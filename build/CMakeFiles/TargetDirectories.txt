@@ -1,0 +1,3 @@
+/home/erik/VirtualRouter/build/CMakeFiles/VirtualRouter.dir
+/home/erik/VirtualRouter/build/CMakeFiles/edit_cache.dir
+/home/erik/VirtualRouter/build/CMakeFiles/rebuild_cache.dir

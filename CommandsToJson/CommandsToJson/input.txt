@@ -1,0 +1,64 @@
+collect  Specify a non-key field
+    counter    Counter fields
+        bytes    Total number of bytes
+            <cr>
+        packets  Total number of packets
+            <cr>
+    interface  Interface fields
+        input   The input interface
+            <cr>
+        output  The output interface
+            <cr>
+    ipv4       IPv4 fields
+        destination  IPv4 destination address based fields
+            mask  IPv4 address mask for the IPv4 destination address
+                <cr>
+        source       IPv4 source address based fields
+            mask  IPv4 address mask for the IPv4 source address
+                <cr>
+    routing    Routing attributes
+        destination  Destination routing attributes
+            as  AS number of the destination network
+                <cr>
+        next-hop     Information regarding the next hop
+            address  IPv4 or IPv6 address of the next hop
+                ipv4  IPv4 address of the next hop
+                    <cr>
+        source       Source routing attributes
+            as  AS number of the destination network
+                <cr>
+    timestamp  Timestamp fields
+        sys-uptime  Timestamps based on the sys-uptime
+            first  Time the first packet was seen
+                <cr>
+            last   Time the most recent packet was seen
+                <cr>
+    transport  Transport layer fields
+        tcp  TCP fields
+            flags  TCP flags
+                <cr>
+match    Specify a key field
+    flow       Flow identifying fields
+        direction  Direction the flow was monitored
+            <cr>
+    interface  Interface fields
+        input   The input interface
+            <cr>
+        output  The output interface
+            <cr>
+    ipv4       IPv4 fields
+        destination  IPv4 destination address based fields
+            address  IPv4 destination address
+                <cr>
+        protocol     IPv4 protocol
+            <cr>
+        source       IPv4 source address based fields
+            address  IPv4 destination address
+                <cr>
+        tos          IPv4 type of service
+            <cr>
+    transport  Transport layer fields
+        destination-port  Transport destination port
+            <cr>
+        source-port       Transport source port
+            <cr>

@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+<config>
+    <hostname>Router1</hostname>
+    <vrf name="CUSTOMER_A">
+        <description>Customer A VRF</description>
+        <address-family type="ipv4">
+            <route-target-export>65003:100</route-target-export>
+            <route-target-import>65001:100</route-target-import>
+        </address-family>
+        <address-family type="ipv7">
+            <route-target-export>65001:100</route-target-export>
+            <route-target-import>65001:100</route-target-import>
+        </address-family>
+    </vrf>
+    <interface name="GigabitEthernet0/0">
+        <description>LAN Interface</description>
+        <ip>
+            <vrf>CUSTOMER_A</vrf>
+            <address>192.168.1.1</address>
+            <subnet-mask>255.255.255.0</subnet-mask>
+        </ip>
+    </interface>
+    <interface name="GigabitEthernet0/1">
+        <description>WAN Interface</description>
+        <ip>
+            <address>10.0.0.1</address>
+            <subnet-mask>255.255.255.0</subnet-mask>
+        </ip>
+    </interface>
+    <router name="ospf" vrf="CUSTOMER_A">
+        <router-id>1.1.1.1</router-id>
+    </router>
+    <ip-dhcp-pool name="LAN" vrf="CUSTOMER_A">
+        <network>192.168.1.0 255.255.255.0</network>
+        <default-router>192.168.1.1</default-router>
+        <dns-server>8.8.8.8</dns-server>
+    </ip-dhcp-pool>
+    <ip-route vrf="CUSTOMER_A">0.0.0.0 0.0.0.0 10.0.0.254</ip-route>
+    <ipv6-router name="ospf" vrf="CUSTOMER_A">
+        <router-id>1.1.1.1</router-id>
+    </ipv6-router>
+    <access-list number="101">
+        <entry action="permit">
+            <protocol>tcp</protocol>
+            <source>any</source>
+            <destination>host 192.168.1.10</destination>
+            <port>eq 80</port>
+        </entry>
+        <entry action="deny">
+            <protocol>ip</protocol>
+            <source>any</source>
+            <destination>any</destination>
+        </entry>
+    </access-list>
+    <route-map name="CUSTOMER_A_MAP">
+        <entry number="10">
+            <match type="ip">
+                <address type="101" />
+            </match>
+            <set>
+                <vrf>CUSTOMER_A</vrf>
+            </set>
+        </entry>
+    </route-map>
+    <interface name="GigabitEthernet0/2">
+        <description>DMZ Interface</description>
+        <ip>
+            <vrf>CUSTOMER_A</vrf>
+            <address>172.16.0.1</address>
+            <subnet-mask>255.255.255.0</subnet-mask>
+        </ip>
+    </interface>
+    <ip-nat operation="inside-source">
+        <source>
+            <list>101</list>
+            <interface>GigabitEthernet0/1</interface>
+            <overload />
+        </source>
+    </ip-nat>
+</config>
+
+
+
+<config>
+    <GigabitEthernet id="1">
+    </GigabitEthernet>
+    <GigabitEthernet id="2">
+    </GigabitEthernet>
+    <GigabitEthernet id="3">
+    </GigabitEthernet>
+    <GigabitEthernet id="4">
+    </GigabitEthernet>
+</config>

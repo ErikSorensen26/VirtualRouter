@@ -1,0 +1,30 @@
+{
+    "name": "VirtualRouter",
+    "build": {
+        "context": ".",
+        "dockerfile": "./Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "hediet.vscode-drawio",
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vscode.cmake-tools",
+                "ms-vscode.test-adapter-converter",
+                "twxs.cmake",
+                "hbenl.vscode-test-explorer",
+                "matepek.vscode-catch2-test-adapter",
+                "eamodio.gitlens",
+                "streetsidesoftware.code-spell-checker",
+                "DavidAnson.vscode-markdownlint",
+                "ms-vscode.hexeditor",
+                "ms-azuretools.vscode-docker"
+            ]
+        }
+    },
+    "runArgs": [
+        "--network", "host",  // Use host networking
+        "--cap-add", "NET_ADMIN"  // Add additional capabilities if needed
+    ]
+}

@@ -1,0 +1,91 @@
+#include <Ingress.h>
+#include <iostream>
+#include <pcap.h>
+
+// Mutex for synchronizing access to the packet queue.
+std::mutex packetQueueMutex;
+
+// Constructor for Ingress class.
+// Opens a live capture session on the specified device and sets the subnet mask.
+Ingress::Ingress(const std::string& device, const std::string mask, const int inQueSize) : packetQueue(inQueSize) 
+{
+    char errbuf[PCAP_ERRBUF_SIZE]; // Buffer for error messages.
+    
+    // Open a live capture session on the specified network device.
+    pcap_handle = pcap_open_live(device.c_str(), BUFSIZ, 1, 1000, errbuf);
+    if (pcap_handle == NULL) 
+    {
+        // Print an error message and exit if the device cannot be opened.
+        std::cerr << "Error opening device " << device << ": " << errbuf << std::endl;
+        exit(1);
+    }
+    
+    // Convert the netmask from hexadecimal string to bpf_u_int32 format.
+    subnet = hexStringToNetmask(mask);
+}
+
+// Destructor for Ingress class.
+// Closes the pcap handle when the Ingress object is destroyed.
+Ingress::~Ingress() 
+{
+    if (pcap_handle != NULL) 
+    {
+        pcap_close(pcap_handle); // Close the pcap handle if it is open.
+    }
+}
+
+// Stop the packet capture session and close the pcap handle.
+void Ingress::stopSnif() 
+{
+    pcap_close(pcap_handle);
+}
+
+// Start capturing packets with the specified filter expression.
+// Sets the filter for the capture and starts the packet capture loop.
+int Ingress::startCapture(const char* filter_exp) 
+{
+    struct bpf_program fp; // Structure for the compiled filter program.
+    bpf_u_int32 netmask = subnet; // Netmask for the filter.
+
+    // Compile the filter expression into a BPF program.
+    if (pcap_compile(pcap_handle, &fp, filter_exp, 0, netmask) == -1) 
+    {
+        std::cerr << "Error compiling filter: " << pcap_geterr(pcap_handle) << std::endl;
+        return 1;
+    }
+    
+    // Set the compiled filter program for the capture session.
+    if (pcap_setfilter(pcap_handle, &fp) == -1) 
+    {
+        std::cerr << "Error setting filter: " << pcap_geterr(pcap_handle) << std::endl;
+        return 1;
+    }
+    
+    // Start capturing packets and process them with the packetHandler function.
+    pcap_loop(pcap_handle, -1, packetHandler, reinterpret_cast<u_char*>(this));
+    return 0;
+}
+
+// Callback function for processing captured packets.
+// Enqueues packet data into the packet queue in a thread-safe manner.
+void Ingress::packetHandler(u_char* user, const struct pcap_pkthdr* pkthdr, const u_char* packet) 
+{
+    Ingress* ingress = reinterpret_cast<Ingress*>(user); // Cast user data to Ingress pointer.
+    std::string packetData(reinterpret_cast<const char*>(packet), pkthdr->caplen); // Extract packet data.
+    
+    // Lock the mutex and enqueue the packet data.
+    std::lock_guard<std::mutex> lock(packetQueueMutex);
+    ingress->packetQueue.enqueue(packetData);
+}
+
+// Convert a hexadecimal string to a bpf_u_int32 netmask.
+// Parses the hexadecimal string and returns the result as a netmask.
+bpf_u_int32 Ingress::hexStringToNetmask(const std::string& hexString) 
+{
+    std::stringstream ss; // String stream for parsing hexadecimal string.
+    ss << std::hex << hexString; // Set the stream to hexadecimal format.
+    bpf_u_int32 result; // Variable to store the result.
+    ss >> result; // Parse the hexadecimal string into the result.
+    return result; // Return the parsed netmask.
+return 5;
+}

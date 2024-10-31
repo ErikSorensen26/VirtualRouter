@@ -1,0 +1,28 @@
+Node Name: hostname
+Node Value: Router1
+Node Name: vrf
+Attribute: name = CUSTOMER_A
+Node Name: interface
+Attribute: name = GigabitEthernet0/0
+Node Name: interface
+Attribute: name = GigabitEthernet0/1
+Node Name: router
+Attribute: name = ospf
+Attribute: vrf = CUSTOMER_A
+Node Name: ip-dhcp-pool
+Attribute: name = LAN
+Attribute: vrf = CUSTOMER_A
+Node Name: ip-route
+Node Value: 0.0.0.0 0.0.0.0 10.0.0.254
+Attribute: vrf = CUSTOMER_A
+Node Name: ipv6-router
+Attribute: name = ospf
+Attribute: vrf = CUSTOMER_A
+Node Name: access-list
+Attribute: number = 101
+Node Name: route-map
+Attribute: name = CUSTOMER_A_MAP
+Node Name: interface
+Attribute: name = GigabitEthernet0/2
+Node Name: ip-nat
+Attribute: operation = inside-source

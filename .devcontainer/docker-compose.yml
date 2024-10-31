@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+  virtualrouter:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    networks:
+      - my_bridge_network
+    cap_add:
+      - NET_ADMIN  # Add additional capabilities if needed
+
+networks:
+  my_bridge_network:
+    driver: bridge  # Use the bridge driver

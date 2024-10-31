@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/Background/Packet/Global/include",
+                "${workspaceFolder}/Background/Packet/Local/include",
+                "${workspaceFolder}/Background/Protocols/include",
+                "${workspaceFolder}/Background/Services/include",
+                "${workspaceFolder}/Dir",
+                "${workspaceFolder}/Common",
+                "${workspaceFolder}/Configs",
+                "${workspaceFolder}/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}
