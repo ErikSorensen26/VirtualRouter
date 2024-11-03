@@ -110,11 +110,12 @@ namespace Protocol {
             while (sideload) 
             {
                 if (leaseStart + function->hexToNum(function->byteToHex(currentInterface->interfaceInfo.dhcp.renewalTime)) < secondsSinceEpoch()) 
-                {
+                {   
+                    string dhcpIP = currentInterface->Get().ip;
                     dhcpHeader header; 
-                    header.yourClientIP = currentInterface->ipAddress; 
+                    header.yourClientIP = dhcpIP; 
                     header.transID = function->hexToByte(generateDhcpTransid()); 
-                    PacketInfo requestInfo = DhcpRequest(dhcpBody, header, hostname, hardwareAddress, currentInterface->ipAddress, currentInterface->interfaceInfo.dhcp.dhcpServer); // Create DHCP request packet
+                    PacketInfo requestInfo = DhcpRequest(dhcpBody, header, hostname, hardwareAddress, dhcpIP, currentInterface->interfaceInfo.dhcp.dhcpServer); // Create DHCP request packet
                     string requestPacket = Encapsulate(requestInfo); 
                     currentInterface->packetOutQueue.enqueue(requestPacket); 
                     sideload = false;

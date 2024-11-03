@@ -176,7 +176,7 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             eigrpString += eigrp.version;
             eigrpString += eigrp.opcode;
             eigrpString += function->hexToByte("0000");
-            eigrpString += function->binToByte("0000000000000000000000000000" + eigrp.flags.init + eigrp.flags.conditionalRecieve + eigrp.flags.restart + eigrp.flags.endOfTable);
+            eigrpString += function->binToByte("0000000000000000000000000000" + eigrp.flags.endOfTable + eigrp.flags.restart + eigrp.flags.conditionalRecieve + eigrp.flags.init);
             eigrpString += eigrp.sequence;
             eigrpString += eigrp.ack;
             eigrpString += eigrp.virtualRouterID;

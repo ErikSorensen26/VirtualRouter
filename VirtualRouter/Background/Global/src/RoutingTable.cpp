@@ -47,6 +47,26 @@ void RoutingTable::UpdateArp(const arpHeader& recievedArp)
     arp[key] = route;
 }
 
+void RoutingTable::UpdateArp(const string ip, string mac, string interfaceAddress)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+
+    // Create route entry
+    Arp route;
+    route.age = std::chrono::system_clock::now();
+    route.interface = interfaceAddress;
+    route.ipAddress = function->byteToHex(ip);
+    route.mac = function->byteToHex(mac);
+
+    // Find if the route Exists
+    std::string key = ip;
+    const auto it = arp.find(key);
+    if (it == arp.end())
+    {
+        arp[key] = route;
+    }
+}
+
 std::optional<RoutingTable::Arp> RoutingTable::ArpLookup(const std::string& ipAddress)
 {
     std::lock_guard<std::mutex> lock(tableMutex);

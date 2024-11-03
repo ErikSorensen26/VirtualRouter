@@ -7,8 +7,9 @@ std::mutex packetQueueMutex;
 
 // Constructor for Ingress class.
 // Opens a live capture session on the specified device and sets the subnet mask.
-Ingress::Ingress(const std::string& device, const std::string mask, const int inQueSize) : packetQueue(inQueSize) 
+Ingress::Ingress(const std::string& device, const std::string mask, const int inQueSize, std::string MacAddress) : packetQueue(inQueSize) 
 {
+    localMac = MacAddress;
     char errbuf[PCAP_ERRBUF_SIZE]; // Buffer for error messages.
     
     // Open a live capture session on the specified network device.
@@ -71,11 +72,35 @@ int Ingress::startCapture(const char* filter_exp)
 void Ingress::packetHandler(u_char* user, const struct pcap_pkthdr* pkthdr, const u_char* packet) 
 {
     Ingress* ingress = reinterpret_cast<Ingress*>(user); // Cast user data to Ingress pointer.
+
+    // Ethernet header is 14 bytes
+    if (pkthdr->caplen < 14) {
+        // Packet too shor, ignore
+        return;
+    }
+
+    // Extract source MAC address from the ethernet header
+    const u_char* macHeader = packet;
+    char srcMAC[18];
+    snprintf(srcMAC, sizeof(srcMAC), "%02x:%02x:%02x:%02x:%02x:%02x",
+            macHeader[6], macHeader[7], macHeader[8],
+            macHeader[9], macHeader[10], macHeader[11]);
+
+    std::string packetSrcMAC(srcMAC);
+
+    if (packetSrcMAC == ingress->localMac)
+    {
+        // This packet was sent by us, ignore it
+        return;
+    }
+
     std::string packetData(reinterpret_cast<const char*>(packet), pkthdr->caplen); // Extract packet data.
     
     // Lock the mutex and enqueue the packet data.
-    std::lock_guard<std::mutex> lock(packetQueueMutex);
-    ingress->packetQueue.enqueue(packetData);
+    {
+        std::lock_guard<std::mutex> lock(packetQueueMutex);
+        ingress->packetQueue.enqueue(packetData);
+    }
 }
 
 // Convert a hexadecimal string to a bpf_u_int32 netmask.

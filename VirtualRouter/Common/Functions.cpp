@@ -294,7 +294,7 @@ std::string Functions::computeNetworkAddress(const std::string& ipAddress, int m
 
     for (int i = 0; i < 32; i++)
     {
-        if (binMask[i] == '1')
+        if (binMask[i] == '0')
         {
             binIp[i] = '0';
         }
@@ -311,7 +311,7 @@ std::string Functions::intMaskToBin(int mask)
     }
     for (int i = 0; i < (32 - mask); i++)
     {
-        stringMask = "0" + stringMask;
+        stringMask = stringMask + "0";
     }
     return stringMask;
 }
@@ -352,4 +352,48 @@ std::string Functions::changeSize(std::string str, int size, std::string value) 
         str = value + str;
     }
     return str;
+}
+
+bool Functions::compareNetworkWithIp(std::string networkAddress, std::string ipAddress)
+{
+    bool compare = false;
+    for (int i = 0; i < ipAddress.size(); i += 2)
+    {
+        std::string oct = networkAddress.substr(i, 2);
+        if (oct == "00" || oct == ipAddress.substr(i, 2))
+        {
+            compare = true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return compare;
+}
+
+std::string Functions::reverseBinary(const std::string& binary) {
+    std::string reversed = binary; // Create a copy of the input string
+
+    for (size_t i = 0; i < binary.size(); i++) {
+        if (binary[i] == '0') {
+            reversed[i] = '1'; // Change '0' to '1'
+        } else if (binary[i] == '1') {
+            reversed[i] = '0'; // Change '1' to '0'
+        }
+    }
+
+    return reversed; // Return the modified string
+}
+
+std::string Functions::compactNetworkAddress(std::string network, int mask)
+{
+    std::string networkAddress = network;
+    std::string binMask = binToByte(intMaskToBin(mask));
+    for (int i = 3; i >= 0; i--)
+    {
+        if (binMask[i] == 0x00)
+        networkAddress.erase(i);
+    }
+    return networkAddress;
 }

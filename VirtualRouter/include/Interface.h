@@ -26,17 +26,20 @@ namespace Protocol {
 
 // Structure to hold IP address information
 struct ipInfo {
+    char id{};
+    unsigned long bandwidth{}; // Bandwidth or speed of the interface
+    unsigned long delay; // Delay of the interface
     string ip = ""; // IP address of the interface
     string subnet = ""; // Subnet mask of the interface
     string mac = ""; // MAC address of the interface
-    unsigned long speed; // Bandwidth or speed of the interface
+    int mtu{}; // Maximum Transmission Unit
 };
 
 // Interface class definition
 class Interface {
 public:
     // Constructor for Interface class
-    Interface(string outInterface, const int inQueSiz, const int outQueSiz);
+    Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId);
     // Destructor for Interface class
     ~Interface();
 
@@ -45,14 +48,6 @@ public:
     
     // Method to set IPv4 address and subnet mask
     void setIPv4(string ip, string subnet);
-
-    char id; // Identifier for the interface
-    unsigned long bandwidth{1000000}; // Bandwidth or speed of the interface
-    unsigned long delay{100};
-    string ipAddress  = ""; // IP address of the interface
-    string macAddress = ""; // MAC address of the interface
-    string mask = ""; // Subnet mask of the interface
-    uint16_t mtu = 1500; // Maximum Transmission Unit
 
     bool shutdown = true; // Flag to indicate if the interface is shutdown
 
@@ -105,7 +100,20 @@ public:
     // Holds interface name
     string interfaceName{};
 
+//private:
+
+    std::mutex ipInfoMutex;
+
+    char id; // Identifier for the interface
+    unsigned long bandwidth{1000000}; // Bandwidth or speed of the interface
+    unsigned long delay{100};
+    string ipAddress  = ""; // IP address of the interface
+    string macAddress = ""; // MAC address of the interface
+    string mask = ""; // Subnet mask of the interface
+    int mtu = 1500; // Maximum Transmission Unit
+
 private:
+
     // Pointer to Functions class instance
     Functions* function = Functions::getInstance();
     Egress packetSend; // Packet sending object

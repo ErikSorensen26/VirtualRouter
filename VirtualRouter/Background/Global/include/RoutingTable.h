@@ -31,6 +31,7 @@ public:
     };
 
     void UpdateArp(const arpHeader& recievedArp);
+    void UpdateArp(const string ip, string mac, string interfaceAddress);
     std::optional<RoutingTable::Arp> ArpLookup(const std::string& ipAddress);
 
     struct NDP {

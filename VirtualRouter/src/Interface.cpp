@@ -10,8 +10,8 @@
 using namespace std;
 
 // Constructor for the Interface class
-Interface::Interface(string outInterface, const int inQueSiz, const int outQueSiz)
-    : packetCapture(outInterface, "FF000000", inQueSiz), 
+Interface::Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId)
+    : packetCapture(outInterface, "FF000000", inQueSiz, function->hexToByte(mac)), 
       packetSend(outInterface),
       threadsRunning(false), 
       packetOutQueue(outQueSiz) 
@@ -20,6 +20,8 @@ Interface::Interface(string outInterface, const int inQueSiz, const int outQueSi
     outInt = outInterface;
     inQsiz = inQueSiz;
     outQsiz = outQueSiz;
+    macAddress = mac;
+    id = interfaceId;
     // Initialize shared pointers for Protocol objects
     dhcp = std::make_shared<Protocol::DhcpClient>(*this);
     arp = std::make_shared<Protocol::Arp>(*this);
@@ -40,12 +42,16 @@ void Interface::setIPv4(string ip, string subnet) {
 
 // Get current IP address, subnet mask, MAC address, and speed information
 ipInfo Interface::Get() {
+    std::lock_guard<std::mutex> lock(ipInfoMutex);
     ipInfo info;
+    info.id = id;
+    info.bandwidth = bandwidth;
+    info.delay = delay;
     info.ip = ipAddress;
     info.subnet = mask;
-    info.mac = macAddress; 
-    info.speed = bandwidth; 
-    return info; 
+    info.mac = macAddress;  
+    info.mtu = mtu;
+    return info;
 }
 
 // Start background threads for packet processing
@@ -137,8 +143,9 @@ void Interface::StateChange()
     }
     for (const auto& eigrpInt : eigrpInterfaceList)
     {
-        eigrpInt.second->eigrpProcess->OnInterfaceChange(this);
+        //eigrpInt.second->eigrpProcess->OnInterfaceChange(this);
     }
+    
 }
 
 // Destructor to ensure threads are stopped

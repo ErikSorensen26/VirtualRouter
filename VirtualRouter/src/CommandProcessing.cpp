@@ -83,11 +83,6 @@ void Terminal::Process(string& command) {
 				} else {
 					intType = "NO_INTERFACE";
 				}
-				getInterfaceMode(type);
-				if (Interfaces->count(interfaceID) == 0) {
-					(*Interfaces)[interfaceID] = std::make_shared<Interface>(intType, 1024, 1024);
-				}
-				CurrentInterface = Interfaces->at(interfaceID).get();
 				string mac;
 				if (commandStream[1] == "Ethernet" && macAddressList.Ethernet.size() == 9) {
 					mac = OUI + macAddressList.Ethernet[interfaceID];
@@ -101,8 +96,11 @@ void Terminal::Process(string& command) {
 	    			std::sprintf(buffer, "%04d", interfaceID);
 					mac += buffer;
 				}
-				CurrentInterface->macAddress = mac;
-				CurrentInterface->id = interfaceID;
+				getInterfaceMode(type);
+				if (Interfaces->count(interfaceID) == 0) {
+					(*Interfaces)[interfaceID] = std::make_shared<Interface>(intType, 1024, 1024, mac, interfaceID);
+				}
+				CurrentInterface = Interfaces->at(interfaceID).get();
 			}
 			if (commandStream[0] == "router") {
 				string type = commandStream[1];
@@ -184,6 +182,7 @@ void Terminal::Process(string& command) {
 }
 
 void Terminal::runDhcp() {
-	CurrentInterface->dhcp->InitializeDhcp(hostname, CurrentInterface->macAddress);
+	std::string mac = CurrentInterface->Get().mac;
+	CurrentInterface->dhcp->InitializeDhcp(hostname, mac);
 
 }

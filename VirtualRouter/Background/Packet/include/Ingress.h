@@ -13,7 +13,7 @@ extern std::mutex packetQueueMutex;
 class Ingress {
 public:
     // Constructor
-    Ingress(const std::string& device, const std::string mask, const int inQueSize);
+    Ingress(const std::string& device, const std::string mask, const int inQueSize, std::string MacAddress);
 
     // Deconstructor
     ~Ingress();
@@ -27,6 +27,8 @@ public:
     // Packet que
     RingBuffer<std::string> packetQueue;
 private:
+    std::string localMac;
+
     pcap_t* pcap_handle;
     bpf_u_int32 subnet;
 

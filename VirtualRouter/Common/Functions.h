@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <random>
 #include <netinet/in.h>
+#include <algorithm>
 
 //#include <PacketStructure.h>
 
@@ -87,6 +88,12 @@ public:
     std::string intMaskToBin(int mask);
     // change size of string
     std::string changeSize(std::string str, int size, std::string value = "0");
+    // compare network address to ip
+    bool compareNetworkWithIp(std::string networkAddress, std::string ipAddress);
+    // compact netword address
+    std::string compactNetworkAddress(std::string network, int mask);
+    // reverse binary bits
+    std::string reverseBinary(const std::string& binary);
 private:
     Functions();
     static Functions* singleton;

@@ -45,7 +45,7 @@ namespace Protocol {
         PacketInfo ArpReply(string& currentMac, string& targetmac, string& ip, string& targetIp);
     
         // Method to send an ARP request
-        void sendRequest(std::string& targetIp);
+        void sendRequest(std::string targetIp);
 
         // Method to reply to arp request
         void sendReply(string targetMac, string targetIp);

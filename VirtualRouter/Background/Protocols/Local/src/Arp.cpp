@@ -31,7 +31,7 @@ namespace Protocol
     }
 
     // Sends an ARP request and processes the reply
-    void Arp::sendRequest(std::string& targetIp)
+    void Arp::sendRequest(std::string targetIp)
     {
         if (targetIp.empty()) {return;}
 
@@ -74,7 +74,8 @@ namespace Protocol
 
             while(!replyReceived && retryCount < maxRetries)
             {
-                PacketInfo arp = ArpRequest(currentInterface->macAddress, currentInterface->ipAddress, targetIp);
+                ipInfo interfaceInfo = currentInterface->Get();
+                PacketInfo arp = ArpRequest(interfaceInfo.mac, interfaceInfo.ip, targetIp);
                 const std::string arpPacket = Encapsulate(arp);
                 currentInterface->packetOutQueue.enqueue(arpPacket);
 
@@ -150,18 +151,20 @@ namespace Protocol
     // Method to reply to arp request
     void Arp::sendReply(string targetMac, string targetIp) {
         if (targetIp == "") {return;}
-        if (currentInterface->ipAddress == "") {return;}
+        if (currentInterface->Get().ip == "") {return;}
         // Check for empty IP
         if (targetIp.empty()) {
             return;
         }
+
+        ipInfo interfaceInfo = currentInterface->Get();
         
         // Initializations
         PacketInfo arpPacket;
         string packet;
         
         // Create an ARP reply packet
-        arpPacket = ArpReply(currentInterface->macAddress, targetMac, currentInterface->ipAddress, targetIp);
+        arpPacket = ArpReply(interfaceInfo.mac, targetMac, interfaceInfo.ip, targetIp);
         packet = Encapsulate(arpPacket);
 
         // Ques arp packet for sending

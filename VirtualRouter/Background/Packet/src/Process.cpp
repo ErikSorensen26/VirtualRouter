@@ -13,15 +13,35 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
 {
     currentVrf = vrf;
 
+    const ethernetHeader* ethernet;
+    const pppHeader* ppp;
+    const arpHeader* arp;
+    const mplsHeader* mpls;
+    const vlanHeader* vlan;
+    const lldpHeader* lldp;
+    const ipv4Header* ipv4;
+    const greHeade* gre;
+    const ahHeader* ah;
+    const espHeader* esp;
+    const icmpHeader* icmp;
+    const igmpHeader* igmp;
+    const eigrpHeader* eigrp;
+    const tcpHeader* tcp;
+    const udpHeader* udp;
+    const dhcpHeader* dhcp;
+
+    std::string macAddress;
+
     // Iterate over Layer 2 headers and identify their types.
     for (auto header : packet.Layer2) 
     {
         if (is_type<ethernetHeader>(header)) 
         {
-            const ethernetHeader* ethernet = std::any_cast<ethernetHeader>(&header);
+            ethernet = std::any_cast<ethernetHeader>(&header);
             if (Print(header)) { cout << "THIS IS ETHERNET" << endl; } 
             // Check if packet contains your source address
-            if (function->byteToHex(ethernet->sourceMac) == interface->macAddress) 
+            macAddress = ethernet->sourceMac;
+            if (function->byteToHex(ethernet->sourceMac) == interface->Get().mac) 
             {
                 // Drop packet
                 return;
@@ -29,7 +49,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
         } 
         else if (is_type<pppHeader>(header)) 
         {
-            const pppHeader* ppp = std::any_cast<pppHeader>(&header); 
+            ppp = std::any_cast<pppHeader>(&header); 
             if (Print(header)) { cout << "THIS IS PPP" << endl; } 
         }
     }
@@ -39,7 +59,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
     {
         if (is_type<arpHeader>(header)) 
         {
-            const arpHeader* arp = std::any_cast<arpHeader>(&header);
+            arp = std::any_cast<arpHeader>(&header);
             if (Print(header)) { cout << "THIS IS ARP" << endl; } 
             
             // Tests for request OPCODE
@@ -54,17 +74,17 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
         }
         else if (is_type<mplsHeader>(header)) 
         {
-            const mplsHeader* mpls = std::any_cast<mplsHeader>(&header); 
+            mpls = std::any_cast<mplsHeader>(&header); 
             if (Print(header)) { cout << "THIS IS MPLS" << endl; }
         } 
         else if (is_type<vlanHeader>(header)) 
         {
-            const vlanHeader* vlan = std::any_cast<vlanHeader>(&header); 
+            vlan = std::any_cast<vlanHeader>(&header); 
             if (Print(header)) { cout << "THIS IS VLAN" << endl; }
         } 
         else if (is_type<lldpHeader>(header)) 
         {
-            const lldpHeader* lldp = std::any_cast<lldpHeader>(&header);
+            lldp = std::any_cast<lldpHeader>(&header);
             if (Print(header)) { cout << "THIS IS LLDP" << endl; } 
         }
     }
@@ -74,39 +94,42 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
     {
         if (is_type<ipv4Header>(header)) 
         {
-            const ipv4Header* ipv4 = std::any_cast<ipv4Header>(&header);
+            ipv4 = std::any_cast<ipv4Header>(&header);
             if (Print(header)) { cout << "THIS IS IPV4" << endl; } 
+            if (ethernet && RoutingTable::getInstance().ArpLookup(function->byteToHex(ipv4->sourceAddress)))
+            {
+                RoutingTable::getInstance().UpdateArp(ipv4->sourceAddress, macAddress, interface->Get().ip);
+            }
         } 
         else if (is_type<greHeade>(header)) 
         {
-            const greHeade* gre = std::any_cast<greHeade>(&header); 
+            gre = std::any_cast<greHeade>(&header); 
             if (Print(header)) { cout << "THIS IS GRE" << endl; }
         } 
         else if (is_type<ahHeader>(header)) 
         {
-            const ahHeader* ah = std::any_cast<ahHeader>(&header);
+            ah = std::any_cast<ahHeader>(&header);
             if (Print(header)) { cout << "THIS IS AH" << endl; } 
         } 
         else if (is_type<espHeader>(header)) 
         {
-            const espHeader* esp = std::any_cast<espHeader>(&header); 
+            esp = std::any_cast<espHeader>(&header); 
             if (Print(header)) { cout << "THIS IS ESP" << endl; } 
         } 
         else if (is_type<icmpHeader>(header)) 
         {
-            const icmpHeader* icmp = std::any_cast<icmpHeader>(&header); 
+            icmp = std::any_cast<icmpHeader>(&header); 
             if (Print(header)) { cout << "THIS IS ICMP" << endl; } 
         } 
         else if (is_type<igmpHeader>(header)) 
         {
-            const igmpHeader* igmp = std::any_cast<igmpHeader>(&header); 
+            igmp = std::any_cast<igmpHeader>(&header); 
             if (Print(header)) { cout << "THIS IS IGMP" << endl; } 
         }
         else if (is_type<eigrpHeader>(header)) 
         {
             if (Print(header)) { cout << "THIS IS EIGRP" << endl; } 
-            const eigrpHeader* eigrp = std::any_cast<eigrpHeader>(&header); 
-            const ipv4Header* ipv4 = std::any_cast<ipv4Header>(&packet.Layer3[0]);
+            eigrp = std::any_cast<eigrpHeader>(&header); 
             auto it = eigrpList.find(function->byteToNum(eigrp->autonomousSystem));
             auto iface = interface->eigrpInterfaceList.find(function->byteToNum(eigrp->autonomousSystem));
             if (it != eigrpList.end() && iface != interface->eigrpInterfaceList.end()) 
@@ -122,12 +145,12 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
     {
         if (is_type<tcpHeader>(header))
         {
-            const tcpHeader* tcp = std::any_cast<tcpHeader>(&header);
+            tcp = std::any_cast<tcpHeader>(&header);
             if (Print(header)) { cout << "THIS IS TCP" << endl; } 
         } 
         else if (is_type<udpHeader>(header)) 
         {
-            const udpHeader* udp = std::any_cast<udpHeader>(&header); 
+            udp = std::any_cast<udpHeader>(&header); 
             if (Print(header)) { cout << "THIS IS UDP" << endl; } 
         } 
     }
@@ -137,7 +160,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
     {
         if (is_type<dhcpHeader>(header)) 
         {
-            const dhcpHeader* dhcp = std::any_cast<dhcpHeader>(&header); 
+            dhcp = std::any_cast<dhcpHeader>(&header); 
             if (Print(header)) { cout << "THIS IS DHCP" << endl; } 
             for (auto opt : dhcp->options) 
             {

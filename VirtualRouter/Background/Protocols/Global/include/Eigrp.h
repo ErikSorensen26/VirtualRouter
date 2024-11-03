@@ -18,6 +18,7 @@
 #include <Interface.h>
 #include <RoutingTable.h>
 #include <TimeManager.h>
+#include <unordered_map>
 
 using namespace std;
 
@@ -52,52 +53,68 @@ namespace EigrpConfigs {
             string flags{"00"};
         } metric;
     };
-    struct NeighborInfo {
-        // Arp info
-        bool hasMac = false;
+struct NeighborInfo {
+    std::string ipAddress;                                  // Neighbor's IP address
+    std::string macAddress;                                 // Neighbor's MAC address
+    std::mutex macMutex;                                    // Neighbor's MAC mutex
+    bool hasMac;                                            // Indicates if MAC address is known
+    bool isInit;                                            // Initialization flag
+    bool sendInitUpdate;                                    // Flag to send initial update
+    bool receivedInitUpdate;                                // Flag for received initial update
+    int sequenceNumber;                                     // Sequence number for reliable delivery
+    int lastReceivedSequenceNumber;                         // Last received sequence number
+    bool adjacency;                                         // Adjacency status
 
-        // Neighbor identification
-        std::string ipAddress;
-        std::string macAddress;
+    // Acks
+    vector<int> pendingAcks;                                // Pending Acks
 
-        // Timing and sequence information
-        int holdTime;
-        std::chrono::steady_clock::time_point lastHeard;
+    // Synchronization primitives
+    std::mutex neighborDataMutex;                           // Protects neighbor-specific data
+    std::condition_variable cv;                             // Condition variable for synchronization
 
-        // Sequence Numbers for reliabile delivery
-        int sequenceNumber;
-        int lastReceivedSequenceNumber;
+    // RTT estimation
+    double srtt;                                            // Smoothed RTT
+    double rttvar;                                          // RTT variance
+    double rto;                                             // Retransmission timeout
 
-        // Reliable transport data
-        std::map<int, std::string> reliablePackets;
-        std::map<int, int> retransmissionTimers;
-        std::map<int, std::chrono::steady_clock::time_point> packetSendTimes;
-        
+    // Timers
+    int holdTimerId;                                        // Hold timer ID
+    int holdTime;                                           // Hold time
+    std::chrono::steady_clock::time_point lastHeard;        // Last heard time point
+    std::unordered_map<int, int> retransmissionTimers;      // Map of sequenceNumber to timerId
+    std::mutex retransmissionMutex;                         // Protects retransmissionTimers
 
-        // RTT and RTO estimations
-        double srtt;
-        double rttvar;
-        double rto;
+    // Reliable packets
+    std::unordered_map<int, std::string> reliablePackets;   // Map of sequenceNumber to packet
+    std::unordered_map<int, std::chrono::steady_clock::time_point> packetSendTimes; // Send times
+    std::unordered_map<int, int> retransmissionCounts; 
 
-        // Retransmission data
-        int retransmissions;
+    // Threads
+    std::thread workerThread;                               // Worker thread
+    std::atomic<bool> workerActive;                         // Worker thread active flag
 
-        // Hold timer management
-        int holdTimerId = 0;
+    NeighborInfo()
+        : hasMac(false),
+          isInit(false),
+          sendInitUpdate(false),
+          receivedInitUpdate(false),
+          sequenceNumber(0),
+          adjacency(false),
+          srtt(1.0),
+          rttvar(0.5),
+          rto(1.5),
+          holdTimerId(0),
+          workerActive(false)
+    {}
 
+    // Delete copy constructor and copy assignment operator
+    NeighborInfo(const NeighborInfo&) = delete;
+    NeighborInfo& operator=(const NeighborInfo&) = delete;
 
-        std::thread holdTimerThread;
-        std::atomic<bool> holdTimerRunning;
-        std::mutex holdMutex;
-        std::condition_variable holdCV;
-        std::atomic<bool> holdStop;
-        // Other neighbor-specific data
-
-
-        NeighborInfo()
-            : holdTime(0), sequenceNumber(0), lastReceivedSequenceNumber(0),
-              srtt(0.0), rttvar(0.0), rto(1.0), retransmissions(0) {}
-    };
+    // Delete move constructor and move assignment operator
+    NeighborInfo(NeighborInfo&&) = delete;
+    NeighborInfo& operator=(NeighborInfo&&) = delete;
+};
     struct NetworksDistributed {
         RoutingTable::Eigrp route;
         bool distrubuted = false;
@@ -129,7 +146,7 @@ namespace Protocol
         // Processes Update packets
         void ProcessUpdate(const eigrpHeader* receivedUpdate, const std::string& neighborIp);
         // Process Ack
-        void ProcessAck(const eigrpHeader* recievedAck, const std::string& neighborIp);
+        void ProcessAck(const std::string sequenceNumber, const std::string &neighborIp);
         // Process query
         void ProcessQuery(const eigrpHeader* receivedQuery, const std::string& neighborIp);
         // Process reply
@@ -140,6 +157,8 @@ namespace Protocol
         void SendUpdateToNeighbor(const std::string& neighborIp, const RoutingTable::Eigrp& route, bool removal);
         // Send full Update Packet
         void SendFullUpdateToNeighbor(const std::string& neighborIp);
+        // Send empty Update Packet to neighbor
+        void SendEmptyUpdateToNeighbor(const std::string& neighborIp);
         // Send query to neighbor
         void SendQueryToNeighbor(const std::string& neighborIp, const RoutingTable::Eigrp& route);
         // Send reply to neighbor
@@ -154,13 +173,15 @@ namespace Protocol
         mutex eigrpMutex;
         PacketInfo eigrpHello;
 
-        int helloTime = 6;
+        
+        int helloTime = 5;
         int holdTime = 15;
         int activeTime = 180;
         int stuckInActiveTime = 60; 
         int adminDistance = 90;
-        int load{};
+        int varience = 1;
         bool passive = false;
+        int bandwidth;
 
         // Holds current interface
         std::shared_ptr<Interface> currentInterface;
@@ -168,6 +189,7 @@ namespace Protocol
         // Timers and their management methods
         void StartHello();
         void StartHelloHelper();
+        void SendHelloPacket(bool update = false, int sequenceNum = 0, string neighborIp = "00000000");
         void StopHello();
     
         void StartActiveTimer(const std::string& destinationF); 
@@ -181,7 +203,7 @@ namespace Protocol
 
         void StartRetransmissionTimer(const std::string& neighborIp, int sequenceNumber, double timeout);
         void HandleRetransmissionTimeout(const std::string& neighborIp, int sequenceNumber);
-        void UpdateRTTEstimate(EigrpConfigs::NeighborInfo& neighbor, int sequenceNumber);
+        void UpdateRTTEstimate(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, int sequenceNumber);
 
         void UpdateRoutingTableForDestination(const std::string& destination);
 
@@ -189,17 +211,17 @@ namespace Protocol
         void HandleNeighborDown(const std::string& neighborIp);
 
         // Holds EIGRP neighbors
-        std::map<std::string, EigrpConfigs::NeighborInfo> neighbors;
+        std::map<std::string, shared_ptr<EigrpConfigs::NeighborInfo>> neighbors;
         // Protects access to neighbors
         std::mutex neighborMutex;
-
-        int bandwidth;
-        int delay{0};
 
         // Advertized route mutex
         std::mutex advertizedRouteMutex;
         // List of advertized routes
         std::unordered_map<std::string, RoutingTable::Eigrp> advertisedRoutes;
+
+        // Split horizon
+        bool splitHorizon = true;
 
     private:
 
@@ -235,15 +257,15 @@ namespace Protocol
         ~Eigrp();
 
         // Configures EIGRP Hello packet with specific settings
-        void EigrpHello(eigrpHeader& eigrp, string virtualRouterID, EigrpInterface* eigrpInt, bool ack = false, bool update = false, int sequenceNum = 0);
+        void EigrpHello(eigrpHeader& eigrp, EigrpInterface* eigrpInt, bool ack = false, bool update = false, int sequenceNumber = 0, string neighborIp = "00000000");
         // Configures EIGRP update packet with specific settings
-        void EigrpUpdate(eigrpHeader& eigrp, string virtualRouterID, int sequenceNum, vector<EigrpConfigs::NetworksDistributed>& internalRoutes, bool init = false, bool conditional = false, bool restart = false, bool endoftable = false, bool query = false, bool reply = false);
+        void EigrpUpdate(eigrpHeader& eigrp, int sequenceNum, vector<EigrpConfigs::NetworksDistributed>& internalRoutes, bool init = false, bool conditional = false, bool restart = false, bool endoftable = false, bool query = false, bool reply = false);
         // Updates list of EIGRP interfaces based on address matching
         void UpdateInterfaceList();
         // Tests if an IP address matches the configured networks
         bool TestAddress(const std::string& testIp);
         // Add EIGRP rouing entry
-        double CalculateMetric(EigrpConfigs::KValue k, int bandwidth, int load, int delay, int reliability);
+        double CalculateMetric(EigrpConfigs::KValue k, Interface* interface, int bandwidth, int load, int delay, int reliability);
         // Calculate Parameters
         string CalculateParameters(int holdTime);
         // Updates Distribution Lists
@@ -253,7 +275,7 @@ namespace Protocol
         // Handles Interface change
         void OnInterfaceChange(Interface* interfacePtr);
         // Update from route change
-        void NotifyRoutingChange(const RoutingTable::Eigrp& changeRoute, bool isRemoval);
+        void NotifyRoutingChange(const RoutingTable::Eigrp& changeRoute, bool isRemoval, bool init = false);
     
         // List of EIGRP interfaces
         std::map<int, std::shared_ptr<EigrpInterface>> eigrpInterfaceList{};
