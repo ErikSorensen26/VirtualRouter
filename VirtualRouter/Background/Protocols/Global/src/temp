@@ -388,7 +388,7 @@ namespace Protocol
     }
 
     // Update from route change
-    void Eigrp::NotifyRoutingChange(const RoutingTable::Eigrp &changeRoute, bool isRemoval = false)
+    void Eigrp::NotifyRoutingChange(const RoutingTable::Eigrp &changeRoute)
     {
         for (const auto &eigrpInterfacePtr : eigrpInterfaceList)
         {

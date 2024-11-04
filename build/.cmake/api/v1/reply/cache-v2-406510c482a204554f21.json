@@ -159,7 +159,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/g++"
+			"value" : "/usr/bin/clang++"
 		},
 		{
 			"name" : "CMAKE_CXX_COMPILER_AR",
@@ -171,11 +171,27 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "A wrapper around 'ar' adding the appropriate '--plugin' option for the GCC compiler"
+					"value" : "LLVM archiver"
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ar-13"
+			"value" : "/usr/bin/llvm-ar-18"
+		},
+		{
+			"name" : "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS",
+			"properties" : 
+			[
+				{
+					"name" : "ADVANCED",
+					"value" : "1"
+				},
+				{
+					"name" : "HELPSTRING",
+					"value" : "`clang-scan-deps` dependency scanner"
+				}
+			],
+			"type" : "FILEPATH",
+			"value" : "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS-NOTFOUND"
 		},
 		{
 			"name" : "CMAKE_CXX_COMPILER_RANLIB",
@@ -187,11 +203,11 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "A wrapper around 'ranlib' adding the appropriate '--plugin' option for the GCC compiler"
+					"value" : "Generate index for LLVM archive"
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ranlib-13"
+			"value" : "/usr/bin/llvm-ranlib-18"
 		},
 		{
 			"name" : "CMAKE_CXX_FLAGS",
@@ -287,7 +303,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc"
+			"value" : "/usr/bin/clang"
 		},
 		{
 			"name" : "CMAKE_C_COMPILER_AR",
@@ -299,11 +315,27 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "A wrapper around 'ar' adding the appropriate '--plugin' option for the GCC compiler"
+					"value" : "LLVM archiver"
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ar-13"
+			"value" : "/usr/bin/llvm-ar-18"
+		},
+		{
+			"name" : "CMAKE_C_COMPILER_CLANG_SCAN_DEPS",
+			"properties" : 
+			[
+				{
+					"name" : "ADVANCED",
+					"value" : "1"
+				},
+				{
+					"name" : "HELPSTRING",
+					"value" : "`clang-scan-deps` dependency scanner"
+				}
+			],
+			"type" : "FILEPATH",
+			"value" : "CMAKE_C_COMPILER_CLANG_SCAN_DEPS-NOTFOUND"
 		},
 		{
 			"name" : "CMAKE_C_COMPILER_RANLIB",
@@ -315,11 +347,11 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "A wrapper around 'ranlib' adding the appropriate '--plugin' option for the GCC compiler"
+					"value" : "Generate index for LLVM archive"
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ranlib-13"
+			"value" : "/usr/bin/llvm-ranlib-18"
 		},
 		{
 			"name" : "CMAKE_C_FLAGS",
@@ -596,6 +628,18 @@
 			],
 			"type" : "INTERNAL",
 			"value" : ""
+		},
+		{
+			"name" : "CMAKE_HAVE_LIBC_PTHREAD",
+			"properties" : 
+			[
+				{
+					"name" : "HELPSTRING",
+					"value" : "Test CMAKE_HAVE_LIBC_PTHREAD"
+				}
+			],
+			"type" : "INTERNAL",
+			"value" : "1"
 		},
 		{
 			"name" : "CMAKE_HOME_DIRECTORY",
@@ -1160,6 +1204,18 @@
 			],
 			"type" : "INTERNAL",
 			"value" : "[/usr/bin/pkg-config][v1.8.1()]"
+		},
+		{
+			"name" : "FIND_PACKAGE_MESSAGE_DETAILS_Threads",
+			"properties" : 
+			[
+				{
+					"name" : "HELPSTRING",
+					"value" : "Details about finding Threads"
+				}
+			],
+			"type" : "INTERNAL",
+			"value" : "[TRUE][v()]"
 		},
 		{
 			"name" : "FIND_PACKAGE_MESSAGE_DETAILS_ZLIB",

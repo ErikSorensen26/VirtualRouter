@@ -72,8 +72,8 @@ public:
 
     struct Eigrp {
         std::string network{}, nextHop{}, interface{}, successor{}, feasibleSuccessor{}, routeSource{}, routeType{}, activeOrPassive{};
-        int metric{}, feasibleDistance{}, reportedDistance{}, adminDistance{}, holdTime{}, stuckInActive{}, updateTimer{}, retransmitInterval{}, sequenceNumber{}, routeTag{};
-        int hopCount{}, bandwidth{}, load{}, delay{}, reliability{}, mtu{}, mask{};
+        unsigned int metric{}, feasibleDistance{}, reportedDistance{}, adminDistance{}, holdTime{}, stuckInActive{}, updateTimer{}, retransmitInterval{}, sequenceNumber{}, routeTag{};
+        unsigned int hopCount{}, bandwidth{}, load{}, delay{}, reliability{}, mtu{}, mask{};
         std::chrono::system_clock::time_point age;
     };
 

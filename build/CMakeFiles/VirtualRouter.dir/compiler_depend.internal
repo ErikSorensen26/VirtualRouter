@@ -6,13 +6,6 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/RoutingTable.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/RoutingTable.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/PacketStructure.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
- /usr/include/alloca.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -188,6 +181,29 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/RoutingTable.cpp.o
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -291,22 +307,6 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/RoutingTable.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -314,9 +314,17 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/RoutingTable.cpp.o
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/socket.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Global/src/SaveToBinary.cpp
@@ -324,13 +332,6 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/SaveToBinary.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/PacketStructure.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
- /usr/include/alloca.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -506,6 +507,29 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.o
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -609,22 +633,6 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -632,21 +640,22 @@ CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.o
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/socket.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Packet/src/Checksums.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/src/Checksums.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Checksums.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
- /usr/include/alloca.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
@@ -793,6 +802,29 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Checksums.cpp.o
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -896,22 +928,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Checksums.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -919,23 +935,23 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Checksums.cpp.o
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/socket.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Packet/src/Decapsulation.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/src/Decapsulation.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Decapsulation.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/PacketStructure.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/backward/binders.h
@@ -1084,6 +1100,30 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Decapsulation.cpp.o
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -1203,22 +1243,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Decapsulation.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -1227,21 +1251,22 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Decapsulation.cpp.o
  /usr/include/x86_64-linux-gnu/sys/socket.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Packet/src/Egress.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/src/Egress.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Egress.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
  /usr/include/c++/13/bits/alloc_traits.h
@@ -1343,6 +1368,25 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Egress.cpp.o
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -1449,17 +1493,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Egress.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -1468,9 +1501,18 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Egress.cpp.o
  /usr/include/x86_64-linux-gnu/sys/socket.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/src/Encapsulation.cpp
@@ -1489,14 +1531,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -1698,6 +1732,30 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.o
  /usr/include/c++/13/unordered_map
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -1838,22 +1896,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -1863,24 +1905,25 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.o
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Packet/src/Ingress.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/src/Ingress.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Ingress.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Que.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
  /usr/include/c++/13/bits/alloc_traits.h
@@ -2002,6 +2045,29 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Ingress.cpp.o
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -2109,21 +2175,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Ingress.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -2132,9 +2183,18 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Ingress.cpp.o
  /usr/include/x86_64-linux-gnu/sys/socket.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/src/Process.cpp
@@ -2153,14 +2213,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -2362,6 +2414,30 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.o
  /usr/include/c++/13/unordered_map
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -2502,22 +2578,6 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -2527,18 +2587,24 @@ CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.o
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Bgp.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Bgp.h
- /usr/include/alloca.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
  /usr/include/c++/13/backward/auto_ptr.h
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
@@ -2661,6 +2727,20 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Bgp.cpp.o
  /usr/include/c++/13/tuple
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -2758,17 +2838,6 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Bgp.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -2776,11 +2845,19 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Bgp.cpp.o
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp
@@ -2799,14 +2876,6 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -3008,6 +3077,30 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.o
  /usr/include/c++/13/unordered_map
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -3148,22 +3241,6 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -3173,18 +3250,24 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.o
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Ospf.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Ospf.h
- /usr/include/alloca.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
  /usr/include/c++/13/backward/auto_ptr.h
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
@@ -3307,6 +3390,20 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Ospf.cpp.o
  /usr/include/c++/13/tuple
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -3404,17 +3501,6 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Ospf.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -3422,11 +3508,19 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Ospf.cpp.o
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Rip.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Rip.cpp
@@ -3485,20 +3579,27 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Rip.cpp.o
  /usr/include/c++/13/pstl/pstl_config.h
  /usr/include/c++/13/tuple
  /usr/include/c++/13/type_traits
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
  /usr/include/features-time64.h
  /usr/include/features.h
  /usr/include/stdc-predef.h
  /usr/include/x86_64-linux-gnu/bits/long-double.h
  /usr/include/x86_64-linux-gnu/bits/timesize.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
 
 CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Arp.cpp
@@ -3517,14 +3618,6 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -3726,6 +3819,30 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.o
  /usr/include/c++/13/unordered_map
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -3866,22 +3983,6 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -3891,11 +3992,20 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.o
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp
@@ -3911,17 +4021,10 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Eigrp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Arp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h
+ /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -4123,6 +4226,30 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.o
  /usr/include/c++/13/unordered_map
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -4263,22 +4390,6 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -4288,18 +4399,24 @@ CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.o
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Services/src/Time.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/src/Time.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/Time.h
- /usr/include/alloca.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
  /usr/include/c++/13/array
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
@@ -4437,6 +4554,22 @@ CMakeFiles/VirtualRouter.dir/Background/Services/src/Time.cpp.o
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -4516,35 +4649,27 @@ CMakeFiles/VirtualRouter.dir/Background/Services/src/Time.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
  /usr/include/x86_64-linux-gnu/sys/select.h
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Background/Services/src/TimeManager.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/src/TimeManager.cpp
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
- /usr/include/alloca.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
  /usr/include/c++/13/array
  /usr/include/c++/13/atomic
  /usr/include/c++/13/backward/binders.h
@@ -4711,6 +4836,22 @@ CMakeFiles/VirtualRouter.dir/Background/Services/src/TimeManager.cpp.o
  /usr/include/c++/13/unordered_map
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -4811,19 +4952,6 @@ CMakeFiles/VirtualRouter.dir/Background/Services/src/TimeManager.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -4832,22 +4960,22 @@ CMakeFiles/VirtualRouter.dir/Background/Services/src/TimeManager.cpp.o
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Common/Functions.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.cpp
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
- /usr/include/alloca.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
@@ -4994,6 +5122,29 @@ CMakeFiles/VirtualRouter.dir/Common/Functions.cpp.o
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -5097,22 +5248,6 @@ CMakeFiles/VirtualRouter.dir/Common/Functions.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wchar.h
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -5120,22 +5255,22 @@ CMakeFiles/VirtualRouter.dir/Common/Functions.cpp.o
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/socket.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/Common/pugixml.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Common/pugixml.cpp
  /home/erik/VirtualRouter/VirtualRouter/Common/pugiconfig.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/pugixml.hpp
- /usr/include/alloca.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/int-ll64.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/types.h
- /usr/include/assert.h
  /usr/include/c++/13/backward/binders.h
  /usr/include/c++/13/bit
  /usr/include/c++/13/bits/alloc_traits.h
@@ -5250,6 +5385,25 @@ CMakeFiles/VirtualRouter.dir/Common/pugixml.cpp.o
  /usr/include/c++/13/tuple
  /usr/include/c++/13/type_traits
  /usr/include/c++/13/typeinfo
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/int-ll64.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/types.h
+ /usr/include/assert.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -5361,17 +5515,6 @@ CMakeFiles/VirtualRouter.dir/Common/pugixml.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -5379,12 +5522,19 @@ CMakeFiles/VirtualRouter.dir/Common/pugixml.cpp.o
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
  /usr/include/x86_64-linux-gnu/sys/stat.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/float.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/float.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/main.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/main.cpp
@@ -5413,17 +5563,6 @@ CMakeFiles/VirtualRouter.dir/main.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/include/Console.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
  /home/erik/VirtualRouter/VirtualRouter/include/Terminal.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/ioctl.h
- /usr/include/asm-generic/ioctls.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
- /usr/include/assert.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -5669,6 +5808,33 @@ CMakeFiles/VirtualRouter.dir/main.cpp.o
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
  /usr/include/c++/13/version
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/ioctl.h
+ /usr/include/asm-generic/ioctls.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
+ /usr/include/assert.h
  /usr/include/ctype.h
  /usr/include/curses.h
  /usr/include/endian.h
@@ -5834,22 +6000,6 @@ CMakeFiles/VirtualRouter.dir/main.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -5861,11 +6011,24 @@ CMakeFiles/VirtualRouter.dir/main.cpp.o
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/ttydefaults.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_arg.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/src/CommandProcessing.cpp
@@ -5894,17 +6057,6 @@ CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/include/Console.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
  /home/erik/VirtualRouter/VirtualRouter/include/Terminal.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/ioctl.h
- /usr/include/asm-generic/ioctls.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
- /usr/include/assert.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -6150,6 +6302,33 @@ CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.o
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
  /usr/include/c++/13/version
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/ioctl.h
+ /usr/include/asm-generic/ioctls.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
+ /usr/include/assert.h
  /usr/include/ctype.h
  /usr/include/curses.h
  /usr/include/endian.h
@@ -6315,22 +6494,6 @@ CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -6342,11 +6505,24 @@ CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.o
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/ttydefaults.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_arg.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/src/Configs.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/src/Configs.cpp
@@ -6355,16 +6531,6 @@ CMakeFiles/VirtualRouter.dir/src/Configs.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Common/pugiconfig.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/pugixml.hpp
  /home/erik/VirtualRouter/VirtualRouter/include/Configs.h
- /usr/include/alloca.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/ioctl.h
- /usr/include/asm-generic/ioctls.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
- /usr/include/assert.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -6604,6 +6770,32 @@ CMakeFiles/VirtualRouter.dir/src/Configs.cpp.o
  /usr/include/c++/13/valarray
  /usr/include/c++/13/vector
  /usr/include/c++/13/version
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/ioctl.h
+ /usr/include/asm-generic/ioctls.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
+ /usr/include/assert.h
  /usr/include/ctype.h
  /usr/include/curses.h
  /usr/include/endian.h
@@ -6755,22 +6947,6 @@ CMakeFiles/VirtualRouter.dir/src/Configs.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -6782,11 +6958,23 @@ CMakeFiles/VirtualRouter.dir/src/Configs.cpp.o
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/ttydefaults.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_arg.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/src/Console.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/src/Console.cpp
@@ -6796,16 +6984,6 @@ CMakeFiles/VirtualRouter.dir/src/Console.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Common/pugixml.hpp
  /home/erik/VirtualRouter/VirtualRouter/include/Configs.h
  /home/erik/VirtualRouter/VirtualRouter/include/Console.h
- /usr/include/alloca.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/ioctl.h
- /usr/include/asm-generic/ioctls.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
- /usr/include/assert.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -7045,6 +7223,32 @@ CMakeFiles/VirtualRouter.dir/src/Console.cpp.o
  /usr/include/c++/13/valarray
  /usr/include/c++/13/vector
  /usr/include/c++/13/version
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/ioctl.h
+ /usr/include/asm-generic/ioctls.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
+ /usr/include/assert.h
  /usr/include/ctype.h
  /usr/include/curses.h
  /usr/include/endian.h
@@ -7196,22 +7400,6 @@ CMakeFiles/VirtualRouter.dir/src/Console.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -7223,11 +7411,23 @@ CMakeFiles/VirtualRouter.dir/src/Console.cpp.o
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/ttydefaults.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_arg.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/src/Interface.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/src/Interface.cpp
@@ -7246,14 +7446,6 @@ CMakeFiles/VirtualRouter.dir/src/Interface.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -7455,6 +7647,30 @@ CMakeFiles/VirtualRouter.dir/src/Interface.cpp.o
  /usr/include/c++/13/unordered_map
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
  /usr/include/ctype.h
  /usr/include/endian.h
  /usr/include/errno.h
@@ -7595,22 +7811,6 @@ CMakeFiles/VirtualRouter.dir/src/Interface.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -7620,11 +7820,20 @@ CMakeFiles/VirtualRouter.dir/src/Interface.cpp.o
  /usr/include/x86_64-linux-gnu/sys/syscall.h
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 
 CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/src/Terminal.cpp
@@ -7653,22 +7862,6 @@ CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/include/Console.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
  /home/erik/VirtualRouter/VirtualRouter/include/Terminal.h
- /usr/include/X11/X.h
- /usr/include/X11/Xfuncproto.h
- /usr/include/X11/Xlib.h
- /usr/include/X11/Xosdefs.h
- /usr/include/X11/extensions/xtestconst.h
- /usr/include/alloca.h
- /usr/include/arpa/inet.h
- /usr/include/asm-generic/bitsperlong.h
- /usr/include/asm-generic/errno-base.h
- /usr/include/asm-generic/errno.h
- /usr/include/asm-generic/ioctl.h
- /usr/include/asm-generic/ioctls.h
- /usr/include/asm-generic/posix_types.h
- /usr/include/asm-generic/socket.h
- /usr/include/asm-generic/sockios.h
- /usr/include/assert.h
  /usr/include/c++/13/algorithm
  /usr/include/c++/13/any
  /usr/include/c++/13/array
@@ -7914,6 +8107,38 @@ CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.o
  /usr/include/c++/13/variant
  /usr/include/c++/13/vector
  /usr/include/c++/13/version
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
+ /usr/include/X11/X.h
+ /usr/include/X11/Xfuncproto.h
+ /usr/include/X11/Xlib.h
+ /usr/include/X11/Xosdefs.h
+ /usr/include/X11/extensions/xtestconst.h
+ /usr/include/alloca.h
+ /usr/include/arpa/inet.h
+ /usr/include/asm-generic/bitsperlong.h
+ /usr/include/asm-generic/errno-base.h
+ /usr/include/asm-generic/errno.h
+ /usr/include/asm-generic/ioctl.h
+ /usr/include/asm-generic/ioctls.h
+ /usr/include/asm-generic/posix_types.h
+ /usr/include/asm-generic/socket.h
+ /usr/include/asm-generic/sockios.h
+ /usr/include/assert.h
  /usr/include/ctype.h
  /usr/include/curses.h
  /usr/include/endian.h
@@ -8079,22 +8304,6 @@ CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.o
  /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h
  /usr/include/x86_64-linux-gnu/bits/wordsize.h
  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++locale.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
@@ -8106,9 +8315,22 @@ CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.o
  /usr/include/x86_64-linux-gnu/sys/time.h
  /usr/include/x86_64-linux-gnu/sys/ttydefaults.h
  /usr/include/x86_64-linux-gnu/sys/types.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdarg.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h
- /usr/lib/gcc/x86_64-linux-gnu/13/include/syslimits.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___gnuc_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg___va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_arg.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_copy.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stdarg_va_list.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_max_align_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_null.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_nullptr_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_offsetof.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_ptrdiff_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_size_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/__stddef_wchar_t.h
+ /usr/lib/llvm-18/lib/clang/18/include/inttypes.h
+ /usr/lib/llvm-18/lib/clang/18/include/limits.h
+ /usr/lib/llvm-18/lib/clang/18/include/sanitizer/tsan_interface.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdarg.h
+ /usr/lib/llvm-18/lib/clang/18/include/stddef.h
+ /usr/lib/llvm-18/lib/clang/18/include/stdint.h
 

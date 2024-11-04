@@ -395,7 +395,7 @@ namespace Protocol
     }
 
     // Update from route change
-    void Eigrp::NotifyRoutingChange(const RoutingTable::Eigrp &changeRoute, bool isRemoval = false, bool init)
+    void Eigrp::NotifyRoutingChange(const RoutingTable::Eigrp &changeRoute, bool isRemoval, bool init)
     {
         for (const auto &eigrpInterfacePtr : eigrpInterfaceList)
         {
@@ -412,26 +412,37 @@ namespace Protocol
             for (const auto &neighborEntry : neighbors)
             {
                 // send an Update Packet to the neighbor
-                if (!neighborEntry->hasMac)
                 {
-                    continue;
-                }
+                    std::lock_guard<std::mutex> lock(neighborEntry->macMutex);
+                    if (!neighborEntry->hasMac || neighborEntry->macAddress.empty())
+                    {
+                        auto mac = RoutingTable::getInstance().ArpLookup(neighborEntry->ipAddress);
+                        if (mac.has_value())
+                        {
+                            neighborEntry->macAddress = mac->mac;
+                            neighborEntry->hasMac = true;
+                        }
+                        else
+                        {
+                            eigrpInterfacePtr.second->currentInterface->arp->sendRequest(neighborEntry->ipAddress);
+                            continue;
+                        }
+                    }
+                } 
 
                 const auto &neighborIp = neighborEntry->ipAddress;
                 bool sendRemoval = isRemoval;
-                if (!isRemoval)
+                if (init) 
                 {
-                    sendRemoval = (changeRoute.nextHop == neighborEntry->ipAddress);
-                }
-                if (init) {
-                    eigrpInterfacePtr.second->SendUpdateToNeighbor(neighborIp, changeRoute, sendRemoval);
+                    if (changeRoute.nextHop == neighborEntry->ipAddress)
+                    {
+                        eigrpInterfacePtr.second->SendUpdateToNeighbor(neighborIp, changeRoute, false);
+                    }
                 }
                 else 
                 {
-                    if (changeRoute.nextHop != neighborEntry->ipAddress)
-                    {
-                        eigrpInterfacePtr.second->SendUpdateToNeighbor(neighborIp, changeRoute, sendRemoval);
-                    }
+                    sendRemoval = (changeRoute.nextHop == neighborEntry->ipAddress);
+                    eigrpInterfacePtr.second->SendUpdateToNeighbor(neighborIp, changeRoute, sendRemoval);
                 }
             }
         }
@@ -475,7 +486,7 @@ namespace Protocol
         ip.fragmentFlag.fragment = "0";
         ip.fragmentFlag.moreFragment = "0";
         ip.fragmentFlag.fragment = "0000000000000";
-        ip.TTL = function->hexToByte("01");
+        ip.TTL = function->hexToByte("02");
         ip.protocol = variable.ipv4.eigrp;
         ip.checksum = function->hexToByte("0000");
         ip.sourceAddress = function->hexToByte(currentInterface->Get().ip);
@@ -504,11 +515,11 @@ namespace Protocol
         }
         else if (eigrpPacket->opcode == variable.eigrp.type.reply)
         {
-            ProcessReply(eigrpPacket, ipPacket->sourceAddress);
+            ProcessReply(eigrpPacket, function->byteToHex(ipPacket->sourceAddress));
         }
         else if (eigrpPacket->opcode == variable.eigrp.type.query)
         {
-            ProcessQuery(eigrpPacket, ipPacket->sourceAddress);
+            ProcessQuery(eigrpPacket, function->byteToHex(ipPacket->sourceAddress));
         }
     }
 
@@ -523,6 +534,7 @@ namespace Protocol
         }
 
         int recievedHoldTime = holdTime; // Default holdtime
+        std::string initialSeq; // Initial sequence number
 
         // Process TLV parameters
         for (const auto& opt : receivedHello->options)
@@ -533,6 +545,13 @@ namespace Protocol
                 if (opt.value.substr(0, 5) != parameters.substr(0, 5)) return;
                 // Extract Holdtime
                 recievedHoldTime = function->byteToNum(opt.value.substr(6, 2));
+
+                // Check for Peer Termination
+                if (parameters.substr(0, 5) == function->hexToByte("FFFFFFFFFF"))
+                {
+                    HandleNeighborDown(function->byteToHex(recievedIP->sourceAddress));
+                    return;
+                }
             }
         }
 
@@ -589,14 +608,14 @@ namespace Protocol
             StartHoldTimer(neighborIp, neighbor->holdTime);
 
             // If it's a new neighbor, send a full update
-            if (isNewNeighbor)
+            if (isNewNeighbor && !neighbor->adjacency)
             {
+                neighbor->adjacency = true;
                 neighbor->sequenceNumber = 1;
                 SendHelloPacket(true, neighbor->sequenceNumber, neighborIp);
                 SendEmptyUpdateToNeighbor(neighborIp);
-                neighbor->adjacency = true;
             }
-            else if (neighbor->adjacency && neighbor->hasMac && neighbor->receivedInitUpdate && neighbor->sendInitUpdate && !neighbor->isInit)
+            else if (neighbor->adjacency && neighbor->hasMac && !neighbor->isInit && neighbor->receivedInitUpdate && !neighbor->sendInitUpdate)
             {
                 SendFullUpdateToNeighbor(neighborIp);
                 neighbor->sendInitUpdate = true;
@@ -607,23 +626,38 @@ namespace Protocol
     // Processes EIGRP Update Packet
     void EigrpInterface::ProcessUpdate(const eigrpHeader *receivedUpdate, const std::string &neighborIp)
     {
-        // Check flags
-        bool initFlag = (receivedUpdate->flags.init == "1");
-        bool endOfTableFlag = (receivedUpdate->flags.endOfTable == "1");
-
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
+
+        // Get sequence number
+        int receivedSequenceNumber = function->byteToNum(receivedUpdate->sequence);
+
+        if (neighbor->lastReceivedSequenceNumber <= neighbor->conditionalReceive && neighbor->lastReceivedSequenceNumber != 0) 
+        {
+            SendAckToNeighbor(neighborIp, receivedSequenceNumber);
+            return; 
+        }
+
+        neighbor->lastReceivedSequenceNumber = receivedSequenceNumber;
+
+        // Update flags if needed
+        if (receivedUpdate->flags.init == "1") { neighbor->sequenceList[receivedSequenceNumber].init = true; }
+        if (receivedUpdate->flags.conditionalRecieve == "1") { neighbor->sequenceList[receivedSequenceNumber].conditionalReceive = true; }
+        if (receivedUpdate->flags.restart == "1") { /*HandleNeighborDown(neighborIp);*/ return; } // CAUSING FUCKING PROBLEMS
+        if (receivedUpdate->flags.endOfTable == "1") {neighbor->sequenceList[receivedSequenceNumber].endOfTable = true; }
 
         if (!neighbor->receivedInitUpdate && receivedUpdate->options.empty())
         {
             neighbor->receivedInitUpdate = true;
         }
 
-        if (initFlag)
+        // Clear if new sequence number
+        if (receivedSequenceNumber != neighbor->lastReceivedSequenceNumber)
         {
-            // Start update sequence
             routeBuffer.clear();
         }
 
+        // Process ack if necessary
         if (receivedUpdate->ack != function->hexToByte("00000000"))
         {
             ProcessAck(receivedUpdate->ack, neighborIp);
@@ -653,13 +687,13 @@ namespace Protocol
             }
         }
 
-        if (true)
+        if (neighbor->sequenceList[receivedSequenceNumber].endOfTable || (!neighbor->sequenceList[receivedSequenceNumber].init && !neighbor->sequenceList[receivedSequenceNumber].endOfTable))
         {
             // End of update sequence
-            neighbor->isInit = true;
+            neighbor->sequenceList.erase(receivedSequenceNumber);
             for (const auto &route : routeBuffer)
             {
-                UpdateRoutingTable(route);
+                UpdateRoutingTable(route, neighbor->sequenceList[receivedSequenceNumber].init);
             }
             routeBuffer.clear();
         }
@@ -678,6 +712,7 @@ namespace Protocol
         auto neighborIt = neighbors.find(neighborIp);
         if (neighborIt != neighbors.end())
         {
+            if (neighbors.find(neighborIp) == neighbors.end()) { return; }
             std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
 
             // Remove this acknowledged packet
@@ -737,20 +772,9 @@ namespace Protocol
     // Process reply
     void EigrpInterface::ProcessReply(const eigrpHeader *recievedReply, const std::string &neighborIp)
     {
-        // Extract routes from the reply
-        for (const auto &option : recievedReply->options)
+        // Validate neighbor existence
         {
-            if (option.option == variable.eigrp.options.internalRoute ||
-                option.option == variable.eigrp.options.externalRoute)
-            {
-                RoutingTable::Eigrp route = DecodeRoute(neighborIp, option.value, (option.option == variable.eigrp.options.externalRoute));
-
-                // Update the topology table with the recieves route
-                UpdateRoutingTable(route);
-
-                // Transition route to passive state if all replies recieved
-                topologyTable->MarkRouteAsPassive(route.network, this);
-            }
+            //std::lock_guard<std::mutex> lock(neighbor)
         }
     }
 
@@ -758,6 +782,7 @@ namespace Protocol
     void EigrpInterface::SendAckToNeighbor(const std::string &neighborIp, int sequenceNumber)
     {
         // Retrieve neighbor information
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
 
         if (!neighbor->isInit)
@@ -781,6 +806,9 @@ namespace Protocol
         }
         ip.destinationAddress = function->hexToByte(neighbor->ipAddress);
 
+        {
+            routeBuffer.clear();
+        };
         // Construct EIGRP Ack packet
         eigrpProcess->EigrpHello(eigrp, this, true, false, sequenceNumber);
 
@@ -799,12 +827,18 @@ namespace Protocol
     // Send Update to neighbor
     void EigrpInterface::SendUpdateToNeighbor(const std::string &neighborIp, const RoutingTable::Eigrp &route, bool removal)
     {
-        // Increment sequence number for reliabile delivery
         std::lock_guard<std::mutex> lock(neighborMutex);
-        auto neighborIt = neighbors.find(neighborIp);
-        if (neighborIt == neighbors.end()) return;
+
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
 
+        // Check Removal
+        if (neighbor->sequenceNumber < 1)
+        {
+            return;
+        }
+
+        // Incrament sequence number for reliability
         if (neighbor->sequenceNumber >= INT_MAX)
         {
             neighbor->sequenceNumber = 1;
@@ -847,7 +881,7 @@ namespace Protocol
 
         // Construct EIGRP Update packet
         vector<EigrpConfigs::NetworksDistributed> routesToSend = {EigrpConfigs::NetworksDistributed{.route = routeToSend}};
-        eigrpProcess->EigrpUpdate(eigrp, neighbor->sequenceNumber, routesToSend, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endOfTable=*/false);
+        eigrpProcess->EigrpUpdate(eigrp, neighbor->sequenceNumber, routesToSend, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endOfTable=*/true);
 
         // Check for pending acks
         if (!neighbor->pendingAcks.empty())
@@ -880,7 +914,11 @@ namespace Protocol
     void EigrpInterface::SendFullUpdateToNeighbor(const std::string &neighborIp)
     {
         RoutingTable &routingTable = RoutingTable::getInstance();
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
+
+        // Incrament sequence number for reliable delivery
+        neighbor->sequenceNumber = 2;
 
         // Create the Eigrp Update Packet
         PacketInfo eigrpUpdatePacketStructure;
@@ -898,7 +936,7 @@ namespace Protocol
 
         for (const auto &route : eigrpTable)
         {
-            if (function->compareNetworkWithIp(route.network, neighbor->ipAddress))
+            if (!function->compareNetworkWithIp(route.network, neighbor->ipAddress))
             {
                 routesToSend.push_back(EigrpConfigs::NetworksDistributed{.route = route});
             }
@@ -937,10 +975,8 @@ namespace Protocol
 
     void EigrpInterface::SendEmptyUpdateToNeighbor(const std::string &neighborIp)
     {
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
-
-        // Incrament sequence number for reliable delivery
-        neighbor->sequenceNumber++;
 
         // Create the EIGRP Update packet structure
         PacketInfo eigrpUpdatePacketStructure;
@@ -989,7 +1025,7 @@ namespace Protocol
             RoutingTable &routingTable = RoutingTable::getInstance();
             for (const auto &update : routingTable.eigrp)
             {
-                if (function->compareNetworkWithIp(update.second.network, neighbor->ipAddress))
+                if (!function->compareNetworkWithIp(update.second.network, neighbor->ipAddress))
                 {
                     end = false;
                 }
@@ -998,6 +1034,7 @@ namespace Protocol
             {
                 neighbor->isInit = true;
             }
+            neighbor->conditionalReceive = neighbor->lastReceivedSequenceNumber;
             eigrpProcess->EigrpUpdate(eigrp, neighbor->sequenceNumber, routesToSend, /*init=*/true, /*conditional=*/true, /*restart=*/false, /*endOfTable=*/end, /*query=*/false, /*reply=*/false);
         }
 
@@ -1032,6 +1069,7 @@ namespace Protocol
     void EigrpInterface::SendQueryToNeighbor(const std::string &neighborIp, const RoutingTable::Eigrp &route)
     {
         // Increment sequence number for reliabile delivery
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> &neighbor = neighbors[neighborIp];
         neighbor->sequenceNumber++;
 
@@ -1071,6 +1109,7 @@ namespace Protocol
     void EigrpInterface::SendReplyToNeighbor(const std::string &neighborIp, const RoutingTable::Eigrp &route)
     {
         // Increment sequence number for reliabile delivery
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
         neighbor->sequenceNumber++;
 
@@ -1188,10 +1227,6 @@ namespace Protocol
 
         std::string eigrpHelloPacket = Encapsulate(eigrpHelloPacketStructure);
         currentInterface->packetOutQueue.enqueue(eigrpHelloPacket);
-        if (currentInterface->ipAddress == "16161601")
-        {
-            currentInterface->packetOutQueue.enqueue(function->hexToByte("01005e00000aca0549b9001c080045c000420000000002580cf1c0a80a01e000000a02030fc1000000000000000900000000000000010102001a00000000ffffffff00000a000005dc01ff0100040809"));
-        }
     }
 
     // Stops the Hello timer thread
@@ -1207,6 +1242,7 @@ namespace Protocol
     // EIGRP Hold timer thread function
     void EigrpInterface::StartHoldTimer(const std::string &neighborIp, int holdTime)
     {
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> &neighbor = neighbors[neighborIp];
 
         auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(holdTime);
@@ -1373,7 +1409,7 @@ namespace Protocol
     }
 
     // Updates EIGRP routing table
-    void EigrpInterface::UpdateRoutingTable(const RoutingTable::Eigrp &route)
+    void EigrpInterface::UpdateRoutingTable(const RoutingTable::Eigrp &route, bool init)
     {
         // Access the topology table and update it with new routes
         TopologyTable::RouteInfo routeInfo;
@@ -1397,22 +1433,42 @@ namespace Protocol
             if (successorIt != bestRouteEntry->routesByNeighbor.end())
             {
                 // Update the routing table accordingly
-                RoutingTable &routingTable = RoutingTable::getInstance();
-
                 RoutingTable::Eigrp newRoute = route;
                 newRoute.nextHop = successorIt->second.nextHop;
                 newRoute.metric = successorIt->second.feasibleDistance;
 
-                // Update the global routing table
-                routingTable.UpdateEigrp(newRoute);
+                // Access the routing table to check existing conditions
+                RoutingTable &routingTable = RoutingTable::getInstance();
+                auto existingRoute = routingTable.GetAllEigrpRoutes();
 
-                // Notify neighbors about the route change
-                eigrpProcess->NotifyRoutingChange(newRoute, /*isRemoval*/ false);
+                bool routeChange = false;
+
+                for (const auto& testRoute : existingRoute)
+                {
+                    if (testRoute.network != route.network && testRoute.metric != route.metric)
+                    {
+                        routeChange = true;
+                    }
+
+                    if (testRoute.nextHop != route.nextHop || testRoute.metric != route.metric)
+                    {
+                        routeChange = true;
+                    }
+                }
+
+                if (routeChange) 
+                {
+                    // Update the global EIGRP table
+                    routingTable.UpdateEigrp(newRoute);
+                    
+                    // Notify neighbors about the route change
+                    eigrpProcess->NotifyRoutingChange(newRoute, /*isRemoval*/ false, /*init*/init);
+                }
             }
         }
         else
         {
-            eigrpProcess->NotifyRoutingChange(route, /*isRemoval*/ false);
+            eigrpProcess->NotifyRoutingChange(route, /*isRemoval*/ false, /*init*/init);
         }
     }
 
@@ -1421,10 +1477,8 @@ namespace Protocol
     {
         std::lock_guard<std::mutex> lock(neighborMutex);
 
-        auto it = neighbors.find(neighborIp);
-        if (it == neighbors.end()) return;
-
         // Remove neighbor from the neighbor table
+        if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
 
         // Cancel any pending timers
@@ -1441,6 +1495,7 @@ namespace Protocol
         neighbor->retransmissionCounts.clear();
         neighbor->reliablePackets.clear();
         neighbor->packetSendTimes.clear();
+        neighbor->sequenceList.clear();
 
         // for each affected destination, re-run DUEL
         for (auto &[destination, entry] : topologyTable->GetTopologyEntries())

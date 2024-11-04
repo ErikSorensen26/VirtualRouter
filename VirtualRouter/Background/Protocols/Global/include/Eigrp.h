@@ -53,6 +53,14 @@ namespace EigrpConfigs {
             string flags{"00"};
         } metric;
     };
+    struct Sequence {
+        bool init;
+        bool conditionalReceive;
+        bool endOfTable;
+
+        Sequence() : init(false), conditionalReceive(false), endOfTable(false) {}
+
+    };
 struct NeighborInfo {
     std::string ipAddress;                                  // Neighbor's IP address
     std::string macAddress;                                 // Neighbor's MAC address
@@ -60,6 +68,8 @@ struct NeighborInfo {
     bool hasMac;                                            // Indicates if MAC address is known
     bool isInit;                                            // Initialization flag
     bool sendInitUpdate;                                    // Flag to send initial update
+    std::unordered_map<int, Sequence> sequenceList;         // Holds flags for sequences
+    int conditionalReceive;                                 // Holds conditional receive sequence
     bool receivedInitUpdate;                                // Flag for received initial update
     int sequenceNumber;                                     // Sequence number for reliable delivery
     int lastReceivedSequenceNumber;                         // Last received sequence number
@@ -98,6 +108,8 @@ struct NeighborInfo {
           isInit(false),
           sendInitUpdate(false),
           receivedInitUpdate(false),
+          lastReceivedSequenceNumber(0),
+          conditionalReceive(0),
           sequenceNumber(0),
           adjacency(false),
           srtt(1.0),
@@ -165,7 +177,7 @@ namespace Protocol
         void SendReplyToNeighbor(const std::string& neighborIp, const RoutingTable::Eigrp& route);
 
         // Updates Routing Table
-        void UpdateRoutingTable(const RoutingTable::Eigrp& route);
+        void UpdateRoutingTable(const RoutingTable::Eigrp& route, bool init = false);
         
         // Decodes Routes
         RoutingTable::Eigrp DecodeRoute(string ip, string value, bool external);
@@ -275,7 +287,7 @@ namespace Protocol
         // Handles Interface change
         void OnInterfaceChange(Interface* interfacePtr);
         // Update from route change
-        void NotifyRoutingChange(const RoutingTable::Eigrp& changeRoute, bool isRemoval, bool init = false);
+        void NotifyRoutingChange(const RoutingTable::Eigrp& changeRoute, bool isRemoval = false, bool init = false);
     
         // List of EIGRP interfaces
         std::map<int, std::shared_ptr<EigrpInterface>> eigrpInterfaceList{};

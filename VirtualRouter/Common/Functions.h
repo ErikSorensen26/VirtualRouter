@@ -61,7 +61,7 @@ public:
     // converts 
     std::string byteArrayToHex(const std::vector<uint8_t>& byte_array);
     // converts hex to decimal number
-    int hexToNum(const std::string& hexStr);
+    unsigned hexToNum(const std::string& hexStr);
     // converts int to hex
     std::string intToHex(int num);
     // converts int to hex with given byte size

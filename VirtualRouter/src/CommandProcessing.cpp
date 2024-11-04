@@ -11,16 +11,16 @@ void Terminal::Process(string& command) {
 	vector<string> TEMPcommandStream = extractWords(command);
 	vector<string> commandStream;
 	
-	bool line = false;
-	for (int index = 0; index < TEMPcommandStream.size(); index++)  {
-		if (!line) {
+	bool textLine = false;
+	for (unsigned long index = 0; index < TEMPcommandStream.size(); index++)  {
+		if (!textLine) {
 			commandStream.push_back(TEMPcommandStream[index]);
 		} else {
 			commandStream[commandStream.size() - 1] += " " + TEMPcommandStream[index];
 		}
 		if (index > 0) {
 			if (oldCommandStream[index] == "LINE") {
-				line = true;
+				textLine = true;
 			}
 		}
 	}
@@ -76,7 +76,7 @@ void Terminal::Process(string& command) {
 			if (commandStream[0] == "interface") {
 				string type = commandStream[1]; 
 				string interfaceID_temp = commandStream[2];
-				interfaceID = function->stringToNum(commandStream[2]);
+				interfaceID = static_cast<unsigned long>(function->stringToNum(commandStream[2]));
 				string intType;
 				if ((type == "Ethernet" || type == "GigabitEthernet" || type == "FastEthernet") && physicalInterfaces.size() >= interfaceID) {
 					intType = physicalInterfaces[interfaceID];

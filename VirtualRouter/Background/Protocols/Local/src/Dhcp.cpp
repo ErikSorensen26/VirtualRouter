@@ -41,7 +41,7 @@ namespace Protocol {
                     PacketInfo discoverInfo = DhcpDiscover(dhcpBody, hostname, hardwareAddress);
                     string discoverPacket = Encapsulate(discoverInfo);
                     currentInterface->packetOutQueue.enqueue(discoverPacket); 
-                    std::this_thread::sleep_for(std::chrono::seconds(4)); 
+                    std::this_thread::sleep_for(std::chrono::seconds(2)); 
 
                     std::lock_guard<std::mutex> lock(dhcpMutex);
                     if (!dhcpOffer.Layer2.empty())

@@ -56,7 +56,7 @@ private:
 	void runBgp();
 	void runRip();
 
-	int interfaceID;
+	unsigned long interfaceID;
 	int routingProtocolID;
 	
 	map<int, std::shared_ptr<Interface>>* Interfaces;

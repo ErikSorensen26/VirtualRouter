@@ -204,8 +204,8 @@ std::string Functions::byteArrayToHex(const std::vector<uint8_t>& byte_array) {
     return hex_stream.str();
 }
 
-int Functions::hexToNum(const std::string& hexStr) {
-    int decimalValue;
+unsigned Functions::hexToNum(const std::string& hexStr) {
+    unsigned decimalValue;
     std::stringstream ss;
 
     ss << std::hex << hexStr;
@@ -357,6 +357,7 @@ std::string Functions::changeSize(std::string str, int size, std::string value) 
 bool Functions::compareNetworkWithIp(std::string networkAddress, std::string ipAddress)
 {
     bool compare = false;
+    std::transform(ipAddress.begin(), ipAddress.end(), ipAddress.begin(), ::toupper);
     for (int i = 0; i < ipAddress.size(); i += 2)
     {
         std::string oct = networkAddress.substr(i, 2);
