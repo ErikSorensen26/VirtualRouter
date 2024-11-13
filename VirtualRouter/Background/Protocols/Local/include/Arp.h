@@ -67,9 +67,6 @@ namespace Protocol {
         std::condition_variable cv;
 
         map<std::string, arpHeader> pendingReplies;
-
-        // Pointer to the singleton instance of Functions
-        Functions* function = Functions::getInstance();
     
         // Variable for storing additional ARP-related data
         Variable variable;

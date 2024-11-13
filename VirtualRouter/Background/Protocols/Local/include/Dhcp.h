@@ -68,9 +68,6 @@ private:
 
     // Variable for storing additional DHCP-related data
     Variable variable;
-
-    // Pointer to the singleton instance of Functions
-    Functions* function = Functions::getInstance();
 };
 
 }

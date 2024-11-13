@@ -12,169 +12,169 @@ struct Variable
 {
     struct ethernet
     {
-        string arp = Functions::hexToByte("0806");
-        string ipv4 = Functions::hexToByte("0800");
-        string mpls = Functions::hexToByte("8847");
-        string vlan = Functions::hexToByte("86dd");
-        string lldp = Functions::hexToByte("88cc");
+        std::string arp{"\x08\x06", 2};
+        string ipv4{"\x08\x00", 2};
+        string mpls{"\x88\x47", 2};
+        string vlan{"\x86\xdd", 2};
+        string lldp{"\x88\xcc", 2};
     } ethernet;
     struct arp
     {
-        string ethernet = Functions::hexToByte("0001");
-        string ipv4 = Functions::hexToByte("0800");
+        string ethernet = {"\x00\x01", 2};
+        string ipv4 = {"\x08\x00", 2};
         struct opcode
         {
-            string request = Functions::hexToByte("0001");
-            string reply = Functions::hexToByte("0002");
-            string reverseRequest = Functions::hexToByte("0003");
-            string reverseReply = Functions::hexToByte("0004");
-            string dynamicRequest = Functions::hexToByte("0005");
-            string dynamicReply = Functions::hexToByte("0006");
-            string dynamicError = Functions::hexToByte("0007");
-            string inverseRequest = Functions::hexToByte("0008");
-            string inverseReply = Functions::hexToByte("0009");
-            string nak = Functions::hexToByte("000a");
+            string request{"\x00\x01", 2};
+            string reply = {"\x00\x02", 2};
+            string reverseRequest{"\x00\x03", 2};
+            string reverseReply{"\x00\x04", 2};
+            string dynamicRequest{"\x00\x05", 2};
+            string dynamicReply{"\x00\x06", 2};
+            string dynamicError{"\x00\x07", 2};
+            string inverseRequest{"\x00\x08", 2};
+            string inverseReply{"\x00\x09", 2};
+            string nak{"\x00\x0a", 2};
         } opcode;
     } arp;
     struct ipv4
     {
         std::string GetValue() const { return "4"; }
-        string gre = Functions::hexToByte("2f");
-        string tcp = Functions::hexToByte("06");
-        string udp = Functions::hexToByte("11");
-        string icmp = Functions::hexToByte("01");
-        string igmp = Functions::hexToByte("02");
-        string ah = Functions::hexToByte("33");
-        string eigrp = Functions::hexToByte("58");
+        string gre{"\x2f", 1};
+        string tcp{"\x06", 1};
+        string udp{"\x11", 1};
+        string icmp{"\x01", 1};
+        string igmp{"\x02", 1};
+        string ah{"\x33", 1};
+        string eigrp{"\x58", 1};
     } ipv4;
     struct udp
     {
         struct dhcp
         {
-            string source = Functions::hexToByte("0044");
-            string destination = Functions::hexToByte("0043");
+            string source{"\x00\x44", 2};
+            string destination{"\x00\x43", 2};
         } dhcp;
     } udp;
     struct gre
     {
-        string ppp = Functions::hexToByte("880b");
+        string ppp{"\x88\x0b", 2};
     } gre;
     struct ah
     {
-        string esp = Functions::hexToByte("32");
+        string esp{"\x32", 1};
     } ah;
     struct mac
     {
-        string broadcast = Functions::hexToByte("ffffffffffff");
-        string source = Functions::hexToByte("000000000000");
+        string broadcast{"\xff\xff\xff\xff\xff\xff", 6};
+        string source{"\x00\x00\x00\x00\x00\x00", 6};
     } mac;
     struct ip
     {
-        string broadcast = Functions::hexToByte("ffffffff");
-        string source = Functions::hexToByte("00000000");
+        string broadcast{"\xff\xff\xff\xff", 4};
+        string source{"\x00\x00\x00\x00", 4};
     } ip;
     struct dhcp
     {
         struct type
         {
-            string discover = Functions::hexToByte("01");
-            string offer = Functions::hexToByte("02");
-            string request = Functions::hexToByte("03");
-            string ack = Functions::hexToByte("05");
-            string nac = Functions::hexToByte("06");
+            string discover{"\x01", 1};
+            string offer{"\x02", 1};
+            string request{"\x03", 1};
+            string ack{"\x05", 1};
+            string nac{"\x06", 1};
         } type;
         struct options
         {
-            string mask = Functions::hexToByte("01");
-            string broadcast = Functions::hexToByte("1c");
-            string timeOffset = Functions::hexToByte("02");
-            string router = Functions::hexToByte("03");
-            string domainName = Functions::hexToByte("0f");
-            string domainServer = Functions::hexToByte("06");
-            string domainSearch = Functions::hexToByte("77");
-            string netbiosNameServer = Functions::hexToByte("2c");
-            string netbiosScope = Functions::hexToByte("2c");
-            string mtu = Functions::hexToByte("1a");
-            string classlessStateRoute = Functions::hexToByte("79");
-            string ntp = Functions::hexToByte("2a");
-            string type = Functions::hexToByte("35");
-            string hostname = Functions::hexToByte("0c");
-            string clientID = Functions::hexToByte("3d");
-            string serverIdentifier = Functions::hexToByte("36");
-            string leaseTime = Functions::hexToByte("33");
-            string renewalTime = Functions::hexToByte("3a");
-            string rebindingTime = Functions::hexToByte("3b");
-            string requestIP = Functions::hexToByte("32");
-            string requestList = Functions::hexToByte("37");
-            string maxSize = Functions::hexToByte("39");
+            string mask{"\x01", 1};
+            string broadcast{"\x1c", 1};
+            string timeOffset{"\x02", 1};
+            string router{"\x03", 1};
+            string domainName{"\x0f", 1};
+            string domainServer{"\x06", 1};
+            string domainSearch{"\x77", 1};
+            string netbiosNameServer{"\x2c", 1};
+            string netbiosScope{"\x2c", 1};
+            string mtu{"\x1a", 1};
+            string classlessStateRoute{"\x79", 1};
+            string ntp{"\x2a", 1};
+            string type{"\x35", 1};
+            string hostname{"\x0c", 1};
+            string clientID{"\x3d", 1};
+            string serverIdentifier{"\x36", 1};
+            string leaseTime{"\x33", 1};
+            string renewalTime{"\x3a", 1};
+            string rebindingTime{"\x3b", 1};
+            string requestIP{"\x32", 1};
+            string requestList{"\x37", 1};
+            string maxSize{"\x39", 1};
         } options;
-        string clientHardwareAddressPadding = Functions::hexToByte("00000000000000000000");
-        string serverHostName = Functions::hexToByte("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-        string bootfile = Functions::hexToByte("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-        string endPadding = Functions::hexToByte("00000000000000000000000000000000000000000000000000");
-        string end = Functions::hexToByte("ff");
-        string magicCookie = Functions::hexToByte("63825363");
+        string clientHardwareAddressPadding{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 10};
+        string serverHostName{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 64} ;
+        string bootfile{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 128};
+        string endPadding{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 25};
+        string end{"\xff", 1};
+        string magicCookie{"\x63\x82\x53\x63", 4};
     } dhcp;
     struct eigrp
     {
         struct type
         {
-            string update = Functions::hexToByte("01");
-            string request = Functions::hexToByte("02");
-            string query = Functions::hexToByte("03");
-            string reply = Functions::hexToByte("04");
-            string hello = Functions::hexToByte("05");
+            string update{"\x01", 1};
+            string request{"\x02", 1};
+            string query{"\x03", 1};
+            string reply{"\x04", 1};
+            string hello{"\x05", 1};
         } type;
         struct options
         {
-            string parameter = Functions::hexToByte("0001");
-            string version = Functions::hexToByte("0004");
-            string sequence = Functions::hexToByte("0003");
-            string multicastSequence = Functions::hexToByte("0005");
-            string internalRoute = Functions::hexToByte("0102");
-            string externalRoute = Functions::hexToByte("0202");
+            string parameter{"\x00\x01", 2};
+            string version{"\x00\x04", 2};
+            string sequence{"\x00\x03", 2};
+            string multicastSequence{"\x00\x05", 2};
+            string internalRoute{"\x01\x02", 2};
+            string externalRoute{"\x02\x02", 2};
         } options;
         struct version
         {
-            string release = Functions::hexToByte("0c04");
-            string tls = Functions::hexToByte("0102");
+            string release{"\x0c\x04", 2};
+            string tls{"\x01\x02", 2};
         } version;
         struct externalProtocol {
-            string igrp = Functions::hexToByte("01");
-            string eigrp = Functions::hexToByte("02");
-            string staticRoute = Functions::hexToByte("03");
-            string rip = Functions::hexToByte("04");
-            string hello = Functions::hexToByte("05");
-            string ospf = Functions::hexToByte("06");
-            string isis = Functions::hexToByte("07");
-            string egp = Functions::hexToByte("08");
-            string bgp = Functions::hexToByte("09");
-            string idrp = Functions::hexToByte("0a");
-            string connected = Functions::hexToByte("0b");
+            string igrp = {"\x01", 1};
+            string eigrp = {"\x02", 1};
+            string staticRoute = {"\x03", 1};
+            string rip = {"\x04", 1};
+            string hello = {"\x05", 1};
+            string ospf = {"\x06", 1};
+            string isis = {"\x07", 1};
+            string egp = {"\x08", 1};
+            string bgp = {"\x09", 1};
+            string idrp = {"\x0a", 1};
+            string connected = {"\x0b", 1};
         } externalProtocol;
         struct destinationAssignmentEncoding {
-            string ipv4 = Functions::hexToByte("01");
-            string ipv6 = Functions::hexToByte("02");
-            string commonService = Functions::hexToByte("4000");
-            string ipv4Family = Functions::hexToByte("4001");
-            string ipv6Family= Functions::hexToByte("4002"); 
+            string ipv4 = {"\x01", 1};
+            string ipv6 = {"\x02", 1};
+            string commonService{"\x40\x00", 2};
+            string ipv4Family{"\x40\x01", 2};
+            string ipv6Famil{"\x40\x02", 2}; 
         } destinationAssignmentEncoding;
         struct communityAttribute {
-            string EXTCOMM_EIGRP = Functions::hexToByte("00");
-            string EXTCOMM_DAD = Functions::hexToByte("01");
-            string EXTCOMM_VRHB = Functions::hexToByte("02");
-            string EXTCOMM_SRLM = Functions::hexToByte("03");
-            string EXTCOMM_SAR = Functions::hexToByte("04");
-            string EXTCOMM_RPM = Functions::hexToByte("05");
-            string EXTCOMM_VRR = Functions::hexToByte("06");
+            string EXTCOMM_EIGRP{"\x00", 1};
+            string EXTCOMM_DAD{"\x01", 1};
+            string EXTCOMM_VRHB{"\x02", 1};
+            string EXTCOMM_SRLM{"\x03", 1};
+            string EXTCOMM_SAR{"\x04", 1};
+            string EXTCOMM_RPM{"\x05", 1};
+            string EXTCOMM_VRR{"\x06", 1};
         } communityAttribute;
     } eigrp;
     struct multicast
     {
         struct Eigrp
         {
-            string address = Functions::hexToByte("e000000a");
-            string mac = Functions::hexToByte("01005e00000a");
+            string address{"\xe0\x00\x00\x0a", 4};
+            string mac{"\x01\x00\x5e\x00\x00\x0a", 6};
         } eigrp;
     } multicast;
 };

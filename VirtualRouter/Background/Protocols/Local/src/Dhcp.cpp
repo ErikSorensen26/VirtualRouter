@@ -18,7 +18,7 @@ namespace Protocol {
         uint32_t transid = dis(gen);
         std::stringstream ss;
         ss << std::hex << std::setw(8) << std::setfill('0') << transid;
-        return ss.str(); 
+        return Functions::hexToByte(ss.str()); 
     }
 
     // Initializes DHCP, sends discover requests, handles offers, and sends requests and acknowledgments
@@ -36,7 +36,7 @@ namespace Protocol {
             while (offer) 
             {
                 // Check if lease time has expired
-                if (leaseStart + function->hexToNum("00" + function->byteToHex(currentInterface->interfaceInfo.dhcp.leaseTime)) < secondsSinceEpoch()) 
+                if (leaseStart + Functions::byteToNum(std::string("0x00", 1) + currentInterface->interfaceInfo.dhcp.leaseTime) < secondsSinceEpoch()) 
                 {
                     PacketInfo discoverInfo = DhcpDiscover(dhcpBody, hostname, hardwareAddress);
                     string discoverPacket = Encapsulate(discoverInfo);
@@ -98,7 +98,7 @@ namespace Protocol {
                             if (sideload) 
                             {
                                 ExtractOptions(dhcp->options); 
-                                currentInterface->setIPv4(function->byteToHex(dhcp->yourClientIP), function->byteToHex(currentInterface->interfaceInfo.dhcp.subnetMask));
+                                currentInterface->setIPv4(dhcp->yourClientIP, currentInterface->interfaceInfo.dhcp.subnetMask);
                                 leaseStart = secondsSinceEpoch(); 
                             }
                         }
@@ -109,12 +109,12 @@ namespace Protocol {
             // Loop to handle DHCP lease renewal
             while (sideload) 
             {
-                if (leaseStart + function->hexToNum(function->byteToHex(currentInterface->interfaceInfo.dhcp.renewalTime)) < secondsSinceEpoch()) 
+                if (leaseStart + Functions::byteToNum(currentInterface->interfaceInfo.dhcp.renewalTime) < secondsSinceEpoch()) 
                 {   
                     string dhcpIP = currentInterface->Get().ip;
                     dhcpHeader header; 
                     header.yourClientIP = dhcpIP; 
-                    header.transID = function->hexToByte(generateDhcpTransid()); 
+                    header.transID = generateDhcpTransid(); 
                     PacketInfo requestInfo = DhcpRequest(dhcpBody, header, hostname, hardwareAddress, dhcpIP, currentInterface->interfaceInfo.dhcp.dhcpServer); // Create DHCP request packet
                     string requestPacket = Encapsulate(requestInfo); 
                     currentInterface->packetOutQueue.enqueue(requestPacket); 
@@ -135,23 +135,23 @@ namespace Protocol {
         udpHeader udp;
 
         eth.destinationMac = variable.mac.broadcast; 
-        eth.sourceMac = function->hexToByte(hardwareAddress); 
+        eth.sourceMac = hardwareAddress; 
         eth.type = variable.ethernet.ipv4;
 
         dhcpPacket.Layer2.push_back(eth);
 
         ip.version = variable.ipv4.GetValue();
         ip.headerLength = "5";
-        ip.serviceField = function->hexToByte("00");
-        ip.totalLength = function->hexToByte("0000"); 
-        ip.identification = function->hexToByte("0000"); 
+        ip.serviceField = std::string("\x00", 1);
+        ip.totalLength = std::string("\x00\x00", 2); 
+        ip.identification = std::string("\x00\x00", 2); 
         ip.fragmentFlag.reserved = "0"; 
         ip.fragmentFlag.fragment = "0";
         ip.fragmentFlag.moreFragment = "0";
         ip.fragmentFlag.fragment = "0000000000000";
-        ip.TTL = function->hexToByte("10");
+        ip.TTL = std::string("\x10", 1);
         ip.protocol = variable.ipv4.udp; 
-        ip.checksum = function->hexToByte("0000");
+        ip.checksum = std::string("\x00\x00", 2);
         ip.sourceAddress = variable.ip.source;
         ip.destinationAddress = variable.ip.broadcast;
 
@@ -159,8 +159,8 @@ namespace Protocol {
 
         udp.sourcePort = variable.udp.dhcp.source;
         udp.destinationPort = variable.udp.dhcp.destination;
-        udp.length = function->hexToByte("0000");
-        udp.checksum = function->hexToByte("0000"); 
+        udp.length = std::string("\x01\x00", 2);
+        udp.checksum = std::string("\x00\x00", 2); 
 
         dhcpPacket.Layer4.push_back(udp); 
         return dhcpPacket; 
@@ -172,18 +172,18 @@ namespace Protocol {
         dhcpHeader dhcp;
 
         dhcp.boot = variable.dhcp.type.discover; 
-        dhcp.hardwareType = function->hexToByte("01");
-        dhcp.hardwareAddressLength = function->hexToByte("06");
-        dhcp.hops = function->hexToByte("00");
-        dhcp.transID = function->hexToByte(generateDhcpTransid()); 
-        dhcp.secondsElapsed = function->hexToByte("0000");
+        dhcp.hardwareType = std::string("\x01", 1);
+        dhcp.hardwareAddressLength = std::string("\x06", 1);
+        dhcp.hops = std::string("\x00", 1);
+        dhcp.transID = generateDhcpTransid(); 
+        dhcp.secondsElapsed = std::string("\x00\x00", 2);
         dhcp.bootpFlags.broadcast = "0";
         dhcp.bootpFlags.reserved = "000000000000000";
         dhcp.clientIP = variable.ip.source; 
         dhcp.yourClientIP = variable.ip.source;
         dhcp.nextServerIP = variable.ip.source;
         dhcp.relayAgentIP = variable.ip.source;
-        dhcp.clientMacAddress = function->hexToByte(hardwareAddress);
+        dhcp.clientMacAddress = hardwareAddress;
         dhcp.clientHardwareAddressPadding = variable.dhcp.clientHardwareAddressPadding;
         dhcp.serverHostName = variable.dhcp.serverHostName;
         dhcp.bootFile = variable.dhcp.bootfile;
@@ -192,19 +192,19 @@ namespace Protocol {
         dhcp.options.resize(4);
 
         dhcp.options[0].option = variable.dhcp.options.type;
-        dhcp.options[0].length = function->hexToByte("01"); 
+        dhcp.options[0].length = std::string("\x01", 1); 
         dhcp.options[0].value = variable.dhcp.type.discover;
 
         dhcp.options[1].option = variable.dhcp.options.clientID;
-        dhcp.options[1].length = function->hexToByte("06"); 
-        dhcp.options[1].value = function->hexToByte(hardwareAddress);
+        dhcp.options[1].length = std::string("\x06", 1);
+        dhcp.options[1].value = hardwareAddress;
 
         dhcp.options[2].option = variable.dhcp.options.maxSize; 
-        dhcp.options[2].length = function->hexToByte("02"); 
-        dhcp.options[2].value = function->hexToByte("0240");
+        dhcp.options[2].length = std::string("\x02", 1); 
+        dhcp.options[2].value = std::string("\x02\x40", 2);
 
         dhcp.options[3].option = variable.dhcp.options.hostname;
-        dhcp.options[3].length = function->hexToByte(function->intToHex(hostname.length())); 
+        dhcp.options[3].length = Functions::numToByte(hostname.length());
         dhcp.options[3].value = hostname; 
 
         dhcp.end = variable.dhcp.end; 
@@ -219,18 +219,18 @@ namespace Protocol {
         dhcpHeader dhcp;
 
         dhcp.boot = variable.dhcp.type.discover; 
-        dhcp.hardwareType = function->hexToByte("01"); 
-        dhcp.hardwareAddressLength = function->hexToByte("06"); 
-        dhcp.hops = function->hexToByte("00"); 
+        dhcp.hardwareType = std::string("\x01", 1); 
+        dhcp.hardwareAddressLength = std::string("\x06", 1); 
+        dhcp.hops = std::string("\x00", 1); 
         dhcp.transID = header.transID; 
-        dhcp.secondsElapsed = function->hexToByte("0000"); 
+        dhcp.secondsElapsed = std::string("\x00\x00", 2); 
         dhcp.bootpFlags.broadcast = "0"; 
         dhcp.bootpFlags.reserved = "000000000000000"; 
         dhcp.clientIP = variable.ip.source; 
         dhcp.yourClientIP = header.yourClientIP; 
         dhcp.nextServerIP = variable.ip.source; 
         dhcp.relayAgentIP = variable.ip.source; 
-        dhcp.clientMacAddress = function->hexToByte(hardwareAddress); 
+        dhcp.clientMacAddress = hardwareAddress; 
         dhcp.clientHardwareAddressPadding = variable.dhcp.clientHardwareAddressPadding; 
         dhcp.serverHostName = variable.dhcp.serverHostName; 
         dhcp.bootFile = variable.dhcp.bootfile; 
@@ -239,31 +239,31 @@ namespace Protocol {
         dhcp.options.resize(7); 
 
         dhcp.options[0].option = variable.dhcp.options.type; 
-        dhcp.options[0].length = function->hexToByte("01"); 
+        dhcp.options[0].length = std::string("\x01", 1); 
         dhcp.options[0].value = variable.dhcp.type.request; 
 
         dhcp.options[1].option = variable.dhcp.options.clientID;
-        dhcp.options[1].length = function->hexToByte("06");
-        dhcp.options[1].value = function->hexToByte(hardwareAddress); 
+        dhcp.options[1].length = std::string("\x06", 1);
+        dhcp.options[1].value = hardwareAddress; 
 
         dhcp.options[2].option = variable.dhcp.options.serverIdentifier;
-        dhcp.options[2].length = function->hexToByte("04");
+        dhcp.options[2].length = std::string("\x04", 1);
         dhcp.options[2].value = currentInterface->interfaceInfo.dhcp.dhcpServer;
 
         dhcp.options[3].option = variable.dhcp.options.requestIP;
-        dhcp.options[3].length = function->hexToByte("04");
+        dhcp.options[3].length = std::string("\x04", 1);
         dhcp.options[3].value = header.yourClientIP; 
 
         dhcp.options[4].option = variable.dhcp.options.leaseTime; 
-        dhcp.options[4].length = function->hexToByte(function->intToHex(currentInterface->interfaceInfo.dhcp.leaseTime.size())); 
+        dhcp.options[4].length = Functions::numToByte(currentInterface->interfaceInfo.dhcp.leaseTime.size()); 
         dhcp.options[4].value = currentInterface->interfaceInfo.dhcp.leaseTime;
 
         dhcp.options[5].option = variable.dhcp.options.hostname; 
-        dhcp.options[5].length = function->hexToByte(function->intToHex(hostname.length())); 
+        dhcp.options[5].length = Functions::numToByte(hostname.length()); 
         dhcp.options[5].value = hostname; 
 
         dhcp.options[6].option = variable.dhcp.options.requestList; 
-        dhcp.options[6].length = function->hexToByte("0d"); 
+        dhcp.options[6].length = std::string("\x0d", 1);
         dhcp.options[6].value = variable.dhcp.options.mask + 
             variable.dhcp.options.broadcast + 
             variable.dhcp.options.timeOffset + 

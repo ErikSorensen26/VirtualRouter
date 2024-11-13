@@ -10,7 +10,9 @@
 using namespace std;
 
 
-Terminal::Terminal() : Console() {
+Terminal::Terminal(bool isDebug) : Console() {
+
+	debug = isDebug;
 
 	er.name = "<error>";		// default name
 	cr.name = "<cr>";
@@ -167,7 +169,7 @@ string Terminal::FixCommand(const string& command) {
 				} else if ((name == "?") && !successMatch && !previousList.empty() && !nextWordHelp) {
 					nextLine = command;
 				}
-				if (currentDir == "error" && currentMode != mode.globalConfiguration && currentMode != mode.userExec && currentMode != mode.privilegedExec && !help && function->lowerCase(command) != "exit") {
+				if (currentDir == "error" && currentMode != mode.globalConfiguration && currentMode != mode.userExec && currentMode != mode.privilegedExec && !help && Functions::lowerCase(command) != "exit") {
 				globalCommand = true;
 				string prevMode = currentMode;
 				nlohmann::json prevJson = jsonDir;
@@ -220,7 +222,7 @@ string Terminal::FixCommand(const string& command) {
 							matches.push_back(word);
 						}
 						if (word.name.size() >= name.size()) {
-							if (equal(name.begin(), name.end(), function->lowerCase(word.name).begin())) {
+							if (equal(name.begin(), name.end(), Functions::lowerCase(word.name).begin())) {
 								matches.push_back(word);
 							}
 						}
@@ -345,14 +347,14 @@ vector<com> Terminal::GetCommandList(const nlohmann::json& execCommands, const s
 				endcommand = true;	
 			}
 		} else if (word.size() >= directory.size()) {
-			if (equal(directory.begin(), directory.end(), function->lowerCase(word).begin()) && !isEqual) {
+			if (equal(directory.begin(), directory.end(), Functions::lowerCase(word).begin()) && !isEqual) {
 				w = work;
 				matches++;
 			}
 			if (word == directory) {
 				isEqual = true;
 				com wr;
-				wr.name = function->lowerCase(work["name"]);
+				wr.name = Functions::lowerCase(work["name"]);
 				wr.description = work["description"];
 				equalWord = wr;
 				w = work;
@@ -381,7 +383,7 @@ vector<com> Terminal::GetCommandList(const nlohmann::json& execCommands, const s
 	else if ((isValidDirectory(w) || matches != 1) && !successMatch) {
 		currentDir = "error";
 	} else if (isEqual && !isValidDirectory(w) && !directory.empty()) {
-		endstring = function->lowerCase(w["name"]);
+		endstring = Functions::lowerCase(w["name"]);
 		endcommand = true;
 		return noSubComList;
 	}

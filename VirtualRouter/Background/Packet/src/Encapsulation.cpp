@@ -6,9 +6,6 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
 {
     std::string packetString{};
 
-    // Retrieve the singleton instance of Functions.
-    Functions *function = Functions::getInstance();
-
     string currentVrf;
     vector<any> data{};
 
@@ -78,9 +75,9 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
         {
             const mplsHeader &mpls = std::any_cast<const mplsHeader &>(header);
             mplsString += mpls.label;
-            // mplsString += function->binToHex(mpls.expBit + mpls.bottomLabelStack);
+            // mplsString += Functions::binToHex(mpls.expBit + mpls.bottomLabelStack);
             mplsString += mpls.TTL;
-            mplsString += function->hexToByte(mplsString);
+            mplsString += Functions::hexToByte(mplsString);
             hasMpls = true;
         }
         else if (is_type<vlanHeader>(header))
@@ -105,17 +102,17 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
         if (is_type<ipv4Header>(header))
         {
             const ipv4Header &ipv4 = std::any_cast<const ipv4Header &>(header);
-            ipv4String += function->hexToByte(ipv4.version + ipv4.headerLength);
+            ipv4String += Functions::hexToByte(ipv4.version + ipv4.headerLength);
             ipv4String += ipv4.serviceField;
             ipv4String += ipv4.totalLength;
             ipv4String += ipv4.identification;
-            ipv4String += function->binToByte(ipv4.fragmentFlag.reserved + ipv4.fragmentFlag.fragment + ipv4.fragmentFlag.moreFragment + ipv4.fragmentFlag.fragmentOffset);
+            ipv4String += Functions::binToByte(ipv4.fragmentFlag.reserved + ipv4.fragmentFlag.fragment + ipv4.fragmentFlag.moreFragment + ipv4.fragmentFlag.fragmentOffset);
             ipv4String += ipv4.TTL;
             ipv4String += ipv4.protocol;
-            ipv4String += function->hexToByte("0000");
+            ipv4String += std::string("\x00\x00", 2);
             ipv4String += ipv4.sourceAddress;
             ipv4String += ipv4.destinationAddress;
-            ipv4String += function->binToByte(ipv4.options.type.copy) + ipv4.options.type.classControl + ipv4.options.type.routerAlert;
+            ipv4String += Functions::binToByte(ipv4.options.type.copy) + ipv4.options.type.classControl + ipv4.options.type.routerAlert;
             ipv4String += ipv4.options.length;
             ipv4String += ipv4.options.routerAlert;
             hasIpv4 = true;
@@ -123,7 +120,7 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
         else if (is_type<greHeade>(header))
         {
             const greHeade &gre = std::any_cast<const greHeade &>(header);
-            greString += function->binToByte(gre.flags.checksum + gre.flags.routing + gre.flags.key + gre.flags.seqNum + gre.flags.strictSourceRoute + gre.flags.recursion + gre.flags.acknowledgment + gre.flags.recursion + gre.flags.version);
+            greString += Functions::binToByte(gre.flags.checksum + gre.flags.routing + gre.flags.key + gre.flags.seqNum + gre.flags.strictSourceRoute + gre.flags.recursion + gre.flags.acknowledgment + gre.flags.recursion + gre.flags.version);
             greString += gre.protocol;
             greString += gre.length;
             greString += gre.callID;
@@ -153,7 +150,7 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             const icmpHeader &icmp = std::any_cast<const icmpHeader &>(header);
             icmpString += icmp.type;
             icmpString += icmp.code;
-            icmpString += function->hexToByte("0000");
+            icmpString += std::string("\x00\x00", 2);
             icmpString += icmp.identifier;
             icmpString += icmp.sequenceNumber;
             icmpString = Checksum::CalculateProtocolChecksum(icmpString + encapsulated, icmpString.size(), 8, 2);
@@ -164,9 +161,9 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             const igmpHeader &igmp = std::any_cast<const igmpHeader &>(header);
             igmpString += igmp.type;
             igmpString += igmp.maxRestTime;
-            igmpString += function->hexToByte("0000");
+            igmpString += std::string("\x00\x00", 2);
             igmpString += igmp.multicastAddress;
-            igmpString += function->binToByte(igmp.v3.supress + igmp.v3.qrv + igmp.v3.qqic + igmp.v3.numSrc);
+            igmpString += Functions::binToByte(igmp.v3.supress + igmp.v3.qrv + igmp.v3.qqic + igmp.v3.numSrc);
             igmpString = Checksum::CalculateProtocolChecksum(igmpString, 0, igmpString.size(), 2);
             hasIgmp = true;
         }
@@ -175,8 +172,8 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             const eigrpHeader &eigrp = std::any_cast<const eigrpHeader &>(header);
             eigrpString += eigrp.version;
             eigrpString += eigrp.opcode;
-            eigrpString += function->hexToByte("0000");
-            eigrpString += function->binToByte("0000000000000000000000000000" + eigrp.flags.endOfTable + eigrp.flags.restart + eigrp.flags.conditionalRecieve + eigrp.flags.init);
+            eigrpString += std::string("\x00\x00", 2);
+            eigrpString += Functions::binToByte("0000000000000000000000000000" + eigrp.flags.endOfTable + eigrp.flags.restart + eigrp.flags.conditionalRecieve + eigrp.flags.init);
             eigrpString += eigrp.sequence;
             eigrpString += eigrp.ack;
             eigrpString += eigrp.virtualRouterID;
@@ -202,9 +199,9 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             tcpString += tcp.sequenceNumber;
             tcpString += tcp.ackNumber;
             tcpString += tcp.headerLength;
-            tcpString += function->binToByte(tcp.flags.congestionWindowReduced + tcp.flags.ecnEcho + tcp.flags.urgent + tcp.flags.acknowledgement + tcp.flags.push + tcp.flags.reset + tcp.flags.syn + tcp.flags.fin);
+            tcpString += Functions::binToByte(tcp.flags.congestionWindowReduced + tcp.flags.ecnEcho + tcp.flags.urgent + tcp.flags.acknowledgement + tcp.flags.push + tcp.flags.reset + tcp.flags.syn + tcp.flags.fin);
             tcpString += tcp.windowSize;
-            tcpString += function->hexToByte("0000");
+            tcpString += std::string("\x00\x00", 2);
             tcpString += tcp.urgentPointer;
             // Add TCP options.
             for (auto opt : tcp.options)
@@ -221,7 +218,7 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             udpString += udp.sourcePort;
             udpString += udp.destinationPort;
             udpString += udp.length;
-            udpString += function->hexToByte("0000");
+            udpString += std::string("\x00\x00", 2);
             hasUdp = true;
         }
     }
@@ -238,7 +235,7 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             dhcpString += dhcp.hops;
             dhcpString += dhcp.transID;
             dhcpString += dhcp.secondsElapsed;
-            dhcpString += function->binToByte(dhcp.bootpFlags.broadcast + dhcp.bootpFlags.reserved);
+            dhcpString += Functions::binToByte(dhcp.bootpFlags.broadcast + dhcp.bootpFlags.reserved);
             dhcpString += dhcp.clientIP;
             dhcpString += dhcp.yourClientIP;
             dhcpString += dhcp.nextServerIP;
@@ -266,12 +263,12 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     if (hasIpv4)
     {
         // Calculate the total size of the IPv4 payload including headers and application payload.
-        string ipv4Size = function->intToHex(ipv4String.size() + udpString.size() + tcpString.size() + eigrpString.size() + applicationPayload.size());
-        while (ipv4Size.size() < 4)
+        string ipv4Size = Functions::numToByte(ipv4String.size() + udpString.size() + tcpString.size() + eigrpString.size() + applicationPayload.size());
+        while (ipv4Size.size() < 2)
         {
-            ipv4Size = "0" + ipv4Size;
+            ipv4Size = string("\x00", 1) + ipv4Size;
         }
-        ipv4String.replace(2, 2, function->hexToByte(ipv4Size));
+        ipv4String.replace(2, 2, ipv4Size);
 
         // Recalculate the IPv4 checksum.
         ipv4String = Checksum::CalculateProtocolChecksum(ipv4String, 0, ipv4String.size(), 10);
@@ -280,19 +277,14 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     if (hasIpv4 && hasTcp)
     {
         // Calculate the size of the TCP header.
-        string tcpSize = function->intToHex(tcpString.size());
-        while (tcpSize.size() < 2)
-        {
-            tcpSize = "0" + tcpSize;
-        }
-        tcpString.replace(12, 1, function->hexToByte(tcpSize));
+        tcpString.replace(12, 1, std::to_string(static_cast<char>(tcpString.size())));
 
         // Calculate the TCP data length by including the application payload.
         std::ostringstream oss;
-        oss << std::setw(4) << std::setfill('0') << std::hex << function->binToDec((function->byteToBin(tcpString.substr(12, 1))).substr(0, 4)) * 4 + applicationPayload.size();
+        oss << std::setw(4) << std::setfill('0') << std::hex << Functions::binToNum((Functions::byteToBin(tcpString.substr(12, 1))).substr(0, 4)) * 4 + applicationPayload.size();
 
         // Construct the pseudo header for TCP checksum calculation.
-        string pseudoHeader = ipv4String.substr(12, 8) + function->hexToByte("00") + ipv4String.substr(9, 1) + function->hexToByte(oss.str());
+        string pseudoHeader = ipv4String.substr(12, 8) + std::string("\x00", 1) + ipv4String.substr(9, 1) + Functions::hexToByte(oss.str());
         string checksumStr = pseudoHeader + tcpString + applicationPayload;
 
         // Recalculate the TCP checksum.
@@ -302,16 +294,11 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     if (hasIpv4 && hasUdp)
     {
         // Calculate the size of the UDP header including the application payload.
-        string udpSize = function->intToHex(udpString.size() + applicationPayload.size());
-        while (udpSize.size() < 4)
-        {
-            udpSize = "0" + udpSize;
-        }
-        udpString.replace(4, 2, function->hexToByte(udpSize));
-        string oss = udpString.substr(4, 2);
+        string udpSize = Functions::numToByte(udpString.size() + applicationPayload.size(), 2);
+        udpString.replace(4, 2, udpSize);
 
         // Construct the pseudo header for UDP checksum calculation.
-        string pseudoHeader = ipv4String.substr(12, 8) + function->hexToByte("00") + ipv4String.substr(9, 1) + (oss);
+        string pseudoHeader = ipv4String.substr(12, 8) + std::string("\x00", 1) + ipv4String.substr(9, 1) + udpSize;
         string checksumStr = pseudoHeader + udpString + applicationPayload;
 
         // Recalculate the UDP checksum.

@@ -76,7 +76,7 @@ void Terminal::Process(string& command) {
 			if (commandStream[0] == "interface") {
 				string type = commandStream[1]; 
 				string interfaceID_temp = commandStream[2];
-				interfaceID = static_cast<unsigned long>(function->stringToNum(commandStream[2]));
+				interfaceID = static_cast<unsigned long>(Functions::stringToNum(commandStream[2]));
 				string intType;
 				if ((type == "Ethernet" || type == "GigabitEthernet" || type == "FastEthernet") && physicalInterfaces.size() >= interfaceID) {
 					intType = physicalInterfaces[interfaceID];
@@ -98,7 +98,7 @@ void Terminal::Process(string& command) {
 				}
 				getInterfaceMode(type);
 				if (Interfaces->count(interfaceID) == 0) {
-					(*Interfaces)[interfaceID] = std::make_shared<Interface>(intType, 1024, 1024, mac, interfaceID);
+					(*Interfaces)[interfaceID] = std::make_shared<Interface>(intType, 1024, 1024, mac, interfaceID, debug);
 				}
 				CurrentInterface = Interfaces->at(interfaceID).get();
 			}
@@ -106,7 +106,7 @@ void Terminal::Process(string& command) {
 				string type = commandStream[1];
 				string ID;
 				if (type != "rip") ID = commandStream[2];
-				if (type != "rip") routingProtocolID = function->stringToNum(commandStream[2]);
+				if (type != "rip") routingProtocolID = Functions::stringToNum(commandStream[2]);
 				getRoutingMode(type);
 				if (type == "eigrp") {
 					if (eigrpList.count(routingProtocolID) == 0) {
@@ -131,7 +131,7 @@ void Terminal::Process(string& command) {
 			if (command == "exit") {switchMode(mode.globalConfiguration);}
 			if (commandStream[0] == "ip" && commandStream[1] == "address") {
 				if (commandStream[2] != "dhcp") {
-					CurrentInterface->setIPv4(function->addressToHex(commandStream[2]), function->addressToHex(commandStream[3]));
+					CurrentInterface->setIPv4(Functions::addressToByte(commandStream[2]), Functions::addressToByte(commandStream[3]));
 				} else {
 					thread dhcpThread([this]() {
 						this->runDhcp();
@@ -145,9 +145,9 @@ void Terminal::Process(string& command) {
 			if (currentSubMode == "eigrp") {
 				if (commandStream[0] == "network") {
 					EigrpConfigs::network network;
-					network.ip = function->addressToHex(commandStream[1]);
+					network.ip = Functions::addressToByte(commandStream[1]);
 					if (commandStream.size() == 3) {
-						network.mask = function->addressToHex(commandStream[2]);
+						network.mask = Functions::addressToByte(commandStream[2]);
 					} else {
 						network.mask = variable.ip.broadcast;
 					}
@@ -173,9 +173,9 @@ void Terminal::Process(string& command) {
 	if (commandStream[0] == "ip" && (commandStream[1] == "route")) {notlist = true;}
 
 	if (preProcessMode != mode.userExec && preProcessMode != mode.privilegedExec && command != "error") {
-		function->printVector(oldCommandStream);
+		Functions::printVector(oldCommandStream);
 		//cout << "\n" << endl;
-		function->printVector(commandStream);
+		Functions::printVector(commandStream);
 		saveCommand(oldCommandStream, commandStream, modeChange, notlist);
 	}
 

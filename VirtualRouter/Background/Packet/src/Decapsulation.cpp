@@ -1,10 +1,10 @@
 #include <Decapsulation.h>
 
 // Constructor for Packet class, starts packet inspection.
-Packet::Packet(string &packet)
+Packet::Packet(string &packet, bool debug)
 {
-    //print = true;
-    if (print) {cout << function->byteToHex(packet) << endl;}
+    print = debug;
+    if (print) {cout << Functions::byteToHex(packet) << endl;}
     Inspection(packet);
 }
 
@@ -75,7 +75,7 @@ void Packet::L2_5(string &packet)
     }
     else if (ethernet.type == variable.ethernet.mpls)
     {
-        string mplsHeader = function->byteToHex(packet.substr(start, 4));
+        string mplsHeader = Functions::byteToHex(packet.substr(start, 4));
         Mpls(mplsHeader); // Process MPLS header
         packetInfo.Layer2_5.push_back(mpls);
     }
@@ -99,7 +99,7 @@ void Packet::L3(string &packet)
 {
     if (ethernet.type == variable.ethernet.ipv4 || ethernet.type == variable.ethernet.mpls)
     {
-        int ipv4Size = function->binToDec((function->byteToBin(packet.substr(start, 1))).substr(4, 4)) * 4;
+        int ipv4Size = Functions::binToNum((Functions::byteToBin(packet.substr(start, 1))).substr(4, 4)) * 4;
         string ipv4Header = packet.substr(start, ipv4Size);
         Ipv4(ipv4Header, ipv4Size); // Process IPv4 header
         packetInfo.Layer3.push_back(ipv4);
@@ -118,7 +118,7 @@ void Packet::L3(string &packet)
         }
         else if (ipv4.protocol == variable.ipv4.ah)
         {
-            int ahSize = (function->binToDec(function->byteToBin(packet.substr(start + 1, 1))) * 4) + 8;
+            int ahSize = (Functions::binToNum(Functions::byteToBin(packet.substr(start + 1, 1))) * 4) + 8;
             string ahHeader = packet.substr(start, ahSize);
             Ah(ahHeader, ahSize); // Process AH header
             packetInfo.Layer3.push_back(ah);
@@ -149,7 +149,7 @@ void Packet::L3(string &packet)
         }
         else if (ipv4.protocol == variable.ipv4.eigrp)
         {
-            int eigrpSize = function->hexToNum(function->byteToHex(ipv4.totalLength)) - 20;
+            int eigrpSize = Functions::byteToNum(ipv4.totalLength) - 20;
             string eigrpHeader = packet.substr(start, eigrpSize);
             Eigrp(eigrpHeader); // Process EIGRP header
             packetInfo.Layer3.push_back(eigrp);
@@ -163,7 +163,7 @@ void Packet::L4(string &packet)
 {
     if (ipv4.protocol == variable.ipv4.tcp)
     {
-        int tcpSize = function->binToDec((function->byteToBin(packet.substr(start + 12, 1))).substr(0, 4)) * 4;
+        int tcpSize = Functions::binToNum((Functions::byteToBin(packet.substr(start + 12, 1))).substr(0, 4)) * 4;
         string tcpHeader = packet.substr(start, tcpSize);
         Tcp(tcpHeader, tcpSize); // Process TCP header
         packetInfo.Layer4.push_back(tcp);
@@ -180,8 +180,8 @@ void Packet::L4(string &packet)
 // Processes Layer 5 (Session Layer) headers, such as DHCP.
 void Packet::L5(string &packet)
 {
-    if ((function->byteToHex(udp.sourcePort) == "0044" && function->byteToHex(udp.destinationPort) == "0043") ||
-        (function->byteToHex(udp.sourcePort) == "0043" && function->byteToHex(udp.destinationPort) == "0044"))
+    if ((udp.sourcePort == variable.udp.dhcp.source && udp.destinationPort == variable.udp.dhcp.destination) ||
+        (udp.sourcePort == variable.udp.dhcp.destination && udp.destinationPort == variable.udp.dhcp.source))
     {
         string dhcpHeader = packet.substr(start);
         Dhcp(dhcpHeader); // Process DHCP header
@@ -202,9 +202,9 @@ void Packet::Ethernet(string &ethernetHeader)
     {
 
         cout << "Ethernet:" << endl;
-        cout << "Destination Mac: " << function->byteToHex(ethernet.destinationMac) << endl;
-        cout << "Source Mac: " << function->byteToHex(ethernet.sourceMac) << endl;
-        cout << "Type: " << function->byteToHex(ethernet.type) << endl;
+        cout << "Destination Mac: " << Functions::byteToHex(ethernet.destinationMac) << endl;
+        cout << "Source Mac: " << Functions::byteToHex(ethernet.sourceMac) << endl;
+        cout << "Type: " << Functions::byteToHex(ethernet.type) << endl;
     }
 }
 
@@ -226,15 +226,15 @@ void Packet::Arp(string &arpHeader)
     if (print)
     {
         cout << "ARP Header:" << endl;
-        cout << "Hardware Type: " << function->byteToHex(arp.hardwareType) << endl;
-        cout << "Protocol Type: " << function->byteToHex(arp.protocolType) << endl;
-        cout << "Hardware Size: " << function->byteToHex(arp.hardwareSize) << endl;
-        cout << "Protocol Size: " << function->byteToHex(arp.protocolSize) << endl;
-        cout << "Opcode: " << function->byteToHex(arp.opcode) << endl;
-        cout << "Sender Hardware Address: " << function->byteToHex(arp.senderHardwareAddress) << endl;
-        cout << "Sender IP Address: " << function->byteToHex(arp.senderIpAddress) << endl;
-        cout << "Target Hardware Address: " << function->byteToHex(arp.targetHardwareAddress) << endl;
-        cout << "Target IP Address: " << function->byteToHex(arp.targetIpAddress) << endl;
+        cout << "Hardware Type: " << Functions::byteToHex(arp.hardwareType) << endl;
+        cout << "Protocol Type: " << Functions::byteToHex(arp.protocolType) << endl;
+        cout << "Hardware Size: " << Functions::byteToHex(arp.hardwareSize) << endl;
+        cout << "Protocol Size: " << Functions::byteToHex(arp.protocolSize) << endl;
+        cout << "Opcode: " << Functions::byteToHex(arp.opcode) << endl;
+        cout << "Sender Hardware Address: " << Functions::byteToHex(arp.senderHardwareAddress) << endl;
+        cout << "Sender IP Address: " << Functions::byteToHex(arp.senderIpAddress) << endl;
+        cout << "Target Hardware Address: " << Functions::byteToHex(arp.targetHardwareAddress) << endl;
+        cout << "Target IP Address: " << Functions::byteToHex(arp.targetIpAddress) << endl;
     }
 }
 
@@ -242,7 +242,7 @@ void Packet::Arp(string &arpHeader)
 void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
 {
 
-    string ipHeader = function->byteToHex(ipv4Header.substr(0, 1));
+    string ipHeader = Functions::byteToHex(ipv4Header.substr(0, 1));
     ipv4.version = ipHeader.substr(0, 1);
     ipv4.headerLength = ipHeader.substr(1, 1);
     ipv4.serviceField = ipv4Header.substr(1, 1);
@@ -255,7 +255,7 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
     ipv4.destinationAddress = ipv4Header.substr(16, 4);
     start += ipv4Size;
 
-    string fragmentFlag = function->byteToBin(ipv4Header.substr(6, 2));
+    string fragmentFlag = Functions::byteToBin(ipv4Header.substr(6, 2));
 
     ipv4.fragmentFlag.reserved = fragmentFlag.substr(0, 1);
     ipv4.fragmentFlag.fragment = fragmentFlag.substr(1, 1);
@@ -268,14 +268,14 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
         cout << "IPv4 Header:" << endl;
         cout << "Version: " << ipv4.version << endl;
         cout << "Header Length: " << ipv4.headerLength << endl;
-        cout << "Service Field: " << function->byteToHex(ipv4.serviceField) << endl;
-        cout << "Total Length: " << function->hexToNum(function->byteToHex(ipv4.totalLength)) << " " << this->fullPacket.size() << endl;
-        cout << "Identification: " << function->byteToHex(ipv4.identification) << endl;
-        cout << "TTL: " << function->byteToHex(ipv4.TTL) << endl;
-        cout << "Protocol: " << function->byteToHex(ipv4.protocol) << endl;
-        cout << "Checksum: " << function->byteToHex(ipv4.checksum) << endl;
-        cout << "Source Address: " << function->getIPAddress(ipv4.sourceAddress) << endl;
-        cout << "Destination Address: " << function->getIPAddress(ipv4.destinationAddress) << endl;
+        cout << "Service Field: " << Functions::byteToHex(ipv4.serviceField) << endl;
+        cout << "Total Length: " << Functions::hexToNum(Functions::byteToHex(ipv4.totalLength)) << " " << this->fullPacket.size() << endl;
+        cout << "Identification: " << Functions::byteToHex(ipv4.identification) << endl;
+        cout << "TTL: " << Functions::byteToHex(ipv4.TTL) << endl;
+        cout << "Protocol: " << Functions::byteToHex(ipv4.protocol) << endl;
+        cout << "Checksum: " << Functions::byteToHex(ipv4.checksum) << endl;
+        cout << "Source Address: " << Functions::byteAddressToNumAddress(ipv4.sourceAddress) << endl;
+        cout << "Destination Address: " << Functions::byteAddressToNumAddress(ipv4.destinationAddress) << endl;
         cout << "Fragment Flags:" << endl;
         cout << "  Reserved: " << ipv4.fragmentFlag.reserved << endl;
         cout << "  Fragment: " << ipv4.fragmentFlag.fragment << endl;
@@ -285,7 +285,7 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
 
     if (ipv4Size > 20)
     {
-        string type = function->byteToBin(ipv4Header.substr(20, 1));
+        string type = Functions::byteToBin(ipv4Header.substr(20, 1));
         ipv4.options.type.copy = type.substr(0, 1);
         ipv4.options.type.classControl = type.substr(1, 2);
         ipv4.options.type.routerAlert = type.substr(3, 5);
@@ -311,8 +311,8 @@ void Packet::Mpls(string &mplsHeader)
 {
 
     mpls.label = mplsHeader.substr(0, 5);
-    mpls.expBit = (function->hexToBin(mplsHeader.substr(5, 1))).substr(0, 3);
-    mpls.bottomLabelStack = (function->hexToBin(mplsHeader.substr(5, 1))).substr(3, 1);
+    mpls.expBit = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(0, 3);
+    mpls.bottomLabelStack = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(3, 1);
     mpls.TTL = mplsHeader.substr(6, 2);
     start += 4;
 
@@ -340,7 +340,7 @@ void Packet::Tcp(string &tcpHeader, int &tcpSize)
     tcp.urgentPointer = tcpHeader.substr(18, 2);
     start += tcpSize;
 
-    string flags = function->byteToBin(tcpHeader.substr(13, 1));
+    string flags = Functions::byteToBin(tcpHeader.substr(13, 1));
 
     tcp.flags.congestionWindowReduced = flags.substr(0, 1);
     tcp.flags.ecnEcho = flags.substr(1, 1);
@@ -360,11 +360,11 @@ void Packet::Tcp(string &tcpHeader, int &tcpSize)
             tcpHeader::Option option;
             option.type = tcpOptions.substr(optionStart, 1);
             optionStart += 1;
-            if (function->byteToHex(option.type) != "01")
+            if (option.type != std::string("\x01", 1))
             {
                 option.length = tcpOptions.substr(optionStart, 1);
                 optionStart += 1;
-                int valueLength = (function->hexToNum(function->byteToHex(option.length))) - 2;
+                int valueLength = Functions::byteToNum(option.length) - 2;
                 option.value = tcpOptions.substr(optionStart, valueLength);
                 optionStart += valueLength;
             }
@@ -376,14 +376,14 @@ void Packet::Tcp(string &tcpHeader, int &tcpSize)
     {
 
         cout << "TCP Header:" << endl;
-        cout << "Source Port: " << function->byteToHex(tcp.sourcePort) << endl;
-        cout << "Destination Port: " << function->byteToHex(tcp.destinationPort) << endl;
-        cout << "Sequence Number: " << function->byteToHex(tcp.sequenceNumber) << endl;
-        cout << "Ack Number: " << function->byteToHex(tcp.ackNumber) << endl;
-        cout << "Header Length: " << function->byteToHex(tcp.headerLength) << endl;
-        cout << "Window Size: " << function->byteToHex(tcp.windowSize) << endl;
-        cout << "Checksum: " << function->byteToHex(tcp.checksum) << endl;
-        cout << "Urgent Pointer: " << function->byteToHex(tcp.urgentPointer) << endl;
+        cout << "Source Port: " << Functions::byteToHex(tcp.sourcePort) << endl;
+        cout << "Destination Port: " << Functions::byteToHex(tcp.destinationPort) << endl;
+        cout << "Sequence Number: " << Functions::byteToHex(tcp.sequenceNumber) << endl;
+        cout << "Ack Number: " << Functions::byteToHex(tcp.ackNumber) << endl;
+        cout << "Header Length: " << Functions::byteToHex(tcp.headerLength) << endl;
+        cout << "Window Size: " << Functions::byteToHex(tcp.windowSize) << endl;
+        cout << "Checksum: " << Functions::byteToHex(tcp.checksum) << endl;
+        cout << "Urgent Pointer: " << Functions::byteToHex(tcp.urgentPointer) << endl;
         cout << "Flags:" << endl;
         cout << "  Congestion Window Reduced: " << tcp.flags.congestionWindowReduced << endl;
         cout << "  ECN Echo: " << tcp.flags.ecnEcho << endl;
@@ -410,10 +410,10 @@ void Packet::Udp(string &udpHeader)
     {
 
         cout << "UDP Header:" << endl;
-        cout << "Source Port: " << function->byteToHex(udp.sourcePort) << endl;
-        cout << "Destination Port: " << function->byteToHex(udp.destinationPort) << endl;
-        cout << "Length: " << function->byteToHex(udp.length) << endl;
-        cout << "Checksum: " << function->byteToHex(udp.checksum) << endl;
+        cout << "Source Port: " << Functions::byteToHex(udp.sourcePort) << endl;
+        cout << "Destination Port: " << Functions::byteToHex(udp.destinationPort) << endl;
+        cout << "Length: " << Functions::byteToHex(udp.length) << endl;
+        cout << "Checksum: " << Functions::byteToHex(udp.checksum) << endl;
     }
 }
 
@@ -432,11 +432,11 @@ void Packet::Icmp(string &icmpHeader)
     {
 
         cout << "ICMP Header:" << endl;
-        cout << "Type: " << function->byteToHex(icmp.type) << endl;
-        cout << "Code: " << function->byteToHex(icmp.code) << endl;
-        cout << "Checksum: " << function->byteToHex(icmp.checksum) << endl;
-        cout << "Identifier: " << function->byteToHex(icmp.identifier) << endl;
-        cout << "Sequence Number: " << function->byteToHex(icmp.sequenceNumber) << endl;
+        cout << "Type: " << Functions::byteToHex(icmp.type) << endl;
+        cout << "Code: " << Functions::byteToHex(icmp.code) << endl;
+        cout << "Checksum: " << Functions::byteToHex(icmp.checksum) << endl;
+        cout << "Identifier: " << Functions::byteToHex(icmp.identifier) << endl;
+        cout << "Sequence Number: " << Functions::byteToHex(icmp.sequenceNumber) << endl;
     }
 }
 
@@ -453,19 +453,19 @@ void Packet::Igmp(string &igmpHeader)
     //    if (print) {
     //
     //        cout << "IGMP Header:" << endl;
-    //        cout << "Type: " << function->byteToHex(igmp.type) << endl;
-    //        cout << "Max Rest Time: " << function->byteToHex(igmp.maxRestTime) << endl;
-    //        cout << "Checksum: " << function->byteToHex(igmp.checksum) << endl;
-    //        cout << "Multicast Address: " << function->byteToHex(igmp.multicastAddress) << endl;
+    //        cout << "Type: " << Functions::byteToHex(igmp.type) << endl;
+    //        cout << "Max Rest Time: " << Functions::byteToHex(igmp.maxRestTime) << endl;
+    //        cout << "Checksum: " << Functions::byteToHex(igmp.checksum) << endl;
+    //        cout << "Multicast Address: " << Functions::byteToHex(igmp.multicastAddress) << endl;
     //
     //    }
     //
     //    if (igmpHeader.size() == 12) {
     //
     //        cout << "imgp" << endl;
-    //        igmp.v3.supress = (function->byteToBin(igmpHeader.substr(8, 1))).substr(5, 1);
+    //        igmp.v3.supress = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(5, 1);
     //        cout << "igmp2" << endl;
-    //        igmp.v3.qrv = (function->byteToBin(igmpHeader.substr(8, 1))).substr(6, 3);
+    //        igmp.v3.qrv = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(6, 3);
     //        igmp.v3.qqic = igmpHeader.substr(9, 1);
     //        igmp.v3.numSrc = igmpHeader.substr(10, 2);
     //        start += 4;
@@ -476,7 +476,7 @@ void Packet::Igmp(string &igmpHeader)
     //            cout << "  Suppress: " << igmp.v3.supress << endl;
     //            cout << "  QRV: " << igmp.v3.qrv << endl;
     //            cout << "  QQIC: " << igmp.v3.qqic << endl;
-    //            cout << "  Num Src: " << function->byteToHex(igmp.v3.numSrc) << endl;
+    //            cout << "  Num Src: " << Functions::byteToHex(igmp.v3.numSrc) << endl;
     //
     //        }
     //    }
@@ -486,16 +486,16 @@ void Packet::Igmp(string &igmpHeader)
 void Packet::Gre(string &greHeader)
 {
 
-    string flags = function->byteToBin(greHeader.substr(0, 2));
+    string flags = Functions::byteToBin(greHeader.substr(0, 2));
     gre.flags.checksum = flags.substr(0, 1);
     gre.flags.routing = flags.substr(1, 1);
     gre.flags.key = flags.substr(2, 1);
     gre.flags.seqNum = flags.substr(3, 1);
     gre.flags.strictSourceRoute = flags.substr(4, 1);
-    gre.flags.recursion = (function->byteToBin(greHeader.substr(0, 2))).substr(5, 3);
+    gre.flags.recursion = (Functions::byteToBin(greHeader.substr(0, 2))).substr(5, 3);
     gre.flags.acknowledgment = flags.substr(8, 1);
-    gre.flags.reserved = (function->byteToBin(greHeader.substr(0, 2))).substr(9, 4);
-    gre.flags.version = (function->byteToBin(greHeader.substr(0, 2))).substr(13, 3);
+    gre.flags.reserved = (Functions::byteToBin(greHeader.substr(0, 2))).substr(9, 4);
+    gre.flags.version = (Functions::byteToBin(greHeader.substr(0, 2))).substr(13, 3);
     gre.protocol = greHeader.substr(2, 2);
     gre.length = greHeader.substr(4, 2);
     gre.callID = greHeader.substr(6, 2);
@@ -516,10 +516,10 @@ void Packet::Gre(string &greHeader)
         cout << "   Acknowledgment: " << gre.flags.acknowledgment << endl;
         cout << "   Reserved: " << gre.flags.reserved << endl;
         cout << "   Version: " << gre.flags.version << endl;
-        cout << "Protocol: " << function->byteToHex(gre.protocol) << endl;
-        cout << "Length: " << function->byteToHex(gre.length) << endl;
-        cout << "Call ID: " << function->byteToHex(gre.callID) << endl;
-        cout << "Sequence Number: " << function->byteToHex(gre.seqNum) << endl;
+        cout << "Protocol: " << Functions::byteToHex(gre.protocol) << endl;
+        cout << "Length: " << Functions::byteToHex(gre.length) << endl;
+        cout << "Call ID: " << Functions::byteToHex(gre.callID) << endl;
+        cout << "Sequence Number: " << Functions::byteToHex(gre.seqNum) << endl;
     }
 }
 
@@ -536,9 +536,9 @@ void Packet::Ppp(string &pppHeader)
     {
 
         cout << "PPP: " << endl;
-        cout << "Address: " << function->byteToHex(ppp.address) << endl;
-        cout << "Control: " << function->byteToHex(ppp.control) << endl;
-        cout << "Protocol: " << function->byteToHex(ppp.protocol) << endl;
+        cout << "Address: " << Functions::byteToHex(ppp.address) << endl;
+        cout << "Control: " << Functions::byteToHex(ppp.control) << endl;
+        cout << "Protocol: " << Functions::byteToHex(ppp.protocol) << endl;
     }
 }
 
@@ -546,10 +546,10 @@ void Packet::Ppp(string &pppHeader)
 void Packet::Frame(string &frameHeader)
 {
 
-    string relay = function->byteToBin(frameHeader.substr(0, 1));
+    string relay = Functions::byteToBin(frameHeader.substr(0, 1));
     frame.firstAddress.cr = relay.substr(6, 1);
     frame.firstAddress.ea = relay.substr(7, 1);
-    relay = function->byteToBin(frameHeader.substr(1, 1));
+    relay = Functions::byteToBin(frameHeader.substr(1, 1));
     frame.secondAddress.fecn = relay.substr(4, 1);
     frame.secondAddress.becn = relay.substr(5, 1);
     frame.secondAddress.de = relay.substr(6, 1);
@@ -569,7 +569,7 @@ void Packet::Frame(string &frameHeader)
         cout << "Second BECN: " << frame.secondAddress.becn << endl;
         cout << "Second DE: " << frame.secondAddress.de << endl;
         cout << "Second EA: " << frame.secondAddress.ea << endl;
-        cout << "Type: " << function->byteToHex(frame.type) << endl;
+        cout << "Type: " << Functions::byteToHex(frame.type) << endl;
     }
 }
 
@@ -589,12 +589,12 @@ void Packet::Ah(string &ahHeader, int &ahSize)
     {
 
         cout << "AH:" << endl;
-        cout << "Next: " << function->byteToHex(ah.next) << endl;
-        cout << "Length: " << function->byteToHex(ah.length) << endl;
-        cout << "Reserved: " << function->byteToHex(ah.reserved) << endl;
-        cout << "AH SPI: " << function->byteToHex(ah.spi) << endl;
-        cout << "AH Sequence: " << function->byteToHex(ah.sequence) << endl;
-        cout << "AH ICV: " << function->byteToHex(ah.icv) << endl;
+        cout << "Next: " << Functions::byteToHex(ah.next) << endl;
+        cout << "Length: " << Functions::byteToHex(ah.length) << endl;
+        cout << "Reserved: " << Functions::byteToHex(ah.reserved) << endl;
+        cout << "AH SPI: " << Functions::byteToHex(ah.spi) << endl;
+        cout << "AH Sequence: " << Functions::byteToHex(ah.sequence) << endl;
+        cout << "AH ICV: " << Functions::byteToHex(ah.icv) << endl;
     }
 }
 
@@ -610,8 +610,8 @@ void Packet::Esp(string &espHeader)
     {
 
         cout << "ESP: " << endl;
-        cout << "ESP SPI: " << function->byteToHex(esp.spi) << endl;
-        cout << "ESP Sequence: " << function->byteToHex(esp.sequence) << endl;
+        cout << "ESP SPI: " << Functions::byteToHex(esp.spi) << endl;
+        cout << "ESP Sequence: " << Functions::byteToHex(esp.sequence) << endl;
     }
 }
 
@@ -619,7 +619,7 @@ void Packet::Esp(string &espHeader)
 void Packet::Vlan(string &vlanHeader)
 {
 
-    string vlans = function->byteToBin(vlanHeader.substr(0, 2));
+    string vlans = Functions::byteToBin(vlanHeader.substr(0, 2));
     vlan.priority = vlans.substr(0, 3);
     vlan.dei = vlans.substr(3, 1);
     vlan.type = vlanHeader.substr(2, 2);
@@ -632,7 +632,7 @@ void Packet::Vlan(string &vlanHeader)
         cout << "Priority: " << vlan.priority << endl;
         cout << "DEI: " << vlan.dei << endl;
         cout << "ID: " << vlan.id << endl;
-        cout << "Type: " << function->byteToHex(vlan.type) << endl;
+        cout << "Type: " << Functions::byteToHex(vlan.type) << endl;
     }
 }
 
@@ -647,9 +647,9 @@ void Packet::Lldp(string &lldpHeader)
         lldpHeader::TLV tlv;
 
         uint16_t typeLength = (lldpHeader[pos] << 8) | lldpHeader[pos + 1];
-        string sec = function->byteToBin(lldpHeader.substr(pos, 2));
-        tlv.type = function->binToDec(sec.substr(0, 7));
-        tlv.length = function->binToDec(sec.substr(7, 9));
+        string sec = Functions::byteToBin(lldpHeader.substr(pos, 2));
+        tlv.type = Functions::binToNum(sec.substr(0, 7));
+        tlv.length = Functions::binToNum(sec.substr(7, 9));
         pos += 2;
 
         tlv.value = lldpHeader.substr(pos, tlv.length);
@@ -722,7 +722,7 @@ void Packet::Dhcp(string &dhcpHeader)
     dhcp.hops = dhcpHeader.substr(3, 1);
     dhcp.transID = dhcpHeader.substr(4, 4);
     dhcp.secondsElapsed = dhcpHeader.substr(8, 2);
-    string flags = function->byteToBin(dhcpHeader.substr(10, 2));
+    string flags = Functions::byteToBin(dhcpHeader.substr(10, 2));
     dhcp.bootpFlags.broadcast = flags.substr(0, 1);
     dhcp.bootpFlags.reserved = flags.substr(1, 7);
     dhcp.clientIP = dhcpHeader.substr(12, 4);
@@ -755,8 +755,8 @@ void Packet::Dhcp(string &dhcpHeader)
         dhcpStart += 1;
         option.length = dhcpHeader.substr(dhcpStart, 1);
         dhcpStart += 1;
-        option.value = dhcpHeader.substr(dhcpStart, function->hexToNum(function->byteToHex(option.length)));
-        int dhcpADD = function->hexToNum(function->byteToHex(option.length));
+        option.value = dhcpHeader.substr(dhcpStart, Functions::byteToNum(option.length));
+        int dhcpADD = Functions::byteToNum(option.length);
         dhcpStart += dhcpADD;
         start += dhcpADD;
         dhcp.options.push_back(option);
@@ -769,19 +769,19 @@ void Packet::Dhcp(string &dhcpHeader)
     {
 
         cout << "DHCP Frame:" << endl;
-        cout << "Message Type: " << function->byteToHex(dhcp.boot) << endl;
-        cout << "Hardware Type: " << function->byteToHex(dhcp.hardwareType) << endl;
-        cout << "Hardware Address Length: " << function->byteToHex(dhcp.hardwareAddressLength) << endl;
-        cout << "Hops: " << function->byteToHex(dhcp.hops) << endl;
-        cout << "Transaction ID: " << function->byteToHex(dhcp.transID) << endl;
-        cout << "Seconds Elapsed: " << function->byteToHex(dhcp.secondsElapsed) << endl;
+        cout << "Message Type: " << Functions::byteToHex(dhcp.boot) << endl;
+        cout << "Hardware Type: " << Functions::byteToHex(dhcp.hardwareType) << endl;
+        cout << "Hardware Address Length: " << Functions::byteToHex(dhcp.hardwareAddressLength) << endl;
+        cout << "Hops: " << Functions::byteToHex(dhcp.hops) << endl;
+        cout << "Transaction ID: " << Functions::byteToHex(dhcp.transID) << endl;
+        cout << "Seconds Elapsed: " << Functions::byteToHex(dhcp.secondsElapsed) << endl;
         cout << "Broadcast: " << dhcp.bootpFlags.broadcast << endl;
-        cout << "Reserved: " << function->byteToHex(dhcp.bootpFlags.reserved) << endl;
-        cout << "Client IP: " << function->byteToHex(dhcp.clientIP) << endl;
-        cout << "Your Client IP: " << function->byteToHex(dhcp.yourClientIP) << endl;
-        cout << "Next Server Address: " << function->byteToHex(dhcp.nextServerIP) << endl;
-        cout << "Relay Agent IP: " << function->byteToHex(dhcp.relayAgentIP) << endl;
-        cout << "Client MAC Address: " << function->byteToHex(dhcp.clientMacAddress) << endl;
+        cout << "Reserved: " << Functions::byteToHex(dhcp.bootpFlags.reserved) << endl;
+        cout << "Client IP: " << Functions::byteToHex(dhcp.clientIP) << endl;
+        cout << "Your Client IP: " << Functions::byteToHex(dhcp.yourClientIP) << endl;
+        cout << "Next Server Address: " << Functions::byteToHex(dhcp.nextServerIP) << endl;
+        cout << "Relay Agent IP: " << Functions::byteToHex(dhcp.relayAgentIP) << endl;
+        cout << "Client MAC Address: " << Functions::byteToHex(dhcp.clientMacAddress) << endl;
     }
 }
 
@@ -791,7 +791,7 @@ void Packet::Eigrp(string &eigrpHeader)
     eigrp.version = eigrpHeader.substr(0, 1);
     eigrp.opcode = eigrpHeader.substr(1, 1);
     eigrp.checksum = eigrpHeader.substr(2, 2);
-    string flag = function->byteToBin(eigrpHeader.substr(4, 4));
+    string flag = Functions::byteToBin(eigrpHeader.substr(4, 4));
     eigrp.flags.init = flag.substr(28, 1);
     eigrp.flags.conditionalRecieve = flag.substr(29, 1);
     eigrp.flags.restart = flag.substr(30, 1);
@@ -811,7 +811,7 @@ void Packet::Eigrp(string &eigrpHeader)
         eigrpStart += 2;
         option.length = eigrpHeader.substr(eigrpStart, 2);
         eigrpStart += 2;
-        int eigrpADD = function->hexToNum(function->byteToHex(option.length)) - 4;
+        int eigrpADD = Functions::byteToNum(option.length) - 4;
         option.value = eigrpHeader.substr(eigrpStart, eigrpADD);
         eigrpStart += eigrpADD;
         start += eigrpADD;
@@ -821,25 +821,25 @@ void Packet::Eigrp(string &eigrpHeader)
     if (print)
     {
         cout << "EIGRP Frame:" << endl;
-        cout << "Version: " << function->byteToHex(eigrp.version) << endl;
-        cout << "Opcode: " << function->byteToHex(eigrp.opcode) << endl;
-        cout << "Checksum: " << function->byteToHex(eigrp.checksum) << endl;
+        cout << "Version: " << Functions::byteToHex(eigrp.version) << endl;
+        cout << "Opcode: " << Functions::byteToHex(eigrp.opcode) << endl;
+        cout << "Checksum: " << Functions::byteToHex(eigrp.checksum) << endl;
         cout << "Flags: " << endl;
         cout << "  Init: " << eigrp.flags.init << endl;
         cout << "  Conditional Receive: " << eigrp.flags.conditionalRecieve << endl;
         cout << "  Restart: " << eigrp.flags.restart << endl;
         cout << "  End Of Table: " << eigrp.flags.endOfTable << endl;
-        cout << "Sequence Number: " << function->byteToHex(eigrp.sequence) << endl;
-        cout << "Acknowledgment Number: " << function->byteToHex(eigrp.ack) << endl;
-        cout << "Virtual Router ID: " << function->byteToHex(eigrp.virtualRouterID) << endl;
-        cout << "Autonomous System Number: " << function->byteToHex(eigrp.autonomousSystem) << endl;
+        cout << "Sequence Number: " << Functions::byteToHex(eigrp.sequence) << endl;
+        cout << "Acknowledgment Number: " << Functions::byteToHex(eigrp.ack) << endl;
+        cout << "Virtual Router ID: " << Functions::byteToHex(eigrp.virtualRouterID) << endl;
+        cout << "Autonomous System Number: " << Functions::byteToHex(eigrp.autonomousSystem) << endl;
 
         cout << "Options:" << endl;
         for (const auto &option : eigrp.options)
         {
-            cout << "  Option: " << function->byteToHex(option.option) << endl;
-            cout << "  Length: " << function->byteToHex(option.length) << endl;
-            cout << "  Value: " << function->byteToHex(option.value) << endl;
+            cout << "  Option: " << Functions::byteToHex(option.option) << endl;
+            cout << "  Length: " << Functions::byteToHex(option.length) << endl;
+            cout << "  Value: " << Functions::byteToHex(option.value) << endl;
         }
     }
 }

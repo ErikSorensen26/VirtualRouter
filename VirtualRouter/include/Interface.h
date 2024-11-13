@@ -39,7 +39,7 @@ struct ipInfo {
 class Interface {
 public:
     // Constructor for Interface class
-    Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId);
+    Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId, bool debug);
     // Destructor for Interface class
     ~Interface();
 
@@ -114,8 +114,6 @@ public:
 
 private:
 
-    // Pointer to Functions class instance
-    Functions* function = Functions::getInstance();
     Egress packetSend; // Packet sending object
 
     // Private methods for packet processing
@@ -130,6 +128,8 @@ private:
 
     int inQsiz; // Size of the input queue
     int outQsiz; // Size of the output queue
+
+    bool debug;
 };
 
 // External declarations

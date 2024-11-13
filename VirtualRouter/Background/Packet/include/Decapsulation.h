@@ -12,7 +12,7 @@ class Packet
 {
 public:
     // constructor
-    Packet(string &packet);
+    Packet(string &packet, bool debug);
 
     // layers 2-3 decapsulation
     void Inspection(string &packet);
@@ -27,7 +27,6 @@ public:
     PacketInfo packetInfo;
 
 private:
-    Functions *function = Functions::getInstance();
 
     // Parses and processes Ethernet header.
     void Ethernet(string &ethernetHeader);

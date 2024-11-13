@@ -1,7 +1,4 @@
-// Functions.h
-
-#ifndef FUNCTIONS_H
-#define FUNCTIONS_H
+#pragma once
 
 #include <iostream>
 #include <string>
@@ -16,91 +13,103 @@
 #include <netinet/in.h>
 #include <algorithm>
 
-//#include <PacketStructure.h>
+namespace Functions {
+    // Adjusts the size of a string by prepending `value` until it reaches `size`.
+    std::string changeSize(std::string str, size_t size, std::string value = std::string("\x00", 1));
 
-//Functions* function = Functions::getInstance();
-
-class Functions {
-public:
-    static Functions* getInstance();
-    
-    // check for binary
-    bool isBinary(const std::string& str);
-    // check for hex
-    bool isHex(const std::string& str);
-    // converts 0 and 1 to bool
-    bool stringToBool(const std::string& str);
-    // converts binary to hex
-    std::string binToHex(const std::string& binaryStr);
-    // converts single hex digit to binary
-    std::string hexDigitToBin(char hexDigit);
-    // converts hex to binary
-    std::string hexToBin(const std::string& hexStr);
-    // converts binary to bytes
-    std::string binToByte(const std::string& binaryData);
-    // converts hex to bytes
-    static std::string hexToByte(const std::string& hexBinaryData);
-    // converts byte to hex
-    std::string byteToHex(const std::string& input);
-    // converts a char to hex
+    // Converts a single byte to a hexadecimal string representation.
     std::string charToHex(unsigned char byte);
-    // converts a char to binary
-    std::string charToBin(unsigned char byte);
-    // converts bytes to binary
-    std::string byteToBin(const std::string& input);
-    // converts binary to decimal
-    uint8_t binToDec(const std::string& binary);
-    // extracts words into a vector based on spaces
-    std::vector<std::string> extractWords(const std::string& str);
-    // prints a vector
-    void printVector(const std::vector<std::string>& vec);
-    // converts to lowercase
-    std::string lowerCase(std::string str);
-    // converts a string to a number
-    int stringToNum(std::string num);
-    // converts 
-    std::string byteArrayToHex(const std::vector<uint8_t>& byte_array);
-    // converts hex to decimal number
+
+    // Converts a hexadecimal string to an unsigned integer.
     unsigned hexToNum(const std::string& hexStr);
-    // converts int to hex
-    std::string intToHex(int num);
-    // converts int to hex with given byte size
-    std::string intToHexWithByte(uint32_t num, int byteSize);
-    // converts a subnet mask/ip to hex
-    std::string addressToHex(const std::string& mask);
-    // converts a ip address
-    std::string getIPAddress(const std::string& ip);
-    // converts a mac address
-    std::string getMacAddress(const std::string& mac);
-    // bool to string
-    std::string boolToString(bool bol);
-    // get random value between
-    int getRandomBetween(int min, int max);
-    // convert byte to int
+
+    // Converts a single byte to a binary string representation (8 bits).
+    std::string charToBin(unsigned char byte);
+
+    // Checks if a string contains only binary characters ('0' and '1').
+    bool isBinary(const std::string& str);
+
+    // Checks if a string contains only hexadecimal characters (0-9, A-F).
+    bool isHex(const std::string& str);
+
+    // Converts a string of bytes to a hexadecimal string representation.
+    std::string byteToHex(const std::string& input);
+
+    // Converts a string of bytes to a binary string representation.
+    std::string byteToBin(const std::string& input);
+
+    // Converts a vector of bytes to a hexadecimal string representation.
+    std::string byteArrayToHex(const std::vector<uint8_t>& byte_array);
+
+    // Converts a string of bytes to an integer, treating the bytes as hexadecimal values.
     int byteToNum(std::string str);
-    // convert int to byte
-    std::string intToByte(int num);
-    // convert hex mask to int
-    int hexMaskToInt(const std::string& mask);
-    // compute network address
+
+    // Converts a binary string to a hexadecimal string representation.
+    std::string binToHex(const std::string& binaryStr);
+
+    // Converts a single hexadecimal character to its 4-bit binary representation.
+    std::string hexDigitToBin(char hexDigit);
+
+    // Converts a hexadecimal string to a binary string representation.
+    std::string hexToBin(const std::string& hexStr);
+
+    // Converts a hexadecimal string to a byte string. If `size` is specified, adjusts the result to the given size.
+    std::string hexToByte(const std::string& hexBinaryData, size_t size = 0);
+
+    // Converts a boolean to a string representation ("1" for true, "0" for false).
+    std::string boolToString(bool bol);
+
+    // Converts a binary string to a byte string. If `size` is specified, adjusts the result to the given size.
+    std::string binToByte(const std::string& binaryData, size_t size = 0);
+
+    // Converts a binary string to an integer.
+    uint8_t binToNum(const std::string& binary);
+
+    // Converts a string to lowercase.
+    std::string lowerCase(std::string str);
+
+    // Converts a string to a boolean. Returns true if the string is "1", false otherwise.
+    bool stringToBool(const std::string& str);
+
+    // Converts a string to an integer.
+    int stringToNum(std::string num);
+
+    // Converts an integer to a hexadecimal string, ensuring at least two characters.
+    std::string numToHex(int num);
+
+    // Converts an integer to a hexadecimal string of a specific byte size.
+    std::string numToHexWithByte(uint32_t num, int byteSize);
+
+    // Converts an integer to a byte string. If `size` is specified, adjusts the result to the given size.
+    std::string numToByte(int num, size_t size = 0);
+
+    // Converts an IPv4 address in dot-decimal notation to a byte string.
+    std::string addressToByte(const std::string& mask);
+
+    // Prints each element in a vector of strings.
+    void printVector(const std::vector<std::string>& vec);
+
+    // Counts the number of '1' bits in a binary representation of a mask string.
+    int byteMaskToNum(const std::string& mask);
+
+    // Creates a binary string representation of a network mask with a specified number of bits.
+    std::string numMaskToBin(int mask);
+
+    // Computes the network address from an IP address and a subnet mask.
     std::string computeNetworkAddress(const std::string& ipAddress, int mask);
-    // convert int mask to hex
-    std::string intMaskToBin(int mask);
-    // change size of string
-    std::string changeSize(std::string str, int size, std::string value = "0");
-    // compare network address to ip
+
+    // Converts a byte-based IP address to its dot-decimal notation.
+    std::string byteAddressToNumAddress(const std::string& ip);
+
+    // Compares a network address with an IP address to check if they match.
     bool compareNetworkWithIp(std::string networkAddress, std::string ipAddress);
-    // compact netword address
+
+    // Trims the network address based on the subnet mask, removing zeroed sections.
     std::string compactNetworkAddress(std::string network, int mask);
-    // reverse binary bits
+
+    // Generates a random integer between min and max (inclusive).
+    int getRandomBetween(int min, int max);
+
+    // Reverses a binary string, flipping '0' to '1' and '1' to '0'.
     std::string reverseBinary(const std::string& binary);
-private:
-    Functions();
-    static Functions* singleton;
-
-public:
-    Functions(const Functions&) = delete;
-    void operator=(const Functions&) = delete;
-};
-
-#endif
+}

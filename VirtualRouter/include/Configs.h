@@ -113,8 +113,6 @@ private:
 
 class Configs {
 public:
-	// Pointer to a singleton instance of Functions class.
-	Functions* function = Functions::getInstance(); 
 
 	// Constructor for the Configs class.
     Configs(); 

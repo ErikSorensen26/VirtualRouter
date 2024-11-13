@@ -7,9 +7,8 @@ std::mutex packetQueueMutex;
 
 // Constructor for Ingress class.
 // Opens a live capture session on the specified device and sets the subnet mask.
-Ingress::Ingress(const std::string& device, const std::string mask, const int inQueSize, std::string MacAddress) : packetQueue(inQueSize) 
+Ingress::Ingress(const std::string& device, const std::string mask, const int inQueSize) : packetQueue(inQueSize) 
 {
-    localMac = MacAddress;
     char errbuf[PCAP_ERRBUF_SIZE]; // Buffer for error messages.
     
     // Open a live capture session on the specified network device.
@@ -21,8 +20,8 @@ Ingress::Ingress(const std::string& device, const std::string mask, const int in
         exit(1);
     }
     
-    // Convert the netmask from hexadecimal string to bpf_u_int32 format.
-    subnet = hexStringToNetmask(mask);
+    // Convert the netmask from byte string to bpf_u_int32 format.
+    subnet = Functions::byteMaskToNum(mask);
 }
 
 // Destructor for Ingress class.
@@ -79,21 +78,6 @@ void Ingress::packetHandler(u_char* user, const struct pcap_pkthdr* pkthdr, cons
         return;
     }
 
-    // Extract source MAC address from the ethernet header
-    const u_char* macHeader = packet;
-    char srcMAC[18];
-    snprintf(srcMAC, sizeof(srcMAC), "%02x:%02x:%02x:%02x:%02x:%02x",
-            macHeader[6], macHeader[7], macHeader[8],
-            macHeader[9], macHeader[10], macHeader[11]);
-
-    std::string packetSrcMAC(srcMAC);
-
-    if (packetSrcMAC == ingress->localMac)
-    {
-        // This packet was sent by us, ignore it
-        return;
-    }
-
     std::string packetData(reinterpret_cast<const char*>(packet), pkthdr->caplen); // Extract packet data.
     
     // Lock the mutex and enqueue the packet data.
@@ -101,16 +85,4 @@ void Ingress::packetHandler(u_char* user, const struct pcap_pkthdr* pkthdr, cons
         std::lock_guard<std::mutex> lock(packetQueueMutex);
         ingress->packetQueue.enqueue(packetData);
     }
-}
-
-// Convert a hexadecimal string to a bpf_u_int32 netmask.
-// Parses the hexadecimal string and returns the result as a netmask.
-bpf_u_int32 Ingress::hexStringToNetmask(const std::string& hexString) 
-{
-    std::stringstream ss; // String stream for parsing hexadecimal string.
-    ss << std::hex << hexString; // Set the stream to hexadecimal format.
-    bpf_u_int32 result; // Variable to store the result.
-    ss >> result; // Parse the hexadecimal string into the result.
-    return result; // Return the parsed netmask.
-return 5;
 }

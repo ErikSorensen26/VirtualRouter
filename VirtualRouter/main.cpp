@@ -1,11 +1,7 @@
-#include <Interface.h>
 #include <Terminal.h>
-#include <Configs.h>
-
-#include <Eigrp.h>
+#include <Functions.h>
 
 int main() {
-    Functions* function = Functions::getInstance();
 
     Terminal* terminal = new Terminal();
     while (true) {

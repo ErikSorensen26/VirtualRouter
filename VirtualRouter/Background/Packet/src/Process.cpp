@@ -41,7 +41,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
             if (Print(header)) { cout << "THIS IS ETHERNET" << endl; } 
             // Check if packet contains your source address
             macAddress = ethernet->sourceMac;
-            if (function->byteToHex(ethernet->sourceMac) == interface->Get().mac) 
+            if (ethernet->sourceMac == interface->Get().mac) 
             {
                 // Drop packet
                 return;
@@ -96,7 +96,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
         {
             ipv4 = std::any_cast<ipv4Header>(&header);
             if (Print(header)) { cout << "THIS IS IPV4" << endl; } 
-            if (ethernet && RoutingTable::getInstance().ArpLookup(function->byteToHex(ipv4->sourceAddress)))
+            if (ethernet && RoutingTable::getInstance().ArpLookup(ipv4->sourceAddress))
             {
                 RoutingTable::getInstance().UpdateArp(ipv4->sourceAddress, macAddress, interface->Get().ip);
             }
@@ -130,12 +130,12 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
         {
             if (Print(header)) { cout << "THIS IS EIGRP" << endl; } 
             eigrp = std::any_cast<eigrpHeader>(&header); 
-            auto it = eigrpList.find(function->byteToNum(eigrp->autonomousSystem));
-            auto iface = interface->eigrpInterfaceList.find(function->byteToNum(eigrp->autonomousSystem));
+            auto it = eigrpList.find(Functions::byteToNum(eigrp->autonomousSystem));
+            auto iface = interface->eigrpInterfaceList.find(Functions::byteToNum(eigrp->autonomousSystem));
             if (it != eigrpList.end() && iface != interface->eigrpInterfaceList.end()) 
             {
-                if (interface->eigrpInterfaceList[function->byteToNum(eigrp->autonomousSystem)] != nullptr);
-                interface->eigrpInterfaceList[function->byteToNum(eigrp->autonomousSystem)]->ProcessPacket(eigrp, ipv4);
+                if (interface->eigrpInterfaceList[Functions::byteToNum(eigrp->autonomousSystem)] != nullptr);
+                interface->eigrpInterfaceList[Functions::byteToNum(eigrp->autonomousSystem)]->ProcessPacket(eigrp, ipv4);
             }
         }
     }

@@ -113,7 +113,6 @@ namespace Checksum
     // Calculates a protocol-specific checksum and updates the given data string
     std::string CalculateProtocolChecksum(const std::string &data_str, int startIndex, int headerlength, int index, bool swap)
     {
-        Functions *function = Functions::getInstance();
 
         // Convert string to vector of bytes
         std::vector<uint8_t> data(data_str.begin(), data_str.end());
@@ -138,7 +137,7 @@ namespace Checksum
 
         // Replace the checksum in the original string
         std::string final_str = data_str.substr(startIndex, headerlength);
-        return final_str.replace(index, 2, (function->hexToByte(checksum)));
+        return final_str.replace(index, 2, (Functions::hexToByte(checksum)));
     }
 
 }

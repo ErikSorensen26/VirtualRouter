@@ -24,7 +24,7 @@ public:
     bool Print(any param);
 
 private:
-    Functions* function = Functions::getInstance();
+
     Variable variable;
 
     Interface* interface;

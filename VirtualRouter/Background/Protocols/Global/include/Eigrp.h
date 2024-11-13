@@ -171,10 +171,16 @@ namespace Protocol
         void SendFullUpdateToNeighbor(const std::string& neighborIp);
         // Send empty Update Packet to neighbor
         void SendEmptyUpdateToNeighbor(const std::string& neighborIp);
+        // Send query to neighbors
+        void SendQueryToNeighbors(const std::string& failedNeighborIp, const RoutingTable::Eigrp& failedRoute);
         // Send query to neighbor
-        void SendQueryToNeighbor(const std::string& neighborIp, const RoutingTable::Eigrp& route);
+        void SendQueryToNeighbor(const std::string&neighborIp, const std::string& destination, int mask);
+        // Encode query option
+        std::string EncodeQueryOption(const std::string& destination, int mask);
         // Send reply to neighbor
         void SendReplyToNeighbor(const std::string& neighborIp, const RoutingTable::Eigrp& route);
+        // Encode reply option
+        std::string EncodeRouteOption(const RoutingTable::Eigrp& route);
 
         // Updates Routing Table
         void UpdateRoutingTable(const RoutingTable::Eigrp& route, bool init = false);
@@ -247,7 +253,6 @@ namespace Protocol
         int activeTimerId = 0;
         int stuckInActiveTimerId = 0;
 
-        Functions* function = Functions::getInstance();
         Variable variable;
         bool runTimers = true;
         bool helloTimerActive = false;
@@ -298,7 +303,7 @@ namespace Protocol
         // Configurations for EIGRP
         vector<EigrpConfigs::network> networks;
         EigrpConfigs::KValue kvalue;
-        string virtualRouterID = "0000";
+        string virtualRouterID = std::string("\x00\x00", 2);
         int asNumber;
 
         // Eigrp Distribution List
@@ -306,7 +311,6 @@ namespace Protocol
 
     private:
 
-        Functions* function = Functions::getInstance();
         Variable variable;
         bool runTimers = true;
 

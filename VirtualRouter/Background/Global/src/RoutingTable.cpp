@@ -29,6 +29,19 @@ std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes()
     return routes;
 }
 
+std::optional<RoutingTable::Eigrp> RoutingTable::GetEigrpRoute(const std::string& destination, const int mask)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+    for (const auto& [key, entry] : eigrp)
+    {
+        if (entry.network == destination, entry.mask == mask)
+        {
+            return entry;
+        }
+    }
+    return std::nullopt;
+}
+
 
 void RoutingTable::UpdateArp(const arpHeader& recievedArp)
 {
@@ -37,9 +50,9 @@ void RoutingTable::UpdateArp(const arpHeader& recievedArp)
     // Create route entry
     Arp route;
     route.age = std::chrono::system_clock::now();
-    route.interface = function->byteToHex(recievedArp.targetIpAddress);
-    route.ipAddress = function->byteToHex(recievedArp.senderIpAddress);
-    route.mac = function->byteToHex(recievedArp.senderHardwareAddress);
+    route.interface = recievedArp.targetIpAddress;
+    route.ipAddress = recievedArp.senderIpAddress;
+    route.mac = recievedArp.senderHardwareAddress;
     route.type = recievedArp.opcode;
 
     // Find if the route Exists
@@ -55,8 +68,8 @@ void RoutingTable::UpdateArp(const string ip, string mac, string interfaceAddres
     Arp route;
     route.age = std::chrono::system_clock::now();
     route.interface = interfaceAddress;
-    route.ipAddress = function->byteToHex(ip);
-    route.mac = function->byteToHex(mac);
+    route.ipAddress = ip;
+    route.mac = mac;
 
     // Find if the route Exists
     std::string key = ip;

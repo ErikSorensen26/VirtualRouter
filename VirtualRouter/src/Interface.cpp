@@ -10,17 +10,18 @@
 using namespace std;
 
 // Constructor for the Interface class
-Interface::Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId)
-    : packetCapture(outInterface, "FF000000", inQueSiz, function->hexToByte(mac)), 
+Interface::Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId, bool debug)
+    : packetCapture(outInterface, "FF000000", inQueSiz), 
       packetSend(outInterface),
       threadsRunning(false), 
-      packetOutQueue(outQueSiz) 
+      packetOutQueue(outQueSiz),
+      debug(debug)
 {
     // Set member variables
     outInt = outInterface;
     inQsiz = inQueSiz;
     outQsiz = outQueSiz;
-    macAddress = mac;
+    macAddress = Functions::hexToByte(mac);
     id = interfaceId;
     // Initialize shared pointers for Protocol objects
     dhcp = std::make_shared<Protocol::DhcpClient>(*this);
@@ -35,7 +36,7 @@ void Interface::setIPv4(string ip, string subnet) {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
         ipAddress = ip; 
         mask = subnet;
-        string sub = function->addressToHex(subnet);
+        string sub = Functions::addressToByte(subnet);
         StateChange();
     }
 }
@@ -98,7 +99,7 @@ void Interface::Process(Ingress& packetCapture) {
         {
             if (!packetCapture.packetQueue.isEmpty()) {
                 std::string packet = packetCapture.packetQueue.dequeue();
-                Packet p(packet);
+                Packet p(packet, debug);
                 p.Decapsulate();
                 PacketInfo PacketInformation = p.packetInfo;
                 ProcessPacket process(PacketInformation, vrf, this, shutdown);

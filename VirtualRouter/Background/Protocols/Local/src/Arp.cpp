@@ -112,8 +112,8 @@ namespace Protocol
     // Method for recieving arp reply
     void Arp::RecieveReply(const arpHeader recievedReply)
     {
-        std::string arpIp = function->byteToHex(recievedReply.senderIpAddress);
-        std::string arpMac = function->byteToHex(recievedReply.senderHardwareAddress);
+        std::string arpIp = recievedReply.senderIpAddress;
+        std::string arpMac = recievedReply.senderHardwareAddress;
 
         {
             std::lock_guard<std::mutex> lock(requestMutex);
@@ -180,7 +180,7 @@ namespace Protocol
 
         // Set up the Ethernet header for the ARP request
         eth.destinationMac = variable.mac.broadcast; 
-        eth.sourceMac = function->hexToByte(currentMac); 
+        eth.sourceMac = currentMac; 
         eth.type = variable.ethernet.arp; 
 
         packet.Layer2.push_back(eth);
@@ -188,13 +188,13 @@ namespace Protocol
         // Set up the ARP header for the request
         arp.hardwareType = variable.arp.ethernet; 
         arp.protocolType = variable.arp.ipv4; 
-        arp.hardwareSize = function->hexToByte("06"); 
-        arp.protocolSize = function->hexToByte("04"); 
+        arp.hardwareSize = std::string("\x06", 1); 
+        arp.protocolSize = std::string("\x04", 1); 
         arp.opcode = variable.arp.opcode.request; 
-        arp.senderHardwareAddress = function->hexToByte(currentMac); 
-        arp.senderIpAddress = function->hexToByte(ip); 
+        arp.senderHardwareAddress = currentMac; 
+        arp.senderIpAddress = ip; 
         arp.targetHardwareAddress = variable.mac.source; 
-        arp.targetIpAddress = function->hexToByte(targetIp); 
+        arp.targetIpAddress = targetIp; 
 
         packet.Layer2_5.push_back(arp);
 
@@ -210,7 +210,7 @@ namespace Protocol
 
         // Set up the Ethernet header for the ARP reply
         eth.destinationMac = targetmac; 
-        eth.sourceMac = function->hexToByte(currentMac); 
+        eth.sourceMac = currentMac;
         eth.type = variable.ethernet.arp;
 
         packet.Layer2.push_back(eth);
@@ -218,11 +218,11 @@ namespace Protocol
         // Set up the ARP header for the reply
         arp.hardwareType = variable.arp.ethernet; 
         arp.protocolType = variable.arp.ipv4; 
-        arp.hardwareSize = function->hexToByte("06"); 
-        arp.protocolSize = function->hexToByte("04"); 
+        arp.hardwareSize = std::string("\x06", 1); 
+        arp.protocolSize = std::string("\x04", 1); 
         arp.opcode = variable.arp.opcode.reply; 
-        arp.senderHardwareAddress = function->hexToByte(currentMac);
-        arp.senderIpAddress = function->hexToByte(ip);
+        arp.senderHardwareAddress = currentMac;
+        arp.senderIpAddress = ip;
         arp.targetHardwareAddress = targetmac;
         arp.targetIpAddress = targetIp; 
 

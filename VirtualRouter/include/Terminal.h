@@ -17,11 +17,11 @@ public:
 	com er, cr;
 
 
-	Terminal();	
+	Terminal(bool isDebug = false);
 	void Input();
 	
 private:
-	Functions* function = Functions::getInstance();
+
 	Variable variable;
 
 	void Process(string& command);
@@ -92,4 +92,6 @@ private:
 	bool globalCommand = false;
 
 	condition_variable cv;
+
+	bool debug;
 };

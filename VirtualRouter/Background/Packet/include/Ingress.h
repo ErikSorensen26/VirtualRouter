@@ -5,6 +5,7 @@
 #include <string>
 #include <iomanip>
 #include <mutex>
+#include <Functions.h>
 
 #include "Que.h"
 
@@ -13,7 +14,7 @@ extern std::mutex packetQueueMutex;
 class Ingress {
 public:
     // Constructor
-    Ingress(const std::string& device, const std::string mask, const int inQueSize, std::string MacAddress);
+    Ingress(const std::string& device, const std::string mask, const int inQueSize);
 
     // Deconstructor
     ~Ingress();
@@ -33,5 +34,4 @@ private:
     bpf_u_int32 subnet;
 
     static void packetHandler(u_char* user, const struct pcap_pkthdr* pkthdr, const u_char* packet);
-    bpf_u_int32 hexStringToNetmask(const std::string& hexString);
 };
