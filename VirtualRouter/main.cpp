@@ -1,9 +1,10 @@
 #include <Terminal.h>
-#include <Functions.h>
+#include <Logger.h>
 
 int main() {
+    Logger::getInstance().initialize(true);
 
-    Terminal* terminal = new Terminal();
+    Terminal* terminal = new Terminal(false);
     while (true) {
         terminal->Input();
     }

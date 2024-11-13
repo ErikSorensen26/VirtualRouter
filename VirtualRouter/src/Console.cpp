@@ -2,7 +2,9 @@
 
 
 // Constructor for Console class
-Console::Console() : Configs() 
+Console::Console() : Configs() {}
+
+void Console::initConsole()
 {
     // Initialize history with an empty string
     history.push_back("");

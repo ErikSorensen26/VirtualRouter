@@ -30,7 +30,9 @@ struct ipInfo {
     unsigned long bandwidth{}; // Bandwidth or speed of the interface
     unsigned long delay; // Delay of the interface
     string ip = ""; // IP address of the interface
+    string ipv6 = ""; // IPv6 address of the interface
     string subnet = ""; // Subnet mask of the interface
+    int v6subnet = 64; // V6 subnet mask of the interface
     string mac = ""; // MAC address of the interface
     int mtu{}; // Maximum Transmission Unit
 };
@@ -44,10 +46,14 @@ public:
     ~Interface();
 
     // Runs when the interface state changes
-    void StateChange();
+    void stateChange();
+    // Runs when the interface state changes
+    void stateChangeV6();
     
     // Method to set IPv4 address and subnet mask
     void setIPv4(string ip, string subnet);
+    // Method to set IPv6 address and subnet mask
+    void setIPv6(string ip, int subnet = 64, bool eui64 = false);
 
     bool shutdown = true; // Flag to indicate if the interface is shutdown
 
@@ -108,8 +114,10 @@ public:
     unsigned long bandwidth{1000000}; // Bandwidth or speed of the interface
     unsigned long delay{100};
     string ipAddress  = ""; // IP address of the interface
+    string ipv6Address = ""; // IPv6 address of the interface
     string macAddress = ""; // MAC address of the interface
     string mask = ""; // Subnet mask of the interface
+    int v6mask = 64; // V6 subnet mask of the interface
     int mtu = 1500; // Maximum Transmission Unit
 
 private:

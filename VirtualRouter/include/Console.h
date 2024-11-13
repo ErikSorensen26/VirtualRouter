@@ -14,6 +14,7 @@ class Console : public Configs {
 public:
     // Constructor for initializing the Console object
     Console();
+    void initConsole();
 
     // Function to read input from the console
     string input();

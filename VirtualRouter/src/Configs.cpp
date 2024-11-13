@@ -1,7 +1,8 @@
 #include <Configs.h>
 
 // Function to print a chunk of XML for debugging purposes
-void printNodeChunk(const pugi::xml_node& node) {
+void printNodeChunk(const pugi::xml_node& node) 
+{
     // Create a temporary xml_document for isolation
     pugi::xml_document temp_doc;
 
@@ -9,12 +10,15 @@ void printNodeChunk(const pugi::xml_node& node) {
     pugi::xml_node imported_node = temp_doc.append_copy(node);
 
     // Print the XML chunk with indentation for readability
-    //temp_doc.save(std::cout, "  "); 
-    //std::cout << std::endl;
+    temp_doc.save(std::cout, "  "); 
+    std::cout << std::endl;
 }
 
 // Constructor for Configs class
-Configs::Configs() {
+Configs::Configs() {}
+
+void Configs::initConfigs() 
+{
     // Get the singleton instance of Save
     //Save& routingTable = Save::getInstance();
 
@@ -31,52 +35,38 @@ Configs::Configs() {
     modeHistory.push_back(config_node);
 
     // Load JSON data for interface configurations
-    json intJson;
-    string intFilename = "../VirtualRouter/Configs/Interface.json";
-    std::ifstream intFile(intFilename);
-    if (intFile.is_open()) 
+    json configJson;
+    string configFilename = "../VirtualRouter/Configs/Configs.json";
+    std::ifstream configFile(configFilename);
+    if (configFile.is_open()) 
     {
-        intFile >> intJson;
-        intFile.close();
+        configFile >> configJson;
+        configFile.close();
     } 
     else 
     {
-        std::cerr << "Failed to open file: " << intFilename << std::endl;
+        std::cerr << "Failed to open file: " << configFilename << std::endl;
     }
     // Add interface configurations to physicalInterfaces vector
-    for (auto obj : intJson)
+    for (auto obj : configJson["Interface"])
     {
         physicalInterfaces.push_back(obj);
     }
 
-    // Load JSON data for MAC address configurations
-    json macJson;
-    string macFilename = "../VirtualRouter/Configs/mac.json";
-    std::ifstream macFile(macFilename);
-    if (macFile.is_open()) 
-    {
-        macFile >> macJson;
-        macFile.close();
-    } 
-    else 
-    {
-        std::cerr << "Failed to open file: " << macFilename << std::endl;
-    }
-
     // Set OUI from JSON data
-    OUI = macJson["OUI"];
+    OUI = configJson["Mac"]["OUI"];
     // Add Ethernet MAC addresses to macAddressList
-    for (auto obj : macJson["Ethernet"]) 
+    for (auto obj : configJson["Mac"]["Ethernet"]) 
     {
         macAddressList.Ethernet.push_back(obj);
     }
     // Add FastEthernet MAC addresses to macAddressList
-    for (auto obj : macJson["FastEthernet"]) 
+    for (auto obj : configJson["Mac"]["FastEthernet"]) 
     {
         macAddressList.FastEthernet.push_back(obj);
     }
     // Add GigabitEthernet MAC addresses to macAddressList
-    for (auto obj : macJson["GigabitEthernet"]) 
+    for (auto obj : configJson["Mac"]["GigabitEthernet"]) 
     {
         macAddressList.GigabitEthernet.push_back(obj);
     }
@@ -97,7 +87,8 @@ void Configs::processNode(const pugi::xml_node& node, std::string command)
     {
         command += " " + std::string(node.name());
         curNonVolCommand += " " + std::string(node.name());
-    } else 
+    } 
+    else 
     {
         bool contains = false;
         for (string& str : inputs) 

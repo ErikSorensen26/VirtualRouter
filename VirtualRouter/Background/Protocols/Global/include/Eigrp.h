@@ -61,72 +61,75 @@ namespace EigrpConfigs {
         Sequence() : init(false), conditionalReceive(false), endOfTable(false) {}
 
     };
-struct NeighborInfo {
-    std::string ipAddress;                                  // Neighbor's IP address
-    std::string macAddress;                                 // Neighbor's MAC address
-    std::mutex macMutex;                                    // Neighbor's MAC mutex
-    bool hasMac;                                            // Indicates if MAC address is known
-    bool isInit;                                            // Initialization flag
-    bool sendInitUpdate;                                    // Flag to send initial update
-    std::unordered_map<int, Sequence> sequenceList;         // Holds flags for sequences
-    int conditionalReceive;                                 // Holds conditional receive sequence
-    bool receivedInitUpdate;                                // Flag for received initial update
-    int sequenceNumber;                                     // Sequence number for reliable delivery
-    int lastReceivedSequenceNumber;                         // Last received sequence number
-    bool adjacency;                                         // Adjacency status
 
-    // Acks
-    vector<int> pendingAcks;                                // Pending Acks
-
-    // Synchronization primitives
-    std::mutex neighborDataMutex;                           // Protects neighbor-specific data
-    std::condition_variable cv;                             // Condition variable for synchronization
-
-    // RTT estimation
-    double srtt;                                            // Smoothed RTT
-    double rttvar;                                          // RTT variance
-    double rto;                                             // Retransmission timeout
-
-    // Timers
-    int holdTimerId;                                        // Hold timer ID
-    int holdTime;                                           // Hold time
-    std::chrono::steady_clock::time_point lastHeard;        // Last heard time point
-    std::unordered_map<int, int> retransmissionTimers;      // Map of sequenceNumber to timerId
-    std::mutex retransmissionMutex;                         // Protects retransmissionTimers
-
-    // Reliable packets
-    std::unordered_map<int, std::string> reliablePackets;   // Map of sequenceNumber to packet
-    std::unordered_map<int, std::chrono::steady_clock::time_point> packetSendTimes; // Send times
-    std::unordered_map<int, int> retransmissionCounts; 
-
-    // Threads
-    std::thread workerThread;                               // Worker thread
-    std::atomic<bool> workerActive;                         // Worker thread active flag
-
-    NeighborInfo()
-        : hasMac(false),
-          isInit(false),
-          sendInitUpdate(false),
-          receivedInitUpdate(false),
-          lastReceivedSequenceNumber(0),
-          conditionalReceive(0),
-          sequenceNumber(0),
-          adjacency(false),
-          srtt(1.0),
-          rttvar(0.5),
-          rto(1.5),
-          holdTimerId(0),
-          workerActive(false)
-    {}
-
-    // Delete copy constructor and copy assignment operator
-    NeighborInfo(const NeighborInfo&) = delete;
-    NeighborInfo& operator=(const NeighborInfo&) = delete;
-
-    // Delete move constructor and move assignment operator
-    NeighborInfo(NeighborInfo&&) = delete;
-    NeighborInfo& operator=(NeighborInfo&&) = delete;
-};
+    struct NeighborInfo {
+        std::string ipAddress;                                  // Neighbor's IP address
+        std::string macAddress;                                 // Neighbor's MAC address
+        std::mutex macMutex;                                    // Neighbor's MAC mutex
+        bool hasMac;                                            // Indicates if MAC address is known
+        bool isInit;                                            // Initialization flag
+        bool sendInitUpdate;                                    // Flag to send initial update
+        std::unordered_map<int, Sequence> sequenceList;         // Holds flags for sequences
+        int conditionalReceive;                                 // Holds conditional receive sequence
+        bool receivedInitUpdate;                                // Flag for received initial update
+        int sequenceNumber;                                     // Sequence number for reliable delivery
+        int lastReceivedSequenceNumber;                         // Last received sequence number
+        bool adjacency;                                         // Adjacency status
+        
+        std::unordered_map<int, std::vector<RoutingTable::Eigrp>> routingBuffers;
+    
+        // Acks
+        vector<int> pendingAcks;                                // Pending Acks
+    
+        // Synchronization primitives
+        std::mutex neighborDataMutex;                           // Protects neighbor-specific data
+        std::condition_variable cv;                             // Condition variable for synchronization
+    
+        // RTT estimation
+        double srtt;                                            // Smoothed RTT
+        double rttvar;                                          // RTT variance
+        double rto;                                             // Retransmission timeout
+    
+        // Timers
+        int holdTimerId;                                        // Hold timer ID
+        int holdTime;                                           // Hold time
+        std::chrono::steady_clock::time_point lastHeard;        // Last heard time point
+        std::unordered_map<int, int> retransmissionTimers;      // Map of sequenceNumber to timerId
+        std::mutex retransmissionMutex;                         // Protects retransmissionTimers
+    
+        // Reliable packets
+        std::unordered_map<int, std::string> reliablePackets;   // Map of sequenceNumber to packet
+        std::unordered_map<int, std::chrono::steady_clock::time_point> packetSendTimes; // Send times
+        std::unordered_map<int, int> retransmissionCounts; 
+    
+        // Threads
+        std::thread workerThread;                               // Worker thread
+        std::atomic<bool> workerActive;                         // Worker thread active flag
+    
+        NeighborInfo()
+            : hasMac(false),
+              isInit(false),
+              sendInitUpdate(false),
+              receivedInitUpdate(false),
+              lastReceivedSequenceNumber(0),
+              conditionalReceive(0),
+              sequenceNumber(0),
+              adjacency(false),
+              srtt(1.0),
+              rttvar(0.5),
+              rto(1.5),
+              holdTimerId(0),
+              workerActive(false)
+        {}
+    
+        // Delete copy constructor and copy assignment operator
+        NeighborInfo(const NeighborInfo&) = delete;
+        NeighborInfo& operator=(const NeighborInfo&) = delete;
+    
+        // Delete move constructor and move assignment operator
+        NeighborInfo(NeighborInfo&&) = delete;
+        NeighborInfo& operator=(NeighborInfo&&) = delete;
+    };
     struct NetworksDistributed {
         RoutingTable::Eigrp route;
         bool distrubuted = false;
@@ -210,8 +213,9 @@ namespace Protocol
         void SendHelloPacket(bool update = false, int sequenceNum = 0, string neighborIp = "00000000");
         void StopHello();
     
-        void StartActiveTimer(const std::string& destinationF); 
-        void HandleActiveTimeExpire(const std::string& destination); 
+        void StartActiveTimer(const std::string& destination, int mask); 
+        void HandleActiveTimeExpire(const std::string& destination, int mask);
+        void CancelActiveTimer(const std::string &destination, int mask);
     
         void StartStuckInActive();
         void StopStuckInActive();
@@ -221,6 +225,7 @@ namespace Protocol
 
         void StartRetransmissionTimer(const std::string& neighborIp, int sequenceNumber, double timeout);
         void HandleRetransmissionTimeout(const std::string& neighborIp, int sequenceNumber);
+        double CalculateRTT(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, int sequenceNumber);
         void UpdateRTTEstimate(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, int sequenceNumber);
 
         void UpdateRoutingTableForDestination(const std::string& destination);
@@ -248,6 +253,9 @@ namespace Protocol
         // Topology table
         std::unique_ptr<Protocol::TopologyTable> topologyTable;
 
+        // List of active timers
+        std::unordered_map<std::string, int> activeTimers;
+
         // Timer IDs
         int helloTimerId = 0;
         int activeTimerId = 0;
@@ -261,6 +269,7 @@ namespace Protocol
         vector<RoutingTable::Eigrp> routeBuffer;
 
         std::mutex helloTimerMutex;
+        std::mutex activeTimerMutex;
         std::mutex retransmissionMutex;
     };
 
@@ -282,7 +291,7 @@ namespace Protocol
         // Tests if an IP address matches the configured networks
         bool TestAddress(const std::string& testIp);
         // Add EIGRP rouing entry
-        double CalculateMetric(EigrpConfigs::KValue k, Interface* interface, int bandwidth, int load, int delay, int reliability);
+        double CalculateMetric(EigrpConfigs::KValue k, Interface* interface, int bandwidth, int load, int delay, int reliability, int hopCount = 0);
         // Calculate Parameters
         string CalculateParameters(int holdTime);
         // Updates Distribution Lists

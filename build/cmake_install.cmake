@@ -1,4 +1,4 @@
-# Install script for directory: /home/erik/VirtualRouter/VirtualRouter
+# Install script for directory: /home/erik/VirtualRouter
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

@@ -22,10 +22,9 @@ namespace Protocol {
     }
 
     // Initializes DHCP, sends discover requests, handles offers, and sends requests and acknowledgments
-    void DhcpClient::InitializeDhcp(string& hostname, string& hardwareAddress) 
+    void DhcpClient::InitializeDhcp(string& hardwareAddress) 
     {
         bool run = true;
-        PacketInfo dhcpBody = DhcpBody(hostname, hardwareAddress, 312); 
 
         while (run) 
         {
@@ -38,7 +37,9 @@ namespace Protocol {
                 // Check if lease time has expired
                 if (leaseStart + Functions::byteToNum(std::string("0x00", 1) + currentInterface->interfaceInfo.dhcp.leaseTime) < secondsSinceEpoch()) 
                 {
-                    PacketInfo discoverInfo = DhcpDiscover(dhcpBody, hostname, hardwareAddress);
+                    std::string hostname = Global::getInstance().Hostname();
+                    PacketInfo dhcpBody = DhcpBody(hostname, hardwareAddress, 312); 
+                    PacketInfo discoverInfo = DhcpDiscover(dhcpBody,hostname , hardwareAddress);
                     string discoverPacket = Encapsulate(discoverInfo);
                     currentInterface->packetOutQueue.enqueue(discoverPacket); 
                     std::this_thread::sleep_for(std::chrono::seconds(2)); 
@@ -114,7 +115,9 @@ namespace Protocol {
                     string dhcpIP = currentInterface->Get().ip;
                     dhcpHeader header; 
                     header.yourClientIP = dhcpIP; 
-                    header.transID = generateDhcpTransid(); 
+                    header.transID = generateDhcpTransid();
+                    std::string hostname = Global::getInstance().Hostname();
+                    PacketInfo dhcpBody = DhcpBody(hostname, hardwareAddress, 312); 
                     PacketInfo requestInfo = DhcpRequest(dhcpBody, header, hostname, hardwareAddress, dhcpIP, currentInterface->interfaceInfo.dhcp.dhcpServer); // Create DHCP request packet
                     string requestPacket = Encapsulate(requestInfo); 
                     currentInterface->packetOutQueue.enqueue(requestPacket); 

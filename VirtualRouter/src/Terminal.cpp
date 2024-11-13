@@ -12,9 +12,11 @@ using namespace std;
 
 Terminal::Terminal(bool isDebug) : Console() {
 
+	std::cout << "terminal" << std::endl;
+
 	debug = isDebug;
 
-	er.name = "<error>";		// default name
+	er.name = "<error>";
 	cr.name = "<cr>";
 
 	json.clear();
@@ -28,17 +30,25 @@ Terminal::Terminal(bool isDebug) : Console() {
 	}
 	switchMode(mode.globalConfiguration);
 
+	initConsole();
+	initConfigs();
+
+	recover();
+}
+
+void Terminal::recover() {
 	vector<string> running = recoverXml();
 	for (string& str : running) {
-		//cout << str << endl;
 		Process(str);
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 	//switchMode(mode.userExec);
 }
 
 void Terminal::Input() {
+	std::string hostname = Global::getInstance().Hostname();
 	cursorPos = 0;
-	cout << hostname << currentMode;
+	cout << Global::getInstance().Hostname() << currentMode;
 #ifdef _WIN32
 	initialLineLength = hostname.size() + currentMode.size();
 #else 
@@ -199,6 +209,7 @@ string Terminal::FixCommand(const string& command) {
 				if (currentDir == "error" && !isGlobal(name) && !help) {
 					run = 0;
 					cout << endl;
+					std::string hostname = Global::getInstance().Hostname();
 					for (char i : hostname) {
 						cout << " ";
 					}

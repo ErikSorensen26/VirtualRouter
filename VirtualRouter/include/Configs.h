@@ -28,6 +28,7 @@
 #include <pugixml.hpp>
 #include <json.hpp>
 #include <Functions.h>
+#include <Global.h>
 
 using json = nlohmann::json;
 using namespace std;
@@ -116,6 +117,7 @@ public:
 
 	// Constructor for the Configs class.
     Configs(); 
+	void initConfigs();
 	// Recovers XML data as a vector of strings.
     vector<string> recoverXml(); 
 	// Processes an XML node based on a command.
@@ -137,8 +139,6 @@ public:
 
 	// Mode settings for command-line prompts.
 	Mode mode;
-	// Default hostname.
-	string hostname = "Router";
 	// Current mode.
     string currentMode;
 	// Previous mode.

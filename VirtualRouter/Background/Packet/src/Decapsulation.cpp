@@ -4,7 +4,7 @@
 Packet::Packet(string &packet, bool debug)
 {
     print = debug;
-    if (print) {cout << Functions::byteToHex(packet) << endl;}
+    if (print) {Logger::getInstance().info() << Functions::byteToHex(packet) << endl;}
     Inspection(packet);
 }
 
@@ -16,17 +16,17 @@ void Packet::Inspection(string &packet)
     start = 0;
     if (print)
     {
-        cout << "Layer 2:" << endl;
+        Logger::getInstance().info() << "Layer 2:" << endl;
     }
     L2(packet); // Process Layer 2 (Data Link Layer)
     if (print)
     {
-        cout << "Layer 2.5:" << endl;
+        Logger::getInstance().info() << "Layer 2.5:" << endl;
     }
     L2_5(packet); // Process Layer 2.5 (e.g., VLAN, MPLS)
     if (print)
     {
-        cout << "Layer 3:" << endl;
+        Logger::getInstance().info() << "Layer 3:" << endl;
     }
     L3(packet); // Process Layer 3 (Network Layer)
 }
@@ -36,12 +36,12 @@ void Packet::Decapsulate()
 {
     if (print)
     {
-        cout << "Layer 4:" << endl;
+        Logger::getInstance().info() << "Layer 4:" << endl;
     }
     L4(fullPacket); // Process Layer 4 (Transport Layer)
     if (print)
     {
-        cout << "Layer 5:" << endl;
+        Logger::getInstance().info() << "Layer 5:" << endl;
     }
     L5(fullPacket); // Process Layer 5 (Session Layer)
 }
@@ -201,10 +201,10 @@ void Packet::Ethernet(string &ethernetHeader)
     if (print)
     {
 
-        cout << "Ethernet:" << endl;
-        cout << "Destination Mac: " << Functions::byteToHex(ethernet.destinationMac) << endl;
-        cout << "Source Mac: " << Functions::byteToHex(ethernet.sourceMac) << endl;
-        cout << "Type: " << Functions::byteToHex(ethernet.type) << endl;
+        Logger::getInstance().info() << "Ethernet:" << endl;
+        Logger::getInstance().info() << "Destination Mac: " << Functions::byteToHex(ethernet.destinationMac) << endl;
+        Logger::getInstance().info() << "Source Mac: " << Functions::byteToHex(ethernet.sourceMac) << endl;
+        Logger::getInstance().info() << "Type: " << Functions::byteToHex(ethernet.type) << endl;
     }
 }
 
@@ -225,16 +225,16 @@ void Packet::Arp(string &arpHeader)
 
     if (print)
     {
-        cout << "ARP Header:" << endl;
-        cout << "Hardware Type: " << Functions::byteToHex(arp.hardwareType) << endl;
-        cout << "Protocol Type: " << Functions::byteToHex(arp.protocolType) << endl;
-        cout << "Hardware Size: " << Functions::byteToHex(arp.hardwareSize) << endl;
-        cout << "Protocol Size: " << Functions::byteToHex(arp.protocolSize) << endl;
-        cout << "Opcode: " << Functions::byteToHex(arp.opcode) << endl;
-        cout << "Sender Hardware Address: " << Functions::byteToHex(arp.senderHardwareAddress) << endl;
-        cout << "Sender IP Address: " << Functions::byteToHex(arp.senderIpAddress) << endl;
-        cout << "Target Hardware Address: " << Functions::byteToHex(arp.targetHardwareAddress) << endl;
-        cout << "Target IP Address: " << Functions::byteToHex(arp.targetIpAddress) << endl;
+        Logger::getInstance().info() << "ARP Header:" << endl;
+        Logger::getInstance().info() << "Hardware Type: " << Functions::byteToHex(arp.hardwareType) << endl;
+        Logger::getInstance().info() << "Protocol Type: " << Functions::byteToHex(arp.protocolType) << endl;
+        Logger::getInstance().info() << "Hardware Size: " << Functions::byteToHex(arp.hardwareSize) << endl;
+        Logger::getInstance().info() << "Protocol Size: " << Functions::byteToHex(arp.protocolSize) << endl;
+        Logger::getInstance().info() << "Opcode: " << Functions::byteToHex(arp.opcode) << endl;
+        Logger::getInstance().info() << "Sender Hardware Address: " << Functions::byteToHex(arp.senderHardwareAddress) << endl;
+        Logger::getInstance().info() << "Sender IP Address: " << Functions::byteToHex(arp.senderIpAddress) << endl;
+        Logger::getInstance().info() << "Target Hardware Address: " << Functions::byteToHex(arp.targetHardwareAddress) << endl;
+        Logger::getInstance().info() << "Target IP Address: " << Functions::byteToHex(arp.targetIpAddress) << endl;
     }
 }
 
@@ -265,22 +265,22 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
     if (print)
     {
 
-        cout << "IPv4 Header:" << endl;
-        cout << "Version: " << ipv4.version << endl;
-        cout << "Header Length: " << ipv4.headerLength << endl;
-        cout << "Service Field: " << Functions::byteToHex(ipv4.serviceField) << endl;
-        cout << "Total Length: " << Functions::hexToNum(Functions::byteToHex(ipv4.totalLength)) << " " << this->fullPacket.size() << endl;
-        cout << "Identification: " << Functions::byteToHex(ipv4.identification) << endl;
-        cout << "TTL: " << Functions::byteToHex(ipv4.TTL) << endl;
-        cout << "Protocol: " << Functions::byteToHex(ipv4.protocol) << endl;
-        cout << "Checksum: " << Functions::byteToHex(ipv4.checksum) << endl;
-        cout << "Source Address: " << Functions::byteAddressToNumAddress(ipv4.sourceAddress) << endl;
-        cout << "Destination Address: " << Functions::byteAddressToNumAddress(ipv4.destinationAddress) << endl;
-        cout << "Fragment Flags:" << endl;
-        cout << "  Reserved: " << ipv4.fragmentFlag.reserved << endl;
-        cout << "  Fragment: " << ipv4.fragmentFlag.fragment << endl;
-        cout << "  More Fragment: " << ipv4.fragmentFlag.moreFragment << endl;
-        cout << "  Fragment Offset: " << ipv4.fragmentFlag.fragmentOffset << endl;
+        Logger::getInstance().info() << "IPv4 Header:" << endl;
+        Logger::getInstance().info() << "Version: " << ipv4.version << endl;
+        Logger::getInstance().info() << "Header Length: " << ipv4.headerLength << endl;
+        Logger::getInstance().info() << "Service Field: " << Functions::byteToHex(ipv4.serviceField) << endl;
+        Logger::getInstance().info() << "Total Length: " << Functions::hexToNum(Functions::byteToHex(ipv4.totalLength)) << " " << this->fullPacket.size() << endl;
+        Logger::getInstance().info() << "Identification: " << Functions::byteToHex(ipv4.identification) << endl;
+        Logger::getInstance().info() << "TTL: " << Functions::byteToHex(ipv4.TTL) << endl;
+        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(ipv4.protocol) << endl;
+        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(ipv4.checksum) << endl;
+        Logger::getInstance().info() << "Source Address: " << Functions::byteAddressToNumAddress(ipv4.sourceAddress) << endl;
+        Logger::getInstance().info() << "Destination Address: " << Functions::byteAddressToNumAddress(ipv4.destinationAddress) << endl;
+        Logger::getInstance().info() << "Fragment Flags:" << endl;
+        Logger::getInstance().info() << "  Reserved: " << ipv4.fragmentFlag.reserved << endl;
+        Logger::getInstance().info() << "  Fragment: " << ipv4.fragmentFlag.fragment << endl;
+        Logger::getInstance().info() << "  More Fragment: " << ipv4.fragmentFlag.moreFragment << endl;
+        Logger::getInstance().info() << "  Fragment Offset: " << ipv4.fragmentFlag.fragmentOffset << endl;
     }
 
     if (ipv4Size > 20)
@@ -295,13 +295,13 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
         if (print)
         {
 
-            cout << "Options:" << endl;
-            cout << "  Type:" << endl;
-            cout << "    Copy: " << ipv4.options.type.copy << endl;
-            cout << "    Class Control: " << ipv4.options.type.classControl << endl;
-            cout << "    Router Alert: " << ipv4.options.type.routerAlert << endl;
-            cout << "  Length: " << ipv4.options.length << endl;
-            cout << "  Router Alert: " << ipv4.options.routerAlert << endl;
+            Logger::getInstance().info() << "Options:" << endl;
+            Logger::getInstance().info() << "  Type:" << endl;
+            Logger::getInstance().info() << "    Copy: " << ipv4.options.type.copy << endl;
+            Logger::getInstance().info() << "    Class Control: " << ipv4.options.type.classControl << endl;
+            Logger::getInstance().info() << "    Router Alert: " << ipv4.options.type.routerAlert << endl;
+            Logger::getInstance().info() << "  Length: " << ipv4.options.length << endl;
+            Logger::getInstance().info() << "  Router Alert: " << ipv4.options.routerAlert << endl;
         }
     }
 }
@@ -319,11 +319,11 @@ void Packet::Mpls(string &mplsHeader)
     if (print)
     {
 
-        cout << "MPLS Header:" << endl;
-        cout << "Label: " << mpls.label << endl;
-        cout << "Exp Bit: " << mpls.expBit << endl;
-        cout << "Bottom Label Stack: " << mpls.bottomLabelStack << endl;
-        cout << "TTL: " << mpls.TTL << endl;
+        Logger::getInstance().info() << "MPLS Header:" << endl;
+        Logger::getInstance().info() << "Label: " << mpls.label << endl;
+        Logger::getInstance().info() << "Exp Bit: " << mpls.expBit << endl;
+        Logger::getInstance().info() << "Bottom Label Stack: " << mpls.bottomLabelStack << endl;
+        Logger::getInstance().info() << "TTL: " << mpls.TTL << endl;
     }
 }
 
@@ -375,24 +375,24 @@ void Packet::Tcp(string &tcpHeader, int &tcpSize)
     if (print)
     {
 
-        cout << "TCP Header:" << endl;
-        cout << "Source Port: " << Functions::byteToHex(tcp.sourcePort) << endl;
-        cout << "Destination Port: " << Functions::byteToHex(tcp.destinationPort) << endl;
-        cout << "Sequence Number: " << Functions::byteToHex(tcp.sequenceNumber) << endl;
-        cout << "Ack Number: " << Functions::byteToHex(tcp.ackNumber) << endl;
-        cout << "Header Length: " << Functions::byteToHex(tcp.headerLength) << endl;
-        cout << "Window Size: " << Functions::byteToHex(tcp.windowSize) << endl;
-        cout << "Checksum: " << Functions::byteToHex(tcp.checksum) << endl;
-        cout << "Urgent Pointer: " << Functions::byteToHex(tcp.urgentPointer) << endl;
-        cout << "Flags:" << endl;
-        cout << "  Congestion Window Reduced: " << tcp.flags.congestionWindowReduced << endl;
-        cout << "  ECN Echo: " << tcp.flags.ecnEcho << endl;
-        cout << "  Urgent: " << tcp.flags.urgent << endl;
-        cout << "  Acknowledgement: " << tcp.flags.acknowledgement << endl;
-        cout << "  Push: " << tcp.flags.push << endl;
-        cout << "  Reset: " << tcp.flags.reset << endl;
-        cout << "  SYN: " << tcp.flags.syn << endl;
-        cout << "  FIN: " << tcp.flags.fin << endl;
+        Logger::getInstance().info() << "TCP Header:" << endl;
+        Logger::getInstance().info() << "Source Port: " << Functions::byteToHex(tcp.sourcePort) << endl;
+        Logger::getInstance().info() << "Destination Port: " << Functions::byteToHex(tcp.destinationPort) << endl;
+        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(tcp.sequenceNumber) << endl;
+        Logger::getInstance().info() << "Ack Number: " << Functions::byteToHex(tcp.ackNumber) << endl;
+        Logger::getInstance().info() << "Header Length: " << Functions::byteToHex(tcp.headerLength) << endl;
+        Logger::getInstance().info() << "Window Size: " << Functions::byteToHex(tcp.windowSize) << endl;
+        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(tcp.checksum) << endl;
+        Logger::getInstance().info() << "Urgent Pointer: " << Functions::byteToHex(tcp.urgentPointer) << endl;
+        Logger::getInstance().info() << "Flags:" << endl;
+        Logger::getInstance().info() << "  Congestion Window Reduced: " << tcp.flags.congestionWindowReduced << endl;
+        Logger::getInstance().info() << "  ECN Echo: " << tcp.flags.ecnEcho << endl;
+        Logger::getInstance().info() << "  Urgent: " << tcp.flags.urgent << endl;
+        Logger::getInstance().info() << "  Acknowledgement: " << tcp.flags.acknowledgement << endl;
+        Logger::getInstance().info() << "  Push: " << tcp.flags.push << endl;
+        Logger::getInstance().info() << "  Reset: " << tcp.flags.reset << endl;
+        Logger::getInstance().info() << "  SYN: " << tcp.flags.syn << endl;
+        Logger::getInstance().info() << "  FIN: " << tcp.flags.fin << endl;
     }
 }
 
@@ -409,11 +409,11 @@ void Packet::Udp(string &udpHeader)
     if (print)
     {
 
-        cout << "UDP Header:" << endl;
-        cout << "Source Port: " << Functions::byteToHex(udp.sourcePort) << endl;
-        cout << "Destination Port: " << Functions::byteToHex(udp.destinationPort) << endl;
-        cout << "Length: " << Functions::byteToHex(udp.length) << endl;
-        cout << "Checksum: " << Functions::byteToHex(udp.checksum) << endl;
+        Logger::getInstance().info() << "UDP Header:" << endl;
+        Logger::getInstance().info() << "Source Port: " << Functions::byteToHex(udp.sourcePort) << endl;
+        Logger::getInstance().info() << "Destination Port: " << Functions::byteToHex(udp.destinationPort) << endl;
+        Logger::getInstance().info() << "Length: " << Functions::byteToHex(udp.length) << endl;
+        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(udp.checksum) << endl;
     }
 }
 
@@ -431,12 +431,12 @@ void Packet::Icmp(string &icmpHeader)
     if (print)
     {
 
-        cout << "ICMP Header:" << endl;
-        cout << "Type: " << Functions::byteToHex(icmp.type) << endl;
-        cout << "Code: " << Functions::byteToHex(icmp.code) << endl;
-        cout << "Checksum: " << Functions::byteToHex(icmp.checksum) << endl;
-        cout << "Identifier: " << Functions::byteToHex(icmp.identifier) << endl;
-        cout << "Sequence Number: " << Functions::byteToHex(icmp.sequenceNumber) << endl;
+        Logger::getInstance().info() << "ICMP Header:" << endl;
+        Logger::getInstance().info() << "Type: " << Functions::byteToHex(icmp.type) << endl;
+        Logger::getInstance().info() << "Code: " << Functions::byteToHex(icmp.code) << endl;
+        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(icmp.checksum) << endl;
+        Logger::getInstance().info() << "Identifier: " << Functions::byteToHex(icmp.identifier) << endl;
+        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(icmp.sequenceNumber) << endl;
     }
 }
 
@@ -452,19 +452,19 @@ void Packet::Igmp(string &igmpHeader)
     //
     //    if (print) {
     //
-    //        cout << "IGMP Header:" << endl;
-    //        cout << "Type: " << Functions::byteToHex(igmp.type) << endl;
-    //        cout << "Max Rest Time: " << Functions::byteToHex(igmp.maxRestTime) << endl;
-    //        cout << "Checksum: " << Functions::byteToHex(igmp.checksum) << endl;
-    //        cout << "Multicast Address: " << Functions::byteToHex(igmp.multicastAddress) << endl;
+    //        Logger::getInstance().info() << "IGMP Header:" << endl;
+    //        Logger::getInstance().info() << "Type: " << Functions::byteToHex(igmp.type) << endl;
+    //        Logger::getInstance().info() << "Max Rest Time: " << Functions::byteToHex(igmp.maxRestTime) << endl;
+    //        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(igmp.checksum) << endl;
+    //        Logger::getInstance().info() << "Multicast Address: " << Functions::byteToHex(igmp.multicastAddress) << endl;
     //
     //    }
     //
     //    if (igmpHeader.size() == 12) {
     //
-    //        cout << "imgp" << endl;
+    //        Logger::getInstance().info() << "imgp" << endl;
     //        igmp.v3.supress = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(5, 1);
-    //        cout << "igmp2" << endl;
+    //        Logger::getInstance().info() << "igmp2" << endl;
     //        igmp.v3.qrv = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(6, 3);
     //        igmp.v3.qqic = igmpHeader.substr(9, 1);
     //        igmp.v3.numSrc = igmpHeader.substr(10, 2);
@@ -472,11 +472,11 @@ void Packet::Igmp(string &igmpHeader)
     //
     //        if (print) {
     //
-    //            cout << "IGMP v3:" << endl;
-    //            cout << "  Suppress: " << igmp.v3.supress << endl;
-    //            cout << "  QRV: " << igmp.v3.qrv << endl;
-    //            cout << "  QQIC: " << igmp.v3.qqic << endl;
-    //            cout << "  Num Src: " << Functions::byteToHex(igmp.v3.numSrc) << endl;
+    //            Logger::getInstance().info() << "IGMP v3:" << endl;
+    //            Logger::getInstance().info() << "  Suppress: " << igmp.v3.supress << endl;
+    //            Logger::getInstance().info() << "  QRV: " << igmp.v3.qrv << endl;
+    //            Logger::getInstance().info() << "  QQIC: " << igmp.v3.qqic << endl;
+    //            Logger::getInstance().info() << "  Num Src: " << Functions::byteToHex(igmp.v3.numSrc) << endl;
     //
     //        }
     //    }
@@ -505,21 +505,21 @@ void Packet::Gre(string &greHeader)
     if (print)
     {
 
-        cout << "Gre: " << endl;
-        cout << "Flags: " << endl;
-        cout << "   Checksum: " << gre.flags.checksum << endl;
-        cout << "   Routing: " << gre.flags.routing << endl;
-        cout << "   Key: " << gre.flags.key << endl;
-        cout << "   Sequence Number: " << gre.flags.seqNum << endl;
-        cout << "   Strict Source Route: " << gre.flags.strictSourceRoute << endl;
-        cout << "   Recursion: " << gre.flags.recursion << endl;
-        cout << "   Acknowledgment: " << gre.flags.acknowledgment << endl;
-        cout << "   Reserved: " << gre.flags.reserved << endl;
-        cout << "   Version: " << gre.flags.version << endl;
-        cout << "Protocol: " << Functions::byteToHex(gre.protocol) << endl;
-        cout << "Length: " << Functions::byteToHex(gre.length) << endl;
-        cout << "Call ID: " << Functions::byteToHex(gre.callID) << endl;
-        cout << "Sequence Number: " << Functions::byteToHex(gre.seqNum) << endl;
+        Logger::getInstance().info() << "Gre: " << endl;
+        Logger::getInstance().info() << "Flags: " << endl;
+        Logger::getInstance().info() << "   Checksum: " << gre.flags.checksum << endl;
+        Logger::getInstance().info() << "   Routing: " << gre.flags.routing << endl;
+        Logger::getInstance().info() << "   Key: " << gre.flags.key << endl;
+        Logger::getInstance().info() << "   Sequence Number: " << gre.flags.seqNum << endl;
+        Logger::getInstance().info() << "   Strict Source Route: " << gre.flags.strictSourceRoute << endl;
+        Logger::getInstance().info() << "   Recursion: " << gre.flags.recursion << endl;
+        Logger::getInstance().info() << "   Acknowledgment: " << gre.flags.acknowledgment << endl;
+        Logger::getInstance().info() << "   Reserved: " << gre.flags.reserved << endl;
+        Logger::getInstance().info() << "   Version: " << gre.flags.version << endl;
+        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(gre.protocol) << endl;
+        Logger::getInstance().info() << "Length: " << Functions::byteToHex(gre.length) << endl;
+        Logger::getInstance().info() << "Call ID: " << Functions::byteToHex(gre.callID) << endl;
+        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(gre.seqNum) << endl;
     }
 }
 
@@ -535,10 +535,10 @@ void Packet::Ppp(string &pppHeader)
     if (print)
     {
 
-        cout << "PPP: " << endl;
-        cout << "Address: " << Functions::byteToHex(ppp.address) << endl;
-        cout << "Control: " << Functions::byteToHex(ppp.control) << endl;
-        cout << "Protocol: " << Functions::byteToHex(ppp.protocol) << endl;
+        Logger::getInstance().info() << "PPP: " << endl;
+        Logger::getInstance().info() << "Address: " << Functions::byteToHex(ppp.address) << endl;
+        Logger::getInstance().info() << "Control: " << Functions::byteToHex(ppp.control) << endl;
+        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(ppp.protocol) << endl;
     }
 }
 
@@ -560,16 +560,16 @@ void Packet::Frame(string &frameHeader)
     if (print)
     {
 
-        cout << "Frame Relay:" << endl;
-        cout << "First DLCI: " << frame.firstAddress.dlci << endl;
-        cout << "First CR: " << frame.firstAddress.cr << endl;
-        cout << "First EA: " << frame.firstAddress.ea << endl;
-        cout << "Second DLCI: " << frame.secondAddress.dlci << endl;
-        cout << "Second FECN: " << frame.secondAddress.fecn << endl;
-        cout << "Second BECN: " << frame.secondAddress.becn << endl;
-        cout << "Second DE: " << frame.secondAddress.de << endl;
-        cout << "Second EA: " << frame.secondAddress.ea << endl;
-        cout << "Type: " << Functions::byteToHex(frame.type) << endl;
+        Logger::getInstance().info() << "Frame Relay:" << endl;
+        Logger::getInstance().info() << "First DLCI: " << frame.firstAddress.dlci << endl;
+        Logger::getInstance().info() << "First CR: " << frame.firstAddress.cr << endl;
+        Logger::getInstance().info() << "First EA: " << frame.firstAddress.ea << endl;
+        Logger::getInstance().info() << "Second DLCI: " << frame.secondAddress.dlci << endl;
+        Logger::getInstance().info() << "Second FECN: " << frame.secondAddress.fecn << endl;
+        Logger::getInstance().info() << "Second BECN: " << frame.secondAddress.becn << endl;
+        Logger::getInstance().info() << "Second DE: " << frame.secondAddress.de << endl;
+        Logger::getInstance().info() << "Second EA: " << frame.secondAddress.ea << endl;
+        Logger::getInstance().info() << "Type: " << Functions::byteToHex(frame.type) << endl;
     }
 }
 
@@ -588,13 +588,13 @@ void Packet::Ah(string &ahHeader, int &ahSize)
     if (print)
     {
 
-        cout << "AH:" << endl;
-        cout << "Next: " << Functions::byteToHex(ah.next) << endl;
-        cout << "Length: " << Functions::byteToHex(ah.length) << endl;
-        cout << "Reserved: " << Functions::byteToHex(ah.reserved) << endl;
-        cout << "AH SPI: " << Functions::byteToHex(ah.spi) << endl;
-        cout << "AH Sequence: " << Functions::byteToHex(ah.sequence) << endl;
-        cout << "AH ICV: " << Functions::byteToHex(ah.icv) << endl;
+        Logger::getInstance().info() << "AH:" << endl;
+        Logger::getInstance().info() << "Next: " << Functions::byteToHex(ah.next) << endl;
+        Logger::getInstance().info() << "Length: " << Functions::byteToHex(ah.length) << endl;
+        Logger::getInstance().info() << "Reserved: " << Functions::byteToHex(ah.reserved) << endl;
+        Logger::getInstance().info() << "AH SPI: " << Functions::byteToHex(ah.spi) << endl;
+        Logger::getInstance().info() << "AH Sequence: " << Functions::byteToHex(ah.sequence) << endl;
+        Logger::getInstance().info() << "AH ICV: " << Functions::byteToHex(ah.icv) << endl;
     }
 }
 
@@ -609,9 +609,9 @@ void Packet::Esp(string &espHeader)
     if (print)
     {
 
-        cout << "ESP: " << endl;
-        cout << "ESP SPI: " << Functions::byteToHex(esp.spi) << endl;
-        cout << "ESP Sequence: " << Functions::byteToHex(esp.sequence) << endl;
+        Logger::getInstance().info() << "ESP: " << endl;
+        Logger::getInstance().info() << "ESP SPI: " << Functions::byteToHex(esp.spi) << endl;
+        Logger::getInstance().info() << "ESP Sequence: " << Functions::byteToHex(esp.sequence) << endl;
     }
 }
 
@@ -628,11 +628,11 @@ void Packet::Vlan(string &vlanHeader)
     if (print)
     {
 
-        cout << "Vlan: " << endl;
-        cout << "Priority: " << vlan.priority << endl;
-        cout << "DEI: " << vlan.dei << endl;
-        cout << "ID: " << vlan.id << endl;
-        cout << "Type: " << Functions::byteToHex(vlan.type) << endl;
+        Logger::getInstance().info() << "Vlan: " << endl;
+        Logger::getInstance().info() << "Priority: " << vlan.priority << endl;
+        Logger::getInstance().info() << "DEI: " << vlan.dei << endl;
+        Logger::getInstance().info() << "ID: " << vlan.id << endl;
+        Logger::getInstance().info() << "Type: " << Functions::byteToHex(vlan.type) << endl;
     }
 }
 
@@ -699,17 +699,17 @@ void Packet::Lldp(string &lldpHeader)
     if (print)
     {
 
-        cout << "LLDP Frame:" << endl;
-        cout << "Chassis ID: " << lldp.chassisID.value << endl;
-        cout << "Port ID: " << lldp.portID.value << endl;
-        cout << "TTL: " << lldp.ttl.value << endl;
-        cout << "Port Description: " << lldp.portDescription.value << endl;
-        cout << "System Name: " << lldp.systemName.value << endl;
-        cout << "System Description: " << lldp.systemDescription.value << endl;
-        cout << "System Capabilities: " << lldp.systemCapabilities.value << endl;
-        cout << "Management Address: " << lldp.managementAddress.value << endl;
-        cout << "Organizationally Specific: " << lldp.organizationallySpecific.value << endl;
-        cout << "End of LLDPDU" << endl;
+        Logger::getInstance().info() << "LLDP Frame:" << endl;
+        Logger::getInstance().info() << "Chassis ID: " << lldp.chassisID.value << endl;
+        Logger::getInstance().info() << "Port ID: " << lldp.portID.value << endl;
+        Logger::getInstance().info() << "TTL: " << lldp.ttl.value << endl;
+        Logger::getInstance().info() << "Port Description: " << lldp.portDescription.value << endl;
+        Logger::getInstance().info() << "System Name: " << lldp.systemName.value << endl;
+        Logger::getInstance().info() << "System Description: " << lldp.systemDescription.value << endl;
+        Logger::getInstance().info() << "System Capabilities: " << lldp.systemCapabilities.value << endl;
+        Logger::getInstance().info() << "Management Address: " << lldp.managementAddress.value << endl;
+        Logger::getInstance().info() << "Organizationally Specific: " << lldp.organizationallySpecific.value << endl;
+        Logger::getInstance().info() << "End of LLDPDU" << endl;
     }
 }
 
@@ -768,20 +768,28 @@ void Packet::Dhcp(string &dhcpHeader)
     if (print)
     {
 
-        cout << "DHCP Frame:" << endl;
-        cout << "Message Type: " << Functions::byteToHex(dhcp.boot) << endl;
-        cout << "Hardware Type: " << Functions::byteToHex(dhcp.hardwareType) << endl;
-        cout << "Hardware Address Length: " << Functions::byteToHex(dhcp.hardwareAddressLength) << endl;
-        cout << "Hops: " << Functions::byteToHex(dhcp.hops) << endl;
-        cout << "Transaction ID: " << Functions::byteToHex(dhcp.transID) << endl;
-        cout << "Seconds Elapsed: " << Functions::byteToHex(dhcp.secondsElapsed) << endl;
-        cout << "Broadcast: " << dhcp.bootpFlags.broadcast << endl;
-        cout << "Reserved: " << Functions::byteToHex(dhcp.bootpFlags.reserved) << endl;
-        cout << "Client IP: " << Functions::byteToHex(dhcp.clientIP) << endl;
-        cout << "Your Client IP: " << Functions::byteToHex(dhcp.yourClientIP) << endl;
-        cout << "Next Server Address: " << Functions::byteToHex(dhcp.nextServerIP) << endl;
-        cout << "Relay Agent IP: " << Functions::byteToHex(dhcp.relayAgentIP) << endl;
-        cout << "Client MAC Address: " << Functions::byteToHex(dhcp.clientMacAddress) << endl;
+        Logger::getInstance().info() << "DHCP Frame:" << endl;
+        Logger::getInstance().info() << "Message Type: " << Functions::byteToHex(dhcp.boot) << endl;
+        Logger::getInstance().info() << "Hardware Type: " << Functions::byteToHex(dhcp.hardwareType) << endl;
+        Logger::getInstance().info() << "Hardware Address Length: " << Functions::byteToHex(dhcp.hardwareAddressLength) << endl;
+        Logger::getInstance().info() << "Hops: " << Functions::byteToHex(dhcp.hops) << endl;
+        Logger::getInstance().info() << "Transaction ID: " << Functions::byteToHex(dhcp.transID) << endl;
+        Logger::getInstance().info() << "Seconds Elapsed: " << Functions::byteToHex(dhcp.secondsElapsed) << endl;
+        Logger::getInstance().info() << "Broadcast: " << dhcp.bootpFlags.broadcast << endl;
+        Logger::getInstance().info() << "Reserved: " << Functions::byteToHex(dhcp.bootpFlags.reserved) << endl;
+        Logger::getInstance().info() << "Client IP: " << Functions::byteToHex(dhcp.clientIP) << endl;
+        Logger::getInstance().info() << "Your Client IP: " << Functions::byteToHex(dhcp.yourClientIP) << endl;
+        Logger::getInstance().info() << "Next Server Address: " << Functions::byteToHex(dhcp.nextServerIP) << endl;
+        Logger::getInstance().info() << "Relay Agent IP: " << Functions::byteToHex(dhcp.relayAgentIP) << endl;
+        Logger::getInstance().info() << "Client MAC Address: " << Functions::byteToHex(dhcp.clientMacAddress) << endl;
+
+        Logger::getInstance().info() << "Options:" << endl;
+        for (const auto &option : eigrp.options)
+        {
+            Logger::getInstance().info() << "  Option: " << Functions::byteToHex(option.option) << endl;
+            Logger::getInstance().info() << "  Length: " << Functions::byteToHex(option.length) << endl;
+            Logger::getInstance().info() << "  Value: " << Functions::byteToHex(option.value) << endl;
+        }
     }
 }
 
@@ -820,26 +828,52 @@ void Packet::Eigrp(string &eigrpHeader)
 
     if (print)
     {
-        cout << "EIGRP Frame:" << endl;
-        cout << "Version: " << Functions::byteToHex(eigrp.version) << endl;
-        cout << "Opcode: " << Functions::byteToHex(eigrp.opcode) << endl;
-        cout << "Checksum: " << Functions::byteToHex(eigrp.checksum) << endl;
-        cout << "Flags: " << endl;
-        cout << "  Init: " << eigrp.flags.init << endl;
-        cout << "  Conditional Receive: " << eigrp.flags.conditionalRecieve << endl;
-        cout << "  Restart: " << eigrp.flags.restart << endl;
-        cout << "  End Of Table: " << eigrp.flags.endOfTable << endl;
-        cout << "Sequence Number: " << Functions::byteToHex(eigrp.sequence) << endl;
-        cout << "Acknowledgment Number: " << Functions::byteToHex(eigrp.ack) << endl;
-        cout << "Virtual Router ID: " << Functions::byteToHex(eigrp.virtualRouterID) << endl;
-        cout << "Autonomous System Number: " << Functions::byteToHex(eigrp.autonomousSystem) << endl;
+        Logger::getInstance().info() << "EIGRP Frame:" << endl;
+        Logger::getInstance().info() << "Version: " << Functions::byteToHex(eigrp.version) << endl;
+        Logger::getInstance().info() << "Opcode: " << Functions::byteToHex(eigrp.opcode) << endl;
+        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(eigrp.checksum) << endl;
+        Logger::getInstance().info() << "Flags: " << endl;
+        Logger::getInstance().info() << "  Init: " << eigrp.flags.init << endl;
+        Logger::getInstance().info() << "  Conditional Receive: " << eigrp.flags.conditionalRecieve << endl;
+        Logger::getInstance().info() << "  Restart: " << eigrp.flags.restart << endl;
+        Logger::getInstance().info() << "  End Of Table: " << eigrp.flags.endOfTable << endl;
+        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(eigrp.sequence) << endl;
+        Logger::getInstance().info() << "Acknowledgment Number: " << Functions::byteToHex(eigrp.ack) << endl;
+        Logger::getInstance().info() << "Virtual Router ID: " << Functions::byteToHex(eigrp.virtualRouterID) << endl;
+        Logger::getInstance().info() << "Autonomous System Number: " << Functions::byteToHex(eigrp.autonomousSystem) << endl;
 
-        cout << "Options:" << endl;
+        Logger::getInstance().info() << "Options:" << endl;
         for (const auto &option : eigrp.options)
         {
-            cout << "  Option: " << Functions::byteToHex(option.option) << endl;
-            cout << "  Length: " << Functions::byteToHex(option.length) << endl;
-            cout << "  Value: " << Functions::byteToHex(option.value) << endl;
+            Logger::getInstance().info() << "  Option: " << Functions::byteToHex(option.option) << endl;
+            Logger::getInstance().info() << "  Length: " << Functions::byteToHex(option.length) << endl;
+            Logger::getInstance().info() << "  Value: " << Functions::byteToHex(option.value) << endl;
         }
+    }
+}
+
+void Packet::SysLog(string &syslogHeader)
+{
+    int priSize{0};
+    for (const char& ch : syslogHeader)
+    {
+        if (ch != '>')
+        {
+            priSize++;
+        }
+        else
+        {
+            priSize++;
+            break;
+        }
+    }
+
+    syslog.PRI = syslogHeader.substr(0, priSize);
+    syslog.message = syslogHeader.substr(priSize);
+
+    if (print) {
+        Logger::getInstance().info() << "SysLog Frame:" << endl;
+        Logger::getInstance().info() << "PRI: " << syslog.PRI << endl;
+        Logger::getInstance().info() << "Message: " << syslog.message << endl;
     }
 }

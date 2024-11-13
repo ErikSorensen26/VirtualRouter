@@ -12,6 +12,10 @@
 #include <random>
 #include <netinet/in.h>
 #include <algorithm>
+#include <optional>
+#include <regex>
+#include <ctime>
+#include <chrono>
 
 namespace Functions {
     // Adjusts the size of a string by prepending `value` until it reaches `size`.
@@ -112,4 +116,10 @@ namespace Functions {
 
     // Reverses a binary string, flipping '0' to '1' and '1' to '0'.
     std::string reverseBinary(const std::string& binary);
+
+    // Calculated EUI-64 address
+    std::optional<std::string> calculateEui64(std::string mac, std::string fullIPv6);
+
+    // Converts time point to string
+    std::string timeToString(const std::chrono::system_clock::time_point time);
 }

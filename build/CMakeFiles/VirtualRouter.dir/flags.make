@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/g++
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/home/erik/VirtualRouter/VirtualRouter/Background/Packet/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Services/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Dir -I/home/erik/VirtualRouter/VirtualRouter/Common -I/home/erik/VirtualRouter/VirtualRouter/Configs -I/home/erik/VirtualRouter/VirtualRouter/include -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/usr/include/libnl3
+CXX_INCLUDES = -I/home/erik/VirtualRouter/VirtualRouter/Background/Packet/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Services/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Dir -I/home/erik/VirtualRouter/VirtualRouter/Common -I/home/erik/VirtualRouter/VirtualRouter/Configs -I/home/erik/VirtualRouter/VirtualRouter/include
 
-CXX_FLAGS = -g -O0 -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wconversion -Wsign-conversion -Wmisleading-indentation -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wnull-dereference -Wuseless-cast -Wdouble-promotion -Wformat=2 -std=gnu++20
+CXX_FLAGS = -g -std=gnu++20
 

@@ -1,5 +1,6 @@
 
 #include "Functions.h"
+#include <Logger.h>
 
 namespace Functions {
 
@@ -393,6 +394,71 @@ namespace Functions {
         return networkAddress;
     }
 
+    std::optional<std::string> calculateEui64(std::string mac, std::string fullIPv6)
+    {
+        Logger::getInstance().debug() << "Calculating EUI-64 address with IPv6 address: " << byteToHex(fullIPv6) << " and MAC: " << mac << "." << std::endl;
+        // Check if parameters are valid
+        if (fullIPv6.length() != 16 || mac.length() != 6) { 
+            Logger::getInstance().error() << "EUI-64 invalid parameters.";
+            // Return due to invalid parameters
+            return nullptr;
+        }
+        // New variables
+        std::string newAddress;
+        std::string network = fullIPv6.substr(0, 8);
+        std::string host = fullIPv6.substr(8);
+        // Checks if host address if blank
+        if (host == std::string{"\x00\x00\x00\x00\x00\x00\x00\x00", 8})
+        {
+            std::string newHost = mac.substr(0, 3) +
+                std::string{"\xff\xfe", 2} +
+                mac.substr(3, 3);
+
+            // Convert first byte to a binary string
+            std::string firstByte = byteToBin(mac.substr(0, 1));
+
+            // Logging
+            Logger::getInstance().debug() << "First byte converted to binary: " << firstByte << "." << std::endl;
+            Logger::getInstance().info() << "Flipping seventh bit of EUI-64." << std::endl;
+
+            // Flip 7th (6th index) bit
+            if (firstByte[6] == '1') { firstByte[6] = '0'; }
+            else if (firstByte[6] == '0') { firstByte[6] = '1'; }
+
+            // Logging
+            Logger::getInstance().debug() << "New first byte: " << firstByte << "." << std::endl;
+
+            // Converts back to byte form
+            firstByte = binToByte(firstByte, 1);
+
+            Logger::getInstance().info() << "Adding flipped byte back to the host address" << std::endl;
+
+            // Add first byte back to the host portion
+            newHost[0] = firstByte[0];
+
+            Logger::getInstance().debug() << "New host portion: " << byteToHex(newHost) << "." << std::endl;
+
+            // Calculate new IPv6 Address
+            newAddress = network + newHost;
+
+            return newAddress;
+        }
+        else
+        {
+            Logger::getInstance().error() << "Host portion not empty" << std::endl;
+            // Host field not empty
+            return nullptr;
+        }
+    }
+
+    std::string ipv6ToByte(std::string ip)
+    {
+        int oct1, oct2, oct3, oct4, oct5, oct6, oct7, oct8;
+    	sscanf(ip.c_str(), "%d:%d:%d:%d:%d:%d:%d:%d", &oct1, &oct2, &oct3, &oct4, &oct5, &oct6, &oct7, &oct8);
+        std::string newmask = numToByte(oct1, 2) + numToByte(oct2, 2) + numToByte(oct3, 2) + numToByte(oct4, 2) + numToByte(oct5, 2) + numToByte(oct6, 2) + numToByte(oct7, 2) + numToByte(oct8, 2);
+        return newmask;
+    }
+
     #pragma endregion
     #pragma region Other
 
@@ -422,5 +488,11 @@ namespace Functions {
         }
 
         return reversed; // Return the modified string
+    }
+
+    std::string timeToString(const std::chrono::system_clock::time_point time)
+    {
+        std::time_t time_t_value = std::chrono::system_clock::to_time_t(time);
+        return std::to_string(time_t_value);
     }
 }

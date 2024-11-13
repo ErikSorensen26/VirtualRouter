@@ -1,43 +1,28 @@
+chapter  1
 
-Ip Routing
+ipv4, ipv6
 
-Connected──┐
-static─────┤
-OSPF───────┤───> Rib ───> Fib
-RIP────────┤
-BGP────────┘
+dhcpv4
+dhcpv6 stateless & statefull
+slaac
 
-Rib
+dhcp relay
+dhcp snooping
 
-prefix-in ───> Private ───> policy update ───> update calculate ───> current  
+arp
+proxy arp
+NDP
 
+cef
+rib, fib ctr..
 
-
-
-
-
-
-
+chapter 2
 
 
-/home
-  └── user
-    ├── documents
-    │   └── project
-    └── downloads
 
- main
-  └── Terminal ── Console ── Config
-      └── CommandProcessing  └── Interface
-                                 ├── Ingress
-                                 │   └── Que
-                                 ├── Process
-                                 │   ├── Decapsulation
-                                 │   │   └── PacketStructure
-                                 │   ├── RoutingTable
-                                 │   └── Encapsulation
-                                 │       └── PacketStructure
-                                 └── Egress
+
+
+
 
 
                     ┌─────────────< Logincal-Int <──────────────┐
@@ -144,10 +129,4 @@ How Filled:
 Manual Configuration: Network administrators define ACL rules.
 When Filled:
 Startup: ACL rules are loaded.
-Runtime: Rules can be dynamically applied or updated.a
-
-
-
-
-
-01005e00000aca0549b9001c080045c000420000000002580cf1c0a80a01e000000a02030fc6000000000000000900000000000000010102001a00000000ffffffff00000a000005dc01ff0100040809
+Runtime: Rules can be dynamically applied or updated.

@@ -31,13 +31,23 @@ Interface::Interface(string outInterface, const int inQueSiz, const int outQueSi
 }
 
 // Set IPv4 address and subnet mask
-void Interface::setIPv4(string ip, string subnet) {
+void Interface::setIPv4(string ip, string subnet)
+{
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
         ipAddress = ip; 
         mask = subnet;
-        string sub = Functions::addressToByte(subnet);
-        StateChange();
+        stateChange();
+    }
+}
+
+void Interface::setIPv6(string ip, int subnet, bool eui64)
+{
+    {
+        std::lock_guard<std::mutex> lock(threadsRunningMutex);
+        ipv6Address = ip;
+        mask = subnet;
+        stateChangeV6();
     }
 }
 
@@ -49,7 +59,9 @@ ipInfo Interface::Get() {
     info.bandwidth = bandwidth;
     info.delay = delay;
     info.ip = ipAddress;
+    info.ipv6 = ipv6Address;
     info.subnet = mask;
+    info.v6subnet = v6mask;
     info.mac = macAddress;  
     info.mtu = mtu;
     return info;
@@ -130,11 +142,12 @@ void Interface::Shutdown(bool shut) {
         threadsRunning = true;
         shutdown = false;
     }
-    StateChange();
+    stateChange();
+    stateChangeV6();
 }
 
-// Runs whem the interface state changes
-void Interface::StateChange()
+// Runs when the interface state changes
+void Interface::stateChange()
 {
     UpdateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
@@ -142,11 +155,12 @@ void Interface::StateChange()
         eigrp.second->UpdateInterfaceList();
         eigrp.second->UpdateRoutingTableForConnected();
     }
-    for (const auto& eigrpInt : eigrpInterfaceList)
-    {
-        //eigrpInt.second->eigrpProcess->OnInterfaceChange(this);
-    }
-    
+}
+
+// Runs when the interface state changes
+void Interface::stateChangeV6()
+{
+
 }
 
 // Destructor to ensure threads are stopped

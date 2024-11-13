@@ -57,7 +57,7 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/erik/VirtualRouter/VirtualRouter
+CMAKE_SOURCE_DIR = /home/erik/VirtualRouter
 
 # The top-level build directory on which CMake was run.
 CMAKE_BINARY_DIR = /home/erik/VirtualRouter/build
@@ -129,581 +129,703 @@ VirtualRouter/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/build
 .PHONY : VirtualRouter/fast
 
-Background/Global/src/RoutingTable.o: Background/Global/src/RoutingTable.cpp.o
-.PHONY : Background/Global/src/RoutingTable.o
+#=============================================================================
+# Target rules for targets named LogServer
+
+# Build rule for target.
+LogServer: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 LogServer
+.PHONY : LogServer
+
+# fast build rule for target.
+LogServer/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/LogServer.dir/build.make CMakeFiles/LogServer.dir/build
+.PHONY : LogServer/fast
+
+#=============================================================================
+# Target rules for targets named CommandParser
+
+# Build rule for target.
+CommandParser: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CommandParser
+.PHONY : CommandParser
+
+# fast build rule for target.
+CommandParser/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/CommandParser.dir/build.make CMakeFiles/CommandParser.dir/build
+.PHONY : CommandParser/fast
+
+Utils/src/CommandParser.o: Utils/src/CommandParser.cpp.o
+.PHONY : Utils/src/CommandParser.o
 
 # target to build an object file
-Background/Global/src/RoutingTable.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Global/src/RoutingTable.cpp.o
-.PHONY : Background/Global/src/RoutingTable.cpp.o
+Utils/src/CommandParser.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/CommandParser.dir/build.make CMakeFiles/CommandParser.dir/Utils/src/CommandParser.cpp.o
+.PHONY : Utils/src/CommandParser.cpp.o
 
-Background/Global/src/RoutingTable.i: Background/Global/src/RoutingTable.cpp.i
-.PHONY : Background/Global/src/RoutingTable.i
+Utils/src/CommandParser.i: Utils/src/CommandParser.cpp.i
+.PHONY : Utils/src/CommandParser.i
 
 # target to preprocess a source file
-Background/Global/src/RoutingTable.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Global/src/RoutingTable.cpp.i
-.PHONY : Background/Global/src/RoutingTable.cpp.i
+Utils/src/CommandParser.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/CommandParser.dir/build.make CMakeFiles/CommandParser.dir/Utils/src/CommandParser.cpp.i
+.PHONY : Utils/src/CommandParser.cpp.i
 
-Background/Global/src/RoutingTable.s: Background/Global/src/RoutingTable.cpp.s
-.PHONY : Background/Global/src/RoutingTable.s
+Utils/src/CommandParser.s: Utils/src/CommandParser.cpp.s
+.PHONY : Utils/src/CommandParser.s
 
 # target to generate assembly for a file
-Background/Global/src/RoutingTable.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Global/src/RoutingTable.cpp.s
-.PHONY : Background/Global/src/RoutingTable.cpp.s
+Utils/src/CommandParser.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/CommandParser.dir/build.make CMakeFiles/CommandParser.dir/Utils/src/CommandParser.cpp.s
+.PHONY : Utils/src/CommandParser.cpp.s
 
-Background/Global/src/SaveToBinary.o: Background/Global/src/SaveToBinary.cpp.o
-.PHONY : Background/Global/src/SaveToBinary.o
+Utils/src/LogServer.o: Utils/src/LogServer.cpp.o
+.PHONY : Utils/src/LogServer.o
 
 # target to build an object file
-Background/Global/src/SaveToBinary.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.o
-.PHONY : Background/Global/src/SaveToBinary.cpp.o
+Utils/src/LogServer.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/LogServer.dir/build.make CMakeFiles/LogServer.dir/Utils/src/LogServer.cpp.o
+.PHONY : Utils/src/LogServer.cpp.o
 
-Background/Global/src/SaveToBinary.i: Background/Global/src/SaveToBinary.cpp.i
-.PHONY : Background/Global/src/SaveToBinary.i
+Utils/src/LogServer.i: Utils/src/LogServer.cpp.i
+.PHONY : Utils/src/LogServer.i
 
 # target to preprocess a source file
-Background/Global/src/SaveToBinary.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.i
-.PHONY : Background/Global/src/SaveToBinary.cpp.i
+Utils/src/LogServer.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/LogServer.dir/build.make CMakeFiles/LogServer.dir/Utils/src/LogServer.cpp.i
+.PHONY : Utils/src/LogServer.cpp.i
 
-Background/Global/src/SaveToBinary.s: Background/Global/src/SaveToBinary.cpp.s
-.PHONY : Background/Global/src/SaveToBinary.s
+Utils/src/LogServer.s: Utils/src/LogServer.cpp.s
+.PHONY : Utils/src/LogServer.s
 
 # target to generate assembly for a file
-Background/Global/src/SaveToBinary.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Global/src/SaveToBinary.cpp.s
-.PHONY : Background/Global/src/SaveToBinary.cpp.s
+Utils/src/LogServer.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/LogServer.dir/build.make CMakeFiles/LogServer.dir/Utils/src/LogServer.cpp.s
+.PHONY : Utils/src/LogServer.cpp.s
 
-Background/Packet/src/Checksums.o: Background/Packet/src/Checksums.cpp.o
-.PHONY : Background/Packet/src/Checksums.o
+VirtualRouter/Background/Global/src/Global.o: VirtualRouter/Background/Global/src/Global.cpp.o
+.PHONY : VirtualRouter/Background/Global/src/Global.o
 
 # target to build an object file
-Background/Packet/src/Checksums.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Checksums.cpp.o
-.PHONY : Background/Packet/src/Checksums.cpp.o
+VirtualRouter/Background/Global/src/Global.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o
+.PHONY : VirtualRouter/Background/Global/src/Global.cpp.o
 
-Background/Packet/src/Checksums.i: Background/Packet/src/Checksums.cpp.i
-.PHONY : Background/Packet/src/Checksums.i
+VirtualRouter/Background/Global/src/Global.i: VirtualRouter/Background/Global/src/Global.cpp.i
+.PHONY : VirtualRouter/Background/Global/src/Global.i
 
 # target to preprocess a source file
-Background/Packet/src/Checksums.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Checksums.cpp.i
-.PHONY : Background/Packet/src/Checksums.cpp.i
+VirtualRouter/Background/Global/src/Global.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.i
+.PHONY : VirtualRouter/Background/Global/src/Global.cpp.i
 
-Background/Packet/src/Checksums.s: Background/Packet/src/Checksums.cpp.s
-.PHONY : Background/Packet/src/Checksums.s
+VirtualRouter/Background/Global/src/Global.s: VirtualRouter/Background/Global/src/Global.cpp.s
+.PHONY : VirtualRouter/Background/Global/src/Global.s
 
 # target to generate assembly for a file
-Background/Packet/src/Checksums.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Checksums.cpp.s
-.PHONY : Background/Packet/src/Checksums.cpp.s
+VirtualRouter/Background/Global/src/Global.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.s
+.PHONY : VirtualRouter/Background/Global/src/Global.cpp.s
 
-Background/Packet/src/Decapsulation.o: Background/Packet/src/Decapsulation.cpp.o
-.PHONY : Background/Packet/src/Decapsulation.o
+VirtualRouter/Background/Global/src/RoutingTable.o: VirtualRouter/Background/Global/src/RoutingTable.cpp.o
+.PHONY : VirtualRouter/Background/Global/src/RoutingTable.o
 
 # target to build an object file
-Background/Packet/src/Decapsulation.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Decapsulation.cpp.o
-.PHONY : Background/Packet/src/Decapsulation.cpp.o
+VirtualRouter/Background/Global/src/RoutingTable.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o
+.PHONY : VirtualRouter/Background/Global/src/RoutingTable.cpp.o
 
-Background/Packet/src/Decapsulation.i: Background/Packet/src/Decapsulation.cpp.i
-.PHONY : Background/Packet/src/Decapsulation.i
+VirtualRouter/Background/Global/src/RoutingTable.i: VirtualRouter/Background/Global/src/RoutingTable.cpp.i
+.PHONY : VirtualRouter/Background/Global/src/RoutingTable.i
 
 # target to preprocess a source file
-Background/Packet/src/Decapsulation.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Decapsulation.cpp.i
-.PHONY : Background/Packet/src/Decapsulation.cpp.i
+VirtualRouter/Background/Global/src/RoutingTable.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.i
+.PHONY : VirtualRouter/Background/Global/src/RoutingTable.cpp.i
 
-Background/Packet/src/Decapsulation.s: Background/Packet/src/Decapsulation.cpp.s
-.PHONY : Background/Packet/src/Decapsulation.s
+VirtualRouter/Background/Global/src/RoutingTable.s: VirtualRouter/Background/Global/src/RoutingTable.cpp.s
+.PHONY : VirtualRouter/Background/Global/src/RoutingTable.s
 
 # target to generate assembly for a file
-Background/Packet/src/Decapsulation.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Decapsulation.cpp.s
-.PHONY : Background/Packet/src/Decapsulation.cpp.s
+VirtualRouter/Background/Global/src/RoutingTable.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.s
+.PHONY : VirtualRouter/Background/Global/src/RoutingTable.cpp.s
 
-Background/Packet/src/Egress.o: Background/Packet/src/Egress.cpp.o
-.PHONY : Background/Packet/src/Egress.o
+VirtualRouter/Background/Global/src/SaveToBinary.o: VirtualRouter/Background/Global/src/SaveToBinary.cpp.o
+.PHONY : VirtualRouter/Background/Global/src/SaveToBinary.o
 
 # target to build an object file
-Background/Packet/src/Egress.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Egress.cpp.o
-.PHONY : Background/Packet/src/Egress.cpp.o
+VirtualRouter/Background/Global/src/SaveToBinary.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o
+.PHONY : VirtualRouter/Background/Global/src/SaveToBinary.cpp.o
 
-Background/Packet/src/Egress.i: Background/Packet/src/Egress.cpp.i
-.PHONY : Background/Packet/src/Egress.i
+VirtualRouter/Background/Global/src/SaveToBinary.i: VirtualRouter/Background/Global/src/SaveToBinary.cpp.i
+.PHONY : VirtualRouter/Background/Global/src/SaveToBinary.i
 
 # target to preprocess a source file
-Background/Packet/src/Egress.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Egress.cpp.i
-.PHONY : Background/Packet/src/Egress.cpp.i
+VirtualRouter/Background/Global/src/SaveToBinary.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.i
+.PHONY : VirtualRouter/Background/Global/src/SaveToBinary.cpp.i
 
-Background/Packet/src/Egress.s: Background/Packet/src/Egress.cpp.s
-.PHONY : Background/Packet/src/Egress.s
+VirtualRouter/Background/Global/src/SaveToBinary.s: VirtualRouter/Background/Global/src/SaveToBinary.cpp.s
+.PHONY : VirtualRouter/Background/Global/src/SaveToBinary.s
 
 # target to generate assembly for a file
-Background/Packet/src/Egress.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Egress.cpp.s
-.PHONY : Background/Packet/src/Egress.cpp.s
+VirtualRouter/Background/Global/src/SaveToBinary.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.s
+.PHONY : VirtualRouter/Background/Global/src/SaveToBinary.cpp.s
 
-Background/Packet/src/Encapsulation.o: Background/Packet/src/Encapsulation.cpp.o
-.PHONY : Background/Packet/src/Encapsulation.o
+VirtualRouter/Background/Packet/src/Checksums.o: VirtualRouter/Background/Packet/src/Checksums.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Checksums.o
 
 # target to build an object file
-Background/Packet/src/Encapsulation.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.o
-.PHONY : Background/Packet/src/Encapsulation.cpp.o
+VirtualRouter/Background/Packet/src/Checksums.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Checksums.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Checksums.cpp.o
 
-Background/Packet/src/Encapsulation.i: Background/Packet/src/Encapsulation.cpp.i
-.PHONY : Background/Packet/src/Encapsulation.i
+VirtualRouter/Background/Packet/src/Checksums.i: VirtualRouter/Background/Packet/src/Checksums.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Checksums.i
 
 # target to preprocess a source file
-Background/Packet/src/Encapsulation.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.i
-.PHONY : Background/Packet/src/Encapsulation.cpp.i
+VirtualRouter/Background/Packet/src/Checksums.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Checksums.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Checksums.cpp.i
 
-Background/Packet/src/Encapsulation.s: Background/Packet/src/Encapsulation.cpp.s
-.PHONY : Background/Packet/src/Encapsulation.s
+VirtualRouter/Background/Packet/src/Checksums.s: VirtualRouter/Background/Packet/src/Checksums.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Checksums.s
 
 # target to generate assembly for a file
-Background/Packet/src/Encapsulation.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Encapsulation.cpp.s
-.PHONY : Background/Packet/src/Encapsulation.cpp.s
+VirtualRouter/Background/Packet/src/Checksums.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Checksums.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Checksums.cpp.s
 
-Background/Packet/src/Ingress.o: Background/Packet/src/Ingress.cpp.o
-.PHONY : Background/Packet/src/Ingress.o
+VirtualRouter/Background/Packet/src/Decapsulation.o: VirtualRouter/Background/Packet/src/Decapsulation.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Decapsulation.o
 
 # target to build an object file
-Background/Packet/src/Ingress.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Ingress.cpp.o
-.PHONY : Background/Packet/src/Ingress.cpp.o
+VirtualRouter/Background/Packet/src/Decapsulation.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Decapsulation.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Decapsulation.cpp.o
 
-Background/Packet/src/Ingress.i: Background/Packet/src/Ingress.cpp.i
-.PHONY : Background/Packet/src/Ingress.i
+VirtualRouter/Background/Packet/src/Decapsulation.i: VirtualRouter/Background/Packet/src/Decapsulation.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Decapsulation.i
 
 # target to preprocess a source file
-Background/Packet/src/Ingress.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Ingress.cpp.i
-.PHONY : Background/Packet/src/Ingress.cpp.i
+VirtualRouter/Background/Packet/src/Decapsulation.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Decapsulation.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Decapsulation.cpp.i
 
-Background/Packet/src/Ingress.s: Background/Packet/src/Ingress.cpp.s
-.PHONY : Background/Packet/src/Ingress.s
+VirtualRouter/Background/Packet/src/Decapsulation.s: VirtualRouter/Background/Packet/src/Decapsulation.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Decapsulation.s
 
 # target to generate assembly for a file
-Background/Packet/src/Ingress.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Ingress.cpp.s
-.PHONY : Background/Packet/src/Ingress.cpp.s
+VirtualRouter/Background/Packet/src/Decapsulation.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Decapsulation.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Decapsulation.cpp.s
 
-Background/Packet/src/Process.o: Background/Packet/src/Process.cpp.o
-.PHONY : Background/Packet/src/Process.o
+VirtualRouter/Background/Packet/src/Egress.o: VirtualRouter/Background/Packet/src/Egress.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Egress.o
 
 # target to build an object file
-Background/Packet/src/Process.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.o
-.PHONY : Background/Packet/src/Process.cpp.o
+VirtualRouter/Background/Packet/src/Egress.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Egress.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Egress.cpp.o
 
-Background/Packet/src/Process.i: Background/Packet/src/Process.cpp.i
-.PHONY : Background/Packet/src/Process.i
+VirtualRouter/Background/Packet/src/Egress.i: VirtualRouter/Background/Packet/src/Egress.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Egress.i
 
 # target to preprocess a source file
-Background/Packet/src/Process.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.i
-.PHONY : Background/Packet/src/Process.cpp.i
+VirtualRouter/Background/Packet/src/Egress.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Egress.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Egress.cpp.i
 
-Background/Packet/src/Process.s: Background/Packet/src/Process.cpp.s
-.PHONY : Background/Packet/src/Process.s
+VirtualRouter/Background/Packet/src/Egress.s: VirtualRouter/Background/Packet/src/Egress.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Egress.s
 
 # target to generate assembly for a file
-Background/Packet/src/Process.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Packet/src/Process.cpp.s
-.PHONY : Background/Packet/src/Process.cpp.s
+VirtualRouter/Background/Packet/src/Egress.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Egress.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Egress.cpp.s
 
-Background/Protocols/Global/src/Bgp.o: Background/Protocols/Global/src/Bgp.cpp.o
-.PHONY : Background/Protocols/Global/src/Bgp.o
+VirtualRouter/Background/Packet/src/Encapsulation.o: VirtualRouter/Background/Packet/src/Encapsulation.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Encapsulation.o
 
 # target to build an object file
-Background/Protocols/Global/src/Bgp.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Bgp.cpp.o
-.PHONY : Background/Protocols/Global/src/Bgp.cpp.o
+VirtualRouter/Background/Packet/src/Encapsulation.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Encapsulation.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Encapsulation.cpp.o
 
-Background/Protocols/Global/src/Bgp.i: Background/Protocols/Global/src/Bgp.cpp.i
-.PHONY : Background/Protocols/Global/src/Bgp.i
+VirtualRouter/Background/Packet/src/Encapsulation.i: VirtualRouter/Background/Packet/src/Encapsulation.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Encapsulation.i
 
 # target to preprocess a source file
-Background/Protocols/Global/src/Bgp.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Bgp.cpp.i
-.PHONY : Background/Protocols/Global/src/Bgp.cpp.i
+VirtualRouter/Background/Packet/src/Encapsulation.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Encapsulation.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Encapsulation.cpp.i
 
-Background/Protocols/Global/src/Bgp.s: Background/Protocols/Global/src/Bgp.cpp.s
-.PHONY : Background/Protocols/Global/src/Bgp.s
+VirtualRouter/Background/Packet/src/Encapsulation.s: VirtualRouter/Background/Packet/src/Encapsulation.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Encapsulation.s
 
 # target to generate assembly for a file
-Background/Protocols/Global/src/Bgp.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Bgp.cpp.s
-.PHONY : Background/Protocols/Global/src/Bgp.cpp.s
+VirtualRouter/Background/Packet/src/Encapsulation.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Encapsulation.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Encapsulation.cpp.s
 
-Background/Protocols/Global/src/Eigrp.o: Background/Protocols/Global/src/Eigrp.cpp.o
-.PHONY : Background/Protocols/Global/src/Eigrp.o
+VirtualRouter/Background/Packet/src/Ingress.o: VirtualRouter/Background/Packet/src/Ingress.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Ingress.o
 
 # target to build an object file
-Background/Protocols/Global/src/Eigrp.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.o
-.PHONY : Background/Protocols/Global/src/Eigrp.cpp.o
+VirtualRouter/Background/Packet/src/Ingress.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Ingress.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Ingress.cpp.o
 
-Background/Protocols/Global/src/Eigrp.i: Background/Protocols/Global/src/Eigrp.cpp.i
-.PHONY : Background/Protocols/Global/src/Eigrp.i
+VirtualRouter/Background/Packet/src/Ingress.i: VirtualRouter/Background/Packet/src/Ingress.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Ingress.i
 
 # target to preprocess a source file
-Background/Protocols/Global/src/Eigrp.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.i
-.PHONY : Background/Protocols/Global/src/Eigrp.cpp.i
+VirtualRouter/Background/Packet/src/Ingress.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Ingress.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Ingress.cpp.i
 
-Background/Protocols/Global/src/Eigrp.s: Background/Protocols/Global/src/Eigrp.cpp.s
-.PHONY : Background/Protocols/Global/src/Eigrp.s
+VirtualRouter/Background/Packet/src/Ingress.s: VirtualRouter/Background/Packet/src/Ingress.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Ingress.s
 
 # target to generate assembly for a file
-Background/Protocols/Global/src/Eigrp.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Eigrp.cpp.s
-.PHONY : Background/Protocols/Global/src/Eigrp.cpp.s
+VirtualRouter/Background/Packet/src/Ingress.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Ingress.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Ingress.cpp.s
 
-Background/Protocols/Global/src/Ospf.o: Background/Protocols/Global/src/Ospf.cpp.o
-.PHONY : Background/Protocols/Global/src/Ospf.o
+VirtualRouter/Background/Packet/src/Process.o: VirtualRouter/Background/Packet/src/Process.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Process.o
 
 # target to build an object file
-Background/Protocols/Global/src/Ospf.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Ospf.cpp.o
-.PHONY : Background/Protocols/Global/src/Ospf.cpp.o
+VirtualRouter/Background/Packet/src/Process.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Process.cpp.o
+.PHONY : VirtualRouter/Background/Packet/src/Process.cpp.o
 
-Background/Protocols/Global/src/Ospf.i: Background/Protocols/Global/src/Ospf.cpp.i
-.PHONY : Background/Protocols/Global/src/Ospf.i
+VirtualRouter/Background/Packet/src/Process.i: VirtualRouter/Background/Packet/src/Process.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Process.i
 
 # target to preprocess a source file
-Background/Protocols/Global/src/Ospf.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Ospf.cpp.i
-.PHONY : Background/Protocols/Global/src/Ospf.cpp.i
+VirtualRouter/Background/Packet/src/Process.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Process.cpp.i
+.PHONY : VirtualRouter/Background/Packet/src/Process.cpp.i
 
-Background/Protocols/Global/src/Ospf.s: Background/Protocols/Global/src/Ospf.cpp.s
-.PHONY : Background/Protocols/Global/src/Ospf.s
+VirtualRouter/Background/Packet/src/Process.s: VirtualRouter/Background/Packet/src/Process.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Process.s
 
 # target to generate assembly for a file
-Background/Protocols/Global/src/Ospf.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Ospf.cpp.s
-.PHONY : Background/Protocols/Global/src/Ospf.cpp.s
+VirtualRouter/Background/Packet/src/Process.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Process.cpp.s
+.PHONY : VirtualRouter/Background/Packet/src/Process.cpp.s
 
-Background/Protocols/Global/src/Rip.o: Background/Protocols/Global/src/Rip.cpp.o
-.PHONY : Background/Protocols/Global/src/Rip.o
+VirtualRouter/Background/Protocols/Global/src/Bgp.o: VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Bgp.o
 
 # target to build an object file
-Background/Protocols/Global/src/Rip.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Rip.cpp.o
-.PHONY : Background/Protocols/Global/src/Rip.cpp.o
+VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o
 
-Background/Protocols/Global/src/Rip.i: Background/Protocols/Global/src/Rip.cpp.i
-.PHONY : Background/Protocols/Global/src/Rip.i
+VirtualRouter/Background/Protocols/Global/src/Bgp.i: VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Bgp.i
 
 # target to preprocess a source file
-Background/Protocols/Global/src/Rip.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Rip.cpp.i
-.PHONY : Background/Protocols/Global/src/Rip.cpp.i
+VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.i
 
-Background/Protocols/Global/src/Rip.s: Background/Protocols/Global/src/Rip.cpp.s
-.PHONY : Background/Protocols/Global/src/Rip.s
+VirtualRouter/Background/Protocols/Global/src/Bgp.s: VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Bgp.s
 
 # target to generate assembly for a file
-Background/Protocols/Global/src/Rip.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Global/src/Rip.cpp.s
-.PHONY : Background/Protocols/Global/src/Rip.cpp.s
+VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.s
 
-Background/Protocols/Local/src/Arp.o: Background/Protocols/Local/src/Arp.cpp.o
-.PHONY : Background/Protocols/Local/src/Arp.o
+VirtualRouter/Background/Protocols/Global/src/Eigrp.o: VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Eigrp.o
 
 # target to build an object file
-Background/Protocols/Local/src/Arp.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.o
-.PHONY : Background/Protocols/Local/src/Arp.cpp.o
+VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o
 
-Background/Protocols/Local/src/Arp.i: Background/Protocols/Local/src/Arp.cpp.i
-.PHONY : Background/Protocols/Local/src/Arp.i
+VirtualRouter/Background/Protocols/Global/src/Eigrp.i: VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Eigrp.i
 
 # target to preprocess a source file
-Background/Protocols/Local/src/Arp.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.i
-.PHONY : Background/Protocols/Local/src/Arp.cpp.i
+VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.i
 
-Background/Protocols/Local/src/Arp.s: Background/Protocols/Local/src/Arp.cpp.s
-.PHONY : Background/Protocols/Local/src/Arp.s
+VirtualRouter/Background/Protocols/Global/src/Eigrp.s: VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Eigrp.s
 
 # target to generate assembly for a file
-Background/Protocols/Local/src/Arp.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Arp.cpp.s
-.PHONY : Background/Protocols/Local/src/Arp.cpp.s
+VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.s
 
-Background/Protocols/Local/src/Dhcp.o: Background/Protocols/Local/src/Dhcp.cpp.o
-.PHONY : Background/Protocols/Local/src/Dhcp.o
+VirtualRouter/Background/Protocols/Global/src/Ospf.o: VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Ospf.o
 
 # target to build an object file
-Background/Protocols/Local/src/Dhcp.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.o
-.PHONY : Background/Protocols/Local/src/Dhcp.cpp.o
+VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o
 
-Background/Protocols/Local/src/Dhcp.i: Background/Protocols/Local/src/Dhcp.cpp.i
-.PHONY : Background/Protocols/Local/src/Dhcp.i
+VirtualRouter/Background/Protocols/Global/src/Ospf.i: VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Ospf.i
 
 # target to preprocess a source file
-Background/Protocols/Local/src/Dhcp.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.i
-.PHONY : Background/Protocols/Local/src/Dhcp.cpp.i
+VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.i
 
-Background/Protocols/Local/src/Dhcp.s: Background/Protocols/Local/src/Dhcp.cpp.s
-.PHONY : Background/Protocols/Local/src/Dhcp.s
+VirtualRouter/Background/Protocols/Global/src/Ospf.s: VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Ospf.s
 
 # target to generate assembly for a file
-Background/Protocols/Local/src/Dhcp.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Protocols/Local/src/Dhcp.cpp.s
-.PHONY : Background/Protocols/Local/src/Dhcp.cpp.s
+VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.s
 
-Background/Services/src/Time.o: Background/Services/src/Time.cpp.o
-.PHONY : Background/Services/src/Time.o
+VirtualRouter/Background/Protocols/Global/src/Rip.o: VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Rip.o
 
 # target to build an object file
-Background/Services/src/Time.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Services/src/Time.cpp.o
-.PHONY : Background/Services/src/Time.cpp.o
+VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o
 
-Background/Services/src/Time.i: Background/Services/src/Time.cpp.i
-.PHONY : Background/Services/src/Time.i
+VirtualRouter/Background/Protocols/Global/src/Rip.i: VirtualRouter/Background/Protocols/Global/src/Rip.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Rip.i
 
 # target to preprocess a source file
-Background/Services/src/Time.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Services/src/Time.cpp.i
-.PHONY : Background/Services/src/Time.cpp.i
+VirtualRouter/Background/Protocols/Global/src/Rip.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Rip.cpp.i
 
-Background/Services/src/Time.s: Background/Services/src/Time.cpp.s
-.PHONY : Background/Services/src/Time.s
+VirtualRouter/Background/Protocols/Global/src/Rip.s: VirtualRouter/Background/Protocols/Global/src/Rip.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Rip.s
 
 # target to generate assembly for a file
-Background/Services/src/Time.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Services/src/Time.cpp.s
-.PHONY : Background/Services/src/Time.cpp.s
+VirtualRouter/Background/Protocols/Global/src/Rip.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Global/src/Rip.cpp.s
 
-Background/Services/src/TimeManager.o: Background/Services/src/TimeManager.cpp.o
-.PHONY : Background/Services/src/TimeManager.o
+VirtualRouter/Background/Protocols/Local/src/Arp.o: VirtualRouter/Background/Protocols/Local/src/Arp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Arp.o
 
 # target to build an object file
-Background/Services/src/TimeManager.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Services/src/TimeManager.cpp.o
-.PHONY : Background/Services/src/TimeManager.cpp.o
+VirtualRouter/Background/Protocols/Local/src/Arp.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Arp.cpp.o
 
-Background/Services/src/TimeManager.i: Background/Services/src/TimeManager.cpp.i
-.PHONY : Background/Services/src/TimeManager.i
+VirtualRouter/Background/Protocols/Local/src/Arp.i: VirtualRouter/Background/Protocols/Local/src/Arp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Arp.i
 
 # target to preprocess a source file
-Background/Services/src/TimeManager.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Services/src/TimeManager.cpp.i
-.PHONY : Background/Services/src/TimeManager.cpp.i
+VirtualRouter/Background/Protocols/Local/src/Arp.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Arp.cpp.i
 
-Background/Services/src/TimeManager.s: Background/Services/src/TimeManager.cpp.s
-.PHONY : Background/Services/src/TimeManager.s
+VirtualRouter/Background/Protocols/Local/src/Arp.s: VirtualRouter/Background/Protocols/Local/src/Arp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Arp.s
 
 # target to generate assembly for a file
-Background/Services/src/TimeManager.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Background/Services/src/TimeManager.cpp.s
-.PHONY : Background/Services/src/TimeManager.cpp.s
+VirtualRouter/Background/Protocols/Local/src/Arp.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Arp.cpp.s
 
-Common/Functions.o: Common/Functions.cpp.o
-.PHONY : Common/Functions.o
+VirtualRouter/Background/Protocols/Local/src/Dhcp.o: VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Dhcp.o
 
 # target to build an object file
-Common/Functions.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Common/Functions.cpp.o
-.PHONY : Common/Functions.cpp.o
+VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.o
 
-Common/Functions.i: Common/Functions.cpp.i
-.PHONY : Common/Functions.i
+VirtualRouter/Background/Protocols/Local/src/Dhcp.i: VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Dhcp.i
 
 # target to preprocess a source file
-Common/Functions.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Common/Functions.cpp.i
-.PHONY : Common/Functions.cpp.i
+VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.i
 
-Common/Functions.s: Common/Functions.cpp.s
-.PHONY : Common/Functions.s
+VirtualRouter/Background/Protocols/Local/src/Dhcp.s: VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Dhcp.s
 
 # target to generate assembly for a file
-Common/Functions.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Common/Functions.cpp.s
-.PHONY : Common/Functions.cpp.s
+VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.s
 
-Common/pugixml.o: Common/pugixml.cpp.o
-.PHONY : Common/pugixml.o
+VirtualRouter/Background/Services/src/Time.o: VirtualRouter/Background/Services/src/Time.cpp.o
+.PHONY : VirtualRouter/Background/Services/src/Time.o
 
 # target to build an object file
-Common/pugixml.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Common/pugixml.cpp.o
-.PHONY : Common/pugixml.cpp.o
+VirtualRouter/Background/Services/src/Time.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o
+.PHONY : VirtualRouter/Background/Services/src/Time.cpp.o
 
-Common/pugixml.i: Common/pugixml.cpp.i
-.PHONY : Common/pugixml.i
+VirtualRouter/Background/Services/src/Time.i: VirtualRouter/Background/Services/src/Time.cpp.i
+.PHONY : VirtualRouter/Background/Services/src/Time.i
 
 # target to preprocess a source file
-Common/pugixml.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Common/pugixml.cpp.i
-.PHONY : Common/pugixml.cpp.i
+VirtualRouter/Background/Services/src/Time.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.i
+.PHONY : VirtualRouter/Background/Services/src/Time.cpp.i
 
-Common/pugixml.s: Common/pugixml.cpp.s
-.PHONY : Common/pugixml.s
+VirtualRouter/Background/Services/src/Time.s: VirtualRouter/Background/Services/src/Time.cpp.s
+.PHONY : VirtualRouter/Background/Services/src/Time.s
 
 # target to generate assembly for a file
-Common/pugixml.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/Common/pugixml.cpp.s
-.PHONY : Common/pugixml.cpp.s
+VirtualRouter/Background/Services/src/Time.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.s
+.PHONY : VirtualRouter/Background/Services/src/Time.cpp.s
 
-main.o: main.cpp.o
-.PHONY : main.o
+VirtualRouter/Background/Services/src/TimeManager.o: VirtualRouter/Background/Services/src/TimeManager.cpp.o
+.PHONY : VirtualRouter/Background/Services/src/TimeManager.o
 
 # target to build an object file
-main.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/main.cpp.o
-.PHONY : main.cpp.o
+VirtualRouter/Background/Services/src/TimeManager.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o
+.PHONY : VirtualRouter/Background/Services/src/TimeManager.cpp.o
 
-main.i: main.cpp.i
-.PHONY : main.i
+VirtualRouter/Background/Services/src/TimeManager.i: VirtualRouter/Background/Services/src/TimeManager.cpp.i
+.PHONY : VirtualRouter/Background/Services/src/TimeManager.i
 
 # target to preprocess a source file
-main.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/main.cpp.i
-.PHONY : main.cpp.i
+VirtualRouter/Background/Services/src/TimeManager.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.i
+.PHONY : VirtualRouter/Background/Services/src/TimeManager.cpp.i
 
-main.s: main.cpp.s
-.PHONY : main.s
+VirtualRouter/Background/Services/src/TimeManager.s: VirtualRouter/Background/Services/src/TimeManager.cpp.s
+.PHONY : VirtualRouter/Background/Services/src/TimeManager.s
 
 # target to generate assembly for a file
-main.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/main.cpp.s
-.PHONY : main.cpp.s
+VirtualRouter/Background/Services/src/TimeManager.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.s
+.PHONY : VirtualRouter/Background/Services/src/TimeManager.cpp.s
 
-src/CommandProcessing.o: src/CommandProcessing.cpp.o
-.PHONY : src/CommandProcessing.o
+VirtualRouter/Common/Functions.o: VirtualRouter/Common/Functions.cpp.o
+.PHONY : VirtualRouter/Common/Functions.o
 
 # target to build an object file
-src/CommandProcessing.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.o
-.PHONY : src/CommandProcessing.cpp.o
+VirtualRouter/Common/Functions.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o
+.PHONY : VirtualRouter/Common/Functions.cpp.o
 
-src/CommandProcessing.i: src/CommandProcessing.cpp.i
-.PHONY : src/CommandProcessing.i
+VirtualRouter/Common/Functions.i: VirtualRouter/Common/Functions.cpp.i
+.PHONY : VirtualRouter/Common/Functions.i
 
 # target to preprocess a source file
-src/CommandProcessing.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.i
-.PHONY : src/CommandProcessing.cpp.i
+VirtualRouter/Common/Functions.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.i
+.PHONY : VirtualRouter/Common/Functions.cpp.i
 
-src/CommandProcessing.s: src/CommandProcessing.cpp.s
-.PHONY : src/CommandProcessing.s
+VirtualRouter/Common/Functions.s: VirtualRouter/Common/Functions.cpp.s
+.PHONY : VirtualRouter/Common/Functions.s
 
 # target to generate assembly for a file
-src/CommandProcessing.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/CommandProcessing.cpp.s
-.PHONY : src/CommandProcessing.cpp.s
+VirtualRouter/Common/Functions.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.s
+.PHONY : VirtualRouter/Common/Functions.cpp.s
 
-src/Configs.o: src/Configs.cpp.o
-.PHONY : src/Configs.o
+VirtualRouter/Common/pugixml.o: VirtualRouter/Common/pugixml.cpp.o
+.PHONY : VirtualRouter/Common/pugixml.o
 
 # target to build an object file
-src/Configs.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Configs.cpp.o
-.PHONY : src/Configs.cpp.o
+VirtualRouter/Common/pugixml.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o
+.PHONY : VirtualRouter/Common/pugixml.cpp.o
 
-src/Configs.i: src/Configs.cpp.i
-.PHONY : src/Configs.i
+VirtualRouter/Common/pugixml.i: VirtualRouter/Common/pugixml.cpp.i
+.PHONY : VirtualRouter/Common/pugixml.i
 
 # target to preprocess a source file
-src/Configs.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Configs.cpp.i
-.PHONY : src/Configs.cpp.i
+VirtualRouter/Common/pugixml.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.i
+.PHONY : VirtualRouter/Common/pugixml.cpp.i
 
-src/Configs.s: src/Configs.cpp.s
-.PHONY : src/Configs.s
+VirtualRouter/Common/pugixml.s: VirtualRouter/Common/pugixml.cpp.s
+.PHONY : VirtualRouter/Common/pugixml.s
 
 # target to generate assembly for a file
-src/Configs.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Configs.cpp.s
-.PHONY : src/Configs.cpp.s
+VirtualRouter/Common/pugixml.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.s
+.PHONY : VirtualRouter/Common/pugixml.cpp.s
 
-src/Console.o: src/Console.cpp.o
-.PHONY : src/Console.o
+VirtualRouter/main.o: VirtualRouter/main.cpp.o
+.PHONY : VirtualRouter/main.o
 
 # target to build an object file
-src/Console.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Console.cpp.o
-.PHONY : src/Console.cpp.o
+VirtualRouter/main.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/main.cpp.o
+.PHONY : VirtualRouter/main.cpp.o
 
-src/Console.i: src/Console.cpp.i
-.PHONY : src/Console.i
+VirtualRouter/main.i: VirtualRouter/main.cpp.i
+.PHONY : VirtualRouter/main.i
 
 # target to preprocess a source file
-src/Console.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Console.cpp.i
-.PHONY : src/Console.cpp.i
+VirtualRouter/main.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/main.cpp.i
+.PHONY : VirtualRouter/main.cpp.i
 
-src/Console.s: src/Console.cpp.s
-.PHONY : src/Console.s
+VirtualRouter/main.s: VirtualRouter/main.cpp.s
+.PHONY : VirtualRouter/main.s
 
 # target to generate assembly for a file
-src/Console.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Console.cpp.s
-.PHONY : src/Console.cpp.s
+VirtualRouter/main.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/main.cpp.s
+.PHONY : VirtualRouter/main.cpp.s
 
-src/Interface.o: src/Interface.cpp.o
-.PHONY : src/Interface.o
+VirtualRouter/src/CommandProcessing.o: VirtualRouter/src/CommandProcessing.cpp.o
+.PHONY : VirtualRouter/src/CommandProcessing.o
 
 # target to build an object file
-src/Interface.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Interface.cpp.o
-.PHONY : src/Interface.cpp.o
+VirtualRouter/src/CommandProcessing.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o
+.PHONY : VirtualRouter/src/CommandProcessing.cpp.o
 
-src/Interface.i: src/Interface.cpp.i
-.PHONY : src/Interface.i
+VirtualRouter/src/CommandProcessing.i: VirtualRouter/src/CommandProcessing.cpp.i
+.PHONY : VirtualRouter/src/CommandProcessing.i
 
 # target to preprocess a source file
-src/Interface.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Interface.cpp.i
-.PHONY : src/Interface.cpp.i
+VirtualRouter/src/CommandProcessing.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.i
+.PHONY : VirtualRouter/src/CommandProcessing.cpp.i
 
-src/Interface.s: src/Interface.cpp.s
-.PHONY : src/Interface.s
+VirtualRouter/src/CommandProcessing.s: VirtualRouter/src/CommandProcessing.cpp.s
+.PHONY : VirtualRouter/src/CommandProcessing.s
 
 # target to generate assembly for a file
-src/Interface.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Interface.cpp.s
-.PHONY : src/Interface.cpp.s
+VirtualRouter/src/CommandProcessing.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.s
+.PHONY : VirtualRouter/src/CommandProcessing.cpp.s
 
-src/Terminal.o: src/Terminal.cpp.o
-.PHONY : src/Terminal.o
+VirtualRouter/src/Configs.o: VirtualRouter/src/Configs.cpp.o
+.PHONY : VirtualRouter/src/Configs.o
 
 # target to build an object file
-src/Terminal.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.o
-.PHONY : src/Terminal.cpp.o
+VirtualRouter/src/Configs.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Configs.cpp.o
+.PHONY : VirtualRouter/src/Configs.cpp.o
 
-src/Terminal.i: src/Terminal.cpp.i
-.PHONY : src/Terminal.i
+VirtualRouter/src/Configs.i: VirtualRouter/src/Configs.cpp.i
+.PHONY : VirtualRouter/src/Configs.i
 
 # target to preprocess a source file
-src/Terminal.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.i
-.PHONY : src/Terminal.cpp.i
+VirtualRouter/src/Configs.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Configs.cpp.i
+.PHONY : VirtualRouter/src/Configs.cpp.i
 
-src/Terminal.s: src/Terminal.cpp.s
-.PHONY : src/Terminal.s
+VirtualRouter/src/Configs.s: VirtualRouter/src/Configs.cpp.s
+.PHONY : VirtualRouter/src/Configs.s
 
 # target to generate assembly for a file
-src/Terminal.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/src/Terminal.cpp.s
-.PHONY : src/Terminal.cpp.s
+VirtualRouter/src/Configs.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Configs.cpp.s
+.PHONY : VirtualRouter/src/Configs.cpp.s
+
+VirtualRouter/src/Console.o: VirtualRouter/src/Console.cpp.o
+.PHONY : VirtualRouter/src/Console.o
+
+# target to build an object file
+VirtualRouter/src/Console.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Console.cpp.o
+.PHONY : VirtualRouter/src/Console.cpp.o
+
+VirtualRouter/src/Console.i: VirtualRouter/src/Console.cpp.i
+.PHONY : VirtualRouter/src/Console.i
+
+# target to preprocess a source file
+VirtualRouter/src/Console.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Console.cpp.i
+.PHONY : VirtualRouter/src/Console.cpp.i
+
+VirtualRouter/src/Console.s: VirtualRouter/src/Console.cpp.s
+.PHONY : VirtualRouter/src/Console.s
+
+# target to generate assembly for a file
+VirtualRouter/src/Console.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Console.cpp.s
+.PHONY : VirtualRouter/src/Console.cpp.s
+
+VirtualRouter/src/Interface.o: VirtualRouter/src/Interface.cpp.o
+.PHONY : VirtualRouter/src/Interface.o
+
+# target to build an object file
+VirtualRouter/src/Interface.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Interface.cpp.o
+.PHONY : VirtualRouter/src/Interface.cpp.o
+
+VirtualRouter/src/Interface.i: VirtualRouter/src/Interface.cpp.i
+.PHONY : VirtualRouter/src/Interface.i
+
+# target to preprocess a source file
+VirtualRouter/src/Interface.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Interface.cpp.i
+.PHONY : VirtualRouter/src/Interface.cpp.i
+
+VirtualRouter/src/Interface.s: VirtualRouter/src/Interface.cpp.s
+.PHONY : VirtualRouter/src/Interface.s
+
+# target to generate assembly for a file
+VirtualRouter/src/Interface.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Interface.cpp.s
+.PHONY : VirtualRouter/src/Interface.cpp.s
+
+VirtualRouter/src/Logger.o: VirtualRouter/src/Logger.cpp.o
+.PHONY : VirtualRouter/src/Logger.o
+
+# target to build an object file
+VirtualRouter/src/Logger.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Logger.cpp.o
+.PHONY : VirtualRouter/src/Logger.cpp.o
+
+VirtualRouter/src/Logger.i: VirtualRouter/src/Logger.cpp.i
+.PHONY : VirtualRouter/src/Logger.i
+
+# target to preprocess a source file
+VirtualRouter/src/Logger.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Logger.cpp.i
+.PHONY : VirtualRouter/src/Logger.cpp.i
+
+VirtualRouter/src/Logger.s: VirtualRouter/src/Logger.cpp.s
+.PHONY : VirtualRouter/src/Logger.s
+
+# target to generate assembly for a file
+VirtualRouter/src/Logger.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Logger.cpp.s
+.PHONY : VirtualRouter/src/Logger.cpp.s
+
+VirtualRouter/src/Terminal.o: VirtualRouter/src/Terminal.cpp.o
+.PHONY : VirtualRouter/src/Terminal.o
+
+# target to build an object file
+VirtualRouter/src/Terminal.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Terminal.cpp.o
+.PHONY : VirtualRouter/src/Terminal.cpp.o
+
+VirtualRouter/src/Terminal.i: VirtualRouter/src/Terminal.cpp.i
+.PHONY : VirtualRouter/src/Terminal.i
+
+# target to preprocess a source file
+VirtualRouter/src/Terminal.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Terminal.cpp.i
+.PHONY : VirtualRouter/src/Terminal.cpp.i
+
+VirtualRouter/src/Terminal.s: VirtualRouter/src/Terminal.cpp.s
+.PHONY : VirtualRouter/src/Terminal.s
+
+# target to generate assembly for a file
+VirtualRouter/src/Terminal.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Terminal.cpp.s
+.PHONY : VirtualRouter/src/Terminal.cpp.s
 
 # Help Target
 help:
@@ -713,79 +835,93 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... CommandParser"
+	@echo "... LogServer"
 	@echo "... VirtualRouter"
-	@echo "... Background/Global/src/RoutingTable.o"
-	@echo "... Background/Global/src/RoutingTable.i"
-	@echo "... Background/Global/src/RoutingTable.s"
-	@echo "... Background/Global/src/SaveToBinary.o"
-	@echo "... Background/Global/src/SaveToBinary.i"
-	@echo "... Background/Global/src/SaveToBinary.s"
-	@echo "... Background/Packet/src/Checksums.o"
-	@echo "... Background/Packet/src/Checksums.i"
-	@echo "... Background/Packet/src/Checksums.s"
-	@echo "... Background/Packet/src/Decapsulation.o"
-	@echo "... Background/Packet/src/Decapsulation.i"
-	@echo "... Background/Packet/src/Decapsulation.s"
-	@echo "... Background/Packet/src/Egress.o"
-	@echo "... Background/Packet/src/Egress.i"
-	@echo "... Background/Packet/src/Egress.s"
-	@echo "... Background/Packet/src/Encapsulation.o"
-	@echo "... Background/Packet/src/Encapsulation.i"
-	@echo "... Background/Packet/src/Encapsulation.s"
-	@echo "... Background/Packet/src/Ingress.o"
-	@echo "... Background/Packet/src/Ingress.i"
-	@echo "... Background/Packet/src/Ingress.s"
-	@echo "... Background/Packet/src/Process.o"
-	@echo "... Background/Packet/src/Process.i"
-	@echo "... Background/Packet/src/Process.s"
-	@echo "... Background/Protocols/Global/src/Bgp.o"
-	@echo "... Background/Protocols/Global/src/Bgp.i"
-	@echo "... Background/Protocols/Global/src/Bgp.s"
-	@echo "... Background/Protocols/Global/src/Eigrp.o"
-	@echo "... Background/Protocols/Global/src/Eigrp.i"
-	@echo "... Background/Protocols/Global/src/Eigrp.s"
-	@echo "... Background/Protocols/Global/src/Ospf.o"
-	@echo "... Background/Protocols/Global/src/Ospf.i"
-	@echo "... Background/Protocols/Global/src/Ospf.s"
-	@echo "... Background/Protocols/Global/src/Rip.o"
-	@echo "... Background/Protocols/Global/src/Rip.i"
-	@echo "... Background/Protocols/Global/src/Rip.s"
-	@echo "... Background/Protocols/Local/src/Arp.o"
-	@echo "... Background/Protocols/Local/src/Arp.i"
-	@echo "... Background/Protocols/Local/src/Arp.s"
-	@echo "... Background/Protocols/Local/src/Dhcp.o"
-	@echo "... Background/Protocols/Local/src/Dhcp.i"
-	@echo "... Background/Protocols/Local/src/Dhcp.s"
-	@echo "... Background/Services/src/Time.o"
-	@echo "... Background/Services/src/Time.i"
-	@echo "... Background/Services/src/Time.s"
-	@echo "... Background/Services/src/TimeManager.o"
-	@echo "... Background/Services/src/TimeManager.i"
-	@echo "... Background/Services/src/TimeManager.s"
-	@echo "... Common/Functions.o"
-	@echo "... Common/Functions.i"
-	@echo "... Common/Functions.s"
-	@echo "... Common/pugixml.o"
-	@echo "... Common/pugixml.i"
-	@echo "... Common/pugixml.s"
-	@echo "... main.o"
-	@echo "... main.i"
-	@echo "... main.s"
-	@echo "... src/CommandProcessing.o"
-	@echo "... src/CommandProcessing.i"
-	@echo "... src/CommandProcessing.s"
-	@echo "... src/Configs.o"
-	@echo "... src/Configs.i"
-	@echo "... src/Configs.s"
-	@echo "... src/Console.o"
-	@echo "... src/Console.i"
-	@echo "... src/Console.s"
-	@echo "... src/Interface.o"
-	@echo "... src/Interface.i"
-	@echo "... src/Interface.s"
-	@echo "... src/Terminal.o"
-	@echo "... src/Terminal.i"
-	@echo "... src/Terminal.s"
+	@echo "... Utils/src/CommandParser.o"
+	@echo "... Utils/src/CommandParser.i"
+	@echo "... Utils/src/CommandParser.s"
+	@echo "... Utils/src/LogServer.o"
+	@echo "... Utils/src/LogServer.i"
+	@echo "... Utils/src/LogServer.s"
+	@echo "... VirtualRouter/Background/Global/src/Global.o"
+	@echo "... VirtualRouter/Background/Global/src/Global.i"
+	@echo "... VirtualRouter/Background/Global/src/Global.s"
+	@echo "... VirtualRouter/Background/Global/src/RoutingTable.o"
+	@echo "... VirtualRouter/Background/Global/src/RoutingTable.i"
+	@echo "... VirtualRouter/Background/Global/src/RoutingTable.s"
+	@echo "... VirtualRouter/Background/Global/src/SaveToBinary.o"
+	@echo "... VirtualRouter/Background/Global/src/SaveToBinary.i"
+	@echo "... VirtualRouter/Background/Global/src/SaveToBinary.s"
+	@echo "... VirtualRouter/Background/Packet/src/Checksums.o"
+	@echo "... VirtualRouter/Background/Packet/src/Checksums.i"
+	@echo "... VirtualRouter/Background/Packet/src/Checksums.s"
+	@echo "... VirtualRouter/Background/Packet/src/Decapsulation.o"
+	@echo "... VirtualRouter/Background/Packet/src/Decapsulation.i"
+	@echo "... VirtualRouter/Background/Packet/src/Decapsulation.s"
+	@echo "... VirtualRouter/Background/Packet/src/Egress.o"
+	@echo "... VirtualRouter/Background/Packet/src/Egress.i"
+	@echo "... VirtualRouter/Background/Packet/src/Egress.s"
+	@echo "... VirtualRouter/Background/Packet/src/Encapsulation.o"
+	@echo "... VirtualRouter/Background/Packet/src/Encapsulation.i"
+	@echo "... VirtualRouter/Background/Packet/src/Encapsulation.s"
+	@echo "... VirtualRouter/Background/Packet/src/Ingress.o"
+	@echo "... VirtualRouter/Background/Packet/src/Ingress.i"
+	@echo "... VirtualRouter/Background/Packet/src/Ingress.s"
+	@echo "... VirtualRouter/Background/Packet/src/Process.o"
+	@echo "... VirtualRouter/Background/Packet/src/Process.i"
+	@echo "... VirtualRouter/Background/Packet/src/Process.s"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Bgp.o"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Bgp.i"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Bgp.s"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Eigrp.o"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Eigrp.i"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Eigrp.s"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Ospf.o"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Ospf.i"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Ospf.s"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Rip.o"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Rip.i"
+	@echo "... VirtualRouter/Background/Protocols/Global/src/Rip.s"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Arp.o"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Arp.i"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Arp.s"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Dhcp.o"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Dhcp.i"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Dhcp.s"
+	@echo "... VirtualRouter/Background/Services/src/Time.o"
+	@echo "... VirtualRouter/Background/Services/src/Time.i"
+	@echo "... VirtualRouter/Background/Services/src/Time.s"
+	@echo "... VirtualRouter/Background/Services/src/TimeManager.o"
+	@echo "... VirtualRouter/Background/Services/src/TimeManager.i"
+	@echo "... VirtualRouter/Background/Services/src/TimeManager.s"
+	@echo "... VirtualRouter/Common/Functions.o"
+	@echo "... VirtualRouter/Common/Functions.i"
+	@echo "... VirtualRouter/Common/Functions.s"
+	@echo "... VirtualRouter/Common/pugixml.o"
+	@echo "... VirtualRouter/Common/pugixml.i"
+	@echo "... VirtualRouter/Common/pugixml.s"
+	@echo "... VirtualRouter/main.o"
+	@echo "... VirtualRouter/main.i"
+	@echo "... VirtualRouter/main.s"
+	@echo "... VirtualRouter/src/CommandProcessing.o"
+	@echo "... VirtualRouter/src/CommandProcessing.i"
+	@echo "... VirtualRouter/src/CommandProcessing.s"
+	@echo "... VirtualRouter/src/Configs.o"
+	@echo "... VirtualRouter/src/Configs.i"
+	@echo "... VirtualRouter/src/Configs.s"
+	@echo "... VirtualRouter/src/Console.o"
+	@echo "... VirtualRouter/src/Console.i"
+	@echo "... VirtualRouter/src/Console.s"
+	@echo "... VirtualRouter/src/Interface.o"
+	@echo "... VirtualRouter/src/Interface.i"
+	@echo "... VirtualRouter/src/Interface.s"
+	@echo "... VirtualRouter/src/Logger.o"
+	@echo "... VirtualRouter/src/Logger.i"
+	@echo "... VirtualRouter/src/Logger.s"
+	@echo "... VirtualRouter/src/Terminal.o"
+	@echo "... VirtualRouter/src/Terminal.i"
+	@echo "... VirtualRouter/src/Terminal.s"
 .PHONY : help
 
 

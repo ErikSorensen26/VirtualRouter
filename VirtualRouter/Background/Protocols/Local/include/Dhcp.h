@@ -4,6 +4,7 @@
 #include <Interface.h>
 #include <PacketStructure.h>
 #include <Functions.h>
+#include <Global.h>
 #include <random>
 #include <mutex>
 #include <thread>
@@ -37,7 +38,7 @@ public:
                            string& hardwareAddress, string& requestedIP, string& serverID);
 
     // Initializes the DHCP client with the given hostname and hardware address
-    void InitializeDhcp(string& hostname, string& hardwareAddress);
+    void InitializeDhcp(string& hardwareAddress);
 
     // Extracts DHCP options from the provided list of options
     void ExtractOptions(vector<dhcpHeader::Option> options);

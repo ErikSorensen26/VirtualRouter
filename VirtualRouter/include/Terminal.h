@@ -47,6 +47,7 @@ private:
 	bool isValidMACAddress(const std::string& mac);
 	void getInterfaceMode(string& type);
 	void getRoutingMode(string& type);
+	void recover();
 
 	// threads
 

@@ -71,7 +71,7 @@ void Terminal::Process(string& command) {
 		if (currentMode == mode.globalConfiguration) {
 			if (command == "exit") {switchMode(mode.privilegedExec);}
 			if (commandStream[0] == "hostname") {
-				hostname = commandStream[1];
+				Global::getInstance().Hostname() = commandStream[1];
 			}	
 			if (commandStream[0] == "interface") {
 				string type = commandStream[1]; 
@@ -183,6 +183,7 @@ void Terminal::Process(string& command) {
 
 void Terminal::runDhcp() {
 	std::string mac = CurrentInterface->Get().mac;
-	CurrentInterface->dhcp->InitializeDhcp(hostname, mac);
+
+	CurrentInterface->dhcp->InitializeDhcp(mac);
 
 }

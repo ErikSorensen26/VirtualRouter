@@ -132,7 +132,8 @@ struct Variable
             string sequence{"\x00\x03", 2};
             string multicastSequence{"\x00\x05", 2};
             string internalRoute{"\x01\x02", 2};
-            string externalRoute{"\x02\x02", 2};
+            string externalRoute{"\x01\x03", 2};
+            string stub{"\x00\x06", 2};
         } options;
         struct version
         {
@@ -574,6 +575,11 @@ namespace OspfPacket
         vector<OspfPacket::LSA> lsa{};
     };
 }
+// Syslog Packet
+struct syslogHeader {
+    string PRI{},
+        message{};
+};
 
 // Packet structure
 struct PacketInfo

@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include <Functions.h>
+#include <Logger.h>
 #include "PacketStructure.h"
 
 using namespace std;
@@ -64,6 +65,8 @@ private:
     void Dhcp(string &dhcpHeader);
     // Parses and processes the EIGRP header.
     void Eigrp(string &eigrpHeader);
+    // Parses and processes the SysLog header
+    void SysLog(string &syslogHeader);
 
     // Decapsulates layer 2 headers
     void L2(string &packet);
@@ -95,6 +98,7 @@ private:
     lldpHeader lldp;
     dhcpHeader dhcp;
     eigrpHeader eigrp;
+    syslogHeader syslog;
 
     Variable variable;
 
