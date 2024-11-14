@@ -67,7 +67,7 @@ namespace EigrpConfigs {
         std::string macAddress;                                 // Neighbor's MAC address
         std::mutex macMutex;                                    // Neighbor's MAC mutex
         bool hasMac;                                            // Indicates if MAC address is known
-        //bool isInit;                                            // Initialization flag
+        bool isInit;                                            // Initialization flag
         bool sendInitUpdate;                                    // Flag to send initial update
         int conditionalReceive;                                 // Holds conditional receive sequence
         bool receivedInitUpdate;                                // Flag for received initial update
@@ -235,6 +235,8 @@ namespace Protocol
 
         // Neighbor went down
         void HandleNeighborDown(const std::string& neighborIp);
+        // Handle neighbor restart
+        void HandleNeighborRestart(const std::string &neighborIp);
 
         // Holds EIGRP neighbors
         std::map<std::string, shared_ptr<EigrpConfigs::NeighborInfo>> neighbors;

@@ -1725,6 +1725,34 @@ namespace Protocol
         neighbors.erase(neighborIp);
     }
 
+    void EigrpInterface::HandleNeighborRestart(const std::string &neighborIp)
+    {
+        // Locate the neighbor
+        auto neighborIt = neighbors.find(neighborIp);
+        if (neighborIt == neighbors.end()) return;
+        std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighborIt->second;
+        
+        // Reset sequence numbers and reliable packets
+        {
+            std::lock_guard<std::mutex> lock(neighbor->neighborDataMutex);
+            neighbor->reliablePackets.clear();
+            neighbor->retransmissionCounts.clear();
+            neighbor->lastReceivedSequenceNumber = 0;
+        }
+
+        SendHelloPacket(false, 0, neighborIp);
+
+        // Clear any existing timers
+        if (neighbor->holdTimerId != 0)
+        {
+            TimeManager::getInstance().CancelTimer(neighbor->holdTimerId);
+            neighbor->holdTimerId = 0;
+        }
+
+        // Reinitialize hold timer
+        StartHoldTimer(neighborIp, neighbor->holdTime);
+    }
+
     // Update routing table for destination
     void EigrpInterface::UpdateRoutingTableForDestination(const std::string &destination)
     {
