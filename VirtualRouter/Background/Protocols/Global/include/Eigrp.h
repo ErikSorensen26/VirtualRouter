@@ -67,16 +67,13 @@ namespace EigrpConfigs {
         std::string macAddress;                                 // Neighbor's MAC address
         std::mutex macMutex;                                    // Neighbor's MAC mutex
         bool hasMac;                                            // Indicates if MAC address is known
-        bool isInit;                                            // Initialization flag
+        //bool isInit;                                            // Initialization flag
         bool sendInitUpdate;                                    // Flag to send initial update
-        std::unordered_map<int, Sequence> sequenceList;         // Holds flags for sequences
         int conditionalReceive;                                 // Holds conditional receive sequence
         bool receivedInitUpdate;                                // Flag for received initial update
         int sequenceNumber;                                     // Sequence number for reliable delivery
         int lastReceivedSequenceNumber;                         // Last received sequence number
         bool adjacency;                                         // Adjacency status
-        
-        std::unordered_map<int, std::vector<RoutingTable::Eigrp>> routingBuffers;
     
         // Acks
         vector<int> pendingAcks;                                // Pending Acks
@@ -96,11 +93,13 @@ namespace EigrpConfigs {
         std::chrono::steady_clock::time_point lastHeard;        // Last heard time point
         std::unordered_map<int, int> retransmissionTimers;      // Map of sequenceNumber to timerId
         std::mutex retransmissionMutex;                         // Protects retransmissionTimers
+        std::unordered_map<int, std::vector<RoutingTable::Eigrp>> routingBuffers;
     
         // Reliable packets
         std::unordered_map<int, std::string> reliablePackets;   // Map of sequenceNumber to packet
         std::unordered_map<int, std::chrono::steady_clock::time_point> packetSendTimes; // Send times
-        std::unordered_map<int, int> retransmissionCounts; 
+        std::unordered_map<int, int> retransmissionCounts;      // Map for retransmissions
+        std::unordered_map<int, Sequence> sequenceList;         // Holds flags for sequences
     
         // Threads
         std::thread workerThread;                               // Worker thread
@@ -184,6 +183,8 @@ namespace Protocol
         void SendReplyToNeighbor(const std::string& neighborIp, const RoutingTable::Eigrp& route);
         // Encode reply option
         std::string EncodeRouteOption(const RoutingTable::Eigrp& route);
+        // Calculate Local Link Cost (LLC)
+        double CalculateLocalLinkCost();
 
         // Updates Routing Table
         void UpdateRoutingTable(const RoutingTable::Eigrp& route, bool init = false);
@@ -200,9 +201,11 @@ namespace Protocol
         int activeTime = 180;
         int stuckInActiveTime = 60; 
         int adminDistance = 90;
-        int varience = 1;
+        int variance = 1;
         bool passive = false;
         int bandwidth;
+        int reliability = 255;
+        int load = 1;
 
         // Holds current interface
         std::shared_ptr<Interface> currentInterface;
@@ -291,7 +294,7 @@ namespace Protocol
         // Tests if an IP address matches the configured networks
         bool TestAddress(const std::string& testIp);
         // Add EIGRP rouing entry
-        double CalculateMetric(EigrpConfigs::KValue k, Interface* interface, int bandwidth, int load, int delay, int reliability, int hopCount = 0);
+        double CalculateMetric(int bandwidth, int load, int delay, int reliability, int hopCount = 0);
         // Calculate Parameters
         string CalculateParameters(int holdTime);
         // Updates Distribution Lists
@@ -314,6 +317,7 @@ namespace Protocol
         EigrpConfigs::KValue kvalue;
         string virtualRouterID = std::string("\x00\x00", 2);
         int asNumber;
+        double wideMetric;
 
         // Eigrp Distribution List
         vector<vector<EigrpConfigs::NetworksDistributed>*> EigrpDistributionList;

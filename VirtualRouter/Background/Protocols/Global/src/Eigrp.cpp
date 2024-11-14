@@ -11,7 +11,7 @@ namespace Protocol
 {
 
     // EIGRP constructor initializing AS number and starting Hello timer
-    Eigrp::Eigrp(int &as) : asNumber(as)
+    Eigrp::Eigrp(int &as) : asNumber(as), wideMetric(10000000)
     {
         kvalue.k1_Bandwidth = 1;
         kvalue.k2_Load = 0;
@@ -46,37 +46,41 @@ namespace Protocol
         eigrp.flags.restart = "0";
         eigrp.flags.endOfTable = "0";
         eigrp.sequence = std::string("\x00\x00\x00\x00", 4);
-        eigrp.ack = ack ? Functions::numToByte(sequenceNumber, 4) : string("\x00\x00\x00\x00", 4);
+        eigrp.ack = ack ? Functions::numToByte(sequenceNumber, 4) : std::string("\x00\x00\x00\x00", 4);
         eigrp.virtualRouterID = virtualRouterID;
         eigrp.autonomousSystem = Functions::numToByte(asNumber, 2);
 
-        // Check for acknowlegement
+        // Construct TLVs
         if (!ack)
         {
-            long unsigned int optionCount = 2 + (update ? 2 : 0);
-            eigrp.options.resize(optionCount);
+            // Parameter TLV (K-values and Hold Time)
+            eigrpHeader::Option paramTLV;
+            paramTLV.option = variable.eigrp.options.parameter;
+            paramTLV.value = CalculateParameters(eigrpInt->holdTime);
+            paramTLV.length = Functions::numToByte(paramTLV.value.size() + 4, 2);
+            eigrp.options.push_back(paramTLV);
 
-            // Set option 0 for K-values and hold time
-            eigrp.options[0].option = variable.eigrp.options.parameter;
-            eigrp.options[0].length = std::string("\x00\x0c", 2);
-            eigrp.options[0].value = CalculateParameters(eigrpInt->holdTime);
+            // Version TLV
+            eigrpHeader::Option versionTLV;
+            versionTLV.option = variable.eigrp.options.version;
+            versionTLV.value = variable.eigrp.version.release + variable.eigrp.version.tls;
+            versionTLV.length = Functions::numToByte(versionTLV.value.size() + 4, 2);
+            eigrp.options.push_back(versionTLV);
 
-            // Set option 1 for version information
-            eigrp.options[1].option = variable.eigrp.options.version;
-            eigrp.options[1].length = std::string("\x00\x08", 2);
-            eigrp.options[1].value = variable.eigrp.version.release + variable.eigrp.version.tls;
-
+            // Sequence TLV
             if (update)
             {
-                eigrp.options[2].option = variable.eigrp.options.sequence;
-                eigrp.options[2].value = Functions::numToByte(neighborIp.size()) + neighborIp;
-                eigrp.options[2].length = Functions::numToByte((eigrp.options[2].option.size() + eigrp.options[2].value.size() + 2), 2);
+                eigrpHeader::Option sequenceTLV;
+                sequenceTLV.option = variable.eigrp.options.sequence;
+                sequenceTLV.value = Functions::numToByte(sequenceNumber, 4) + neighborIp;
+                sequenceTLV.length = Functions::numToByte(sequenceTLV.value.size() + 4, 2);
+                eigrp.options.push_back(sequenceTLV);
 
-                // Set option 3 for next multicast sequence
-                eigrp.options[3].option = variable.eigrp.options.multicastSequence;
-                eigrp.options[3].length = std::string("\x00\x08", 2);
-                string num = Functions::numToByte(sequenceNumber, 4);
-                eigrp.options[3].value = num;
+                eigrpHeader::Option multicastSeqTLV;
+                multicastSeqTLV.option = variable.eigrp.options.multicastSequence;
+                multicastSeqTLV.value = Functions::numToByte(sequenceNumber, 4);
+                multicastSeqTLV.length = Functions::numToByte(multicastSeqTLV.value.size() + 4, 2);
+                eigrp.options.push_back(multicastSeqTLV);
             }
         }
     }
@@ -129,10 +133,7 @@ namespace Protocol
             value += Functions::compactNetworkAddress(intRoute.route.network, intRoute.route.mask);       // Destination
 
             option.value = value;
-
-            // Option length = Option Type (2 bytes) + Length (2 bytes) + Value
-            int optionLength = 2 + 2 + value.size();
-            option.length = Functions::numToByte(optionLength, 2);
+            option.length = Functions::numToByte(value.size() + 4, 2);
 
             eigrp.options.push_back(option);
         }
@@ -173,30 +174,37 @@ namespace Protocol
     }
 
     // Calculate EIGRP metric
-    double Eigrp::CalculateMetric(EigrpConfigs::KValue k, Interface* interface, int bandwidth, int load, int delay, int reliability, int hopCount)
+    double Eigrp::CalculateMetric(int bandwidth, int load, int delay, int reliability, int hopCount)
     {
-        // Prevent division by zero
         if (bandwidth == 0)
         {
             return std::numeric_limits<double>::infinity();
         }
 
-        // Convert Bandwidth from kbps to the scaled value (assuming scaling factor of 256)
-        double scaledBandwidth = (10000000.0 / bandwidth) * 256;
+        // Calculate Bandwidth component
+        double bandwidthMetric = (wideMetric / bandwidth); // Bandwidth in kbps
 
-        // Convert Delay from tens of microseconds to the scaled value
-        double scaledDelay = (delay / 10.0) * 256;
+        // Calculate Load component (only if K2 is not 0)
+        double loadMetric = 0.0;
+        if (kvalue.k2_Load != 0)
+        {
+            loadMetric = (kvalue.k2_Load  * bandwidth) / (256.0 - load);
+        }
 
-        // EIGRP Metric formula
-        double metric = (k.k1_Bandwidth * scaledBandwidth) +
-                        (k.k2_Load * load) +
-                        (k.k3_Delay * scaledDelay) +
-                        (k.k4_Reliability * (255.0 - reliability)) +
-                        (k.k5_MTU * interface->Get().mtu) +
-                        (k.k6_Power * hopCount);
+        // Calculate Delay component
+        double delayMetric = (delay / 10.0); // Delay in tens of microseconds
 
-        // Ensure metric is within valid range
-        return std::min(metric, 4294967295.0); // Maximum EIGRP metric
+        // Sum the component
+        double metric = (kvalue.k1_Bandwidth * bandwidthMetric) + loadMetric + (kvalue.k3_Delay * delayMetric);
+
+        // Apply the scalling factor and reliability
+        if (kvalue.k5_MTU != 0) // Assuming K5 is used as scaling factor
+        {
+            metric *= (static_cast<double>(kvalue.k5_MTU) / (reliability + kvalue.k4_Reliability));
+        }
+        
+        // Endure metric does not exceed meximum EIGRP value
+        return std::min(metric, 4294967295.0);
     }
 
     // Updates the EIGRP interface list based on configured networks
@@ -270,16 +278,16 @@ namespace Protocol
 
                 // Create EIGRP route entry
                 RoutingTable::Eigrp connectedRoute;
-                    connectedRoute.bandwidth = ( 10000000 / eigrpBw ) * 256;
-                    connectedRoute.delay = (interfaceInfo.delay / 10) * 256;
+                    connectedRoute.bandwidth = (10000000 / eigrpBw);
+                    connectedRoute.delay = (interfaceInfo.delay / 10);
                     connectedRoute.hopCount = 0;
                     connectedRoute.mtu = interfaceInfo.mtu;
                     connectedRoute.reliability = 255;
-                    connectedRoute.load = eigrpInterfacePtr->varience;
+                    connectedRoute.load = eigrpInterfacePtr->variance;
                     connectedRoute.network = connectedNetwork;
                     connectedRoute.mask = Functions::byteMaskToNum(interfaceInfo.subnet);
                     connectedRoute.nextHop = std::string("\x00\x00\x00\x00", 4); // indicates directly connected
-                    connectedRoute.metric = CalculateMetric(kvalue, interfacePtr.get(), eigrpBw, 0, interfaceInfo.delay, 255);
+                    connectedRoute.metric = CalculateMetric(eigrpBw, 0, interfaceInfo.delay, 255);
                     connectedRoute.routeType = "connected";
 
                 bool hasChanged = false;
@@ -356,16 +364,16 @@ namespace Protocol
             {
                 // Create and insert new connected route
                 RoutingTable::Eigrp connectedRoute;
-                    connectedRoute.bandwidth = ( 10000000 / interfaceInfo.bandwidth ) * 256;
-                    connectedRoute.delay = (interfaceInfo.delay / 10) * 256;
+                    connectedRoute.bandwidth = ( 10000000 / interfaceInfo.bandwidth );
+                    connectedRoute.delay = (interfaceInfo.delay / 10);
                     connectedRoute.hopCount = 1;
                     connectedRoute.mtu = interfaceInfo.mtu;
                     connectedRoute.reliability = 0;
-                    connectedRoute.load = interfacePtr->eigrpInterfaceList[asNumber]->varience;
+                    connectedRoute.load = interfacePtr->eigrpInterfaceList[asNumber]->variance;
                     connectedRoute.network = connectedNetwork;
                     connectedRoute.mask = Functions::byteMaskToNum(interfaceInfo.subnet);
                     connectedRoute.nextHop = std::string("\x00\x00\x00\x00", 4); // indicates directly connected
-                    connectedRoute.metric = CalculateMetric(kvalue, interfacePtr, interfaceInfo.bandwidth, 0, interfaceInfo.delay, 255);
+                    connectedRoute.metric = CalculateMetric(interfaceInfo.bandwidth, 0, interfaceInfo.delay, 255);
                     connectedRoute.routeType = "connected";
 
                 routingTable.UpdateEigrp(connectedRoute);
@@ -398,17 +406,17 @@ namespace Protocol
     {
         for (const auto &eigrpInterfacePtr : eigrpInterfaceList)
         {
-            vector<std::shared_ptr<EigrpConfigs::NeighborInfo>> neighbors;
+            vector<std::shared_ptr<EigrpConfigs::NeighborInfo>> neighborsCopy;
             {
                 std::lock_guard<std::mutex> lock(eigrpInterfacePtr.second->neighborMutex);
                 for (const auto& neighborEntry : eigrpInterfacePtr.second->neighbors)
                 {
-                    neighbors.emplace_back(neighborEntry.second);
+                    neighborsCopy.emplace_back(neighborEntry.second);
                 }
             }
 
             // Iterate over all neighbors
-            for (const auto &neighborEntry : neighbors)
+            for (const auto &neighborEntry : neighborsCopy)
             {
                 // send an Update Packet to the neighbor
                 {
@@ -423,6 +431,7 @@ namespace Protocol
                         }
                         else
                         {
+                            // Initialize ARP request and skip sending the update until MAC is resolved
                             eigrpInterfacePtr.second->currentInterface->arp->sendRequest(neighborEntry->ipAddress);
                             continue;
                         }
@@ -430,7 +439,8 @@ namespace Protocol
                 } 
 
                 const auto &neighborIp = neighborEntry->ipAddress;
-                bool sendRemoval = isRemoval;
+                bool shouldSendRemoval = isRemoval;
+
                 if (init) 
                 {
                     if (changeRoute.nextHop == neighborEntry->ipAddress)
@@ -440,8 +450,8 @@ namespace Protocol
                 }
                 else 
                 {
-                    sendRemoval = (changeRoute.nextHop == neighborEntry->ipAddress);
-                    eigrpInterfacePtr.second->SendUpdateToNeighbor(neighborIp, changeRoute, sendRemoval);
+                    shouldSendRemoval = (changeRoute.nextHop == neighborEntry->ipAddress);
+                    eigrpInterfacePtr.second->SendUpdateToNeighbor(neighborIp, changeRoute, shouldSendRemoval);
                 }
             }
         }
@@ -528,15 +538,15 @@ namespace Protocol
     {
         std::string neighborIp = recievedIP->sourceAddress;
 
+        // Validate Autonomous System Number
         if (Functions::byteToNum(receivedHello->autonomousSystem) != eigrpProcess->asNumber)
         {
             // Drop the packet - AS number mismatch
             return;
         }
 
+        // Extract Hold Time from options
         int recievedHoldTime = holdTime; // Default holdtime
-
-        // Process TLV parameters
         for (const auto& opt : receivedHello->options)
         {
             if (opt.option == variable.eigrp.options.parameter)
@@ -881,7 +891,7 @@ namespace Protocol
         std::lock_guard<std::mutex> lock(neighborMutex);
 
         if (neighbors.find(neighborIp) == neighbors.end()) { return; }
-        std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
+        auto neighbor = neighbors[neighborIp];
 
         // Check Removal
         if (neighbor->sequenceNumber < 1)
@@ -908,31 +918,24 @@ namespace Protocol
 
         // Construct Ethernet and IPv4 headers
         EigrpBody(eth, ip, currentInterface->Get().mac);
+        eth.destinationMac = neighbor->macAddress;
+        ip.destinationAddress = neighbor->ipAddress;
 
-        // Set the destination MAC and IP to the neighbor
-        //eth.destinationMac = neighbor.macAddress;
-        //ip.destinationAddress = neighbor.ipAddress;
+        // Construct EIGRP Update packet
+        vector<EigrpConfigs::NetworksDistributed> routesToSend = {EigrpConfigs::NetworksDistributed{.route = route}};
+        eigrpProcess->EigrpUpdate(eigrp, neighbor->sequenceNumber, routesToSend, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endOfTable=*/true);
 
         RoutingTable::Eigrp routeToSend = route;
         if (removal)
         {
             // EIGRP uses 4294967295 (0xFFFFFFFF) as infinity
+            RoutingTable::Eigrp removalRoute = route;
             routeToSend.reportedDistance = 0xFFFFFFFF;
+            routeToSend.feasibleDistance = 0xFFFFFFFF;
             routeToSend.metric = 0xFFFFFFFF;
             routeToSend.delay = 0xFFFFFFFF;
+            // Set other feilds as needed
         }
-        if (routeToSend.routeType == "connected")
-        {
-            routeToSend.nextHop = std::string("\x00\x00\x00\x00", 4);
-        }
-        else
-        {
-            routeToSend.nextHop = currentInterface->Get().ip;
-        }
-
-        // Construct EIGRP Update packet
-        vector<EigrpConfigs::NetworksDistributed> routesToSend = {EigrpConfigs::NetworksDistributed{.route = routeToSend}};
-        eigrpProcess->EigrpUpdate(eigrp, neighbor->sequenceNumber, routesToSend, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endOfTable=*/true);
 
         // Check for pending acks
         if (!neighbor->pendingAcks.empty())
@@ -1537,32 +1540,63 @@ namespace Protocol
             throw std::runtime_error("DecodeRoute: Insufficient data to decode route.");
         }
 
-        // Extract and pad destination
-        string destination = value.substr(21);
-        while (destination.size() < 4)
-        {
-            destination = destination + std::string("\x00", 1);
-        }
-
         // Creating a new route
         RoutingTable::Eigrp route;
 
-        // Decapsulating internal route value
-        route.bandwidth = Functions::byteToNum(value.substr(8, 4));
+        // Extract fields based on their exact byte position
+        route.nextHop = value.substr(0, 4);
         route.delay = Functions::byteToNum(value.substr(4, 4));
+        route.bandwidth = Functions::byteToNum(value.substr(8, 4));
+        route.mtu = Functions::byteToNum(value.substr(12, 3));
         route.hopCount = Functions::byteToNum(value.substr(15, 1));
+        route.reliability = Functions::byteToNum(value.substr(16, 1));
         route.load = Functions::byteToNum(value.substr(17, 1));
         route.mask = Functions::byteToNum(value.substr(20, 1));
-        route.mtu = Functions::byteToNum(value.substr(12, 3));
-        route.network = destination;
-        route.nextHop = ip;
-        route.reliability = Functions::byteToNum(value.substr(16, 1));
-        route.reportedDistance = (eigrpProcess->kvalue.k1_Bandwidth * route.bandwidth) + (eigrpProcess->kvalue.k2_Load * route.load) + (eigrpProcess->kvalue.k3_Delay * route.delay) + (eigrpProcess->kvalue.k4_Reliability * (255 - route.reliability)) + (eigrpProcess->kvalue.k5_MTU * route.mtu) + (eigrpProcess->kvalue.k6_Power * route.hopCount);
-        route.metric = eigrpProcess->CalculateMetric(eigrpProcess->kvalue, currentInterface.get(), route.bandwidth, route.load, route.delay, route.reliability, route.hopCount);
-        route.feasibleDistance = route.reportedDistance + route.metric;
+        route.routeTag = Functions::byteToNum(value.substr(18, 2));
+
+        // Extract the network address based on the mask
+        route.network = value.substr(21);
+        while (route.network.size() < 4)
+        {
+            route.network = route.network + std::string("\x00", 1);
+        }
+
+        double neighborRD = eigrpProcess->CalculateMetric(route.bandwidth, route.load, route.delay, route.reliability);
+
+        route.reportedDistance = neighborRD;
+
+        // Calculate FD = Local Link Cost + RD
+        double localLinkCost = CalculateLocalLinkCost();
+        route.feasibleDistance = localLinkCost + route.reportedDistance;
+
+        // Calculate the composite metric for internal use
+        route.metric = route.feasibleDistance;
+
         route.routeType = external ? "external" : "internal";
 
         return route;
+    }
+
+    // Calculate Local Link Cost (LLC)
+    double EigrpInterface::CalculateLocalLinkCost()
+    {
+        const ipInfo& ifaceInfo = currentInterface->Get();
+
+        // Bandwidth is in kbps
+        double bandwidthMetric = (eigrpProcess->wideMetric / ifaceInfo.bandwidth);
+
+        // Delay is in tens of microseconds
+        double delayMetric = static_cast<double>(ifaceInfo.delay) / 10.0;
+
+        // Calculate link cost using K-values
+        double linkCost = (eigrpProcess->kvalue.k1_Bandwidth * bandwidthMetric) +
+                          (eigrpProcess->kvalue.k2_Load * load) / (256.0 - load) +
+                          (eigrpProcess->kvalue.k3_Delay * delayMetric);
+
+        // Apply scaling factor and reliability
+        linkCost *= (eigrpProcess->kvalue.k5_MTU / (reliability + eigrpProcess->kvalue.k4_Reliability));
+
+        return linkCost;
     }
 
     // Updates EIGRP routing table
@@ -1596,25 +1630,18 @@ namespace Protocol
 
                 // Access the routing table to check existing conditions
                 RoutingTable &routingTable = RoutingTable::getInstance();
-                auto existingRoute = routingTable.GetAllEigrpRoutes();
+                auto existingRoute = routingTable.GetEigrpRoute(route.network, route.mask);
 
                 bool routeChange = false;
-                bool routeExists = false;
 
-                for (const auto& testRoute : existingRoute)
+                if (existingRoute)
                 {
-                    if (testRoute.network == route.network && testRoute.mask == route.mask)
+                    if (existingRoute->metric != newRoute.metric || existingRoute->nextHop != newRoute.nextHop);
                     {
-                        routeExists = true;
-                        if (testRoute.metric != route.metric || testRoute.nextHop == route.nextHop)
-                        {
-                            routeChange = true;
-                        }
-                        break;
+                        routeChange = true;
                     }
                 }
-
-                if (!routeExists)
+                else
                 {
                     routeChange = true;
                 }
