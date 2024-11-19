@@ -112,7 +112,7 @@ public:
 
     char id; // Identifier for the interface
     unsigned long bandwidth{1000000}; // Bandwidth or speed of the interface
-    unsigned long delay{100};
+    unsigned long delay{10};
     string ipAddress  = ""; // IP address of the interface
     string ipv6Address = ""; // IPv6 address of the interface
     string macAddress = ""; // MAC address of the interface

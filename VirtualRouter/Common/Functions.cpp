@@ -30,6 +30,11 @@ namespace Functions {
         return true;
     }
 
+    bool isDecimal(const std::string& str)
+    {
+        return !str.empty() && std::all_of(str.begin(), str.end(), ::isdigit);
+    }
+
     #pragma endregion
     #pragma region ByteConv
 
@@ -459,6 +464,23 @@ namespace Functions {
         return newmask;
     }
 
+    bool compareNetworkWithMask(const std::string& network, int mask)
+    {
+        const std::string binAddress = byteToBin(network);
+        const std::string binMask = numMaskToBin(mask);
+        for (int i = 0; i < 32; ++i)
+        {
+            if (binMask[i] == '0')
+            {
+                if (binAddress[i] != 0)
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
     #pragma endregion
     #pragma region Other
 

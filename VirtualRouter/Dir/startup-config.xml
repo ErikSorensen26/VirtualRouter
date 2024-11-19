@@ -21,6 +21,8 @@
 		<GigabitEthernet id="1">
 			<ip>
 				<address>
+					<ip>172.16.0.2</ip>
+					<subnet></subnet>
 				</address>
 			</ip>
 		</GigabitEthernet>

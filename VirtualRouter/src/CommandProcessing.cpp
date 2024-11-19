@@ -93,7 +93,7 @@ void Terminal::Process(string& command) {
 				} else if (commandStream[1] == "Dot11Radio") {
 					mac = OUI + "0d";
 					char buffer[5];
-	    			std::sprintf(buffer, "%04d", interfaceID);
+	    			std::sprintf(buffer, "%04ld", interfaceID);
 					mac += buffer;
 				}
 				getInterfaceMode(type);
@@ -107,8 +107,12 @@ void Terminal::Process(string& command) {
 				string ID;
 				if (type != "rip") ID = commandStream[2];
 				if (type != "rip") routingProtocolID = Functions::stringToNum(commandStream[2]);
-				getRoutingMode(type);
 				if (type == "eigrp") {
+					if (Functions::isDecimal(ID)) {type = "eigrp_classic";}
+					else {type = "eigrp_named";}
+				}
+				getRoutingMode(type);
+				if (type == "eigrp_classic") {
 					if (eigrpList.count(routingProtocolID) == 0) {
 						(eigrpList)[routingProtocolID] = std::make_shared<Protocol::Eigrp>(routingProtocolID);
 					}
@@ -142,7 +146,7 @@ void Terminal::Process(string& command) {
 		}
 
 		if (currentMode == "(config-router)#") {
-			if (currentSubMode == "eigrp") {
+			if (currentSubMode == "eigrp_classic") {
 				if (commandStream[0] == "network") {
 					EigrpConfigs::network network;
 					network.ip = Functions::addressToByte(commandStream[1]);
@@ -151,7 +155,7 @@ void Terminal::Process(string& command) {
 					} else {
 						network.mask = variable.ip.broadcast;
 					}
-					currentEigrp->networks.push_back(network);
+					currentEigrp->AddNetwork(network);
 					currentEigrp->UpdateInterfaceList();
 					currentEigrp->UpdateRoutingTableForConnected();
 				}

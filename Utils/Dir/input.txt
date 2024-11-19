@@ -1,64 +1,876 @@
-collect  Specify a non-key field
-    counter    Counter fields
-        bytes    Total number of bytes
+cts                  EIGRP Trustsec Configuration
+    propagate  Enable propagation of CTS parameters
+        sgt  Enable propagation of CTS SGT over LISP
             <cr>
-        packets  Total number of packets
-            <cr>
-    interface  Interface fields
-        input   The input interface
-            <cr>
-        output  The output interface
-            <cr>
-    ipv4       IPv4 fields
-        destination  IPv4 destination address based fields
-            mask  IPv4 address mask for the IPv4 destination address
+default              Set a command to its defaults
+    cts                  EIGRP Trustsec Configuration
+        propagate  Enable propagation of CTS parameters
+            sgt  Enable propagation of CTS SGT over LISP
                 <cr>
-        source       IPv4 source address based fields
-            mask  IPv4 address mask for the IPv4 source address
-                <cr>
-    routing    Routing attributes
-        destination  Destination routing attributes
-            as  AS number of the destination network
-                <cr>
-        next-hop     Information regarding the next hop
-            address  IPv4 or IPv6 address of the next hop
-                ipv4  IPv4 address of the next hop
+    default-metric       Set metric of redistributed routes
+        <ct>
+    distance             Define an administrative distance
+        eigrp  EIGRP-IPV6 distance
+            <cr>
+    distribute-list      Filter entries in eigrp updates
+        prefix-list  Filter connections based on an IPv6 prefix-list
+            WORD  Prefix-list name
+                in   Filter incoming routing updates
+                    <interface>
+                out  Filter outgoing routing updates
+                    <interface>
+    eigrp                EIGRP specific commands
+        event-log-size  Set EIGRP maximum event log entries
+            <cr>
+    maximum-paths        Forward packets over multiple paths
+        <cr>
+    metric               Modify metrics and parameters for advertisement
+        maximum-hops  Advertise greater than <hops> as unreachable
+            <cr>
+    redistribute         Redistribute IPv4 routes from another routing protocol
+        bgp             Border Gateway Protocol (BGP)
+            <1-4294967295>  Autonomous system number
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
                     <cr>
-        source       Source routing attributes
-            as  AS number of the destination network
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
                 <cr>
-    timestamp  Timestamp fields
-        sys-uptime  Timestamps based on the sys-uptime
-            first  Time the first packet was seen
+            <1.0-XX.YY>     Autonomous system number
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
+                    <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
                 <cr>
-            last   Time the most recent packet was seen
+        connected       Connected
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
                 <cr>
-    transport  Transport layer fields
-        tcp  TCP fields
-            flags  TCP flags
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        eigrp           Enhanced Interior Gateway Routing Protocol (EIGRP)
+            <1-65535>  Autonomous system number
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
+                    <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
                 <cr>
-match    Specify a key field
-    flow       Flow identifying fields
-        direction  Direction the flow was monitored
-            <cr>
-    interface  Interface fields
-        input   The input interface
-            <cr>
-        output  The output interface
-            <cr>
-    ipv4       IPv4 fields
-        destination  IPv4 destination address based fields
-            address  IPv4 destination address
+        isis            ISO IS-IS
+            FINISH
+        lisp            Locator ID Separation Protocol (LISP)
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
                 <cr>
-        protocol     IPv4 protocol
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
             <cr>
-        source       IPv4 source address based fields
-            address  IPv4 destination address
+        mobile          Mobile routes
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
                 <cr>
-        tos          IPv4 type of service
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
             <cr>
-    transport  Transport layer fields
-        destination-port  Transport destination port
+        nemo       Network Mobility (NEMO)
+            include-connected  Include connected
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        metric     Metric for redistributed routes
+                            <1-4294967295>  Bandwidth metric in Kbits per second
+                                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                            <1-65535>  EIGRP MTU of the path
+                <cr>
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    include-connected  Include connected
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                                    route-map          Route map reference
+                                        WORD  Pointer to route-map entries
+                                            include-connected  Include connected
+                                                <cr>
+                                    <cr>
+            route-map          Route map reference
+                WORD  Pointer to route-map entries
+                    include-connected  Include connected
+                        metric             Metric for redistributed routes
+                            <1-4294967295>  Bandwidth metric in Kbits per second
+                                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                            <1-65535>  EIGRP MTU of the path
+                    metric             Metric for redistributed routes
+                        <1-4294967295>  Bandwidth metric in Kbits per second
+                            <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                    <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                        <1-65535>  EIGRP MTU of the path
+                                            include-connected  Include connected
+                                                <cr>
+                                            <cr>
+                    <cr>
             <cr>
-        source-port       Transport source port
+        ospf            Open Shortest Path First (OSPF)
+            <1-65535>  Process ID
+                match      Redistribution of OSPF routes
+                    external       Redistribute OSPF external routes
+                        FINISH
+                    internal       Redistribute OSPF internal routes
+                        FINISH
+                    nssa-external  Redistribute OSPF NSSA external routes
+                        FINISH
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
+                    <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+        rip             Routing Information Protocol (RIP)
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
             <cr>
+        static          Static routes
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+    summary-metric       Specify summary to apply metric/filtering
+        X:X:X:X::X/<0-128>  Summary to configure static metric
+            <cr>
+    timers               Adjust topology specific timers
+        active-time  time limit for active state
+            <cr>
+    topo-interface       Enter Topology interface configuration
+        <interface>
+    traffic-share        How to compute traffic share over alternate paths
+        balanced  Share inversely proportional to metric
+            <cr>
+        min       All traffic shared among min metric paths
+            across-interfaces  Use different interfaces for equal-cost paths
+                <cr>
+    variance             Control load balancing variance
+        <cr>
+default-metric       Set metric of redistributed routes
+    <1-4294967295>  Bandwidth in Kbits per second
+        <0-4294967295>  delay metric in 10 microsecond units
+            <0-255>  Reliability metric where 255 is 100% reliable
+                <1-255>  Effective bandwidth metric (Loading) where 255 is 100% loaded
+                    <1-65535>  Maximum Transmission Unit metric of the path
+                        <cr>
+distance             Define an administrative distance
+    eigrp    Set distance for internal and external routes
+        <1-255>  Distance for internal routes
+            <1-255>  Distance for external routes
+                <cr>
+distribute-list      Filter entries in eigrp updates
+    prefix-list  Filter connections based on an IPv6 prefix-list
+        WORD  Prefix-list name
+            in   Filter incoming routing updates
+                <interface>
+            out  Filter outgoing routing updates
+                <interface>
+eigrp                EIGRP specific commands
+    event-log-size  Set EIGRP maximum event log entries
+        <0-909425>  Max event log entries
+            <cr>
+exit-af-topology     Exit from Address Family Topology configuration mode
+    <cr>
+maximum-paths        Forward packets over multiple paths
+    <1-32>  Number of paths
+        <cr>
+metric               Modify metrics and parameters for advertisement
+    maximum-hops  Advertise greater than <hops> as unreachable
+        <1-255>  Hop count
+            <cr>
+no                   Negate a command or set its defaults
+    cts                  EIGRP Trustsec Configuration
+        propagate  Enable propagation of CTS parameters
+            sgt  Enable propagation of CTS SGT over LISP
+                <cr>
+    default-metric       Set metric of redistributed routes
+        <cr>
+    distance             Define an administrative distance
+        eigrp    Set distance for internal and external routes
+            <cr>
+    distribute-list      Filter entries in eigrp updates
+        prefix-list  Filter connections based on an IPv6 prefix-list
+            WORD  Prefix-list name
+                in   Filter incoming routing updates
+                    <interface>
+                out  Filter outgoing routing updates
+                    <interface>
+    eigrp                EIGRP specific commands
+        event-log-size  Set EIGRP maximum event log entries
+            <cr>
+    maximum-paths        Forward packets over multiple paths
+        <cr>
+    metric               Modify metrics and parameters for advertisement
+        maximum-hops  Advertise greater than <hops> as unreachable
+            <cr>
+    redistribute         Redistribute IPv4 routes from another routing protocol
+        bgp             Border Gateway Protocol (BGP)
+            <1-4294967295>  Autonomous system number
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
+                    <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            <1.0-XX.YY>     Autonomous system number
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
+                    <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+        connected       Connected
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        eigrp           Enhanced Interior Gateway Routing Protocol (EIGRP)
+            <1-65535>  Autonomous system number
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
+                    <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+        isis            ISO IS-IS
+            FINISH
+        lisp            Locator ID Separation Protocol (LISP)
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        mobile          Mobile routes
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        nemo       Network Mobility (NEMO)
+            include-connected  Include connected
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        metric     Metric for redistributed routes
+                            <1-4294967295>  Bandwidth metric in Kbits per second
+                                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                            <1-65535>  EIGRP MTU of the path
+                <cr>
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    include-connected  Include connected
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                                    route-map          Route map reference
+                                        WORD  Pointer to route-map entries
+                                            include-connected  Include connected
+                                                <cr>
+                                    <cr>
+            route-map          Route map reference
+                WORD  Pointer to route-map entries
+                    include-connected  Include connected
+                        metric             Metric for redistributed routes
+                            <1-4294967295>  Bandwidth metric in Kbits per second
+                                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                            <1-65535>  EIGRP MTU of the path
+                    metric             Metric for redistributed routes
+                        <1-4294967295>  Bandwidth metric in Kbits per second
+                            <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                    <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                        <1-65535>  EIGRP MTU of the path
+                                            include-connected  Include connected
+                                                <cr>
+                                            <cr>
+                    <cr>
+            <cr>
+        ospf            Open Shortest Path First (OSPF)
+            <1-65535>  Process ID
+                match      Redistribution of OSPF routes
+                    external       Redistribute OSPF external routes
+                        FINISH
+                    internal       Redistribute OSPF internal routes
+                        FINISH
+                    nssa-external  Redistribute OSPF NSSA external routes
+                        FINISH
+                metric     Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        route-map  Route map reference
+                                            WORD  Pointer to route-map entries
+                                                <cr>
+                                        <cr>
+                    route-map       Route map reference
+                        WORD  Pointer to route-map entries
+                            <cr>
+                    <cr>
+                route-map  Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+        rip             Routing Information Protocol (RIP)
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        static          Static routes
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+    summary-metric       Specify summary to apply metric/filtering
+        X:X:X:X::X/<0-128>  Summary to configure static metric
+            <cr>
+    timers               Adjust topology specific timers
+        active-time  time limit for active state
+            <cr>
+    topo-interface       Enter Topology interface configuration
+        <interface>
+        default                  Topology default interface configuration
+            <cr>
+    traffic-share        How to compute traffic share over alternate paths
+        balanced  Share inversely proportional to metric
+            <cr>
+        min       All traffic shared among min metric paths
+            across-interfaces  Use different interfaces for equal-cost paths
+                <cr>
+    variance
+        <cr>
+redistribute         Redistribute IPv4 routes from another routing protocol
+    bgp             Border Gateway Protocol (BGP)
+        <1-4294967295>  Autonomous system number
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        <1.0-XX.YY>     Autonomous system number
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+    connected       Connected
+        metric     Metric for redistributed routes
+            <1-4294967295>  Bandwidth metric in Kbits per second
+                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                            <1-65535>  EIGRP MTU of the path
+                                route-map  Route map reference
+                                    WORD  Pointer to route-map entries
+                                        <cr>
+                                <cr>
+            route-map       Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        route-map  Route map reference
+            WORD  Pointer to route-map entries
+                <cr>
+        <cr>
+    eigrp           Enhanced Interior Gateway Routing Protocol (EIGRP)
+        <1-65535>  Autonomous system number
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+    isis            ISO IS-IS
+        FINISH
+    lisp            Locator ID Separation Protocol (LISP)
+        metric     Metric for redistributed routes
+            <1-4294967295>  Bandwidth metric in Kbits per second
+                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                            <1-65535>  EIGRP MTU of the path
+                                route-map  Route map reference
+                                    WORD  Pointer to route-map entries
+                                        <cr>
+                                <cr>
+            route-map       Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        route-map  Route map reference
+            WORD  Pointer to route-map entries
+                <cr>
+        <cr>
+    mobile          Mobile routes
+        metric     Metric for redistributed routes
+            <1-4294967295>  Bandwidth metric in Kbits per second
+                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                            <1-65535>  EIGRP MTU of the path
+                                route-map  Route map reference
+                                    WORD  Pointer to route-map entries
+                                        <cr>
+                                <cr>
+            route-map       Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        route-map  Route map reference
+            WORD  Pointer to route-map entries
+                <cr>
+        <cr>
+    nemo       Network Mobility (NEMO)
+        include-connected  Include connected
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    metric     Metric for redistributed routes
+                        <1-4294967295>  Bandwidth metric in Kbits per second
+                            <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                    <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                        <1-65535>  EIGRP MTU of the path
+            <cr>
+        metric     Metric for redistributed routes
+            <1-4294967295>  Bandwidth metric in Kbits per second
+                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                            <1-65535>  EIGRP MTU of the path
+                                include-connected  Include connected
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                                route-map          Route map reference
+                                    WORD  Pointer to route-map entries
+                                        include-connected  Include connected
+                                            <cr>
+                                <cr>
+        route-map          Route map reference
+            WORD  Pointer to route-map entries
+                include-connected  Include connected
+                    metric             Metric for redistributed routes
+                        <1-4294967295>  Bandwidth metric in Kbits per second
+                            <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                                <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                    <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                        <1-65535>  EIGRP MTU of the path
+                metric             Metric for redistributed routes
+                    <1-4294967295>  Bandwidth metric in Kbits per second
+                        <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                            <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                                <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                    <1-65535>  EIGRP MTU of the path
+                                        include-connected  Include connected
+                                            <cr>
+                                        <cr>
+                <cr>
+        <cr>
+    ospf            Open Shortest Path First (OSPF)
+        <1-65535>  Process ID
+            match      Redistribution of OSPF routes
+                external       Redistribute OSPF external routes
+                    FINISH
+                internal       Redistribute OSPF internal routes
+                    FINISH
+                nssa-external  Redistribute OSPF NSSA external routes
+                    FINISH
+            metric     Metric for redistributed routes
+                <1-4294967295>  Bandwidth metric in Kbits per second
+                    <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                        <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                            <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                                <1-65535>  EIGRP MTU of the path
+                                    route-map  Route map reference
+                                        WORD  Pointer to route-map entries
+                                            <cr>
+                                    <cr>
+                route-map       Route map reference
+                    WORD  Pointer to route-map entries
+                        <cr>
+                <cr>
+            route-map  Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+    rip             Routing Information Protocol (RIP)
+        metric     Metric for redistributed routes
+            <1-4294967295>  Bandwidth metric in Kbits per second
+                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                            <1-65535>  EIGRP MTU of the path
+                                route-map  Route map reference
+                                    WORD  Pointer to route-map entries
+                                        <cr>
+                                <cr>
+            route-map       Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        route-map  Route map reference
+            WORD  Pointer to route-map entries
+                <cr>
+        <cr>
+    static          Static routes
+        metric     Metric for redistributed routes
+            <1-4294967295>  Bandwidth metric in Kbits per second
+                <0-4294967295>  EIGRP delay metric, in 10 microsecond units
+                    <0-255>  EIGRP reliability metric where 255 is 100% reliable
+                        <1-255>  EIGRP Effective bandwidth metric (Loading) where 255 is 100% loaded
+                            <1-65535>  EIGRP MTU of the path
+                                route-map  Route map reference
+                                    WORD  Pointer to route-map entries
+                                        <cr>
+                                <cr>
+            route-map       Route map reference
+                WORD  Pointer to route-map entries
+                    <cr>
+            <cr>
+        route-map  Route map reference
+            WORD  Pointer to route-map entries
+                <cr>
+        <cr>
+summary-metric       Specify summary to apply metric/filtering
+    X:X:X:X::X/<0-128>  Summary to configure static metric
+        <1-4294967295>  Bandwidth metric in Kbits per second
+            <1-4294967295>  delay metric in 10 microsecond units
+                <0-255>  reliability metric where 255 is 100% reliable
+                    <0-255>  Effective bandwidth metric (Loading) where 255 is 100% loaded
+                        <1-65535>  MTU of the path
+                            distance  Set administrative distance for summary route
+                                <1-255>  Administrative distance
+                                    <cr>
+                            <cr>
+        distance        Set administrative distance for summary route
+            <1-255>  Administrative distance
+                <cr>
+timers               Adjust topology specific timers
+    active-time  time limit for active state
+        <1-65535>  active state time limit in minutes
+            <cr>
+        disabled   disable time limit for active state
+            <cr>
+topo-interface       Enter Topology interface configuration
+    <interface>
+    default                  Topology default interface configuration
+        <cr>
+traffic-share        How to compute traffic share over alternate paths
+    balanced  Share inversely proportional to metric
+        <cr>
+    min       All traffic shared among min metric paths
+        across-interfaces  Use different interfaces for equal-cost paths
+            <cr>
+variance
+    <1-128>  Metric variance multiplier
+        <cr>

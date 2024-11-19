@@ -1,6 +1,35 @@
 #include <RoutingTable.h>
 
-void RoutingTable::UpdateEigrp(const Eigrp& route)
+void RoutingTable::UpdateEigrp(const Eigrp route)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+
+    // Create key in "network/mask" format
+    std::string key = route.network + "/" + std::to_string(route.mask);
+    auto& existingRoute = eigrp[key];
+
+    if (existingRoute.nextHops.empty())
+    {
+        existingRoute = route;
+    }
+    else
+    {
+        // Add new nextHop if not already present
+        if (std::find(existingRoute.nextHops.begin(), existingRoute.nextHops.end(), route.nextHop) == existingRoute.nextHops.end())
+        {
+            existingRoute.nextHops.push_back(route.nextHop);
+        }
+
+        // Update all relevant fields
+        existingRoute.metric = route.metric;
+        existingRoute.feasibleDistance = route.feasibleDistance;
+        existingRoute.reportedDistance = route.reportedDistance;
+        existingRoute.routeType = route.routeType;
+        existingRoute.interface = route.interface;
+    }
+}
+
+void RoutingTable::AddEigrp(const Eigrp route)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::string key = route.network + "/" + std::to_string(route.mask);
@@ -19,6 +48,32 @@ void RoutingTable::RemoveEigrp(const std::string& network, int mask)
     printEigrpTable();
 }
 
+void RoutingTable::UpdateEigrpWithVaraence(const Eigrp& route, double variance)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+
+    std::string key = route.network + "/" + std::to_string(route.mask);
+    auto& existingRoute = eigrp[key];
+    double minMetric = existingRoute.metric;
+
+    // Allow routes within variance range
+    if (route.metric <= minMetric * variance)
+    {
+        // Avoid duplicate nextHops
+        if (std::find(existingRoute.nextHops.begin(), existingRoute.nextHops.end(), route.nextHop) == existingRoute.nextHops.end())
+        {
+            existingRoute.nextHops.push_back(route.nextHop);
+        }
+
+        // Update metric to the minimum
+        existingRoute.metric = std::min(existingRoute.metric, route.metric);
+        existingRoute.feasibleDistance = std::min(existingRoute.feasibleDistance, route.feasibleDistance);
+        existingRoute.reportedDistance = std::min(existingRoute.reportedDistance, route.reportedDistance);
+        existingRoute.routeType = route.routeType;
+        existingRoute.interface = route.interface;
+    }
+}
+
 std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes()
 {
     std::lock_guard<std::mutex> lock(tableMutex);
@@ -35,7 +90,7 @@ std::optional<RoutingTable::Eigrp> RoutingTable::GetEigrpRoute(const std::string
     std::lock_guard<std::mutex> lock(tableMutex);
     for (const auto& [key, entry] : eigrp)
     {
-        if (entry.network == destination, entry.mask == mask)
+        if (entry.network == destination && entry.mask == mask)
         {
             return entry;
         }
@@ -84,17 +139,28 @@ void RoutingTable::UpdateArp(const string ip, string mac, string interfaceAddres
 std::optional<RoutingTable::Arp> RoutingTable::ArpLookup(const std::string& ipAddress)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    for (const auto& [key, entry] : arp)
+    auto it = arp.find(ipAddress);
+    if (it != arp.end())
     {
-        if (entry.ipAddress == ipAddress)
-        {
-            return entry;
-        }
+        return it->second;
     }
     return std::nullopt;
 }
 
+std::string RoutingTable::GetNextHop(const std::string& destination, int mask)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+    auto it = eigrp.find(destination + "/" + std::to_string(mask));
+    if (it != eigrp.end() && !it->second.nextHops.empty())
+    {
+        static std::atomic<size_t> roundRobinIndex{0};
+        return it->second.nextHops[roundRobinIndex++ % it->second.nextHops.size()];
+    }
+    return ""; // No route found
+}
+
 void RoutingTable::printRoutingTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - RoutingEntry:\n";
     for (const auto& entry : routingTable) {
         Logger::getInstance().debug() << "Destination: " << entry.second.destination
@@ -109,6 +175,7 @@ void RoutingTable::printRoutingTable() {
     }
 }
 void RoutingTable::printFibTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - Fib:\n";
     for (const auto& entry : fib) {
         Logger::getInstance().debug() << "Destination: " << entry.second.destination
@@ -120,6 +187,7 @@ void RoutingTable::printFibTable() {
     }
 }
 void RoutingTable::printArpTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - Arp:\n";
     for (const auto& entry : arp) {
         Logger::getInstance().debug() << "IP Address: " << entry.second.ipAddress
@@ -131,6 +199,7 @@ void RoutingTable::printArpTable() {
     }
 }
 void RoutingTable::printNdpTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - NDP:\n";
     for (const auto& entry : ndp) {
         Logger::getInstance().debug() << "IP Address: " << entry.second.ipAddress
@@ -142,6 +211,7 @@ void RoutingTable::printNdpTable() {
     }
 }
 void RoutingTable::printMacTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - MAC:\n";
     for (const auto& entry : mac) {
         Logger::getInstance().debug() << "MAC: " << entry.second.mac
@@ -153,6 +223,7 @@ void RoutingTable::printMacTable() {
     }
 }
 void RoutingTable::printRibTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - Rib:\n";
     for (const auto& entry : rib) {
         Logger::getInstance().debug() << "Destination: " << entry.second.destination
@@ -171,6 +242,7 @@ void RoutingTable::printRibTable() {
     }
 }
 void RoutingTable::printPrbTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - Prb:\n";
     for (const auto& entry : prb) {
         Logger::getInstance().debug() << "Source IP: " << entry.second.sourceIp
@@ -186,6 +258,7 @@ void RoutingTable::printPrbTable() {
     }
 }
 void RoutingTable::printMulticastTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - Multicast:\n";
     for (const auto& entry : multicast) {
         Logger::getInstance().debug() << "Group: " << entry.second.group
@@ -203,6 +276,7 @@ void RoutingTable::printMulticastTable() {
     }
 }
 void RoutingTable::printAclTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - ACL:\n";
     for (const auto& entry : acl) {
         Logger::getInstance().debug() << "Source IP: " << entry.second.sourceIp
@@ -220,6 +294,7 @@ void RoutingTable::printAclTable() {
     }
 }
 void RoutingTable::printEigrpTable() {
+    std::lock_guard<std::mutex> lock(tableMutex);
     Logger::getInstance().debug() << "RoutingTable - EIGRP:\n";
     for (const auto& entry : eigrp) {
         Logger::getInstance().debug() << "Network: " << entry.second.network

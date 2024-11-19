@@ -778,7 +778,8 @@ void Terminal::getInterfaceMode(string& type) {
 
 void Terminal::getRoutingMode(string& type) {
 	if (type == "bgp") {switchMode(mode.bgp); currentSubMode = type;} 
-	else if (type == "eigrp") {switchMode(mode.eigrp); currentSubMode = type;} 
+	else if (type == "eigrp_classic") {switchMode(mode.eigrp_classic); currentSubMode = type;} 
+	else if (type == "eigrp_named") {switchMode(mode.eigrp_named); currentSubMode = type;} 
 	else if (type == "ospf") {switchMode(mode.ospf); currentSubMode = type;}
 	else if (type == "rip") {switchMode(mode.rip); currentSubMode = type;}
 	jsonDir = jsonDir[0][type];

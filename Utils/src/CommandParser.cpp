@@ -14,7 +14,7 @@ struct command {
 };
 
 string getMode() {
-    return "(config-flow-record)#";
+    return "(config-router-af-topology-ipv6)#";
 }
 
 int getLevel(string& line) {
@@ -100,12 +100,27 @@ void writeJSONToFile(const string& filename, const json& jsonData) {
 }
 
 int main() {
-    ifstream infile("../VirtualRouter/Utils/Dir/input.txt");
+    ifstream infile("../Utils/Dir/input.txt");
+    if (!infile) 
+    {
+        std::cerr << "Error: Unable to open input file." << std::endl;
+        return 1;
+    }
+
     vector<string> lines;
     string line;
 
-    json existingData = readJSONFromFile("../VirtualRouter/Utils/Dir/output.json");
-    
+    json existingData;
+    ifstream existingFile("../Utils/Dir/output.json");
+    if (existingFile)
+    {
+        existingFile >> existingData;
+    }
+    else
+    {
+        existingData = json::object();
+    }
+
     while (getline(infile, line)) {
         lines.push_back(line);
     }
@@ -119,7 +134,7 @@ int main() {
 
     existingData[getMode()] = output;
     
-    ofstream outfile("output.json");
+    ofstream outfile("../Utils/Dir/output.json");
     outfile << existingData.dump(4);
     outfile.close();
     

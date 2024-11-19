@@ -57,7 +57,8 @@ struct Mode {
 	string vlan = "(config-if)#";
 	string policyMap = "(config-pmap)#";
 	string bgp = "(config-router)#";
-	string eigrp = "(config-router)#";
+	string eigrp_classic = "(config-router)#";
+	string eigrp_named = "(config-router)#";
 	string ospf = "(config-router)#";
 	string rip = "(config-router)#";
 	string standardACL = "(config-std-nacl)#";

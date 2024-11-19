@@ -36,6 +36,9 @@ namespace Functions {
     // Checks if a string contains only hexadecimal characters (0-9, A-F).
     bool isHex(const std::string& str);
 
+    // Checks if a string contains only decimal charectors (0-9).
+    bool isDecimal(const std::string& str);
+
     // Converts a string of bytes to a hexadecimal string representation.
     std::string byteToHex(const std::string& input);
 
@@ -122,4 +125,7 @@ namespace Functions {
 
     // Converts time point to string
     std::string timeToString(const std::chrono::system_clock::time_point time);
+
+    // Tests network addres against subnet mask
+    bool compareNetworkWithMask(const std::string& network, int mask);
 }
