@@ -214,6 +214,12 @@ namespace Protocol
         // Handles stuck in active
         void HandleStuckInActive();
 
+        // Advertise a summary route to a neighbor
+        void AdvertiseSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
+        // Removes a summary route from a neighbor
+        void WithdrawSummaryRoute(const std::string& network, int mask);
+        // Encode summary route
+        std::string EncodeSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
 
         void SetupReliablePacket(std::shared_ptr<EigrpConfigs::NeighborInfo> &neighbor, const std::string &packet, int sequenceNum);
     
@@ -341,6 +347,10 @@ namespace Protocol
         void RemoveSummaryRoute(const std::string& network, int mask);
         // Method to check if a route matches any summary route
         bool IsRouteSummarized(const std::string& network, int mask);
+        // Updates interfaces when a summary route is applied
+        void UpdateInterfacesWithSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
+        // Updates interfaces when a summary route is removed
+        void UpdateInterfacesAfterRemovingSummaryRoute(const std::string& network, int mask);
 
         // List of summary routes
         std::vector<EigrpConfigs::SummaryRoute> summaryRoutes;

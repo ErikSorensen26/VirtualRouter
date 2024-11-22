@@ -240,12 +240,12 @@ namespace Protocol
     string Eigrp::CalculateParameters(int holdTime)
     {
         std::string params;
-        params += Functions::numToByte(kvalue.k1_Bandwidth, 1) + 
-        params += Functions::numToByte(kvalue.k2_Load, 1) + 
-        params += Functions::numToByte(kvalue.k3_Delay, 1) + 
-        params += Functions::numToByte(kvalue.k4_Reliability, 1) + 
-        params += Functions::numToByte(kvalue.k5_MTU, 1) + 
-        params += Functions::numToByte(kvalue.k6_Power, 1) + 
+        params += Functions::numToByte(kvalue.k1_Bandwidth, 1);
+        params += Functions::numToByte(kvalue.k2_Load, 1);
+        params += Functions::numToByte(kvalue.k3_Delay, 1);
+        params += Functions::numToByte(kvalue.k4_Reliability, 1);
+        params += Functions::numToByte(kvalue.k5_MTU, 1);
+        params += Functions::numToByte(kvalue.k6_Power, 1);
         params += Functions::numToByte(holdTime, 2);
         return params;
     }
@@ -510,12 +510,102 @@ namespace Protocol
 
     void Eigrp::AddSummaryRoute(const std::string& network, int mask)
     {
+        std::lock_guard<std::mutex> lock(eigrpMutex);
+
         // Validate network and mask
-        if (Functions::compareNetworkWithMask(network, mask))
+        if (!Functions::compareNetworkWithMask(network, mask))
         {
-            EigrpConfigs::SummaryRoute summaryRoute{ .network = network, .mask = mask };
-            summaryRoutes.push_back(summaryRoute);
+            // Mask is not valid
+            return;
         }
+
+        // Check for overlapping summary routes
+        for (const auto& sr : summaryRoutes)
+        {
+            if (Functions::isSubnetOf(sr.network, sr.mask, network, mask) || Functions::isSubnetOf(network, mask, sr.network, sr.mask))
+            {
+                // Conflicting summary route
+                return;
+            }
+        }
+
+        // Checks if the summary route already exists
+        for (const auto& sr : summaryRoutes) 
+        {
+            if (sr.network == network && sr.mask == mask)
+            {
+                // Summary already exists
+                return;
+            }
+        }
+
+        // Add new summary route
+        EigrpConfigs::SummaryRoute summaryRoute{ .network = network, .mask = mask };
+        summaryRoutes.push_back(summaryRoute);
+
+        // Inject the summary route into the routing table as an internal summary route
+        RoutingTable::Eigrp internalSummaryRoute;
+        internalSummaryRoute.network = network;
+        internalSummaryRoute.mask = mask;
+        internalSummaryRoute.nextHop = std::string("\x00\x00\x00\x00", 4);
+        internalSummaryRoute.metric = CalculateMetric(0, 0, 0, 255);
+        internalSummaryRoute.routeType = "summary";
+
+        RoutingTable::getInstance().AddEigrp(internalSummaryRoute);
+
+        // Update interfaces to advertise the new summary route
+        UpdateInterfacesWithSummaryRoute(summaryRoute);
+    }
+
+    void Eigrp::RemoveSummaryRoute(const std::string& network, int mask)
+    {
+        std::lock_guard<std::mutex> lock(eigrpMutex); // Esures thread safety
+        
+        auto originalSize = summaryRoutes.size();
+        summaryRoutes.erase(
+            std::remove_if(summaryRoutes.begin(), summaryRoutes.end(),
+                [&](const EigrpConfigs::SummaryRoute& sr) {
+                    return sr.network == network && sr.mask == mask;
+                }),
+            summaryRoutes.end()
+        );
+
+        if (summaryRoutes.size() < originalSize)
+        {
+            // Remove the summary route from the routing table
+            RoutingTable::getInstance().RemoveEigrp(network, mask);
+
+            // Withdraw summary route from all neighbors
+            UpdateInterfacesAfterRemovingSummaryRoute(network, mask);
+        }
+    }
+
+    void Eigrp::UpdateInterfacesWithSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute)
+    {
+        for (auto& [id, eigrpInterfacePtr] : eigrpInterfaceList)
+        {
+            eigrpInterfacePtr->AdvertiseSummaryRoute(summaryRoute);
+        }
+    }
+
+    void Eigrp::UpdateInterfacesAfterRemovingSummaryRoute(const std::string& network, int mask)
+    {
+        for (auto& [id, eigrpInterfacePtr] : eigrpInterfaceList)
+        {
+            eigrpInterfacePtr->WithdrawSummaryRoute(network, mask);
+        }
+    }
+    
+    bool Eigrp::IsRouteSummarized(const std::string& network, int mask)
+    {
+        for (const auto& sr : summaryRoutes)
+        {
+            if (Functions::isSubnetOf(network, mask, sr.network, sr.mask))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
 #pragma endregion
@@ -728,7 +818,9 @@ namespace Protocol
             if (option.option == variable.eigrp.options.internalRoute ||
                 option.option == variable.eigrp.options.externalRoute)
             {
-                RoutingTable::Eigrp route = DecodeRoute(option.value, (option.option == variable.eigrp.options.externalRoute));
+                RoutingTable::Eigrp route;
+                
+                route = DecodeRoute(option.value, (option.option == variable.eigrp.options.externalRoute));
 
                 if (route.delay != 0xFFFFFFFF)
                 {
@@ -975,7 +1067,7 @@ namespace Protocol
         vector<EigrpConfigs::NetworksDistributed> routesToSend;
         for (const auto& route : routes)
         {
-            if (!splitHorizon || route.nextHop != neighborIp)
+            if (!splitHorizon || route.nextHop != neighborIp || !eigrpProcess->IsRouteSummarized(route.network, route.mask))
             {
                 routesToSend.push_back(EigrpConfigs::NetworksDistributed{.route = route});
             }
@@ -1322,6 +1414,107 @@ namespace Protocol
         return encoded;
     }
 
+    void EigrpInterface::AdvertiseSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute)
+    {
+        std::lock_guard<std::mutex> lock(neighborMutex); // Protext access to neighbors
+
+        // Iterate over all neighbors to advertise the summary route
+        for (const auto& [neighborIp, NeighborInfo] : neighbors)
+        {
+            if (!NeighborInfo->isInit) continue; // skip non-initialized neighbor
+
+            int seqNumber = GetNextSequenceNumber(NeighborInfo);
+            
+            // Create the EIGRP Summary Route Packet
+            PacketInfo eigrpSummaryPacketStructure;
+            ethernetHeader eth;
+            ipv4Header ip;
+            eigrpHeader eigrpHeaderInstance;
+
+            //Construct Ethernet and Ipv4 Headers
+            EigrpBody(eth, ip, currentInterface->Get().mac);
+            eth.destinationMac = NeighborInfo->macAddress;
+            ip.destinationAddress = NeighborInfo->ipAddress;
+
+            // Construct EIGRP Summary Route option
+            eigrpHeader::Option summaryOption;
+            summaryOption.option = variable.eigrp.options.internalRoute;
+            summaryOption.value = EncodeSummaryRoute(summaryRoute);
+            summaryOption.length = Functions::numToByte(summaryOption.value.size() + 4, 2);
+            eigrpHeaderInstance.options.push_back(summaryOption);
+
+            // Finish EIGRP Header
+            vector<EigrpConfigs::NetworksDistributed> routes{};
+            eigrpProcess->EigrpUpdate(eigrpHeaderInstance, seqNumber, routes);
+
+            // Assemble the packet
+            eigrpSummaryPacketStructure.Layer2.push_back(eth);
+            eigrpSummaryPacketStructure.Layer3.push_back(ip);
+            eigrpSummaryPacketStructure.Layer3.push_back(eigrpHeaderInstance);
+
+            // Convert to raw packet string
+            std::string eigrpSummaryPacket = Encapsulate(eigrpSummaryPacketStructure);
+            currentInterface->packetOutQueue.enqueue(eigrpSummaryPacket);
+
+            // Store the packet for possible retransmission (reliable delivery)
+            SetupReliablePacket(neighbors[NeighborInfo->ipAddress], eigrpSummaryPacket, seqNumber);
+        }
+    }
+
+    void EigrpInterface::WithdrawSummaryRoute(const std::string& network, int mask)
+    {
+        std::lock_guard<std::mutex> lock(neighborMutex); // Protext access to neighbors
+        
+        // Create a summary route with metric set to infinity
+        RoutingTable::Eigrp withdrawnSummaryRoute;
+        withdrawnSummaryRoute.network = network;
+        withdrawnSummaryRoute.mask = mask;
+        withdrawnSummaryRoute.metric = std::numeric_limits<double>::infinity();
+        withdrawnSummaryRoute.nextHop = std::string("\xff\xff\xff\xff", 4);
+        withdrawnSummaryRoute.routeType = "internal";
+
+        for (const auto& [neighborIp, NeighborInfo] : neighbors)
+        {
+            if (!NeighborInfo->isInit) continue; // skip non-initialized neighbor
+
+            int seqNumber = GetNextSequenceNumber(NeighborInfo);
+            
+            // Create the EIGRP Summary Route Packet
+            PacketInfo eigrpSummaryPacketStructure;
+            ethernetHeader eth;
+            ipv4Header ip;
+            eigrpHeader eigrpHeaderInstance;
+
+            //Construct Ethernet and Ipv4 Headers
+            EigrpBody(eth, ip, currentInterface->Get().mac);
+            eth.destinationMac = NeighborInfo->macAddress;
+            ip.destinationAddress = NeighborInfo->ipAddress;
+
+            // Construct EIGRP Summary Route option
+            eigrpHeader::Option summaryOption;
+            summaryOption.option = variable.eigrp.options.internalRoute;
+            summaryOption.value = EncodeRouteOption(withdrawnSummaryRoute);
+            summaryOption.length = Functions::numToByte(summaryOption.value.size() + 4, 2);
+            eigrpHeaderInstance.options.push_back(summaryOption);
+
+            // Finish EIGRP Header
+            vector<EigrpConfigs::NetworksDistributed> routes{};
+            eigrpProcess->EigrpUpdate(eigrpHeaderInstance, seqNumber, routes);
+
+            // Assemble the packet
+            eigrpSummaryPacketStructure.Layer2.push_back(eth);
+            eigrpSummaryPacketStructure.Layer3.push_back(ip);
+            eigrpSummaryPacketStructure.Layer3.push_back(eigrpHeaderInstance);
+
+            // Convert to raw packet string
+            std::string eigrpSummaryPacket = Encapsulate(eigrpSummaryPacketStructure);
+            currentInterface->packetOutQueue.enqueue(eigrpSummaryPacket);
+
+            // Store the packet for possible retransmission (reliable delivery)
+            SetupReliablePacket(neighbors[NeighborInfo->ipAddress], eigrpSummaryPacket, seqNumber);
+        }
+    }
+
     void EigrpInterface::StartHelloHelper()
     {
         if (helloTimerActive)
@@ -1617,7 +1810,6 @@ namespace Protocol
             pktIt->second.timerId = timerId;
         }
     }
-
     RoutingTable::Eigrp EigrpInterface::DecodeRoute(string value, bool external)
     {
         if (value.size() < 21)
@@ -1627,17 +1819,38 @@ namespace Protocol
 
         RoutingTable::Eigrp route;
         route.nextHop = value.substr(0, 4);
-        route.delay = Functions::byteToNum(value.substr(4, 4));
-        route.bandwidth = Functions::byteToNum(value.substr(8, 4));
-        route.mtu = Functions::byteToNum(value.substr(12, 3));
-        route.hopCount = Functions::byteToNum(value.substr(15, 1));
-        route.reliability = Functions::byteToNum(value.substr(16, 1));
-        route.load = Functions::byteToNum(value.substr(17, 1));
-        route.mask = Functions::byteToNum(value.substr(20, 1));
-        route.routeTag = Functions::byteToNum(value.substr(18, 2));
+        if (!external)
+        {
+            route.delay = Functions::byteToNum(value.substr(4, 4));
+            route.bandwidth = Functions::byteToNum(value.substr(8, 4));
+            route.mtu = Functions::byteToNum(value.substr(12, 3));
+            route.hopCount = Functions::byteToNum(value.substr(15, 1));
+            route.reliability = Functions::byteToNum(value.substr(16, 1));
+            route.load = Functions::byteToNum(value.substr(17, 1));
+            route.mask = Functions::byteToNum(value.substr(20, 1));
+            route.network = value.substr(21);
+            route.routeType = "internal";
+        }
+        else if (external)
+        {
+            route.originRouter = Functions::byteToNum(value.substr(4, 4));
+            route.originAS = Functions::byteToNum(value.substr(8, 4));
+            route.routeTag = Functions::byteToNum(value.substr(12, 4));
+            route.extendedMetric = Functions::byteToNum(value.substr(16, 4));
+            route.extendedID = Functions::byteToNum(value.substr(22, 1));
+            route.flags = value.substr(23, 1);
+            route.delay = Functions::byteToNum(value.substr(24, 4));
+            route.bandwidth = Functions::byteToNum(value.substr(28, 3));
+            route.mtu = Functions::byteToNum(value.substr(29, 3));
+            route.hopCount = Functions::byteToNum(value.substr(32, 1));
+            route.reliability = Functions::byteToNum(value.substr(33, 1));
+            route.load = Functions::byteToNum(value.substr(34, 1));
+            route.mask = Functions::byteToNum(value.substr(37, 1));
+            route.network = value.substr(38);
+            route.routeType = "external";
+        }
 
         // Extract the network address based on the mask
-        route.network = value.substr(21);
         while (route.network.size() < 4)
         {
             route.network = route.network + std::string("\x00", 1);
@@ -1652,8 +1865,6 @@ namespace Protocol
 
         // Calculate the composite metric for internal use
         route.metric = route.feasibleDistance;
-
-        route.routeType = external ? "external" : "internal";
 
         return route;
     }
@@ -1958,6 +2169,23 @@ namespace Protocol
             return it->second.first;
         }
         return "";
+    }
+
+    std::string EigrpInterface::EncodeSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute)
+    {
+        std::string route;
+        route += std::string("\x00\x00\x00\x00", 4);
+        route += Functions::numToByte((10000000 / currentInterface->Get().bandwidth) * 256, 4);
+        route += Functions::numToByte((currentInterface->Get().delay / 10) * 256, 4);
+        route += Functions::numToByte(currentInterface->Get().mtu, 3);
+        route += std::string("\x00", 1);
+        route += std::string("\xff", 1);
+        route += Functions::numToByte(load, 1);
+        route += std::string("\x00\x00", 2);
+        route += Functions::numToByte(summaryRoute.mask, 1);
+        route += Functions::compactNetworkAddress(summaryRoute.network, summaryRoute.mask);
+
+        return route;
     }
     
 #pragma endregion

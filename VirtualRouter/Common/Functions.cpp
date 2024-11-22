@@ -517,4 +517,31 @@ namespace Functions {
         std::time_t time_t_value = std::chrono::system_clock::to_time_t(time);
         return std::to_string(time_t_value);
     }
+
+    bool isSubnetOf(const std::string &network, int mask, const std::string &summaryNetwork, int summaryMask)
+    {
+        if (summaryMask > mask)
+        {
+            // Summary maske cannot be more specific then the network mask
+            return false;
+        }
+
+        // Calculate binary strings of each network address
+        std::string binNetwork = byteToBin(network);
+        std::string binSummary = byteToBin(summaryNetwork);
+
+        for (int i = 31; i >- 0; --i)
+        {
+            if (binSummary[i] != '0')
+            {
+                if (binSummary[i] != binNetwork[i])
+                {
+                    // Not part of the subnet
+                    return false;
+                }
+            }
+        }
+        // Success
+        return true;
+    }
 }

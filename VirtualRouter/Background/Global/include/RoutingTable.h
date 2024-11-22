@@ -89,9 +89,9 @@ public:
     void printAclTable();
 
     struct Eigrp {
-        std::string network{}, nextHop{}, interface{}, successor{}, feasibleSuccessor{}, routeSource{}, routeType{}, activeOrPassive{};
+        std::string network{}, nextHop{}, interface{}, successor{}, feasibleSuccessor{}, routeSource{}, routeType{}, activeOrPassive{}, originRouter{}, flags{};
         unsigned int metric{}, feasibleDistance{}, reportedDistance{}, adminDistance{}, holdTime{}, stuckInActive{}, updateTimer{}, retransmitInterval{}, sequenceNumber{}, routeTag{};
-        unsigned int hopCount{}, bandwidth{}, load{}, delay{}, reliability{}, mtu{}, mask{};
+        unsigned int hopCount{}, bandwidth{}, load{}, delay{}, reliability{}, mtu{}, mask{}, originAS{}, extendedMetric{}, extendedID{};
         std::chrono::system_clock::time_point age;
         vector<std::string> nextHops{};
     };

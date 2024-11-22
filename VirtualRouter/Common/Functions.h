@@ -128,4 +128,7 @@ namespace Functions {
 
     // Tests network addres against subnet mask
     bool compareNetworkWithMask(const std::string& network, int mask);
+
+    // Checks if subnet (network/mask) is within summary (summaryNetwork/summaryMask)
+    bool isSubnetOf(const std::string& network, int mask, const std::string& summaryNetwork, int summaryMask);
 }
