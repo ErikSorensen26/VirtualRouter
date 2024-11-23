@@ -608,6 +608,23 @@ namespace Protocol
         return false;
     }
 
+   
+    void Eigrp::SetStub(bool isStub, bool advertiseConnected = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true)
+    {
+        std::lock_guard<std::mutex> lock(eigrpMutex);
+        stubConfig.isStub = isStub;
+        stubConfig.advertiseConnected = advertiseConnected;
+        stubConfig.advertiseStatic = advertiseStatic;
+        stubConfig.advertiseSummary = advertiseSummary;
+        stubConfig.advertiseRedistributed = advertiseRedistributed;
+
+        // Update stub routes across all interfaces
+        for (auto & [id, eigrpInterfacePtr] : eigrpInterfaceList)
+        {
+            eigrpInterfacePtr->HandleStubRouteUpdates();
+        }
+    }
+
 #pragma endregion
 
 #pragma region EigrpInterface
@@ -890,9 +907,52 @@ namespace Protocol
 
     void EigrpInterface::ProcessQuery(const eigrpHeader *receivedQuery, const std::string &neighborIp)
     {
+        auto eigrpProcess = this->eigrpProcess;
+        
+        // Stub routing query blocking
+        if (eigrpProcess->IsStub())
+        {
+            // Extract the queries network from the query options
+            std::string queriedNetwork;
+            int queriedMask = 0;
+            for (const auto& option : receivedQuery->options)
+            {
+                if (option.option == variable.eigrp.options.internalRoute)
+                {
+                    // Decode the queried route
+                    RoutingTable::Eigrp queriedRoute = DecodeRoute(option.value, /*external=*/false);
+                    queriedNetwork = queriedRoute.network;
+                    queriedMask = queriedRoute.mask;
+                    break;
+                }
+            }
+
+            // Check if the queried route exists
+            auto existingRoute = RoutingTable::getInstance().GetEigrpRoute(queriedNetwork, queriedMask);
+            if (existingRoute)
+            {
+                // Route exists, send a reply with the route information
+                SendReplyToNeighbor(neighborIp, { *existingRoute });
+            }
+            else
+            {
+                // Route does not exist, send a reply indicating route is unavailable
+                RoutingTable::Eigrp unavailableRoute;
+                unavailableRoute.network = queriedNetwork;
+                unavailableRoute.mask = queriedMask;
+                unavailableRoute.metric = std::numeric_limits<double>::infinity();
+                unavailableRoute.nextHop = std::string("\xff\xff\xff\xff", 4);
+                unavailableRoute.routeType = "internal";
+
+                SendReplyToNeighbor(neighborIp, { unavailableRoute });
+            }
+            return; // Do not propagate the query further;
+        }
+
         vector<RoutingTable::Eigrp> queryRoutes;
         vector<RoutingTable::Eigrp> validQueryRoutes;
         int queryId = Functions::byteToNum(receivedQuery->sequence);
+
         // Extract the destination network network and mask from the Query options
         for (const auto& opt : receivedQuery->options)
         {
@@ -991,6 +1051,7 @@ namespace Protocol
         // Retrieve neighbor information
         if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = neighbors[neighborIp];
+        auto eigrpProcess = this->eigrpProcess;
 
         // Create the EIGRP Ack packet
         PacketInfo eigrpAckPacketStructure;
@@ -1043,14 +1104,43 @@ namespace Protocol
     void EigrpInterface::SendUpdateToNeighbor(const std::string &neighborIp, const vector<RoutingTable::Eigrp> &routes, bool removal)
     {
         std::lock_guard<std::mutex> lock(neighborMutex);
+        auto eigrpProcess = this->eigrpProcess;
 
         routeBuffer.clear();
+        std::vector<RoutingTable::Eigrp> filteredRoutes{};
 
         if (neighbors.find(neighborIp) == neighbors.end()) { return; }
         auto neighbor = neighbors[neighborIp];
 
         // Get and incrament sequence number
         int currentSeqNum = GetNextSequenceNumber(neighbor);
+
+        // Filters stub routes
+        if (eigrpProcess->IsStub())
+        {
+            for (const auto& route : routes)
+            {
+                if (removal)
+                {
+                    // Always include routes being removed
+                    filteredRoutes.push_back(route);
+                    continue;
+                }
+
+                // Filter routes based on stub configuration
+                if ((route.routeType == "connected" && eigrpProcess->AdvertiseConnected()) ||
+                    (route.routeType == "static" && eigrpProcess->AdvertiseStatic()) ||
+                    (route.routeType == "summary" && eigrpProcess->AdvertiseSummary()) ||
+                    (route.routeType == "external" && eigrpProcess->AdvertiseRedistributed()))
+                {
+                    filteredRoutes.push_back(route);
+                }
+            }
+        }
+        else
+        {
+            filteredRoutes = routes; // No filtering for non-stub routers
+        }
 
         // Create the Eigrp Update Packet
         PacketInfo eigrpUpdatePacketStructure;
@@ -1065,28 +1155,33 @@ namespace Protocol
 
         // Construct EIGRP Update packet
         vector<EigrpConfigs::NetworksDistributed> routesToSend;
-        for (const auto& route : routes)
+        for (const auto& route : filteredRoutes)
         {
-            if (!splitHorizon || route.nextHop != neighborIp || !eigrpProcess->IsRouteSummarized(route.network, route.mask))
+            if (splitHorizon && route.nextHop == neighborIp)
+            {
+                continue;
+            }
+
+            if (removal)
+            {
+                // Poison the route by setting the metric to infinity
+                RoutingTable::Eigrp poisenedRoute = route;
+                poisenedRoute.metric = 0xFFFFFFFF;
+                poisenedRoute.delay = 0xFFFFFFFF;
+                poisenedRoute.nextHop = std::string("\xff\xff\xff\xff", 4);
+                poisenedRoute.routeType = "poisened";
+                routesToSend.push_back({.route = poisenedRoute});
+            }
+            else
             {
                 routesToSend.push_back(EigrpConfigs::NetworksDistributed{.route = route});
             }
         }
-        
-        eigrpProcess->EigrpUpdate(eigrp, currentSeqNum, routesToSend, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endOfTable=*/false);
 
-        if (removal)
-        {
-            for (auto& route : routesToSend)
-            {
-                // EIGRP uses 4294967295 (0xFFFFFFFF) as infinity
-                route.route.reportedDistance = 0xFFFFFFFF;
-                route.route.feasibleDistance = 0xFFFFFFFF;
-                route.route.metric = 0xFFFFFFFF;
-                route.route.delay = 0xFFFFFFFF;
-                route.route.nextHop = std::string("\xFF\xFF\xFF\xFF", 4);
-            }
-        }
+        // Makes sure there are aroutes to send
+        if (routesToSend.empty()) return;
+        
+        eigrpProcess->EigrpUpdate(eigrp, currentSeqNum, routesToSend, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endOfTable=*/routesToSend.size() > 1);
 
         // Assemble the packet
         eigrpUpdatePacketStructure.Layer2.push_back(eth);
@@ -1098,6 +1193,23 @@ namespace Protocol
 
         // Store the packet for possible retransmission (reliable delivery)
         SetupReliablePacket(neighbor, eigrpUpdatePacket, currentSeqNum);
+
+        // Update advertiseRoutes map
+        std::lock_guard<std::mutex> advertLock(advertisedRouteMutex);
+        for (const auto& route : filteredRoutes)
+        {
+            std::string routeKey = route.network + "/" + std::to_string(route.mask);
+            advertisedRoutes[routeKey] = route;
+        }
+
+        if (removal)
+        {
+            for (const auto& route : routes)
+            {
+                std::string routeKey = route.network + "/" + std::to_string(route.mask);
+                advertisedRoutes.erase(routeKey);
+            }
+        }
     }
 
     void EigrpInterface::SendFullUpdateToNeighbor(const std::string &neighborIp)
@@ -1108,6 +1220,8 @@ namespace Protocol
         // Get and incrament next sequence number
         int fullUpdateSeqNum = GetNextSequenceNumber(neighbor);
 
+        std::vector<RoutingTable::Eigrp> filteredRoutes;
+        
         // Create the Eigrp Update Packet
         PacketInfo eigrpUpdatePacketStructure;
         ethernetHeader eth;
@@ -1122,7 +1236,26 @@ namespace Protocol
 
         auto eigrpTable = RoutingTable::getInstance().GetAllEigrpRoutes();
 
-        for (const auto &route : eigrpTable)
+        if (eigrpProcess->IsStub())
+        {
+            for (const auto& route : eigrpTable)
+            {
+                // Filter routes based on stub configurations
+                if ((route.routeType == "connected" && eigrpProcess->AdvertiseConnected()) ||
+                    (route.routeType == "static" && eigrpProcess->AdvertiseStatic()) ||
+                    (route.routeType == "summary" && eigrpProcess->AdvertiseSummary()) ||
+                    (route.routeType == "external" && eigrpProcess->AdvertiseRedistributed()))
+                {
+                    filteredRoutes.push_back(route);
+                }
+            }
+        }
+        else
+        {
+            filteredRoutes = eigrpTable;
+        }
+
+        for (const auto &route : filteredRoutes)
         {
             if (!splitHorizon || route.nextHop != neighbor->ipAddress)
             {
@@ -1153,6 +1286,14 @@ namespace Protocol
 
         // Store the packet for possible retransmission (reliable delivery)
         SetupReliablePacket(neighbor, eigrpUpdatePacket, fullUpdateSeqNum);
+
+        // Update advertisedRoutes map
+        std::lock_guard<std::mutex> advertLock(advertisedRouteMutex);
+        for (const auto& route : routesToSend)
+        {
+            std::string routeKey = route.route.network + "/" + std::to_string(route.route.mask);
+            advertisedRoutes[routeKey] = route.route;
+        }
     }
 
     void EigrpInterface::SendEmptyUpdateToNeighbor(const std::string &neighborIp)
@@ -1248,6 +1389,16 @@ namespace Protocol
     void EigrpInterface::SendQueryToNeighbors(const vector<RoutingTable::Eigrp>& failedRoutes, const std::string& originNeighborIp)
     {
         std::lock_guard<std::mutex> lock(neighborMutex);
+        auto eigrpProcess = this->eigrpProcess;
+
+        if (eigrpProcess->IsStub())
+        {
+            // Instead of propagating the query, respond with route unavailable
+            for (const auto& route : failedRoutes)
+            {
+                eigrpProcess->NotifyRoutingChange({route}, /*isRemoval=*/true, /*init=*/false);
+            }
+        }
 
         int queryId = GetNextSequenceNumber(neighbors.begin()->second); // Generate query ID
         outstandingReplies[queryId] = {originNeighborIp, static_cast<int>(neighbors.size() - 1)};
@@ -1365,7 +1516,6 @@ namespace Protocol
             replyOption.option = variable.eigrp.options.internalRoute;
             replyOption.value = EncodeRouteOption(route);
             replyOption.length = Functions::numToByte(replyOption.value.size() + 4, 2);
-            // Add the Reply option to EIGRP header
             eigrp.options.push_back(replyOption);
         }
 
@@ -1445,7 +1595,7 @@ namespace Protocol
 
             // Finish EIGRP Header
             vector<EigrpConfigs::NetworksDistributed> routes{};
-            eigrpProcess->EigrpUpdate(eigrpHeaderInstance, seqNumber, routes);
+            eigrpProcess->EigrpUpdate(eigrpHeaderInstance, seqNumber, routes, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endoftable=*/true, /*query=*/false, /*reply=*/false);
 
             // Assemble the packet
             eigrpSummaryPacketStructure.Layer2.push_back(eth);
@@ -1471,7 +1621,7 @@ namespace Protocol
         withdrawnSummaryRoute.mask = mask;
         withdrawnSummaryRoute.metric = std::numeric_limits<double>::infinity();
         withdrawnSummaryRoute.nextHop = std::string("\xff\xff\xff\xff", 4);
-        withdrawnSummaryRoute.routeType = "internal";
+        withdrawnSummaryRoute.routeType = "summary";
 
         for (const auto& [neighborIp, NeighborInfo] : neighbors)
         {
@@ -1499,7 +1649,7 @@ namespace Protocol
 
             // Finish EIGRP Header
             vector<EigrpConfigs::NetworksDistributed> routes{};
-            eigrpProcess->EigrpUpdate(eigrpHeaderInstance, seqNumber, routes);
+            eigrpProcess->EigrpUpdate(eigrpHeaderInstance, seqNumber, routes, /*init=*/false, /*conditional=*/false, /*restart=*/false, /*endoftable=*/true, /*query=*/false, /*reply=*/false);
 
             // Assemble the packet
             eigrpSummaryPacketStructure.Layer2.push_back(eth);
@@ -1512,6 +1662,61 @@ namespace Protocol
 
             // Store the packet for possible retransmission (reliable delivery)
             SetupReliablePacket(neighbors[NeighborInfo->ipAddress], eigrpSummaryPacket, seqNumber);
+        }
+    }
+
+    void EigrpInterface::HandleStubRouteUpdates()
+    {
+        std::lock_guard<std::mutex> lock(advertizedRouteMutex);
+        auto eigrpProcess = this->eigrpProcess;
+
+        // Identify routes that should no longer be advertised
+        std::vector<RoutingTable::Eigrp> routesToWithdraw;
+        for (const auto& [routeKey, advertisedRoute] : advertisedRoutes)
+        {
+            bool shouldAdvertise = false;
+
+            if (eigrpProcess->IsStub())
+            {
+                if (advertisedRoute.routeType == "connected" && eigrpProcess->AdvertiseConnected())
+                    shouldAdvertise = true;
+                if (advertisedRoute.routeType == "static" && eigrpProcess->AdvertiseStatic())
+                    shouldAdvertise = true;
+                if (advertisedRoute.routeType == "summary" && eigrpProcess->AdvertiseSummary())
+                    shouldAdvertise = true;
+                if (advertisedRoute.routeType == "external" &&  eigrpProcess->AdvertiseRedistributed())
+                    shouldAdvertise = true;
+            }
+            else
+            {
+                shouldAdvertise = true;
+            }
+
+            if (!shouldAdvertise)
+            {
+                // Prepare to withdraw this route
+                RoutingTable::Eigrp withdrawRoute = advertisedRoute;
+                withdrawRoute.metric = std::numeric_limits<double>::infinity();
+                withdrawRoute.nextHop = std::string("\xff\xff\xff\xff", 4);
+                withdrawRoute.routeType = "withdrawn";
+
+                routesToWithdraw.push_back(withdrawRoute);
+
+                // Remove from advertised routes
+                advertisedRoutes.erase(routeKey);
+            }
+        }
+        
+        if (!routesToWithdraw.empty())
+        {
+            // Withdraw routes to all neighbors
+            for (const auto& [neighborIp, neighborInfo] : neighbors)
+            {
+                if (!neighborInfo->isInit) continue;
+
+                // Send withdraw updates
+                SendUpdateToNeighbor(neighborIp, routesToWithdraw, /*removal=*/true);
+            }
         }
     }
 
@@ -1810,7 +2015,7 @@ namespace Protocol
             pktIt->second.timerId = timerId;
         }
     }
-    RoutingTable::Eigrp EigrpInterface::DecodeRoute(string value, bool external)
+    RoutingTable::Eigrp EigrpInterface::DecodeRoute(string value, bool external, bool summary)
     {
         if (value.size() < 21)
         {
@@ -1848,6 +2053,10 @@ namespace Protocol
             route.mask = Functions::byteToNum(value.substr(37, 1));
             route.network = value.substr(38);
             route.routeType = "external";
+        }
+        if (summary && !external)
+        {
+            route.routeType = "summary";
         }
 
         // Extract the network address based on the mask

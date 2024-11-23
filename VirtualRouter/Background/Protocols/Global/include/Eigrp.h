@@ -2,17 +2,14 @@
 
 #include <map>
 #include <memory>
-#include <algorithm>
 #include <string>
 #include <vector>
 #include <PacketStructure.h>
 #include <Functions.h>
-#include <random>
 #include <mutex>
 #include <thread>
 #include <chrono>
 #include <climits>
-#include <time.h>
 #include <condition_variable>
 #include <atomic>
 #include <Interface.h>
@@ -70,6 +67,20 @@ namespace EigrpConfigs
 
         Sequence() : init(false), conditionalReceive(false), endOfTable(false) {}
 
+    };
+    struct StubConfig
+    {
+        bool isStub = false;
+        bool advertiseConnected = true;
+        bool advertiseStatic = true;
+        bool advertiseSummary = true;
+        bool advertiseRedistributed = true;
+
+        StubConfig() = default;
+
+        StubConfig(bool stub, bool conn, bool stat, bool summ, bool redis)
+            : isStub(stub), advertiseConnected(conn), advertiseStatic(stat),
+              advertiseSummary(summ), advertiseRedistributed(redis) {}
     };
 
     struct NeighborInfo 
@@ -208,11 +219,13 @@ namespace Protocol
         // Updates Routing Table
         void UpdateRoutingTable(const vector<RoutingTable::Eigrp> routes, bool init, const std::string& neighborIp);
         // Decodes Routes
-        RoutingTable::Eigrp DecodeRoute(string value, bool external);
+        RoutingTable::Eigrp DecodeRoute(string value, bool external, bool summary = false);
         // Finds an ip address for a querying router
         std::string FindQueryNeighbor(int queryId);
         // Handles stuck in active
         void HandleStuckInActive();
+        // Handles stub route updates
+        void HandleStubRouteUpdates();
 
         // Advertise a summary route to a neighbor
         void AdvertiseSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
@@ -351,6 +364,17 @@ namespace Protocol
         void UpdateInterfacesWithSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
         // Updates interfaces when a summary route is removed
         void UpdateInterfacesAfterRemovingSummaryRoute(const std::string& network, int mask);
+        // Sets router to stub
+        void SetStub(bool isStub, bool advertiseConnected = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
+        // Updates routes based on stub configuration
+        void UpdateStubRoutes();
+        
+        // Stub Checks
+        bool IsStub() const { return stubConfig.isStub; }
+        bool AdvertiseConnected() const { return stubConfig.advertiseConnected; }
+        bool AdvertiseStatic() const { return stubConfig.advertiseStatic; }
+        bool AdvertiseSummary() const { return stubConfig.advertiseSummary; }
+        bool AdvertiseRedistributed() const { return stubConfig.advertiseRedistributed; }
 
         // List of summary routes
         std::vector<EigrpConfigs::SummaryRoute> summaryRoutes;
@@ -381,6 +405,7 @@ namespace Protocol
 
         Variable variable;
         bool runTimers = true;
+        EigrpConfigs::StubConfig stubConfig;
 
     };
 
