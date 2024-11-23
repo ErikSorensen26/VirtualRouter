@@ -133,7 +133,10 @@ struct Variable
             string multicastSequence{"\x00\x05", 2};
             string internalRoute{"\x01\x02", 2};
             string externalRoute{"\x01\x03", 2};
+            string internalRouteV6{"\x04\02"};
+            string externalRouteV6{"\x04\x03"};
             string stub{"\x00\x06", 2};
+            string authentication{"\x00\x02"};
         } options;
         struct version
         {
@@ -248,6 +251,12 @@ struct ipv4Header
             routerAlert{};
     } options;
 };
+// Ipv6 header
+struct ipv6Header
+{
+    
+};
+
 // Tcp header
 struct tcpHeader
 {

@@ -1,7 +1,6 @@
 
 #include "Functions.h"
 #include <Logger.h>
-
 namespace Functions {
 
     #pragma region TestIf
@@ -479,6 +478,38 @@ namespace Functions {
             }
         }
         return true;
+    }
+
+    std::string findClassfullNetwork(std::string& ip)
+    {
+        uint32_t ipInt = byteToNum(ip);
+        uint32_t network = ipInt & 0xFF000000; // Class A
+        if (network >= 0xC0000000)
+        {
+            network = ipInt & 0xFFFFFF00; // Class C
+        }
+        else if (network >= 0x80000000)
+        {
+            network = ipInt & 0xFFFF0000; // Class B
+        }
+        return numToByte(network, 4);
+    }
+
+    int getDefaultMask(const std::string& network)
+    {
+        uint32_t netInt = byteToNum(network);
+        if (netInt <= 0x7FFFFFFF) // Class A
+        {
+            return 8;
+        }
+        else if (netInt <= 0xBFFFFFFF) // Class B
+        {
+            return 16;
+        }
+        else // Class C
+        {
+            return 24;
+        }
     }
     
     #pragma endregion

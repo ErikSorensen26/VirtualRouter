@@ -15,6 +15,7 @@
 #include <Interface.h>
 #include <RoutingTable.h>
 #include <TimeManager.h>
+#include <Authentication.hpp>
 #include <unordered_map>
 
 using namespace std;
@@ -33,6 +34,7 @@ namespace EigrpConfigs
     {
         std::string network;
         int mask;
+        bool isAuto = false;
     };
     struct KValue 
     {
@@ -43,21 +45,10 @@ namespace EigrpConfigs
         int k5_MTU = 0;
         int k6_Power = 0;
     };
-    struct InternalRoute 
+    struct AuthKey
     {
-        string nexthop{"00000000"};
-        string prefixLength{"10"};
-        string destination{"00000000"};
-        struct metric {
-            string scaledDelay{"00000000"};
-            string scaledBw{"00000000"};
-            string mtu{"000000"};
-            string hopCount{"00"};
-            string reliability{"00"};
-            string load{"00"};
-            string routeTag{"00"};
-            string flags{"00"};
-        } metric;
+        int keyId;
+        std::string key;
     };
     struct Sequence 
     {
@@ -95,6 +86,7 @@ namespace EigrpConfigs
         bool receivedInitUpdate;                                // Flag for received initial update
         int globalSequenceNumber;                               // Sequence number for reliable delivery
         int lastReceivedSequenceNumber;                         // Last received sequence number
+        int nextSequenceNumber;                                 // Next sequence number
         bool adjacency;                                         // Adjacency status
     
         // Acks
@@ -115,7 +107,11 @@ namespace EigrpConfigs
         std::chrono::steady_clock::time_point lastHeard;        // Last heard time point
         std::unordered_map<int, int> retransmissionTimers;      // Map of sequenceNumber to timerId
         std::mutex retransmissionMutex;                         // Protects retransmissionTimers
-        std::unordered_map<int, std::vector<RoutingTable::Eigrp>> routingBuffers;
+
+        // Authentication
+        int authKeyId;                                          // Authentication ID
+        std::string authKey;                                    // Authentication string
+        bool authenticationEnabled;                             // Authentication enabled
     
         // Threads
         std::thread workerThread;                               // Worker thread
@@ -132,6 +128,7 @@ namespace EigrpConfigs
 
         std::unordered_map<int, ReliablePacketInfo> reliablePackets;
         std::unordered_map<int, Sequence> sequenceList;
+        std::unordered_map<int, std::vector<RoutingTable::Eigrp>> routingBuffers;
     
         NeighborInfo()
             : hasMac(false),
@@ -139,6 +136,7 @@ namespace EigrpConfigs
               sendInitUpdate(false),
               receivedInitUpdate(false),
               lastReceivedSequenceNumber(0),
+              nextSequenceNumber(1),
               conditionalReceive(0),
               globalSequenceNumber(0),
               adjacency(false),
@@ -146,7 +144,9 @@ namespace EigrpConfigs
               rttvar(0.5),
               rto(1.5),
               holdTimerId(0),
-              workerActive(false)
+              workerActive(false),
+              authenticationEnabled(false),
+              authKeyId(1)
         {}
     
         // Delete copy constructor and copy assignment operator
@@ -212,6 +212,8 @@ namespace Protocol
         void SendReplyToNeighbor(const std::string& neighborIp, const vector<RoutingTable::Eigrp>& routes);
         // Encode reply option
         std::string EncodeRouteOption(const RoutingTable::Eigrp& routes);
+        // Encode stub option
+        std::string EncodeStubOption(const EigrpConfigs::StubConfig stub);
         // Calculate Local Link Cost (LLC)
         double CalculateLocalLinkCost();
         // Helper function to get and increment the global sequence number
@@ -232,7 +234,7 @@ namespace Protocol
         // Removes a summary route from a neighbor
         void WithdrawSummaryRoute(const std::string& network, int mask);
         // Encode summary route
-        std::string EncodeSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
+        RoutingTable::Eigrp EncodeSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
 
         void SetupReliablePacket(std::shared_ptr<EigrpConfigs::NeighborInfo> &neighbor, const std::string &packet, int sequenceNum);
     
@@ -286,16 +288,13 @@ namespace Protocol
         // Protects access to neighbors
         std::mutex neighborMutex;
 
-        // Advertized route mutex
-        std::mutex advertizedRouteMutex;
-        // List of advertized routes
+        // Advertised route mutex
+        std::mutex advertisedRouteMutex;
+        // List of advertised routes
         std::unordered_map<std::string, RoutingTable::Eigrp> advertisedRoutes;
         // Outstanding replies
         std::unordered_map<int, std::pair<std::string, int>> outstandingReplies;
         std::mutex replyTrackingMutex;
-
-        // Split horizon
-        bool splitHorizon = true;
 
     private:
 
@@ -355,7 +354,7 @@ namespace Protocol
         // Adds network to the network table
         void AddNetwork(const EigrpConfigs::network newNetwork);
         // Method to add a summary route to EIGRP
-        void AddSummaryRoute(const std::string& network, int mask);
+        void AddSummaryRoute(const std::string& network, int mask, bool isAuto = false);
         // Method to remove a summary route from EIGRP
         void RemoveSummaryRoute(const std::string& network, int mask);
         // Method to check if a route matches any summary route
@@ -364,10 +363,21 @@ namespace Protocol
         void UpdateInterfacesWithSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
         // Updates interfaces when a summary route is removed
         void UpdateInterfacesAfterRemovingSummaryRoute(const std::string& network, int mask);
+        // Enabled auto summarization
+        void EnableAutoSummary(bool enable);
         // Sets router to stub
         void SetStub(bool isStub, bool advertiseConnected = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
         // Updates routes based on stub configuration
         void UpdateStubRoutes();
+
+        // Gets neighbor
+        std::shared_ptr<EigrpConfigs::NeighborInfo> GetNeighborInfo(const std::string& neighborIp);
+
+
+        // Authentication
+        void ConfigureAuthentication(const std::string& neighborIp, int keyId, const std::string& key, bool enable);
+        std::string SerializeEigrpHeader(const eigrpHeader& eigrp, bool exclusiveAuthTLV);
+        eigrpHeader::Option GenerateAuthenticatedTLV(const eigrpHeader& eigrp, const std::shared_ptr<EigrpConfigs::NeighborInfo>& neighbor);
         
         // Stub Checks
         bool IsStub() const { return stubConfig.isStub; }
@@ -401,12 +411,16 @@ namespace Protocol
 
         std::unique_ptr<Protocol::TopologyTable> topologyTable;
 
+        // Stub Option
+        EigrpConfigs::StubConfig stubConfig;
+
+        // Auto summarization
+        bool autoSummarizationEnabled = false;
+
     private:
 
         Variable variable;
         bool runTimers = true;
-        EigrpConfigs::StubConfig stubConfig;
-
     };
 
     class TopologyTable {
@@ -433,8 +447,6 @@ namespace Protocol
             vector<std::string> successors;
         };
 
-        int variance;
-    
         void AddOrUpdateRoute(const std::string& destination, int prefixLength, const RouteInfo& routeInfo, const std::string& neighborIp);
         void RemoveRoutesFromNeighbor(const std::string& neighborIp);
         TopologyEntry* FindBestRoute(const std::string& destination);
@@ -445,9 +457,10 @@ namespace Protocol
 
         std::map<std::string, TopologyEntry>& GetTopologyEntries() {return topologyEntries; }
     
-        std::mutex tableMutex;
     private:
+        std::mutex tableMutex;
         std::map<std::string, TopologyEntry> topologyEntries;
+        int variance = 1;
     };
 }
 

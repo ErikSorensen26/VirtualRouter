@@ -131,4 +131,10 @@ namespace Functions {
 
     // Checks if subnet (network/mask) is within summary (summaryNetwork/summaryMask)
     bool isSubnetOf(const std::string& network, int mask, const std::string& summaryNetwork, int summaryMask);
+
+    // Finds classfull network address
+    std::string findClassfullNetwork(std::string& ip);
+
+    // Gets default mask for a network
+    int getDefaultMask(const std::string& network);
 }
