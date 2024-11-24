@@ -94,7 +94,7 @@ void Packet::L2_5(string &packet)
     afterPacket = packet.substr(start);
 }
 
-// Processes Layer 3 headers, focusing on IPv4 and its encapsulated protocols.
+// Processes Layer 3 headers, focusing on IPv4/IPv6 and its encapsulated protocols.
 void Packet::L3(string &packet)
 {
     if (ethernet.type == variable.ethernet.ipv4 || ethernet.type == variable.ethernet.mpls)
@@ -152,6 +152,21 @@ void Packet::L3(string &packet)
             int eigrpSize = Functions::byteToNum(ipv4.totalLength) - 20;
             string eigrpHeader = packet.substr(start, eigrpSize);
             Eigrp(eigrpHeader); // Process EIGRP header
+            packetInfo.Layer3.push_back(eigrp);
+        }
+    }
+    if (ethernet.type == variable.ethernet.ipv6)
+    {
+        int ipv6Size = 40;
+        string ipv6Header = packet.substr(start, ipv6Size);
+        Ipv6(ipv6Header); // Process IPv6 header
+        packetInfo.Layer3.push_back(ipv6);
+
+        if (ipv6.protocol == variable.ipv6.eigrp)
+        {
+            int eigrpSize = Functions::byteToNum(ipv6.payloadLength) - 40;
+            string eigrpHeader = packet.substr(start, eigrpSize);
+            Eigrp(eigrpHeader); // Process EigrpHeader
             packetInfo.Layer3.push_back(eigrp);
         }
     }
@@ -306,6 +321,33 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
     }
 }
 
+// Parses and processes the IPv6 header
+void Packet::Ipv6(string &ipv6Header)
+{
+    string ipv6Temp = Functions::byteToHex(ipv6Header.substr(0, 4));
+    ipv6.version = ipv6Temp.substr(0, 1);
+    ipv6.trafficClass = ipv6Temp.substr(1, 2);
+    ipv6.flowLabel = ipv6Temp.substr(3, 5);
+    ipv6.payloadLength = ipv6Header.substr(4, 2);
+    ipv6.protocol = ipv6Header.substr(6, 1);
+    ipv6.hopLimit = ipv6Header.substr(7, 1);
+    ipv6.sourceAddress = ipv6Header.substr(8, 16);
+    ipv6.destinationAddress = ipv6Header.substr(24, 16);
+    start += 40;
+
+    if (print)
+    {
+        Logger::getInstance().info() << "IPv6 Header:" << endl;
+        Logger::getInstance().info() << "Version: " << Functions::byteToHex(ipv6.version) << endl;
+        Logger::getInstance().info() << "Flow Label: " << Functions::byteToBin(ipv6.flowLabel) << endl;
+        Logger::getInstance().info() << "Payload Length: " << Functions::byteToNum(ipv6.payloadLength) << endl;
+        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(ipv6.protocol) << endl;
+        Logger::getInstance().info() << "Hop Limit: " << Functions::byteToNum(ipv6.hopLimit) << endl;
+        Logger::getInstance().info() << "Source Address: " << Functions::byteToHex(ipv6.sourceAddress) << endl;
+        Logger::getInstance().info() << "Destination Address: " << Functions::byteToHex(ipv6.destinationAddress) << endl;
+    }
+}
+
 // Parses and processes the MPLS header.
 void Packet::Mpls(string &mplsHeader)
 {
@@ -437,6 +479,33 @@ void Packet::Icmp(string &icmpHeader)
         Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(icmp.checksum) << endl;
         Logger::getInstance().info() << "Identifier: " << Functions::byteToHex(icmp.identifier) << endl;
         Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(icmp.sequenceNumber) << endl;
+    }
+}
+
+// Parses and processes the ICMPv6 header
+void Packet::Icmpv6(string &icmpv6Header)
+{
+    icmpv6.type = icmpv6Header.substr(0, 1);
+    icmpv6.code = icmpv6Header.substr(1, 1);
+    icmpv6.checksum = icmpv6Header.substr(2, 2);
+    icmpv6.reserved = icmpv6Header.substr(4, 4);
+    int icmpv6Start = 8;
+    start += icmpv6Start;
+    int icmpv6End = icmpv6Header.size();
+    
+
+    while (icmpv6Start != icmpv6End)
+    {
+        icmpv6Header::Option option;
+        option.option = icmpv6Header.substr(icmpv6Start, 2);
+        icmpv6Start += 2;
+        option.length = icmpv6Header.substr(icmpv6Start, 2);
+        icmpv6Start += 2;
+        int icmpv6ADD = Functions::byteToNum(option.length) - 4;
+        option.value = icmpv6Header.substr(icmpv6Start, icmpv6ADD);
+        icmpv6Start += icmpv6ADD;
+        start += icmpv6ADD;
+        icmpv6.options.push_back(option);
     }
 }
 

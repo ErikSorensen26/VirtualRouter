@@ -64,6 +64,7 @@ ipInfo Interface::Get() {
     info.v6subnet = v6mask;
     info.mac = macAddress;  
     info.mtu = mtu;
+    info.ipv6FlowLabel = ipv6FlowLabel;
     return info;
 }
 
@@ -152,15 +153,26 @@ void Interface::stateChange()
     UpdateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
-        eigrp.second->UpdateInterfaceList();
-        eigrp.second->UpdateRoutingTableForConnected();
+        if (eigrp.second && eigrp.second->IPv4)
+        {
+            eigrp.second->IPv4->UpdateInterfaceList();
+            eigrp.second->IPv4->UpdateRoutingTableForConnected();
+        }
     }
 }
 
 // Runs when the interface state changes
 void Interface::stateChangeV6()
 {
-
+    UpdateEigrpInterface(this);
+    for (const auto& eigrp : eigrpList)
+    {
+        if(eigrp.second && eigrp.second->IPv6)
+        {
+            eigrp.second->IPv6->UpdateInterfaceList();
+            eigrp.second->IPv6->UpdateRoutingTableForConnected();
+        }
+    }
 }
 
 // Destructor to ensure threads are stopped

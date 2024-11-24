@@ -20,7 +20,8 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
         hasEsp{}, hasIcmp{},
         hasIgmp{}, hasTcp{},
         hasUdp{}, hasDhcp{},
-        hasEigrp{};
+        hasEigrp{}, hasIpv6{},
+        hasIcmpv6{};
 
     // Strings to accumulate header data.
     string ethernetString{},
@@ -31,7 +32,8 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
         espString{}, icmpString{},
         igmpString{}, tcpString{},
         udpString{}, dhcpString{},
-        eigrpString{};
+        eigrpString{}, ipv6String{},
+        icmpv6String{};
 
     // Process Layer2 headers.
     for (auto header : packet.Layer2)
@@ -117,6 +119,17 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             ipv4String += ipv4.options.routerAlert;
             hasIpv4 = true;
         }
+        else if (is_type<ipv6Header>(header))
+        {
+            const ipv6Header& ipv6 = std::any_cast<const ipv6Header &>(header);
+            ipv6String += Functions::hexToByte(ipv6.version + ipv6.trafficClass + ipv6.flowLabel);
+            ipv6String += ipv6.payloadLength;
+            ipv6String += ipv6.protocol;
+            ipv6String += ipv6.hopLimit;
+            ipv6String += ipv6.sourceAddress;
+            ipv6String += ipv6.destinationAddress;
+            hasIpv6 = true;
+        }
         else if (is_type<greHeade>(header))
         {
             const greHeade &gre = std::any_cast<const greHeade &>(header);
@@ -155,6 +168,21 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             icmpString += icmp.sequenceNumber;
             icmpString = Checksum::CalculateProtocolChecksum(icmpString + encapsulated, icmpString.size(), 8, 2);
             hasIcmp = true;
+        }
+        else if (is_type<icmpv6Header>(header))
+        {
+            const icmpv6Header &icmpv6 = std::any_cast<const icmpv6Header &>(header);
+            icmpv6String += icmpv6.type;
+            icmpv6String += icmpv6.code;
+            icmpv6String += std::string("\x00\x00", 2);
+            icmpv6String += icmpv6.reserved;
+            for (const auto& opt : icmpv6.options)
+            {
+                icmpv6String += opt.option;
+                icmpv6String += opt.length;
+                icmpv6String += opt.value;
+            }
+            hasIcmpv6 = true;
         }
         else if (is_type<igmpHeader>(header))
         {

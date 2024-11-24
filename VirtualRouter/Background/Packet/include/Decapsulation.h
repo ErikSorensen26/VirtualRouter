@@ -34,13 +34,17 @@ private:
     // Parses and processes ARP header.
     void Arp(string &arpHeader);
     // Parses and processes the IP header.
-    void Ipv4(string &ivp4Header, int &ipv4Size);
+    void Ipv4(string &ipv4Header, int &ipv4Size);
+    // Parses and processes the IPv6 header
+    void Ipv6(string &ipv6Header);
     // Parses and processes the TCP header.
     void Tcp(string &tcpHeader, int &tcpSize);
     // Parses and processes the UDP header.
     void Udp(string &udpHeader);
     // Parses and processes the ICMP header.
     void Icmp(string &icmpHeader);
+    // Parses and processes the ICMPv6 header
+    void Icmpv6(string &icmpv6Header);
     // Parses and processes the IGMP header.
     void Igmp(string &igmpHeader);
     // Parses and processes the TLS header.
@@ -83,9 +87,11 @@ private:
     ethernetHeader ethernet;
     arpHeader arp;
     ipv4Header ipv4;
+    ipv6Header ipv6;
     tcpHeader tcp;
     udpHeader udp;
     icmpHeader icmp;
+    icmpv6Header icmpv6;
     igmpHeader igmp;
     tlsHeader tls;
     mplsHeader mpls;

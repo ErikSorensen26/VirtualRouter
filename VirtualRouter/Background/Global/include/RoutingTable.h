@@ -90,19 +90,25 @@ public:
 
     struct Eigrp {
         std::string network{}, nextHop{}, interface{}, successor{}, feasibleSuccessor{}, routeSource{}, routeType{}, activeOrPassive{}, originRouter{}, flags{};
-        unsigned int metric{}, feasibleDistance{}, reportedDistance{}, adminDistance{}, holdTime{}, stuckInActive{}, updateTimer{}, retransmitInterval{}, sequenceNumber{}, routeTag{};
-        unsigned int hopCount{}, bandwidth{}, load{}, delay{}, reliability{}, mtu{}, mask{}, originAS{}, extendedMetric{}, extendedID{};
+        unsigned int metric{}, feasibleDistance{}, reportedDistance{}, adminDistance{}, holdTime{}, stuckInaActive{}, updateTimer{}, retransmitInterval{}, sequenceNumber{}, routeTag{};
+        unsigned int hopCount{}, bandwidth{}, load{}, delay{}, reliability{}, mtu{}, mask{}, originAS{}, extendedMetric{}, extendedId{};
         std::chrono::system_clock::time_point age;
         vector<std::string> nextHops{};
+        bool isIPv6{false};
     };
 
     void printEigrpTable();
     void AddEigrp(const Eigrp route);
+    void AddEigrpIPv6(const Eigrp route);
     void UpdateEigrp(const Eigrp route);
+    void UpdateEigrpIPv6(const Eigrp route);
     void RemoveEigrp(const std::string& network, int mask);
+    void RemoveEigrpIPv6(const std::string& network, int mask);
     std::vector<Eigrp> GetAllEigrpRoutes();
+    std::vector<Eigrp> GetAllEigrpRoutesIPv6();
     std::optional<RoutingTable::Eigrp> GetEigrpRoute(const std::string& destination, const int mask);
-    void UpdateEigrpWithVaraence(const Eigrp& route, double variance);
+    void UpdateEigrpWithVariance(const Eigrp& route, double variance);
+    void UpdateEigrpWithVarianceIPv6(const Eigrp& route, double variance);
 
     // Static method to access the singleton instance
     static RoutingTable& getInstance()
@@ -133,6 +139,7 @@ private:
     std::map<std::string, Multicast> multicast;
     std::map<std::string, ACL> acl;
     std::map<std::string, Eigrp> eigrp;
+    std::map<std::string, Eigrp> eigrpIPv6;
 
     Variable variable;
 };

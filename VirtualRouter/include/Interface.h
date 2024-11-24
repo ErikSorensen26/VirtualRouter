@@ -21,7 +21,7 @@ using namespace std; // Use standard namespace for convenience
 namespace Protocol {
     class DhcpClient; // Forward declaration for DhcpClient class
     class Arp; // Forward declaration for Arp class
-    class EigrpInterface;
+    class EigrpInterfaceInstance;
 }
 
 // Structure to hold IP address information
@@ -35,6 +35,7 @@ struct ipInfo {
     int v6subnet = 64; // V6 subnet mask of the interface
     string mac = ""; // MAC address of the interface
     int mtu{}; // Maximum Transmission Unit
+    int ipv6FlowLabel{}; // Flow label for IPv6
 };
 
 // Interface class definition
@@ -98,15 +99,13 @@ public:
     std::shared_ptr<Protocol::Arp> arp;
     
     // Eigrp processes
-    map<int, std::shared_ptr<Protocol::EigrpInterface>> eigrpInterfaceList;
+    map<int, shared_ptr<Protocol::EigrpInterfaceInstance>> eigrpInterfaceList;
 
     // Method to start or stop the interface
     void Shutdown(bool shut);
 
     // Holds interface name
     string interfaceName{};
-
-//private:
 
     std::mutex ipInfoMutex;
 
@@ -119,6 +118,7 @@ public:
     string mask = ""; // Subnet mask of the interface
     int v6mask = 64; // V6 subnet mask of the interface
     int mtu = 1500; // Maximum Transmission Unit
+    int ipv6FlowLabel = 0; // Flow label for IPv6
 
 private:
 

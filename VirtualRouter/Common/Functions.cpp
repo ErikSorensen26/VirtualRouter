@@ -244,12 +244,24 @@ namespace Functions {
     #pragma endregion
     #pragma region NumChar
 
-    std::string numToHex(int num) {
+    std::string numToHex(int num, int size) {
+        int newSize;
+        if (size != 0)
+        {
+            newSize = size;
+        }
+        else
+        {
+            newSize = 2;
+        }
         std::stringstream ss;
-        ss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << num;ss.str();
+        ss << std::hex << std::uppercase << std::setw(newSize) << std::setfill('0') << num;ss.str();
         std::string hex = ss.str();
-        if (hex.size() % 2 != 0) {
-            hex = "0" + hex;
+        if (size == 0)
+        {
+            if (hex.size() % 2 != 0) {
+                hex = "0" + hex;
+            }
         }
 
         return hex;

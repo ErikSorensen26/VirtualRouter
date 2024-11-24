@@ -20,6 +20,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
     const vlanHeader* vlan;
     const lldpHeader* lldp;
     const ipv4Header* ipv4;
+    const ipv6Header* ipv6;
     const greHeade* gre;
     const ahHeader* ah;
     const espHeader* esp;
@@ -134,8 +135,15 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
             auto iface = interface->eigrpInterfaceList.find(Functions::byteToNum(eigrp->autonomousSystem));
             if (it != eigrpList.end() && iface != interface->eigrpInterfaceList.end()) 
             {
-                if (interface->eigrpInterfaceList[Functions::byteToNum(eigrp->autonomousSystem)] != nullptr);
-                interface->eigrpInterfaceList[Functions::byteToNum(eigrp->autonomousSystem)]->ProcessPacket(eigrp, ipv4);
+                int AS = Functions::byteToNum(eigrp->autonomousSystem);
+                if (ipv4 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv4)
+                {
+                    interface->eigrpInterfaceList[AS]->IPv4->ProcessPacket(eigrp, ipv4->sourceAddress);
+                }
+                else if (ipv6 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv6)
+                {
+                    interface->eigrpInterfaceList[AS]->IPv6->ProcessPacket(eigrp, ipv6->sourceAddress);
+                }
             }
         }
     }

@@ -14,6 +14,7 @@ struct Variable
     {
         std::string arp{"\x08\x06", 2};
         string ipv4{"\x08\x00", 2};
+        string ipv6{"\x86\xdd", 3};
         string mpls{"\x88\x47", 2};
         string vlan{"\x86\xdd", 2};
         string lldp{"\x88\xcc", 2};
@@ -47,6 +48,20 @@ struct Variable
         string ah{"\x33", 1};
         string eigrp{"\x58", 1};
     } ipv4;
+    struct ipv6
+    {
+        std::string GetValue() const { return "6"; }
+        string esp{"\x32", 1};
+        string ah{"\x33", 1};
+        string gre{"\x2f", 1};
+        string igmp{"\x02", 1};
+        string none{"\x3b", 1};
+        string tcp{"\x06", 1};
+        string udp{"\x11", 1};
+        string icmp{"\x3a", 1};
+        string sctp{"\x84", 1};
+        string eigrp{"\x58", 1};
+    } ipv6;
     struct udp
     {
         struct dhcp
@@ -178,7 +193,9 @@ struct Variable
         struct Eigrp
         {
             string address{"\xe0\x00\x00\x0a", 4};
+            string addressv6{"\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0a"};
             string mac{"\x01\x00\x5e\x00\x00\x0a", 6};
+            string macv6{"\x33\x33\x00\x00\x00\x0a"};
         } eigrp;
     } multicast;
 };
@@ -254,7 +271,15 @@ struct ipv4Header
 // Ipv6 header
 struct ipv6Header
 {
-    
+    string
+        version{},
+        trafficClass{},
+        flowLabel{},
+        payloadLength{},
+        protocol{},
+        hopLimit{},
+        sourceAddress{},
+        destinationAddress{};
 };
 
 // Tcp header
@@ -302,6 +327,22 @@ struct icmpHeader
         checksum{},
         identifier{},
         sequenceNumber{};
+};
+// Icmpv6 header
+struct icmpv6Header
+{
+    string
+        type{},
+        code{},
+        checksum{},
+        reserved{};
+
+    struct Option
+    {
+        string option{}, length{}, value{};
+    };
+
+    vector<Option> options{};
 };
 // Igmp header
 struct igmpHeader

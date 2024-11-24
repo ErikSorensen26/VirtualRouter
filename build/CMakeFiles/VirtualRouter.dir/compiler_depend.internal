@@ -6199,6 +6199,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/main.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/Time.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
+ /home/erik/VirtualRouter/VirtualRouter/Common/Authentication.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/Common/json.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/pugiconfig.hpp
@@ -6439,6 +6440,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/main.cpp.o
  /usr/include/c++/13/sstream
  /usr/include/c++/13/stack
  /usr/include/c++/13/stdexcept
+ /usr/include/c++/13/stdlib.h
  /usr/include/c++/13/stop_token
  /usr/include/c++/13/streambuf
  /usr/include/c++/13/string
@@ -6488,6 +6490,34 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/main.cpp.o
  /usr/include/ncurses_dll.h
  /usr/include/netdb.h
  /usr/include/netinet/in.h
+ /usr/include/openssl/asn1.h
+ /usr/include/openssl/asn1err.h
+ /usr/include/openssl/bio.h
+ /usr/include/openssl/bioerr.h
+ /usr/include/openssl/bn.h
+ /usr/include/openssl/bnerr.h
+ /usr/include/openssl/core.h
+ /usr/include/openssl/core_dispatch.h
+ /usr/include/openssl/crypto.h
+ /usr/include/openssl/cryptoerr.h
+ /usr/include/openssl/cryptoerr_legacy.h
+ /usr/include/openssl/des.h
+ /usr/include/openssl/e_os2.h
+ /usr/include/openssl/evp.h
+ /usr/include/openssl/evperr.h
+ /usr/include/openssl/hmac.h
+ /usr/include/openssl/macros.h
+ /usr/include/openssl/md5.h
+ /usr/include/openssl/obj_mac.h
+ /usr/include/openssl/objects.h
+ /usr/include/openssl/objectserr.h
+ /usr/include/openssl/opensslv.h
+ /usr/include/openssl/params.h
+ /usr/include/openssl/safestack.h
+ /usr/include/openssl/sha.h
+ /usr/include/openssl/stack.h
+ /usr/include/openssl/symhacks.h
+ /usr/include/openssl/types.h
  /usr/include/pcap.h
  /usr/include/pcap/bpf.h
  /usr/include/pcap/compiler-tests.h
@@ -6649,6 +6679,8 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/main.cpp.o
  /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
+ /usr/include/x86_64-linux-gnu/openssl/configuration.h
+ /usr/include/x86_64-linux-gnu/openssl/opensslconf.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
  /usr/include/x86_64-linux-gnu/sys/ioctl.h
  /usr/include/x86_64-linux-gnu/sys/select.h
@@ -6684,6 +6716,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/Time.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
+ /home/erik/VirtualRouter/VirtualRouter/Common/Authentication.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/Common/json.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/pugiconfig.hpp
@@ -6924,6 +6957,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o
  /usr/include/c++/13/sstream
  /usr/include/c++/13/stack
  /usr/include/c++/13/stdexcept
+ /usr/include/c++/13/stdlib.h
  /usr/include/c++/13/stop_token
  /usr/include/c++/13/streambuf
  /usr/include/c++/13/string
@@ -6973,6 +7007,34 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o
  /usr/include/ncurses_dll.h
  /usr/include/netdb.h
  /usr/include/netinet/in.h
+ /usr/include/openssl/asn1.h
+ /usr/include/openssl/asn1err.h
+ /usr/include/openssl/bio.h
+ /usr/include/openssl/bioerr.h
+ /usr/include/openssl/bn.h
+ /usr/include/openssl/bnerr.h
+ /usr/include/openssl/core.h
+ /usr/include/openssl/core_dispatch.h
+ /usr/include/openssl/crypto.h
+ /usr/include/openssl/cryptoerr.h
+ /usr/include/openssl/cryptoerr_legacy.h
+ /usr/include/openssl/des.h
+ /usr/include/openssl/e_os2.h
+ /usr/include/openssl/evp.h
+ /usr/include/openssl/evperr.h
+ /usr/include/openssl/hmac.h
+ /usr/include/openssl/macros.h
+ /usr/include/openssl/md5.h
+ /usr/include/openssl/obj_mac.h
+ /usr/include/openssl/objects.h
+ /usr/include/openssl/objectserr.h
+ /usr/include/openssl/opensslv.h
+ /usr/include/openssl/params.h
+ /usr/include/openssl/safestack.h
+ /usr/include/openssl/sha.h
+ /usr/include/openssl/stack.h
+ /usr/include/openssl/symhacks.h
+ /usr/include/openssl/types.h
  /usr/include/pcap.h
  /usr/include/pcap/bpf.h
  /usr/include/pcap/compiler-tests.h
@@ -7134,6 +7196,8 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o
  /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
+ /usr/include/x86_64-linux-gnu/openssl/configuration.h
+ /usr/include/x86_64-linux-gnu/openssl/opensslconf.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
  /usr/include/x86_64-linux-gnu/sys/ioctl.h
  /usr/include/x86_64-linux-gnu/sys/select.h
@@ -8060,6 +8124,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Interface.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Arp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
+ /home/erik/VirtualRouter/VirtualRouter/Common/Authentication.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h
  /home/erik/VirtualRouter/VirtualRouter/include/Logger.h
@@ -8268,6 +8333,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Interface.cpp.o
  /usr/include/c++/13/sstream
  /usr/include/c++/13/stack
  /usr/include/c++/13/stdexcept
+ /usr/include/c++/13/stdlib.h
  /usr/include/c++/13/stop_token
  /usr/include/c++/13/streambuf
  /usr/include/c++/13/string
@@ -8309,6 +8375,34 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Interface.cpp.o
  /usr/include/math.h
  /usr/include/netdb.h
  /usr/include/netinet/in.h
+ /usr/include/openssl/asn1.h
+ /usr/include/openssl/asn1err.h
+ /usr/include/openssl/bio.h
+ /usr/include/openssl/bioerr.h
+ /usr/include/openssl/bn.h
+ /usr/include/openssl/bnerr.h
+ /usr/include/openssl/core.h
+ /usr/include/openssl/core_dispatch.h
+ /usr/include/openssl/crypto.h
+ /usr/include/openssl/cryptoerr.h
+ /usr/include/openssl/cryptoerr_legacy.h
+ /usr/include/openssl/des.h
+ /usr/include/openssl/e_os2.h
+ /usr/include/openssl/evp.h
+ /usr/include/openssl/evperr.h
+ /usr/include/openssl/hmac.h
+ /usr/include/openssl/macros.h
+ /usr/include/openssl/md5.h
+ /usr/include/openssl/obj_mac.h
+ /usr/include/openssl/objects.h
+ /usr/include/openssl/objectserr.h
+ /usr/include/openssl/opensslv.h
+ /usr/include/openssl/params.h
+ /usr/include/openssl/safestack.h
+ /usr/include/openssl/sha.h
+ /usr/include/openssl/stack.h
+ /usr/include/openssl/symhacks.h
+ /usr/include/openssl/types.h
  /usr/include/pcap.h
  /usr/include/pcap/bpf.h
  /usr/include/pcap/compiler-tests.h
@@ -8450,6 +8544,8 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Interface.cpp.o
  /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
+ /usr/include/x86_64-linux-gnu/openssl/configuration.h
+ /usr/include/x86_64-linux-gnu/openssl/opensslconf.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
  /usr/include/x86_64-linux-gnu/sys/select.h
  /usr/include/x86_64-linux-gnu/sys/single_threaded.h
@@ -8880,6 +8976,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Terminal.cpp.o
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/Time.h
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h
+ /home/erik/VirtualRouter/VirtualRouter/Common/Authentication.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h
  /home/erik/VirtualRouter/VirtualRouter/Common/json.hpp
  /home/erik/VirtualRouter/VirtualRouter/Common/pugiconfig.hpp
@@ -9125,6 +9222,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Terminal.cpp.o
  /usr/include/c++/13/sstream
  /usr/include/c++/13/stack
  /usr/include/c++/13/stdexcept
+ /usr/include/c++/13/stdlib.h
  /usr/include/c++/13/stop_token
  /usr/include/c++/13/streambuf
  /usr/include/c++/13/string
@@ -9174,6 +9272,34 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Terminal.cpp.o
  /usr/include/ncurses_dll.h
  /usr/include/netdb.h
  /usr/include/netinet/in.h
+ /usr/include/openssl/asn1.h
+ /usr/include/openssl/asn1err.h
+ /usr/include/openssl/bio.h
+ /usr/include/openssl/bioerr.h
+ /usr/include/openssl/bn.h
+ /usr/include/openssl/bnerr.h
+ /usr/include/openssl/core.h
+ /usr/include/openssl/core_dispatch.h
+ /usr/include/openssl/crypto.h
+ /usr/include/openssl/cryptoerr.h
+ /usr/include/openssl/cryptoerr_legacy.h
+ /usr/include/openssl/des.h
+ /usr/include/openssl/e_os2.h
+ /usr/include/openssl/evp.h
+ /usr/include/openssl/evperr.h
+ /usr/include/openssl/hmac.h
+ /usr/include/openssl/macros.h
+ /usr/include/openssl/md5.h
+ /usr/include/openssl/obj_mac.h
+ /usr/include/openssl/objects.h
+ /usr/include/openssl/objectserr.h
+ /usr/include/openssl/opensslv.h
+ /usr/include/openssl/params.h
+ /usr/include/openssl/safestack.h
+ /usr/include/openssl/sha.h
+ /usr/include/openssl/stack.h
+ /usr/include/openssl/symhacks.h
+ /usr/include/openssl/types.h
  /usr/include/pcap.h
  /usr/include/pcap/bpf.h
  /usr/include/pcap/compiler-tests.h
@@ -9335,6 +9461,8 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/Terminal.cpp.o
  /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h
  /usr/include/x86_64-linux-gnu/gnu/stubs.h
+ /usr/include/x86_64-linux-gnu/openssl/configuration.h
+ /usr/include/x86_64-linux-gnu/openssl/opensslconf.h
  /usr/include/x86_64-linux-gnu/sys/cdefs.h
  /usr/include/x86_64-linux-gnu/sys/ioctl.h
  /usr/include/x86_64-linux-gnu/sys/select.h

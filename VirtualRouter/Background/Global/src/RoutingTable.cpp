@@ -48,7 +48,7 @@ void RoutingTable::RemoveEigrp(const std::string& network, int mask)
     printEigrpTable();
 }
 
-void RoutingTable::UpdateEigrpWithVaraence(const Eigrp& route, double variance)
+void RoutingTable::UpdateEigrpWithVariance(const Eigrp& route, double variance)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 

@@ -82,7 +82,7 @@ namespace Functions {
     int stringToNum(std::string num);
 
     // Converts an integer to a hexadecimal string, ensuring at least two characters.
-    std::string numToHex(int num);
+    std::string numToHex(int num, int size = 0);
 
     // Converts an integer to a hexadecimal string of a specific byte size.
     std::string numToHexWithByte(uint32_t num, int byteSize);

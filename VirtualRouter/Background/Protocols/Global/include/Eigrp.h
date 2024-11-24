@@ -23,7 +23,7 @@ using namespace std;
 extern mutex globalEigrpMutex;
 
 // Config schemas for EIGRP class
-namespace EigrpConfigs 
+namespace EigrpConfigs
 {
     struct network 
     {
@@ -168,7 +168,28 @@ namespace EigrpConfigs
 namespace Protocol 
 {
     class Eigrp;
+    class EigrpInterface;
     class TopologyTable;
+
+    struct EigrpInstance
+    {
+        // Address Families
+        std::shared_ptr<Eigrp> IPv4;
+        std::shared_ptr<Eigrp> IPv6;
+    };
+
+    struct EigrpInterfaceInstance
+    {
+        // Address Families
+        std::shared_ptr<EigrpInterface> IPv4;
+        std::shared_ptr<EigrpInterface> IPv6;
+    };
+    
+    enum class AddressFamily 
+    {
+        IPv4,
+        IPv6
+    };
 
     class EigrpInterface : public std::enable_shared_from_this<Protocol::EigrpInterface> 
     {
@@ -176,16 +197,16 @@ namespace Protocol
         // Holds EIGRP process
         Eigrp* eigrpProcess;
 
-        // Constructor initializing AS number and starting Hello timer
+        // Construct:or initializing AS number and starting Hello timer
         EigrpInterface(Eigrp& eigrpSystem, std::shared_ptr<Interface> interface);
         // Destructor stopping all timers
         ~EigrpInterface();
         // Sets up EIGRP packet headers
-        void EigrpBody(ethernetHeader& eth, ipv4Header& ip, string mac);
+        PacketInfo EigrpBody(string unicastAddress = "");
         // Process Packet
-        void ProcessPacket(const eigrpHeader* eigrpPacket, const ipv4Header* ipPacket);
+        void ProcessPacket(const eigrpHeader* eigrpPacket, const std::string& neighborIp);
         // Processes Hello packets
-        void ProcessHello(const eigrpHeader* receivedHello, const ipv4Header* recievedIP);
+        void ProcessHello(const eigrpHeader* receivedHello, const std::string& neighborIp);
         // Processes Update packets
         void ProcessUpdate(const eigrpHeader* receivedUpdate, const std::string& neighborIp);
         // Process Ack
@@ -221,7 +242,7 @@ namespace Protocol
         // Updates Routing Table
         void UpdateRoutingTable(const vector<RoutingTable::Eigrp> routes, bool init, const std::string& neighborIp);
         // Decodes Routes
-        RoutingTable::Eigrp DecodeRoute(string value, bool external, bool summary = false);
+        RoutingTable::Eigrp DecodeRoute(string value, bool external, bool summary);
         // Finds an ip address for a querying router
         std::string FindQueryNeighbor(int queryId);
         // Handles stuck in active
@@ -239,8 +260,6 @@ namespace Protocol
         void SetupReliablePacket(std::shared_ptr<EigrpConfigs::NeighborInfo> &neighbor, const std::string &packet, int sequenceNum);
     
         mutex eigrpMutex;
-        PacketInfo eigrpHello;
-
         
         int helloTime = 5;
         int holdTime = 15;
@@ -252,6 +271,12 @@ namespace Protocol
         int bandwidth;
         int reliability = 255;
         int load = 1;
+
+        // Qos
+        int DSCP = 0;
+
+        // Split horizon
+        bool splitHorizon = false;
 
         // Holds current interface
         std::shared_ptr<Interface> currentInterface;
@@ -325,7 +350,7 @@ namespace Protocol
     class Eigrp {
     public:
         // Constructor initializing AS number and starting Hello timer
-        Eigrp(int& as);
+        Eigrp(int& as, AddressFamily af);
         // Destructor stopping all timers
         ~Eigrp();
 
@@ -344,7 +369,7 @@ namespace Protocol
         // Adds interface to routing table
         void UpdateRoutingTableForConnected();
         // Handles Interface change
-        void OnInterfaceChange(Interface* interfacePtr);
+        void OnInterfaceChange(Interface* interfacePtr, AddressFamily af);
         // Update from route change
         void NotifyRoutingChange(const vector<RoutingTable::Eigrp>& changedRoutes, bool isRemoval = false, bool init = false);
         // Graceful instance shutdown
@@ -401,25 +426,18 @@ namespace Protocol
         string virtualRouterID = std::string("\x00\x00", 2);
         int asNumber;
         double wideMetric;
-
         double redistributionMetricOffset = 0.0;
-
-        // Eigrp Distribution List
-        vector<vector<EigrpConfigs::NetworksDistributed>*> EigrpDistributionList;
-        // Stuck in active timers
-        std::unordered_map<std::string, int> stuckInActiveTimers;
-
-        std::unique_ptr<Protocol::TopologyTable> topologyTable;
-
-        // Stub Option
-        EigrpConfigs::StubConfig stubConfig;
-
-        // Auto summarization
         bool autoSummarizationEnabled = false;
+        AddressFamily getAddressFamily() const { return addressFamily; }
+        vector<vector<EigrpConfigs::NetworksDistributed>*> EigrpDistributionList;
+        std::unordered_map<std::string, int> stuckInActiveTimers;
+        std::unique_ptr<Protocol::TopologyTable> topologyTable;
+        EigrpConfigs::StubConfig stubConfig;
 
     private:
 
         Variable variable;
+        AddressFamily addressFamily;
         bool runTimers = true;
     };
 
@@ -471,7 +489,7 @@ namespace Protocol
 extern Protocol::Eigrp* currentEigrp;
 
 // Map of EIGRP instances by AS number
-extern map<int, std::shared_ptr<Protocol::Eigrp>> eigrpList;
+extern map<int, std::shared_ptr<Protocol::EigrpInstance>> eigrpList;
 
 // Updates EIGRP interface list based on interface changes
 void UpdateEigrpInterface(Interface* interface);
