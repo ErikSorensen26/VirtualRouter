@@ -153,10 +153,14 @@ void Interface::stateChange()
     UpdateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
-        if (eigrp.second && eigrp.second->IPv4)
+        for (const auto& as : eigrp.second->autonomousSystems)
         {
-            eigrp.second->IPv4->UpdateInterfaceList();
-            eigrp.second->IPv4->UpdateRoutingTableForConnected();
+            auto af = as.second->addressFamilies.find(AddressFamily::IPv4);
+            if (af != as.second->addressFamilies.end())
+            {
+                af->second->UpdateInterfaceList();
+                af->second->UpdateRoutingTableForConnected();
+            }
         }
     }
 }
@@ -167,10 +171,14 @@ void Interface::stateChangeV6()
     UpdateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
-        if(eigrp.second && eigrp.second->IPv6)
+        for (const auto& as : eigrp.second->autonomousSystems)
         {
-            eigrp.second->IPv6->UpdateInterfaceList();
-            eigrp.second->IPv6->UpdateRoutingTableForConnected();
+            auto af = as.second->addressFamilies.find(AddressFamily::IPv6);
+            if (af != as.second->addressFamilies.end())
+            {
+                af->second->UpdateInterfaceList();
+                af->second->UpdateRoutingTableForConnected();
+            }
         }
     }
 }

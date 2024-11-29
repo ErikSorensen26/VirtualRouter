@@ -66,6 +66,7 @@ CMAKE_BINARY_DIR = /home/erik/VirtualRouter/build
 all: CMakeFiles/VirtualRouter.dir/all
 all: CMakeFiles/LogServer.dir/all
 all: CMakeFiles/CommandParser.dir/all
+all: CMakeFiles/EigrpTest.dir/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
@@ -76,6 +77,8 @@ preinstall:
 clean: CMakeFiles/VirtualRouter.dir/clean
 clean: CMakeFiles/LogServer.dir/clean
 clean: CMakeFiles/CommandParser.dir/clean
+clean: CMakeFiles/EigrpTest.dir/clean
+clean: CMakeFiles/PythonTests.dir/clean
 .PHONY : clean
 
 #=============================================================================
@@ -85,7 +88,7 @@ clean: CMakeFiles/CommandParser.dir/clean
 CMakeFiles/VirtualRouter.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31 "Built target VirtualRouter"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34 "Built target VirtualRouter"
 .PHONY : CMakeFiles/VirtualRouter.dir/all
 
 # Build rule for subdir invocation for target.
@@ -111,7 +114,7 @@ CMakeFiles/VirtualRouter.dir/clean:
 CMakeFiles/LogServer.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/LogServer.dir/build.make CMakeFiles/LogServer.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/LogServer.dir/build.make CMakeFiles/LogServer.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=3,4 "Built target LogServer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=5,6 "Built target LogServer"
 .PHONY : CMakeFiles/LogServer.dir/all
 
 # Build rule for subdir invocation for target.
@@ -155,6 +158,58 @@ CommandParser: CMakeFiles/CommandParser.dir/rule
 CMakeFiles/CommandParser.dir/clean:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/CommandParser.dir/build.make CMakeFiles/CommandParser.dir/clean
 .PHONY : CMakeFiles/CommandParser.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/EigrpTest.dir
+
+# All Build rule for target.
+CMakeFiles/EigrpTest.dir/all:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/EigrpTest.dir/build.make CMakeFiles/EigrpTest.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/EigrpTest.dir/build.make CMakeFiles/EigrpTest.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=3,4 "Built target EigrpTest"
+.PHONY : CMakeFiles/EigrpTest.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/EigrpTest.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/erik/VirtualRouter/build/CMakeFiles 2
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/EigrpTest.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/erik/VirtualRouter/build/CMakeFiles 0
+.PHONY : CMakeFiles/EigrpTest.dir/rule
+
+# Convenience name for target.
+EigrpTest: CMakeFiles/EigrpTest.dir/rule
+.PHONY : EigrpTest
+
+# clean rule for target.
+CMakeFiles/EigrpTest.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/EigrpTest.dir/build.make CMakeFiles/EigrpTest.dir/clean
+.PHONY : CMakeFiles/EigrpTest.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/PythonTests.dir
+
+# All Build rule for target.
+CMakeFiles/PythonTests.dir/all:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/PythonTests.dir/build.make CMakeFiles/PythonTests.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/PythonTests.dir/build.make CMakeFiles/PythonTests.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=7 "Built target PythonTests"
+.PHONY : CMakeFiles/PythonTests.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/PythonTests.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/erik/VirtualRouter/build/CMakeFiles 1
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/PythonTests.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/erik/VirtualRouter/build/CMakeFiles 0
+.PHONY : CMakeFiles/PythonTests.dir/rule
+
+# Convenience name for target.
+PythonTests: CMakeFiles/PythonTests.dir/rule
+.PHONY : PythonTests
+
+# clean rule for target.
+CMakeFiles/PythonTests.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/PythonTests.dir/build.make CMakeFiles/PythonTests.dir/clean
+.PHONY : CMakeFiles/PythonTests.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

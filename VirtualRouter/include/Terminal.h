@@ -12,87 +12,123 @@
 
 using namespace std;
 
+// Enum for representing different routing modes
+enum RoutingMode
+{
+    BGP,
+    EIGRP_CLASSIC,
+    EIGRP_NAMED,
+    OSPF,
+    RIP
+};
+
+// Terminal class interits from COnsole to simulate a terminal interface for the virtual router
 class Terminal : public Console {
 public:
-	com er, cr;
+    com errorCommand, carriageReturnCommand;
 
+    // Constructor
+    // Initialized the Terminal with optional debug mode for a packet capture
+    Terminal(bool enableDebug = false);
 
-	Terminal(bool isDebug = false);
-	void Input();
+    // Captures and processes user input
+    void handleInput();
 	
 private:
 
-	Variable variable;
+    Variable variable;
 
-	void Process(string& command);
-	void UnProcess(string& command);
-	string FixCommand(const string& command);
-	vector<com> GetCommandList(const nlohmann::json& execCommands, const string& directory, bool mo);
-	bool isGlobal(string& name);
-	void printNames(vector<com> list);
-	string getLastWord(const std::string& inputString);
-	vector<string> extractWords(const std::string& str);
-	string format(string str);
-	bool matchesPattern(const std::string& input, const std::string& regexRange);
-	bool isNumber(const std::string& s);
-	bool isValidDirectory(nlohmann::json& js);
-	bool more(int& lineNum);
-	void switchMode(string& newMode);
-	std::string fillZeros(const std::string& str);
-	std::string convertToFullIPv6(const std::string& ipv6);
-	std::vector<std::string> split(const std::string& str, char delimiter);
-	bool isIPV6(string& ip);
-	bool isValidIPv6(const std::string& ipv6);
-	bool isValidIPv6WithMask(const std::string& ipWithMask);
-	bool isValidMACAddress(const std::string& mac);
-	void getInterfaceMode(string& type);
-	void getRoutingMode(string& type);
-	void recover();
+    // Processes a single command
+    void executeCommand(string& command);
+    // Reverses the effect of process command (e.g., for "no" commands)
+    void undoCommand(string& command);
+    // Normalized and fixes user-entered commands
+    string normalizeCommand(const string& command);
+    // Retreived a list of possible commands based on the current directory and input
+    vector<com> GetAvailableCommands(const nlohmann::json& commandTree, const string& userInput, bool inPriviledgedMode);
+    // Checks if a command belongs to the global command set
+    bool isGlobalCommand(string& commandName);
+    // Prints available commands 
+    void displayAvailableCommands(vector<com> commandList);
+    // Extracts the last word from an input string
+    string getLastWord(const std::string& input);
+    // Splits a string into individual words, preservind certain charecters
+    vector<string> splitIntoWords(const std::string& str);
+    // Formats a string by trimming leasing and trailing spaces
+    string trimString(string str);
+    // Matches a user input against a specific pattern (e.g., IPv6, MAC address)
+    bool matchInputPattern(const std::string& userInput, const std::string& expectedPattern);
+    // Checks if a string represents a valid number
+    bool isNumeric(const std::string& input);
+    // Validates if a JSON object represents a valid command directory
+    bool isValidCommandDirectory(nlohmann::json& directory);
+    // Handles pagination for long command lists
+    bool handlePagination(int& lineCount);
+    // Switches the terminal to a new operational mode
+    void changeMode(string& newMode);
+    // Pads a string with leading zeros (e.g., for IPv6 segments)
+    std::string padWithZeros(const std::string& input);
+    // Expands an abbreviated IPv6 address to its full form
+    std::string expandIPv6Address(const std::string& ipv6Address);
+    // Splits a string into tokens based on a delimiter
+    std::vector<std::string> tokenize(const std::string& input, char delimiter);
+    // Validates if a string is a valid IPv6 address
+    bool isIPv6Address(const std::string& address);
+    // Validates if a string is a valid IPv6 address with a subnet mask
+    bool isIPv6AddressWithMask(const std::string& addressWithMask);
+    // Validates if a string is a valid MAC address
+    bool isMACAddress(const std::string& macAddress);
+    // Recovers the terminal state from saved configurations
+    void recoverState();
 
-	// threads
+    // Router Modes
+    void configureInterfaceMode(string& type);
+    void configureRoutingMode(RoutingMode type);
 
-	void runDhcp();
-	void runEigrp();
-	void runOspf();
-	void runBgp();
-	void runRip();
+    // threads
+    void runDhcp();
+    void runEigrp();
+    void runOspf();
+    void runBgp();
+    void runRip();
 
-	unsigned long interfaceID;
-	int routingProtocolID;
+    // Member variables
+    unsigned long interfaceID;		// Unique identifier for interfaces
+    int routingProtocolID;		// ID of the current routing protocol
 	
-	map<int, std::shared_ptr<Interface>>* Interfaces;
+    map<int, std::shared_ptr<Interface>>* activeInterfaces; // pointer to a map of active interfaces
 
-	vector<string> globalList{"exit", "end", "?", "vk_tab"};
-	vector<string> oldCommandStream;
+    vector<string> globalCommandList{"exit", "end", "?", "vk_tab"}; // List of global commands
+    vector<string> commandHistory; // History of previous entered commands
 
-	DoTime time;
+    DoTime timeManager; // Manages time-related functionality
 
-    string pattern;
-	string endstring;
-	string previousMatchString;
-	string current;
-	string currentSubMode;
+    string currentPattern;		// Current matching pattern
+    string endCommandString;		// String for marking the end of a command
+    string previousMatch;		// Previous successfull command match
+    string currentCommand;		// Current command being processed
+    string currentSubMode;		// Current sub-mode (e.g., specific interface or protocol)
 
-	nlohmann::json json;
-	nlohmann::json currentDir;
-	nlohmann::json jsonDir;
+    nlohmann::json commandTree;		// JSON structure holding the command hierarchy
+    nlohmann::json currentDirectory;	// Current directory in the command tree
+    nlohmann::json workingDirectory;    // Working directory in the JSON structure
 
-	vector<string> listHistory;
+    vector<string> executionHistory;	// History of executed commands
 
-	bool run = true;
-	bool endcommand = false;
-	bool nextWordHelp = false;
-	bool successMatch = false;
-	bool line = false;
-	bool help = false;
-	bool validCommand = false;
-	bool matchPattern = false;
-	bool matchPatternEnd = false;
-	bool modeChange = false;
-	bool successCommand = false;
-	bool globalCommand = false;
+    bool isRunning = true;		// Terminal run state
+    bool endOfCommand = false;		// Indicates if the command has reached its end
+    bool isNextWordHelpRequested = false; // Indicated if help is requested for the next word
+    bool isMatchSuccessful = false;     // Indicates if a command match was successfull
+    bool isLineBasedInput = false;	// indicates if input is line-based
+    bool isHelpModeActive = false;	// Indicates if help mode is active
+    bool isCommandValid = false;	// Indicates if the command is valid
+    bool isPatternMatching = false;	// Indicates if the input matches a pattern
+    bool isPatternMatchEnd = false;	// Indicates the end of a matching pattern
+    bool isModeChanged = false;		// Indicates if the operational mode has changed
+    bool isCommandExecutionSuccessful = false; // Indicates if the command was successful
+    bool isGlobalCommandExecution = false; // Indicates if a global command is being executed
 
-	condition_variable cv;
+    condition_variable stateCondition; // Condition variabel for thread synchronization
 
-	bool debug;
+    bool isDebugModeEnabled; // Debug mode flag
 };

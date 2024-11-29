@@ -1,6 +1,6 @@
 #include <RoutingTable.h>
 
-void RoutingTable::UpdateEigrp(const Eigrp route)
+void RoutingTable::UpdateEigrp(const Eigrp route, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
@@ -28,15 +28,43 @@ void RoutingTable::UpdateEigrp(const Eigrp route)
         existingRoute.interface = route.interface;
     }
 }
+// void RoutingTable::AddEigrp(const Eigrp& route)
+// {
+//     std::lock_guard<std::mutex> lock(routingMutex);
+// 
+//     auto it = routes.find(route.network + "/" + std::to_string(route.mask));
+//     if (it == routes.end())
+//     {
+        // New route
+//         routes[route.network + "/" + std::to_string(route.mask)] = route;
+//         Logger::getInstance().info() << "Added new EIGRP route: " << route.network << "/" << route.mask;
+//     }
+//     else
+//     {
+        // Existing route, check if it's a new path
+//         if (it->second.nextHop != route.nextHop)
+//         {
+            // Add as a backup path
+//             it->second.backupPaths.push_back(route);
+//             Logger::getInstance().info() << "Added backup EIGRP route: " << route.network << "/" << route.mask << " via " << Functions::byteToHex(route.nextHop);
+//         }
+//         else
+//         {
+            // Update existing route
+//             it->second.metric = route.metric;
+//             Logger::getInstance().info() << "Updated EIGRP route: " << route.network << "/" << route.mask;
+//         }
+//     }
+// }
 
-void RoutingTable::AddEigrp(const Eigrp route)
+void RoutingTable::AddEigrp(const Eigrp route, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::string key = route.network + "/" + std::to_string(route.mask);
     eigrp[key] = route;
 }
 
-void RoutingTable::RemoveEigrp(const std::string& network, int mask)
+void RoutingTable::RemoveEigrp(const std::string& network, int mask, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::string key = network + "/" + std::to_string(mask);
@@ -48,7 +76,7 @@ void RoutingTable::RemoveEigrp(const std::string& network, int mask)
     printEigrpTable();
 }
 
-void RoutingTable::UpdateEigrpWithVariance(const Eigrp& route, double variance)
+void RoutingTable::UpdateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
@@ -74,7 +102,7 @@ void RoutingTable::UpdateEigrpWithVariance(const Eigrp& route, double variance)
     }
 }
 
-std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes()
+std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes(AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::vector<Eigrp> routes;
@@ -85,7 +113,7 @@ std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes()
     return routes;
 }
 
-std::optional<RoutingTable::Eigrp> RoutingTable::GetEigrpRoute(const std::string& destination, const int mask)
+std::optional<RoutingTable::Eigrp> RoutingTable::GetEigrpRoute(const std::string& destination, const int mask, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     for (const auto& [key, entry] : eigrp)

@@ -65,6 +65,16 @@ CMAKE_BINARY_DIR = /home/erik/VirtualRouter/build
 #=============================================================================
 # Targets provided globally by CMake.
 
+# Special rule for the target test
+test:
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running tests..."
+	/usr/bin/ctest --force-new-ctest-process $(ARGS)
+.PHONY : test
+
+# Special rule for the target test
+test/fast: test
+.PHONY : test/fast
+
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "No interactive CMake dialog available..."
@@ -154,6 +164,56 @@ CommandParser: cmake_check_build_system
 CommandParser/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/CommandParser.dir/build.make CMakeFiles/CommandParser.dir/build
 .PHONY : CommandParser/fast
+
+#=============================================================================
+# Target rules for targets named EigrpTest
+
+# Build rule for target.
+EigrpTest: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 EigrpTest
+.PHONY : EigrpTest
+
+# fast build rule for target.
+EigrpTest/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/EigrpTest.dir/build.make CMakeFiles/EigrpTest.dir/build
+.PHONY : EigrpTest/fast
+
+#=============================================================================
+# Target rules for targets named PythonTests
+
+# Build rule for target.
+PythonTests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 PythonTests
+.PHONY : PythonTests
+
+# fast build rule for target.
+PythonTests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/PythonTests.dir/build.make CMakeFiles/PythonTests.dir/build
+.PHONY : PythonTests/fast
+
+Tests/TestEigrp.o: Tests/TestEigrp.cpp.o
+.PHONY : Tests/TestEigrp.o
+
+# target to build an object file
+Tests/TestEigrp.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/EigrpTest.dir/build.make CMakeFiles/EigrpTest.dir/Tests/TestEigrp.cpp.o
+.PHONY : Tests/TestEigrp.cpp.o
+
+Tests/TestEigrp.i: Tests/TestEigrp.cpp.i
+.PHONY : Tests/TestEigrp.i
+
+# target to preprocess a source file
+Tests/TestEigrp.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/EigrpTest.dir/build.make CMakeFiles/EigrpTest.dir/Tests/TestEigrp.cpp.i
+.PHONY : Tests/TestEigrp.cpp.i
+
+Tests/TestEigrp.s: Tests/TestEigrp.cpp.s
+.PHONY : Tests/TestEigrp.s
+
+# target to generate assembly for a file
+Tests/TestEigrp.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/EigrpTest.dir/build.make CMakeFiles/EigrpTest.dir/Tests/TestEigrp.cpp.s
+.PHONY : Tests/TestEigrp.cpp.s
 
 Utils/src/CommandParser.o: Utils/src/CommandParser.cpp.o
 .PHONY : Utils/src/CommandParser.o
@@ -835,9 +895,15 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... test"
+	@echo "... PythonTests"
 	@echo "... CommandParser"
+	@echo "... EigrpTest"
 	@echo "... LogServer"
 	@echo "... VirtualRouter"
+	@echo "... Tests/TestEigrp.o"
+	@echo "... Tests/TestEigrp.i"
+	@echo "... Tests/TestEigrp.s"
 	@echo "... Utils/src/CommandParser.o"
 	@echo "... Utils/src/CommandParser.i"
 	@echo "... Utils/src/CommandParser.s"

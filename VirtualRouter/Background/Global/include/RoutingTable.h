@@ -12,6 +12,12 @@
 #include <Functions.h>
 #include <Logger.h>
 
+enum class AddressFamily 
+{
+    IPv4,
+    IPv6
+};
+
 class RoutingTable {
 public:
 
@@ -98,17 +104,13 @@ public:
     };
 
     void printEigrpTable();
-    void AddEigrp(const Eigrp route);
-    void AddEigrpIPv6(const Eigrp route);
-    void UpdateEigrp(const Eigrp route);
-    void UpdateEigrpIPv6(const Eigrp route);
-    void RemoveEigrp(const std::string& network, int mask);
-    void RemoveEigrpIPv6(const std::string& network, int mask);
-    std::vector<Eigrp> GetAllEigrpRoutes();
-    std::vector<Eigrp> GetAllEigrpRoutesIPv6();
-    std::optional<RoutingTable::Eigrp> GetEigrpRoute(const std::string& destination, const int mask);
-    void UpdateEigrpWithVariance(const Eigrp& route, double variance);
-    void UpdateEigrpWithVarianceIPv6(const Eigrp& route, double variance);
+    void UpdateEigrpWithVarianceIPv6(const Eigrp& route, double variance, AddressFamily af);
+    void AddEigrp(const Eigrp route, AddressFamily af);
+    void UpdateEigrp(const Eigrp route, AddressFamily af);
+    void RemoveEigrp(const std::string& network, int mask, AddressFamily af);
+    std::vector<Eigrp> GetAllEigrpRoutes(AddressFamily af);
+    std::optional<RoutingTable::Eigrp> GetEigrpRoute(const std::string& destination, const int mask, AddressFamily af);
+    void UpdateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af);
 
     // Static method to access the singleton instance
     static RoutingTable& getInstance()

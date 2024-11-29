@@ -6,7 +6,7 @@ int main() {
 
     Terminal* terminal = new Terminal(false);
     while (true) {
-        terminal->Input();
+        terminal->handleInput();
     }
     delete terminal;
     std::string bin;

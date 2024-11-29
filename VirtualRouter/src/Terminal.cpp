@@ -9,443 +9,557 @@
 
 using namespace std;
 
+/**
+ * @brief Constructor for the Terminal class.
+ * 
+ * Initializes the terminal by setting up debugging options, loading command configurations,
+ * setting the default mode, and restoring the previous state if available.
+ * 
+ * @param enableDebug A boolean flag to enable or disable debug mode.
+ */
+Terminal::Terminal(bool enableDebug) : Console() {
+    // Output a message to indicate terminal initialization
+    std::cout << "Initializing Terminal..." << std::endl;
 
-Terminal::Terminal(bool isDebug) : Console() {
+    // Set debug mode based on the input parameter
+    isDebugModeEnabled = enableDebug;
 
-	std::cout << "terminal" << std::endl;
+    // Initialize default error and carriage return commands
+    errorCommand.name = "<error>";
+    carriageReturnCommand.name = "<cr>";
 
-	debug = isDebug;
+	// Load the command tree configuration from a JSON file
+    commandTree.clear();
+    std::string configFilePath = "../VirtualRouter/Configs/Commands.json";
+    std::ifstream configFile(configFilePath);
+    if (configFile.is_open()) {
+        configFile >> commandTree;  // Parse JSON into commandTree
+        configFile.close();
+    } else {
+        std::cerr << "Failed to open configuration file: " << configFilePath << std::endl;
+    }
 
-	er.name = "<error>";
-	cr.name = "<cr>";
+    // Set the terminal to Global Configuration mode by default
+    changeMode(mode.globalConfiguration);
 
-	json.clear();
-	std::string filename = "../VirtualRouter/Configs/Commands.json";
-	std::ifstream file(filename);
-	if (file.is_open()) {
-	    file >> json;
-	    file.close();
-	} else {
-	    std::cerr << "Failed to open file: " << filename << std::endl;
-	}
-	switchMode(mode.globalConfiguration);
+    // Initialize the console and configuration settings
+    initConsole();
+    initConfigs();
 
-	initConsole();
-	initConfigs();
-
-	recover();
+    // Restore the terminal state from saved configurations
+    recoverState();
 }
 
-void Terminal::recover() {
-	vector<string> running = recoverXml();
-	for (string& str : running) {
-		Process(str);
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	}
-	//switchMode(mode.userExec);
+/**
+ * @brief Restores the terminal's state from previously saved configurations.
+ * 
+ * This function retrieves saved commands from persistent storage (XML), executes them,
+ * and optionally introduces a delay between commands for stability.
+ */
+void Terminal::recoverState() {
+    // Retrieve the list of saved commands from the XML recovery system
+    vector<string> savedCommands = recoverXml();
+
+    // Execute each saved command to restore the terminal's state
+    for (string& command : savedCommands) {
+        executeCommand(command);  // Execute the command
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));  // Add a delay for stability
+    }
+
+    // Optionally, switch back to userExec mode if required
+    // changeMode(mode.userExec);
 }
 
-void Terminal::Input() {
-	std::string hostname = Global::getInstance().Hostname();
-	cursorPos = 0;
-	cout << Global::getInstance().Hostname() << currentMode;
+
+/**
+ * @brief Captures and processes user input in the terminal.
+ * 
+ * This function reads the user's input, processes IPv6 addresses if applicable,
+ * handles shortcuts (e.g., Ctrl-Z for mode switching), and executes valid commands.
+ */
+void Terminal::handleInput() {
+    // Retrieve the hostname from the global settings and reset cursor position
+    std::string hostname = Global::getInstance().Hostname();
+    cursorPos = 0;
+    cout << hostname << currentMode;  // Display the prompt with the current mode
+
 #ifdef _WIN32
-	initialLineLength = hostname.size() + currentMode.size();
-#else 
-	initialLineLength = hostname.size() + currentMode.size() + 1;
+    // Windows-specific calculation for prompt length
+    initialLineLength = hostname.size() + currentMode.size();
+#else
+    // Linux-specific calculation for prompt length
+    initialLineLength = hostname.size() + currentMode.size() + 1;
 #endif
-	string Command = input();
-	if (isValidIPv6(Command)) {
-		cout << convertToFullIPv6(Command);
-	}
-	if (Command == "CRT-Z" && currentMode != mode.userExec) {
-		switchMode(mode.privilegedExec);
-	}
-	if (Command != "VK_UP" && Command != "VK_DOWN") {
-		Process(Command);
-	}
-	cout << endl;
+
+    // Read the user's input from the terminal
+    string userCommand = input();
+
+    // Handle IPv6 address input and print the expanded version
+    if (isIPv6Address(userCommand)) {
+        cout << expandIPv6Address(userCommand);
+    }
+
+    // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
+    if (userCommand == "CRT-Z" && currentMode != mode.userExec) {
+        changeMode(mode.privilegedExec);
+    }
+
+    // Execute commands that are not navigation keys (e.g., up/down arrows)
+    if (userCommand != "VK_UP" && userCommand != "VK_DOWN") {
+        executeCommand(userCommand);
+    }
+
+    // Move to the next line after command execution
+    cout << endl;
 }
 
-string Terminal::FixCommand(const string& command) {
-	if (command == "") {
-		return "";
-	}
-	vector<string> normalStream = extractWords(command);
-	string normalize;
-	for (char c : command) {
-		if (isspace(c) || c == '\t') {
-			normalize += c;
-		}
-		else {
-			normalize += tolower(c);
-		}
-	}
-	currentDir = jsonDir;
+std::string Terminal::normalizeCommand(const std::string& inputCommand) {
+    // Return an empty string if the input command is empty
+    if (inputCommand.empty()) {
+        return "";
+    }
 
-	nextWordHelp = false;
+    // Normalize the command by converting all characters to lowercase while preserving spaces and tabs
+    std::string normalizedCommand;
+    for (char character : inputCommand) {
+        if (std::isspace(character) || character == '\t') {
+            normalizedCommand += character;
+        } else {
+            normalizedCommand += std::tolower(character);
+        }
+    }
 
-	vector<string> stream = extractWords(normalize);
-	vector<com> previousList;
-	string oldstring;
-	string previous;
-	string newstring;
-	string volitileString;
+    // Initialize command processing variables
+    currentDirectory = workingDirectory;
+    isNextWordHelpRequested = false;
 
-	int i = 0;
-	bool m = true;
-	run = true;
+    std::vector<std::string> parsedWords = splitIntoWords(normalizedCommand);
+    std::vector<com> previousCommandList;
+    std::string formattedOldCommand;
+    std::string lastProcessedWord;
+    std::string fullyFormattedCommand;
+    std::string volatileCommand;
+
+    int currentIndex = 0;
+    bool isFirstIteration = true;
+    isRunning = true;
 	no = false;
-	successMatch = false;
-	help = false;
-	endcommand = false;
-	line = false;
-	for (string name : stream) {
-		if (name == "?" || name == "vk_tab") {
-			help = true;
+    isMatchSuccessful = false;
+    isHelpModeActive = false;
+    endOfCommand = false;
+    isLineBasedInput = false;
+
+    // Check for help triggers ("?" or "vk_tab")
+    for (const std::string& word : parsedWords) {
+        if (word == "?" || word == "vk_tab") {
+            isHelpModeActive = true;
+        }
+    }
+
+    // Handle "do" and "no" prefix commands
+    if (!parsedWords.empty()) {
+        if (parsedWords[0] == "do" && parsedWords[1] != "exit" && parsedWords[1] != "conf" &&
+            parsedWords[1] != "configure" &&
+            currentMode != mode.userExec && currentMode != mode.privilegedExec) {
+
+            // Temporarily switch to privileged mode for "do" commands
+            isGlobalCommandExecution = true;
+            std::string previousMode = currentMode;
+            nlohmann::json previousCommandTree = workingDirectory;
+            pugi::xml_node previousConfigNode = config_node;
+
+            changeMode(mode.privilegedExec);
+            std::string remainingCommand = inputCommand.substr(2);
+            executeCommand(remainingCommand);
+
+            // Restore the previous mode and working directory
+            currentDirectory.clear();
+            changeMode(previousMode);
+            config_node = previousConfigNode;
+            workingDirectory = previousCommandTree;
+
+            return "error";
+        } else if (parsedWords[0] == "no" && !isHelpModeActive) {
+            // Handle "no" commands by normalizing the remainder of the command
+            std::string strippedCommand = normalizeCommand(inputCommand.substr(3));
+            no = true;
+            return strippedCommand;
+        }
+    }
+	if (!parsedWords.empty())
+	{
+		if (parsedWords[0] == "?" || parsedWords[0] == "vk_tab")
+		{
+			isMatchSuccessful = true;
 		}
 	}
-	if (stream.size() > 0) {
-		if (stream[0] == "do" && stream[1] != "exit" && stream[1] != "conf" && stream[1] != "configure" && currentMode != mode.userExec && currentMode != mode.privilegedExec) {
-			globalCommand = true;
-			string prevMode = currentMode;
-			nlohmann::json prevJson = jsonDir;
-			pugi::xml_node prevXML = config_node;
-			switchMode(mode.privilegedExec);
-			string nextCommand = command.substr(2);
-			Process(nextCommand);
-			currentDir.clear();
-			switchMode(prevMode);
-			config_node = prevXML;
-			jsonDir = prevJson;
-			return "error";
-		} else if (stream[0] == "no" && !help) {
-			string newCommand = FixCommand(command.substr(3));
-			no = true;
-			return newCommand;
-		}
-	}
-	if (!stream.empty()) {
-		if (stream[0] == "?" || stream[0] == "vk_tab") {
-			successMatch = true;
-		}
-	}
-	for (string name : stream) {
-		if (line) {
-			newstring = newstring + " " + normalStream[i];
-			volitileString = volitileString + " " + normalStream[i];
-		} else {
-			matchPattern = false;
-			matchPatternEnd = false;
-			if (run) {
-				vector<com> commandlist = GetCommandList(currentDir, name, m);
-			if ((name == "?") && !successMatch && !previousList.empty() && !nextWordHelp && !endcommand) {
-					newstring += name;
-					volitileString += name;
-					nextLine = oldstring + " ";
-					if (previousList[0].name != "<cr>") {
-						printNames(previousList);
-					} else {
-						nextLine = format(command);
-					}
-				} else if (name == "vk_tab" && !nextWordHelp) {
-					if (!previousList.empty() && previousList.size() != 1) {
-						newstring += name;
-						volitileString += name;
-						nextLine = oldstring + " ";
-					} else if (previousList.empty()) {
-						nextLine = format(command);
-					} else {
-						nextLine = oldstring + " ";
-						nextLine = nextLine.substr(0, nextLine.size() - 1);
-						int pos;
-						bool isSpace = false;
-						for (int c = 0; c <= nextLine.size(); c++) {
-							if (nextLine[c] == ' ') {
-								pos = c;
-								isSpace = true;
-							}
-						}
-						if (!isSpace) {
-							pos = 0;
-						}
-							if (pos == 0) {
-							nextLine = nextLine.substr(0, pos) + getLastWord(newstring) + "  ";
-						}
-						else {
-							nextLine = nextLine.substr(0, pos) + " " + getLastWord(newstring) + "  ";
-						}
-					}
-				} else if ((name == "?") && !successMatch && !previousList.empty() && !nextWordHelp) {
-					nextLine = command;
-				}
-				if (currentDir == "error" && currentMode != mode.globalConfiguration && currentMode != mode.userExec && currentMode != mode.privilegedExec && !help && Functions::lowerCase(command) != "exit") {
-				globalCommand = true;
-				string prevMode = currentMode;
-				nlohmann::json prevJson = jsonDir;
-				pugi::xml_node prevXML = config_node;
-				switchMode(mode.globalConfiguration);
-				historyToGlobal();
-				string nextCommand = command;
-				Process(nextCommand);
-				currentDir.clear();
-				if (currentMode == mode.globalConfiguration) {
-					if (successCommand) {
-						return "error";
-					} else {
-						switchMode(prevMode);
-						config_node = prevXML;
-						jsonDir = prevJson;
-						if (successCommand) {
-							return "error";
-						}
-					}
-				}
-				else {
-					return "error";
-				}
+
+    // Process each word in the parsed command
+    for (std::string& word : parsedWords) {
+        if (isLineBasedInput) {
+            fullyFormattedCommand += " " + parsedWords[currentIndex];
+            volatileCommand += " " + parsedWords[currentIndex];
+        } else {
+            isPatternMatching = false;
+            isPatternMatchEnd = false;
+
+            if (isRunning) {
+                // Retrieve a list of available commands for the current word
+                std::vector<com> availableCommands = GetAvailableCommands(currentDirectory, word, isFirstIteration);
+
+                // Handle "?" for command help
+                if ((word == "?") && !isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested && !endOfCommand) {
+                    fullyFormattedCommand += word;
+                    volatileCommand += word;
+                    nextLine = formattedOldCommand + " ";
+
+                    if (previousCommandList[0].name != "<cr>") {
+                        displayAvailableCommands(previousCommandList);
+                    } else {
+                        nextLine = trimString(inputCommand);
+                    }
+                } else if (word == "vk_tab" && !isNextWordHelpRequested) {
+                    // Handle tab completion logic
+                    if (!previousCommandList.empty() && previousCommandList.size() != 1) {
+                        fullyFormattedCommand += word;
+                        volatileCommand += word;
+                        nextLine = formattedOldCommand + " ";
+                    } else if (previousCommandList.empty()) {
+                        nextLine = trimString(inputCommand);
+                    } else {
+                        nextLine = formattedOldCommand + " ";
+                        nextLine = nextLine.substr(0, nextLine.size() - 1);
+
+                        int lastSpacePosition;
+                        bool hasSpace = false;
+                        for (int charIndex = 0; charIndex <= nextLine.size(); charIndex++) {
+                            if (nextLine[charIndex] == ' ') {
+                                lastSpacePosition = charIndex;
+                                hasSpace = true;
+                            }
+                        }
+                        if (!hasSpace) {
+                            lastSpacePosition = 0;
+                        }
+                        if (lastSpacePosition == 0) {
+                            nextLine = nextLine.substr(0, lastSpacePosition) +
+                                              getLastWord(fullyFormattedCommand) + "  ";
+                        } else {
+                            nextLine = nextLine.substr(0, lastSpacePosition) +
+                                              " " + getLastWord(fullyFormattedCommand) + "  ";
+                        }
+                    }
+                } else if ((word == "?") && isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested) {
+                    nextLine = inputCommand;
+                }
+                if (currentDirectory == "error" && currentMode != mode.globalConfiguration && currentMode != mode.userExec && currentMode != mode.privilegedExec && !isHelpModeActive && Functions::lowerCase(inputCommand) != "exit")
+                {
+                    isGlobalCommandExecution = true;
+                    string prevMode = currentMode;
+                    nlohmann::json prevDirectory = workingDirectory;
+                    pugi::xml_node prevXML = config_node;
+                    changeMode(mode.globalConfiguration);
+                    historyToGlobal();
+                    string nextCommand = inputCommand;
+                    executeCommand(nextCommand);
+                    currentDirectory.clear();
+                    if (currentMode == mode.globalConfiguration)
+                    {
+                        if (isCommandExecutionSuccessful)
+                        {
+                            return "error";
+                        }
+                        else
+                        {
+                            changeMode(prevMode);
+                            config_node = prevXML;
+                            workingDirectory = prevDirectory;
+                            if (isCommandExecutionSuccessful)
+                            {
+                                return "error";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        return "error";
+                    }
+                }
+                if (currentDirectory == "error" && !isGlobalCommand(word) && !isHelpModeActive)
+                {
+                    isRunning = false;
+                    cout << endl;
+                    std::string hostname = Global::getInstance().Hostname();
+                    for (char i : hostname)
+                    {
+                        cout << " ";
+                    }
+                    for (char i : currentMode)
+                    {
+                        cout << " ";
+                    }
+                    for (char i : formattedOldCommand)
+                    {
+                        cout << " ";
+                    }
+                    cout << " ^" << endl;
+                    cout << "% Invalid input detected at '^' marker." << endl;
+                }
+
+                isFirstIteration = false;
 				
-				} 
-				if (currentDir == "error" && !isGlobal(name) && !help) {
-					run = 0;
-					cout << endl;
-					std::string hostname = Global::getInstance().Hostname();
-					for (char i : hostname) {
-						cout << " ";
-					}
-					for (char i : currentMode) {
-						cout << " ";
-					}
-					for (char i : oldstring) {
-						cout << " ";
-					}
-					cout << " ^" << endl;
-					cout << "% Invalid input detected at '^' marker." << endl;
-				}
+                // Match the input word against available commands
+                bool isCommandDone = false;
+                if (!isCommandDone) {
+                    std::vector<com> matchingCommands;
+                    for (const auto& command : availableCommands) {
+                        if (isPatternMatching && command.name == currentPattern) {
+                            matchingCommands.push_back(command);
+                        }
+                        if (command.name.size() >= word.size() &&
+                            std::equal(word.begin(), word.end(), Functions::lowerCase(command.name).begin())) {
+                            matchingCommands.push_back(command);
+                        }
+                    }
+                    previousCommandList = matchingCommands;
+                    if (previousCommandList.empty()) {
+                        previousCommandList = availableCommands;
+                    }
 
-				m = 0;
-
-				bool done = 0;
-				if (!done) {
-					vector<com> matches;
-					for (const auto& word : commandlist) {
-						if (matchPattern && word.name == pattern) {
-							matches.push_back(word);
+                    if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested) && !endOfCommand) {
+                        displayAvailableCommands(availableCommands);
+                        fullyFormattedCommand += word;
+                        volatileCommand += word;
+                        nextLine = formattedOldCommand + " ";
+						if (availableCommands[0].name != "<error>")
+						{
+							// cout << isHelpModeActive
 						}
-						if (word.name.size() >= name.size()) {
-							if (equal(name.begin(), name.end(), Functions::lowerCase(word.name).begin())) {
-								matches.push_back(word);
-							}
+						else
+						{
+							nextLine = inputCommand;
 						}
-					}
-					previousList = matches;
-					if (previousList.empty()) {
-						previousList = commandlist;
-					}
-					if (name == "?" && (successMatch || nextWordHelp) && !endcommand) {
-						printNames(commandlist);
-						newstring += name;
-						volitileString += name;
-						nextLine = oldstring + " ";
-						if (commandlist[0].name != "<error>") {
-							//cout << nextWordHelp;
-						} else {
-							nextLine = command;
-						}
-						if (nextWordHelp) {
+						if (isHelpModeActive)
+						{
 							nextLine += " ";
 						}
-					} else if (name == "vk_tab" && (commandlist[0].name == "<error>" || nextWordHelp)) {
-						nextLine = command;
+                    }
+					else if (word == "vk_tab" && (availableCommands[0].name == "<error>" || isNextWordHelpRequested))
+					{
+						nextLine = inputCommand;
 					}
-					successMatch = 0;
-					if (previousList.size() == 1 && !matches.empty()) {
-						if (matchPattern && pattern == matches[0].name) {
-							successMatch = 1;
-						}
-						if (matches[0].name == name) {
-							successMatch = 1;
-						}
-					} else if (name == "?" && (successMatch || nextWordHelp)) {
-						nextLine = command;
+
+                    isMatchSuccessful = false;
+
+                    if (previousCommandList.size() == 1 && !matchingCommands.empty()) {
+                        if (isPatternMatching && currentPattern == matchingCommands[0].name) {
+                            isMatchSuccessful = true;
+                        }
+                        if (matchingCommands[0].name == word) {
+                            isMatchSuccessful = true;
+                        }
+                    }
+					else if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested))
+					{
+						nextLine = inputCommand;
 					}
-					if (!done && matches.size() <= 1) {
-						if (matchPattern) {
-							newstring = newstring + " " + normalStream[i];
-							oldstring = oldstring + " " + normalStream[i];
-							volitileString = volitileString + " " + pattern;
-							previousMatchString = matches[0].name;
-						} else if (matches.size() == 1) {
-							newstring = newstring + " " + matches[0].name;
-							oldstring = oldstring + " " + name;
-							volitileString = volitileString + " " + name;
-							done = true;
-							previousMatchString = matches[0].name;
-						} else if (matches.empty() && endcommand) {
-							newstring = newstring + " " + endstring;
-							oldstring = oldstring + " " + name;
-							volitileString = volitileString + " " + name;
-							previous = name;
-						} else if (matches.empty() ) {
-							newstring = newstring + " " + name;
-							oldstring = oldstring + " " + name;
-							volitileString = volitileString + " " + name;
-							previous = name;
-							if (!help) {
-								return name;
-							}
-						} else {
-							newstring = newstring + " " + matches[0].name;
-							oldstring = oldstring + " " + name;
-							volitileString = volitileString + " " + name;
-							done = true;
-							previousMatchString = matches[0].name;
+
+                    if (!isCommandDone && matchingCommands.size() <= 1) {
+                        if (isPatternMatching) {
+                            fullyFormattedCommand += " " + parsedWords[currentIndex];
+                            formattedOldCommand += " " + parsedWords[currentIndex];
+                            volatileCommand += " " + currentPattern;
+                            previousMatch = matchingCommands[0].name;
+                        } else if (matchingCommands.size() == 1) {
+                            fullyFormattedCommand += " " + matchingCommands[0].name;
+                            formattedOldCommand += " " + word;
+                            volatileCommand += " " + word;
+                            isCommandDone = true;
+                            previousMatch = matchingCommands[0].name;
+                        } else if (matchingCommands.empty() && endOfCommand) {
+                            fullyFormattedCommand += " " + endCommandString;
+                            formattedOldCommand += " " + word;
+                            volatileCommand += " " + word;
+                            lastProcessedWord = word;
+                        } else if (matchingCommands.empty()) {
+                            fullyFormattedCommand += " " + word;
+                            formattedOldCommand += " " + word;
+                            volatileCommand += " " + word;
+                            lastProcessedWord = word;
+                            if (!isHelpModeActive) {
+                                return word;
+                            }
+                        } else {
+							fullyFormattedCommand += " " + matchingCommands[0].name;
+							formattedOldCommand += " " + word;
+							volatileCommand += " " + word;
+							isCommandDone = true;
+							previousMatch = matchingCommands[0].name;
 						}
-					} else {
-						oldstring = oldstring + " " + name;
-						volitileString = volitileString + " " + name;
-					}
-				}
-			}
-		}
-		i++;
-		previous = name;
-	}
-	oldstring = format(oldstring);
-	volitileString = format(volitileString);
-	oldCommandStream = extractWords(volitileString);
-	newstring = format(newstring);
-	nextLine = format(nextLine);
-	if (!validCommand && !help && !matchPatternEnd && !line) {
-		cout << endl;
-		cout << "Incomplete Command";
-		return "";
-	} else {
-		return newstring;
-	 }
+                    } else {
+                        formattedOldCommand += " " + word;
+                        volatileCommand += " " + word;
+                    }
+                }
+            }
+        }
+        currentIndex++;
+        lastProcessedWord = word;
+    }
+
+    // Final formatting and return
+    formattedOldCommand = trimString(formattedOldCommand);
+    volatileCommand = trimString(volatileCommand);
+    commandHistory = splitIntoWords(volatileCommand);
+    fullyFormattedCommand = trimString(fullyFormattedCommand);
+    nextLine = trimString(nextLine);
+
+    if (!isCommandValid && !isHelpModeActive && !isPatternMatchEnd && !isLineBasedInput) {
+        std::cout << std::endl << "Incomplete Command";
+        return "";
+    } else {
+        return fullyFormattedCommand;
+    }
 }
 
-vector<com> Terminal::GetCommandList(const nlohmann::json& execCommands, const string& directory, bool mode) {
-	
-	vector<com> commandlist;
-	nlohmann::json currentDirCopy = currentDir;
-	vector<com> noSubComList{er};
-	com equalWord;
-	bool isEqual = false;
-	bool valid = false;
+std::vector<com> Terminal::GetAvailableCommands(const nlohmann::json& commandTree, const std::string& userInput, bool inPrivilegedMode) {
+    // Container for storing available commands
+    std::vector<com> availableCommands;
 
-	if (currentDir == "error") {
-		return noSubComList;
-	}
+    // Clone the current command directory
+    nlohmann::json currentCommandDirectory = currentDirectory;
 
-	nlohmann::json w;
-	int matches {0};
-	currentDirCopy = currentDir;
-	for (auto& work : currentDirCopy) {
-		com word;
-		word.name = work["name"];
-		word.description = work["description"];
-		commandlist.push_back(word);
-	}
+    // Default response for invalid or unavailable commands
+    std::vector<com> noSubCommands = {errorCommand};
 
-	for (auto& work : currentDirCopy) {
+    // Variables for handling exact matches
+    com exactMatchCommand;
+    bool isExactMatch = false;
+    bool isValidCommand = false;
 
-		string word = work["name"];
-		if (matchesPattern(directory, word) && !endcommand) {
-			w = work;
-			matches++;
-			if (!isValidDirectory(w)) {
-				endcommand = true;	
-			}
-		} else if (word.size() >= directory.size()) {
-			if (equal(directory.begin(), directory.end(), Functions::lowerCase(word).begin()) && !isEqual) {
-				w = work;
-				matches++;
-			}
-			if (word == directory) {
-				isEqual = true;
-				com wr;
-				wr.name = Functions::lowerCase(work["name"]);
-				wr.description = work["description"];
-				equalWord = wr;
-				w = work;
-			}
-		}
-	}
-	if (isEqual) {
-		matches = 1;
-	}
-	if (matches == 1 && isValidDirectory(w)) {
-		currentDir = w["subcommands"];
-		for (auto& word : currentDir) {
-			if (word["name"] == "<cr>") {
-				validCommand = true;
-				valid = true;
-			}
-		}
-		if (!valid) {
-			validCommand = false;
-		}
-		if (isEqual) {
-			commandlist.clear();
-			commandlist.push_back(equalWord);
-		}
-	}
-	else if ((isValidDirectory(w) || matches != 1) && !successMatch) {
-		currentDir = "error";
-	} else if (isEqual && !isValidDirectory(w) && !directory.empty()) {
-		endstring = Functions::lowerCase(w["name"]);
-		endcommand = true;
-		return noSubComList;
-	}
-	if (matches == 0 && !directory.empty() && currentDir == "error" && directory != "?" && directory != "vk_tab") {
-		return noSubComList;
-	}
-	if (matches == 0 && !isValidDirectory(w) && directory != "?" && directory != "vk_tab" && !matchPattern) {
-		currentDir = "error";
-		return noSubComList;
-	}
-	return commandlist;
+    // If the current directory is invalid, return the default error response
+    if (currentDirectory == "error") {
+        return noSubCommands;
+    }
+
+    // Iterate over all commands in the current directory
+    nlohmann::json commandNode;
+    int matchCount = 0;
+    for (const auto& command : currentCommandDirectory) {
+        com commandData;
+        for (const auto i : command)
+        commandData.name = command["name"];
+        commandData.description = command["description"];
+        availableCommands.push_back(commandData);
+
+        // Check if the user input matches a pattern or specific command
+        std::string commandName = command["name"];
+        if (matchInputPattern(userInput, commandName) && !endOfCommand) {
+            commandNode = command;
+            matchCount++;
+            if (!isValidCommandDirectory(commandNode)) {
+                endOfCommand = true;
+            }
+        } else if (commandName.size() >= userInput.size()) {
+            if (std::equal(userInput.begin(), userInput.end(), Functions::lowerCase(commandName).begin()) && !isExactMatch) {
+                commandNode = command;
+                matchCount++;
+            }
+            if (commandName == userInput) {
+                isExactMatch = true;
+                exactMatchCommand.name = Functions::lowerCase(command["name"]);
+                exactMatchCommand.description = command["description"];
+                commandNode = command;
+            }
+        }
+    }
+
+    // Handle exact matches and valid commands
+    if (isExactMatch) {
+        matchCount = 1;
+    }
+    if (matchCount == 1 && isValidCommandDirectory(commandNode)) {
+        currentDirectory = commandNode["subcommands"];
+        for (const auto& subCommand : currentDirectory) {
+            if (subCommand["name"] == "<cr>") {
+                isCommandValid = true;
+                isValidCommand = true;
+            }
+        }
+        if (!isValidCommand) {
+            isCommandValid = false;
+        }
+        if (isExactMatch) {
+            availableCommands.clear();
+            availableCommands.push_back(exactMatchCommand);
+        }
+    } else if ((isValidCommandDirectory(commandNode) || matchCount != 1) && !isMatchSuccessful) {
+        currentDirectory = "error";
+    } else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty()) {
+        endCommandString = Functions::lowerCase(commandNode["name"]);
+        endOfCommand = true;
+        return noSubCommands;
+    }
+
+    // Handle unmatched or invalid commands
+    if (matchCount == 0 && !userInput.empty() && currentDirectory == "error" &&
+        userInput != "?" && userInput != "vk_tab") {
+        return noSubCommands;
+    }
+    if (matchCount == 0 && !isValidCommandDirectory(commandNode) && userInput != "?" &&
+        userInput != "vk_tab" && !isPatternMatching) {
+        currentDirectory = "error";
+        return noSubCommands;
+    }
+
+    return availableCommands;
 }
 
-bool Terminal::isGlobal(string& name) {
-	for (string i : globalList) {
-		if (i.size() >= name.size() && equal(name.begin(), name.end(), i.begin())) {
-			return true;
-		}
-	}
-	return false;
+bool Terminal::isGlobalCommand(std::string& commandName) {
+    // Iterate through the list of global commands
+    for (const std::string& globalCommand : globalCommandList) {
+        if (globalCommand.size() >= commandName.size() &&
+            std::equal(commandName.begin(), commandName.end(), globalCommand.begin())) {
+            return true;
+        }
+    }
+    return false;
 }
 
-void Terminal::printNames(vector<com> list) {
-	uint8_t size = 0;
-	int line = 0;
-	for (com i : list) {
-		if (i.name.size() > size) {
-			size = i.name.size();
-		}
-	}
-	for (com i : list) {
-		if (i.name != "<error>") {
-			if (more(line)) {
-				cout << "\n  " << i.name;
-				int siz = i.name.size();
-				for (int i = 0; i <= (size - siz + 5); i++) {
-					cout << " ";
-				}
-				//cout << i.description;
-				line++;
-			} else {
-				return;
-			}
-		} else {
-			return;
-		}
-	}
+void Terminal::displayAvailableCommands(std::vector<com> commandList) {
+    uint8_t maxNameLength = 0;
+    int lineCount = 0;
+
+    // Find the longest command name for formatting
+    for (const com& command : commandList) {
+        if (command.name.size() > maxNameLength) {
+            maxNameLength = command.name.size();
+        }
+    }
+
+    // Print each command with aligned descriptions
+    for (const com& command : commandList) {
+        if (command.name != "<error>") {
+            if (handlePagination(lineCount)) {
+                std::cout << "\n  " << command.name;
+                int nameLength = command.name.size();
+                for (int i = 0; i <= (maxNameLength - nameLength + 5); i++) {
+                    std::cout << " ";
+                }
+                // Uncomment if you want to display descriptions
+                std::cout << command.description;
+                lineCount++;
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+    }
 }
 
-std::string Terminal::getLastWord(const std::string& inputString) {
-    std::istringstream stream(inputString);
+std::string Terminal::getLastWord(const std::string& input) {
+    std::istringstream stream(input);
     std::string stringword;
     std::string stringlastWord;
     while (stream >> stringword) {
@@ -455,52 +569,52 @@ std::string Terminal::getLastWord(const std::string& inputString) {
     return stringlastWord;
 }
 
-std::vector<std::string> Terminal::extractWords(const std::string& str) {
+std::vector<std::string> Terminal::splitIntoWords(const std::string& str) {
     std::vector<std::string> words;
-    std::string word;
-    bool inWord = false;
-	bool space = false;
+    std::string currentWord;
+    bool isInsideWord = false;
+    bool isPreviousSpace = false;
+    // Iterate through each character in the string
+    for (char ch : str) {
+        if (!std::isspace(ch) && ch != '?' && ch != '\t') {
+            currentWord += ch;
+            isInsideWord = true;
+            isPreviousSpace = false;
+        } else if (ch == '?') {
+            if (!currentWord.empty()) {
+                words.push_back(currentWord);
+            }
+            currentWord = ch;
+            if (isPreviousSpace) {
+                isNextWordHelpRequested = true;
+            }
+            isPreviousSpace = false;
+        } else if (ch == '\t') {
+            if (!currentWord.empty()) {
+                words.push_back(currentWord);
+            }
+            currentWord = "vk_tab";
+            if (isPreviousSpace) {
+                isNextWordHelpRequested = true;
+            }
+            isPreviousSpace = false;
+        } else if (isInsideWord) {
+            words.push_back(currentWord);
+            currentWord.clear();
+            isInsideWord = false;
+            isPreviousSpace = true;
+        }
+    }
 
-	for (char ch : str) {
-		if (!isspace(ch) && ch != '?' && ch != '\t') {
-			word += ch;
-			inWord = true;
-			space = false;
-		}
-		else if (ch == '?') {
-			if (!word.empty()) {
-				words.push_back(word);
-			}
-			word = ch;
-			if (space) {
-				nextWordHelp = true;
-			}
-			space = false;
-		}
-		else if (ch == '\t') {
-			if (!word.empty()) {
-				words.push_back(word);
-			}
-			word = "vk_tab";
-			if (space) {
-				nextWordHelp = true;
-			}
-			space = false;
-		}
-		else if (inWord) {
-			words.push_back(word);
-			word.clear();
-			inWord = false;
-			space = true;
-		}
-	}
-	if (!word.empty()) {
-		words.push_back(word);
-	}
-	return words;
+    // Push the last word if any
+    if (!currentWord.empty()) {
+        words.push_back(currentWord);
+    }
+
+    return words;
 }
 
-string Terminal::format(string str) {
+std::string Terminal::trimString(std::string str) {
 	string newstr = str;
 	for (int ch = 0; ch <= str.size(); ch++) {
 		if (isspace(str[ch])) {
@@ -512,276 +626,294 @@ string Terminal::format(string str) {
 	return newstr;
 }
 
-bool Terminal::matchesPattern(const std::string& input, const std::string& regexRange) {
-	if (regexRange == "WORD" && input != "?" && input != "vk_tab") {
-		pattern = regexRange;
-		matchPattern = true;
-		return true;
-	}
-	if (regexRange == "LINE" && input != "?" && input != "vk_tab") {
-		pattern = regexRange;
-		matchPattern = true;
-		line = true;
-		return true;
-	}
-	if (regexRange == "A.B.C.D" && input != "?" && input != "vk_tab") {
-		int oct1, oct2, oct3, oct4;
-	#ifdef _WIN32
-		sscanf_s(input.c_str(), "%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
-	#else
-		sscanf(input.c_str(), "%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
-	#endif
-		vector<int> oct{oct1, oct2, oct3, oct4};
-		bool isIP = true;
-		for (int i : oct) {
-			if (i < 0 || i > 255) {
-				isIP = false;
-			}
-		}
-		if (isIP) {
-			pattern = regexRange;
-			matchPattern = true;
-			return true;
-		}
-	}
-	if (regexRange == "X:X:X:X::X") {
-		if (isValidIPv6(input)) {
-			pattern = regexRange;
-			matchPattern = true;
-			return true;
-		}
-	}
-	if (regexRange == "X:X:X:X::X/<0-128>") {
-		if (isValidIPv6WithMask(input)) {
-			pattern = regexRange;
-			matchPattern = true;
-			return true;
-		}
-	}
-	if (regexRange == "H.H.H") {
-		if (isValidMACAddress(input)) {
-			pattern = regexRange;
-			matchPattern = true;
-			return true;
-		}
-	}
-	if (regexRange == "x/y/z") {}
+bool Terminal::matchInputPattern(const std::string& userInput, const std::string& expectedPattern) {
+    if (expectedPattern == "WORD" && userInput != "?" && userInput != "vk_tab") {
+        currentPattern = expectedPattern;
+        isPatternMatching = true;
+        return true;
+    }
 
-	if (regexRange[0] == '<') {
-		int min, max;
-	#ifdef _WIN32
-		sscanf_s(regexRange.c_str(), "<%d-%d>", &min, &max);
-	#else
-		sscanf(regexRange.c_str(), "<%d-%d>", &min, &max);
-	#endif
-		if (isNumber(input)) {
-			if (std::stoi(input) >= min && std::stoi(input) <= max) {
-				pattern = regexRange;
-				matchPattern = true;
-				matchPatternEnd = true;
-				return true;
-			}
-		}
-	}
-	return false;
+    if (expectedPattern == "LINE" && userInput != "?" && userInput != "vk_tab") {
+        currentPattern = expectedPattern;
+        isPatternMatching = true;
+        isLineBasedInput = true;
+        return true;
+    }
+
+    if (expectedPattern == "A.B.C.D" && userInput != "?" && userInput != "vk_tab") {
+        int oct1, oct2, oct3, oct4;
+    #ifdef _WIN32
+        sscanf_s(userInput.c_str(), "%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
+    #else
+        sscanf(userInput.c_str(), "%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
+    #endif
+        std::vector<int> octets = {oct1, oct2, oct3, oct4};
+        bool isValidIP = true;
+        for (int octet : octets) {
+            if (octet < 0 || octet > 255) {
+                isValidIP = false;
+            }
+        }
+        if (isValidIP) {
+            currentPattern = expectedPattern;
+            isPatternMatching = true;
+            return true;
+        }
+    }
+
+    if (expectedPattern == "X:X:X:X::X") {
+        if (isIPv6Address(userInput)) {
+            currentPattern = expectedPattern;
+            isPatternMatching = true;
+            return true;
+        }
+    }
+
+    if (expectedPattern == "X:X:X:X::X/<0-128>") {
+        if (isIPv6AddressWithMask(userInput)) {
+            currentPattern = expectedPattern;
+            isPatternMatching = true;
+            return true;
+        }
+    }
+
+    if (expectedPattern == "H.H.H") {
+        if (isMACAddress(userInput)) {
+            currentPattern = expectedPattern;
+            isPatternMatching = true;
+            return true;
+        }
+    }
+
+    if (expectedPattern[0] == '<') {
+        int min, max;
+    #ifdef _WIN32
+        sscanf_s(expectedPattern.c_str(), "<%d-%d>", &min, &max);
+    #else
+        sscanf(expectedPattern.c_str(), "<%d-%d>", &min, &max);
+    #endif
+        if (isNumeric(userInput)) {
+            int number = std::stoi(userInput);
+            if (number >= min && number <= max) {
+                currentPattern = expectedPattern;
+                isPatternMatching = true;
+                isPatternMatchEnd = true;
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
-bool Terminal::isNumber(const std::string& s) {
-    if (s.empty() || ((!isdigit(s[0])) && (s[0] != '-') && (s[0] != '+'))) return false;
+bool Terminal::isNumeric(const std::string& input) {
+    if (input.empty() || (!std::isdigit(input[0]) && input[0] != '-' && input[0] != '+')) {
+        return false;
+    }
 
-    char* p;
-    strtol(s.c_str(), &p, 10);
+    char* endPtr;
+    std::strtol(input.c_str(), &endPtr, 10);
 
-    return (*p == 0);
+    return (*endPtr == '\0');
 }
 
-bool Terminal::isValidDirectory(nlohmann::json& js) {
-	if (!js.contains("subcommands")) {
+bool Terminal::isValidCommandDirectory(nlohmann::json& directory) {
+    return directory.contains("subcommands");
+}
+
+bool Terminal::handlePagination(int& lineNum) {
+    if (lineNum % 10 == 0 && lineNum != 0) {
+	cout << "\n  --More--";
+    #ifdef _WIN32
+	HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD mode;
+    GetConsoleMode(hInput, &mode);
+    SetConsoleMode(hInput, mode & (~ENABLE_PROCESSED_INPUT));
+
+	DWORD read;
+    INPUT_RECORD ir;
+    DWORD written;
+
+	while (true) {
+
+	maxCommandLength = getTerminalWidth() - initialLineLength;
+
+	ReadConsoleInput(hInput, &ir, 1, &read);
+
+	if (ir.EventType == KEY_EVENT && ir.Event.KeyEvent.bKeyDown) {
+	    if (ir.Event.KeyEvent.wVirtualKeyCode == VK_SPACE) {
+		while (getCursorPosition().X != 0) {
+		    moveCursorLeft(1);
+		    cout << " ";
+		    moveCursorLeft(1);
+		}
+		moveCursorLeft(1);
+		return true;
+	    } else if (ir.Event.KeyEvent.uChar.AsciiChar == 'q') {
+	        while (getCursorPosition().X != 0) {
+		    moveCursorLeft(1);
+		    cout << " ";
+		    moveCursorLeft(1);
+		}
+	        moveCursorLeft(1);
 		return false;
-	} else {
-		return true;
+	    }
 	}
+    }
+    #else
+
+
+
+    while (true) {
+
+	maxCommandLength = getTerminalWidth() - initialLineLength;
+
+	if (kbhit()) {
+	    char nextch = getchar();
+	    if (nextch == '\x20') {
+		while (getCursorPosition().col != 1) {
+		    moveCursorLeft(1);
+		    cout << " ";
+		    moveCursorLeft(1);
+		}
+		moveCursorLeft(1);
+		return true;
+		} else if (nextch == 'q') {
+		    while (getCursorPosition().col != 1) {
+			moveCursorLeft(1);
+			cout << " ";
+			moveCursorLeft(1);
+		    }
+		    moveCursorLeft(1);
+		    return false;
+		}
+	    }
+	}
+
+    #endif
+
+    } else {
+	return true;
+    }
 }
 
-bool Terminal::more(int& lineNum) {
-	if (lineNum % 10 == 0 && lineNum != 0) {
-		cout << "\n  --More--";
-	#ifdef _WIN32
-		HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
-    	DWORD mode;
-    	GetConsoleMode(hInput, &mode);
-    	SetConsoleMode(hInput, mode & (~ENABLE_PROCESSED_INPUT));
-
-		DWORD read;
-    	INPUT_RECORD ir;
-    	DWORD written;
-
-		while (true) {
-
-	        maxCommandLength = getTerminalWidth() - initialLineLength;
-
-	        ReadConsoleInput(hInput, &ir, 1, &read);
-
-	        if (ir.EventType == KEY_EVENT && ir.Event.KeyEvent.bKeyDown) {
-	            if (ir.Event.KeyEvent.wVirtualKeyCode == VK_SPACE) {
-					while (getCursorPosition().X != 0) {
-						moveCursorLeft(1);
-						cout << " ";
-						moveCursorLeft(1);
-					}
-					moveCursorLeft(1);
-					return true;
-				} else if (ir.Event.KeyEvent.uChar.AsciiChar == 'q') {
-					while (getCursorPosition().X != 0) {
-						moveCursorLeft(1);
-						cout << " ";
-						moveCursorLeft(1);
-					}
-					moveCursorLeft(1);
-					return false;
-				}
-			}
-		}
-	#else
-
-
-
-		while (true) {
-
-	        maxCommandLength = getTerminalWidth() - initialLineLength;
-
-	        if (kbhit()) {
-				char nextch = getchar();
-	            if (nextch == '\x20') {
-					while (getCursorPosition().col != 1) {
-						moveCursorLeft(1);
-						cout << " ";
-						moveCursorLeft(1);
-					}
-					moveCursorLeft(1);
-					return true;
-				} else if (nextch == 'q') {
-					while (getCursorPosition().col != 1) {
-						moveCursorLeft(1);
-						cout << " ";
-						moveCursorLeft(1);
-					}
-					moveCursorLeft(1);
-					return false;
-				}
-			}
-		}
-
-	#endif
-	} else {
-		return true;
-	}
-}
-
-void Terminal::switchMode(string& newMode) {
+void Terminal::changeMode(string& newMode) {
 	prevMode = currentMode;
 	currentMode = newMode;
-	jsonDir = json[currentMode];
-	modeChange = true;
+	workingDirectory = commandTree[currentMode];
+	isModeChanged = true;
 }
 
-std::vector<std::string> Terminal::split(const std::string& str, char delimiter) {
+std::vector<std::string> Terminal::tokenize(const std::string& input, char delimiter) {
+    // Vector to store the resulting tokens
     std::vector<std::string> tokens;
+
+    // Temporary string to store each token during iteration
     std::string token;
-    std::istringstream tokenStream(str);
+
+    // Use an input string stream for easy parsing
+    std::istringstream tokenStream(input);
+
+    // Split the string based on the delimiter
     while (std::getline(tokenStream, token, delimiter)) {
         tokens.push_back(token);
     }
+
     return tokens;
 }
 
-std::string Terminal::fillZeros(const std::string& str) {
-    std::ostringstream oss;
-    oss << std::setfill('0') << std::setw(4) << str;
-    return oss.str();
+std::string Terminal::padWithZeros(const std::string& input) {
+    std::ostringstream paddedStream;
+    paddedStream << std::setfill('0') << std::setw(4) << input;
+    return paddedStream.str();
 }
 
-std::string Terminal::convertToFullIPv6(const std::string& ipv6) {
-	string ip, prefix;
-	bool hasPrefix = false;
-	for (size_t i = 0; i < ipv6.length(); i++) {
-		if (ipv6[i] == '/') {
-			ip = ipv6.substr(0, i - 1);
-			prefix = ipv6.substr(i);
-			hasPrefix = true;
-		}
-	}
-	if (!hasPrefix) {
-		ip = ipv6;
-	}
-    std::string expandedIPv6 = ip;
-    size_t doubleColonPos = expandedIPv6.find("::");
+std::string Terminal::expandIPv6Address(const std::string& ipv6Address) {
+    std::string ip, prefix;
+    bool hasPrefix = false;
+
+    size_t slashPos = ipv6Address.find('/');
+    if (slashPos != std::string::npos) {
+        ip = ipv6Address.substr(0, slashPos);
+        prefix = ipv6Address.substr(slashPos);
+        hasPrefix = true;
+    } else {
+        ip = ipv6Address;
+    }
+
+    std::string expandedIP = ip;
+    size_t doubleColonPos = expandedIP.find("::");
     if (doubleColonPos != std::string::npos) {
-        std::vector<std::string> frontParts = split(expandedIPv6.substr(0, doubleColonPos), ':');
-        std::vector<std::string> backParts = split(expandedIPv6.substr(doubleColonPos + 2), ':');
-        int hextetCount = frontParts.size() + backParts.size();
-        std::string zeros = "";
-        for (int i = 0; i < 8 - hextetCount; ++i) {
-            zeros += "0000:";
+        std::vector<std::string> frontSegments = tokenize(expandedIP.substr(0, doubleColonPos), ':');
+        std::vector<std::string> backSegments = tokenize(expandedIP.substr(doubleColonPos + 2), ':');
+
+        int hextetCount = frontSegments.size() + backSegments.size();
+        std::string zeroSegments((8 - hextetCount), '0');
+        expandedIP.clear();
+
+        for (const std::string& segment : frontSegments) {
+            expandedIP += padWithZeros(segment) + ":";
         }
-        expandedIPv6 = "";
-        for (const std::string& part : frontParts) {
-            expandedIPv6 += fillZeros(part) + ":";
+        expandedIP += zeroSegments;
+        for (const std::string& segment : backSegments) {
+            expandedIP += padWithZeros(segment) + ":";
         }
-        expandedIPv6 += zeros;
-        for (const std::string& part : backParts) {
-            expandedIPv6 += fillZeros(part) + ":";
-        }
-        if (!expandedIPv6.empty() && expandedIPv6.back() == ':') {
-            expandedIPv6.pop_back();
+        if (!expandedIP.empty() && expandedIP.back() == ':') {
+            expandedIP.pop_back();
         }
     } else {
-        std::vector<std::string> parts = split(expandedIPv6, ':');
-        expandedIPv6 = "";
-        for (const std::string& part : parts) {
-            expandedIPv6 += fillZeros(part) + ":";
+        std::vector<std::string> segments = tokenize(expandedIP, ':');
+        expandedIP.clear();
+        for (const std::string& segment : segments) {
+            expandedIP += padWithZeros(segment) + ":";
         }
-        if (!expandedIPv6.empty() && expandedIPv6.back() == ':') {
-            expandedIPv6.pop_back();
+        if (!expandedIP.empty() && expandedIP.back() == ':') {
+            expandedIP.pop_back();
         }
     }
-    return expandedIPv6 + prefix;
+
+    return expandedIP + prefix;
 }
 
-bool Terminal::isValidIPv6(const std::string& ipv6) {
+bool Terminal::isIPv6Address(const std::string& address) {
     std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))");
-    return std::regex_match(ipv6, ipRegex);
+    return std::regex_match(address, ipRegex);
 }
 
-bool Terminal::isValidIPv6WithMask(const std::string& ipWithMask) {
+bool Terminal::isIPv6AddressWithMask(const std::string& addressWithMask) {
     std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))/(12[0-8]|1[01][0-9]|[1-9]?[0-9])");
-    return std::regex_match(ipWithMask, ipRegex);
+    return std::regex_match(addressWithMask, ipRegex);
 }
 
-bool Terminal::isValidMACAddress(const std::string& mac) {
+bool Terminal::isMACAddress(const std::string& macAddress) {
     std::regex macRegex("^([0-9A-Fa-f]{1,4}[:-]?){6}([0-9A-Fa-f]{1,4})$");
-    return std::regex_match(mac, macRegex);
+    return std::regex_match(macAddress, macRegex);
 }
 
-void Terminal::getInterfaceMode(string& type) {
-	if (type == "Dialer") {switchMode(mode.dialer); currentSubMode = type;}
-	else if (type == "Ethernet") {switchMode(mode.ethernet); Interfaces = &InterfaceList["EthernetList"]; currentSubMode = type;}
-	else if (type == "FastEthernet") {switchMode(mode.fastEthernet); Interfaces = &InterfaceList["FastEthernetList"]; currentSubMode = type;}
-	else if (type == "GigabitEthernet") {switchMode(mode.gigabitEthernet); Interfaces = &InterfaceList["GigabitList"]; currentSubMode = type;}
-	else if (type == "Loopback") {switchMode(mode.loopback); Interfaces = &InterfaceList["LoopbackList"]; currentSubMode = type;}
-	else if (type == "Portchannel") {switchMode(mode.portchannel); Interfaces = &InterfaceList["PortchannelList"]; currentSubMode = type;}
-	else if (type == "Tunnel") {switchMode(mode.tunnel); Interfaces = &InterfaceList["TunnelList"]; currentSubMode = type;}
-	else if (type == "Virtual-Template") {switchMode(mode.virtualTemplate); Interfaces = &InterfaceList["VirtualTemplateList"]; currentSubMode = type;}
-	else if (type == "Vlan") {switchMode(mode.vlan); Interfaces = &InterfaceList["VlanList"]; currentSubMode = type;}
-	jsonDir = jsonDir[0][type];
+enum InterfaceMode
+{
+	
+};
+
+void Terminal::configureInterfaceMode(string& type) {
+	if (type == "Dialer") {changeMode(mode.dialer); currentSubMode = type;}
+	else if (type == "Ethernet") {changeMode(mode.ethernet); activeInterfaces = &InterfaceList["EthernetList"]; currentSubMode = type;}
+	else if (type == "FastEthernet") {changeMode(mode.fastEthernet); activeInterfaces = &InterfaceList["FastEthernetList"]; currentSubMode = type;}
+	else if (type == "GigabitEthernet") {changeMode(mode.gigabitEthernet); activeInterfaces = &InterfaceList["GigabitList"]; currentSubMode = type;}
+	else if (type == "Loopback") {changeMode(mode.loopback); activeInterfaces = &InterfaceList["LoopbackList"]; currentSubMode = type;}
+	else if (type == "Portchannel") {changeMode(mode.portchannel); activeInterfaces = &InterfaceList["PortchannelList"]; currentSubMode = type;}
+	else if (type == "Tunnel") {changeMode(mode.tunnel); activeInterfaces = &InterfaceList["TunnelList"]; currentSubMode = type;}
+	else if (type == "Virtual-Template") {changeMode(mode.virtualTemplate); activeInterfaces = &InterfaceList["VirtualTemplateList"]; currentSubMode = type;}
+	else if (type == "Vlan") {changeMode(mode.vlan); activeInterfaces = &InterfaceList["VlanList"]; currentSubMode = type;}
+	workingDirectory = workingDirectory[0][type];
 }
 
-void Terminal::getRoutingMode(string& type) {
-	if (type == "bgp") {switchMode(mode.bgp); currentSubMode = type;} 
-	else if (type == "eigrp_classic") {switchMode(mode.eigrp_classic); currentSubMode = type;} 
-	else if (type == "eigrp_named") {switchMode(mode.eigrp_named); currentSubMode = type;} 
-	else if (type == "ospf") {switchMode(mode.ospf); currentSubMode = type;}
-	else if (type == "rip") {switchMode(mode.rip); currentSubMode = type;}
-	jsonDir = jsonDir[0][type];
+void Terminal::configureRoutingMode(RoutingMode type) {
+	if (type == RoutingMode::BGP) {changeMode(mode.bgp); currentSubMode = "bgp";} 
+	else if (type == RoutingMode::EIGRP_CLASSIC) {changeMode(mode.eigrp_classic); currentSubMode = "eigrp_classic";} 
+	else if (type == RoutingMode::EIGRP_NAMED) {changeMode(mode.eigrp_named); currentSubMode = "eigrp_named";} 
+	else if (type == RoutingMode::OSPF) {changeMode(mode.ospf); currentSubMode = "ospf";}
+	else if (type == RoutingMode::RIP) {changeMode(mode.rip); currentSubMode = "rip";}
+	workingDirectory = workingDirectory[0][currentSubMode];
 }
 

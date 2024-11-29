@@ -493,6 +493,9 @@ VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o
 VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o
 VirtualRouter: CMakeFiles/VirtualRouter.dir/build.make
 VirtualRouter: /usr/lib/x86_64-linux-gnu/libz.so
+VirtualRouter: /usr/lib/x86_64-linux-gnu/libcrypto.so
+VirtualRouter: /usr/lib/x86_64-linux-gnu/libssl.so
+VirtualRouter: /usr/lib/x86_64-linux-gnu/libcrypto.so
 VirtualRouter: CMakeFiles/VirtualRouter.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Linking CXX executable VirtualRouter"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/VirtualRouter.dir/link.txt --verbose=$(VERBOSE)

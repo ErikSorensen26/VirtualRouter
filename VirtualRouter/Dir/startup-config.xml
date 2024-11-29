@@ -9,15 +9,7 @@
 			</ip>
 		</GigabitEthernet>
 	</interface>
-	<router>
-		<eigrp id="1">
-			<network>
-				<ip>0.0.0.0</ip>
-				<subnet>255.255.255.255</subnet>
-			</network>
-		</eigrp>
-	</router>
-		<interface>
+	<interface>
 		<GigabitEthernet id="1">
 			<ip>
 				<address>
@@ -27,4 +19,12 @@
 			</ip>
 		</GigabitEthernet>
 	</interface>
+	<router>
+		<eigrp id="1">
+			<network>
+				<ip>0.0.0.0</ip>
+				<subnet>255.255.255.255</subnet>
+			</network>
+		</eigrp>
+	</router>
 </config>

@@ -131,9 +131,9 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
         {
             if (Print(header)) { cout << "THIS IS EIGRP" << endl; } 
             eigrp = std::any_cast<eigrpHeader>(&header); 
-            auto it = eigrpList.find(Functions::byteToNum(eigrp->autonomousSystem));
+            auto it = eigrpAutonomousSystems.find(Functions::byteToNum(eigrp->autonomousSystem));
             auto iface = interface->eigrpInterfaceList.find(Functions::byteToNum(eigrp->autonomousSystem));
-            if (it != eigrpList.end() && iface != interface->eigrpInterfaceList.end()) 
+            if (it != eigrpAutonomousSystems.end() && iface != interface->eigrpInterfaceList.end()) 
             {
                 int AS = Functions::byteToNum(eigrp->autonomousSystem);
                 if (ipv4 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv4)
