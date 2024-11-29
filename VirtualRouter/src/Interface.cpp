@@ -10,7 +10,7 @@
 using namespace std;
 
 // Constructor for the Interface class
-Interface::Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId, bool debug)
+Interface::Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug)
     : packetCapture(outInterface, "FF000000", inQueSiz), 
       packetSend(outInterface),
       threadsRunning(false), 
@@ -23,6 +23,7 @@ Interface::Interface(string outInterface, const int inQueSiz, const int outQueSi
     outQsiz = outQueSiz;
     macAddress = Functions::hexToByte(mac);
     id = interfaceId;
+    cout << "int id set to " << interfaceId;
     // Initialize shared pointers for Protocol objects
     dhcp = std::make_shared<Protocol::DhcpClient>(*this);
     arp = std::make_shared<Protocol::Arp>(*this);
