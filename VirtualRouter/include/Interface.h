@@ -26,7 +26,7 @@ namespace Protocol {
 
 // Structure to hold IP address information
 struct ipInfo {
-    char id{};
+    int id{};
     unsigned long bandwidth{}; // Bandwidth or speed of the interface
     unsigned long delay; // Delay of the interface
     string ip = ""; // IP address of the interface
@@ -42,7 +42,7 @@ struct ipInfo {
 class Interface {
 public:
     // Constructor for Interface class
-    Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, char interfaceId, bool debug);
+    Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug);
     // Destructor for Interface class
     ~Interface();
 

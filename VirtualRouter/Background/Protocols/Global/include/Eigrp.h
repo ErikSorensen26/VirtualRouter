@@ -122,6 +122,8 @@ namespace EigrpConfigs
         int nextSequenceNumber = 1;                             // Next sequence number
         bool adjacency = false;                                 // Adjacency status
         CommunicationMode mode;                                 // Communication mode
+        std::mutex sequenceMutex;
+        std::mutex packetMutex;
     
         // Acks
         vector<int> pendingAcks;                                // Pending Acks
@@ -268,7 +270,7 @@ namespace Protocol
         // Process Packet
         void ProcessPacket(const eigrpHeader* eigrpPacket, const std::string& neighborIp);
         // Processes Hello packets
-        void ProcessHello(const eigrpHeader* receivedHello, const std::string& neighborIp);
+        void ProcessHello(const eigrpHeader* receivedHello, const std::string neighborIp);
         // Processes Update packets
         void ProcessUpdate(const eigrpHeader* receivedUpdate, const std::string& neighborIp);
         // Process Ack
@@ -280,7 +282,7 @@ namespace Protocol
         // Send Ack to neighbors
         void SendAckToNeighbor(const std::string& neighborIp, int sequenceNumber);
         // Send Update Packet
-        void SendUpdateToNeighbor(const std::string &neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool restart);
+        void SendUpdateToNeighbor(const std::string &neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool removal, bool restart = false);
         // Send query to neighbors
         void SendQueryToNeighbors(const vector<RoutingTable::Eigrp>& failedRoutes, const std::string& originNeighborIp = "");
         // Send query to neighbor
