@@ -523,6 +523,29 @@ namespace Functions {
             return 24;
         }
     }
+
+    bool validateMacAddress(const std::string& mac, const std::string currentMac)
+    {
+        // Ensure the byte string is a valid length
+        if (mac.size() != 6 || currentMac.size() != 6)
+        {
+            return false;
+        }
+
+        // Check if the mac matches the current MAC
+        if (mac == currentMac)
+        {
+            return true;
+        }
+
+        // Check for multicast/broadcast by examining the LSB of the first byte
+        if (static_cast<unsigned char>(mac[0]) & 0x01)
+        {
+            return true;
+        }
+        
+        return false;
+    }
     
     #pragma endregion
     #pragma region Other

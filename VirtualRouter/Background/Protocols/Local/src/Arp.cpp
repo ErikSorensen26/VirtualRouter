@@ -31,9 +31,15 @@ namespace Protocol
     }
 
     // Sends an ARP request and processes the reply
-    void Arp::sendRequest(std::string targetIp)
+    void Arp::sendRequest(std::string targetIp, std::condition_variable* externalCV, std::mutex* externalMutex)
     {
         if (targetIp.empty()) {return;}
+
+        // Atomic flag to tracl if a reply is received
+        {
+            std::lock_guard<std::mutex> lock(replyStatusMutex);
+            replyStatus[targetIp] = false;
+        }
 
         {
             std::lock_guard<std::mutex> lock(arpCacheMutex);
@@ -43,7 +49,16 @@ namespace Protocol
                 // Check if the cache entry is still valid
                 if (std::chrono::steady_clock::now() < cacheIt->second.expiryTime)
                 {
-                    return;
+                    if (externalCV && externalMutex)
+                    {
+                        std::unique_lock<std::mutex> lock(*externalMutex);
+                        externalCV->notify_one();
+                        return;
+                    }
+                    else
+                    {
+                        return;
+                    }
                 }
                 else
                 {
@@ -66,30 +81,48 @@ namespace Protocol
         }
 
         // Launch async ARP request handleer
-        std::thread([this, targetIp]() {
-            bool replyReceived = false;
+        std::thread([this, targetIp, externalCV, externalMutex]() {
             int retryCount = 0;
             const int maxRetries = 3;
             const std::chrono::seconds retryInterval(2);
 
-            while(!replyReceived && retryCount < maxRetries)
+            // Wait for an arp request
+            while (retryCount < maxRetries)
             {
                 ipInfo interfaceInfo = currentInterface->Get();
                 PacketInfo arp = ArpRequest(interfaceInfo.mac, interfaceInfo.ip, targetIp);
                 const std::string arpPacket = Encapsulate(arp);
                 currentInterface->packetOutQueue.enqueue(arpPacket);
 
-                // Simulate waiting for an ARP reply
-                std::this_thread::sleep_for(retryInterval);
+                // Sumulate waiting for an arp reply
+                for (int i = 0; i < retryInterval.count() * 10; ++i)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(replyStatusMutex);
+                        if (replyStatus[targetIp].load())
+                        {
+                            // Reply received, exit retry loop
+                            std::cout << "Reply received for: " << targetIp << std::endl;
+                            if (externalCV && externalMutex)
+                            {
+                                std::unique_lock<std::mutex> lock(*externalMutex);
+                                externalCV->notify_one();
+                                std::cout << "Condition variable notified for: " << targetIp << std::endl;
+                            }
+                            return;
+                        }
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
 
-                // Check for ARP reply
-                replyReceived = checkForReply(targetIp);
                 retryCount++;
             }
             
+            // Notify the external condition variable if retries are exhausted
+            if (externalCV && externalMutex)
             {
-                std::lock_guard<std::mutex> lock(requestMutex);
-                pendingRequests.erase(targetIp);
+                std::unique_lock<std::mutex> lock(*externalMutex);
+                externalCV->notify_one();
             }
         }).detach();
     }
@@ -139,10 +172,18 @@ namespace Protocol
         }
 
         {
+            std::lock_guard<std::mutex> lock(replyStatusMutex);
+            if (replyStatus.find(arpIp) != replyStatus.end())
+            {
+                replyStatus[arpIp].store(true);
+            }
+        }
+
+        {
             std::lock_guard<std::mutex> lock(requestMutex);
             pendingRequests.erase(arpIp);
         }
-        
+
         // Adds arp to the routing table
         RoutingTable& routingTable = RoutingTable::getInstance();
         routingTable.UpdateArp(recievedReply);
@@ -190,7 +231,7 @@ namespace Protocol
         arp.protocolType = variable.arp.ipv4; 
         arp.hardwareSize = std::string("\x06", 1); 
         arp.protocolSize = std::string("\x04", 1); 
-        arp.opcode = variable.arp.opcode.request; 
+        arp.opcode = variable.arp.opcode.request;
         arp.senderHardwareAddress = currentMac; 
         arp.senderIpAddress = ip; 
         arp.targetHardwareAddress = variable.mac.source; 
@@ -229,5 +270,35 @@ namespace Protocol
         packet.Layer2_5.push_back(arp);
 
         return packet;
+    }
+
+    void Arp::resolveAndWait(const std::string& targetIp, std::condition_variable& externalCV, std::mutex& externalMutex)
+    {
+        if (targetIp.empty())
+        {
+            return;
+        }
+
+        // Check if the IP is in the arp cache
+        {
+            std::lock_guard<std::mutex> lock(arpCacheMutex);
+            auto cacheIt = arpCache.find(targetIp);
+            if (cacheIt != arpCache.end() && std::chrono::steady_clock::now() < cacheIt->second.expiryTime)
+            {
+                // IP is already resolved
+                std::cout << "IP " << targetIp << " is already in the ARP cache." << std::endl;
+                return;
+            }
+        }
+        
+        // Lanch the ARP resolution process
+        sendRequest(targetIp, &externalCV, &externalMutex);
+
+        // Wait for arp resolution or timeout
+        std::unique_lock<std::mutex> lock(externalMutex);
+        bool result =  externalCV.wait_for(lock, std::chrono::seconds(10), [this, &targetIp]() {
+                std::lock_guard<std::mutex> statusLock(replyStatusMutex);
+                return replyStatus[targetIp].load();
+        });
     }
 }

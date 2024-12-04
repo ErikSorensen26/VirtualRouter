@@ -14,7 +14,7 @@
 			<ip>
 				<address>
 					<ip>172.16.0.2</ip>
-					<subnet></subnet>
+					<subnet>255.255.0.0</subnet>
 				</address>
 			</ip>
 		</GigabitEthernet>

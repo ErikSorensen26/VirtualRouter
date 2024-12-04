@@ -869,10 +869,10 @@ void Packet::Eigrp(string &eigrpHeader)
     eigrp.opcode = eigrpHeader.substr(1, 1);
     eigrp.checksum = eigrpHeader.substr(2, 2);
     string flag = Functions::byteToBin(eigrpHeader.substr(4, 4));
-    eigrp.flags.init = flag.substr(28, 1);
-    eigrp.flags.conditionalRecieve = flag.substr(29, 1);
-    eigrp.flags.restart = flag.substr(30, 1);
-    eigrp.flags.endOfTable = flag.substr(31, 1);
+    eigrp.flags.endOfTable = flag.substr(28, 1);
+    eigrp.flags.restart = flag.substr(29, 1);
+    eigrp.flags.conditionalRecieve = flag.substr(30, 1);
+    eigrp.flags.init = flag.substr(31, 1);
     eigrp.sequence = eigrpHeader.substr(8, 4);
     eigrp.ack = eigrpHeader.substr(12, 4);
     eigrp.virtualRouterID = eigrpHeader.substr(16, 2);

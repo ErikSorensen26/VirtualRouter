@@ -13,23 +13,23 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
 {
     currentVrf = vrf;
 
-    const ethernetHeader* ethernet;
-    const pppHeader* ppp;
-    const arpHeader* arp;
-    const mplsHeader* mpls;
-    const vlanHeader* vlan;
-    const lldpHeader* lldp;
-    const ipv4Header* ipv4;
-    const ipv6Header* ipv6;
-    const greHeade* gre;
-    const ahHeader* ah;
-    const espHeader* esp;
-    const icmpHeader* icmp;
-    const igmpHeader* igmp;
-    const eigrpHeader* eigrp;
-    const tcpHeader* tcp;
-    const udpHeader* udp;
-    const dhcpHeader* dhcp;
+    ethernetHeader* ethernet;
+    pppHeader* ppp;
+    arpHeader* arp;
+    mplsHeader* mpls;
+    vlanHeader* vlan;
+    lldpHeader* lldp;
+    ipv4Header* ipv4;
+    ipv6Header* ipv6;
+    greHeade* gre;
+    ahHeader* ah;
+    espHeader* esp;
+    icmpHeader* icmp;
+    igmpHeader* igmp;
+    eigrpHeader* eigrp;
+    tcpHeader* tcp;
+    udpHeader* udp;
+    dhcpHeader* dhcp;
 
     std::string macAddress;
 

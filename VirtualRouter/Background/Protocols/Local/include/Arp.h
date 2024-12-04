@@ -22,6 +22,10 @@ namespace Protocol {
 
     // ARP class for handling ARP requests and replies
     class Arp {
+    private:
+        std::map<std::string, std::atomic<bool>> replyStatus;
+        std::mutex replyStatusMutex;
+
     public:
 
         struct ArpCacheEntry {
@@ -45,10 +49,13 @@ namespace Protocol {
         PacketInfo ArpReply(string& currentMac, string& targetmac, string& ip, string& targetIp);
     
         // Method to send an ARP request
-        void sendRequest(std::string targetIp);
+        void sendRequest(std::string targetIp, std::condition_variable* externalCV = nullptr, std::mutex* externalMutex = nullptr);
 
         // Method to reply to arp request
         void sendReply(string targetMac, string targetIp);
+
+        // Methos to resolve an arp request on pause
+        void resolveAndWait(const std::string& targetIp, std::condition_variable& externalCV, std::mutex& externalMutex);
     
         // Public member for creating ARP requests
         PacketInfo createArpRequest;

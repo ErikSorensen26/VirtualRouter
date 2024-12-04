@@ -17,6 +17,7 @@
 #include <TimeManager.h>
 #include <Authentication.hpp>
 #include <unordered_map>
+#include <shared_mutex>
 
 using namespace std;
 
@@ -92,9 +93,10 @@ namespace EigrpConfigs
     enum class UpdateType
     {
         FULL,
-        EMPTY,
-        SPECIFIC,
-        CONDITIONAL
+        QUERY,
+        PARTIAL,
+        TRIGGERED,
+        WITHDRAW,
     };
     enum class CommunicationMode
     {
@@ -106,24 +108,47 @@ namespace EigrpConfigs
         NAMED,
         CLASSIC
     };
+    enum class NeighborState
+    {
+        INIT,
+        TWOWAY,
+        EXSTART,
+        EXCHANGE,
+        LOADING,
+        ESTABLISHED
+    };
+    enum class InitRole
+    {
+        MASTER,
+        SLAVE
+    };
     struct NeighborInfo 
     {
+        // Initialization
+        NeighborState initialization = NeighborState::INIT;
+        bool initHelloReceived = false;
+        bool neighborValidated = false;
+        InitRole initRole;
+        int lastFullUpdateSequence;
+        std::mutex initializationMutex;
+
+        int nullUpdateSequence;
+        std::mutex nullMutex;
+
         std::string ipAddress;                                  // Neighbor's IP address
         std::string macAddress;                                 // Neighbor's MAC address
+        std::string routerID;                                   // Neighbor's RouterID
         std::mutex macMutex;                                    // Neighbor's MAC mutex
         bool hasMac = false;                                    // Indicates if MAC address is known
         bool isInit = false;                                    // Initialization flag
-        bool sendInitUpdate = false;                            // Flag to send initial update
         bool isGracfullyRestarting = false;                     // Gracefully restarting
         int conditionalReceive = 0;                             // Holds conditional receive sequence
-        bool receivedInitUpdate = false;                        // Flag for received initial update
-        int globalSequenceNumber = 0;                           // Sequence number for reliable delivery
         int lastReceivedSequenceNumber = 0;                     // Last received sequence number
         int nextSequenceNumber = 1;                             // Next sequence number
-        bool adjacency = false;                                 // Adjacency status
         CommunicationMode mode;                                 // Communication mode
-        std::mutex sequenceMutex;
-        std::mutex packetMutex;
+    
+        struct PacketBuffer { std::string neighborIp; eigrpHeader eigrp; };
+        std::map<int, PacketBuffer> packetBuffer;
     
         // Acks
         vector<int> pendingAcks;                                // Pending Acks
@@ -142,7 +167,6 @@ namespace EigrpConfigs
         int holdTime;                                           // Hold time
         std::chrono::steady_clock::time_point lastHeard;        // Last heard time point
         std::unordered_map<int, int> retransmissionTimers;      // Map of sequenceNumber to timerId
-        std::mutex retransmissionMutex;                         // Protects retransmissionTimers
 
         // Authentication
         int authKeyId = 1;                                      // Authentication ID
@@ -157,10 +181,21 @@ namespace EigrpConfigs
         // Reliable delivery of packet tracking per route
         struct ReliablePacketInfo 
         {
-            std::string packet;
+            std::vector<std::string> packets;
             std::chrono::steady_clock::time_point sendTime;
             int retransmissionCount;
-            int timerId;
+            int timerId;            
+            
+            // Default constructor
+            ReliablePacketInfo() = default;
+
+            // Default copy constructor and copy assignment operator
+            ReliablePacketInfo(const ReliablePacketInfo&) = default;
+            ReliablePacketInfo& operator=(const ReliablePacketInfo&) = default;
+
+            // Default move constructor and move assignment operator
+            ReliablePacketInfo(ReliablePacketInfo&&) = default;
+            ReliablePacketInfo& operator=(ReliablePacketInfo&&) = default;
         };
 
         std::unordered_map<int, ReliablePacketInfo> reliablePackets;
@@ -168,7 +203,7 @@ namespace EigrpConfigs
         std::unordered_map<int, std::vector<RoutingTable::Eigrp>> routingBuffers;
 
         NeighborInfo() = default;
-    
+
         // Delete copy constructor and copy assignment operator
         NeighborInfo(const NeighborInfo&) = delete;
         NeighborInfo& operator=(const NeighborInfo&) = delete;
@@ -268,11 +303,15 @@ namespace Protocol
         // Sets up EIGRP packet headers
         PacketInfo EigrpBody(string unicastAddress = "");
         // Process Packet
-        void ProcessPacket(const eigrpHeader* eigrpPacket, const std::string& neighborIp);
+        void ProcessPacket(eigrpHeader* eigrpPacket, const std::string& neighborIp);
+        // Initialize neighbor
+        void InitializeNeighbor(shared_ptr<EigrpConfigs::NeighborInfo> neighbor);
+        // Changes the neighbor initialization state
+        void ChangeNeighborState(shared_ptr<EigrpConfigs::NeighborInfo> neighbor, EigrpConfigs::NeighborState newState);
         // Processes Hello packets
         void ProcessHello(const eigrpHeader* receivedHello, const std::string neighborIp);
         // Processes Update packets
-        void ProcessUpdate(const eigrpHeader* receivedUpdate, const std::string& neighborIp);
+        void ProcessUpdate(eigrpHeader* receivedUpdate, const std::string& neighborIp);
         // Process Ack
         void ProcessAck(const std::string sequenceNumber, const std::string &neighborIp);
         // Process query
@@ -282,7 +321,7 @@ namespace Protocol
         // Send Ack to neighbors
         void SendAckToNeighbor(const std::string& neighborIp, int sequenceNumber);
         // Send Update Packet
-        void SendUpdateToNeighbor(const std::string &neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool removal, bool restart = false);
+        void SendUpdateToNeighbor(const std::string &neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool restart = false, bool conditional = false, std::vector<string> conditionalNeighbors = {});
         // Send query to neighbors
         void SendQueryToNeighbors(const vector<RoutingTable::Eigrp>& failedRoutes, const std::string& originNeighborIp = "");
         // Send query to neighbor
@@ -294,9 +333,9 @@ namespace Protocol
         // Encode query option
         std::string EncodeQueryOption(RoutingTable::Eigrp route);
         // Encode reply option
-        std::string EncodeRouteOption(const RoutingTable::Eigrp& route);
+        std::string EncodeRouteOption(const RoutingTable::Eigrp& route, bool removed = false);
         // Encode external reply option
-        std::string EncodeExternalRouteOption(const RoutingTable::Eigrp& route) const;
+        std::string EncodeExternalRouteOption(const RoutingTable::Eigrp& route, bool removed = false);
         // Encode stub option
         std::string EncodeStubOption(const EigrpConfigs::StubConfig stub);
         // Finds an ip address for a querying router
@@ -333,6 +372,8 @@ namespace Protocol
         void addNeighbor(const std::string& ipAddress, const std::string& macAddress, EigrpConfigs::CommunicationMode mode);
         // Gets neighbor
         std::optional<std::shared_ptr<EigrpConfigs::NeighborInfo>> GetNeighborInfo(const std::string& neighborIp);
+        // Resolved mac address
+        void ResolveMacAddress(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor);
 
         // Authentication
         bool isNeighborAuthenticated(const std::string& neighborIp);
@@ -346,7 +387,7 @@ namespace Protocol
         // Hello Timer
         void StartHello();
         void StartHelloHelper();
-        void SendHelloPacket(bool update = false, int sequenceNum = 0, string neighborIp = "");
+        void SendHelloPacket(string neighborIp = "", bool unicast = false, bool update = false, int sequenceNumber = 0, string routerID = "");
         void StopHello();
         // Active Timer
         void StartActiveTimer(const RoutingTable::Eigrp& route); 
@@ -359,17 +400,15 @@ namespace Protocol
         void StartHoldTimer(const std::string& neighborIp, int holdTime);
         void HandleHoldTimeExpire(const std::string& neighborIp);
         // Retransmission
-        void SetupReliablePacket(std::shared_ptr <EigrpConfigs::NeighborInfo> &neighbor, const std::string &packet, int sequenceNum);
+        void SetupReliablePacket(std::shared_ptr <EigrpConfigs::NeighborInfo> &neighbor, const std::vector<std::string> packets, int sequenceNum);
         int StartRetransmissionTimer(const std::string &neighborIp, const int& sequenceNumber, double timeout);
         void HandleRetransmissionTimeout(const std::string &neighborIp, const int& sequenceNumber);
         double CalculateRTT(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, int sequenceNumber);
         void UpdateRTTEstimate(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, int sequenceNumber);
 
-        std::mutex eigrpInterfaceMutex;
-        std::mutex advertisedRouteMutex;
-
-        std::unordered_map<std::string, RoutingTable::Eigrp>& getAdvertisedRoutes() { return advertisedRoutes; } std::shared_ptr<EigrpConfigs::InterfaceConfigs> getConfigs() { return std::make_shared<EigrpConfigs::InterfaceConfigs>(configs); }
-        vector<shared_ptr<EigrpConfigs::NeighborInfo>> getNeighbors() { vector<shared_ptr<EigrpConfigs::NeighborInfo>> neighborsCp; 
+        inline std::unordered_map<std::string, RoutingTable::Eigrp>& getAdvertisedRoutes() { return advertisedRoutes; }
+        inline std::shared_ptr<EigrpConfigs::InterfaceConfigs> getConfigs() { return std::make_shared<EigrpConfigs::InterfaceConfigs>(configs); }
+        inline vector<shared_ptr<EigrpConfigs::NeighborInfo>> getNeighbors() { vector<shared_ptr<EigrpConfigs::NeighborInfo>> neighborsCp; 
         std::lock_guard<std::mutex> lock(neighborMutex); for (auto& neighbor : neighbors) {neighborsCp.emplace_back(neighbor.second);}return neighborsCp;}
 
     private:
@@ -386,7 +425,7 @@ namespace Protocol
         int stuckInActiveTimerId = 0;
 
         // Lists
-        std::map<std::string, shared_ptr<EigrpConfigs::NeighborInfo>> neighbors;
+        std::unordered_map<std::string, shared_ptr<EigrpConfigs::NeighborInfo>> neighbors;
         std::unordered_map<int, std::pair<std::string, int>> outstandingReplies;
         std::unordered_map<std::string, RoutingTable::Eigrp> advertisedRoutes;
 
@@ -396,9 +435,7 @@ namespace Protocol
         // Mutex
         std::mutex helloTimerMutex;
         std::mutex activeTimerMutex;
-        std::mutex retransmissionMutex;
         std::mutex neighborMutex;
-        std::mutex replyTrackingMutex;
 
         Variable variable;
     };
@@ -420,7 +457,7 @@ namespace Protocol
         // Add network to configuration
         void AddNetwork(const EigrpConfigs::network& newNetwork);
         // Configures EIGRP Hello packet with specific settings
-        void EigrpHello(eigrpHeader& eigrp, EigrpInterface* eigrpInt, bool ack = false, bool update = false, int sequenceNumber = 0, string neighborIp = "00000000");
+        void EigrpHello(eigrpHeader& eigrp, EigrpInterface* eigrpInt, std::string neighborIp, int sequenceNumber = 0, bool ack = false, bool update = false, string routeID = "");
         // Configures EIGRP update packet with specific settings
         void EigrpUpdate(eigrpHeader& eigrp, int sequenceNum, bool init = false, bool conditional = false, bool restart = false, bool endoftable = false, bool query = false, bool reply = false);
         // Updates list of EIGRP interfaces based on address matching
@@ -432,7 +469,7 @@ namespace Protocol
         // Calculate Parameters
         string CalculateParameters(int holdTime);
         // Adds interface to routing table
-        void UpdateRoutingTableForConnected();
+        void UpdateRoutingTableForConnected(std::vector<std::string> routedToRemove = {});
         // Handles Interface change
         void OnInterfaceChange(Interface* interfacePtr, AddressFamily af);
         // Update from route change
@@ -483,12 +520,13 @@ namespace Protocol
 
         // Lists
         std::vector<EigrpConfigs::SummaryRoute> summaryRoutes;
-        std::map<int, std::shared_ptr<EigrpInterface>> eigrpInterfaceList{};
-        std::map<std::string, std::map<std::string, std::shared_ptr<EigrpConfigs::NeighborInfo>>> neighborBackup;
-        std::mutex backupMutex;
+        std::unordered_map<int, std::shared_ptr<EigrpInterface>> eigrpInterfaceList{};
+        std::unordered_map<std::string, std::unordered_map<std::string, std::shared_ptr<EigrpConfigs::NeighborInfo>>> neighborBackup;
 
         // Eigrp proccess mutex
         mutex eigrpMutex;
+        // Eigrp data mutex
+        mutex eigrpDataMutex;
         
         // Configurations for EIGRP
         AddressFamily getAddressFamily() const { return addressFamily; }
@@ -496,16 +534,18 @@ namespace Protocol
         std::unordered_map<std::string, int> stuckInActiveTimers;
         std::unique_ptr<Protocol::TopologyTable> topologyTable;
 
-        int getAsNumber() { std::lock_guard<std::mutex> lock(eigrpMutex); return asNumber; }
-        AddressFamily getAddressFamily() { std::lock_guard<std::mutex> lock(eigrpMutex); return addressFamily; }
-        string getVirtualRouterID() { std::lock_guard<std::mutex> lock(eigrpMutex); return virtualRouterID; }
-        std::shared_ptr<EigrpConfigs::EigrpConfigs> getConfigs() { return std::make_shared<EigrpConfigs::EigrpConfigs>(configs); }
+        inline int getAsNumber() { std::lock_guard<std::mutex> lock(eigrpDataMutex); return asNumber; }
+        inline AddressFamily getAddressFamily() { std::lock_guard<std::mutex> lock(eigrpDataMutex); return addressFamily; }
+        inline string getVirtualRouterID() { std::lock_guard<std::mutex> lock(eigrpDataMutex); return virtualRouterID; }
+        inline string getRouterID() { std::lock_guard<std::mutex> lock(eigrpDataMutex); return routeID; }
+        inline std::shared_ptr<EigrpConfigs::EigrpConfigs> getConfigs() { return std::make_shared<EigrpConfigs::EigrpConfigs>(configs); }
 
     private:
         
         AddressFamily addressFamily;
         string virtualRouterID = std::string(2, '\x00');
         int asNumber;
+        string routeID;
         Variable variable;
     };
 
@@ -544,7 +584,7 @@ namespace Protocol
         struct TopologyEntry {
             std::string destination;
             int prefixLength;
-            std::map<std::string, RouteInfo> routesByNeighbor;
+            std::unordered_map<std::string, RouteInfo> routesByNeighbor;
             bool isActive;
             // Timers for Active and Stuck-In-Active
             int activeTimerId = 0;
@@ -567,13 +607,13 @@ namespace Protocol
         void PruneStaleRoutes();
         void HandleNeighborDown(const std::string &neighborIp);
 
-        std::map<std::string, TopologyEntry>& GetTopologyEntries() { std::lock_guard<std::mutex> lock(tableMutex); return topologyEntries; }
+        std::unordered_map<std::string, TopologyEntry>& GetTopologyEntries() { std::lock_guard<std::mutex> lock(tableMutex); return topologyEntries; }
 
         int staleThreshold = 15;
     
     private:
         std::mutex tableMutex;
-        std::map<std::string, TopologyEntry> topologyEntries;
+        std::unordered_map<std::string, TopologyEntry> topologyEntries;
         std::shared_ptr<Eigrp> eigrpProcess;
     };
 }

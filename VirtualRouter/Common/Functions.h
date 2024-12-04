@@ -137,4 +137,7 @@ namespace Functions {
 
     // Gets default mask for a network
     int getDefaultMask(const std::string& network);
+
+    // Validates MAC address
+    bool validateMacAddress(const std::string& mac, const std::string currentMac);
 }
