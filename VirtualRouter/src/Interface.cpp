@@ -32,7 +32,7 @@ Interface::Interface(string outInterface, const int inQueSiz, const int outQueSi
 }
 
 // Set IPv4 address and subnet mask
-void Interface::setIPv4(string ip, string subnet)
+void Interface::setIPv4(string ip, int subnet)
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);

@@ -73,7 +73,6 @@ void RoutingTable::RemoveEigrp(const std::string& network, int mask, AddressFami
     {
         eigrp.erase(it);
     }
-    printEigrpTable();
 }
 
 void RoutingTable::UpdateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af)
@@ -106,9 +105,23 @@ std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes(AddressFamily a
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::vector<Eigrp> routes;
-    for (const auto& [key, route] : eigrp)
+    for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp : eigrpIPv6)
     {
         routes.push_back(route);
+    }
+    return routes;
+}
+
+std::vector<RoutingTable::Eigrp> RoutingTable::GetAllConnectedEigrpRoutes(AddressFamily af)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+    std::vector<Eigrp> routes;
+    for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp : eigrpIPv6)
+    {
+        if (route.routeType == "connected")
+        {
+            routes.push_back(route);
+        }
     }
     return routes;
 }

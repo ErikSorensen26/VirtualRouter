@@ -311,7 +311,7 @@ namespace Protocol {
             } 
             else if (opt.option == variable.dhcp.options.mask) 
             { 
-                currentInterface->interfaceInfo.dhcp.subnetMask = opt.value; 
+                currentInterface->interfaceInfo.dhcp.subnetMask = Functions::byteMaskToNum(opt.value);
             } 
             else if (opt.option == variable.dhcp.options.broadcast) 
             {

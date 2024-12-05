@@ -66,7 +66,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
             // Tests for request OPCODE
             if (arp->opcode == variable.arp.opcode.request) {
                 // Reply to arp request
-                interface->arp->sendReply(arp->targetHardwareAddress, arp->targetIpAddress);
+                interface->arp->sendReply(arp->senderHardwareAddress, arp->senderIpAddress);
             }
             if (arp->opcode == variable.arp.opcode.reply) {
                 // Set as reply
@@ -97,6 +97,23 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
         {
             ipv4 = std::any_cast<ipv4Header>(&header);
             if (Print(header)) { cout << "THIS IS IPV4" << endl; } 
+            // Validate adjacent IP address
+            // if (ipv4->sourceAddress != interface->adjacentIp)
+            // {
+            //     interface->adjacentIp = ipv4->sourceAddress;
+            //     if (Functions::compareNetworkWithIp(interface->Get().ip, ipv4->sourceAddress, interface->Get().subnet))
+            //     {
+            //         interface->adjacentValid = true;
+            //     }
+            //     else
+            //     {
+            //         interface->adjacentValid = false;
+            //     }
+            // }
+            // if (!interface->adjacentValid)
+            // {
+            //     return;
+            // }
             if (ethernet && RoutingTable::getInstance().ArpLookup(ipv4->sourceAddress))
             {
                 RoutingTable::getInstance().UpdateArp(ipv4->sourceAddress, macAddress, interface->Get().ip);

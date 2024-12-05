@@ -109,6 +109,7 @@ public:
     void UpdateEigrp(const Eigrp route, AddressFamily af);
     void RemoveEigrp(const std::string& network, int mask, AddressFamily af);
     std::vector<Eigrp> GetAllEigrpRoutes(AddressFamily af);
+    std::vector<RoutingTable::Eigrp> GetAllConnectedEigrpRoutes(AddressFamily af);
     std::optional<RoutingTable::Eigrp> GetEigrpRoute(const std::string& destination, const int mask, AddressFamily af);
     void UpdateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af);
 

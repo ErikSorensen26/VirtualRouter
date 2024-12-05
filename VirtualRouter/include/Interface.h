@@ -31,7 +31,7 @@ struct ipInfo {
     unsigned long delay; // Delay of the interface
     string ip = ""; // IP address of the interface
     string ipv6 = ""; // IPv6 address of the interface
-    string subnet = ""; // Subnet mask of the interface
+    int subnet = 32; // Subnet mask of the interface
     int v6subnet = 64; // V6 subnet mask of the interface
     string mac = ""; // MAC address of the interface
     int mtu{}; // Maximum Transmission Unit
@@ -52,7 +52,7 @@ public:
     void stateChangeV6();
     
     // Method to set IPv4 address and subnet mask
-    void setIPv4(string ip, string subnet);
+    void setIPv4(string ip, int subnet);
     // Method to set IPv6 address and subnet mask
     void setIPv6(string ip, int subnet = 64, bool eui64 = false);
 
@@ -84,13 +84,13 @@ public:
     struct InterfaceInfo {
         struct Dhcp {
             string dhcpServer{}, // DHCP server address
-                subnetMask{}, // Subnet mask for DHCP
                 broadcast{}, // Broadcast address
                 router{}; // Router address
             vector<string> dnsServer{}; // List of DNS servers
             string leaseTime{}, // Lease time for DHCP
                 renewalTime{}, // Renewal time for DHCP
                 rebindingTime{}; // Rebinding time for DHCP
+            int subnetMask{}; // Subnet mask;
         } dhcp;
     } interfaceInfo;
 
@@ -115,10 +115,13 @@ public:
     string ipAddress  = ""; // IP address of the interface
     string ipv6Address = ""; // IPv6 address of the interface
     string macAddress = ""; // MAC address of the interface
-    string mask = ""; // Subnet mask of the interface
+    int mask = 32; // Subnet mask of the interface
     int v6mask = 64; // V6 subnet mask of the interface
     int mtu = 1500; // Maximum Transmission Unit
     int ipv6FlowLabel = 0; // Flow label for IPv6
+
+    string adjacentIp{};
+    bool adjacentValid = false;
 
 private:
 

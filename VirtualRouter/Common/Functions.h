@@ -109,7 +109,7 @@ namespace Functions {
     std::string byteAddressToNumAddress(const std::string& ip);
 
     // Compares a network address with an IP address to check if they match.
-    bool compareNetworkWithIp(std::string networkAddress, std::string ipAddress);
+    bool compareNetworkWithIp(std::string networkAddress, std::string ipAddress, size_t mask);
 
     // Trims the network address based on the subnet mask, removing zeroed sections.
     std::string compactNetworkAddress(std::string network, int mask);

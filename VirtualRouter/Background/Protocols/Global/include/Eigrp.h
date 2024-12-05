@@ -131,6 +131,7 @@ namespace EigrpConfigs
         InitRole initRole;
         int lastFullUpdateSequence;
         std::mutex initializationMutex;
+        bool processAcks = false;
 
         int nullUpdateSequence;
         std::mutex nullMutex;
@@ -408,6 +409,7 @@ namespace Protocol
 
         inline std::unordered_map<std::string, RoutingTable::Eigrp>& getAdvertisedRoutes() { return advertisedRoutes; }
         inline std::shared_ptr<EigrpConfigs::InterfaceConfigs> getConfigs() { return std::make_shared<EigrpConfigs::InterfaceConfigs>(configs); }
+        inline int getNeighborCount() { std::lock_guard<std::mutex> lock(neighborMutex); return neighbors.size();}
         inline vector<shared_ptr<EigrpConfigs::NeighborInfo>> getNeighbors() { vector<shared_ptr<EigrpConfigs::NeighborInfo>> neighborsCp; 
         std::lock_guard<std::mutex> lock(neighborMutex); for (auto& neighbor : neighbors) {neighborsCp.emplace_back(neighbor.second);}return neighborsCp;}
 
@@ -469,7 +471,7 @@ namespace Protocol
         // Calculate Parameters
         string CalculateParameters(int holdTime);
         // Adds interface to routing table
-        void UpdateRoutingTableForConnected(std::vector<std::string> routedToRemove = {});
+        void UpdateRoutingTableForConnected(const std::shared_ptr<EigrpInterface> eigrpInterface = nullptr);
         // Handles Interface change
         void OnInterfaceChange(Interface* interfacePtr, AddressFamily af);
         // Update from route change
@@ -598,22 +600,22 @@ namespace Protocol
 
         TopologyTable(Eigrp* process);
 
-        void AddOrUpdateRoute(const std::string& destination, int prefixLength, const RouteInfo& routeInfo, const std::string& neighborIp);
+        void AddOrUpdateRoute(const std::string destination, int prefixLength, const RouteInfo& routeInfo, const std::string& neighborIp);
         void RemoveRoutesFromNeighbor(const std::string& neighborIp);
-        TopologyEntry* FindBestRoute(const std::string& destination, int variance);
+        std::shared_ptr<TopologyEntry> FindBestRoute(const std::string& destination, int variance);
         void HandleRouteFailure(const std::string& destination, const std::string& failedNeighborIp);
         void MarkRouteAsPassive(const std::string& destination, EigrpInterface* eigrp);
         void RemoveEntry(const std::string& destination);
         void PruneStaleRoutes();
         void HandleNeighborDown(const std::string &neighborIp);
 
-        std::unordered_map<std::string, TopologyEntry>& GetTopologyEntries() { std::lock_guard<std::mutex> lock(tableMutex); return topologyEntries; }
+        std::unordered_map<std::string, std::shared_ptr<TopologyEntry>>& GetTopologyEntries() { std::lock_guard<std::mutex> lock(tableMutex); return topologyEntries; }
 
         int staleThreshold = 15;
     
     private:
         std::mutex tableMutex;
-        std::unordered_map<std::string, TopologyEntry> topologyEntries;
+        std::unordered_map<std::string, std::shared_ptr<TopologyEntry>> topologyEntries;
         std::shared_ptr<Eigrp> eigrpProcess;
     };
 }

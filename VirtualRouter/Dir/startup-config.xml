@@ -1,15 +1,6 @@
 <?xml version="1.0"?>
 <config>
 	<interface>
-		<GigabitEthernet id="2">
-			<ip>
-				<address>
-					<dhcp />
-				</address>
-			</ip>
-		</GigabitEthernet>
-	</interface>
-	<interface>
 		<GigabitEthernet id="1">
 			<ip>
 				<address>

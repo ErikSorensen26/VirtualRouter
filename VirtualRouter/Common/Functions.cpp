@@ -379,23 +379,48 @@ namespace Functions {
         return address.str();
     }
 
-    bool compareNetworkWithIp(std::string networkAddress, std::string ipAddress)
+    bool compareNetworkWithIp(std::string networkAddress, std::string ipAddress, size_t mask)
     {
-        bool compare = false;
-        std::transform(ipAddress.begin(), ipAddress.end(), ipAddress.begin(), ::toupper);
-        for (int i = 0; i < ipAddress.size(); i += 1)
+        // Ensure addresses are the same length
+        if (networkAddress.size() != ipAddress.size())
         {
-            std::string oct = networkAddress.substr(i, 1);
-            if (oct == std::string("\x00", 1) || oct == ipAddress.substr(i, 1))
+            return false;
+        }
+
+        size_t totalBits = networkAddress.size() * 8;
+
+        // Validate previx length
+        if (mask > totalBits)
+        {
+            return false;
+        }
+
+        // Calculate byte length and reminder bit for the mask
+        size_t fullBytes = mask / 8;
+        size_t remainingBits = mask % 8;
+        
+        // Compare each byte
+        for (size_t i = 0; i < networkAddress.size(); ++i)
+        {
+            uint8_t mask = 0xFF; // Default mask for full byte
+            if (i == fullBytes)
             {
-                compare = true;
+                // Create a partial mask for the last byte
+                mask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
             }
-            else
+            else if (i > fullBytes)
+            {
+                mask = 0x00; // Beyone the prefix, mask is all zeros
+            }
+
+            // Apply the mask and compare the bytes
+            if ((networkAddress[i] & mask) != (ipAddress[i] & mask))
             {
                 return false;
             }
         }
-        return compare;
+
+        return true; // All bytes match
     }
 
     std::string compactNetworkAddress(std::string network, int mask)

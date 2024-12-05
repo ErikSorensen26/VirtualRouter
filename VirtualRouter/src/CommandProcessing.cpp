@@ -254,7 +254,7 @@ void Terminal::executeCommand(string &command)
 			{
 				if (commandStream[2] != "dhcp")
 				{
-					CurrentInterface->setIPv4(Functions::addressToByte(commandStream[2]), Functions::addressToByte(commandStream[3]));
+					CurrentInterface->setIPv4(Functions::addressToByte(commandStream[2]), Functions::byteMaskToNum(Functions::addressToByte(commandStream[3])));
 				}
 				else
 				{
