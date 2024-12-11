@@ -1,15 +1,15 @@
 #include <Terminal.h>
 
-void Terminal::executeCommand(string &command)
+void Terminal::executeCommand(std::string &command)
 {
 	isModeChanged = false;
-	string preProcessMode = currentMode;
+	std::string preProcessMode = currentMode;
 
 	command = normalizeCommand(command);
 	isCommandExecutionSuccessful = false;
 
-	vector<string> TEMPcommandStream = splitIntoWords(command);
-	vector<string> commandStream;
+	std::vector<std::string> TEMPcommandStream = splitIntoWords(command);
+	std::vector<std::string> commandStream;
 
 	bool textLine = false;
 	for (unsigned long index = 0; index < TEMPcommandStream.size(); index++)
@@ -44,7 +44,7 @@ void Terminal::executeCommand(string &command)
 	{
 		while (currentMode != mode.privilegedExec)
 		{
-			string exit = "exit";
+			std::string exit = "exit";
 			executeCommand(exit);
 		}
 	}
@@ -64,14 +64,14 @@ void Terminal::executeCommand(string &command)
 				{
 					if (str != "")
 					{
-						cout << "\n  " + str;
+						std::cout << "\n  " + str;
 					}
 				}
 			}
 			if (command == "show clock")
 			{
-				cout << "\n"
-					 << timeManager.GetTime();
+				std::cout << "\n"
+					 << timeManager.getTime();
 			}
 			if (command == "write memory")
 			{
@@ -107,7 +107,7 @@ void Terminal::executeCommand(string &command)
 			if (command == "configure terminal")
 			{
 				changeMode(mode.globalConfiguration);
-				cout << "\nEnter configuration commands, one per line.  End with CNTL/Z.";
+				std::cout << "\nEnter configuration commands, one per line.  End with CNTL/Z.";
 			}
 			if (command == "exit")
 			{
@@ -127,14 +127,14 @@ void Terminal::executeCommand(string &command)
 			}
 			if (commandStream[0] == "hostname")
 			{
-				Global::getInstance().Hostname() = commandStream[1];
+				Global::getInstance().getHostname() = commandStream[1];
 			}
 			if (commandStream[0] == "interface")
 			{
-				string type = commandStream[1];
-				string interfaceID_temp = commandStream[2];
+				std::string type = commandStream[1];
+				std::string interfaceID_temp = commandStream[2];
 				interfaceID = static_cast<unsigned long>(Functions::stringToNum(commandStream[2]));
-				string intType;
+				std::string intType;
 				if ((type == "Ethernet" || type == "GigabitEthernet" || type == "FastEthernet") && physicalInterfaces.size() >= interfaceID)
 				{
 					intType = physicalInterfaces[interfaceID];
@@ -143,7 +143,7 @@ void Terminal::executeCommand(string &command)
 				{
 					intType = "NO_INTERFACE";
 				}
-				string mac;
+				std::string mac;
 				if (commandStream[1] == "Ethernet" && macAddressList.Ethernet.size() == 9)
 				{
 					mac = OUI + macAddressList.Ethernet[interfaceID];
@@ -168,12 +168,12 @@ void Terminal::executeCommand(string &command)
 				{
 					(*activeInterfaces)[interfaceID] = std::make_shared<Interface>(intType, 1024, 1024, mac, interfaceID, isDebugModeEnabled);
 				}
-				CurrentInterface = activeInterfaces->at(interfaceID).get();
+				currentInterface = activeInterfaces->at(interfaceID).get();
 			}
 			if (commandStream[0] == "router")
 			{
-				string type = commandStream[1];
-				string ID = commandStream[2];
+				std::string type = commandStream[1];
+				std::string ID = commandStream[2];
 				routingProtocolID = Functions::stringToNum(commandStream[2]);
 				if (type == "eigrp")
 				{
@@ -224,17 +224,17 @@ void Terminal::executeCommand(string &command)
 				}
 				else if (type == "ospf")
 				{
-					if (!OspfList[routingProtocolID])
+					if (!ospfList[routingProtocolID])
 					{
-						(OspfList)[routingProtocolID] = std::make_shared<Protocol::Ospf>();
+						(ospfList)[routingProtocolID] = std::make_shared<Protocol::Ospf>();
 					}
-					CurrentOspf = OspfList.at(routingProtocolID).get();
+					currentOspf = ospfList.at(routingProtocolID).get();
 				}
 				else if (type == "bgp")
 				{
-					if (!BgpList[routingProtocolID])
+					if (!bgpList[routingProtocolID])
 					{
-						(BgpList)[routingProtocolID] = std::make_shared<Protocol::Bgp>();
+						(bgpList)[routingProtocolID] = std::make_shared<Protocol::Bgp>();
 					}
 				}
 			}
@@ -254,11 +254,11 @@ void Terminal::executeCommand(string &command)
 			{
 				if (commandStream[2] != "dhcp")
 				{
-					CurrentInterface->setIPv4(Functions::addressToByte(commandStream[2]), Functions::byteMaskToNum(Functions::addressToByte(commandStream[3])));
+					currentInterface->setIPv4(Functions::addressToByte(commandStream[2]), Functions::byteMaskToNum(Functions::addressToByte(commandStream[3])));
 				}
 				else
 				{
-					thread dhcpThread([this]()
+					std::thread dhcpThread([this]()
 									  { this->runDhcp(); });
 					dhcpThread.detach();
 				}
@@ -275,7 +275,7 @@ void Terminal::executeCommand(string &command)
 			{
 				if (commandStream[0] == "network")
 				{
-					EigrpConfigs::network network;
+					EigrpConfigs::Network network;
 					network.ip = Functions::addressToByte(commandStream[1]);
 					if (commandStream.size() == 3)
 					{
@@ -283,11 +283,11 @@ void Terminal::executeCommand(string &command)
 					}
 					else
 					{
-						network.mask = variable.ip.broadcast;
+						network.mask = Variable::IPv4::broadcast;
 					}
-					currentEigrp->AddNetwork(network);
-					currentEigrp->UpdateInterfaceList();
-					currentEigrp->UpdateRoutingTableForConnected();
+					currentEigrp->addNetwork(network);
+					currentEigrp->updateInterfaceList();
+					currentEigrp->updateRoutingTableForConnected();
 				}
 			}
 			else if (currentSubMode == "eigrp_named")
@@ -364,7 +364,7 @@ void Terminal::executeCommand(string &command)
 						auto eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
 						if (eigrpIt == eigrpAs->second->addressFamilies.end())
 						{
-							eigrpAs->second->addressFamilies[AddressFamily::IPv4] = std::make_shared<Protocol::ClassicEigrp>(routingProtocolID, AddressFamily::IPv4);
+							// eigrpAs->second->addressFamilies[AddressFamily::IPv4] = std::make_shared<Protocol::NamedEigrp>(routingProtocolID, AddressFamily::IPv4, currentEigrpInstance->); NAMED
 							eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
 						}
 						currentEigrp = eigrpIt->second;
@@ -408,7 +408,7 @@ void Terminal::executeCommand(string &command)
 
 void Terminal::runDhcp()
 {
-	std::string mac = CurrentInterface->Get().mac;
+	ByteString mac = currentInterface->Get().macAddress;
 
-	CurrentInterface->dhcp->InitializeDhcp(mac);
+	currentInterface->dhcp->InitializeDhcp(mac);
 }

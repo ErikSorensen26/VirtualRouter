@@ -1,217 +1,203 @@
 #pragma once
 
-#include <string>
-#include <vector>
 #include <any>
 #include <typeinfo>
 #include <Functions.h>
+#include <ByteString.hpp>
 
-using namespace std;
-
-struct Variable
+namespace Variable
 {
-    struct ethernet
+    namespace Ethernet
     {
-        std::string arp{"\x08\x06", 2};
-        string ipv4{"\x08\x00", 2};
-        string ipv6{"\x86\xdd", 3};
-        string mpls{"\x88\x47", 2};
-        string vlan{"\x86\xdd", 2};
-        string lldp{"\x88\xcc", 2};
-    } ethernet;
-    struct arp
+        inline const std::string arp("\x08\x06", 2);
+        inline const std::string ipv4("\x08\x00", 2);
+        inline const std::string ipv6("\x86\xdd", 3);
+        inline const std::string mpls("\x88\x47", 2);
+        inline const std::string vlan("\x86\xdd", 2);
+        inline const std::string lldp("\x88\xcc", 2);
+    }
+    namespace Arp
     {
-        string ethernet = {"\x00\x01", 2};
-        string ipv4 = {"\x08\x00", 2};
-        struct opcode
+        inline const std::string ethernet("\x00\x01", 2);
+        inline const std::string ipv4("\x08\x00", 2);
+        namespace Opcode
         {
-            string request{"\x00\x01", 2};
-            string reply = {"\x00\x02", 2};
-            string reverseRequest{"\x00\x03", 2};
-            string reverseReply{"\x00\x04", 2};
-            string dynamicRequest{"\x00\x05", 2};
-            string dynamicReply{"\x00\x06", 2};
-            string dynamicError{"\x00\x07", 2};
-            string inverseRequest{"\x00\x08", 2};
-            string inverseReply{"\x00\x09", 2};
-            string nak{"\x00\x0a", 2};
-        } opcode;
-    } arp;
-    struct ipv4
+            inline const std::string request("\x00\x01", 2);
+            inline const std::string reply("\x00\x02", 2);
+            inline const std::string reverseRequest("\x00\x03", 2);
+            inline const std::string reverseReply("\x00\x04", 2);
+            inline const std::string dynamicRequest("\x00\x05", 2);
+            inline const std::string dynamicReply("\x00\x06", 2);
+            inline const std::string dynamicError("\x00\x07", 2);
+            inline const std::string inverseRequest("\x00\x08", 2);
+            inline const std::string inverseReply("\x00\x09", 2);
+            inline const std::string nak("\x00\x0a", 2);
+        }
+    }
+    namespace IP
     {
-        std::string GetValue() const { return "4"; }
-        string gre{"\x2f", 1};
-        string tcp{"\x06", 1};
-        string udp{"\x11", 1};
-        string icmp{"\x01", 1};
-        string igmp{"\x02", 1};
-        string ah{"\x33", 1};
-        string eigrp{"\x58", 1};
-    } ipv4;
-    struct ipv6
+        inline const std::string esp("\x32", 1);
+        inline const std::string ah("\x33", 1);
+        inline const std::string gre("\x2f", 1);
+        inline const std::string igmp("\x02", 1);
+        inline const std::string none("\x3b", 1);
+        inline const std::string tcp("\x06", 1);
+        inline const std::string udp("\x11", 1);
+        inline const std::string icmp("\x3a", 1);
+        inline const std::string sctp("\x84", 1);
+        inline const std::string eigrp("\x58", 1);
+    }
+    namespace Udp
     {
-        std::string GetValue() const { return "6"; }
-        string esp{"\x32", 1};
-        string ah{"\x33", 1};
-        string gre{"\x2f", 1};
-        string igmp{"\x02", 1};
-        string none{"\x3b", 1};
-        string tcp{"\x06", 1};
-        string udp{"\x11", 1};
-        string icmp{"\x3a", 1};
-        string sctp{"\x84", 1};
-        string eigrp{"\x58", 1};
-    } ipv6;
-    struct udp
-    {
-        struct dhcp
+        namespace Dhcp
         {
-            string source{"\x00\x44", 2};
-            string destination{"\x00\x43", 2};
-        } dhcp;
-    } udp;
-    struct gre
+            inline const std::string source("\x00\x44", 2);
+            inline const std::string destination("\x00\x43", 2);
+        }
+    }
+    namespace Gre
     {
-        string ppp{"\x88\x0b", 2};
-    } gre;
-    struct ah
+        inline const std::string ppp("\x88\x0b", 2);
+    }
+    namespace Ah
     {
-        string esp{"\x32", 1};
-    } ah;
-    struct mac
+        inline const std::string esp("\x32", 1);
+    }
+    namespace Mac
     {
-        string broadcast{"\xff\xff\xff\xff\xff\xff", 6};
-        string source{"\x00\x00\x00\x00\x00\x00", 6};
-    } mac;
-    struct ip
+        inline const std::string broadcast(6, '\xff');
+        inline const std::string source(6, '\x00');
+    }
+    namespace IPv4
     {
-        string broadcast{"\xff\xff\xff\xff", 4};
-        string source{"\x00\x00\x00\x00", 4};
-    } ip;
-    struct dhcp
+        inline const std::string broadcast(4, '\xff');
+        inline const std::string source(4, '\x00');
+    }
+    namespace Dhcp
     {
-        struct type
+        namespace Type
         {
-            string discover{"\x01", 1};
-            string offer{"\x02", 1};
-            string request{"\x03", 1};
-            string ack{"\x05", 1};
-            string nac{"\x06", 1};
-        } type;
-        struct options
+            inline const std::string discover("\x01", 1);
+            inline const std::string offer("\x02", 1);
+            inline const std::string request("\x03", 1);
+            inline const std::string ack("\x05", 1);
+            inline const std::string nac("\x06", 1);
+        }
+        namespace Option
         {
-            string mask{"\x01", 1};
-            string broadcast{"\x1c", 1};
-            string timeOffset{"\x02", 1};
-            string router{"\x03", 1};
-            string domainName{"\x0f", 1};
-            string domainServer{"\x06", 1};
-            string domainSearch{"\x77", 1};
-            string netbiosNameServer{"\x2c", 1};
-            string netbiosScope{"\x2c", 1};
-            string mtu{"\x1a", 1};
-            string classlessStateRoute{"\x79", 1};
-            string ntp{"\x2a", 1};
-            string type{"\x35", 1};
-            string hostname{"\x0c", 1};
-            string clientID{"\x3d", 1};
-            string serverIdentifier{"\x36", 1};
-            string leaseTime{"\x33", 1};
-            string renewalTime{"\x3a", 1};
-            string rebindingTime{"\x3b", 1};
-            string requestIP{"\x32", 1};
-            string requestList{"\x37", 1};
-            string maxSize{"\x39", 1};
-        } options;
-        string clientHardwareAddressPadding{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 10};
-        string serverHostName{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 64} ;
-        string bootfile{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 128};
-        string endPadding{"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 25};
-        string end{"\xff", 1};
-        string magicCookie{"\x63\x82\x53\x63", 4};
-    } dhcp;
-    struct eigrp
+            inline const std::string mask("\x01", 1);
+            inline const std::string broadcast("\x1c", 1);
+            inline const std::string timeOffset("\x02", 1);
+            inline const std::string router("\x03", 1);
+            inline const std::string domainName("\x0f", 1);
+            inline const std::string domainServer("\x06", 1);
+            inline const std::string domainSearch("\x77", 1);
+            inline const std::string netbiosNameServer("\x2c", 1);
+            inline const std::string netbiosScope("\x2c", 1);
+            inline const std::string mtu("\x1a", 1);
+            inline const std::string classlessStateRoute("\x79", 1);
+            inline const std::string ntp("\x2a", 1);
+            inline const std::string type("\x35", 1);
+            inline const std::string hostname("\x0c", 1);
+            inline const std::string clientID("\x3d", 1);
+            inline const std::string serverIdentifier("\x36", 1);
+            inline const std::string leaseTime("\x33", 1);
+            inline const std::string renewalTime("\x3a", 1);
+            inline const std::string rebindingTime("\x3b", 1);
+            inline const std::string requestIP("\x32", 1);
+            inline const std::string requestList("\x37", 1);
+            inline const std::string maxSize("\x39", 1);
+        }
+        inline const std::string clientHardwareAddressPadding(10, '\x00');
+        inline const std::string serverHostName(64, '\x00');
+        inline const std::string bootfile(128, '\x00');
+        inline const std::string endPadding(25, '\x00');
+        inline const std::string end("\xff", 1);
+        inline const std::string magicCookie("\x63\x82\x53\x63", 4);
+    }
+    namespace Eigrp
     {
-        struct type
+        namespace Type
         {
-            string update{"\x01", 1};
-            string request{"\x02", 1};
-            string query{"\x03", 1};
-            string reply{"\x04", 1};
-            string hello{"\x05", 1};
-        } type;
-        struct options
+            inline const std::string update("\x01", 1);
+            inline const std::string request("\x02", 1);
+            inline const std::string query("\x03", 1);
+            inline const std::string reply("\x04", 1);
+            inline const std::string hello("\x05", 1);
+        }
+        namespace Option
         {
-            string parameter{"\x00\x01", 2};
-            string version{"\x00\x04", 2};
-            string sequence{"\x00\x03", 2};
-            string multicastSequence{"\x00\x05", 2};
-            string internalRoute{"\x01\x02", 2};
-            string externalRoute{"\x01\x03", 2};
-            string internalRouteV6{"\x04\02"};
-            string externalRouteV6{"\x04\x03"};
-            string stub{"\x00\x06", 2};
-            string authentication{"\x00\x02"};
-        } options;
-        struct version
+            inline const std::string parameter("\x00\x01", 2);
+            inline const std::string version("\x00\x04", 2);
+            inline const std::string sequence("\x00\x03", 2);
+            inline const std::string multicastSequence("\x00\x05", 2);
+            inline const std::string internalRoute("\x01\x02", 2);
+            inline const std::string externalRoute("\x01\x03", 2);
+            inline const std::string internalRouteV6("\x04\02");
+            inline const std::string externalRouteV6("\x04\x03");
+            inline const std::string stub("\x00\x06", 2);
+            inline const std::string authentication("\x00\x02");
+        }
+        namespace Version
         {
-            string release{"\x0c\x04", 2};
-            string tls{"\x01\x02", 2};
-        } version;
-        struct externalProtocol {
-            string igrp = {"\x01", 1};
-            string eigrp = {"\x02", 1};
-            string staticRoute = {"\x03", 1};
-            string rip = {"\x04", 1};
-            string hello = {"\x05", 1};
-            string ospf = {"\x06", 1};
-            string isis = {"\x07", 1};
-            string egp = {"\x08", 1};
-            string bgp = {"\x09", 1};
-            string idrp = {"\x0a", 1};
-            string connected = {"\x0b", 1};
-        } externalProtocol;
-        struct destinationAssignmentEncoding {
-            string ipv4 = {"\x01", 1};
-            string ipv6 = {"\x02", 1};
-            string commonService{"\x40\x00", 2};
-            string ipv4Family{"\x40\x01", 2};
-            string ipv6Famil{"\x40\x02", 2}; 
-        } destinationAssignmentEncoding;
-        struct communityAttribute {
-            string EXTCOMM_EIGRP{"\x00", 1};
-            string EXTCOMM_DAD{"\x01", 1};
-            string EXTCOMM_VRHB{"\x02", 1};
-            string EXTCOMM_SRLM{"\x03", 1};
-            string EXTCOMM_SAR{"\x04", 1};
-            string EXTCOMM_RPM{"\x05", 1};
-            string EXTCOMM_VRR{"\x06", 1};
-        } communityAttribute;
-    } eigrp;
-    struct multicast
+            inline const std::string release("\x0c\x04", 2);
+            inline const std::string tls("\x01\x02", 2);
+        }
+        namespace ExternalProtocol 
+        {
+            inline const std::string igrp("\x01", 1);
+            inline const std::string eigrp("\x02", 1);
+            inline const std::string staticRoute("\x03", 1);
+            inline const std::string rip("\x04", 1);
+            inline const std::string hello("\x05", 1);
+            inline const std::string ospf("\x06", 1);
+            inline const std::string isis("\x07", 1);
+            inline const std::string egp("\x08", 1);
+            inline const std::string bgp("\x09", 1);
+            inline const std::string idrp("\x0a", 1);
+            inline const std::string connected("\x0b", 1);
+        }
+        namespace DestinationAssignmentEncoding {
+            inline const std::string ipv4("\x01", 1);
+            inline const std::string ipv6("\x02", 1);
+            inline const std::string commonService("\x40\x00", 2);
+            inline const std::string ipv4Family("\x40\x01", 2);
+            inline const std::string ipv6Famil("\x40\x02", 2); 
+        }
+        namespace CommunityAttribute {
+            inline const std::string EXTCOMM_EIGRP("\x00", 1);
+            inline const std::string EXTCOMM_DAD("\x01", 1);
+            inline const std::string EXTCOMM_VRHB("\x02", 1);
+            inline const std::string EXTCOMM_SRLM("\x03", 1);
+            inline const std::string EXTCOMM_SAR("\x04", 1);
+            inline const std::string EXTCOMM_RPM("\x05", 1);
+            inline const std::string EXTCOMM_VRR("\x06", 1);
+        }
+    }
+    namespace Multicast
     {
-        struct Eigrp
+        namespace Eigrp
         {
-            string address{"\xe0\x00\x00\x0a", 4};
-            string addressv6{"\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0a"};
-            string mac{"\x01\x00\x5e\x00\x00\x0a", 6};
-            string macv6{"\x33\x33\x00\x00\x00\x0a"};
-        } eigrp;
-    } multicast;
-};
+            inline const std::string address("\xe0\x00\x00\x0a", 4);
+            inline const std::string addressv6("\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0a");
+            inline const std::string mac("\x01\x00\x5e\x00\x00\x0a", 6);
+            inline const std::string macv6("\x33\x33\x00\x00\x00\x0a");
+        }
+    }
+}
 
 // Ethernet header
-struct ethernetHeader
+struct EthernetHeader
 {
-    string
+    ByteString
         sourceMac{},
         destinationMac{},
         type{};
 };
 // Arp header
-struct arpHeader
+struct ArpHeader
 {
-    string
+    ByteString
         hardwareType{},
         protocolType{},
         hardwareSize{},
@@ -223,18 +209,18 @@ struct arpHeader
         targetIpAddress{};
 };
 // Mpls header
-struct mplsHeader
+struct MplsHeader
 {
-    string bottomLabelStack{};
-    string
+    ByteString bottomLabelStack{};
+    ByteString
         label{},
         expBit{},
         TTL{};
 };
 // Ipv4 header
-struct ipv4Header
+struct IPv4Header
 {
-    string
+    ByteString
         version{},
         headerLength{},
         serviceField{},
@@ -246,32 +232,32 @@ struct ipv4Header
         sourceAddress{},
         destinationAddress{};
 
-    struct fragmentFlag
+    struct FragmentFlag
     {
-        string reserved{},
+        ByteString reserved{},
             fragment{},
             moreFragment{};
-        string fragmentOffset{};
+        ByteString fragmentOffset{};
     } fragmentFlag;
 
-    struct options
+    struct Options
     {
-        struct type
+        struct Type
         {
-            string copy{};
-            string
+            ByteString copy{};
+            ByteString
                 classControl{},
                 routerAlert{};
         } type;
-        string
+        ByteString
             length{},
             routerAlert{};
     } options;
 };
 // Ipv6 header
-struct ipv6Header
+struct IPv6Header
 {
-    string
+    ByteString
         version{},
         trafficClass{},
         flowLabel{},
@@ -283,9 +269,9 @@ struct ipv6Header
 };
 
 // Tcp header
-struct tcpHeader
+struct TcpHeader
 {
-    string
+    ByteString
         sourcePort{},
         destinationPort{},
         sequenceNumber{},
@@ -295,33 +281,33 @@ struct tcpHeader
         checksum{},
         urgentPointer{};
 
-    struct flags
+    struct Flags
     {
-        string congestionWindowReduced{},
+        ByteString congestionWindowReduced{},
             ecnEcho{}, urgent{}, acknowledgement{},
             push{}, reset{}, syn{}, fin{};
     } flags;
 
     struct Option
     {
-        string type{}, length{}, value{};
+        ByteString type{}, length{}, value{};
     };
 
-    vector<Option> options{};
+    std::vector<Option> options{};
 };
 // Udp header
-struct udpHeader
+struct UdpHeader
 {
-    string
+    ByteString
         sourcePort{},
         destinationPort{},
         length{},
         checksum{};
 };
 // Icmp header
-struct icmpHeader
+struct IcmpHeader
 {
-    string
+    ByteString
         type{},
         code{},
         checksum{},
@@ -329,9 +315,9 @@ struct icmpHeader
         sequenceNumber{};
 };
 // Icmpv6 header
-struct icmpv6Header
+struct IcmpV6Header
 {
-    string
+    ByteString
         type{},
         code{},
         checksum{},
@@ -339,83 +325,83 @@ struct icmpv6Header
 
     struct Option
     {
-        string option{}, length{}, value{};
+        ByteString option{}, length{}, value{};
     };
 
-    vector<Option> options{};
+    std::vector<Option> options{};
 };
 // Igmp header
-struct igmpHeader
+struct IgmpHeader
 {
-    string
+    ByteString
         type{},
         maxRestTime{},
         checksum{},
         multicastAddress{};
 
-    struct v3
+    struct V3
     {
-        string supress{};
-        string
+        ByteString supress{};
+        ByteString
             qrv{},
             qqic{},
             numSrc{};
     } v3;
 };
 // Tls header
-struct tlsHeader
+struct TlsHeader
 {
-    string
+    ByteString
         type{},
         version{},
         length{};
 };
 // Gre header
-struct greHeade
+struct GreHeade
 {
-    struct flags
+    struct Flags
     {
-        string
+        ByteString
             checksum{},
             routing{},
             key{},
             seqNum{},
             strictSourceRoute{},
             acknowledgment{};
-        string
+        ByteString
             recursion{},
             reserved{},
             version{};
     } flags;
-    string
+    ByteString
         protocol{},
         length{},
         callID{},
         seqNum{};
 };
-struct pppHeader
+struct PppHeader
 {
-    string
+    ByteString
         address{},
         control{},
         protocol{};
 };
-struct frameHeader
+struct FrameHeader
 {
-    struct firstAddress
+    struct FirstAddress
     {
-        string dlci{}, cr{}, ea{};
+        ByteString dlci{}, cr{}, ea{};
     } firstAddress;
-    struct secondAddress
+    struct SecondAddress
     {
-        string dlci{}, fecn{}, becn{}, de{}, ea{};
+        ByteString dlci{}, fecn{}, becn{}, de{}, ea{};
     } secondAddress;
-    string type;
+    ByteString type;
 };
 // Ah header
-struct ahHeader
+struct AhHeader
 {
-    string
+    ByteString
         next{},
         length{},
         reserved{},
@@ -424,26 +410,26 @@ struct ahHeader
         icv{};
 };
 // Esp header
-struct espHeader
+struct EspHeader
 {
-    string spi{}, sequence{};
+    ByteString spi{}, sequence{};
 };
-struct vlanHeader
+struct VlanHeader
 {
-    string
+    ByteString
         priority{},
         dei{},
         id{},
         type{};
 };
 // Lldp header
-struct lldpHeader
+struct LldpHeader
 {
     struct TLV
     {
         uint8_t type;
         uint16_t length;
-        string value{};
+        ByteString value{};
     };
 
     TLV chassisID;
@@ -458,9 +444,9 @@ struct lldpHeader
     TLV endOfLLDPDU;
 };
 // Dhcp header
-struct dhcpHeader
+struct DhcpHeader
 {
-    string
+    ByteString
         boot{},
         hardwareType{},
         hardwareAddressLength{},
@@ -481,21 +467,21 @@ struct dhcpHeader
 
     struct BootpFlags
     {
-        string broadcast{};
-        string reserved{};
+        ByteString broadcast{};
+        ByteString reserved{};
     } bootpFlags;
 
     struct Option
     {
-        string option{}, length{}, value{};
+        ByteString option{}, length{}, value{};
     };
 
-    vector<Option> options{};
+    std::vector<Option> options{};
 };
 // Eigrp header
-struct eigrpHeader
+struct EigrpHeader
 {
-    string version{},
+    ByteString version{},
         opcode{},
         checksum{},
         sequence{},
@@ -505,7 +491,7 @@ struct eigrpHeader
 
     struct flags
     {
-        string init{},
+        ByteString init{},
             conditionalRecieve{},
             restart{},
             endOfTable{};
@@ -513,16 +499,16 @@ struct eigrpHeader
 
     struct Option
     {
-        string option{}, length{}, value{};
+        ByteString option{}, length{}, value{};
     };
-    vector<Option> options{};
+    std::vector<Option> options{};
 };
 // Ospf header
 namespace OspfPacket
 {
     struct ospfHeader
     {
-        string version{},
+        ByteString version{},
             type{},
             packetLength{},
             sourceRouter{},
@@ -534,7 +520,7 @@ namespace OspfPacket
 
     struct ospfHelloHeader
     {
-        string mask{},
+        ByteString mask{},
             helloInterval{},
             routerPriority{},
             routerDeadInterval{},
@@ -544,7 +530,7 @@ namespace OspfPacket
 
         struct options
         {
-            string notSet{},
+            ByteString notSet{},
                 opaque{},
                 demand{},
                 llsPresent{},
@@ -557,12 +543,12 @@ namespace OspfPacket
 
     struct ospfDescriptionHeader
     {
-        string interfaceMtu{},
+        ByteString interfaceMtu{},
             sequence{};
 
         struct options
         {
-            string notSet{},
+            ByteString notSet{},
                 opaque{},
                 demand{},
                 llsPresent{},
@@ -574,7 +560,7 @@ namespace OspfPacket
 
         struct description
         {
-            string OOBResync{},
+            ByteString OOBResync{},
                 init{},
                 more{},
                 master{};
@@ -583,21 +569,21 @@ namespace OspfPacket
 
     struct ospfRequest
     {
-        string lsType{},
+        ByteString lsType{},
             linkStatID{},
             advertisingRouter{};
     };
 
     struct ospfLLSHeader
     {
-        string checksum{},
+        ByteString checksum{},
             dataLength{},
             options{};
     };
 
     struct LSA
     {
-        string lsAge{},
+        ByteString lsAge{},
             doNotAge{},
             lsType{},
             linkStateID{},
@@ -608,7 +594,7 @@ namespace OspfPacket
 
         struct options
         {
-            string notSet{},
+            ByteString notSet{},
                 opaque{},
                 demand{},
                 llsPresent{},
@@ -621,24 +607,24 @@ namespace OspfPacket
 
     struct ospfUpdateheader
     {
-        string numOfLsa{};
-        vector<OspfPacket::LSA> lsa{};
+        ByteString numOfLsa{};
+        std::vector<OspfPacket::LSA> lsa{};
     };
 }
 // Syslog Packet
-struct syslogHeader {
-    string PRI{},
+struct SyslogHeader {
+    ByteString PRI{},
         message{};
 };
 
 // Packet structure
 struct PacketInfo
 {
-    vector<std::any> Layer2;
-    vector<std::any> Layer2_5;
-    vector<std::any> Layer3;
-    vector<std::any> Layer4;
-    vector<std::any> Layer5;
+    std::vector<std::any> Layer2;
+    std::vector<std::any> Layer2_5;
+    std::vector<std::any> Layer3;
+    std::vector<std::any> Layer4;
+    std::vector<std::any> Layer5;
 };
 // Type test
 template <typename T>

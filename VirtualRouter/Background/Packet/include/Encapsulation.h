@@ -2,10 +2,7 @@
 
 #include "Process.h"
 #include <Checksums.h>
-
-#include <any>
-
-using namespace std;
+#include <ByteString.hpp>
 
 // Encapsulates packet information into a formatted string.
-std::string Encapsulate(PacketInfo& packet, string encapsulated = "");
+ByteString encapsulate(PacketInfo& packet, ByteString encapsulated = "");

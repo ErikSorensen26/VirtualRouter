@@ -125,50 +125,9 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o: \
  /usr/include/c++/13/bits/ranges_util.h \
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Ingress.h \
- /usr/include/c++/13/iostream /usr/include/c++/13/ostream \
- /usr/include/c++/13/ios /usr/include/c++/13/exception \
- /usr/include/c++/13/bits/exception_ptr.h \
- /usr/include/c++/13/bits/cxxabi_init_exception.h \
- /usr/include/c++/13/typeinfo /usr/include/c++/13/bits/nested_exception.h \
- /usr/include/c++/13/bits/ios_base.h /usr/include/c++/13/ext/atomicity.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h \
- /usr/include/pthread.h /usr/include/sched.h \
- /usr/include/x86_64-linux-gnu/bits/sched.h \
- /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h \
- /usr/include/x86_64-linux-gnu/bits/cpu-set.h /usr/include/time.h \
- /usr/include/x86_64-linux-gnu/bits/time.h \
- /usr/include/x86_64-linux-gnu/bits/timex.h \
- /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h \
- /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h \
- /usr/include/x86_64-linux-gnu/bits/setjmp.h \
- /usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h \
- /usr/include/x86_64-linux-gnu/bits/pthread_stack_min-dynamic.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h \
- /usr/include/x86_64-linux-gnu/sys/single_threaded.h \
- /usr/include/c++/13/bits/locale_classes.h \
- /usr/include/c++/13/bits/locale_classes.tcc \
- /usr/include/c++/13/system_error \
- /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h \
- /usr/include/c++/13/stdexcept /usr/include/c++/13/streambuf \
- /usr/include/c++/13/bits/streambuf.tcc \
- /usr/include/c++/13/bits/basic_ios.h \
- /usr/include/c++/13/bits/locale_facets.h /usr/include/c++/13/cwctype \
- /usr/include/wctype.h /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h \
- /usr/include/c++/13/bits/streambuf_iterator.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h \
- /usr/include/c++/13/bits/locale_facets.tcc \
- /usr/include/c++/13/bits/basic_ios.tcc \
- /usr/include/c++/13/bits/ostream.tcc /usr/include/c++/13/istream \
- /usr/include/c++/13/bits/istream.tcc /usr/include/c++/13/fstream \
- /usr/include/c++/13/bits/codecvt.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h \
- /usr/include/c++/13/bits/fstream.tcc /usr/include/pcap.h \
- /usr/include/pcap/pcap.h /usr/include/pcap/funcattrs.h \
- /usr/include/pcap/compiler-tests.h /usr/include/pcap/pcap-inttypes.h \
- /usr/include/inttypes.h \
+ /usr/include/pcap.h /usr/include/pcap/pcap.h \
+ /usr/include/pcap/funcattrs.h /usr/include/pcap/compiler-tests.h \
+ /usr/include/pcap/pcap-inttypes.h /usr/include/inttypes.h \
  /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h /usr/include/stdint.h \
  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
  /usr/include/x86_64-linux-gnu/bits/stdint-least.h \
@@ -195,21 +154,62 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o: \
  /usr/include/x86_64-linux-gnu/bits/types/__sigval_t.h \
  /usr/include/x86_64-linux-gnu/bits/netdb.h /usr/include/arpa/inet.h \
  /usr/include/pcap/bpf.h /usr/include/pcap/dlt.h \
- /usr/include/c++/13/iomanip /usr/include/c++/13/locale \
- /usr/include/c++/13/bits/locale_facets_nonio.h /usr/include/c++/13/ctime \
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h \
- /usr/include/libintl.h /usr/include/c++/13/bits/locale_facets_nonio.tcc \
- /usr/include/c++/13/bits/locale_conv.h \
- /usr/include/c++/13/bits/quoted_string.h /usr/include/c++/13/sstream \
- /usr/include/c++/13/bits/sstream.tcc /usr/include/c++/13/mutex \
+ /usr/include/c++/13/mutex /usr/include/c++/13/exception \
+ /usr/include/c++/13/bits/exception_ptr.h \
+ /usr/include/c++/13/bits/cxxabi_init_exception.h \
+ /usr/include/c++/13/typeinfo /usr/include/c++/13/bits/nested_exception.h \
  /usr/include/c++/13/bits/chrono.h /usr/include/c++/13/ratio \
  /usr/include/c++/13/cstdint /usr/include/c++/13/limits \
+ /usr/include/c++/13/ctime /usr/include/time.h \
+ /usr/include/x86_64-linux-gnu/bits/time.h \
+ /usr/include/x86_64-linux-gnu/bits/timex.h \
+ /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h \
+ /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h \
  /usr/include/c++/13/bits/parse_numbers.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/error_constants.h \
  /usr/include/c++/13/bits/std_mutex.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/gthr-default.h \
+ /usr/include/pthread.h /usr/include/sched.h \
+ /usr/include/x86_64-linux-gnu/bits/sched.h \
+ /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h \
+ /usr/include/x86_64-linux-gnu/bits/cpu-set.h \
+ /usr/include/x86_64-linux-gnu/bits/setjmp.h \
+ /usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h \
+ /usr/include/x86_64-linux-gnu/bits/pthread_stack_min-dynamic.h \
  /usr/include/c++/13/bits/unique_lock.h \
+ /usr/include/c++/13/ext/atomicity.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/atomic_word.h \
+ /usr/include/x86_64-linux-gnu/sys/single_threaded.h \
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h \
- /usr/include/c++/13/bitset /usr/include/c++/13/vector \
+ /home/erik/VirtualRouter/VirtualRouter/Common/ByteString.hpp \
+ /usr/include/c++/13/cstring /usr/include/string.h /usr/include/strings.h \
+ /usr/include/c++/13/stdexcept /usr/include/c++/13/algorithm \
+ /usr/include/c++/13/bits/stl_algo.h \
+ /usr/include/c++/13/bits/algorithmfwd.h \
+ /usr/include/c++/13/bits/stl_heap.h \
+ /usr/include/c++/13/bits/uniform_int_dist.h \
+ /usr/include/c++/13/bits/stl_tempbuf.h \
+ /usr/include/c++/13/bits/ranges_algo.h \
+ /usr/include/c++/13/bits/ranges_algobase.h \
+ /usr/include/c++/13/pstl/glue_algorithm_defs.h \
+ /usr/include/c++/13/pstl/execution_defs.h /usr/include/c++/13/iostream \
+ /usr/include/c++/13/ostream /usr/include/c++/13/ios \
+ /usr/include/c++/13/bits/ios_base.h \
+ /usr/include/c++/13/bits/locale_classes.h \
+ /usr/include/c++/13/bits/locale_classes.tcc \
+ /usr/include/c++/13/system_error /usr/include/c++/13/streambuf \
+ /usr/include/c++/13/bits/streambuf.tcc \
+ /usr/include/c++/13/bits/basic_ios.h \
+ /usr/include/c++/13/bits/locale_facets.h /usr/include/c++/13/cwctype \
+ /usr/include/wctype.h /usr/include/x86_64-linux-gnu/bits/wctype-wchar.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_base.h \
+ /usr/include/c++/13/bits/streambuf_iterator.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/ctype_inline.h \
+ /usr/include/c++/13/bits/locale_facets.tcc \
+ /usr/include/c++/13/bits/basic_ios.tcc \
+ /usr/include/c++/13/bits/ostream.tcc /usr/include/c++/13/istream \
+ /usr/include/c++/13/bits/istream.tcc /usr/include/c++/13/vector \
  /usr/include/c++/13/bits/stl_uninitialized.h \
  /usr/include/c++/13/bits/stl_vector.h \
  /usr/include/c++/13/bits/stl_bvector.h \
@@ -234,58 +234,29 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o: \
  /usr/include/c++/13/tr1/modified_bessel_func.tcc \
  /usr/include/c++/13/tr1/poly_hermite.tcc \
  /usr/include/c++/13/tr1/poly_laguerre.tcc \
- /usr/include/c++/13/tr1/riemann_zeta.tcc /usr/include/c++/13/random \
- /usr/include/c++/13/bits/random.h \
- /usr/include/c++/13/bits/uniform_int_dist.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h \
- /usr/include/c++/13/bits/random.tcc /usr/include/c++/13/numeric \
- /usr/include/c++/13/bits/stl_numeric.h \
- /usr/include/c++/13/pstl/glue_numeric_defs.h \
- /usr/include/c++/13/pstl/execution_defs.h /usr/include/c++/13/algorithm \
- /usr/include/c++/13/bits/stl_algo.h \
- /usr/include/c++/13/bits/algorithmfwd.h \
- /usr/include/c++/13/bits/stl_heap.h \
- /usr/include/c++/13/bits/stl_tempbuf.h \
- /usr/include/c++/13/bits/ranges_algo.h \
- /usr/include/c++/13/bits/ranges_algobase.h \
- /usr/include/c++/13/pstl/glue_algorithm_defs.h \
- /usr/include/c++/13/optional \
+ /usr/include/c++/13/tr1/riemann_zeta.tcc /usr/include/c++/13/optional \
  /usr/include/c++/13/bits/enable_special_members.h \
- /usr/include/c++/13/regex /usr/include/c++/13/stack \
- /usr/include/c++/13/deque /usr/include/c++/13/bits/stl_deque.h \
- /usr/include/c++/13/bits/deque.tcc /usr/include/c++/13/bits/stl_stack.h \
- /usr/include/c++/13/ext/aligned_buffer.h \
+ /usr/include/c++/13/chrono /usr/include/c++/13/sstream \
+ /usr/include/c++/13/bits/sstream.tcc \
  /usr/include/c++/13/bits/shared_ptr.h \
  /usr/include/c++/13/bits/shared_ptr_base.h \
  /usr/include/c++/13/bits/allocated_ptr.h \
  /usr/include/c++/13/bits/unique_ptr.h \
+ /usr/include/c++/13/ext/aligned_buffer.h \
  /usr/include/c++/13/ext/concurrence.h /usr/include/c++/13/bits/align.h \
- /usr/include/c++/13/bits/std_function.h \
- /usr/include/c++/13/bits/stl_tree.h \
- /usr/include/c++/13/bits/node_handle.h \
- /usr/include/c++/13/bits/stl_map.h \
- /usr/include/c++/13/bits/regex_constants.h \
- /usr/include/c++/13/bits/regex_error.h \
- /usr/include/c++/13/bits/regex_automaton.h \
- /usr/include/c++/13/bits/regex_automaton.tcc \
- /usr/include/c++/13/bits/regex_scanner.h \
- /usr/include/c++/13/bits/regex_scanner.tcc \
- /usr/include/c++/13/bits/regex_compiler.h \
- /usr/include/c++/13/bits/regex_compiler.tcc \
- /usr/include/c++/13/bits/regex.h /usr/include/c++/13/bits/regex.tcc \
- /usr/include/c++/13/bits/regex_executor.h \
- /usr/include/c++/13/bits/regex_executor.tcc /usr/include/c++/13/chrono \
- /usr/include/c++/13/bits/chrono_io.h /usr/include/c++/13/format \
+ /usr/include/c++/13/bits/chrono_io.h /usr/include/c++/13/iomanip \
+ /usr/include/c++/13/locale \
+ /usr/include/c++/13/bits/locale_facets_nonio.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h \
+ /usr/include/libintl.h /usr/include/c++/13/bits/codecvt.h \
+ /usr/include/c++/13/bits/locale_facets_nonio.tcc \
+ /usr/include/c++/13/bits/locale_conv.h \
+ /usr/include/c++/13/bits/quoted_string.h /usr/include/c++/13/format \
  /usr/include/c++/13/array /usr/include/c++/13/charconv \
  /usr/include/c++/13/span /usr/include/c++/13/variant \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Que.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Egress.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Process.h \
- /usr/include/c++/13/any \
- /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Decapsulation.h \
- /usr/include/c++/13/cstring /usr/include/string.h /usr/include/strings.h \
- /home/erik/VirtualRouter/VirtualRouter/include/Logger.h \
- /usr/include/c++/13/thread /usr/include/c++/13/stop_token \
+ /usr/include/c++/13/condition_variable /usr/include/c++/13/stop_token \
  /usr/include/c++/13/atomic /usr/include/c++/13/bits/atomic_base.h \
  /usr/include/c++/13/bits/atomic_lockfree_defines.h \
  /usr/include/c++/13/bits/atomic_wait.h /usr/include/c++/13/climits \
@@ -313,28 +284,38 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o: \
  /usr/include/c++/13/bits/atomic_timed_wait.h \
  /usr/include/c++/13/bits/this_thread_sleep.h /usr/include/semaphore.h \
  /usr/include/x86_64-linux-gnu/bits/semaphore.h /usr/include/c++/13/queue \
- /usr/include/c++/13/bits/stl_queue.h \
- /usr/include/c++/13/condition_variable /usr/include/c++/13/functional \
+ /usr/include/c++/13/deque /usr/include/c++/13/bits/stl_deque.h \
+ /usr/include/c++/13/bits/deque.tcc /usr/include/c++/13/bits/stl_queue.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Egress.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Process.h \
+ /usr/include/c++/13/any \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/RoutingTable.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/PacketStructure.h \
+ /usr/include/c++/13/map /usr/include/c++/13/bits/stl_tree.h \
+ /usr/include/c++/13/bits/node_handle.h \
+ /usr/include/c++/13/bits/stl_map.h \
+ /usr/include/c++/13/bits/stl_multimap.h \
+ /usr/include/c++/13/bits/erase_if.h \
+ /home/erik/VirtualRouter/VirtualRouter/include/Logger.h \
+ /usr/include/c++/13/thread /usr/include/c++/13/functional \
+ /usr/include/c++/13/bits/std_function.h \
  /usr/include/c++/13/unordered_map \
  /usr/include/c++/13/bits/unordered_map.h \
  /usr/include/c++/13/bits/hashtable.h \
  /usr/include/c++/13/bits/hashtable_policy.h \
- /usr/include/c++/13/bits/erase_if.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/PacketStructure.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/RoutingTable.h \
- /usr/include/c++/13/map /usr/include/c++/13/bits/stl_multimap.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Encapsulation.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Checksums.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/Global.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Arp.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Eigrp.h \
  /usr/include/c++/13/memory \
  /usr/include/c++/13/bits/stl_raw_storage_iter.h \
  /usr/include/c++/13/bits/shared_ptr_atomic.h \
  /usr/include/c++/13/backward/auto_ptr.h \
  /usr/include/c++/13/bits/ranges_uninitialized.h \
  /usr/include/c++/13/pstl/glue_memory_defs.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Arp.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Eigrp.h \
+ /usr/include/c++/13/shared_mutex \
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h \
  /home/erik/VirtualRouter/VirtualRouter/Common/Authentication.hpp \
  /usr/include/openssl/hmac.h /usr/include/openssl/macros.h \
@@ -353,7 +334,11 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o: \
  /usr/include/openssl/obj_mac.h /usr/include/openssl/asn1.h \
  /usr/include/openssl/asn1err.h /usr/include/openssl/objectserr.h \
  /usr/include/openssl/md5.h /usr/include/openssl/sha.h \
- /usr/include/openssl/des.h /usr/include/c++/13/shared_mutex \
+ /usr/include/openssl/des.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Ethernet.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/IPPacket.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/ThreadPool.h \
+ /usr/include/c++/13/future /usr/include/c++/13/bits/atomic_futex.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Ospf.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Rip.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include/Bgp.h \
@@ -402,4 +387,6 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/src/CommandProcessing.cpp.o: \
  /usr/include/c++/13/filesystem /usr/include/c++/13/bits/fs_fwd.h \
  /usr/include/c++/13/bits/fs_path.h /usr/include/c++/13/codecvt \
  /usr/include/c++/13/bits/fs_dir.h /usr/include/c++/13/bits/fs_ops.h \
- /usr/include/c++/13/ranges
+ /usr/include/c++/13/ranges /usr/include/c++/13/numeric \
+ /usr/include/c++/13/bits/stl_numeric.h \
+ /usr/include/c++/13/pstl/glue_numeric_defs.h

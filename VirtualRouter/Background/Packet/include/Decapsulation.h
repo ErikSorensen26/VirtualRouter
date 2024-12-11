@@ -5,113 +5,113 @@
 
 #include <Functions.h>
 #include <Logger.h>
+#include <Interface.h>
 #include "PacketStructure.h"
-
-using namespace std;
 
 class Packet
 {
 public:
     // constructor
-    Packet(string &packet, bool debug);
+    Packet(ByteString &packet, bool debug, Interface& iface);
 
     // layers 2-3 decapsulation
-    void Inspection(string &packet);
+    void inspection(ByteString &packet);
 
     // layers 4-7 decapsulation
-    void Decapsulate();
+    void decapsulate();
 
     // Leftover Packet
-    string afterPacket;
+    ByteString afterPacket;
 
     // Packet structure initialization
     PacketInfo packetInfo;
 
 private:
 
+    // Interface
+    Interface& currentInterface;
+
     // Parses and processes Ethernet header.
-    void Ethernet(string &ethernetHeader);
+    void decodeEthernet(ByteString &ethernetHeader);
     // Parses and processes ARP header.
-    void Arp(string &arpHeader);
+    void decodeArp(ByteString &arpHeader);
     // Parses and processes the IP header.
-    void Ipv4(string &ipv4Header, int &ipv4Size);
+    void decodeIPv4(ByteString &ipv4Header, int &ipv4Size);
     // Parses and processes the IPv6 header
-    void Ipv6(string &ipv6Header);
+    void decodeIPv6(ByteString &ipv6Header);
     // Parses and processes the TCP header.
-    void Tcp(string &tcpHeader, int &tcpSize);
+    void decodeTcp(ByteString &tcpHeader, int &tcpSize);
     // Parses and processes the UDP header.
-    void Udp(string &udpHeader);
+    void decodeUdp(ByteString &udpHeader);
     // Parses and processes the ICMP header.
-    void Icmp(string &icmpHeader);
+    void decodeIcmp(ByteString &icmpHeader);
     // Parses and processes the ICMPv6 header
-    void Icmpv6(string &icmpv6Header);
+    void decodeIcmpV6(ByteString &icmpV6Header);
     // Parses and processes the IGMP header.
-    void Igmp(string &igmpHeader);
+    void decodeIgmp(ByteString &igmpHeader);
     // Parses and processes the TLS header.
-    void Tls(string &tlsHeader);
+    void decodeTls(ByteString &tlsHeader);
     // Parses and processes the MPLS header.
-    void Mpls(string &mplsHeader);
+    void decodeMpls(ByteString &mplsHeader);
     // Parses and processes the GRE header.
-    void Gre(string &greHeader);
+    void decodeGre(ByteString &greHeader);
     // Parses and processes the PPP header.
-    void Ppp(string &pppHeader);
+    void decodePpp(ByteString &pppHeader);
     // Parses and processes the Frame Relay header.
-    void Frame(string &frameHeader);
+    void decodeFrame(ByteString &frameHeader);
     // Parses and processes the AH header.
-    void Ah(string &ahHeader, int &ahSize);
+    void decodeAh(ByteString &ahHeader, int &ahSize);
     // Parses and processes the ESP header.
-    void Esp(string &espHeader);
+    void decodeEsp(ByteString &espHeader);
     // Parses and processes the VLAN header.
-    void Vlan(string &vlanHeader);
+    void decodeVlan(ByteString &vlanHeader);
     // Parses and processes the LLDP header.
-    void Lldp(string &lldpHeader);
+    void decodeLldp(ByteString &lldpHeader);
     // Parses and processes the DHCP header.
-    void Dhcp(string &dhcpHeader);
+    void decodeDhcp(ByteString &dhcpHeader);
     // Parses and processes the EIGRP header.
-    void Eigrp(string &eigrpHeader);
+    void decodeEigrp(ByteString &eigrpHeader);
     // Parses and processes the SysLog header
-    void SysLog(string &syslogHeader);
+    void decodeSysLog(ByteString &syslogHeader);
 
     // Decapsulates layer 2 headers
-    void L2(string &packet);
+    void l2(ByteString &packet);
     // Decapsulates layer 2.5 headers
-    void L2_5(string &packet);
+    void l2_5(ByteString &packet);
     // Decapsulates layer 3 headers
-    void L3(string &packet);
+    void l3(ByteString &packet);
     // Decapsulates layer 4 headers
-    void L4(string &packet);
+    void l4(ByteString &packet);
     // Decapsulates layer 5 headers
-    void L5(string &packet);
+    void l5(ByteString &packet);
 
     // Header Initializations
-    ethernetHeader ethernet;
-    arpHeader arp;
-    ipv4Header ipv4;
-    ipv6Header ipv6;
-    tcpHeader tcp;
-    udpHeader udp;
-    icmpHeader icmp;
-    icmpv6Header icmpv6;
-    igmpHeader igmp;
-    tlsHeader tls;
-    mplsHeader mpls;
-    greHeade gre;
-    pppHeader ppp;
-    frameHeader frame;
-    ahHeader ah;
-    espHeader esp;
-    vlanHeader vlan;
-    lldpHeader lldp;
-    dhcpHeader dhcp;
-    eigrpHeader eigrp;
-    syslogHeader syslog;
-
-    Variable variable;
+    EthernetHeader ethernet;
+    ArpHeader arp;
+    IPv4Header ipv4;
+    IPv6Header ipv6;
+    TcpHeader tcp;
+    UdpHeader udp;
+    IcmpHeader icmp;
+    IcmpV6Header icmpv6;
+    IgmpHeader igmp;
+    TlsHeader tls;
+    MplsHeader mpls;
+    GreHeade gre;
+    PppHeader ppp;
+    FrameHeader frame;
+    AhHeader ah;
+    EspHeader esp;
+    VlanHeader vlan;
+    LldpHeader lldp;
+    DhcpHeader dhcp;
+    EigrpHeader eigrp;
+    SyslogHeader syslog;
 
     // Packet Index
     unsigned long start{0};
 
-    string fullPacket;
+    ByteString fullPacket;
 
     bool options;
     bool print = false;

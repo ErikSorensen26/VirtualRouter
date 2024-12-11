@@ -2,7 +2,7 @@
 #include <Logger.h>
 
 int main() {
-    Logger::getInstance().initialize(true);
+    Logger::getInstance().initialize(true, /*isolateMode*/true);
 
     Terminal* terminal = new Terminal(false);
     while (true) {

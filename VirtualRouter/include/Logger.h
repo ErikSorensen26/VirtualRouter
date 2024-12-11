@@ -26,16 +26,16 @@ public:
     static Logger& getInstance();
 
     // Methods to obtain LogStream for each log level
-    LogStream info();
-    LogStream debug();
-    LogStream warn();
-    LogStream error();
+    LogStream info(bool isolate = false);
+    LogStream debug(bool isolate = false);
+    LogStream warn(bool isolate = false);
+    LogStream error(bool isolate = false);
 
     // Method to enqueue a log message
     void enqueue(const std::string& message, LogLevel level);
 
     // Initialize the logger with configuration
-    void initialize(bool start);
+    void initialize(bool start, bool isolateMode = false);
 
     // Destructor
     ~Logger();
@@ -60,6 +60,9 @@ private:
 
     // Internal method running in a separate thread to send log messages
     void processLogs();
+
+    // Isolate mode
+    bool isolatedMode = false;
     
     // Members
     std::string serverIP_;
@@ -76,7 +79,7 @@ private:
 // LogStream class defination
 class LogStream {
 public:
-    LogStream(Logger& logger, LogLevel level);
+    LogStream(Logger& logger, LogLevel level, bool isFiltered = false);
     ~LogStream();
 
     // Overload the insertion operator for various types
@@ -89,6 +92,8 @@ public:
 
     // Overload for manipulators like std::endl;
     LogStream& operator<<(std::ostream& (*manip)(std::ostream&));
+
+    bool filtered;
 
 private:
     Logger& logger_;

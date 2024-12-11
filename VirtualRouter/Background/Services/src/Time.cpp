@@ -1,5 +1,4 @@
 #include <ctime>  
-#include <iomanip>
 #include <string> 
 #include <chrono> 
 #include <Time.h> 
@@ -11,7 +10,7 @@ DoTime::DoTime() // Default constructor for the DoTime class.
 
 // Returns the current time formatted as a string based on object settings.
 // Includes milliseconds if 'includeMilliseconds' is true.
-std::string DoTime::GetTime() 
+std::string DoTime::getTime() 
 {
     std::time_t now = std::time(nullptr); // Get current time as std::time_t.
     std::tm localTime; // Structure to hold local time.

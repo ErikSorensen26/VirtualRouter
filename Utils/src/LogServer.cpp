@@ -8,7 +8,6 @@
 #include <cstring>
 #include <json.hpp>
 #include <fstream>
-#include <sstream>
 #include <atomic>
 
 // POSIX Socket Headers

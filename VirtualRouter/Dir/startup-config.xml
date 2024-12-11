@@ -1,11 +1,10 @@
 <?xml version="1.0"?>
 <config>
 	<interface>
-		<GigabitEthernet id="1">
+		<GigabitEthernet id="2">
 			<ip>
 				<address>
-					<ip>172.16.0.2</ip>
-					<subnet>255.255.0.0</subnet>
+					<dhcp/>
 				</address>
 			</ip>
 		</GigabitEthernet>

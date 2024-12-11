@@ -1,22 +1,14 @@
-
 // ByteString.h
 
 #ifndef BYTE_STRING_H
 #define BYTE_STRING_H
 
 #include <cstdint>
-#include <cstring>   // For std::memcpy, std::memmove
+#include <cstring>
 #include <string>
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
-
-// Highly Efficient ByteString:
-// - Small Buffer Optimization (SBO) for small data
-// - Direct heap allocation for larger data without std::vector overhead
-// - No unnecessary zeroing
-// - Inline methods and direct memory operations
-// - No guaranteed null termination
 
 class ByteString {
 public:
@@ -64,6 +56,34 @@ public:
         initialize((const byte*)str.data(), str.size());
     }
 
+    inline ByteString(const std::string& str, size_t size) {
+        if (size <= SBO_BUFFER_SIZE) {
+            is_sbo_ = true;
+            capacity_ = SBO_BUFFER_SIZE;
+            if (size <= str.size()) {
+                size_ = size;
+                std::memcpy(sbo_buffer_, str.data(), size_);
+            } else {
+                size_ = size;
+                std::memcpy(sbo_buffer_, str.data(), str.size());
+                std::memset(sbo_buffer_ + str.size(), 0, size - str.size());
+            }
+        } else {
+            is_sbo_ = false;
+            capacity_ = std::max(size * 2, str.size() > size ? str.size() * 2 : size * 2);
+            data_ptr_ = (byte*)std::malloc(capacity_);
+            if (!data_ptr_) throw std::bad_alloc();
+            if (size <= str.size()) {
+                size_ = size;
+                std::memcpy(data_ptr_, str.data(), size_);
+            } else {
+                size_ = size;
+                std::memcpy(data_ptr_, str.data(), str.size());
+                std::memset(data_ptr_ + str.size(), 0, size - str.size());
+            }
+        }
+    }
+
     inline ByteString(size_t length, byte value) {
         if (length <= SBO_BUFFER_SIZE) {
             is_sbo_ = true;
@@ -107,7 +127,7 @@ public:
         return *this;
     }
 
-    inline ByteString& operator=(ByteString&& other) noexcept {
+    inline ByteString& operator=(ByteString&& other) {
         if (this == &other) return *this;
         clearInternal();
         size_ = other.size_;
@@ -179,7 +199,7 @@ public:
         }
     }
 
-    inline void push_back(byte b) {
+    inline void push_back(byte b) noexcept {
         if (is_sbo_) {
             if (size_ < SBO_BUFFER_SIZE) {
                 sbo_buffer_[size_++] = b;
@@ -187,7 +207,6 @@ public:
                 // Switch to heap
                 size_t new_cap = SBO_BUFFER_SIZE * 2;
                 byte* new_data = (byte*)std::malloc(new_cap);
-                if (!new_data) throw std::bad_alloc();
                 std::memcpy(new_data, sbo_buffer_, size_);
                 new_data[size_++] = b;
                 is_sbo_ = false;
@@ -198,7 +217,6 @@ public:
             if (size_ >= capacity_) {
                 size_t new_cap = capacity_ * 2;
                 byte* new_data = (byte*)std::realloc(data_ptr_, new_cap);
-                if (!new_data) throw std::bad_alloc();
                 data_ptr_ = new_data;
                 capacity_ = new_cap;
             }
@@ -283,19 +301,53 @@ public:
         return std::string::npos;
     }
 
-    inline size_t replace(const ByteString& target, const ByteString& replacement) {
-        if (target.empty()) return 0;
-        size_t count = 0;
-        size_t pos = 0;
-        for (;;) {
-            pos = find(target, pos);
-            if (pos == std::string::npos) break;
-            erase(pos, target.size_);
-            insert(pos, replacement);
-            pos += replacement.size_;
-            ++count;
+    //inline size_t replace(const ByteString& target, const ByteString& replacement) {
+        //if (target.empty()) return 0;
+        //size_t count = 0;
+        //size_t pos = 0;
+        //for (;;) {
+            //pos = find(target, pos);
+            //if (pos == std::string::npos) break;
+            //erase(pos, target.size_);
+            //insert(pos, replacement);
+            //pos += replacement.size_;
+            //++count;
+        //}
+        //return count;
+    //}
+
+    inline ByteString& replace(size_t pos, size_t len, ByteString& replacement) {
+        if (pos > size_) {
+            throw std::out_of_range("ByteString::replace: position out of range");
         }
-        return count;
+
+        // Ensure 'len' does not exceed the remaining time
+        len = std::min(len, size_ - pos);
+
+        size_t replacement_len = replacement.size();
+        size_t new_size = size_ - len + replacement_len;
+
+        // Ensure sufficient capacity
+        if (new_size > capacity_) {
+            reserve(std::max(new_size, capacity_ * 2));
+        }
+
+        // Move the tall data if sizes differ
+        if (replacement_len != len) {
+            std::memmove(
+                begin() + pos + replacement_len, // Destination
+                begin() + pos + len,             // Source
+                size_ - pos - len                // Number of bytes to move
+            );
+        }
+
+        // Copy replacement data
+        std::memcpy(begin() + pos, replacement.data(), replacement_len);
+
+        // Update size
+        size_ = new_size;
+
+        return *this;
     }
 
     inline void insert(size_t pos, const ByteString& other) {
@@ -377,7 +429,9 @@ public:
         return is;
     }
 
-    // Binary, printable, and serialization methods can be the same or similarly optimized.
+    inline const byte* data() const {
+        return is_sbo_ ? sbo_buffer_ : data_ptr_;
+    }
 
 private:
     inline void initialize(const byte* data_ptr, size_t len) {
@@ -433,10 +487,6 @@ private:
         std::memset(sbo_buffer_, 0, SBO_BUFFER_SIZE);
     }
 
-    inline const byte* data() const {
-        return is_sbo_ ? sbo_buffer_ : data_ptr_;
-    }
-
     // Members
     union {
         byte sbo_buffer_[SBO_BUFFER_SIZE];
@@ -448,5 +498,19 @@ private:
     size_t capacity_;
     bool is_sbo_;
 };
+
+namespace std {
+    template <>
+    struct hash<ByteString> {
+        size_t operator()(const ByteString& bs) const noexcept {
+            size_t hash = 0;
+            const auto* data = bs.begin();
+            for (size_t i = 0; i < bs.size(); ++i) {
+                hash = hash * 31 + data[i];
+            }
+            return hash;
+        }
+    };
+}
 
 #endif // BYTE_STRING_H

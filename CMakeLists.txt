@@ -28,6 +28,8 @@ set(VIRTUAL_ROUTER_SOURCES
     ${VIRTUAL_ROUTER_DIR}/Background/Packet/src/Process.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/Dhcp.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/Arp.cpp
+    ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/Ethernet.cpp
+    ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/IPPacket.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Global/src/Eigrp.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Global/src/Rip.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Global/src/Ospf.cpp

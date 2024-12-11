@@ -1,9 +1,9 @@
 #pragma once
 
 #include <pcap.h>
-#include <iostream>
 #include <string>
 #include <vector>
+#include <ByteString.hpp>
 
 class Egress {
 public:
@@ -14,11 +14,11 @@ public:
     ~Egress();
 
     // Sends a packet from base 256 string
-    bool sendPacket(const std::string& base256Str);
+    bool sendPacket(const ByteString& base256Str);
 
 private:
 
     pcap_t* pcap_handle;
 
-    std::vector<unsigned char> base256ToBytes(const std::string& base256Str);
+    std::vector<unsigned char> base256ToBytes(const ByteString& base256Str);
 };

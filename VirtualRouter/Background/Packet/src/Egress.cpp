@@ -21,7 +21,7 @@ Egress::~Egress()
 }
 
 // Sends a packet with data converted from base256 string format.
-bool Egress::sendPacket(const std::string& base256Str) 
+bool Egress::sendPacket(const ByteString& base256Str) 
 {
   std::vector<unsigned char> packet_data = base256ToBytes(base256Str);
   int packet_length = packet_data.size();
@@ -34,7 +34,7 @@ bool Egress::sendPacket(const std::string& base256Str)
 }
 
 // Converts a base256 string to a vector of unsigned char bytes.
-std::vector<unsigned char> Egress::base256ToBytes(const std::string& base256Str) 
+std::vector<unsigned char> Egress::base256ToBytes(const ByteString& base256Str) 
 {
     std::vector<unsigned char> bytes(base256Str.begin(), base256Str.end());
     return bytes;

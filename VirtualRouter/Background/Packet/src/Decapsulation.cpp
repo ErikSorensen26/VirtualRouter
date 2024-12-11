@@ -1,172 +1,172 @@
 #include <Decapsulation.h>
 
-// Constructor for Packet class, starts packet inspection.
-Packet::Packet(string &packet, bool debug)
+// Constructor for Packet class, starts packet inspection
+Packet::Packet(ByteString &packet, bool debug, Interface& iface) : currentInterface(iface)
 {
     print = debug;
-    if (print) {Logger::getInstance().info() << Functions::byteToHex(packet) << endl;}
-    Inspection(packet);
+    if (print) {Logger::getInstance().info() << packet.toHex() << std::endl;}
+    inspection(packet);
 }
 
 // Inspects the given packet and processes each layer.
-void Packet::Inspection(string &packet)
+void Packet::inspection(ByteString &packet)
 {
     fullPacket = packet;
 
     start = 0;
     if (print)
     {
-        Logger::getInstance().info() << "Layer 2:" << endl;
+        Logger::getInstance().info() << "Layer 2:" << std::endl;
     }
-    L2(packet); // Process Layer 2 (Data Link Layer)
+    l2(packet); // Process Layer 2 (Data Link Layer)
     if (print)
     {
-        Logger::getInstance().info() << "Layer 2.5:" << endl;
+        Logger::getInstance().info() << "Layer 2.5:" << std::endl;
     }
-    L2_5(packet); // Process Layer 2.5 (e.g., VLAN, MPLS)
+    l2_5(packet); // Process Layer 2.5 (e.g., VLAN, MPLS)
     if (print)
     {
-        Logger::getInstance().info() << "Layer 3:" << endl;
+        Logger::getInstance().info() << "Layer 3:" << std::endl;
     }
-    L3(packet); // Process Layer 3 (Network Layer)
+    l3(packet); // Process Layer 3 (Network Layer)
 }
 
 // Decapsulates the remaining layers after Layer 3.
-void Packet::Decapsulate()
+void Packet::decapsulate()
 {
     if (print)
     {
-        Logger::getInstance().info() << "Layer 4:" << endl;
+        Logger::getInstance().info() << "Layer 4:" << std::endl;
     }
-    L4(fullPacket); // Process Layer 4 (Transport Layer)
+    l4(fullPacket); // Process Layer 4 (Transport Layer)
     if (print)
     {
-        Logger::getInstance().info() << "Layer 5:" << endl;
+        Logger::getInstance().info() << "Layer 5:" << std::endl;
     }
-    L5(fullPacket); // Process Layer 5 (Session Layer)
+    l5(fullPacket); // Process Layer 5 (Session Layer)
 }
 
 // Handles Layer 2 processing, distinguishing between Ethernet and PPP.
-void Packet::L2(string &packet)
+void Packet::l2(ByteString &packet)
 {
-    if (gre.protocol == variable.gre.ppp)
+    if (gre.protocol == Variable::Gre::ppp)
     {
-        string pppHeader = packet.substr(start, 4);
-        Ppp(pppHeader); // Process PPP header
+        ByteString pppHeader = packet.substr(start, 4);
+        decodePpp(pppHeader); // Process PPP header
         packetInfo.Layer2.push_back(ppp);
     }
     else
     {
-        string ethernetHeader = packet.substr(start, 14);
-        Ethernet(ethernetHeader); // Process Ethernet header
+        ByteString ethernetHeader = packet.substr(start, 14);
+        decodeEthernet(ethernetHeader); // Process Ethernet header
         packetInfo.Layer2.push_back(ethernet);
     }
     afterPacket = packet.substr(start);
 }
 
 // Processes Layer 2.5 headers such as ARP, MPLS, VLAN, or LLDP.
-void Packet::L2_5(string &packet)
+void Packet::l2_5(ByteString &packet)
 {
-    if (ethernet.type == variable.ethernet.arp)
+    if (ethernet.type == Variable::Ethernet::arp)
     {
-        string arpHeader = packet.substr(start, 28);
-        Arp(arpHeader); // Process ARP header
+        ByteString arpHeader = packet.substr(start, 28);
+        decodeArp(arpHeader); // Process ARP header
         packetInfo.Layer2_5.push_back(arp);
     }
-    else if (ethernet.type == variable.ethernet.mpls)
+    else if (ethernet.type == Variable::Ethernet::mpls)
     {
-        string mplsHeader = Functions::byteToHex(packet.substr(start, 4));
-        Mpls(mplsHeader); // Process MPLS header
+        ByteString mplsHeader = packet.substr(start, 4).toHex();
+        decodeMpls(mplsHeader); // Process MPLS header
         packetInfo.Layer2_5.push_back(mpls);
     }
-    else if (ethernet.type == variable.ethernet.vlan)
+    else if (ethernet.type == Variable::Ethernet::vlan)
     {
-        string vlanHeader = packet.substr(start, 4);
-        Vlan(vlanHeader); // Process VLAN header
+        ByteString vlanHeader = packet.substr(start, 4);
+        decodeVlan(vlanHeader); // Process VLAN header
         packetInfo.Layer2_5.push_back(vlan);
     }
-    else if (ethernet.type == variable.ethernet.lldp)
+    else if (ethernet.type == Variable::Ethernet::lldp)
     {
-        string lldpHeader = packet.substr(start);
-        Lldp(lldpHeader); // Process LLDP header
+        ByteString lldpHeader = packet.substr(start);
+        decodeLldp(lldpHeader); // Process LLDP header
         packetInfo.Layer2_5.push_back(lldp);
     }
     afterPacket = packet.substr(start);
 }
 
 // Processes Layer 3 headers, focusing on IPv4/IPv6 and its encapsulated protocols.
-void Packet::L3(string &packet)
+void Packet::l3(ByteString &packet)
 {
-    if (ethernet.type == variable.ethernet.ipv4 || ethernet.type == variable.ethernet.mpls)
+    if (ethernet.type == Variable::Ethernet::ipv4 || ethernet.type == Variable::Ethernet::mpls)
     {
-        int ipv4Size = Functions::binToNum((Functions::byteToBin(packet.substr(start, 1))).substr(4, 4)) * 4;
-        string ipv4Header = packet.substr(start, ipv4Size);
-        Ipv4(ipv4Header, ipv4Size); // Process IPv4 header
+        int ipv4Size = Functions::binToNum((Functions::byteToBin(packet.substr(start, 1).toString())).substr(4, 4)) * 4;
+        ByteString ipv4Header = packet.substr(start, ipv4Size);
+        decodeIPv4(ipv4Header, ipv4Size); // Process IPv4 header
         packetInfo.Layer3.push_back(ipv4);
 
-        if (ipv4.protocol == variable.ipv4.gre)
+        if (ipv4.protocol == Variable::IP::gre)
         {
-            string greHeader = packet.substr(start, 12);
-            Gre(greHeader); // Process GRE header
+            ByteString greHeader = packet.substr(start, 12);
+            decodeGre(greHeader); // Process GRE header
             packetInfo.Layer3.push_back(gre);
-            if (gre.protocol == variable.gre.ppp)
+            if (gre.protocol == Variable::Gre::ppp)
             {
-                string grepacket = packet.substr(start);
-                Inspection(grepacket); // Recursively inspect encapsulated GRE packet
+                ByteString grepacket = packet.substr(start);
+                inspection(grepacket); // Recursively inspect encapsulated GRE packet
                 return;
             }
         }
-        else if (ipv4.protocol == variable.ipv4.ah)
+        else if (ipv4.protocol == Variable::IP::ah)
         {
-            int ahSize = (Functions::binToNum(Functions::byteToBin(packet.substr(start + 1, 1))) * 4) + 8;
-            string ahHeader = packet.substr(start, ahSize);
-            Ah(ahHeader, ahSize); // Process AH header
+            int ahSize = (Functions::binToNum(Functions::byteToBin(packet.substr(start + 1, 1).toString())) * 4) + 8;
+            ByteString ahHeader = packet.substr(start, ahSize);
+            decodeAh(ahHeader, ahSize); // Process AH header
             packetInfo.Layer3.push_back(ah);
-            if (ah.next == variable.ah.esp)
+            if (ah.next == Variable::Ah::esp)
             {
-                string espHeader = packet.substr(start);
-                Esp(espHeader); // Process ESP header after AH
+                ByteString espHeader = packet.substr(start);
+                decodeEsp(espHeader); // Process ESP header after AH
                 packetInfo.Layer3.push_back(esp);
             }
         }
-        else if (ipv4.protocol == variable.ah.esp)
+        else if (ipv4.protocol == Variable::Ah::esp)
         {
-            string espHeader = packet.substr(start);
-            Esp(espHeader); // Process ESP header
+            ByteString espHeader = packet.substr(start);
+            decodeEsp(espHeader); // Process ESP header
             packetInfo.Layer3.push_back(esp);
         }
-        else if (ipv4.protocol == variable.ipv4.icmp)
+        else if (ipv4.protocol == Variable::IP::icmp)
         {
-            string icmpHeader = packet.substr(start, 8);
-            Icmp(icmpHeader); // Process ICMP header
+            ByteString icmpHeader = packet.substr(start, 8);
+            decodeIcmp(icmpHeader); // Process ICMP header
             packetInfo.Layer3.push_back(icmp);
         }
-        else if (ipv4.protocol == variable.ipv4.igmp)
+        else if (ipv4.protocol == Variable::IP::igmp)
         {
-            string igmpHeader = packet.substr(start);
-            Igmp(igmpHeader); // Process IGMP header
+            ByteString igmpHeader = packet.substr(start);
+            decodeIgmp(igmpHeader); // Process IGMP header
             packetInfo.Layer3.push_back(igmp);
         }
-        else if (ipv4.protocol == variable.ipv4.eigrp)
+        else if (ipv4.protocol == Variable::IP::eigrp)
         {
-            int eigrpSize = Functions::byteToNum(ipv4.totalLength) - 20;
-            string eigrpHeader = packet.substr(start, eigrpSize);
-            Eigrp(eigrpHeader); // Process EIGRP header
+            int eigrpSize = Functions::byteToNum(ipv4.totalLength.toString()) - 20;
+            ByteString eigrpHeader = packet.substr(start, eigrpSize);
+            decodeEigrp(eigrpHeader); // Process EIGRP header
             packetInfo.Layer3.push_back(eigrp);
         }
     }
-    if (ethernet.type == variable.ethernet.ipv6)
+    if (ethernet.type == Variable::Ethernet::ipv6)
     {
         int ipv6Size = 40;
-        string ipv6Header = packet.substr(start, ipv6Size);
-        Ipv6(ipv6Header); // Process IPv6 header
+        ByteString ipv6Header = packet.substr(start, ipv6Size);
+        decodeIPv6(ipv6Header); // Process IPv6 header
         packetInfo.Layer3.push_back(ipv6);
 
-        if (ipv6.protocol == variable.ipv6.eigrp)
+        if (ipv6.protocol == Variable::IP::eigrp)
         {
-            int eigrpSize = Functions::byteToNum(ipv6.payloadLength) - 40;
-            string eigrpHeader = packet.substr(start, eigrpSize);
-            Eigrp(eigrpHeader); // Process EigrpHeader
+            int eigrpSize = Functions::byteToNum(ipv6.payloadLength.toString()) - 40;
+            ByteString eigrpHeader = packet.substr(start, eigrpSize);
+            decodeEigrp(eigrpHeader); // Process EigrpHeader
             packetInfo.Layer3.push_back(eigrp);
         }
     }
@@ -174,57 +174,63 @@ void Packet::L3(string &packet)
 }
 
 // Processes Layer 4 headers, including TCP, UDP, and EIGRP.
-void Packet::L4(string &packet)
+void Packet::l4(ByteString &packet)
 {
-    if (ipv4.protocol == variable.ipv4.tcp)
+    if (ipv4.protocol == Variable::IP::tcp)
     {
-        int tcpSize = Functions::binToNum((Functions::byteToBin(packet.substr(start + 12, 1))).substr(0, 4)) * 4;
-        string tcpHeader = packet.substr(start, tcpSize);
-        Tcp(tcpHeader, tcpSize); // Process TCP header
+        int tcpSize = Functions::binToNum((Functions::byteToBin(packet.substr(start + 12, 1).toString())).substr(0, 4)) * 4;
+        ByteString tcpHeader = packet.substr(start, tcpSize);
+        decodeTcp(tcpHeader, tcpSize); // Process TCP header
         packetInfo.Layer4.push_back(tcp);
     }
-    else if (ipv4.protocol == variable.ipv4.udp)
+    else if (ipv4.protocol == Variable::IP::udp)
     {
-        string udpHeader = packet.substr(start, 8);
-        Udp(udpHeader); // Process UDP header
+        ByteString udpHeader = packet.substr(start, 8);
+        decodeUdp(udpHeader); // Process UDP header
         packetInfo.Layer4.push_back(udp);
     }
     afterPacket = packet.substr(start);
 }
 
 // Processes Layer 5 (Session Layer) headers, such as DHCP.
-void Packet::L5(string &packet)
+void Packet::l5(ByteString &packet)
 {
-    if ((udp.sourcePort == variable.udp.dhcp.source && udp.destinationPort == variable.udp.dhcp.destination) ||
-        (udp.sourcePort == variable.udp.dhcp.destination && udp.destinationPort == variable.udp.dhcp.source))
+    if ((udp.sourcePort.toString() == Variable::Udp::Dhcp::source && udp.destinationPort == Variable::Udp::Dhcp::destination) ||
+        (udp.sourcePort == Variable::Udp::Dhcp::destination && udp.destinationPort == Variable::Udp::Dhcp::source))
     {
-        string dhcpHeader = packet.substr(start);
-        Dhcp(dhcpHeader); // Process DHCP header
+        ByteString dhcpHeader = packet.substr(start);
+        decodeDhcp(dhcpHeader); // Process DHCP header
         packetInfo.Layer5.push_back(dhcp);
     }
 }
 
 // Parses and processes Ethernet header.
-void Packet::Ethernet(string &ethernetHeader)
+void Packet::decodeEthernet(ByteString &ethernetHeader)
 {
-
+    
     ethernet.destinationMac = ethernetHeader.substr(0, 6);
     ethernet.sourceMac = ethernetHeader.substr(6, 6);
     ethernet.type = ethernetHeader.substr(12, 2);
     start += 14;
 
+    if (currentInterface.Get().macAddress == ethernet.sourceMac)
+    {
+        Logger::getInstance().info() << "Packet dropped due to receiving current MAC" << std::endl;
+        return;
+    }
+
     if (print)
     {
 
-        Logger::getInstance().info() << "Ethernet:" << endl;
-        Logger::getInstance().info() << "Destination Mac: " << Functions::byteToHex(ethernet.destinationMac) << endl;
-        Logger::getInstance().info() << "Source Mac: " << Functions::byteToHex(ethernet.sourceMac) << endl;
-        Logger::getInstance().info() << "Type: " << Functions::byteToHex(ethernet.type) << endl;
+        Logger::getInstance().info() << "Ethernet:" << std::endl;
+        Logger::getInstance().info() << "Destination Mac: " << ethernet.destinationMac.toHex() << std::endl;
+        Logger::getInstance().info() << "Source Mac: " << ethernet.sourceMac.toHex() << std::endl;
+        Logger::getInstance().info() << "Type: " << ethernet.type.toHex() << std::endl;
     }
 }
 
 // Parses and processes ARP header.
-void Packet::Arp(string &arpHeader)
+void Packet::decodeArp(ByteString &arpHeader)
 {
 
     arp.hardwareType = arpHeader.substr(0, 2);
@@ -240,24 +246,24 @@ void Packet::Arp(string &arpHeader)
 
     if (print)
     {
-        Logger::getInstance().info() << "ARP Header:" << endl;
-        Logger::getInstance().info() << "Hardware Type: " << Functions::byteToHex(arp.hardwareType) << endl;
-        Logger::getInstance().info() << "Protocol Type: " << Functions::byteToHex(arp.protocolType) << endl;
-        Logger::getInstance().info() << "Hardware Size: " << Functions::byteToHex(arp.hardwareSize) << endl;
-        Logger::getInstance().info() << "Protocol Size: " << Functions::byteToHex(arp.protocolSize) << endl;
-        Logger::getInstance().info() << "Opcode: " << Functions::byteToHex(arp.opcode) << endl;
-        Logger::getInstance().info() << "Sender Hardware Address: " << Functions::byteToHex(arp.senderHardwareAddress) << endl;
-        Logger::getInstance().info() << "Sender IP Address: " << Functions::byteToHex(arp.senderIpAddress) << endl;
-        Logger::getInstance().info() << "Target Hardware Address: " << Functions::byteToHex(arp.targetHardwareAddress) << endl;
-        Logger::getInstance().info() << "Target IP Address: " << Functions::byteToHex(arp.targetIpAddress) << endl;
+        Logger::getInstance().info() << "ARP Header:" << std::endl;
+        Logger::getInstance().info() << "Hardware Type: " << arp.hardwareType.toHex() << std::endl;
+        Logger::getInstance().info() << "Protocol Type: " << arp.protocolType.toHex() << std::endl;
+        Logger::getInstance().info() << "Hardware Size: " << arp.hardwareSize.toHex() << std::endl;
+        Logger::getInstance().info() << "Protocol Size: " << arp.protocolSize.toHex() << std::endl;
+        Logger::getInstance().info() << "Opcode: " << arp.opcode.toHex() << std::endl;
+        Logger::getInstance().info() << "Sender Hardware Address: " << arp.senderHardwareAddress.toHex() << std::endl;
+        Logger::getInstance().info() << "Sender IP Address: " << arp.senderIpAddress.toHex() << std::endl;
+        Logger::getInstance().info() << "Target Hardware Address: " << arp.targetHardwareAddress.toHex() << std::endl;
+        Logger::getInstance().info() << "Target IP Address: " << arp.targetIpAddress.toHex() << std::endl;
     }
 }
 
 // Parses and processes the IP header.
-void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
+void Packet::decodeIPv4(ByteString &ipv4Header, int &ipv4Size)
 {
 
-    string ipHeader = Functions::byteToHex(ipv4Header.substr(0, 1));
+    ByteString ipHeader = ipv4Header.substr(0, 1).toHex();
     ipv4.version = ipHeader.substr(0, 1);
     ipv4.headerLength = ipHeader.substr(1, 1);
     ipv4.serviceField = ipv4Header.substr(1, 1);
@@ -270,7 +276,7 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
     ipv4.destinationAddress = ipv4Header.substr(16, 4);
     start += ipv4Size;
 
-    string fragmentFlag = Functions::byteToBin(ipv4Header.substr(6, 2));
+    ByteString fragmentFlag = Functions::byteToBin(ipv4Header.substr(6, 2).toString());
 
     ipv4.fragmentFlag.reserved = fragmentFlag.substr(0, 1);
     ipv4.fragmentFlag.fragment = fragmentFlag.substr(1, 1);
@@ -280,27 +286,27 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
     if (print)
     {
 
-        Logger::getInstance().info() << "IPv4 Header:" << endl;
-        Logger::getInstance().info() << "Version: " << ipv4.version << endl;
-        Logger::getInstance().info() << "Header Length: " << ipv4.headerLength << endl;
-        Logger::getInstance().info() << "Service Field: " << Functions::byteToHex(ipv4.serviceField) << endl;
-        Logger::getInstance().info() << "Total Length: " << Functions::hexToNum(Functions::byteToHex(ipv4.totalLength)) << " " << this->fullPacket.size() << endl;
-        Logger::getInstance().info() << "Identification: " << Functions::byteToHex(ipv4.identification) << endl;
-        Logger::getInstance().info() << "TTL: " << Functions::byteToHex(ipv4.TTL) << endl;
-        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(ipv4.protocol) << endl;
-        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(ipv4.checksum) << endl;
-        Logger::getInstance().info() << "Source Address: " << Functions::byteAddressToNumAddress(ipv4.sourceAddress) << endl;
-        Logger::getInstance().info() << "Destination Address: " << Functions::byteAddressToNumAddress(ipv4.destinationAddress) << endl;
-        Logger::getInstance().info() << "Fragment Flags:" << endl;
-        Logger::getInstance().info() << "  Reserved: " << ipv4.fragmentFlag.reserved << endl;
-        Logger::getInstance().info() << "  Fragment: " << ipv4.fragmentFlag.fragment << endl;
-        Logger::getInstance().info() << "  More Fragment: " << ipv4.fragmentFlag.moreFragment << endl;
-        Logger::getInstance().info() << "  Fragment Offset: " << ipv4.fragmentFlag.fragmentOffset << endl;
+        Logger::getInstance().info() << "IPv4 Header:" << std::endl;
+        Logger::getInstance().info() << "Version: " << ipv4.version << std::endl;
+        Logger::getInstance().info() << "Header Length: " << ipv4.headerLength << std::endl;
+        Logger::getInstance().info() << "Service Field: " << ipv4.serviceField.toHex() << std::endl;
+        Logger::getInstance().info() << "Total Length: " << Functions::hexToNum(ipv4.totalLength.toHex()) << " " << this->fullPacket.size() << std::endl;
+        Logger::getInstance().info() << "Identification: " << ipv4.identification.toHex() << std::endl;
+        Logger::getInstance().info() << "TTL: " << ipv4.TTL.toHex() << std::endl;
+        Logger::getInstance().info() << "Protocol: " << ipv4.protocol.toHex() << std::endl;
+        Logger::getInstance().info() << "Checksum: " << ipv4.checksum.toHex() << std::endl;
+        Logger::getInstance().info() << "Source Address: " << Functions::byteAddressToNumAddress(ipv4.sourceAddress.toString()) << std::endl;
+        Logger::getInstance().info() << "Destination Address: " << Functions::byteAddressToNumAddress(ipv4.destinationAddress.toString()) << std::endl;
+        Logger::getInstance().info() << "Fragment Flags:" << std::endl;
+        Logger::getInstance().info() << "  Reserved: " << ipv4.fragmentFlag.reserved << std::endl;
+        Logger::getInstance().info() << "  Fragment: " << ipv4.fragmentFlag.fragment << std::endl;
+        Logger::getInstance().info() << "  More Fragment: " << ipv4.fragmentFlag.moreFragment << std::endl;
+        Logger::getInstance().info() << "  Fragment Offset: " << ipv4.fragmentFlag.fragmentOffset << std::endl;
     }
 
     if (ipv4Size > 20)
     {
-        string type = Functions::byteToBin(ipv4Header.substr(20, 1));
+        ByteString type = Functions::byteToBin(ipv4Header.substr(20, 1).toString());
         ipv4.options.type.copy = type.substr(0, 1);
         ipv4.options.type.classControl = type.substr(1, 2);
         ipv4.options.type.routerAlert = type.substr(3, 5);
@@ -310,21 +316,21 @@ void Packet::Ipv4(string &ipv4Header, int &ipv4Size)
         if (print)
         {
 
-            Logger::getInstance().info() << "Options:" << endl;
-            Logger::getInstance().info() << "  Type:" << endl;
-            Logger::getInstance().info() << "    Copy: " << ipv4.options.type.copy << endl;
-            Logger::getInstance().info() << "    Class Control: " << ipv4.options.type.classControl << endl;
-            Logger::getInstance().info() << "    Router Alert: " << ipv4.options.type.routerAlert << endl;
-            Logger::getInstance().info() << "  Length: " << ipv4.options.length << endl;
-            Logger::getInstance().info() << "  Router Alert: " << ipv4.options.routerAlert << endl;
+            Logger::getInstance().info() << "Options:" << std::endl;
+            Logger::getInstance().info() << "  Type:" << std::endl;
+            Logger::getInstance().info() << "    Copy: " << ipv4.options.type.copy << std::endl;
+            Logger::getInstance().info() << "    Class Control: " << ipv4.options.type.classControl << std::endl;
+            Logger::getInstance().info() << "    Router Alert: " << ipv4.options.type.routerAlert << std::endl;
+            Logger::getInstance().info() << "  Length: " << ipv4.options.length << std::endl;
+            Logger::getInstance().info() << "  Router Alert: " << ipv4.options.routerAlert << std::endl;
         }
     }
 }
 
 // Parses and processes the IPv6 header
-void Packet::Ipv6(string &ipv6Header)
+void Packet::decodeIPv6(ByteString &ipv6Header)
 {
-    string ipv6Temp = Functions::byteToHex(ipv6Header.substr(0, 4));
+    ByteString ipv6Temp = Functions::byteToHex(ipv6Header.substr(0, 4).toString());
     ipv6.version = ipv6Temp.substr(0, 1);
     ipv6.trafficClass = ipv6Temp.substr(1, 2);
     ipv6.flowLabel = ipv6Temp.substr(3, 5);
@@ -337,40 +343,40 @@ void Packet::Ipv6(string &ipv6Header)
 
     if (print)
     {
-        Logger::getInstance().info() << "IPv6 Header:" << endl;
-        Logger::getInstance().info() << "Version: " << Functions::byteToHex(ipv6.version) << endl;
-        Logger::getInstance().info() << "Flow Label: " << Functions::byteToBin(ipv6.flowLabel) << endl;
-        Logger::getInstance().info() << "Payload Length: " << Functions::byteToNum(ipv6.payloadLength) << endl;
-        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(ipv6.protocol) << endl;
-        Logger::getInstance().info() << "Hop Limit: " << Functions::byteToNum(ipv6.hopLimit) << endl;
-        Logger::getInstance().info() << "Source Address: " << Functions::byteToHex(ipv6.sourceAddress) << endl;
-        Logger::getInstance().info() << "Destination Address: " << Functions::byteToHex(ipv6.destinationAddress) << endl;
+        Logger::getInstance().info() << "IPv6 Header:" << std::endl;
+        Logger::getInstance().info() << "Version: " << ipv6.version.toHex() << std::endl;
+        Logger::getInstance().info() << "Flow Label: " << Functions::byteToBin(ipv6.flowLabel.toString()) << std::endl;
+        Logger::getInstance().info() << "Payload Length: " << Functions::byteToNum(ipv6.payloadLength.toString()) << std::endl;
+        Logger::getInstance().info() << "Protocol: " << ipv6.protocol.toHex() << std::endl;
+        Logger::getInstance().info() << "Hop Limit: " << Functions::byteToNum(ipv6.hopLimit.toString()) << std::endl;
+        Logger::getInstance().info() << "Source Address: " << ipv6.sourceAddress.toHex() << std::endl;
+        Logger::getInstance().info() << "Destination Address: " << ipv6.destinationAddress.toHex() << std::endl;
     }
 }
 
 // Parses and processes the MPLS header.
-void Packet::Mpls(string &mplsHeader)
+void Packet::decodeMpls(ByteString &mplsHeader)
 {
 
     mpls.label = mplsHeader.substr(0, 5);
-    mpls.expBit = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(0, 3);
-    mpls.bottomLabelStack = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(3, 1);
+    mpls.expBit = (Functions::hexToBin(mplsHeader.substr(5, 1).toString())).substr(0, 3);
+    mpls.bottomLabelStack = (Functions::hexToBin(mplsHeader.substr(5, 1).toString())).substr(3, 1);
     mpls.TTL = mplsHeader.substr(6, 2);
     start += 4;
 
     if (print)
     {
 
-        Logger::getInstance().info() << "MPLS Header:" << endl;
-        Logger::getInstance().info() << "Label: " << mpls.label << endl;
-        Logger::getInstance().info() << "Exp Bit: " << mpls.expBit << endl;
-        Logger::getInstance().info() << "Bottom Label Stack: " << mpls.bottomLabelStack << endl;
-        Logger::getInstance().info() << "TTL: " << mpls.TTL << endl;
+        Logger::getInstance().info() << "MPLS Header:" << std::endl;
+        Logger::getInstance().info() << "Label: " << mpls.label << std::endl;
+        Logger::getInstance().info() << "Exp Bit: " << mpls.expBit << std::endl;
+        Logger::getInstance().info() << "Bottom Label Stack: " << mpls.bottomLabelStack << std::endl;
+        Logger::getInstance().info() << "TTL: " << mpls.TTL << std::endl;
     }
 }
 
 // Parses and processes the TCP header.
-void Packet::Tcp(string &tcpHeader, int &tcpSize)
+void Packet::decodeTcp(ByteString &tcpHeader, int &tcpSize)
 {
     tcp.sourcePort = tcpHeader.substr(0, 2);
     tcp.destinationPort = tcpHeader.substr(2, 2);
@@ -382,7 +388,7 @@ void Packet::Tcp(string &tcpHeader, int &tcpSize)
     tcp.urgentPointer = tcpHeader.substr(18, 2);
     start += tcpSize;
 
-    string flags = Functions::byteToBin(tcpHeader.substr(13, 1));
+    ByteString flags = Functions::byteToBin(tcpHeader.substr(13, 1).toString());
 
     tcp.flags.congestionWindowReduced = flags.substr(0, 1);
     tcp.flags.ecnEcho = flags.substr(1, 1);
@@ -395,18 +401,18 @@ void Packet::Tcp(string &tcpHeader, int &tcpSize)
 
     if (tcpSize > 20)
     {
-        string tcpOptions = tcpHeader.substr(20);
+        ByteString tcpOptions = tcpHeader.substr(20);
         int optionStart = 0;
         while (optionStart != tcpSize - 20)
         {
-            tcpHeader::Option option;
+            TcpHeader::Option option;
             option.type = tcpOptions.substr(optionStart, 1);
             optionStart += 1;
             if (option.type != std::string("\x01", 1))
             {
                 option.length = tcpOptions.substr(optionStart, 1);
                 optionStart += 1;
-                int valueLength = Functions::byteToNum(option.length) - 2;
+                int valueLength = Functions::byteToNum(option.length.toString()) - 2;
                 option.value = tcpOptions.substr(optionStart, valueLength);
                 optionStart += valueLength;
             }
@@ -417,29 +423,29 @@ void Packet::Tcp(string &tcpHeader, int &tcpSize)
     if (print)
     {
 
-        Logger::getInstance().info() << "TCP Header:" << endl;
-        Logger::getInstance().info() << "Source Port: " << Functions::byteToHex(tcp.sourcePort) << endl;
-        Logger::getInstance().info() << "Destination Port: " << Functions::byteToHex(tcp.destinationPort) << endl;
-        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(tcp.sequenceNumber) << endl;
-        Logger::getInstance().info() << "Ack Number: " << Functions::byteToHex(tcp.ackNumber) << endl;
-        Logger::getInstance().info() << "Header Length: " << Functions::byteToHex(tcp.headerLength) << endl;
-        Logger::getInstance().info() << "Window Size: " << Functions::byteToHex(tcp.windowSize) << endl;
-        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(tcp.checksum) << endl;
-        Logger::getInstance().info() << "Urgent Pointer: " << Functions::byteToHex(tcp.urgentPointer) << endl;
-        Logger::getInstance().info() << "Flags:" << endl;
-        Logger::getInstance().info() << "  Congestion Window Reduced: " << tcp.flags.congestionWindowReduced << endl;
-        Logger::getInstance().info() << "  ECN Echo: " << tcp.flags.ecnEcho << endl;
-        Logger::getInstance().info() << "  Urgent: " << tcp.flags.urgent << endl;
-        Logger::getInstance().info() << "  Acknowledgement: " << tcp.flags.acknowledgement << endl;
-        Logger::getInstance().info() << "  Push: " << tcp.flags.push << endl;
-        Logger::getInstance().info() << "  Reset: " << tcp.flags.reset << endl;
-        Logger::getInstance().info() << "  SYN: " << tcp.flags.syn << endl;
-        Logger::getInstance().info() << "  FIN: " << tcp.flags.fin << endl;
+        Logger::getInstance().info() << "TCP Header:" << std::endl;
+        Logger::getInstance().info() << "Source Port: " << tcp.sourcePort.toHex() << std::endl;
+        Logger::getInstance().info() << "Destination Port: " << tcp.destinationPort.toHex() << std::endl;
+        Logger::getInstance().info() << "Sequence Number: " << tcp.sequenceNumber.toHex() << std::endl;
+        Logger::getInstance().info() << "Ack Number: " << tcp.ackNumber.toHex() << std::endl;
+        Logger::getInstance().info() << "Header Length: " << tcp.headerLength.toHex() << std::endl;
+        Logger::getInstance().info() << "Window Size: " << tcp.windowSize.toHex() << std::endl;
+        Logger::getInstance().info() << "Checksum: " << tcp.checksum.toHex() << std::endl;
+        Logger::getInstance().info() << "Urgent Pointer: " << tcp.urgentPointer.toHex() << std::endl;
+        Logger::getInstance().info() << "Flags:" << std::endl;
+        Logger::getInstance().info() << "  Congestion Window Reduced: " << tcp.flags.congestionWindowReduced << std::endl;
+        Logger::getInstance().info() << "  ECN Echo: " << tcp.flags.ecnEcho << std::endl;
+        Logger::getInstance().info() << "  Urgent: " << tcp.flags.urgent << std::endl;
+        Logger::getInstance().info() << "  Acknowledgement: " << tcp.flags.acknowledgement << std::endl;
+        Logger::getInstance().info() << "  Push: " << tcp.flags.push << std::endl;
+        Logger::getInstance().info() << "  Reset: " << tcp.flags.reset << std::endl;
+        Logger::getInstance().info() << "  SYN: " << tcp.flags.syn << std::endl;
+        Logger::getInstance().info() << "  FIN: " << tcp.flags.fin << std::endl;
     }
 }
 
 // Parses and processes the UDP header.
-void Packet::Udp(string &udpHeader)
+void Packet::decodeUdp(ByteString &udpHeader)
 {
 
     udp.sourcePort = udpHeader.substr(0, 2);
@@ -451,16 +457,16 @@ void Packet::Udp(string &udpHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "UDP Header:" << endl;
-        Logger::getInstance().info() << "Source Port: " << Functions::byteToHex(udp.sourcePort) << endl;
-        Logger::getInstance().info() << "Destination Port: " << Functions::byteToHex(udp.destinationPort) << endl;
-        Logger::getInstance().info() << "Length: " << Functions::byteToHex(udp.length) << endl;
-        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(udp.checksum) << endl;
+        Logger::getInstance().info() << "UDP Header:" << std::endl;
+        Logger::getInstance().info() << "Source Port: " << udp.sourcePort.toHex() << std::endl;
+        Logger::getInstance().info() << "Destination Port: " << udp.destinationPort.toHex() << std::endl;
+        Logger::getInstance().info() << "Length: " << udp.length.toHex() << std::endl;
+        Logger::getInstance().info() << "Checksum: " << udp.checksum.toHex() << std::endl;
     }
 }
 
 // Parses and processes the ICMP header.
-void Packet::Icmp(string &icmpHeader)
+void Packet::decodeIcmp(ByteString &icmpHeader)
 {
 
     icmp.type = icmpHeader.substr(0, 1);
@@ -473,36 +479,36 @@ void Packet::Icmp(string &icmpHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "ICMP Header:" << endl;
-        Logger::getInstance().info() << "Type: " << Functions::byteToHex(icmp.type) << endl;
-        Logger::getInstance().info() << "Code: " << Functions::byteToHex(icmp.code) << endl;
-        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(icmp.checksum) << endl;
-        Logger::getInstance().info() << "Identifier: " << Functions::byteToHex(icmp.identifier) << endl;
-        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(icmp.sequenceNumber) << endl;
+        Logger::getInstance().info() << "ICMP Header:" << std::endl;
+        Logger::getInstance().info() << "Type: " << icmp.type.toHex() << std::endl;
+        Logger::getInstance().info() << "Code: " << icmp.code.toHex() << std::endl;
+        Logger::getInstance().info() << "Checksum: " << icmp.checksum.toHex() << std::endl;
+        Logger::getInstance().info() << "Identifier: " << icmp.identifier.toHex() << std::endl;
+        Logger::getInstance().info() << "Sequence Number: " << icmp.sequenceNumber.toHex() << std::endl;
     }
 }
 
 // Parses and processes the ICMPv6 header
-void Packet::Icmpv6(string &icmpv6Header)
+void Packet::decodeIcmpV6(ByteString &icmpV6Header)
 {
-    icmpv6.type = icmpv6Header.substr(0, 1);
-    icmpv6.code = icmpv6Header.substr(1, 1);
-    icmpv6.checksum = icmpv6Header.substr(2, 2);
-    icmpv6.reserved = icmpv6Header.substr(4, 4);
+    icmpv6.type = icmpV6Header.substr(0, 1);
+    icmpv6.code = icmpV6Header.substr(1, 1);
+    icmpv6.checksum = icmpV6Header.substr(2, 2);
+    icmpv6.reserved = icmpV6Header.substr(4, 4);
     int icmpv6Start = 8;
     start += icmpv6Start;
-    int icmpv6End = icmpv6Header.size();
+    int icmpv6End = icmpV6Header.size();
     
 
     while (icmpv6Start != icmpv6End)
     {
-        icmpv6Header::Option option;
-        option.option = icmpv6Header.substr(icmpv6Start, 2);
+        IcmpV6Header::Option option;
+        option.option = icmpV6Header.substr(icmpv6Start, 2);
         icmpv6Start += 2;
-        option.length = icmpv6Header.substr(icmpv6Start, 2);
+        option.length = icmpV6Header.substr(icmpv6Start, 2);
         icmpv6Start += 2;
-        int icmpv6ADD = Functions::byteToNum(option.length) - 4;
-        option.value = icmpv6Header.substr(icmpv6Start, icmpv6ADD);
+        int icmpv6ADD = Functions::byteToNum(option.length.toString()) - 4;
+        option.value = icmpV6Header.substr(icmpv6Start, icmpv6ADD);
         icmpv6Start += icmpv6ADD;
         start += icmpv6ADD;
         icmpv6.options.push_back(option);
@@ -510,7 +516,7 @@ void Packet::Icmpv6(string &icmpv6Header)
 }
 
 // Parses and processes the IGMP header.
-void Packet::Igmp(string &igmpHeader)
+void Packet::decodeIgmp(ByteString &igmpHeader)
 {
     //
     //    igmp.type = igmpHeader.substr(0, 1);
@@ -521,19 +527,19 @@ void Packet::Igmp(string &igmpHeader)
     //
     //    if (print) {
     //
-    //        Logger::getInstance().info() << "IGMP Header:" << endl;
-    //        Logger::getInstance().info() << "Type: " << Functions::byteToHex(igmp.type) << endl;
-    //        Logger::getInstance().info() << "Max Rest Time: " << Functions::byteToHex(igmp.maxRestTime) << endl;
-    //        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(igmp.checksum) << endl;
-    //        Logger::getInstance().info() << "Multicast Address: " << Functions::byteToHex(igmp.multicastAddress) << endl;
+    //        Logger::getInstance().info() << "IGMP Header:" << std::endl;
+    //        Logger::getInstance().info() << "Type: " << igmp.type.toHex() << std::endl;
+    //        Logger::getInstance().info() << "Max Rest Time: " << igmp.maxRestTime.toHex() << std::endl;
+    //        Logger::getInstance().info() << "Checksum: " << igmp.checksum.toHex() << std::endl;
+    //        Logger::getInstance().info() << "Multicast Address: " << igmp.multicastAddress.toHex() << std::endl;
     //
     //    }
     //
     //    if (igmpHeader.size() == 12) {
     //
-    //        Logger::getInstance().info() << "imgp" << endl;
+    //        Logger::getInstance().info() << "imgp" << std::endl;
     //        igmp.v3.supress = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(5, 1);
-    //        Logger::getInstance().info() << "igmp2" << endl;
+    //        Logger::getInstance().info() << "igmp2" << std::endl;
     //        igmp.v3.qrv = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(6, 3);
     //        igmp.v3.qqic = igmpHeader.substr(9, 1);
     //        igmp.v3.numSrc = igmpHeader.substr(10, 2);
@@ -541,30 +547,30 @@ void Packet::Igmp(string &igmpHeader)
     //
     //        if (print) {
     //
-    //            Logger::getInstance().info() << "IGMP v3:" << endl;
-    //            Logger::getInstance().info() << "  Suppress: " << igmp.v3.supress << endl;
-    //            Logger::getInstance().info() << "  QRV: " << igmp.v3.qrv << endl;
-    //            Logger::getInstance().info() << "  QQIC: " << igmp.v3.qqic << endl;
-    //            Logger::getInstance().info() << "  Num Src: " << Functions::byteToHex(igmp.v3.numSrc) << endl;
+    //            Logger::getInstance().info() << "IGMP v3:" << std::endl;
+    //            Logger::getInstance().info() << "  Suppress: " << igmp.v3.supress << std::endl;
+    //            Logger::getInstance().info() << "  QRV: " << igmp.v3.qrv << std::endl;
+    //            Logger::getInstance().info() << "  QQIC: " << igmp.v3.qqic << std::endl;
+    //            Logger::getInstance().info() << "  Num Src: " << Functions::byteToHex(igmp.v3.numSrc.toString()) << std::endl;
     //
     //        }
     //    }
 }
 
 // Parses and processes the GRE header.
-void Packet::Gre(string &greHeader)
+void Packet::decodeGre(ByteString &greHeader)
 {
 
-    string flags = Functions::byteToBin(greHeader.substr(0, 2));
+    ByteString flags = Functions::byteToBin(greHeader.substr(0, 2).toString());
     gre.flags.checksum = flags.substr(0, 1);
     gre.flags.routing = flags.substr(1, 1);
     gre.flags.key = flags.substr(2, 1);
     gre.flags.seqNum = flags.substr(3, 1);
     gre.flags.strictSourceRoute = flags.substr(4, 1);
-    gre.flags.recursion = (Functions::byteToBin(greHeader.substr(0, 2))).substr(5, 3);
+    gre.flags.recursion = (Functions::byteToBin(greHeader.substr(0, 2).toString())).substr(5, 3);
     gre.flags.acknowledgment = flags.substr(8, 1);
-    gre.flags.reserved = (Functions::byteToBin(greHeader.substr(0, 2))).substr(9, 4);
-    gre.flags.version = (Functions::byteToBin(greHeader.substr(0, 2))).substr(13, 3);
+    gre.flags.reserved = (Functions::byteToBin(greHeader.substr(0, 2).toString())).substr(9, 4);
+    gre.flags.version = (Functions::byteToBin(greHeader.substr(0, 2).toString())).substr(13, 3);
     gre.protocol = greHeader.substr(2, 2);
     gre.length = greHeader.substr(4, 2);
     gre.callID = greHeader.substr(6, 2);
@@ -574,26 +580,26 @@ void Packet::Gre(string &greHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "Gre: " << endl;
-        Logger::getInstance().info() << "Flags: " << endl;
-        Logger::getInstance().info() << "   Checksum: " << gre.flags.checksum << endl;
-        Logger::getInstance().info() << "   Routing: " << gre.flags.routing << endl;
-        Logger::getInstance().info() << "   Key: " << gre.flags.key << endl;
-        Logger::getInstance().info() << "   Sequence Number: " << gre.flags.seqNum << endl;
-        Logger::getInstance().info() << "   Strict Source Route: " << gre.flags.strictSourceRoute << endl;
-        Logger::getInstance().info() << "   Recursion: " << gre.flags.recursion << endl;
-        Logger::getInstance().info() << "   Acknowledgment: " << gre.flags.acknowledgment << endl;
-        Logger::getInstance().info() << "   Reserved: " << gre.flags.reserved << endl;
-        Logger::getInstance().info() << "   Version: " << gre.flags.version << endl;
-        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(gre.protocol) << endl;
-        Logger::getInstance().info() << "Length: " << Functions::byteToHex(gre.length) << endl;
-        Logger::getInstance().info() << "Call ID: " << Functions::byteToHex(gre.callID) << endl;
-        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(gre.seqNum) << endl;
+        Logger::getInstance().info() << "Gre: " << std::endl;
+        Logger::getInstance().info() << "Flags: " << std::endl;
+        Logger::getInstance().info() << "   Checksum: " << gre.flags.checksum << std::endl;
+        Logger::getInstance().info() << "   Routing: " << gre.flags.routing << std::endl;
+        Logger::getInstance().info() << "   Key: " << gre.flags.key << std::endl;
+        Logger::getInstance().info() << "   Sequence Number: " << gre.flags.seqNum << std::endl;
+        Logger::getInstance().info() << "   Strict Source Route: " << gre.flags.strictSourceRoute << std::endl;
+        Logger::getInstance().info() << "   Recursion: " << gre.flags.recursion << std::endl;
+        Logger::getInstance().info() << "   Acknowledgment: " << gre.flags.acknowledgment << std::endl;
+        Logger::getInstance().info() << "   Reserved: " << gre.flags.reserved << std::endl;
+        Logger::getInstance().info() << "   Version: " << gre.flags.version << std::endl;
+        Logger::getInstance().info() << "Protocol: " << gre.protocol.toHex() << std::endl;
+        Logger::getInstance().info() << "Length: " << gre.length.toHex() << std::endl;
+        Logger::getInstance().info() << "Call ID: " << gre.callID.toHex() << std::endl;
+        Logger::getInstance().info() << "Sequence Number: " << gre.seqNum.toHex() << std::endl;
     }
 }
 
 // Parses and processes the PPP header.
-void Packet::Ppp(string &pppHeader)
+void Packet::decodePpp(ByteString &pppHeader)
 {
 
     ppp.address = pppHeader.substr(0, 1);
@@ -604,21 +610,21 @@ void Packet::Ppp(string &pppHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "PPP: " << endl;
-        Logger::getInstance().info() << "Address: " << Functions::byteToHex(ppp.address) << endl;
-        Logger::getInstance().info() << "Control: " << Functions::byteToHex(ppp.control) << endl;
-        Logger::getInstance().info() << "Protocol: " << Functions::byteToHex(ppp.protocol) << endl;
+        Logger::getInstance().info() << "PPP: " << std::endl;
+        Logger::getInstance().info() << "Address: " << ppp.address.toHex() << std::endl;
+        Logger::getInstance().info() << "Control: " << ppp.control.toHex() << std::endl;
+        Logger::getInstance().info() << "Protocol: " << ppp.protocol.toHex() << std::endl;
     }
 }
 
 // Parses and processes the Frame Relay header.
-void Packet::Frame(string &frameHeader)
+void Packet::decodeFrame(ByteString &frameHeader)
 {
 
-    string relay = Functions::byteToBin(frameHeader.substr(0, 1));
+    ByteString relay = Functions::byteToBin(frameHeader.substr(0, 1).toString());
     frame.firstAddress.cr = relay.substr(6, 1);
     frame.firstAddress.ea = relay.substr(7, 1);
-    relay = Functions::byteToBin(frameHeader.substr(1, 1));
+    relay = Functions::byteToBin(frameHeader.substr(1, 1).toString());
     frame.secondAddress.fecn = relay.substr(4, 1);
     frame.secondAddress.becn = relay.substr(5, 1);
     frame.secondAddress.de = relay.substr(6, 1);
@@ -629,21 +635,21 @@ void Packet::Frame(string &frameHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "Frame Relay:" << endl;
-        Logger::getInstance().info() << "First DLCI: " << frame.firstAddress.dlci << endl;
-        Logger::getInstance().info() << "First CR: " << frame.firstAddress.cr << endl;
-        Logger::getInstance().info() << "First EA: " << frame.firstAddress.ea << endl;
-        Logger::getInstance().info() << "Second DLCI: " << frame.secondAddress.dlci << endl;
-        Logger::getInstance().info() << "Second FECN: " << frame.secondAddress.fecn << endl;
-        Logger::getInstance().info() << "Second BECN: " << frame.secondAddress.becn << endl;
-        Logger::getInstance().info() << "Second DE: " << frame.secondAddress.de << endl;
-        Logger::getInstance().info() << "Second EA: " << frame.secondAddress.ea << endl;
-        Logger::getInstance().info() << "Type: " << Functions::byteToHex(frame.type) << endl;
+        Logger::getInstance().info() << "Frame Relay:" << std::endl;
+        Logger::getInstance().info() << "First DLCI: " << frame.firstAddress.dlci << std::endl;
+        Logger::getInstance().info() << "First CR: " << frame.firstAddress.cr << std::endl;
+        Logger::getInstance().info() << "First EA: " << frame.firstAddress.ea << std::endl;
+        Logger::getInstance().info() << "Second DLCI: " << frame.secondAddress.dlci << std::endl;
+        Logger::getInstance().info() << "Second FECN: " << frame.secondAddress.fecn << std::endl;
+        Logger::getInstance().info() << "Second BECN: " << frame.secondAddress.becn << std::endl;
+        Logger::getInstance().info() << "Second DE: " << frame.secondAddress.de << std::endl;
+        Logger::getInstance().info() << "Second EA: " << frame.secondAddress.ea << std::endl;
+        Logger::getInstance().info() << "Type: " << frame.type.toHex() << std::endl;
     }
 }
 
 // Parses and processes the AH header.
-void Packet::Ah(string &ahHeader, int &ahSize)
+void Packet::decodeAh(ByteString &ahHeader, int &ahSize)
 {
 
     ah.next = ahHeader.substr(0, 1);
@@ -657,18 +663,18 @@ void Packet::Ah(string &ahHeader, int &ahSize)
     if (print)
     {
 
-        Logger::getInstance().info() << "AH:" << endl;
-        Logger::getInstance().info() << "Next: " << Functions::byteToHex(ah.next) << endl;
-        Logger::getInstance().info() << "Length: " << Functions::byteToHex(ah.length) << endl;
-        Logger::getInstance().info() << "Reserved: " << Functions::byteToHex(ah.reserved) << endl;
-        Logger::getInstance().info() << "AH SPI: " << Functions::byteToHex(ah.spi) << endl;
-        Logger::getInstance().info() << "AH Sequence: " << Functions::byteToHex(ah.sequence) << endl;
-        Logger::getInstance().info() << "AH ICV: " << Functions::byteToHex(ah.icv) << endl;
+        Logger::getInstance().info() << "AH:" << std::endl;
+        Logger::getInstance().info() << "Next: " << ah.next.toHex() << std::endl;
+        Logger::getInstance().info() << "Length: " << ah.length.toHex() << std::endl;
+        Logger::getInstance().info() << "Reserved: " << ah.reserved.toHex() << std::endl;
+        Logger::getInstance().info() << "AH SPI: " << ah.spi.toHex() << std::endl;
+        Logger::getInstance().info() << "AH Sequence: " << ah.sequence.toHex() << std::endl;
+        Logger::getInstance().info() << "AH ICV: " << ah.icv.toHex() << std::endl;
     }
 }
 
 // Parses and processes the ESP header.
-void Packet::Esp(string &espHeader)
+void Packet::decodeEsp(ByteString &espHeader)
 {
 
     esp.spi = espHeader.substr(0, 4);
@@ -678,17 +684,17 @@ void Packet::Esp(string &espHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "ESP: " << endl;
-        Logger::getInstance().info() << "ESP SPI: " << Functions::byteToHex(esp.spi) << endl;
-        Logger::getInstance().info() << "ESP Sequence: " << Functions::byteToHex(esp.sequence) << endl;
+        Logger::getInstance().info() << "ESP: " << std::endl;
+        Logger::getInstance().info() << "ESP SPI: " << esp.spi.toHex() << std::endl;
+        Logger::getInstance().info() << "ESP Sequence: " << esp.sequence.toHex() << std::endl;
     }
 }
 
 // Parses and processes the VLAN header.
-void Packet::Vlan(string &vlanHeader)
+void Packet::decodeVlan(ByteString &vlanHeader)
 {
 
-    string vlans = Functions::byteToBin(vlanHeader.substr(0, 2));
+    ByteString vlans = Functions::byteToBin(vlanHeader.substr(0, 2).toString());
     vlan.priority = vlans.substr(0, 3);
     vlan.dei = vlans.substr(3, 1);
     vlan.type = vlanHeader.substr(2, 2);
@@ -697,28 +703,28 @@ void Packet::Vlan(string &vlanHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "Vlan: " << endl;
-        Logger::getInstance().info() << "Priority: " << vlan.priority << endl;
-        Logger::getInstance().info() << "DEI: " << vlan.dei << endl;
-        Logger::getInstance().info() << "ID: " << vlan.id << endl;
-        Logger::getInstance().info() << "Type: " << Functions::byteToHex(vlan.type) << endl;
+        Logger::getInstance().info() << "Vlan: " << std::endl;
+        Logger::getInstance().info() << "Priority: " << vlan.priority << std::endl;
+        Logger::getInstance().info() << "DEI: " << vlan.dei << std::endl;
+        Logger::getInstance().info() << "ID: " << vlan.id << std::endl;
+        Logger::getInstance().info() << "Type: " << vlan.type.toHex() << std::endl;
     }
 }
 
 // Parses and processes the LLDP header.
-void Packet::Lldp(string &lldpHeader)
+void Packet::decodeLldp(ByteString &lldpHeader)
 {
 
     uint16_t pos = 0;
     while (pos < lldpHeader.size())
     {
 
-        lldpHeader::TLV tlv;
+        LldpHeader::TLV tlv;
 
         uint16_t typeLength = (lldpHeader[pos] << 8) | lldpHeader[pos + 1];
-        string sec = Functions::byteToBin(lldpHeader.substr(pos, 2));
-        tlv.type = Functions::binToNum(sec.substr(0, 7));
-        tlv.length = Functions::binToNum(sec.substr(7, 9));
+        ByteString sec = Functions::byteToBin(lldpHeader.substr(pos, 2).toString());
+        tlv.type = Functions::binToNum(sec.substr(0, 7).toString());
+        tlv.length = Functions::binToNum(sec.substr(7, 9).toString());
         pos += 2;
 
         tlv.value = lldpHeader.substr(pos, tlv.length);
@@ -768,30 +774,31 @@ void Packet::Lldp(string &lldpHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "LLDP Frame:" << endl;
-        Logger::getInstance().info() << "Chassis ID: " << lldp.chassisID.value << endl;
-        Logger::getInstance().info() << "Port ID: " << lldp.portID.value << endl;
-        Logger::getInstance().info() << "TTL: " << lldp.ttl.value << endl;
-        Logger::getInstance().info() << "Port Description: " << lldp.portDescription.value << endl;
-        Logger::getInstance().info() << "System Name: " << lldp.systemName.value << endl;
-        Logger::getInstance().info() << "System Description: " << lldp.systemDescription.value << endl;
-        Logger::getInstance().info() << "System Capabilities: " << lldp.systemCapabilities.value << endl;
-        Logger::getInstance().info() << "Management Address: " << lldp.managementAddress.value << endl;
-        Logger::getInstance().info() << "Organizationally Specific: " << lldp.organizationallySpecific.value << endl;
-        Logger::getInstance().info() << "End of LLDPDU" << endl;
+        Logger::getInstance().info() << "LLDP Frame:" << std::endl;
+        Logger::getInstance().info() << "Chassis ID: " << lldp.chassisID.value << std::endl;
+        Logger::getInstance().info() << "Port ID: " << lldp.portID.value << std::endl;
+        Logger::getInstance().info() << "TTL: " << lldp.ttl.value << std::endl;
+        Logger::getInstance().info() << "Port Description: " << lldp.portDescription.value << std::endl;
+        Logger::getInstance().info() << "System Name: " << lldp.systemName.value << std::endl;
+        Logger::getInstance().info() << "System Description: " << lldp.systemDescription.value << std::endl;
+        Logger::getInstance().info() << "System Capabilities: " << lldp.systemCapabilities.value << std::endl;
+        Logger::getInstance().info() << "Management Address: " << lldp.managementAddress.value << std::endl;
+        Logger::getInstance().info() << "Organizationally Specific: " << lldp.organizationallySpecific.value << std::endl;
+        Logger::getInstance().info() << "End of LLDPDU" << std::endl;
     }
 }
 
 // Parses and processes the DHCP header.
-void Packet::Dhcp(string &dhcpHeader)
+void Packet::decodeDhcp(ByteString &dhcpHeaders)
 {
+    std::string dhcpHeader = dhcpHeaders.toString();
     dhcp.boot = dhcpHeader.substr(0, 1);
     dhcp.hardwareType = dhcpHeader.substr(1, 1);
     dhcp.hardwareAddressLength = dhcpHeader.substr(2, 1);
     dhcp.hops = dhcpHeader.substr(3, 1);
     dhcp.transID = dhcpHeader.substr(4, 4);
     dhcp.secondsElapsed = dhcpHeader.substr(8, 2);
-    string flags = Functions::byteToBin(dhcpHeader.substr(10, 2));
+    ByteString flags = Functions::byteToBin(dhcpHeader.substr(10, 2));
     dhcp.bootpFlags.broadcast = flags.substr(0, 1);
     dhcp.bootpFlags.reserved = flags.substr(1, 7);
     dhcp.clientIP = dhcpHeader.substr(12, 4);
@@ -810,7 +817,7 @@ void Packet::Dhcp(string &dhcpHeader)
     int dhcpLength = dhcpHeader.size();
     for (int i = dhcpLength - 1; i >= 0; --i)
     {
-        if (dhcpHeader[i] == variable.dhcp.end[0])
+        if (dhcpHeader[i] == Variable::Dhcp::end[0])
         {
             dhcpEnd = i;
             break;
@@ -819,13 +826,13 @@ void Packet::Dhcp(string &dhcpHeader)
 
     while (dhcpStart != dhcpEnd)
     {
-        dhcpHeader::Option option;
+        DhcpHeader::Option option;
         option.option = dhcpHeader.substr(dhcpStart, 1);
         dhcpStart += 1;
         option.length = dhcpHeader.substr(dhcpStart, 1);
         dhcpStart += 1;
-        option.value = dhcpHeader.substr(dhcpStart, Functions::byteToNum(option.length));
-        int dhcpADD = Functions::byteToNum(option.length);
+        option.value = dhcpHeader.substr(dhcpStart, Functions::byteToNum(option.length.toString()));
+        int dhcpADD = Functions::byteToNum(option.length.toString());
         dhcpStart += dhcpADD;
         start += dhcpADD;
         dhcp.options.push_back(option);
@@ -837,38 +844,38 @@ void Packet::Dhcp(string &dhcpHeader)
     if (print)
     {
 
-        Logger::getInstance().info() << "DHCP Frame:" << endl;
-        Logger::getInstance().info() << "Message Type: " << Functions::byteToHex(dhcp.boot) << endl;
-        Logger::getInstance().info() << "Hardware Type: " << Functions::byteToHex(dhcp.hardwareType) << endl;
-        Logger::getInstance().info() << "Hardware Address Length: " << Functions::byteToHex(dhcp.hardwareAddressLength) << endl;
-        Logger::getInstance().info() << "Hops: " << Functions::byteToHex(dhcp.hops) << endl;
-        Logger::getInstance().info() << "Transaction ID: " << Functions::byteToHex(dhcp.transID) << endl;
-        Logger::getInstance().info() << "Seconds Elapsed: " << Functions::byteToHex(dhcp.secondsElapsed) << endl;
-        Logger::getInstance().info() << "Broadcast: " << dhcp.bootpFlags.broadcast << endl;
-        Logger::getInstance().info() << "Reserved: " << Functions::byteToHex(dhcp.bootpFlags.reserved) << endl;
-        Logger::getInstance().info() << "Client IP: " << Functions::byteToHex(dhcp.clientIP) << endl;
-        Logger::getInstance().info() << "Your Client IP: " << Functions::byteToHex(dhcp.yourClientIP) << endl;
-        Logger::getInstance().info() << "Next Server Address: " << Functions::byteToHex(dhcp.nextServerIP) << endl;
-        Logger::getInstance().info() << "Relay Agent IP: " << Functions::byteToHex(dhcp.relayAgentIP) << endl;
-        Logger::getInstance().info() << "Client MAC Address: " << Functions::byteToHex(dhcp.clientMacAddress) << endl;
+        Logger::getInstance().info() << "DHCP Frame:" << std::endl;
+        Logger::getInstance().info() << "Message Type: " << dhcp.boot.toHex() << std::endl;
+        Logger::getInstance().info() << "Hardware Type: " << dhcp.hardwareType.toHex() << std::endl;
+        Logger::getInstance().info() << "Hardware Address Length: " << dhcp.hardwareAddressLength.toHex() << std::endl;
+        Logger::getInstance().info() << "Hops: " << dhcp.hops.toHex() << std::endl;
+        Logger::getInstance().info() << "Transaction ID: " << dhcp.transID.toHex() << std::endl;
+        Logger::getInstance().info() << "Seconds Elapsed: " << dhcp.secondsElapsed.toHex() << std::endl;
+        Logger::getInstance().info() << "Broadcast: " << dhcp.bootpFlags.broadcast << std::endl;
+        Logger::getInstance().info() << "Reserved: " << Functions::byteToHex(dhcp.bootpFlags.reserved.toString()) << std::endl;
+        Logger::getInstance().info() << "Client IP: " << dhcp.clientIP.toHex() << std::endl;
+        Logger::getInstance().info() << "Your Client IP: " << dhcp.yourClientIP.toHex() << std::endl;
+        Logger::getInstance().info() << "Next Server Address: " << dhcp.nextServerIP.toHex() << std::endl;
+        Logger::getInstance().info() << "Relay Agent IP: " << dhcp.relayAgentIP.toHex() << std::endl;
+        Logger::getInstance().info() << "Client MAC Address: " << dhcp.clientMacAddress.toHex() << std::endl;
 
-        Logger::getInstance().info() << "Options:" << endl;
+        Logger::getInstance().info() << "Options:" << std::endl;
         for (const auto &option : eigrp.options)
         {
-            Logger::getInstance().info() << "  Option: " << Functions::byteToHex(option.option) << endl;
-            Logger::getInstance().info() << "  Length: " << Functions::byteToHex(option.length) << endl;
-            Logger::getInstance().info() << "  Value: " << Functions::byteToHex(option.value) << endl;
+            Logger::getInstance().info() << "  Option: " << option.option.toHex() << std::endl;
+            Logger::getInstance().info() << "  Length: " << option.length.toHex() << std::endl;
+            Logger::getInstance().info() << "  Value: " << option.value.toHex() << std::endl;
         }
     }
 }
 
 // Parses and processes the EIGRP header.
-void Packet::Eigrp(string &eigrpHeader)
+void Packet::decodeEigrp(ByteString &eigrpHeader)
 {
     eigrp.version = eigrpHeader.substr(0, 1);
     eigrp.opcode = eigrpHeader.substr(1, 1);
     eigrp.checksum = eigrpHeader.substr(2, 2);
-    string flag = Functions::byteToBin(eigrpHeader.substr(4, 4));
+    ByteString flag = Functions::byteToBin(eigrpHeader.substr(4, 4).toString());
     eigrp.flags.endOfTable = flag.substr(28, 1);
     eigrp.flags.restart = flag.substr(29, 1);
     eigrp.flags.conditionalRecieve = flag.substr(30, 1);
@@ -883,12 +890,12 @@ void Packet::Eigrp(string &eigrpHeader)
 
     while (eigrpStart != eigrpEnd)
     {
-        eigrpHeader::Option option;
+        EigrpHeader::Option option;
         option.option = eigrpHeader.substr(eigrpStart, 2);
         eigrpStart += 2;
         option.length = eigrpHeader.substr(eigrpStart, 2);
         eigrpStart += 2;
-        int eigrpADD = Functions::byteToNum(option.length) - 4;
+        int eigrpADD = Functions::byteToNum(option.length.toString()) - 4;
         option.value = eigrpHeader.substr(eigrpStart, eigrpADD);
         eigrpStart += eigrpADD;
         start += eigrpADD;
@@ -897,31 +904,31 @@ void Packet::Eigrp(string &eigrpHeader)
 
     if (print)
     {
-        Logger::getInstance().info() << "EIGRP Frame:" << endl;
-        Logger::getInstance().info() << "Version: " << Functions::byteToHex(eigrp.version) << endl;
-        Logger::getInstance().info() << "Opcode: " << Functions::byteToHex(eigrp.opcode) << endl;
-        Logger::getInstance().info() << "Checksum: " << Functions::byteToHex(eigrp.checksum) << endl;
-        Logger::getInstance().info() << "Flags: " << endl;
-        Logger::getInstance().info() << "  Init: " << eigrp.flags.init << endl;
-        Logger::getInstance().info() << "  Conditional Receive: " << eigrp.flags.conditionalRecieve << endl;
-        Logger::getInstance().info() << "  Restart: " << eigrp.flags.restart << endl;
-        Logger::getInstance().info() << "  End Of Table: " << eigrp.flags.endOfTable << endl;
-        Logger::getInstance().info() << "Sequence Number: " << Functions::byteToHex(eigrp.sequence) << endl;
-        Logger::getInstance().info() << "Acknowledgment Number: " << Functions::byteToHex(eigrp.ack) << endl;
-        Logger::getInstance().info() << "Virtual Router ID: " << Functions::byteToHex(eigrp.virtualRouterID) << endl;
-        Logger::getInstance().info() << "Autonomous System Number: " << Functions::byteToHex(eigrp.autonomousSystem) << endl;
+        Logger::getInstance().info() << "EIGRP Frame:" << std::endl;
+        Logger::getInstance().info() << "Version: " << eigrp.version.toHex() << std::endl;
+        Logger::getInstance().info() << "Opcode: " << eigrp.opcode.toHex() << std::endl;
+        Logger::getInstance().info() << "Checksum: " << eigrp.checksum.toHex() << std::endl;
+        Logger::getInstance().info() << "Flags: " << std::endl;
+        Logger::getInstance().info() << "  Init: " << eigrp.flags.init << std::endl;
+        Logger::getInstance().info() << "  Conditional Receive: " << eigrp.flags.conditionalRecieve << std::endl;
+        Logger::getInstance().info() << "  Restart: " << eigrp.flags.restart << std::endl;
+        Logger::getInstance().info() << "  End Of Table: " << eigrp.flags.endOfTable << std::endl;
+        Logger::getInstance().info() << "Sequence Number: " << eigrp.sequence.toHex() << std::endl;
+        Logger::getInstance().info() << "Acknowledgment Number: " << eigrp.ack.toHex() << std::endl;
+        Logger::getInstance().info() << "Virtual Router ID: " << eigrp.virtualRouterID.toHex() << std::endl;
+        Logger::getInstance().info() << "Autonomous System Number: " << eigrp.autonomousSystem.toHex() << std::endl;
 
-        Logger::getInstance().info() << "Options:" << endl;
+        Logger::getInstance().info() << "Options:" << std::endl;
         for (const auto &option : eigrp.options)
         {
-            Logger::getInstance().info() << "  Option: " << Functions::byteToHex(option.option) << endl;
-            Logger::getInstance().info() << "  Length: " << Functions::byteToHex(option.length) << endl;
-            Logger::getInstance().info() << "  Value: " << Functions::byteToHex(option.value) << endl;
+            Logger::getInstance().info() << "  Option: " << option.option.toHex() << std::endl;
+            Logger::getInstance().info() << "  Length: " << option.length.toHex() << std::endl;
+            Logger::getInstance().info() << "  Value: " << option.value.toHex() << std::endl;
         }
     }
 }
 
-void Packet::SysLog(string &syslogHeader)
+void Packet::decodeSysLog(ByteString &syslogHeader)
 {
     int priSize{0};
     for (const char& ch : syslogHeader)
@@ -941,8 +948,8 @@ void Packet::SysLog(string &syslogHeader)
     syslog.message = syslogHeader.substr(priSize);
 
     if (print) {
-        Logger::getInstance().info() << "SysLog Frame:" << endl;
-        Logger::getInstance().info() << "PRI: " << syslog.PRI << endl;
-        Logger::getInstance().info() << "Message: " << syslog.message << endl;
+        Logger::getInstance().info() << "SysLog Frame:" << std::endl;
+        Logger::getInstance().info() << "PRI: " << syslog.PRI << std::endl;
+        Logger::getInstance().info() << "Message: " << syslog.message << std::endl;
     }
 }

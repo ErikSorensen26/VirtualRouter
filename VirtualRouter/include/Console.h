@@ -2,8 +2,6 @@
 
 #include "Configs.h" // Include the Configs class header for configuration handling
 
-using namespace std;
-
 // Structure to hold cursor position with row and column
 struct CursorPosition {
     int row, col;
@@ -17,7 +15,7 @@ public:
     void initConsole();
 
     // Function to read input from the console
-    string input();
+    std::string input();
 
     // Flags and settings for the console
     bool insert = false; // Mode for inserting text
@@ -28,12 +26,12 @@ public:
     int maxCommandLength; // Maximum length of a command
 
     // Strings for managing command input and history
-    string nextLine; // Holds the next line of input
-    string lastCommand; // Holds the last command executed
+    std::string nextLine; // Holds the next line of input
+    std::string lastCommand; // Holds the last command executed
 
     // History management
-    uint8_t historyIndex = 0; // Index for navigating through command history
-    vector<string> history{}; // Vector to store command history
+    int historyIndex = 0; // Index for navigating through command history
+    std::vector<std::string> history{}; // Vector to store command history
 
     // Cursor movement functions
     void moveCursorLeft(int steps); // Move cursor left by a number of steps
@@ -42,8 +40,8 @@ public:
     void moveCursorDown(int steps); // Move cursor down by a number of steps
 
     // Functions for managing and retrieving command history
-    string getHistory(bool& his); // Retrieve command history based on a flag
-    void clearCurrentLine(string& input, string& nextLine); // Clear the current line of input
+    std::string getHistory(bool& his); // Retrieve command history based on a flag
+    void clearCurrentLine(std::string& input, std::string& nextLine); // Clear the current line of input
 
     // Terminal utility functions
     int getTerminalWidth(); // Get the width of the terminal
@@ -62,8 +60,8 @@ public:
 
 private:
     // Utility function to print a string to the console
-    void printString(string& str);
+    void printString(std::string& str);
 
     // Options for autocompletion
-    vector<string> autocompleteOptions {"end", "exit"}; // List of options for autocompletion
+    std::vector<std::string> autocompleteOptions {"end", "exit"}; // List of options for autocompletion
 };

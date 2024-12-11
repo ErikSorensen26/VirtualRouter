@@ -3,7 +3,6 @@
 #include <map>
 #include <memory>
 
-using namespace std;
 namespace Protocol {
 class Bgp {
 public:
@@ -12,5 +11,5 @@ private:
 };
 }
 
-extern Protocol::Bgp* CurrentBgp;
-extern map<int, std::shared_ptr<Protocol::Bgp>> BgpList;
+extern Protocol::Bgp* currentBgp;
+extern std::map<int, std::shared_ptr<Protocol::Bgp>> bgpList;

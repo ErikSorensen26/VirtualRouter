@@ -6,48 +6,85 @@
 #include <map>
 #include <memory>
 #include <string>
-
-using namespace std;
+#include <Decapsulation.h>
 
 // Constructor for the Interface class
-Interface::Interface(string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug)
-    : packetCapture(outInterface, "FF000000", inQueSiz), 
+Interface::Interface(std::string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug)
+    : packetCapture(outInterface, "FF000000", inQueSiz),
       packetSend(outInterface),
       threadsRunning(false), 
       packetOutQueue(outQueSiz),
-      debug(debug)
+      debug(debug),
+      threadPool(std::thread::hardware_concurrency())
 {
     // Set member variables
     outInt = outInterface;
     inQsiz = inQueSiz;
     outQsiz = outQueSiz;
-    macAddress = Functions::hexToByte(mac);
+    configs.macAddress = Functions::hexToByte(mac);
     id = interfaceId;
-    cout << "int id set to " << interfaceId;
+
     // Initialize shared pointers for Protocol objects
-    dhcp = std::make_shared<Protocol::DhcpClient>(*this);
     arp = std::make_shared<Protocol::Arp>(*this);
+    ethernet = std::make_shared<Protocol::Ethernet>(*this, arp, Functions::hexToByte(mac));
+    ipPacket = std::make_shared<Protocol::IPPacket>(*this);
+    dhcp = std::make_shared<Protocol::DhcpClient>(*this);
+
     // Start background threads
     startThreads();
+}   
+
+Interface::~Interface()
+{
+    stopThreads();
+}
+
+// Enqueue packet
+void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
+{
+    ByteString serializedPacket = encapsulate(packetInfo);
+
+    if (serializedPacket.empty())
+    {
+        Logger::getInstance().error() << "Serialized packet is empty. Aborting send." << std::endl;
+        return;
+    }
+
+    if (!mac.empty())
+    {
+        serializedPacket.replace(0, 6, mac);
+    }
+
+    // Enqueue the serialized packet for sending
+    {
+        std::lock_guard<std::mutex> lock(packetOutQueueMutex);
+        packetOutQueue.enqueue(serializedPacket);
+    }
+
+    packetOutQueueCV.notify_one();
 }
 
 // Set IPv4 address and subnet mask
-void Interface::setIPv4(string ip, int subnet)
+void Interface::setIPv4(std::string ip, int subnet)
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
-        ipAddress = ip; 
-        mask = subnet;
+        configs.ipAddress = ip; 
+        configs.mask = subnet;
+        // Send gratuitous arps
+        arp->sendReply(Variable::Mac::broadcast, ip);
+        arp->sendReply(Variable::Mac::broadcast, ip);
         stateChange();
     }
 }
 
-void Interface::setIPv6(string ip, int subnet, bool eui64)
+void Interface::setIPv6(std::string ip, int subnet, bool eui64)
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
-        ipv6Address = ip;
-        mask = subnet;
+        configs.ipv6Address = ip;
+        configs.mask = subnet;
+        // NDP
         stateChangeV6();
     }
 }
@@ -55,18 +92,7 @@ void Interface::setIPv6(string ip, int subnet, bool eui64)
 // Get current IP address, subnet mask, MAC address, and speed information
 ipInfo Interface::Get() {
     std::lock_guard<std::mutex> lock(ipInfoMutex);
-    ipInfo info;
-    info.id = id;
-    info.bandwidth = bandwidth;
-    info.delay = delay;
-    info.ip = ipAddress;
-    info.ipv6 = ipv6Address;
-    info.subnet = mask;
-    info.v6subnet = v6mask;
-    info.mac = macAddress;  
-    info.mtu = mtu;
-    info.ipv6FlowLabel = ipv6FlowLabel;
-    return info;
+    return configs;
 }
 
 // Start background threads for packet processing
@@ -75,13 +101,13 @@ void Interface::startThreads() {
 
     std::lock_guard<std::mutex> lock(threadsRunningMutex); 
     // Start threads for packet ingress, egress, and processing
-    thread1 = std::thread(&Interface::PacketIngress, this, std::ref(packetCapture));
-    thread2 = std::thread(&Interface::PacketEgress, this, std::ref(packetSend));
-    thread3 = std::thread(&Interface::Process, this, std::ref(packetCapture));
+    thread1 = std::thread(&Interface::packetIngress, this, std::ref(packetCapture));
+    thread2 = std::thread(&Interface::packetEgress, this, std::ref(packetSend));
+    thread3 = std::thread(&Interface::process, this, std::ref(packetCapture));
 }
 
 // Function to handle packet ingress
-void Interface::PacketIngress(Ingress& packetCapture) {
+void Interface::packetIngress(Ingress& packetCapture) {
     while (threadsRunning) {
         if (packetCapture.startCapture(NULL) != 0) {
             std::cerr << "Error starting packet capture." << std::endl;
@@ -93,34 +119,57 @@ void Interface::PacketIngress(Ingress& packetCapture) {
 }
 
 // Function to handle packet egress (sending packets)
-void Interface::PacketEgress(Egress& packetSend) {
-    std::lock_guard<std::mutex> lock(packetOutQueueMutex);
+void Interface::packetEgress(Egress& packetSend) {
     while (threadsRunning) { 
+        ByteString packet;
         {
-            if (!packetOutQueue.isEmpty()) { 
-                std::string packet = packetOutQueue.dequeue(); 
-                packetSend.sendPacket(packet);
+            std::unique_lock<std::mutex> lock(packetOutQueueMutex);
+            packetOutQueueCV.wait(lock, [this]() {return !packetOutQueue.isEmpty() || !threadsRunning; });
+
+            if (!threadsRunning && packetOutQueue.isEmpty())
+            {
+                break;
+            }
+
+            if (!packetOutQueue.isEmpty())
+            {
+                packet = packetOutQueue.dequeue();
             }
         }
-        std::this_thread::sleep_for(std::chrono::microseconds(1));
+
+        if (!packet.empty())
+        {
+            // Enqueue the send task to the thread pool
+            threadPool.enqueue([this, packet, &packetSend]() {
+                packetSend.sendPacket(packet);
+                Logger::getInstance().info() << "Packet sent via egress." << std::endl;
+            });
+        }
     }
 }
 
 // Function to process packets
-void Interface::Process(Ingress& packetCapture) {
-    std::lock_guard<std::mutex> lock(packetInQueueMutex); 
+void Interface::process(Ingress& packetCapture) {
     while (threadsRunning) {
+        ByteString packet;
         {
+            std::lock_guard<std::mutex> lock(packetInQueueMutex);
             if (!packetCapture.packetQueue.isEmpty()) {
-                std::string packet = packetCapture.packetQueue.dequeue();
-                Packet p(packet, debug);
-                p.Decapsulate();
-                PacketInfo PacketInformation = p.packetInfo;
-                ProcessPacket process(PacketInformation, vrf, this, shutdown);
-                packet = Encapsulate(PacketInformation, p.afterPacket);
+                packet = packetCapture.packetQueue.dequeue();
             }
         }
-        std::this_thread::sleep_for(std::chrono::microseconds(1));
+
+        if (!packet.empty()) {
+            // Enqueue the packet processing task to the thread pool
+            threadPool.enqueue([this, packet]() {
+                ByteString newPacket = packet;
+                Packet p(newPacket, debug, *this);
+                p.decapsulate();
+                PacketInfo packetInformation = p.packetInfo;
+                ProcessPacket process(packetInformation, vrf, this, shutdownFlag);
+            });
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
 }
 
@@ -133,16 +182,19 @@ void Interface::stopThreads() {
     if (thread1.joinable()) thread1.detach(); 
     if (thread2.joinable()) thread2.join(); 
     if (thread3.joinable()) thread3.join(); 
+
+    // Shutdown the thread pool
+    // threadPool.shutdown();
 }
 
 // Shutdown or restart interface threads based on the shut parameter
 void Interface::Shutdown(bool shut) {
     if (shut) {
         threadsRunning = false;
-        shutdown = true;
+        shutdownFlag = true;
     } else if (!shut) {
         threadsRunning = true;
-        shutdown = false;
+        shutdownFlag = false;
     }
     stateChange();
     stateChangeV6();
@@ -151,7 +203,7 @@ void Interface::Shutdown(bool shut) {
 // Runs when the interface state changes
 void Interface::stateChange()
 {
-    UpdateEigrpInterface(this);
+    updateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
         for (const auto& as : eigrp.second->autonomousSystems)
@@ -159,8 +211,8 @@ void Interface::stateChange()
             auto af = as.second->addressFamilies.find(AddressFamily::IPv4);
             if (af != as.second->addressFamilies.end())
             {
-                af->second->UpdateInterfaceList();
-                af->second->UpdateRoutingTableForConnected();
+                af->second->updateInterfaceList();
+                af->second->updateRoutingTableForConnected();
             }
         }
     }
@@ -169,7 +221,7 @@ void Interface::stateChange()
 // Runs when the interface state changes
 void Interface::stateChangeV6()
 {
-    UpdateEigrpInterface(this);
+    updateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
         for (const auto& as : eigrp.second->autonomousSystems)
@@ -177,21 +229,15 @@ void Interface::stateChangeV6()
             auto af = as.second->addressFamilies.find(AddressFamily::IPv6);
             if (af != as.second->addressFamilies.end())
             {
-                af->second->UpdateInterfaceList();
-                af->second->UpdateRoutingTableForConnected();
+                af->second->updateInterfaceList();
+                af->second->updateRoutingTableForConnected();
             }
         }
     }
 }
 
-// Destructor to ensure threads are stopped
-Interface::~Interface() 
-{
-    stopThreads(); 
-}
-
 // Initialize the shared pointer to the current Interface
-Interface* CurrentInterface{};
+Interface* currentInterface{};
 
 // Map to store Interface objects by string key and integer ID
-map<string, std::map<int, std::shared_ptr<Interface>>> InterfaceList;
+std::map<std::string, std::map<int, std::shared_ptr<Interface>>> interfaceList;

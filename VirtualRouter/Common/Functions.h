@@ -1,19 +1,12 @@
 #pragma once
 
-#include <iostream>
 #include <string>
-#include <bitset>
-#include <sstream>
-#include <iomanip>
-#include <fstream>
+#include <ByteString.hpp>
 #include <vector>
 #include <cmath>
 #include <cstdint>
-#include <random>
 #include <netinet/in.h>
-#include <algorithm>
 #include <optional>
-#include <regex>
 #include <ctime>
 #include <chrono>
 
@@ -140,4 +133,7 @@ namespace Functions {
 
     // Validates MAC address
     bool validateMacAddress(const std::string& mac, const std::string currentMac);
+
+    // Determins if IP is multicast
+    bool isMulticast(const ByteString& ip);
 }

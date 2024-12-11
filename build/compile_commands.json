@@ -91,6 +91,18 @@
 },
 {
   "directory": "/home/erik/VirtualRouter/build",
+  "command": "/usr/bin/g++  -I/home/erik/VirtualRouter/VirtualRouter/Background/Packet/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Services/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Dir -I/home/erik/VirtualRouter/VirtualRouter/Common -I/home/erik/VirtualRouter/VirtualRouter/Configs -I/home/erik/VirtualRouter/VirtualRouter/include -g -std=gnu++20 -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp",
+  "file": "/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp",
+  "output": "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o"
+},
+{
+  "directory": "/home/erik/VirtualRouter/build",
+  "command": "/usr/bin/g++  -I/home/erik/VirtualRouter/VirtualRouter/Background/Packet/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Services/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Dir -I/home/erik/VirtualRouter/VirtualRouter/Common -I/home/erik/VirtualRouter/VirtualRouter/Configs -I/home/erik/VirtualRouter/VirtualRouter/include -g -std=gnu++20 -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp",
+  "file": "/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp",
+  "output": "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o"
+},
+{
+  "directory": "/home/erik/VirtualRouter/build",
   "command": "/usr/bin/g++  -I/home/erik/VirtualRouter/VirtualRouter/Background/Packet/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Services/include -I/home/erik/VirtualRouter/VirtualRouter/Background/Global/include -I/home/erik/VirtualRouter/VirtualRouter/Dir -I/home/erik/VirtualRouter/VirtualRouter/Common -I/home/erik/VirtualRouter/VirtualRouter/Configs -I/home/erik/VirtualRouter/VirtualRouter/include -g -std=gnu++20 -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp",
   "file": "/home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp",
   "output": "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o"

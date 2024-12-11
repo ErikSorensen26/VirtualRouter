@@ -8,9 +8,6 @@
 #include <thread>
 #include <chrono>
 #include <condition_variable>
-#include <atomic>
-#include <iostream>
-
 
 class TimeManager {
 public:
@@ -21,13 +18,13 @@ public:
     }
 
     // Adds a timer task to the manager and returns a unique timer ID
-    int AddTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback);
+    int addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback);
 
     // Cancels a timer based on its ID
-    void CancelTimer(int timerId);
+    void cancelTimer(int timerId);
 
     // Stops the timer manager and its thread
-    void Stop();
+    void stopTimer();
 
     // Delete copy constructor and assignment operator to prevent multiple instances
     TimeManager(const TimeManager&) = delete;

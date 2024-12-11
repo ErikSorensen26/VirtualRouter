@@ -1,4 +1,6 @@
 #include <Configs.h>
+#include <iostream>
+#include <fstream>
 
 // Function to print a chunk of XML for debugging purposes
 void printNodeChunk(const pugi::xml_node& node) 
@@ -36,7 +38,7 @@ void Configs::initConfigs()
 
     // Load JSON data for interface configurations
     json configJson;
-    string configFilename = "../VirtualRouter/Configs/Configs.json";
+    std::string configFilename = "../VirtualRouter/Configs/Configs.json";
     std::ifstream configFile(configFilename);
     if (configFile.is_open()) 
     {
@@ -78,9 +80,9 @@ void Configs::processNode(const pugi::xml_node& node, std::string command)
     noMoreVol = false; 
     moreChild = false;
 
-    string prevCommand;
+    std::string prevCommand;
 
-    string root = "config"; 
+    std::string root = "config"; 
 
     // Process node name and text
     if (!node.text()) 
@@ -91,7 +93,7 @@ void Configs::processNode(const pugi::xml_node& node, std::string command)
     else 
     {
         bool contains = false;
-        for (string& str : inputs) 
+        for (std::string& str : inputs) 
         {
             if (str == node.name()) 
             {
@@ -141,7 +143,7 @@ void Configs::processNode(const pugi::xml_node& node, std::string command)
             if (noMoreVol) 
             {
                 int numChild = 0;
-                string num = child.name();
+                std::string num = child.name();
                 for (pugi::xml_node node : child.children()) 
                 {
                     numChild++;
@@ -172,7 +174,7 @@ void Configs::processNode(const pugi::xml_node& node, std::string command)
                     if (noMoreVol) 
                     {
                         int numChild = 0;
-                        string num = child.name();
+                        std::string num = child.name();
                         for (pugi::xml_node node : child.parent().children()) 
                         {
                             numChild++;
@@ -199,7 +201,7 @@ void Configs::processNode(const pugi::xml_node& node, std::string command)
 }
 
 // Retrieve commands from XML configuration
-vector<string> Configs::recoverXml() 
+std::vector<std::string> Configs::recoverXml() 
 {
     recover.clear(); // Clear previous recover data
     config_node = doc.child("config"); 
@@ -213,7 +215,7 @@ vector<string> Configs::recoverXml()
 }
 
 // Save new commands to the XML configuration
-void Configs::saveCommand(vector<string>& oldCommand, vector<string>& command, bool& changeMode, bool& isListed) 
+void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool& changeMode, bool& isListed) 
 {
     if (oldCommand.empty()) 
     { 
@@ -260,11 +262,11 @@ void Configs::saveCommand(vector<string>& oldCommand, vector<string>& command, b
                     {
                         for (auto child : config_node.child(command[0].c_str()).children(command[1].c_str())) 
                         {
-                            vector<string> tempCommand = command;
+                            std::vector<std::string> tempCommand = command;
                             pugi::xml_node node = child;
-                            if (!TravelNode(tempCommand, oldCommand, node, save, changeMode, isListed, 2)) 
+                            if (!travelNode(tempCommand, oldCommand, node, save, changeMode, isListed, 2)) 
                             {
-                                ReturnToRoot(node, child);
+                                returnToRoot(node, child);
                                 node.remove_children();
                                 config_node.child(command[0].c_str()).remove_child(node);
                                 return;
@@ -276,18 +278,18 @@ void Configs::saveCommand(vector<string>& oldCommand, vector<string>& command, b
                 // Handle non-listed commands
                 if (!isListed) 
                 {
-                    TravelNode(command, oldCommand, config_node, save, changeMode, isListed, index);
+                    travelNode(command, oldCommand, config_node, save, changeMode, isListed, index);
                     if (deleteNodeAndAllChildren(config_node, save)) {
-                        ReturnToRoot(config_node, save);
+                        returnToRoot(config_node, save);
                         return;
                     }
-                    ReturnToRoot(config_node, save);
+                    returnToRoot(config_node, save);
                 }
             }
         } 
         else 
         {
-            TravelNode(command, oldCommand, config_node, save, changeMode, isListed, 0);
+            travelNode(command, oldCommand, config_node, save, changeMode, isListed, 0);
         }
     }
 
@@ -314,7 +316,7 @@ void Configs::saveCommand(vector<string>& oldCommand, vector<string>& command, b
     //std::cout << std::endl;
 }
 
-bool Configs::TravelNode(vector<string>& command, vector<string> oldCommand, pugi::xml_node& config_node, pugi::xml_node& save, bool& changeMode, bool& isList, int offset) 
+bool Configs::travelNode(std::vector<std::string>& command, std::vector<std::string> oldCommand, pugi::xml_node& config_node, pugi::xml_node& save, bool& changeMode, bool& isList, int offset) 
 {
     // Offset adjustment for special conditions
     int otherOffset = 0;
@@ -584,7 +586,7 @@ bool Configs::deleteNodeAndAllChildren(pugi::xml_node& node, pugi::xml_node& sav
 }
 
 // Checks if a command string is volatile based on certain conditions
-bool Configs::isVolitile(string& command) 
+bool Configs::isVolitile(std::string& command) 
 {
     // Check if the root node's name is "config" to set configMode flag
     if (config_node.name() == "config") 
@@ -597,7 +599,7 @@ bool Configs::isVolitile(string& command)
     }
     
     // Check if the command matches any in the volatile inputs list
-    for (const string& str : volitileInputs) 
+    for (const std::string& str : volitileInputs) 
     {
         if (command == str) {
             return true; 
@@ -614,7 +616,7 @@ bool Configs::isVolitile(string& command)
 }
 
 // Determines the volatile type based on command and format
-string Configs::getVolitileValue(string& command, string& com) 
+std::string Configs::getVolitileValue(std::string& command, std::string& com) 
 {
     // Return "value" for commands of type "WORD" and "LINE"
     if (command == "WORD" || command == "LINE") 
@@ -625,7 +627,7 @@ string Configs::getVolitileValue(string& command, string& com)
     // Parse IP address in "A.B.C.D" format
     if (command == "A.B.C.D") 
     {
-        vector<int> ip{0, 0, 0, 0};
+        std::vector<int> ip{0, 0, 0, 0};
     #ifdef _WIN32
         // Windows-specific IP parsing
         sscanf_s(com.c_str(), "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
@@ -680,7 +682,7 @@ void Configs::historyToGlobal()
 }
 
 // Traverses from a node up to the root node and updates the node to match the root
-void Configs::ReturnToRoot(pugi::xml_node& node, pugi::xml_node& root) 
+void Configs::returnToRoot(pugi::xml_node& node, pugi::xml_node& root) 
 {
     // Traverse up the tree until the node matches the root's name
     while (node.name() != root.name()) 

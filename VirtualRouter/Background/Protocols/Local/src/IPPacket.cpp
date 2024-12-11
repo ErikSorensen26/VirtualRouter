@@ -1,0 +1,45 @@
+#include <IPPacket.h>
+
+namespace Protocol
+{
+    IPPacket::IPPacket(Interface& iface) : currentInterface(iface) {}
+
+    void IPPacket::setIPHeader(PacketInfo& packetInfo, const ByteString destIp, int DSCP, int hopLimit, ByteString type)
+    {
+        // IPv6 Header creation
+        if (destIp.size() == 16)
+        {        
+            IPv6Header ip;
+            ip.version = "6";
+            ip.trafficClass = Functions::numToHex(DSCP, 2);
+            ip.flowLabel = Functions::numToHex(currentInterface.Get().ipv6FlowLabel, 5);
+            ip.payloadLength = ByteString(2, 0x00); // Will be calculated later
+            ip.protocol = Variable::IP::eigrp;
+            ip.hopLimit = Functions::numToByte(hopLimit, 1);
+            ip.sourceAddress = currentInterface.Get().ipv6Address;
+            ip.destinationAddress = Variable::Multicast::Eigrp::addressv6;
+            packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
+            currentInterface.ethernet->setEthernetHeader(packetInfo, destIp, Variable::Ethernet::ipv6);
+        }
+        else if (destIp.size() == 4)
+        {
+            IPv4Header ip;
+            ip.version = "4";
+            ip.headerLength = "5";
+            ip.serviceField = Functions::numToByte(DSCP, 1);
+            ip.totalLength = ByteString(2, 0x02);
+            ip.identification = ByteString(2, 0x00);
+            ip.fragmentFlag.reserved = "0";
+            ip.fragmentFlag.fragment = "0";
+            ip.fragmentFlag.moreFragment = "0";
+            ip.fragmentFlag.fragment = "0000000000000";
+            ip.TTL = ByteString(1, 0x02);
+            ip.protocol = Variable::IP::eigrp;
+            ip.checksum = ByteString(2, 0x00);
+            ip.sourceAddress = currentInterface.Get().ipAddress;
+            ip.destinationAddress = Variable::Multicast::Eigrp::address;
+            packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
+            currentInterface.ethernet->setEthernetHeader(packetInfo, destIp, Variable::Ethernet::ipv4);
+        }
+    }
+}

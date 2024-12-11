@@ -2,8 +2,6 @@
 
 #include <string>
 
-using namespace std;
-
 // Class to handle time formatting and retrieval.
 class DoTime {
 public:
@@ -11,7 +9,7 @@ public:
     DoTime();
     
     // Returns the current time as a string based on object settings.
-    std::string GetTime();
+    std::string getTime();
 
     bool milTime = false;             // Indicates if time should be in military format.
     bool includeMilliseconds = true; // Indicates if milliseconds should be included in the time string.

@@ -1,11 +1,11 @@
 #include <RoutingTable.h>
 
-void RoutingTable::UpdateEigrp(const Eigrp route, AddressFamily af)
+void RoutingTable::updateEigrp(const Eigrp route, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
     // Create key in "network/mask" format
-    std::string key = route.network + "/" + std::to_string(route.mask);
+    ByteString key = route.network + ByteString("/") + ByteString(std::to_string(route.mask));
     auto& existingRoute = eigrp[key];
 
     if (existingRoute.nextHops.empty())
@@ -57,17 +57,17 @@ void RoutingTable::UpdateEigrp(const Eigrp route, AddressFamily af)
 //     }
 // }
 
-void RoutingTable::AddEigrp(const Eigrp route, AddressFamily af)
+void RoutingTable::addEigrp(const Eigrp route, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    std::string key = route.network + "/" + std::to_string(route.mask);
+    ByteString key = route.network + "/" + std::to_string(route.mask);
     eigrp[key] = route;
 }
 
-void RoutingTable::RemoveEigrp(const std::string& network, int mask, AddressFamily af)
+void RoutingTable::removeEigrp(const ByteString& network, int mask, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    std::string key = network + "/" + std::to_string(mask);
+    ByteString key = network + "/" + std::to_string(mask);
     auto it = eigrp.find(key);
     if (it != eigrp.end())
     {
@@ -75,11 +75,11 @@ void RoutingTable::RemoveEigrp(const std::string& network, int mask, AddressFami
     }
 }
 
-void RoutingTable::UpdateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af)
+void RoutingTable::updateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
-    std::string key = route.network + "/" + std::to_string(route.mask);
+    ByteString key = route.network + "/" + std::to_string(route.mask);
     auto& existingRoute = eigrp[key];
     double minMetric = existingRoute.metric;
 
@@ -101,7 +101,7 @@ void RoutingTable::UpdateEigrpWithVariance(const Eigrp& route, double variance, 
     }
 }
 
-std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes(AddressFamily af)
+std::vector<RoutingTable::Eigrp> RoutingTable::getAllEigrpRoutes(AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::vector<Eigrp> routes;
@@ -112,7 +112,7 @@ std::vector<RoutingTable::Eigrp> RoutingTable::GetAllEigrpRoutes(AddressFamily a
     return routes;
 }
 
-std::vector<RoutingTable::Eigrp> RoutingTable::GetAllConnectedEigrpRoutes(AddressFamily af)
+std::vector<RoutingTable::Eigrp> RoutingTable::getAllConnectedEigrpRoutes(AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::vector<Eigrp> routes;
@@ -126,7 +126,7 @@ std::vector<RoutingTable::Eigrp> RoutingTable::GetAllConnectedEigrpRoutes(Addres
     return routes;
 }
 
-std::optional<RoutingTable::Eigrp> RoutingTable::GetEigrpRoute(const std::string& destination, const int mask, AddressFamily af)
+std::optional<RoutingTable::Eigrp> RoutingTable::getEigrpRoute(const ByteString& destination, const int mask, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     for (const auto& [key, entry] : eigrp)
@@ -140,24 +140,24 @@ std::optional<RoutingTable::Eigrp> RoutingTable::GetEigrpRoute(const std::string
 }
 
 
-void RoutingTable::UpdateArp(const arpHeader& recievedArp)
+void RoutingTable::updateArp(const ArpHeader& recievedArp)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
     // Create route entry
     Arp route;
     route.age = std::chrono::system_clock::now();
-    route.interface = recievedArp.targetIpAddress;
-    route.ipAddress = recievedArp.senderIpAddress;
-    route.mac = recievedArp.senderHardwareAddress;
-    route.type = recievedArp.opcode;
+    route.interface = recievedArp.targetIpAddress.toString();
+    route.ipAddress = recievedArp.senderIpAddress.toString();
+    route.mac = recievedArp.senderHardwareAddress.toString();
+    route.type = recievedArp.opcode.toString();
 
     // Find if the route Exists
-    std::string key = recievedArp.senderIpAddress;
+    ByteString key = recievedArp.senderIpAddress.toString();
     arp[key] = route;
 }
 
-void RoutingTable::UpdateArp(const string ip, string mac, string interfaceAddress)
+void RoutingTable::updateArp(const ByteString ip, ByteString mac, ByteString interfaceAddress)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
@@ -169,7 +169,7 @@ void RoutingTable::UpdateArp(const string ip, string mac, string interfaceAddres
     route.mac = mac;
 
     // Find if the route Exists
-    std::string key = ip;
+    ByteString key = ip;
     const auto it = arp.find(key);
     if (it == arp.end())
     {
@@ -177,7 +177,7 @@ void RoutingTable::UpdateArp(const string ip, string mac, string interfaceAddres
     }
 }
 
-std::optional<RoutingTable::Arp> RoutingTable::ArpLookup(const std::string& ipAddress)
+std::optional<RoutingTable::Arp> RoutingTable::ArpLookup(const ByteString& ipAddress)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     auto it = arp.find(ipAddress);
@@ -188,14 +188,14 @@ std::optional<RoutingTable::Arp> RoutingTable::ArpLookup(const std::string& ipAd
     return std::nullopt;
 }
 
-std::string RoutingTable::GetNextHop(const std::string& destination, int mask)
+ByteString RoutingTable::getNextHop(const ByteString& destination, int mask)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     auto it = eigrp.find(destination + "/" + std::to_string(mask));
     if (it != eigrp.end() && !it->second.nextHops.empty())
     {
         static std::atomic<size_t> roundRobinIndex{0};
-        return it->second.nextHops[roundRobinIndex++ % it->second.nextHops.size()];
+        return it->second.nextHops[roundRobinIndex++ % it->second.nextHops.size()].toString();
     }
     return ""; // No route found
 }

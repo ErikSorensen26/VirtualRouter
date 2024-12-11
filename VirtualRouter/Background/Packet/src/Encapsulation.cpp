@@ -1,15 +1,12 @@
 #include <Encapsulation.h>
-#include <typeinfo>
 
 // Encapsulates packet information into a formatted string.
-std::string Encapsulate(PacketInfo &packet, string encapsulated)
+ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
 {
-    std::string packetString{};
+    ByteString packetString{};
 
-    string currentVrf;
-    vector<any> data{};
-
-    Variable variable;
+    ByteString currentVrf;
+    std::vector<std::any> data{};
 
     // Flags to track the presence of different header types.
     bool hasEthernet{},
@@ -24,7 +21,7 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
         hasIcmpv6{};
 
     // Strings to accumulate header data.
-    string ethernetString{},
+    ByteString ethernetString{},
         pppString{}, arpString{},
         mplsString{}, vlanString{},
         lldpString{}, ipv4String{},
@@ -38,17 +35,18 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     // Process Layer2 headers.
     for (auto header : packet.Layer2)
     {
-        if (is_type<ethernetHeader>(header))
+        if (is_type<EthernetHeader>(header))
         {
-            const ethernetHeader &eth = std::any_cast<const ethernetHeader &>(header);
-            ethernetString += eth.destinationMac;
+            const EthernetHeader &eth = std::any_cast<const EthernetHeader &>(header);
+            ethernetString += eth.destinationMac.size() == 6 ? eth.destinationMac : ByteString(6, '\x00');
+            // ethernetString += eth.destinationMac;
             ethernetString += eth.sourceMac;
             ethernetString += eth.type;
             hasEthernet = true;
         }
-        else if (is_type<pppHeader>(header))
+        else if (is_type<PppHeader>(header))
         {
-            const pppHeader &ppp = std::any_cast<const pppHeader &>(header);
+            const PppHeader &ppp = std::any_cast<const PppHeader &>(header);
             pppString += ppp.address;
             pppString += ppp.control;
             pppString += ppp.protocol;
@@ -59,9 +57,9 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     // Process Layer2.5 headers.
     for (auto header : packet.Layer2_5)
     {
-        if (is_type<arpHeader>(header))
+        if (is_type<ArpHeader>(header))
         {
-            const arpHeader &arp = std::any_cast<const arpHeader &>(header);
+            const ArpHeader &arp = std::any_cast<const ArpHeader &>(header);
             arpString += arp.hardwareType;
             arpString += arp.protocolType;
             arpString += arp.hardwareSize;
@@ -73,27 +71,27 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             arpString += arp.targetIpAddress;
             hasArp = true;
         }
-        else if (is_type<mplsHeader>(header))
+        else if (is_type<MplsHeader>(header))
         {
-            const mplsHeader &mpls = std::any_cast<const mplsHeader &>(header);
+            const MplsHeader &mpls = std::any_cast<const MplsHeader &>(header);
             mplsString += mpls.label;
             // mplsString += Functions::binToHex(mpls.expBit + mpls.bottomLabelStack);
             mplsString += mpls.TTL;
-            mplsString += Functions::hexToByte(mplsString);
+            mplsString += mplsString.toHex();
             hasMpls = true;
         }
-        else if (is_type<vlanHeader>(header))
+        else if (is_type<VlanHeader>(header))
         {
-            const vlanHeader &vlan = std::any_cast<const vlanHeader &>(header);
+            const VlanHeader &vlan = std::any_cast<const VlanHeader &>(header);
             vlanString += vlan.priority;
             vlanString += vlan.dei;
             vlanString += vlan.id;
             vlanString += vlan.type;
             hasVlan = true;
         }
-        else if (is_type<lldpHeader>(header))
+        else if (is_type<LldpHeader>(header))
         {
-            const lldpHeader &lldp = std::any_cast<const lldpHeader &>(header);
+            const LldpHeader &lldp = std::any_cast<const LldpHeader &>(header);
             // No processing for LLDP in this implementation.
         }
     }
@@ -101,28 +99,28 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     // Process Layer3 headers.
     for (auto header : packet.Layer3)
     {
-        if (is_type<ipv4Header>(header))
+        if (is_type<IPv4Header>(header))
         {
-            const ipv4Header &ipv4 = std::any_cast<const ipv4Header &>(header);
-            ipv4String += Functions::hexToByte(ipv4.version + ipv4.headerLength);
+            const IPv4Header &ipv4 = std::any_cast<const IPv4Header &>(header);
+            ipv4String += Functions::hexToByte(ipv4.version.toString() + ipv4.headerLength.toString());
             ipv4String += ipv4.serviceField;
             ipv4String += ipv4.totalLength;
             ipv4String += ipv4.identification;
-            ipv4String += Functions::binToByte(ipv4.fragmentFlag.reserved + ipv4.fragmentFlag.fragment + ipv4.fragmentFlag.moreFragment + ipv4.fragmentFlag.fragmentOffset);
+            ipv4String += Functions::binToByte(ipv4.fragmentFlag.reserved.toString() + ipv4.fragmentFlag.fragment.toString() + ipv4.fragmentFlag.moreFragment.toString() + ipv4.fragmentFlag.fragmentOffset.toString());
             ipv4String += ipv4.TTL;
             ipv4String += ipv4.protocol;
-            ipv4String += std::string("\x00\x00", 2);
+            ipv4String += ByteString(2, 0x00);
             ipv4String += ipv4.sourceAddress;
             ipv4String += ipv4.destinationAddress;
-            ipv4String += Functions::binToByte(ipv4.options.type.copy) + ipv4.options.type.classControl + ipv4.options.type.routerAlert;
+            ipv4String += Functions::binToByte(ipv4.options.type.copy.toString()) + ipv4.options.type.classControl.toString() + ipv4.options.type.routerAlert.toString();
             ipv4String += ipv4.options.length;
             ipv4String += ipv4.options.routerAlert;
             hasIpv4 = true;
         }
-        else if (is_type<ipv6Header>(header))
+        else if (is_type<IPv6Header>(header))
         {
-            const ipv6Header& ipv6 = std::any_cast<const ipv6Header &>(header);
-            ipv6String += Functions::hexToByte(ipv6.version + ipv6.trafficClass + ipv6.flowLabel);
+            const IPv6Header& ipv6 = std::any_cast<const IPv6Header &>(header);
+            ipv6String += Functions::hexToByte(ipv6.version.toString() + ipv6.trafficClass.toString() + ipv6.flowLabel.toString());
             ipv6String += ipv6.payloadLength;
             ipv6String += ipv6.protocol;
             ipv6String += ipv6.hopLimit;
@@ -130,19 +128,19 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             ipv6String += ipv6.destinationAddress;
             hasIpv6 = true;
         }
-        else if (is_type<greHeade>(header))
+        else if (is_type<GreHeade>(header))
         {
-            const greHeade &gre = std::any_cast<const greHeade &>(header);
-            greString += Functions::binToByte(gre.flags.checksum + gre.flags.routing + gre.flags.key + gre.flags.seqNum + gre.flags.strictSourceRoute + gre.flags.recursion + gre.flags.acknowledgment + gre.flags.recursion + gre.flags.version);
+            const GreHeade &gre = std::any_cast<const GreHeade &>(header);
+            greString += Functions::binToByte(gre.flags.checksum.toString() + gre.flags.routing.toString() + gre.flags.key.toString() + gre.flags.seqNum.toString() + gre.flags.strictSourceRoute.toString() + gre.flags.recursion.toString() + gre.flags.acknowledgment.toString() + gre.flags.recursion.toString() + gre.flags.version.toString());
             greString += gre.protocol;
             greString += gre.length;
             greString += gre.callID;
             greString += gre.seqNum;
             hasGre = true;
         }
-        else if (is_type<ahHeader>(header))
+        else if (is_type<AhHeader>(header))
         {
-            const ahHeader &ah = std::any_cast<const ahHeader &>(header);
+            const AhHeader &ah = std::any_cast<const AhHeader &>(header);
             ahString += ah.next;
             ahString += ah.length;
             ahString += ah.reserved;
@@ -151,30 +149,30 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             ahString += ah.icv;
             hasAh = true;
         }
-        else if (is_type<espHeader>(header))
+        else if (is_type<EspHeader>(header))
         {
-            const espHeader &esp = std::any_cast<const espHeader &>(header);
+            const EspHeader &esp = std::any_cast<const EspHeader &>(header);
             espString += esp.spi;
             espString += esp.sequence;
             hasEsp = true;
         }
-        else if (is_type<icmpHeader>(header))
+        else if (is_type<IcmpHeader>(header))
         {
-            const icmpHeader &icmp = std::any_cast<const icmpHeader &>(header);
+            const IcmpHeader &icmp = std::any_cast<const IcmpHeader &>(header);
             icmpString += icmp.type;
             icmpString += icmp.code;
-            icmpString += std::string("\x00\x00", 2);
+            icmpString += ByteString(2, 0x00);
             icmpString += icmp.identifier;
             icmpString += icmp.sequenceNumber;
-            icmpString = Checksum::CalculateProtocolChecksum(icmpString + encapsulated, icmpString.size(), 8, 2);
+            icmpString = Checksum::calculateProtocolChecksum(icmpString + encapsulated, icmpString.size(), 8, 2);
             hasIcmp = true;
         }
-        else if (is_type<icmpv6Header>(header))
+        else if (is_type<IcmpV6Header>(header))
         {
-            const icmpv6Header &icmpv6 = std::any_cast<const icmpv6Header &>(header);
+            const IcmpV6Header &icmpv6 = std::any_cast<const IcmpV6Header &>(header);
             icmpv6String += icmpv6.type;
             icmpv6String += icmpv6.code;
-            icmpv6String += std::string("\x00\x00", 2);
+            icmpv6String += ByteString(2, 0x00);
             icmpv6String += icmpv6.reserved;
             for (const auto& opt : icmpv6.options)
             {
@@ -184,24 +182,24 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             }
             hasIcmpv6 = true;
         }
-        else if (is_type<igmpHeader>(header))
+        else if (is_type<IgmpHeader>(header))
         {
-            const igmpHeader &igmp = std::any_cast<const igmpHeader &>(header);
+            const IgmpHeader &igmp = std::any_cast<const IgmpHeader &>(header);
             igmpString += igmp.type;
             igmpString += igmp.maxRestTime;
-            igmpString += std::string("\x00\x00", 2);
+            igmpString += ByteString(2, 0x00);
             igmpString += igmp.multicastAddress;
-            igmpString += Functions::binToByte(igmp.v3.supress + igmp.v3.qrv + igmp.v3.qqic + igmp.v3.numSrc);
-            igmpString = Checksum::CalculateProtocolChecksum(igmpString, 0, igmpString.size(), 2);
+            igmpString += Functions::binToByte(igmp.v3.supress.toString() + igmp.v3.qrv.toString() + igmp.v3.qqic.toString() + igmp.v3.numSrc.toString());
+            igmpString = Checksum::calculateProtocolChecksum(igmpString, 0, igmpString.size(), 2);
             hasIgmp = true;
         }
-        else if (is_type<eigrpHeader>(header))
+        else if (is_type<EigrpHeader>(header))
         {
-            const eigrpHeader &eigrp = std::any_cast<const eigrpHeader &>(header);
+            const EigrpHeader &eigrp = std::any_cast<const EigrpHeader &>(header);
             eigrpString += eigrp.version;
             eigrpString += eigrp.opcode;
-            eigrpString += std::string("\x00\x00", 2);
-            eigrpString += Functions::binToByte("0000000000000000000000000000" + eigrp.flags.endOfTable + eigrp.flags.restart + eigrp.flags.conditionalRecieve + eigrp.flags.init);
+            eigrpString += ByteString(2, 0x00);
+            eigrpString += Functions::binToByte("0000000000000000000000000000" + eigrp.flags.endOfTable.toString() + eigrp.flags.restart.toString() + eigrp.flags.conditionalRecieve.toString() + eigrp.flags.init.toString());
             eigrpString += eigrp.sequence;
             eigrpString += eigrp.ack;
             eigrpString += eigrp.virtualRouterID;
@@ -219,17 +217,17 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     // Process Layer4 headers.
     for (auto header : packet.Layer4)
     {
-        if (is_type<tcpHeader>(header))
+        if (is_type<TcpHeader>(header))
         {
-            const tcpHeader &tcp = std::any_cast<const tcpHeader &>(header);
+            const TcpHeader &tcp = std::any_cast<const TcpHeader &>(header);
             tcpString += tcp.sourcePort;
             tcpString += tcp.destinationPort;
             tcpString += tcp.sequenceNumber;
             tcpString += tcp.ackNumber;
             tcpString += tcp.headerLength;
-            tcpString += Functions::binToByte(tcp.flags.congestionWindowReduced + tcp.flags.ecnEcho + tcp.flags.urgent + tcp.flags.acknowledgement + tcp.flags.push + tcp.flags.reset + tcp.flags.syn + tcp.flags.fin);
+            tcpString += Functions::binToByte(tcp.flags.congestionWindowReduced.toString() + tcp.flags.ecnEcho.toString() + tcp.flags.urgent.toString() + tcp.flags.acknowledgement.toString() + tcp.flags.push.toString() + tcp.flags.reset.toString() + tcp.flags.syn.toString() + tcp.flags.fin.toString());
             tcpString += tcp.windowSize;
-            tcpString += std::string("\x00\x00", 2);
+            tcpString += ByteString(2, 0x00);
             tcpString += tcp.urgentPointer;
             // Add TCP options.
             for (auto opt : tcp.options)
@@ -240,13 +238,13 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             }
             hasTcp = true;
         }
-        else if (is_type<udpHeader>(header))
+        else if (is_type<UdpHeader>(header))
         {
-            const udpHeader &udp = std::any_cast<const udpHeader &>(header);
+            const UdpHeader &udp = std::any_cast<const UdpHeader &>(header);
             udpString += udp.sourcePort;
             udpString += udp.destinationPort;
             udpString += udp.length;
-            udpString += std::string("\x00\x00", 2);
+            udpString += ByteString(2, 0x00);
             hasUdp = true;
         }
     }
@@ -254,16 +252,16 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
     // Process Layer5 headers.
     for (auto header : packet.Layer5)
     {
-        if (is_type<dhcpHeader>(header))
+        if (is_type<DhcpHeader>(header))
         {
-            const dhcpHeader &dhcp = std::any_cast<const dhcpHeader &>(header);
+            const DhcpHeader &dhcp = std::any_cast<const DhcpHeader &>(header);
             dhcpString += dhcp.boot;
             dhcpString += dhcp.hardwareType;
             dhcpString += dhcp.hardwareAddressLength;
             dhcpString += dhcp.hops;
             dhcpString += dhcp.transID;
             dhcpString += dhcp.secondsElapsed;
-            dhcpString += Functions::binToByte(dhcp.bootpFlags.broadcast + dhcp.bootpFlags.reserved);
+            dhcpString += Functions::binToByte(dhcp.bootpFlags.broadcast.toString() + dhcp.bootpFlags.reserved.toString());
             dhcpString += dhcp.clientIP;
             dhcpString += dhcp.yourClientIP;
             dhcpString += dhcp.nextServerIP;
@@ -273,7 +271,7 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             dhcpString += dhcp.serverHostName;
             dhcpString += dhcp.bootFile;
             dhcpString += dhcp.magicCookie;
-            for (dhcpHeader::Option opt : dhcp.options)
+            for (DhcpHeader::Option opt : dhcp.options)
             {
                 dhcpString += opt.option;
                 dhcpString += opt.length;
@@ -284,59 +282,59 @@ std::string Encapsulate(PacketInfo &packet, string encapsulated)
             hasDhcp = true;
         }
     }
-    string applicationPayload = dhcpString + encapsulated;
+    ByteString applicationPayload = dhcpString + encapsulated;
 
     // ------------------Final-Calculations-----------------------
 
     if (hasIpv4)
     {
         // Calculate the total size of the IPv4 payload including headers and application payload.
-        string ipv4Size = Functions::numToByte(ipv4String.size() + udpString.size() + tcpString.size() + eigrpString.size() + applicationPayload.size());
+        ByteString ipv4Size = Functions::numToByte(ipv4String.size() + udpString.size() + tcpString.size() + eigrpString.size() + applicationPayload.size());
         while (ipv4Size.size() < 2)
         {
-            ipv4Size = string("\x00", 1) + ipv4Size;
+            ipv4Size = ByteString(1, 0x00) + ipv4Size;
         }
-        ipv4String.replace(2, 2, ipv4Size);
+        ipv4String = ipv4String.toString().replace(2, 2, ipv4Size.toString());
 
         // Recalculate the IPv4 checksum.
-        ipv4String = Checksum::CalculateProtocolChecksum(ipv4String, 0, ipv4String.size(), 10);
+        ipv4String = Checksum::calculateProtocolChecksum(ipv4String, 0, ipv4String.size(), 10);
     }
 
     if (hasIpv4 && hasTcp)
     {
         // Calculate the size of the TCP header.
-        tcpString.replace(12, 1, std::to_string(static_cast<char>(tcpString.size())));
+        tcpString = tcpString.toString().replace(12, 1, std::to_string(static_cast<char>(tcpString.size())));
 
         // Calculate the TCP data length by including the application payload.
         std::ostringstream oss;
-        oss << std::setw(4) << std::setfill('0') << std::hex << Functions::binToNum((Functions::byteToBin(tcpString.substr(12, 1))).substr(0, 4)) * 4 + applicationPayload.size();
+        oss << std::setw(4) << std::setfill('0') << std::hex << Functions::binToNum((Functions::byteToBin(tcpString.substr(12, 1).toString())).substr(0, 4)) * 4 + applicationPayload.size();
 
         // Construct the pseudo header for TCP checksum calculation.
-        string pseudoHeader = ipv4String.substr(12, 8) + std::string("\x00", 1) + ipv4String.substr(9, 1) + Functions::hexToByte(oss.str());
-        string checksumStr = pseudoHeader + tcpString + applicationPayload;
+        ByteString pseudoHeader = ipv4String.substr(12, 8) + ByteString(1, 0x00) + ipv4String.substr(9, 1) + Functions::hexToByte(oss.str());
+        ByteString checksumStr = pseudoHeader + tcpString + applicationPayload;
 
         // Recalculate the TCP checksum.
-        tcpString = Checksum::CalculateProtocolChecksum(checksumStr, 12, tcpString.size(), 16);
+        tcpString = Checksum::calculateProtocolChecksum(checksumStr, 12, tcpString.size(), 16);
     }
 
     if (hasIpv4 && hasUdp)
     {
         // Calculate the size of the UDP header including the application payload.
-        string udpSize = Functions::numToByte(udpString.size() + applicationPayload.size(), 2);
-        udpString.replace(4, 2, udpSize);
+        ByteString udpSize = Functions::numToByte(udpString.size() + applicationPayload.size(), 2);
+        udpString = udpString.toString().replace(4, 2, udpSize.toString());
 
         // Construct the pseudo header for UDP checksum calculation.
-        string pseudoHeader = ipv4String.substr(12, 8) + std::string("\x00", 1) + ipv4String.substr(9, 1) + udpSize;
-        string checksumStr = pseudoHeader + udpString + applicationPayload;
+        ByteString pseudoHeader = ipv4String.substr(12, 8) + ByteString(1, 0x00) + ipv4String.substr(9, 1) + udpSize;
+        ByteString checksumStr = pseudoHeader + udpString + applicationPayload;
 
         // Recalculate the UDP checksum.
-        udpString = Checksum::CalculateProtocolChecksum(checksumStr, 12, 8, 6);
+        udpString = Checksum::calculateProtocolChecksum(checksumStr, 12, 8, 6);
     }
 
     if (hasIpv4 && hasEigrp)
     {
         // Recalculate the EIGRP checksum.
-        eigrpString = Checksum::CalculateProtocolChecksum(eigrpString, 0, eigrpString.size(), 2);
+        eigrpString = Checksum::calculateProtocolChecksum(eigrpString, 0, eigrpString.size(), 2);
     }
 
     // Assemble the final packet string from all headers and payloads.

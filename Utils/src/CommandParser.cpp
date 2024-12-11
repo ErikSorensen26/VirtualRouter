@@ -2,22 +2,20 @@
 
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <vector>
 #include <string>
 
 using json = nlohmann::json;
-using namespace std;
 
 struct command {
-    string name, description;
+    std::string name, description;
 };
 
-string getMode() {
+std::string getMode() {
     return "(config-router-af-topology-ipv6)#";
 }
 
-int getLevel(string& line) {
+int getLevel(std::string& line) {
     int space = 0;
     int indent = 0;
     for (char ch : line) {
@@ -32,14 +30,15 @@ int getLevel(string& line) {
             return indent;
         }
     }
+    return indent;
 }
 
-json harvestCommand(string& line) {
+json harvestCommand(std::string& line) {
     bool noIndent = false;
     bool nam = false;
     bool decSpace = true;
-    string name;
-    string description;
+    std::string name;
+    std::string description;
     json command;
     for (char ch : line) {
         if (ch != ' ') {
@@ -65,9 +64,9 @@ json harvestCommand(string& line) {
     return command;
 }
 
-void processCommands(vector<string>& lines, size_t& index, int currentLevel, json& parent) {
+void processCommands(std::vector<std::string>& lines, size_t& index, int currentLevel, json& parent) {
     while (index < lines.size()) {
-        string line = lines[index];
+        std::string line = lines[index];
         int level = getLevel(line);
         if (level == currentLevel) {
             json command = harvestCommand(line);
@@ -85,33 +84,33 @@ void processCommands(vector<string>& lines, size_t& index, int currentLevel, jso
     }
 }
 
-json readJSONFromFile(const string& filename) {
-    ifstream file(filename);
+json readJSONFromFile(const std::string& filename) {
+    std::ifstream file(filename);
     json jsonData;
     file >> jsonData;
     file.close();
     return jsonData;
 }
 
-void writeJSONToFile(const string& filename, const json& jsonData) {
-    ofstream file(filename);
+void writeJSONToFile(const std::string& filename, const json& jsonData) {
+    std::ofstream file(filename);
     file << jsonData.dump(4);
     file.close();
 }
 
 int main() {
-    ifstream infile("../Utils/Dir/input.txt");
+    std::ifstream infile("../Utils/Dir/input.txt");
     if (!infile) 
     {
         std::cerr << "Error: Unable to open input file." << std::endl;
         return 1;
     }
 
-    vector<string> lines;
-    string line;
+    std::vector<std::string> lines;
+    std::string line;
 
     json existingData;
-    ifstream existingFile("../Utils/Dir/output.json");
+    std::ifstream existingFile("../Utils/Dir/output.json");
     if (existingFile)
     {
         existingFile >> existingData;
@@ -134,7 +133,7 @@ int main() {
 
     existingData[getMode()] = output;
     
-    ofstream outfile("../Utils/Dir/output.json");
+    std::ofstream outfile("../Utils/Dir/output.json");
     outfile << existingData.dump(4);
     outfile.close();
     

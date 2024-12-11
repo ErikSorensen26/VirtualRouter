@@ -1,9 +1,7 @@
 #pragma once
 
-#include <string>
 #include <vector>
-#include <iostream>
-#include <algorithm>
+#include <ByteString.hpp>
 #include <mutex>
 #include <PacketStructure.h>
 #include <optional>
@@ -22,7 +20,7 @@ class RoutingTable {
 public:
 
     struct RoutingEntry {
-        std::string destination, mask, nextHop, outInterface, source;
+        ByteString destination, mask, nextHop, outInterface, source;
         int metric, admDist;
         std::chrono::system_clock::time_point age;
     };
@@ -30,47 +28,47 @@ public:
     void printRoutingTable();
 
     struct Fib {
-        std::string destination, nextHop, outInt, mac;
+        ByteString destination, nextHop, outInt, mac;
         int preference;
     };
 
     void printFibTable();
 
     struct Arp {
-        std::string ipAddress, mac, interface, type;
+        ByteString ipAddress, mac, interface, type;
         std::chrono::system_clock::time_point age;
     };
 
     void printArpTable();
-    void UpdateArp(const arpHeader& recievedArp);
-    void UpdateArp(const string ip, string mac, string interfaceAddress);
-    std::optional<RoutingTable::Arp> ArpLookup(const std::string& ipAddress);
+    void updateArp(const ArpHeader& recievedArp);
+    void updateArp(const ByteString ip, ByteString mac, ByteString interfaceAddress);
+    std::optional<RoutingTable::Arp> ArpLookup(const ByteString& ipAddress);
 
     struct NDP {
-        std::string ipAddress, macAddress, interface, state;
+        ByteString ipAddress, macAddress, interface, state;
         std::chrono::system_clock::time_point age;
     };
 
     void printNdpTable();
 
     struct MAC {
-        std::string mac, interface, vlanID, type;
+        ByteString mac, interface, vlanID, type;
         std::chrono::system_clock::time_point age;
     };
 
     void printMacTable();
 
     struct Rib {
-        std::string destination, mask, nextHop, outInterface, source;
+        ByteString destination, mask, nextHop, outInterface, source;
         int metric, admDist;
-        std::vector<std::string> tags;
+        std::vector<ByteString> tags;
         std::chrono::system_clock::time_point age;
     };
 
     void printRibTable();
 
     struct Prb {
-        std::string sourceIp, destination, sourcePort, destPort, protocol, nextHop, outInterface, matchCriteria;
+        ByteString sourceIp, destination, sourcePort, destPort, protocol, nextHop, outInterface, matchCriteria;
         int DSCP;
         std::chrono::system_clock::time_point age;
     };
@@ -78,16 +76,16 @@ public:
     void printPrbTable();
 
     struct Multicast {
-        std::string group, sourceIp, inInterface, RPF, protocol;
+        ByteString group, sourceIp, inInterface, RPF, protocol;
         int routeMetric;
-        std::vector<std::string> outInterface;
+        std::vector<ByteString> outInterface;
         std::chrono::system_clock::time_point age;
     };
 
     void printMulticastTable();
 
     struct ACL {
-        std::string sourceIp, destIp, protocol, sourcePortRange, destPortRange, logString, action;
+        ByteString sourceIp, destIp, protocol, sourcePortRange, destPortRange, logString, action;
         int ruleNum, icmoCode, DSCP;
         std::chrono::system_clock::time_point age;
     };
@@ -95,23 +93,23 @@ public:
     void printAclTable();
 
     struct Eigrp {
-        std::string network{}, nextHop{}, interface{}, successor{}, feasibleSuccessor{}, routeSource{}, routeType{}, activeOrPassive{}, originRouter{}, flags{};
+        ByteString network{}, nextHop{}, interface{}, successor{}, feasibleSuccessor{}, routeSource{}, routeType{}, activeOrPassive{}, originRouter{}, flags{};
         unsigned int metric{}, feasibleDistance{}, reportedDistance{}, adminDistance{}, holdTime{}, stuckInaActive{}, updateTimer{}, retransmitInterval{}, sequenceNumber{}, routeTag{};
         unsigned int hopCount{}, bandwidth{}, load{}, delay{}, reliability{}, mtu{}, mask{}, originAS{}, extendedMetric{}, extendedId{};
         std::chrono::system_clock::time_point age;
-        vector<std::string> nextHops{};
+        std::vector<ByteString> nextHops{};
         bool isIPv6{false};
     };
 
     void printEigrpTable();
-    void UpdateEigrpWithVarianceIPv6(const Eigrp& route, double variance, AddressFamily af);
-    void AddEigrp(const Eigrp route, AddressFamily af);
-    void UpdateEigrp(const Eigrp route, AddressFamily af);
-    void RemoveEigrp(const std::string& network, int mask, AddressFamily af);
-    std::vector<Eigrp> GetAllEigrpRoutes(AddressFamily af);
-    std::vector<RoutingTable::Eigrp> GetAllConnectedEigrpRoutes(AddressFamily af);
-    std::optional<RoutingTable::Eigrp> GetEigrpRoute(const std::string& destination, const int mask, AddressFamily af);
-    void UpdateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af);
+    void updateEigrpWithVarianceIPv6(const Eigrp& route, double variance, AddressFamily af);
+    void addEigrp(const Eigrp route, AddressFamily af);
+    void updateEigrp(const Eigrp route, AddressFamily af);
+    void removeEigrp(const ByteString& network, int mask, AddressFamily af);
+    std::vector<Eigrp> getAllEigrpRoutes(AddressFamily af);
+    std::vector<RoutingTable::Eigrp> getAllConnectedEigrpRoutes(AddressFamily af);
+    std::optional<RoutingTable::Eigrp> getEigrpRoute(const ByteString& destination, const int mask, AddressFamily af);
+    void updateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af);
 
     // Static method to access the singleton instance
     static RoutingTable& getInstance()
@@ -120,7 +118,7 @@ public:
         return instance;
     }
 
-    std::string GetNextHop(const std::string& destination, int mask);
+    ByteString getNextHop(const ByteString& destination, int mask);
 
     // Delete copy constructor and assignment operator
     RoutingTable(const RoutingTable&) = delete;
@@ -132,17 +130,15 @@ private:
     RoutingTable() = default;
     ~RoutingTable() = default;
 
-    std::map<std::string, RoutingEntry> routingTable;
-    std::map<std::string, Fib> fib;
-    std::map<std::string, Arp> arp;
-    std::map<std::string, NDP> ndp;
-    std::map<std::string, MAC> mac;
-    std::map<std::string, Rib> rib;
-    std::map<std::string, Prb> prb;
-    std::map<std::string, Multicast> multicast;
-    std::map<std::string, ACL> acl;
-    std::map<std::string, Eigrp> eigrp;
-    std::map<std::string, Eigrp> eigrpIPv6;
-
-    Variable variable;
+    std::map<ByteString, RoutingEntry> routingTable;
+    std::map<ByteString, Fib> fib;
+    std::map<ByteString, Arp> arp;
+    std::map<ByteString, NDP> ndp;
+    std::map<ByteString, MAC> mac;
+    std::map<ByteString, Rib> rib;
+    std::map<ByteString, Prb> prb;
+    std::map<ByteString, Multicast> multicast;
+    std::map<ByteString, ACL> acl;
+    std::map<ByteString, Eigrp> eigrp;
+    std::map<ByteString, Eigrp> eigrpIPv6;
 };

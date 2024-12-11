@@ -3,100 +3,100 @@
 
 // Constructor for ProcessPacket class.
 // Initializes the interface and processes the given packet and VRF.
-ProcessPacket::ProcessPacket(PacketInfo& packet, string& vrf, Interface* Interface) : interface(Interface) 
+ProcessPacket::ProcessPacket(PacketInfo& packet, ByteString& vrf, Interface* Interface) : interface(Interface) 
 { 
-    Process(packet, vrf); // Call the Process method to handle the packet.
+    process(packet, vrf); // Call the Process method to handle the packet.
 }
 
 // Processes the packet by examining and handling various header types.
-void ProcessPacket::Process(PacketInfo& packet, string& vrf) 
+void ProcessPacket::process(PacketInfo& packet, ByteString& vrf) 
 {
     currentVrf = vrf;
 
-    ethernetHeader* ethernet;
-    pppHeader* ppp;
-    arpHeader* arp;
-    mplsHeader* mpls;
-    vlanHeader* vlan;
-    lldpHeader* lldp;
-    ipv4Header* ipv4;
-    ipv6Header* ipv6;
-    greHeade* gre;
-    ahHeader* ah;
-    espHeader* esp;
-    icmpHeader* icmp;
-    igmpHeader* igmp;
-    eigrpHeader* eigrp;
-    tcpHeader* tcp;
-    udpHeader* udp;
-    dhcpHeader* dhcp;
+    EthernetHeader* ethernet;
+    PppHeader* ppp;
+    ArpHeader* arp;
+    MplsHeader* mpls;
+    VlanHeader* vlan;
+    LldpHeader* lldp;
+    IPv4Header* ipv4;
+    IPv6Header* ipv6;
+    GreHeade* gre;
+    AhHeader* ah;
+    EspHeader* esp;
+    IcmpHeader* icmp;
+    IgmpHeader* igmp;
+    EigrpHeader* eigrp;
+    TcpHeader* tcp;
+    UdpHeader* udp;
+    DhcpHeader* dhcp;
 
-    std::string macAddress;
+    ByteString macAddress;
 
     // Iterate over Layer 2 headers and identify their types.
     for (auto header : packet.Layer2) 
     {
-        if (is_type<ethernetHeader>(header)) 
+        if (is_type<EthernetHeader>(header)) 
         {
-            ethernet = std::any_cast<ethernetHeader>(&header);
-            if (Print(header)) { cout << "THIS IS ETHERNET" << endl; } 
+            ethernet = std::any_cast<EthernetHeader>(&header);
+            if (print(header)) { Logger::getInstance().info() << "THIS IS ETHERNET" << std::endl; } 
             // Check if packet contains your source address
-            macAddress = ethernet->sourceMac;
-            if (ethernet->sourceMac == interface->Get().mac) 
+            macAddress = ethernet->sourceMac.toString();
+            if (ethernet->sourceMac == interface->Get().macAddress) 
             {
                 // Drop packet
                 return;
             }
         } 
-        else if (is_type<pppHeader>(header)) 
+        else if (is_type<PppHeader>(header)) 
         {
-            ppp = std::any_cast<pppHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS PPP" << endl; } 
+            ppp = std::any_cast<PppHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS PPP" << std::endl; } 
         }
     }
 
     // Iterate over Layer 2.5 headers and identify their types.
     for (auto header : packet.Layer2_5) 
     {
-        if (is_type<arpHeader>(header)) 
+        if (is_type<ArpHeader>(header)) 
         {
-            arp = std::any_cast<arpHeader>(&header);
-            if (Print(header)) { cout << "THIS IS ARP" << endl; } 
+            arp = std::any_cast<ArpHeader>(&header);
+            if (print(header)) { Logger::getInstance().info() << "THIS IS ARP" << std::endl; } 
             
             // Tests for request OPCODE
-            if (arp->opcode == variable.arp.opcode.request) {
+            if (arp->opcode == Variable::Arp::Opcode::request) {
                 // Reply to arp request
                 interface->arp->sendReply(arp->senderHardwareAddress, arp->senderIpAddress);
             }
-            if (arp->opcode == variable.arp.opcode.reply) {
+            if (arp->opcode == Variable::Arp::Opcode::reply) {
                 // Set as reply
-                interface->arp->RecieveReply(*arp);
+                interface->arp->receiveReply(*arp);
             }
         }
-        else if (is_type<mplsHeader>(header)) 
+        else if (is_type<MplsHeader>(header)) 
         {
-            mpls = std::any_cast<mplsHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS MPLS" << endl; }
+            mpls = std::any_cast<MplsHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS MPLS" << std::endl; }
         } 
-        else if (is_type<vlanHeader>(header)) 
+        else if (is_type<VlanHeader>(header)) 
         {
-            vlan = std::any_cast<vlanHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS VLAN" << endl; }
+            vlan = std::any_cast<VlanHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS VLAN" << std::endl; }
         } 
-        else if (is_type<lldpHeader>(header)) 
+        else if (is_type<LldpHeader>(header)) 
         {
-            lldp = std::any_cast<lldpHeader>(&header);
-            if (Print(header)) { cout << "THIS IS LLDP" << endl; } 
+            lldp = std::any_cast<LldpHeader>(&header);
+            if (print(header)) { Logger::getInstance().info() << "THIS IS LLDP" << std::endl; } 
         }
     }
 
     // Iterate over Layer 3 headers and identify their types.
     for (auto header : packet.Layer3) 
     {
-        if (is_type<ipv4Header>(header)) 
+        if (is_type<IPv4Header>(header)) 
         {
-            ipv4 = std::any_cast<ipv4Header>(&header);
-            if (Print(header)) { cout << "THIS IS IPV4" << endl; } 
+            ipv4 = std::any_cast<IPv4Header>(&header);
+            if (print(header)) { Logger::getInstance().info() << "THIS IS IPV4" << std::endl; } 
             // Validate adjacent IP address
             // if (ipv4->sourceAddress != interface->adjacentIp)
             // {
@@ -116,50 +116,50 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
             // }
             if (ethernet && RoutingTable::getInstance().ArpLookup(ipv4->sourceAddress))
             {
-                RoutingTable::getInstance().UpdateArp(ipv4->sourceAddress, macAddress, interface->Get().ip);
+                RoutingTable::getInstance().updateArp(ipv4->sourceAddress, macAddress, interface->Get().ipAddress);
             }
         } 
-        else if (is_type<greHeade>(header)) 
+        else if (is_type<GreHeade>(header)) 
         {
-            gre = std::any_cast<greHeade>(&header); 
-            if (Print(header)) { cout << "THIS IS GRE" << endl; }
+            gre = std::any_cast<GreHeade>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS GRE" << std::endl; }
         } 
-        else if (is_type<ahHeader>(header)) 
+        else if (is_type<AhHeader>(header)) 
         {
-            ah = std::any_cast<ahHeader>(&header);
-            if (Print(header)) { cout << "THIS IS AH" << endl; } 
+            ah = std::any_cast<AhHeader>(&header);
+            if (print(header)) { Logger::getInstance().info() << "THIS IS AH" << std::endl; } 
         } 
-        else if (is_type<espHeader>(header)) 
+        else if (is_type<EspHeader>(header)) 
         {
-            esp = std::any_cast<espHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS ESP" << endl; } 
+            esp = std::any_cast<EspHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS ESP" << std::endl; } 
         } 
-        else if (is_type<icmpHeader>(header)) 
+        else if (is_type<IcmpHeader>(header)) 
         {
-            icmp = std::any_cast<icmpHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS ICMP" << endl; } 
+            icmp = std::any_cast<IcmpHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS ICMP" << std::endl; } 
         } 
-        else if (is_type<igmpHeader>(header)) 
+        else if (is_type<IgmpHeader>(header)) 
         {
-            igmp = std::any_cast<igmpHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS IGMP" << endl; } 
+            igmp = std::any_cast<IgmpHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS IGMP" << std::endl; } 
         }
-        else if (is_type<eigrpHeader>(header)) 
+        else if (is_type<EigrpHeader>(header)) 
         {
-            if (Print(header)) { cout << "THIS IS EIGRP" << endl; } 
-            eigrp = std::any_cast<eigrpHeader>(&header); 
-            auto it = eigrpAutonomousSystems.find(Functions::byteToNum(eigrp->autonomousSystem));
-            auto iface = interface->eigrpInterfaceList.find(Functions::byteToNum(eigrp->autonomousSystem));
+            if (print(header)) { Logger::getInstance().info() << "THIS IS EIGRP" << std::endl; } 
+            eigrp = std::any_cast<EigrpHeader>(&header); 
+            auto it = eigrpAutonomousSystems.find(Functions::byteToNum(eigrp->autonomousSystem.toString()));
+            auto iface = interface->eigrpInterfaceList.find(Functions::byteToNum(eigrp->autonomousSystem.toString()));
             if (it != eigrpAutonomousSystems.end() && iface != interface->eigrpInterfaceList.end()) 
             {
-                int AS = Functions::byteToNum(eigrp->autonomousSystem);
+                int AS = Functions::byteToNum(eigrp->autonomousSystem.toString());
                 if (ipv4 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv4)
                 {
-                    interface->eigrpInterfaceList[AS]->IPv4->ProcessPacket(eigrp, ipv4->sourceAddress);
+                    interface->eigrpInterfaceList[AS]->IPv4->processPacket(eigrp, ipv4->sourceAddress);
                 }
                 else if (ipv6 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv6)
                 {
-                    interface->eigrpInterfaceList[AS]->IPv6->ProcessPacket(eigrp, ipv6->sourceAddress);
+                    interface->eigrpInterfaceList[AS]->IPv6->processPacket(eigrp, ipv6->sourceAddress);
                 }
             }
         }
@@ -168,53 +168,54 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
     // Iterate over Layer 4 headers and identify their types.
     for (auto header : packet.Layer4) 
     {
-        if (is_type<tcpHeader>(header))
+        if (is_type<TcpHeader>(header))
         {
-            tcp = std::any_cast<tcpHeader>(&header);
-            if (Print(header)) { cout << "THIS IS TCP" << endl; } 
+            tcp = std::any_cast<TcpHeader>(&header);
+            if (print(header)) { Logger::getInstance().info() << "THIS IS TCP" << std::endl; } 
         } 
-        else if (is_type<udpHeader>(header)) 
+        else if (is_type<UdpHeader>(header)) 
         {
-            udp = std::any_cast<udpHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS UDP" << endl; } 
+            udp = std::any_cast<UdpHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS UDP" << std::endl; } 
         } 
     }
 
     // Iterate over Layer 5 headers and identify their types.
     for (auto header : packet.Layer5) 
     {
-        if (is_type<dhcpHeader>(header)) 
+        if (is_type<DhcpHeader>(header)) 
         {
-            dhcp = std::any_cast<dhcpHeader>(&header); 
-            if (Print(header)) { cout << "THIS IS DHCP" << endl; } 
+            dhcp = std::any_cast<DhcpHeader>(&header); 
+            if (print(header)) { Logger::getInstance().info() << "THIS IS DHCP" << std::endl; } 
             for (auto opt : dhcp->options) 
             {
-                if (opt.option == variable.dhcp.options.type) 
+                if (opt.option == Variable::Dhcp::Option::type) 
                 {
                     // Handle different DHCP option types.
-                    if (!interface->dhcp->offered && opt.value == variable.dhcp.type.offer) 
+                    if (!interface->dhcp->offered && opt.value == Variable::Dhcp::Type::offer) 
                     {
                         std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex); 
                         interface->dhcp->dhcpOffer = packet; 
                         interface->dhcp->offered = true;
                     } 
-                    else if ((!interface->dhcp->acked && opt.value == variable.dhcp.type.ack) || (opt.value == variable.dhcp.type.nac)) 
+                    else if ((!interface->dhcp->acked && opt.value == Variable::Dhcp::Type::ack) || (opt.value == Variable::Dhcp::Type::nac)) 
                     {
                         std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex); 
                         interface->dhcp->dhcpAck = packet; 
                         interface->dhcp->acked = true;
                     } 
-                    else if (opt.value == variable.dhcp.type.discover) 
+                    else if (opt.value == Variable::Dhcp::Type::discover) 
                     {
                         // Handle DHCP Discover packet.
                     } 
-                    else if (opt.value == variable.dhcp.type.request) 
+                    else if (opt.value == Variable::Dhcp::Type::request) 
                     {
                         // Handle DHCP Request packet.
                     } 
                     else 
                     {
-                        interface->dhcp->DhcpPacket(dhcp, opt.value); // Handle other DHCP packets.
+                        std::string value = opt.value.toString();
+                        interface->dhcp->DhcpPacket(dhcp, value); // Handle other DHCP packets.
                     }
                 }
             }
@@ -223,7 +224,7 @@ void ProcessPacket::Process(PacketInfo& packet, string& vrf)
 }
 
 // Checks if the packet header should be printed based on the data type.
-bool ProcessPacket::Print(any param) 
+bool ProcessPacket::print(std::any param) 
 {
     if (data.empty()) 
     {

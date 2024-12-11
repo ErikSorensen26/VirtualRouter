@@ -4,5 +4,5 @@ namespace Protocol {
 Ospf::Ospf() {}
 }
 
-Protocol::Ospf* CurrentOspf;
-map<int, std::shared_ptr<Protocol::Ospf>> OspfList;
+Protocol::Ospf* currentOspf;
+std::map<int, std::shared_ptr<Protocol::Ospf>> ospfList;

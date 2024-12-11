@@ -2,6 +2,11 @@
 
 #include <vector>
 #include <stdexcept>
+#include <ByteString.hpp>
+#include <mutex>
+#include <optional>
+#include <condition_variable>
+#include <queue>
 
 template<typename T>
 class RingBuffer {
@@ -34,7 +39,7 @@ private:
     bool full_;             // Indicates whether the buffer is full.
 };
 
-template class RingBuffer<std::string>;
+template class RingBuffer<ByteString>;
 
 // Constructor: Initializes the ring buffer with a specified capacity.
 template<typename T>
@@ -90,3 +95,55 @@ template<typename T>
 size_t RingBuffer<T>::capacity() const {
     return buffer_.capacity();
 }
+
+
+template <typename T>
+class ThreadSafeQueue {
+public:
+    ThreadSafeQueue(size_t maxSize = 0) : maxSize_(maxSize), stopped_(false) {}
+
+    // Enqueue an item; blocks if the queue is full (when maxSize > 0)
+    void enqueue(T item) {
+        std::unique_lock<std::mutex> lock(mtx_);
+        if (maxSize_ > 0) {
+            cvFull_.wait(lock, [&]() { return queue_.size() < maxSize_ || stopped_; });
+        }
+        if (stopped_) return; // Do not enqueue if stopped
+        queue_.push(std::move(item));
+        cvEmpty_.notify_one();
+    }
+
+    // Dequeue an item; blocks until an item is available or the queue is stopped
+    std::optional<T> dequeue() {
+        std::unique_lock<std::mutex> lock(mtx_);
+        cvEmpty_.wait(lock, [&]() { return !queue_.empty() || stopped_; });
+        if (queue_.empty()) return std::nullopt; // Return nullopt if stopped and empty
+        T item = std::move(queue_.front());
+        queue_.pop();
+        cvFull_.notify_one();
+        return item;
+    }
+
+    // Stop the queue and notify all waiting threads
+    void stop() {
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            stopped_ = true;
+        }
+        cvEmpty_.notify_all();
+        cvFull_.notify_all();
+    }
+
+    bool isEmpty() const {
+        std::lock_guard<std::mutex> lock(mtx_);
+        return queue_.empty();
+    }
+
+private:
+    mutable std::mutex mtx_;
+    std::queue<T> queue_;
+    std::condition_variable cvEmpty_;
+    std::condition_variable cvFull_;
+    size_t maxSize_;
+    bool stopped_;
+};

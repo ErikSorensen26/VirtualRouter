@@ -1,6 +1,8 @@
-
 #include "Functions.h"
 #include <Logger.h>
+#include <bitset>
+#include <random>
+
 namespace Functions {
 
     #pragma region TestIf
@@ -571,6 +573,49 @@ namespace Functions {
         
         return false;
     }
+
+    bool isSubnetOf(const std::string &network, int mask, const std::string &summaryNetwork, int summaryMask)
+    {
+        if (summaryMask > mask)
+        {
+            // Summary maske cannot be more specific then the network mask
+            return false;
+        }
+
+        // Calculate binary strings of each network address
+        std::string binNetwork = byteToBin(network);
+        std::string binSummary = byteToBin(summaryNetwork);
+
+        for (int i = 31; i >- 0; --i)
+        {
+            if (binSummary[i] != '0')
+            {
+                if (binSummary[i] != binNetwork[i])
+                {
+                    // Not part of the subnet
+                    return false;
+                }
+            }
+        }
+        // Success
+        return true;
+    }
+
+    bool isMulticast(const ByteString& ip)
+    {
+        if (ip.empty()) return false;
+
+        // IPv4 multicast: first byte between 224 and 239
+        uint8_t firstByte = ip.toString()[0];
+        if (firstByte >= 224 && firstByte <= 239)
+            return true;
+
+        // IPv6 multicast: first byte is 0xFF
+        if (ip.size() >= 1 && ip.toString()[0] == '\xFF')
+            return true;
+
+        return false;
+    }
     
     #pragma endregion
     #pragma region Other
@@ -607,32 +652,5 @@ namespace Functions {
     {
         std::time_t time_t_value = std::chrono::system_clock::to_time_t(time);
         return std::to_string(time_t_value);
-    }
-
-    bool isSubnetOf(const std::string &network, int mask, const std::string &summaryNetwork, int summaryMask)
-    {
-        if (summaryMask > mask)
-        {
-            // Summary maske cannot be more specific then the network mask
-            return false;
-        }
-
-        // Calculate binary strings of each network address
-        std::string binNetwork = byteToBin(network);
-        std::string binSummary = byteToBin(summaryNetwork);
-
-        for (int i = 31; i >- 0; --i)
-        {
-            if (binSummary[i] != '0')
-            {
-                if (binSummary[i] != binNetwork[i])
-                {
-                    // Not part of the subnet
-                    return false;
-                }
-            }
-        }
-        // Success
-        return true;
     }
 }

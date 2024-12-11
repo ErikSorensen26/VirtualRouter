@@ -8,10 +8,10 @@ TimeManager::TimeManager() : currentTimerId(0), stop(false)
 
 TimeManager::~TimeManager() 
 {
-    Stop();
+    stopTimer();
 }
 
-int TimeManager::AddTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback)
+int TimeManager::addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     int timerId = currentTimerId++;
@@ -20,7 +20,7 @@ int TimeManager::AddTimer(std::chrono::steady_clock::time_point expirationTime, 
     return timerId;
 }
 
-void TimeManager::CancelTimer(int timerId) 
+void TimeManager::cancelTimer(int timerId) 
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -33,7 +33,7 @@ void TimeManager::CancelTimer(int timerId)
     }
 }
 
-void TimeManager::Stop() 
+void TimeManager::stopTimer() 
 {
     {
         std::lock_guard<std::mutex> lock(mutex);

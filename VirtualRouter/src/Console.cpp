@@ -1,5 +1,5 @@
 #include <Console.h>
-
+#include <iostream>
 
 // Constructor for Console class
 Console::Console() : Configs() {}
@@ -22,7 +22,7 @@ void Console::clearLineAfterCursor()
 {
     for (int ch = 0; maxCommandLength < ch; ch++) 
     {
-        cout << " "; 
+        std::cout << " "; 
     }
 }
 
@@ -464,7 +464,7 @@ std::string Console::input()
     bool ctrlPressed = false; 
 
     int cursorPos = 0; 
-    string input;
+    std::string input;
 
     // Process the next line input by removing the last character
     nextLine = nextLine.substr(0, nextLine.size() - 1);
@@ -476,8 +476,8 @@ std::string Console::input()
         {
             input.insert(cursorPos, 1, in);
             ++cursorPos;
-            cout << in;
-            cout << input.substr(cursorPos); 
+            std::cout << in;
+            std::cout << input.substr(cursorPos); 
             moveCursorLeft(input.length() - cursorPos - 1); 
         }
     }
@@ -498,7 +498,7 @@ std::string Console::input()
             switch (hInput) {
                 case '\x3f':
                     {
-                        cout << "?";
+                        std::cout << "?";
                         return input + "?";
                     }
                 case '\x09':
@@ -524,9 +524,9 @@ std::string Console::input()
                         input.erase(cursorPos, 1);
                         int line = getCursorPosition().row;
                         int siz = input.substr(cursorPos).size();
-                        cout << "\33[s"; 
-                        cout << input.substr(cursorPos) << " "; 
-                        cout << "\33[u";
+                        std::cout << "\33[s"; 
+                        std::cout << input.substr(cursorPos) << " "; 
+                        std::cout << "\33[u";
                     }
                     break;
                 case '\x7e':
@@ -535,9 +535,9 @@ std::string Console::input()
                         input.erase(cursorPos, 1);
                         int siz = input.substr(cursorPos).size();
                         int line = getCursorPosition().row;
-                        cout << "\33[s";
-                        cout << input.substr(cursorPos) << " ";
-                        cout << "\33[u";
+                        std::cout << "\33[s";
+                        std::cout << input.substr(cursorPos) << " ";
+                        std::cout << "\33[u";
                     }
                     break;
                 case '\x1b':
@@ -653,7 +653,7 @@ std::string Console::input()
                         }
                         if (insert && cursorPos != input.size())
                         {
-                            cout << hInput;
+                            std::cout << hInput;
                             cursorPos++; 
                             input[cursorPos] = hInput; 
                         } 
@@ -661,11 +661,11 @@ std::string Console::input()
                         {
                             input.insert(cursorPos, 1, hInput); 
                             ++cursorPos;
-                            cout << hInput;
-                            string str1 = input.substr(cursorPos);
-                            cout << "\33[s";
+                            std::cout << hInput;
+                            std::string str1 = input.substr(cursorPos);
+                            std::cout << "\33[s";
                             printString(str1);
-                            cout << "\33[u";
+                            std::cout << "\33[u";
                             if (isEnd) 
                             {
                                 moveCursorRight(1);
@@ -674,7 +674,7 @@ std::string Console::input()
                     }
                     break;
             }
-            cout.flush();
+            std::cout.flush();
         }
     }
     return input; 
@@ -706,7 +706,7 @@ std::string Console::getHistory(bool& his)
     return history[historyIndex];
 }
 
-void Console::clearCurrentLine(string& input, string& nextLine) 
+void Console::clearCurrentLine(std::string& input, std::string& nextLine) 
 {
 #ifdef _WIN32
     // For Windows systems
@@ -756,13 +756,13 @@ void Console::clearCurrentLine(string& input, string& nextLine)
     {
         if (getCursorPosition().row != 0) {
             moveCursorLeft(1); 
-            cout << " "; 
+            std::cout << " "; 
             moveCursorLeft(1); 
         } 
         else 
         {
             moveCursorLeft(1); 
-            cout << " "; 
+            std::cout << " "; 
         }
     }
     cursorPos = 0; // Reset cursor position to start
@@ -770,17 +770,17 @@ void Console::clearCurrentLine(string& input, string& nextLine)
     // Print the new line content
     for (char ch : nextLine) 
     {
-        cout << ch; 
+        std::cout << ch; 
         cursorPos++; 
     }
 #endif
 }
 
-void Console::printString(string& string) 
+void Console::printString(std::string& string) 
 {
     // Print each character in the provided string
     for (char ch : string) 
     {
-        cout << ch; 
+        std::cout << ch; 
     }
 }

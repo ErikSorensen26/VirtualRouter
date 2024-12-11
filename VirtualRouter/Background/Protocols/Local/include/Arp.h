@@ -6,80 +6,58 @@
 #include <Encapsulation.h>
 #include <RoutingTable.h>
 #include <mutex>
-#include <thread>
 #include <chrono>
-#include <time.h>
-#include <map>
-#include <condition_variable>
-#include <functional> 
-
-using namespace std;
 
 // Declares interface class
 class Interface;
 
 namespace Protocol {
+    struct ArpCacheEntry {
+        ByteString macAddress;
+        std::chrono::steady_clock::time_point expiryTime;
+    };
 
     // ARP class for handling ARP requests and replies
     class Arp {
-    private:
-        std::map<std::string, std::atomic<bool>> replyStatus;
-        std::mutex replyStatusMutex;
-
     public:
-
-        struct ArpCacheEntry {
-            std::string macAddress;
-            std::chrono::steady_clock::time_point expiryTime;
-        };
 
         // Constructor that takes a reference to the current interface
         Arp(Interface& CurrentInterface);
+        ~Arp() = default;
     
-        // Method to create an ARP request packet
-        PacketInfo ArpRequest(string& currentMac, string& ip, string targetIp);
-        
-        // Method for recieving ARP reply
-        void RecieveReply(const arpHeader recievedReply);
+        // Method to equeue a packet for ARP resolution and send once resolved
+        void resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend);
 
-        // Method to check for reply
-        bool checkForReply(const string& targetIp);
-    
-        // Method to create an ARP reply packet
-        PacketInfo ArpReply(string& currentMac, string& targetmac, string& ip, string& targetIp);
-    
-        // Method to send an ARP request
-        void sendRequest(std::string targetIp, std::condition_variable* externalCV = nullptr, std::mutex* externalMutex = nullptr);
+        // Method to receive an ARP reply
+        void receiveReply(const ArpHeader& recievedReply);
 
-        // Method to reply to arp request
-        void sendReply(string targetMac, string targetIp);
+        // Methods to check if MAC is known and to get MAC
+        bool isMacKnown(const ByteString& ip);
+        ByteString getMac(const ByteString& ip);
+        PacketInfo arpReply(ByteString& currentMac, ByteString& targetMac, ByteString& ip, ByteString& targetIp);
+        void sendReply(ByteString targetMac, ByteString targetIp);
+        PacketInfo arpRequest(ByteString& currentMac, ByteString& ip, ByteString targetIp); 
+        void sendRequest(const ByteString& targetIp);
 
-        // Methos to resolve an arp request on pause
-        void resolveAndWait(const std::string& targetIp, std::condition_variable& externalCV, std::mutex& externalMutex);
-    
-        // Public member for creating ARP requests
-        PacketInfo createArpRequest;
-    
-        // Mutex for synchronizing access to ARP-related resources
-        std::mutex arpMutex;
-    
     private:
-
-        std::unordered_map<std::string, ArpCacheEntry> arpCache;
+        
+        // ARP cache: Maps IP to MAC and expiry time
+        std::unordered_map<ByteString, ArpCacheEntry, std::hash<ByteString>, std::equal_to<ByteString>> arpCache;
         std::mutex arpCacheMutex;
 
-        std::map<std::string, std::string> pendingRequests;
-        std::mutex replyMutex;
+        // Pending ARP requests: Tracks ongoing ARP requests
+        std::unordered_map<ByteString, bool, std::hash<ByteString>, std::equal_to<ByteString>> pendingRequests;
         std::mutex requestMutex;
-        std::condition_variable cv;
 
-        map<std::string, arpHeader> pendingReplies;
-    
-        // Variable for storing additional ARP-related data
-        Variable variable;
-    
-        // Pointer to the interface associated with this ARP instance
+        // Reply status: Indicates if a reply has been received for an IP
+        std::unordered_map<ByteString, std::shared_ptr<std::atomic<bool>>, std::hash<ByteString>, std::equal_to<ByteString>> replyStatus;
+        std::mutex replyStatusMutex;
+
+        // Queues of packets waiting for ARP resolution, keyed by IP
+        std::unordered_map<ByteString, std::queue<PacketInfo>, std::hash<ByteString>, std::equal_to<ByteString>> packetQueuePerIp;
+        std::mutex packetQueueMutex;
+
+        // Reference to the Interface for 
         Interface* currentInterface;
     };
-
 }

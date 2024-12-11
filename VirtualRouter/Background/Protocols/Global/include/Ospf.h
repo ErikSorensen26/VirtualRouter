@@ -3,8 +3,6 @@
 #include <map>
 #include <memory>
 
-using namespace std;
-
 namespace Protocol {
 class Ospf {
 public:
@@ -13,5 +11,5 @@ private:
 };
 }
 
-extern Protocol::Ospf* CurrentOspf;
-extern map<int, std::shared_ptr<Protocol::Ospf>> OspfList;
+extern Protocol::Ospf* currentOspf;
+extern std::map<int, std::shared_ptr<Protocol::Ospf>> ospfList;

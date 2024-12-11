@@ -1,11 +1,9 @@
 #pragma once
-#include <iostream>
-#include <fstream>
 #include <pcap.h>
 #include <string>
-#include <iomanip>
 #include <mutex>
 #include <Functions.h>
+#include <ByteString.hpp>
 
 #include "Que.h"
 
@@ -26,10 +24,8 @@ public:
     void stopSnif();
 
     // Packet que
-    RingBuffer<std::string> packetQueue;
+    RingBuffer<ByteString> packetQueue;
 private:
-    std::string localMac;
-
     pcap_t* pcap_handle;
     bpf_u_int32 subnet;
 

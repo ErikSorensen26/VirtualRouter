@@ -2,7 +2,6 @@
 
 #include <string>
 #include <mutex>
-#include <memory>
 
 #define DEFAULT_HOSTNAME "router"
 
@@ -14,8 +13,8 @@ public:
         return instance;
     }
     
-    std::string& Hostname() { return protectedValue<std::string>(hostname, hostnameMutex); }
-    bool& IPv6Enabled() { return protectedValue<bool>(ipv6Enabled, ipv6EnabledMutex); }
+    std::string& getHostname() { return ProtectedValue<std::string>(hostname, hostnameMutex); }
+    bool& isIPv6Enabled() { return ProtectedValue<bool>(ipv6Enabled, ipv6EnabledMutex); }
 
     Global(const Global&) = delete;
     Global& operator=(const Global&) = delete;
@@ -24,7 +23,7 @@ private:
     ~Global() = default;
 
     template <typename T>
-    T& protectedValue(T& value, std::mutex& mxt)
+    T& ProtectedValue(T& value, std::mutex& mxt)
     {
         mxt.lock(); // Manually lock for returning reference
 

@@ -208,20 +208,16 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/PacketStructure.h \
  /usr/include/c++/13/any \
  /home/erik/VirtualRouter/VirtualRouter/Common/Functions.h \
+ /home/erik/VirtualRouter/VirtualRouter/Common/ByteString.hpp \
+ /usr/include/c++/13/cstring /usr/include/string.h /usr/include/strings.h \
+ /usr/include/c++/13/algorithm /usr/include/c++/13/bits/stl_algo.h \
+ /usr/include/c++/13/bits/algorithmfwd.h \
+ /usr/include/c++/13/bits/stl_heap.h \
+ /usr/include/c++/13/bits/uniform_int_dist.h \
+ /usr/include/c++/13/bits/ranges_algo.h \
+ /usr/include/c++/13/pstl/glue_algorithm_defs.h \
  /usr/include/c++/13/iostream /usr/include/c++/13/istream \
- /usr/include/c++/13/bits/istream.tcc /usr/include/c++/13/bitset \
- /usr/include/c++/13/sstream /usr/include/c++/13/bits/sstream.tcc \
- /usr/include/c++/13/iomanip /usr/include/c++/13/locale \
- /usr/include/c++/13/bits/locale_facets_nonio.h /usr/include/c++/13/ctime \
- /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h \
- /usr/include/libintl.h /usr/include/c++/13/bits/codecvt.h \
- /usr/include/c++/13/bits/locale_facets_nonio.tcc \
- /usr/include/c++/13/bits/locale_conv.h \
- /usr/include/c++/13/bits/quoted_string.h /usr/include/c++/13/fstream \
- /usr/include/x86_64-linux-gnu/c++/13/bits/basic_file.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h \
- /usr/include/c++/13/bits/fstream.tcc /usr/include/c++/13/cmath \
+ /usr/include/c++/13/bits/istream.tcc /usr/include/c++/13/cmath \
  /usr/include/math.h /usr/include/x86_64-linux-gnu/bits/math-vector.h \
  /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h \
  /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h \
@@ -243,13 +239,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp
  /usr/include/c++/13/tr1/modified_bessel_func.tcc \
  /usr/include/c++/13/tr1/poly_hermite.tcc \
  /usr/include/c++/13/tr1/poly_laguerre.tcc \
- /usr/include/c++/13/tr1/riemann_zeta.tcc /usr/include/c++/13/random \
- /usr/include/c++/13/bits/random.h \
- /usr/include/c++/13/bits/uniform_int_dist.h \
- /usr/include/x86_64-linux-gnu/c++/13/bits/opt_random.h \
- /usr/include/c++/13/bits/random.tcc /usr/include/c++/13/numeric \
- /usr/include/c++/13/bits/stl_numeric.h \
- /usr/include/c++/13/pstl/glue_numeric_defs.h /usr/include/netinet/in.h \
+ /usr/include/c++/13/tr1/riemann_zeta.tcc /usr/include/netinet/in.h \
  /usr/include/x86_64-linux-gnu/sys/socket.h \
  /usr/include/x86_64-linux-gnu/bits/types/struct_iovec.h \
  /usr/include/x86_64-linux-gnu/bits/socket.h \
@@ -266,32 +256,21 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp
  /usr/include/x86_64-linux-gnu/asm/sockios.h \
  /usr/include/asm-generic/sockios.h \
  /usr/include/x86_64-linux-gnu/bits/types/struct_osockaddr.h \
- /usr/include/x86_64-linux-gnu/bits/in.h /usr/include/c++/13/algorithm \
- /usr/include/c++/13/bits/stl_algo.h \
- /usr/include/c++/13/bits/algorithmfwd.h \
- /usr/include/c++/13/bits/stl_heap.h \
- /usr/include/c++/13/bits/ranges_algo.h \
- /usr/include/c++/13/pstl/glue_algorithm_defs.h \
- /usr/include/c++/13/optional \
+ /usr/include/x86_64-linux-gnu/bits/in.h /usr/include/c++/13/optional \
  /usr/include/c++/13/bits/enable_special_members.h \
- /usr/include/c++/13/regex /usr/include/c++/13/stack \
- /usr/include/c++/13/deque /usr/include/c++/13/bits/stl_deque.h \
- /usr/include/c++/13/bits/deque.tcc /usr/include/c++/13/bits/stl_stack.h \
- /usr/include/c++/13/bits/std_function.h \
- /usr/include/c++/13/bits/regex_constants.h \
- /usr/include/c++/13/bits/regex_error.h \
- /usr/include/c++/13/bits/regex_automaton.h \
- /usr/include/c++/13/bits/regex_automaton.tcc \
- /usr/include/c++/13/bits/regex_scanner.h \
- /usr/include/c++/13/bits/regex_scanner.tcc \
- /usr/include/c++/13/bits/regex_compiler.h \
- /usr/include/c++/13/bits/regex_compiler.tcc \
- /usr/include/c++/13/bits/regex.h /usr/include/c++/13/bits/regex.tcc \
- /usr/include/c++/13/bits/regex_executor.h \
- /usr/include/c++/13/bits/regex_executor.tcc /usr/include/c++/13/chrono \
+ /usr/include/c++/13/ctime /usr/include/c++/13/chrono \
  /usr/include/c++/13/bits/chrono.h /usr/include/c++/13/ratio \
- /usr/include/c++/13/bits/parse_numbers.h \
- /usr/include/c++/13/bits/chrono_io.h /usr/include/c++/13/format \
+ /usr/include/c++/13/bits/parse_numbers.h /usr/include/c++/13/sstream \
+ /usr/include/c++/13/bits/sstream.tcc \
+ /usr/include/c++/13/bits/chrono_io.h /usr/include/c++/13/iomanip \
+ /usr/include/c++/13/locale \
+ /usr/include/c++/13/bits/locale_facets_nonio.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/time_members.h \
+ /usr/include/x86_64-linux-gnu/c++/13/bits/messages_members.h \
+ /usr/include/libintl.h /usr/include/c++/13/bits/codecvt.h \
+ /usr/include/c++/13/bits/locale_facets_nonio.tcc \
+ /usr/include/c++/13/bits/locale_conv.h \
+ /usr/include/c++/13/bits/quoted_string.h /usr/include/c++/13/format \
  /usr/include/c++/13/array /usr/include/c++/13/charconv \
  /usr/include/c++/13/span /usr/include/c++/13/variant \
  /usr/include/c++/13/mutex /usr/include/c++/13/bits/unique_lock.h \
@@ -302,7 +281,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp
  /usr/include/c++/13/bits/this_thread_sleep.h \
  /usr/include/x86_64-linux-gnu/sys/time.h /usr/include/semaphore.h \
  /usr/include/x86_64-linux-gnu/bits/semaphore.h \
- /usr/include/c++/13/condition_variable \
+ /usr/include/c++/13/condition_variable /usr/include/c++/13/shared_mutex \
  /home/erik/VirtualRouter/VirtualRouter/include/Interface.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Ingress.h \
  /usr/include/pcap.h /usr/include/pcap/pcap.h \
@@ -314,22 +293,27 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp
  /usr/include/x86_64-linux-gnu/bits/netdb.h /usr/include/arpa/inet.h \
  /usr/include/pcap/bpf.h /usr/include/pcap/dlt.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Que.h \
+ /usr/include/c++/13/queue /usr/include/c++/13/deque \
+ /usr/include/c++/13/bits/stl_deque.h /usr/include/c++/13/bits/deque.tcc \
+ /usr/include/c++/13/bits/stl_queue.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Egress.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Process.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Decapsulation.h \
- /usr/include/c++/13/cstring /usr/include/string.h /usr/include/strings.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/RoutingTable.h \
  /home/erik/VirtualRouter/VirtualRouter/include/Logger.h \
- /usr/include/c++/13/queue /usr/include/c++/13/bits/stl_queue.h \
- /usr/include/c++/13/functional /usr/include/c++/13/unordered_map \
+ /usr/include/c++/13/functional /usr/include/c++/13/bits/std_function.h \
+ /usr/include/c++/13/unordered_map \
  /usr/include/c++/13/bits/unordered_map.h \
  /usr/include/c++/13/bits/hashtable.h \
  /usr/include/c++/13/bits/hashtable_policy.h \
- /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/RoutingTable.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Encapsulation.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/Checksums.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Dhcp.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Global/include/Global.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Arp.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/Ethernet.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/include/IPPacket.h \
+ /home/erik/VirtualRouter/VirtualRouter/Background/Packet/include/ThreadPool.h \
+ /usr/include/c++/13/future /usr/include/c++/13/bits/atomic_futex.h \
  /home/erik/VirtualRouter/VirtualRouter/Background/Services/include/TimeManager.h \
  /home/erik/VirtualRouter/VirtualRouter/Common/Authentication.hpp \
  /usr/include/openssl/hmac.h /usr/include/openssl/macros.h \
@@ -348,4 +332,4 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp
  /usr/include/openssl/obj_mac.h /usr/include/openssl/asn1.h \
  /usr/include/openssl/asn1err.h /usr/include/openssl/objectserr.h \
  /usr/include/openssl/md5.h /usr/include/openssl/sha.h \
- /usr/include/openssl/des.h /usr/include/c++/13/shared_mutex
+ /usr/include/openssl/des.h

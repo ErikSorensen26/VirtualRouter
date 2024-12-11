@@ -1,6 +1,5 @@
 #include <Checksums.h>
 #include <Functions.h>
-
 #include <iostream>
 
 namespace Checksum
@@ -14,7 +13,7 @@ namespace Checksum
     }
 
     // Calculates the CRC32 checksum of the given string data
-    std::string Crc32(const std::string &data)
+    ByteString crc32(const ByteString &data)
     {
         // Predefined CRC32 table for fast calculations
         static const unsigned long crcTable[256] = {
@@ -58,7 +57,7 @@ namespace Checksum
 
         unsigned long crc32 = 0xFFFFFFFF;
         const unsigned char *byteBuf = reinterpret_cast<const unsigned char *>(data.data());
-        unsigned int bufLen = data.length();
+        unsigned int bufLen = data.size();
 
         // Perform CRC32 calculation
         for (unsigned int i = 0; i < bufLen; i++)
@@ -78,7 +77,7 @@ namespace Checksum
     }
 
     // Calculates a generic checksum over the given data
-    std::string CalculateChecksum(const uint16_t *data, size_t length)
+    std::string calculateChecksum(const uint16_t *data, size_t length)
     {
         uint32_t sum = 0;
 
@@ -111,7 +110,7 @@ namespace Checksum
     }
 
     // Calculates a protocol-specific checksum and updates the given data string
-    std::string CalculateProtocolChecksum(const std::string &data_str, int startIndex, int headerlength, int index, bool swap)
+    ByteString calculateProtocolChecksum(const ByteString &data_str, int startIndex, int headerlength, int index, bool swap)
     {
 
         // Convert string to vector of bytes
@@ -127,7 +126,7 @@ namespace Checksum
         std::reverse(data.begin(), data.end());
 
         // Calculate the checksum of the data
-        std::string checksum = CalculateChecksum(reinterpret_cast<const uint16_t *>(data.data()), data.size());
+        std::string checksum = calculateChecksum(reinterpret_cast<const uint16_t *>(data.data()), data.size());
 
         // Swap bytes if needed
         if (swap)
@@ -136,8 +135,7 @@ namespace Checksum
         }
 
         // Replace the checksum in the original string
-        std::string final_str = data_str.substr(startIndex, headerlength);
+        std::string final_str = data_str.substr(startIndex, headerlength).toString();
         return final_str.replace(index, 2, (Functions::hexToByte(checksum)));
     }
-
 }

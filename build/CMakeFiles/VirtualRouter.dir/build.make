@@ -279,10 +279,38 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cp
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cpp.s"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Arp.cpp -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cpp.s
 
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp
+
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.i"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp > CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.i
+
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.s"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.s
+
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp
+
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.i"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp > CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.i
+
+CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.s"
+	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.s
+
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.i: cmake_force
@@ -296,7 +324,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Rip.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Rip.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.i: cmake_force
@@ -310,7 +338,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.c
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.i: cmake_force
@@ -324,7 +352,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.cpp.i: cmake_force
@@ -338,7 +366,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Bgp.c
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Global/src/SaveToBinary.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Global/src/SaveToBinary.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cpp.i: cmake_force
@@ -352,7 +380,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/SaveToBinary.cp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Global/src/Global.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Global/src/Global.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.i: cmake_force
@@ -366,7 +394,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/Global.cpp.s: c
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Global/src/RoutingTable.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Global/src/RoutingTable.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cpp.i: cmake_force
@@ -380,7 +408,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Global/src/RoutingTable.cp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Services/src/Time.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Services/src/Time.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.i: cmake_force
@@ -394,7 +422,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/Time.cpp.s: c
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Background/Services/src/TimeManager.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Background/Services/src/TimeManager.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.cpp.i: cmake_force
@@ -408,7 +436,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Services/src/TimeManager.c
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Common/pugixml.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Common/pugixml.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.i: cmake_force
@@ -422,7 +450,7 @@ CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/pugixml.cpp.s: cmake_force
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o: CMakeFiles/VirtualRouter.dir/flags.make
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o: /home/erik/VirtualRouter/VirtualRouter/Common/Functions.cpp
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o: CMakeFiles/VirtualRouter.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o"
 	/usr/bin/g++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o -MF CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o.d -o CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.o -c /home/erik/VirtualRouter/VirtualRouter/Common/Functions.cpp
 
 CMakeFiles/VirtualRouter.dir/VirtualRouter/Common/Functions.cpp.i: cmake_force
@@ -450,6 +478,8 @@ VirtualRouter_OBJECTS = \
 "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Process.cpp.o" \
 "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.o" \
 "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cpp.o" \
+"CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o" \
+"CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o" \
 "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o" \
 "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o" \
 "CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o" \
@@ -480,6 +510,8 @@ VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/
 VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Packet/src/Process.cpp.o
 VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.o
 VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Arp.cpp.o
+VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o
+VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o
 VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Eigrp.cpp.o
 VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Rip.cpp.o
 VirtualRouter: CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Global/src/Ospf.cpp.o
@@ -497,7 +529,7 @@ VirtualRouter: /usr/lib/x86_64-linux-gnu/libcrypto.so
 VirtualRouter: /usr/lib/x86_64-linux-gnu/libssl.so
 VirtualRouter: /usr/lib/x86_64-linux-gnu/libcrypto.so
 VirtualRouter: CMakeFiles/VirtualRouter.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Linking CXX executable VirtualRouter"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/erik/VirtualRouter/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Linking CXX executable VirtualRouter"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/VirtualRouter.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

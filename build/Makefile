@@ -623,6 +623,54 @@ VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.s
 .PHONY : VirtualRouter/Background/Protocols/Local/src/Dhcp.cpp.s
 
+VirtualRouter/Background/Protocols/Local/src/Ethernet.o: VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Ethernet.o
+
+# target to build an object file
+VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.o
+
+VirtualRouter/Background/Protocols/Local/src/Ethernet.i: VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Ethernet.i
+
+# target to preprocess a source file
+VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.i
+
+VirtualRouter/Background/Protocols/Local/src/Ethernet.s: VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Ethernet.s
+
+# target to generate assembly for a file
+VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/Ethernet.cpp.s
+
+VirtualRouter/Background/Protocols/Local/src/IPPacket.o: VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/IPPacket.o
+
+# target to build an object file
+VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o
+.PHONY : VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.o
+
+VirtualRouter/Background/Protocols/Local/src/IPPacket.i: VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/IPPacket.i
+
+# target to preprocess a source file
+VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.i
+.PHONY : VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.i
+
+VirtualRouter/Background/Protocols/Local/src/IPPacket.s: VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/IPPacket.s
+
+# target to generate assembly for a file
+VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/VirtualRouter.dir/build.make CMakeFiles/VirtualRouter.dir/VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.s
+.PHONY : VirtualRouter/Background/Protocols/Local/src/IPPacket.cpp.s
+
 VirtualRouter/Background/Services/src/Time.o: VirtualRouter/Background/Services/src/Time.cpp.o
 .PHONY : VirtualRouter/Background/Services/src/Time.o
 
@@ -955,6 +1003,12 @@ help:
 	@echo "... VirtualRouter/Background/Protocols/Local/src/Dhcp.o"
 	@echo "... VirtualRouter/Background/Protocols/Local/src/Dhcp.i"
 	@echo "... VirtualRouter/Background/Protocols/Local/src/Dhcp.s"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Ethernet.o"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Ethernet.i"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/Ethernet.s"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/IPPacket.o"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/IPPacket.i"
+	@echo "... VirtualRouter/Background/Protocols/Local/src/IPPacket.s"
 	@echo "... VirtualRouter/Background/Services/src/Time.o"
 	@echo "... VirtualRouter/Background/Services/src/Time.i"
 	@echo "... VirtualRouter/Background/Services/src/Time.s"

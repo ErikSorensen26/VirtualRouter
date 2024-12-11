@@ -44,11 +44,13 @@ Logger::~Logger()
 }
 
 // Initialization
-void Logger::initialize(bool start)
+void Logger::initialize(bool start, bool isolateMode)
 {
     if (!start) {
         return;
     }
+
+    isolatedMode = isolateMode;
 
     nlohmann::json configJson;
     std::string configPath = CONFIG_FILE;
@@ -255,8 +257,8 @@ std::string Logger::getCurrentTimestamp()
 
 // Implementation of LogStream methods
 
-LogStream::LogStream(Logger& logger, LogLevel level)
-    : logger_(logger), level_(level) {}
+LogStream::LogStream(Logger& logger, LogLevel level, bool isFiltered)
+    : logger_(logger), level_(level), filtered(isFiltered) {}
 
 LogStream::~LogStream() {
     if (!logger_.running) { return; }
@@ -271,7 +273,10 @@ LogStream::~LogStream() {
     std::string formattedMsg = "[" + logger_.getCurrentTimestamp() + "] [" + logger_.getLogLevelString(level_) + "] " + msg + "\n";
     
     // Enqueue the formatted message with its level
-    logger_.enqueue(formattedMsg, level_);
+    if (!filtered) 
+    {
+        logger_.enqueue(formattedMsg, level_);
+    }
 }
 
 LogStream& LogStream::operator<<(std::ostream& (*manip)(std::ostream&))
@@ -282,22 +287,38 @@ LogStream& LogStream::operator<<(std::ostream& (*manip)(std::ostream&))
 
 // Logger level methods
 
-LogStream Logger::info()
+LogStream Logger::info(bool isolate)
 {
+    if (isolatedMode)
+    {
+        return LogStream(*this, LogLevel::INFO, !isolate);
+    }
     return LogStream(*this, LogLevel::INFO);
 }
 
-LogStream Logger::debug()
+LogStream Logger::debug(bool isolate)
 {
+    if (isolatedMode)
+    {
+        return LogStream(*this, LogLevel::DEBUG, !isolate);
+    }
     return LogStream(*this, LogLevel::DEBUG);
 }
 
-LogStream Logger::warn()
+LogStream Logger::warn(bool isolate)
 {
+    if (isolatedMode)
+    {
+        return LogStream(*this, LogLevel::WARN, !isolate);
+    }
     return LogStream(*this, LogLevel::WARN);
 }
 
-LogStream Logger::error()
+LogStream Logger::error(bool isolate)
 {
+    if (isolatedMode)
+    {
+        return LogStream(*this, LogLevel::ERROR, !isolate);
+    }
     return LogStream(*this, LogLevel::ERROR);
 }
