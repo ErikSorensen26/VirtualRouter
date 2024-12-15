@@ -1,31 +1,41 @@
 #include <RoutingTable.h>
 
-void RoutingTable::updateEigrp(const Eigrp route, AddressFamily af)
+void RoutingTable::addEigrp(const Eigrp route, AddressFamily af)
 {
-    std::lock_guard<std::mutex> lock(tableMutex);
-
     // Create key in "network/mask" format
     ByteString key = route.network + ByteString("/") + ByteString(std::to_string(route.mask));
-    auto& existingRoute = eigrp[key];
+    auto existingRoute = getEigrpRoute(route.network, route.mask, af);
+    std::lock_guard<std::mutex> lock(tableMutex);
 
-    if (existingRoute.nextHops.empty())
+    auto it = eigrp.find(key);
+    if (!existingRoute)
     {
-        existingRoute = route;
+        // New route added to the eigrp routing table
+        eigrp[key] = route;
     }
     else
     {
-        // Add new nextHop if not already present
-        if (std::find(existingRoute.nextHops.begin(), existingRoute.nextHops.end(), route.nextHop) == existingRoute.nextHops.end())
-        {
-            existingRoute.nextHops.push_back(route.nextHop);
-        }
+        auto& existingRoute = it->second;
 
-        // Update all relevant fields
-        existingRoute.metric = route.metric;
-        existingRoute.feasibleDistance = route.feasibleDistance;
-        existingRoute.reportedDistance = route.reportedDistance;
-        existingRoute.routeType = route.routeType;
-        existingRoute.interface = route.interface;
+        // Check if the feasible distance or metric has changed
+        bool metricChanged = existingRoute.metric != route.metric;
+        bool fdChanged = existingRoute.feasibleDistance != route.feasibleDistance;
+
+        if (metricChanged || fdChanged)
+        {
+            // Update all relevant fields
+            existingRoute.metric = route.metric;
+            existingRoute.feasibleDistance = route.feasibleDistance;
+            existingRoute.reportedDistance = route.reportedDistance;
+            existingRoute.routeType = route.routeType;
+            existingRoute.interface = route.interface;
+
+            // Add new nextHop if not already present
+            if (std::find(existingRoute.nextHops.begin(), existingRoute.nextHops.end(), route.nextHop) == existingRoute.nextHops.end())
+            {
+                existingRoute.nextHops.push_back(route.nextHop);
+            }
+        }
     }
 }
 // void RoutingTable::AddEigrp(const Eigrp& route)
@@ -57,12 +67,12 @@ void RoutingTable::updateEigrp(const Eigrp route, AddressFamily af)
 //     }
 // }
 
-void RoutingTable::addEigrp(const Eigrp route, AddressFamily af)
-{
-    std::lock_guard<std::mutex> lock(tableMutex);
-    ByteString key = route.network + "/" + std::to_string(route.mask);
-    eigrp[key] = route;
-}
+// void RoutingTable::addEigrp(const Eigrp route, AddressFamily af)
+// {
+//     std::lock_guard<std::mutex> lock(tableMutex);
+//     ByteString key = route.network + "/" + std::to_string(route.mask);
+//     eigrp[key] = route;
+// }
 
 void RoutingTable::removeEigrp(const ByteString& network, int mask, AddressFamily af)
 {
@@ -105,7 +115,7 @@ std::vector<RoutingTable::Eigrp> RoutingTable::getAllEigrpRoutes(AddressFamily a
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     std::vector<Eigrp> routes;
-    for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp : eigrpIPv6)
+    for (const auto [key, route] : af == AddressFamily::IPv4 ? eigrp : eigrpIPv6)
     {
         routes.push_back(route);
     }

@@ -1,1 +1,0 @@
-/usr/bin/g++ -g CMakeFiles/CommandParser.dir/Utils/src/CommandParser.cpp.o -o CommandParser  -lpthread -lpcap /usr/lib/x86_64-linux-gnu/libz.so 

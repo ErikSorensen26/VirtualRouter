@@ -17,7 +17,7 @@ namespace Protocol
             ip.protocol = Variable::IP::eigrp;
             ip.hopLimit = Functions::numToByte(hopLimit, 1);
             ip.sourceAddress = currentInterface.Get().ipv6Address;
-            ip.destinationAddress = Variable::Multicast::Eigrp::addressv6;
+            ip.destinationAddress = destIp;
             packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
             currentInterface.ethernet->setEthernetHeader(packetInfo, destIp, Variable::Ethernet::ipv6);
         }
@@ -37,7 +37,7 @@ namespace Protocol
             ip.protocol = Variable::IP::eigrp;
             ip.checksum = ByteString(2, 0x00);
             ip.sourceAddress = currentInterface.Get().ipAddress;
-            ip.destinationAddress = Variable::Multicast::Eigrp::address;
+            ip.destinationAddress = destIp;
             packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
             currentInterface.ethernet->setEthernetHeader(packetInfo, destIp, Variable::Ethernet::ipv4);
         }

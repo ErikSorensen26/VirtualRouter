@@ -886,30 +886,41 @@ bool Terminal::isMACAddress(const std::string& macAddress) {
     return std::regex_match(macAddress, macRegex);
 }
 
-enum InterfaceMode
+InterfaceType Terminal::getInterfaceType(std::string& type)
 {
-	
-};
+    if (type == "Dialer") {return InterfaceType::DIALER;}
+    else if (type == "Ethernet") {return InterfaceType::ETHERNET;}
+    else if (type == "FastEthernet") {return InterfaceType::FAST_ETHERNET;}
+    else if (type == "GigabitEthernet") {return InterfaceType::GIGABIT_ETHERNET;}
+    else if (type == "Loopback") {return InterfaceType::LOOPBACK;}
+    else if (type == "Portchannel") {return InterfaceType::PORT_CHANNEL;}
+    else if (type == "Tunnel") {return InterfaceType::TUNNEL;}
+    else if (type == "Virtual-Template") {return InterfaceType::VIRTUAL_TEMPLATE;}
+    else if (type == "Vlan") {return InterfaceType::VLAN;}
+    Logger::getInstance().warn() << "Undefined Interface type detected: " << type << std::endl;
+    return InterfaceType::UNDEFINED;
+}
 
 void Terminal::configureInterfaceMode(std::string& type) {
-	if (type == "Dialer") {changeMode(mode.dialer); currentSubMode = type;}
-	else if (type == "Ethernet") {changeMode(mode.ethernet); activeInterfaces = &interfaceList["EthernetList"]; currentSubMode = type;}
-	else if (type == "FastEthernet") {changeMode(mode.fastEthernet); activeInterfaces = &interfaceList["FastEthernetList"]; currentSubMode = type;}
-	else if (type == "GigabitEthernet") {changeMode(mode.gigabitEthernet); activeInterfaces = &interfaceList["GigabitList"]; currentSubMode = type;}
-	else if (type == "Loopback") {changeMode(mode.loopback); activeInterfaces = &interfaceList["LoopbackList"]; currentSubMode = type;}
-	else if (type == "Portchannel") {changeMode(mode.portchannel); activeInterfaces = &interfaceList["PortchannelList"]; currentSubMode = type;}
-	else if (type == "Tunnel") {changeMode(mode.tunnel); activeInterfaces = &interfaceList["TunnelList"]; currentSubMode = type;}
-	else if (type == "Virtual-Template") {changeMode(mode.virtualTemplate); activeInterfaces = &interfaceList["VirtualTemplateList"]; currentSubMode = type;}
-	else if (type == "Vlan") {changeMode(mode.vlan); activeInterfaces = &interfaceList["VlanList"]; currentSubMode = type;}
-	workingDirectory = workingDirectory[0][type];
+    std::shared_lock<std::shared_mutex> lock(interfaceListMutex);
+    if (type == "Dialer") {changeMode(mode.dialer); currentSubMode = type;}
+    else if (type == "Ethernet") {changeMode(mode.ethernet); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    else if (type == "FastEthernet") {changeMode(mode.fastEthernet); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    else if (type == "GigabitEthernet") {changeMode(mode.gigabitEthernet); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    else if (type == "Loopback") {changeMode(mode.loopback); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    else if (type == "Portchannel") {changeMode(mode.portchannel); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    else if (type == "Tunnel") {changeMode(mode.tunnel); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    else if (type == "Virtual-Template") {changeMode(mode.virtualTemplate); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    else if (type == "Vlan") {changeMode(mode.vlan); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
+    workingDirectory = workingDirectory[0][type];
 }
 
 void Terminal::configureRoutingMode(RoutingMode type) {
-	if (type == RoutingMode::BGP) {changeMode(mode.bgp); currentSubMode = "bgp";} 
-	else if (type == RoutingMode::EIGRP_CLASSIC) {changeMode(mode.eigrp_classic); currentSubMode = "eigrp_classic";} 
-	else if (type == RoutingMode::EIGRP_NAMED) {changeMode(mode.eigrp_named); currentSubMode = "eigrp_named";} 
-	else if (type == RoutingMode::OSPF) {changeMode(mode.ospf); currentSubMode = "ospf";}
-	else if (type == RoutingMode::RIP) {changeMode(mode.rip); currentSubMode = "rip";}
-	workingDirectory = workingDirectory[0][currentSubMode];
+    if (type == RoutingMode::BGP) {changeMode(mode.bgp); currentSubMode = "bgp";} 
+    else if (type == RoutingMode::EIGRP_CLASSIC) {changeMode(mode.eigrp_classic); currentSubMode = "eigrp_classic";} 
+    else if (type == RoutingMode::EIGRP_NAMED) {changeMode(mode.eigrp_named); currentSubMode = "eigrp_named";} 
+    else if (type == RoutingMode::OSPF) {changeMode(mode.ospf); currentSubMode = "ospf";}
+    else if (type == RoutingMode::RIP) {changeMode(mode.rip); currentSubMode = "rip";}
+    workingDirectory = workingDirectory[0][currentSubMode];
 }
 

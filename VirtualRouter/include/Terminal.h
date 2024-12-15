@@ -78,6 +78,7 @@ private:
 
     // Router Modes
     void configureInterfaceMode(std::string& type);
+    InterfaceType getInterfaceType(std::string& type);
     void configureRoutingMode(RoutingMode type);
 
     // threads

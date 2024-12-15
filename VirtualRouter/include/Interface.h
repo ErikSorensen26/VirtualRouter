@@ -18,6 +18,20 @@
 #include <mutex>
 #include <memory>
 
+enum class InterfaceType
+{
+    UNDEFINED,
+    DIALER,
+    ETHERNET,
+    FAST_ETHERNET,
+    GIGABIT_ETHERNET,
+    LOOPBACK,
+    PORT_CHANNEL,
+    TUNNEL,
+    VIRTUAL_TEMPLATE,
+    VLAN
+};
+
 namespace Protocol {
     class Ethernet;
     class IPPacket;
@@ -31,13 +45,13 @@ struct ipInfo {
     char id;
     double bandwidth{1000000};
     double delay{10};
-    ByteString ipAddress;
-    ByteString ipv6Address;
-    ByteString macAddress;
-    int mask;
-    int v6mask;
-    int mtu;
-    int ipv6FlowLabel;
+    ByteString ipAddress{};
+    ByteString ipv6Address{};
+    ByteString macAddress{};
+    int mask{0};
+    int v6mask{0};
+    int mtu{1500};
+    int ipv6FlowLabel{0};
 };
 
 // Interface class definition
@@ -137,4 +151,5 @@ private:
 
 // External declarations
 extern Interface* currentInterface; // Pointer to the current Interface object
-extern std::map<std::string, std::map<int, std::shared_ptr<Interface>>> interfaceList; // Map to store Interface objects by string key and integer ID
+extern std::shared_mutex interfaceListMutex;
+extern std::map<InterfaceType, std::map<int, std::shared_ptr<Interface>>> interfaceList; // Map to store Interface objects by string key and integer ID

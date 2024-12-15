@@ -1,1 +1,0 @@
-/usr/bin/g++ -g CMakeFiles/LogServer.dir/Utils/src/LogServer.cpp.o -o LogServer  -lpthread -lpcap /usr/lib/x86_64-linux-gnu/libz.so 

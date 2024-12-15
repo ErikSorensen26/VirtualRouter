@@ -1,1 +1,0 @@
-/usr/bin/g++ -g CMakeFiles/EigrpTest.dir/Tests/TestEigrp.cpp.o -o EigrpTest  -lpthread -lpcap /usr/lib/x86_64-linux-gnu/libcrypto.so /usr/lib/x86_64-linux-gnu/libssl.so /usr/lib/x86_64-linux-gnu/libgtest_main.a /usr/lib/x86_64-linux-gnu/libgtest.a /usr/lib/x86_64-linux-gnu/libcrypto.so 

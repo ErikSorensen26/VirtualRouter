@@ -166,6 +166,7 @@ void Terminal::executeCommand(std::string &command)
 				configureInterfaceMode(type);
 				if (activeInterfaces->count(interfaceID) == 0)
 				{
+					std::lock_guard<std::shared_mutex> lock(interfaceListMutex);
 					(*activeInterfaces)[interfaceID] = std::make_shared<Interface>(intType, 1024, 1024, mac, interfaceID, isDebugModeEnabled);
 				}
 				currentInterface = activeInterfaces->at(interfaceID).get();
@@ -183,6 +184,7 @@ void Terminal::executeCommand(std::string &command)
 					}
 					if (Functions::isDecimal(ID))
 					{
+						std::lock_guard<std::shared_mutex> lock(globalEigrpMutex);
 						*currentCommunicationMode = EigrpConfigs::CommunicationMode::MULTICAST;
 						auto eigrpAs = eigrpList[ID]->autonomousSystems.find(routingProtocolID);
 						if (eigrpAs == eigrpList[ID]->autonomousSystems.end())

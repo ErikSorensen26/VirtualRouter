@@ -240,4 +240,5 @@ void Interface::stateChangeV6()
 Interface* currentInterface{};
 
 // Map to store Interface objects by string key and integer ID
-std::map<std::string, std::map<int, std::shared_ptr<Interface>>> interfaceList;
+std::shared_mutex interfaceListMutex;
+std::map<InterfaceType, std::map<int, std::shared_ptr<Interface>>> interfaceList;
