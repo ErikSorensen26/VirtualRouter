@@ -324,8 +324,7 @@ namespace Functions {
 
     void printVector(const std::vector<std::string>& vec) {
         for (const auto& element : vec) {
-
-            std::cout << std::string(element) << std::endl;
+            //std::cout << std::string(element) << std::endl;
         }
     }
 

@@ -2,12 +2,8 @@
 #include <fstream>
 #include <regex>
 
-#ifdef _WIN32
-#include <Windows.h>
-#elif __linux__
 #include <X11/Xlib.h>
 #include <X11/extensions/xtestconst.h>
-#endif
 
 /**
  * @brief Constructor for the Terminal class.
@@ -115,323 +111,443 @@ void Terminal::handleInput() {
     std::cout << std::endl;
 }
 
-std::string Terminal::normalizeCommand(const std::string& inputCommand) {
-    // Return an empty string if the input command is empty
-    if (inputCommand.empty()) {
-        return "";
+void Terminal::initializeProcessingState()
+{
+    currentDirectory         = workingDirectory;
+    isNextWordHelpRequested  = false;
+    isRunning                = true;
+    isMatchSuccessful        = false;
+    isHelpModeActive         = false;
+    endOfCommand             = false;
+    isLineBasedInput         = false;
+}
+
+bool Terminal::detectHelpTriggers(const std::vector<std::string>& parsedWords)
+{
+    return std::any_of(parsedWords.begin(), parsedWords.end(),
+        [](const std::string& word) 
+        { 
+            return word == "?" || word == "vk_tab"; 
+        }
+    );
+}
+
+bool Terminal::isDoCommand(const std::vector<std::string>& parsedWords)
+{
+    if (!parsedWords.empty()) return false;
+    if (parsedWords[0] != "do" || parsedWords.size() < 2) return false;
+
+    // Avoid "exit and conf"
+    if (parsedWords[1] == "exit" || parsedWords[1].rfind("conf", 0) == 0) return false;
+
+    // Must not already be in userExec or privilegedExec
+    return currentMode != mode.userExec && currentMode != mode.privilegedExec;
+}
+
+std::string Terminal::executeDoCommand(std::string remainingCommand)
+{
+    isGlobalCommandExecution = true;
+
+    // Save current state
+    std::string previousMode = currentMode;
+    json previousCommandTree = workingDirectory;
+    nlohmann::ordered_json* prevModeSchema = modeSchema;
+    nlohmann::ordered_json* previousConfigNode = configNode;
+
+    // Switch to privileged mode and execute
+    changeMode(mode.privilegedExec, true);
+    executeCommand(remainingCommand);
+
+    // Restore old mode / working directory
+    changeMode(previousMode, true);
+    configNode       = previousConfigNode;
+    workingDirectory = previousCommandTree;
+    modeSchema       = prevModeSchema;
+
+    // Return "error" to signify no further processing
+    return "error";
+}
+
+void Terminal::appendLineBasedCommand(const std::vector<std::string>& parsedWords, int currentIndex, std::string& fullyFormattedCommand, std::string& volatileCommand)
+{
+    fullyFormattedCommand += " " + parsedWords[currentIndex];
+    volatileCommand       += " " + parsedWords[currentIndex];
+}
+
+void Terminal::processNonLineBasedWord(std::string& word, std::vector<com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volitileCommand, const std::string& inputCommand, bool& isFirstIteration)
+{
+    // Reset matching states
+    isPatternMatching = false;
+    isPatternMatchEnd = false;
+
+    // if processing has already failed, baile out
+    if (!isRunning) return;
+
+    // Grab the current list of available commands
+    std::vector<com> availableCommands = getAvailableCommands(currentDirectory, word, isFirstIteration);
+    isFirstIteration = false;
+
+    // Handle help question "?"
+    if (handleHelpQuestion(word, previousCommandList, inputCommand, formattedOldCommand, fullyFormattedCommand, volitileCommand))
+    {
+        return;
     }
 
-    // Normalize the command by converting all characters to lowercase while preserving spaces and tabs
-    std::string normalizedCommand;
-    for (char character : inputCommand) {
-        if (std::isspace(character) || character == '\t') {
-            normalizedCommand += character;
-        } else {
-            normalizedCommand += std::tolower(character);
+    // Handle "vk_tab" for tab completion
+    if (handleTabCompletion(word, previousCommandList, inputCommand, formattedOldCommand, fullyFormattedCommand, volitileCommand))
+    {
+        return;
+    }
+
+    // If directory is "error", attempt to fix by switching to global config
+    if (!attemptGlobalCommand(inputCommand))
+    {
+        return; // If attemptGlobalCommand returned an error condition, just stop
+    }
+
+    // Attempt to match user's word with the available commands
+    bool isCommandDone = false;
+    matchCommand(
+        inputCommand, word, availableCommands, previousCommandList, 
+        formattedOldCommand, fullyFormattedCommand, volitileCommand, 
+        isCommandDone
+    );
+}
+
+bool Terminal::handleHelpQuestion(const std::string& word, std::vector<com>& previousCommandList,
+               const std::string& inputCommand, std::string& formattedOldCommand,
+               std::string& fullyFormattedCommand, std::string& volatileCommand)
+{
+    // Return false if "?" is not actually truggered or doesn't apply
+    if (word != "?" || isMatchSuccessful || previousCommandList.empty() || isNextWordHelpRequested || endOfCommand)
+    {
+        if ((word == "?") && isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested)
+        {
+            nextLine = inputCommand;
+        }
+        return false;
+    }
+
+    fullyFormattedCommand += word;
+    volatileCommand       += word;
+
+    nextLine = formattedOldCommand;
+
+    if (previousCommandList[0].name != "<cr>")
+    {
+        displayAvailableCommands(previousCommandList);
+    }
+    else
+    {
+        nextLine = trimString(inputCommand);
+    }
+    return true;
+}
+
+bool Terminal::handleTabCompletion(const std::string& word, std::vector<com>& previousCommandList,
+               const std::string& inputCommand, std::string& formattedOldCommand,
+               std::string& fullyFormattedCommand, std::string& volatileCommand)
+{
+    if (word != "vk_tab" || isNextWordHelpRequested) return false;
+
+    // Multiple suggestions
+    if (previousCommandList.size() > 1)
+    {
+        fullyFormattedCommand += word;
+        volatileCommand       += word;
+        nextLine = formattedOldCommand + " ";
+    }
+    // no suggestions
+    else if (previousCommandList.empty())
+    {
+        nextLine = trimString(inputCommand);
+    }
+    // Exactly one suggestion => auto complete
+    else
+    {
+        nextLine = formattedOldCommand;
+        int lastSpacePosition = (int)nextLine.rfind(' ');
+        if (lastSpacePosition == -1)
+        {
+            // No spaces found
+            nextLine += " " + getLastWord(fullyFormattedCommand) + "  ";
+        }
+        else
+        {
+            // Insert after last space
+            nextLine = nextLine.substr(0, lastSpacePosition) + " " + getLastWord(fullyFormattedCommand) + "  ";
         }
     }
+    return true;
+}
 
-    // Initialize command processing variables
-    currentDirectory = workingDirectory;
-    isNextWordHelpRequested = false;
+bool Terminal::attemptGlobalCommand(const std::string& inputCommand)
+{
+    if (currentDirectory == "error" &&
+        currentMode != mode.globalConfiguration &&
+        currentMode != mode.userExec &&
+        currentMode != mode.privilegedExec &&
+        !isHelpModeActive && 
+        Functions::lowerCase(inputCommand) != "exit")
+    {
+        isGlobalCommandExecution = true;
+        // Backup
+        std::string prevMode        = currentMode;
+        auto        prevDirectory   = workingDirectory;
+        auto        prevModeSchema  = modeSchema;
+        auto        prevConfig      = configNode;
 
-    std::vector<std::string> parsedWords = splitIntoWords(normalizedCommand);
-    std::vector<com> previousCommandList;
-    std::string formattedOldCommand;
-    std::string lastProcessedWord;
-    std::string fullyFormattedCommand;
-    std::string volatileCommand;
+        // Attempt global execution
+        changeMode(mode.globalConfiguration, true);
+        historyToGlobal();
+        std::string inputCommandCopy = inputCommand;
+        executeCommand(inputCommandCopy);
+        currentDirectory.clear();
 
-    int currentIndex = 0;
-    bool isFirstIteration = true;
-    isRunning = true;
-    no = false;
+        if (currentMode == mode.globalConfiguration)
+        {
+            if (isCommandExecutionSuccessful)
+            {
+                return false; // Triggers "error" return
+            }
+            else
+            {
+                // Restore
+                changeMode(prevMode, true);
+                configNode       = prevConfig;
+                modeSchema       = prevModeSchema;
+                workingDirectory = prevDirectory;
+                if (isCommandExecutionSuccessful)
+                {
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void Terminal::handleInvalidInputMarker(const std::string& formattedOldCommand)
+{
+    isRunning = false;
+    std::cout << "\n";
+
+    std::string hostname = Global::getInstance().getHostname();
+    // Print spaces for hostname, mode, old command
+    std::cout << std::string(hostname.size() + currentMode.size() + formattedOldCommand.size(), ' ');
+
+    std::cout << "^" << std::endl
+              << "% Invlid input detected at '^' marker." << std::endl;
+}
+
+void Terminal::matchCommand(const std::string& inputCommand, const std::string& word, 
+               const std::vector<com>& availableCommands, std::vector<com>& previousCommandList, 
+               std::string& formattedOldCommand, std::string& fullyFormattedCommand,
+               std::string& volatileCommand, bool& isCommandDone)
+{
+    // Build a list of commands that match the user-typed 'word'.
+    std::vector<com> matchingCommands;
+    for (const auto& command : availableCommands)
+    {
+        // If patteru matching is enabled and the command name matches the current pattern
+        if (isPatternMatching && command.name == currentPattern)
+        {
+            matchingCommands.push_back(command);
+        }
+        // Or if the user-typed word is a prefix of the command name
+        if (command.name.size() >= word.size() && 
+            std::equal(word.begin(), word.end(), Functions::lowerCase(command.name).begin()))
+        matchingCommands.push_back(command);
+    }
+
+    // if no specific match was found, fall back to the entire 'availableCommands'.
+    previousCommandList = matchingCommands.empty() ? availableCommands : matchingCommands;
+
+    // Handle "?" or "vk_tab" after partial match:
+    if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested) && !endOfCommand)
+    {
+        // Display possible commands and append "?"
+        displayAvailableCommands(availableCommands);
+        fullyFormattedCommand += word;
+        volatileCommand       += word;
+
+        // Typically set nextline to old command + space
+        nextLine = formattedOldCommand + " ";
+        // If the first command is <error>, revert to raw input
+        if (!availableCommands.empty() && availableCommands[0].name == "<error>")
+        {
+            nextLine = inputCommand;
+        }
+
+        // If in help mode, an extra space is appended for later
+        if (isHelpModeActive)
+        {
+            nextLine += " ";
+        }
+
+        // We displayed help, so reset success
+        isMatchSuccessful = false;
+        return; // This completes processing of this word
+    }
+    else if (word == "vk_tab" && !previousCommandList.empty())
+    {
+        // If there's an <error> or the user requested help, use the raw input
+        if (previousCommandList[0].name == "<error>" || isNextWordHelpRequested)
+        {
+            nextLine = inputCommand;
+        }
+        
+        isMatchSuccessful = false;
+        return;
+    }
+
+    // Reset isMatchSuccessful now that "?" / "vk_tab" is handled
     isMatchSuccessful = false;
-    isHelpModeActive = false;
-    endOfCommand = false;
-    isLineBasedInput = false;
 
-    // Check for help triggers ("?" or "vk_tab")
-    for (const std::string& word : parsedWords) {
-        if (word == "?" || word == "vk_tab") {
-            isHelpModeActive = true;
-        }
-    }
-
-    // Handle "do" and "no" prefix commands
-    if (!parsedWords.empty()) 
+    // Check if exactly one match remains
+    if (previousCommandList.size() == 1 && !matchingCommands.empty())
     {
-        if (parsedWords[0] == "do" && parsedWords[1] != "exit" && parsedWords[1] != "conf" &&
-            parsedWords[1] != "configure" &&
-            currentMode != mode.userExec && currentMode != mode.privilegedExec) 
+        // If pattern-matching is on and the command is exactly currentPattern
+        if (isPatternMatching && currentPattern == matchingCommands[0].name)
         {
-
-            // Temporarily switch to privileged mode for "do" commands
-            isGlobalCommandExecution = true;
-            std::string previousMode = currentMode;
-            json previousCommandTree = workingDirectory;
-            nlohmann::ordered_json* prevModeSchema = modeSchema;
-            nlohmann::ordered_json* previousConfigNode = configNode;
-
-            changeMode(mode.privilegedExec, true);
-            std::string remainingCommand = inputCommand.substr(2);
-            executeCommand(remainingCommand);
-
-            // Restore the previous mode and working directory
-            currentDirectory.clear();
-            changeMode(previousMode, true);
-            configNode = previousConfigNode;
-            workingDirectory = previousCommandTree;
-            modeSchema = prevModeSchema;
-
-            return "error";
-        } 
-        else if (parsedWords[0] == "no" && !isHelpModeActive) 
-        {
-            // Handle "no" commands by normalizing the remainder of the command
-            std::string strippedCommand = normalizeCommand(inputCommand.substr(3));
-            no = true;
-            return strippedCommand;
+            isMatchSuccessful = true;
         }
-    }
-    
-    // Handle "?" or "vk_tab" if there is no input
-    if (!parsedWords.empty())
-    {
-        if (parsedWords[0] == "?" || parsedWords[0] == "vk_tab")
+        // If typed word matches the command name exactly
+        if (matchingCommands[0].name == word)
         {
-            // Sets match to true
             isMatchSuccessful = true;
         }
     }
+    // If the user typed "?" again after partial match
+    else if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested))
+    {
+        // Set the nextLine to the raw input
+        nextLine = inputCommand;
+    }
+
+    // If this word isn't done yet, decide how to append matched commands
+    if (!isCommandDone && matchingCommands.size() <= 1)
+    {
+        // (A) If we're pattern-matching, use the user's typed pattern
+        if (isPatternMatching && !matchingCommands.empty())
+        {
+            fullyFormattedCommand += " " + word;
+            formattedOldCommand   += " " + word;
+            volatileCommand       += " " + currentPattern;
+            previousMatch          = matchingCommands[0].name;
+        }
+        // (B) If there is exactly one match
+        else if (matchingCommands.size() == 1)
+        {
+            fullyFormattedCommand += " " + matchingCommands[0].name;
+            formattedOldCommand   += " " + word;
+            volatileCommand       += " " + word;
+            isCommandDone          = true;
+            previousMatch          = matchingCommands[0].name;
+        }
+        // (C) If no matches but the command is flagged as endOfCommand
+        else if (matchingCommands.empty() && endOfCommand)
+        {
+            fullyFormattedCommand += " " + endCommandString;
+            formattedOldCommand   += " " + word;
+            volatileCommand       += " " + word;
+        }
+        // (D) If no matches at all (not endOfCommand)
+        else if (matchingCommands.empty())
+        {
+            fullyFormattedCommand += " " + word;
+            formattedOldCommand   += " " + word;
+            volatileCommand       += " " + word;
+
+            // If its not a help scenario, some code returns the typed word or ends here
+            if (!isHelpModeActive)
+            {
+                fullyFormattedCommand = word;
+            }
+        }
+        // (E) If multiple matches but the first is a valid guess
+        else
+        {
+            fullyFormattedCommand += " " + matchingCommands[0].name;
+            formattedOldCommand   += " " + word;
+            volatileCommand       += " " + word;
+            isCommandDone          = true;
+            previousMatch          = matchingCommands[0].name;
+        }
+    }
+    else
+    {
+        // Command is partially matched or has multiple possibilities
+        formattedOldCommand += " " + word;
+        volatileCommand     += " " + word;
+    }
+}
+
+std::string Terminal::normalizeCommand(const std::string& inputCommand) {
+    // Return an empty string if the input command is empty
+    if (inputCommand.empty()) return "";
+
+    // Normalize to lowerCase
+    std::string normalizedCommand = Functions::lowerCase(inputCommand);
+    initializeProcessingState();
+
+    // Parse the command
+    std::vector<std::string> parsedWords = splitIntoWords(normalizedCommand);
+    if (parsedWords.empty()) return "";
+
+    std::vector<com> previousCommandList;
+    std::string formattedOldCommand, lastProcessedWord, fullyFormattedCommand, volatileCommand;
+    int currentIndex = 0;
+    bool isFirstIteration = true;
+
+    // Check for help triggers ("?" or "vk_tab")
+    isHelpModeActive = detectHelpTriggers(parsedWords);
+
+    // Handle "do" command
+    if (isDoCommand(parsedWords))
+    {
+        return executeDoCommand(inputCommand.substr(2));
+    } 
+    
+    // Mark as valid if the first word is "?" or "vk_tab"
+    isMatchSuccessful = (!parsedWords.empty() && (parsedWords[0] == "?" || parsedWords[0] == "vk_tab"));
 
     // Process each word in the parsed command
     for (std::string& word : parsedWords) {
         if (isLineBasedInput) {
-            fullyFormattedCommand += " " + parsedWords[currentIndex];
-            volatileCommand += " " + parsedWords[currentIndex];
-        } else {
-            isPatternMatching = false;
-            isPatternMatchEnd = false;
-
-            if (isRunning) {
-                // Retrieve a list of available commands for the current word
-                std::vector<com> availableCommands = GetAvailableCommands(currentDirectory, word, isFirstIteration);
-
-                // Handle "?" for command help
-                if ((word == "?") && !isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested && !endOfCommand) {
-                    fullyFormattedCommand += word;
-                    volatileCommand += word;
-                    nextLine = formattedOldCommand + " ";
-
-                    if (previousCommandList[0].name != "<cr>") {
-                        displayAvailableCommands(previousCommandList);
-                    } else {
-                        nextLine = trimString(inputCommand);
-                    }
-                } else if (word == "vk_tab" && !isNextWordHelpRequested) {
-                    // Handle tab completion logic
-                    if (!previousCommandList.empty() && previousCommandList.size() != 1) {
-                        fullyFormattedCommand += word;
-                        volatileCommand += word;
-                        nextLine = formattedOldCommand + " ";
-                    } else if (previousCommandList.empty()) {
-                        nextLine = trimString(inputCommand);
-                    } else {
-                        nextLine = formattedOldCommand + " ";
-                        nextLine = nextLine.substr(0, nextLine.size() - 1);
-
-                        int lastSpacePosition;
-                        bool hasSpace = false;
-                        for (int charIndex = 0; charIndex <= nextLine.size(); charIndex++) {
-                            if (nextLine[charIndex] == ' ') {
-                                lastSpacePosition = charIndex;
-                                hasSpace = true;
-                            }
-                        }
-                        if (!hasSpace) {
-                            lastSpacePosition = 0;
-                        }
-                        if (lastSpacePosition == 0) {
-                            nextLine = nextLine.substr(0, lastSpacePosition) +
-                                              getLastWord(fullyFormattedCommand) + "  ";
-                        } else {
-                            nextLine = nextLine.substr(0, lastSpacePosition) +
-                                              " " + getLastWord(fullyFormattedCommand) + "  ";
-                        }
-                    }
-                } else if ((word == "?") && isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested) {
-                    nextLine = inputCommand;
-                }
-                if (currentDirectory == "error" && currentMode != mode.globalConfiguration && currentMode != mode.userExec && currentMode != mode.privilegedExec && !isHelpModeActive && Functions::lowerCase(inputCommand) != "exit")
-                {
-                    isGlobalCommandExecution = true;
-                    std::string prevMode = currentMode;
-                    nlohmann::json prevDirectory = workingDirectory;
-                    nlohmann::ordered_json* prevModeSchema = modeSchema;
-                    nlohmann::ordered_json* prevConf = configNode;
-                    changeMode(mode.globalConfiguration, true);
-                    historyToGlobal();
-                    std::string nextCommand = inputCommand;
-                    executeCommand(nextCommand);
-                    currentDirectory.clear();
-                    if (currentMode == mode.globalConfiguration)
-                    {
-                        if (isCommandExecutionSuccessful)
-                        {
-                            return "error";
-                        }
-                        else
-                        {
-                            changeMode(prevMode, true);
-                            configNode = prevConf;
-                            modeSchema = prevModeSchema;
-                            workingDirectory = prevDirectory;
-                            if (isCommandExecutionSuccessful)
-                            {
-                                return "error";
-                            }
-                        }
-                    }
-                    else
-                    {
-                        return "error";
-                    }
-                }
-                if (currentDirectory == "error" && !isGlobalCommand(word) && !isHelpModeActive)
-                {
-                    isRunning = false;
-                    std::cout << std::endl;
-                    std::string hostname = Global::getInstance().getHostname();
-                    for (char i : hostname)
-                    {
-                        std::cout << " ";
-                    }
-                    for (char i : currentMode)
-                    {
-                        std::cout << " ";
-                    }
-                    for (char i : formattedOldCommand)
-                    {
-                        std::cout << " ";
-                    }
-                    std::cout << " ^" << std::endl;
-                    std::cout << "% Invalid input detected at '^' marker." << std::endl;
-                }
-
-                isFirstIteration = false;
-				
-                // Match the input word against available commands
-                bool isCommandDone = false;
-                if (!isCommandDone) {
-                    std::vector<com> matchingCommands;
-                    for (const auto& command : availableCommands) {
-                        if (isPatternMatching && command.name == currentPattern) {
-                            matchingCommands.push_back(command);
-                        }
-                        if (command.name.size() >= word.size() &&
-                            std::equal(word.begin(), word.end(), Functions::lowerCase(command.name).begin())) {
-                            matchingCommands.push_back(command);
-                        }
-                    }
-                    previousCommandList = matchingCommands;
-                    if (previousCommandList.empty()) {
-                        previousCommandList = availableCommands;
-                    }
-
-                    if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested) && !endOfCommand) 
-                    {
-                        displayAvailableCommands(availableCommands);
-                        fullyFormattedCommand += word;
-                        volatileCommand += word;
-                        nextLine = formattedOldCommand + " ";
-		        if (availableCommands[0].name != "<error>")
-			{
-                            // std::cout << isHelpModeActive
-			} else {
-			    nextLine = inputCommand;
-			}
-
-			if (isHelpModeActive)
-			{
-			    nextLine += " ";
-			}
-                    } else if (word == "vk_tab" && (availableCommands[0].name == "<error>" || isNextWordHelpRequested)) {
-			nextLine = inputCommand;
-		    }
-
-                    isMatchSuccessful = false;
-
-                    if (previousCommandList.size() == 1 && !matchingCommands.empty()) {
-                        if (isPatternMatching && currentPattern == matchingCommands[0].name) {
-                            isMatchSuccessful = true;
-                        }
-                        if (matchingCommands[0].name == word) {
-                            isMatchSuccessful = true;
-                        }
-                    } else if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested)) {
-			nextLine = inputCommand;
-		    }
-
-                    if (!isCommandDone && matchingCommands.size() <= 1) {
-                        if (isPatternMatching) {
-                            fullyFormattedCommand += " " + parsedWords[currentIndex];
-                            formattedOldCommand += " " + parsedWords[currentIndex];
-                            volatileCommand += " " + currentPattern;
-                            previousMatch = matchingCommands[0].name;
-                        } else if (matchingCommands.size() == 1) {
-                            fullyFormattedCommand += " " + matchingCommands[0].name;
-                            formattedOldCommand += " " + word;
-                            volatileCommand += " " + word;
-                            isCommandDone = true;
-                            previousMatch = matchingCommands[0].name;
-                        } else if (matchingCommands.empty() && endOfCommand) {
-                            fullyFormattedCommand += " " + endCommandString;
-                            formattedOldCommand += " " + word;
-                            volatileCommand += " " + word;
-                            lastProcessedWord = word;
-                        } else if (matchingCommands.empty()) {
-                            fullyFormattedCommand += " " + word;
-                            formattedOldCommand += " " + word;
-                            volatileCommand += " " + word;
-                            lastProcessedWord = word;
-                            if (!isHelpModeActive) {
-                                return word;
-                            }
-                        } else {
-			    fullyFormattedCommand += " " + matchingCommands[0].name;
-			    formattedOldCommand += " " + word;
-			    volatileCommand += " " + word;
-			    isCommandDone = true;
-			    previousMatch = matchingCommands[0].name;
-			}
-                    } else {
-                        formattedOldCommand += " " + word;
-                        volatileCommand += " " + word;
-                    }
-                }
-            }
+            appendLineBasedCommand(parsedWords, currentIndex, fullyFormattedCommand, volatileCommand);
         }
-        currentIndex++;
-        lastProcessedWord = word;
+        else
+        {
+            processNonLineBasedWord(word, previousCommandList, formattedOldCommand, fullyFormattedCommand, volatileCommand, inputCommand, isFirstIteration);
+        }
     }
 
-    // Final formatting and return
-    formattedOldCommand = trimString(formattedOldCommand);
-    volatileCommand = trimString(volatileCommand);
-    commandHistory = splitIntoWords(volatileCommand);
+    // Final trumming/formatting
+    formattedOldCommand   = trimString(formattedOldCommand);
+    volatileCommand       = trimString(volatileCommand);
     fullyFormattedCommand = trimString(fullyFormattedCommand);
-    nextLine = trimString(nextLine);
+    nextLine              = trimString(nextLine);
 
-    if (!isCommandValid && !isHelpModeActive && !isPatternMatchEnd && !isLineBasedInput) {
-        std::cout << std::endl << "Incomplete Command";
+    // Update command history
+    commandHistory = splitIntoWords(volatileCommand);
+
+    // Check if command is incomplete
+    if (!isCommandValid && !isHelpModeActive && !isPatternMatchEnd && !isLineBasedInput) 
+    {
+        std::cout << "\nIncomplete Command";
         return "";
-    } else {
-        return fullyFormattedCommand;
     }
+    
+    // Return the final processed command
+    return fullyFormattedCommand;
 }
 
-std::vector<com> Terminal::GetAvailableCommands(const nlohmann::json& commandTree, const std::string& userInput, bool inPrivilegedMode) {
+std::vector<com> Terminal::getAvailableCommands(const nlohmann::json& commandTree, const std::string& userInput, bool inPrivilegedMode) {
     // Container for storing available commands
     std::vector<com> availableCommands;
 
@@ -651,11 +767,7 @@ bool Terminal::matchInputPattern(const std::string& userInput, const std::string
 
     if (expectedPattern == "A.B.C.D" && userInput != "?" && userInput != "vk_tab") {
         int oct1, oct2, oct3, oct4;
-    #ifdef _WIN32
-        sscanf_s(userInput.c_str(), "%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
-    #else
         sscanf(userInput.c_str(), "%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
-    #endif
         std::vector<int> octets = {oct1, oct2, oct3, oct4};
         bool isValidIP = true;
         for (int octet : octets) {
@@ -696,11 +808,7 @@ bool Terminal::matchInputPattern(const std::string& userInput, const std::string
 
     if (expectedPattern[0] == '<') {
         int min, max;
-    #ifdef _WIN32
-        sscanf_s(expectedPattern.c_str(), "<%d-%d>", &min, &max);
-    #else
         sscanf(expectedPattern.c_str(), "<%d-%d>", &min, &max);
-    #endif
         if (isNumeric(userInput)) {
             int number = std::stoi(userInput);
             if (number >= min && number <= max) {

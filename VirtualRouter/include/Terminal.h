@@ -37,10 +37,34 @@ private:
     void executeCommand(std::string& command);
     // Reverses the effect of process command (e.g., for "no" commands)
     void undoCommand(std::string& command);
+
     // Normalized and fixes user-entered commands
     std::string normalizeCommand(const std::string& command);
+    // Appends line based input
+    void appendLineBasedCommand(const std::vector<std::string>& parsedWords, int currentIndex, std::string& fullyFormattedCommand, std::string& volitileCommand);
+    // Processes non line based word
+    void processNonLineBasedWord(std::string& word, std::vector<com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volitileCommand, const std::string& inputCommand, bool& isFirstIteration);
+    // Initializes variables for processing
+    void initializeProcessingState();
+    // Detect help triggers
+    bool detectHelpTriggers(const std::vector<std::string>& parsedWords);
+    // Tests for valid "do" command
+    bool isDoCommand(const std::vector<std::string>& parsedWords);
+    // Handle "do" command
+    std::string executeDoCommand(std::string remainingCommand);
+    // Handle help with a question mark
+    bool handleHelpQuestion(const std::string& word, std::vector<com>& previousCommandList, const std::string& inputCommand, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand);
+    // Handle tab completion for command
+    bool handleTabCompletion(const std::string& word, std::vector<com>& previousCommandList, const std::string& inputCommand, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand);
+    // Attempts to use the command as a global command
+    bool attemptGlobalCommand(const std::string& inputCommand);
+    // Handles invalid input marker
+    void handleInvalidInputMarker(const std::string& formattedOldCommand);
+    // Matches a word to a command
+    void matchCommand(const std::string& inputCommand, const std::string& word, const std::vector<com>& availableCommands, std::vector<com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volitileCommand, bool& isCommandDone);
+
     // Retreived a list of possible commands based on the current directory and input
-    std::vector<com> GetAvailableCommands(const nlohmann::json& commandTree, const std::string& userInput, bool inPriviledgedMode);
+    std::vector<com> getAvailableCommands(const nlohmann::json& commandTree, const std::string& userInput, bool inPriviledgedMode);
     // Checks if a command belongs to the global command set
     bool isGlobalCommand(std::string& commandName);
     // Prints available commands 

@@ -6,7 +6,7 @@
 // Function to print a chunk of XML for debugging purposes
 void Configs::printConfig() 
 {
-    std::cout << root.dump(4) << std::endl;
+    ///std::cout << root.dump(4) << std::endl;
 }
 
 // Constructor for Configs class
@@ -279,7 +279,6 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
                 }
             }
         }
-        std::cout << newConfig.dump(4) << std::endl;
 
         if (isListed)
         {

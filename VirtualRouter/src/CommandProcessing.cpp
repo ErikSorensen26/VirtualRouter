@@ -2,11 +2,10 @@
 
 void Terminal::executeCommand(std::string &command)
 {
-	std::cout << modeSchema->dump(4) << std::endl;
 	isModeChanged = false;
 	isExitCommand = false;
 	std::string preProcessMode = currentMode;
-
+	
 	command = normalizeCommand(command);
 	isCommandExecutionSuccessful = false;
 

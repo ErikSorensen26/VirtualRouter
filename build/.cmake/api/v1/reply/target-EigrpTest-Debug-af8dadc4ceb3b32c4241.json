@@ -171,11 +171,6 @@
 			},
 			{
 				"backtrace" : 2,
-				"fragment" : "-lpcap",
-				"role" : "libraries"
-			},
-			{
-				"backtrace" : 2,
 				"fragment" : "/usr/lib/x86_64-linux-gnu/libtelnet.so",
 				"role" : "libraries"
 			},
