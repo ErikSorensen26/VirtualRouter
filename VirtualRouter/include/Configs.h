@@ -5,21 +5,19 @@
 #include <cmath>
 #include <cstdio>
 
-#ifdef _WIN32
-    #include <conio.h>
-    #include <windows.h>
-#else
-    #include <curses.h> 
-    #include <unistd.h>   
-    #include <termios.h>
-    #include <sys/ioctl.h>
-    #include <fcntl.h>
-#endif
+#include <curses.h> 
+#include <unistd.h>   
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
 
 #include <pugixml.hpp>
 #include <json.hpp>
 #include <Functions.h>
 #include <Global.h>
+
+#define STARTUP_FILE "../configs.json"
+#define MODE_KEY "commands"
 
 using json = nlohmann::json;
 
@@ -108,25 +106,36 @@ public:
 
     // Constructor for the Configs class.
     Configs(); 
-    void initConfigs();
-    // Recovers XML data as a vector of std::strings.
-    std::vector<std::string> recoverXml(); 
-    // Processes an XML node based on a command.
-    void processNode(const pugi::xml_node& node, std::string command); 
+    void initConfigs(const std::string& startupFilename = STARTUP_FILE);
+    // Recovers JSON data as a vector of std::strings.
+    std::vector<std::string> recoverConfigs(); 
+    // Processes a JSON for recovery commands
+    void processConfigs(nlohmann::ordered_json* currentNode, std::vector<std::string> command, std::vector<std::string>& commandList);
     // Saves commands and updates mode.
-    void saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool& changeMode, bool& isListed); 
-    // Traverses and processes XML nodes.
-    bool travelNode(std::vector<std::string>& command, std::vector<std::string> oldCommand, pugi::xml_node& config_node, pugi::xml_node& save, bool& changeMode, bool& isList, int offset); 
-    // Deletes an XML node and its children.
-    bool deleteNodeAndAllChildren(pugi::xml_node& node, pugi::xml_node& save); 
+    void saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool& isList); 
+    // Inserts items in the correct order
+    void insertOrdered(nlohmann::ordered_json* parentNode, const std::string& mainCommand, const std::string& subCommand = "", bool isListed = false);
+    // Saves the full configuration
+    void saveConfig();
+    // Deletes an configuration
+    void deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isList);
     // Returns to the root of the XML document.
     void returnToRoot(pugi::xml_node& node, pugi::xml_node& root);
     // Checks if a std::string represents a volatile parameter.
-    bool isVolitile(std::string& str);
+    bool isVolitile(const std::string& str);
+    // Combines a vector of commands into a single command
+    std::string joinCommand(const std::vector<std::string>& command);
     // Retrieves the value of a volatile parameter based on command.
-    std::string getVolitileValue(std::string& command, std::string& com);
+    std::string getVolitileValue(std::string& command, std::string& com, nlohmann::ordered_json currentJson);
+    std::string getVolitileValue(std::string& command, std::string com, std::vector<std::string> volitileValues);
+    // Helper for getVolitileValue, does the actual lookup
+    std::string getVolitileValueHelper(std::string& command, std::string& com);
     // Updates global history from local history.
     void historyToGlobal();
+    // Sets schema mode
+    void setSchemaMode(const std::string& mode);
+    // Print configs
+    void printConfig();
 
     // Mode settings for command-line prompts.
     Mode mode;
@@ -134,11 +143,21 @@ public:
     std::string currentMode;
     // Previous mode.
     std::string prevMode;
+    // Startup file name
+    std::string startupFileName{};
 
-    // PugiXML document object.
-    pugi::xml_document doc;
-    // XML node representing the configuration.
-    pugi::xml_node config_node;
+    // Config root
+    nlohmann::ordered_json root;
+    // JSON node representing the configuration.
+    nlohmann::ordered_json* configNode = &root;
+
+    // Config Schema for config
+    nlohmann::ordered_json configSchema;
+    // Config schema for specific node
+    nlohmann::ordered_json* modeSchema;
+    // Temp config schema
+    nlohmann::ordered_json* tempModeSchema;
+
     // List of physical interfaces.
     std::vector<std::string> physicalInterfaces;
 
@@ -148,36 +167,17 @@ public:
     std::string OUI;
     // Boolean flag for additional logic.
     bool no = false;
+    // Boolean flag for when in config mode
+    bool configMode = true;
 	
 private:
-    // Boolean flag indicating no more volatile parameters.
-    bool noMoreVol = false;
-    // Boolean flag for additional child processing.
-    bool moreChild = false;
-    // Boolean flag indicating if in configuration mode.
-    bool configMode;
-    // Boolean flag for clearing settings.
-    bool clear = false;
-    // Command for non-volatile settings.
-    std::string nonVolCommand;
-    // Current command for non-volatile settings.
-    std::string curNonVolCommand;
 
     // List of volatile input types.
     std::vector<std::string> volitileInputs{"WORD", "LINE", "A.B.C.D", "X:X:X:X::X", "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"};
-
-    // History of XML nodes for different modes.
-    std::vector<pugi::xml_node> modeHistory;
-
-    // Depth level for XML traversal.
-    int level = 0;
-
-    // Placeholder std::string for testing.
-    std::string test;
-
-    // Previous configuration XML node.
-    pugi::xml_node prevConfig;
-
+    // History of JSON nodes for different modes.
+    std::vector<nlohmann::ordered_json*> modeHistory;
+    // Previous configuration JSON node.
+    nlohmann::ordered_json *prevConfig;
     // List of input parameters
     std::vector<std::string> inputs{"ip", "subnet", "id", "value", "ipv6", "mac"};
     // List of recoverable items.

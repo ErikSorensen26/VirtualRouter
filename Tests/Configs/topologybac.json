@@ -1,0 +1,305 @@
+{
+    "routers": [
+        {
+            "name": "R1",
+            "telnetIp": "localhost",
+            "telnetPort": 5001,
+            "interfaces": [
+                { "name": "GigabitEthernet 1/0", "ip": "1.0.0.1", "subnet": "255.255.255.252" },
+                { "name": "GigabitEthernet 2/0", "ip": "2.0.0.1", "subnet": "255.255.255.252" },
+                { "name": "GigabitEthernet 3/0", "ip": "3.0.0.1", "subnet": "255.255.255.252" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R2",
+            "telnetIp": "localhost",
+            "telnetPort": 5002,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "1.0.0.2", "subnet": "255.255.255.252" },
+                { "name": "GigabitEthernet 1/0", "ip": "172.16.1.2", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "172.16.2.2", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 3/0", "ip": "4.0.0.2", "subnet": "255.255.255.252" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R3",
+            "telnetIp": "localhost",
+            "telnetPort": 5003,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "3.0.0.3", "subnet": "255.255.255.252" },
+                { "name": "GigabitEthernet 1/0", "ip": "10.1.0.3", "subnet": "255.255.0.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "10.2.0.3", "subnet": "255.255.0.0" },
+                {"name": "GigabitEthernet 3/0", "ip": "5.0.0.3", "subnet": "255.255.255.252" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R4",
+            "telnetIp": "localhost",
+            "telnetPort": 5004,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "172.16.1.4", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "172.16.2.4", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "172.16.3.4", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R5",
+            "telnetIp": "localhost",
+            "telnetPort": 5005,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "172.16.2.5", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "172.16.5.5", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "172.16.3.5", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R6",
+            "telnetIp": "localhost",
+            "telnetPort": 5006,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "192.168.1.6", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "192.168.4.6", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "192.168.3.6", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R7",
+            "telnetIp": "localhost",
+            "telnetPort": 5007,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "192.168.2.7", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "192.168.5.7", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "192.168.3.7", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R8",
+            "telnetIp": "localhost",
+            "telnetPort": 5008,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "10.1.0.8", "subnet": "255.255.0.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "10.4.0.8", "subnet": "255.255.0.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "10.3.0.8", "subnet": "255.255.0.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R9",
+            "telnetIp": "localhost",
+            "telnetPort": 5009,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "10.2.0.9", "subnet": "255.255.0.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "10.5.0.9", "subnet": "255.255.0.0" },
+                { "name": "GigabitEthernet 2/0", "ip": "10.3.0.9", "subnet": "255.255.0.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R10",
+            "telnetIp": "localhost",
+            "telnetPort": 5010,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "172.16.4.10", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "172.16.6.10", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R11",
+            "telnetIp": "localhost",
+            "telnetPort": 5011,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "172.16.5.11", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "172.16.6.11", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R12",
+            "telnetIp": "localhost",
+            "telnetPort": 5012,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "192.168.4.12", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "192.168.6.12", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R13",
+            "telnetIp": "localhost",
+            "telnetPort": 5013,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "192.168.4.13", "subnet": "255.255.255.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "192.168.6.13", "subnet": "255.255.255.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R14",
+            "telnetIp": "localhost",
+            "telnetPort": 5014,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "10.4.0.14", "subnet": "255.255.0.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "10.6.0.14", "subnet": "255.255.0.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        },
+        {
+            "name": "R15",
+            "telnetIp": "localhost",
+            "telnetPort": 5015,
+            "interfaces": [
+                { "name": "GigabitEthernet 0/0", "ip": "10.5.0.15", "subnet": "255.255.0.0" },
+                { "name": "GigabitEthernet 1/0", "ip": "10.6.0.15", "subnet": "255.255.0.0" }
+            ],
+            "ospf": {
+                "processID": 10,
+                "networks": [
+                    { "ip": "0.0.0.0", "wildcard": "255.255.255.255", "area": 0}
+                ]
+            }
+        }
+    ]
+}
+
+
+
+{
+    "hostname": {
+        "Line": "Router1"
+    },
+
+    "interface": [
+        "GigabitEthernet": [
+            {
+                "id": "0/1",
+                "commands": [
+                    "ip": [
+                        "address": {
+                            "ip": "192.168.0.1",
+                            "ip": "255.255.255.0"
+                        },
+                        "mtu": {
+                            "number": 1400
+                        }
+                    ]
+                ]
+            },
+            {
+                "id": "0/2",
+                "commands": [
+                    "ip": {
+                        "address": {
+                            "dhcp": {}
+                        }
+                    }
+                ]
+            }
+        ],
+        "FastEthernet": [
+            {
+                "id": "0/0",
+                "commands": [
+                    "ip": [
+                        "address": {
+                            "ip": "10.0.0.126",
+                            "ip": "255.0.0.0"
+                        }
+                    ]
+                ]
+            }
+        ]
+    ],
+    "router": [
+        "ospf": [
+            {
+                "id": "1",
+                "commands": {
+                    "network": [
+                        {
+                            "ip": "0.0.0.0",
+                            "ip": "255.255.255.255"
+                        }
+                    ]
+                }
+            }
+        ]
+    ]
+}

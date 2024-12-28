@@ -60,7 +60,9 @@ private:
     // Handles pagination for long command lists
     bool handlePagination(int& lineCount);
     // Switches the terminal to a new operational mode
-    void changeMode(std::string& newMode);
+    void changeMode(std::string& newMode, bool processing = false);
+    // Handles exiting a mode
+    inline void exitMode(std::string& newMode) { isExitCommand = true; changeMode(newMode);}
     // Pads a string with leading zeros (e.g., for IPv6 segments)
     std::string padWithZeros(const std::string& input);
     // Expands an abbreviated IPv6 address to its full form
@@ -121,6 +123,7 @@ private:
     bool isPatternMatching = false;	// Indicates if the input matches a pattern
     bool isPatternMatchEnd = false;	// Indicates the end of a matching pattern
     bool isModeChanged = false;		// Indicates if the operational mode has changed
+    bool isExitCommand = false;         // Indicates if the command return to the previous mode
     bool isCommandExecutionSuccessful = false; // Indicates if the command was successful
     bool isGlobalCommandExecution = false; // Indicates if a global command is being executed
 

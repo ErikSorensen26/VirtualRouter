@@ -147,9 +147,14 @@ namespace Protocol
             while (retryCount < maxRetries)
             {
                 // Create and send ARP request
-                ipInfo interfaceInfo = currentInterface->Get();
-                ByteString mac = currentInterface->Get().macAddress;
-                PacketInfo arpReq = arpRequest(mac, interfaceInfo.ipAddress, targetIp);
+                ByteString mac;
+                PacketInfo arpReq;
+                {
+                    auto interfaceInfo = currentInterface->Get();
+                    std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
+                    mac = interfaceInfo->macAddress;
+                    arpReq = arpRequest(mac, interfaceInfo->ipv4.ipAddress, targetIp);
+                }
                 currentInterface->enqueuePacket(arpReq);
 
                 Logger::getInstance().info() << "Sent ARP request for IP " << targetIp << std::endl;
@@ -279,12 +284,15 @@ namespace Protocol
     void Arp::sendReply(ByteString targetMac, ByteString targetIp) 
     {
         if (targetIp.empty()) { return; }
-        if (currentInterface->Get().ipAddress.empty()) { return; }
-
-        ipInfo interfaceInfo = currentInterface->Get();
         
         // Create an ARP reply packet
-        PacketInfo arpPacket = arpReply(interfaceInfo.macAddress, targetMac, interfaceInfo.ipAddress, targetIp);
+        PacketInfo arpPacket;
+        {
+            auto interfaceInfo = currentInterface->Get();
+            std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
+            if (interfaceInfo->ipv4.ipAddress.empty()) { return; }
+            arpPacket = arpReply(interfaceInfo->macAddress, targetMac, interfaceInfo->ipv4.ipAddress, targetIp);
+        }
 
         // Enqueue ARP reply for sending
         currentInterface->enqueuePacket(arpPacket);

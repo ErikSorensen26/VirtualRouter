@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 
 project(VirtualRouter)
 
+# Find and link libtelnet
+set(TELNET_LIBRARIES /usr/lib/x86_64-linux-gnu/libtelnet.so)
+set(TELNET_INCLUDE_DIR /usr/include)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -90,13 +94,15 @@ find_package(GTest REQUIRED)
 
 # List of test files
 set(TEST_SOURCES
+    ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
+    ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
     ${TEST_DIR}/TestEigrp.cpp
 )
 
 # Define Eigrp Test
 add_executable(EigrpTest ${TEST_SOURCES})
-target_link_libraries(EigrpTest PRIVATE GTest::GTest GTest::Main pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
-target_include_directories(EigrpTest PRIVATE $<TARGET_PROPERTY:VirtualRouter,INCLUDE_DIRECTORIES>)
+target_link_libraries(EigrpTest PRIVATE GTest::GTest GTest::Main pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} ${TELNET_LIBRARIES} ${CURL_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
+target_include_directories(EigrpTest PRIVATE $<TARGET_PROPERTY:VirtualRouter,INCLUDE_DIRECTORIES> ${TELNET_INCLUDE_DIR} ${CURL_INCLUDE_DIRS} ${TEST_DIR} ${TEST_DIR}/RouterTesting/include)
 add_test(NAME EigrpTest COMMAND EigrpTest)
 
 # Python integration tests
@@ -131,6 +137,17 @@ find_package(ZLIB REQUIRED)
 
 # Find and link OpenSSL
 find_package(OpenSSL REQUIRED)
+
+# Find and link CURL
+find_package(CURL REQUIRED)
+
+# Check if libtelnet is found
+if (EXISTS ${TELNET_LIBRARIES} AND EXISTS ${TELNET_INCLUDE_DIR}/libtelnet.h)
+    message(STATUS "Found libtelnet: ${TELNET_LIBRARIES}")
+    message(STATUS "Include directory: ${TELNET_INCLUDE_DIR}")
+else()
+    message(FATAL_ERROR "libtelnet not found in expected paths. Please verify installation.")
+endif()
 
 # Apply debug flags using target_compile_options
 foreach(target IN LISTS VirtualRouter LogServer CommandParser EigrpTest)

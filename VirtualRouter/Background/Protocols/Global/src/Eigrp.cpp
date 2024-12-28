@@ -36,6 +36,8 @@ namespace Protocol
 
         configs = processConfigs;
 
+        calculateRouterID();
+
         topologyTable = std::make_unique<TopologyTable>(this);
 
         updateInterfaceList();
@@ -63,7 +65,7 @@ namespace Protocol
         Logger::getInstance().info() << "EIGRP process initiated." << std::endl;
     }
 
-    void Eigrp::eigrpHello(EigrpHeader &eigrp, EigrpInterface *eigrpInt, ByteString neighborIp, int sequenceNumber,  bool ack, bool update, ByteString routerID)
+    void Eigrp::eigrpHello(EigrpHeader &eigrp, EigrpInterface *eigrpInt, ByteString neighborIp, int sequenceNumber,  bool ack, bool update)
     {
         eigrp.version = ByteString(1, 0x02);
         eigrp.opcode = Variable::Eigrp::Type::hello;
@@ -99,7 +101,7 @@ namespace Protocol
             {
                 EigrpHeader::Option sequenceTLV;
                 sequenceTLV.option = Variable::Eigrp::Option::sequence;
-                sequenceTLV.value = routerID.empty() ? Functions::numToByte(neighborIp.size(), 1) + neighborIp.toString() : Functions::numToByte(routerID.toString().size(), 1) + routerID.toString();
+                sequenceTLV.value = Functions::numToByte(neighborIp.size(), 1) + neighborIp.toString();
                 sequenceTLV.length = Functions::numToByte(sequenceTLV.value.size() + 4, 2);
                 eigrp.options.emplace_back(sequenceTLV);
 
@@ -207,20 +209,23 @@ namespace Protocol
 
     void Eigrp::updateInterfaceList()
     {
-        std::lock_guard<std::shared_mutex> lock(globalEigrpMutex);
+        std::unique_lock<std::shared_mutex> lock(globalEigrpMutex);
 
         // Iterate through all interfaces
         for (const auto& outer : interfaceList)
         {
             for (const auto& interface : outer.second)
             {
-                if (testAddress(interface.second->Get().ipAddress))
+                auto ipInfo = interface.second->Get();
+                std::unique_lock<std::shared_mutex> ipLock(ipInfo->ipMutex);
+                if (testAddress(interface.second->Get()->ipv4.ipAddress))
                 {
-                    int intID = interface.second->Get().id;
+                    int intID = ipInfo->id;
                     // Add interface to eigrp
                     if (interface.second->eigrpInterfaceList.find(asNumber) == interface.second->eigrpInterfaceList.end() && 
                         eigrpInterfaceList.find(intID) == eigrpInterfaceList.end())
                     {
+                        ipLock.unlock();
                         std::shared_ptr<EigrpInterface> instance;
                         std::shared_ptr<EigrpInterfaceInstance> interfaceInstance;
                         if (!interface.second->eigrpInterfaceList[asNumber])
@@ -239,10 +244,11 @@ namespace Protocol
                             interfaceInstance->IPv4 = instance;
                         }
                         eigrpInterfaceList[intID] = instance;
+                        ipLock.lock();
 
                         if (configs.autoSummarizationEnabled)
                         {
-                            std::string networkIt = interface.second->Get().ipAddress.toString();
+                            std::string networkIt = ipInfo->ipv4.ipAddress.toString();
                             auto majorNetwork = Functions::findClassfullNetwork(networkIt);
                             addSummaryRoute(majorNetwork, Functions::getDefaultMask(majorNetwork));
                         }
@@ -253,8 +259,8 @@ namespace Protocol
                     // Check and remove interface from eigrp
                     if (interface.second->eigrpInterfaceList.count(asNumber) > 0)
                     {
-                        eigrpInterfaceList[interface.second->Get().id]->stopHello();
-                        eigrpInterfaceList.erase(interface.second->Get().id);
+                        eigrpInterfaceList[ipInfo->id]->stopHello();
+                        eigrpInterfaceList.erase(ipInfo->id);
                         interface.second->eigrpInterfaceList.erase(asNumber);
                     }
                 }
@@ -289,34 +295,38 @@ namespace Protocol
         // get Eigrp Interface list
         if (eigrpInterface)
         {
-            currentEigrpInterface[eigrpInterface->currentInterface->Get().id] = eigrpInterface;
+            auto ipInfo = eigrpInterface->currentInterface.lock()->Get();
+            std::shared_lock<std::shared_mutex> lock(ipInfo->ipMutex);
+            currentEigrpInterface[ipInfo->id] = eigrpInterface;
         }
 
         for (const auto& [id, eigrpInterfacePtr] : eigrpInterface ? currentEigrpInterface : eigrpInterfaceList)
         {
             auto interfacePtr = eigrpInterfacePtr->currentInterface;
-            ipInfo interfaceInfo = interfacePtr->Get();
+            auto interfaceInfo = interfacePtr.lock()->Get();
+            std::shared_lock<std::shared_mutex> ipLock(interfaceInfo->ipMutex);
             int eigrpBw;
-            eigrpBw = eigrpInterfacePtr->getConfigs()->bandwidth;
+            eigrpBw = interfaceInfo->bandwidth;
+            ByteString connectedNetwork = Functions::computeNetworkAddress((currentAddressFamily == AddressFamily::IPv4) ? interfaceInfo->ipv4.ipAddress.toString() : interfaceInfo->ipv6.ipAddress.toString(), (currentAddressFamily == AddressFamily::IPv4) ? interfaceInfo->ipv4.mask : interfaceInfo->ipv6.mask);
+            int connectedMask = currentAddressFamily == AddressFamily::IPv4 ? interfaceInfo->ipv4.mask : interfaceInfo->ipv6.mask;
 
-            if ((!interfacePtr->Get().ipAddress.empty() && currentAddressFamily == AddressFamily::IPv4) || (!interfaceInfo.ipv6Address.empty() && currentAddressFamily == AddressFamily::IPv6))
+            if ((!interfacePtr.lock()->Get()->ipv4.ipAddress.empty() && currentAddressFamily == AddressFamily::IPv4) || (!interfaceInfo->ipv6.ipAddress.empty() && currentAddressFamily == AddressFamily::IPv6))
             {
                 // Compute the connected network
-                ByteString connectedNetwork = Functions::computeNetworkAddress((currentAddressFamily == AddressFamily::IPv4) ? interfaceInfo.ipAddress.toString() : interfaceInfo.ipv6Address.toString(), (currentAddressFamily == AddressFamily::IPv4) ? interfaceInfo.mask : interfaceInfo.v6mask);
                 connectedNetworks.emplace_back(connectedNetwork);
 
                 // Create EIGRP route entry
                 RoutingTable::Eigrp connectedRoute;
                     connectedRoute.bandwidth = ( 10000000 / eigrpBw ) * 256;
-                    connectedRoute.delay = (interfaceInfo.delay / 10) * 256;
+                    connectedRoute.delay = (interfaceInfo->delay / 10) * 256;
                     connectedRoute.hopCount = 0;
-                    connectedRoute.mtu = interfaceInfo.mtu;
+                    connectedRoute.mtu = interfaceInfo->mtu;
                     connectedRoute.reliability = 255;
                     connectedRoute.load = configs.variance;
                     connectedRoute.network = connectedNetwork;
-                    connectedRoute.mask = interfaceInfo.mask;
+                    connectedRoute.mask = connectedMask;
                     connectedRoute.nextHop = ByteString(connectedNetwork.size(), '\x00'); // indicates directly connected
-                    connectedRoute.metric = calculateMetric(eigrpBw, 0, interfaceInfo.delay, 255);
+                    connectedRoute.metric = calculateMetric(eigrpBw, 0, interfaceInfo->delay, 255);
                     connectedRoute.routeType = "connected";
 
                 auto existingRoute = RoutingTable::getInstance().getEigrpRoute(connectedNetwork, connectedRoute.mask, getAddressFamily());
@@ -334,21 +344,17 @@ namespace Protocol
                     updatedRoutes.emplace_back(connectedRoute);
                 }
             }
-            else if (interfacePtr)
+            else if (!interfacePtr.expired())
             {
-                // Compute the connected network
-                ByteString connectedNetwork = Functions::computeNetworkAddress((currentAddressFamily == AddressFamily::IPv4) ? interfaceInfo.ipAddress.toString() : interfaceInfo.ipv6Address.toString(), (currentAddressFamily == AddressFamily::IPv4) ? interfaceInfo.mask : interfaceInfo.v6mask);
-                int mask = (currentAddressFamily == AddressFamily::IPv4) ? interfaceInfo.mask : interfaceInfo.v6mask;
-
                 // Remove the connected route from the routing table
-                routingTable.removeEigrp(connectedNetwork, mask, currentAddressFamily);
+                routingTable.removeEigrp(connectedNetwork, connectedMask, currentAddressFamily);
 
-                if (eigrpInterfacePtr->isRouteAdvertised(connectedNetwork, mask))
+                if (eigrpInterfacePtr->isRouteAdvertised(connectedNetwork, connectedMask))
                 {
                     // Notify neighbors of route removal
                     RoutingTable::Eigrp removedRoute;
                     removedRoute.network = connectedNetwork;
-                    removedRoute.mask = mask;
+                    removedRoute.mask = connectedMask;
                     removedRoute.nextHop = ByteString(connectedNetwork.size(), '\xff');
                     removedRoute.routeType = "connected";
 
@@ -384,14 +390,15 @@ namespace Protocol
 
     void Eigrp::onInterfaceChange(Interface *interfacePtr, AddressFamily af)
     {
-        ipInfo interfaceInfo = interfacePtr->Get();
+        auto interfaceInfo = interfacePtr->Get();
+        std::shared_lock<std::shared_mutex> interfaceLock(interfaceInfo->ipMutex);
         std::shared_lock<std::shared_mutex> lock(eigrpMutex);
         RoutingTable &routingTable = RoutingTable::getInstance();
 
-        int mask = interfaceInfo.mask;
 
         // Compute the connected network
-        ByteString connectedNetwork = Functions::computeNetworkAddress(interfaceInfo.ipAddress.toString(), mask);
+        int mask = af == AddressFamily::IPv4 ? interfaceInfo->ipv4.mask : interfaceInfo->ipv6.mask;
+        ByteString connectedNetwork = Functions::computeNetworkAddress(af == AddressFamily::IPv4 ? interfaceInfo->ipv4.ipAddress.toString() : interfaceInfo->ipv6.ipAddress.toString(), mask);
 
         // Check if the route already exists
         bool routeExists = false;
@@ -413,16 +420,16 @@ namespace Protocol
             {
                 // Create and insert new connected route
                 RoutingTable::Eigrp connectedRoute;
-                    connectedRoute.bandwidth = ( 10000000 / interfaceInfo.bandwidth );
-                    connectedRoute.delay = (interfaceInfo.delay / 10);
+                    connectedRoute.bandwidth = ( 10000000 / interfaceInfo->bandwidth );
+                    connectedRoute.delay = (interfaceInfo->delay / 10);
                     connectedRoute.hopCount = 1;
-                    connectedRoute.mtu = interfaceInfo.mtu;
+                    connectedRoute.mtu = interfaceInfo->mtu;
                     connectedRoute.reliability = 0;
                     connectedRoute.load = configs.variance;
                     connectedRoute.network = connectedNetwork;
-                    connectedRoute.mask = interfaceInfo.mask;
+                    connectedRoute.mask = mask;
                     connectedRoute.nextHop = ByteString(connectedNetwork.size(), '\x00'); // indicates directly connected
-                    connectedRoute.metric = calculateMetric(interfaceInfo.bandwidth, 0, interfaceInfo.delay, 255);
+                    connectedRoute.metric = calculateMetric(interfaceInfo->bandwidth, 0, interfaceInfo->delay, 255);
                     connectedRoute.routeType = "connected";
 
                 RoutingTable::getInstance().addEigrp(connectedRoute, getAddressFamily());
@@ -455,6 +462,13 @@ namespace Protocol
 
     void Eigrp::notifyRoutingChange(const std::vector<RoutingTable::Eigrp>& changedRoutes, bool isRemoval, bool init)
     {
+        for (const auto& route : changedRoutes)
+        {
+            if (route.network == Functions::hexToByte("03000000"))
+            {
+                std::cout << std::endl;
+            }
+        }
         Logger::getInstance().info() << "Notifying all neighbors for route changes" << std::endl;
         std::scoped_lock lock(globalEigrpMutex);
 
@@ -703,11 +717,12 @@ namespace Protocol
     int Eigrp::getLowestBandwidth()
     {
         unsigned int lowestBW = std::numeric_limits<unsigned int>::max();
-        for (const auto eigrpInterfacePtr : eigrpInterfaceList)
+        for (const auto& [id, eigrpInterfacePtr] : eigrpInterfaceList)
         {
-            if (eigrpInterfacePtr.second->getConfigs()->bandwidth < lowestBW)
+            std::shared_lock<std::shared_mutex> lock(eigrpInterfacePtr->currentInterfaceInfo.lock()->ipMutex);
+            if (eigrpInterfacePtr->currentInterfaceInfo.lock()->bandwidth < lowestBW)
             {
-                lowestBW = eigrpInterfacePtr.second->getConfigs()->bandwidth;
+                lowestBW = eigrpInterfacePtr->currentInterfaceInfo.lock()->bandwidth;
             }
         }
         return lowestBW;
@@ -727,7 +742,7 @@ namespace Protocol
         std::shared_ptr<EigrpInterface> selectedInterface;
         for (const auto& [id, eigrpInterfacePtr] : eigrpInterfaceList)
         {
-            if (eigrpInterfacePtr->getConfigs()->bandwidth == lowestBW)
+            if (eigrpInterfacePtr->currentInterfaceInfo.lock()->bandwidth == lowestBW)
             {
                 selectedInterface = eigrpInterfacePtr;
                 break;
@@ -740,7 +755,11 @@ namespace Protocol
             return;
         }
         // Calculate metric
-        double metric = calculateMetric(selectedInterface->getConfigs()->bandwidth, selectedInterface->getConfigs()->load, selectedInterface->getConfigs()->delay, 255, 0);
+        int bandwidth;
+        {
+            std::shared_lock<std::shared_mutex> interfaceLock(selectedInterface->currentInterfaceInfo.lock()->ipMutex);
+        }
+        double metric = calculateMetric(selectedInterface->currentInterfaceInfo.lock()->bandwidth, selectedInterface->getConfigs()->load, selectedInterface->currentInterfaceInfo.lock()->delay, 255, 0);
 
         RoutingTable::Eigrp defaultRoute;
         defaultRoute.network = configs.defaultNetwork;
@@ -827,25 +846,26 @@ namespace Protocol
         Logger::getInstance().info() << "Restarting EIGRP process..." << std::endl;
 
         // Step 1: Backup neighbors    
-        for (const auto& [interfaceId, interfacePtr] : eigrpInterfaceList)
+        neighborBackup.clear();
+        for (const auto& [interfaceId, interfacePtr] : eigrpInterfaceList) 
         {
-            neighborBackup.clear();
-            for (const auto& [interfaceId, interfacePtr] : eigrpInterfaceList) 
-            {
-                ByteString ipAddress = interfacePtr->currentInterface->Get().ipAddress;
-                std::shared_lock<std::shared_mutex> lock(interfacePtr->neighborMutex);
-                for (const auto& [address, neighbor] : interfacePtr->neighbors)
-                {
-                    auto backup = std::make_shared<EigrpConfigs::NeighborInfo>();
-                    backup->ipAddress = neighbor->ipAddress;
-                    backup->authKey = neighbor->authKey;
-                    backup->authType = neighbor->authType;
-                    backup->authenticationEnabled = neighbor->authenticationEnabled;
-                    backup->holdTime = neighbor->holdTime;
-                    backup->mode = neighbor->mode;
+            auto interfaceInfo = interfacePtr->currentInterfaceInfo;
+            std::shared_lock<std::shared_mutex> interfaceLock(interfaceInfo.lock()->ipMutex);
 
-                    neighborBackup[ipAddress][neighbor->ipAddress] = backup; // Store neighbor in backup
-                }
+            ByteString ipAddress = getAddressFamily() == AddressFamily::IPv4 ? interfaceInfo.lock()->ipv4.ipAddress : interfaceInfo.lock()->ipv6.ipAddress;
+            std::shared_lock<std::shared_mutex> lock(interfacePtr->neighborMutex);
+            for (const auto& [address, neighbor] : interfacePtr->neighbors)
+            {
+                std::shared_lock<std::shared_mutex> dataLock(neighbor->neighborDataMutex);
+                auto backup = std::make_shared<EigrpConfigs::NeighborInfo>();
+                backup->ipAddress = neighbor->ipAddress;
+                backup->authKey = neighbor->authKey;
+                backup->authType = neighbor->authType;
+                backup->authenticationEnabled = neighbor->authenticationEnabled;
+                backup->holdTime = neighbor->holdTime;
+                backup->mode = neighbor->mode;
+
+                neighborBackup[ipAddress][neighbor->ipAddress] = backup; // Store neighbor in backup
             }
         }
         
@@ -881,12 +901,15 @@ namespace Protocol
     {
         unsigned int highestNum = 0;
         ByteString highestIP{};
-        if (!getConfigs()->routerID.isStatic)
+        std::lock_guard<std::shared_mutex> lock(eigrpDataMutex);
+        if (routerID.isStatic)
         {
-            std::shared_lock<std::shared_mutex> lock(interfaceListMutex);
-            for (const auto& [id, interfaceInfo] : interfaceList[InterfaceType::LOOPBACK])
+            std::shared_lock<std::shared_mutex> interfaceLock(interfaceListMutex);
+            for (const auto& [id, interface] : interfaceList[InterfaceType::LOOPBACK])
             {
-                ByteString address = interfaceInfo->Get().ipAddress;
+                auto interfaceInfo = interface->Get();
+                std::shared_lock<std::shared_mutex> ipLock(interfaceInfo->ipMutex);
+                ByteString address = interfaceInfo->ipv4.ipAddress;
                 unsigned int ipNum = Functions::byteToNum(address.toString());
                 if (ipNum > highestNum)
                 {
@@ -895,27 +918,33 @@ namespace Protocol
             }
             if (highestIP.empty())
             {
-                for (const auto& [id, interfaceInfo] : interfaceList[InterfaceType::ETHERNET])
+                for (const auto& [id, interface] : interfaceList[InterfaceType::ETHERNET])
                 {
-                    ByteString address = interfaceInfo->Get().ipAddress;
+                    auto interfaceInfo = interface->Get();
+                    std::shared_lock<std::shared_mutex> ipLock(interfaceInfo->ipMutex);
+                    ByteString address = interfaceInfo->ipv4.ipAddress;
                     unsigned int ipNum = Functions::byteToNum(address.toString());
                     if (ipNum > highestNum)
                     {
                         highestNum = ipNum;
                     }
                 }
-                for (const auto& [id, interfaceInfo] : interfaceList[InterfaceType::FAST_ETHERNET])
+                for (const auto& [id, interface] : interfaceList[InterfaceType::FAST_ETHERNET])
                 {
-                    ByteString address = interfaceInfo->Get().ipAddress;
+                    auto interfaceInfo = interface->Get();
+                    std::shared_lock<std::shared_mutex> ipLock(interfaceInfo->ipMutex);
+                    ByteString address = interfaceInfo->ipv4.ipAddress;
                     unsigned int ipNum = Functions::byteToNum(address.toString());
                     if (ipNum > highestNum)
                     {
                         highestNum = ipNum;
                     }
                 }
-                for (const auto& [id, interfaceInfo] : interfaceList[InterfaceType::GIGABIT_ETHERNET])
+                for (const auto& [id, interface] : interfaceList[InterfaceType::GIGABIT_ETHERNET])
                 {
-                    ByteString address = interfaceInfo->Get().ipAddress;
+                    auto interfaceInfo = interface->Get();
+                    std::shared_lock<std::shared_mutex> ipLock(interfaceInfo->ipMutex);
+                    ByteString address = interfaceInfo->ipv4.ipAddress;
                     unsigned int ipNum = Functions::byteToNum(address.toString());
                     if (ipNum > highestNum)
                     {
@@ -923,7 +952,7 @@ namespace Protocol
                     }
                 }
             }
-            getConfigs()->routerID.ID = highestIP;
+            routerID.ID = highestIP;
         }
     }
 
@@ -935,11 +964,14 @@ namespace Protocol
           eigrpProcess(&eigrpSystem),
           helloStartTime(std::chrono::steady_clock::now())
     {
-        configs.bandwidth = currentInterface->Get().bandwidth;
+        {
+            currentInterfaceInfo = currentInterface.lock()->Get();
+            std::lock_guard<std::shared_mutex> lock(currentInterfaceInfo.lock()->ipMutex);
+            configs.interfaceAddress = (eigrpProcess->getAddressFamily() == AddressFamily::IPv4) ? currentInterfaceInfo.lock()->ipv4.ipAddress : currentInterfaceInfo.lock()->ipv6.ipAddress;
+            configs.interfaceMask = (eigrpProcess->getAddressFamily() == AddressFamily::IPv4) ? currentInterfaceInfo.lock()->ipv4.mask : currentInterfaceInfo.lock()->ipv6.mask;
+        }
         startHelloHelper();
         sendHelloPacket();
-
-        // Create Eigrp DistributionList
     }
 
     EigrpInterface::~EigrpInterface()
@@ -1134,7 +1166,7 @@ namespace Protocol
                         {std::lock_guard<std::mutex> lock(neighbor->initializationMutex); neighbor->initialization = EigrpConfigs::NeighborState::EXCHANGE; neighbor->masterInit = true;}
                         // Send Sequence Hello with the generated sequence number
                         Logger::getInstance().info(true) << "MASTER sending Sequence Hello with sequence number: " << seq << std::endl;
-                        sendHelloPacket(neighborIp, /*unicast=*/false, /*update=*/true, seq, neighborIp);
+                        sendHelloPacket(neighborIp, /*unicast=*/false, /*update=*/true, seq);
 
                         // Send your topology
                         Logger::getInstance().info(true) << "MASTER sending full topology." << std::endl;
@@ -1150,7 +1182,7 @@ namespace Protocol
                     
                     // Send Sequence Hello with the generated sequence number
                     Logger::getInstance().info(true) << "Sending Sequence Hello with sequence number: " << seq << std::endl;
-                    sendHelloPacket(neighborIp, /*unicast=*/false, /*update=*/true, seq, neighborIp);
+                    sendHelloPacket(neighborIp, /*unicast=*/false, /*update=*/true, seq);
 
                     // Send your topology
                     Logger::getInstance().info(true) << "Sending full topology." << std::endl;
@@ -1235,7 +1267,8 @@ namespace Protocol
             {
                 neighbors[neighborIp] = std::make_shared<EigrpConfigs::NeighborInfo>();
                 neighborAdded = true;
-                ByteString ipAddress = currentInterface->Get().ipAddress;
+                std::shared_lock<std::shared_mutex> interfacePtr(currentInterfaceInfo.lock()->ipMutex);
+                ByteString ipAddress = getConfigs()->interfaceAddress;
                 auto backupIt = eigrpProcess->neighborBackup[ipAddress].find(neighborIp);
                 if (backupIt != eigrpProcess->neighborBackup[ipAddress].end())
                 {
@@ -1268,8 +1301,8 @@ namespace Protocol
                 }
                 if (opt.option == Variable::Eigrp::Option::sequence)
                 {
-                    if (currentInterface->Get().ipAddress == opt.value.substr(1, Functions::byteToNum(opt.value.substr(0, 1).toString())).toString() ||
-                        currentInterface->Get().ipv6Address == opt.value.substr(1, Functions::byteToNum(opt.value.substr(0, 1).toString())).toString())
+                    std::shared_lock<std::shared_mutex> interfaceLock(currentInterfaceInfo.lock()->ipMutex);
+                    if (getConfigs()->interfaceAddress == opt.value.substr(1, Functions::byteToNum(opt.value.substr(0, 1).toString())).toString())
                     {
 
                     }
@@ -1329,7 +1362,7 @@ namespace Protocol
 
     void EigrpInterface::processUpdate(EigrpHeader *receivedUpdate, const ByteString neighborIp)
     {
-        if (neighborIp == currentInterface->Get().ipAddress)
+        if (neighborIp == getConfigs()->interfaceAddress)
         {
             Logger::getInstance().warn() << "Received update with current interface as neighbor. Dropping update." << std::endl;
             return;
@@ -1389,10 +1422,11 @@ namespace Protocol
                 {
                     if (receivedSequenceNumber != neighbor->initSequence)
                     {
-                        handleNeighborRestart(neighborIp);
                         neighbor->initSequence = 0;
+                        handleNeighborRestart(neighborIp);
                         return;
                     }
+                    neighbor->initSequence = 0;
                 }
                     
                 neighbor->lastReceivedSequenceNumber = receivedSequenceNumber;
@@ -1831,7 +1865,7 @@ namespace Protocol
             eigrpAckPacketStructure.Layer3.push_back(eigrp);
 
             // Enqueue for transmission
-            currentInterface->ipPacket->setIPHeader(eigrpAckPacketStructure, neighborIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
+            currentInterface.lock()->ipPacket->setIPHeader(eigrpAckPacketStructure, neighborIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
 
             // Remove ack from pending
             neighbor->pendingAcks.erase(std::remove(neighbor->pendingAcks.begin(), neighbor->pendingAcks.end(), seq), neighbor->pendingAcks.end());
@@ -1841,7 +1875,7 @@ namespace Protocol
         }
     }
 
-    void EigrpInterface::sendUpdateToNeighbor(const ByteString neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool restart, bool conditional, std::vector<ByteString> conditionalNeighbors, int ack)
+    void EigrpInterface::sendUpdateToNeighbor(const ByteString neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool restart, bool conditional, std::vector<ByteString> conditionalNeighbors)
     {
         std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor = nullptr;
         if (!neighborIp.empty())
@@ -1883,11 +1917,6 @@ namespace Protocol
             bool stubTest = false;
             bool splitHorizonTest = true;
             bool needsUpdate = false;
-
-            if (route.network == Functions::hexToByte("00000000"))
-            {
-                std::cout << "diushf" << std::endl;
-            }
 
             // Stub test
             if (eigrpProcess->isStub())
@@ -1938,13 +1967,13 @@ namespace Protocol
                 }
             }
 
-            Logger::getInstance().debug() << "Route received from neighbor: " << route.nextHop.toString() << " Route being sent out of interface: " << currentInterface->Get().ipAddress.toHex() << std::endl;
+            Logger::getInstance().debug() << "Route received from neighbor: " << route.nextHop.toString() << " Route being sent out of interface: " << getConfigs()->interfaceAddress.toHex() << std::endl;
             Logger::getInstance().debug() << (needsUpdate ? "Route Needs updating " : "Route does not need updating ") << " with a new metric of: " << route.metric << std::endl;
 
             if (splitHorizonTest && stubTest && needsUpdate)
             {
                 filteredRoutes.emplace_back(route);
-                Logger::getInstance().info() << "Route: " << route.network.toHex() << " sent to out of interface: " << currentInterface->Get().ipAddress.toHex() << " with a metric of: " << route.metric << std::endl;
+                Logger::getInstance().info() << "Route: " << route.network.toHex() << " sent to out of interface: " << getConfigs()->interfaceAddress.toHex() << " with a metric of: " << route.metric << std::endl;
             }
         }
 
@@ -2019,11 +2048,7 @@ namespace Protocol
             isInit = false;
 
             // Handle Acknowledgments
-            if (ack != 0)
-            {
-                eigrp.ack = Functions::numToByte(ack, 4);
-            }
-            else if (neighbor)
+            if (neighbor)
             {
                 if (!neighbor->pendingAcks.empty())
                 {
@@ -2050,7 +2075,7 @@ namespace Protocol
             // Assemble and send the packet
             eigrpPacket.Layer3.push_back(eigrp);
 
-            currentInterface->ipPacket->setIPHeader(eigrpPacket, targetIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
+            currentInterface.lock()->ipPacket->setIPHeader(eigrpPacket, targetIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
             
             Logger::getInstance().info() << "Update sent to neighbor " << neighborIp.toHex() << " with sequence number " << sequenceNumber << std::endl;
 
@@ -2180,7 +2205,7 @@ namespace Protocol
         eigrpQueryPacketStructure.Layer3.push_back(eigrp);
 
         // Convert to raw packet ByteString
-        currentInterface->ipPacket->setIPHeader(eigrpQueryPacketStructure, neighbor->ipAddress, getConfigs()->DSCP, 2, Variable::IP::eigrp);
+        currentInterface.lock()->ipPacket->setIPHeader(eigrpQueryPacketStructure, neighbor->ipAddress, getConfigs()->DSCP, 2, Variable::IP::eigrp);
 
         // Store the packet for possible retransmission (relieable delivery)
         setupReliablePacket(neighbor, EigrpConfigs::NeighborInfo::ReliablePacketInfo::Packet(eigrp, neighborIp, failedRoutes, true), currentSeqNum);
@@ -2260,7 +2285,7 @@ namespace Protocol
         eigrpReplyPacketStructure.Layer3.push_back(eigrp);
 
         // Enqueue for transmission
-        currentInterface->ipPacket->setIPHeader(eigrpReplyPacketStructure, neighborIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
+        currentInterface.lock()->ipPacket->setIPHeader(eigrpReplyPacketStructure, neighborIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
 
         // Store the packet for possible retransmission (reliable delivery)
         setupReliablePacket(neighbor, EigrpConfigs::NeighborInfo::ReliablePacketInfo::Packet(eigrp, neighborIp), currentSeqNum);
@@ -2270,10 +2295,6 @@ namespace Protocol
 
     ByteString EigrpInterface::encodeRouteOption(const RoutingTable::Eigrp& route, bool removed)
     {
-        if (route.mtu != 1500)
-        {
-            std::cout << "test" << std::endl;
-        }
         ByteString encoded;
         encoded += route.nextHop;
         encoded += (removed ? ByteString (4, '\xff') : Functions::numToByte(route.delay, 4));
@@ -2521,7 +2542,7 @@ namespace Protocol
         Logger::getInstance().info() << "Hello timer started with expiration at " << std::chrono::duration_cast<std::chrono::seconds>(nextExpiration.time_since_epoch()).count() << std::endl;
     }
 
-    void EigrpInterface::sendHelloPacket(ByteString neighborIp, bool unicast, bool update, int sequenceNumber, ByteString routerID)
+    void EigrpInterface::sendHelloPacket(ByteString neighborIp, bool unicast, bool update, int sequenceNumber)
     {
         if (configs.isPassive)
         {
@@ -2537,7 +2558,7 @@ namespace Protocol
         PacketInfo eigrpHello;
         EigrpHeader eigrp;
 
-        eigrpProcess->eigrpHello(eigrp, this, neighborIp, sequenceNumber, false, update, routerID);
+        eigrpProcess->eigrpHello(eigrp, this, neighborIp, sequenceNumber, false, update);
 
         // Add stub flags
         if (eigrpProcess->isStub())
@@ -2551,7 +2572,7 @@ namespace Protocol
 
         eigrpHello.Layer3.push_back(eigrp);
 
-        currentInterface->ipPacket->setIPHeader(eigrpHello, targetIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
+        currentInterface.lock()->ipPacket->setIPHeader(eigrpHello, targetIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
     }
 
     void EigrpInterface::stopHello()
@@ -2709,12 +2730,15 @@ namespace Protocol
                 }
                 
                 RoutingTable::Eigrp routeToRemove;
-                routeToRemove.network = network;
-                routeToRemove.mask = mask;
-                routeToRemove.delay = std::numeric_limits<unsigned int>::max();
-                routeToRemove.bandwidth = (10000000 / currentInterface->Get().bandwidth) * 256;
-                routeToRemove.nextHop = ByteString(network.size(), '\xff');
-                routeToRemove.routeType = "internal";
+                {
+                    std::shared_lock<std::shared_mutex> interfaceLock(currentInterfaceInfo.lock()->ipMutex);
+                    routeToRemove.network = network;
+                    routeToRemove.mask = mask;
+                    routeToRemove.delay = std::numeric_limits<unsigned int>::max();
+                    routeToRemove.bandwidth = (10000000 / currentInterfaceInfo.lock()->bandwidth) * 256;
+                    routeToRemove.nextHop = ByteString(network.size(), '\xff');
+                    routeToRemove.routeType = "internal";
+                }
 
                 // Mark as pending removal for all neighbors
                 for (auto& [neighborIp, neighborInfo] : neighbors)
@@ -2850,7 +2874,7 @@ namespace Protocol
         }
         PacketInfo retransmissionPacket;
         retransmissionPacket.Layer3.push_back(pktInfo->packet.eigrp);
-        currentInterface->ipPacket->setIPHeader(retransmissionPacket, pktInfo->packet.destination, getConfigs()->DSCP, 2, Variable::IP::eigrp);
+        currentInterface.lock()->ipPacket->setIPHeader(retransmissionPacket, pktInfo->packet.destination, getConfigs()->DSCP, 2, Variable::IP::eigrp);
 
         Logger::getInstance().info() << "Resent packet to neighbor " << neighborIp.toHex() << " for sequence number " << sequenceNumber << ". Retransmission count: " << pktInfo->retransmissionCount + 1 << "." << std::endl;
 
@@ -3043,10 +3067,9 @@ namespace Protocol
 
     double EigrpInterface::calculateLocalLinkCost()
     {
-        const ipInfo& ifaceInfo = currentInterface->Get();
-
-        double bandwidthMetric = (static_cast<double>(eigrpProcess->getConfigs()->wideMetric) / ifaceInfo.bandwidth);
-        double delayMetric = static_cast<double>(ifaceInfo.delay) / 10.0;
+        std::shared_lock<std::shared_mutex> lock(currentInterfaceInfo.lock()->ipMutex);
+        double bandwidthMetric = (static_cast<double>(eigrpProcess->getConfigs()->wideMetric) / currentInterfaceInfo.lock()->bandwidth);
+        double delayMetric = static_cast<double>(currentInterfaceInfo.lock()->delay) / 10.0;
 
         double loadMetric = 0.0;
         if (eigrpProcess->getConfigs()->kvalue.k2_Load != 0 && (256.0 - configs.load) != 0)
@@ -3085,11 +3108,6 @@ namespace Protocol
             routeInfo.hopCount = route.hopCount;
             routeInfo.isSuccessor = false;
             routeInfo.isFeasibleSuccessor = false;
-
-            if (neighborIp == Functions::hexToByte("c0a80001") && (route.network == Functions::hexToByte("03000000") || route.network == Functions::hexToByte("02000000") || route.network == Functions::hexToByte("01000000")))
-            {
-                std::cout << "idk" << std::endl;
-            }
 
             // Add or update the route in the topology table
             eigrpProcess->topologyTable->addOrUpdateRoute(route.network, route.mask, routeInfo, neighborIp);
@@ -3145,8 +3163,6 @@ namespace Protocol
             auto existingRoute = RoutingTable::getInstance().getEigrpRoute(route.network, route.mask, eigrpProcess->getAddressFamily());
             bool routeChange = !existingRoute.has_value() || (existingRoute->feasibleDistance != newRoute.feasibleDistance);
 
-            std::cout << routeChange << " " << (existingRoute ? existingRoute->feasibleDistance : 0) << " " << newRoute.feasibleDistance << " " << newRoute.network.toHex() << std::endl;
-                
             if (routeChange)
             {
                 if (existingRoute.has_value())
@@ -3205,9 +3221,7 @@ namespace Protocol
         // Check if this is the last neighbor
         if (neighbors.size() == 1)
         {
-            ipInfo info = currentInterface->Get();
-            auto routeIt = eigrpProcess->getAddressFamily() == AddressFamily::IPv4 ? RoutingTable::getInstance().getEigrpRoute(Functions::computeNetworkAddress(info.ipAddress.toString(), info.mask), info.mask, AddressFamily::IPv4)
-                                                                                   : RoutingTable::getInstance().getEigrpRoute(Functions::computeNetworkAddress(info.ipv6Address.toString(), info.v6mask), info.v6mask, AddressFamily::IPv6);
+            auto routeIt = RoutingTable::getInstance().getEigrpRoute(Functions::computeNetworkAddress(getConfigs()->interfaceAddress.toString(), getConfigs()->interfaceMask), getConfigs()->interfaceMask, eigrpProcess->getAddressFamily());
             if (routeIt.has_value())
             {
                 removedRoutes.push_back(routeIt.value());
@@ -3386,7 +3400,7 @@ namespace Protocol
         std::lock_guard<std::shared_mutex> lock(seqMutex);
         int currentSeq = nextSequenceNumber;
         nextSequenceNumber += 1;
-        Logger::getInstance().debug() << "Assigned sequence number " << currentSeq << " to interface: " << currentInterface->Get().ipAddress.toHex() << std::endl;
+        Logger::getInstance().debug() << "Assigned sequence number " << currentSeq << " to interface: " << getConfigs()->interfaceAddress.toHex() << std::endl;
         return currentSeq;
     }
 
@@ -3401,10 +3415,6 @@ namespace Protocol
                 Logger::getInstance().warn() << "Packet with sequence number " << sequenceNum << " already exists for neighbor " << neighbor->ipAddress.toHex() << std::endl;
                 return;
             }
-        }
-        if (neighbor->ipAddress == Functions::hexToByte("c0a80001"))
-        {
-            std::cout << std::endl;
         }
 
         // Create ReliablePacketInfo
@@ -3441,11 +3451,12 @@ namespace Protocol
 
     RoutingTable::Eigrp EigrpInterface::encodeSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute)
     {
+        std::shared_lock<std::shared_mutex> lock(currentInterfaceInfo.lock()->ipMutex);
         RoutingTable::Eigrp route;
         route.nextHop = ByteString(summaryRoute.network.size(), '\x00');
-        route.bandwidth = (10000000 / currentInterface->Get().bandwidth) * 256;
-        route.delay = (currentInterface->Get().delay / 10) * 256;
-        route.mtu = currentInterface->Get().mtu;
+        route.bandwidth = (10000000 / currentInterfaceInfo.lock()->bandwidth) * 256;
+        route.delay = (currentInterfaceInfo.lock()->delay / 10) * 256;
+        route.mtu = currentInterfaceInfo.lock()->mtu;
         route.hopCount = 0;
         route.reliability = 255;
         route.load = configs.load;
@@ -3626,7 +3637,7 @@ namespace Protocol
                 }
                 else
                 {
-                    currentInterface->arp->sendRequest(neighbor->ipAddress.toString());
+                    currentInterface.lock()->arp->sendRequest(neighbor->ipAddress.toString());
                 }
             }
         }
@@ -3729,10 +3740,6 @@ namespace Protocol
     void TopologyTable::addOrUpdateRoute(const ByteString destination, int prefixLength, const RouteInfo &routeInfo, const ByteString neighborIp)
     {
         std::lock_guard<std::mutex> lock(tableMutex);
-        if (neighborIp == Functions::hexToByte("c0a80001"))
-        {
-            std::cout << "idshjfkosd" << std::endl;
-        }
 
         // Create or update the topology table entry
         auto& entry = topologyEntries[destination];
@@ -3976,10 +3983,10 @@ void updateEigrpInterface(Interface *interface)
         {
             for (auto as : instance.second->autonomousSystems)
             {
-                if (as.second->addressFamilies[AddressFamily::IPv4] && !as.second->addressFamilies[AddressFamily::IPv4]->getConfigs()->networks.empty() && !as.second->addressFamilies[AddressFamily::IPv4]->testAddress(interface->Get().ipAddress))
+                if (as.second->addressFamilies[AddressFamily::IPv4] && !as.second->addressFamilies[AddressFamily::IPv4]->getConfigs()->networks.empty() && !as.second->addressFamilies[AddressFamily::IPv4]->testAddress(interface->Get()->ipv4.ipAddress))
                 {
                     interface->eigrpInterfaceList.erase(as.second->addressFamilies[AddressFamily::IPv4]->getAsNumber());
-                    as.second->addressFamilies[AddressFamily::IPv4]->eigrpInterfaceList.erase(interface->Get().id);
+                    as.second->addressFamilies[AddressFamily::IPv4]->eigrpInterfaceList.erase(interface->Get()->id);
                 }
             }
         }
@@ -3987,8 +3994,8 @@ void updateEigrpInterface(Interface *interface)
 }
 
 EigrpConfigs::CommunicationMode* currentCommunicationMode = new EigrpConfigs::CommunicationMode;
-std::shared_ptr<Protocol::Eigrp> currentEigrp;
-std::shared_ptr<Protocol::EigrpInstance> currentEigrpInstance;
+std::weak_ptr<Protocol::Eigrp> currentEigrp;
+std::weak_ptr<Protocol::EigrpInstance> currentEigrpInstance;
 std::map<ByteString, std::shared_ptr<Protocol::EigrpInstance>> eigrpList;
 std::map<int, std::weak_ptr<Protocol::EigrpAutonomousSystems>> eigrpAutonomousSystems;
 

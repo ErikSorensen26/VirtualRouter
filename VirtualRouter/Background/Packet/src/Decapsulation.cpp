@@ -213,7 +213,13 @@ void Packet::decodeEthernet(ByteString &ethernetHeader)
     ethernet.type = ethernetHeader.substr(12, 2);
     start += 14;
 
-    if (currentInterface.Get().macAddress == ethernet.sourceMac)
+    ByteString currentMac;
+    {
+        std::shared_lock<std::shared_mutex> lock(currentInterface.Get()->ipMutex);
+        currentMac = currentInterface.Get()->macAddress;
+    }
+
+    if (currentMac == ethernet.sourceMac)
     {
         Logger::getInstance().info() << "Packet dropped due to receiving current MAC" << std::endl;
         return;

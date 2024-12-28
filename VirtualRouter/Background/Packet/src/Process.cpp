@@ -42,7 +42,8 @@ void ProcessPacket::process(PacketInfo& packet, ByteString& vrf)
             if (print(header)) { Logger::getInstance().info() << "THIS IS ETHERNET" << std::endl; } 
             // Check if packet contains your source address
             macAddress = ethernet->sourceMac.toString();
-            if (ethernet->sourceMac == interface->Get().macAddress) 
+            std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
+            if (ethernet->sourceMac == interface->Get()->macAddress)
             {
                 // Drop packet
                 return;
@@ -116,7 +117,8 @@ void ProcessPacket::process(PacketInfo& packet, ByteString& vrf)
             // }
             if (ethernet && RoutingTable::getInstance().ArpLookup(ipv4->sourceAddress))
             {
-                RoutingTable::getInstance().updateArp(ipv4->sourceAddress, macAddress, interface->Get().ipAddress);
+                std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
+                RoutingTable::getInstance().updateArp(ipv4->sourceAddress, macAddress, interface->Get()->ipv4.ipAddress);
             }
         } 
         else if (is_type<GreHeade>(header)) 

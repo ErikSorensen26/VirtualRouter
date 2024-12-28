@@ -9,7 +9,7 @@
 #include <Decapsulation.h>
 
 // Constructor for the Interface class
-Interface::Interface(std::string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug)
+Interface::Interface(InterfaceType interfaceType, std::string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug)
     : packetCapture(outInterface, "FF000000", inQueSiz),
       packetSend(outInterface),
       threadsRunning(false), 
@@ -21,8 +21,11 @@ Interface::Interface(std::string outInterface, const int inQueSiz, const int out
     outInt = outInterface;
     inQsiz = inQueSiz;
     outQsiz = outQueSiz;
-    configs.macAddress = Functions::hexToByte(mac);
-    id = interfaceId;
+
+    // Configs
+    configs = std::make_shared<IpInfo>();
+    configs->macAddress = Functions::hexToByte(mac);
+    configs->id = interfaceId;
 
     // Initialize shared pointers for Protocol objects
     arp = std::make_shared<Protocol::Arp>(*this);
@@ -69,8 +72,11 @@ void Interface::setIPv4(std::string ip, int subnet)
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
-        configs.ipAddress = ip; 
-        configs.mask = subnet;
+        {
+            std::lock_guard<std::shared_mutex> ipLock(configs->ipMutex);
+            configs->ipv4.ipAddress = ip; 
+            configs->ipv4.mask = subnet;
+        }
         // Send gratuitous arps
         arp->sendReply(Variable::Mac::broadcast, ip);
         arp->sendReply(Variable::Mac::broadcast, ip);
@@ -82,16 +88,18 @@ void Interface::setIPv6(std::string ip, int subnet, bool eui64)
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
-        configs.ipv6Address = ip;
-        configs.mask = subnet;
+        {
+            std::lock_guard<std::shared_mutex> ipLock(configs->ipMutex);
+            configs->ipv6.ipAddress = ip; 
+            configs->ipv6.mask = subnet;
+        }
         // NDP
         stateChangeV6();
     }
 }
 
 // Get current IP address, subnet mask, MAC address, and speed information
-ipInfo Interface::Get() {
-    std::lock_guard<std::mutex> lock(ipInfoMutex);
+std::shared_ptr<IpInfo> Interface::Get() const {
     return configs;
 }
 
@@ -237,7 +245,7 @@ void Interface::stateChangeV6()
 }
 
 // Initialize the shared pointer to the current Interface
-Interface* currentInterface{};
+std::weak_ptr<Interface> currentInterface;
 
 // Map to store Interface objects by string key and integer ID
 std::shared_mutex interfaceListMutex;

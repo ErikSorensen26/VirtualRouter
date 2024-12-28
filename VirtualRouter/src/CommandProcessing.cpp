@@ -2,7 +2,9 @@
 
 void Terminal::executeCommand(std::string &command)
 {
+	std::cout << modeSchema->dump(4) << std::endl;
 	isModeChanged = false;
+	isExitCommand = false;
 	std::string preProcessMode = currentMode;
 
 	command = normalizeCommand(command);
@@ -75,10 +77,7 @@ void Terminal::executeCommand(std::string &command)
 			}
 			if (command == "write memory")
 			{
-				if (!doc.save_file("../VirtualRouter/Dir/startup-config.xml"))
-				{
-					std::cerr << "Error saving XML file" << std::endl;
-				}
+				saveConfig();
 			}
 		}
 
@@ -111,7 +110,7 @@ void Terminal::executeCommand(std::string &command)
 			}
 			if (command == "exit")
 			{
-				changeMode(mode.userExec);
+				exitMode(mode.userExec);
 			}
 		}
 
@@ -123,7 +122,7 @@ void Terminal::executeCommand(std::string &command)
 		{
 			if (command == "exit")
 			{
-				changeMode(mode.privilegedExec);
+				exitMode(mode.privilegedExec);
 			}
 			if (commandStream[0] == "hostname")
 			{
@@ -167,9 +166,9 @@ void Terminal::executeCommand(std::string &command)
 				if (activeInterfaces->count(interfaceID) == 0)
 				{
 					std::lock_guard<std::shared_mutex> lock(interfaceListMutex);
-					(*activeInterfaces)[interfaceID] = std::make_shared<Interface>(intType, 1024, 1024, mac, interfaceID, isDebugModeEnabled);
+					(*activeInterfaces)[interfaceID] = std::make_shared<Interface>(getInterfaceType(type), intType, 1024, 1024, mac, interfaceID, isDebugModeEnabled);
 				}
-				currentInterface = activeInterfaces->at(interfaceID).get();
+				currentInterface = activeInterfaces->at(interfaceID);
 			}
 			if (commandStream[0] == "router")
 			{
@@ -184,13 +183,15 @@ void Terminal::executeCommand(std::string &command)
 					}
 					if (Functions::isDecimal(ID))
 					{
-						std::lock_guard<std::shared_mutex> lock(globalEigrpMutex);
+						std::unique_lock<std::shared_mutex> lock(globalEigrpMutex);
 						*currentCommunicationMode = EigrpConfigs::CommunicationMode::MULTICAST;
 						auto eigrpAs = eigrpList[ID]->autonomousSystems.find(routingProtocolID);
 						if (eigrpAs == eigrpList[ID]->autonomousSystems.end())
 						{
+							lock.unlock();
 							eigrpList[ID]->autonomousSystems[routingProtocolID] = std::make_shared<Protocol::EigrpAutonomousSystems>();
 							eigrpAs = eigrpList[ID]->autonomousSystems.find(routingProtocolID);
+							lock.lock();
 						}
 						// Update autonomous system instance list
 						for (auto it = eigrpAutonomousSystems.begin(); it != eigrpAutonomousSystems.end();)
@@ -211,8 +212,10 @@ void Terminal::executeCommand(std::string &command)
 						auto eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
 						if (eigrpIt == eigrpAs->second->addressFamilies.end())
 						{
+							lock.unlock();
 							eigrpAs->second->addressFamilies[AddressFamily::IPv4] = std::make_shared<Protocol::ClassicEigrp>(routingProtocolID, AddressFamily::IPv4);
 							eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
+							lock.lock();
 						}
 						currentEigrp = eigrpIt->second;
 						configureRoutingMode(RoutingMode::EIGRP_CLASSIC);
@@ -250,13 +253,13 @@ void Terminal::executeCommand(std::string &command)
 		{
 			if (command == "exit")
 			{
-				changeMode(mode.globalConfiguration);
+				exitMode(mode.globalConfiguration);
 			}
 			if (commandStream[0] == "ip" && commandStream[1] == "address")
 			{
 				if (commandStream[2] != "dhcp")
 				{
-					currentInterface->setIPv4(Functions::addressToByte(commandStream[2]), Functions::byteMaskToNum(Functions::addressToByte(commandStream[3])));
+					currentInterface.lock()->setIPv4(Functions::addressToByte(commandStream[2]), Functions::byteMaskToNum(Functions::addressToByte(commandStream[3])));
 				}
 				else
 				{
@@ -287,9 +290,9 @@ void Terminal::executeCommand(std::string &command)
 					{
 						network.mask = Variable::IPv4::broadcast;
 					}
-					currentEigrp->addNetwork(network);
-					currentEigrp->updateInterfaceList();
-					currentEigrp->updateRoutingTableForConnected();
+					currentEigrp.lock()->addNetwork(network);
+					currentEigrp.lock()->updateInterfaceList();
+					currentEigrp.lock()->updateRoutingTableForConnected();
 				}
 			}
 			else if (currentSubMode == "eigrp_named")
@@ -341,11 +344,11 @@ void Terminal::executeCommand(std::string &command)
 					}
 					if (commandStream[2] == "autonomous-system" || commandStream[3] == "autonomous-system")
 					{
-						auto eigrpAs = currentEigrpInstance->autonomousSystems.find(routingProtocolID);
-						if (eigrpAs == currentEigrpInstance->autonomousSystems.end())
+						auto eigrpAs = currentEigrpInstance.lock()->autonomousSystems.find(routingProtocolID);
+						if (eigrpAs == currentEigrpInstance.lock()->autonomousSystems.end())
 						{
-							currentEigrpInstance->autonomousSystems[routingProtocolID] = std::make_shared<Protocol::EigrpAutonomousSystems>();
-							eigrpAs = currentEigrpInstance->autonomousSystems.find(routingProtocolID);
+							currentEigrpInstance.lock()->autonomousSystems[routingProtocolID] = std::make_shared<Protocol::EigrpAutonomousSystems>();
+							eigrpAs = currentEigrpInstance.lock()->autonomousSystems.find(routingProtocolID);
 						}
 						// Update autonomous system instance list
 						for (auto it = eigrpAutonomousSystems.begin(); it != eigrpAutonomousSystems.end();)
@@ -389,14 +392,18 @@ void Terminal::executeCommand(std::string &command)
 
 	}
 
-	bool notlist = false;
-	if (notlist)
+	bool isList = false;
+	if (isList)
 	{
 		executionHistory.push_back(command);
 	}
 	if (commandStream[0] == "ip" && (commandStream[1] == "route"))
 	{
-		notlist = true;
+		isList = true;
+	}
+	if (commandStream[0] == "interface")
+	{
+		isList = true;
 	}
 
 	if (preProcessMode != mode.userExec && preProcessMode != mode.privilegedExec && command != "error")
@@ -404,13 +411,24 @@ void Terminal::executeCommand(std::string &command)
 		Functions::printVector(commandHistory);
 		// cout << "\n" << endl;
 		Functions::printVector(commandStream);
-		saveCommand(commandHistory, commandStream, isModeChanged, notlist);
+		saveCommand(commandHistory, commandStream, isModeChanged, isExitCommand, isList);
+		
+		// Check if mode changed
+		if (isModeChanged)
+		{
+			modeSchema = tempModeSchema;
+		}
 	}
 }
 
 void Terminal::runDhcp()
 {
-	ByteString mac = currentInterface->Get().macAddress;
+	ByteString mac;
+	{
+		auto interfaceInfo = currentInterface.lock()->Get();
+		std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
+		mac = interfaceInfo->macAddress;
+	}
 
-	currentInterface->dhcp->InitializeDhcp(mac);
+	currentInterface.lock()->dhcp->InitializeDhcp(mac);
 }

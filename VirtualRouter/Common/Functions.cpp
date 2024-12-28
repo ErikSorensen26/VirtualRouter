@@ -198,12 +198,12 @@ namespace Functions {
         if (str.empty()) {return "";}
         std::string normalize;
         for (char c : str) {
-    		if (isspace(c) || c == '\t') {
-    			normalize += c;
-    		}
-    		else {
-    			normalize += tolower(c);
-    		}
+            if (isspace(c) || c == '\t') {
+                normalize += c;
+            }
+            else {
+                normalize += tolower(c);
+            }
     	}
         return normalize;
     }
@@ -325,7 +325,7 @@ namespace Functions {
     void printVector(const std::vector<std::string>& vec) {
         for (const auto& element : vec) {
 
-            //std::cout << std::string(element) << std::endl;
+            std::cout << std::string(element) << std::endl;
         }
     }
 

@@ -1,40 +1,57 @@
 #include <Configs.h>
 #include <iostream>
 #include <fstream>
+#include <Logger.h>
 
 // Function to print a chunk of XML for debugging purposes
-void printNodeChunk(const pugi::xml_node& node) 
+void Configs::printConfig() 
 {
-    // Create a temporary xml_document for isolation
-    pugi::xml_document temp_doc;
-
-    // Import the subtree to the temporary document
-    pugi::xml_node imported_node = temp_doc.append_copy(node);
-
-    // Print the XML chunk with indentation for readability
-    temp_doc.save(std::cout, "  "); 
-    std::cout << std::endl;
+    std::cout << root.dump(4) << std::endl;
 }
 
 // Constructor for Configs class
 Configs::Configs() {}
 
-void Configs::initConfigs() 
+void Configs::initConfigs(const std::string& startupFilename) 
 {
-    // Get the singleton instance of Save
-    //Save& routingTable = Save::getInstance();
+    startupFileName = startupFilename;
 
-    // Load XML configuration file into doc
-    pugi::xml_parse_result config = doc.load_file("../VirtualRouter/Dir/startup-config.xml");
-    if (!config) 
+    // Load JSON configuration file into doc
+    std::ifstream startupFile(startupFilename);
+    if (startupFile.is_open()) 
     {
-        std::cerr << "Error loading XML file: " << config.description() << std::endl;
-        return;
+        if (startupFile.peek() == std::ifstream::traits_type::eof())
+        {
+            Logger::getInstance().warn() << "Startup file is empty. Initializing with {}." << std::endl;
+
+            // Set root to an empty JSON object
+            root = json::object();
+
+            // Write "{}" back to the file
+            std::ofstream outputFile(startupFilename);
+            if (outputFile.is_open())
+            {
+                outputFile << root.dump(4); // Save as formatted JSON
+                outputFile.close();
+            }
+            else
+            {
+                std::cerr << "Failed to open file: " << startupFilename << std::endl;
+            }
+        }
+        startupFile >> root;
+        startupFile.close();
+    } 
+    else 
+    {
+        std::cerr << "Failed to open file: " << startupFilename << std::endl;
+        root = json::object(); // Default to empty JSON if file cannot be opened
     }
 
-    // Get the root node of the XML configuration
-    config_node = doc.child("config");
-    modeHistory.push_back(config_node);
+    printConfig();
+    // Get the root node of the JSON configuration
+    configNode = &root;
+    modeHistory.push_back(configNode);
 
     // Load JSON data for interface configurations
     json configJson;
@@ -74,522 +91,419 @@ void Configs::initConfigs()
     }
 }
 
-// Process XML nodes and generate commands based on their content
-void Configs::processNode(const pugi::xml_node& node, std::string command) 
+// Process JSON nodes and generate commands based on their content
+void Configs::processConfigs(nlohmann::ordered_json* currentNode, std::vector<std::string> command, std::vector<std::string>& commandList)
 {
-    noMoreVol = false; 
-    moreChild = false;
-
-    std::string prevCommand;
-
-    std::string root = "config"; 
-
-    // Process node name and text
-    if (!node.text()) 
+    if (!currentNode || currentNode->is_null()) return; // Handle null or invalid JSON nodes
+    
+    for (auto it = currentNode->begin(); it != currentNode->end(); ++it)
     {
-        command += " " + std::string(node.name());
-        curNonVolCommand += " " + std::string(node.name());
-    } 
-    else 
-    {
-        bool contains = false;
-        for (std::string& str : inputs) 
+        const std::string& key = it.key();
+        nlohmann::ordered_json& value = it.value();
+
+        // Handle mode key (mode change)
+        if (value.is_object() && key == MODE_KEY)
         {
-            if (str == node.name()) 
-            {
-                contains = true;
-            }
+            commandList.push_back(joinCommand(command));  // Add current mode
+            processConfigs(&value, {}, commandList); // Process commands in the mode
+            continue;
         }
-        if (!contains) 
+
+        // Volitile keys (check if the value is primitive or explicitly volatile)
+        if (isVolitile(key) || value.is_primitive())
         {
-            command += " " + std::string(node.name());
+            command.push_back(value.is_primitive() ? value.get<std::string>() : key);
+            continue;
         }
-    }
 
-    // Append attributes to command string
-    for (pugi::xml_attribute attr = node.first_attribute(); attr; attr = attr.next_attribute()) 
-    {
-        command += " " + std::string(attr.value());
-    }
-
-    // Append text content to command string
-    if (node.text()) 
-    {
-        command += " " + std::string(node.text().get());
-    }
-
-    // If the node has attributes, store command and clear it
-    if (node.first_attribute()) 
-    {
-        recover.push_back(command);
-        command.clear();
-        nonVolCommand = curNonVolCommand;
-        curNonVolCommand.clear();
-    }
-
-    // Process child nodes
-    bool has_child_elements = false;
-    for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) 
-    {
-        if (child.type() == pugi::node_element) 
+        // handle arrays
+        if (value.is_array())
         {
-            has_child_elements = true;
-            std::string child_command = command;
-            processNode(child, child_command);
-            if (command == nonVolCommand) 
+            for (auto& obj : value)
             {
-                noMoreVol = true;
-            }
-            if (noMoreVol) 
-            {
-                int numChild = 0;
-                std::string num = child.name();
-                for (pugi::xml_node node : child.children()) 
+                if (obj.is_object())
                 {
-                    numChild++;
-                }
-                if (numChild > 1) 
-                { 
-                    moreChild = true; 
+                    // Process each object in the array
+                    command.push_back(key); // Add the parent key
+                    processConfigs(&obj, command, commandList);
+                    command.pop_back();
                 }
             }
-            if (node.parent().name() != root && !moreChild) 
-            {
-                return;
-            }
-        } 
-        else if (!has_child_elements && node.parent().name() != root) 
+            continue;
+        }
+
+        // Handle objects
+        if (value.is_object())
         {
-            pugi::xml_node sibling = node.next_sibling();
-            while (sibling) 
-            {
-                if (sibling.type() == pugi::node_element) 
-                {
-                    std::string sibling_command = command;
-                    processNode(sibling, sibling_command);
-                    if (command == nonVolCommand) 
-                    {
-                        noMoreVol = true;
-                    }
-                    if (noMoreVol) 
-                    {
-                        int numChild = 0;
-                        std::string num = child.name();
-                        for (pugi::xml_node node : child.parent().children()) 
-                        {
-                            numChild++;
-                        }
-                        if (numChild > 1) { moreChild = true; }
-                    }
-                    if (node.parent().name() != root && node.text() && !moreChild) 
-                    {
-                        return;
-                    }
-                }
-                sibling = sibling.next_sibling();
-            }
+            command.push_back(key); // Add the current key to the command
+            processConfigs(&value, command, commandList); // Recurse
+            command.pop_back(); // Remove key after processing
+            continue;
         }
     }
-    // Store final command if no child elements are present
-    if (!has_child_elements && !command.empty()) 
+
+    // Test if this is the end of a command
+    bool endOfCommand = true;
+    for (auto it = currentNode->begin(); it != currentNode->end(); ++it)
     {
-        recover.push_back(command);
-        command.clear();
-        nonVolCommand = curNonVolCommand;
-        curNonVolCommand.clear();
+        if (it.value().is_array() || it.value().is_object())
+        {
+            endOfCommand = false;
+        }
     }
+
+    // Add the completed command to the list if at the end of a command
+    if (!command.empty() && endOfCommand)
+    {
+        commandList.push_back(joinCommand(command));
+    }
+}
+
+std::string Configs::joinCommand(const std::vector<std::string>& command)
+{
+    std::ostringstream oss;
+    for (size_t i = 0; i < command.size(); ++i)
+    {
+        if (i > 0) oss << " ";
+        oss << command[i];
+    }
+    return oss.str();
 }
 
 // Retrieve commands from XML configuration
-std::vector<std::string> Configs::recoverXml() 
+std::vector<std::string> Configs::recoverConfigs() 
 {
     recover.clear(); // Clear previous recover data
-    config_node = doc.child("config"); 
+
+    processConfigs(&root, {}, recover);
 
     // Process each child node of the root node
-    for (pugi::xml_node node = config_node.first_child(); node; node = node.next_sibling()) 
-    {
-        processNode(node, "");
-    }
     return recover;
 }
 
-// Save new commands to the XML configuration
-void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool& changeMode, bool& isListed) 
+// Saves the entire configuration
+void Configs::saveConfig()
 {
-    if (oldCommand.empty()) 
-    { 
-        return; 
-    } // No commands to process
-
-    pugi::xml_node save = config_node;
-
-    // If not in privileged or user exec mode, handle volatile commands
-    if (command[0] != "exit" && currentMode != mode.privilegedExec && currentMode != mode.userExec) 
+    std::ofstream file(startupFileName);
+    if (!file)
     {
-        int vol = 0;
-        for (int index = 0; index < command.size(); index++) 
-        {
-            if (isVolitile(oldCommand[index])) 
-            {
-                vol++;
-                if (vol > 1) 
-                {
-                    break;
-                }
-            } 
-            else 
-            {
-                vol = 0;
-            }
-        }
-        if (no && !changeMode) 
-        {
-            bool listed = false;
-            for (int index = 0; command.size() >= index; ++index) 
-            {
-                if (isListed) {
-                    int childAmount = 0;
-                    for (auto child : config_node.child(command[0].c_str()).children()) 
-                    {
-                        childAmount++;
-                    }
-                    if (childAmount <= 1) 
-                    {
-                        config_node.remove_child(config_node.child(command[0].c_str()));
-                    } 
-                    else 
-                    {
-                        for (auto child : config_node.child(command[0].c_str()).children(command[1].c_str())) 
-                        {
-                            std::vector<std::string> tempCommand = command;
-                            pugi::xml_node node = child;
-                            if (!travelNode(tempCommand, oldCommand, node, save, changeMode, isListed, 2)) 
-                            {
-                                returnToRoot(node, child);
-                                node.remove_children();
-                                config_node.child(command[0].c_str()).remove_child(node);
-                                return;
-                            }
-                        }
-                    }
-                }
-
-                // Handle non-listed commands
-                if (!isListed) 
-                {
-                    travelNode(command, oldCommand, config_node, save, changeMode, isListed, index);
-                    if (deleteNodeAndAllChildren(config_node, save)) {
-                        returnToRoot(config_node, save);
-                        return;
-                    }
-                    returnToRoot(config_node, save);
-                }
-            }
-        } 
-        else 
-        {
-            travelNode(command, oldCommand, config_node, save, changeMode, isListed, 0);
-        }
+        std::cerr << "Error opening file for writing!" << std::endl;
     }
-
-    // Handle mode changes
-    if (changeMode && currentMode != mode.privilegedExec && currentMode != mode.userExec) 
-    {
-        if (command[0] == "exit") 
-        {
-            modeHistory.pop_back(); 
-            config_node = modeHistory[modeHistory.size() - 1]; 
-        } 
-        else 
-        {
-            modeHistory.push_back(config_node);
-        }
-    } 
-    else 
-    {
-        config_node = save; 
-    }
-
-    // Print the final XML configuration
-    //doc.save(std::cout);
-    //std::cout << std::endl;
+    file << root.dump(4);
+    file.close();
 }
 
-bool Configs::travelNode(std::vector<std::string>& command, std::vector<std::string> oldCommand, pugi::xml_node& config_node, pugi::xml_node& save, bool& changeMode, bool& isList, int offset) 
+// Save new commands to the XML configuration
+void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool& isListed) 
 {
-    // Offset adjustment for special conditions
-    int otherOffset = 0;
+    if (oldCommand.empty() || command.empty()) return;
 
-    // If `no` is true and `isList` is true, adjust the offset
-    if (no && isList) 
+    nlohmann::ordered_json* currentNode = &(*configNode);
+
+    // Indicates of the subCommand is the first command
+    bool firstIsSub = false;
+
+    // Gets main and subcommand
+    std::string mainCommand = command[0];
+    std::string subCommand = command.size() > 1 ? command[1] : "";
+
+    // Step 1: Navigate or create the nested structure
+    if (subCommand.empty() || isVolitile(oldCommand[1]))
     {
-        otherOffset = offset;
-        offset = 0;
+        firstIsSub = true;
+        subCommand = mainCommand;
+        mainCommand.clear();
+        // Main command
+        if (!currentNode->contains(subCommand))
+        {
+            insertOrdered(currentNode, subCommand);
+            
+            (*currentNode)[subCommand] = (isListed ? json::array() : json::object());
+        }
+        if (currentNode)
+        {
+            currentNode = &((*currentNode)[subCommand]);
+        }
+
+        printConfig();
+    }
+    else
+    {
+        // Main command
+        if (!currentNode->contains(mainCommand))
+        {
+            {
+                insertOrdered(currentNode, mainCommand);
+            }
+        }
+        if (currentNode)
+        {
+            currentNode = &((*currentNode)[mainCommand]);
+        }
+        printConfig();
+
+        // Sub command
+        if (!currentNode->contains(subCommand))
+        {
+            if (!currentNode->contains(subCommand))
+            {
+                insertOrdered(currentNode, mainCommand, subCommand, isListed);
+            }
+        }
+        currentNode = &((*currentNode)[subCommand]);
+
+        printConfig();
     }
 
-    // Declare temporary variables for XML node processing
-    pugi::xml_node tempNode;
-    pugi::xml_node noNode;
-    pugi::xml_node tempNoNode;
+    // Step 2: Create or append the new configuration
+    nlohmann::ordered_json newConfig = json::object();
+    nlohmann::ordered_json* newConfigDir = &newConfig;
 
-    // Flags for tracking the state of node matching and new nodes
-    bool runMatch = false;
-    bool isNew = false;
-    bool cleared = false;
-    clear = false;
-
-    // Traverse the command vector starting from the offset
-    for (int index = 0 + otherOffset; index < (command.size() - offset); ++index) 
+    if (command.size() > 1)
     {
-        // If `no` is false, `isList` is true, and we're at the start, navigate to the child node
-        if (!no && isList && index == 0 && config_node.child(command[0].c_str())) 
+        for (size_t i = firstIsSub ? 1 : 2; i < command.size(); ++i)
         {
-            config_node = config_node.child(command[0].c_str());
-        } 
-        else 
-        {
-            // If we are at index 2 and not in change mode or in a list, clear children of the current node
-            if (index == 2 && !changeMode && !isList) 
+            if (isVolitile(oldCommand[i]))
             {
-                if (!no) {
-                    config_node.remove_children();
+                (*newConfigDir)[getVolitileValue(oldCommand[i], command[i], *newConfigDir)] = command[i];
+            }
+            else
+            {
+                if (!newConfigDir->contains(command[i]))
+                {
+                    (*newConfigDir)[command[i]] = json::object();
+                }
+                if (newConfigDir)
+                {
+                    newConfigDir = &((*newConfigDir)[command[i]]);
+                }
+            }
+        }
+        std::cout << newConfig.dump(4) << std::endl;
+
+        if (isListed)
+        {
+            bool match = false;
+
+            // Ensure currentNode is an array
+            if (!currentNode->is_array())
+            {
+                *currentNode = json::array();
+            }
+            
+            // Check for duplicates
+            for (auto& obj : *currentNode)
+            {
+                std::vector<std::string> volitileValues{};
+                bool noMatch = false;
+                nlohmann::ordered_json *jsonLookup = &obj;
+                for (size_t io = firstIsSub ? 1 : 2; io < command.size(); ++io)
+                {
+                    if (isVolitile(oldCommand[io]))
+                    {
+                        // Guess volitile value
+                        std::string volitileValue = getVolitileValue(oldCommand[io], command[io], volitileValues);
+                        // Cache used volitile value
+                        volitileValues.push_back(volitileValue);
+
+                        if (jsonLookup->contains(volitileValue) && (*jsonLookup)[volitileValue] == command[io])
+                        {
+                            noMatch = false;
+                        }
+                        else
+                        {
+                            noMatch = true;
+                        }
+                    }
+                    else
+                    {
+                        if (jsonLookup->contains(command[io]))
+                        {
+                            jsonLookup = &((*jsonLookup)[command[io]]);
+                        }
+                        else
+                        {
+                            noMatch = true;
+                        }
+                    }
+
+                    if (noMatch)
+                    {
+                        break;
+                    }
+                }
+                if (noMatch)
+                {
+                    continue;
+                }
+
+                if (!noMatch)
+                {
+                    match = true;
+                    if (changeMode)
+                    {
+                        configNode = &obj;
+                    }
+                    break;
+                }
+            }
+            
+            // Append the new configuration of no match
+            if (!match)
+            {
+                currentNode->push_back(newConfig);
+                if (changeMode)
+                {
+                    configNode = &((*currentNode)[currentNode->size() - 1]);
                 }
             }
 
-            // If the old command is not volatile, handle non-volatile nodes
-            if (!isVolitile(oldCommand[index])) 
+        }
+        else
+        {
+            *currentNode = newConfig;
+            if (changeMode)
             {
-                if (!isList || no) 
-                {
-                    // Check if the child node exists; if not, create it
-                    pugi::xml_node child = config_node.child(command[index].c_str());
-                    if (!child) 
-                    {
-                        if (no && isList) 
-                        {
-                            return 1; 
-                        }
-                        child = config_node.append_child(command[index].c_str());
-                    }
-                    config_node = child;
-                }
-                else 
-                {
-                    // Create child node directly if we are in a list
-                    pugi::xml_node child = config_node.child(command[index].c_str());
-                    child = config_node.append_child(command[index].c_str());
-                    config_node = child;
-                }
-            } 
-            else 
-            {
-                // Handle volatile nodes
-                if (!runMatch) 
-                {
-                    bool match = true;   
-                    bool isNew = false; 
-                    int numChild = 0;   
+                configNode = currentNode;
+            }
+        }
+        printConfig();
+    }
 
-                    // Attempt to match nodes in the parent node
-                    for (pugi::xml_node conf_node : config_node.parent().children()) 
+    // Step 3: Handle 'changeMode' adjustments
+    if (changeMode && !exitMode)
+    {
+        for (size_t i = firstIsSub ? 1 : 2; i < command.size(); ++i)
+        {
+            if (!isVolitile(oldCommand[i]))
+            {
+                if (configNode)
+                {
+                    configNode = &((*newConfigDir)[command[i]]);
+                }
+            }
+        }
+        if (!configNode->contains(MODE_KEY))
+        {
+            (*configNode)[MODE_KEY] = json::object();
+        }
+        configNode = &((*configNode)[MODE_KEY]);
+        modeHistory.push_back(configNode);
+    }
+    else if (exitMode)
+    {
+        modeHistory.pop_back(); 
+        configNode = &(*(modeHistory[modeHistory.size() - 1]));
+    }
+    printConfig();
+}
+    
+// Inserts items in the correct order
+void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::string& mainCommand, const std::string& subCommand, bool isListed)
+{
+    // Handle main command
+    if (!mainCommand.empty() && subCommand.empty())
+    {
+        if (!modeSchema->contains(mainCommand))
+        {
+            (*parentNode)[mainCommand] = nlohmann::ordered_json::object();
+            return;
+        }
+
+        // Insert the main command in order
+        const auto& orderArray = *modeSchema; // Top-level order for main commands
+        
+        if (parentNode->is_object())
+        {
+            // Handle objects
+            if (!parentNode->contains(mainCommand))
+            {
+                nlohmann::ordered_json tempNode(*parentNode);
+                parentNode->clear();
+                bool inserted = false;
+
+                for (auto& key : orderArray.items())
+                {
+                    if (key.key() == mainCommand)
                     {
-                        match = true;
-                        numChild = 0;
-                        if (isList && !isNew) 
-                        {
-                            int ind = index;
-                            int forInd = index;
-                            pugi::xml_node child = conf_node;
-                            for (int num = index; num < command.size(); ++num) 
-                            {
-                                int chn = 0;
-                                if (!match) 
-                                {
-                                    break;
-                                }
-                                // Compare command with node children
-                                for (pugi::xml_node node : child.children()) 
-                                {
-                                    if (chn == (num - forInd)) 
-                                    {
-                                        if (command[ind] == node.text().as_string())
-                                        {
-                                            match = true;
-                                            ++ind;
-                                        } 
-                                        else if (command[ind] == node.name()) 
-                                        {
-                                            match = true;
-                                            ++ind;
-                                            child = node;      
-                                            forInd = ind;
-                                        } 
-                                        else 
-                                        {
-                                            match = false;
-                                        }
-                                    }
-                                    ++chn;
-                                }
-                                if (chn == 0) 
-                                {
-                                    match = false;
-                                    break;
-                                }
-                            }
-                            if (match) 
-                            {
-                                config_node = conf_node; 
-                                break;
-                            }
-                        }
+                        (*parentNode)[mainCommand] = nlohmann::ordered_json::object();
+                        inserted = true;
                     }
-                    if (!match) 
+                    if (tempNode.contains(std::string(key.key())))
                     {
-                        // Create a new node if no match is found and there are children with text
-                        for (pugi::xml_node node : config_node.children()) 
-                        {
-                            if (node.text()) 
-                            {
-                                ++numChild;
-                            }
-                        }
-                        if (numChild != 0) 
-                        {
-                            config_node = config_node.parent().append_child(command[index - 1].c_str());
-                            isNew = true;
-                        }
+                        (*parentNode)[std::string(key.key())] = tempNode[std::string(key.key())];
                     }
-                    runMatch = true; 
-                    if (isNew) 
-                    { 
-                    isNew = true;
-                    } 
                 }
 
-                // Handle changes based on mode
-                if (changeMode) 
+                if (!inserted)
                 {
-                    config_node = config_node.parent(); 
-                    pugi::xml_node child;
-                    // Look for the child node with the attribute to modify
-                    for (pugi::xml_node node : config_node.children(command[index - 1].c_str())) 
-                    {
-                        if (!node.first_attribute()) 
-                        {
-                            node.append_attribute(getVolitileValue(oldCommand[index], command[index]).c_str())
-                                .set_value(command[index].c_str());
-                            child = node;
-                            break;
-                        }
-                        // Check existing attributes for match
-                        for (pugi::xml_attribute attr : node.attributes()) 
-                        {
-                            if (std::string(attr.name()) == getVolitileValue(oldCommand[index], command[index])
-                                && std::string(attr.value()) == command[index]) {
-                                child = node;
-                                break;
-                            }
-                        }
-                    }
-                    if (!child) 
-                    {
-                        if (no && isList) 
-                        {
-                            return 1; 
-                        }
-                        // Create a new child node with attribute if not found
-                        child = config_node.append_child(command[index - 1].c_str());
-                        child.append_attribute(getVolitileValue(oldCommand[index], command[index]).c_str())
-                            .set_value(command[index].c_str());
-                    }
-                    config_node = child; 
-                } 
-                else if (command.size() <= 2 || oldCommand[index] == "LINE") 
+                    (*parentNode)[mainCommand] = nlohmann::ordered_json::object();
+                }
+            }
+        }
+    } 
+
+
+    // Handle SubCommands
+    if (!mainCommand.empty() && !subCommand.empty())
+    {
+        if (!modeSchema->contains(mainCommand))
+        {
+            (*parentNode)[subCommand] = isListed ? nlohmann::ordered_json::array() : nlohmann::ordered_json::object();
+            return;
+        }
+
+        const auto& subCommands = (*modeSchema)[mainCommand];
+        if (!subCommands.is_array())
+        {
+            throw std::runtime_error("SubCommands for '" + mainCommand + "' must be an array in the schema.");
+        }
+
+        if (!parentNode->is_object())
+        {
+            *parentNode = nlohmann::ordered_json::object();
+        }
+
+        if (!parentNode->contains(subCommand))
+        {
+            if (parentNode->is_object())
+            {
+                nlohmann::ordered_json tempNode = *parentNode;
+                parentNode->clear();
+                bool inserted = false;
+
+                for (auto& key : subCommands)
                 {
-                    // Update attribute value if `changeMode` is false or if the command size is small
-                    if (!config_node.first_attribute()) 
+                    if (key == subCommand)
                     {
-                        config_node.append_attribute(getVolitileValue(oldCommand[index], command[index]).c_str())
-                            .set_value(command[index].c_str());
-                    } 
-                    else 
-                    {
-                        config_node.attribute(getVolitileValue(oldCommand[index], command[index]).c_str())
-                            .set_value(command[index].c_str());
+                        (*parentNode)[subCommand] = isListed ? nlohmann::ordered_json::array() : nlohmann::ordered_json::object();
+                        inserted = true;
                     }
-                } 
-                else 
+                    if (tempNode.contains(key))
+                    {
+                        (*parentNode)[std::string(key)] = tempNode[std::string(key)];
+                    }
+                }
+
+                if (!inserted)
                 {
-                    // Handle non-volatile attributes or child nodes
-                    pugi::xml_node child = config_node.child(getVolitileValue(oldCommand[index], command[index]).c_str());
-                    if (!child || (isList && !no)) 
-                    {
-                        if (no && isList) 
-                        {
-                            return 1;
-                        }
-                        child = config_node.append_child(getVolitileValue(oldCommand[index], command[index]).c_str());
-                        child.append_child(pugi::node_pcdata).set_value(command[index].c_str());
-                    } 
-                    else 
-                    {
-                        if (std::string(child.text().get()) != command[index]) 
-                        {
-                            child.text().set(command[index].c_str());
-                        }
-                    }
-                    config_node = child.parent();
+                    (*parentNode)[subCommand] = isListed ? nlohmann::ordered_json::array() : nlohmann::ordered_json::object();
                 }
             }
         }
     }
-    return 0;
 }
 
 // Deletes a given node and all its children based on specific conditions
-bool Configs::deleteNodeAndAllChildren(pugi::xml_node& node, pugi::xml_node& save) 
+void Configs::deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isListed)
 {
-    // Check if the node has siblings (either previous or next) or if it is valid
-    if ((node.previous_sibling() || node.next_sibling()) && node) 
-    {
-        // Remove all children of the node
-        node.remove_children();
-        
-        // Check if the node has attributes and if 'no' is true or if the save node's name matches the parent's name and 'no' is true
-        if ((node.first_attribute() != nullptr && no) || (save.name() == node.parent().name() && no)) 
-        {
-            pugi::xml_node parent = node.parent(); 
-            if (parent) 
-            {
-                // Remove the node from its parent
-                parent.remove_child(node);
-                node = parent;
-            } 
-            else 
-            {
-                // If no parent, set node to an invalid state
-                node = pugi::xml_node();
-            }
-            return true;
-        }
-    } 
-    else if (node.name() == save.name()) 
-    {
-        // If the node's name matches the save node's name, remove all children of the node
-        node.remove_children();
-        return true; 
-    }
-
-    return false;
 }
 
 // Checks if a command string is volatile based on certain conditions
-bool Configs::isVolitile(std::string& command) 
+bool Configs::isVolitile(const std::string& command) 
 {
     // Check if the root node's name is "config" to set configMode flag
-    if (config_node.name() == "config") 
+    if (configNode && * configNode == root) 
     {
         configMode = true;
     } 
@@ -615,8 +529,53 @@ bool Configs::isVolitile(std::string& command)
     return false; 
 }
 
+// Determine the volatile value
+std::string Configs::getVolitileValue(std::string& command, std::string& com, nlohmann::ordered_json currentJson)
+{
+    std::string value = getVolitileValueHelper(command, com);
+
+    int count = 1;
+
+    for (const auto& obj : currentJson.items())
+    {
+        if (obj.key() == value || obj.key().rfind(value + "_", 0) == 0)
+        {
+            count++;
+        }
+    }
+
+    if (count > 0)
+    {
+        value += "_" + std::to_string(count);
+    }
+
+    return value;
+}
+
+std::string Configs::getVolitileValue(std::string& command, std::string com, std::vector<std::string> volitileValues)
+{
+    std::string value = getVolitileValueHelper(command, com);
+
+    int count = 1;
+
+    for (const auto& str : volitileValues)
+    {
+        if (str == value || str.rfind(value + "_", 0) == 0)
+        {
+            count++;
+        }
+    }
+
+    if (count > 0)
+    {
+        value += "_" + std::to_string(count);
+    }
+
+    return value;
+}
+
 // Determines the volatile type based on command and format
-std::string Configs::getVolitileValue(std::string& command, std::string& com) 
+std::string Configs::getVolitileValueHelper(std::string& command, std::string& com) 
 {
     // Return "value" for commands of type "WORD" and "LINE"
     if (command == "WORD" || command == "LINE") 
@@ -628,13 +587,8 @@ std::string Configs::getVolitileValue(std::string& command, std::string& com)
     if (command == "A.B.C.D") 
     {
         std::vector<int> ip{0, 0, 0, 0};
-    #ifdef _WIN32
-        // Windows-specific IP parsing
-        sscanf_s(com.c_str(), "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
-    #else
         // Non-Windows IP parsing
         sscanf(com.c_str(), "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
-    #endif
         for (int num : ip) 
         {
             if (num == 255) 
@@ -675,10 +629,11 @@ std::string Configs::getVolitileValue(std::string& command, std::string& com)
 // Updates the global configuration history to reflect the current configuration state
 void Configs::historyToGlobal() 
 {
-    prevConfig = config_node; 
+    prevConfig = configNode; 
     modeHistory.clear();
-    modeHistory.push_back(config_node.root().child("config")); 
-    config_node = config_node.root().child("config");
+    modeHistory.push_back(&root); 
+    configNode = &root;
+
 }
 
 // Traverses from a node up to the root node and updates the node to match the root

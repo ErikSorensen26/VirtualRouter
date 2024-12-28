@@ -28,7 +28,7 @@ Terminal::Terminal(bool enableDebug) : Console() {
     errorCommand.name = "<error>";
     carriageReturnCommand.name = "<cr>";
 
-	// Load the command tree configuration from a JSON file
+    // Load the command tree configuration from a JSON file
     commandTree.clear();
     std::string configFilePath = "../VirtualRouter/Configs/Commands.json";
     std::ifstream configFile(configFilePath);
@@ -39,8 +39,16 @@ Terminal::Terminal(bool enableDebug) : Console() {
         std::cerr << "Failed to open configuration file: " << configFilePath << std::endl;
     }
 
+    // Load the JSON order
+    std::ifstream configSchemaFile("../VirtualRouter/Configs/ConfigSchema.json");
+    if (configSchemaFile.is_open())
+    {
+        configSchemaFile >> configSchema;
+        configSchemaFile.close();
+    }
+
     // Set the terminal to Global Configuration mode by default
-    changeMode(mode.globalConfiguration);
+    changeMode(mode.globalConfiguration, true);
 
     // Initialize the console and configuration settings
     initConsole();
@@ -58,7 +66,7 @@ Terminal::Terminal(bool enableDebug) : Console() {
  */
 void Terminal::recoverState() {
     // Retrieve the list of saved commands from the XML recovery system
-    std::vector<std::string> savedCommands = recoverXml();
+    std::vector<std::string> savedCommands = recoverConfigs();
 
     // Execute each saved command to restore the terminal's state
     for (std::string& command : savedCommands) {
@@ -67,7 +75,7 @@ void Terminal::recoverState() {
     }
 
     // Optionally, switch back to userExec mode if required
-    // changeMode(mode.userExec);
+    // changeMode(mode.userExec, true);
 }
 
 
@@ -83,13 +91,7 @@ void Terminal::handleInput() {
     cursorPos = 0;
     std::cout << hostname << currentMode;  // Display the prompt with the current mode
 
-#ifdef _WIN32
-    // Windows-specific calculation for prompt length
-    initialLineLength = hostname.size() + currentMode.size();
-#else
-    // Linux-specific calculation for prompt length
     initialLineLength = hostname.size() + currentMode.size() + 1;
-#endif
 
     // Read the user's input from the terminal
     std::string userCommand = input();
@@ -101,7 +103,7 @@ void Terminal::handleInput() {
 
     // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
     if (userCommand == "CRT-Z" && currentMode != mode.userExec) {
-        changeMode(mode.privilegedExec);
+        changeMode(mode.privilegedExec, true);
     }
 
     // Execute commands that are not navigation keys (e.g., up/down arrows)
@@ -143,7 +145,7 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand) {
     int currentIndex = 0;
     bool isFirstIteration = true;
     isRunning = true;
-	no = false;
+    no = false;
     isMatchSuccessful = false;
     isHelpModeActive = false;
     endOfCommand = false;
@@ -157,42 +159,51 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand) {
     }
 
     // Handle "do" and "no" prefix commands
-    if (!parsedWords.empty()) {
+    if (!parsedWords.empty()) 
+    {
         if (parsedWords[0] == "do" && parsedWords[1] != "exit" && parsedWords[1] != "conf" &&
             parsedWords[1] != "configure" &&
-            currentMode != mode.userExec && currentMode != mode.privilegedExec) {
+            currentMode != mode.userExec && currentMode != mode.privilegedExec) 
+        {
 
             // Temporarily switch to privileged mode for "do" commands
             isGlobalCommandExecution = true;
             std::string previousMode = currentMode;
-            nlohmann::json previousCommandTree = workingDirectory;
-            pugi::xml_node previousConfigNode = config_node;
+            json previousCommandTree = workingDirectory;
+            nlohmann::ordered_json* prevModeSchema = modeSchema;
+            nlohmann::ordered_json* previousConfigNode = configNode;
 
-            changeMode(mode.privilegedExec);
+            changeMode(mode.privilegedExec, true);
             std::string remainingCommand = inputCommand.substr(2);
             executeCommand(remainingCommand);
 
             // Restore the previous mode and working directory
             currentDirectory.clear();
-            changeMode(previousMode);
-            config_node = previousConfigNode;
+            changeMode(previousMode, true);
+            configNode = previousConfigNode;
             workingDirectory = previousCommandTree;
+            modeSchema = prevModeSchema;
 
             return "error";
-        } else if (parsedWords[0] == "no" && !isHelpModeActive) {
+        } 
+        else if (parsedWords[0] == "no" && !isHelpModeActive) 
+        {
             // Handle "no" commands by normalizing the remainder of the command
             std::string strippedCommand = normalizeCommand(inputCommand.substr(3));
             no = true;
             return strippedCommand;
         }
     }
-	if (!parsedWords.empty())
-	{
-		if (parsedWords[0] == "?" || parsedWords[0] == "vk_tab")
-		{
-			isMatchSuccessful = true;
-		}
-	}
+    
+    // Handle "?" or "vk_tab" if there is no input
+    if (!parsedWords.empty())
+    {
+        if (parsedWords[0] == "?" || parsedWords[0] == "vk_tab")
+        {
+            // Sets match to true
+            isMatchSuccessful = true;
+        }
+    }
 
     // Process each word in the parsed command
     for (std::string& word : parsedWords) {
@@ -257,8 +268,9 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand) {
                     isGlobalCommandExecution = true;
                     std::string prevMode = currentMode;
                     nlohmann::json prevDirectory = workingDirectory;
-                    pugi::xml_node prevXML = config_node;
-                    changeMode(mode.globalConfiguration);
+                    nlohmann::ordered_json* prevModeSchema = modeSchema;
+                    nlohmann::ordered_json* prevConf = configNode;
+                    changeMode(mode.globalConfiguration, true);
                     historyToGlobal();
                     std::string nextCommand = inputCommand;
                     executeCommand(nextCommand);
@@ -271,8 +283,9 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand) {
                         }
                         else
                         {
-                            changeMode(prevMode);
-                            config_node = prevXML;
+                            changeMode(prevMode, true);
+                            configNode = prevConf;
+                            modeSchema = prevModeSchema;
                             workingDirectory = prevDirectory;
                             if (isCommandExecutionSuccessful)
                             {
@@ -793,11 +806,21 @@ bool Terminal::handlePagination(int& lineNum) {
     }
 }
 
-void Terminal::changeMode(std::string& newMode) {
-	prevMode = currentMode;
-	currentMode = newMode;
-	workingDirectory = commandTree[currentMode];
-	isModeChanged = true;
+void Terminal::changeMode(std::string& newMode, bool processing)
+{
+    prevMode = currentMode;
+    currentMode = newMode;
+    workingDirectory = commandTree[currentMode];
+    isModeChanged = true;
+
+    if (processing)
+    {
+        modeSchema = &(configSchema[currentMode]);
+    }
+    else
+    {
+        tempModeSchema = &(configSchema[currentMode]);
+    }
 }
 
 std::vector<std::string> Terminal::tokenize(const std::string& input, char delimiter) {
@@ -913,6 +936,7 @@ void Terminal::configureInterfaceMode(std::string& type) {
     else if (type == "Virtual-Template") {changeMode(mode.virtualTemplate); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
     else if (type == "Vlan") {changeMode(mode.vlan); activeInterfaces = &interfaceList[getInterfaceType(type)]; currentSubMode = type;}
     workingDirectory = workingDirectory[0][type];
+    tempModeSchema = &((*tempModeSchema)[type]);
 }
 
 void Terminal::configureRoutingMode(RoutingMode type) {
@@ -922,5 +946,6 @@ void Terminal::configureRoutingMode(RoutingMode type) {
     else if (type == RoutingMode::OSPF) {changeMode(mode.ospf); currentSubMode = "ospf";}
     else if (type == RoutingMode::RIP) {changeMode(mode.rip); currentSubMode = "rip";}
     workingDirectory = workingDirectory[0][currentSubMode];
+    tempModeSchema = &((*tempModeSchema)[currentSubMode]);
 }
 

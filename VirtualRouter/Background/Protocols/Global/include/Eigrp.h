@@ -32,7 +32,7 @@ namespace EigrpConfigs
     };
     struct RouterID
     {
-        ByteString ID{};
+        ByteString ID = ByteString(4, '\x00');
         bool isStatic = false;
     };
     struct SummaryRoute 
@@ -269,18 +269,14 @@ namespace EigrpConfigs
         double redistributionMetricOffset = 0.0;
         double wideMetric = 0.0;
         std::vector<Network> networks;
-        ByteString routeID = ByteString(4, '\x00');
         ByteString defaultNetwork;
         int defaultMask = 0;
         TrafficShareMode trafficShareMode = TrafficShareMode::Balenced;
-        RouterID routerID;
     };
     struct InterfaceConfigs
     {
         int helloTime = 5;
         int holdTime = 15;
-        int bandwidth = 100000;
-        int delay = 10;
         int reliability = 255;
         int load = 1;
         int mtu = 1500;
@@ -289,8 +285,12 @@ namespace EigrpConfigs
         int DSCP = 0;
         std::unordered_map<int, int> retransmissionTimers;
         Mode interfaceMode = Mode::MULTIPOINT;
+        ByteString interfaceAddress;
+        int interfaceMask;
     };
 }
+
+class IpInfo;
 
 namespace Protocol 
 {
@@ -351,7 +351,7 @@ namespace Protocol
         // Send Ack to neighbors
         void sendAckToNeighbor(const ByteString neighborIp, int sequenceNumber);
         // Send Update Packet
-        void sendUpdateToNeighbor(const ByteString neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool restart = false, bool conditional = false, std::vector<ByteString> conditionalNeighbors = {}, int ack = 0);
+        void sendUpdateToNeighbor(const ByteString neighborIp, const std::vector<RoutingTable::Eigrp> &routes, EigrpConfigs::UpdateType updateType, bool restart = false, bool conditional = false, std::vector<ByteString> conditionalNeighbors = {});
         // Send query to neighbors
         void sendQueryToNeighbors(const std::vector<RoutingTable::Eigrp>& failedRoutes, const ByteString& originNeighborIp = "");
         // Send query to neighbor
@@ -414,7 +414,8 @@ namespace Protocol
         EigrpHeader::Option generateAuthenticatedTLV(const EigrpHeader& eigrp, const std::shared_ptr<EigrpConfigs::NeighborInfo>& neighbor);
         
         // Holds current interface
-        std::shared_ptr<Interface> currentInterface;
+        std::weak_ptr<Interface> currentInterface;
+        std::weak_ptr<IpInfo> currentInterfaceInfo;
 
         // Neighbor Advertised routes
         bool isRouteAdvertised(ByteString& network, int mask);
@@ -425,7 +426,7 @@ namespace Protocol
         // Hello Timer
         void startHello();
         void startHelloHelper();
-        void sendHelloPacket(ByteString neighborIp = "", bool unicast = false, bool update = false, int sequenceNumber = 0, ByteString routerID = "");
+        void sendHelloPacket(ByteString neighborIp = "", bool unicast = false, bool update = false, int sequenceNumber = 0);
         void stopHello();
         // Active Timer
         void startActiveTimer(const RoutingTable::Eigrp& route); 
@@ -446,7 +447,6 @@ namespace Protocol
 
         ByteString getMulticast();
 
-//         inline std::unordered_map<ByteString, RoutingTable::Eigrp>& getAdvertisedRoutes() { return advertisedRoutes; }
         inline std::shared_ptr<EigrpConfigs::InterfaceConfigs> getConfigs() { return std::make_shared<EigrpConfigs::InterfaceConfigs>(configs); }
         
         // Neighbors
@@ -501,7 +501,7 @@ namespace Protocol
         // Add network to configuration
         void addNetwork(const EigrpConfigs::Network& newNetwork);
         // Configures EIGRP Hello packet with specific settings
-        void eigrpHello(EigrpHeader& eigrp, EigrpInterface* eigrpInt, ByteString neighborIp, int sequenceNumber = 0, bool ack = false, bool update = false, ByteString routeID = ""); // Configures EIGRP update packet with specific settings
+        void eigrpHello(EigrpHeader& eigrp, EigrpInterface* eigrpInt, ByteString neighborIp, int sequenceNumber = 0, bool ack = false, bool update = false); // Configures EIGRP update packet with specific settings
         // Configures EIGRP Hello packet with specific settings
         void eigrpUpdate(EigrpHeader& eigrp, int sequenceNum, bool init = false, bool conditional = false, bool restart = false, bool endoftable = false, bool query = false, bool reply = false);
         // Updates list of EIGRP interfaces based on address matching
@@ -576,14 +576,13 @@ namespace Protocol
         
         // Configurations for EIGRP
         AddressFamily getAddressFamily() const { return addressFamily; }
-//         std::vector<std::vector<EigrpConfigs::NetworksDistributed>*> eigrpDistributionList;
         std::unordered_map<ByteString, int> stuckInActiveTimers;
         std::unique_ptr<Protocol::TopologyTable> topologyTable;
 
         inline int getAsNumber() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return asNumber; }
         inline AddressFamily getAddressFamily() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return addressFamily; }
         inline ByteString getVirtualRouterID() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return virtualRouterID; }
-        inline ByteString getRouterID() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return routeID; }
+        inline ByteString getRouterID() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return routerID.ID; }
         inline std::shared_ptr<EigrpConfigs::EigrpConfigs> getConfigs() { return std::make_shared<EigrpConfigs::EigrpConfigs>(configs); }
 
     private:
@@ -591,7 +590,7 @@ namespace Protocol
         AddressFamily addressFamily;
         ByteString virtualRouterID = ByteString(2, '\x00');
         int asNumber;
-        ByteString routeID;
+        EigrpConfigs::RouterID routerID;
     };
 
     class ClassicEigrp : public Eigrp
@@ -670,10 +669,10 @@ namespace Protocol
 extern EigrpConfigs::CommunicationMode* currentCommunicationMode;
 
 // Global pointer to the current EIGRP autonomous system
-extern std::shared_ptr<Protocol::Eigrp> currentEigrp;
+extern std::weak_ptr<Protocol::Eigrp> currentEigrp;
 
-// Global pointer to the cirrent EIGRP instance
-extern std::shared_ptr<Protocol::EigrpInstance> currentEigrpInstance;
+// Global pointer to the current EIGRP instance
+extern std::weak_ptr<Protocol::EigrpInstance> currentEigrpInstance;
 
 // Map of EIGRP instances by AS number
 extern std::map<ByteString, std::shared_ptr<Protocol::EigrpInstance>> eigrpList;
