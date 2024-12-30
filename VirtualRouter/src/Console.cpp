@@ -1,684 +1,592 @@
 #include <Console.h>
 #include <iostream>
+#include <cstdio>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <vector>
 
 // Constructor for Console class
 Console::Console() : Configs() {}
 
+// Destructor to clean up
+Console::~Console() {}
+
+void Console::setPrompt(const std::string newPrompt)
+{
+    prompt = newPrompt;
+    cursorPos = 0;
+    initialLineLength = prompt.length();
+
+    // Clear current input on the screen and pring new prompt
+    std::cout << prompt;
+    std::cout.flush();
+}
+
+bool Console::isCursorAtLineEnd()
+{
+    int terminalWidth = getTerminalWidth();
+    return (cursorPos + initialLineLength) % terminalWidth == 0;
+}
+
+// Initialization
 void Console::initConsole()
 {
-    // Initialize history with an empty string
-    history.push_back("");
-    int busahd = 0;
+    // Clear the screen once
+    std::cout << "\033[2J\033[H"; // ANSI escape to clear and move cursor to top
+    std::cout << "\033[?7h"; // Enable line wrapping
 
-    // Clear the console screen on Linux
-#ifdef __linux__
-    system("clear");
-#else
-#endif
+    // Initialize inputBuffer as empty
+    cursorPos = 0;
+
+    // Print the prompt
+    std::cout << prompt;
+    std::cout.flush();
 }
 
 // Clears the line after the current cursor position
 void Console::clearLineAfterCursor() 
 {
-    for (int ch = 0; maxCommandLength < ch; ch++) 
-    {
-        std::cout << " "; 
-    }
+    int width = getTerminalWidth();
+    std::cout << std::string(width, ' ');
+    moveCursorLeft(width);
 }
 
-// Retrieves the cursor position on Windows
-#ifdef _WIN32
-COORD Console::getCursorPosition() 
-{
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    // Get the console screen buffer information
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    COORD pos = csbi.dwCursorPosition; 
-    return pos;
-}
-#else
 // Retrieves the cursor position on Unix-like systems
 CursorPosition Console::getCursorPosition() {
-    CursorPosition pos;
-    termios orig_termios;
-    // Save the original terminal attributes
-    tcgetattr(STDIN_FILENO, &orig_termios);
-    termios raw = orig_termios;
-    // Disable echo and canonical mode
-    raw.c_lflag &= ~(ECHO | ICANON);
+    CursorPosition pos{-1, -1};
+    termios orig, raw;
+    tcgetattr(STDIN_FILENO, &orig); // Save original state
+    raw = orig;
+
+    // Turn off canonical & echo
+    raw.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-    std::cout << "\033[6n"; 
+
+    // Ask terminal for position
+    std::cout << "\033[6n";
     std::cout.flush();
+
     char buf[32];
     unsigned int i = 0;
-    while (i < sizeof(buf) - 1) 
+    while (i < sizeof(buf) - 1)
     {
-        if (read(STDIN_FILENO, buf + i, 1) != 1) 
+        if (read(STDIN_FILENO, buf + i, 1) != 1)
         {
             break;
         }
-        if (buf[i] == 'R') 
+        if (buf[i] == 'R')
         {
             break;
         }
         i++;
     }
-    buf[i] = '\0'; 
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
-    if (buf[0] == '\033' && buf[1] == '[') {
-        sscanf(buf, "\033[%d;%dR", &pos.row, &pos.col);
-    } else {
-        pos.row = -1;
-        pos.col = -1;
+    buf[i] = '\0';
+
+    // Restore terminal
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig);
+
+    // Parse row, col from e.g. "/033[12;40R"
+    if (buf[0] == '\033' && buf[1] == '[')
+    {
+        std::sscanf(buf, "\033[%d;%dR", &pos.row, &pos.col);
     }
     return pos;
 }
 
 // Checks if a key has been pressed
-int Console::kbhit() {
-    struct termios oldt, newt;
-    int ch;
-    int oldf;
-
-    // Get and modify terminal attributes for non-blocking input
+int Console::kbhit() 
+{
+    termios oldt, newt;
     tcgetattr(STDIN_FILENO, &oldt);
     newt = oldt;
     newt.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+
+    int oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
     fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
 
-    ch = getchar();
+    int ch = getchar();
 
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); 
-    fcntl(STDIN_FILENO, F_SETFL, oldf); 
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    fcntl(STDIN_FILENO, F_SETFL, oldf);
 
-    if(ch != EOF) {
+    if (ch != EOF)
+    {
         ungetc(ch, stdin);
         return 1;
     }
-
     return 0;
 }
-#endif
 
 int Console::getTerminalWidth() 
 {
-#ifdef _WIN32
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    // Get the console screen buffer information
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    int columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    return columns;
-#else
     struct winsize w;
-    // Get the terminal window size
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-    return w.ws_col;
-#endif
+    return w.ws_col > 0 ? w.ws_col : 80;
 }
 
 // Moves the cursor left by the specified number of steps
 void Console::moveCursorLeft(int steps) 
 {
-#ifdef _WIN32
-    if (getCursorPosition().X == 0) 
+    for (int i = 0; i < steps; ++i)
     {
-        // If at the left edge, move up and then right
-        moveCursorUp(1);
-        moveCursorRight(getTerminalWidth());
-    } 
-    else 
-    {
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        // Get the console screen buffer information
-        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-        COORD pos = csbi.dwCursorPosition;
-        pos.X = max(pos.X - steps, csbi.srWindow.Left); 
-        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
+        if (cursorPos > 0)
+        {
+            if ((cursorPos + initialLineLength) % getTerminalWidth() == 0)
+            {
+                // Move to the previous line
+                std::cout << "\033[A";
+                std::cout << "\033[" << terminalWidth << "C";
+            }
+            else
+            {
+                // Move left
+                std::cout << "\033[D";
+            }
+        }
+        cursorPos--;
     }
-#else
-    if (getCursorPosition().col == 1) 
-    {
-        // If at the left edge, move up and then right
-        moveCursorUp(1);
-        moveCursorRight(getTerminalWidth() - 1);
-    } 
-    else 
-    {
-        std::cout << "\033[" << steps << "D";
-    }
-#endif
 }
 
 // Moves the cursor right by the specified number of steps
-void Console::moveCursorRight(int steps) {
-#ifdef _WIN32
-    if (getCursorPosition().X == getTerminalWidth() - 1)
+void Console::moveCursorRight(int steps) 
+{
+    int terminalWidth = getTerminalWidth();
+    for (int i = 0; i < steps; ++i)
     {
-        // If at the right edge, move left and then down
-        moveCursorLeft(getTerminalWidth() - 1);
-        moveCursorDown(1);
-    } 
-    else 
-    {
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        // Get the console screen buffer information
-        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-        COORD pos = csbi.dwCursorPosition;
-        pos.X = min(pos.X + steps, csbi.srWindow.Right);
-        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
+        if ((cursorPos + initialLineLength) % terminalWidth == terminalWidth - 1)
+        {
+            // Move to the next line
+            std::cout << "\033[B\033[1G";
+        }
+        else
+        {
+            // Move right
+            std::cout << "\033[C";
+        }
+        cursorPos++;
     }
-#else
-    if (getCursorPosition().col == getTerminalWidth()) 
-    {
-        // If at the right edge, move left and then down
-        moveCursorLeft(getTerminalWidth());
-        moveCursorDown(1);
-    } 
-    else 
-    {
-        std::cout << "\033[" << steps << "C";
-    }
-#endif
 }
 
 // Moves the cursor up by the specified number of steps
 void Console::moveCursorUp(int steps) 
 {
-#ifdef _WIN32
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    // Get the console screen buffer information
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    COORD pos = csbi.dwCursorPosition;
-    pos.Y = max(pos.Y - steps, csbi.srWindow.Top); 
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
-#else
     if (steps > 0) 
     {
         std::cout << "\033[" << steps << "A"; 
     }
-#endif
 }
 
 // Moves the cursor down by the specified number of steps
 void Console::moveCursorDown(int steps) 
 {
-#ifdef _WIN32
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    // Get the console screen buffer information
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    COORD pos = csbi.dwCursorPosition;
-    pos.Y = min(pos.Y + steps, csbi.srWindow.Bottom);
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
-#else
+    // Move cursor left 'cursorPos' times to reach the beginning
     if (steps > 0) 
     {
         std::cout << "\033[" << steps << "B";
     }
-#endif
+}
+
+void Console::moveCursorToStart()
+{
+    if (cursorPos > 0)
+    {
+        moveCursorLeft(cursorPos);
+    }
+}
+
+void Console::moveCursorToEnd(std::string& input)
+{
+    // Move cursor right until the end is reached
+    if ((int)input.size() > cursorPos)
+    {
+        int steps = input.size() - cursorPos;
+        moveCursorRight(steps);
+    }
+}
+
+void Console::skipWordLeft(std::string& input)
+{
+    if (cursorPos == 0) return;
+
+    int newPos = cursorPos - 1;
+
+    if (input[newPos - 1] == ' ')
+    {
+        while (newPos > 0 && input[newPos - 1] == ' ')
+        {
+            newPos--;
+        }
+    }
+
+    // Skip trailing spaces
+    while (newPos > 0 && input[newPos - 1] != ' ')
+    {
+        newPos--;
+    }
+    int steps = cursorPos - newPos;
+    moveCursorLeft(steps);
+}
+
+void Console::skipWordRight(std::string& input)
+{
+    if (cursorPos >= (int)input.size()) return;
+
+    int newPos = cursorPos;
+
+    // Skip space if currently on one
+    if (input[newPos] != ' ')
+    {
+        while (newPos < (int)input.size() && input[newPos] != ' ')
+        {
+            newPos++;
+        }
+    }
+    // Skip any spaces if on them
+    while (newPos < (int)input.size() && input[newPos] == ' ')
+    {
+        newPos++;
+    }
+    int steps = newPos - cursorPos;
+    moveCursorRight(steps);
+}
+
+void Console::printLineBulk(const std::string& line)
+{
+    std::cout << line;
+}
+
+void Console::rewriteTail(const std::string& input, int startPos)
+{
+    int terminalWidth = getTerminalWidth();
+    int currentColumn = (startPos + initialLineLength) % terminalWidth;
+
+    // Save the current cursor position
+    std::cout << "\033[s";
+
+    // Rewrite the input from the start position
+    for (size_t i = startPos; i < input.size(); ++i)
+    {
+        if (currentColumn >= terminalWidth)
+        {
+            std::cout << "\n";
+            currentColumn = 0;
+        }
+        std::cout << input[i];
+        ++currentColumn;
+    }
+
+    // Clear any leftover characters on the current line and subsequent lines
+    int leftoverSpace = terminalWidth - currentColumn;
+    if (leftoverSpace > 0)
+    {
+        std::cout << std::string(leftoverSpace, ' ');
+    }
+
+    // Clear leftover characters
+    std::cout << " ";
+
+    // Restore the cursor position
+    std::cout << "\033[u";
 }
 
 std::string Console::input()
 {
-#ifdef _WIN32
-    // Save the current cursor position
-    startPos = getCursorPosition();
+    // Save starting cursor position
+    CursorPosition startPos = getCursorPosition();
+    cursorPos = 0;
 
-    // Get the handle to the standard input
-    HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
-    DWORD mode;
-    
-    // Get the current console mode
-    GetConsoleMode(hInput, &mode);
-    // Set the console mode to disable processed input
-    SetConsoleMode(hInput, mode & (~ENABLE_PROCESSED_INPUT));
-
-    // Initialize the input string
-    string input;
-
-    DWORD read;
-    INPUT_RECORD ir;
-    DWORD written;
-
-    // Process the next line input by removing the last character
-    nextLine = nextLine.substr(0, nextLine.size() - 1);
-
-    // Output the characters from nextLine into the console
-    for (char in : nextLine) 
-    {
-        if (isprint(in))
-         {
-            input.insert(cursorPos, 1, in);
-            ++cursorPos;
-            cout << in; 
-            cout << input.substr(cursorPos);
-            moveCursorLeft(input.length() - cursorPos); 
-        }
-    }
-
-    // Clear nextLine for future input
-    nextLine = "";
-
-    while (true) 
-    {
-        // Determine the maximum length of the command based on terminal width
-        maxCommandLength = getTerminalWidth() - initialLineLength;
-
-        // Read console input
-        ReadConsoleInput(hInput, &ir, 1, &read);
-
-        // Check if the event is a key event and the key is pressed
-        if (ir.EventType == KEY_EVENT && ir.Event.KeyEvent.bKeyDown) 
-        {
-
-            // Handle special case for the '?' character
-            if (ir.Event.KeyEvent.uChar.AsciiChar == '?') 
-            {
-                cout << "?";
-                return input + "?";
-            }
-
-            // Handle control key states for cursor movement
-            if ((ir.Event.KeyEvent.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED)) != 0) 
-            {
-                int pos = cursorPos;
-                switch (ir.Event.KeyEvent.wVirtualKeyCode) {
-                    case VK_LEFT:
-                        if (cursorPos > 0) {
-                            for (int ch = (input.substr(0, pos)).size() - 1; ch >= 0; ch--) 
-                            {
-                                if (input[ch] != ' ') {
-                                    --cursorPos; 
-                                    moveCursorLeft(1);
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-                        break;
-                    case VK_RIGHT:
-                        if (cursorPos < input.length()) 
-                        {
-                            for (char ch : input.substr(pos)) 
-                            {
-                                if (ch != ' ') {
-                                    ++cursorPos;
-                                    moveCursorRight(1);
-                                } 
-                                else 
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                        break;
-                }
-            }
-
-            // Handle various key events
-            switch (ir.Event.KeyEvent.wVirtualKeyCode) {
-                case VK_TAB:
-                    {   
-                        return input + "\t";
-                    }
-                    break;
-                case VK_RETURN:
-                    {   
-                        // Add input to history if not empty and not last command
-                        if (input != lastCommand && input != "") 
-                        {
-                            history.insert(history.end() - 1, input);
-                        }
-                        historyIndex = history.size() - 1;
-                        lastCommand = input;
-                        return input; 
-                    }
-                    break;
-                case VK_BACK: 
-                    if (cursorPos > 0) 
-                    {
-                        moveCursorLeft(1);
-                        cursorPos--;
-                        input.erase(cursorPos, 1);
-                        int line = getCursorPosition().Y;
-                        int siz = input.substr(cursorPos).size();
-                        std::cout << input.substr(cursorPos) << " ";
-                        // Move cursor left to correct position
-                        while ((cursorPos + initialLineLength) % getTerminalWidth() != getCursorPosition().X || getCursorPosition().Y != line) 
-                        {
-                            moveCursorLeft(1);
-                        }
-                    }
-                    break;
-                case VK_DELETE:
-                    if (cursorPos >= 0 && cursorPos < input.size()) 
-                    {
-                        input.erase(cursorPos, 1);
-                        int siz = input.substr(cursorPos).size();
-                        int line = getCursorPosition().Y; 
-                        std::cout << input.substr(cursorPos) << " ";
-                        // Move cursor left to correct position
-                        while ((cursorPos + initialLineLength) % getTerminalWidth() != getCursorPosition().X || getCursorPosition().Y != line) 
-                        {
-                            moveCursorLeft(1);
-                        }
-                    }
-                    break;
-                case VK_LEFT: 
-                    if (cursorPos > 0) 
-                    {
-                        --cursorPos; 
-                        moveCursorLeft(1);
-                    }
-                    break;
-                case VK_RIGHT:
-                    if (cursorPos < input.length()) 
-                    {
-                        ++cursorPos;
-                        moveCursorRight(1);
-                    }
-                    break;
-                case VK_UP: 
-                    {
-                        if (historyIndex != 0)
-                        {
-                            bool his = true;
-                            nextLine = getHistory(his); 
-                            clearCurrentLine(input, nextLine);
-                            input = nextLine;
-                            nextLine = "";
-                        }
-                    }
-                    break;
-                case VK_DOWN: 
-                    {
-                        bool his = false;
-                        nextLine = getHistory(his);
-                        clearCurrentLine(input, nextLine);
-                        input = nextLine;
-                        nextLine = "";
-                    }
-                    break;
-                case VK_INSERT: 
-                    // Toggle insert mode
-                    if (insert) 
-                    {
-                        insert = false;
-                    } 
-                    else 
-                    {
-                        insert = true;
-                    }
-                    break;
-                default:
-                    int pos = getCursorPosition().X;
-                    bool isEnd = false;
-                    // Check if cursor is at the end of the line
-                    if (getCursorPosition().X == getTerminalWidth() - 1) 
-                    {
-                        isEnd = true;
-                    }
-                    if (insert && cursorPos != input.size()) 
-                    {
-                        cout << ir.Event.KeyEvent.uChar.AsciiChar;
-                        cursorPos++;
-                        input[cursorPos] = ir.Event.KeyEvent.uChar.AsciiChar;
-                    } 
-                    else if (ir.Event.KeyEvent.uChar.AsciiChar) 
-                    {
-                        input.insert(cursorPos, 1, ir.Event.KeyEvent.uChar.AsciiChar);
-                        ++cursorPos;
-                        cout << ir.Event.KeyEvent.uChar.AsciiChar;
-                        string str1 = input.substr(cursorPos);
-                        printString(str1);
-                        if (isEnd && cursorPos - input.length() == 0) 
-                        {
-                            // No additional processing needed
-                        } 
-                        else 
-                        {
-                            for (int num = 0; num < input.length() - cursorPos; num++) 
-                            {
-                                moveCursorLeft(1);
-                            }
-                        }
-                        if (getCursorPosition().X == pos) 
-                        {
-                            moveCursorRight(1);
-                        }
-                    }
-                    break;
-            }
-        }
-    }
-
-    // Restore the original console mode
-    SetConsoleMode(hInput, mode);
-    return input;
-#else
-    // Save the current cursor position
-    startPos = getCursorPosition();
-    
-    char hInput;
-    bool ctrlPressed = false; 
-
-    int cursorPos = 0; 
+    // Startup Variables
     std::string input;
 
-    // Process the next line input by removing the last character
-    nextLine = nextLine.substr(0, nextLine.size() - 1);
-
-    // Output the characters from nextLine into the console
-    for (char in : nextLine) 
+    // Print the nextLine if something is queued
+    if (!nextLine.empty())
     {
-        if (isprint(in)) 
+        if (nextLine[nextLine.length() - 1] == ' ')
         {
-            input.insert(cursorPos, 1, in);
-            ++cursorPos;
-            std::cout << in;
-            std::cout << input.substr(cursorPos); 
-            moveCursorLeft(input.length() - cursorPos - 1); 
+            nextLine.pop_back();
         }
+        input = nextLine;
+        cursorPos = input.size();
+        oldInputLength = input.size();
+        std::cout << nextLine;
+        nextLine.clear();
     }
-
-    // Clear nextLine for future input
-    nextLine = "";
     
     while (true) 
     {
-        // Determine the maximum length of the command based on terminal width
         maxCommandLength = getTerminalWidth() - initialLineLength;
 
-        // Check if a key has been pressed
+        // Non-blocking check for keypress
         if (kbhit()) 
         {
-            hInput = getchar();
-            // Handle special character cases
-            switch (hInput) {
-                case '\x3f':
-                    {
-                        std::cout << "?";
-                        return input + "?";
-                    }
-                case '\x09':
-                    {
-                        return input + "\t";
-                    }
-                case '\x0a':
-                    {
-                        // Add input to history if not empty and not last command
-                        if (input != lastCommand && input != "") 
-                        {
-                            history.insert(history.end() - 1, input);
-                        }
-                        historyIndex = history.size() - 1;
-                        lastCommand = input;
-                        return input;
-                    }
-                case '\x7f':
-                    if (cursorPos > 0) 
-                    {
-                        cursorPos--;
-                        moveCursorLeft(1);
-                        input.erase(cursorPos, 1);
-                        int line = getCursorPosition().row;
-                        int siz = input.substr(cursorPos).size();
-                        std::cout << "\33[s"; 
-                        std::cout << input.substr(cursorPos) << " "; 
-                        std::cout << "\33[u";
-                    }
-                    break;
-                case '\x7e':
-                    if (cursorPos <= 0 && cursorPos < input.size()) 
-                    {
-                        input.erase(cursorPos, 1);
-                        int siz = input.substr(cursorPos).size();
-                        int line = getCursorPosition().row;
-                        std::cout << "\33[s";
-                        std::cout << input.substr(cursorPos) << " ";
-                        std::cout << "\33[u";
-                    }
-                    break;
-                case '\x1b':
-                    {
-                        if (getchar() == '[')
-                        {
-                            char nextch = getchar();
-                            if (nextch == 'C') 
-                            {
-                                if (cursorPos < input.length()) 
-                                {
-                                    ++cursorPos;
-                                    moveCursorRight(1); 
-                                }
-                            } else if (nextch == 'D') 
-                            {
-                                if (cursorPos > 0) 
-                                {
-                                    --cursorPos;
-                                    moveCursorLeft(1);
-                                }
-                            } 
-                            else if (nextch == 'A') 
-                            {
-                                if (historyIndex != 0) 
-                                {
-                                    bool his = true;
-                                    nextLine = getHistory(his); 
-                                    clearCurrentLine(input, nextLine);
-                                    input = nextLine;
-                                    nextLine = "";
-                                }
-                            }
-                            else if (nextch == 'B') 
-                            { 
-                                bool his = false;
-                                nextLine = getHistory(his);
-                                clearCurrentLine(input, nextLine); 
-                                input = nextLine;
-                                nextLine = "";
-                            } 
-                            else if (nextch == '1') 
-                            { 
-                                int pos = cursorPos;
-                                nextch = getchar(); 
-                                if (nextch == ';') 
-                                {
-                                    nextch = getchar(); 
-                                    if (nextch == '5') 
-                                    {
-                                        nextch = getchar(); 
-                                        if (nextch == 'C') 
-                                        {
-                                            if (cursorPos < input.length()) 
-                                            {
-                                                for (char ch : input.substr(pos))
-                                                {
-                                                    if (ch != ' ') 
-                                                    {
-                                                        ++cursorPos; 
-                                                        moveCursorRight(1); 
-                                                    } 
-                                                    else 
-                                                    {
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        } 
-                                        else if (nextch == 'D')
-                                        {
-                                            if (cursorPos < input.length()) 
-                                            {
-                                                for (char ch : input.substr(pos)) 
-                                                {
-                                                    if (ch != ' ') 
-                                                    {
-                                                        --cursorPos;
-                                                        moveCursorLeft(1);
-                                                    } 
-                                                    else 
-                                                    {
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } 
-                            else if (nextch == '2') 
-                            { 
-                                if (insert) 
-                                {
-                                    insert = false; 
-                                }
-                                else 
-                                {
-                                    insert = true; 
-                                }
-                            }
-                        }
-                    }
-                    break;
-                default:
-                    if (isprint(hInput)) 
-                    {
-                        int pos = getCursorPosition().col;
-                        bool isEnd = false;
-                        if (getCursorPosition().col == getTerminalWidth()) 
-                        {
-                            isEnd = true;
-                        }
-                        if (insert && cursorPos != input.size())
-                        {
-                            std::cout << hInput;
-                            cursorPos++; 
-                            input[cursorPos] = hInput; 
-                        } 
-                        else if (isprint(hInput)) 
-                        {
-                            input.insert(cursorPos, 1, hInput); 
-                            ++cursorPos;
-                            std::cout << hInput;
-                            std::string str1 = input.substr(cursorPos);
-                            std::cout << "\33[s";
-                            printString(str1);
-                            std::cout << "\33[u";
-                            if (isEnd) 
-                            {
-                                moveCursorRight(1);
-                            }
-                        }
-                    }
-                    break;
+            char hInput = getchar();
+
+            // 1. Handle single-char special keys (Enter, Tab, '?', Backspace, Delete)
+            std::string result = handleSpecialKey(hInput, input);
+            if (!result.empty())
+            {
+                historyIndex = history.size();
+                browsingHistory = false;
+                inputCache.clear();
+                // If we got a non-empty string, return now
+                return result;
             }
+
+            // 2. If it's an escape sequence
+            if (hInput == '\x1b')
+            {
+                handleEscapeSequence(input);
+            }
+
+            // 3. If It's a normal printable char, handle in one go
+            else if (std::isprint(static_cast<unsigned char>(hInput)))
+            {
+                handlePrintableChar(hInput, input);
+            }
+
+            if (!browsingHistory)
+            {
+                inputCache = input;
+            }
+
+            // Flush once per key
             std::cout.flush();
         }
     }
-    return input; 
-#endif
+    return input;
+}
+
+std::string Console::handleSpecialKey(char hInput, std::string& input)
+{
+    switch (hInput)
+    {
+        case '\x3f': // '?'
+        {
+            // Print '?' and return, so we exit the input loop
+            std::cout << "?";
+            input += "?";
+            return input;
+        }
+        case '\x09': // Tab
+        {
+            // Return the input with 
+            input += "\t";
+            return input;
+        }
+        case '\x0a': // Enter
+        {
+            if (!input.empty() && input != lastCommand)
+            {
+                history.push_back(input);
+            }
+            lastCommand = input;
+            if (input.empty())
+            {
+                return input + "\t";
+            }
+            else
+            {
+                return input;
+            }
+        }
+        case '\x08': // Control-h
+        case '\x7f': // Backspace
+        {
+            if (cursorPos > 0)
+            {
+                cursorPos--;
+
+                if ((cursorPos + initialLineLength + 1) % getTerminalWidth() == 0)
+                {
+                    std::cout << "\033[A\033[" << getTerminalWidth() << "C";
+                }
+                else
+                {
+                    std::cout << "\b \b";
+                }
+
+                input.erase(cursorPos, 1);
+                rewriteTail(input, cursorPos);
+            }
+            break;
+        }
+        default:
+            // Not recognized => do nothing
+            break;
+    }
+    // Return empty => keep reading input
+    return "";
+}
+
+void Console::handleEscapeSequence(std::string& input)
+{
+    if (!kbhit()) return; // no next char => bail
+
+    char bracket = getchar();
+    if (bracket != '[') return; // Not arrow or known seq
+
+    if (!kbhit()) return;
+
+    char nextch = getchar();
+    switch(nextch)
+    {
+        case 'A':
+            // Up arrow
+            navigateHistory(input, true);
+            break;
+        case 'B':
+            // Down arrow
+            navigateHistory(input, false);
+            break;
+        case 'C':
+            // Right arrow
+            if (cursorPos < (int)input.size())
+            {
+                moveCursorRight(1);
+            }
+            break;
+        case 'D':
+            // Left arrow
+            if (cursorPos > 0)
+            {
+                moveCursorLeft(1);
+            }
+            break;
+        case '1':
+        {
+            char nextchar = getchar();
+            if (nextchar == '~')
+            {
+                // Home
+                moveCursorToStart();
+            }
+            else if (nextchar == ';')
+            {
+                nextchar = getchar();
+                if (nextchar == '5')
+                {
+                    nextchar = getchar();
+                    if (nextchar == 'C')
+                    {
+                        skipWordRight(input);
+                    }
+                    else if (nextchar == 'D')
+                    {
+                        skipWordLeft(input);
+                    }
+                }
+            }
+            break;
+        }
+        case '4':
+            if (getchar() == '~')
+            {
+                // End
+                moveCursorToEnd(input);
+            }
+            break;
+        case '2':
+            if (getchar() == '~')
+            {
+                // Insert toggle
+                insert  = !insert;
+            }
+            break;
+        default:
+            // Possibly more sequences
+            break;
+    }
+}
+    
+void Console::navigateHistory(std::string& input, bool moveUp)
+{
+    if (history.empty()) return;
+
+    std::string oldInput = input;
+
+    // if moving up in history
+    if (moveUp && historyIndex > 0)
+    {
+        --historyIndex;
+    }
+    // If moving down in history
+    else if (!moveUp && historyIndex < (int)history.size() - 1)
+    {
+        ++historyIndex;
+    }
+    // If at the end of history, disable browsing
+    else if (!moveUp && historyIndex == (int)history.size() - 1)
+    {
+        historyIndex++;
+        browsingHistory = false;
+        input = inputCache;
+        updateDisplayInput(oldInput, input);
+        return;
+    }
+    else
+    {
+        return;
+    }
+
+    // Update input with the selected history item
+    input = history[historyIndex];
+    browsingHistory = true;
+    updateDisplayInput(oldInput, input);
+}
+
+void Console::updateDisplayInput(std::string& oldInput, std::string& input)
+{
+    // Calculate how many lines the input spans
+    int terminalWidth = getTerminalWidth();
+    int oldLines = (oldInput.size() + initialLineLength) / terminalWidth + 1;
+    int newLines = (input.size() + initialLineLength) / terminalWidth + 1;
+
+    // Move cursor to the start of the current line
+    moveCursorToStart();
+
+    // Save the starting position
+    std::cout << "\033[s";
+
+    // Clear all lines occupied by the input
+    for (int i = 0; i < oldLines; ++i)
+    {
+        std::cout << "\033[K"; // Clear the current lines
+        if (i < oldLines)
+        {
+            std::cout << "\033[B"; // Move down one line
+            std::cout << "\033[1G";
+        }
+    }
+
+    // Move back up to the starting position
+    std::cout << "\033[u";
+
+    // Write the updated input
+    std::cout << input;
+    cursorPos = input.size();
+}
+
+void Console::handlePrintableChar(char hInput, std::string& input)
+{
+    // If insert mode is on and not at the end => insert mid-line
+    if (insert && cursorPos < (int)input.size())
+    {
+        input.insert(cursorPos, 1, hInput);
+        cursorPos++;
+        std::cout << hInput;
+        rewriteTail(input, cursorPos);
+    }
+    else
+    {
+        // Append or insert at the cursor
+        input.insert(cursorPos, 1, hInput);
+        cursorPos++;
+        std::cout << hInput;
+        rewriteTail(input, cursorPos);
+    }
 }
 
 std::string Console::getHistory(bool& his) 
@@ -694,7 +602,7 @@ std::string Console::getHistory(bool& his)
         }
     }
     // Check if we need to retrieve the next command
-    if (!his) 
+    else
     {
         // If not at the end of history, move to the next command
         if (historyIndex != history.size() - 1) 
@@ -708,79 +616,13 @@ std::string Console::getHistory(bool& his)
 
 void Console::clearCurrentLine(std::string& input, std::string& nextLine) 
 {
-#ifdef _WIN32
-    // For Windows systems
-
-    // Move cursor to the end of the current line
-    while (cursorPos != input.size()) 
-    {
-        moveCursorRight(1);
-        cursorPos++;
-    }
-
-    // Clear the line by moving cursor to the start and overwriting with spaces
-    while (startPos.X != getCursorPosition().X || startPos.Y != getCursorPosition().Y) 
-    {
-        if (getCursorPosition().X != 0) 
-        {
-            moveCursorLeft(1); 
-            cout << " "; 
-            moveCursorLeft(1); 
-        } 
-        else 
-        {
-            moveCursorLeft(1); 
-            cout << " "; 
-        }
-    }
-    cursorPos = 0; 
-
-    // Print the new line content
-    for (char ch : nextLine) 
-    {
-        cout << ch;
-        cursorPos++; 
-    }
-#else
-    // For Unix-like systems
-
-    // Move cursor to the end of the current line
-    while (cursorPos != input.size()) 
-    {
-        moveCursorRight(1); 
-        cursorPos++; 
-    }
-
-    // Clear the line by moving cursor to the start and overwriting with spaces
-    while (startPos.col != getCursorPosition().col || startPos.row != getCursorPosition().row) 
-    {
-        if (getCursorPosition().row != 0) {
-            moveCursorLeft(1); 
-            std::cout << " "; 
-            moveCursorLeft(1); 
-        } 
-        else 
-        {
-            moveCursorLeft(1); 
-            std::cout << " "; 
-        }
-    }
-    cursorPos = 0; // Reset cursor position to start
-
-    // Print the new line content
-    for (char ch : nextLine) 
-    {
-        std::cout << ch; 
-        cursorPos++; 
-    }
-#endif
+    moveCursorToStart();
+    std::cout << "\033[K";
+    input = nextLine;
+    cursorPos = input.length();
 }
 
 void Console::printString(std::string& string) 
 {
-    // Print each character in the provided string
-    for (char ch : string) 
-    {
-        std::cout << ch; 
-    }
+    std::cout << string;
 }

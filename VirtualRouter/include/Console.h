@@ -12,55 +12,75 @@ class Console : public Configs {
 public:
     // Constructor for initializing the Console object
     Console();
+    ~Console();
     void initConsole();
 
-    // Function to read input from the console
+    // Main input loop
     std::string input();
+    
+    // Functions for managing and retrieving command history
+    std::string getHistory(bool& his); // Retrieve command history based on a flag
 
-    // Flags and settings for the console
-    bool insert = false; // Mode for inserting text
-    size_t cursorPos = false; // Position of the cursor (initially false, likely a placeholder)
-
-    // Line length settings
-    int initialLineLength; // Length of the initial line
-    int maxCommandLength; // Maximum length of a command
+    // Clear line
+    void clearCurrentLine(std::string& input, std::string& nextLine); // Clear the current line of input
 
     // Strings for managing command input and history
     std::string nextLine; // Holds the next line of input
     std::string lastCommand; // Holds the last command executed
 
+    // Terminal utility functions
+    void clearLineAfterCursor(); // Clear the line content after the cursor position
+protected:
+    // Utility functions for printing
+    void printString(std::string& str);
+    void printLineBulk(const std::string& line);
+    void rewriteTail(const std::string& input, int startPos);
+
+    // Key handling for input()
+    std::string handleSpecialKey(char hInput, std::string& input);
+    void handleEscapeSequence(std::string& input);
+    void handlePrintableChar(char hInput, std::string& input);
+
+    // Cursor and colsole utilities
+    CursorPosition getCursorPosition();
+    int kbhit();
+    int getTerminalWidth();
+    void moveCursorLeft(int steps);  // Move cursor left by a number of steps
+    void moveCursorRight(int steps); // Move cursor right by a number of steps
+    void moveCursorUp(int steps);    // Move cursor up by a number of steps
+    void moveCursorDown(int steps);  // Move cursor down by a number of steps
+
+    // Large cursor movement
+    void moveCursorToStart();
+    void moveCursorToEnd(std::string& input);
+    void skipWordLeft(std::string& input);
+    void skipWordRight(std::string& input);
+
+    // Display Management
+    void setPrompt(const std::string newPrompt);
+    bool isCursorAtLineEnd();
+    void updateDisplayInput(std::string& oldInput, std::string& input);
+
+    // Member variables for line wrapping and display
+    CursorPosition startPos;                // Starting cursor position
+    int cursorPos = 0;                      // Logical cursor position within inputBuffer
+    int terminalWidth = 80;                 // Current terminal width
+    int oldInputLength = 0;                 // Previous input length to track changes
+
+    int initialLineLength = 0;
+    int maxCommandLength = 0;
+    std::string prompt;
+
+    bool resized = false;                   // Flag indicating if the terminal has been resized
+
+    bool insert = false;
+
     // History management
+    void navigateHistory(std::string& input, bool moveUp);
     int historyIndex = 0; // Index for navigating through command history
     std::vector<std::string> history{}; // Vector to store command history
-
-    // Cursor movement functions
-    void moveCursorLeft(int steps); // Move cursor left by a number of steps
-    void moveCursorRight(int steps); // Move cursor right by a number of steps
-    void moveCursorUp(int steps); // Move cursor up by a number of steps
-    void moveCursorDown(int steps); // Move cursor down by a number of steps
-
-    // Functions for managing and retrieving command history
-    std::string getHistory(bool& his); // Retrieve command history based on a flag
-    void clearCurrentLine(std::string& input, std::string& nextLine); // Clear the current line of input
-
-    // Terminal utility functions
-    int getTerminalWidth(); // Get the width of the terminal
-    void clearLineAfterCursor(); // Clear the line content after the cursor position
-
-#ifdef _WIN32
-    // Windows-specific functions
-    COORD getCursorPosition(); // Get the cursor position on Windows
-    COORD startPos = getCursorPosition(); // Initial cursor position on Windows
-#else
-    // Non-Windows (Linux/Unix) specific functions
-    CursorPosition getCursorPosition(); // Get the cursor position on Linux/Unix
-    int kbhit(); // Check if a key has been hit on Linux/Unix
-    CursorPosition startPos = getCursorPosition(); // Initial cursor position on Linux/Unix
-#endif
-
-private:
-    // Utility function to print a string to the console
-    void printString(std::string& str);
+    bool browsingHistory = false; // Indicates whether history is being accessed
+    std::string inputCache; // Current command being edited while browsing history
 
     // Options for autocompletion
     std::vector<std::string> autocompleteOptions {"end", "exit"}; // List of options for autocompletion

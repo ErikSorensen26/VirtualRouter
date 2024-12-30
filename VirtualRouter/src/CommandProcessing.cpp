@@ -410,6 +410,15 @@ void Terminal::executeCommand(std::string &command)
 		Functions::printVector(commandHistory);
 		// cout << "\n" << endl;
 		Functions::printVector(commandStream);
+
+		// TEMPORARY
+		// Need to put it in command json
+		if (isExitCommand)
+		{
+			commandHistory = commandStream;
+		}
+		// TEMPORARY
+		
 		saveCommand(commandHistory, commandStream, isModeChanged, isExitCommand, isList);
 		
 		// Check if mode changed

@@ -6,7 +6,7 @@
 // Function to print a chunk of XML for debugging purposes
 void Configs::printConfig() 
 {
-    ///std::cout << root.dump(4) << std::endl;
+    //std::cout << root.dump(4) << std::endl;
 }
 
 // Constructor for Configs class
@@ -194,8 +194,10 @@ void Configs::saveConfig()
 }
 
 // Save new commands to the XML configuration
-void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool& isListed) 
+void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool& isListed)
 {
+    if (currentMode == mode.userExec || currentMode == mode.privilegedExec) return;
+    
     if (oldCommand.empty() || command.empty()) return;
 
     nlohmann::ordered_json* currentNode = &(*configNode);
@@ -391,8 +393,24 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
     }
     else if (exitMode)
     {
-        modeHistory.pop_back(); 
-        configNode = &(*(modeHistory[modeHistory.size() - 1]));
+        if (!modeHistory.empty())
+        {
+            modeHistory.pop_back();
+            if (!modeHistory.empty())
+            {
+                configNode = &(*(modeHistory[modeHistory.size() - 1]));
+            }
+            else
+            {
+                Logger::getInstance().warn() << "Mode history empty after pop_back. Resetting to root." << std::endl;
+                configNode = &root;
+            }
+        }
+        else
+        {
+            Logger::getInstance().error() << "Mode history is already empty during exitMode." << std::endl;
+            configNode - &root;
+        }
     }
     printConfig();
 }

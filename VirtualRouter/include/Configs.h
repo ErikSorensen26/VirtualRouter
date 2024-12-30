@@ -160,6 +160,8 @@ public:
 
     // List of physical interfaces.
     std::vector<std::string> physicalInterfaces;
+    // History of JSON nodes for different modes.
+    std::vector<nlohmann::ordered_json*> modeHistory;
 
     // List of MAC addresses categorized by type.
     macList macAddressList;
@@ -174,8 +176,6 @@ private:
 
     // List of volatile input types.
     std::vector<std::string> volitileInputs{"WORD", "LINE", "A.B.C.D", "X:X:X:X::X", "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"};
-    // History of JSON nodes for different modes.
-    std::vector<nlohmann::ordered_json*> modeHistory;
     // Previous configuration JSON node.
     nlohmann::ordered_json *prevConfig;
     // List of input parameters

@@ -85,9 +85,7 @@ void Terminal::handleInput() {
     // Retrieve the hostname from the global settings and reset cursor position
     std::string hostname = Global::getInstance().getHostname();
     cursorPos = 0;
-    std::cout << hostname << currentMode;  // Display the prompt with the current mode
-
-    initialLineLength = hostname.size() + currentMode.size() + 1;
+    setPrompt(hostname + currentMode);
 
     // Read the user's input from the terminal
     std::string userCommand = input();
@@ -134,7 +132,7 @@ bool Terminal::detectHelpTriggers(const std::vector<std::string>& parsedWords)
 
 bool Terminal::isDoCommand(const std::vector<std::string>& parsedWords)
 {
-    if (!parsedWords.empty()) return false;
+    if (parsedWords.empty()) return false;
     if (parsedWords[0] != "do" || parsedWords.size() < 2) return false;
 
     // Avoid "exit and conf"
@@ -203,6 +201,13 @@ void Terminal::processNonLineBasedWord(std::string& word, std::vector<com>& prev
     if (!attemptGlobalCommand(inputCommand))
     {
         return; // If attemptGlobalCommand returned an error condition, just stop
+    }
+    
+    // Check for incorrect command
+    if (currentDirectory == "error" && !isGlobalCommand(word) && !isHelpModeActive)
+    {
+        handleInvalidInputMarker(formattedOldCommand);
+        return;
     }
 
     // Attempt to match user's word with the available commands
@@ -333,12 +338,13 @@ bool Terminal::attemptGlobalCommand(const std::string& inputCommand)
 
 void Terminal::handleInvalidInputMarker(const std::string& formattedOldCommand)
 {
+    isCommandInvalid = true;
     isRunning = false;
     std::cout << "\n";
 
     std::string hostname = Global::getInstance().getHostname();
     // Print spaces for hostname, mode, old command
-    std::cout << std::string(hostname.size() + currentMode.size() + formattedOldCommand.size(), ' ');
+    std::cout << std::string(initialLineLength + formattedOldCommand.size(), ' ');
 
     std::cout << "^" << std::endl
               << "% Invlid input detected at '^' marker." << std::endl;
@@ -398,7 +404,8 @@ void Terminal::matchCommand(const std::string& inputCommand, const std::string& 
         // If there's an <error> or the user requested help, use the raw input
         if (previousCommandList[0].name == "<error>" || isNextWordHelpRequested)
         {
-            nextLine = inputCommand;
+            // Set the nextLine but shave off the "\t"
+            nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
         }
         
         isMatchSuccessful = false;
@@ -516,6 +523,11 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand) {
     // Mark as valid if the first word is "?" or "vk_tab"
     isMatchSuccessful = (!parsedWords.empty() && (parsedWords[0] == "?" || parsedWords[0] == "vk_tab"));
 
+    if (isGlobalCommand(parsedWords[0]) && !isMatchSuccessful)
+    {
+        return parsedWords[0];
+    }
+
     // Process each word in the parsed command
     for (std::string& word : parsedWords) {
         if (isLineBasedInput) {
@@ -537,12 +549,14 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand) {
     commandHistory = splitIntoWords(volatileCommand);
 
     // Check if command is incomplete
-    if (!isCommandValid && !isHelpModeActive && !isPatternMatchEnd && !isLineBasedInput) 
+    if (!isCommandValid && !isHelpModeActive && !isPatternMatchEnd && !isLineBasedInput && !isCommandInvalid) 
     {
         std::cout << "\nIncomplete Command";
         return "";
     }
-    
+
+    isCommandInvalid = false;
+
     // Return the final processed command
     return fullyFormattedCommand;
 }
@@ -570,31 +584,33 @@ std::vector<com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
     // Iterate over all commands in the current directory
     nlohmann::json commandNode;
     int matchCount = 0;
-    for (const auto& command : currentCommandDirectory) {
-        com commandData;
-        for (const auto i : command)
-        commandData.name = command["name"];
-        commandData.description = command["description"];
-        availableCommands.push_back(commandData);
+    for (const json& command : currentCommandDirectory) {
+        if (command.is_object())
+        {
+            com commandData;
+            commandData.name = command["name"];
+            commandData.description = command["description"];
+            availableCommands.push_back(commandData);
 
-        // Check if the user input matches a pattern or specific command
-        std::string commandName = command["name"];
-        if (matchInputPattern(userInput, commandName) && !endOfCommand) {
-            commandNode = command;
-            matchCount++;
-            if (!isValidCommandDirectory(commandNode)) {
-                endOfCommand = true;
-            }
-        } else if (commandName.size() >= userInput.size()) {
-            if (std::equal(userInput.begin(), userInput.end(), Functions::lowerCase(commandName).begin()) && !isExactMatch) {
+            // Check if the user input matches a pattern or specific command
+            std::string commandName = command["name"];
+            if (matchInputPattern(userInput, commandName) && !endOfCommand) {
                 commandNode = command;
                 matchCount++;
-            }
-            if (commandName == userInput) {
-                isExactMatch = true;
-                exactMatchCommand.name = Functions::lowerCase(command["name"]);
-                exactMatchCommand.description = command["description"];
-                commandNode = command;
+                if (!isValidCommandDirectory(commandNode)) {
+                    endOfCommand = true;
+                }
+            } else if (commandName.size() >= userInput.size()) {
+                if (std::equal(userInput.begin(), userInput.end(), Functions::lowerCase(commandName).begin()) && !isExactMatch) {
+                    commandNode = command;
+                    matchCount++;
+                }
+                if (commandName == userInput) {
+                    isExactMatch = true;
+                    exactMatchCommand.name = Functions::lowerCase(command["name"]);
+                    exactMatchCommand.description = command["description"];
+                    commandNode = command;
+                }
             }
         }
     }
@@ -841,76 +857,32 @@ bool Terminal::isValidCommandDirectory(nlohmann::json& directory) {
 bool Terminal::handlePagination(int& lineNum) {
     if (lineNum % 10 == 0 && lineNum != 0) {
         std::cout << "\n  --More--";
-    #ifdef _WIN32
-	HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
-    DWORD mode;
-    GetConsoleMode(hInput, &mode);
-    SetConsoleMode(hInput, mode & (~ENABLE_PROCESSED_INPUT));
+        while (true) {
 
-	DWORD read;
-    INPUT_RECORD ir;
-    DWORD written;
+            maxCommandLength = getTerminalWidth() - initialLineLength;
 
-	while (true) {
-
-	maxCommandLength = getTerminalWidth() - initialLineLength;
-
-	ReadConsoleInput(hInput, &ir, 1, &read);
-
-	if (ir.EventType == KEY_EVENT && ir.Event.KeyEvent.bKeyDown) {
-	    if (ir.Event.KeyEvent.wVirtualKeyCode == VK_SPACE) {
-		while (getCursorPosition().X != 0) {
-		    moveCursorLeft(1);
-		    cout << " ";
-		    moveCursorLeft(1);
-		}
-		moveCursorLeft(1);
-		return true;
-	    } else if (ir.Event.KeyEvent.uChar.AsciiChar == 'q') {
-	        while (getCursorPosition().X != 0) {
-		    moveCursorLeft(1);
-		    cout << " ";
-		    moveCursorLeft(1);
-		}
-	        moveCursorLeft(1);
-		return false;
-	    }
-	}
-    }
-    #else
-
-
-
-    while (true) {
-
-	maxCommandLength = getTerminalWidth() - initialLineLength;
-
-	if (kbhit()) {
-	    char nextch = getchar();
-	    if (nextch == '\x20') {
-		while (getCursorPosition().col != 1) {
-		    moveCursorLeft(1);
-                    std::cout << " ";
-		    moveCursorLeft(1);
-		}
-		moveCursorLeft(1);
-		return true;
-		} else if (nextch == 'q') {
-		    while (getCursorPosition().col != 1) {
-			moveCursorLeft(1);
-                        std::cout << " ";
-			moveCursorLeft(1);
-		    }
-		    moveCursorLeft(1);
-		    return false;
-		}
-	    }
-	}
-
-    #endif
-
-    } else {
-	return true;
+            if (kbhit()) {
+                char nextch = getchar();
+                if (nextch == '\x20') 
+                {
+                    std::cout << "\033[2k\033[1G";
+                    moveCursorUp(1);
+                    return true;
+                } 
+                else if (nextch == 'q') 
+                {
+                    std::cout << "\033[2k\033[1G";
+                    std::cout << std::string(10, ' ');
+                    std::cout << "\033[2k\033[1G";
+                    moveCursorUp(1);
+                    return false;
+                }
+            }
+        }
+    } 
+    else
+    {
+	    return true;
     }
 }
 
@@ -928,6 +900,16 @@ void Terminal::changeMode(std::string& newMode, bool processing)
     else
     {
         tempModeSchema = &(configSchema[currentMode]);
+    }
+
+    if (!modeHistory.empty() && configNode != modeHistory.back())
+    {
+        modeHistory.push_back(configNode);
+    }
+    else
+    {
+        modeHistory.clear();
+        modeHistory.push_back(&root);
     }
 }
 

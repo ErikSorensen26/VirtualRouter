@@ -147,7 +147,8 @@ private:
     bool isPatternMatching = false;	// Indicates if the input matches a pattern
     bool isPatternMatchEnd = false;	// Indicates the end of a matching pattern
     bool isModeChanged = false;		// Indicates if the operational mode has changed
-    bool isExitCommand = false;         // Indicates if the command return to the previous mode
+    bool isExitCommand = false;     // Indicates if the command return to the previous mode
+    bool isCommandInvalid = false;  // Indicates if a command is invalid
     bool isCommandExecutionSuccessful = false; // Indicates if the command was successful
     bool isGlobalCommandExecution = false; // Indicates if a global command is being executed
 
