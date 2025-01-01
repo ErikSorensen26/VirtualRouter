@@ -8,7 +8,6 @@
 #include <string>
 #include <Decapsulation.h>
 
-// Constructor for the Interface class
 Interface::Interface(InterfaceType interfaceType, std::string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug)
     : packetCapture(outInterface, "FF000000", inQueSiz),
       packetSend(outInterface),
@@ -42,7 +41,6 @@ Interface::~Interface()
     stopThreads();
 }
 
-// Enqueue packet
 void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
 {
     ByteString serializedPacket = encapsulate(packetInfo);
@@ -67,7 +65,6 @@ void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
     packetOutQueueCV.notify_one();
 }
 
-// Set IPv4 address and subnet mask
 void Interface::setIPv4(std::string ip, int subnet)
 {
     {
@@ -98,12 +95,10 @@ void Interface::setIPv6(std::string ip, int subnet, bool eui64)
     }
 }
 
-// Get current IP address, subnet mask, MAC address, and speed information
 std::shared_ptr<IpInfo> Interface::Get() const {
     return configs;
 }
 
-// Start background threads for packet processing
 void Interface::startThreads() {
     threadsRunning = true;
 
@@ -114,7 +109,6 @@ void Interface::startThreads() {
     thread3 = std::thread(&Interface::process, this, std::ref(packetCapture));
 }
 
-// Function to handle packet ingress
 void Interface::packetIngress(Ingress& packetCapture) {
     while (threadsRunning) {
         if (packetCapture.startCapture(NULL) != 0) {
@@ -126,7 +120,6 @@ void Interface::packetIngress(Ingress& packetCapture) {
     }
 }
 
-// Function to handle packet egress (sending packets)
 void Interface::packetEgress(Egress& packetSend) {
     while (threadsRunning) { 
         ByteString packet;
@@ -149,14 +142,13 @@ void Interface::packetEgress(Egress& packetSend) {
         {
             // Enqueue the send task to the thread pool
             threadPool.enqueue([this, packet, &packetSend]() {
-                packetSend.sendPacket(packet);
+                this->packetSend.sendPacket(packet);
                 Logger::getInstance().info() << "Packet sent via egress." << std::endl;
             });
         }
     }
 }
 
-// Function to process packets
 void Interface::process(Ingress& packetCapture) {
     while (threadsRunning) {
         ByteString packet;
@@ -181,7 +173,6 @@ void Interface::process(Ingress& packetCapture) {
     }
 }
 
-// Stop all background threads
 void Interface::stopThreads() {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex); 
@@ -192,10 +183,9 @@ void Interface::stopThreads() {
     if (thread3.joinable()) thread3.join(); 
 
     // Shutdown the thread pool
-    // threadPool.shutdown();
+    threadPool.shutdown();
 }
 
-// Shutdown or restart interface threads based on the shut parameter
 void Interface::Shutdown(bool shut) {
     if (shut) {
         threadsRunning = false;
@@ -208,7 +198,6 @@ void Interface::Shutdown(bool shut) {
     stateChangeV6();
 }
 
-// Runs when the interface state changes
 void Interface::stateChange()
 {
     updateEigrpInterface(this);
@@ -226,7 +215,6 @@ void Interface::stateChange()
     }
 }
 
-// Runs when the interface state changes
 void Interface::stateChangeV6()
 {
     updateEigrpInterface(this);

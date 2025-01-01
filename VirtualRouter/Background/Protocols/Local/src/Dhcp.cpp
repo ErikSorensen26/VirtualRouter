@@ -88,7 +88,7 @@ namespace Protocol {
                             offer = false; 
                             for (auto opt : dhcp->options) 
                             { 
-                                if (opt.option == Variable::Dhcp::Option::type && opt.value == Variable::Dhcp::Type::nac) 
+                                if (opt.option == Variable::Dhcp::Option::type && opt.value == Variable::Dhcp::Type::nak) 
                                 {
                                     sideload = false; 
                                 }

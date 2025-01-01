@@ -1,6 +1,5 @@
 #include <Egress.h>
 
-// Constructor initializes the pcap handle for sending packets on the specified interface.
 Egress::Egress(const std::string& interface) 
 {
     char errbuf[PCAP_ERRBUF_SIZE];
@@ -11,7 +10,6 @@ Egress::Egress(const std::string& interface)
     }
 }
 
-// Destructor closes the pcap handle if it's not NULL.
 Egress::~Egress() 
 {
     if (pcap_handle != NULL) 
@@ -20,7 +18,6 @@ Egress::~Egress()
     }
 }
 
-// Sends a packet with data converted from base256 string format.
 bool Egress::sendPacket(const ByteString& base256Str) 
 {
   std::vector<unsigned char> packet_data = base256ToBytes(base256Str);
@@ -33,7 +30,6 @@ bool Egress::sendPacket(const ByteString& base256Str)
   return true;
 }
 
-// Converts a base256 string to a vector of unsigned char bytes.
 std::vector<unsigned char> Egress::base256ToBytes(const ByteString& base256Str) 
 {
     std::vector<unsigned char> bytes(base256Str.begin(), base256Str.end());

@@ -7,6 +7,7 @@
 #include <RoutingTable.h>
 #include <mutex>
 #include <chrono>
+#include <unordered_map>
 
 // Declares interface class
 class Interface;

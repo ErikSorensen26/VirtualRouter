@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/CommandParser.dir/Utils/src/CommandParser.cpp.o -o bin/CommandParser  libVirtualRouter.a -lpthread -lpcap /usr/lib/x86_64-linux-gnu/libz.so /usr/lib/x86_64-linux-gnu/libssl.so /usr/lib/x86_64-linux-gnu/libcrypto.so 

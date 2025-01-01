@@ -3,13 +3,11 @@
 #include <fstream>
 #include <Logger.h>
 
-// Function to print a chunk of XML for debugging purposes
 void Configs::printConfig() 
 {
     //std::cout << root.dump(4) << std::endl;
 }
 
-// Constructor for Configs class
 Configs::Configs() {}
 
 void Configs::initConfigs(const std::string& startupFilename) 
@@ -91,7 +89,6 @@ void Configs::initConfigs(const std::string& startupFilename)
     }
 }
 
-// Process JSON nodes and generate commands based on their content
 void Configs::processConfigs(nlohmann::ordered_json* currentNode, std::vector<std::string> command, std::vector<std::string>& commandList)
 {
     if (!currentNode || currentNode->is_null()) return; // Handle null or invalid JSON nodes
@@ -170,7 +167,6 @@ std::string Configs::joinCommand(const std::vector<std::string>& command)
     return oss.str();
 }
 
-// Retrieve commands from XML configuration
 std::vector<std::string> Configs::recoverConfigs() 
 {
     recover.clear(); // Clear previous recover data
@@ -181,7 +177,6 @@ std::vector<std::string> Configs::recoverConfigs()
     return recover;
 }
 
-// Saves the entire configuration
 void Configs::saveConfig()
 {
     std::ofstream file(startupFileName);
@@ -193,7 +188,6 @@ void Configs::saveConfig()
     file.close();
 }
 
-// Save new commands to the XML configuration
 void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool& isListed)
 {
     if (currentMode == mode.userExec || currentMode == mode.privilegedExec) return;
@@ -415,7 +409,6 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
     printConfig();
 }
     
-// Inserts items in the correct order
 void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::string& mainCommand, const std::string& subCommand, bool isListed)
 {
     // Handle main command
@@ -511,12 +504,10 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::strin
     }
 }
 
-// Deletes a given node and all its children based on specific conditions
 void Configs::deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isListed)
 {
 }
 
-// Checks if a command string is volatile based on certain conditions
 bool Configs::isVolitile(const std::string& command) 
 {
     // Check if the root node's name is "config" to set configMode flag
@@ -546,7 +537,6 @@ bool Configs::isVolitile(const std::string& command)
     return false; 
 }
 
-// Determine the volatile value
 std::string Configs::getVolitileValue(std::string& command, std::string& com, nlohmann::ordered_json currentJson)
 {
     std::string value = getVolitileValueHelper(command, com);
@@ -591,7 +581,6 @@ std::string Configs::getVolitileValue(std::string& command, std::string com, std
     return value;
 }
 
-// Determines the volatile type based on command and format
 std::string Configs::getVolitileValueHelper(std::string& command, std::string& com) 
 {
     // Return "value" for commands of type "WORD" and "LINE"
@@ -643,7 +632,6 @@ std::string Configs::getVolitileValueHelper(std::string& command, std::string& c
     return ""; // Return empty string for unknown commands
 }
 
-// Updates the global configuration history to reflect the current configuration state
 void Configs::historyToGlobal() 
 {
     prevConfig = configNode; 
@@ -653,7 +641,6 @@ void Configs::historyToGlobal()
 
 }
 
-// Traverses from a node up to the root node and updates the node to match the root
 void Configs::returnToRoot(pugi::xml_node& node, pugi::xml_node& root) 
 {
     // Traverse up the tree until the node matches the root's name

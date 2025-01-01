@@ -7,17 +7,15 @@
 #include <fcntl.h>
 #include <vector>
 
-// Constructor for Console class
 Console::Console() : Configs() {}
 
-// Destructor to clean up
 Console::~Console() {}
 
 void Console::setPrompt(const std::string newPrompt)
 {
     prompt = newPrompt;
     cursorPos = 0;
-    initialLineLength = prompt.length();
+    initialLineLength = static_cast<int>(prompt.length());
 
     // Clear current input on the screen and pring new prompt
     std::cout << prompt;
@@ -26,11 +24,10 @@ void Console::setPrompt(const std::string newPrompt)
 
 bool Console::isCursorAtLineEnd()
 {
-    int terminalWidth = getTerminalWidth();
-    return (cursorPos + initialLineLength) % terminalWidth == 0;
+    int width = getTerminalWidth();
+    return (cursorPos + initialLineLength) % width == 0;
 }
 
-// Initialization
 void Console::initConsole()
 {
     // Clear the screen once
@@ -45,7 +42,6 @@ void Console::initConsole()
     std::cout.flush();
 }
 
-// Clears the line after the current cursor position
 void Console::clearLineAfterCursor() 
 {
     int width = getTerminalWidth();
@@ -53,8 +49,8 @@ void Console::clearLineAfterCursor()
     moveCursorLeft(width);
 }
 
-// Retrieves the cursor position on Unix-like systems
-CursorPosition Console::getCursorPosition() {
+CursorPosition Console::getCursorPosition() 
+{
     CursorPosition pos{-1, -1};
     termios orig, raw;
     tcgetattr(STDIN_FILENO, &orig); // Save original state
@@ -95,7 +91,6 @@ CursorPosition Console::getCursorPosition() {
     return pos;
 }
 
-// Checks if a key has been pressed
 int Console::kbhit() 
 {
     termios oldt, newt;
@@ -127,7 +122,6 @@ int Console::getTerminalWidth()
     return w.ws_col > 0 ? w.ws_col : 80;
 }
 
-// Moves the cursor left by the specified number of steps
 void Console::moveCursorLeft(int steps) 
 {
     for (int i = 0; i < steps; ++i)
@@ -150,7 +144,6 @@ void Console::moveCursorLeft(int steps)
     }
 }
 
-// Moves the cursor right by the specified number of steps
 void Console::moveCursorRight(int steps) 
 {
     int terminalWidth = getTerminalWidth();
@@ -170,7 +163,6 @@ void Console::moveCursorRight(int steps)
     }
 }
 
-// Moves the cursor up by the specified number of steps
 void Console::moveCursorUp(int steps) 
 {
     if (steps > 0) 
@@ -179,7 +171,6 @@ void Console::moveCursorUp(int steps)
     }
 }
 
-// Moves the cursor down by the specified number of steps
 void Console::moveCursorDown(int steps) 
 {
     // Move cursor left 'cursorPos' times to reach the beginning

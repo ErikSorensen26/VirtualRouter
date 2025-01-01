@@ -1,0 +1,114 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "VirtualRouter",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "AllTests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-AllTests-fa017c5ef65cdbbc2734.json",
+					"name" : "AllTests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "CommandParser::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-CommandParser-68ffbcde1e69cc7e254e.json",
+					"name" : "CommandParser",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "GMock::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-GMock-102958616b9821c9408a.json",
+					"name" : "GMock",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "LogServer::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-LogServer-ed6a21b643bc9aa42ca6.json",
+					"name" : "LogServer",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "PythonTests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-PythonTests-d1860ce4a0004e1e1aee.json",
+					"name" : "PythonTests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "VirtualRouter::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-VirtualRouter-9e9382fed9dad2328e34.json",
+					"name" : "VirtualRouter",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "VirtualRouterExec::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-VirtualRouterExec-55fc3f2447dc4daf56ce.json",
+					"name" : "VirtualRouterExec",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/erik/VirtualRouter/build",
+		"source" : "/home/erik/VirtualRouter"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

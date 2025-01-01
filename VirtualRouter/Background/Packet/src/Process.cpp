@@ -1,14 +1,11 @@
 #include <Process.h>
 #include <Eigrp.h>
 
-// Constructor for ProcessPacket class.
-// Initializes the interface and processes the given packet and VRF.
 ProcessPacket::ProcessPacket(PacketInfo& packet, ByteString& vrf, Interface* Interface) : interface(Interface) 
 { 
     process(packet, vrf); // Call the Process method to handle the packet.
 }
 
-// Processes the packet by examining and handling various header types.
 void ProcessPacket::process(PacketInfo& packet, ByteString& vrf) 
 {
     currentVrf = vrf;
@@ -200,7 +197,7 @@ void ProcessPacket::process(PacketInfo& packet, ByteString& vrf)
                         interface->dhcp->dhcpOffer = packet; 
                         interface->dhcp->offered = true;
                     } 
-                    else if ((!interface->dhcp->acked && opt.value == Variable::Dhcp::Type::ack) || (opt.value == Variable::Dhcp::Type::nac)) 
+                    else if ((!interface->dhcp->acked && opt.value == Variable::Dhcp::Type::ack) || (opt.value == Variable::Dhcp::Type::nak)) 
                     {
                         std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex); 
                         interface->dhcp->dhcpAck = packet; 
@@ -225,7 +222,6 @@ void ProcessPacket::process(PacketInfo& packet, ByteString& vrf)
     }
 }
 
-// Checks if the packet header should be printed based on the data type.
 bool ProcessPacket::print(std::any param) 
 {
     if (data.empty()) 

@@ -8,111 +8,271 @@
 #include <Interface.h>
 #include "PacketStructure.h"
 
+/**
+ * @class Packet
+ * @brief Represents a network packet and handles its decapsulation across various protocol layers.
+ *
+ * The Packet class is responsible for inspecting and decapsulating network packets through layers 2 to 5.
+ * It parses headers for protocols such as Ethernet, ARP, IPv4/IPv6, TCP/UDP, ICMP/ICMPv6, IGMP, TLS,
+ * MPLS, GRE, PPP, Frame Relay, AH, ESP, VLAN, LLDP, DHCP, EIGRP, SysLog, ctr..
+ *
+ * It utilizes the Singleton design pattern to ensure a single instance per packet processing.
+ * Thread safety is maintained through the use of mutexes and proper synchronization mechanisms.
+ */
 class Packet
 {
 public:
-    // constructor
+
+    /**
+     * @brief Constructs a Packet object and initiates packet inspection.
+     *
+     * @param packet The ByteString representation of the raw packet data.
+     * @param debug Boolean flag to enable or disable debug logging.
+     * @param iface Reference to the Interface object associated with the packet.
+     */
     Packet(ByteString &packet, bool debug, Interface& iface);
 
-    // layers 2-3 decapsulation
+    /**
+     * @brief Inspects the given packet and processes each protocol layer (Layers 2-3).
+     *
+     * @param packet The ByteString representation of the raw packet data to inspect.
+     */
     void inspection(ByteString &packet);
 
-    // layers 4-7 decapsulation
+    /**
+     * @brief Decapsulates the remaining protocol layers (Layers 4-5) after initial inspection.
+     */
     void decapsulate();
 
-    // Leftover Packet
+    /**
+     * @brief Holds the leftover packet data after processing.
+     *
+     * This ByteString contains the portion of the packet that remains unprocessed after decapsulation.
+     */
     ByteString afterPacket;
 
-    // Packet structure initialization
+    /**
+     * @brief Contains the structured information of the packet after decapsulation.
+     *
+     * The PacketInfo struct aggregates information from various protocol layers for easy access and analysis.
+     */
     PacketInfo packetInfo;
 
 private:
 
-    // Interface
+    /**
+     * @brief Reference to the Interface associated with this packet.
+     *
+     * Ensures that the packet is processed in the context of the correct network interface.
+     */
     Interface& currentInterface;
 
-    // Parses and processes Ethernet header.
+    // Decapsulation and Decoding Methods
+
+    /**
+     * @brief Parses and processes the Ethernet header.
+     *
+     * @param ethernetHeader The ByteString representation of the Ethernet header.
+     */
     void decodeEthernet(ByteString &ethernetHeader);
-    // Parses and processes ARP header.
+
+    /**
+     * @brief Parses and processes the ARP header.
+     *
+     * @param arpHeader The ByteString representation of the ARP header.
+     */
     void decodeArp(ByteString &arpHeader);
-    // Parses and processes the IP header.
+
+    /**
+     * @brief Parses and processes the IPv4 header.
+     *
+     * @param ipv4Header The ByteString representation of the IPv4 header.
+     * @param ipv4Size Reference to an integer indicating the size of the IPv4 header.
+     */
     void decodeIPv4(ByteString &ipv4Header, int &ipv4Size);
-    // Parses and processes the IPv6 header
+
+    /**
+     * @brief Parses and processes the IPv6 header.
+     *
+     * @param ipv6Header The ByteString representation of the IPv6 header.
+     */
     void decodeIPv6(ByteString &ipv6Header);
-    // Parses and processes the TCP header.
+
+    /**
+     * @brief Parses and processes the TCP header.
+     *
+     * @param tcpHeader The ByteString representation of the TCP header.
+     * @param tcpSize Reference to an integer indicating the size of the TCP header.
+     */
     void decodeTcp(ByteString &tcpHeader, int &tcpSize);
-    // Parses and processes the UDP header.
+
+    /**
+     * @brief Parses and processes the UDP header.
+     *
+     * @param udpHeader The ByteString representation of the UDP header.
+     */
     void decodeUdp(ByteString &udpHeader);
-    // Parses and processes the ICMP header.
+
+    /**
+     * @brief Parses and processes the ICMP header.
+     *
+     * @param icmpHeader The ByteString representation of the ICMP header.
+     */
     void decodeIcmp(ByteString &icmpHeader);
-    // Parses and processes the ICMPv6 header
+
+    /**
+     * @brief Parses and processes the ICMPv6 header.
+     *
+     * @param icmpV6Header The ByteString representation of the ICMPv6 header.
+     */
     void decodeIcmpV6(ByteString &icmpV6Header);
-    // Parses and processes the IGMP header.
+
+    /**
+     * @brief Parses and processes the IGMP header.
+     *
+     * @param igmpHeader The ByteString representation of the IGMP header.
+     *
+     * @note Currently, the implementation is commented out and requires completion.
+     */
     void decodeIgmp(ByteString &igmpHeader);
-    // Parses and processes the TLS header.
+
     void decodeTls(ByteString &tlsHeader);
-    // Parses and processes the MPLS header.
+
     void decodeMpls(ByteString &mplsHeader);
-    // Parses and processes the GRE header.
+
+    /**
+     * @brief Parses and processes the GRE header.
+     *
+     * @param greHeader The ByteString representation of the GRE header.
+     */
     void decodeGre(ByteString &greHeader);
-    // Parses and processes the PPP header.
+
+    /**
+     * @brief Parses and processes the PPP header.
+     *
+     * @param pppHeader The ByteString representation of the PPP header.
+     */
     void decodePpp(ByteString &pppHeader);
-    // Parses and processes the Frame Relay header.
+
+    /**
+     * @brief Parses and processes the Frame Relay header.
+     *
+     * @param frameHeader The ByteString representation of the Frame Relay header.
+     */
     void decodeFrame(ByteString &frameHeader);
-    // Parses and processes the AH header.
+
+    /**
+     * @brief Parses and processes the AH header.
+     *
+     * @param ahHeader The ByteString representation of the AH header.
+     * @param ahSize Reference to an integer indicating the size of the AH header.
+     */
     void decodeAh(ByteString &ahHeader, int &ahSize);
-    // Parses and processes the ESP header.
+
+    /**
+     * @brief Parses and processes the ESP header.
+     *
+     * @param espHeader The ByteString representation of the ESP header.
+     */
     void decodeEsp(ByteString &espHeader);
-    // Parses and processes the VLAN header.
+
+    /**
+     * @brief Parses and processes the VLAN header.
+     *
+     * @param vlanHeader The ByteString representation of the VLAN header.
+     */
     void decodeVlan(ByteString &vlanHeader);
-    // Parses and processes the LLDP header.
+
+    /**
+     * @brief Parses and processes the LLDP header.
+     *
+     * @param lldpHeader The ByteString representation of the LLDP header.
+     */
     void decodeLldp(ByteString &lldpHeader);
-    // Parses and processes the DHCP header.
+
+    /**
+     * @brief Parses and processes the DHCP header.
+     *
+     * @param dhcpHeaders The ByteString representation of the DHCP headers.
+     */
     void decodeDhcp(ByteString &dhcpHeader);
-    // Parses and processes the EIGRP header.
+
+    /**
+     * @brief Parses and processes the EIGRP header.
+     *
+     * @param eigrpHeader The ByteString representation of the EIGRP header.
+     */
     void decodeEigrp(ByteString &eigrpHeader);
-    // Parses and processes the SysLog header
+
+    /**
+     * @brief Parses and processes the SysLog header.
+     *
+     * @param syslogHeader The ByteString representation of the SysLog header.
+     */
     void decodeSysLog(ByteString &syslogHeader);
 
-    // Decapsulates layer 2 headers
+    // Decapsulation Layer Methods
+
+    /**
+     * @brief Decapsulates layer 2 headers from the packet.
+     *
+     * @param packet The ByteString representation of the packet data.
+     */
     void l2(ByteString &packet);
-    // Decapsulates layer 2.5 headers
+
+    /**
+     * @brief Decapsulates layer 2.5 headers from the packet (e.g., VLAN, MPLS).
+     *
+     * @param packet The ByteString representation of the packet data.
+     */
     void l2_5(ByteString &packet);
-    // Decapsulates layer 3 headers
+
+    /**
+     * @brief Decapsulates layer 3 headers from the packet.
+     *
+     * @param packet The ByteString representation of the packet data.
+     */
     void l3(ByteString &packet);
-    // Decapsulates layer 4 headers
+
+    /**
+     * @brief Decapsulates layer 4 headers from the packet.
+     *
+     * @param packet The ByteString representation of the packet data.
+     */
     void l4(ByteString &packet);
-    // Decapsulates layer 5 headers
+
+    /**
+     * @brief Decapsulates layer 5 headers from the packet (e.g., DHCP).
+     *
+     * @param packet The ByteString representation of the packet data.
+     */
     void l5(ByteString &packet);
 
     // Header Initializations
-    EthernetHeader ethernet;
-    ArpHeader arp;
-    IPv4Header ipv4;
-    IPv6Header ipv6;
-    TcpHeader tcp;
-    UdpHeader udp;
-    IcmpHeader icmp;
-    IcmpV6Header icmpv6;
-    IgmpHeader igmp;
-    TlsHeader tls;
-    MplsHeader mpls;
-    GreHeade gre;
-    PppHeader ppp;
-    FrameHeader frame;
-    AhHeader ah;
-    EspHeader esp;
-    VlanHeader vlan;
-    LldpHeader lldp;
-    DhcpHeader dhcp;
-    EigrpHeader eigrp;
-    SyslogHeader syslog;
+    EthernetHeader ethernet;    ///< Holds the Ethernet header information.
+    ArpHeader arp;              ///< Holds the ARP header information.
+    IPv4Header ipv4;            ///< Holds the IPv4 header information.
+    IPv6Header ipv6;            ///< Holds the IPv6 header information.
+    TcpHeader tcp;              ///< Holds the TCP header information.
+    UdpHeader udp;              ///< Holds the UDP header information.
+    IcmpHeader icmp;            ///< Holds the ICMP header information.
+    IcmpV6Header icmpv6;        ///< Holds the ICMPv6 header information.
+    IgmpHeader igmp;            ///< Holds the IGMP header information.
+    TlsHeader tls;              ///< Holds the TLS header information.
+    MplsHeader mpls;            ///< Holds the MPLS header information.
+    GreHeade gre;               ///< Holds the GRE header information.
+    PppHeader ppp;              ///< Holds the PPP header information.
+    FrameHeader frame;          ///< Holds the Frame Relay information.
+    AhHeader ah;                ///< Holds the AH header information.
+    EspHeader esp;              ///< Holds the ESP header information.
+    VlanHeader vlan;            ///< Holds the VLAN header information.
+    LldpHeader lldp;            ///< Holds the LLDP header information.
+    DhcpHeader dhcp;            ///< Holds the DHCP header information.
+    EigrpHeader eigrp;          ///< Holds the EIGRP header information.
+    SyslogHeader syslog;        ///< Holds the SysLog header information.
 
-    // Packet Index
-    unsigned long start{0};
-
-    ByteString fullPacket;
-
-    bool options;
-    bool print = false;
+    unsigned long start{0};     ///< Index indicating the current position within the packet data.
+    ByteString fullPacket;      ///< Holds the complete packet data for processing.
+    bool options;               ///< Boolean flag indicating whether additional options are present.
+    bool print = false;         ///< Boolesn flag to control debug printing.
 };

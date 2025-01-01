@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/LogServer.dir/Utils/src/LogServer.cpp.o -o bin/LogServer  libVirtualRouter.a -lpthread -lpcap /usr/lib/x86_64-linux-gnu/libz.so /usr/lib/x86_64-linux-gnu/libssl.so /usr/lib/x86_64-linux-gnu/libcrypto.so 

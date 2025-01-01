@@ -5,8 +5,6 @@
 // Mutex for synchronizing access to the packet queue.
 std::mutex packetQueueMutex;
 
-// Constructor for Ingress class.
-// Opens a live capture session on the specified device and sets the subnet mask.
 Ingress::Ingress(const std::string& device, const std::string mask, const int inQueSize) : packetQueue(inQueSize) 
 {
     char errbuf[PCAP_ERRBUF_SIZE]; // Buffer for error messages.
@@ -24,8 +22,6 @@ Ingress::Ingress(const std::string& device, const std::string mask, const int in
     subnet = Functions::byteMaskToNum(mask);
 }
 
-// Destructor for Ingress class.
-// Closes the pcap handle when the Ingress object is destroyed.
 Ingress::~Ingress() 
 {
     if (pcap_handle != NULL) 
@@ -34,14 +30,11 @@ Ingress::~Ingress()
     }
 }
 
-// Stop the packet capture session and close the pcap handle.
 void Ingress::stopSnif() 
 {
     pcap_close(pcap_handle);
 }
 
-// Start capturing packets with the specified filter expression.
-// Sets the filter for the capture and starts the packet capture loop.
 int Ingress::startCapture(const char* filter_exp) 
 {
     struct bpf_program fp; // Structure for the compiled filter program.
@@ -66,8 +59,6 @@ int Ingress::startCapture(const char* filter_exp)
     return 0;
 }
 
-// Callback function for processing captured packets.
-// Enqueues packet data into the packet queue in a thread-safe manner.
 void Ingress::packetHandler(u_char* user, const struct pcap_pkthdr* pkthdr, const u_char* packet) 
 {
     Ingress* ingress = reinterpret_cast<Ingress*>(user); // Cast user data to Ingress pointer.

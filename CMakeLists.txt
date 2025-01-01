@@ -10,14 +10,45 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Define project root
+# Define directories
 set(VIRTUAL_ROUTER_DIR "${PROJECT_SOURCE_DIR}/VirtualRouter")
 set(UTILS_DIR "${PROJECT_SOURCE_DIR}/Utils")
 set(TEST_DIR "${PROJECT_SOURCE_DIR}/Tests")
+set(COMMON_DIR "${VIRTUAL_ROUTER_DIR}/Common")
+
+# Output Directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# Debugging flags
+set(DEBUG_FLAGS -g -O0 -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wconversion -Wsign-conversion -Wmisleading-indentation -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wnull-dereference -Wuseless-cast -Wdouble-promotion -Wformat=2)
+add_compile_options(${DEBUG_FLAGS})
+
+# External Libraries
+find_package(GTest REQUIRED)
+find_package(GMock REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(PCAP REQUIRED libpcap)
+find_package(ZLIB REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(CURL REQUIRED)
+
+set(TELNET_LIBRARIES /usr/lib/x86_64-linux-gnu/libtelnet.so)
+set(TELNET_INCLUDE_DIR /usr/include)
+
+# Check for Telnet library
+if (EXISTS ${TELNET_LIBRARIES} AND EXISTS ${TELNET_INCLUDE_DIR}/libtelnet.h)
+    message(STATUS "Found libtelnet: ${TELNET_LIBRARIES}")
+else()
+    message(FATAL_ERROR "libtelnet not found in expected paths. Please verify installation.")
+endif()
+
+# ============================================================
+# VirtualRouter Library
+# ============================================================
 
 # List of source files
 set(VIRTUAL_ROUTER_SOURCES
-    ${VIRTUAL_ROUTER_DIR}/main.cpp
     ${VIRTUAL_ROUTER_DIR}/src/Configs.cpp
     ${VIRTUAL_ROUTER_DIR}/src/Console.cpp
     ${VIRTUAL_ROUTER_DIR}/src/Interface.cpp
@@ -47,116 +78,78 @@ set(VIRTUAL_ROUTER_SOURCES
     ${VIRTUAL_ROUTER_DIR}/Common/Functions.cpp
 )
 
-# Define the executable
-add_executable(VirtualRouter ${VIRTUAL_ROUTER_SOURCES})
+add_library(VirtualRouter STATIC ${VIRTUAL_ROUTER_SOURCES})
 
-# Set include directories for the target after it's created
-target_include_directories(VirtualRouter PRIVATE
+
+target_include_directories(VirtualRouter PUBLIC
     ${VIRTUAL_ROUTER_DIR}/Background/Packet/include
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/include
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Global/include
     ${VIRTUAL_ROUTER_DIR}/Background/Services/include
     ${VIRTUAL_ROUTER_DIR}/Background/Global/include
     ${VIRTUAL_ROUTER_DIR}/Dir
-    ${VIRTUAL_ROUTER_DIR}/Common
+    ${COMMON_DIR}
     ${VIRTUAL_ROUTER_DIR}/Configs
     ${VIRTUAL_ROUTER_DIR}/include
 )
 
-#------------------------------------------------------------
+target_link_libraries(VirtualRouter PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
 
-# Define utils include directories
-set(UTILS_INCLUDE_DIRS
-    ${UTILS_DIR}/
-    ${UTILS_DIR}/src
-    ${UTILS_DIR}/Dir
-    ${UTILS_DIR}/Configs
-    ${UTILS_DIR}/../VirtualRouter/Common
-)
+# ============================================================
+# Executables
+# ============================================================
 
-# List of source files
-set(LOG_SERVER_SOURCES ${UTILS_DIR}/src/LogServer.cpp)
-set(COMMAND_PARSER_SOURCES ${UTILS_DIR}/src/CommandParser.cpp)
+# Main VirtualRouter executable
+add_executable(VirtualRouterExec ${VIRTUAL_ROUTER_DIR}/main.cpp)
+target_link_libraries(VirtualRouterExec PRIVATE VirtualRouter)
 
-# Define the executable
-add_executable(LogServer ${LOG_SERVER_SOURCES})
-add_executable(CommandParser ${COMMAND_PARSER_SOURCES})
+# Log Server executable
+add_executable(LogServer ${UTILS_DIR}/src/LogServer.cpp)
+target_include_directories(LogServer PRIVATE ${UTILS_DIR})
+target_link_libraries(LogServer PRIVATE VirtualRouter)
 
-# Apply shared utils include directories to utils
-target_include_directories(LogServer PRIVATE ${UTILS_INCLUDE_DIRS})
-target_include_directories(CommandParser PRIVATE ${UTILS_INCLUDE_DIRS})
+# Command Parser executable
+add_executable(CommandParser ${UTILS_DIR}/src/CommandParser.cpp)
+target_include_directories(CommandParser PRIVATE ${UTILS_DIR})
+target_link_libraries(CommandParser PRIVATE VirtualRouter)
 
-#------------------------------------------------------------
+# ============================================================
+# Tests
+# ============================================================
 
-# Add Tests (Google Tests)
 enable_testing()
-find_package(GTest REQUIRED)
 
 # List of test files
 set(TEST_SOURCES
     ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
     ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
-    ${TEST_DIR}/TestEigrp.cpp
+    ${TEST_DIR}/ConsoleTest.cpp
 )
 
-# Define Eigrp Test
-add_executable(EigrpTest ${TEST_SOURCES})
-target_link_libraries(EigrpTest PRIVATE GTest::GTest GTest::Main pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} ${TELNET_LIBRARIES} ${CURL_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
-target_include_directories(EigrpTest PRIVATE $<TARGET_PROPERTY:VirtualRouter,INCLUDE_DIRECTORIES> ${TELNET_INCLUDE_DIR} ${CURL_INCLUDE_DIRS} ${TEST_DIR} ${TEST_DIR}/RouterTesting/include)
-add_test(NAME EigrpTest COMMAND EigrpTest)
+# Test executable
+add_executable(AllTests ${TEST_SOURCES})
+target_link_libraries(AllTests PRIVATE VirtualRouter GTest::GTest GTest::Main gmock gmock_main pthread ${TELNET_LIBRARIES})
+target_include_directories(AllTests PRIVATE
+    ${TEST_DIR}
+    ${TEST_DIR}/RouterTesting/include
+)
 
-# Python integration tests
+add_test(NAME AllTests COMMAND AllTests)
+
+
+# ============================================================
+# Python Integration Tests
+# ============================================================
+
 add_custom_target(PythonTests
     COMMAND pytest ${PROJECT_SOURCE_DIR}/tests
-    COMMENT "Running Pything integration tests..."
+    COMMENT "Running Python integration tests..."
 )
 
-#------------------------------------------------------------
+# ============================================================
+# Debugging Flags for All Targets
+# ============================================================
 
-# Compiler flags for debugging
-set(DEBUG_FlAGS "-g -O0 -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wconversion -Wsign-conversion -Wmisleading-indentation -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wnull-dereference -Wuseless-cast -Wdouble-promotion -Wformat=2")
-
-# Set the build type to Debug to include debugging symbols
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug)
-endif()
-
-# Use the script path in your command
-execute_process(
-    COMMAND git config --local alias.shrink "!bash ${PROJECT_SOURCE_DIR}/scripts/shrink_git_objects.sh"
-    COMMAND git config --local alias.configinterfaces "!bash ${PROJECT_SOURCE_DIR}/scripts/add_interface.sh"
-    COMMAND git shrink
-)
-
-# Find and link libpcap
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(PCAP REQUIRED libpcap)
-
-# Find and link ZLIB
-find_package(ZLIB REQUIRED)
-
-# Find and link OpenSSL
-find_package(OpenSSL REQUIRED)
-
-# Find and link CURL
-find_package(CURL REQUIRED)
-
-# Check if libtelnet is found
-if (EXISTS ${TELNET_LIBRARIES} AND EXISTS ${TELNET_INCLUDE_DIR}/libtelnet.h)
-    message(STATUS "Found libtelnet: ${TELNET_LIBRARIES}")
-    message(STATUS "Include directory: ${TELNET_INCLUDE_DIR}")
-else()
-    message(FATAL_ERROR "libtelnet not found in expected paths. Please verify installation.")
-endif()
-
-# Apply debug flags using target_compile_options
-foreach(target IN LISTS VirtualRouter LogServer CommandParser EigrpTest)
-    target_compile_options(${target} PRIVATE
-        $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
-    )
+foreach(target IN LISTS VirtualRouter VirtualRouterExec LogServer CommandParser AllTests)
+    target_compile_options(${target} PRIVATE ${DEBUG_FLAGS})
 endforeach()
-
-# Link libraries to the target
-target_link_libraries(VirtualRouter PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
-target_link_libraries(LogServer PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES})
-target_link_libraries(CommandParser PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES})
