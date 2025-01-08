@@ -1,4 +1,7 @@
-#pragma once
+// Terminal.h
+
+#ifndef TERMINAL_H
+#define TERMINAL_H
 
 #include <Time.h>
 #include "Interface.h"
@@ -6,7 +9,6 @@
 #include <Ospf.h>
 #include <Rip.h>
 #include <Bgp.h>
-
 #include <Functions.h>
 #include "Console.h"
 
@@ -49,12 +51,32 @@ public:
     Terminal(bool enableDebug = false);
 
     /**
+     * @brief Constructor for the Terminal class.
+     * 
+     * Initializes the terminal by setting up debugging options, loading command configurations,
+     * setting the default mode, and restoring the previous state if available.
+     * 
+     * @param term IConsole shared pointer for testing
+     * @param fs IFileSystem shared pointer for testing
+     */
+    Terminal(std::shared_ptr<IConsole> term, std::shared_ptr<IFileSystem> fs);
+
+    /**
+     * @brief Initialization function for the Terminal class
+     *
+     * This function fully initialized this class by setting the configuration files
+     */
+    void initTerminal();
+
+    /**
      * @brief Captures and processes user input in the terminal.
      * 
      * This function reads the user's input, processes IPv6 addresses if applicable,
      * handles shortcuts (e.g., Ctrl-Z for mode switching), and executes valid commands.
+     *
+     * @param input String for giving manual input
      */
-    void handleInput();
+    bool handleInput(std::string input = "");
 	
 private:
     
@@ -63,9 +85,10 @@ private:
      *
      * Processes the given command string and performs the corresponding action within the terminal.
      *
-     * @param command The command string to process and execute
+     * @param command The command string to process and execute.
+     * @return boolean Indicates whether the execution was a success or not.
      */
-    void executeCommand(std::string& command);
+    bool executeCommand(std::string& command);
 
     /**
      * @brief Reverses the effects of a processed command.
@@ -97,7 +120,7 @@ private:
      * @param fullyFormattedCommand Reference to the string accumalating the fully formatted command.
      * @param volatileCommand Reference to the string accumalating the volatile command.
      */
-    void appendLineBasedCommand(const std::vector<std::string>& parsedWords, int currentIndex, std::string& fullyFormattedCommand, std::string& volitileCommand);
+    void appendLineBasedCommand(const std::vector<std::string>& parsedWords, size_t currentIndex, std::string& fullyFormattedCommand, std::string& volatileCommand);
 
     /**
      * @brief
@@ -113,7 +136,7 @@ private:
      * @param inputCommand The original user command string.
      * @param isFirstIteration A flag indicating if this is the first iteration of processing.
      */
-    void processNonLineBasedWord(std::string& word, std::vector<Com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volitileCommand, const std::string& inputCommand, bool& isFirstIteration);
+    void processNonLineBasedWord(std::string& word, std::vector<Com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand, const std::string& inputCommand, bool& isFirstIteration);
 
     /**
      * @brief Initializes the processing state for command execution
@@ -208,6 +231,16 @@ private:
     void handleInvalidInputMarker(const std::string& formattedOldCommand);
 
     /**
+     * @brief Handles the marking of ambiguous input within the command.
+     *
+     * Flags the command as ambiguous, stops further processing, and provides user feedback indicating
+     * the location of the ambiguous input.
+     *
+     * @param ambiguousCommand The formatted command string up to the point of invalid input.
+     */
+    void handleAmbiguousInputMarker(const std::string& ambiguousCommand);
+
+    /**
      * @brief Matches the user input command with available commands.
      *
      * Compares the input command with a list of available commands, updates matching states,
@@ -222,7 +255,7 @@ private:
      * @param volatileCommand Reference to the string accumulating the volatile command.
      * @param isCommandDone A reference to a boolean indicating if the command matching is complete.
      */
-    void matchCommand(const std::string& inputCommand, const std::string& word, const std::vector<Com>& availableCommands, std::vector<Com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volitileCommand, bool& isCommandDone);
+    void matchCommand(const std::string& inputCommand, const std::string& word, const std::vector<Com>& availableCommands, std::vector<Com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand, bool& isCommandDone);
 
     /**
      * @brief Retrieves a list of available commands based on the current command tree and user input.
@@ -328,7 +361,7 @@ private:
      * @param lineCount A reference to the current line number being displayed.
      * @return true If pagination continues; otherwise, false to stop displaying more lines.
      */
-    bool handlePagination(int& lineCount);
+    bool handlePagination(size_t& lineCount);
 
     /**
      * @brief Changes the terminal's operational mode.
@@ -339,7 +372,7 @@ private:
      * @param newMode A reference to the string representing the new mode to switch to.
      * @param processing A boolean flag indicating whether the mode change is part of command processing. Defaults to false.
      */
-    void changeMode(std::string& newMode, bool processing = false);
+    bool changeMode(std::string& newMode, bool processing = false);
 
     /**
      * @brief Exits the current mode and switches to a new mode.
@@ -412,7 +445,7 @@ private:
      * @return true If the MAC address is valid; otherwise, false.
      */
     bool isMACAddress(const std::string& macAddress);
-
+    
     /**
      * @brief Configures the terminal's interface mode based on the specified type.
      *
@@ -435,14 +468,25 @@ private:
     InterfaceType getInterfaceType(std::string& type);
 
     /**
+     * @brief Masks the prefix over the original.
+     * 
+     * Takes the original string and copies the prefix over the beginning of it.
+     * 
+     * @param prefix Reference to the prefix string to be masked.
+     * @param original Original string to by copied over.
+     * @return std::string The masked string.
+     */
+    std::string maskInput(const std::string& prefix, std::string original);
+
+    /**
      * @brief Configures the terminal's routing mode based on the specified routing protocol.
      *
      * Switches the terminal's operational mode to match the given routing protocol (e.g., BGP, OSPF),
      * updates the active routing configurations, and adjusts the working directory accordingly.
      *
-     * @param type The enum value representing the routing mode to configure (e.g., RoutingMode::BGP).
+     * @param type The string value representing the routing mode to configure.
      */
-    void configureRoutingMode(RoutingMode type);
+    void configureRoutingMode(std::string type);
 
     /**
      * @brief Recovers the terminal state from saved configurations.
@@ -460,16 +504,18 @@ private:
     void runRip();      ///< Runs the RIP service in a seperate thread
 
     // Member variables
-    unsigned long interfaceID;		///< Unique identifier for interfaces
-    int routingProtocolID;		///< ID of the current routing protocol
+    uint8_t interfaceID;		///< Unique identifier for interfaces
+    uint32_t routingProtocolID;	        ///< ID of the current routing protocol
 	
-    std::map<int, std::shared_ptr<Interface>>* activeInterfaces; ///< pointer to a map of active interfaces
+    std::map<unsigned int, std::shared_ptr<Interface>>* activeInterfaces; ///< pointer to a map of active interfaces
 
     std::vector<std::string> globalCommandList{"exit", "end", "?", "vk_tab"}; ///< List of global commands
 
     std::vector<std::string> commandHistory;    ///< History of previous entered commands
 
     DoTime timeManager;                         ///< Manages time-related functionality
+
+    size_t paginationCount = 10;                ///< Pagination count for command help
 
     std::string currentPattern;		        ///< Current matching pattern
     std::string endCommandString;	        ///< String for marking the end of a command
@@ -497,8 +543,12 @@ private:
     bool isCommandInvalid = false;              ///< Indicates if a command is invalid
     bool isCommandExecutionSuccessful = false;  ///< Indicates if the command was successful
     bool isGlobalCommandExecution = false;      ///< Indicates if a global command is being executed
-    bool isDebugModeEnabled = false;            ///< Debug mode flag
+    bool isDebugModeEnabled = false;            ///< Indicates if in Debug mode
+    bool attemptingGlobalCommand = false;       ///< Indicates if a global command is being attempted
 
     std::condition_variable stateCondition;     ///< Condition variabel for thread synchronization
-
+    
+    static std::string defaultMode;
 };
+
+#endif // TERMINAL_H

@@ -1,10 +1,14 @@
-#pragma once
+// Ethernet.h
+
+#ifndef ETHERNET_H
+#define ETHERNET_H
 
 #include <ByteString.hpp>
 #include <PacketStructure.h>
 #include <Arp.h>
-#include <Interface.h>
 #include <Logger.h>
+
+class interface;
 
 namespace Protocol
 {
@@ -36,3 +40,4 @@ namespace Protocol
     };
 }
 
+#endif // ETHERNET_H

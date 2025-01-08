@@ -1,4 +1,7 @@
-#pragma once
+// Time.h
+
+#ifndef TIME_H
+#define TIME_H
 
 #include <string>
 
@@ -19,3 +22,5 @@ private:
 
 // Returns the number of seconds since the epoch (January 1, 1970).
 double secondsSinceEpoch();
+
+#endif // TIME_H

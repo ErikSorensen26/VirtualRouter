@@ -25,8 +25,8 @@ Logger& Logger::getInstance()
 
 // Constructor
 Logger::Logger()
-    : serverIP_("127.0.0.1"), serverPort_(54000), minLogLevel_(LogLevel::INFO),
-    timestampFormat_("%Y-%m-%d %H:%M:%S"), sock_(-1), running(false) {
+    : running(false), serverIP_("127.0.0.1"), serverPort_(54000), 
+    minLogLevel_(LogLevel::INFO), timestampFormat_("%Y-%m-%d %H:%M:%S"), sock_(-1) {
 }
 
 // Destructor
@@ -172,7 +172,7 @@ void Logger::connectToServer()
     }
 
     // Connect to the server
-    if (connect(sock_, (sockaddr*)&serverAddr, sizeof(serverAddr)) < 0)
+    if (connect(sock_, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) < 0)
     {
         std::cerr << "Logger: Connection to Log Server failed" << std::endl;
         close (sock_);
@@ -258,7 +258,7 @@ std::string Logger::getCurrentTimestamp()
 // Implementation of LogStream methods
 
 LogStream::LogStream(Logger& logger, LogLevel level, bool isFiltered)
-    : logger_(logger), level_(level), filtered(isFiltered) {}
+    : filtered(isFiltered), logger_(logger), level_(level) {}
 
 LogStream::~LogStream() {
     if (!logger_.running) { return; }

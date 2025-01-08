@@ -1,8 +1,10 @@
-#pragma once
+// Arp.h
+
+#ifndef ARP_H
+#define ARP_H
 
 #include <PacketStructure.h>
 #include <Functions.h>
-#include <Interface.h>
 #include <Encapsulation.h>
 #include <RoutingTable.h>
 #include <mutex>
@@ -62,3 +64,5 @@ namespace Protocol {
         Interface* currentInterface;
     };
 }
+
+#endif // ARP_H

@@ -1,11 +1,15 @@
-#pragma once
+// Ingress.h
+
+#ifndef INGRESS_H
+#define INGRESS_H
+
 #include <pcap.h>
 #include <string>
 #include <mutex>
 #include <Functions.h>
 #include <ByteString.hpp>
 
-#include "Que.h"
+#include "Queue.hpp"
 
 /**
  * @file Ingress.h
@@ -42,7 +46,7 @@ public:
      *
      * @note The constructor will terminate the program if the pcap handle cannot be opened.
      */
-    Ingress(const std::string& device, const std::string mask, const int inQueSize);
+    Ingress(const std::string& device, const std::string mask, const size_t inQueSize);
 
     /**
      * @brief Destructs the Ingress object and closes the pcap handle.
@@ -98,3 +102,5 @@ private:
      */
     static void packetHandler(u_char* user, const struct pcap_pkthdr* pkthdr, const u_char* packet);
 };
+
+#endif // INGRESS_H

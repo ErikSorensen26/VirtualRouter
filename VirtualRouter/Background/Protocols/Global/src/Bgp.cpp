@@ -5,4 +5,4 @@ Bgp::Bgp() {}
 }
 
 Protocol::Bgp* currentBgp;
-std::map<int, std::shared_ptr<Protocol::Bgp>> bgpList;
+std::map<uint32_t, std::shared_ptr<Protocol::Bgp>> bgpList;

@@ -57,10 +57,10 @@ namespace Checksum
 
         unsigned long crc32 = 0xFFFFFFFF;
         const unsigned char *byteBuf = reinterpret_cast<const unsigned char *>(data.data());
-        unsigned int bufLen = data.size();
+        size_t bufLen = data.size();
 
         // Perform CRC32 calculation
-        for (unsigned int i = 0; i < bufLen; i++)
+        for (size_t i = 0; i < bufLen; i++)
         {
             crc32 = (crc32 >> 8) ^ crcTable[(crc32 ^ byteBuf[i]) & 0xFF];
         }
@@ -68,10 +68,10 @@ namespace Checksum
 
         // Convert the CRC32 result to a 4-byte string
         std::string byteString(4, '\0');
-        byteString[0] = static_cast<unsigned char>(crc32 >> 24);
-        byteString[1] = static_cast<unsigned char>(crc32 >> 16);
-        byteString[2] = static_cast<unsigned char>(crc32 >> 8);
-        byteString[3] = static_cast<unsigned char>(crc32);
+        byteString[0] = static_cast<char>(crc32 >> 24);
+        byteString[1] = static_cast<char>(crc32 >> 16);
+        byteString[2] = static_cast<char>(crc32 >> 8);
+        byteString[3] = static_cast<char>(crc32);
 
         return byteString;
     }
@@ -110,7 +110,7 @@ namespace Checksum
     }
 
     // Calculates a protocol-specific checksum and updates the given data string
-    ByteString calculateProtocolChecksum(const ByteString &data_str, int startIndex, int headerlength, int index, bool swap)
+    ByteString calculateProtocolChecksum(const ByteString &data_str, size_t startIndex, size_t headerlength, size_t index, bool swap)
     {
 
         // Convert string to vector of bytes
@@ -136,6 +136,6 @@ namespace Checksum
 
         // Replace the checksum in the original string
         std::string final_str = data_str.substr(startIndex, headerlength).toString();
-        return final_str.replace(index, 2, (Functions::hexToByte(checksum)));
+        return final_str.replace(index, 2, Functions::hexToByte(checksum).toString());
     }
 }

@@ -1,4 +1,7 @@
-#pragma once
+// Eigrp.h
+
+#ifndef EIGRP_H
+#define EIGRP_H
 
 #include <map>
 #include <memory>
@@ -13,7 +16,6 @@
 #include <atomic>
 #include <shared_mutex>
 #include <condition_variable>
-#include <Interface.h>
 #include <RoutingTable.h>
 #include <TimeManager.h>
 #include <Authentication.hpp>
@@ -26,6 +28,7 @@
  */
 
 extern std::shared_mutex globalEigrpMutex;
+class Interface;
 
 /**
  * @namespace EigrpConfigs
@@ -60,7 +63,7 @@ namespace EigrpConfigs
     struct SummaryRoute 
     {
         ByteString network; ///< Network address of the summary route.
-        int mask;           ///< Subnet mask length of the summary route.
+        uint8_t mask;       ///< Subnet mask length of the summary route.
         bool isAuto = false;///< Indicates if the summary route is automatically generated.
     };
 
@@ -70,12 +73,12 @@ namespace EigrpConfigs
      */
     struct KValue 
     {
-        int k1_Bandwidth = 1; ///< Weight for bandwidth.
-        int k2_Load = 0;       ///< Weight for load.
-        int k3_Delay = 1;      ///< Weight for delay.
-        int k4_Reliability = 0;///< Weight for reliability.
-        int k5_MTU = 0;        ///< Weight for MTU.
-        int k6_Power = 0;      ///< Weight for power.
+        uint8_t k1_Bandwidth = 1; ///< Weight for bandwidth.
+        uint8_t k2_Load = 0;       ///< Weight for load.
+        uint8_t k3_Delay = 1;      ///< Weight for delay.
+        uint8_t k4_Reliability = 0;///< Weight for reliability.
+        uint8_t k5_MTU = 0;        ///< Weight for MTU.
+        uint8_t k6_Power = 0;      ///< Weight for power.
     };
 
     /**
@@ -142,8 +145,8 @@ namespace EigrpConfigs
      */
     struct AuthKey
     {
-        int keyId;                ///< Identifier for the authentication key.
-        ByteString key;           ///< The authentication key.
+        uint8_t keyId;              ///< Identifier for the authentication key.
+        ByteString key;             ///< The authentication key.
         AuthType authType = AuthType::NONE; ///< Type of authentication.
     };
 
@@ -252,8 +255,8 @@ namespace EigrpConfigs
         bool masterInit =           false; ///< Indicates if the nieghbor is in master initialization.
         bool initComplete =         false; ///< Indicates if neighbor initialization is complete.
         bool processAcks =          false; ///< Indicates if ACKs should be processed.
-        int initSequence{0}; ///< Initialization sequence number.
-        int nullUpdateSequence{0}; ///< Last sequence number for received for null update.
+        uint32_t initSequence{0}; ///< Initialization sequence number.
+        uint32_t nullUpdateSequence{0}; ///< Last sequence number for received for null update.
 
         // Packet Handling
         /**
@@ -265,10 +268,10 @@ namespace EigrpConfigs
             ByteString neighborIp;  ///< IP address of the neighbor.
             EigrpHeader eigrp;      ///< EIGRP packet header.
         };
-        std::map<int, PacketBuffer> packetBuffer; ///< Buffer for packets from neighbors.
+        std::map<uint32_t, PacketBuffer> packetBuffer; ///< Buffer for packets from neighbors.
 
         // Acknowledgements
-        std::vector<int> pendingAcks; ///< List of pending ACKs.
+        std::vector<uint32_t> pendingAcks; ///< List of pending ACKs.
 
         // RTT (Route-Trip Time) Estimation
         double srtt = 1.0; ///< Smoothed RTT
@@ -276,10 +279,10 @@ namespace EigrpConfigs
         double rto = 1.5; ///< Retransmission timeout
 
         // Timers
-        int holdTimerId = 0; ///< Hold timer ID.
-        int holdTime; ///< Hold time in seconds.
+        uint32_t holdTimerId = 0; ///< Hold timer ID.
+        uint16_t holdTime; ///< Hold time in seconds.
         std::chrono::steady_clock::time_point lastHeard; ///< Last heard time point.
-        std::unordered_map<int, int> retransmissionTimers; ///< Map of sequence numbers to retransmission timer IDs.
+        std::unordered_map<uint32_t, uint32_t> retransmissionTimers; ///< Map of sequence numbers to retransmission timer IDs.
 
         // Synchronization
         std::shared_mutex neighborDataMutex; ///< Protects neighbor-specific data.
@@ -287,7 +290,7 @@ namespace EigrpConfigs
         std::condition_variable cv; ///< Condition variable for synchronization
 
         // Authentication
-        int authKeyId = 1; ///< Authentication key ID.
+        uint8_t authKeyId = 1; ///< Authentication key ID.
         ByteString authKey; ///< Authentication key.
         bool authenticationEnabled = false; ///< Indicates if authentication is enabled.
         AuthType authType = AuthType::NONE; ///< Type of authentication.
@@ -322,8 +325,8 @@ namespace EigrpConfigs
 
             Packet packet; ///< Reliable packet information.
             std::chrono::steady_clock::time_point sendTime; ///< Time the packet was sent.
-            int retransmissionCount; ///< Number of retransmissions.
-            int timerId; ///< Timer ID for retransmission.
+            uint8_t retransmissionCount; ///< Number of retransmissions.
+            uint32_t timerId; ///< Timer ID for retransmission.
 
             /**
              * @brief Default constructor.
@@ -344,7 +347,7 @@ namespace EigrpConfigs
             ReliablePacketInfo(ReliablePacketInfo&&) = default;
             ReliablePacketInfo& operator=(ReliablePacketInfo&&) = default;
         };
-        std::unordered_map<int, ReliablePacketInfo> reliablePackets; ///< Map of sequence numbers to reliable packets.
+        std::unordered_map<uint32_t, ReliablePacketInfo> reliablePackets; ///< Map of sequence numbers to reliable packets.
 
         /**
          * @struct AdvertisedRoute
@@ -359,16 +362,16 @@ namespace EigrpConfigs
         };
 
         // Routing Updates
-        std::unordered_map<int, Sequence> sequenceList; ///< Map of sequence numbers to sequence flags.
-        std::unordered_map<int, std::vector<RoutingTable::Eigrp>> routingBuffers; ///< Buffer for routing updates.
+        std::unordered_map<uint32_t, Sequence> sequenceList; ///< Map of sequence numbers to sequence flags.
+        std::unordered_map<uint32_t, std::vector<RoutingTable::Eigrp>> routingBuffers; ///< Buffer for routing updates.
         std::unordered_map<ByteString, AdvertisedRoute> advertisedRoutes; ///< Map of advertised routes.
 
         // Neighbor Flags
         bool hasMac = false; ///< Indicates if MAC address is known.
         bool isInit = false; ///< Initialization flag.
         bool isGracfullyRestarting = false; ///< Gracefully restarting.
-        int lastReceivedSequenceNumber = 0; ///< Last received sequence number.
-        std::unordered_map<int, std::chrono::steady_clock::time_point> missingPacketTimestamps; ///< Timestamps for missing packets.
+        uint32_t lastReceivedSequenceNumber = 0; ///< Last received sequence number.
+        std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> missingPacketTimestamps; ///< Timestamps for missing packets.
     
         // Threads and Worker Management
         std::thread workerThread; ///< Worker thread for neighbor operations.
@@ -405,29 +408,29 @@ namespace EigrpConfigs
      */
     struct EigrpConfigs
     {
-        int maxPaths = 4; ///< Maximum number of equal-cost paths.
-        int activeTime = 180; ///< Active time in seconds.
-        int stuckInActiveTime = 60; ///< Stuck-in-active time in seconds.
-        int adminDistance = 90; ///< Administrative distance for internal routes.
-        int externalAdminDistance = 170; ///< Administrative distance for external routes.
-        int summaryAdminDistance = 90; ///< Administrative distance for summary routes.
-        int defaultAdminDistance = 90; ///< Administrative distance for default routes.
-        int variance = 1; ///< Variance for unequal-cost load balancing.
+        uint8_t maxPaths = 4; ///< Maximum number of equal-cost paths.
+        uint8_t adminDistance = 90; ///< Administrative distance for internal routes.
+        uint8_t externalAdminDistance = 170; ///< Administrative distance for external routes.
+        uint8_t summaryAdminDistance = 90; ///< Administrative distance for summary routes.
+        uint8_t defaultAdminDistance = 90; ///< Administrative distance for default routes.
+        uint8_t variance = 1; ///< Variance for unequal-cost load balancing.
+        uint8_t defaultMask = 0; ///< Default network mask.
+        uint8_t trafficShare = 0; ///< Traffic sharing mode.
+        uint16_t activeTime = 180; ///< Active time in seconds.
+        uint16_t stuckInActiveTime = 60; ///< Stuck-in-active time in seconds.
+        uint32_t redistributionMetricOffset = 0.0; ///< Metric offset for redistribution.
+        uint32_t wideMetric = 0; ///< Wide metric setting.
         bool logNeighborChanges = true; ///< Enable logging of neighbor changes.
         bool advertiseDefault = false; ///< Advertise default route.
         bool activeTimerEnabled = true; ///< Enable active timers.
-        int trafficShare = 0; ///< Traffic sharing mode.
-        KValue kvalue; ///< K-values for metric calculation.
-        StubConfig stubConfig; ///< Stub routing configuration.
-        std::vector<SummaryRoute> summaryRoutes; ///< List of summary routes.
-        AuthKey authKey; ///< Authentication key.
         bool autoSummarizationEnabled = false; ///< Enable auto-summarization.
-        double redistributionMetricOffset = 0.0; ///< Metric offset for redistribution.
-        double wideMetric = 0.0; ///< Wide metric setting.
+        std::vector<SummaryRoute> summaryRoutes; ///< List of summary routes.
         std::vector<Network> networks; ///< List of configured networks.
         ByteString defaultNetwork; ///< Default network.
-        int defaultMask = 0; ///< Default network mask.
         TrafficShareMode trafficShareMode = TrafficShareMode::Balenced; ///< Traffic sharing mode.
+        KValue kvalue; ///< K-values for metric calculation.
+        StubConfig stubConfig; ///< Stub routing configuration.
+        AuthKey authKey; ///< Authentication key.
     };
 
     /**
@@ -436,22 +439,22 @@ namespace EigrpConfigs
      */
     struct InterfaceConfigs
     {
-        int helloTime = 5; ///< Hello interval in seconds.
-        int holdTime = 15; ///< Hold time in seconds.
-        int reliability = 255; ///< Reliability value.
-        int load = 1; ///< Load value.
-        int mtu = 1500; ///< Maximum Transmission Unit.
+        uint8_t reliability = 255; ///< Reliability value.
+        uint8_t load = 1; ///< Load value.
+        uint8_t DSCP = 0; ///< Differentiated Services Code Point.
+        uint8_t interfaceMask; ///< Interface subnet mask.
+        uint16_t helloTime = 5; ///< Hello interval in seconds.
+        uint16_t holdTime = 15; ///< Hold time in seconds.
+        uint16_t mtu = 1500; ///< Maximum Transmission Unit.
         bool splitHorizon = true; ///< Enable split horizon.
         bool isPassive = false; ///< Enable passive mode.
-        int DSCP = 0; ///< Differentiated Services Code Point.
-        std::unordered_map<int, int> retransmissionTimers; ///< Retransmission timers.
+        std::unordered_map<uint32_t, uint32_t> retransmissionTimers; ///< Retransmission timers.
         Mode interfaceMode = Mode::MULTIPOINT; ///< Interface mode.
         ByteString interfaceAddress; ///< Interface IP address.
-        int interfaceMask; ///< Interface subnet mask.
     };
 }
 
-class IpInfo;
+struct IpInfo;
 
 namespace Protocol 
 {
@@ -475,7 +478,7 @@ namespace Protocol
      */
     struct EigrpInstance
     {
-        std::unordered_map<int, std::shared_ptr<EigrpAutonomousSystems>> autonomousSystems; ///< Map of Autonomous Systems by AS number.
+        std::unordered_map<uint32_t, std::shared_ptr<EigrpAutonomousSystems>> autonomousSystems; ///< Map of Autonomous Systems by AS number.
         bool isShutdown = false; ///< Indicates if the EIGRP instance is shut down.
     };
 
@@ -628,7 +631,7 @@ namespace Protocol
          * @param neighborIp IP address of the neighbor.
          * @param sequenceNumber Sequence number to acknowledge.
          */
-        void sendAckToNeighbor(const ByteString neighborIp, int sequenceNumber);
+        void sendAckToNeighbor(const ByteString neighborIp, uint32_t sequenceNumber);
 
         /**
          * @brief Sends an Update packet to a neighbor.
@@ -689,7 +692,7 @@ namespace Protocol
          * @param neighbor Shared pointer to the neighbor's information.
          * @return True if a timeout has occurred, false otherwise.
          */
-        bool isTimeoutForMissing(int sequenceNumber, std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor);
+        bool isTimeoutForMissing(uint32_t sequenceNumber, std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor);
 
         /**
          * @brief Calculates the maximum number of routes to be sent in a single Update packet.
@@ -759,7 +762,7 @@ namespace Protocol
          * @param queryId Query identifier.
          * @return Neighbor IP address if found, empty ByteString otherwise.
          */
-        ByteString findQueryNeighbor(int queryId);
+        ByteString findQueryNeighbor(uint32_t queryId);
 
         /**
          * @brief Decodes a Route from a ByteString.
@@ -815,7 +818,7 @@ namespace Protocol
          *
          * @return Calculated LLC value.
          */
-        double calculateLocalLinkCost();
+        uint32_t calculateLocalLinkCost();
 
         /**
          * @brief Retrieves the next sequence number for packet identification.
@@ -825,7 +828,7 @@ namespace Protocol
          *
          * @return Next sequence number.
          */
-        int getNextSequenceNumber();
+        uint32_t getNextSequenceNumber();
 
         /**
          * @brief Handles the expiration of the Stuck-In-Active timer.
@@ -864,7 +867,7 @@ namespace Protocol
          * @param network Network address of the summary route.
          * @param mask Subnet mask of the summary route.
          */
-        void withdrawSummaryRoute(const ByteString& network, int mask);
+        void withdrawSummaryRoute(const ByteString& network, uint8_t mask);
 
         /**
          * @brief Encodes a Summary Route for advertisement.
@@ -952,7 +955,7 @@ namespace Protocol
          * @param mask Subnet mask.
          * @return True if the route is advertised to all neighbors, false otherwise.
          */
-        bool isRouteAdvertised(ByteString& network, int mask);
+        bool isRouteAdvertised(ByteString& network, uint8_t mask);
 
         /**
          * @brief Advertises a route to a neighbor.
@@ -1003,7 +1006,7 @@ namespace Protocol
          * @param update Indicates if this Hello is part of an update.
          * @param sequenceNumber Sequence number for the Hello packet.
          */
-        void sendHelloPacket(ByteString neighborIp = "", bool unicast = false, bool update = false, int sequenceNumber = 0);
+        void sendHelloPacket(ByteString neighborIp = "", bool unicast = false, bool update = false, uint32_t sequenceNumber = 0);
 
         /**
          * @brief Stops the Hello timer.
@@ -1044,7 +1047,7 @@ namespace Protocol
          * @param destination Destination network.
          * @param mask Subnet mask of the destination.
          */
-        void cancelActiveTimer(const ByteString &destination, int mask);
+        void cancelActiveTimer(const ByteString &destination, uint8_t mask);
 
         /**
          * @brief Starts the Stuck-In-Active timer.
@@ -1072,7 +1075,7 @@ namespace Protocol
          * @param neighborIp IP address of the neighbor.
          * @param holdTime Hold time in seconds.
          */
-        void startHoldTimer(const ByteString neighborIp, int holdTime);
+        void startHoldTimer(const ByteString neighborIp, uint16_t holdTime);
 
         /**
          * @brief Handles the expiration of a Hold timer for a neighbor.
@@ -1094,7 +1097,7 @@ namespace Protocol
          * @param packet Packet information.
          * @param sequenceNum Sequence number of the packet.
          */
-        void setupReliablePacket(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, const EigrpConfigs::NeighborInfo::ReliablePacketInfo::Packet packet, int sequenceNum);
+        void setupReliablePacket(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, const EigrpConfigs::NeighborInfo::ReliablePacketInfo::Packet packet, uint32_t sequenceNum);
 
         /**
          * @brief Starts a retransmission timer for reliable packet delivery.
@@ -1107,7 +1110,7 @@ namespace Protocol
          * @param timeout Timeout duration in seconds.
          * @return Timer ID of the retransmission timer.
          */
-        int startRetransmissionTimer(const ByteString neighborIp, const int& sequenceNumber, double timeout);
+        uint32_t startRetransmissionTimer(const ByteString neighborIp, const uint32_t& sequenceNumber, double timeout);
 
         /**
          * @brief Handles the expiration of a retransmission timer by resending the packet or marking the neighbor down.
@@ -1118,7 +1121,7 @@ namespace Protocol
          * @param neighborIp IP address of the neighbor.
          * @param sequenceNumber Sequence number of the packet.
          */
-        void handleRetransmissionTimeout(const ByteString neighborIp, const int& sequenceNumber);
+        void handleRetransmissionTimeout(const ByteString neighborIp, const uint32_t& sequenceNumber);
 
         /**
          * @brief Calculates the Round-Trip Time (RTT) for a packet.
@@ -1130,7 +1133,7 @@ namespace Protocol
          * @param sequenceNumber Sequence number of the packet.
          * @return Calculated RTT in seconds.
          */
-        double calculateRTT(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, int sequenceNumber);
+        double calculateRTT(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, uint32_t sequenceNumber);
 
         /**
          * @brief Updates RTT estimates based on received ACKs.
@@ -1141,7 +1144,7 @@ namespace Protocol
          * @param neighbor Shared pointer to the neighbor's information.
          * @param sequenceNumber Sequence number of the acknowledged packet.
          */
-        void updateRTTEstimate(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, int sequenceNumber);
+        void updateRTTEstimate(std::shared_ptr<EigrpConfigs::NeighborInfo> neighbor, uint32_t sequenceNumber);
 
         /**
          * @brief Retrieves the multicast address based on the address family.
@@ -1165,7 +1168,7 @@ namespace Protocol
 
         // Authentication
         bool isNeighborAuthenticated(const ByteString neighborIp);
-        void configureAuthentication(const ByteString neighborIp, int keyId, const ByteString& key, bool enable);
+        void configureAuthentication(const ByteString neighborIp, uint8_t keyId, const ByteString& key, bool enable);
         ByteString serializeEigrpHeader(const EigrpHeader& eigrp, bool exclusiveAuthTLV);
         EigrpHeader::Option generateAuthenticatedTLV(const EigrpHeader& eigrp, const std::shared_ptr<EigrpConfigs::NeighborInfo>& neighbor);
         
@@ -1182,17 +1185,17 @@ namespace Protocol
 
         // Active Timers
         std::chrono::steady_clock::time_point helloStartTime; ///< Start time for the Hello timer.
-        std::unordered_map<ByteString, int> activeTimers; ///< Map of active timers for routes.
+        std::unordered_map<ByteString, uint32_t> activeTimers; ///< Map of active timers for routes.
         bool runTimers = true; ///< Flag to indicate if timers should continue running.
         bool helloTimerActive = false; ///< Indicates if the Hello timer is active.
 
         // Timer IDs
-        int helloTimerId = 0; ///< Timer ID for the Hello timer.
-        int activeTimerId = 0; ///< Timer ID for Active timers.
-        int stuckInActiveTimerId = 0; ///< Timer ID for Stuck-In-Active timer.
+        uint32_t helloTimerId = 0; ///< Timer ID for the Hello timer.
+        uint32_t activeTimerId = 0; ///< Timer ID for Active timers.
+        uint32_t stuckInActiveTimerId = 0; ///< Timer ID for Stuck-In-Active timer.
 
         // Lists
-        std::unordered_map<int, std::pair<ByteString, int>> outstandingReplies; ///< Map of outstanding query IDs to neighbor IPs and timer IDs.
+        std::unordered_map<uint32_t, std::pair<ByteString, uint32_t>> outstandingReplies; ///< Map of outstanding query IDs to neighbor IPs and timer IDs.
 
         // Route Buffer
         std::vector<RoutingTable::Eigrp> routeBuffer = {}; ///< Buffer for routing updates.
@@ -1202,8 +1205,8 @@ namespace Protocol
         std::mutex activeTimerMutex; ///< Mutex for Active timer operations.
 
         // Sequence number
-        int nextSequenceNumber = 1; ///< Next sequence number for packets.
-        int conditionalReceive = 0; ///< Holds conditional receive sequence number.
+        uint32_t nextSequenceNumber = 1; ///< Next sequence number for packets.
+        uint32_t conditionalReceive = 0; ///< Holds conditional receive sequence number.
         std::shared_mutex seqMutex; ///< Mutex for sequence number operations.
     };
 
@@ -1231,7 +1234,7 @@ namespace Protocol
          * @param as Autonomous System number.
          * @param af Address family (IPv4/IPv6).
          */
-        Eigrp(int& as, AddressFamily af);
+        Eigrp(uint32_t& as, AddressFamily af);
 
         /**
          * @brief Destructor for Eigrp.
@@ -1281,7 +1284,7 @@ namespace Protocol
          * @param ack Indicates if this Hello is an ACK.
          * @param update Indicates if this Hello is part of an update.
          */
-        void eigrpHello(EigrpHeader& eigrp, EigrpInterface* eigrpInt, ByteString neighborIp, int sequenceNumber = 0, bool ack = false, bool update = false);
+        void eigrpHello(EigrpHeader& eigrp, EigrpInterface* eigrpInt, ByteString neighborIp, uint32_t sequenceNumber = 0, bool ack = false, bool update = false);
 
         /**
          * @brief Configures an EIGRP Update packet with specific settings.
@@ -1299,7 +1302,7 @@ namespace Protocol
          * @param query Indicates if this Update is a Query.
          * @param reply Indicates if this Update is a Reply to a Query.
          */
-        void eigrpUpdate(EigrpHeader& eigrp, int sequenceNum, bool init = false, bool conditional = false, bool restart = false, bool endoftable = false, bool query = false, bool reply = false);
+        void eigrpUpdate(EigrpHeader& eigrp, uint32_t sequenceNum, bool init = false, bool conditional = false, bool restart = false, bool endoftable = false, bool query = false, bool reply = false);
 
         /**
          * @brief Updates the list of EIGRP interfaces based on address matching.
@@ -1335,7 +1338,7 @@ namespace Protocol
          * @param hopCount Number of hops (default is 0).
          * @return Calculated metric value.
          */
-        double calculateMetric(int bandwidth, int load, int delay, int reliability, int hopCount = 0);
+        uint32_t calculateMetric(uint32_t bandwidth, uint8_t load, uint32_t delay, uint8_t reliability, uint8_t hopCount = 0);
 
         /**
          * @brief Calculates EIGRP parameters based on the hold time.
@@ -1347,7 +1350,7 @@ namespace Protocol
          * @param holdTime Hold time in seconds.
          * @return ByteString representing calculated parameters.
          */
-        ByteString calculateParameters(int holdTime);
+        ByteString calculateParameters(uint16_t holdTime);
 
         /**
          * @brief Updates the routing table with connected routes.
@@ -1395,7 +1398,7 @@ namespace Protocol
          * @param mask Subnet mask of the destination.
          * @param protocol Protocol identifier.
          */
-        void redistributeRoute(const ByteString &destination, int mask, const ByteString &protocol);
+        void redistributeRoute(const ByteString &destination, uint8_t mask, const ByteString &protocol);
 
         /**
          * @brief Adds a summary route to the EIGRP configuration.
@@ -1407,7 +1410,7 @@ namespace Protocol
          * @param mask Subnet mask of the summary route.
          * @param isAuto Indicates if the summary route is auto-generated.
          */
-        void addSummaryRoute(const ByteString& network, int mask, bool isAuto = false);
+        void addSummaryRoute(const ByteString& network, uint8_t mask, bool isAuto = false);
 
         /**
          * @brief Removes a summary route from the EIGRP configuration.
@@ -1418,7 +1421,7 @@ namespace Protocol
          * @param network Network address of the summary route.
          * @param mask Subnet mask of the summary route.
          */
-        void removeSummaryRoute(const ByteString& network, int mask);
+        void removeSummaryRoute(const ByteString& network, uint8_t mask);
 
         /**
          * @brief Checks if a route matches any configured summary route.
@@ -1430,7 +1433,7 @@ namespace Protocol
          * @param mask Subnet mask.
          * @return True if the route is summarized, false otherwise.
          */
-        bool isRouteSummarized(const ByteString& network, int mask);
+        bool isRouteSummarized(const ByteString& network, uint8_t mask);
 
         /**
          * @brief Updates interfaces with a newly added summary route.
@@ -1451,7 +1454,7 @@ namespace Protocol
          * @param network Network address of the removed summary route.
          * @param mask Subnet mask of the removed summary route.
          */
-        void updateInterfacesAfterRemovingSummaryRoute(const ByteString& network, int mask);
+        void updateInterfacesAfterRemovingSummaryRoute(const ByteString& network, uint8_t mask);
 
         /**
          * @brief Enables or disables auto-summarization.
@@ -1495,7 +1498,7 @@ namespace Protocol
          *
          * @return Lowest bandwidth value in Kbps.
          */
-        int getLowestBandwidth();
+        uint32_t getLowestBandwidth();
 
         /**
          * @brief Adds a default route to the routing table.
@@ -1523,7 +1526,7 @@ namespace Protocol
          *
          * @param var Variance value.
          */
-        void setVariance(int var);
+        void setVariance(uint8_t var);
 
         /**
          * @brief Recalculates routes based on updated metrics and variance.
@@ -1611,7 +1614,7 @@ namespace Protocol
 
         // Lists
         std::vector<EigrpConfigs::SummaryRoute> summaryRoutes; ///< List of configured summary routes.
-        std::unordered_map<int, std::shared_ptr<EigrpInterface>> eigrpInterfaceList{}; ///< Map of EIGRP interfaces by identifier.
+        std::unordered_map<uint8_t, std::shared_ptr<EigrpInterface>> eigrpInterfaceList{}; ///< Map of EIGRP interfaces by identifier.
         std::unordered_map<ByteString, std::unordered_map<ByteString, std::shared_ptr<EigrpConfigs::NeighborInfo>>> neighborBackup; ///< Backup information for neighbors.
 
         // Eigrp process mutex
@@ -1639,7 +1642,7 @@ namespace Protocol
          *
          * @return Autonomous System number.
          */
-        inline int getAsNumber() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return asNumber; }
+        inline uint32_t getAsNumber() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return asNumber; }
 
         /**
          * @brief Retrieves the Virtual Router ID.
@@ -1677,7 +1680,7 @@ namespace Protocol
     private:
         AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
         ByteString virtualRouterID = ByteString(2, '\x00'); ///< Virtual Router ID.
-        int asNumber; ///< Autonomous System number.
+        uint32_t asNumber; ///< Autonomous System number.
         EigrpConfigs::RouterID routerID; ///< Router ID configuration.
     };
 
@@ -1700,7 +1703,7 @@ namespace Protocol
          * @param as Autonomous System number.
          * @param af Address family.
          */
-        ClassicEigrp(int& as, AddressFamily af) : Eigrp(as, af) {}
+        ClassicEigrp(uint32_t& as, AddressFamily af) : Eigrp(as, af) {}
 
         /**
          * @brief Initializes the Classic EIGRP process.
@@ -1744,7 +1747,7 @@ namespace Protocol
          * @param af Address family.
          * @param name Name of the EIGRP process.
          */
-        NamedEigrp(int& as, AddressFamily af, const ByteString& name);
+        NamedEigrp(uint32_t& as, AddressFamily af, const ByteString& name);
 
         /**
          * @brief Initializes the Named EIGRP process.
@@ -1792,13 +1795,13 @@ namespace Protocol
          * @brief Contains information about a specific route in the topology table.
          */
         struct RouteInfo {
-            unsigned int feasibleDistance; ///< Feasible distance of the route.
-            unsigned int reportedDistance; ///< Reported distance from the neighbor.
+            uint32_t feasibleDistance; ///< Feasible distance of the route.
+            uint32_t reportedDistance; ///< Reported distance from the neighbor.
+            uint8_t hopCount; ///< Number of hops to the destination.
+            uint8_t adminDistance = 90; ///< Administrative distance.
             ByteString nextHop; ///< Next hop IP address.
             bool isSuccessor; ///< Indicates if this route is a successor.
             bool isFeasibleSuccessor; ///< Indicates if this route is a feasible successor.
-            int hopCount; ///< Number of hops to the destination.
-            int adminDistance = 90; ///< Administrative distance.
             std::chrono::steady_clock::time_point lastUpdate; ///< Timestamp of the last update.
         };
 
@@ -1808,15 +1811,15 @@ namespace Protocol
          */
         struct TopologyEntry {
             ByteString destination; ///< Destination network.
-            int prefixLength; ///< Prefix length of the destination.
+            uint8_t prefixLength; ///< Prefix length of the destination.
             std::unordered_map<ByteString, RouteInfo> routesByNeighbor; ///< Routes learned from each neighbor.
             bool isActive; ///< Indicates if the route is active.
 
             // Timers for Active and Stuck-In-Active
-            int activeTimerId = 0; ///< Timer ID for active routes.
-            int StuckInActiveTimerId = 0; ///< Timer ID for stuck-in-active routes.
+            uint32_t activeTimerId = 0; ///< Timer ID for active routes.
+            uint32_t StuckInActiveTimerId = 0; ///< Timer ID for stuck-in-active routes.
 
-            double bestFD; ///< Best feasible distance for the route.
+            uint32_t bestFD; ///< Best feasible distance for the route.
 
             std::vector<ByteString> feasibleSuccessors; ///< List of feasible successor neighbors.
             std::vector<ByteString> successors; ///< List of successor neighbors.
@@ -1844,7 +1847,7 @@ namespace Protocol
          * @param routeInfo Information about the route.
          * @param neighborIp IP address of the neighbor.
          */
-        void addOrUpdateRoute(const ByteString destination, int prefixLength, const RouteInfo& routeInfo, const ByteString neighborIp);
+        void addOrUpdateRoute(const ByteString destination, uint8_t prefixLength, const RouteInfo& routeInfo, const ByteString neighborIp);
 
         /**
          * @brief Removes all routes associated with a specific neighbor.
@@ -1867,7 +1870,7 @@ namespace Protocol
          * @param variance Variance factor for route selection.
          * @return Optional RouteInfo if a best route is found.
          */
-        std::optional<RouteInfo> findBestRoute(const ByteString& destination, int variance);
+        std::optional<RouteInfo> findBestRoute(const ByteString& destination, uint8_t variance);
 
         /**
          * @brief Updates successors and feasible successors for a topology entry.
@@ -1951,7 +1954,7 @@ namespace Protocol
          */
         std::unordered_map<ByteString, std::shared_ptr<TopologyEntry>>& getTopologyEntries() { std::lock_guard<std::mutex> lock(tableMutex); return topologyEntries; }
 
-        int staleThreshold = 15; ///< Threshold in seconds to consider a route stale.
+        uint8_t staleThreshold = 15; ///< Threshold in seconds to consider a route stale.
     
     private:
         std::mutex tableMutex; ///< Mutex for synchronizing access to the topology table.
@@ -2004,7 +2007,7 @@ extern std::map<ByteString, std::shared_ptr<Protocol::EigrpInstance>> eigrpList;
  * Tracks all autonomous systems configured in the EIGRP process, allowing for
  * efficient management of routing domains and inter-AS route advertisements.
  */
-extern std::map<int, std::weak_ptr<Protocol::EigrpAutonomousSystems>> eigrpAutonomousSystems;
+extern std::map<uint32_t, std::weak_ptr<Protocol::EigrpAutonomousSystems>> eigrpAutonomousSystems;
 
 /**
  * @brief Updates the EIGRP interface list based on interface changes.
@@ -2015,3 +2018,5 @@ extern std::map<int, std::weak_ptr<Protocol::EigrpAutonomousSystems>> eigrpAuton
  * EIGRP interface list accordingly.
  */
 void updateEigrpInterface(Interface* interface);
+
+#endif // EIGRP_H

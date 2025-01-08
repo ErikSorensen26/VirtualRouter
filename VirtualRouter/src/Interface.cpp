@@ -8,12 +8,12 @@
 #include <string>
 #include <Decapsulation.h>
 
-Interface::Interface(InterfaceType interfaceType, std::string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug)
-    : packetCapture(outInterface, "FF000000", inQueSiz),
+Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, uint8_t interfaceId, bool debug)
+    : packetOutQueue(outQueSiz),
+      debug(debug),
+      packetCapture(outInterface, "FF000000", inQueSiz),
       packetSend(outInterface),
       threadsRunning(false), 
-      packetOutQueue(outQueSiz),
-      debug(debug),
       threadPool(std::thread::hardware_concurrency())
 {
     // Set member variables
@@ -24,6 +24,7 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     // Configs
     configs = std::make_shared<IpInfo>();
     configs->macAddress = Functions::hexToByte(mac);
+    configs->interfaceType = interfaceType;
     configs->id = interfaceId;
 
     // Initialize shared pointers for Protocol objects
@@ -65,7 +66,7 @@ void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
     packetOutQueueCV.notify_one();
 }
 
-void Interface::setIPv4(std::string ip, int subnet)
+void Interface::setIPv4(ByteString ip, uint8_t subnet)
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
@@ -81,7 +82,7 @@ void Interface::setIPv4(std::string ip, int subnet)
     }
 }
 
-void Interface::setIPv6(std::string ip, int subnet, bool eui64)
+void Interface::setIPv6(ByteString ip, uint8_t subnet, bool eui64)
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
@@ -104,12 +105,12 @@ void Interface::startThreads() {
 
     std::lock_guard<std::mutex> lock(threadsRunningMutex); 
     // Start threads for packet ingress, egress, and processing
-    thread1 = std::thread(&Interface::packetIngress, this, std::ref(packetCapture));
-    thread2 = std::thread(&Interface::packetEgress, this, std::ref(packetSend));
-    thread3 = std::thread(&Interface::process, this, std::ref(packetCapture));
+    thread1 = std::thread(&Interface::packetIngress, this);
+    thread2 = std::thread(&Interface::packetEgress, this);
+    thread3 = std::thread(&Interface::process, this);
 }
 
-void Interface::packetIngress(Ingress& packetCapture) {
+void Interface::packetIngress() {
     while (threadsRunning) {
         if (packetCapture.startCapture(NULL) != 0) {
             std::cerr << "Error starting packet capture." << std::endl;
@@ -120,7 +121,7 @@ void Interface::packetIngress(Ingress& packetCapture) {
     }
 }
 
-void Interface::packetEgress(Egress& packetSend) {
+void Interface::packetEgress() {
     while (threadsRunning) { 
         ByteString packet;
         {
@@ -141,7 +142,7 @@ void Interface::packetEgress(Egress& packetSend) {
         if (!packet.empty())
         {
             // Enqueue the send task to the thread pool
-            threadPool.enqueue([this, packet, &packetSend]() {
+            threadPool.enqueue([this, packet]() {
                 this->packetSend.sendPacket(packet);
                 Logger::getInstance().info() << "Packet sent via egress." << std::endl;
             });
@@ -149,7 +150,7 @@ void Interface::packetEgress(Egress& packetSend) {
     }
 }
 
-void Interface::process(Ingress& packetCapture) {
+void Interface::process() {
     while (threadsRunning) {
         ByteString packet;
         {
@@ -237,4 +238,4 @@ std::weak_ptr<Interface> currentInterface;
 
 // Map to store Interface objects by string key and integer ID
 std::shared_mutex interfaceListMutex;
-std::map<InterfaceType, std::map<int, std::shared_ptr<Interface>>> interfaceList;
+std::map<InterfaceType, std::map<unsigned int, std::shared_ptr<Interface>>> interfaceList;

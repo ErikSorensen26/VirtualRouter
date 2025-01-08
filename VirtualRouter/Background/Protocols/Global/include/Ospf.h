@@ -1,4 +1,7 @@
-#pragma once
+// Ospf.h
+
+#ifndef OSPF_H
+#define OSPF_H
 
 #include <map>
 #include <memory>
@@ -12,4 +15,6 @@ private:
 }
 
 extern Protocol::Ospf* currentOspf;
-extern std::map<int, std::shared_ptr<Protocol::Ospf>> ospfList;
+extern std::map<uint16_t, std::shared_ptr<Protocol::Ospf>> ospfList;
+
+#endif // OSPF_H

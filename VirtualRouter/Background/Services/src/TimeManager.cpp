@@ -11,16 +11,16 @@ TimeManager::~TimeManager()
     stopTimer();
 }
 
-int TimeManager::addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback)
+uint32_t TimeManager::addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    int timerId = currentTimerId++;
+    uint32_t timerId = currentTimerId++;
     timers[timerId] = TimerEntry{ expirationTime, callback};
     cv.notify_one(); // Wake up the timer thread
     return timerId;
 }
 
-void TimeManager::cancelTimer(int timerId) 
+void TimeManager::cancelTimer(uint32_t timerId) 
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -67,7 +67,6 @@ void TimeManager::Run()
             {
                 // Execute the callback
                 auto callback = nextTimerIt->second.callback;
-                int timerId = nextTimerIt->first;
                 timers.erase(nextTimerIt);
                 lock.unlock();
                 callback();

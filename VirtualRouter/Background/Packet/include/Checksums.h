@@ -1,4 +1,7 @@
-#pragma once
+// Checksums.h
+
+#ifndef CHECKSUMS_H
+#define CHECKSUMS_H
 
 #include <cstdint>
 #include <vector>
@@ -67,5 +70,7 @@ namespace Checksum
      *
      * @note Ensure that the startIndex and index parameters correctly reference the checksum location within the data string.
      */
-    ByteString calculateProtocolChecksum(const ByteString &data_str, int startIndex, int headerlength, int index, bool swap = false);
+    ByteString calculateProtocolChecksum(const ByteString &data_str, size_t startIndex, size_t headerlength, size_t index, bool swap = false);
 }
+
+#endif // CHECKSUMS_H

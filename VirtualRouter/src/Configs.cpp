@@ -8,92 +8,159 @@ void Configs::printConfig()
     //std::cout << root.dump(4) << std::endl;
 }
 
-Configs::Configs() {}
+Configs::Configs(std::shared_ptr<IFileSystem> fs) : configNode(&root), fileSystem(fs) {}
 
-void Configs::initConfigs(const std::string& startupFilename) 
+void Configs::initConfigs(const std::string& filePath) 
 {
-    startupFileName = startupFilename;
+    // Reset all variables before
+    root.clear();
+    configNode->clear();
+    physicalInterfaces.clear();
+    macAddressList.clear();
 
-    // Load JSON configuration file into doc
-    std::ifstream startupFile(startupFilename);
-    if (startupFile.is_open()) 
+    if (configSchema.is_null() || !configSchema.is_object())
     {
-        if (startupFile.peek() == std::ifstream::traits_type::eof())
-        {
-            Logger::getInstance().warn() << "Startup file is empty. Initializing with {}." << std::endl;
-
-            // Set root to an empty JSON object
-            root = json::object();
-
-            // Write "{}" back to the file
-            std::ofstream outputFile(startupFilename);
-            if (outputFile.is_open())
-            {
-                outputFile << root.dump(4); // Save as formatted JSON
-                outputFile.close();
-            }
-            else
-            {
-                std::cerr << "Failed to open file: " << startupFilename << std::endl;
-            }
-        }
-        startupFile >> root;
-        startupFile.close();
-    } 
-    else 
-    {
-        std::cerr << "Failed to open file: " << startupFilename << std::endl;
-        root = json::object(); // Default to empty JSON if file cannot be opened
+        configSchema = nlohmann::ordered_json::object();
+        modeSchema = &configSchema;
     }
 
-    printConfig();
+    startupFileName = filePath;
+
+    // Load JSON configuration file into doc
+    if (fileSystem->fileExists(filePath))
+    {
+        std::string content;
+        if (fileSystem->readFile(filePath, content))
+        {
+            try
+            {
+                root = nlohmann::ordered_json::parse(content);
+            }
+            catch (json::parse_error& e)
+            {
+                root = nlohmann::ordered_json::object();
+            }
+        }
+    }
+    else 
+    {
+        root = nlohmann::ordered_json::object();
+    }
+    
     // Get the root node of the JSON configuration
     configNode = &root;
     modeHistory.push_back(configNode);
 
     // Load JSON data for interface configurations
     json configJson;
-    std::string configFilename = "../VirtualRouter/Configs/Configs.json";
-    std::ifstream configFile(configFilename);
-    if (configFile.is_open()) 
+    if (fileSystem->fileExists(CONFIG_FILE))
     {
-        configFile >> configJson;
-        configFile.close();
-    } 
+        std::string content;
+        if (fileSystem->readFile(CONFIG_FILE, content))
+        {
+            try
+            {
+                configJson = json::parse(content);
+            }
+            catch (json::parse_error& e)
+            {
+                configJson = json::object();
+            }
+        }
+    }
     else 
     {
-        std::cerr << "Failed to open file: " << configFilename << std::endl;
-    }
-    // Add interface configurations to physicalInterfaces vector
-    for (auto obj : configJson["Interface"])
-    {
-        physicalInterfaces.push_back(obj);
+        configJson = json::object();
     }
 
-    // Set OUI from JSON data
-    OUI = configJson["Mac"]["OUI"];
-    // Add Ethernet MAC addresses to macAddressList
-    for (auto obj : configJson["Mac"]["Ethernet"]) 
+
+    if (configJson.is_object())
     {
-        macAddressList.Ethernet.push_back(obj);
-    }
-    // Add FastEthernet MAC addresses to macAddressList
-    for (auto obj : configJson["Mac"]["FastEthernet"]) 
-    {
-        macAddressList.FastEthernet.push_back(obj);
-    }
-    // Add GigabitEthernet MAC addresses to macAddressList
-    for (auto obj : configJson["Mac"]["GigabitEthernet"]) 
-    {
-        macAddressList.GigabitEthernet.push_back(obj);
+        if (configJson.contains("Interface") && configJson["Interface"].is_object())
+        {
+            // Add interface configurations to physicalInterfaces vector
+            for (auto obj : configJson["Interface"])
+            {
+                physicalInterfaces.push_back(obj);
+            }
+        }
+
+        if (configJson.contains("Mac") && configJson["Mac"].is_object())
+        {
+            // Set OUI from JSON data
+            if (configJson["Mac"].contains("OUI"))
+            {
+                OUI = configJson["Mac"]["OUI"];
+            }
+
+            if (configJson["Mac"].contains("Ethernet"))
+            {
+                // Add Ethernet MAC addresses to macAddressList
+                for (std::string obj : configJson["Mac"]["Ethernet"]) 
+                {
+                    if (obj.size() == 6 && Functions::isHex(obj))
+                    {
+                        macAddressList.Ethernet.push_back(obj);
+                    }
+                }
+            }
+
+            if (configJson["Mac"].contains("FastEthernet"))
+            {
+                // Add FastEthernet MAC addresses to macAddressList
+                for (std::string obj : configJson["Mac"]["FastEthernet"]) 
+                {
+                    if (obj.size() == 6 && Functions::isHex(obj))
+                    {
+                        macAddressList.FastEthernet.push_back(obj);
+                    }
+                }
+            }
+
+            if (configJson["Mac"].contains("GigabitEthernet"))
+            {
+                // Add GigabitEthernet MAC addresses to macAddressList
+                for (std::string obj : configJson["Mac"]["GigabitEthernet"]) 
+                {
+                    if (obj.size() == 6 && Functions::isHex(obj))
+                    {
+                        macAddressList.GigabitEthernet.push_back(obj);
+                    }
+                }
+            }
+
+            if (configJson["Mac"].contains("Loopback"))
+            {
+                // Add GigabitEthernet MAC addresses to macAddressList
+                for (std::string obj : configJson["Mac"]["Loopback"]) 
+                {
+                    if (obj.size() == 6 && Functions::isHex(obj))
+                    {
+                        macAddressList.Loopback.push_back(obj);
+                    }
+                }
+            }
+
+            if (configJson["Mac"].contains("PortChannel"))
+            {
+                // Add GigabitEthernet MAC addresses to macAddressList
+                for (std::string obj : configJson["Mac"]["PortChannel"]) 
+                {
+                    if (obj.size() == 6 && Functions::isHex(obj))
+                    {
+                        macAddressList.PortChannel.push_back(obj);
+                    }
+                }
+            }
+        }
     }
 }
 
-void Configs::processConfigs(nlohmann::ordered_json* currentNode, std::vector<std::string> command, std::vector<std::string>& commandList)
+void Configs::processConfigs(nlohmann::ordered_json* node, std::vector<std::string> path, std::vector<std::string>& commands)
 {
-    if (!currentNode || currentNode->is_null()) return; // Handle null or invalid JSON nodes
+    if (!node || node->is_null()) return; // Handle null or invalid JSON nodes
     
-    for (auto it = currentNode->begin(); it != currentNode->end(); ++it)
+    for (auto it = node->begin(); it != node->end(); ++it)
     {
         const std::string& key = it.key();
         nlohmann::ordered_json& value = it.value();
@@ -101,47 +168,51 @@ void Configs::processConfigs(nlohmann::ordered_json* currentNode, std::vector<st
         // Handle mode key (mode change)
         if (value.is_object() && key == MODE_KEY)
         {
-            commandList.push_back(joinCommand(command));  // Add current mode
-            processConfigs(&value, {}, commandList); // Process commands in the mode
+            commands.push_back(joinCommand(path));  // Add current mode
+            processConfigs(&value, {}, commands); // Process commands in the mode
             continue;
         }
 
-        // Volitile keys (check if the value is primitive or explicitly volatile)
-        if (isVolitile(key) || value.is_primitive())
+        // Volatile keys (check if the value is primitive or explicitly volatile)
+        if (isVolatile(key) || value.is_primitive())
         {
-            command.push_back(value.is_primitive() ? value.get<std::string>() : key);
+            path.push_back(value.is_primitive() ? value.get<std::string>() : key);
             continue;
         }
 
         // handle arrays
-        if (value.is_array())
+        if (value.is_array() && value.size() > 0)
         {
             for (auto& obj : value)
             {
                 if (obj.is_object())
                 {
                     // Process each object in the array
-                    command.push_back(key); // Add the parent key
-                    processConfigs(&obj, command, commandList);
-                    command.pop_back();
+                    path.push_back(key); // Add the parent key
+                    processConfigs(&obj, path, commands);
+                    path.pop_back();
                 }
             }
             continue;
+        }
+        else if (value.is_array() && value.size() == 0)
+        {
+            return;
         }
 
         // Handle objects
         if (value.is_object())
         {
-            command.push_back(key); // Add the current key to the command
-            processConfigs(&value, command, commandList); // Recurse
-            command.pop_back(); // Remove key after processing
+            path.push_back(key); // Add the current key to the command
+            processConfigs(&value, path, commands); // Recurse
+            path.pop_back(); // Remove key after processing
             continue;
         }
     }
 
     // Test if this is the end of a command
     bool endOfCommand = true;
-    for (auto it = currentNode->begin(); it != currentNode->end(); ++it)
+    for (auto it = node->begin(); it != node->end(); ++it)
     {
         if (it.value().is_array() || it.value().is_object())
         {
@@ -150,49 +221,58 @@ void Configs::processConfigs(nlohmann::ordered_json* currentNode, std::vector<st
     }
 
     // Add the completed command to the list if at the end of a command
-    if (!command.empty() && endOfCommand)
+    if (!path.empty() && endOfCommand)
     {
-        commandList.push_back(joinCommand(command));
+        commands.push_back(joinCommand(path));
     }
 }
 
-std::string Configs::joinCommand(const std::vector<std::string>& command)
+std::string Configs::joinCommand(const std::vector<std::string>& commandParts)
 {
-    std::ostringstream oss;
-    for (size_t i = 0; i < command.size(); ++i)
+    std::string command;
+    for (size_t i = 0; i < commandParts.size(); ++i)
     {
-        if (i > 0) oss << " ";
-        oss << command[i];
+        command += commandParts[i];
+        if (i != commandParts.size() - 1)
+        {
+            command += " ";
+        }
     }
-    return oss.str();
+    return command;
 }
 
-std::vector<std::string> Configs::recoverConfigs() 
+std::vector<std::string> Configs::recoverConfigs(nlohmann::ordered_json* json)
 {
     recover.clear(); // Clear previous recover data
-
-    processConfigs(&root, {}, recover);
+    
+    if (json)
+    {
+        processConfigs(json, {}, recover);
+    }
+    else
+    {
+        processConfigs(&root, {}, recover);
+    }
 
     // Process each child node of the root node
     return recover;
 }
 
-void Configs::saveConfig()
+bool Configs::saveConfig()
 {
-    std::ofstream file(startupFileName);
-    if (!file)
+    std::string serialized = root.dump(4);
+    if (fileSystem->writeFile(startupFileName, serialized))
     {
-        std::cerr << "Error opening file for writing!" << std::endl;
+        return true;
     }
-    file << root.dump(4);
-    file.close();
+    return false;
 }
 
-void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool& isListed)
+bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool isListed)
 {
-    if (currentMode == mode.userExec || currentMode == mode.privilegedExec) return;
+    if (currentMode == mode.userExec || currentMode == mode.privilegedExec) return false;
     
-    if (oldCommand.empty() || command.empty()) return;
+    if (oldCommand.empty() || command.empty()) return false;
 
     nlohmann::ordered_json* currentNode = &(*configNode);
 
@@ -204,7 +284,7 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
     std::string subCommand = command.size() > 1 ? command[1] : "";
 
     // Step 1: Navigate or create the nested structure
-    if (subCommand.empty() || isVolitile(oldCommand[1]))
+    if (subCommand.empty() || isVolatile(oldCommand[1]))
     {
         firstIsSub = true;
         subCommand = mainCommand;
@@ -259,9 +339,9 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
     {
         for (size_t i = firstIsSub ? 1 : 2; i < command.size(); ++i)
         {
-            if (isVolitile(oldCommand[i]))
+            if (isVolatile(oldCommand[i]))
             {
-                (*newConfigDir)[getVolitileValue(oldCommand[i], command[i], *newConfigDir)] = command[i];
+                (*newConfigDir)[getVolatileValue(oldCommand[i], command[i], *newConfigDir)] = command[i];
             }
             else
             {
@@ -289,19 +369,18 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
             // Check for duplicates
             for (auto& obj : *currentNode)
             {
-                std::vector<std::string> volitileValues{};
+                std::vector<std::string> volatileValues{};
                 bool noMatch = false;
                 nlohmann::ordered_json *jsonLookup = &obj;
                 for (size_t io = firstIsSub ? 1 : 2; io < command.size(); ++io)
                 {
-                    if (isVolitile(oldCommand[io]))
+                    if (isVolatile(oldCommand[io]))
                     {
-                        // Guess volitile value
-                        std::string volitileValue = getVolitileValue(oldCommand[io], command[io], volitileValues);
-                        // Cache used volitile value
-                        volitileValues.push_back(volitileValue);
-
-                        if (jsonLookup->contains(volitileValue) && (*jsonLookup)[volitileValue] == command[io])
+                        // Guess volatile value
+                        std::string volatileValue = getVolatileValue(oldCommand[io], command[io], volatileValues);
+                        // Cache used volatile value
+                        volatileValues.push_back(volatileValue);
+                        if (jsonLookup->contains(volatileValue) && (*jsonLookup)[volatileValue] == command[io])
                         {
                             noMatch = false;
                         }
@@ -370,7 +449,7 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
     {
         for (size_t i = firstIsSub ? 1 : 2; i < command.size(); ++i)
         {
-            if (!isVolitile(oldCommand[i]))
+            if (!isVolatile(oldCommand[i]))
             {
                 if (configNode)
                 {
@@ -403,10 +482,12 @@ void Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
         else
         {
             Logger::getInstance().error() << "Mode history is already empty during exitMode." << std::endl;
-            configNode - &root;
+            configNode = &root;
         }
     }
     printConfig();
+
+    return true;
 }
     
 void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::string& mainCommand, const std::string& subCommand, bool isListed)
@@ -508,7 +589,7 @@ void Configs::deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>
 {
 }
 
-bool Configs::isVolitile(const std::string& command) 
+bool Configs::isVolatile(const std::string& command) 
 {
     // Check if the root node's name is "config" to set configMode flag
     if (configNode && * configNode == root) 
@@ -521,7 +602,7 @@ bool Configs::isVolitile(const std::string& command)
     }
     
     // Check if the command matches any in the volatile inputs list
-    for (const std::string& str : volitileInputs) 
+    for (const std::string& str : volatileInputs) 
     {
         if (command == str) {
             return true; 
@@ -537,51 +618,69 @@ bool Configs::isVolitile(const std::string& command)
     return false; 
 }
 
-std::string Configs::getVolitileValue(std::string& command, std::string& com, nlohmann::ordered_json currentJson)
+std::string Configs::getVolatileValue(std::string& type, std::string& value, nlohmann::ordered_json currentJson)
 {
-    std::string value = getVolitileValueHelper(command, com);
+    std::string volatileValue = getVolatileValueHelper(type, value);
 
     int count = 1;
 
     for (const auto& obj : currentJson.items())
     {
-        if (obj.key() == value || obj.key().rfind(value + "_", 0) == 0)
+        if (obj.key() == volatileValue || obj.key().rfind(volatileValue + "_", 0) == 0)
         {
             count++;
         }
     }
 
-    if (count > 0)
+    if (count > 1)
     {
-        value += "_" + std::to_string(count);
+        volatileValue += "_" + std::to_string(count);
     }
 
-    return value;
+    return volatileValue;
 }
 
-std::string Configs::getVolitileValue(std::string& command, std::string com, std::vector<std::string> volitileValues)
+std::string Configs::getVolatileValue(std::string& type, std::string value, std::vector<std::string> volatileValues)
 {
-    std::string value = getVolitileValueHelper(command, com);
+    std::string volatileValue = getVolatileValueHelper(type, value);
 
     int count = 1;
+    int highestVolatileNumber = 0;
 
-    for (const auto& str : volitileValues)
+    for (const auto& str : volatileValues)
     {
-        if (str == value || str.rfind(value + "_", 0) == 0)
+        if (str == volatileValue || str.rfind(volatileValue + "_", 0) == 0)
         {
             count++;
+            if (str.size() > volatileValue.size() + 1)
+            {
+                try
+                {
+                    std::string numberPart = str.substr(volatileValue.size() + 1);
+                    int number = std::stoi(numberPart);
+                    highestVolatileNumber = std::max(number, highestVolatileNumber);
+                }
+                catch (const std::invalid_argument&) 
+                {
+                    std::cerr << "Error: Invalid number format in '" << str << "'\n";
+                } 
+                catch (const std::out_of_range&) 
+                {
+                    std::cerr << "Error: Number out of range in '" << str << "'\n";
+                }
+            }
         }
     }
 
-    if (count > 0)
+    if (count > 1)
     {
-        value += "_" + std::to_string(count);
+        volatileValue += "_" + std::to_string(std::max(count, highestVolatileNumber + 1));
     }
 
-    return value;
+    return volatileValue;
 }
 
-std::string Configs::getVolitileValueHelper(std::string& command, std::string& com) 
+std::string Configs::getVolatileValueHelper(std::string& command, std::string& com) 
 {
     // Return "value" for commands of type "WORD" and "LINE"
     if (command == "WORD" || command == "LINE") 
@@ -593,16 +692,43 @@ std::string Configs::getVolitileValueHelper(std::string& command, std::string& c
     if (command == "A.B.C.D") 
     {
         std::vector<int> ip{0, 0, 0, 0};
-        // Non-Windows IP parsing
+
+        ByteString binaryIp = Functions::byteToBin(Functions::addressToByte(com));
+        bool isMask = true;
+        bool reversed = false;
+        bool endOfOnes = false;
+
         sscanf(com.c_str(), "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
-        for (int num : ip) 
+        
+        // Calculate if it's a subnet or wildcard mask
+        if (binaryIp[binaryIp.size() - 1] == '1' && binaryIp[0] == '0')
         {
-            if (num == 255) 
+            // Reversing for validation
+            binaryIp = Functions::reverseBinary(binaryIp);
+            reversed = true;
+        }
+
+        for (auto& ch : binaryIp) 
+        {
+            if (ch == '0')
             {
-                return "subnet"; 
+                endOfOnes = true;
+            }
+            else if (ch == '1' && endOfOnes)
+            {
+                isMask = false;
+                break;
             }
         }
-        return "ip"; 
+
+        if (isMask)
+        {
+            return reversed ? "wildcard" : "subnet";
+        }
+        else
+        {
+            return "ip"; 
+        }
     }
     
     // Return "ipv6" for IPv6 address formats
@@ -639,13 +765,4 @@ void Configs::historyToGlobal()
     modeHistory.push_back(&root); 
     configNode = &root;
 
-}
-
-void Configs::returnToRoot(pugi::xml_node& node, pugi::xml_node& root) 
-{
-    // Traverse up the tree until the node matches the root's name
-    while (node.name() != root.name()) 
-    {
-        node = node.parent(); // Move to the parent node
-    }
 }

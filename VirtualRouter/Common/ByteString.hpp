@@ -1,7 +1,7 @@
-// ByteString.h
+// ByteString.hpp
 
-#ifndef BYTE_STRING_H
-#define BYTE_STRING_H
+#ifndef BYTE_STRING_HPP
+#define BYTE_STRING_HPP
 
 #include <cstdint>
 #include <cstring>
@@ -27,7 +27,7 @@ public:
             std::memcpy(sbo_buffer_, other.sbo_buffer_, size_);
         } else {
             capacity_ = other.capacity_;
-            data_ptr_ = (byte*)std::malloc(capacity_);
+            data_ptr_ = static_cast<byte*>(std::malloc(capacity_));
             if (!data_ptr_) throw std::bad_alloc();
             std::memcpy(data_ptr_, other.data_ptr_, size_);
         }
@@ -49,11 +49,11 @@ public:
 
     inline ByteString(const char* cstr) {
         size_t len = std::strlen(cstr);
-        initialize((const byte*)cstr, len);
+        initialize(reinterpret_cast<const byte*>(cstr), len);
     }
 
     inline ByteString(const std::string& str) {
-        initialize((const byte*)str.data(), str.size());
+        initialize(reinterpret_cast<const byte*>(str.data()), str.size());
     }
 
     inline ByteString(const std::string& str, size_t size) {
@@ -71,7 +71,7 @@ public:
         } else {
             is_sbo_ = false;
             capacity_ = std::max(size * 2, str.size() > size ? str.size() * 2 : size * 2);
-            data_ptr_ = (byte*)std::malloc(capacity_);
+            data_ptr_ = static_cast<byte*>(std::malloc(capacity_));
             if (!data_ptr_) throw std::bad_alloc();
             if (size <= str.size()) {
                 size_ = size;
@@ -93,7 +93,7 @@ public:
         } else {
             is_sbo_ = false;
             capacity_ = length * 2;
-            data_ptr_ = (byte*)std::malloc(capacity_);
+            data_ptr_ = static_cast<byte*>(std::malloc(capacity_));
             if (!data_ptr_) throw std::bad_alloc();
             std::memset(data_ptr_, value, length);
             size_ = length;
@@ -120,7 +120,7 @@ public:
             std::memcpy(sbo_buffer_, other.sbo_buffer_, size_);
         } else {
             capacity_ = other.capacity_;
-            data_ptr_ = (byte*)std::malloc(capacity_);
+            data_ptr_ = static_cast<byte*>(std::malloc(capacity_));
             if (!data_ptr_) throw std::bad_alloc();
             std::memcpy(data_ptr_, other.data_ptr_, size_);
         }
@@ -183,7 +183,7 @@ public:
         }
         if (is_sbo_) {
             // Switch to heap
-            byte* new_data = (byte*)std::malloc(new_cap);
+            byte* new_data = static_cast<byte*>(std::malloc(new_cap));
             if (!new_data) throw std::bad_alloc();
             std::memcpy(new_data, sbo_buffer_, size_);
             is_sbo_ = false;
@@ -191,7 +191,7 @@ public:
             data_ptr_ = new_data;
         } else {
             if (new_cap > capacity_) {
-                byte* new_data = (byte*)std::realloc(data_ptr_, new_cap);
+                byte* new_data = static_cast<byte*>(std::realloc(data_ptr_, new_cap));
                 if (!new_data) throw std::bad_alloc();
                 data_ptr_ = new_data;
                 capacity_ = new_cap;
@@ -206,7 +206,7 @@ public:
             } else {
                 // Switch to heap
                 size_t new_cap = SBO_BUFFER_SIZE * 2;
-                byte* new_data = (byte*)std::malloc(new_cap);
+                byte* new_data = static_cast<byte*>(std::malloc(new_cap));
                 std::memcpy(new_data, sbo_buffer_, size_);
                 new_data[size_++] = b;
                 is_sbo_ = false;
@@ -216,7 +216,7 @@ public:
         } else {
             if (size_ >= capacity_) {
                 size_t new_cap = capacity_ * 2;
-                byte* new_data = (byte*)std::realloc(data_ptr_, new_cap);
+                byte* new_data = static_cast<byte*>(std::realloc(data_ptr_, new_cap));
                 data_ptr_ = new_data;
                 capacity_ = new_cap;
             }
@@ -265,7 +265,7 @@ public:
             result.is_sbo_ = false;
             result.size_ = rlen;
             result.capacity_ = rlen * 2;
-            result.data_ptr_ = (byte*)std::malloc(result.capacity_);
+            result.data_ptr_ = static_cast<byte*>(std::malloc(result.capacity_));
             if (!result.data_ptr_) throw std::bad_alloc();
             std::memcpy(result.data_ptr_, data() + pos, rlen);
         }
@@ -297,7 +297,7 @@ public:
         const byte* end_ptr = data() + size_;
         const byte* result = std::search(start_ptr, end_ptr, pattern.begin(), pattern.end());
         if (result != end_ptr)
-            return result - data();
+            return static_cast<size_t>(result - data());
         return std::string::npos;
     }
 
@@ -444,7 +444,7 @@ private:
         } else {
             is_sbo_ = false;
             capacity_ = len * 2;
-            data_ptr_ = (byte*)std::malloc(capacity_);
+            data_ptr_ = static_cast<byte*>(std::malloc(capacity_));
             if (!data_ptr_) throw std::bad_alloc();
             std::memcpy(data_ptr_, data_ptr, len);
         }
@@ -456,7 +456,7 @@ private:
         // Need to grow
         if (is_sbo_) {
             size_t new_cap = std::max(required, SBO_BUFFER_SIZE * 2);
-            byte* new_data = (byte*)std::malloc(new_cap);
+            byte* new_data = static_cast<byte*>(std::malloc(new_cap));
             if (!new_data) throw std::bad_alloc();
             std::memcpy(new_data, sbo_buffer_, size_);
             data_ptr_ = new_data;
@@ -468,7 +468,7 @@ private:
                 while (new_cap < required) {
                     new_cap *= 2; // double until we have enough
                 }
-                byte* new_data = (byte*)std::realloc(data_ptr_, new_cap);
+                byte* new_data = static_cast<byte*>(std::realloc(data_ptr_, new_cap));
                 if (!new_data) throw std::bad_alloc();
                 data_ptr_ = new_data;
                 capacity_ = new_cap;
@@ -513,4 +513,4 @@ namespace std {
     };
 }
 
-#endif // BYTE_STRING_H
+#endif // BYTE_STRING_HPP

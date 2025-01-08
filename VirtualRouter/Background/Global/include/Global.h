@@ -1,7 +1,11 @@
-#pragma once
+// Global.h
+
+#ifndef GLOBAL_H
+#define GLOBAL_H
 
 #include <string>
 #include <mutex>
+#include <shared_mutex>
 
 /**
  * @def DEFAULT_HOSTNAME
@@ -30,8 +34,26 @@ public:
      */
     static Global& getInstance()
     {
-        static Global instance;
-        return instance;
+        std::unique_lock<std::shared_mutex> lock(instanceMutex);
+        if (!instance)
+        {
+            instance = new Global();
+        }
+        return *instance;
+    }
+
+    /**
+     * @brief Clears all stored configurations and resets the class
+     *
+     * This method ensures that everything is safely reset.
+     *
+     * @note This is mainly for testing purposes, this is dangourus to use on a active router.
+     */
+    static void resetInstance()
+    {
+        std::unique_lock<std::shared_mutex> lock(instanceMutex);
+        delete instance;
+        instance = new Global();
     }
 
     /**
@@ -45,6 +67,18 @@ public:
      * @return std::string& Reference to the hostname string.
      */
     std::string getHostname() { return ProtectedValue<std::string>(hostname, hostnameMutex); }
+
+    /**
+     * @brief Retrieves a thread-safe reference to the hostname.
+     *
+     * This method provides access to the hostname in a thread-safe manner by locking
+     * the associated mutex before returning a reference. However, returning a reference
+     * after unlocking the mutex can lead to potential race conditions. Consider returning
+     * a copy instead to ensure thread safety.
+     *
+     * @return std::string& Reference to the hostname string.
+     */
+    void setHostname(std::string name) {std::lock_guard<std::mutex> lock(hostnameMutex); hostname = name;}
 
     /**
      * @brief Retrieves a thread-safe reference to the IPv6 enablement status.
@@ -92,6 +126,7 @@ private:
     template <typename T>
     T ProtectedValue(T& value, std::mutex& mxt)
     {
+        std::shared_lock<std::shared_mutex> lock(instanceMutex);
         mxt.lock(); // Manually lock for returning reference
 
         // Costom lock structure
@@ -108,4 +143,9 @@ private:
 
     bool ipv6Enabled;               ///< Flag indicating IPv6 enabled.
     std::mutex ipv6EnabledMutex;    ///< Mutex protecting the IPv6 enablement flag.
+
+    static Global* instance;
+    static std::shared_mutex instanceMutex;
 };
+
+#endif // GLOBAL_H

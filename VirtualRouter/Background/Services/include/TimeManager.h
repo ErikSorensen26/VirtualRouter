@@ -1,6 +1,7 @@
-// TimerManager.h
-#ifndef TIMERMANAGER_H
-#define TIMERMANAGER_H
+// TimeManager.h
+
+#ifndef TIME_MANAGER_H
+#define TIME_MANAGER_H
 
 #include <functional>
 #include <map>
@@ -18,10 +19,10 @@ public:
     }
 
     // Adds a timer task to the manager and returns a unique timer ID
-    int addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback);
+    uint32_t addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback);
 
     // Cancels a timer based on its ID
-    void cancelTimer(int timerId);
+    void cancelTimer(uint32_t timerId);
 
     // Stops the timer manager and its thread
     void stopTimer();
@@ -45,8 +46,8 @@ private:
 
     std::mutex mutex;
     std::condition_variable cv;
-    std::map<int, TimerEntry> timers;
-    int currentTimerId;
+    std::map<uint32_t, TimerEntry> timers;
+    uint32_t currentTimerId;
     std::thread timerThread;
     bool stop;
 };

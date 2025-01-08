@@ -17,12 +17,11 @@ set(TEST_DIR "${PROJECT_SOURCE_DIR}/Tests")
 set(COMMON_DIR "${VIRTUAL_ROUTER_DIR}/Common")
 
 # Output Directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Debugging flags
-set(DEBUG_FLAGS -g -O0 -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wconversion -Wsign-conversion -Wmisleading-indentation -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wnull-dereference -Wuseless-cast -Wdouble-promotion -Wformat=2)
-add_compile_options(${DEBUG_FLAGS})
+add_compile_options(-Wall -Wextra -pedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wconversion -Wsign-conversion -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wnull-dereference -Wuseless-cast -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough)
 
 # External Libraries
 find_package(GTest REQUIRED)
@@ -123,7 +122,9 @@ enable_testing()
 set(TEST_SOURCES
     ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
     ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
-    ${TEST_DIR}/ConsoleTest.cpp
+    # ${TEST_DIR}/ConsoleTest.cpp
+    # ${TEST_DIR}/ConfigsTest.cpp
+    ${TEST_DIR}/TerminalTest.cpp
 )
 
 # Test executable
@@ -132,6 +133,7 @@ target_link_libraries(AllTests PRIVATE VirtualRouter GTest::GTest GTest::Main gm
 target_include_directories(AllTests PRIVATE
     ${TEST_DIR}
     ${TEST_DIR}/RouterTesting/include
+    ${TEST_DIR}/RouterTesting/Mocks
 )
 
 add_test(NAME AllTests COMMAND AllTests)

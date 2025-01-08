@@ -1,10 +1,11 @@
 #include <IPPacket.h>
+#include <Interface.h>
 
 namespace Protocol
 {
     IPPacket::IPPacket(Interface& iface) : currentInterface(iface) {}
 
-    void IPPacket::setIPHeader(PacketInfo& packetInfo, const ByteString destIp, int DSCP, int hopLimit, ByteString type)
+    void IPPacket::setIPHeader(PacketInfo& packetInfo, const ByteString destIp, uint8_t DSCP, uint8_t hopLimit, ByteString type)
     {
         // IPv6 Header creation
         if (destIp.size() == 16)

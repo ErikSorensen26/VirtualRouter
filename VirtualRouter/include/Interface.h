@@ -1,4 +1,7 @@
-#pragma once
+// Interface.h
+
+#ifndef INTERFACE_H
+#define INTERFACE_H
 
 #include <Ingress.h>
 #include <Egress.h>
@@ -10,7 +13,7 @@
 #include <Eigrp.h>
 #include <Ethernet.h>
 #include <IPPacket.h>
-#include <ThreadPool.h>
+#include <ThreadPool.hpp>
 #include <string>
 
 #include <map>
@@ -41,7 +44,7 @@ namespace Protocol {
     class IPPacket;                 ///< Forward declaration of IPPacket protocol class.
     class DhcpClient;               ///< Forward declaration of DhcpClient protocol class.
     class Arp;                      ///< Forward declaration of Arp protocol class.
-    class EigrpInterfaceInstance;   ///< Forward declaration of EigrpInterfaceInstance class.
+    struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
 }
 
 /**
@@ -51,11 +54,12 @@ namespace Protocol {
 struct IpInfo {
     std::shared_mutex ipMutex;      ///< Mutex for thread-safe access to IP information
 
-    int id;                         ///< Identifier for the interface.
-    double bandwidth{1000000};      ///< Bandwidth of the interface in kpbs.
-    double delay{10};               ///< Delay of the interface in milliseconds.
+    uint8_t id;                     ///< Identifier for the interface.
+    InterfaceType interfaceType;    ///< Type of interface.
+    uint32_t bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
+    uint32_t delay{10};             ///< Delay of the interface in milliseconds.
     ByteString macAddress{};        ///< MAC address addociated with the interface.
-    int mtu{1500};                  ///< Maximum Transmission Unit size.
+    uint16_t mtu{1500};             ///< Maximum Transmission Unit size.
 
     /**
      * @struct IPv4
@@ -64,7 +68,7 @@ struct IpInfo {
     struct IPv4
     {
         ByteString ipAddress{};     ///< IPv4 address.
-        int mask{0};                ///< Subnet mask.
+        uint8_t mask{0};            ///< Subnet mask.
     } ipv4;
 
     /**
@@ -74,8 +78,8 @@ struct IpInfo {
     struct IPv6
     {
         ByteString ipAddress{};     ///< IPv6 address.
-        int mask{0};                ///< Subnet Mask.
-        int ipv6FlowLabel{0};       ///< IPv6 flow label
+        uint8_t mask{0};            ///< Subnet Mask.
+        uint32_t ipv6FlowLabel{0};  ///< IPv6 flow label
     }  ipv6;
 
     /**
@@ -86,11 +90,11 @@ struct IpInfo {
         ByteString dhcpServer{};    ///< DHCP server address
         ByteString broadcast{};     ///< Broadcast address
         ByteString router{};        ///< Router address
-        std::vector<std::string> dnsServer{}; ///< List of DNS servers
+        std::vector<ByteString> dnsServer{}; ///< List of DNS servers
         ByteString leaseTime{};     ///< Lease time for DHCP
         ByteString renewalTime{};   ///< Renewal time for DHCP
         ByteString rebindingTime{}; ///< Rebinding time for DHCP
-        int subnetMask{};           ///< Subnet mask;
+        uint8_t subnetMask{};       ///< Subnet mask;
     } dhcp;
 };
 
@@ -120,7 +124,7 @@ public:
      * @param interfaceId The Identifier for the interface
      * @param debug Flag to enable or disable debug mode.
      */
-    Interface(InterfaceType interfaceType, std::string outInterface, const int inQueSiz, const int outQueSiz, std::string mac, int interfaceId, bool debug);
+    Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, uint8_t interfaceId, bool debug);
 
     /**
      * @brief Destructs the Interface object.
@@ -137,7 +141,7 @@ public:
      * @param ip The IPv4 address to assign to the interface.
      * @param subnet The subnet mask for the IPv4 address.
      */
-    void setIPv4(std::string ip, int subnet);
+    void setIPv4(ByteString, uint8_t subnet);
 
     /**
      * @brief Sets the IPv6 address, subnet mask, and EUI-64 flag for interface.
@@ -148,7 +152,7 @@ public:
      * @param subnet The subnet mask for the IPv6 address, Default to 64.
      * @param eui64 Flag indicating whether to use EUI-64 for IPv6 address generation.
      */
-    void setIPv6(std::string ip, int subnet = 64, bool eui64 = false);
+    void setIPv6(ByteString ip, uint8_t subnet = 64, bool eui64 = false);
 
     /**
      * @brief Retrieves the current IP address information
@@ -188,13 +192,10 @@ public:
     std::shared_ptr<Protocol::IPPacket> ipPacket;   ///< IP Packet protocol handler.
 
     // L4 Protocols
-    std::map<int, std::shared_ptr<Protocol::EigrpInterfaceInstance>> eigrpInterfaceList; ///< EIGRP interface instance.
+    std::map<uint32_t, std::shared_ptr<Protocol::EigrpInterfaceInstance>> eigrpInterfaceList; ///< EIGRP interface instance.
     std::shared_ptr<Protocol::DhcpClient> dhcp;     ///< DHCP Client protocol handler.
 
 private:
-
-    std::shared_ptr<IpInfo> configs;    ///< Shared pointer to IP configuration information.
-    std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
 
     /**
      * @brief Handles packet ingress by capturing incoming packets.
@@ -203,7 +204,7 @@ private:
      *
      * @param packetCapture Reference to the Ingress object for packet capturing.
      */
-    void packetIngress(Ingress& packetCapture);
+    void packetIngress();
 
     /**
      * @brief Handles packet egress by sending outgoing packets.
@@ -212,14 +213,14 @@ private:
      *
      * @param packetSend Reference to the Egress object for packet sending.
      */
-    void packetEgress(Egress& packetSend);
+    void packetEgress();
     
     /**
      * @brief Starts the background threads for packet handling.
      *
      * Launches threads for packet ingress, egress, and processing.
      */
-    void process(Ingress& packetCapture); // Method for processing packets
+    void process(); // Method for processing packets
 
     /**
      * @brief Starts the background threads for packet handling.
@@ -260,9 +261,12 @@ private:
     void onArpResolved(const ByteString& ip, const ByteString& mac);
 
     // Member variables
+    std::shared_ptr<IpInfo> configs;    ///< Shared pointer to IP configuration information.
+    std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
+
     std::string outInt;     ///< Outgoing interface name.
-    int inQsiz;             ///< Size of the incoming packet queue.
-    int outQsiz;            ///< Size of the outgoing packet queue.
+    size_t inQsiz;          ///< Size of the incoming packet queue.
+    size_t outQsiz;         ///< Size of the outgoing packet queue.
     bool debug;             ///< Flag indicating if debug mode is enabled.
 
     Ingress packetCapture;  ///< Ingress object for packet capturing.
@@ -285,4 +289,6 @@ private:
 // External declarations
 extern std::weak_ptr<Interface> currentInterface; ///< Weak pointer to the current Interface object.
 extern std::shared_mutex interfaceListMutex; ///< Mutex for protecting access to the interface list.
-extern std::map<InterfaceType, std::map<int, std::shared_ptr<Interface>>> interfaceList; ///< Map storing Interface objects categorized by InterfaceType and ID.
+extern std::map<InterfaceType, std::map<unsigned int, std::shared_ptr<Interface>>> interfaceList; ///< Map storing Interface objects categorized by InterfaceType and ID.
+
+#endif // INTERFACE_H

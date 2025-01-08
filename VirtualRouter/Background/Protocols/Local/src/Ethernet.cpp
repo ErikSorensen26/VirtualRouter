@@ -1,5 +1,6 @@
 #include <Ethernet.h>
 #include <Functions.h>
+#include <Interface.h>
 
 namespace Protocol
 {
@@ -19,12 +20,12 @@ namespace Protocol
         std::string ipString = ip.toString();
         if (ip.size() == 4)
         {
-            multicastMac = {0x01, 0x00, 0x5E, (unsigned char)ipString[1], (unsigned char)ipString[2], (unsigned char)ipString[3]};
+            multicastMac = {0x01, 0x00, 0x5E, static_cast<unsigned char>(ipString[1]), static_cast<unsigned char>(ipString[2]), static_cast<unsigned char>(ipString[3])};
         }
         // IPv6 multicast MAC: 33:33:xx:xx:xx:xx (last 32 bits of IPv6 address)
         else if (ip.size() == 16)
         {
-            multicastMac = {0x33, 0x33, (unsigned char)ipString[12], (unsigned char)ipString[13], (unsigned char)ipString[14], (unsigned char)ipString[15]};
+            multicastMac = {0x33, 0x33, static_cast<unsigned char>(ipString[12]), static_cast<unsigned char>(ipString[13]), static_cast<unsigned char>(ipString[14]), static_cast<unsigned char>(ipString[15])};
         }
         
         return multicastMac;

@@ -1,10 +1,12 @@
-#pragma once
+// Process.h
+
+#ifndef PROCESS_H
+#define PROCESS_H
 
 #include <any>
 #include <RoutingTable.h>
-#include <Interface.h>
 #include <ByteString.hpp>
-#include <Que.h>
+#include <Queue.hpp>
 
 /**
  * @file Process.h
@@ -43,7 +45,7 @@ public:
      * @note This constructor is primarily intended for debugging and testing scenarios.
      */
     template <typename... Args>
-    ProcessPacket(PacketInfo& packet, ByteString& vrf, Interface* Interface, Args... args) : data{std::any(args)...}, interface(Interface) { process(packet, vrf); }
+    ProcessPacket(PacketInfo& packet, ByteString& vrf, Interface* Interface, Args... args) : interface(Interface), data{std::any(args)...} { process(packet, vrf); }
 
     /**
      * @brief Constructs a `ProcessPacket` object.
@@ -91,3 +93,5 @@ private:
     
     std::vector<std::any> data{};          ///< Vector storing types of headers to be printed for debugging.
 };
+
+#endif // PROCESS_H

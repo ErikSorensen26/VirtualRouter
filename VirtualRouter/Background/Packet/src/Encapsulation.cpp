@@ -102,17 +102,17 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
         if (is_type<IPv4Header>(header))
         {
             const IPv4Header &ipv4 = std::any_cast<const IPv4Header &>(header);
-            ipv4String += Functions::hexToByte(ipv4.version.toString() + ipv4.headerLength.toString());
+            ipv4String += Functions::hexToByte(ipv4.version + ipv4.headerLength);
             ipv4String += ipv4.serviceField;
             ipv4String += ipv4.totalLength;
             ipv4String += ipv4.identification;
-            ipv4String += Functions::binToByte(ipv4.fragmentFlag.reserved.toString() + ipv4.fragmentFlag.fragment.toString() + ipv4.fragmentFlag.moreFragment.toString() + ipv4.fragmentFlag.fragmentOffset.toString());
+            ipv4String += Functions::binToByte(ipv4.fragmentFlag.reserved + ipv4.fragmentFlag.fragment + ipv4.fragmentFlag.moreFragment + ipv4.fragmentFlag.fragmentOffset);
             ipv4String += ipv4.TTL;
             ipv4String += ipv4.protocol;
             ipv4String += ByteString(2, 0x00);
             ipv4String += ipv4.sourceAddress;
             ipv4String += ipv4.destinationAddress;
-            ipv4String += Functions::binToByte(ipv4.options.type.copy.toString()) + ipv4.options.type.classControl.toString() + ipv4.options.type.routerAlert.toString();
+            ipv4String += Functions::binToByte(ipv4.options.type.copy) + ipv4.options.type.classControl + ipv4.options.type.routerAlert;
             ipv4String += ipv4.options.length;
             ipv4String += ipv4.options.routerAlert;
             hasIpv4 = true;
@@ -120,7 +120,7 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
         else if (is_type<IPv6Header>(header))
         {
             const IPv6Header& ipv6 = std::any_cast<const IPv6Header &>(header);
-            ipv6String += Functions::hexToByte(ipv6.version.toString() + ipv6.trafficClass.toString() + ipv6.flowLabel.toString());
+            ipv6String += Functions::hexToByte(ipv6.version + ipv6.trafficClass + ipv6.flowLabel);
             ipv6String += ipv6.payloadLength;
             ipv6String += ipv6.protocol;
             ipv6String += ipv6.hopLimit;
@@ -131,7 +131,7 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
         else if (is_type<GreHeade>(header))
         {
             const GreHeade &gre = std::any_cast<const GreHeade &>(header);
-            greString += Functions::binToByte(gre.flags.checksum.toString() + gre.flags.routing.toString() + gre.flags.key.toString() + gre.flags.seqNum.toString() + gre.flags.strictSourceRoute.toString() + gre.flags.recursion.toString() + gre.flags.acknowledgment.toString() + gre.flags.recursion.toString() + gre.flags.version.toString());
+            greString += Functions::binToByte(gre.flags.checksum + gre.flags.routing + gre.flags.key + gre.flags.seqNum + gre.flags.strictSourceRoute + gre.flags.recursion + gre.flags.acknowledgment + gre.flags.recursion + gre.flags.version);
             greString += gre.protocol;
             greString += gre.length;
             greString += gre.callID;
@@ -189,7 +189,7 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
             igmpString += igmp.maxRestTime;
             igmpString += ByteString(2, 0x00);
             igmpString += igmp.multicastAddress;
-            igmpString += Functions::binToByte(igmp.v3.supress.toString() + igmp.v3.qrv.toString() + igmp.v3.qqic.toString() + igmp.v3.numSrc.toString());
+            igmpString += Functions::binToByte(igmp.v3.supress + igmp.v3.qrv + igmp.v3.qqic + igmp.v3.numSrc);
             igmpString = Checksum::calculateProtocolChecksum(igmpString, 0, igmpString.size(), 2);
             hasIgmp = true;
         }
@@ -199,7 +199,7 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
             eigrpString += eigrp.version;
             eigrpString += eigrp.opcode;
             eigrpString += ByteString(2, 0x00);
-            eigrpString += Functions::binToByte("0000000000000000000000000000" + eigrp.flags.endOfTable.toString() + eigrp.flags.restart.toString() + eigrp.flags.conditionalRecieve.toString() + eigrp.flags.init.toString());
+            eigrpString += Functions::binToByte(ByteString("0000000000000000000000000000") + eigrp.flags.endOfTable + eigrp.flags.restart + eigrp.flags.conditionalRecieve + eigrp.flags.init);
             eigrpString += eigrp.sequence;
             eigrpString += eigrp.ack;
             eigrpString += eigrp.virtualRouterID;
@@ -225,7 +225,7 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
             tcpString += tcp.sequenceNumber;
             tcpString += tcp.ackNumber;
             tcpString += tcp.headerLength;
-            tcpString += Functions::binToByte(tcp.flags.congestionWindowReduced.toString() + tcp.flags.ecnEcho.toString() + tcp.flags.urgent.toString() + tcp.flags.acknowledgement.toString() + tcp.flags.push.toString() + tcp.flags.reset.toString() + tcp.flags.syn.toString() + tcp.flags.fin.toString());
+            tcpString += Functions::binToByte(tcp.flags.congestionWindowReduced + tcp.flags.ecnEcho + tcp.flags.urgent + tcp.flags.acknowledgement + tcp.flags.push + tcp.flags.reset + tcp.flags.syn + tcp.flags.fin);
             tcpString += tcp.windowSize;
             tcpString += ByteString(2, 0x00);
             tcpString += tcp.urgentPointer;
@@ -261,7 +261,7 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
             dhcpString += dhcp.hops;
             dhcpString += dhcp.transID;
             dhcpString += dhcp.secondsElapsed;
-            dhcpString += Functions::binToByte(dhcp.bootpFlags.broadcast.toString() + dhcp.bootpFlags.reserved.toString());
+            dhcpString += Functions::binToByte(dhcp.bootpFlags.broadcast + dhcp.bootpFlags.reserved);
             dhcpString += dhcp.clientIP;
             dhcpString += dhcp.yourClientIP;
             dhcpString += dhcp.nextServerIP;
@@ -289,12 +289,12 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
     if (hasIpv4)
     {
         // Calculate the total size of the IPv4 payload including headers and application payload.
-        ByteString ipv4Size = Functions::numToByte(ipv4String.size() + udpString.size() + tcpString.size() + eigrpString.size() + applicationPayload.size());
+        ByteString ipv4Size = Functions::numToByte(static_cast<unsigned int>(ipv4String.size() + udpString.size() + tcpString.size() + eigrpString.size() + applicationPayload.size()));
         while (ipv4Size.size() < 2)
         {
             ipv4Size = ByteString(1, 0x00) + ipv4Size;
         }
-        ipv4String = ipv4String.toString().replace(2, 2, ipv4Size.toString());
+        ipv4String = ipv4String.replace(2, 2, ipv4Size);
 
         // Recalculate the IPv4 checksum.
         ipv4String = Checksum::calculateProtocolChecksum(ipv4String, 0, ipv4String.size(), 10);
@@ -307,7 +307,7 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
 
         // Calculate the TCP data length by including the application payload.
         std::ostringstream oss;
-        oss << std::setw(4) << std::setfill('0') << std::hex << Functions::binToNum((Functions::byteToBin(tcpString.substr(12, 1).toString())).substr(0, 4)) * 4 + applicationPayload.size();
+        oss << std::setw(4) << std::setfill('0') << std::hex << Functions::binToNum((Functions::byteToBin(tcpString.substr(12, 1))).substr(0, 4)) * 4 + applicationPayload.size();
 
         // Construct the pseudo header for TCP checksum calculation.
         ByteString pseudoHeader = ipv4String.substr(12, 8) + ByteString(1, 0x00) + ipv4String.substr(9, 1) + Functions::hexToByte(oss.str());
@@ -320,8 +320,8 @@ ByteString encapsulate(PacketInfo &packet, ByteString encapsulated)
     if (hasIpv4 && hasUdp)
     {
         // Calculate the size of the UDP header including the application payload.
-        ByteString udpSize = Functions::numToByte(udpString.size() + applicationPayload.size(), 2);
-        udpString = udpString.toString().replace(4, 2, udpSize.toString());
+        ByteString udpSize = Functions::numToByte(static_cast<unsigned int>(udpString.size() + applicationPayload.size()), 2);
+        udpString = udpString.replace(4, 2, udpSize);
 
         // Construct the pseudo header for UDP checksum calculation.
         ByteString pseudoHeader = ipv4String.substr(12, 8) + ByteString(1, 0x00) + ipv4String.substr(9, 1) + udpSize;

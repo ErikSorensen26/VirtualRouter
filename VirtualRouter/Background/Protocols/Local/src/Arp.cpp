@@ -1,4 +1,5 @@
 #include <Arp.h>
+#include <Interface.h>
 
 namespace Protocol 
 {
@@ -186,13 +187,13 @@ namespace Protocol
                     }
 
                     // Retreive MAC from cache
-                    ByteString mac;
+                    ByteString macAddress;
                     {
                         std::lock_guard<std::mutex> lock(arpCacheMutex);
                         auto it = arpCache.find(targetIp);
                         if (it != arpCache.end())
                         {
-                            mac = it->second.macAddress;
+                            macAddress = it->second.macAddress;
                         }
                     }
 

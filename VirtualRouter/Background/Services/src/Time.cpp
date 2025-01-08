@@ -68,6 +68,6 @@ double secondsSinceEpoch()
 {
     auto now = std::chrono::system_clock::now(); // Get the current system time.
     auto duration = now.time_since_epoch(); // Get the duration since the epoch.
-    double seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count(); // Convert duration to seconds and count.
+    double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(duration).count()); // Convert duration to seconds and count.
     return seconds; // Return the number of seconds since the epoch.
 }

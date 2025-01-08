@@ -1,4 +1,7 @@
-#pragma once
+// Encapsulation.h
+
+#ifndef ENCAPSULATION_H
+#define ENCAPSULATION_H
 
 #include <Checksums.h>
 #include <ByteString.hpp>
@@ -23,3 +26,5 @@
  * @return A `ByteString` containing the fully encapsulated and formatted packet ready for transmission.
  */
 ByteString encapsulate(PacketInfo& packet, ByteString encapsulated = "");
+
+#endif // ENCAPSULATION_H

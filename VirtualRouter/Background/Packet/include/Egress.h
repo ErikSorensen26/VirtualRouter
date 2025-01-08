@@ -1,4 +1,7 @@
-#pragma once
+// Egress.h
+
+#ifndef EGRESS_H
+#define EGRESS_H
 
 #include <pcap.h>
 #include <string>
@@ -75,3 +78,5 @@ private:
      */
     std::vector<unsigned char> base256ToBytes(const ByteString& base256Str);
 };
+
+#endif // EGRESS_H

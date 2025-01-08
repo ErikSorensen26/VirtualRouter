@@ -1,4 +1,5 @@
 #include "../include/Dhcp.h"
+#include <Interface.h>
 #include <random>
 
 namespace Protocol {
@@ -9,7 +10,7 @@ namespace Protocol {
     }
 
     // Generates a random DHCP transaction ID
-    std::string DhcpClient::generateDhcpTransid() 
+    ByteString DhcpClient::generateDhcpTransid() 
     {
         std::random_device rd; 
         std::mt19937 gen(rd());
@@ -34,10 +35,10 @@ namespace Protocol {
             while (offer) 
             {
                 // Check if lease time has expired
-                if (leaseStart + Functions::byteToNum(std::string("0x00", 1) + currentInterface->Get()->dhcp.leaseTime.toString()) < secondsSinceEpoch()) 
+                if (leaseStart + Functions::byteToNum(ByteString("0x00", 1) + currentInterface->Get()->dhcp.leaseTime) < secondsSinceEpoch()) 
                 {
                     std::string hostname = Global::getInstance().getHostname();
-                    PacketInfo dhcpPacket = dhcpBody(hostname, hardwareAddress, 312); 
+                    PacketInfo dhcpPacket = dhcpBody(hardwareAddress); 
                     PacketInfo discoverInfo = dhcpDiscover(dhcpPacket,hostname , hardwareAddress);
                     currentInterface->enqueuePacket(discoverInfo); 
                     std::this_thread::sleep_for(std::chrono::seconds(2)); 
@@ -46,7 +47,7 @@ namespace Protocol {
                     if (!dhcpOffer.Layer2.empty())
                     {
                         offer = false; 
-                        PacketInfo dhcpBody2 = dhcpBody(hostname, hardwareAddress, 340); 
+                        PacketInfo dhcpBody2 = dhcpBody(hardwareAddress);
 
                         if (!dhcpOffer.Layer5.empty())
                         { 
@@ -96,7 +97,7 @@ namespace Protocol {
                             if (sideload) 
                             {
                                 ExtractOptions(dhcp->options); 
-                                currentInterface->setIPv4(dhcp->yourClientIP.toString(), currentInterface->Get()->dhcp.subnetMask);
+                                currentInterface->setIPv4(dhcp->yourClientIP, currentInterface->Get()->dhcp.subnetMask);
                                 leaseStart = secondsSinceEpoch(); 
                             }
                         }
@@ -107,14 +108,14 @@ namespace Protocol {
             // Loop to handle DHCP lease renewal
             while (sideload) 
             {
-                if (leaseStart + Functions::byteToNum(currentInterface->Get()->dhcp.renewalTime.toString()) < secondsSinceEpoch()) 
+                if (leaseStart + Functions::byteToNum(currentInterface->Get()->dhcp.renewalTime) < secondsSinceEpoch()) 
                 {   
                     ByteString dhcpIP = currentInterface->Get()->ipv4.ipAddress;
                     DhcpHeader header; 
                     header.yourClientIP = dhcpIP; 
                     header.transID = generateDhcpTransid();
                     std::string hostname = Global::getInstance().getHostname();
-                    PacketInfo dhcpPacket = dhcpBody(hostname, hardwareAddress, 312); 
+                    PacketInfo dhcpPacket = dhcpBody(hardwareAddress); 
                     PacketInfo requestInfo = dhcpRequest(dhcpPacket, header, hostname, hardwareAddress, dhcpIP, currentInterface->Get()->dhcp.dhcpServer); // Create DHCP request packet
                     currentInterface->enqueuePacket(requestInfo); 
                     sideload = false;
@@ -125,7 +126,7 @@ namespace Protocol {
     }
 
     // Creates a DHCP packet body with Ethernet, IP, and UDP headers
-    PacketInfo DhcpClient::dhcpBody(std::string& hostname, ByteString& hardwareAddress, int length) 
+    PacketInfo DhcpClient::dhcpBody(ByteString& hardwareAddress)
     {
         PacketInfo dhcpPacket;
 
@@ -203,7 +204,7 @@ namespace Protocol {
         dhcp.options[2].value = std::string("\x02\x40", 2);
 
         dhcp.options[3].option = Variable::Dhcp::Option::hostname;
-        dhcp.options[3].length = Functions::numToByte(hostname.length());
+        dhcp.options[3].length = Functions::numToByte(static_cast<uint32_t>(hostname.length()));
         dhcp.options[3].value = hostname; 
 
         dhcp.end = Variable::Dhcp::end; 
@@ -254,11 +255,11 @@ namespace Protocol {
         dhcp.options[3].value = header.yourClientIP; 
 
         dhcp.options[4].option = Variable::Dhcp::Option::leaseTime; 
-        dhcp.options[4].length = Functions::numToByte(currentInterface->Get()->dhcp.leaseTime.size()); 
+        dhcp.options[4].length = Functions::numToByte(static_cast<uint32_t>(currentInterface->Get()->dhcp.leaseTime.size()));
         dhcp.options[4].value = currentInterface->Get()->dhcp.leaseTime;
 
         dhcp.options[5].option = Variable::Dhcp::Option::hostname; 
-        dhcp.options[5].length = Functions::numToByte(hostname.length()); 
+        dhcp.options[5].length = Functions::numToByte(static_cast<uint32_t>(hostname.length()));
         dhcp.options[5].value = hostname; 
 
         dhcp.options[6].option = Variable::Dhcp::Option::requestList; 
@@ -291,41 +292,41 @@ namespace Protocol {
         {
             if (opt.option == Variable::Dhcp::Option::serverIdentifier) 
             {
-                currentInterface->Get()->dhcp.dhcpServer = opt.value.toString(); 
+                currentInterface->Get()->dhcp.dhcpServer = opt.value;
             } 
             else if (opt.option == Variable::Dhcp::Option::leaseTime) 
             {
-                currentInterface->Get()->dhcp.leaseTime = opt.value.toString(); 
+                currentInterface->Get()->dhcp.leaseTime = opt.value;
             } 
             else if (opt.option == Variable::Dhcp::Option::renewalTime) 
             {
-                currentInterface->Get()->dhcp.renewalTime = opt.value.toString(); 
+                currentInterface->Get()->dhcp.renewalTime = opt.value;
             } 
             else if (opt.option == Variable::Dhcp::Option::rebindingTime) 
             {
-                currentInterface->Get()->dhcp.rebindingTime = opt.value.toString(); 
+                currentInterface->Get()->dhcp.rebindingTime = opt.value;
             } 
             else if (opt.option == Variable::Dhcp::Option::mask) 
             { 
-                currentInterface->Get()->dhcp.subnetMask = Functions::byteMaskToNum(opt.value.toString());
+                currentInterface->Get()->dhcp.subnetMask = Functions::byteMaskToNum(opt.value);
             } 
             else if (opt.option == Variable::Dhcp::Option::broadcast) 
             {
-                currentInterface->Get()->dhcp.broadcast = opt.value.toString(); 
+                currentInterface->Get()->dhcp.broadcast = opt.value;
             } 
             else if (opt.option == Variable::Dhcp::Option::domainServer) 
             {
-                currentInterface->Get()->dhcp.dnsServer.push_back(opt.value.toString()); 
+                currentInterface->Get()->dhcp.dnsServer.push_back(opt.value);
             } 
             else if (opt.option == Variable::Dhcp::Option::router) 
             {
-                currentInterface->Get()->dhcp.router = opt.value.toString(); 
+                currentInterface->Get()->dhcp.router = opt.value;
             }
         }
     }
 
     // Placeholder for a method to handle DHCP packets
-    void DhcpClient::DhcpPacket(const DhcpHeader* header, std::string& type)
+    void DhcpClient::DhcpPacket(const DhcpHeader* header, ByteString& type)
     {
         // Implementation needed
     }

@@ -1,4 +1,7 @@
-#pragma once
+// PacketStructure.h
+
+#ifndef PACKET_STRUCTURE_H
+#define PACKET_STRUCTURE_H
 
 #include <any>
 #include <typeinfo>
@@ -307,10 +310,9 @@ namespace Variable
  */
 struct EthernetHeader
 {
-    ByteString
-        sourceMac{},
-        destinationMac{},
-        type{};
+    ByteString sourceMac{};         ///< Source MAC address
+    ByteString destinationMac{};    ///< Destination MAC address
+    ByteString type{};              ///< Next header type
 };
 
 /**
@@ -661,9 +663,9 @@ struct LldpHeader
      */
     struct TLV
     {
-        uint8_t type;        ///< TLV type.
-        uint16_t length;     ///< TLV length.
-        ByteString value{};  ///< TLV value.
+        ByteString type{};      ///< TLV type.
+        ByteString length{};    ///< TLV length.
+        ByteString value{};     ///< TLV value.
     };
 
     TLV chassisID{};               ///< Chassis ID TLV.
@@ -930,3 +932,5 @@ bool is_type(const std::any &a)
 {
     return a.type() == typeid(T);
 }
+
+#endif // PACKET_STRUCTURE_H

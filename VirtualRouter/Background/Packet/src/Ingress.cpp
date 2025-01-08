@@ -5,7 +5,7 @@
 // Mutex for synchronizing access to the packet queue.
 std::mutex packetQueueMutex;
 
-Ingress::Ingress(const std::string& device, const std::string mask, const int inQueSize) : packetQueue(inQueSize) 
+Ingress::Ingress(const std::string& device, const std::string mask, const size_t inQueSize) : packetQueue(inQueSize) 
 {
     char errbuf[PCAP_ERRBUF_SIZE]; // Buffer for error messages.
     
@@ -19,7 +19,7 @@ Ingress::Ingress(const std::string& device, const std::string mask, const int in
     }
     
     // Convert the netmask from byte string to bpf_u_int32 format.
-    subnet = Functions::byteMaskToNum(mask);
+    subnet = static_cast<bpf_u_int32>(Functions::byteMaskToNum(mask));
 }
 
 Ingress::~Ingress() 

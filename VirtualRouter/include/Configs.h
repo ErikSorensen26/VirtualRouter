@@ -1,4 +1,7 @@
-#pragma once
+// Configs.h
+
+#ifndef CONFIGS_H
+#define CONFIGS_H
 
 #include <string>
 #include <cstdio>
@@ -10,12 +13,16 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <fstream>
 
 #include <pugixml.hpp>
 #include <json.hpp>
 #include <Functions.h>
 #include <Global.h>
 
+#define COMMAND_TREE "../VirtualRouter/Configs/Commands.json"
+#define CONFIG_FILE "../VirtualRouter/Configs/Configs.json"
+#define CONFIG_SCHEMA "../VirtualRouter/Configs/ConfigSchema.json"
 #define STARTUP_FILE "../configs.json"
 #define MODE_KEY "commands"
 
@@ -38,15 +45,7 @@ struct Mode
     std::string flowRecord = "(config-flow-record)#";       ///< Flow Record Configuration mode prompt.
 
     // Interface-related prompts.
-    std::string dialer = "(config-if)#";                ///< Dialier Interface Configuration mode prompt.
-    std::string ethernet = "(config-if)#";              ///< Ethernet Interface Configuration mode prompt.
-    std::string fastEthernet = "(config-if)#";          ///< Fast Ethernet Interface Configuration mode prompt.
-    std::string gigabitEthernet = "(config-if)#";       ///< Gigabit Ethernet Interface Configuration mode prompt.
-    std::string loopback = "(config-if)#";              ///< Loopback Interface Configuration mode prompt.
-    std::string portchannel = "(config-if)#";           ///< Port-Channel Interface Configuration mode prompt.
-    std::string tunnel = "(config-if)#";                ///< Tunnel Interface Configuration mode prompt.
-    std::string virtualTemplate = "(config-if)#";       ///< Virtual-Template Interface Configuration mode prompt.
-    std::string vlan = "(config-if)#";                  ///< VLAN Interface Configuration mode prompt.
+    std::string interface = "(config-if)#";             ///< Interface configuration mode prompt
 
     // Policy based routing
     std::string classMap = "(config-cmap)#";            ///< Class Map mode prompt.
@@ -56,11 +55,7 @@ struct Mode
     std::string policyMap = "(config-pmap)#";           ///< Policy Map Configuration mode prompt.
 
     // Routing protocol prompts
-    std::string bgp = "(config-router)#";               ///< BGP Routing Configuration mode prompt.
-    std::string eigrp_classic = "(config-router)#";     ///< EIGRP Classic Routing Configuration mode prompt.
-    std::string eigrp_named = "(config-router)#";       ///< EIGRP Named Routing COnfiguration mode prompt.
-    std::string ospf = "(config-router)#";              ///< OSPF Routing Configuration mode prompt.
-    std::string rip = "(config-router)#";               ///< RIP Routing Configuration mode prompt.
+    std::string routing = "(config-router)#";            ///< Routing Protocol Configuration mode prompt.
 };
 
 /**
@@ -69,9 +64,23 @@ struct Mode
  */
 struct MacList 
 {
+    /**
+     * @brief method to clear all MAC addresses.
+     *
+     * Clears all MAC addresses held for each interface type.
+     */
+    void clear() {
+        Ethernet.clear();
+        FastEthernet.clear();
+        GigabitEthernet.clear();
+        Loopback.clear();
+    }
+
     std::vector<std::string> Ethernet;          ///< List of Ethernet MAC addresses.
     std::vector<std::string> FastEthernet;      ///< List of Fast Ethernet MAC Addresses.
     std::vector<std::string> GigabitEthernet;   ///< List of Gigabit Ethernet MAC Addresses.
+    std::vector<std::string> PortChannel;       ///< List of PortChannel MAC Addresses.
+    std::vector<std::string> Loopback;          ///< List of Loopback MAC Addresses.
 };
 
 /**
@@ -92,7 +101,7 @@ struct Com
  *
  * Provides methods to retreive string representations of various volatile parameters.
  */
-class volitileValueUsage 
+class volatileValueUsage 
 {
 public:
 
@@ -140,13 +149,65 @@ public:
 
 private:
 
-    int value = 0;      ///< Integer value
-    int ip = 0;         ///< IP address
-    int ipv6 = 0;       ///< IPv6 address
-    int subnet = 0;     ///< Subnet mask
-    int mac = 0;        ///< MAC address
-    int xyz = 0;        ///< XYZ coordinate
-    int id = 0;         ///< Identifier
+    unsigned int value = 0;      ///< Integer value
+    unsigned int ip = 0;         ///< IP address
+    unsigned int ipv6 = 0;       ///< IPv6 address
+    unsigned int subnet = 0;     ///< Subnet mask
+    unsigned int mac = 0;        ///< MAC address
+    unsigned int xyz = 0;        ///< XYZ coordinate
+    unsigned int id = 0;         ///< Identifier
+};
+
+class IFileSystem
+{
+public:
+    virtual ~IFileSystem() = default;
+    virtual bool readFile(const std::string& path, std::string& content) = 0;
+    virtual bool writeFile(const std::string& path, const std::string& content) = 0;
+    virtual bool fileExists(const std::string& path) = 0;
+    virtual void removeFile(const std::string& path) = 0;
+};
+
+class RealFileSystem : public IFileSystem
+{
+public:
+    virtual ~RealFileSystem() override = default;
+    bool readFile(const std::string& path, std::string& content) override
+    {
+        std::ifstream file(path, std::ios::in);
+        if (!file.is_open())
+        {
+            return false; // File not found or cannot be opened
+        }
+
+        // Read file content
+        content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
+        return true;
+    }
+
+    bool writeFile(const std::string& path, const std::string& content) override
+    {
+        std::ofstream file(path, std::ios::out | std::ios::trunc);
+        if (!file.is_open())
+        {
+            return false; // Cannot open the file for writing
+        }
+
+        file << content;
+        file.close();
+        return true;
+    }
+
+    bool fileExists(const std::string& path) override
+    {
+        return std::filesystem::exists(path);
+    }
+
+    void removeFile(const std::string& path) override
+    {
+
+    }
 };
 
 /**
@@ -159,13 +220,16 @@ private:
 class Configs 
 {
 public:
+    friend class ConfigsTest;
 
     /**
      * @brief Constructor for the Configs class.
      *
      * Initializes the Configs object without any parameters.
+     *
+     * @param fileSystem Smart pointer to the kind of file system being used.
      */
-    Configs(); 
+    Configs(std::shared_ptr<IFileSystem> fileSystem = std::make_shared<RealFileSystem>()); 
 
     /**
      * @brief Initializes configuration settings from a startup file.
@@ -182,9 +246,10 @@ public:
      *
      * Processes the JSON configuration tree and retrieves a list of commands for recovery purposes.
      *
+     * @param nlohmann::ordered_json optional json for recovering custom configurations.
      * @return std::vector<std::string> A vector containing the recovered command strings.
      */
-    std::vector<std::string> recoverConfigs(); 
+    std::vector<std::string> recoverConfigs(nlohmann::ordered_json* json = nullptr);
 
     /**
      * @brief Processes JSON data to extract configuration commands.
@@ -207,8 +272,9 @@ public:
      * @param changeMode Boolean flag indicating whether the command triggers a mode change.
      * @param exitMode Boolean flag indicating whether the command triggers an exit from the current mode.
      * @param isList Boolean flag indicating if the command should be listed.
+     * @return bool Indicating if the save was successful
      */
-    void saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool& isList); 
+    bool saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool isList); 
 
      /**
      * @brief Inserts commands into the configuration tree in the correct order.
@@ -226,8 +292,10 @@ public:
      * @brief Saves the entire configuration to the startup file.
      *
      * Writes the current JSON configuration tree to the specified startup file in a formatted manner.
+     *
+     * @return boolean Indicating if the save was successful.
      */
-    void saveConfig();
+    bool saveConfig();
 
     /**
      * @brief Deletes a specific configuration from the JSON tree.
@@ -242,16 +310,6 @@ public:
     void deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isList);
 
     /**
-     * @brief Returns the current JSON node to the root of the XML document.
-     *
-     * Traverses up the JSON tree until the specified root node is reached.
-     *
-     * @param node Reference to the current XML node.
-     * @param root Reference to the root XML node.
-     */
-    void returnToRoot(pugi::xml_node& node, pugi::xml_node& root);
-
-    /**
      * @brief Determines if a given command string is volatile.
      *
      * Checks if the provided command string matches any known volatile parameters or follows specific volatile formats.
@@ -259,7 +317,7 @@ public:
      * @param str The command string to evaluate.
      * @return true If the command is volatile; otherwise, false.
      */
-    bool isVolitile(const std::string& str);
+    bool isVolatile(const std::string& str);
 
     /**
      * @brief Combines a vector of command strings into a single command string.
@@ -276,35 +334,35 @@ public:
      *
      * Determines the appropriate key for a volatile parameter and appends an index if necessary to ensure uniqueness.
      *
-     * @param command The type of volatile parameter (e.g., "WORD", "IP").
-     * @param com The actual command string entered by the user.
+     * @param type The type of volatile parameter (e.g., "WORD", "IP").
+     * @param value The actual command string entered by the user.
      * @param currentJson The current JSON node being processed.
      * @return std::string The resolved key for the volatile parameter.
      */
-    std::string getVolitileValue(std::string& command, std::string& com, nlohmann::ordered_json currentJson);
+    std::string getVolatileValue(std::string& type, std::string& value, nlohmann::ordered_json currentJson);
 
     /**
      * @brief Overloaded method to retrieve the value of a volatile parameter based on the command.
      *
      * Similar to the above method but uses a list of existing volatile values to determine the appropriate key.
      *
-     * @param command The type of volatile parameter (e.g., "WORD", "IP").
-     * @param com The actual command string entered by the user.
+     * @param type The type of volatile parameter (e.g., "WORD", "IP").
+     * @param value The actual command string entered by the user.
      * @param volatileValues A vector of strings representing existing volatile values.
      * @return std::string The resolved key for the volatile parameter.
      */
-    std::string getVolitileValue(std::string& command, std::string com, std::vector<std::string> volitileValues);
+    std::string getVolatileValue(std::string& type, std::string value, std::vector<std::string> volatileValues);
 
     /**
      * @brief Helper method to resolve the key for a volatile parameter.
      *
      * Determines the base key name based on the command type.
      *
-     * @param command The type of volatile parameter (e.g., "WORD", "IP").
-     * @param com The actual command string entered by the user.
+     * @param type The type of volatile parameter (e.g., "WORD", "IP").
+     * @param value The actual command string entered by the user.
      * @return std::string The base key name for the volatile parameter.
      */
-    std::string getVolitileValueHelper(std::string& command, std::string& com);
+    std::string getVolatileValueHelper(std::string& command, std::string& com);
 
     /**
      * @brief Updates the global configuration history from the local history.
@@ -350,12 +408,17 @@ public:
 
     std::vector<std::string> physicalInterfaces;        ///< List of physical interface names.
     std::vector<nlohmann::ordered_json*> modeHistory;   ///< History of configuration nodes for mode management
+
+    std::shared_ptr<IFileSystem> fileSystem; ///< File system interface.
 	
 private:
 
-    std::vector<std::string> volitileInputs{"WORD", "LINE", "A.B.C.D", "X:X:X:X::X", "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"}; ///< List of volatile input types
+
+    std::vector<std::string> volatileInputs{"WORD", "LINE", "A.B.C.D", "X:X:X:X::X", "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"}; ///< List of volatile input types
     std::vector<std::string> inputs{"ip", "subnet", "id", "value", "ipv6", "mac"}; ///< List of inputs parameter names.
 
     nlohmann::ordered_json *prevConfig;     ///< Pointer to the previous configuration node
     std::vector<std::string> recover;       ///< List of commands recovered from the configuration.
 };
+
+#endif // CONFIGS_H

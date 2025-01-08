@@ -1,4 +1,7 @@
-#pragma once
+// RoutingTable.h
+
+#ifndef ROUTING_TABLE_H
+#define ROUTING_TABLE_H
 
 #include <vector>
 #include <ByteString.hpp>
@@ -45,8 +48,8 @@ public:
         ByteString nextHop;          ///< Next hop IP address.
         ByteString outInterface;     ///< Outgoing interface name.
         ByteString source;           ///< Source of the routing entry.
-        int metric;                  ///< Routing metric.
-        int admDist;                 ///< Administrative distance.
+        uint32_t metric;                  ///< Routing metric.
+        uint8_t admDist;                 ///< Administrative distance.
         std::chrono::system_clock::time_point age; ///< Age of the routing entry.
     };
 
@@ -64,7 +67,7 @@ public:
         ByteString nextHop;       ///< Next hop IP address.
         ByteString outInt;        ///< Outgoing interface name.
         ByteString mac;           ///< MAC address associated with the next hop.
-        int preference;           ///< Preference value for the route.
+        uint8_t preference;           ///< Preference value for the route.
     };
 
     /**
@@ -157,8 +160,8 @@ public:
         ByteString nextHop;       ///< Next hop IP address.
         ByteString outInterface;  ///< Outgoing interface name.
         ByteString source;        ///< Source of the routing entry.
-        int metric;               ///< Routing metric.
-        int admDist;              ///< Administrative distance.
+        uint32_t metric;               ///< Routing metric.
+        uint8_t admDist;              ///< Administrative distance.
         std::vector<ByteString> tags; ///< Tags associated with the routing entry.
         std::chrono::system_clock::time_point age; ///< Age of the RIB entry.
     };
@@ -180,7 +183,7 @@ public:
         ByteString nextHop;           ///< Next hop IP address.
         ByteString outInterface;      ///< Outgoing interface name.
         ByteString matchCriteria;     ///< Criteria for matching the route.
-        int DSCP;                     ///< Differentiated Services Code Point value.
+        uint8_t DSCP;                     ///< Differentiated Services Code Point value.
         std::chrono::system_clock::time_point age; ///< Age of the PBR entry.
     };
 
@@ -200,7 +203,7 @@ public:
         ByteString inInterface;      ///< Incoming interface name.
         ByteString RPF;              ///< Reverse Path Forwarding interface.
         ByteString protocol;         ///< Protocol used for multicast routing.
-        int routeMetric;             ///< Metric for the multicast route.
+        uint32_t routeMetric;        ///< Metric for the multicast route.
         std::vector<ByteString> outInterface; ///< Outgoing interfaces for the multicast group.
         std::chrono::system_clock::time_point age; ///< Age of the multicast entry.
     };
@@ -222,9 +225,9 @@ public:
         ByteString destPortRange;        ///< Destination port range.
         ByteString logString;            ///< Log string for matched traffic.
         ByteString action;               ///< Action to take (e.g., permit, deny).
-        int ruleNum;                     ///< Rule number in the ACL.
-        int icmoCode;                    ///< ICMO code for the ACL entry.
-        int DSCP;                        ///< Differentiated Services Code Point value.
+        uint16_t ruleNum;                ///< Rule number in the ACL.
+        uint8_t icmpCode;                ///< ICMP code for the ACL entry.
+        uint8_t DSCP;                    ///< Differentiated Services Code Point value.
         std::chrono::system_clock::time_point age; ///< Age of the ACL entry.
     };
 
@@ -248,29 +251,33 @@ public:
         ByteString activeOrPassive{};       ///< Active or passive state.
         ByteString originRouter{};          ///< Originating router.
         ByteString flags{};                 ///< Flags associated with the route.
-        unsigned int metric{};              ///< Metric value.
-        unsigned int feasibleDistance{};    ///< Feasible distance.
-        unsigned int reportedDistance{};    ///< Reported distance.
-        unsigned int adminDistance{};       ///< Administrative distance.
-        unsigned int holdTime{};            ///< Hold time for the route.
-        unsigned int stuckInaActive{};      ///< Stuck in active state.
-        unsigned int updateTimer{};         ///< Update timer value.
-        unsigned int retransmitInterval{};  ///< Retransmit interval.
-        unsigned int sequenceNumber{};      ///< Sequence number.
-        unsigned int routeTag{};            ///< Route tag.
-        unsigned int hopCount{};            ///< Hop count.
-        unsigned int bandwidth{};           ///< Bandwidth.
-        unsigned int load{};                ///< Load.
-        unsigned int delay{};               ///< Delay.
-        unsigned int reliability{};         ///< Reliability.
-        unsigned int mtu{};                 ///< Maximum Transmission Unit.
-        unsigned int mask{};                ///< Subnet mask.
-        unsigned int originAS{};            ///< Origin Autonomous System.
-        unsigned int extendedMetric{};      ///< Extended metric.
-        unsigned int extendedId{};          ///< Extended ID.
+
+        uint32_t metric{};                  ///< Metric value.
+        uint32_t feasibleDistance{};        ///< Feasible distance.
+        uint32_t reportedDistance{};        ///< Reported distance.
+        uint32_t adminDistance{};           ///< Administrative distance.
+        uint32_t sequenceNumber{};          ///< Sequence number.
+        uint32_t routeTag{};                ///< Route tag.
+        uint32_t bandwidth{};               ///< Bandwidth.
+        uint32_t delay{};                   ///< Delay.
+        uint32_t originAS{};                ///< Origin Autonomous System.
+        uint32_t extendedMetric{};          ///< Extended metric.
+        uint32_t extendedId{};              ///< Extended ID.
+
+        uint16_t holdTime{};                ///< Hold time for the route.
+        uint16_t updateTimer{};             ///< Update timer value.
+        uint16_t retransmitInterval{};      ///< Retransmit interval.
+        uint16_t mtu{};                     ///< Maximum Transmission Unit.
+
+        uint8_t hopCount{};                 ///< Hop count.
+        uint8_t load{};                     ///< Load.
+        uint8_t reliability{};              ///< Reliability.
+        uint8_t mask{};                     ///< Subnet mask.
+
+        bool stuckInActive{};               ///< Stuck in active state.
         std::chrono::system_clock::time_point age; ///< Age of the EIGRP entry.
-        std::vector<ByteString> nextHops{};        ///< List of next hop IP addresses.
-        bool isIPv6{false};                         ///< Flag indicating if the route is IPv6.
+        std::vector<ByteString> nextHops{};     ///< List of next hop IP addresses.
+        bool isIPv6{false};                     ///< Flag indicating if the route is IPv6.
     };
 
     /**
@@ -285,7 +292,7 @@ public:
      * @param variance The variance factor to apply.
      * @param af The address family (IPv4 or IPv6).
      */
-    void updateEigrpWithVarianceIPv6(const Eigrp& route, double variance, AddressFamily af);
+    void updateEigrpWithVarianceIPv6(const Eigrp& route, uint8_t variance, AddressFamily af);
 
     /**
      * @brief Adds a new EIGRP route to the table.
@@ -310,7 +317,7 @@ public:
      * @param mask The subnet mask of the route to remove.
      * @param af The address family (IPv4 or IPv6).
      */
-    void removeEigrp(const ByteString& network, int mask, AddressFamily af);
+    void removeEigrp(const ByteString& network, uint8_t mask, AddressFamily af);
 
     /**
      * @brief Retrieves all EIGRP routes for a specific address family.
@@ -338,7 +345,7 @@ public:
      * @param af The address family (IPv4 or IPv6).
      * @return std::optional<RoutingTable::Eigrp> The EIGRP route if found, otherwise std::nullopt.
      */
-    std::optional<RoutingTable::Eigrp> getEigrpRoute(const ByteString& destination, const int mask, AddressFamily af);
+    std::optional<RoutingTable::Eigrp> getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af);
 
     /**
      * @brief Updates the EIGRP table with a given route, applying variance.
@@ -347,7 +354,7 @@ public:
      * @param variance The variance factor to apply.
      * @param af The address family (IPv4 or IPv6).
      */
-    void updateEigrpWithVariance(const Eigrp& route, double variance, AddressFamily af);
+    void updateEigrpWithVariance(const Eigrp& route, uint8_t variance, AddressFamily af);
 
     /**
      * @brief Retrieves the singleton instance of the RoutingTable.
@@ -370,7 +377,7 @@ public:
      * @param mask The subnet mask for the destination.
      * @return ByteString The next hop IP address.
      */
-    ByteString getNextHop(const ByteString& destination, int mask);
+    ByteString getNextHop(const ByteString& destination, uint8_t mask);
 
     /**
      * @brief Deleted copy constructor to prevent copying of the singleton instance.
@@ -410,3 +417,5 @@ private:
     std::map<ByteString, Eigrp> eigrp;                     ///< EIGRP routing table for IPv4.
     std::map<ByteString, Eigrp> eigrpIPv6;                 ///< EIGRP routing table for IPv6.
 };
+
+#endif // ROUTING_TABLE_H

@@ -1,5 +1,6 @@
 #include <Process.h>
 #include <Eigrp.h>
+#include <Interface.h>
 
 ProcessPacket::ProcessPacket(PacketInfo& packet, ByteString& vrf, Interface* Interface) : interface(Interface) 
 { 
@@ -10,23 +11,23 @@ void ProcessPacket::process(PacketInfo& packet, ByteString& vrf)
 {
     currentVrf = vrf;
 
-    EthernetHeader* ethernet;
-    PppHeader* ppp;
-    ArpHeader* arp;
-    MplsHeader* mpls;
-    VlanHeader* vlan;
-    LldpHeader* lldp;
-    IPv4Header* ipv4;
-    IPv6Header* ipv6;
-    GreHeade* gre;
-    AhHeader* ah;
-    EspHeader* esp;
-    IcmpHeader* icmp;
-    IgmpHeader* igmp;
-    EigrpHeader* eigrp;
-    TcpHeader* tcp;
-    UdpHeader* udp;
-    DhcpHeader* dhcp;
+    EthernetHeader* ethernet = nullptr;
+    PppHeader* ppp = nullptr;
+    ArpHeader* arp = nullptr;
+    MplsHeader* mpls = nullptr;
+    VlanHeader* vlan = nullptr;
+    LldpHeader* lldp = nullptr;
+    IPv4Header* ipv4 = nullptr;
+    IPv6Header* ipv6 = nullptr;
+    GreHeade* gre = nullptr;
+    AhHeader* ah = nullptr;
+    EspHeader* esp = nullptr;
+    IcmpHeader* icmp = nullptr;
+    IgmpHeader* igmp = nullptr;
+    EigrpHeader* eigrp = nullptr;
+    TcpHeader* tcp = nullptr;
+    UdpHeader* udp = nullptr;
+    DhcpHeader* dhcp = nullptr;
 
     ByteString macAddress;
 
@@ -147,11 +148,11 @@ void ProcessPacket::process(PacketInfo& packet, ByteString& vrf)
         {
             if (print(header)) { Logger::getInstance().info() << "THIS IS EIGRP" << std::endl; } 
             eigrp = std::any_cast<EigrpHeader>(&header); 
-            auto it = eigrpAutonomousSystems.find(Functions::byteToNum(eigrp->autonomousSystem.toString()));
-            auto iface = interface->eigrpInterfaceList.find(Functions::byteToNum(eigrp->autonomousSystem.toString()));
+            auto it = eigrpAutonomousSystems.find(Functions::byteToNum(eigrp->autonomousSystem));
+            auto iface = interface->eigrpInterfaceList.find((Functions::byteToNum(eigrp->autonomousSystem)));
             if (it != eigrpAutonomousSystems.end() && iface != interface->eigrpInterfaceList.end()) 
             {
-                int AS = Functions::byteToNum(eigrp->autonomousSystem.toString());
+                uint32_t AS = Functions::byteToNum(eigrp->autonomousSystem);
                 if (ipv4 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv4)
                 {
                     interface->eigrpInterfaceList[AS]->IPv4->processPacket(eigrp, ipv4->sourceAddress);
@@ -213,7 +214,7 @@ void ProcessPacket::process(PacketInfo& packet, ByteString& vrf)
                     } 
                     else 
                     {
-                        std::string value = opt.value.toString();
+                        ByteString value = opt.value;
                         interface->dhcp->DhcpPacket(dhcp, value); // Handle other DHCP packets.
                     }
                 }

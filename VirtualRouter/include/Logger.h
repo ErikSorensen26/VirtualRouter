@@ -1,4 +1,7 @@
-#pragma once
+// Logger.h
+
+#ifndef LOGGER_H
+#define LOGGER_H
 
 #include <string>
 #include <mutex>
@@ -23,6 +26,23 @@ enum class LogLevel {
 };
 
 /**
+ * @class ILogger
+ * @brief Virtual class used for used for the logger while testing.
+ *
+ * The ILogger class provides virtual functions for Logging levels so that
+ * logs can be identified during tests.
+ */
+class ILogger
+{
+public:
+    virtual ~ILogger() = default;
+    virtual LogStream info(bool isolate = false) = 0;
+    virtual LogStream debug(bool isolate = false) = 0;
+    virtual LogStream warn(bool isolate = false) = 0;
+    virtual LogStream error(bool isolate = false) = 0;
+};
+
+/**
  * @class Logger
  * @brief Singleton class responsible for logging messages to a remote Log Server.
  *
@@ -30,7 +50,8 @@ enum class LogLevel {
  * It supports asynchronous message sending using a dedicated sender thread and handles
  * connection management with the Log Server.
  */
-class Logger {
+class Logger : public ILogger
+{
 public:
 
     /**
@@ -68,7 +89,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream info(bool isolate = false);
+    class LogStream info(bool isolate = false) override;
 
     /**
      * @brief Logs a debug message.
@@ -76,7 +97,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream debug(bool isolate = false);
+    class LogStream debug(bool isolate = false) override;
 
     /**
      * @brief Logs a warning message.
@@ -84,7 +105,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream warn(bool isolate = false);
+    class LogStream warn(bool isolate = false) override;
 
     /**
      * @brief Logs an error message.
@@ -92,7 +113,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream error(bool isolate = false);
+    class LogStream error(bool isolate = false) override;
 
     /**
      * @brief Converts a LogLevel enum to its string representation.
@@ -213,3 +234,5 @@ private:
     LogLevel level_; ///< Severity level of the log message.
     std::ostringstream stream_; ///< Stream to collect message parts.
 };
+
+#endif // LOGGER_H

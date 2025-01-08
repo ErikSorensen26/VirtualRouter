@@ -1,14 +1,189 @@
-#pragma once
+// Console.h
+
+#ifndef CONSOLE_H
+#define CONSOLE_H
 
 #include "Configs.h" // Include the Configs class header for configuration handling
+
+class ConsoleTest; ///< Forward declaration of ConsoleTest
 
 /**
  * @struct CursorPosition
  * @brief Represents the cursor's position in terms of row and comumn.
  */
 struct CursorPosition {
-    int row; ///< The row position of the cursor.
-    int col; ///< The column position of the cursor.
+    int row = 0; ///< The row position of the cursor.
+    int col = 0; ///< The column position of the cursor.
+};
+
+class IConsole
+{
+public:
+    virtual ~IConsole() = default;
+
+    // Clears the terminal screen and moves the cursor to home
+    virtual void clearScreen() = 0;
+
+    // Enable line wrapping
+    virtual void enableLineWrapping() = 0;
+
+    // Clears from the cursor to the end of the line
+    virtual void clearLineAfterCursor() = 0;
+
+    // Saves the current cursor position
+    virtual void saveCursorPosition() = 0;
+
+    // Restores the cursor position
+    virtual void restoreCursorPosition() = 0;
+
+    // Moves the cursor to the start of the line
+    virtual void moveCursorToStart() = 0;
+
+    // Moves the cursor left by 'count' positions
+    virtual void moveCursorLeft(size_t count = 1) = 0;
+
+    // Moves the cursor right by 'count' positions
+    virtual void moveCursorRight(size_t count = 1) = 0;
+
+    // Moves the cursor up by 'count' positions
+    virtual void moveCursorUp(size_t count = 1) = 0;
+
+    // Moves the cursor down by 'count' positions
+    virtual void moveCursorDown(size_t count = 1) = 0;
+
+    // Prints a string to the terminal
+    virtual void print(std::string str) = 0;
+
+    // Gets the current cursor position
+    virtual CursorPosition getCursorPosition() = 0;
+
+    // Gets the terminal width
+    virtual size_t getTerminalWidth() = 0;
+
+    // Beep sound
+    virtual void beep() = 0;
+};
+
+class RealConsole : public IConsole
+{
+public:
+    virtual ~RealConsole() override = default;
+
+    void clearScreen() override 
+    {
+        std::cout << "\033[2J\033[H"; // ANSI escape to clear screen and move cursor to home
+    }
+
+    void enableLineWrapping() override 
+    {
+        std::cout << "\033[?7h"; // Enable line wrapping
+    }
+
+    void clearLineAfterCursor() override 
+    {
+        std::cout << "\033[K"; // Clear from cursor to end of line
+    }
+
+    void saveCursorPosition() override 
+    {
+        std::cout << "\033[s"; // Save cursor position
+    }
+
+    void restoreCursorPosition() override 
+    {
+        std::cout << "\033[u"; // Restore cursor position
+    }
+    void moveCursorToStart() override
+    {
+        std::cout << "\033[1G";
+    }
+
+    void moveCursorLeft(size_t count) override 
+    {
+        if (count > 0) {
+            std::cout << "\033[" << count << "D"; // Move cursor left
+        }
+    }
+
+    void moveCursorRight(size_t count) override 
+    {
+        if (count > 0) {
+            std::cout << "\033[" << count << "C"; // Move cursor right
+        }
+    }
+
+    void moveCursorUp(size_t count) override 
+    {
+        if (count > 0) {
+            std::cout << "\033[" << count << "A"; // Move cursor up
+        }
+    }
+
+    void moveCursorDown(size_t count) override 
+    {
+        if (count > 0) {
+            std::cout << "\033[" << count << "B"; // Move cursor down
+        }
+    }
+
+    void print(std::string str) override 
+    {
+        std::cout << str;
+    }
+
+    CursorPosition getCursorPosition() override 
+    {
+        CursorPosition pos{-1, -1};
+        termios orig, raw;
+        tcgetattr(STDIN_FILENO, &orig); // Save original state
+        raw = orig;
+
+        // Turn off canonical & echo
+        raw.c_lflag &= static_cast<unsigned int>(~(ICANON | ECHO));
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+
+        // Ask terminal for position
+        std::cout << "\033[6n";
+        std::cout.flush();
+
+        char buf[32];
+        size_t i = 0;
+        while (i < sizeof(buf) - 1)
+        {
+            if (read(STDIN_FILENO, buf + i, 1) != 1)
+            {
+                break;
+            }
+            if (buf[i] == 'R')
+            {
+                break;
+            }
+            i++;
+        }
+        buf[i] = '\0';
+
+        // Restore terminal
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig);
+
+        // Parse row, col from e.g. "/033[12;40R"
+        if (buf[0] == '\033' && buf[1] == '[')
+        {
+            std::sscanf(buf, "\033[%d;%dR", &pos.row, &pos.col);
+        }
+        return pos;
+    }
+
+    size_t getTerminalWidth() override
+    {
+        struct winsize w;
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+        return w.ws_col > 0 ? w.ws_col : 80;
+    }
+
+    void beep() override 
+    {
+        std::cout << "\a"; // ASCII Bell character
+    }
 };
 
 /**
@@ -19,8 +194,9 @@ struct CursorPosition {
  * for managing user input, cursor movements, and command history within the terminal.
  */
 class Console : public Configs {
-public:
+private:
     friend class ConsoleTest;
+public:
 
     /**
      * @brief Constructor for the Console class.
@@ -28,6 +204,25 @@ public:
      * Initializes the Console object of invoking the Configs constructor
      */
     Console();
+
+    /**
+     * @brief Constructor for the Console class.
+     *
+     * Initializes the Console object of invoking the Configs constructor
+     *
+     * @param term Terminal deciding whether it's simulated or not
+     */
+    explicit Console(std::shared_ptr<IConsole> term);
+
+    /**
+     * @brief Constructor for the Console class.
+     *
+     * Initializes the Console object of invoking the Configs constructor
+     *
+     * @param term Terminal deciding whether it's simulated or not
+     * @param fs File system deciding whether it's simulated or not
+     */
+    explicit Console(std::shared_ptr<IConsole> term, std::shared_ptr<IFileSystem> fs);
 
     /**
      * @brief Destructor for the Console class
@@ -52,7 +247,7 @@ public:
      *
      * @return std::string The processed input command entered by the user.
      */
-    std::string input();
+    std::string input(std::string input = "");
     
     /**
      * @brief Retrieves a command from the history based on navigation direction.
@@ -92,7 +287,7 @@ public:
      *
      * @param newPrompt The new prompt string to be set.
      */
-    void setPrompt(const std::string newPrompt);
+    void setPrompt(const std::string& newPrompt);
 
     /**
      * @brief Edit the cursor positions while testing.
@@ -102,27 +297,9 @@ public:
      * @return int Reference to cursor position
      * @note This returns a reference, be carefull.
      */
-    int& getInputCursorPosition() {return cursorPos;}
+    size_t& getInputCursorPosition() {return cursorPos;}
 
 protected:
-
-    /**
-     * @brief Prints a string to the console.
-     *
-     * Outputs the provided string to the console withoug additional formatting.
-     *
-     * @param str The string to be printed.
-     */
-    void printString(std::string& str);
-
-    /**
-     * @brief Prints an entire line of text to the console in bulk.
-     *
-     * Outputs the provided line string directory to the console.
-     *
-     * @param line The line string to be printed.
-     */
-    void printLineBulk(const std::string& line);
 
     /**
      * @brief Rewrites the tail of the input line starting from a specific position.
@@ -131,9 +308,9 @@ protected:
      * handling line wrapping as necessary.
      *
      * @param input The current input string.
-     * @param startPos The position in the input string from where to start rewriting.
+     * @param startPos The starting position of the rewrite
      */
-    void rewriteTail(const std::string& input, int startPos);
+    void rewriteTail(const std::string& input, size_t startPos);
 
     /**
      * @brief Handles special key inputs such as Enter, Tab, Backspace, etc.
@@ -154,7 +331,7 @@ protected:
      *
      * @param input Reference to the current input string.
      */
-    void handleEscapeSequence(std::string& input);
+    void handleEscapeSequence(std::string& input, std::string testKey = "");
 
     /**
      * @brief Handles printable character inputs.
@@ -183,14 +360,14 @@ protected:
      *
      * @return int Returns 1 if a key has been pressed; otherwise, 0.
      */
-    int kbhit();
+    bool kbhit();
 
     /**
      * @brief Moves the cursor to the start of the current line.
      *
      * If the cursor is not already at the start, it moves the cursor left to the beginning.
      */
-    int getTerminalWidth();
+    size_t getTerminalWidth();
 
     /**
      * @brief Moves the cursor left by a specified number of steps.
@@ -199,7 +376,7 @@ protected:
      *
      * @param steps the number of positions to move the cursor left.
      */
-    void moveCursorLeft(int steps);
+    void moveCursorLeft(size_t steps);
 
     /**
      * @brief Moves the cursor right by a specified number of steps.
@@ -208,7 +385,7 @@ protected:
      *
      * @param steps the number of positions to move the cursor right.
      */
-    void moveCursorRight(int steps);
+    void moveCursorRight(size_t steps, std::string* input = nullptr);
 
     /**
      * @brief Moves the cursor up by a specified number of steps.
@@ -217,7 +394,7 @@ protected:
      *
      * @param steps the number of positions to move the cursor up.
      */
-    void moveCursorUp(int steps);
+    void moveCursorUp(size_t steps);
 
     /**
      * @brief Moves the cursor down by a specified number of steps.
@@ -226,7 +403,7 @@ protected:
      *
      * @param steps the number of positions to move the cursor down.
      */
-    void moveCursorDown(int steps);
+    void moveCursorDown(size_t steps);
 
     /**
      * @brief Moves the cursor to the start of the current line.
@@ -298,12 +475,14 @@ protected:
     void navigateHistory(std::string& input, bool moveUp);
 
     // Member variables for line wrapping and display.
-    CursorPosition startPos;    ///< Starting cursor position.
-    int cursorPos = 0;          ///< Logical cursor position within inputBuffer.
-    int terminalWidth = 80;     ///< Current terminal width.
-    int oldInputLength = 0;     ///< Previous input length to track changes.
-    int initialLineLength = 0;  ///< Initial starting position for a command.
-    int maxCommandLength = 0;   ///< Maximum command length based on terminal width.
+    std::shared_ptr<IConsole> iConsole;  ///< Terminal deciding whether its using a simulated terminal.
+
+    CursorPosition startPos;       ///< Starting cursor position.
+    size_t cursorPos = 0;          ///< Logical cursor position within inputBuffer.
+    size_t terminalWidth = 80;     ///< Current terminal width.
+    size_t oldInputLength = 0;     ///< Previous input length to track changes.
+    size_t initialLineLength = 0;  ///< Initial starting position for a command.
+    size_t maxCommandLength = 0;   ///< Maximum command length based on terminal width.
     std::string prompt;         ///< The current prompt string.
 
     std::string nextLine;       ///< Holds the next line of input
@@ -311,9 +490,10 @@ protected:
 
     bool resized = false;       ///< Flag indicating if the terminal has been resized.
     bool insert = false;        ///< Flag indicating if the terminal is in insert mode.
+    std::string insertString;   ///< String used for keeping the original while in insert mode.
 
     // History management
-    int historyIndex = 0;               ///< Index for navigating through command history
+    size_t historyIndex = 0;               ///< Index for navigating through command history
     std::vector<std::string> history{}; ///< Vector to store command history
     bool browsingHistory = false;       ///< Indicates whether history is being accessed
     std::string inputCache;             ///< Current command being edited while browsing history
@@ -321,3 +501,5 @@ protected:
     // Options for autocompletion
     std::vector<std::string> autocompleteOptions {"end", "exit"}; ///< List of options for autocompletion
 };
+
+#endif // CONSOLE_H

@@ -1,4 +1,7 @@
-#pragma once
+// Decapsulation.h
+
+#ifndef DECAPSULATION_H
+#define DECAPSULATION_H
 
 #include <pcap.h>
 #include <cstring>
@@ -89,7 +92,7 @@ private:
      * @param ipv4Header The ByteString representation of the IPv4 header.
      * @param ipv4Size Reference to an integer indicating the size of the IPv4 header.
      */
-    void decodeIPv4(ByteString &ipv4Header, int &ipv4Size);
+    void decodeIPv4(ByteString &ipv4Header, size_t &ipv4Size);
 
     /**
      * @brief Parses and processes the IPv6 header.
@@ -104,7 +107,7 @@ private:
      * @param tcpHeader The ByteString representation of the TCP header.
      * @param tcpSize Reference to an integer indicating the size of the TCP header.
      */
-    void decodeTcp(ByteString &tcpHeader, int &tcpSize);
+    void decodeTcp(ByteString &tcpHeader, size_t &tcpSize);
 
     /**
      * @brief Parses and processes the UDP header.
@@ -167,7 +170,7 @@ private:
      * @param ahHeader The ByteString representation of the AH header.
      * @param ahSize Reference to an integer indicating the size of the AH header.
      */
-    void decodeAh(ByteString &ahHeader, int &ahSize);
+    void decodeAh(ByteString &ahHeader, size_t &ahSize);
 
     /**
      * @brief Parses and processes the ESP header.
@@ -249,30 +252,32 @@ private:
     void l5(ByteString &packet);
 
     // Header Initializations
-    EthernetHeader ethernet;    ///< Holds the Ethernet header information.
-    ArpHeader arp;              ///< Holds the ARP header information.
-    IPv4Header ipv4;            ///< Holds the IPv4 header information.
-    IPv6Header ipv6;            ///< Holds the IPv6 header information.
-    TcpHeader tcp;              ///< Holds the TCP header information.
-    UdpHeader udp;              ///< Holds the UDP header information.
-    IcmpHeader icmp;            ///< Holds the ICMP header information.
-    IcmpV6Header icmpv6;        ///< Holds the ICMPv6 header information.
-    IgmpHeader igmp;            ///< Holds the IGMP header information.
-    TlsHeader tls;              ///< Holds the TLS header information.
-    MplsHeader mpls;            ///< Holds the MPLS header information.
-    GreHeade gre;               ///< Holds the GRE header information.
-    PppHeader ppp;              ///< Holds the PPP header information.
-    FrameHeader frame;          ///< Holds the Frame Relay information.
-    AhHeader ah;                ///< Holds the AH header information.
-    EspHeader esp;              ///< Holds the ESP header information.
-    VlanHeader vlan;            ///< Holds the VLAN header information.
-    LldpHeader lldp;            ///< Holds the LLDP header information.
-    DhcpHeader dhcp;            ///< Holds the DHCP header information.
-    EigrpHeader eigrp;          ///< Holds the EIGRP header information.
-    SyslogHeader syslog;        ///< Holds the SysLog header information.
+    std::shared_ptr<EthernetHeader> ethernet;   ///< Holds the Ethernet header information.
+    std::shared_ptr<ArpHeader> arp;             ///< Holds the ARP header information.
+    std::shared_ptr<IPv4Header> ipv4;           ///< Holds the IPv4 header information.
+    std::shared_ptr<IPv6Header> ipv6;           ///< Holds the IPv6 header information.
+    std::shared_ptr<TcpHeader> tcp;             ///< Holds the TCP header information.
+    std::shared_ptr<UdpHeader> udp;             ///< Holds the UDP header information.
+    std::shared_ptr<IcmpHeader> icmp;           ///< Holds the ICMP header information.
+    std::shared_ptr<IcmpV6Header> icmpv6;       ///< Holds the ICMPv6 header information.
+    std::shared_ptr<IgmpHeader> igmp;           ///< Holds the IGMP header information.
+    std::shared_ptr<TlsHeader> tls;             ///< Holds the TLS header information.
+    std::shared_ptr<MplsHeader> mpls;           ///< Holds the MPLS header information.
+    std::shared_ptr<GreHeade> gre;              ///< Holds the GRE header information.
+    std::shared_ptr<PppHeader> ppp;             ///< Holds the PPP header information.
+    std::shared_ptr<FrameHeader> frame;         ///< Holds the Frame Relay information.
+    std::shared_ptr<AhHeader> ah;               ///< Holds the AH header information.
+    std::shared_ptr<EspHeader> esp;             ///< Holds the ESP header information.
+    std::shared_ptr<VlanHeader> vlan;           ///< Holds the VLAN header information.
+    std::shared_ptr<LldpHeader> lldp;           ///< Holds the LLDP header information.
+    std::shared_ptr<DhcpHeader> dhcp;           ///< Holds the DHCP header information.
+    std::shared_ptr<EigrpHeader> eigrp;         ///< Holds the EIGRP header information.
+    std::shared_ptr<SyslogHeader> syslog;       ///< Holds the SysLog header information.
 
-    unsigned long start{0};     ///< Index indicating the current position within the packet data.
+    size_t start{0};            ///< Index indicating the current position within the packet data.
     ByteString fullPacket;      ///< Holds the complete packet data for processing.
     bool options;               ///< Boolean flag indicating whether additional options are present.
     bool print = false;         ///< Boolesn flag to control debug printing.
 };
+
+#endif // DECAPSULATION_H

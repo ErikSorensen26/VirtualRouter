@@ -1,7 +1,9 @@
-#pragma once
+// Dhcp.h
+
+#ifndef DHCP_H
+#define DHCP_H
 
 #include <string>
-#include <Interface.h>
 #include <PacketStructure.h>
 #include <Functions.h>
 #include <Global.h>
@@ -21,7 +23,7 @@ namespace Protocol {
         DhcpClient(Interface& CurrentInterface);
 
         // Creates a DHCP packet body with the given hostname, hardware address, and length
-        PacketInfo dhcpBody(std::string& hostname, ByteString& hardwareAddress, int length);
+        PacketInfo dhcpBody(ByteString& hardwareAddress);
 
         // Creates a DHCP Discover packet with the provided hostname and hardware address
         PacketInfo dhcpDiscover(PacketInfo packet, std::string& hostname, ByteString& hardwareAddress);
@@ -38,10 +40,10 @@ namespace Protocol {
         void ExtractOptions(std::vector<DhcpHeader::Option> options);
 
         // Processes a DHCP packet with the given header and type
-        void DhcpPacket(const DhcpHeader* header, std::string& type);
+        void DhcpPacket(const DhcpHeader* header, ByteString& type);
 
         // Generates a unique DHCP transaction ID
-        std::string generateDhcpTransid();
+        ByteString generateDhcpTransid();
 
         // Mutex for synchronizing access to DHCP-related resources
         std::mutex dhcpMutex;
@@ -63,3 +65,5 @@ namespace Protocol {
     };
 
 }
+
+#endif // DHCP_H
