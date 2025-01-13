@@ -217,7 +217,7 @@ void Console::skipWordRight(std::string& input)
     moveCursorRight(steps);
 }
 
-void Console::rewriteTail(const std::string& input, size_t startPosition)
+void Console::rewriteTail(const std::string& input, size_t startPosition, bool backspace)
 {
     if (startPosition > input.size())
     {
@@ -250,7 +250,10 @@ void Console::rewriteTail(const std::string& input, size_t startPosition)
     }
 
     // Clear leftover characters
-    iConsole->print(" ");
+    if (backspace)
+    {
+        iConsole->print(" ");
+    }
 
     // Restore the cursor position
     iConsole->restoreCursorPosition();
@@ -381,7 +384,7 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
                 if (!insert)
                 {
                     input.erase(cursorPos, 1);
-                    rewriteTail(input, cursorPos);
+                    rewriteTail(input, cursorPos, true);
                 }
                 else
                 {
@@ -389,7 +392,7 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
                     {
                         input[cursorPos] = insertString[cursorPos];
                     }
-                    rewriteTail(insertString, cursorPos);
+                    rewriteTail(insertString, cursorPos, true);
                 }
             }
             break;

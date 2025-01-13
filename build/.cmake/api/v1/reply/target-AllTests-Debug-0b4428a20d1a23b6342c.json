@@ -34,13 +34,13 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 131,
+				"line" : 133,
 				"parent" : 0
 			},
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 132,
+				"line" : 134,
 				"parent" : 0
 			},
 			{
@@ -132,7 +132,7 @@
 			{
 				"command" : 8,
 				"file" : 0,
-				"line" : 133,
+				"line" : 135,
 				"parent" : 0
 			}
 		]
@@ -315,19 +315,22 @@
 			[
 				0,
 				1,
-				2
+				2,
+				3,
+				4,
+				5
 			]
 		}
 	],
 	"dependencies" : 
 	[
 		{
-			"backtrace" : 12,
-			"id" : "GMock::@6890427a1f51a3e7e1df"
-		},
-		{
 			"backtrace" : 2,
 			"id" : "VirtualRouter::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 12,
+			"id" : "GMock::@6890427a1f51a3e7e1df"
 		}
 	],
 	"id" : "AllTests::@6890427a1f51a3e7e1df",
@@ -426,7 +429,10 @@
 			[
 				0,
 				1,
-				2
+				2,
+				3,
+				4,
+				5
 			]
 		}
 	],
@@ -447,7 +453,25 @@
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "Tests/TerminalTest.cpp",
+			"path" : "Tests/ConsoleTest.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "Tests/ConfigsTest.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "Tests/DecapsulationTest.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "Tests/EncapsulationTest.cpp",
 			"sourceGroupIndex" : 0
 		}
 	],

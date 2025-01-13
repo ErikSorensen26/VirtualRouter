@@ -226,6 +226,19 @@ namespace Functions {
     }
 
     #pragma endregion
+    #pragma region NumConv
+
+    ByteString numToBin(size_t number, size_t length)
+    {
+        // Create a bitset large enough to handle the length
+        std::bitset<64> binary(number); // 64-bit ensures a arge range for input numbers
+        
+        // Convert to string, keep only the least significant 'length' bits
+        ByteString binaryString = binary.to_string();
+        return binaryString.substr(64 - length);
+    }
+
+    #pragma endregion
     #pragma region CharConv
 
     ByteString charToHex(uint8_t byte) {

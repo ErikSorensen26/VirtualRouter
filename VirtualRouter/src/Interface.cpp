@@ -44,23 +44,23 @@ Interface::~Interface()
 
 void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
 {
-    ByteString serializedPacket = encapsulate(packetInfo);
+    auto serializedPacket = encapsulate(packetInfo);
 
-    if (serializedPacket.empty())
+    if (!serializedPacket.has_value() || serializedPacket.value().empty())
     {
-        Logger::getInstance().error() << "Serialized packet is empty. Aborting send." << std::endl;
+        Logger::getInstance().error() << "Invalid Packet" << std::endl;
         return;
     }
 
     if (!mac.empty())
     {
-        serializedPacket.replace(0, 6, mac);
+        serializedPacket.value().replace(0, 6, mac);
     }
 
     // Enqueue the serialized packet for sending
     {
         std::lock_guard<std::mutex> lock(packetOutQueueMutex);
-        packetOutQueue.enqueue(serializedPacket);
+        packetOutQueue.enqueue(serializedPacket.value());
     }
 
     packetOutQueueCV.notify_one();
@@ -167,7 +167,7 @@ void Interface::process() {
                 Packet p(newPacket, debug, *this);
                 p.decapsulate();
                 PacketInfo packetInformation = p.packetInfo;
-                ProcessPacket process(packetInformation, vrf, this, shutdownFlag);
+                ProcessPacket process(packetInformation, vrf, this);
             });
         }
         std::this_thread::sleep_for(std::chrono::microseconds(10));

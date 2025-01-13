@@ -10,16 +10,13 @@ bool Terminal::executeCommand(std::string &command)
 	std::string preProcessMode = currentMode;
 	
 	command = normalizeCommand(command);
-	
-	// Check if it's is a "do" command
-	if (isGlobalCommandExecution || (isHelpModeActive && isRunning))
-	{
-		return true;
-	}
 
 	isCommandExecutionSuccessful = false;
-
-	if (command.empty() || !isRunning || isCommandInvalid) return false;
+	
+	// Check if it's is a "do" command
+	if (command.empty()) return false;
+	if (isGlobalCommandExecution || (isHelpModeActive && isRunning))return true;
+	if (!isRunning || isCommandInvalid || !isCommandValid) return false;
 
 	std::vector<std::string> TEMPcommandStream = splitIntoWords(command);
 	std::vector<std::string> commandStream;
@@ -149,15 +146,15 @@ bool Terminal::executeCommand(std::string &command)
 					intType = "NO_INTERFACE";
 				}
 				std::string mac;
-				if (commandStream[1] == "Ethernet" && macAddressList.Ethernet.size() == 9)
+				if (commandStream[1] == "Ethernet" && macAddressList.Ethernet.size() >= interfaceID)
 				{
 					mac = OUI + macAddressList.Ethernet[interfaceID];
 				}
-				else if (commandStream[1] == "FastEthernet" && macAddressList.FastEthernet.size() == 9)
+				else if (commandStream[1] == "FastEthernet" && macAddressList.FastEthernet.size() >= interfaceID)
 				{
 					mac = OUI + macAddressList.FastEthernet[interfaceID];
 				}
-				else if (commandStream[1] == "GigabitEthernet" && macAddressList.GigabitEthernet.size() == 9)
+			else if (commandStream[1] == "GigabitEthernet" && macAddressList.GigabitEthernet.size() >= interfaceID)
 				{
 					mac = OUI + macAddressList.GigabitEthernet[interfaceID];
 				}
@@ -179,8 +176,12 @@ bool Terminal::executeCommand(std::string &command)
 			if (commandStream[0] == "router")
 			{
 				std::string type = commandStream[1];
-				std::string ID = commandStream[2];
-				routingProtocolID = Functions::stringToNum(commandStream[2]);
+				std::string ID;
+				if (commandStream.size() > 2)
+				{
+					ID = commandStream[2];
+					routingProtocolID = Functions::stringToNum(commandStream[2]);
+				}
 				if (type == "eigrp")
 				{
 					if (!eigrpList[ID])
@@ -235,6 +236,7 @@ bool Terminal::executeCommand(std::string &command)
 				}
 				else if (type == "ospf")
 				{
+					configureRoutingMode("ospf");
 					if (!ospfList[static_cast<uint16_t>(routingProtocolID)])
 					{
 						(ospfList)[static_cast<uint16_t>(routingProtocolID)] = std::make_shared<Protocol::Ospf>();
@@ -243,6 +245,7 @@ bool Terminal::executeCommand(std::string &command)
 				}
 				else if (type == "bgp")
 				{
+					configureRoutingMode("bgp");
 					if (!bgpList[static_cast<uint16_t>(routingProtocolID)])
 					{
 						(bgpList)[routingProtocolID] = std::make_shared<Protocol::Bgp>();
@@ -282,6 +285,10 @@ bool Terminal::executeCommand(std::string &command)
 
 		if (currentMode == "(config-router)#")
 		{
+			if (command == "exit")
+			{
+				exitMode(mode.globalConfiguration);
+			}
 			if (currentSubMode == "eigrp_classic")
 			{
 				if (commandStream[0] == "network")

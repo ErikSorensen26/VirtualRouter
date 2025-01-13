@@ -174,6 +174,14 @@ namespace Functions {
     ByteString numToHex(uint32_t num, size_t size = 0);
 
     /**
+     * @brief Converts an integer to a binary string.
+     * @param number The input integer.
+     * @param size The desired size of the output.
+     * @return A binary string representation.
+     */
+    ByteString numToBin(size_t number, size_t length);
+
+    /**
      * @brief Converts an integer to a hexadecimal string of a specific byte size.
      * @param num The input integer.
      * @param byteSize The desired byte size of the output.

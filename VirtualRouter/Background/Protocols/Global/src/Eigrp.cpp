@@ -992,7 +992,7 @@ namespace Protocol
         Logger::getInstance().info() << "EigrpInterface destroyed and all timers canceled." << std::endl;
     }
 
-    void EigrpInterface::processPacket(EigrpHeader *eigrpPacket, const ByteString neighborIp)
+    void EigrpInterface::processPacket(const EigrpHeader *eigrpPacket, const ByteString neighborIp)
     {
         EigrpConfigs::NeighborState neighborState;
         // Validate packet version
@@ -1353,7 +1353,7 @@ namespace Protocol
         }
     }
 
-    void EigrpInterface::processUpdate(EigrpHeader *receivedUpdate, const ByteString neighborIp)
+    void EigrpInterface::processUpdate(const EigrpHeader *receivedUpdate, const ByteString neighborIp)
     {
         if (neighborIp == getConfigs()->interfaceAddress)
         {
@@ -1846,7 +1846,7 @@ namespace Protocol
             }
 
             // Assemble the packet
-            eigrpAckPacketStructure.Layer3.push_back(eigrp);
+            eigrpAckPacketStructure.Layer4.push_back(std::move(eigrp));
 
             // Enqueue for transmission
             currentInterface.lock()->ipPacket->setIPHeader(eigrpAckPacketStructure, neighborIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
@@ -2056,7 +2056,7 @@ namespace Protocol
             }
 
             // Assemble and send the packet
-            eigrpPacket.Layer3.push_back(eigrp);
+            eigrpPacket.Layer4.push_back(eigrp);
 
             currentInterface.lock()->ipPacket->setIPHeader(eigrpPacket, targetIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
             
@@ -2183,7 +2183,7 @@ namespace Protocol
         }
 
         // Assemble the packet
-        eigrpQueryPacketStructure.Layer3.push_back(eigrp);
+        eigrpQueryPacketStructure.Layer4.push_back(eigrp);
 
         // Convert to raw packet ByteString
         currentInterface.lock()->ipPacket->setIPHeader(eigrpQueryPacketStructure, neighbor->ipAddress, getConfigs()->DSCP, 2, Variable::IP::eigrp);
@@ -2262,7 +2262,7 @@ namespace Protocol
         }
 
         // Assemble the packet
-        eigrpReplyPacketStructure.Layer3.push_back(eigrp);
+        eigrpReplyPacketStructure.Layer4.push_back(eigrp);
 
         // Enqueue for transmission
         currentInterface.lock()->ipPacket->setIPHeader(eigrpReplyPacketStructure, neighborIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
@@ -2547,7 +2547,7 @@ namespace Protocol
             eigrp.options.emplace_back(stubOption);
         }
 
-        eigrpHello.Layer3.push_back(eigrp);
+        eigrpHello.Layer4.push_back(eigrp);
 
         currentInterface.lock()->ipPacket->setIPHeader(eigrpHello, targetIp, getConfigs()->DSCP, 2, Variable::IP::eigrp);
     }
@@ -2850,7 +2850,7 @@ namespace Protocol
             neighbor->pendingAcks.erase(neighbor->pendingAcks.begin());
         }
         PacketInfo retransmissionPacket;
-        retransmissionPacket.Layer3.push_back(pktInfo->packet.eigrp);
+        retransmissionPacket.Layer4.push_back(pktInfo->packet.eigrp);
         currentInterface.lock()->ipPacket->setIPHeader(retransmissionPacket, pktInfo->packet.destination, getConfigs()->DSCP, 2, Variable::IP::eigrp);
 
         Logger::getInstance().info() << "Resent packet to neighbor " << neighborIp.toHex() << " for sequence number " << sequenceNumber << ". Retransmission count: " << pktInfo->retransmissionCount + 1 << "." << std::endl;

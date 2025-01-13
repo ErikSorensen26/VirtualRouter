@@ -7,6 +7,8 @@
 #include <typeinfo>
 #include <Functions.h>
 #include <ByteString.hpp>
+#include <Checksums.h>
+#include <variant>
 
 /**
  * @file Encapsulation.h
@@ -23,7 +25,7 @@ namespace Variable
     {
         inline const std::string arp("\x08\x06", 2);    ///< EtherType for ARP
         inline const std::string ipv4("\x08\x00", 2);   ///< EtherType for IPv4
-        inline const std::string ipv6("\x86\xdd", 3);   ///< EtherType for IPv6
+        inline const std::string ipv6("\x86\xdd", 2);   ///< EtherType for IPv6
         inline const std::string mpls("\x88\x47", 2);   ///< EtherType for MPLS
         inline const std::string vlan("\x81\x00", 2);   ///< EtherType for VLAN
         inline const std::string lldp("\x88\xcc", 2);   ///< EtherType for LLDP
@@ -63,16 +65,76 @@ namespace Variable
      */
     namespace IP
     {
-        inline const std::string esp("\x32", 1);      ///< IP protocol number for ESP.
-        inline const std::string ah("\x33", 1);       ///< IP protocol number for AH.
-        inline const std::string gre("\x2f", 1);      ///< IP protocol number for GRE.
-        inline const std::string igmp("\x02", 1);     ///< IP protocol number for IGMP.
-        inline const std::string none("\x3b", 1);     ///< IP protocol number for None.
-        inline const std::string tcp("\x06", 1);      ///< IP protocol number for TCP.
-        inline const std::string udp("\x11", 1);      ///< IP protocol number for UDP.
-        inline const std::string icmp("\x3a", 1);     ///< IP protocol number for ICMP.
-        inline const std::string sctp("\x84", 1);     ///< IP protocol number for SCTP.
-        inline const std::string eigrp("\x58", 1);    ///< IP protocol number for EIGRP.
+        // Existing Protocols
+        inline const std::string esp("\x32", 1);      ///< IP protocol number for ESP (50).
+        inline const std::string ah("\x33", 1);       ///< IP protocol number for AH (51).
+        inline const std::string gre("\x2f", 1);      ///< IP protocol number for GRE (47).
+        inline const std::string igmp("\x02", 1);     ///< IP protocol number for IGMP (2).
+        inline const std::string none("\x3b", 1);     ///< IP protocol number for None (59).
+        inline const std::string tcp("\x06", 1);      ///< IP protocol number for TCP (6).
+        inline const std::string udp("\x11", 1);      ///< IP protocol number for UDP (17).
+        inline const std::string icmpv4("\x01", 1);   ///< IP protocol number for ICMPv4 (1).
+        inline const std::string icmpv6("\x3a", 1);   ///< IP protocol number for ICMPv6 (58).
+        inline const std::string sctp("\x84", 1);     ///< IP protocol number for SCTP (132).
+        inline const std::string eigrp("\x58", 1);    ///< IP protocol number for EIGRP (88).
+        inline const std::string ospf("\x59", 1);     ///< IP protocol number for OSPF (89).
+        inline const std::string pim("\x67", 1);      ///< IP protocol number for PIM (103).
+        inline const std::string rsvp("\x2e", 1);     ///< IP protocol number for RSVP (46). Corrected from \x2f to \x2e.
+
+        // Additional Protocols
+        inline const std::string hopopt("\x00", 1);       ///< IP protocol number for HOPOPT (0).
+        inline const std::string ggp("\x03", 1);          ///< IP protocol number for GGP (3).
+        inline const std::string ipv4("\x04", 1);         ///< IP protocol number for IPv4 (4).
+        inline const std::string st("\x05", 1);           ///< IP protocol number for ST (5).
+        inline const std::string cbt("\x07", 1);          ///< IP protocol number for CBT (7).
+        inline const std::string egp("\x08", 1);          ///< IP protocol number for EGP (8).
+        inline const std::string igp_v2("\x09", 1);       ///< IP protocol number for IGP (9).
+        inline const std::string bbn_rcc_mon("\x0a", 1);  ///< IP protocol number for BBN_RCC_MON (10).
+        inline const std::string nvp_ii("\x0b", 1);        ///< IP protocol number for NVP-II (11).
+        inline const std::string pup("\x0c", 1);           ///< IP protocol number for PUP (12).
+        inline const std::string argus("\x0d", 1);         ///< IP protocol number for ARGUS (13).
+        inline const std::string emcon("\x0e", 1);         ///< IP protocol number for EMCON (14).
+        inline const std::string xnet("\x0f", 1);          ///< IP protocol number for XNET (15).
+        inline const std::string chaos("\x10", 1);         ///< IP protocol number for CHAOS (16).
+        inline const std::string mux("\x12", 1);           ///< IP protocol number for MUX (18).
+        inline const std::string dcn_meas("\x13", 1);      ///< IP protocol number for DCN_MEAS (19).
+        inline const std::string hmp("\x14", 1);           ///< IP protocol number for HMP (20).
+        inline const std::string prm("\x15", 1);           ///< IP protocol number for PRM (21).
+        inline const std::string xns_idp("\x16", 1);       ///< IP protocol number for XNS_IDP (22).
+        inline const std::string trunk_1("\x17", 1);       ///< IP protocol number for TRUNK-1 (23).
+        inline const std::string trunk_2("\x18", 1);       ///< IP protocol number for TRUNK-2 (24).
+        inline const std::string leaf_1("\x19", 1);        ///< IP protocol number for LEAF-1 (25).
+        inline const std::string leaf_2("\x1a", 1);        ///< IP protocol number for LEAF-2 (26).
+        inline const std::string rdp("\x1b", 1);           ///< IP protocol number for RDP (27).
+        inline const std::string irtp("\x1c", 1);          ///< IP protocol number for IRTP (28).
+        inline const std::string iso_tp4("\x1d", 1);       ///< IP protocol number for ISO_TP4 (29).
+        inline const std::string netblt("\x1e", 1);        ///< IP protocol number for NETBLT (30).
+        inline const std::string mfe_nsp("\x1f", 1);       ///< IP protocol number for MFE_NSP (31).
+        inline const std::string merit_inp("\x20", 1);     ///< IP protocol number for MERIT_INP (32).
+        inline const std::string dccp("\x21", 1);          ///< IP protocol number for DCCP (33).
+        inline const std::string ipcomp("\x22", 1);        ///< IP protocol number for IPCOMP (34).
+        inline const std::string eigrp_v6("\x58", 1);      ///< IP protocol number for EIGRP (88).
+        inline const std::string ospf_v3("\x59", 1);       ///< IP protocol number for OSPF (89).
+        inline const std::string pim_sm("\x67", 1);        ///< IP protocol number for PIM-SM (103).
+        inline const std::string l2tp("\x4e", 1);          ///< IP protocol number for L2TP (78).
+        inline const std::string mpls_in_ip("\x2b", 1);    ///< IP protocol number for MPLS-in-IP (43).
+        inline const std::string vxlan("\xb7", 1);         ///< IP protocol number for VXLAN (183).
+        inline const std::string dvrp("\x5e", 1);          ///< IP protocol number for DVRP (94).
+        inline const std::string lmtp("\x46", 1);          ///< IP protocol number for LMTP (70).
+        inline const std::string encap("\x8e", 1);         ///< IP protocol number for ENCAPSULATION (142).
+        inline const std::string ipv6("\x29", 1);          ///< IP protocol number for IPv6 (41).
+        inline const std::string pim_dm("\x64", 1);        ///< IP protocol number for PIM-DM (100).
+        inline const std::string eigrp_v5("\x8a", 1);      ///< IP protocol number for EIGRP for IPv6 (138).
+        inline const std::string rsvp_te("\x73", 1);       ///< IP protocol number for RSVP-TE (115).
+        inline const std::string mpls("\x2b", 1);          ///< IP protocol number for MPLS (43). Note: MPLS has multiple entries.
+        inline const std::string pppoe_discovery("\x11", 1); ///< IP protocol number for PPPoE Discovery (17).
+        inline const std::string pppoe_session("\x11", 1);   ///< IP protocol number for PPPoE Session (17).
+        inline const std::string ppp_echo("\x01", 1);        ///< IP protocol number for PPP Echo (1).
+        inline const std::string ppp_ipcp("\x21", 1);        ///< IP protocol number for PPP IPCP (33).
+        inline const std::string ppp_ipv6cp("\x57", 1);      ///< IP protocol number for PPP IPv6CP (87).
+        inline const std::string eap("\x88", 1);             ///< IP protocol number for EAP (136).
+        inline const std::string lisp_control("\x8f", 1);    ///< IP protocol number for LISP Control (143).
+        inline const std::string mobileregistration_protocol("\x8d", 1); ///< IP protocol number for Mobile Registration Protocol (141).
     }
 
     /**
@@ -183,7 +245,7 @@ namespace Variable
         inline const std::string serverHostName(64, '\x00');               ///< Server Hostname.
         inline const std::string bootfile(128, '\x00');                    ///< Bootfile Name.
         inline const std::string endPadding(25, '\x00');                   ///< Padding after DHCP options.
-        inline const std::string end("\xff", 1);                           ///< DHCP Option End Marker.
+        inline const std::string end(1, '\xff');                           ///< DHCP Option End Marker.
         inline const std::string magicCookie("\x63\x82\x53\x63", 4);       ///< DHCP Magic Cookie.    
     }
 
@@ -304,6 +366,11 @@ namespace Variable
 
 // ------------------------- Structure Definitions -------------------------
 
+static bool validateSize(size_t& beginning, size_t length, const ByteString& packet)
+{
+    return (beginning + length <= packet.toString().size());
+}
+
 /**
  * @struct EthernetHeader
  * @brief Represents an Ethernet frame header.
@@ -313,6 +380,28 @@ struct EthernetHeader
     ByteString sourceMac{};         ///< Source MAC address
     ByteString destinationMac{};    ///< Destination MAC address
     ByteString type{};              ///< Next header type
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString ethernetString;
+        ethernetString += destinationMac.size() == 6 ? destinationMac : ByteString(6, '\x00');
+        if (sourceMac.size() != 6 || type.size() != 2) return std::nullopt;
+
+        ethernetString.reserve(14);
+        ethernetString += sourceMac;
+        ethernetString += type;
+
+        return ethernetString;
+    }
+    bool decapsulate(const ByteString ethernetHeader, size_t& start)
+    {
+        if (ethernetHeader.size() != 14) return false;
+        destinationMac = ethernetHeader.substr(0, 6);
+        sourceMac = ethernetHeader.substr(6, 6);
+        type = ethernetHeader.substr(12, 2);
+        start += 14;
+        return true;
+    }
 };
 
 /**
@@ -330,6 +419,45 @@ struct ArpHeader
     ByteString senderIpAddress{};        ///< Sender's IP address.
     ByteString targetHardwareAddress{}; ///< Target's hardware address.
     ByteString targetIpAddress{};        ///< Target's IP address.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString arpString;
+        if (hardwareType.size() != 2 || protocolType.size() != 2 || hardwareSize.size() != 1 || protocolSize.size() != 1 ||
+            opcode.size() != 2 || senderHardwareAddress.size() != 6 || senderIpAddress.size() != 4 ||
+            senderHardwareAddress.size() != 6 || senderIpAddress.size() != 4) return std::nullopt;
+
+        arpString.reserve(28);
+        arpString += hardwareType;
+        arpString += protocolType;
+        arpString += hardwareSize;
+        arpString += protocolSize;
+        arpString += opcode;
+        arpString += senderHardwareAddress;
+        arpString += senderIpAddress;
+        arpString += targetHardwareAddress;
+        arpString += targetIpAddress;
+
+        return arpString;
+    }
+    bool decapsulate(const ByteString arpHeader, size_t& start)
+    {
+        if (arpHeader.size() == 28)
+        {
+            hardwareType = arpHeader.substr(0, 2);
+            protocolType = arpHeader.substr(2, 2);
+            hardwareSize = arpHeader.substr(4, 1);
+            protocolSize = arpHeader.substr(5, 1);
+            opcode = arpHeader.substr(6, 2);
+            senderHardwareAddress = arpHeader.substr(8, 6);
+            senderIpAddress = arpHeader.substr(14, 4);
+            targetHardwareAddress = arpHeader.substr(18, 6);
+            targetIpAddress = arpHeader.substr(24, 4);
+            start += 28;
+        }
+        else return false;
+        return true;
+    }
 };
 
 /**
@@ -342,6 +470,32 @@ struct MplsHeader
     ByteString expBit{};          ///< Experimental bits (EXP).
     ByteString bottomLabelStack{};///< Bottom of Stack bit.
     ByteString TTL{};             ///< Time-To-Live (TTL).
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString mplsString;
+        if (/*label.size() != 3 || TTL.size() != 1*/true) return std::nullopt;
+
+        mplsString.reserve(8);
+        mplsString += label;
+        //mplsString += Functions::binToHex(mpls.expBit + mpls.bottomLabelStack);
+        mplsString += TTL;
+        mplsString = Functions::hexToByte(mplsString);
+
+        return mplsString;
+    }
+    bool decapsulate(const ByteString mplsHeader, size_t& start)
+    {
+        if (mplsHeader.size() != 8) return false;
+            
+        label = mplsHeader.substr(0, 5);
+        expBit = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(0, 3);
+        bottomLabelStack = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(3, 1);
+        TTL = mplsHeader.substr(6, 2);
+        start += 4;
+
+        return true;
+    }
 };
 
 /**
@@ -394,6 +548,76 @@ struct IPv4Header
         ByteString routerAlert{};      ///< Router Alert option value.
 
     } options;
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString ipv4String;
+        if (version.size() != 1 || headerLength.size() != 1 || serviceField.size() != 1 || totalLength.size() != 2 ||
+            identification.size() != 2 || TTL.size() != 1 || protocol.size() != 1 || checksum.size() != 2 || 
+            sourceAddress.size() != 4 || destinationAddress.size() != 4) return std::nullopt;
+
+        ipv4String.reserve(20);
+        ipv4String += Functions::hexToByte(version + headerLength);
+        ipv4String += serviceField;
+        ipv4String += totalLength;
+        ipv4String += identification;
+        ipv4String += Functions::binToByte(fragmentFlag.reserved + fragmentFlag.fragment + fragmentFlag.moreFragment + fragmentFlag.fragmentOffset);
+        ipv4String += TTL;
+        ipv4String += protocol;
+        ipv4String += ByteString(2, 0x00);
+        ipv4String += sourceAddress;
+        ipv4String += destinationAddress;
+        ipv4String += Functions::binToByte(options.type.copy) + options.type.classControl + options.type.routerAlert;
+        ipv4String += options.length;
+        ipv4String += options.routerAlert;
+        
+        if (options.type.copy.size() == 1 && options.type.classControl.size() == 2 && 
+            options.type.routerAlert.size() == 5 && options.length.size() == 1)
+        {
+            ipv4String.reserve(23);
+            ByteString typeString;
+            ipv4String += Functions::binToByte(options.type.copy + options.type.classControl + options.type.routerAlert);
+            ipv4String += options.length;
+            ipv4String += options.routerAlert;
+        }
+
+        return ipv4String;
+    }
+    bool decapsulate(const ByteString ipv4Header, size_t& start, size_t& ipv4Size)
+    {
+        if (ipv4Header.size() < 20) return false;
+
+        ByteString ipHeader = ipv4Header.substr(0, 1).toHex();
+        version = ipHeader.substr(0, 1);
+        headerLength = ipHeader.substr(1, 1);
+        serviceField = ipv4Header.substr(1, 1);
+        totalLength = ipv4Header.substr(2, 2);
+        identification = ipv4Header.substr(4, 2);
+        TTL = ipv4Header.substr(8, 1);
+        protocol = ipv4Header.substr(9, 1);
+        checksum = ipv4Header.substr(10, 2);
+        sourceAddress = ipv4Header.substr(12, 4);
+        destinationAddress = ipv4Header.substr(16, 4);
+        start += ipv4Size;
+
+        ByteString fragmentFlags = Functions::byteToBin(ipv4Header.substr(6, 2));
+
+        fragmentFlag.reserved = fragmentFlags.substr(0, 1);
+        fragmentFlag.fragment = fragmentFlags.substr(1, 1);
+        fragmentFlag.moreFragment = fragmentFlags.substr(2, 1);
+        fragmentFlag.fragmentOffset = fragmentFlags.substr(3);
+
+        if (ipv4Size > 20 && ipv4Header.size() == 23)
+        {
+            ByteString type = Functions::byteToBin(ipv4Header.substr(20, 1));
+            options.type.copy = type.substr(0, 1);
+            options.type.classControl = type.substr(1, 2);
+            options.type.routerAlert = type.substr(3, 5);
+            options.length = ipv4Header.substr(21, 1);
+            options.routerAlert = ipv4Header.substr(22, 1);
+        }
+        return true;
+    }
 };
 
 /**
@@ -410,6 +634,41 @@ struct IPv6Header
     ByteString hopLimit{};          ///< Hop Limit field.
     ByteString sourceAddress{};     ///< Source IPv6 address.
     ByteString destinationAddress{};///< Destination IPv6 address.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString ipv6String;
+        if (version.size() != 1 || trafficClass.size() != 2 || flowLabel.size() != 5 || payloadLength.size() != 2 ||
+            protocol.size() != 1 || hopLimit.size() != 1 || sourceAddress.size() != 16 || 
+            destinationAddress.size() != 16) return std::nullopt;
+
+        ipv6String.reserve(40);
+        ipv6String += Functions::hexToByte(version + trafficClass + flowLabel);
+        ipv6String += payloadLength;
+        ipv6String += protocol;
+        ipv6String += hopLimit;
+        ipv6String += sourceAddress;
+        ipv6String += destinationAddress;
+
+        return ipv6String;
+    }
+    bool decapsulate(const ByteString ipv6Header, size_t& start)
+    {
+        if (ipv6Header.size() != 40) return false;
+
+        ByteString ipv6Temp = Functions::byteToHex(ipv6Header.substr(0, 4));
+        version = ipv6Temp.substr(0, 1);
+        trafficClass = ipv6Temp.substr(1, 2);
+        flowLabel = ipv6Temp.substr(3, 5);
+        payloadLength = ipv6Header.substr(4, 2);
+        protocol = ipv6Header.substr(6, 1);
+        hopLimit = ipv6Header.substr(7, 1);
+        sourceAddress = ipv6Header.substr(8, 16);
+        destinationAddress = ipv6Header.substr(24, 16);
+        start += 40;
+
+        return true;
+    }
 };
 
 /**
@@ -455,6 +714,85 @@ struct TcpHeader
     };
 
     std::vector<Option> options{}; ///< Vector of TCP options
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString tcpString;
+        if (sourcePort.size() != 2 || destinationPort.size() != 2 || sequenceNumber.size() != 4 || ackNumber.size() != 4 ||
+            headerLength.size() != 1 || windowSize.size() != 2 || checksum.size() != 2 || urgentPointer.size() != 2 ||
+            flags.congestionWindowReduced.size() != 1 || flags.urgent.size() != 1 || flags.acknowledgement.size() != 1 || flags.ecnEcho.size() != 1 ||
+            flags.fin.size() != 1 || flags.push.size() != 1 || flags.reset.size() != 1 || flags.syn.size() != 1) return std::nullopt;
+        
+        tcpString.reserve(20);
+        tcpString += sourcePort;
+        tcpString += destinationPort;
+        tcpString += sequenceNumber;
+        tcpString += ackNumber;
+        tcpString += headerLength;
+        tcpString += Functions::binToByte(flags.congestionWindowReduced + flags.ecnEcho + flags.urgent + flags.acknowledgement + flags.push + flags.reset + flags.syn + flags.fin);
+        tcpString += windowSize;
+        tcpString += ByteString(2, 0x00);
+        tcpString += urgentPointer;
+        // Add TCP options.
+        for (auto opt : options)
+        {
+            tcpString += opt.type;
+            tcpString += opt.length;
+            tcpString += opt.value;
+        }
+
+        return tcpString;
+    }
+    bool decapsulate(const ByteString tcpHeader, size_t& start, size_t& tcpSize)
+    {
+        if (tcpHeader.size() < 20) return false;
+
+        sourcePort = tcpHeader.substr(0, 2);
+        destinationPort = tcpHeader.substr(2, 2);
+        sequenceNumber = tcpHeader.substr(4, 4);
+        ackNumber = tcpHeader.substr(8, 4);
+        headerLength = tcpHeader.substr(12, 1);
+        windowSize = tcpHeader.substr(14, 2);
+        checksum = tcpHeader.substr(16, 2);
+        urgentPointer = tcpHeader.substr(18, 2);
+        start += tcpSize;
+
+        ByteString flagOpts = Functions::byteToBin(tcpHeader.substr(13, 1));
+
+        flags.congestionWindowReduced = flagOpts.substr(0, 1);
+        flags.ecnEcho = flagOpts.substr(1, 1);
+        flags.urgent = flagOpts.substr(2, 1);
+        flags.acknowledgement = flagOpts.substr(3, 1);
+        flags.push = flagOpts.substr(4, 1);
+        flags.reset = flagOpts.substr(5, 1);
+        flags.syn = flagOpts.substr(6, 1);
+        flags.fin = flagOpts.substr(7, 1);
+
+        if (tcpSize > 20)
+        {
+            ByteString tcpOptions = tcpHeader.substr(20);
+            size_t optionStart = 0;
+            while (optionStart != tcpSize - 20)
+            {
+                TcpHeader::Option option;
+                if (!validateSize(optionStart, 2, tcpOptions)) return false;
+
+                option.type = tcpOptions.substr(optionStart, 1);
+                optionStart += 1;
+                if (option.type != std::string("\x01", 1))
+                {
+                    option.length = tcpOptions.substr(optionStart, 1);
+                    optionStart += 1;
+                    size_t valueLength = static_cast<size_t>(Functions::byteToNum(option.length) - 2);
+                    if (!validateSize(optionStart, valueLength, tcpOptions)) return false;
+                    option.value = tcpOptions.substr(optionStart, valueLength);
+                    optionStart += valueLength;
+                }
+                options.push_back(option);
+            }
+        }
+        return true;
+    }
 };
 
 /**
@@ -467,6 +805,32 @@ struct UdpHeader
     ByteString destinationPort{};   ///< Destination port number.
     ByteString length{};            ///< Length of UDP header and payload.
     ByteString checksum{};          ///< Checksum.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString udpString;
+        if (sourcePort.size() != 2 || destinationPort.size() != 2 || length.size() != 2 || checksum.size() != 2) return std::nullopt;
+
+        udpString.reserve(8);
+        udpString += sourcePort;
+        udpString += destinationPort;
+        udpString += length;
+        udpString += ByteString(2, 0x00);
+
+        return udpString;
+    }
+    bool decapsulate(const ByteString udpHeader, size_t& start)
+    {
+        if (udpHeader.size() != 8) return false;
+
+        sourcePort = udpHeader.substr(0, 2);
+        destinationPort = udpHeader.substr(2, 2);
+        length = udpHeader.substr(4, 2);
+        checksum = udpHeader.substr(6, 2);
+        start += 8;
+
+        return true;
+    }
 };
 
 /**
@@ -480,6 +844,34 @@ struct IcmpHeader
     ByteString checksum{};         ///< ICMP checksum.
     ByteString identifier{};       ///< Identifier.
     ByteString sequenceNumber{};   ///< Sequence number.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString icmpString;
+        if (type.size() != 1 || code.size() != 1 || checksum.size() != 2 || identifier.size() != 2 || sequenceNumber.size() != 2) return std::nullopt;
+
+        icmpString.reserve(8);
+        icmpString += type;
+        icmpString += code;
+        icmpString += ByteString(2, 0x00);
+        icmpString += identifier;
+        icmpString += sequenceNumber;
+
+        return icmpString;
+    }
+    bool decapsulate(const ByteString icmpHeader, size_t& start)
+    {
+        if (icmpHeader.size() != 8) return false;
+
+        type = icmpHeader.substr(0, 1);
+        code = icmpHeader.substr(1, 1);
+        checksum = icmpHeader.substr(2, 2);
+        identifier = icmpHeader.substr(4, 2);
+        sequenceNumber = icmpHeader.substr(6, 2);
+        start += 8;
+
+        return true;
+    }
 };
 
 /**
@@ -505,6 +897,57 @@ struct IcmpV6Header
     };
 
     std::vector<Option> options{}; ///< Vector of ICMPv6 options.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString icmpv6String;
+        if (type.size() != 1 || code.size() != 1 || checksum.size() != 2 || reserved.size() != 4) return std::nullopt;
+
+        icmpv6String.reserve(8);
+        icmpv6String += type;
+        icmpv6String += code;
+        icmpv6String += ByteString(2, 0x00);
+        icmpv6String += reserved;
+        for (const auto& opt : options)
+        {
+            icmpv6String += opt.option;
+            icmpv6String += opt.length;
+            icmpv6String += opt.value;
+        }
+
+        return icmpv6String;
+    }
+    bool decapsulate(const ByteString icmpV6Header, size_t& start)
+    {
+        size_t icmpv6Start = 0;
+        size_t icmpv6End = 0;
+        if (icmpV6Header.size() < 8) return false;
+
+        type = icmpV6Header.substr(0, 1);
+        code = icmpV6Header.substr(1, 1);
+        checksum = icmpV6Header.substr(2, 2);
+        reserved = icmpV6Header.substr(4, 4);
+        icmpv6Start = 8;
+        start += icmpv6Start;
+        icmpv6End = icmpV6Header.size();
+        
+        while (icmpv6Start != icmpv6End)
+        {
+            IcmpV6Header::Option option;
+            if (!validateSize(icmpv6Start, 4, icmpV6Header)) return false;
+            option.option = icmpV6Header.substr(icmpv6Start, 2);
+            icmpv6Start += 2;
+            option.length = icmpV6Header.substr(icmpv6Start, 2);
+            icmpv6Start += 2;
+            size_t icmpv6ADD = static_cast<size_t>(Functions::byteToNum(option.length) - 4);
+            if (!validateSize(icmpv6Start, icmpv6ADD, icmpV6Header)) return false;
+            option.value = icmpV6Header.substr(icmpv6Start, icmpv6ADD);
+            icmpv6Start += icmpv6ADD;
+            start += icmpv6ADD;
+            options.push_back(option);
+        }
+        return true;
+    }
 };
 
 /**
@@ -529,6 +972,46 @@ struct IgmpHeader
         ByteString qqic{};           ///< Querier's Query Interval Code.
         ByteString numSrc{};         ///< Number of Sources.
     } v3;
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString igmpString;
+        if (type.size() != 1 || maxRestTime.size() != 1 || checksum.size() != 2 || multicastAddress.size() != 4) return std::nullopt;
+
+        igmpString.reserve(8);
+        igmpString += type;
+        igmpString += maxRestTime;
+        igmpString += ByteString(2, 0x00);
+        igmpString += multicastAddress;
+        if (v3.supress.size() == 1 && v3.qrv.size() == 3 && v3.qqic.size() == 1 && v3.numSrc.size() == 2)
+        {
+            // NEEDS FURTHER IMPLEMENTATION
+            igmpString.reserve(12);
+            igmpString += Functions::binToByte(v3.supress + v3.qrv) + v3.qqic + v3.numSrc;
+        }
+
+        return igmpString;
+    }
+    bool decapsulate(const ByteString igmpHeader, size_t& start)
+    {
+        if (igmpHeader.size() < 8) return false;
+
+        type = igmpHeader.substr(0, 1);
+        maxRestTime = igmpHeader.substr(1, 1);
+        checksum = igmpHeader.substr(2, 2);
+        multicastAddress = igmpHeader.substr(4, 4);
+        start += 8;
+
+        if (igmpHeader.size() == 12) 
+        {
+            v3.supress = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(5, 1);
+            v3.qrv = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(6, 3);
+            v3.qqic = igmpHeader.substr(9, 1);
+            v3.numSrc = igmpHeader.substr(10, 2);
+            start += 4;
+        }
+        return true;
+    }
 };
 
 /**
@@ -540,6 +1023,15 @@ struct TlsHeader
     ByteString type{};        ///< TLS Content Type.
     ByteString version{};     ///< TLS Version.
     ByteString length{};      ///< TLS Length.
+
+    std::optional<ByteString> encapsulate()
+    {
+        return std::nullopt;
+    }
+    bool decapsulate(const ByteString Header, size_t& start)
+    {
+        return false;
+    }
 };
 
 /**
@@ -569,6 +1061,45 @@ struct GreHeade
     ByteString length{};          ///< GRE Length.
     ByteString callID{};          ///< GRE Call ID.
     ByteString seqNum{};          ///< GRE Sequence Number.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString greString;
+        if (flags.checksum.size() != 1 || flags.routing.size() != 1 || flags.key.size() != 1 || flags.seqNum.size() != 1 ||
+            flags.strictSourceRoute.size() != 1 || flags.recursion.size() != 3 || flags.acknowledgment.size() != 1 || flags.reserved.size() != 4 ||
+            flags.version.size() != 3 || protocol.size() != 2 || length.size() != 2 || callID.size() != 2 || seqNum.size() != 4) return std::nullopt;
+
+        greString.reserve(12);
+        greString += Functions::binToByte(flags.checksum + flags.routing + flags.key + flags.seqNum + flags.strictSourceRoute + flags.recursion + flags.acknowledgment + flags.recursion + flags.version);
+        greString += protocol;
+        greString += length;
+        greString += callID;
+        greString += seqNum;
+
+        return greString;
+    }
+    bool decapsulate(const ByteString greHeader, size_t& start)
+    {
+        if (greHeader.size() != 12) return false;
+
+        ByteString flagOpts = Functions::byteToBin(greHeader.substr(0, 2));
+        flags.checksum = flagOpts.substr(0, 1);
+        flags.routing = flagOpts.substr(1, 1);
+        flags.key = flagOpts.substr(2, 1);
+        flags.seqNum = flagOpts.substr(3, 1);
+        flags.strictSourceRoute = flagOpts.substr(4, 1);
+        flags.recursion = (Functions::byteToBin(greHeader.substr(0, 2))).substr(5, 3);
+        flags.acknowledgment = flagOpts.substr(8, 1);
+        flags.reserved = (Functions::byteToBin(greHeader.substr(0, 2))).substr(9, 4);
+        flags.version = (Functions::byteToBin(greHeader.substr(0, 2))).substr(13, 3);
+        protocol = greHeader.substr(2, 2);
+        length = greHeader.substr(4, 2);
+        callID = greHeader.substr(6, 2);
+        seqNum = greHeader.substr(8, 4);
+        start += 12;
+
+        return true;
+    }
 };
 
 /**
@@ -580,6 +1111,31 @@ struct PppHeader
     ByteString address{};   ///< PPP Address field.
     ByteString control{};   ///< PPP Control field.
     ByteString protocol{};  ///< PPP Protocol field.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString pppString;
+        if (address.size() != 1 || control.size() != 1 || protocol.size() != 2) return std::nullopt;
+
+        pppString.reserve(4);
+        pppString += address;
+        pppString += control;
+        pppString += protocol;
+
+        return pppString;
+        
+    }
+    bool decapsulate(const ByteString pppHeader, size_t& start)
+    {
+        if (pppHeader.size() != 4) return false;
+
+        address = pppHeader.substr(0, 1);
+        control = pppHeader.substr(1, 1);
+        protocol = pppHeader.substr(2, 2);
+        start += 4;
+
+        return true;
+    }
 };
 
 /**
@@ -613,6 +1169,28 @@ struct FrameHeader
     } secondAddress;
 
     ByteString type; ///< Frame Relay Type field.
+
+    std::optional<ByteString> encapsulate()
+    {
+
+    }
+    bool decapsulate(const ByteString frameHeader, size_t& start)
+    {
+        if (frameHeader.size() != 4) return false;
+
+        ByteString relay = Functions::byteToBin(frameHeader.substr(0, 1));
+        firstAddress.cr = relay.substr(6, 1);
+        firstAddress.ea = relay.substr(7, 1);
+        relay = Functions::byteToBin(frameHeader.substr(1, 1));
+        secondAddress.fecn = relay.substr(4, 1);
+        secondAddress.becn = relay.substr(5, 1);
+        secondAddress.de = relay.substr(6, 1);
+        secondAddress.ea = relay.substr(7, 1);
+        type = frameHeader.substr(2, 2);
+        start += 4;
+
+        return true;
+    }
 };
 
 /**
@@ -627,6 +1205,36 @@ struct AhHeader
     ByteString spi{};       ///< Security Parameters Index (SPI).
     ByteString sequence{};  ///< Sequence Number.
     ByteString icv{};        ///< Integrity Check Value (ICV).
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString ahString;
+        if (next.size() != 1 || length.size() != 1 || reserved.size() != 2 || spi.size() != 4 || sequence.size() != 8) return std::nullopt;
+
+        ahString.reserve(12);
+        ahString += next;
+        ahString += length;
+        ahString += reserved;
+        ahString += spi;
+        ahString += sequence;
+        ahString += icv;
+
+        return ahString;
+    }
+    bool decapsulate(const ByteString ahHeader, size_t& start, size_t& ahSize)
+    {
+        if (ahHeader.size() < 12)
+
+        next = ahHeader.substr(0, 1);
+        length = ahHeader.substr(1, 1);
+        reserved = ahHeader.substr(2, 2);
+        spi = ahHeader.substr(4, 4);
+        sequence = ahHeader.substr(8, 4);
+        icv = ahHeader.substr(12);
+        start += ahSize;
+
+        return true;
+    }
 };
 
 /**
@@ -637,6 +1245,28 @@ struct EspHeader
 {
     ByteString spi{};       ///< Security Parameters Index (SPI).
     ByteString sequence{};  ///< Sequence Number.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString espString;
+        if (spi.size() != 4 || sequence.size() != 4) return std::nullopt;
+
+        espString.reserve(8);
+        espString += spi;
+        espString += sequence;
+
+        return espString;
+    }
+    bool decapsulate(const ByteString espHeader, size_t& start)
+    {
+        if (espHeader.size() != 8) return false;
+
+        spi = espHeader.substr(0, 4);
+        sequence = espHeader.substr(4, 4);
+        start += 8;
+
+        return true;
+    }
 };
 
 /**
@@ -649,6 +1279,15 @@ struct VlanHeader
     ByteString dei{};      ///< Drop Eligible Indicator (DEI) field.
     ByteString id{};       ///< VLAN Identifier (VID) field.
     ByteString type{};     ///< EtherType field.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        return std::nullopt;
+    }
+    bool decapsulate(const ByteString vlanHeader, size_t& start)
+    {
+        return false;
+    }
 };
 
 /**
@@ -678,6 +1317,15 @@ struct LldpHeader
     TLV managementAddress{};        ///< Management Address TLV.
     TLV organizationallySpecific{}; ///< Organizationally Specific TLV.
     TLV endOfLLDPDU{};              ///< End of LLDPDU TLV.
+
+    std::optional<ByteString> encapsulate()
+    {
+        return std::nullopt;
+    }
+    bool decapsulate(const ByteString Header, size_t& start)
+    {
+        return false;
+    }
 };
 
 /**
@@ -726,6 +1374,100 @@ struct DhcpHeader
     };
 
     std::vector<Option> options{}; ///< Vector of DHCP options.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString dhcpString;
+        if (boot.size() != 1 || hardwareType.size() != 1 || hardwareAddressLength.size() != 1 || hops.size() != 1 || transID.size() != 4 ||
+            secondsElapsed.size() != 2 || bootpFlags.broadcast.size() != 1 || bootpFlags.reserved.size() != 7 || clientIP.size() != 4 ||
+            yourClientIP.size() != 4 || nextServerIP.size() != 4 || relayAgentIP.size() != 4 || clientMacAddress.size() != 6 || clientHardwareAddressPadding.size() != 10 ||
+            serverHostName.size() != 64 || bootFile.size() != 128 || magicCookie.size() != 4 || end.size() != 1) return std::nullopt;
+
+        dhcpString.reserve(240);
+        dhcpString += boot;
+        dhcpString += hardwareType;
+        dhcpString += hardwareAddressLength;
+        dhcpString += hops;
+        dhcpString += transID;
+        dhcpString += secondsElapsed;
+        dhcpString += Functions::binToByte(bootpFlags.broadcast + bootpFlags.reserved);
+        dhcpString += clientIP;
+        dhcpString += yourClientIP;
+        dhcpString += nextServerIP;
+        dhcpString += relayAgentIP;
+        dhcpString += clientMacAddress;
+        dhcpString += clientHardwareAddressPadding;
+        dhcpString += serverHostName;
+        dhcpString += bootFile;
+        dhcpString += magicCookie;
+        for (DhcpHeader::Option opt : options)
+        {
+            dhcpString += opt.option;
+            dhcpString += opt.length;
+            dhcpString += opt.value;
+        }
+        dhcpString += end;
+        dhcpString += padding;
+
+        return dhcpString;
+    }
+    bool decapsulate(const ByteString dhcpHeaders, size_t& start)
+    {
+        size_t dhcpStart;
+        ByteString dhcpHeader;
+        if (dhcpHeaders.size() < 240) return false;
+
+        dhcpHeader = dhcpHeaders;
+        boot = dhcpHeader.substr(0, 1);
+        hardwareType = dhcpHeader.substr(1, 1);
+        hardwareAddressLength = dhcpHeader.substr(2, 1);
+        hops = dhcpHeader.substr(3, 1);
+        transID = dhcpHeader.substr(4, 4);
+        secondsElapsed = dhcpHeader.substr(8, 2);
+        ByteString flags = Functions::byteToBin(dhcpHeader.substr(10, 2));
+        bootpFlags.broadcast = flags.substr(0, 1);
+        bootpFlags.reserved = flags.substr(1, 7);
+        clientIP = dhcpHeader.substr(12, 4);
+        yourClientIP = dhcpHeader.substr(16, 4);
+        nextServerIP = dhcpHeader.substr(20, 4);
+        relayAgentIP = dhcpHeader.substr(24, 4);
+        clientMacAddress = dhcpHeader.substr(28, 6);
+        clientHardwareAddressPadding = dhcpHeader.substr(34, 10);
+        serverHostName = dhcpHeader.substr(44, 64);
+        bootFile = dhcpHeader.substr(108, 128);
+        magicCookie = dhcpHeader.substr(236, 4);
+        dhcpStart = 240;
+        start = dhcpStart;
+
+        size_t dhcpEnd{};
+        size_t dhcpLength = dhcpHeader.size();
+        for (size_t i = dhcpLength - 1; i >= 0; --i)
+        {
+            if (static_cast<unsigned char>(dhcpHeader[i]) == 0xff)
+            {
+                dhcpEnd = i;
+                break;
+            }
+        }
+
+        while (dhcpStart != dhcpEnd)
+        {
+            DhcpHeader::Option option;
+            option.option = dhcpHeader.substr(dhcpStart, 1);
+            dhcpStart += 1;
+            option.length = dhcpHeader.substr(dhcpStart, 1);
+            dhcpStart += 1;
+            option.value = dhcpHeader.substr(dhcpStart, static_cast<size_t>(Functions::byteToNum(option.length)));
+            size_t dhcpADD = static_cast<size_t>(Functions::byteToNum(option.length));
+            dhcpStart += dhcpADD;
+            start += dhcpADD;
+            options.push_back(option);
+        }
+
+        end = dhcpHeader.substr(dhcpStart, 1);
+        padding = dhcpHeader.substr(dhcpStart + 1);
+        return true;
+    }
 };
 
 /**
@@ -766,6 +1508,72 @@ struct EigrpHeader
     };
 
     std::vector<Option> options{}; ///< Vector of EIGRP options.
+
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString eigrpString;
+        if (version.size() != 1 || opcode.size() != 1 || checksum.size() != 2 || flags.endOfTable.size() != 1 || flags.conditionalRecieve.size() != 1 || flags.init.size() != 1 || flags.restart.size() != 1 ||
+            sequence.size() != 4 || ack.size() != 4 || virtualRouterID.size() != 2 || autonomousSystem.size() != 2) return std::nullopt;
+
+        eigrpString.reserve(20);
+        eigrpString += version;
+        eigrpString += opcode;
+        eigrpString += ByteString(2, 0x00);
+        eigrpString += Functions::binToByte(ByteString("0000000000000000000000000000") + flags.endOfTable + flags.restart + flags.conditionalRecieve + flags.init);
+        eigrpString += sequence;
+        eigrpString += ack;
+        eigrpString += virtualRouterID;
+        eigrpString += autonomousSystem;
+        for (auto opt : options)
+        {
+            eigrpString += opt.option;
+            eigrpString += opt.length;
+            eigrpString += opt.value;
+        }
+            
+        return eigrpString;
+    }
+    bool decapsulate(const ByteString eigrpHeader, size_t& start)
+    {
+        size_t eigrpStart;
+        size_t eigrpEnd;
+        if (eigrpHeader.size() < 20) return false;
+
+        version = eigrpHeader.substr(0, 1);
+        opcode = eigrpHeader.substr(1, 1);
+        checksum = eigrpHeader.substr(2, 2);
+        ByteString flag = Functions::byteToBin(eigrpHeader.substr(4, 4));
+        flags.endOfTable = flag.substr(28, 1);
+        flags.restart = flag.substr(29, 1);
+        flags.conditionalRecieve = flag.substr(30, 1);
+        flags.init = flag.substr(31, 1);
+        sequence = eigrpHeader.substr(8, 4);
+        ack = eigrpHeader.substr(12, 4);
+        virtualRouterID = eigrpHeader.substr(16, 2);
+        autonomousSystem = eigrpHeader.substr(18, 2);
+        eigrpStart = 20;
+        start += eigrpStart;
+        eigrpEnd = eigrpHeader.size();
+
+        while (eigrpStart != eigrpEnd)
+        {
+            EigrpHeader::Option option;
+            if (!validateSize(eigrpStart, 4, eigrpHeader)) return false;
+            option.option = eigrpHeader.substr(eigrpStart, 2);
+            eigrpStart += 2;
+            option.length = eigrpHeader.substr(eigrpStart, 2);
+            eigrpStart += 2;
+            size_t eigrpADD = static_cast<size_t>(Functions::byteToNum(option.length) - 4);
+            if (validateSize(eigrpStart, eigrpADD, eigrpHeader))
+            {
+                option.value = eigrpHeader.substr(eigrpStart, eigrpADD);
+                eigrpStart += eigrpADD;
+                start += eigrpADD;
+                options.push_back(option);
+            }
+        }
+        return true;
+    }
 };
 
 /**
@@ -784,6 +1592,15 @@ namespace OspfPacket
         ByteString checksum{};       ///< OSPF checksum.
         ByteString authType{};       ///< OSPF authentication type.
         ByteString authData{};       ///< OSPF authentication data.
+
+        std::optional<ByteString> encapsulate()
+        {
+            return std::nullopt;
+        }
+        bool decapsulate(const ByteString Header, size_t& start)
+        {
+            return false;
+        }
     };
 
     struct ospfHelloHeader
@@ -811,6 +1628,15 @@ namespace OspfPacket
             ByteString externalRouting{};   ///< External Routing option.
             ByteString multiTopology{};     ///< Multi-Topology Routing option.
         } options;
+
+        std::optional<ByteString> encapsulate()
+        {
+            return std::nullopt;
+        }
+        bool decapsulate(const ByteString Header, size_t& start)
+        {
+            return false;
+        }
     };
 
     struct ospfDescriptionHeader
@@ -845,6 +1671,15 @@ namespace OspfPacket
             ByteString more{};            ///< MORE flag.
             ByteString master{};          ///< MASTER flag.
         } description;
+
+        std::optional<ByteString> encapsulate()
+        {
+            return std::nullopt;
+        }
+        bool decapsulate(const ByteString Header, size_t& start)
+        {
+            return false;
+        }
     };
 
     struct ospfRequest
@@ -852,6 +1687,15 @@ namespace OspfPacket
         ByteString lsType{};           ///< Link State Type.
         ByteString linkStatID{};       ///< Link State ID.
         ByteString advertisingRouter{}; ///< Advertising Router.
+
+        std::optional<ByteString> encapsulate()
+        {
+            return std::nullopt;
+        }
+        bool decapsulate(const ByteString Header, size_t& start)
+        {
+            return false;
+        }
     };
 
     struct ospfLLSHeader
@@ -859,6 +1703,15 @@ namespace OspfPacket
         ByteString checksum{};     ///< OSPF Link-Layer Signaling checksum.
         ByteString dataLength{};   ///< OSPF Link-Layer Signaling data length.
         ByteString options{};      ///< OSPF Link-Layer Signaling options.
+
+        std::optional<ByteString> encapsulate()
+        {
+            return std::nullopt;
+        }
+        bool decapsulate(const ByteString Header, size_t& start)
+        {
+            return false;
+        }
     };
 
     struct LSA
@@ -887,12 +1740,30 @@ namespace OspfPacket
             ByteString externalRouting{};   ///< External Routing option.
             ByteString multiTopology{};     ///< Multi-Topology Routing option.
         } options;
+
+        std::optional<ByteString> encapsulate()
+        {
+            return std::nullopt;
+        }
+        bool decapsulate(const ByteString Header, size_t& start)
+        {
+            return false;
+        }
     };
 
     struct ospfUpdateheader
     {
         ByteString numOfLsa{}; ///< Number of LSAs in the Update.
         std::vector<LSA> lsa{}; ///< Vector of LSAs.
+
+        std::optional<ByteString> encapsulate()
+        {
+            return std::nullopt;
+        }
+        bool decapsulate(const ByteString Header, size_t& start)
+        {
+            return false;
+        }
     };
 }
 
@@ -903,7 +1774,31 @@ namespace OspfPacket
 struct SyslogHeader {
     ByteString PRI{};      ///< Priority value.
     ByteString message{};  ///< Syslog message content.
+
+    std::optional<ByteString> encapsulate()
+    {
+        return std::nullopt;
+    }
+    bool decapsulate(const ByteString syslogHeader, size_t& start)
+    {
+        return false;
+    }
 };
+
+// Layer 2 Variants
+using Layer2Variant = std::variant<EthernetHeader, PppHeader, FrameHeader>;
+
+// Layer 2.5 Variants
+using Layer2_5Variant = std::variant<ArpHeader, MplsHeader, VlanHeader, LldpHeader>;
+
+// Layer 3 Variants
+using Layer3Variant = std::variant<IPv4Header, IPv6Header, GreHeade, AhHeader, EspHeader, IcmpHeader, IcmpV6Header, IgmpHeader>;
+
+// Layer 4 Variants
+using Layer4Variant = std::variant<TcpHeader, UdpHeader, EigrpHeader>;
+
+// Layer 5 Variants
+using Layer5Variant = std::variant<DhcpHeader>;
 
 /**
  * @struct PacketInfo
@@ -911,11 +1806,11 @@ struct SyslogHeader {
  */
 struct PacketInfo
 {
-    std::vector<std::any> Layer2{};    ///< Vector of Layer 2 headers (e.g., Ethernet, PPP).
-    std::vector<std::any> Layer2_5{};  ///< Vector of Layer 2.5 headers (e.g., ARP, MPLS, VLAN, LLDP).
-    std::vector<std::any> Layer3{};    ///< Vector of Layer 3 headers (e.g., IPv4, IPv6, GRE, AH, ESP, ICMP, IGMP, EIGRP).
-    std::vector<std::any> Layer4{};    ///< Vector of Layer 4 headers (e.g., TCP, UDP).
-    std::vector<std::any> Layer5{};    ///< Vector of Layer 5 headers (e.g., DHCP).
+    std::vector<Layer2Variant> Layer2{};    ///< Vector of Layer 2 headers (e.g., Ethernet, PPP).
+    std::vector<Layer2_5Variant> Layer2_5{};  ///< Vector of Layer 2.5 headers (e.g., ARP, MPLS, VLAN, LLDP).
+    std::vector<Layer3Variant> Layer3{};    ///< Vector of Layer 3 headers (e.g., IPv4, IPv6, GRE, AH, ESP, ICMP, IGMP, EIGRP).
+    std::vector<Layer4Variant> Layer4{};    ///< Vector of Layer 4 headers (e.g., TCP, UDP).
+    std::vector<Layer5Variant> Layer5{};    ///< Vector of Layer 5 headers (e.g., DHCP).
 };
 
 /**

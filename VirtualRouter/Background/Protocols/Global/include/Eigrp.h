@@ -535,7 +535,7 @@ namespace Protocol
          * @param eigrpPacket Pointer to the received EIGRP packet header.
          * @param neighborIp IP address of the neighbor that sent the packet.
          */
-        void processPacket(EigrpHeader* eigrpPacket, const ByteString neighborIp);
+        void processPacket(const EigrpHeader* eigrpPacket, const ByteString neighborIp);
 
         /**
          * @brief Initializes a neighbor's information.
@@ -578,7 +578,7 @@ namespace Protocol
          * @param receivedUpdate Pointer to the received Update packet header.
          * @param neighborIp IP address of the neighbor.
          */
-        void processUpdate(EigrpHeader* receivedUpdate, const ByteString neighborIp);
+        void processUpdate(const EigrpHeader* receivedUpdate, const ByteString neighborIp);
 
         /**
          * @brief Processes buffered Update packets for a neighbor.

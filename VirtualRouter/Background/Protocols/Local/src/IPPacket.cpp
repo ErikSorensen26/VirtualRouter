@@ -38,7 +38,7 @@ namespace Protocol
                 ip.fragmentFlag.reserved = "0";
                 ip.fragmentFlag.fragment = "0";
                 ip.fragmentFlag.moreFragment = "0";
-                ip.fragmentFlag.fragment = "0000000000000";
+                ip.fragmentFlag.fragmentOffset = "0000000000000";
                 ip.TTL = ByteString(1, 0x02);
                 ip.protocol = Variable::IP::eigrp;
                 ip.checksum = ByteString(2, 0x00);

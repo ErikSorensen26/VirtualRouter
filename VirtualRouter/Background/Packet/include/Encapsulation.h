@@ -6,6 +6,7 @@
 #include <Checksums.h>
 #include <ByteString.hpp>
 #include <Process.h>
+#include <optional>
 
 /**
  * @file Encapsulation.cpp
@@ -25,6 +26,6 @@
  * @param encapsulated A `ByteString` representing the encapsulated payload (e.g., application data).
  * @return A `ByteString` containing the fully encapsulated and formatted packet ready for transmission.
  */
-ByteString encapsulate(PacketInfo& packet, ByteString encapsulated = "");
+std::optional<ByteString> encapsulate(PacketInfo& packet, ByteString encapsulated = "");
 
 #endif // ENCAPSULATION_H

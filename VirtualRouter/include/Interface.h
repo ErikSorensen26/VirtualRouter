@@ -124,7 +124,7 @@ public:
      * @param interfaceId The Identifier for the interface
      * @param debug Flag to enable or disable debug mode.
      */
-    Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, uint8_t interfaceId, bool debug);
+    Interface(InterfaceType interfaceType = InterfaceType::UNDEFINED, std::string outInterface = "lo", const size_t inQueSiz = 100, const size_t outQueSiz = 100, std::string mac = "010203040506", uint8_t interfaceId = 0, bool debug = false);
 
     /**
      * @brief Destructs the Interface object.

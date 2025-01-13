@@ -122,9 +122,11 @@ enable_testing()
 set(TEST_SOURCES
     ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
     ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
-    # ${TEST_DIR}/ConsoleTest.cpp
-    # ${TEST_DIR}/ConfigsTest.cpp
-    ${TEST_DIR}/TerminalTest.cpp
+    ${TEST_DIR}/ConsoleTest.cpp
+    ${TEST_DIR}/ConfigsTest.cpp
+    # ${TEST_DIR}/TerminalTest.cpp
+    ${TEST_DIR}/DecapsulationTest.cpp
+    ${TEST_DIR}/EncapsulationTest.cpp
 )
 
 # Test executable

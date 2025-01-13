@@ -1,5 +1,5 @@
+// CAN USE PATTERNA AS INPUT
 #include <Terminal.h>
-#include <fstream>
 #include <regex>
 
 #include <X11/Xlib.h>
@@ -24,7 +24,7 @@ void Terminal::initTerminal()
 {
     initConsole();
     // Output a message to indicate terminal initialization
-    std::cout << "Initializing Terminal..." << std::endl;
+    iConsole->print("Initializing Terminal...\n");
 
     // Initialize default error and carriage return commands
     errorCommand.name = "<error>";
@@ -126,7 +126,7 @@ bool Terminal::handleInput(std::string test)
     if (userCommand == "CRT-Z" && currentMode != mode.userExec) {
         if (!changeMode(mode.privilegedExec, true))
         {
-            std::cout << std::endl;
+            iConsole->print("\n");
             return false;
         }
     }
@@ -135,17 +135,18 @@ bool Terminal::handleInput(std::string test)
     initializeProcessingState();
     if (!executeCommand(userCommand))
     {
-        std::cout << std::endl;
+        iConsole->print("\n");
         return false;
     }
 
     // Move to the next line after command execution
-    std::cout << std::endl;
+    iConsole->print("\n");
     return true;
 }
 
 void Terminal::initializeProcessingState()
 {
+    previousMatch.clear();
     currentDirectory         = workingDirectory;
     isNextWordHelpRequested  = false;
     isRunning                = true;
@@ -156,6 +157,7 @@ void Terminal::initializeProcessingState()
     attemptingGlobalCommand  = false;
     isGlobalCommandExecution = false;
     isCommandValid           = false;
+    isCommandInvalid         = false;
 }
 
 bool Terminal::detectHelpTriggers(const std::vector<std::string>& parsedWords)
@@ -273,7 +275,7 @@ bool Terminal::handleHelpQuestion(const std::string& word, std::vector<Com>& pre
     {
         if ((word == "?") && isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested)
         {
-            nextLine = inputCommand;
+            nextLine = inputCommand.substr(0, inputCommand.size());
         }
         return false;
     }
@@ -576,6 +578,7 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
 
     // Parse the command
     std::vector<std::string> parsedWords = splitIntoWords(inputCommand);
+    if (parsedWords.empty()) return "";
 
     std::vector<Com> previousCommandList;
     std::string formattedOldCommand, lastProcessedWord, fullyFormattedCommand, volatileCommand;
@@ -596,6 +599,7 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
 
     if (isGlobalCommand(parsedWords[0]) && !isMatchSuccessful)
     {
+        isCommandValid = true;
         return parsedWords[0];
     }
 
@@ -627,9 +631,17 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
     // Check if command is incomplete
     if (!isCommandValid && !isHelpModeActive && !isPatternMatchEnd && !isLineBasedInput && !isCommandInvalid && !isGlobalCommandExecution && isRunning)
     {
-        isRunning = false;
-        iConsole->print("\nIncomplete Command");
-        return "";
+        if (previousCommandList.size() > 1)
+        {
+            handleAmbiguousInputMarker(getLastWord(inputCommand));
+            return "";
+        }
+        else
+        {
+            isRunning = false;
+            iConsole->print("\nIncomplete Command");
+            return "";
+        }
     }
 
     isCommandInvalid = false;
@@ -668,7 +680,7 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
     int matchCount = 0;
     for (const json& command : currentCommandDirectory) 
     {
-        if (command.is_object())
+        if (command.is_object() && command.contains("name") && command.contains("description"))
         {
             Com commandData;
             commandData.name = command["name"];
@@ -686,7 +698,7 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
                     endOfCommand = true;
                 }
             } 
-            else if (commandName.size() >= userInput.size()) 
+            else if (!isVolatile(commandName) && commandName.size() >= userInput.size())
             {
                 if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), Functions::lowerCase(commandName).begin()) && !isExactMatch) 
                 {
@@ -915,8 +927,58 @@ std::string Terminal::trimString(std::string str)
 
 bool Terminal::matchInputPattern(const std::string &userInput, const std::string &expectedPattern)
 {
+    if (previousMatch.empty())
+    {
+        return false;
+    }
+
     if (expectedPattern == "WORD" && userInput != "?" && userInput != "vk_tab")
     {
+        // Specific validations based on previousMatch
+        if (previousMatch == "hostname") {
+            if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9]([A-Za-z0-9\\-\\.]*[A-Za-z0-9])?$"))) {
+                return false; // Invalid hostname
+            }
+        } 
+        else if (previousMatch == "name" || previousMatch == "vrf" || previousMatch == "route-map" || previousMatch == "policy-map" || 
+                 previousMatch == "group" || previousMatch == "class" || previousMatch == "pool" || previousMatch == "context" || 
+                 previousMatch == "vdpn-group") {
+            if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9\\-]+$"))) {
+                return false; // Invalid name-like userInputs
+            }
+        } 
+        else if (previousMatch == "password" || previousMatch == "secret" || previousMatch == "key-string" || 
+                 previousMatch == "encryption type") {
+            if (!std::regex_match(userInput, std::regex("^[ -~]+$"))) {
+                return false; // Invalid password/secret
+            }
+        } 
+        else if (previousMatch == "input" || previousMatch == "output") {
+            if (!std::regex_match(userInput, std::regex("^[A-Za-z]+[0-9\\/\\:]+$"))) {
+                return false; // Invalid interface
+            }
+        } 
+        else if (previousMatch == "7" || previousMatch == "5") {
+            if (!std::regex_match(userInput, std::regex("^[0-9]+$"))) {
+                return false; // Invalid numeric value
+            }
+        } 
+        else if (previousMatch == "filename" || previousMatch == "flash" || previousMatch == "tftp" || previousMatch == "dir" || previousMatch == "view") {
+            if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9_\\-\\.\\/]+$"))) {
+                return false; // Invalid filename
+            }
+        } 
+        else if (previousMatch == "community" || previousMatch == "as number") {
+            if (!std::regex_match(userInput, std::regex("^[0-9]+:[0-9]+$"))) {
+                return false; // Invalid community or AS number
+            }
+        }
+        else if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9_\\-\\.\\/]+$"))) {
+            return false; // Invalid general WORD
+        }
+
+        // ==========================================
+
         currentPattern = expectedPattern;
         isPatternMatching = true;
         return true;
@@ -985,9 +1047,9 @@ bool Terminal::matchInputPattern(const std::string &userInput, const std::string
         }
     }
 
-    if (expectedPattern[0] == '<')
+    if (expectedPattern[0] == '<' && expectedPattern != "<cr>")
     {
-        int min, max;
+        uint32_t min, max;
         sscanf(expectedPattern.c_str(), "<%d-%d>", &min, &max);
         if (isNumeric(userInput))
         {
@@ -1129,59 +1191,87 @@ std::string Terminal::padWithZeros(const std::string& input)
 
 std::string Terminal::expandIPv6Address(const std::string& ipv6Address) 
 {
+    if (!isIPv6Address(ipv6Address) && !isIPv6AddressWithMask(ipv6Address))
+    {
+        return "";
+    }
+
+    // Seperate any prefix (e.g., /64) from the IP address
     std::string ip, prefix;
-
-    size_t slashPos = ipv6Address.find('/');
-    if (slashPos != std::string::npos) 
     {
-        ip = ipv6Address.substr(0, slashPos);
-        prefix = ipv6Address.substr(slashPos);
-    } 
-    else 
-    {
-        ip = ipv6Address;
+        size_t slashPos = ipv6Address.find('/');
+        if (slashPos != std::string::npos)
+        {
+            ip = ipv6Address.substr(0, slashPos);
+            prefix = ipv6Address.substr(slashPos); // Keeps the '/' + prefix
+        }
+        else
+        {
+            ip = ipv6Address;
+        }
     }
 
-    std::string expandedIP = ip;
-    size_t doubleColonPos = expandedIP.find("::");
-    if (doubleColonPos != std::string::npos) 
-    {
-        std::vector<std::string> frontSegments = tokenize(expandedIP.substr(0, doubleColonPos), ':');
-        std::vector<std::string> backSegments = tokenize(expandedIP.substr(doubleColonPos + 2), ':');
+    // Check for '::' (indicates compressed zero block)
+    size_t doubleColonPos = ip.find("::");
+    std::string expandedIP;
 
+    if (doubleColonPos != std::string::npos)
+    {
+        // Split into front/back around the "::"
+        std::vector<std::string> frontSegments = tokenize(ip.substr(0, doubleColonPos), ':');
+        std::vector<std::string> backSegments = tokenize(ip.substr(doubleColonPos + 2), ':');
+
+        // Calculate how many hextets are missing
+        // (IPv6 has exactly 8 hextets)
         size_t hextetCount = frontSegments.size() + backSegments.size();
-        std::string zeroSegments((8 - hextetCount), '0');
-        expandedIP.clear();
+        size_t missingCount = 8 - hextetCount;
 
-        for (const std::string& segment : frontSegments) 
+        // Combine into one vector
+        std::vector<std::string> allSegments;
+        allSegments.reserve(8);
+
+        // 1. front segments
+        for (auto& seg : frontSegments)
         {
-            expandedIP += padWithZeros(segment) + ":";
+            allSegments.push_back(seg);
         }
-        expandedIP += zeroSegments;
-        for (const std::string& segment : backSegments) 
+        // 2. insert the missing zero segments
+        for (size_t i = 0; i < missingCount; ++i)
         {
-            expandedIP += padWithZeros(segment) + ":";
+            allSegments.push_back("0");
         }
-        if (!expandedIP.empty() && expandedIP.back() == ':') 
+        // 3. back segments
+        for (auto& seg : backSegments)
         {
-            expandedIP.pop_back();
+            allSegments.push_back(seg);
         }
-    } 
-    else 
+
+        // Now pad each segment to 4 hex digites and join them with ':'
+        for (size_t i = 0; i < allSegments.size(); ++i)
+        {
+            expandedIP += padWithZeros(allSegments[i]);
+            if (i < allSegments.size() - 1)
+            {
+                expandedIP += ":";
+            }
+        }
+    }
+    else
     {
-        std::vector<std::string> segments = tokenize(expandedIP, ':');
-        expandedIP.clear();
-        for (const std::string& segment : segments) 
+        std::vector<std::string> segments = tokenize(ip, ':');
+        for (size_t i = 0; i < segments.size(); ++i)
         {
-            expandedIP += padWithZeros(segment) + ":";
-        }
-        if (!expandedIP.empty() && expandedIP.back() == ':') 
-        {
-            expandedIP.pop_back();
+            expandedIP += padWithZeros(segments[i]);
+            if (i < segments.size() - 1)
+            {
+                expandedIP += ":";
+            }
         }
     }
 
-    return expandedIP + prefix;
+    // Append the prefix (e.g., /64) if it exists
+    expandedIP += prefix;
+    return expandedIP;
 }
 
 bool Terminal::isIPv6Address(const std::string& address) 
@@ -1198,7 +1288,7 @@ bool Terminal::isIPv6AddressWithMask(const std::string& addressWithMask)
 
 bool Terminal::isMACAddress(const std::string& macAddress) 
 {
-    std::regex macRegex("^([0-9A-Fa-f]{1,4}[:-]?){6}([0-9A-Fa-f]{1,4})$");
+    std::regex macRegex("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$");
     return std::regex_match(macAddress, macRegex);
 }
 

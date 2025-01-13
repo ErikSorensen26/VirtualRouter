@@ -310,7 +310,7 @@ protected:
      * @param input The current input string.
      * @param startPos The starting position of the rewrite
      */
-    void rewriteTail(const std::string& input, size_t startPos);
+    void rewriteTail(const std::string& input, size_t startPos, bool backspace = false);
 
     /**
      * @brief Handles special key inputs such as Enter, Tab, Backspace, etc.

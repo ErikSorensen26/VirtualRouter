@@ -1880,7 +1880,13 @@
             "subcommands": [
                 {
                     "description": "Ping destination address or hostname",
-                    "name": "WORD"
+                    "name": "WORD",
+                    "subcommands": [
+                        {
+                            "description": "",
+                            "name": "<cr>"
+                        }
+                    ]
                 },
                 {
                     "description": "IP echo",
@@ -14724,7 +14730,13 @@
                     "subcommands": [
                         {
                             "description": "Dialer interface number",
-                            "name": "<0-1199>"
+                            "name": "<0-1199>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14734,7 +14746,13 @@
                     "subcommands": [
                         {
                             "description": "Dialer interface number",
-                            "name": "<0-1199>"
+                            "name": "<0-1199>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14744,7 +14762,13 @@
                     "subcommands": [
                         {
                             "description": "Ethernet interface number",
-                            "name": "<0-9>"
+                            "name": "<0-9>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14754,7 +14778,13 @@
                     "subcommands": [
                         {
                             "description": "FastEthernet interface number",
-                            "name": "<0-9>"
+                            "name": "<0-9>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14764,7 +14794,13 @@
                     "subcommands": [
                         {
                             "description": "GigabitEthernet interface number",
-                            "name": "<0-9>"
+                            "name": "<0-9>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14774,7 +14810,13 @@
                     "subcommands": [
                         {
                             "description": "Loopback interface number",
-                            "name": "<0-2147483647>"
+                            "name": "<0-2147483647>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14784,7 +14826,13 @@
                     "subcommands": [
                         {
                             "description": "Port-channel interface number",
-                            "name": "<1-48>"
+                            "name": "<1-48>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14794,7 +14842,13 @@
                     "subcommands": [
                         {
                             "description": "Serial interface number",
-                            "name": "<0-9>"
+                            "name": "<0-9>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14804,7 +14858,13 @@
                     "subcommands": [
                         {
                             "description": "Tunnel interface number",
-                            "name": "<0-2147483647>"
+                            "name": "<0-2147483647>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14814,7 +14874,13 @@
                     "subcommands": [
                         {
                             "description": "Virtual-Template interface number",
-                            "name": "<1-200>"
+                            "name": "<1-200>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -14824,7 +14890,13 @@
                     "subcommands": [
                         {
                             "description": "Vlan interface number",
-                            "name": "<1-4094>"
+                            "name": "<1-4094>",
+                            "subcommands": [
+                                {
+                                    "description": "",
+                                    "name": "<cr>"
+                                }
+                            ]
                         }
                     ]
                 },
@@ -16934,7 +17006,7 @@
                                     "subcommands": [
                                         {
                                             "description": "",
-                                            "name": "WORD"
+                                            "name": "<cr>"
                                         }
                                     ]
                                 }
