@@ -10,9 +10,11 @@
 #include <mutex>
 #include <chrono>
 #include <unordered_map>
+#include <condition_variable>
 
 // Declares interface class
 class Interface;
+class ArpTest;
 
 namespace Protocol {
     struct ArpCacheEntry {
@@ -23,10 +25,11 @@ namespace Protocol {
     // ARP class for handling ARP requests and replies
     class Arp {
     public:
+        friend class ::ArpTest;
 
         // Constructor that takes a reference to the current interface
         Arp(Interface& CurrentInterface);
-        ~Arp() = default;
+        ~Arp();
     
         // Method to equeue a packet for ARP resolution and send once resolved
         void resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend);
@@ -41,8 +44,9 @@ namespace Protocol {
         void sendReply(ByteString targetMac, ByteString targetIp);
         PacketInfo arpRequest(ByteString& currentMac, ByteString& ip, ByteString targetIp); 
         void sendRequest(const ByteString& targetIp);
+        void shutdown();
 
-    private:
+    protected:
         
         // ARP cache: Maps IP to MAC and expiry time
         std::unordered_map<ByteString, ArpCacheEntry, std::hash<ByteString>, std::equal_to<ByteString>> arpCache;
@@ -59,6 +63,14 @@ namespace Protocol {
         // Queues of packets waiting for ARP resolution, keyed by IP
         std::unordered_map<ByteString, std::queue<PacketInfo>, std::hash<ByteString>, std::equal_to<ByteString>> packetQueuePerIp;
         std::mutex packetQueueMutex;
+
+        // Current threads being used
+        std::vector<std::thread> threads;
+        std::atomic<bool> running;
+
+        // Thread functions
+        void arpCacheCleanupThread();
+        std::condition_variable threadCV;
 
         // Reference to the Interface for 
         Interface* currentInterface;

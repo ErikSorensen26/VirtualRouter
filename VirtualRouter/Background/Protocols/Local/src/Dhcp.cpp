@@ -54,7 +54,7 @@ namespace Protocol {
                             std::any header = dhcpOffer.Layer5[0];
 
                             // Check and extract DHCP header
-                            if (header.has_value() && header.type() == typeid(DhcpHeader)) 
+                            if (header.has_value() && std::any_cast<DhcpHeader>(&header))
                             {
                                 DhcpHeader* dhcp = std::any_cast<DhcpHeader>(&header); 
                                 if (dhcp) 
@@ -80,7 +80,7 @@ namespace Protocol {
                 if (!dhcpAck.Layer2.empty())
                 { 
                     std::any header = dhcpOffer.Layer5[0]; 
-                    if (header.has_value() && header.type() == typeid(DhcpHeader)) 
+                    if (header.has_value() && std::any_cast<DhcpHeader>(&header))
                     {
                         DhcpHeader* dhcp = std::any_cast<DhcpHeader>(&header); 
                         if (dhcp) 

@@ -8,6 +8,9 @@
 #include <string>
 #include <Functions.h>
 #include <ByteString.hpp>
+#include <array>
+
+enum class HeaderType;
 
 /**
  * @namespace Checksum
@@ -18,6 +21,7 @@
  */
 namespace Checksum
 {
+    std::vector<uint8_t> base256StringToBytes(const std::string &base256Str);
     /**
      * @brief Converts a base256-encoded string to a vector of bytes.
      *
@@ -43,34 +47,41 @@ namespace Checksum
     ByteString crc32(const ByteString &data);
 
     /**
-     * @brief Calculates a generic 16-bit checksum over the given data.
+     * @brief Calculates a checksum over the given data.
      *
-     * This function computes a simple checksum by summing all 16-bit words in the data.
-     * If the data length is odd, it pads the last byte with zero.
-     *
-     * @param data Pointer to the data buffer consisting of 16-bit words.
-     * @param length The length of the data in bytes.
-     * @return std::string A hexadecimal string representation of the calculated checksum.
+     * @param data The input ByteString containing data bytes.
+     * @param checksumSizeBytes The size of the checksum in bytes (e.g., 1, 2, or 4).
+     * @return ByteString containing the checksum bytes. If checksumSizeBytes is unsupported,
+     *         returns a ByteString filled with zeros of the specified size.
      */
-    std::string calculateChecksum(const uint16_t *data, size_t length);
+    ByteString calculateChecksum(const ByteString& data, size_t checksumSizeBytes);
 
     /**
-     * @brief Calculates a protocol-specific checksum and updates the given data string.
+     * @brief Inserts a calculated checksum into a specific location within a header.
      *
-     * This function prepares and calculates a checksum for a specific protocol header.
-     * It converts the input string to bytes, calculates the checksum, optionally swaps bytes,
-     * and replaces the checksum in the original data string.
-     *
-     * @param data_str The original ByteString data containing the protocol header.
-     * @param startIndex The starting index in the data string where the checksum is located.
-     * @param headerlength The length of the protocol header.
-     * @param index The position within the header where the checksum should be inserted.
-     * @param swap (Optional) Boolean flag indicating whether to swap bytes in the checksum. Defaults to false.
-     * @return ByteString The updated ByteString with the calculated checksum inserted.
-     *
-     * @note Ensure that the startIndex and index parameters correctly reference the checksum location within the data string.
+     * @param pseudoHeader Optional pseudo-header ByteString to include in the checksum calculation.
+     * @param header The header ByteString where the checksum will be inserted.
+     * @param checksumStartIndex The byte index in the header where the checksum should be placed.
+     * @param checksumSize The size (in bytes) of the checksum.
+     * @param swap Optional flag indicating whether to swap the byte order of the checksum before insertion.
+     * @return A new ByteString representing the header with the checksum inserted.
      */
-    ByteString calculateProtocolChecksum(const ByteString &data_str, size_t startIndex, size_t headerlength, size_t index, bool swap = false);
+    void calculateProtocolChecksum(const ByteString pseudoHeader, ByteString& header, size_t checksumStartIndex, size_t checksumSize, bool swap = false);
+
+    /**
+     * @brief Calculates a checksum over a range of headers and inserts it into a designated header.
+     *
+     * @param headers A vector of headers indexed by HeaderType enum.
+     * @param pseudoHeader Optional pseudo-header ByteString to include in the checksum calculation.
+     * @param payload The payload ByteString to include in the checksum calculation.
+     * @param checksumHeaderType The HeaderType enum value indicating which header the checksum should be inserted into.
+     * @param checksumStartIndex The byte index in the checksum header where the checksum should be placed.
+     * @param startHeaderType The HeaderType enum value indicating where to start the checksum calculation.
+     * @param checksumSize The size (in bytes) of the checksum.
+     * @param swap Optional flag indicating whether to swap the byte order of the checksum before insertion.
+     * @return An optional ByteString containing the final packet with the checksum inserted, or std::nullopt on error.
+     */
+    void calculateProtocolChecksum(std::optional<ByteString>(&headers)[], const ByteString& pseudoHeader, const ByteString& payload, HeaderType startHeaderType, size_t checksumStartIndex, size_t checksumSize, bool swap = false);
 }
 
 #endif // CHECKSUMS_H

@@ -171,7 +171,7 @@ namespace Functions {
      * @param size The desired size of the output (default is 0, meaning no adjustment).
      * @return A hexadecimal string representation.
      */
-    ByteString numToHex(uint32_t num, size_t size = 0);
+    ByteString numToHex(size_t num, size_t size = 0);
 
     /**
      * @brief Converts an integer to a binary string.
@@ -195,7 +195,7 @@ namespace Functions {
      * @param size The desired size of the output (default is 0, meaning no adjustment).
      * @return A byte string representation.
      */
-    ByteString numToByte(uint32_t num, size_t size = 0);
+    ByteString numToByte(size_t num, size_t size = 0);
 
     /**
      * @brief Converts an IPv4 address in dot-decimal notation to a byte string.

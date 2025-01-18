@@ -17,7 +17,7 @@ namespace Protocol
                 ip.trafficClass = Functions::numToHex(DSCP, 2);
                 ip.flowLabel = Functions::numToHex(currentInterface.Get()->ipv6.ipv6FlowLabel, 5);
                 ip.payloadLength = ByteString(2, 0x00); // Will be calculated later
-                ip.protocol = Variable::IP::eigrp;
+                ip.protocol = type;
                 ip.hopLimit = Functions::numToByte(hopLimit, 1);
                 ip.sourceAddress = currentInterface.Get()->ipv6.ipAddress;
                 ip.destinationAddress = destIp;
@@ -30,17 +30,17 @@ namespace Protocol
             {
                 std::shared_lock<std::shared_mutex> lock(currentInterface.Get()->ipMutex);
                 IPv4Header ip;
-                ip.version = "4";
-                ip.headerLength = "5";
+                ip.version = ByteString("4", 1);
+                ip.headerLength = ByteString("5", 1);
                 ip.serviceField = Functions::numToByte(DSCP, 1);
                 ip.totalLength = ByteString(2, 0x02);
                 ip.identification = ByteString(2, 0x00);
-                ip.fragmentFlag.reserved = "0";
-                ip.fragmentFlag.fragment = "0";
-                ip.fragmentFlag.moreFragment = "0";
-                ip.fragmentFlag.fragmentOffset = "0000000000000";
-                ip.TTL = ByteString(1, 0x02);
-                ip.protocol = Variable::IP::eigrp;
+                ip.fragmentFlag.reserved = ByteString("0", 1);
+                ip.fragmentFlag.fragment = ByteString("0", 1);
+                ip.fragmentFlag.moreFragment = ByteString("0", 1);
+                ip.fragmentFlag.fragmentOffset = ByteString("0000000000000", 13);
+                ip.TTL = Functions::numToByte(hopLimit, 1);
+                ip.protocol = type;
                 ip.checksum = ByteString(2, 0x00);
                 ip.sourceAddress = currentInterface.Get()->ipv4.ipAddress;
                 ip.destinationAddress = destIp;

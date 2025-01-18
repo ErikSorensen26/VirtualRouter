@@ -4,7 +4,7 @@
 
 namespace Protocol
 {
-    Ethernet::Ethernet(Interface& iface, std::shared_ptr<Arp> arpHandler, ByteString mac)
+    Ethernet::Ethernet(Interface& iface, Arp* arpHandler, ByteString mac)
         : currentInterface(iface), arp(arpHandler), macAddress(mac) {}
 
     bool Ethernet::isMulticast(const ByteString& ip)
@@ -46,7 +46,7 @@ namespace Protocol
             else
             {
                 EthernetHeader eth;
-                eth.destinationMac = "";
+                eth.destinationMac = ByteString("");
                 eth.sourceMac = macAddress;
                 eth.type = type;
                 packet.Layer2.push_back(eth);

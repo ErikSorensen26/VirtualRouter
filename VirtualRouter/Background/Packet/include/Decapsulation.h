@@ -39,10 +39,8 @@ public:
 
     /**
      * @brief Constructs a Packet object without starting processing.
-     *
-     * @param iface Reference to the Interface object associated with the packet.
      */
-    Packet(Interface& iface);
+    Packet(ByteString& packet);
 
     /**
      * @brief Destructor for the Packet class
@@ -67,48 +65,41 @@ public:
 // Inspects the given packet and processes each layer.
 
 protected:
-    Interface &currentInterface;    ///< Reference to the current Interface.
+    Interface* currentInterface;    ///< Reference to the current Interface.
 
     size_t start{0};            ///< Index indicating the current position within the packet data.
     ByteString fullPacket;      ///< Holds the complete packet data for processing.
     bool options;               ///< Boolean flag indicating whether additional options are present.
     bool print = false;         ///< Boolesn flag to control debug printing.
 
-    // Header Initializations
-    std::vector<Layer2Variant> layer2;
-    std::vector<Layer2_5Variant> layer2_5;
-    std::vector<Layer3Variant> layer3;
-    std::vector<Layer4Variant> layer4;
-    std::vector<Layer5Variant> layer5;
-
     // Header search for layer 2
     template <typename HeaderType>
     const HeaderType* getLayer2Header() const {
-        for (const auto& headerVariant : layer2) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
+        for (const auto& headerVariant : packetInfo.Layer2) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
     }
 
     // Header search for layer 2.5
     template <typename HeaderType>
     const HeaderType* getLayer2_5Header() const {
-        for (const auto& headerVariant : layer2_5) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
+        for (const auto& headerVariant : packetInfo.Layer2_5) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
     }
 
     // Header search for layer 3
     template <typename HeaderType>
     const HeaderType* getLayer3Header() const {
-        for (const auto& headerVariant : layer3) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
+        for (const auto& headerVariant : packetInfo.Layer3) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
     }
     
     // Header search for layer 4
     template <typename HeaderType>
     const HeaderType* getLayer4Header() const {
-        for (const auto& headerVariant : layer4) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }}return nullptr;
+        for (const auto& headerVariant : packetInfo.Layer4) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }}return nullptr;
     }
 
     // Header search for layer 5
     template <typename HeaderType>
     const HeaderType* getLayer5Header() const {
-        for (const auto& headerVariant : layer5) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
+        for (const auto& headerVariant : packetInfo.Layer5) { if (auto ptr = std::get_if<HeaderType>(&headerVariant)) { return ptr; }} return nullptr;
     }
     
     template <typename HeaderType, typename VariantType>
@@ -121,6 +112,10 @@ protected:
         auto it = std::find_if(layer.begin(), layer.end(), [](const VariantType& var) -> bool { return std::holds_alternative<HeaderType>(var); });
         if (it != layer.end()) { return &std::get<HeaderType>(*it); } return nullptr;
     }
+
+    template <typename T>
+    bool processLayer(ByteString& packet, T& decoder, size_t headerSize);
+    ByteString getSlice(size_t length);
 
 
 

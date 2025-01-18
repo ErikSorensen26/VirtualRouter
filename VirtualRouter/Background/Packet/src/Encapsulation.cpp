@@ -1,294 +1,196 @@
 #include <Encapsulation.h>
+#include <type_traits>
+#include <Checksums.h>
+#include <Profiler.hpp>
 
 // Encapsulates packet information into a formatted string.
 std::optional<ByteString> encapsulate(PacketInfo &packet, ByteString encapsulated)
 {
-    ByteString packetString{};
-
-    ByteString currentVrf;
-    std::vector<std::any> data{};
+    //Profiler::getInstance().notify("Encapsulation has begun");
+    bool success = true;
 
     // Strings to accumulate header data.
-    ByteString ethernetString{},
-        pppString{}, arpString{},
-        mplsString{}, vlanString{},
-        lldpString{}, ipv4String{},
-        greString{}, ahString{},
-        espString{}, icmpString{},
-        igmpString{}, tcpString{},
-        udpString{}, dhcpString{},
-        eigrpString{}, ipv6String{},
-        icmpv6String{};
+    std::optional<ByteString> encapsulatedHeaders[static_cast<size_t>(HeaderType::Count)] = { std::nullopt };
+    
+    // Lamda to handle encapsulation and storage
+    auto handleEncapsulation = [&](auto& header) -> bool {
+        HeaderType enumType = mapHeaderToEnum(header);
+        auto encap = header.encapsulate();
+        if (encap.has_value())
+        {
+            encapsulatedHeaders[static_cast<size_t>(enumType)] = std::move(encap.value());
+            return true;
+        }
+        return false;
+    };
 
-    // Process Layer2 headers.
-    for (auto header : packet.Layer2)
+    // Lamda to get sizes
+    auto calculateSize = [&](HeaderType startHeader) -> size_t {
+        size_t headerSize = 0;
+        for (size_t i = static_cast<size_t>(startHeader) + 1; i < static_cast<size_t>(HeaderType::Count); i++)
+        {
+            const auto& header = encapsulatedHeaders[i];
+            if (header) headerSize += header->size();
+        }
+        return headerSize;
+    };
+
+    // Process layer headers in sequence, direct handling based on type
+    auto processLayerHeaders = [&](auto& layerHeaders)
     {
-        if (is_type<EthernetHeader>(header))
+        for (auto& header : layerHeaders)
         {
-            const EthernetHeader &eth = std::any_cast<const EthernetHeader &>(header);
-            auto encap = eth.encapsulate();
-            if (encap.has_value())
+            std::visit([&](auto& hdr)
             {
-                ethernetString = std::move(encap.value());
-            }
-            else return std::nullopt;
+                if (!handleEncapsulation(hdr))
+                {
+                    success = false;
+                }
+            }, header);
         }
-        else if (is_type<PppHeader>(header))
-        {
+    };
 
-            const PppHeader &ppp = std::any_cast<const PppHeader &>(header);
-            auto encap = ppp.encapsulate();
-            if (encap.has_value())
-            {
-                pppString = std::move(encap.value());
-            }
-            //else return std::nullopt;
-        }
-    }
+    processLayerHeaders(packet.Layer2);
+    processLayerHeaders(packet.Layer2_5);
+    processLayerHeaders(packet.Layer3);
+    processLayerHeaders(packet.Layer4);
+    processLayerHeaders(packet.Layer5);
 
-    // Process Layer2.5 headers.
-    for (auto header : packet.Layer2_5)
-    {
-        if (is_type<ArpHeader>(header))
-        {
-            const ArpHeader &arp = std::any_cast<const ArpHeader &>(header);
-            auto encap = arp.encapsulate();
-            if (encap.has_value())
-            {
-                arpString = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<MplsHeader>(header))
-        {
-            const MplsHeader &mpls = std::any_cast<const MplsHeader &>(header);
-            auto encap = mpls.encapsulate();
-            if (encap.has_value())
-            {
-                mplsString = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<VlanHeader>(header))
-        {
-            const VlanHeader &vlan = std::any_cast<const VlanHeader &>(header);
-            auto encap = vlan.encapsulate();
-            if (encap.has_value())
-            {
-                vlanString = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<LldpHeader>(header))
-        {
-            const LldpHeader &lldp = std::any_cast<const LldpHeader &>(header);
-            // No processing for LLDP in this implementation.
-        }
-    }
-
-    // Process Layer3 headers.
-    for (auto header : packet.Layer3)
-    {
-        if (is_type<IPv4Header>(header))
-        {
-            const IPv4Header &ipv4 = std::any_cast<const IPv4Header &>(header);
-            auto encap = ipv4.encapsulate();
-            if (encap.has_value())
-            {
-                ipv4String = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<IPv6Header>(header))
-        {
-            const IPv6Header& ipv6 = std::any_cast<const IPv6Header &>(header);
-            auto encap = ipv6.encapsulate();
-            if (encap.has_value())
-            {
-                ipv6String = std::move(encap.value());
-            }
-            //else return std::nullopt;
-        }
-        else if (is_type<GreHeade>(header))
-        {
-            const GreHeade &gre = std::any_cast<const GreHeade &>(header);
-            auto encap = gre.encapsulate();
-            if (encap.has_value())
-            {
-                greString = std::move(encap.value());
-            }
-            //else return std::nullopt;
-        }
-        else if (is_type<AhHeader>(header))
-        {
-            const AhHeader &ah = std::any_cast<const AhHeader &>(header);
-            auto encap = ah.encapsulate();
-            if (encap.has_value())
-            {
-                ahString = std::move(encap.value());
-            }
-            //else return std::nullopt;
-        }
-        else if (is_type<EspHeader>(header))
-        {
-            const EspHeader &esp = std::any_cast<const EspHeader &>(header);
-            auto encap = esp.encapsulate();
-            if (encap.has_value())
-            {
-                espString = std::move(encap.value());
-            }
-            //else return std::nullopt;
-        }
-        else if (is_type<IcmpHeader>(header))
-        {
-            const IcmpHeader &icmp = std::any_cast<const IcmpHeader &>(header);
-            auto encap = icmp.encapsulate();
-            if (encap.has_value())
-            {
-                icmpString = Checksum::calculateProtocolChecksum(encap.value() + encapsulated, 0, encap.value().size(), 2);
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<IcmpV6Header>(header))
-        {
-            const IcmpV6Header &icmpv6 = std::any_cast<const IcmpV6Header &>(header);
-            auto encap = icmpv6.encapsulate();
-            if (encap.has_value())
-            {
-                icmpv6String = Checksum::calculateProtocolChecksum(encap.value() + encapsulated, 0, encap.value().size(), 2);
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<IgmpHeader>(header))
-        {
-            const IgmpHeader &igmp = std::any_cast<const IgmpHeader &>(header);
-            auto encap = igmp.encapsulate();
-            if (encap.has_value())
-            {
-                igmpString = Checksum::calculateProtocolChecksum(encap.value(), 0, encap.value().size(), 2);
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<EigrpHeader>(header))
-        {
-            const EigrpHeader &eigrp = std::any_cast<const EigrpHeader &>(header);
-            auto encap = eigrp.encapsulate();
-            if (encap.has_value())
-            {
-                eigrpString = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-    }
-
-    // Process Layer4 headers.
-    for (auto header : packet.Layer4)
-    {
-        if (is_type<TcpHeader>(header))
-        {
-            const TcpHeader &tcp = std::any_cast<const TcpHeader &>(header);
-            auto encap = tcp.encapsulate();
-            if (encap.has_value())
-            {
-                tcpString = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-        else if (is_type<UdpHeader>(header))
-        {
-            const UdpHeader &udp = std::any_cast<const UdpHeader &>(header);
-            auto encap = udp.encapsulate();
-            if (encap.has_value())
-            {
-                udpString = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-    }
-
-    // Process Layer5 headers.
-    for (auto header : packet.Layer5)
-    {
-        if (is_type<DhcpHeader>(header))
-        {
-            const DhcpHeader &dhcp = std::any_cast<const DhcpHeader &>(header);
-            auto encap = dhcp.encapsulate();
-            if (encap.has_value())
-            {
-                dhcpString = std::move(encap.value());
-            }
-            else return std::nullopt;
-        }
-    }
-    ByteString applicationPayload = dhcpString + encapsulated;
+    if (!success) return std::nullopt;
 
     // ------------------Final-Calculations-----------------------
 
-    if (!ipv4String.empty())
+    //Profiler::getInstance().notify("Checksum Calculations have started");
+
+    auto processIpv4Headers = [&](ByteString& ipv4)
     {
-        // Calculate the total size of the IPv4 payload including headers and application payload.
-        ByteString ipv4Size = Functions::numToByte(static_cast<unsigned int>(ipv4String.size() + udpString.size() + icmpString.size() + tcpString.size() + eigrpString.size() + applicationPayload.size()));
-        while (ipv4Size.size() < 2)
+        if (ipv4.size())
         {
-            ipv4Size = ByteString(1, 0x00) + ipv4Size;
+            ByteString ipv4Size = Functions::numToByte(ipv4.size() + calculateSize(HeaderType::IPv4) + encapsulated.size(), 2);
+            ipv4.replace(2, 2, ipv4Size);
+            Checksum::calculateProtocolChecksum("", ipv4, 10, 2);
         }
-        ipv4String = ipv4String.replace(2, 2, ipv4Size);
+    };
 
-        // Recalculate the IPv4 checksum.
-        ipv4String = Checksum::calculateProtocolChecksum(ipv4String, 0, ipv4String.size(), 10);
-    }
-
-    if (!ipv4String.empty() && !tcpString.empty())
+    // Process IPv4 headers, TCP/UDP checksums
+    if (encapsulatedHeaders[static_cast<size_t>(HeaderType::IPv4)].has_value())
     {
-        if (tcpString.size() % 4 != 0) return std::nullopt;
+        ByteString& ipv4 = encapsulatedHeaders[static_cast<size_t>(HeaderType::IPv4)].value();
+        processIpv4Headers(ipv4);
 
-        // Calculate the size of the TCP header.
-        tcpString = tcpString.toString().replace(12, 1, Functions::binToByte(Functions::numToBin(tcpString.size() / 4, 4) + "0000").toString());
+        // Process TCP, UDP, EIGRP, ect
+        if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Tcp)].has_value())
+        {
+            ByteString& tcp = encapsulatedHeaders[static_cast<size_t>(HeaderType::Tcp)].value();
+            if (tcp.size() % 4 != 0) return std::nullopt;
 
-        // Calculate the TCP data length by including the application payload.
-        std::ostringstream oss;
-        oss << std::setw(4) << std::setfill('0') << std::hex << Functions::binToNum((Functions::byteToBin(tcpString.substr(12, 1))).substr(0, 4)) * 4 + applicationPayload.size();
+            // Calculate the TCP offset
+            uint8_t dataOffset = static_cast<uint8_t>(tcp.size() / 4);
+            tcp[12] = (tcp[12] & 0x0F) | (dataOffset << 4);
 
-        // Construct the pseudo header for TCP checksum calculation.
-        ByteString pseudoHeader = ipv4String.substr(12, 8) + ByteString(1, 0x00) + ipv4String.substr(9, 1) + Functions::hexToByte(oss.str());
-        ByteString checksumStr = pseudoHeader + tcpString + applicationPayload;
-
-        // Recalculate the TCP checksum.
-        tcpString = Checksum::calculateProtocolChecksum(checksumStr, 12, tcpString.size(), 16);
+            // Calculate the pseudo header for TCP
+            ByteString tcpSize = Functions::numToByte(tcp.size() + calculateSize(HeaderType::Tcp) + encapsulated.size(), 2);
+            ByteString pseudoHeader = ipv4.substr(12, 8) + ByteString(1, 0x00) + ipv4.substr(9, 1) + tcpSize;
+            Checksum::calculateProtocolChecksum(encapsulatedHeaders, pseudoHeader, encapsulated, HeaderType::Tcp, 16, 2);
+        }
+        else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Udp)].has_value())
+        {
+            ByteString& udp = encapsulatedHeaders[static_cast<size_t>(HeaderType::Udp)].value();
+            ByteString udpSize = Functions::numToByte(udp.size() + calculateSize(HeaderType::Udp) + encapsulated.size(), 2);
+            udp.replace(4, 2, udpSize);
+            ByteString pseudoHeader = ipv4.substr(12, 8) + ByteString(1, 0x00) + ipv4.substr(9, 1) + udpSize;
+            Checksum::calculateProtocolChecksum(encapsulatedHeaders, pseudoHeader, encapsulated, HeaderType::Udp, 6, 2);
+        }
+        else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Eigrp)].has_value())
+        {
+            Checksum::calculateProtocolChecksum("", encapsulatedHeaders[static_cast<size_t>(HeaderType::Eigrp)].value(), 2, 2);
+        }
+        else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Icmp)].has_value())
+        {
+            Checksum::calculateProtocolChecksum(encapsulatedHeaders, "", encapsulated, HeaderType::Icmp, 2, 2);
+        }
+        else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Igmp)].has_value())
+        {
+            Checksum::calculateProtocolChecksum(encapsulatedHeaders, "", encapsulated, HeaderType::Igmp, 2, 2);
+        }
     }
-
-    if (!ipv4String.empty() && !udpString.empty())
+    else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::IPv6)].has_value())
     {
-        // Calculate the size of the UDP header including the application payload.
-        ByteString udpSize = Functions::numToByte(static_cast<unsigned int>(udpString.size() + applicationPayload.size()), 2);
-        udpString = udpString.replace(4, 2, udpSize);
+        ByteString& ipv6 = encapsulatedHeaders[static_cast<size_t>(HeaderType::IPv6)].value();
+        size_t totalSize = calculateSize(HeaderType::IPv6) + encapsulated.size();
+        ByteString ipv6Size = Functions::numToByte(totalSize, 2);
+        ipv6.replace(4, 2, ipv6Size);
 
-        // Construct the pseudo header for UDP checksum calculation.
-        ByteString pseudoHeader = ipv4String.substr(12, 8) + ByteString(1, 0x00) + ipv4String.substr(9, 1) + udpSize;
-        ByteString checksumStr = pseudoHeader + udpString + applicationPayload;
+        // Handle TCP, UDP, EIGRP, ect
+        if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Tcp)].has_value())
+        {
+            ByteString& tcp = encapsulatedHeaders[static_cast<size_t>(HeaderType::Tcp)].value();
+        }
+        else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Udp)].has_value())
+        {
+            ByteString& usp = encapsulatedHeaders[static_cast<size_t>(HeaderType::Udp)].value();
+        }
+        else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Eigrp)])
+        {
+            ByteString& eigrp = encapsulatedHeaders[static_cast<size_t>(HeaderType::Eigrp)].value();
+        }
+        else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Icmpv6)].has_value())
+        {
+            ByteString& icmpv6 = encapsulatedHeaders[static_cast<size_t>(HeaderType::Icmpv6)].value();
+            uint16_t icmpv6Length = static_cast<uint16_t>(icmpv6.size() + encapsulated.size());
 
-        // Recalculate the UDP checksum.
-        udpString = Checksum::calculateProtocolChecksum(checksumStr, 12, 8, 6);
+            // Construct the Pseudo-Header for ICMPv6
+            ByteString pseudoHeader = ipv6.substr(8, 32); // IPv6 Addresses
+
+            // Upper-Layer Packet Length (4 bytes) in big-endian
+            pseudoHeader.push_back(static_cast<ByteString::byte>((icmpv6Length >> 24) & 0xFF));
+            pseudoHeader.push_back(static_cast<ByteString::byte>((icmpv6Length >> 16) & 0xFF));
+            pseudoHeader.push_back(static_cast<ByteString::byte>((icmpv6Length >> 8) & 0xFF));
+            pseudoHeader.push_back(static_cast<ByteString::byte>(icmpv6Length & 0xFF));
+            
+            // Append Three Zero Bytes
+            pseudoHeader.push_back('\x00');
+            pseudoHeader.push_back('\x00');
+            pseudoHeader.push_back('\x00');
+
+            // Append Next Header = ICMPv6 (58)
+            pseudoHeader.push_back('\x3A');
+
+            // Calculate the ICMPv6 checksum using existing function
+            Checksum::calculateProtocolChecksum(encapsulatedHeaders, pseudoHeader, encapsulated, HeaderType::Icmpv6, 2, 2, true);
+
+        }
     }
-
-    if (!ipv4String.empty() && !eigrpString.empty())
-    {
-        // Recalculate the EIGRP checksum.
-        eigrpString = Checksum::calculateProtocolChecksum(eigrpString, 0, eigrpString.size(), 2);
-    }
+    //Profiler::getInstance().notify("Packet Assembly has started");
 
     // Assemble the final packet string from all headers and payloads.
-    packetString = ethernetString +
-                   pppString + arpString +
-                   mplsString + vlanString +
-                   lldpString + ipv4String +
-                   ipv6String + greString +
-                   ahString + espString + 
-                   icmpString + icmpv6String +
-                   igmpString + tcpString +
-                   udpString + eigrpString +
-                   dhcpString;
+    size_t totalSize = encapsulated.size();
+    size_t headerCount = static_cast<size_t>(HeaderType::Count);
+    for (size_t i = 0; i < headerCount; ++i)
+    {
+        const auto& encap = encapsulatedHeaders[i];
+        if (encap.has_value())
+        {
+            totalSize += encap->size();
+        }
+    }
+    
+    // Initialize the final packet string wither reserved space
+    //Profiler::getInstance().notify("Size Calculated");
+    ByteString packetString;
+    packetString.reserve(totalSize);
 
+    // Concatenate headers in the specified order
+    for (size_t i = 0; i < headerCount; ++i)
+    {
+        const auto& encap = encapsulatedHeaders[i];
+        if (encap.has_value())
+        {
+            packetString.append(encap.value());
+        }
+    }
+
+    //Profiler::getInstance().notify("Returning Packet");
     // Append encapsulated data to the final packet string.
-    return packetString + encapsulated;
+    return std::move(packetString) + std::move(encapsulated);
 }

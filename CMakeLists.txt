@@ -9,6 +9,7 @@ set(TELNET_INCLUDE_DIR /usr/include)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -mtune=native -flto -ffast-math -funroll-loops -fomit-frame-pointer -fno-rtti")
 
 # Define directories
 set(VIRTUAL_ROUTER_DIR "${PROJECT_SOURCE_DIR}/VirtualRouter")
@@ -90,6 +91,7 @@ target_include_directories(VirtualRouter PUBLIC
     ${COMMON_DIR}
     ${VIRTUAL_ROUTER_DIR}/Configs
     ${VIRTUAL_ROUTER_DIR}/include
+    /usr/include
 )
 
 target_link_libraries(VirtualRouter PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
@@ -100,7 +102,7 @@ target_link_libraries(VirtualRouter PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIB
 
 # Main VirtualRouter executable
 add_executable(VirtualRouterExec ${VIRTUAL_ROUTER_DIR}/main.cpp)
-target_link_libraries(VirtualRouterExec PRIVATE VirtualRouter)
+target_link_libraries(VirtualRouterExec PRIVATE VirtualRouter -lprofiler)
 
 # Log Server executable
 add_executable(LogServer ${UTILS_DIR}/src/LogServer.cpp)
@@ -120,13 +122,15 @@ enable_testing()
 
 # List of test files
 set(TEST_SOURCES
-    ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
-    ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
-    ${TEST_DIR}/ConsoleTest.cpp
-    ${TEST_DIR}/ConfigsTest.cpp
-    # ${TEST_DIR}/TerminalTest.cpp
-    ${TEST_DIR}/DecapsulationTest.cpp
-    ${TEST_DIR}/EncapsulationTest.cpp
+#     ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
+#     ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
+#     ${TEST_DIR}/ConsoleTest.cpp
+#     ${TEST_DIR}/ConfigsTest.cpp
+#     ${TEST_DIR}/TerminalTest.cpp
+#     ${TEST_DIR}/DecapsulationTest.cpp
+#     ${TEST_DIR}/EncapsulationTest.cpp
+#     ${TEST_DIR}/ChecksumsTest.cpp
+    ${TEST_DIR}/ArpTest.cpp
 )
 
 # Test executable

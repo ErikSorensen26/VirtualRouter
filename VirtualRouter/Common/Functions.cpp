@@ -7,28 +7,14 @@ namespace Functions {
 
     #pragma region TestIf
 
-    bool isBinary(const ByteString& str) {
-        if (str.empty()) {
-            return false;
-        }
-        for (auto c : str) {
-            if (c != '0' && c != '1') {
-                return false;
-            }
-        }
-        return true;
+    bool isBinary(const ByteString& str) 
+    {
+        return !str.empty() && std::all_of(str.begin(), str.end(), [](char c) {return c == '0' || c == '1';});
     }
 
-    bool isHex(const ByteString& str) {
-        if (str.empty()) {
-            return false;
-        }
-        for (auto c : str) {
-            if (!std::isxdigit(c)) {
-                return false;
-            }
-        }
-        return true;
+    bool isHex(const ByteString& str) 
+    {
+        return !str.empty() && std::all_of(str.begin(), str.end(), ::isxdigit);
     }
 
     bool isDecimal(const std::string& str)
@@ -39,40 +25,52 @@ namespace Functions {
     #pragma endregion
     #pragma region ByteConv
 
-    ByteString byteToHex(const ByteString& input) {
-        std::stringstream ss;
-        for (auto& byte : input) {
-            ss << charToHex(static_cast<uint8_t>(byte));
+    ByteString byteToHex(const ByteString& input) 
+    {
+        if (input.empty()) return "";
+        std::ostringstream ss;
+        ss << std::hex << std::uppercase;
+        for (unsigned char byte : input)
+        {
+            ss << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
         }
         return ss.str();
     }
 
-    ByteString byteToBin(const ByteString& input) {
-        if (input.empty()) {return "";}
-        std::stringstream ss;
-        for (size_t i = 0; i < input.size(); ++i) {
-            ss << charToBin(static_cast<unsigned char>(input[i]));
+    ByteString byteToBin(const ByteString& input) 
+    {
+        if (input.empty()) return "";
+        ByteString binaryStr;
+        binaryStr.reserve(input.size() * 8);
+        for (unsigned char byte : input)
+        {
+            binaryStr += std::bitset<8>(byte).to_string();
+        }
+        return binaryStr;
+    }
+
+    ByteString byteArrayToHex(const std::vector<uint8_t>& byte_array) 
+    {
+        if (byte_array.empty()) return "";
+        std::ostringstream ss;
+        ss << std::hex << std::setw(2) << std::setfill('0');
+        for (uint8_t byte : byte_array)
+        {
+            ss << std::setw(2) << static_cast<int>(byte);
         }
         return ss.str();
     }
 
-    ByteString byteArrayToHex(const std::vector<uint8_t>& byte_array) {
-        if (byte_array.empty()) {return "";}
-        std::stringstream hex_stream;
-        for (auto byte : byte_array) {
-            hex_stream << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(byte);
-        }
-        return hex_stream.str();
-    }
-
-    uint32_t byteToNum(ByteString str) {
+    uint32_t byteToNum(ByteString str) 
+    {
         return hexToNum(byteToHex(str));
     }
 
     #pragma endregion
     #pragma region HexConv
 
-    ByteString binToHex(const ByteString& binaryStr) {
+    ByteString binToHex(const ByteString& binaryStr) 
+    {
         if (binaryStr.empty()) {return "";}
         std::stringstream ss;
         ByteString paddedBinaryStr = binaryStr;
@@ -87,31 +85,22 @@ namespace Functions {
         return ss.str();
     }
 
-    ByteString hexDigitToBin(uint8_t hexDigit) {
-        switch (hexDigit) {
-            case '0': return "0000";
-            case '1': return "0001";
-            case '2': return "0010";
-            case '3': return "0011";
-            case '4': return "0100";
-            case '5': return "0101";
-            case '6': return "0110";
-            case '7': return "0111";
-            case '8': return "1000";
-            case '9': return "1001";
-            case 'A': case 'a': return "1010";
-            case 'B': case 'b': return "1011";
-            case 'C': case 'c': return "1100";
-            case 'D': case 'd': return "1101";
-            case 'E': case 'e': return "1110";
-            case 'F': case 'f': return "1111";
-            default: return "";
-        }
+    ByteString hexDigitToBin(uint8_t hexDigit) 
+    {
+        static const char* lookup[] = {
+            "0000","0001","0010","0011","0100","0101","0110","0111",
+            "1000","1001","1010","1011","1100","1101","1110","1111"
+        };
+        if (hexDigit >= '0' && hexDigit <= '9') return lookup[hexDigit - '0'];
+        if (hexDigit >= 'A' && hexDigit <= 'F') return lookup[hexDigit - 'A' + 10];
+        if (hexDigit >= 'a' && hexDigit <= 'f') return lookup[hexDigit - 'a' + 10];
+        return "";
     }
 
     ByteString hexToBin(const ByteString& hexStr) {
         if (hexStr.empty()) {return "";}
         ByteString binaryStr;
+        binaryStr.reserve(hexStr.size() * 4);
         for (char hexDigit : hexStr) {
             ByteString binStr = hexDigitToBin(hexDigit);
             if (binStr.empty()) {
@@ -124,68 +113,67 @@ namespace Functions {
     }
 
     ByteString hexToByte(const ByteString& hexBinaryData, size_t size) {
-        if (hexBinaryData.empty()) {
-            return "";
-        }
-
-        ByteString byteString;
+        if (hexBinaryData.empty()) return "";
         size_t length = hexBinaryData.size();
+        ByteString byteString;
+        byteString.reserve((length + 1) / 2);
 
+        std::string temp = hexBinaryData.toString();
         if (length % 2 != 0) {
             byteString = ByteString("0") + byteString;
             length = hexBinaryData.size();
         }
 
-        byteString.reserve(length / 2);  // Reserve space to avoid multiple allocations
-
         for (size_t i = 0; i < length; i += 2) {
-            ByteString byteStr = hexBinaryData.substr(i, 2);
-            unsigned char byte = static_cast<unsigned char>(std::stoi(byteStr.toString(), nullptr, 16));
-            byteString.push_back(byte);
+            unsigned int byte;
+            if (sscanf(temp.c_str() + i, "%2x", &byte) != 1)
+            {
+                std::cerr << "Invalid hex byte: " << temp.substr(i, 2) << std::endl;
+                return "";
+            }
+            byteString.push_back(static_cast<unsigned char>(byte));
         }
 
         if (size != 0)
         {
-            byteString = changeSize(byteString, size, ByteString("\x00", 1));
+            byteString = changeSize(byteString, size, "\x00");
         }
 
         return byteString;
     }
 
-    uint32_t hexToNum(const ByteString& hexStr) {
+    uint32_t hexToNum(const ByteString& hexStr) 
+    {
         uint32_t decimalValue;
         std::stringstream ss;
-
         ss << std::hex << hexStr;
         ss >> decimalValue;
-
         return decimalValue;
     }
 
     #pragma endregion
     #pragma region BoolConv
 
-    std::string boolToString(bool bol) {
-        if (bol) {
-            return "1";
-        } else {
-            return "0";
-        }
+    std::string boolToString(bool bol) 
+    {
+        return bol ? "1" : "0";
     }
 
     #pragma endregion
     #pragma region BinConv
 
-    ByteString binToByte(const ByteString& binaryData, size_t size) {
+    ByteString binToByte(const ByteString& binaryData, size_t size) 
+    {
         return hexToByte(binToHex(binaryData), size);
     }
 
-    uint32_t binToNum(const ByteString& binary) {
+    uint32_t binToNum(const ByteString& binary) 
+    {
         double decimal = 0;
         size_t length = binary.size();
         for (size_t i = 0; i < length; ++i) {
             if (binary[length - 1 - i] == '1') {
-                decimal += pow(2, static_cast<double>(i));
+                decimal += (1U << i);
             }
         }
         return static_cast<unsigned int>(decimal);
@@ -194,35 +182,22 @@ namespace Functions {
     #pragma endregion
     #pragma region StringConv
 
-    std::string lowerCase(std::string str) {
-        if (str.empty()) {return "";}
-        std::string normalize;
-        for (char c : str) {
-            if (isspace(c) || c == '\t') {
-                normalize += c;
-            }
-            else {
-                normalize += static_cast<char>(tolower(c));
-            }
-    	}
-        return normalize;
+    std::string lowerCase(std::string str) 
+    {
+        std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) -> unsigned char {
+            return static_cast<unsigned char>(std::tolower(c));
+        });
+        return str;
     }
 
-    bool stringToBool(const std::string& str) {
-        if (str.empty()) {return false;}
-        if (str == "1") {
-            return true;
-        }
-        if (str == "0") {
-            return false;
-        }
-        return false;
+    bool stringToBool(const std::string& str) 
+    {
+        return str == "1";
     }
 
-    uint32_t stringToNum(std::string num) {
-        unsigned int number;
-        sscanf(num.c_str(), "%d", &number);
-        return number;
+    uint32_t stringToNum(std::string num) 
+    {
+        return static_cast<uint32_t>(std::stoul(num, nullptr, 10));
     }
 
     #pragma endregion
@@ -230,104 +205,107 @@ namespace Functions {
 
     ByteString numToBin(size_t number, size_t length)
     {
-        // Create a bitset large enough to handle the length
-        std::bitset<64> binary(number); // 64-bit ensures a arge range for input numbers
-        
-        // Convert to string, keep only the least significant 'length' bits
-        ByteString binaryString = binary.to_string();
-        return binaryString.substr(64 - length);
+        std::bitset<64> binary(number);
+        std::string binaryStr = binary.to_string();
+        if (length > 64) length = 64;
+        return binaryStr.substr(64 - length);
     }
 
     #pragma endregion
     #pragma region CharConv
 
-    ByteString charToHex(uint8_t byte) {
+    ByteString charToHex(uint8_t byte) 
+    {
         std::stringstream ss;
         ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
         return ss.str();
     }
 
-    ByteString charToBin(uint8_t byte) {
-        std::bitset<8> bits(byte);
-        return bits.to_string();
+    ByteString charToBin(uint8_t byte) 
+    {
+        return std::bitset<8>(byte).to_string();
     }
 
     #pragma endregion
     #pragma region NumChar
 
-    ByteString numToHex(uint32_t num, size_t size) {
-        size_t newSize;
-        if (size != 0)
-        {
-            newSize = size;
-        }
-        else
-        {
-            newSize = 2;
-        }
-        std::stringstream ss;
-        ss << std::hex << std::uppercase << std::setw(static_cast<int>(newSize)) << std::setfill('0') << num;ss.str();
+    ByteString numToHex(size_t num, size_t size) 
+    {
+        std::ostringstream ss;
+        ss << std::hex << std::uppercase;
+        ss << std::setw(static_cast<int>(size != 0 ? size : 2)) << std::setfill('0') << num;
         ByteString hex = ss.str();
-        if (size == 0)
+        if (size == 0 && hex.size() % 2 != 0)
         {
-            if (hex.size() % 2 != 0) {
-                hex = ByteString("0") + hex;
-            }
+            hex = ByteString("0") + hex;
         }
-
         return hex;
     }
 
-    ByteString numToHexWithByte(uint32_t num, int byteSize) {
+    ByteString numToHexWithByte(uint32_t num, int byteSize) 
+    {
         if (byteSize <= 0) {
             throw std::invalid_argument("byteSize must be positive");
         }
 
-        // Calculate the maximum value based on byteSize
-        uint32_t maxVal = 0;
-        for (int i = 0; i < byteSize; ++i) {
-            maxVal = (maxVal << 8) | 0xFF;
+        uint32_t maxVal = (byteSize >= 4) ? 0xFFFFFFFF :
+                          (byteSize >= 3) ? 0xFFFFFF :
+                          (byteSize >= 2) ? 0xFFFF :
+                          (byteSize >= 1) ? 0xFF : 0;
+        
+        if (num > maxVal)
+        {
+            throw std::out_of_range("Number exceeds the maximun value for the specified byte size");
         }
 
-        if (num > maxVal) {
-            throw std::out_of_range("Number exceeds the maximum value for the specified byte size");
+        uint32_t networkOrderNum = 0;
+        switch (byteSize)
+        {
+            case 1:
+                networkOrderNum = num & 0xFF;
+                break;
+            case 2:
+                networkOrderNum = htons(static_cast<uint16_t>(num));
+                break;
+            case 4:
+                networkOrderNum = htonl(num);
+                break;
+            default:
+                throw std::invalid_argument("Unsupported byte size. Supported sizes: 1, 2, 4");
         }
 
-        // Convert number to network byte order
-        uint32_t networkOrderNum;
-        if (byteSize == 1) {
-            networkOrderNum = num & 0xFF;
-        } else if (byteSize == 2) {
-            networkOrderNum = htons(static_cast<uint16_t>(num));
-        } else if (byteSize == 4) {
-            networkOrderNum = htonl(static_cast<uint32_t>(num));
-        } else {
-            throw std::invalid_argument("Unsupported byte size. Supported sizes: 1, 2, 4");
-        }
-
-        // Convert to hex string
         std::ostringstream ss;
         ss << std::hex << std::uppercase << std::setw(byteSize * 2) << std::setfill('0') << networkOrderNum;
-        ByteString hex = ss.str();
-
-        return hex;
+        return ss.str();
     }
 
-    ByteString numToByte(uint32_t num, size_t size) {
+    ByteString numToByte(size_t num, size_t size) 
+    {
         return hexToByte(numToHex(num), size);
     }
 
     #pragma endregion
     #pragma region NetConv
 
-    ByteString addressToByte(const ByteString& mask) {
-        uint32_t oct1, oct2, oct3, oct4;
-    	sscanf(mask.toString().c_str(), "%d.%d.%d.%d", &oct1, &oct2, &oct3, &oct4);
-        ByteString newMask = numToHex(oct1) + numToHex(oct2) + numToHex(oct3) + numToHex(oct4);
-        return hexToByte(newMask);
+    ByteString addressToByte(const ByteString& mask) 
+    {
+        unsigned octets[4] = {0};
+        if (sscanf(mask.toString().c_str(), "%u.%u.%u.%u", &octets[0], &octets[1], &octets[2], &octets[3]) != 4)
+        {
+            Logger::getInstance().error() << "Invalid IP address format: " << mask.toString() << std::endl;
+            return "";
+        }
+        ByteString byteMask;
+        byteMask.reserve(4);
+        for (int i = 0; i < 4; ++i)
+        {
+            byteMask.push_back(static_cast<unsigned char>(octets[i]));
+        }
+        return byteMask;
     }
 
-    void printVector(const std::vector<std::string>& vec) {
+    void printVector(const std::vector<std::string>& vec) 
+    {
         return; // Disabled
         for (const auto& element : vec) {
             std::cout << std::string(element) << std::endl;
@@ -336,16 +314,7 @@ namespace Functions {
 
     uint8_t byteMaskToNum(const ByteString& mask) 
     {
-        uint8_t maskInt{0};
-        ByteString maskInBin = byteToBin(mask);
-        for (const auto bin : maskInBin)
-        {
-            if (bin == '1')
-            {
-                maskInt++;
-            }
-        }
-        return maskInt;
+        return static_cast<uint8_t>(std::count(mask.begin(), mask.end(), '1'));
     }
 
     ByteString numMaskToBin(uint8_t mask)
@@ -388,58 +357,56 @@ namespace Functions {
 
     bool compareNetworkWithIp(ByteString networkAddress, ByteString ipAddress, uint8_t mask)
     {
-        // Ensure addresses are the same length
-        if (networkAddress.size() != ipAddress.size())
-        {
-            return false;
-        }
-
+        if (networkAddress.size() != ipAddress.size()) return false;
         size_t totalBits = networkAddress.size() * 8;
+        if (mask > totalBits) return false;
 
-        // Validate previx length
-        if (mask > totalBits)
-        {
-            return false;
-        }
-
-        // Calculate byte length and reminder bit for the mask
         size_t fullBytes = mask / 8;
         size_t remainingBits = mask % 8;
-        
-        // Compare each byte
+
         for (size_t i = 0; i < networkAddress.size(); ++i)
         {
-            uint8_t subnetMask = 0xFF; // Default mask for full byte
-            if (i == fullBytes)
+            uint8_t subnetMask = 0xFF;
+            if (i < fullBytes)
             {
-                // Create a partial mask for the last byte
-                mask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
+                subnetMask = 0xFF;
             }
-            else if (i > fullBytes)
+            else if (i == fullBytes && remainingBits != 0)
             {
-                mask = 0x00; // Beyone the prefix, mask is all zeros
+                subnetMask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
+            }
+            else
+            {
+                subnetMask = 0x00;
             }
 
-            // Apply the mask and compare the bytes
-            if ((networkAddress[i] & subnetMask) != (ipAddress[i] & subnetMask))
+            if ((networkAddress[i] && subnetMask) != (ipAddress[i] & subnetMask))
             {
                 return false;
             }
         }
 
-        return true; // All bytes match
+        return true;
     }
 
     ByteString compactNetworkAddress(ByteString network, uint8_t mask)
     {
-        ByteString networkAddress = network;
-        ByteString binMask = binToByte(numMaskToBin(mask));
-        for (size_t i = 3; i >= 0; i--)
+        ByteString binMask = numMaskToBin(mask);
+        ByteString compactNet;
+        compactNet.reserve(network.size());
+
+        for (size_t i = 0; i < network.size(); ++i)
         {
-            if (binMask[i] == 0x00)
-            networkAddress.erase(i, 1);
+            if (binMask[i * 8] == '1')
+            {
+                compactNet.push_back(network[i]);
+            }
+            else
+            {
+                break;
+            }
         }
-        return networkAddress;
+        return compactNet;
     }
 
     std::optional<ByteString> calculateEui64(ByteString mac, ByteString fullIPv6)
@@ -501,10 +468,20 @@ namespace Functions {
 
     ByteString ipv6ToByte(std::string ip)
     {
-        unsigned int oct1, oct2, oct3, oct4, oct5, oct6, oct7, oct8;
-    	sscanf(ip.c_str(), "%d:%d:%d:%d:%d:%d:%d:%d", &oct1, &oct2, &oct3, &oct4, &oct5, &oct6, &oct7, &oct8);
-        ByteString newmask = numToByte(oct1, 2) + numToByte(oct2, 2) + numToByte(oct3, 2) + numToByte(oct4, 2) + numToByte(oct5, 2) + numToByte(oct6, 2) + numToByte(oct7, 2) + numToByte(oct8, 2);
-        return newmask;
+        unsigned int octets[8] = {0};
+        if (sscanf(ip.c_str(), "%x:%x:%x:%x:%x:%x:%x:%x", 
+                   &octets[0], &octets[1], &octets[2], &octets[3],
+                   &octets[4], &octets[5], &octets[6], &octets[7]) != 8) {
+            Logger::getInstance().error() << "Invalid IPv6 address format: " << ip << std::endl;
+            return "";
+        }
+        ByteString byteIP;
+        byteIP.reserve(16);
+        for (int i = 0; i < 8; ++i) {
+            byteIP.push_back(static_cast<unsigned char>((octets[i] >> 8) & 0xFF));
+            byteIP.push_back(static_cast<unsigned char>(octets[i] & 0xFF));
+        }
+        return byteIP;
     }
 
     bool compareNetworkWithMask(const ByteString& network, uint8_t mask)
@@ -513,12 +490,9 @@ namespace Functions {
         const ByteString binMask = numMaskToBin(mask);
         for (size_t i = 0; i < 32; ++i)
         {
-            if (binMask[i] == '0')
+            if (binMask[i] == '0' && binAddress[i] != '0')
             {
-                if (binAddress[i] != 0)
-                {
-                    return false;
-                }
+                return false;
             }
         }
         return true;
@@ -527,26 +501,30 @@ namespace Functions {
     ByteString findClassfullNetwork(ByteString& ip)
     {
         uint32_t ipInt = byteToNum(ip);
-        uint32_t network = ipInt & 0xFF000000; // Class A
-        if (network >= 0xC0000000)
+        uint32_t network;
+        if ((ipInt & 0x80000000) == 0)
         {
-            network = ipInt & 0xFFFFFF00; // Class C
+            network = ipInt & 0xFF000000; // Class A
         }
-        else if (network >= 0x80000000)
+        else if ((ipInt & 0xC0000000) == 0x80000000)
         {
             network = ipInt & 0xFFFF0000; // Class B
+        }
+        else
+        {
+            network = ipInt & 0xFFFFFF00; // Class C
         }
         return numToByte(network, 4);
     }
 
     uint8_t getDefaultMask(const ByteString& network)
     {
-        uint32_t netInt = static_cast<uint32_t>(byteToNum(network));
-        if (netInt <= 0x7FFFFFFF) // Class A
+        uint32_t netInt = byteToNum(network);
+        if ((netInt & 0x80000000) == 0) // Class A
         {
             return 8;
         }
-        else if (netInt <= 0xBFFFFFFF) // Class B
+        else if ((netInt & 0xC0000000) == 0x80000000) // Class B
         {
             return 16;
         }
@@ -558,67 +536,29 @@ namespace Functions {
 
     bool validateMacAddress(const ByteString& mac, const ByteString currentMac)
     {
-        // Ensure the byte string is a valid length
-        if (mac.size() != 6 || currentMac.size() != 6)
-        {
-            return false;
-        }
-
-        // Check if the mac matches the current MAC
-        if (mac == currentMac)
-        {
-            return true;
-        }
-
-        // Check for multicast/broadcast by examining the LSB of the first byte
-        if (static_cast<unsigned char>(mac[0]) & 0x01)
-        {
-            return true;
-        }
-        
-        return false;
+        if (mac.size() != 6 || currentMac.size() != 6) return false;
+        if (mac == currentMac) return true;
+        return (static_cast<unsigned char>(mac[0]) & 0x01) != 0;
     }
 
     bool isSubnetOf(const ByteString &network, uint8_t mask, const ByteString &summaryNetwork, uint8_t summaryMask)
     {
-        if (summaryMask > mask)
-        {
-            // Summary maske cannot be more specific then the network mask
-            return false;
-        }
-
-        // Calculate binary strings of each network address
+        if (summaryMask > mask) return false;
         ByteString binNetwork = byteToBin(network);
         ByteString binSummary = byteToBin(summaryNetwork);
-
-        for (size_t i = 31; i >- 0; --i)
+        for (uint8_t i = 0; i < summaryMask; ++i)
         {
-            if (binSummary[i] != '0')
-            {
-                if (binSummary[i] != binNetwork[i])
-                {
-                    // Not part of the subnet
-                    return false;
-                }
-            }
+            if (binNetwork[i] != binSummary[i]) return false;
         }
-        // Success
         return true;
     }
 
     bool isMulticast(const ByteString& ip)
     {
         if (ip.empty()) return false;
-
-        // IPv4 multicast: first byte between 224 and 239
-        uint8_t firstByte = static_cast<uint8_t>(ip.toString()[0]);
-        if (firstByte >= 224 && firstByte <= 239)
-            return true;
-
-        // IPv6 multicast: first byte is 0xFF
-        if (ip.size() >= 1 && ip.toString()[0] == '\xFF')
-            return true;
-
+        unsigned char firstByte = static_cast<unsigned char>(ip[0]);
+        if (firstByte >= 224 && firstByte <= 239) return true;
+        if (firstByte == 0xFF) return true;
         return false;
     }
     
@@ -626,20 +566,26 @@ namespace Functions {
     #pragma region Other
 
     size_t getRandomBetween(size_t min, size_t max) {
+        if (min > max) std::swap(min, max);
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(static_cast<int>(min), static_cast<int>(max));
         return static_cast<size_t>(dis(gen));
     }
 
-    ByteString changeSize(ByteString str, size_t size, ByteString value) {
-        while (str.size() < size) {
+    ByteString changeSize(ByteString str, size_t size, ByteString value) 
+    {
+        if (str.size() >= size) return str;
+        str.reserve(size);
+        while (str.size() < size)
+        {
             str = value + str;
         }
         return str;
     }
 
-    ByteString reverseBinary(const ByteString& binary) {
+    ByteString reverseBinary(const ByteString& binary) 
+    {
         ByteString reversed = binary; // Create a copy of the input string
 
         for (size_t i = 0; i < binary.size(); i++) {
@@ -658,4 +604,6 @@ namespace Functions {
         std::time_t time_t_value = std::chrono::system_clock::to_time_t(time);
         return std::to_string(time_t_value);
     }
+
+    #pragma endregion
 }

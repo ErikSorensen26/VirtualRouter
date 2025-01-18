@@ -28,4 +28,43 @@
  */
 std::optional<ByteString> encapsulate(PacketInfo& packet, ByteString encapsulated = "");
 
+// Enum representing every header
+enum class HeaderType
+{
+    // Headers
+    Ethernet, Ppp, Frame,
+    Arp, Mpls, Vlan, Lldp,
+    IPv4, IPv6, Gre, Ah, Esp, Icmp, Icmpv6, Igmp,
+    Tcp, Udp, Eigrp,
+    Dhcp,
+
+    // Count
+    Count,
+};
+
+// Maps the header to HeaderType (Can be used for indexing headers)
+inline HeaderType mapHeaderToEnum(const EthernetHeader&) { return HeaderType::Ethernet; }
+inline HeaderType mapHeaderToEnum(const PppHeader&) { return HeaderType::Ppp; }
+inline HeaderType mapHeaderToEnum(const FrameHeader&) { return HeaderType::Frame; }
+
+inline HeaderType mapHeaderToEnum(const ArpHeader&) { return HeaderType::Arp; }
+inline HeaderType mapHeaderToEnum(const MplsHeader&) { return HeaderType::Mpls; }
+inline HeaderType mapHeaderToEnum(const VlanHeader&) { return HeaderType::Vlan; }
+inline HeaderType mapHeaderToEnum(const LldpHeader&) { return HeaderType::Lldp; }
+
+inline HeaderType mapHeaderToEnum(const IPv4Header&) { return HeaderType::IPv4; }
+inline HeaderType mapHeaderToEnum(const IPv6Header&) { return HeaderType::IPv6; }
+inline HeaderType mapHeaderToEnum(const GreHeade&) { return HeaderType::Gre; }
+inline HeaderType mapHeaderToEnum(const AhHeader&) { return HeaderType::Ah; }
+inline HeaderType mapHeaderToEnum(const EspHeader&) { return HeaderType::Esp; }
+inline HeaderType mapHeaderToEnum(const IcmpHeader&) { return HeaderType::Icmp; }
+inline HeaderType mapHeaderToEnum(const IcmpV6Header&) { return HeaderType::Icmpv6; }
+inline HeaderType mapHeaderToEnum(const IgmpHeader&) { return HeaderType::Igmp; }
+
+inline HeaderType mapHeaderToEnum(const TcpHeader&) { return HeaderType::Tcp; }
+inline HeaderType mapHeaderToEnum(const UdpHeader&) { return HeaderType::Udp; }
+inline HeaderType mapHeaderToEnum(const EigrpHeader&) { return HeaderType::Eigrp; }
+
+inline HeaderType mapHeaderToEnum(const DhcpHeader&) { return HeaderType::Dhcp; }
+
 #endif // ENCAPSULATION_H

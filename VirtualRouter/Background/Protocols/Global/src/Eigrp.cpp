@@ -719,10 +719,10 @@ namespace Protocol
         uint32_t lowestBW = std::numeric_limits<uint32_t>::max();
         for (const auto& [id, eigrpInterfacePtr] : eigrpInterfaceList)
         {
-            std::shared_lock<std::shared_mutex> lock(eigrpInterfacePtr->currentInterfaceInfo.lock()->ipMutex);
-            if (eigrpInterfacePtr->currentInterfaceInfo.lock()->bandwidth < lowestBW)
+            std::shared_lock<std::shared_mutex> lock(eigrpInterfacePtr->currentInterfaceInfo->ipMutex);
+            if (eigrpInterfacePtr->currentInterfaceInfo->bandwidth < lowestBW)
             {
-                lowestBW = eigrpInterfacePtr->currentInterfaceInfo.lock()->bandwidth;
+                lowestBW = eigrpInterfacePtr->currentInterfaceInfo->bandwidth;
             }
         }
         return lowestBW;
@@ -742,7 +742,7 @@ namespace Protocol
         std::shared_ptr<EigrpInterface> selectedInterface;
         for (const auto& [id, eigrpInterfacePtr] : eigrpInterfaceList)
         {
-            if (eigrpInterfacePtr->currentInterfaceInfo.lock()->bandwidth == lowestBW)
+            if (eigrpInterfacePtr->currentInterfaceInfo->bandwidth == lowestBW)
             {
                 selectedInterface = eigrpInterfacePtr;
                 break;
@@ -755,7 +755,7 @@ namespace Protocol
             return;
         }
         // Calculate metric
-        uint32_t metric = calculateMetric(selectedInterface->currentInterfaceInfo.lock()->bandwidth, selectedInterface->getConfigs()->load, selectedInterface->currentInterfaceInfo.lock()->delay, 255, 0);
+        uint32_t metric = calculateMetric(selectedInterface->currentInterfaceInfo->bandwidth, selectedInterface->getConfigs()->load, selectedInterface->currentInterfaceInfo->delay, 255, 0);
 
         RoutingTable::Eigrp defaultRoute;
         defaultRoute.network = configs.defaultNetwork;
@@ -846,9 +846,9 @@ namespace Protocol
         for (const auto& [interfaceId, interfacePtr] : eigrpInterfaceList) 
         {
             auto interfaceInfo = interfacePtr->currentInterfaceInfo;
-            std::shared_lock<std::shared_mutex> interfaceLock(interfaceInfo.lock()->ipMutex);
+            std::shared_lock<std::shared_mutex> interfaceLock(interfaceInfo->ipMutex);
 
-            ByteString ipAddress = getAddressFamily() == AddressFamily::IPv4 ? interfaceInfo.lock()->ipv4.ipAddress : interfaceInfo.lock()->ipv6.ipAddress;
+            ByteString ipAddress = getAddressFamily() == AddressFamily::IPv4 ? interfaceInfo->ipv4.ipAddress : interfaceInfo->ipv6.ipAddress;
             std::shared_lock<std::shared_mutex> interfaceInfoLock(interfacePtr->neighborMutex);
             for (const auto& [address, neighbor] : interfacePtr->neighbors)
             {
@@ -963,9 +963,9 @@ namespace Protocol
     {
         {
             currentInterfaceInfo = currentInterface.lock()->Get();
-            std::lock_guard<std::shared_mutex> lock(currentInterfaceInfo.lock()->ipMutex);
-            configs.interfaceAddress = (eigrpProcess->getAddressFamily() == AddressFamily::IPv4) ? currentInterfaceInfo.lock()->ipv4.ipAddress : currentInterfaceInfo.lock()->ipv6.ipAddress;
-            configs.interfaceMask = (eigrpProcess->getAddressFamily() == AddressFamily::IPv4) ? currentInterfaceInfo.lock()->ipv4.mask : currentInterfaceInfo.lock()->ipv6.mask;
+            std::lock_guard<std::shared_mutex> lock(currentInterfaceInfo->ipMutex);
+            configs.interfaceAddress = (eigrpProcess->getAddressFamily() == AddressFamily::IPv4) ? currentInterfaceInfo->ipv4.ipAddress : currentInterfaceInfo->ipv6.ipAddress;
+            configs.interfaceMask = (eigrpProcess->getAddressFamily() == AddressFamily::IPv4) ? currentInterfaceInfo->ipv4.mask : currentInterfaceInfo->ipv6.mask;
         }
         startHelloHelper();
         sendHelloPacket();
@@ -1262,7 +1262,7 @@ namespace Protocol
             {
                 neighbors[neighborIp] = std::make_shared<EigrpConfigs::NeighborInfo>();
                 neighborAdded = true;
-                std::shared_lock<std::shared_mutex> interfacePtr(currentInterfaceInfo.lock()->ipMutex);
+                std::shared_lock<std::shared_mutex> interfacePtr(currentInterfaceInfo->ipMutex);
                 ByteString ipAddress = getConfigs()->interfaceAddress;
                 auto backupIt = eigrpProcess->neighborBackup[ipAddress].find(neighborIp);
                 if (backupIt != eigrpProcess->neighborBackup[ipAddress].end())
@@ -1296,7 +1296,7 @@ namespace Protocol
                 }
                 if (opt.option == Variable::Eigrp::Option::sequence)
                 {
-                    std::shared_lock<std::shared_mutex> interfaceLock(currentInterfaceInfo.lock()->ipMutex);
+                    std::shared_lock<std::shared_mutex> interfaceLock(currentInterfaceInfo->ipMutex);
                     if (getConfigs()->interfaceAddress == opt.value.substr(1, Functions::byteToNum(opt.value.substr(0, 1))))
                     {
 
@@ -2708,11 +2708,11 @@ namespace Protocol
                 
                 RoutingTable::Eigrp routeToRemove;
                 {
-                    std::shared_lock<std::shared_mutex> interfaceLock(currentInterfaceInfo.lock()->ipMutex);
+                    std::shared_lock<std::shared_mutex> interfaceLock(currentInterfaceInfo->ipMutex);
                     routeToRemove.network = network;
                     routeToRemove.mask = mask;
                     routeToRemove.delay = std::numeric_limits<uint32_t>::max();
-                    routeToRemove.bandwidth = (10000000 / currentInterfaceInfo.lock()->bandwidth) * 256;
+                    routeToRemove.bandwidth = (10000000 / currentInterfaceInfo->bandwidth) * 256;
                     routeToRemove.nextHop = ByteString(network.size(), 0xff);
                     routeToRemove.routeType = "internal";
                 }
@@ -3044,9 +3044,9 @@ namespace Protocol
 
     uint32_t EigrpInterface::calculateLocalLinkCost()
     {
-        std::shared_lock<std::shared_mutex> lock(currentInterfaceInfo.lock()->ipMutex);
-        uint32_t bandwidthMetric = (eigrpProcess->getConfigs()->wideMetric) / currentInterfaceInfo.lock()->bandwidth;
-        uint32_t delayMetric = currentInterfaceInfo.lock()->delay / 10;
+        std::shared_lock<std::shared_mutex> lock(currentInterfaceInfo->ipMutex);
+        uint32_t bandwidthMetric = (eigrpProcess->getConfigs()->wideMetric) / currentInterfaceInfo->bandwidth;
+        uint32_t delayMetric = currentInterfaceInfo->delay / 10;
 
         uint32_t loadMetric = 0;
         if (eigrpProcess->getConfigs()->kvalue.k2_Load != 0 && (256.0 - configs.load) != 0)
@@ -3428,12 +3428,12 @@ namespace Protocol
 
     RoutingTable::Eigrp EigrpInterface::encodeSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute)
     {
-        std::shared_lock<std::shared_mutex> lock(currentInterfaceInfo.lock()->ipMutex);
+        std::shared_lock<std::shared_mutex> lock(currentInterfaceInfo->ipMutex);
         RoutingTable::Eigrp route;
         route.nextHop = ByteString(summaryRoute.network.size(), '\x00');
-        route.bandwidth = (10000000 / currentInterfaceInfo.lock()->bandwidth) * 256;
-        route.delay = (currentInterfaceInfo.lock()->delay / 10) * 256;
-        route.mtu = currentInterfaceInfo.lock()->mtu;
+        route.bandwidth = (10000000 / currentInterfaceInfo->bandwidth) * 256;
+        route.delay = (currentInterfaceInfo->delay / 10) * 256;
+        route.mtu = currentInterfaceInfo->mtu;
         route.hopCount = 0;
         route.reliability = 255;
         route.load = configs.load;

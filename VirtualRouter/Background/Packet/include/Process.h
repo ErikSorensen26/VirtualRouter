@@ -16,6 +16,7 @@
  * @brief Defines the ProcessPacket class for processing captured network packets.
  */
 
+struct HeaderVisitor;
 class Interface;
 
 /**
@@ -52,9 +53,41 @@ private:
     std::unordered_map<std::type_index, std::any> parsedHeaders; ///< Shared map of parsed headers.
     ByteString macAddress;                  ///< MAC Address found in packet.
     PacketInfo& currentPacket;              ///< Packet being processed.
-    bool print = false;
+    bool print = false;                     ///< Debug flag.
 
-    using HeaderProcessor = std::function<void(const std::any&)>; ///< Type alias for header processing functions.
+    friend struct HeaderVisitor;
+    
+    // Header storage using std::variant
+    std::vector<Layer2Variant> layer2;
+    std::vector<Layer2_5Variant> layer2_5;
+    std::vector<Layer3Variant> layer3;
+    std::vector<Layer4Variant> layer4;
+    std::vector<Layer5Variant> layer5;
+
+    /// Layer-specific header processing functions.
+    void processEthernet(const EthernetHeader& header);     ///< Ethernet processing function.
+    void processPpp(const PppHeader& header);               ///< PPP processing function.
+    void processFrame(const FrameHeader& header);           ///< Frame processing function.
+
+    void processArp(const ArpHeader& header);               ///< ARP processing function.
+    void processMpls(const MplsHeader& header);             ///< MPLS processing function.
+    void processVlan(const VlanHeader& header);             ///< VLAN processing function.
+    void processLldp(const LldpHeader& header);             ///< LLDP processing function.
+
+    void processIPv4(const IPv4Header& header);             ///< IPv4 processing function.
+    void processIPv6(const IPv6Header& header);             ///< IPv6 processing function.
+    void processGre(const GreHeade& header);                ///< GRE processing function.
+    void processAh(const AhHeader& header);                 ///< AH processing function.
+    void processEsp(const EspHeader& header);               ///< ESP processing function.
+    void processIcmp(const IcmpHeader& header);             ///< ICMP processing function.
+    void processIcmpV6(const IcmpV6Header& header);         ///< ICMP processing function.
+    void processIgmp(const IgmpHeader& header);             ///< IGMP processing function.
+
+    void processTcp(const TcpHeader& header);               ///< TCP processing function.
+    void processUdp(const UdpHeader& header);               ///< UDP processing function.
+    void processEigrp(const EigrpHeader& header);           ///< EIGRP processing function.
+
+    void processDhcp(const DhcpHeader& header);             ///< DHCP processing function.
 
     /**
      * @brief Processes the captured packet by examining and handling various header types.
@@ -73,42 +106,48 @@ private:
      *
      * Iterates through headers and applies the appropriate processing function.
      *
-     * @param headers The list of headers to process.
-     * @param layerProcessors Map of type-indexed processing functions.
+     * @param VarientType The std::variant type for the layer.
+     * @param headers The vector of headers to process.
      */
-    void processLayers(const std::vector<std::any>& headers, const std::unordered_map<std::type_index, HeaderProcessor>& layerProcessors);
+    template<typename VariantType>
+    void processLayer(const std::vector<VariantType>& headers);
 
-    /**
-     * @brief Initialized processing functions for different headers.
-     *
-     * This is called only once to populate static processor maps.
-     */
-    void initializeProcessors();
+    HeaderVisitor* visitor; //< Visitor struct to handle std::visit.
+};
 
-    /// Layer-specific header processing functions.
-    void processEthernet(const Layer2Variant& header); ///< Ethernet processing function.
-    void processPpp(const Layer2Variant& header);      ///< PPP processing function.
-    void processArp(const Layer2_5Variant& header);      ///< ARP processing function.
-    void processMpls(const std::any& header);     ///< MPLS processing function.
-    void processVlan(const std::any& header);     ///< VLAN processing function.
-    void processLldp(const std::any& header);     ///< LLDP processing function.
-    void processIPv4(const std::any& header);     ///< IPv4 processing function.
-    void processIPv6(const std::any& header);     ///< IPv6 processing function.
-    void processGre(const std::any& header);      ///< GRE processing function.
-    void processAh(const std::any& header);       ///< AH processing function.
-    void processEsp(const std::any& header);      ///< ESP processing function.
-    void processIcmp(const std::any& header);     ///< ICMP processing function.
-    void processIgmp(const std::any& header);     ///< IGMP processing function.
-    void processEigrp(const std::any& header);    ///< EIGRP processing function.
-    void processTcp(const std::any& header);      ///< TCP processing function.
-    void processUdp(const std::any& header);      ///< UDP processing function.
-    void processDhcp(const std::any& header);     ///< DHCP processing function.
+/**
+ * @struct HeaderVisitor
+ * @brief Visitor struct to handle different header types using std::visit.
+ *
+ * This struct overloads the operator() for each header type, allowing
+ * std::visit to call the appropriate processing function.
+ */
+struct HeaderVisitor {
+    ProcessPacket* processor;
 
-    static std::unordered_map<std::type_index, HeaderProcessor> layer2Processors; ///< Static Layer 2 processors.
-    static std::unordered_map<std::type_index, HeaderProcessor> layer2_5Processors; ///< Static Layer 2.5 processors
-    static std::unordered_map<std::type_index, HeaderProcessor> layer3Processors; ///< Static Layer 3 processors.
-    static std::unordered_map<std::type_index, HeaderProcessor> layer4Processors; ///< Static Layer 4 processors.
-    static std::unordered_map<std::type_index, HeaderProcessor> layer5Processors; ///< Static Layer 5 processors.
+    void operator()(const EthernetHeader& eth) const { processor->processEthernet(eth); }
+    void operator()(const PppHeader& ppp) const { processor->processPpp(ppp); }
+    void operator()(const FrameHeader& frame) const { processor->processFrame(frame); }
+
+    void operator()(const ArpHeader& arp) const { processor->processArp(arp); }
+    void operator()(const MplsHeader& mpls) const { processor->processMpls(mpls); }
+    void operator()(const VlanHeader& vlan) const { processor->processVlan(vlan); }
+    void operator()(const LldpHeader& lldp) const { processor->processLldp(lldp); }
+
+    void operator()(const IPv4Header& ipv4) const { processor->processIPv4(ipv4); }
+    void operator()(const IPv6Header& ipv6) const { processor->processIPv6(ipv6); }
+    void operator()(const GreHeade& gre) const { processor->processGre(gre); }
+    void operator()(const AhHeader& ah) const { processor->processAh(ah); }
+    void operator()(const EspHeader& esp) const { processor->processEsp(esp); }
+    void operator()(const IcmpHeader& icmp) const { processor->processIcmp(icmp); }
+    void operator()(const IcmpV6Header& icmp) const { processor->processIcmpV6(icmp); }
+    void operator()(const IgmpHeader& igmp) const { processor->processIgmp(igmp); }
+
+    void operator()(const TcpHeader& tcp) const { processor->processTcp(tcp); }
+    void operator()(const UdpHeader& udp) const { processor->processUdp(udp); }
+    void operator()(const EigrpHeader& eigrp) const { processor->processEigrp(eigrp); }
+
+    void operator()(const DhcpHeader& dhcp) const { processor->processDhcp(dhcp); }
 };
 
 #endif // PROCESS_H

@@ -199,6 +199,77 @@ public:
         }
     }
 
+    inline void resize(size_t new_size, byte fill_value = 0) {
+        // If the size is unchanged, do nothing
+        if (new_size == size_) return;
+
+        if (new_size < size_) {
+            // ---------------------
+            // Shrinking
+            // ---------------------
+            size_ = new_size;
+            // If we had a heap buffer but now the size is small enough,
+            // switch back to SBO
+            if (!is_sbo_ && size_ <= SBO_BUFFER_SIZE) {
+                // Copy the active data into the SBO buffer
+                std::memcpy(sbo_buffer_, data_ptr_, size_);
+                // Free the old heap buffer
+                std::free(data_ptr_);
+                data_ptr_ = nullptr;
+                // Mark that we're using SBO now
+                is_sbo_ = true;
+                capacity_ = SBO_BUFFER_SIZE;
+            }
+        } else {
+            // ---------------------
+            // Expanding
+            // ---------------------
+            // Check if we already have enough capacity
+            if (new_size <= (is_sbo_ ? SBO_BUFFER_SIZE : capacity_)) {
+                // We can just fill the extra space with fill_value
+                if (is_sbo_) {
+                    std::memset(sbo_buffer_ + size_, fill_value, new_size - size_);
+                } else {
+                    std::memset(data_ptr_ + size_, fill_value, new_size - size_);
+                }
+                size_ = new_size;
+            } else {
+                // We must allocate or reallocate
+                size_t new_cap = (is_sbo_ ? SBO_BUFFER_SIZE : capacity_);
+                // Double until we have at least new_size
+                while (new_cap < new_size) {
+                    new_cap *= 2;
+                }
+
+                if (is_sbo_) {
+                    // We were in SBO, need to move to heap
+                    byte* new_data = static_cast<byte*>(std::malloc(new_cap));
+                    if (!new_data) throw std::bad_alloc();
+
+                    // Copy existing SBO data
+                    std::memcpy(new_data, sbo_buffer_, size_);
+                    // Fill the new area
+                    std::memset(new_data + size_, fill_value, new_size - size_);
+
+                    data_ptr_ = new_data;
+                    capacity_ = new_cap;
+                    is_sbo_ = false;
+                    size_ = new_size;
+                } else {
+                    // We already have a heap buffer, just reallocate
+                    byte* new_data = static_cast<byte*>(std::realloc(data_ptr_, new_cap));
+                    if (!new_data) throw std::bad_alloc();
+
+                    data_ptr_ = new_data;
+                    capacity_ = new_cap;
+                    // Fill the newly added space
+                    std::memset(data_ptr_ + size_, fill_value, new_size - size_);
+                    size_ = new_size;
+                }
+            }
+        }
+    }
+
     inline void push_back(byte b) noexcept {
         if (is_sbo_) {
             if (size_ < SBO_BUFFER_SIZE) {
@@ -433,6 +504,10 @@ public:
         return is_sbo_ ? sbo_buffer_ : data_ptr_;
     }
 
+    inline byte* data() {
+        return is_sbo_ ? sbo_buffer_ : data_ptr_;
+    }
+
 private:
     inline void initialize(const byte* data_ptr, size_t len) {
         size_ = len;
@@ -512,5 +587,284 @@ namespace std {
         }
     };
 }
+
+class ByteSpan {
+public:
+    using byte = uint8_t;
+
+    // Constructors
+    ByteSpan() : data_(nullptr), size_(0) {}
+    ByteSpan(const byte* data, size_t size) : data_(data), size_(size) {}
+    ByteSpan(const ByteString& bs) : data_(bs.data()), size_(bs.size()) {}
+
+    // Element access
+    const byte& operator[](size_t index) const {
+        if (index >= size_) throw std::out_of_range("ByteSpan::operator[]: index out of range");
+        return data_[index];
+    }
+
+    const byte* data() const { return data_; }
+    size_t size() const { return size_; }
+    bool empty() const { return size_ == 0; }
+
+    // Slicing
+    ByteSpan subspan(size_t offset, size_t count = std::string::npos) const {
+        if (offset > size_) throw std::out_of_range("ByteSpan::subspan: offset out of range");
+        size_t new_size = (count == std::string::npos || offset + count > size_) ? size_ - offset : count;
+        return ByteSpan(data_ + offset, new_size);
+    }
+
+    // Conversion to string for compatibility
+    std::string toString() const {
+        return std::string(reinterpret_cast<const char*>(data_), size_);
+    }
+
+    // Comparison operators
+    bool operator==(const ByteSpan& other) const {
+        return size_ == other.size_ && std::equal(data_, data_ + size_, other.data_);
+    }
+
+    bool operator!=(const ByteSpan& other) const { return !(*this == other); }
+
+private:
+    const byte* data_;
+    size_t size_;
+};
+
+
+class ByteStringSpan {
+public:
+    using byte = uint8_t;
+    static const size_t npos = static_cast<size_t>(-1);
+
+    // -------------------------------------------------
+    // 1) Constructors
+    // -------------------------------------------------
+
+    // Default constructor => an invalid (null) span
+    ByteStringSpan()
+        : bs_(nullptr), offset_(0), length_(0)
+    {
+    }
+
+    // Construct a span referencing [offset, offset+length) in `bs`.
+    // Throws if offset+length > bs.size().
+    ByteStringSpan(ByteString& bs, size_t offset, size_t length)
+        : bs_(&bs), offset_(offset), length_(length)
+    {
+        if (offset + length > bs.size()) {
+            throw std::out_of_range("ByteStringSpan: range exceeds ByteString size");
+        }
+    }
+
+    // Construct a span referencing the entire ByteString
+    explicit ByteStringSpan(ByteString& bs)
+        : bs_(&bs), offset_(0), length_(bs.size()) {}
+
+    // Copy constructor
+    ByteStringSpan(const ByteStringSpan& other)
+        : bs_(other.bs_), offset_(other.offset_), length_(other.length_)
+    {
+    }
+
+    // Move constructor
+    ByteStringSpan(ByteStringSpan&& other) noexcept
+        : bs_(other.bs_), offset_(other.offset_), length_(other.length_)
+    {
+        other.bs_ = nullptr;
+        other.offset_ = 0;
+        other.length_ = 0;
+    }
+
+    // -------------------------------------------------
+    // 2) Assignment Operators
+    // -------------------------------------------------
+
+    // Copy assignment
+    ByteStringSpan& operator=(const ByteStringSpan& other) {
+        if (this == &other) {
+            return *this;  // self-assignment => no op
+        }
+        bs_     = other.bs_;
+        offset_ = other.offset_;
+        length_ = other.length_;
+        return *this;
+    }
+
+    // Move assignment
+    ByteStringSpan& operator=(ByteStringSpan&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+        bs_      = other.bs_;
+        offset_  = other.offset_;
+        length_  = other.length_;
+
+        // Invalidate the other
+        other.bs_     = nullptr;
+        other.offset_ = 0;
+        other.length_ = 0;
+        return *this;
+    }
+
+    // -------------------------------------------------
+    // 3) Assigning Data *Into* This Span
+    // -------------------------------------------------
+
+    // Assign from a ByteString => copy data *into* the span’s region
+    ByteStringSpan& operator=(const ByteString& src) {
+        if (!bs_) {
+            throw std::runtime_error("ByteStringSpan: invalid (null) span on ByteString assignment");
+        }
+        size_t copy_len = std::min(length_, src.size());
+
+        std::memcpy(bs_->data() + offset_, src.data(), copy_len);
+
+        return *this;
+    }
+
+    // Assign from a std::string => copy data *into* the span’s region
+    ByteStringSpan& operator=(const std::string& src) {
+        if (!bs_) {
+            throw std::runtime_error("ByteStringSpan: invalid (null) span on std::string assignment");
+        }
+        size_t copy_len = std::min(length_, src.size());
+
+        std::memcpy(bs_->data() + offset_, src.data(), copy_len);
+
+        return *this;
+    }
+
+    // Copy the *data* from another ByteStringSpan (without rebinding)
+    ByteStringSpan& copyDataFrom(const ByteStringSpan& other) {
+        if (!bs_) {
+            throw std::runtime_error("ByteStringSpan: invalid dest span in copyDataFrom()");
+        }
+        if (!other.bs_) {
+            throw std::runtime_error("ByteStringSpan: invalid source span in copyDataFrom()");
+        }
+        size_t copy_len = std::min(length_, other.length_);
+
+        std::memmove(
+            bs_->data() + offset_,
+            other.bs_->data() + other.offset_,
+            copy_len
+        );
+        return *this;
+    }
+
+    // -------------------------------------------------
+    // 4) Element Access
+    // -------------------------------------------------
+
+    // Non-const index operator
+    byte& operator[](size_t index) {
+        if (!bs_ || index >= length_) {
+            throw std::out_of_range("ByteStringSpan::operator[]: index out of range");
+        }
+        // ByteString::operator[] is safe, or we can do:
+        // return *(bs_->data() + offset_ + index);
+        return (*bs_)[offset_ + index];
+    }
+
+    // Const index operator
+    const byte& operator[](size_t index) const {
+        if (!bs_ || index >= length_) {
+            throw std::out_of_range("ByteStringSpan::operator[]: index out of range");
+        }
+        return (*bs_)[offset_ + index];
+    }
+
+    // Provide direct pointer to the beginning of this span’s data.
+    // WARNING: If `bs_` reallocates afterwards, this pointer becomes stale.
+    byte* data() {
+        if (!bs_) return nullptr;
+
+        return bs_->data() + offset_;
+    }
+
+    // Const version
+    const byte* data() const {
+        if (!bs_) return nullptr;
+        return bs_->data() + offset_;
+    }
+
+    // -------------------------------------------------
+    // 5) Span info
+    // -------------------------------------------------
+
+    size_t size() const { return length_; }
+    bool empty() const { return (length_ == 0); }
+    bool valid() const { return (bs_ != nullptr); }
+
+    // -------------------------------------------------
+    // 6) Subspan
+    // -------------------------------------------------
+
+    ByteStringSpan subspan(size_t pos, size_t count = npos) const {
+        if (!bs_) {
+            throw std::runtime_error("ByteStringSpan::subspan of invalid span");
+        }
+        if (pos > length_) {
+            throw std::out_of_range("ByteStringSpan::subspan: pos out of range");
+        }
+        size_t new_len = (count == npos || pos + count > length_)
+                         ? (length_ - pos)
+                         : count;
+        return ByteStringSpan(*bs_, offset_ + pos, new_len);
+    }
+
+    // -------------------------------------------------
+    // 7) Conversions
+    // -------------------------------------------------
+
+    // Copy the subrange into a new ByteString
+    ByteString toByteString() const {
+        if (!bs_) {
+            return ByteString(); // empty
+        }
+        return bs_->substr(offset_, length_);
+    }
+
+    // Copy the subrange into an std::string
+    std::string toString() const {
+        if (!bs_) {
+            return std::string();
+        }
+        return std::string(
+            reinterpret_cast<const char*>(bs_->data() + offset_),
+            reinterpret_cast<const char*>(bs_->data() + offset_ + length_)
+        );
+    }
+
+    // Hex dump of the subrange (like ByteString::toHex())
+    std::string toHex() const {
+        if (!bs_) {
+            return std::string();
+        }
+        static const char hex_table[] = "0123456789ABCDEF";
+        std::string result;
+        result.reserve(length_ * 2);
+        for (size_t i = 0; i < length_; ++i) {
+            byte v = (*bs_)[offset_ + i];
+            result.push_back(hex_table[v >> 4]);
+            result.push_back(hex_table[v & 0x0F]);
+        }
+        return result;
+    }
+
+    // -------------------------------------------------
+    // 8) Data Members
+    // -------------------------------------------------
+
+    // Pointer to the underlying ByteString (non-owning)
+    ByteString* bs_;
+
+private:
+    // The offset and length of our subview within *bs_.
+    size_t offset_;
+    size_t length_;
+};
+
 
 #endif // BYTE_STRING_HPP

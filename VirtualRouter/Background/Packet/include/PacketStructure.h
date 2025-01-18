@@ -9,6 +9,7 @@
 #include <ByteString.hpp>
 #include <Checksums.h>
 #include <variant>
+#include <Profiler.hpp>
 
 /**
  * @file Encapsulation.h
@@ -383,23 +384,26 @@ struct EthernetHeader
 
     const std::optional<ByteString> encapsulate() const
     {
+        //Profiler::getInstance().notify("ethernet encap start");
         ByteString ethernetString;
         ethernetString += destinationMac.size() == 6 ? destinationMac : ByteString(6, '\x00');
         if (sourceMac.size() != 6 || type.size() != 2) return std::nullopt;
 
         ethernetString.reserve(14);
-        ethernetString += sourceMac;
-        ethernetString += type;
+        ethernetString.append(sourceMac);
+        ethernetString.append(type);
 
         return ethernetString;
+        //Profiler::getInstance().notify("ethernet encap end");
     }
-    bool decapsulate(const ByteString ethernetHeader, size_t& start)
+    bool decapsulate(const ByteString ethernetHeader)
     {
+        //Profiler::getInstance().notify("ethernet decap start");
         if (ethernetHeader.size() != 14) return false;
         destinationMac = ethernetHeader.substr(0, 6);
         sourceMac = ethernetHeader.substr(6, 6);
         type = ethernetHeader.substr(12, 2);
-        start += 14;
+        //Profiler::getInstance().notify("ethernet decap end");
         return true;
     }
 };
@@ -440,7 +444,7 @@ struct ArpHeader
 
         return arpString;
     }
-    bool decapsulate(const ByteString arpHeader, size_t& start)
+    bool decapsulate(const ByteString arpHeader)
     {
         if (arpHeader.size() == 28)
         {
@@ -453,7 +457,6 @@ struct ArpHeader
             senderIpAddress = arpHeader.substr(14, 4);
             targetHardwareAddress = arpHeader.substr(18, 6);
             targetIpAddress = arpHeader.substr(24, 4);
-            start += 28;
         }
         else return false;
         return true;
@@ -474,7 +477,7 @@ struct MplsHeader
     const std::optional<ByteString> encapsulate() const
     {
         ByteString mplsString;
-        if (/*label.size() != 3 || TTL.size() != 1*/true) return std::nullopt;
+        if (/*label.size() != 3 || TTL.size() != 1*/false) return std::nullopt;
 
         mplsString.reserve(8);
         mplsString += label;
@@ -484,7 +487,7 @@ struct MplsHeader
 
         return mplsString;
     }
-    bool decapsulate(const ByteString mplsHeader, size_t& start)
+    bool decapsulate(const ByteString mplsHeader)
     {
         if (mplsHeader.size() != 8) return false;
             
@@ -492,7 +495,6 @@ struct MplsHeader
         expBit = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(0, 3);
         bottomLabelStack = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(3, 1);
         TTL = mplsHeader.substr(6, 2);
-        start += 4;
 
         return true;
     }
@@ -551,40 +553,43 @@ struct IPv4Header
 
     const std::optional<ByteString> encapsulate() const
     {
-        ByteString ipv4String;
+        //Profiler::getInstance().notify("IPv4 encap start");
         if (version.size() != 1 || headerLength.size() != 1 || serviceField.size() != 1 || totalLength.size() != 2 ||
             identification.size() != 2 || TTL.size() != 1 || protocol.size() != 1 || checksum.size() != 2 || 
             sourceAddress.size() != 4 || destinationAddress.size() != 4) return std::nullopt;
 
+        ByteString ipv4String;
         ipv4String.reserve(20);
-        ipv4String += Functions::hexToByte(version + headerLength);
-        ipv4String += serviceField;
-        ipv4String += totalLength;
-        ipv4String += identification;
-        ipv4String += Functions::binToByte(fragmentFlag.reserved + fragmentFlag.fragment + fragmentFlag.moreFragment + fragmentFlag.fragmentOffset);
-        ipv4String += TTL;
-        ipv4String += protocol;
-        ipv4String += ByteString(2, 0x00);
-        ipv4String += sourceAddress;
-        ipv4String += destinationAddress;
-        ipv4String += Functions::binToByte(options.type.copy) + options.type.classControl + options.type.routerAlert;
-        ipv4String += options.length;
-        ipv4String += options.routerAlert;
+
+        ipv4String.append(Functions::hexToByte(version + headerLength));
+        ipv4String.append(serviceField);
+        ipv4String.append(totalLength);
+        ipv4String.append(identification);
+        ipv4String.append(Functions::binToByte(fragmentFlag.reserved + fragmentFlag.fragment + fragmentFlag.moreFragment + fragmentFlag.fragmentOffset));
+        ipv4String.append(TTL);
+        ipv4String.append(protocol);
+        ipv4String.append(ByteString(2, 0x00));
+        ipv4String.append(sourceAddress);
+        ipv4String.append(destinationAddress);
+        ipv4String.append(Functions::binToByte(options.type.copy) + options.type.classControl + options.type.routerAlert);
+        ipv4String.append(options.length);
+        ipv4String.append(options.routerAlert);
         
         if (options.type.copy.size() == 1 && options.type.classControl.size() == 2 && 
             options.type.routerAlert.size() == 5 && options.length.size() == 1)
         {
-            ipv4String.reserve(23);
             ByteString typeString;
-            ipv4String += Functions::binToByte(options.type.copy + options.type.classControl + options.type.routerAlert);
-            ipv4String += options.length;
-            ipv4String += options.routerAlert;
+            ipv4String.append(Functions::binToByte(options.type.copy + options.type.classControl + options.type.routerAlert));
+            ipv4String.append(options.length);
+            ipv4String.append(options.routerAlert);
         }
 
+        //Profiler::getInstance().notify("IPv4 encap end");
         return ipv4String;
     }
-    bool decapsulate(const ByteString ipv4Header, size_t& start, size_t& ipv4Size)
+    bool decapsulate(const ByteString ipv4Header)
     {
+        //Profiler::getInstance().notify("IPv4 decap start");
         if (ipv4Header.size() < 20) return false;
 
         ByteString ipHeader = ipv4Header.substr(0, 1).toHex();
@@ -598,7 +603,6 @@ struct IPv4Header
         checksum = ipv4Header.substr(10, 2);
         sourceAddress = ipv4Header.substr(12, 4);
         destinationAddress = ipv4Header.substr(16, 4);
-        start += ipv4Size;
 
         ByteString fragmentFlags = Functions::byteToBin(ipv4Header.substr(6, 2));
 
@@ -607,7 +611,7 @@ struct IPv4Header
         fragmentFlag.moreFragment = fragmentFlags.substr(2, 1);
         fragmentFlag.fragmentOffset = fragmentFlags.substr(3);
 
-        if (ipv4Size > 20 && ipv4Header.size() == 23)
+        if (ipv4Header.size() == 23)
         {
             ByteString type = Functions::byteToBin(ipv4Header.substr(20, 1));
             options.type.copy = type.substr(0, 1);
@@ -616,6 +620,7 @@ struct IPv4Header
             options.length = ipv4Header.substr(21, 1);
             options.routerAlert = ipv4Header.substr(22, 1);
         }
+        //Profiler::getInstance().notify("IPv4 decap end");
         return true;
     }
 };
@@ -652,7 +657,7 @@ struct IPv6Header
 
         return ipv6String;
     }
-    bool decapsulate(const ByteString ipv6Header, size_t& start)
+    bool decapsulate(const ByteString ipv6Header)
     {
         if (ipv6Header.size() != 40) return false;
 
@@ -665,8 +670,6 @@ struct IPv6Header
         hopLimit = ipv6Header.substr(7, 1);
         sourceAddress = ipv6Header.substr(8, 16);
         destinationAddress = ipv6Header.substr(24, 16);
-        start += 40;
-
         return true;
     }
 };
@@ -743,7 +746,7 @@ struct TcpHeader
 
         return tcpString;
     }
-    bool decapsulate(const ByteString tcpHeader, size_t& start, size_t& tcpSize)
+    bool decapsulate(const ByteString tcpHeader)
     {
         if (tcpHeader.size() < 20) return false;
 
@@ -755,7 +758,6 @@ struct TcpHeader
         windowSize = tcpHeader.substr(14, 2);
         checksum = tcpHeader.substr(16, 2);
         urgentPointer = tcpHeader.substr(18, 2);
-        start += tcpSize;
 
         ByteString flagOpts = Functions::byteToBin(tcpHeader.substr(13, 1));
 
@@ -768,11 +770,11 @@ struct TcpHeader
         flags.syn = flagOpts.substr(6, 1);
         flags.fin = flagOpts.substr(7, 1);
 
-        if (tcpSize > 20)
+        if (tcpHeader.size() > 20)
         {
             ByteString tcpOptions = tcpHeader.substr(20);
             size_t optionStart = 0;
-            while (optionStart != tcpSize - 20)
+            while (optionStart != tcpHeader.size() - 20)
             {
                 TcpHeader::Option option;
                 if (!validateSize(optionStart, 2, tcpOptions)) return false;
@@ -819,7 +821,7 @@ struct UdpHeader
 
         return udpString;
     }
-    bool decapsulate(const ByteString udpHeader, size_t& start)
+    bool decapsulate(const ByteString udpHeader)
     {
         if (udpHeader.size() != 8) return false;
 
@@ -827,7 +829,6 @@ struct UdpHeader
         destinationPort = udpHeader.substr(2, 2);
         length = udpHeader.substr(4, 2);
         checksum = udpHeader.substr(6, 2);
-        start += 8;
 
         return true;
     }
@@ -859,7 +860,7 @@ struct IcmpHeader
 
         return icmpString;
     }
-    bool decapsulate(const ByteString icmpHeader, size_t& start)
+    bool decapsulate(const ByteString icmpHeader)
     {
         if (icmpHeader.size() != 8) return false;
 
@@ -868,7 +869,6 @@ struct IcmpHeader
         checksum = icmpHeader.substr(2, 2);
         identifier = icmpHeader.substr(4, 2);
         sequenceNumber = icmpHeader.substr(6, 2);
-        start += 8;
 
         return true;
     }
@@ -917,7 +917,7 @@ struct IcmpV6Header
 
         return icmpv6String;
     }
-    bool decapsulate(const ByteString icmpV6Header, size_t& start)
+    bool decapsulate(const ByteString icmpV6Header)
     {
         size_t icmpv6Start = 0;
         size_t icmpv6End = 0;
@@ -928,7 +928,6 @@ struct IcmpV6Header
         checksum = icmpV6Header.substr(2, 2);
         reserved = icmpV6Header.substr(4, 4);
         icmpv6Start = 8;
-        start += icmpv6Start;
         icmpv6End = icmpV6Header.size();
         
         while (icmpv6Start != icmpv6End)
@@ -943,7 +942,6 @@ struct IcmpV6Header
             if (!validateSize(icmpv6Start, icmpv6ADD, icmpV6Header)) return false;
             option.value = icmpV6Header.substr(icmpv6Start, icmpv6ADD);
             icmpv6Start += icmpv6ADD;
-            start += icmpv6ADD;
             options.push_back(option);
         }
         return true;
@@ -992,7 +990,7 @@ struct IgmpHeader
 
         return igmpString;
     }
-    bool decapsulate(const ByteString igmpHeader, size_t& start)
+    bool decapsulate(const ByteString igmpHeader)
     {
         if (igmpHeader.size() < 8) return false;
 
@@ -1000,7 +998,6 @@ struct IgmpHeader
         maxRestTime = igmpHeader.substr(1, 1);
         checksum = igmpHeader.substr(2, 2);
         multicastAddress = igmpHeader.substr(4, 4);
-        start += 8;
 
         if (igmpHeader.size() == 12) 
         {
@@ -1008,7 +1005,6 @@ struct IgmpHeader
             v3.qrv = (Functions::byteToBin(igmpHeader.substr(8, 1))).substr(6, 3);
             v3.qqic = igmpHeader.substr(9, 1);
             v3.numSrc = igmpHeader.substr(10, 2);
-            start += 4;
         }
         return true;
     }
@@ -1028,7 +1024,7 @@ struct TlsHeader
     {
         return std::nullopt;
     }
-    bool decapsulate(const ByteString Header, size_t& start)
+    bool decapsulate(const ByteString Header)
     {
         return false;
     }
@@ -1078,7 +1074,7 @@ struct GreHeade
 
         return greString;
     }
-    bool decapsulate(const ByteString greHeader, size_t& start)
+    bool decapsulate(const ByteString greHeader)
     {
         if (greHeader.size() != 12) return false;
 
@@ -1096,7 +1092,6 @@ struct GreHeade
         length = greHeader.substr(4, 2);
         callID = greHeader.substr(6, 2);
         seqNum = greHeader.substr(8, 4);
-        start += 12;
 
         return true;
     }
@@ -1125,14 +1120,13 @@ struct PppHeader
         return pppString;
         
     }
-    bool decapsulate(const ByteString pppHeader, size_t& start)
+    bool decapsulate(const ByteString pppHeader)
     {
         if (pppHeader.size() != 4) return false;
 
         address = pppHeader.substr(0, 1);
         control = pppHeader.substr(1, 1);
         protocol = pppHeader.substr(2, 2);
-        start += 4;
 
         return true;
     }
@@ -1174,7 +1168,7 @@ struct FrameHeader
     {
 
     }
-    bool decapsulate(const ByteString frameHeader, size_t& start)
+    bool decapsulate(const ByteString frameHeader)
     {
         if (frameHeader.size() != 4) return false;
 
@@ -1187,7 +1181,6 @@ struct FrameHeader
         secondAddress.de = relay.substr(6, 1);
         secondAddress.ea = relay.substr(7, 1);
         type = frameHeader.substr(2, 2);
-        start += 4;
 
         return true;
     }
@@ -1221,17 +1214,17 @@ struct AhHeader
 
         return ahString;
     }
-    bool decapsulate(const ByteString ahHeader, size_t& start, size_t& ahSize)
+    bool decapsulate(const ByteString ahHeader)
     {
         if (ahHeader.size() < 12)
-
-        next = ahHeader.substr(0, 1);
-        length = ahHeader.substr(1, 1);
-        reserved = ahHeader.substr(2, 2);
-        spi = ahHeader.substr(4, 4);
-        sequence = ahHeader.substr(8, 4);
-        icv = ahHeader.substr(12);
-        start += ahSize;
+        {
+            next = ahHeader.substr(0, 1);
+            length = ahHeader.substr(1, 1);
+            reserved = ahHeader.substr(2, 2);
+            spi = ahHeader.substr(4, 4);
+            sequence = ahHeader.substr(8, 4);
+            icv = ahHeader.substr(12);
+        }
 
         return true;
     }
@@ -1257,13 +1250,12 @@ struct EspHeader
 
         return espString;
     }
-    bool decapsulate(const ByteString espHeader, size_t& start)
+    bool decapsulate(const ByteString espHeader)
     {
         if (espHeader.size() != 8) return false;
 
         spi = espHeader.substr(0, 4);
         sequence = espHeader.substr(4, 4);
-        start += 8;
 
         return true;
     }
@@ -1284,7 +1276,7 @@ struct VlanHeader
     {
         return std::nullopt;
     }
-    bool decapsulate(const ByteString vlanHeader, size_t& start)
+    bool decapsulate(const ByteString vlanHeader)
     {
         return false;
     }
@@ -1322,7 +1314,7 @@ struct LldpHeader
     {
         return std::nullopt;
     }
-    bool decapsulate(const ByteString Header, size_t& start)
+    bool decapsulate(const ByteString Header)
     {
         return false;
     }
@@ -1411,7 +1403,7 @@ struct DhcpHeader
 
         return dhcpString;
     }
-    bool decapsulate(const ByteString dhcpHeaders, size_t& start)
+    bool decapsulate(const ByteString dhcpHeaders)
     {
         size_t dhcpStart;
         ByteString dhcpHeader;
@@ -1437,7 +1429,6 @@ struct DhcpHeader
         bootFile = dhcpHeader.substr(108, 128);
         magicCookie = dhcpHeader.substr(236, 4);
         dhcpStart = 240;
-        start = dhcpStart;
 
         size_t dhcpEnd{};
         size_t dhcpLength = dhcpHeader.size();
@@ -1460,7 +1451,6 @@ struct DhcpHeader
             option.value = dhcpHeader.substr(dhcpStart, static_cast<size_t>(Functions::byteToNum(option.length)));
             size_t dhcpADD = static_cast<size_t>(Functions::byteToNum(option.length));
             dhcpStart += dhcpADD;
-            start += dhcpADD;
             options.push_back(option);
         }
 
@@ -1533,7 +1523,7 @@ struct EigrpHeader
             
         return eigrpString;
     }
-    bool decapsulate(const ByteString eigrpHeader, size_t& start)
+    bool decapsulate(const ByteString eigrpHeader)
     {
         size_t eigrpStart;
         size_t eigrpEnd;
@@ -1552,7 +1542,6 @@ struct EigrpHeader
         virtualRouterID = eigrpHeader.substr(16, 2);
         autonomousSystem = eigrpHeader.substr(18, 2);
         eigrpStart = 20;
-        start += eigrpStart;
         eigrpEnd = eigrpHeader.size();
 
         while (eigrpStart != eigrpEnd)
@@ -1568,7 +1557,6 @@ struct EigrpHeader
             {
                 option.value = eigrpHeader.substr(eigrpStart, eigrpADD);
                 eigrpStart += eigrpADD;
-                start += eigrpADD;
                 options.push_back(option);
             }
         }
@@ -1597,7 +1585,7 @@ namespace OspfPacket
         {
             return std::nullopt;
         }
-        bool decapsulate(const ByteString Header, size_t& start)
+        bool decapsulate(const ByteString Header)
         {
             return false;
         }
@@ -1633,7 +1621,7 @@ namespace OspfPacket
         {
             return std::nullopt;
         }
-        bool decapsulate(const ByteString Header, size_t& start)
+        bool decapsulate(const ByteString Header)
         {
             return false;
         }
@@ -1676,7 +1664,7 @@ namespace OspfPacket
         {
             return std::nullopt;
         }
-        bool decapsulate(const ByteString Header, size_t& start)
+        bool decapsulate(const ByteString Header)
         {
             return false;
         }
@@ -1692,7 +1680,7 @@ namespace OspfPacket
         {
             return std::nullopt;
         }
-        bool decapsulate(const ByteString Header, size_t& start)
+        bool decapsulate(const ByteString Header)
         {
             return false;
         }
@@ -1708,7 +1696,7 @@ namespace OspfPacket
         {
             return std::nullopt;
         }
-        bool decapsulate(const ByteString Header, size_t& start)
+        bool decapsulate(const ByteString Header)
         {
             return false;
         }
@@ -1745,7 +1733,7 @@ namespace OspfPacket
         {
             return std::nullopt;
         }
-        bool decapsulate(const ByteString Header, size_t& start)
+        bool decapsulate(const ByteString Header)
         {
             return false;
         }
@@ -1760,7 +1748,7 @@ namespace OspfPacket
         {
             return std::nullopt;
         }
-        bool decapsulate(const ByteString Header, size_t& start)
+        bool decapsulate(const ByteString Header)
         {
             return false;
         }
@@ -1779,7 +1767,7 @@ struct SyslogHeader {
     {
         return std::nullopt;
     }
-    bool decapsulate(const ByteString syslogHeader, size_t& start)
+    bool decapsulate(const ByteString syslogHeader)
     {
         return false;
     }
@@ -1825,7 +1813,7 @@ struct PacketInfo
 template <typename T>
 bool is_type(const std::any &a)
 {
-    return a.type() == typeid(T);
+    return std::any_cast<T>(&a) != nullptr;
 }
 
 #endif // PACKET_STRUCTURE_H

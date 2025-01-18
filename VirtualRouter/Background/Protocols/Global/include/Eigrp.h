@@ -1173,7 +1173,7 @@ namespace Protocol
         EigrpHeader::Option generateAuthenticatedTLV(const EigrpHeader& eigrp, const std::shared_ptr<EigrpConfigs::NeighborInfo>& neighbor);
         
         std::weak_ptr<Interface> currentInterface; ///< Weak pointer to the current network interface.
-        std::weak_ptr<IpInfo> currentInterfaceInfo; ///< Weak pointer to the current interface's IP information.
+        IpInfo* currentInterfaceInfo; ///< Weak pointer to the current interface's IP information.
         
         // Neighbor management
         std::mutex initMutex; ///< Mutex for initialization operations.

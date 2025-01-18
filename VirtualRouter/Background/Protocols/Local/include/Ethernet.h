@@ -17,7 +17,7 @@ namespace Protocol
     {
     public:
         // Constructor takes references to Interface and Arp classes
-        Ethernet(Interface& iface, std::shared_ptr<Arp> arpHandler, ByteString mac);
+        Ethernet(Interface& iface, Arp* arpHandler, ByteString mac);
 
         // Constructs the Ethernet header in PacketInfo based on destination IP
         // Returns true of Ethernet Header was successfully set
@@ -25,7 +25,7 @@ namespace Protocol
 
     private:
         Interface& currentInterface;
-        std::shared_ptr<Arp> arp;
+        Arp* arp;
 
         // Helper method to determin if IP is multicast
         bool isMulticast(const ByteString& ip);

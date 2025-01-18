@@ -39,7 +39,8 @@ enum class InterfaceType
     VLAN                ///< VLAN interface type.
 };
 
-namespace Protocol {
+namespace Protocol 
+{
     class Ethernet;                 ///< Forward declaration of Ethernet protocol class.
     class IPPacket;                 ///< Forward declaration of IPPacket protocol class.
     class DhcpClient;               ///< Forward declaration of DhcpClient protocol class.
@@ -51,7 +52,8 @@ namespace Protocol {
  * @struct IpInfo
  * @brief Stored IP address and related configuration information.
  */
-struct IpInfo {
+struct IpInfo 
+{
     std::shared_mutex ipMutex;      ///< Mutex for thread-safe access to IP information
 
     uint8_t id;                     ///< Identifier for the interface.
@@ -105,7 +107,8 @@ struct IpInfo {
  * The interface class manages packet capture, sending, and processing for a specific network interface.
  * It handles IP configuration, MAC address management, and interacts with various network protocols.
  */
-class Interface {
+class Interface
+{
 public:
 
     RingBuffer<ByteString> packetOutQueue; ///< Queue for outgoing packets.
@@ -131,7 +134,7 @@ public:
      *
      * Stops background threads and performs necessary cleanup.
      */
-    ~Interface();
+    virtual ~Interface();
 
     /**
      * @brief Sets the IPv4 address and subnet mask for the interface.
@@ -141,7 +144,7 @@ public:
      * @param ip The IPv4 address to assign to the interface.
      * @param subnet The subnet mask for the IPv4 address.
      */
-    void setIPv4(ByteString, uint8_t subnet);
+    virtual void setIPv4(ByteString, uint8_t subnet);
 
     /**
      * @brief Sets the IPv6 address, subnet mask, and EUI-64 flag for interface.
@@ -152,7 +155,7 @@ public:
      * @param subnet The subnet mask for the IPv6 address, Default to 64.
      * @param eui64 Flag indicating whether to use EUI-64 for IPv6 address generation.
      */
-    void setIPv6(ByteString ip, uint8_t subnet = 64, bool eui64 = false);
+    virtual void setIPv6(ByteString ip, uint8_t subnet = 64, bool eui64 = false);
 
     /**
      * @brief Retrieves the current IP address information
@@ -161,7 +164,7 @@ public:
      *
      * @return std::shared_ptr<IpInfo> Shared pointer to the IP information.
      */
-    std::shared_ptr<IpInfo> Get() const;
+    virtual IpInfo* Get() const;
 
     /**
      * @brief Shuts down or restarts the interface.
@@ -170,7 +173,7 @@ public:
      *
      * @param shut Boolean flag indicating whether to shut down ('true') or restart ('false').
      */
-    void Shutdown(bool shut);
+    virtual void Shutdown(bool shut);
     bool shutdownFlag; ///< Flag indicating if the interface is in shutdown state.
     ByteString vrf = "default"; ///< Virtual Routing and Forwarding identifier.
 
@@ -182,18 +185,18 @@ public:
      * @param packetInfo The packet information to be sent.
      * @param mac Optional MAC address to replace the packet's source MAC.
      */
-    void enqueuePacket(PacketInfo& packetInfo, ByteString mac = "");
+    virtual void enqueuePacket(PacketInfo& packetInfo, ByteString mac = "");
 
     //L2 Protocols
-    std::shared_ptr<Protocol::Ethernet> ethernet;   ///< Ethernet Protocol handler.
-    std::shared_ptr<Protocol::Arp> arp;             ///< ARP protocol handler.
+    Protocol::Ethernet* ethernet;   ///< Ethernet Protocol handler.
+    Protocol::Arp* arp;             ///< ARP protocol handler.
 
     // L3 Protocols
-    std::shared_ptr<Protocol::IPPacket> ipPacket;   ///< IP Packet protocol handler.
+    Protocol::IPPacket* ipPacket;   ///< IP Packet protocol handler.
 
     // L4 Protocols
     std::map<uint32_t, std::shared_ptr<Protocol::EigrpInterfaceInstance>> eigrpInterfaceList; ///< EIGRP interface instance.
-    std::shared_ptr<Protocol::DhcpClient> dhcp;     ///< DHCP Client protocol handler.
+    Protocol::DhcpClient* dhcp;     ///< DHCP Client protocol handler.
 
 private:
 
@@ -227,7 +230,7 @@ private:
      *
      * Launches threads for packet ingress, egress, and processing.
      */
-    void startThreads();
+    virtual void startThreads();
 
     /**
      * @brief Stops the background threads for packet handling.
@@ -261,7 +264,7 @@ private:
     void onArpResolved(const ByteString& ip, const ByteString& mac);
 
     // Member variables
-    std::shared_ptr<IpInfo> configs;    ///< Shared pointer to IP configuration information.
+    IpInfo* configs;                    ///< Shared pointer to IP configuration information.
     std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
 
     std::string outInt;     ///< Outgoing interface name.

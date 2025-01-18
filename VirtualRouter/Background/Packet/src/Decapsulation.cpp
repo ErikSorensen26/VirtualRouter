@@ -1,30 +1,28 @@
 #include <Decapsulation.h>
+#include <Profiler.hpp>
 
 // Constructor for Packet class, starts packet inspection
-Packet::Packet(ByteString &packet, bool debug, Interface& iface) : currentInterface(iface)
+Packet::Packet(ByteString &packet, bool debug, Interface& iface)
+     : currentInterface(&iface),
+      start(0),
+      fullPacket(packet),
+      print(debug)
 {
-    print = debug;
     if (print) {Logger::getInstance().info() << packet.toHex() << std::endl;}
     inspection(packet);
 }
 
-Packet::Packet(Interface& iface) : currentInterface(iface) {}
+Packet::Packet(ByteString& packet) : fullPacket(packet), currentInterface(nullptr) {}
 
 // Inspects the given packet and processes each layer.
 bool Packet::inspection(ByteString &packet)
 {
-    //std::cout << "inspect " << packet.toHex() << std::endl;
-    fullPacket = packet;
-
+    //Profiler::getInstance().notify("Inspection begin");
     start = 0;
-    if (print) { Logger::getInstance().info() << "Layer 2:" << std::endl; }
-    if (!processLayer2(packet)) { return false; }
-    
-    if (print) { Logger::getInstance().info() << "Layer 2.5:" << std::endl; }
-    if (!processLayer2_5(packet)) { return false; }
 
-    if (print) { Logger::getInstance().info() << "Layer 3:" << std::endl; }
-    if (!processLayer3(packet)) { return false; }
+    if (!processLayer2(packet) ||
+        !processLayer2_5(packet) ||
+        !processLayer3(packet)) return false;
 
     return true;
 }
@@ -32,34 +30,41 @@ bool Packet::inspection(ByteString &packet)
 // Decapsulates the remaining layers after Layer 3.
 bool Packet::decapsulate()
 {
-    //std::cout << "decap " << fullPacket.toHex() << std::endl;
-    if (print) { Logger::getInstance().info() << "Layer 4:" << std::endl; }
-    if (!processLayer4(fullPacket)) { return false; }
-
-    if (print) { Logger::getInstance().info() << "Layer 5:" << std::endl; }
-    if (!processLayer5(fullPacket)) { return false; }
-
+    if (!processLayer4(fullPacket) ||
+        !processLayer5(fullPacket)) return false;
     return true;
+}
+
+// Slices the packet for decapsulation
+ByteString Packet::getSlice(size_t length)
+{
+    if (!validateSize(start, length, fullPacket))
+    {
+        return {};
+    }
+    ByteString slice = fullPacket.substr(start, length);
+    start += length;
+    return slice;
 }
 
 // Handles Layer 2 processing, distinguishing between Ethernet and PPP.
 bool Packet::processLayer2(ByteString &packet)
 {
-    //std::cout << "l2 " << packet.toHex() << std::endl;
+    //Profiler::getInstance().notify("Decapsulating Layer 2 Headers");
+    //if (print) { Logger::getInstance().info() << "Layer 2:" << std::endl; }
     const GreHeade* gre = getLayer3Header<GreHeade>();
     if (gre && gre->protocol == Variable::Gre::ppp && validateSize(start, 4, packet))
     {
-        ByteString pppHeader = packet.substr(start, 4);
+        ByteString pppHeader = getSlice(4);
         if (!decodePpp(pppHeader)) return false;
     }
     else if (validateSize(start, 14, packet))
     {
-        ByteString ethernetHeader = packet.substr(start, 14);
+        ByteString ethernetHeader = getSlice(14);
         if (!decodeEthernet(ethernetHeader)) return false;
     }
     else return false;
 
-    afterPacket = packet.substr(start);
     return true;
 }
 
@@ -67,23 +72,25 @@ bool Packet::processLayer2(ByteString &packet)
 bool Packet::processLayer2_5(ByteString &packet)
 {
     //std::cout << "l2_5 " << packet.toHex() << std::endl;
+    //Profiler::getInstance().notify("Decapsulating Layer 2.5 Headers");
+    //if (print) { Logger::getInstance().info() << "Layer 2.5:" << std::endl; }
     const EthernetHeader* ethernet = getLayer2Header<EthernetHeader>();
     if (ethernet && ethernet->type == Variable::Ethernet::arp)
     {
         if (!validateSize(start, 28, packet)) return false;
-        ByteString arpHeader = packet.substr(start, 28);
+        ByteString arpHeader = getSlice(28);
         if (!decodeArp(arpHeader)) return false;
     }
     else if (ethernet && ethernet->type == Variable::Ethernet::mpls)
     {
         if (!validateSize(start, 4, packet)) return false;
-        ByteString mplsHeader = packet.substr(start, 4).toHex();
+        ByteString mplsHeader = getSlice(4).toHex();
         if (!decodeMpls(mplsHeader)) return false;
     }
     else if (ethernet && ethernet->type == Variable::Ethernet::vlan)
     {
         if (!validateSize(start, 4, packet)) return false;
-        ByteString vlanHeader = packet.substr(start, 4);
+        ByteString vlanHeader = getSlice(4);
         if (!decodeVlan(vlanHeader)) return false;
     }
     else if (ethernet && ethernet->type == Variable::Ethernet::lldp)
@@ -98,21 +105,24 @@ bool Packet::processLayer2_5(ByteString &packet)
 // Processes Layer 3 headers, focusing on IPv4/IPv6 and its encapsulated protocols.
 bool Packet::processLayer3(ByteString &packet)
 {
-    //std::cout << "l3 " << packet.toHex() << std::endl;
+    //Profiler::getInstance().notify("Decapsulating Layer 3 Headers");
+    //if (print) { Logger::getInstance().info() << "Layer 3:" << std::endl; }
     const EthernetHeader* ethernet = getLayer2Header<EthernetHeader>();
     const VlanHeader* vlan = getLayer2_5Header<VlanHeader>();
+
+    // IPv4
     if (ethernet && (ethernet->type == Variable::Ethernet::ipv4 || ethernet->type == Variable::Ethernet::mpls || (vlan && vlan->type == Variable::Ethernet::ipv4)))
     {
         size_t ipv4Size = Functions::binToNum((Functions::byteToBin(packet.substr(start, 1))).substr(4, 4)) * 4;
         if (!validateSize(start, ipv4Size, packet)) return false;
-        ByteString ipv4Header = packet.substr(start, ipv4Size);
+        ByteString ipv4Header = getSlice(ipv4Size);
         if (!decodeIPv4(ipv4Header, ipv4Size)) return false;
         const IPv4Header* ipv4 = getLayer3Header<IPv4Header>();
 
-        if (ipv4 && ipv4->protocol == Variable::IP::gre)
+        if (ipv4 && ipv4->protocol.toString() == Variable::IP::gre)
         {
             if (!validateSize(start, 12, packet)) return false;
-            ByteString greHeader = packet.substr(start, 12);
+            ByteString greHeader = getSlice(12);
             if (!decodeGre(greHeader)) return false;
             const GreHeade* gre = getLayer3Header<GreHeade>();
             if (gre && gre->protocol == Variable::Gre::ppp)
@@ -122,11 +132,11 @@ bool Packet::processLayer3(ByteString &packet)
                 return true;
             }
         }
-        else if (ipv4 && ipv4->protocol == Variable::IP::ah)
+        else if (ipv4 && ipv4->protocol.toString() == Variable::IP::ah)
         {
             size_t ahSize = (Functions::binToNum(Functions::byteToBin(packet.substr(start + 1, 1))) * 4) + 8;
             if (!validateSize(start, ahSize, packet)) return false;
-            ByteString ahHeader = packet.substr(start, ahSize);
+            ByteString ahHeader = getSlice(ahSize);
             if (!decodeAh(ahHeader, ahSize)) return false;
             const AhHeader* ah = getLayer3Header<AhHeader>();
             if (ah && ah->next == Variable::Ah::esp)
@@ -135,27 +145,27 @@ bool Packet::processLayer3(ByteString &packet)
                 if (!decodeEsp(espHeader)) return false;
             }
         }
-        else if (ipv4 && ipv4->protocol == Variable::Ah::esp)
+        else if (ipv4 && ipv4->protocol.toString() == Variable::Ah::esp)
         {
             ByteString espHeader = packet.substr(start);
             if (!decodeEsp(espHeader)) return false;
         }
-        else if (ipv4 && ipv4->protocol == Variable::IP::icmpv4)
+        else if (ipv4 && ipv4->protocol.toString() == Variable::IP::icmpv4)
         {
             if (!validateSize(start, 8, packet)) return false;
-            ByteString icmpHeader = packet.substr(start, 8);
+            ByteString icmpHeader = getSlice(8);
             if (!decodeIcmp(icmpHeader)) return false;
         }
-        else if (ipv4 && ipv4->protocol == Variable::IP::igmp)
+        else if (ipv4 && ipv4->protocol.toString() == Variable::IP::igmp)
         {
             ByteString igmpHeader = packet.substr(start);
             if (!decodeIgmp(igmpHeader)) return false;
         }
     }
-    if (ethernet->type == Variable::Ethernet::ipv6)
+    if (ethernet->type.toString() == Variable::Ethernet::ipv6)
     {
         if (!validateSize(start, 40, packet)) return false;
-        ByteString ipv6Header = packet.substr(start, 40);
+        ByteString ipv6Header = getSlice(40);
         if (!decodeIPv6(ipv6Header)) return false;
         const IPv6Header* ipv6 = getLayer3Header<IPv6Header>();
 
@@ -173,28 +183,29 @@ bool Packet::processLayer3(ByteString &packet)
 // Processes Layer 4 headers, including TCP, UDP, and EIGRP.
 bool Packet::processLayer4(ByteString &packet)
 {
-    //std::cout << "l4 " << packet.toHex() << std::endl;
+    //if (print) { Logger::getInstance().info() << "Layer 4:" << std::endl; }
+    //Profiler::getInstance().notify("Decapsulating Layer 4 Headers");
     const IPv4Header* ipv4 = getLayer3Header<IPv4Header>();
     const IPv6Header* ipv6 = getLayer3Header<IPv6Header>();
-    if (ipv4 && ipv4->protocol == Variable::IP::tcp)
+    if (ipv4 && ipv4->protocol.toString() == Variable::IP::tcp)
     {
         if (!validateSize(start, 20, packet)) return false;
         size_t tcpSize = Functions::binToNum((Functions::byteToBin(packet.substr(start + 12, 1))).substr(0, 4)) * 4;
         if (!validateSize(start, tcpSize, packet)) return false;
-        ByteString tcpHeader = packet.substr(start, tcpSize);
+        ByteString tcpHeader = getSlice(tcpSize);
         if (!decodeTcp(tcpHeader, tcpSize)) return false;
     }
-    else if (ipv4 && ipv4->protocol == Variable::IP::udp)
+    else if (ipv4 && ipv4->protocol.toString() == Variable::IP::udp)
     {
         if (!validateSize(start, 8, packet)) return false;
-        ByteString udpHeader = packet.substr(start, 8);
+        ByteString udpHeader = getSlice(8);
         if (!decodeUdp(udpHeader)) return false;
     }
-    else if (ipv4 && ipv4->protocol == Variable::IP::eigrp)
+    else if (ipv4 && ipv4->protocol.toString() == Variable::IP::eigrp)
     {
-        size_t eigrpSize = static_cast<size_t>(Functions::byteToNum(ipv6->payloadLength) - 20);
+        size_t eigrpSize = static_cast<size_t>(Functions::byteToNum(ipv4->totalLength.toString()) - 20);
         if (!validateSize(start, eigrpSize, packet)) return false;
-        ByteString eigrpHeader = packet.substr(start, eigrpSize);
+        ByteString eigrpHeader = getSlice(eigrpSize);
         if (!decodeEigrp(eigrpHeader)) return false;
     }
     afterPacket = packet.substr(start);
@@ -204,7 +215,8 @@ bool Packet::processLayer4(ByteString &packet)
 // Processes Layer 5 (Session Layer) headers, such as DHCP.
 bool Packet::processLayer5(ByteString &packet)
 {
-    //std::cout << "l5 " << packet.toHex() << std::endl;
+    //if (print) { Logger::getInstance().info() << "Layer 5:" << std::endl; }
+    //Profiler::getInstance().notify("Decapsulating Layer 5 Headers");
     const UdpHeader* udp = getLayer4Header<UdpHeader>();
     if (udp && ((udp->sourcePort == Variable::Udp::Dhcp::source && udp->destinationPort == Variable::Udp::Dhcp::destination) ||
         (udp->sourcePort == Variable::Udp::Dhcp::destination && udp->destinationPort == Variable::Udp::Dhcp::source)))
@@ -224,16 +236,20 @@ bool Packet::processLayer5(ByteString &packet)
 bool Packet::decodeEthernet(ByteString &ethernetHeader)
 {
     //std::cout << "eth " << ethernetHeader.toHex() << std::endl;
+    //Profiler::getInstance().notify("decoding ethernet");
     EthernetHeader ethernet;
-    if (!ethernet.decapsulate(ethernetHeader, start)) return false;
+    if (!ethernet.decapsulate(ethernetHeader)) return false;
 
     ByteString currentMac;
     {
-        std::shared_lock<std::shared_mutex> lock(currentInterface.Get()->ipMutex);
-        currentMac = currentInterface.Get()->macAddress;
+        if (currentInterface)
+        {
+            std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
+            currentMac = currentInterface->Get()->macAddress;
+        }
     }
 
-    if (currentMac == ethernet.sourceMac)
+    if (currentMac == ethernet.sourceMac.toString())
     {
         Logger::getInstance().info() << "Packet dropped due to receiving current MAC" << std::endl;
         return false;
@@ -247,36 +263,8 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
         Logger::getInstance().info() << "Type: " << ethernet.type.toHex() << std::endl;
     }
 
-    layer2.push_back(std::move(ethernet));
-    return true;
-}
-
-//-----------------------------------------------------------------------------------------------
-// Layer 2.5
-//-----------------------------------------------------------------------------------------------
-
-// Parses and processes ARP header.
-bool Packet::decodeArp(ByteString &arpHeader)
-{
-    //std::cout << "arp " << arpHeader.toHex() << std::endl;
-    ArpHeader arp;
-    if (!arp.decapsulate(arpHeader, start)) return false;
-
-    if (print)
-    {
-        Logger::getInstance().info() << "ARP Header:" << std::endl;
-        Logger::getInstance().info() << "Hardware Type: " << arp.hardwareType.toHex() << std::endl;
-        Logger::getInstance().info() << "Protocol Type: " << arp.protocolType.toHex() << std::endl;
-        Logger::getInstance().info() << "Hardware Size: " << arp.hardwareSize.toHex() << std::endl;
-        Logger::getInstance().info() << "Protocol Size: " << arp.protocolSize.toHex() << std::endl;
-        Logger::getInstance().info() << "Opcode: " << arp.opcode.toHex() << std::endl;
-        Logger::getInstance().info() << "Sender Hardware Address: " << arp.senderHardwareAddress.toHex() << std::endl;
-        Logger::getInstance().info() << "Sender IP Address: " << arp.senderIpAddress.toHex() << std::endl;
-        Logger::getInstance().info() << "Target Hardware Address: " << arp.targetHardwareAddress.toHex() << std::endl;
-        Logger::getInstance().info() << "Target IP Address: " << arp.targetIpAddress.toHex() << std::endl;
-    }
-
-    layer2_5.push_back(std::move(arp));
+    packetInfo.Layer2.emplace_back(ethernet);
+    //Profiler::getInstance().notify("decode complete");
     return true;
 }
 
@@ -285,7 +273,7 @@ bool Packet::decodePpp(ByteString &pppHeader)
 {
     //std::cout << "ppp " << pppHeader.toHex() << std::endl;
     PppHeader ppp;
-    if (!ppp.decapsulate(pppHeader, start)) return false;
+    if (!ppp.decapsulate(pppHeader)) return false;
 
     if (print)
     {
@@ -296,7 +284,7 @@ bool Packet::decodePpp(ByteString &pppHeader)
         Logger::getInstance().info() << "Protocol: " << ppp.protocol.toHex() << std::endl;
     }
 
-    layer2.push_back(std::move(ppp));
+    packetInfo.Layer2.push_back(std::move(ppp));
     return true;
 }
 
@@ -305,7 +293,7 @@ bool Packet::decodeFrame(ByteString &frameHeader)
 {
     //std::cout << "frame " << frameHeader.toHex() << std::endl;
     FrameHeader frame;
-    if (!frame.decapsulate(frameHeader, start)) return true;
+    if (!frame.decapsulate(frameHeader)) return true;
 
     if (print)
     {
@@ -322,7 +310,36 @@ bool Packet::decodeFrame(ByteString &frameHeader)
         Logger::getInstance().info() << "Type: " << frame.type.toHex() << std::endl;
     }
 
-    layer2.push_back(std::move(frame));
+    packetInfo.Layer2.push_back(std::move(frame));
+    return true;
+}
+
+//-----------------------------------------------------------------------------------------------
+// Layer 2.5
+//-----------------------------------------------------------------------------------------------
+
+// Parses and processes ARP header.
+bool Packet::decodeArp(ByteString &arpHeader)
+{
+    //std::cout << "arp " << arpHeader.toHex() << std::endl;
+    ArpHeader arp;
+    if (!arp.decapsulate(arpHeader)) return false;
+
+    if (print)
+    {
+        Logger::getInstance().info() << "ARP Header:" << std::endl;
+        Logger::getInstance().info() << "Hardware Type: " << arp.hardwareType.toHex() << std::endl;
+        Logger::getInstance().info() << "Protocol Type: " << arp.protocolType.toHex() << std::endl;
+        Logger::getInstance().info() << "Hardware Size: " << arp.hardwareSize.toHex() << std::endl;
+        Logger::getInstance().info() << "Protocol Size: " << arp.protocolSize.toHex() << std::endl;
+        Logger::getInstance().info() << "Opcode: " << arp.opcode.toHex() << std::endl;
+        Logger::getInstance().info() << "Sender Hardware Address: " << arp.senderHardwareAddress.toHex() << std::endl;
+        Logger::getInstance().info() << "Sender IP Address: " << arp.senderIpAddress.toHex() << std::endl;
+        Logger::getInstance().info() << "Target Hardware Address: " << arp.targetHardwareAddress.toHex() << std::endl;
+        Logger::getInstance().info() << "Target IP Address: " << arp.targetIpAddress.toHex() << std::endl;
+    }
+
+    packetInfo.Layer2_5.push_back(std::move(arp));
     return true;
 }
 
@@ -331,7 +348,7 @@ bool Packet::decodeMpls(ByteString &mplsHeader)
 {
     //std::cout << "mpls " << mplsHeader.toHex() << std::endl;
     MplsHeader mpls;
-    if (!mpls.decapsulate(mplsHeader, start)) return false;
+    if (!mpls.decapsulate(mplsHeader)) return false;
 
     if (print)
     {
@@ -343,7 +360,7 @@ bool Packet::decodeMpls(ByteString &mplsHeader)
         Logger::getInstance().info() << "TTL: " << mpls.TTL << std::endl;
     }
 
-    layer2_5.push_back(std::move(mpls));
+    packetInfo.Layer2_5.push_back(std::move(mpls));
     return true;
 }
 
@@ -352,7 +369,7 @@ bool Packet::decodeVlan(ByteString &vlanHeader)
 {
     //std::cout << "vlan " << vlanHeader.toHex() << std::endl;
     VlanHeader vlan;
-    if (!vlan.decapsulate(vlanHeader, start)) return false;
+    if (!vlan.decapsulate(vlanHeader)) return false;
 
     if (print)
     {
@@ -364,7 +381,7 @@ bool Packet::decodeVlan(ByteString &vlanHeader)
         Logger::getInstance().info() << "Type: " << vlan.type.toHex() << std::endl;
     }
 
-    layer2_5.push_back(std::move(vlan));
+    packetInfo.Layer2_5.push_back(std::move(vlan));
     return true;
 }
 
@@ -454,9 +471,10 @@ bool Packet::decodeLldp(ByteString &lldpHeader)
 // Parses and processes the IP header.
 bool Packet::decodeIPv4(ByteString &ipv4Header, size_t &ipv4Size)
 {
+    //Profiler::getInstance().notify("ip decode");
     //std::cout << "ipv4 " << ipv4Header.toHex() << std::endl;
     IPv4Header ipv4;
-    if (!ipv4.decapsulate(ipv4Header, start, ipv4Size)) return false;
+    if (!ipv4.decapsulate(ipv4Header)) return false;
 
     if (print)
     {
@@ -470,8 +488,8 @@ bool Packet::decodeIPv4(ByteString &ipv4Header, size_t &ipv4Size)
         Logger::getInstance().info() << "TTL: " << ipv4.TTL.toHex() << std::endl;
         Logger::getInstance().info() << "Protocol: " << ipv4.protocol.toHex() << std::endl;
         Logger::getInstance().info() << "Checksum: " << ipv4.checksum.toHex() << std::endl;
-        Logger::getInstance().info() << "Source Address: " << Functions::byteAddressToNumAddress(ipv4.sourceAddress) << std::endl;
-        Logger::getInstance().info() << "Destination Address: " << Functions::byteAddressToNumAddress(ipv4.destinationAddress) << std::endl;
+        Logger::getInstance().info() << "Source Address: " << Functions::byteAddressToNumAddress(ipv4.sourceAddress.toString()) << std::endl;
+        Logger::getInstance().info() << "Destination Address: " << Functions::byteAddressToNumAddress(ipv4.destinationAddress.toString()) << std::endl;
         Logger::getInstance().info() << "Fragment Flags:" << std::endl;
         Logger::getInstance().info() << "  Reserved: " << ipv4.fragmentFlag.reserved << std::endl;
         Logger::getInstance().info() << "  Fragment: " << ipv4.fragmentFlag.fragment << std::endl;
@@ -494,7 +512,8 @@ bool Packet::decodeIPv4(ByteString &ipv4Header, size_t &ipv4Size)
         }
     }
 
-    layer3.push_back(std::move(ipv4));
+    packetInfo.Layer3.emplace_back(ipv4);
+    //Profiler::getInstance().notify("ip decode end");
     return true;
 }
 
@@ -503,7 +522,7 @@ bool Packet::decodeIPv6(ByteString &ipv6Header)
 {
     //std::cout << "ipv6 " << ipv6Header.toHex() << std::endl;
     IPv6Header ipv6;
-    if (!ipv6.decapsulate(ipv6Header, start)) return false;
+    if (!ipv6.decapsulate(ipv6Header)) return false;
 
     if (print)
     {
@@ -517,7 +536,7 @@ bool Packet::decodeIPv6(ByteString &ipv6Header)
         Logger::getInstance().info() << "Destination Address: " << ipv6.destinationAddress.toHex() << std::endl;
     }
 
-    layer3.push_back(std::move(ipv6));
+    packetInfo.Layer3.push_back(std::move(ipv6));
     return true;
 }
 
@@ -526,7 +545,7 @@ bool Packet::decodeIcmp(ByteString &icmpHeader)
 {
     //std::cout << "icmp " << icmpHeader.toHex() << std::endl;
     IcmpHeader icmp;
-    if (!icmp.decapsulate(icmpHeader, start)) return false;
+    if (!icmp.decapsulate(icmpHeader)) return false;
 
     if (print)
     {
@@ -539,7 +558,7 @@ bool Packet::decodeIcmp(ByteString &icmpHeader)
         Logger::getInstance().info() << "Sequence Number: " << icmp.sequenceNumber.toHex() << std::endl;
     }
 
-    layer3.push_back(std::move(icmp));
+    packetInfo.Layer3.push_back(std::move(icmp));
     return true;
 }
 
@@ -548,9 +567,9 @@ bool Packet::decodeIcmpV6(ByteString &icmpV6Header)
 {
     //std::cout << "icmpv6 " << icmpV6Header.toHex() << std::endl;
     IcmpV6Header icmp;
-    if (!icmp.decapsulate(icmpV6Header, start)) return false;
+    if (!icmp.decapsulate(icmpV6Header)) return false;
 
-    layer3.push_back(std::move(icmp));
+    packetInfo.Layer3.push_back(std::move(icmp));
     return true;
 }
 
@@ -559,7 +578,7 @@ bool Packet::decodeIgmp(ByteString &igmpHeader)
 {
     //std::cout << "igmp " << igmpHeader.toHex() << std::endl;
     IgmpHeader igmp;
-    if (!igmp.decapsulate(igmpHeader, start)) return false;
+    if (!igmp.decapsulate(igmpHeader)) return false;
 
     if (print) {
 
@@ -578,7 +597,7 @@ bool Packet::decodeIgmp(ByteString &igmpHeader)
         Logger::getInstance().info() << "  Num Src: " << Functions::byteToHex(igmp.v3.numSrc) << std::endl;
     }
 
-    layer3.push_back(std::move(igmp));
+    packetInfo.Layer3.push_back(std::move(igmp));
     return true;
 }
 
@@ -587,7 +606,7 @@ bool Packet::decodeGre(ByteString &greHeader)
 {
     //std::cout << "gre " << greHeader.toHex() << std::endl;
     GreHeade gre;
-    if (!gre.decapsulate(greHeader, start)) return false;
+    if (!gre.decapsulate(greHeader)) return false;
 
     if (print)
     {
@@ -609,7 +628,7 @@ bool Packet::decodeGre(ByteString &greHeader)
         Logger::getInstance().info() << "Sequence Number: " << gre.seqNum.toHex() << std::endl;
     }
 
-    layer3.push_back(std::move(gre));
+    packetInfo.Layer3.push_back(std::move(gre));
     return true;
 }
 
@@ -618,7 +637,7 @@ bool Packet::decodeAh(ByteString &ahHeader, size_t &ahSize)
 {
     //std::cout << "ah " << ahHeader.toHex() << std::endl;
     AhHeader ah;
-    if (!ah.decapsulate(ahHeader, start, ahSize)) return false;
+    if (!ah.decapsulate(ahHeader)) return false;
 
     if (print)
     {
@@ -632,7 +651,7 @@ bool Packet::decodeAh(ByteString &ahHeader, size_t &ahSize)
         Logger::getInstance().info() << "AH ICV: " << ah.icv.toHex() << std::endl;
     }
 
-    layer3.push_back(std::move(ah));
+    packetInfo.Layer3.push_back(std::move(ah));
     return true;
 }
 
@@ -641,7 +660,7 @@ bool Packet::decodeEsp(ByteString &espHeader)
 {
     //std::cout << "esp " << espHeader.toHex() << std::endl;
     EspHeader esp;
-    if (!esp.decapsulate(espHeader, start)) return false;
+    if (!esp.decapsulate(espHeader)) return false;
 
     if (print)
     {
@@ -651,7 +670,7 @@ bool Packet::decodeEsp(ByteString &espHeader)
         Logger::getInstance().info() << "ESP Sequence: " << esp.sequence.toHex() << std::endl;
     }
 
-    layer3.push_back(std::move(esp));
+    packetInfo.Layer3.push_back(std::move(esp));
     return true;
 }
 
@@ -664,7 +683,7 @@ bool Packet::decodeTcp(ByteString &tcpHeader, size_t &tcpSize)
 {
     //std::cout << "tcp " << tcpHeader.toHex() << std::endl;
     TcpHeader tcp;
-    if (!tcp.decapsulate(tcpHeader, start, tcpSize)) return false;
+    if (!tcp.decapsulate(tcpHeader)) return false;
 
     if (print)
     {
@@ -689,7 +708,7 @@ bool Packet::decodeTcp(ByteString &tcpHeader, size_t &tcpSize)
         Logger::getInstance().info() << "  FIN: " << tcp.flags.fin << std::endl;
     }
 
-    layer4.push_back(std::move(tcp));
+    packetInfo.Layer4.push_back(std::move(tcp));
     return true;
 }
 
@@ -698,7 +717,7 @@ bool Packet::decodeUdp(ByteString &udpHeader)
 {
     //std::cout << "udp " << udpHeader.toHex() << std::endl;
     UdpHeader udp;
-    if (!udp.decapsulate(udpHeader, start)) return false;
+    if (!udp.decapsulate(udpHeader)) return false;
 
     if (print)
     {
@@ -710,7 +729,7 @@ bool Packet::decodeUdp(ByteString &udpHeader)
         Logger::getInstance().info() << "Checksum: " << udp.checksum.toHex() << std::endl;
     }
 
-    layer4.push_back(std::move(udp));
+    packetInfo.Layer4.push_back(std::move(udp));
     return true;
 }
 
@@ -719,7 +738,7 @@ bool Packet::decodeEigrp(ByteString &eigrpHeader)
 {
     //std::cout << "eigrp " << eigrpHeader.toHex() << std::endl;
     EigrpHeader eigrp;
-    if (!eigrp.decapsulate(eigrpHeader, start)) return false;
+    if (!eigrp.decapsulate(eigrpHeader)) return false;
 
     if (print)
     {
@@ -746,7 +765,7 @@ bool Packet::decodeEigrp(ByteString &eigrpHeader)
         }
     }
 
-    layer4.push_back(std::move(eigrp));
+    packetInfo.Layer4.push_back(std::move(eigrp));
     return true;
 }
 
@@ -759,7 +778,7 @@ bool Packet::decodeDhcp(ByteString &dhcpHeaders)
 {
     //std::cout << "dhcp " << dhcpHeaders.toHex() << std::endl;
     DhcpHeader dhcp;
-    if (!dhcp.decapsulate(dhcpHeaders, start)) return false;
+    if (!dhcp.decapsulate(dhcpHeaders)) return false;
 
     if (print)
     {
@@ -788,7 +807,7 @@ bool Packet::decodeDhcp(ByteString &dhcpHeaders)
         }
     }
 
-    layer5.push_back(std::move(dhcp));
+    packetInfo.Layer5.push_back(std::move(dhcp));
     return true;
 }
 

@@ -1,6 +1,8 @@
 #include <Checksums.h>
 #include <Functions.h>
 #include <iostream>
+#include <Encapsulation.h>
+#include <Profiler.hpp>
 
 namespace Checksum
 {
@@ -8,7 +10,9 @@ namespace Checksum
     // Converts a base256 string to a vector of bytes
     std::vector<uint8_t> base256StringToBytes(const std::string &base256Str)
     {
-        std::vector<uint8_t> bytes(base256Str.begin(), base256Str.end());
+        std::vector<uint8_t> bytes;
+        bytes.reserve(base256Str.size());
+        bytes.insert(bytes.end(), base256Str.begin(), base256Str.end());
         return bytes;
     }
 
@@ -76,66 +80,230 @@ namespace Checksum
         return byteString;
     }
 
-    // Calculates a generic checksum over the given data
-    std::string calculateChecksum(const uint16_t *data, size_t length)
+    ByteString calculateChecksum(const ByteString& data, size_t checksumSizeBytes)
     {
-        uint32_t sum = 0;
+        std::string checksumBytes;
+        checksumBytes.reserve(checksumSizeBytes); // Reserve space to avoid reallocation
 
-        // Sum all 16-bit words in the data
-        while (length > 1)
+        switch (checksumSizeBytes)
         {
-            sum += *data++;
-            length -= 2;
+            case 1: // 1-Byte checksum (8-bit Sum)
+            {
+                uint8_t sum = 0;
+                const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.data());
+                size_t len = data.size();
+
+                for (size_t i = 0; i < len; ++i)
+                {
+                    sum += bytes[i];
+                }
+
+                checksumBytes += static_cast<char>(sum); // Append checksum byte
+                break;
+            }
+            case 2: // 2-Byte Checksum (16-bit Internet Checksum)
+            {
+                uint32_t sum = 0;
+                const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.data());
+                size_t len = data.size();
+                size_t i = 0;
+
+                // Process all 16-bit words
+                for (; i + 1 < len; i += 2)
+                {
+                    uint16_t word = static_cast<uint16_t>(bytes[i]) << 8 | static_cast<uint16_t>(bytes[i + 1]);
+                    sum += word;
+                }
+
+                // Handles any remaining bytes by padding with zero
+                if (i < len)
+                {
+                    uint16_t word = static_cast<uint16_t>(bytes[i]) << 8; // pad lower bytes with 0s
+                    sum += word;
+                }
+
+                // Fold sum to 16 bits: and carry-over if any
+                while (sum >> 16)
+                {
+                    sum = (sum & 0xFFFF) + (sum >> 16);
+                }
+
+                // One's conplement
+                uint16_t checksum = ~static_cast<uint16_t>(sum);
+
+                // Convert checksum to a string in big-endian order
+                checksumBytes += static_cast<char>((checksum >> 8) & 0xFF); // Hight byte
+                checksumBytes += static_cast<char>(checksum & 0xFF);        // Low byte
+                break;
+            }
+            case 4: // 4-Byte Checksum (32-bit Sum)
+            {
+                uint64_t sum = 0;
+                const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data.data());
+                size_t len = data.size();
+                size_t i = 0;
+
+                // Process all 32-bit words
+                for (; i + 3 < len; i += 4)
+                {
+                    uint32_t word = (static_cast<uint32_t>(bytes[i]) << 24) |
+                                    (static_cast<uint32_t>(bytes[i + 1]) << 16) |
+                                    (static_cast<uint32_t>(bytes[i + 2]) << 8) |
+                                    static_cast<uint32_t>(bytes[i + 3]);
+                    sum += word;
+                }
+
+                // Handle remaining by padding with zeros
+                if (i < len)
+                {
+                    uint32_t word = 0;
+                    for (size_t b = 0; b < (4 - (len - 1)); ++b)
+                    {
+                        word <<= 8; // Shifts left for padding
+                    }
+                    for (; i < len; ++i)
+                    {
+                        word = (word << 8) | static_cast<uint32_t>(bytes[i]);
+                    }
+                    sum += word;
+                }
+
+                // Fold sum to 32 bits: add carry-over if any
+                while (sum >> 32)
+                {
+                    sum = (sum & 0xFFFFFFFF) + (sum >> 32);
+                }
+
+                // One's complement
+                uint32_t checksum = ~static_cast<uint32_t>(sum);
+
+                // Convert checksum to string in big-endian order
+                checksumBytes += static_cast<char>((checksum >> 24) & 0xFF); // Byte 3
+                checksumBytes += static_cast<char>((checksum >> 16) & 0xFF); // Byte 2
+                checksumBytes += static_cast<char>((checksum >> 8) & 0xFF);  // Byte 1
+                checksumBytes += static_cast<char>(checksum & 0xFF);         // Byte 0
+                break;
+            }
+
+            default:
+                std::cerr << "Unsupported checksum size: " << checksumSizeBytes << " bytes." << std::endl;
+                // Return a ByteString filled with zeros of the specific size
+                checksumBytes = std::string(checksumSizeBytes, 0);
+                break;
         }
 
-        // If there’s an odd byte, add it as well
-        if (length > 0)
-        {
-            sum += *(reinterpret_cast<const uint8_t *>(data));
-        }
-
-        // Fold the sum to fit in 16 bits
-        while (sum >> 16)
-        {
-            sum = (sum & 0xFFFF) + (sum >> 16);
-        }
-
-        // Calculate the final checksum value
-        uint16_t checksum = ~static_cast<uint16_t>(sum);
-
-        // Convert the checksum to a hexadecimal string
-        std::stringstream ss;
-        ss << std::hex << std::setw(4) << std::setfill('0') << checksum;
-        return ss.str();
+        return checksumBytes;
     }
 
-    // Calculates a protocol-specific checksum and updates the given data string
-    ByteString calculateProtocolChecksum(const ByteString &data_str, size_t startIndex, size_t headerlength, size_t index, bool swap)
+
+    void calculateProtocolChecksum(const ByteString pseudoHeader, ByteString& header, size_t checksumStartIndex, size_t checksumSize, bool swap)
     {
-
-        // Convert string to vector of bytes
-        std::vector<uint8_t> data(data_str.begin(), data_str.end());
-
-        // If data length is odd, pad with a zero byte
-        if (data.size() % 2 != 0)
+        //Profiler::getInstance().notify("Checksum begin");
+        // Step 1: Prepare data fpr checksum calculation
+        // If a pseudo-header id provided, include it; otherwise, only use the header.
+        ByteString dataToChecksum;
+        if (!pseudoHeader.empty())
         {
-            data.push_back(0);
+            dataToChecksum += pseudoHeader;
+        }
+        dataToChecksum += header;
+
+        // Step 2: Calcualte the checksum over the data.
+        ByteString checksumBytes = calculateChecksum(dataToChecksum, checksumSize);
+
+        // Validate that the checksum hex string matches the expected size.
+        // Each byte is represented by two hex characters.
+        if (checksumBytes.size() != checksumSize)
+        {
+            std::cerr << "Error: Calculated checksum size (" << checksumBytes.size()
+                      << ") does not match expected size (" << checksumSize
+                      << " hex characters)." << std::endl;
+            return; // Return on error
         }
 
-        // Reverse the byte order for network transmission
-        std::reverse(data.begin(), data.end());
-
-        // Calculate the checksum of the data
-        std::string checksum = calculateChecksum(reinterpret_cast<const uint16_t *>(data.data()), data.size());
-
-        // Swap bytes if needed
-        if (swap)
+        // Step 4: Swap bytes if required
+        if (swap && checksumSize >= 2)
         {
-            checksum = checksum.substr(2, 2) + checksum.substr(0, 2);
+            // Preform byte swapping for the entire checksum if size permits
+            for (size_t i = 0; i + 1 < checksumBytes.size(); i += 2)
+            {
+                std::swap(checksumBytes[i], checksumBytes[i + 1]);
+            }
         }
 
-        // Replace the checksum in the original string
-        std::string final_str = data_str.substr(startIndex, headerlength).toString();
-        return final_str.replace(index, 2, Functions::hexToByte(checksum).toString());
+        // Step 5: Indert the checksum into the header at the specified index
+        if (checksumStartIndex + checksumSize > header.size())
+        {
+            std::cerr << "Error: Checksum insertion point (" << checksumStartIndex
+                      << ") with size (" << checksumSize
+                      << ") exceeds header size (" << header.size() << ")." << std::endl;
+            return; // Return on error
+        }
+
+        // Create a copy of the header to modify
+        header.replace(checksumStartIndex, checksumSize, checksumBytes);
+        //Profiler::getInstance().notify("Checksum end");
+    }
+
+    void calculateProtocolChecksum(std::optional<ByteString>(&headers)[], const ByteString& pseudoHeader, const ByteString& payload, HeaderType startHeaderType, size_t checksumStartIndex, size_t checksumSize, bool swap)
+    {
+        // Check if header exists
+        if (!headers[static_cast<size_t>(startHeaderType)].has_value())
+        {
+            std::cerr << "Header does not exist when calculating checksum" << std::endl;
+            return;
+        }
+
+        // Step 1: Accumulate data for checksum calculateion
+        // If a pseudo-header is provided, include it first.
+        ByteString dataToChecksum = pseudoHeader;
+
+        // Iterate though headers starting from headerType and concatenate them
+        size_t startIndex = static_cast<size_t>(startHeaderType);
+        size_t headerCount = static_cast<size_t>(HeaderType::Count);
+        
+        if (startIndex >= headerCount)
+        {
+            std::cerr << "Errorr: Invalid startHeaderType enum value." << std::endl;
+            return;
+        }
+
+        for (size_t i = startIndex; i < headerCount; ++i)
+        {
+            if (headers[i].has_value())
+            {
+                dataToChecksum += headers[i].value();
+            }
+        }
+
+        // Append the payload to the data to be checksummed
+        dataToChecksum += payload;
+
+        // Step 2: Calculate the checksum over the accumulated data.
+        // Adduming calculateChecksum returns a hexadecimal string representing the checksum.
+        ByteString checksumBytes = calculateChecksum(dataToChecksum, checksumSize);
+
+        // Validate that the checksum hex string matches the expected size.
+        // Each byte is represented by two hex characters.
+        if (checksumBytes.size() != checksumSize)
+        {
+            std::cerr << "Error: Calculated checksum size (" << checksumBytes.size()
+                      << ") does note match expected size (" << checksumSize
+                      << " hex characters)." << std::endl;
+            return;
+        }
+
+        ByteString& checksumHeader = headers[startIndex].value();
+
+        if (checksumStartIndex + checksumSize > checksumHeader.size())
+        {
+            std::cerr << "Error: Checksum insertion point (" << checksumStartIndex
+                      << ") with size (" << checksumSize
+                      << ") exceeds checksum header size (" << checksumHeader.size() << ")." << std::endl;
+            return;
+        }
+        
+        // Replace the specified portion with the checksum bytes
+        checksumHeader.replace(checksumStartIndex, checksumSize, checksumBytes);
     }
 }

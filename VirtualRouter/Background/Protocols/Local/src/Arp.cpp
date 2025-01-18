@@ -8,28 +8,60 @@ namespace Protocol
     Arp::Arp(Interface& CurrentInterface) : currentInterface(&CurrentInterface)
     {
         // Start ARP cache cleanup thread
-        std::thread([this]()
-        {
-            while (true)
-            {
-                std::this_thread::sleep_for(std::chrono::seconds(30));
+        threads.emplace_back(&Arp::arpCacheCleanupThread, this);
+    }
 
-                std::lock_guard<std::mutex> lock(arpCacheMutex);
-                auto now = std::chrono::steady_clock::now();
-                for (auto it = arpCache.begin(); it != arpCache.end();)
+    // Destructor
+    Arp::~Arp()
+    {
+        shutdown();
+    }
+
+    // Shutdown method
+    void Arp::shutdown()
+    {
+        {
+            std::lock_guard<std::mutex> lock(arpCacheMutex);
+            running.store(false);
+        }
+        threadCV.notify_all();
+        for (auto& t : threads)
+        {
+            if (t.joinable())
+            {
+                t.join();
+            }
+        }
+        threads.clear();
+    }
+
+    void Arp::arpCacheCleanupThread()
+    {
+        std::unique_lock<std::mutex> lock(arpCacheMutex);
+        while (running.load())
+        {
+            std::cout << "waiging fro conedition" << std::endl;
+            if (threadCV.wait_for(lock, std::chrono::seconds(30), [this] { return !running.load(); }))
+            {
+                std::cout << "Thread exiting" << std::endl;
+                break;
+            }
+
+            // Preform ARP cache cleanup
+            auto now = std::chrono::steady_clock::now();
+            for (auto it = arpCache.begin(); it != arpCache.end();)
+            {
+                if (now >= it->second.expiryTime)
                 {
-                    if (now >= it->second.expiryTime)
-                    {
-                        Logger::getInstance().info() << "Removing expired ARP cache entry for IP " << it->first.toHex() << std::endl;
-                        it = arpCache.erase(it);
-                    }
-                    else
-                    {
-                        ++it;
-                    }
+                    Logger::getInstance().info() << "Removing expired ARP cache entry for IP " << it->first.toHex() << std::endl;
+                    it = arpCache.erase(it);
+                }
+                else
+                {
+                    ++it;
                 }
             }
-        }).detach();
+        }
     }
 
     // Check if MAC is known for the given IP
@@ -140,7 +172,7 @@ namespace Protocol
         }
 
         // Launch async ARP request handler
-        std::thread([this, targetIp]() {
+        threads.emplace_back([this, targetIp]() {
             int retryCount = 0;
             const int maxRetries = 3;
             const std::chrono::seconds retryInterval(2);
@@ -164,6 +196,11 @@ namespace Protocol
                 bool replyReceived = false;
                 for (int i = 0; i < retryInterval.count() * 10; ++i)
                 {
+                    if (!running.load())
+                    {
+                        return;
+                    }
+                    
                     {
                         std::lock_guard<std::mutex> lock(replyStatusMutex);
                         auto it = replyStatus.find(targetIp);
@@ -233,7 +270,7 @@ namespace Protocol
                 std::lock_guard<std::mutex> lock(packetQueueMutex);
                 packetQueuePerIp.erase(targetIp);
             }
-        }).detach();
+        });
     }
 
     // Method to receive ARP reply

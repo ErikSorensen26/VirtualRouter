@@ -97,7 +97,7 @@ public:
      *
      * @param recievedArp The received ARP header information.
      */
-    void updateArp(const ArpHeader& recievedArp);
+    virtual void updateArp(const ArpHeader& recievedArp);
 
     /**
      * @brief Updates the ARP table with provided IP and MAC addresses.
@@ -391,8 +391,6 @@ public:
 
     std::mutex tableMutex; ///< Mutex to ensure thread-safe access to the routing tables.
 
-private:
-
     /**
      * @brief Private constructor for the RoutingTable class.
      *
@@ -403,7 +401,9 @@ private:
     /**
      * @brief Default destructor for the RoutingTable class.
      */
-    ~RoutingTable() = default;
+    virtual ~RoutingTable() = default;
+
+private:
 
     std::map<ByteString, RoutingEntry> routingTable;       ///< Routing Information Base (RIB).
     std::map<ByteString, Fib> fib;                         ///< Forwarding Information Base (FIB).

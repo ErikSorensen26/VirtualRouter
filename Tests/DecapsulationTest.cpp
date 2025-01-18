@@ -6,8 +6,8 @@ class TestablePacket : public Packet
 {
 public:
     // A "do-nothing" constructor: does NOT call inspection(...) automatically
-    TestablePacket()
-        : Packet(dummyInterface)
+    TestablePacket(ByteString pak = "")
+        : Packet(pak)
     {
         print = false;
         start = 0;
@@ -25,13 +25,7 @@ public:
         fullPacket = data;
         start = 0;  // Reset the offset
     }
-
-private:
-    static Interface dummyInterface;
 };
-
-// Provide a safe (but empty) default so we don’t crash
-Interface TestablePacket::dummyInterface;
 
 //--------------------------------------------------------------------------------
 // Test Fixture
@@ -109,11 +103,11 @@ TEST_F(DecapsulationTest, EthernetArp_Valid)
 
     // Check L2: Ethernet
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<EthernetHeader>>(pkt->packetInfo.Layer2[0]));
+    EXPECT_TRUE(std::holds_alternative<EthernetHeader>(pkt->packetInfo.Layer2[0]));
 
     // Check L2.5: ARP
     ASSERT_EQ(pkt->packetInfo.Layer2_5.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<ArpHeader>>(pkt->packetInfo.Layer2_5[0]));
+    EXPECT_TRUE(std::holds_alternative<ArpHeader>(pkt->packetInfo.Layer2_5[0]));
     EXPECT_TRUE(result);
 }
 
@@ -167,15 +161,15 @@ TEST_F(DecapsulationTest, EthernetMplsIPv4_Valid)
 
     // L2: Ethernet
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<EthernetHeader>>(pkt->packetInfo.Layer2[0]));
+    EXPECT_TRUE(std::holds_alternative<EthernetHeader>(pkt->packetInfo.Layer2[0]));
 
     // L2.5: MPLS
     ASSERT_EQ(pkt->packetInfo.Layer2_5.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<MplsHeader>>(pkt->packetInfo.Layer2_5[0]));
+    EXPECT_TRUE(std::holds_alternative<MplsHeader>(pkt->packetInfo.Layer2_5[0]));
 
     // L3: IPv4
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv4Header>>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
 
     EXPECT_TRUE(result);
 }
@@ -233,8 +227,8 @@ TEST_F(DecapsulationTest, EthernetIPv4Icmp_Valid)
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 2u);
     // Because code might store IPv4 & ICMP both in Layer3 
     // (some designs treat ICMP as L3). Check the last entry is ICMP
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv4Header>>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(is_type<std::shared_ptr<IcmpHeader>>(pkt->packetInfo.Layer3[1]));
+    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<IcmpHeader>(pkt->packetInfo.Layer3[1]));
 
     EXPECT_TRUE(result);
 }
@@ -259,7 +253,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Icmp_Invalid)
     // IPv4 is present, but ICMP decode fails
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv4Header>>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
     EXPECT_FALSE(result);
 }
 
@@ -291,8 +285,8 @@ TEST_F(DecapsulationTest, EthernetIPv6Icmpv6_Valid)
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
     // L3 => IPv6 + ICMPv6 might be stored. 
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 2u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv6Header>>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(is_type<std::shared_ptr<IcmpV6Header>>(pkt->packetInfo.Layer3[1]));
+    EXPECT_TRUE(std::holds_alternative<IPv6Header>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<IcmpV6Header>(pkt->packetInfo.Layer3[1]));
     EXPECT_TRUE(result);
 }
 
@@ -317,7 +311,7 @@ TEST_F(DecapsulationTest, EthernetIPv6Icmpv6_Invalid)
     // We get Ethernet + IPv6
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv6Header>>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<IPv6Header>(pkt->packetInfo.Layer3[0]));
     EXPECT_FALSE(result);
 }
 
@@ -347,8 +341,8 @@ TEST_F(DecapsulationTest, EthernetIPv4Igmp_Valid)
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
     // L3 => IPv4 + IGMP
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 2u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv4Header>>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(is_type<std::shared_ptr<IgmpHeader>>(pkt->packetInfo.Layer3[1]));
+    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<IgmpHeader>(pkt->packetInfo.Layer3[1]));
     EXPECT_TRUE(result);
 }
 
@@ -404,8 +398,8 @@ TEST_F(DecapsulationTest, EthernetIPv4Tcp_Valid)
     // By design, Packet::l3 might store IPv4, then Packet::l4 might store TCP
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
     ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv4Header>>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(is_type<std::shared_ptr<TcpHeader>>(pkt->packetInfo.Layer4[0]));
+    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<TcpHeader>(pkt->packetInfo.Layer4[0]));
     EXPECT_TRUE(result);
 }
 
@@ -457,8 +451,8 @@ TEST_F(DecapsulationTest, EthernetIPv4Udp_Valid)
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
     ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv4Header>>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(is_type<std::shared_ptr<UdpHeader>>(pkt->packetInfo.Layer4[0]));
+    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<UdpHeader>(pkt->packetInfo.Layer4[0]));
     EXPECT_TRUE(result);
 }
 
@@ -522,7 +516,7 @@ TEST_F(DecapsulationTest, EthernetIPv4UdpDhcp_Valid)
     ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
     // L5 => DHCP
     ASSERT_EQ(pkt->packetInfo.Layer5.size(), 1u);
-    EXPECT_TRUE(is_type<std::shared_ptr<DhcpHeader>>(pkt->packetInfo.Layer5[0]));
+    EXPECT_TRUE(std::holds_alternative<DhcpHeader>(pkt->packetInfo.Layer5[0]));
     EXPECT_TRUE(result);
 }
 
@@ -583,9 +577,10 @@ TEST_F(DecapsulationTest, EthernetIPv4Eigrp_Valid)
 
     // L3 => IPv4 + EIGRP
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 2u);
-    EXPECT_TRUE(is_type<std::shared_ptr<IPv4Header>>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(is_type<std::shared_ptr<EigrpHeader>>(pkt->packetInfo.Layer3[1]));
+    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
+    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
+    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
+    EXPECT_TRUE(std::holds_alternative<EigrpHeader>(pkt->packetInfo.Layer4[0]));
     EXPECT_TRUE(result);
 }
 
@@ -610,6 +605,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Eigrp_Invalid)
 
     ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
     ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u); 
+    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 0u);
     EXPECT_FALSE(result);
 }
 

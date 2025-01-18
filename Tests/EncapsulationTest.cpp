@@ -6,6 +6,7 @@
 #include "PacketStructure.h"      // All your protocol structs
 #include <vector>
 #include <string>
+#include <Decapsulation.h>
 
 //--------------------------------------------------------------------------------
 // Test Fixture
@@ -31,6 +32,7 @@ protected:
 //--------------------------------------------------------------------------------
 // Ethernet Only
 //--------------------------------------------------------------------------------
+
 
 // Test EthernetOnly_Valid
 TEST_F(EncapsulationTest, EthernetOnly_Valid)
@@ -61,7 +63,7 @@ TEST_F(EncapsulationTest, EthernetOnly_Valid)
     ByteString expected = expectedEth;
 
     EXPECT_TRUE(result.has_value());
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetOnly_Invalid
@@ -144,7 +146,7 @@ TEST_F(EncapsulationTest, EthernetArp_Valid)
     // Expected result
     ByteString expected = expectedEth + expectedArp + encapsulated;
 
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetArp_Invalid
@@ -272,7 +274,7 @@ TEST_F(EncapsulationTest, EthernetMplsIPv4_Valid)
     ByteString expected = ethernetHeader + mplsHeader + ipv4Header + encapsulated;
 
     EXPECT_TRUE(result.has_value());
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetMplsIPv4_Invalid
@@ -414,7 +416,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Icmp_Valid)
     // Expected Ethernet + IPv4 + ICMP + Payload
     ByteString expected = ethernetHeader + ipv4Header + icmpHeader + encapsulated;
 
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetIPv4Icmp_Invalid
@@ -497,32 +499,31 @@ TEST_F(EncapsulationTest, EthernetIPv6Icmpv6_Valid)
 {
     // Ethernet(14) + IPv6(40) + ICMPv6(8) = 62 bytes
     ByteString ethernetHeader = std::string(
-        "\xAA\xBB\xCC\xDD\xEE\xFF"  // Destination MAC
-        "\x11\x22\x33\x44\x55\x66"  // Source MAC
+        "\x33\x33\x00\x00\x00\x16"  // Destination MAC
+        "\xAC\x19\x8E\x44\x55\x66"  // Source MAC
         "\x86\xDD",                 // EtherType = IPv6 (0x86DD)
         14
     );
 
     ByteString ipv6Header = std::string(
-        "\x60\x00\x00\x00\x00\x08\x3A\x40"  
+        "\x60\x00\x00\x00\x00\x1C\x3A\x40"  
         "\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"
-        "\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02",
+        "\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x16",
         40
     );
 
     ByteString icmpv6Header = std::string(
-        "\x80\x00\x7A\xF5"            // Type=128 (Echo Request), Code=0, Checksum=0x1234
-        "\x00\x00\x00\x00"            // Reserved
-        "\x01\x04\x01\x02\x03\x04" // Options (dummy data)
-        ,
-        14 // Partial (should be at least 8)
+        "\x8F\x00\x11\x21"            // Type=128 (Echo Request), Code=0, Checksum=0x1234
+        "\x00\x00\x00\x01"            // Reserved
+        "\x04\x00\x00\x00\xFF\x02\x00\x00\00\x00\x00\x00\x00\x00\x00\x01\xFF\x00\x30\xAF", // Option
+        28 // Partial (should be at least 8)
     );
 
     // Assemble the packet
     PacketInfo packetInfo;
     EthernetHeader eth;
-    eth.destinationMac = std::string("\xAA\xBB\xCC\xDD\xEE\xFF", 6);
-    eth.sourceMac = std::string("\x11\x22\x33\x44\x55\x66", 6);
+    eth.destinationMac = std::string("\x33\x33\x00\x00\x00\x16", 6);
+    eth.sourceMac = std::string("\xAC\x19\x8E\x44\x55\x66", 6);
     eth.type = std::string("\x86\xDD", 2); // IPv6
     packetInfo.Layer2.push_back(eth);
 
@@ -534,18 +535,18 @@ TEST_F(EncapsulationTest, EthernetIPv6Icmpv6_Valid)
     ipv6.protocol = std::string("\x3A", 1);         // Next Header=ICMPv6 (58)
     ipv6.hopLimit = std::string("\x40", 1);         // Hop Limit=64
     ipv6.sourceAddress = std::string("\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16); // 2001:db8::1
-    ipv6.destinationAddress = std::string("\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02", 16); // 2001:db8::2
+    ipv6.destinationAddress = std::string("\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x16", 16); // ff02::16
     packetInfo.Layer3.push_back(ipv6);
 
     IcmpV6Header icmpv6;
-    icmpv6.type = std::string("\x80", 1);           // Echo Request
+    icmpv6.type = std::string("\x8F", 1);           // Echo Request
     icmpv6.code = std::string("\x00", 1);           // Code=0
-    icmpv6.checksum = std::string("\x12\x34", 2);   // Checksum
-    icmpv6.reserved = std::string("\x00\x00\x00\x00", 4); // Reserved
+    icmpv6.checksum = std::string("\x00\x00", 2);   // Checksum
+    icmpv6.reserved = std::string("\x00\x00\x00\x01", 4); // Reserved
     IcmpV6Header::Option option;
-    option.option = std::string("\x01", 1);         // Option type
-    option.length = std::string("\x04", 1);         // Option length
-    option.value = std::string("\x01\x02\x03\x04", 4); // Option value
+    option.option = std::string("\x04\x00\x00\x00\xFF\x02\x00\x00\00\x00\x00\x00\x00\x00\x00\x01\xFF\x00\x30\xAF", 20);
+    option.length = std::string("", 0);
+    option.value = std::string("", 0);
     icmpv6.options.push_back(option);
     packetInfo.Layer3.push_back(icmpv6);
 
@@ -556,7 +557,7 @@ TEST_F(EncapsulationTest, EthernetIPv6Icmpv6_Valid)
     // Expected Ethernet + IPv6 + ICMPv6 + Payload
     ByteString expected = ethernetHeader + ipv6Header + icmpv6Header + encapsulated;
 
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetIPv6Icmpv6_Invalid
@@ -632,11 +633,11 @@ TEST_F(EncapsulationTest, EthernetIPv4Igmp_Valid)
 
     ByteString ipv4Header = std::string(
         "\x45\x00"                    // Version/IHL, Type of Service
-        "\x00\x14"                    // Total Length = 20
+        "\x00\x1C"                    // Total Length = 30
         "\x00\x01"                    // Identification
         "\x40\x00"                    // Flags, Fragment Offset
         "\x40\x02"                    // TTL=64, Protocol=2 (IGMP)
-        "\xB7\x7B"                    // Header checksum
+        "\xB7\x73"                    // Header checksum
         "\xC0\xA8\x01\x0D"            // Source IP
         "\xC0\xA8\x01\x0E",           // Destination IP
         20
@@ -690,7 +691,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Igmp_Valid)
     ByteString expected = ethernetHeader + ipv4Header + igmpHeader + encapsulated;
 
     EXPECT_TRUE(result.has_value());
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetIPv4Igmp_Invalid
@@ -767,7 +768,6 @@ TEST_F(EncapsulationTest, EthernetIPv4Igmp_Invalid)
 
     EXPECT_FALSE(result.has_value());
 }
-
 
 //--------------------------------------------------------------------------------
 // 8. Ethernet + IPv4 + TCP
@@ -861,7 +861,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Tcp_Valid)
     // Expected Ethernet + IPv4 + TCP + Payload
     ByteString expected = ethernetHeader + ipv4Header + tcpHeader + encapsulated;
 
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetIPv4Tcp_Invalid
@@ -1024,7 +1024,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Udp_Valid)
     // Expected Ethernet + IPv4 + UDP + Payload
     ByteString expected = ethernetHeader + ipv4Header + udpHeader + encapsulated;
 
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetIPv4Udp_Invalid
@@ -1231,7 +1231,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
     // Expected Ethernet + IPv4 + UDP + DHCP + Payload
     ByteString expected = ethernetHeader + ipv4Header + udpHeader + dhcpHeader + encapsulated;
 
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetIPv4UdpDhcp_Invalid
@@ -1444,13 +1444,13 @@ TEST_F(EncapsulationTest, EthernetIPv4Eigrp_Valid)
     eigrp.autonomousSystem = std::string("\x00\x64", 2);     // Autonomous System number
     eigrp.options.push_back({std::string("\x01", 1), std::string("\x04", 1), std::string("\xDE\xAD", 2)});
     eigrp.options.push_back({std::string("\x02", 1), std::string("\x04", 1), std::string("\xBE\xEF", 2)});
-    packetInfo.Layer3.push_back(eigrp);
+    packetInfo.Layer4.push_back(eigrp);
 
     ByteString payload = std::string("");  // No additional payload for this test
     auto result = encapsulate(packetInfo, payload);
 
     // Validate the encapsulation
-    EXPECT_EQ(result.value(), expected);
+    EXPECT_EQ(result.value().toHex(), expected.toHex());
 }
 
 // Test EthernetIPv4Eigrp_Invalid
@@ -1529,7 +1529,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Eigrp_Invalid)
     eigrp.virtualRouterID = std::string("\x00\x01", 2);      // Virtual Router ID
     eigrp.autonomousSystem = std::string("\x00\x64", 2);     // Autonomous System number
     // Missing flag information
-    packetInfo.Layer3.push_back(eigrp);
+    packetInfo.Layer4.push_back(eigrp);
 
     ByteString payload = std::string("");  // No additional payload for this test
     auto result = encapsulate(packetInfo, payload);

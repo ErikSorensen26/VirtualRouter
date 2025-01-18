@@ -14,7 +14,7 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
       packetCapture(outInterface, "FF000000", inQueSiz),
       packetSend(outInterface),
       threadsRunning(false), 
-      threadPool(std::thread::hardware_concurrency())
+      threadPool(1)
 {
     // Set member variables
     outInt = outInterface;
@@ -22,16 +22,16 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     outQsiz = outQueSiz;
 
     // Configs
-    configs = std::make_shared<IpInfo>();
+    configs = new IpInfo();
     configs->macAddress = Functions::hexToByte(mac);
     configs->interfaceType = interfaceType;
     configs->id = interfaceId;
 
     // Initialize shared pointers for Protocol objects
-    arp = std::make_shared<Protocol::Arp>(*this);
-    ethernet = std::make_shared<Protocol::Ethernet>(*this, arp, Functions::hexToByte(mac));
-    ipPacket = std::make_shared<Protocol::IPPacket>(*this);
-    dhcp = std::make_shared<Protocol::DhcpClient>(*this);
+    arp = new Protocol::Arp(*this);
+    ethernet = new Protocol::Ethernet(*this, arp, Functions::hexToByte(mac));
+    ipPacket = new Protocol::IPPacket(*this);
+    dhcp = new Protocol::DhcpClient(*this);
 
     // Start background threads
     startThreads();
@@ -40,6 +40,11 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
 Interface::~Interface()
 {
     stopThreads();
+    delete configs;
+    delete arp;
+    delete ethernet;
+    delete ipPacket;
+    delete dhcp;
 }
 
 void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
@@ -96,7 +101,7 @@ void Interface::setIPv6(ByteString ip, uint8_t subnet, bool eui64)
     }
 }
 
-std::shared_ptr<IpInfo> Interface::Get() const {
+IpInfo* Interface::Get() const {
     return configs;
 }
 
@@ -179,6 +184,7 @@ void Interface::stopThreads() {
         std::lock_guard<std::mutex> lock(threadsRunningMutex); 
         threadsRunning = false; 
     }
+    packetOutQueueCV.notify_one();
     if (thread1.joinable()) thread1.detach(); 
     if (thread2.joinable()) thread2.join(); 
     if (thread3.joinable()) thread3.join(); 
