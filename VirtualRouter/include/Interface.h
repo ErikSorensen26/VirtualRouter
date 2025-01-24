@@ -83,21 +83,6 @@ struct IpInfo
         uint8_t mask{0};            ///< Subnet Mask.
         uint32_t ipv6FlowLabel{0};  ///< IPv6 flow label
     }  ipv6;
-
-    /**
-     * @struct Dhcp
-     * @brief Stores DHCP configuration information.
-     */
-    struct Dhcp {
-        ByteString dhcpServer{};    ///< DHCP server address
-        ByteString broadcast{};     ///< Broadcast address
-        ByteString router{};        ///< Router address
-        std::vector<ByteString> dnsServer{}; ///< List of DNS servers
-        ByteString leaseTime{};     ///< Lease time for DHCP
-        ByteString renewalTime{};   ///< Renewal time for DHCP
-        ByteString rebindingTime{}; ///< Rebinding time for DHCP
-        uint8_t subnetMask{};       ///< Subnet mask;
-    } dhcp;
 };
 
 /**
@@ -112,6 +97,7 @@ class Interface
 public:
 
     RingBuffer<ByteString> packetOutQueue; ///< Queue for outgoing packets.
+
 
     /**
      * @brief Constructs an Interface object.
@@ -162,9 +148,9 @@ public:
      *
      * Provides access to the shared IP information structure.
      *
-     * @return std::shared_ptr<IpInfo> Shared pointer to the IP information.
+     * @return a pointer of the configs to reduce copies.
      */
-    virtual IpInfo* Get() const;
+    virtual IpInfo* Get();
 
     /**
      * @brief Shuts down or restarts the interface.
@@ -174,8 +160,6 @@ public:
      * @param shut Boolean flag indicating whether to shut down ('true') or restart ('false').
      */
     virtual void Shutdown(bool shut);
-    bool shutdownFlag; ///< Flag indicating if the interface is in shutdown state.
-    ByteString vrf = "default"; ///< Virtual Routing and Forwarding identifier.
 
     /**
      * @brief Enqueues a packet for sending through the interface.
@@ -186,6 +170,9 @@ public:
      * @param mac Optional MAC address to replace the packet's source MAC.
      */
     virtual void enqueuePacket(PacketInfo& packetInfo, ByteString mac = "");
+
+    bool shutdownFlag; ///< Flag indicating if the interface is in shutdown state.
+    ByteString vrf = "default"; ///< Virtual Routing and Forwarding identifier.
 
     //L2 Protocols
     Protocol::Ethernet* ethernet;   ///< Ethernet Protocol handler.
@@ -264,7 +251,7 @@ private:
     void onArpResolved(const ByteString& ip, const ByteString& mac);
 
     // Member variables
-    IpInfo* configs;                    ///< Shared pointer to IP configuration information.
+    IpInfo configs;                     ///< Shared pointer to IP configuration information.
     std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
 
     std::string outInt;     ///< Outgoing interface name.

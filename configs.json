@@ -1,0 +1,16 @@
+{
+    "interface": {
+        "GigabitEthernet": [
+            {
+                "id": "1",
+                "commands": {
+                    "ip": {
+                        "address": {
+                            "dhcp": {}
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}

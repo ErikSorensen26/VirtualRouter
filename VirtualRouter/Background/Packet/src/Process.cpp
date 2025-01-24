@@ -19,19 +19,19 @@ void ProcessPacket::process(PacketInfo& packet)
 {
     // Process each layer using std::visit
     if (print) { Logger::getInstance().info() << "Layer 2:" << std::endl; }
-    processLayer(layer2);
+    processLayer(currentPacket.Layer2);
     
     if (print) { Logger::getInstance().info() << "Layer 2.5:" << std::endl; }
-    processLayer(layer2_5);
+    processLayer(currentPacket.Layer2_5);
 
     if (print) { Logger::getInstance().info() << "Layer 3:" << std::endl; }
-    processLayer(layer3);
+    processLayer(currentPacket.Layer3);
 
     if (print) { Logger::getInstance().info() << "Layer 4:" << std::endl; }
-    processLayer(layer4);
+    processLayer(currentPacket.Layer4);
 
     if (print) { Logger::getInstance().info() << "Layer 5:" << std::endl; }
-    processLayer(layer5);
+    processLayer(currentPacket.Layer5);
 }
 
 // Template function to process a layer
@@ -224,7 +224,7 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
 }
 
 //------------------------------------------------------------------------------------
-// Layer 4
+// Layer 5
 //------------------------------------------------------------------------------------
 
 void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
@@ -234,32 +234,56 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
     {
         if (opt.option == Variable::Dhcp::Option::type) 
         {
-            // Handle different DHCP option types.
-            if (!interface->dhcp->offered && opt.value == Variable::Dhcp::Type::offer) 
+            // Handle differen DHCP option types using a switch-case for efficiency
+            if (opt.value == Variable::Dhcp::Type::discover)
             {
-                std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex); 
-                interface->dhcp->dhcpOffer = currentPacket; 
-                interface->dhcp->offered = true;
-            } 
-            else if ((!interface->dhcp->acked && opt.value == Variable::Dhcp::Type::ack) || (opt.value == Variable::Dhcp::Type::nak)) 
+                // Handle DHCP Discover packet
+            }
+            else if (opt.value == Variable::Dhcp::Type::offer)
             {
-                std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex); 
-                interface->dhcp->dhcpAck = currentPacket; 
-                interface->dhcp->acked = true;
-            } 
-            else if (opt.value == Variable::Dhcp::Type::discover) 
+                std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
+                interface->dhcp->dhcpOffer = currentPacket;
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+            }
+            else if (opt.value == Variable::Dhcp::Type::request)
             {
-                // Handle DHCP Discover packet.
-            } 
-            else if (opt.value == Variable::Dhcp::Type::request) 
+                // Handle DHCP Request packet
+            }
+            else if (opt.value == Variable::Dhcp::Type::ack)
             {
-                // Handle DHCP Request packet.
-            } 
-            else 
+                std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
+                interface->dhcp->dhcpAck = currentPacket;
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+            }
+            else if (opt.value == Variable::Dhcp::Type::nak)
+            {
+                std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
+                interface->dhcp->dhcpNak = currentPacket;
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+            }
+            else if (opt.value == Variable::Dhcp::Type::decline)
+            {
+                std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
+                interface->dhcp->dhcpDecline = currentPacket;
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+            }
+            else if (opt.value == Variable::Dhcp::Type::release)
+            {
+                // Handle DHCP release packet
+            }
+            else if (opt.value == Variable::Dhcp::Type::inform)
+            {
+                std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+            }
+            else
             {
                 ByteString value = opt.value;
-                interface->dhcp->DhcpPacket(&dhcp, value); // Handle other DHCP packets.
+                interface->dhcp->DhcpPacket(&dhcp, value);
             }
         }
     }
 }
+
+
+// FIXME DHCP server packets need to replace the relay field with its own ip address if its empty

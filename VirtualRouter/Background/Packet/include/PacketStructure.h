@@ -208,8 +208,11 @@ namespace Variable
             inline const std::string discover("\x01", 1); ///< DHCP Discover message type.
             inline const std::string offer("\x02", 1);    ///< DHCP Offer message type.
             inline const std::string request("\x03", 1);  ///< DHCP Request message type.
+            inline const std::string decline("\x04", 1);  ///< DHCP Decline message type.
             inline const std::string ack("\x05", 1);      ///< DHCP Acknowledgment message type.
             inline const std::string nak("\x06", 1);      ///< DHCP Negative Acknowledgment message type.
+            inline const std::string release("\x07", 1);  ///< DHCP Release message type
+            inline const std::string inform("\x08", 1);   ///< DHCP Inform message type
         }
 
         /**
@@ -226,7 +229,6 @@ namespace Variable
             inline const std::string domainServer("\x06", 1);           ///< DHCP Option for Domain Name Server.
             inline const std::string domainSearch("\x77", 1);           ///< DHCP Option for Domain Search.
             inline const std::string netbiosNameServer("\x2c", 1);      ///< DHCP Option for NetBIOS Name Server.
-            inline const std::string netbiosScope("\x2c", 1);           ///< DHCP Option for NetBIOS Scope.
             inline const std::string mtu("\x1a", 1);                    ///< DHCP Option for MTU.
             inline const std::string classlessStateRoute("\x79", 1);    ///< DHCP Option for Classless Static Route.
             inline const std::string ntp("\x2a", 1);                    ///< DHCP Option for NTP Servers.
@@ -240,6 +242,10 @@ namespace Variable
             inline const std::string requestIP("\x32", 1);              ///< DHCP Option for Requested IP Address.
             inline const std::string requestList("\x37", 1);            ///< DHCP Option for Parameter Request List.
             inline const std::string maxSize("\x39", 1);                ///< DHCP Option for Maximum DHCP Message Size.
+            inline const std::string tftpServer("\x42", 1);             ///< DHCP Option for TFTP server.
+            inline const std::string bootfile("\x43", 1);               ///< DHCP Option for Bootfile.
+            inline const std::string staticRoute("\x21", 1);            ///< DHCP Option for obtaining static routes.
+            inline const std::string vendorSpecific("\x2b", 1);         ///< DHCP Option for vendor specific information.
         }
 
         inline const std::string clientHardwareAddressPadding(10, '\x00'); ///< Padding for Client Hardware Address.
@@ -1371,7 +1377,7 @@ struct DhcpHeader
     {
         ByteString dhcpString;
         if (boot.size() != 1 || hardwareType.size() != 1 || hardwareAddressLength.size() != 1 || hops.size() != 1 || transID.size() != 4 ||
-            secondsElapsed.size() != 2 || bootpFlags.broadcast.size() != 1 || bootpFlags.reserved.size() != 7 || clientIP.size() != 4 ||
+            secondsElapsed.size() != 2 || bootpFlags.broadcast.size() != 1 || bootpFlags.reserved.size() != 15 || clientIP.size() != 4 ||
             yourClientIP.size() != 4 || nextServerIP.size() != 4 || relayAgentIP.size() != 4 || clientMacAddress.size() != 6 || clientHardwareAddressPadding.size() != 10 ||
             serverHostName.size() != 64 || bootFile.size() != 128 || magicCookie.size() != 4 || end.size() != 1) return std::nullopt;
 
@@ -1418,7 +1424,7 @@ struct DhcpHeader
         secondsElapsed = dhcpHeader.substr(8, 2);
         ByteString flags = Functions::byteToBin(dhcpHeader.substr(10, 2));
         bootpFlags.broadcast = flags.substr(0, 1);
-        bootpFlags.reserved = flags.substr(1, 7);
+        bootpFlags.reserved = flags.substr(1);
         clientIP = dhcpHeader.substr(12, 4);
         yourClientIP = dhcpHeader.substr(16, 4);
         nextServerIP = dhcpHeader.substr(20, 4);

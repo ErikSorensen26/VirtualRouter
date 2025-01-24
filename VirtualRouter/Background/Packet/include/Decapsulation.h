@@ -52,7 +52,7 @@ public:
      *
      * @param packet The ByteString representation of the raw packet data to inspect.
      */
-    bool inspection(ByteString &packet);
+    bool inspection(const ByteString &packet);
 
     /**
      * @brief Decapsulates the remaining protocol layers (Layers 4-5) after initial inspection.
@@ -130,7 +130,7 @@ protected:
      *
      * @return bool Indicating whether process was successfull.
      */
-    bool processLayer2(ByteString &packet);
+    bool processLayer2(const ByteString &packet);
 
     /**
      * @brief Decapsulates layer 2.5 headers from the packet (e.g., VLAN, MPLS).
@@ -139,7 +139,7 @@ protected:
      *
      * @return bool Indicating whether process was successfull.
      */
-    bool processLayer2_5(ByteString &packet);
+    bool processLayer2_5(const ByteString &packet);
 
     /**
      * @brief Decapsulates layer 3 headers from the packet.
@@ -148,7 +148,7 @@ protected:
      *
      * @return bool Indicating whether process was successfull.
      */
-    bool processLayer3(ByteString &packet);
+    bool processLayer3(const ByteString &packet);
 
     /**
      * @brief Decapsulates layer 4 headers from the packet.
@@ -157,7 +157,7 @@ protected:
      *
      * @return bool Indicating whether process was successfull.
      */
-    bool processLayer4(ByteString &packet);
+    bool processLayer4(const ByteString &packet);
 
     /**
      * @brief Decapsulates layer 5 headers from the packet (e.g., DHCP).
@@ -166,7 +166,7 @@ protected:
      *
      * @return bool Indicating whether process was successfull.
      */
-    bool processLayer5(ByteString &packet);
+    bool processLayer5(const ByteString &packet);
 
 //--------------------------------------------------------------------------------
 // Decapsulation and Decoding Methods

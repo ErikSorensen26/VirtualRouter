@@ -122,15 +122,19 @@ enable_testing()
 
 # List of test files
 set(TEST_SOURCES
-#     ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
-#     ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
-#     ${TEST_DIR}/ConsoleTest.cpp
-#     ${TEST_DIR}/ConfigsTest.cpp
-#     ${TEST_DIR}/TerminalTest.cpp
-#     ${TEST_DIR}/DecapsulationTest.cpp
-#     ${TEST_DIR}/EncapsulationTest.cpp
-#     ${TEST_DIR}/ChecksumsTest.cpp
-    ${TEST_DIR}/ArpTest.cpp
+    #    ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
+    #    ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
+    #    ${TEST_DIR}/ConsoleTest.cpp
+    #    ${TEST_DIR}/ConfigsTest.cpp
+    #    ${TEST_DIR}/TerminalTest.cpp
+    #    ${TEST_DIR}/DecapsulationTest.cpp
+    #    ${TEST_DIR}/EncapsulationTest.cpp
+    #    ${TEST_DIR}/ChecksumsTest.cpp
+    #    ${TEST_DIR}/ArpTest.cpp
+    #    ${TEST_DIR}/DhcpClientTest.cpp
+    #    ${TEST_DIR}/IPPoolTest.cpp
+    #    ${TEST_DIR}/DhcpRelayTest.cpp
+    ${TEST_DIR}/DhcpServerTest.cpp
 )
 
 # Test executable

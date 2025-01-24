@@ -157,14 +157,12 @@ namespace Checksum
                 if (i < len)
                 {
                     uint32_t word = 0;
-                    for (size_t b = 0; b < (4 - (len - 1)); ++b)
+                    size_t remaining = len - i;
+                    for (size_t b = 0; b < remaining; ++b)
                     {
-                        word <<= 8; // Shifts left for padding
+                        word = (word << 8) | static_cast<uint32_t>(bytes[i + b]);
                     }
-                    for (; i < len; ++i)
-                    {
-                        word = (word << 8) | static_cast<uint32_t>(bytes[i]);
-                    }
+                    word <<= (4 - remaining) * 8; // Pad remaining bytes with zeros
                     sum += word;
                 }
 

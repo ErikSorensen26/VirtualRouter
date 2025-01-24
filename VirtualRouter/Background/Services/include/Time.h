@@ -20,7 +20,4 @@ private:
     bool ntp = false; // Indicates if Network Time Protocol is used.
 };
 
-// Returns the number of seconds since the epoch (January 1, 1970).
-double secondsSinceEpoch();
-
 #endif // TIME_H

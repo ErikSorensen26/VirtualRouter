@@ -15,7 +15,7 @@ Packet::Packet(ByteString &packet, bool debug, Interface& iface)
 Packet::Packet(ByteString& packet) : fullPacket(packet), currentInterface(nullptr) {}
 
 // Inspects the given packet and processes each layer.
-bool Packet::inspection(ByteString &packet)
+bool Packet::inspection(const ByteString &packet)
 {
     //Profiler::getInstance().notify("Inspection begin");
     start = 0;
@@ -48,7 +48,7 @@ ByteString Packet::getSlice(size_t length)
 }
 
 // Handles Layer 2 processing, distinguishing between Ethernet and PPP.
-bool Packet::processLayer2(ByteString &packet)
+bool Packet::processLayer2(const ByteString &packet)
 {
     //Profiler::getInstance().notify("Decapsulating Layer 2 Headers");
     //if (print) { Logger::getInstance().info() << "Layer 2:" << std::endl; }
@@ -69,7 +69,7 @@ bool Packet::processLayer2(ByteString &packet)
 }
 
 // Processes Layer 2.5 headers such as ARP, MPLS, VLAN, or LLDP.
-bool Packet::processLayer2_5(ByteString &packet)
+bool Packet::processLayer2_5(const ByteString &packet)
 {
     //std::cout << "l2_5 " << packet.toHex() << std::endl;
     //Profiler::getInstance().notify("Decapsulating Layer 2.5 Headers");
@@ -103,7 +103,7 @@ bool Packet::processLayer2_5(ByteString &packet)
 }
 
 // Processes Layer 3 headers, focusing on IPv4/IPv6 and its encapsulated protocols.
-bool Packet::processLayer3(ByteString &packet)
+bool Packet::processLayer3(const ByteString &packet)
 {
     //Profiler::getInstance().notify("Decapsulating Layer 3 Headers");
     //if (print) { Logger::getInstance().info() << "Layer 3:" << std::endl; }
@@ -181,7 +181,7 @@ bool Packet::processLayer3(ByteString &packet)
 }
 
 // Processes Layer 4 headers, including TCP, UDP, and EIGRP.
-bool Packet::processLayer4(ByteString &packet)
+bool Packet::processLayer4(const ByteString &packet)
 {
     //if (print) { Logger::getInstance().info() << "Layer 4:" << std::endl; }
     //Profiler::getInstance().notify("Decapsulating Layer 4 Headers");
@@ -213,7 +213,7 @@ bool Packet::processLayer4(ByteString &packet)
 }
 
 // Processes Layer 5 (Session Layer) headers, such as DHCP.
-bool Packet::processLayer5(ByteString &packet)
+bool Packet::processLayer5(const ByteString &packet)
 {
     //if (print) { Logger::getInstance().info() << "Layer 5:" << std::endl; }
     //Profiler::getInstance().notify("Decapsulating Layer 5 Headers");
@@ -263,7 +263,7 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
         Logger::getInstance().info() << "Type: " << ethernet.type.toHex() << std::endl;
     }
 
-    packetInfo.Layer2.emplace_back(ethernet);
+    packetInfo.Layer2.push_back(std::move(ethernet));
     //Profiler::getInstance().notify("decode complete");
     return true;
 }

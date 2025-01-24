@@ -136,7 +136,7 @@ namespace Functions {
 
         if (size != 0)
         {
-            byteString = changeSize(byteString, size, "\x00");
+            byteString = changeSize(byteString, size, ByteString("\x00", 1));
         }
 
         return byteString;
@@ -144,11 +144,8 @@ namespace Functions {
 
     uint32_t hexToNum(const ByteString& hexStr) 
     {
-        uint32_t decimalValue;
-        std::stringstream ss;
-        ss << std::hex << hexStr;
-        ss >> decimalValue;
-        return decimalValue;
+        char* endptr;
+        return strtol(hexStr.toString().c_str(), &endptr, 16);
     }
 
     #pragma endregion
@@ -314,7 +311,8 @@ namespace Functions {
 
     uint8_t byteMaskToNum(const ByteString& mask) 
     {
-        return static_cast<uint8_t>(std::count(mask.begin(), mask.end(), '1'));
+        ByteString binMask = Functions::byteToBin(mask);
+        return static_cast<uint8_t>(std::count(binMask.begin(), binMask.end(), '1'));
     }
 
     ByteString numMaskToBin(uint8_t mask)
@@ -361,26 +359,21 @@ namespace Functions {
         size_t totalBits = networkAddress.size() * 8;
         if (mask > totalBits) return false;
 
-        size_t fullBytes = mask / 8;
+        size_t byteCount = mask / 8;
         size_t remainingBits = mask % 8;
 
-        for (size_t i = 0; i < networkAddress.size(); ++i)
+        for (size_t i = 0; i < byteCount; ++i)
         {
-            uint8_t subnetMask = 0xFF;
-            if (i < fullBytes)
+            if (networkAddress[i] != ipAddress[i])
             {
-                subnetMask = 0xFF;
+                return false;
             }
-            else if (i == fullBytes && remainingBits != 0)
-            {
-                subnetMask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
-            }
-            else
-            {
-                subnetMask = 0x00;
-            }
+        }
 
-            if ((networkAddress[i] && subnetMask) != (ipAddress[i] & subnetMask))
+        if (remainingBits > 0)
+        {
+            uint8_t mask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
+            if ((networkAddress[byteCount] & mask) != (ipAddress[byteCount] & mask))
             {
                 return false;
             }

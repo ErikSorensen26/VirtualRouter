@@ -3,8 +3,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <memory.h>
-#include <chrono>
-#include <thread>
 
 // Include the ARP implementation and mock classes
 #include <Arp.h>
@@ -21,439 +19,382 @@ protected:
         // Initialize mock objects
         mockInterface = std::make_unique<testing::NiceMock<MockInterface>>();
         mockRoutingTable = std::make_unique<testing::NiceMock<MockRoutingTable>>();
+
+        // Initializeee ARP instance from the interface
+        arp = mockInterface->arp;
     }
 
     void TearDown() override
     {
         // Cleanup if necessary
+        mockInterface.reset();
     }
 
     // Member variables
     std::unique_ptr<MockInterface> mockInterface;
     std::unique_ptr<MockRoutingTable> mockRoutingTable;
+    Protocol::Arp* arp;
 
     // Helper functions
-    std::unordered_map<ByteString, ArpCacheEntry, std::hash<ByteString>, std::equal_to<ByteString>>& getArpCache() {return mockInterface->arp->arpCache;}
-    std::mutex& getArpCacheMutex() {return mockInterface->arp->arpCacheMutex;}
-    std::unordered_map<ByteString, std::queue<PacketInfo>, std::hash<ByteString>, std::equal_to<ByteString>>& getPacketQueuePerIp() {return mockInterface->arp->packetQueuePerIp;}
-    std::mutex& getPacketQueueMutex() {return mockInterface->arp->packetQueueMutex;}
-    std::unordered_map<ByteString, bool, std::hash<ByteString>, std::equal_to<ByteString>>& getPendingRequests() {return mockInterface->arp->pendingRequests;}
-    std::mutex& getPendingRequestsMutex() {return mockInterface->arp->requestMutex;}
+    std::unordered_map<ByteString, ArpCacheEntry>& getArpCache() {return arp->arpCache;}
+    std::shared_mutex& getArpCacheMutex() {return arp->arpCacheMutex;}
+    std::unordered_map<ByteString, std::queue<PacketInfo>>& getPacketQueuePerIp() {return arp->packetQueuePerIp;}
+    std::mutex& getPacketQueueMutex() {return arp->packetQueueMutex;}
+    std::unordered_set<ByteString>& getPendingRequests() {return arp->pendingRequests;}
+    std::mutex& getPendingRequestsMutex() {return arp->requestMutex;}
 };
 
-
-TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiredEntries) 
+// Helper to simulate a reply
+void simulateArpReply(Arp& arp, const ByteString& ip, const ByteString& mac)
 {
-    ByteString testIp = "192.168.1.1";
-    ByteString testMac = "AA:BB:CC:DD:EE:FF";
-
-    // Add an entry to the ARP cache with a short expiry time
-    {
-        std::lock_guard<std::mutex> lock(getArpCacheMutex());
-        getArpCache()[testIp] = ArpCacheEntry{
-            .macAddress = testMac,
-            .expiryTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(100)
-        };
-    }
-
-    // Wait for the cache cleanup thread to remove the expired entry
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    // Check that the entry has been removed
-    EXPECT_FALSE(mockInterface->arp->isMacKnown(testIp));
+    ArpHeader arpReply;
+    arpReply.senderIpAddress = ip;
+    arpReply.senderHardwareAddress = mac;
+    arp.receiveReply(arpReply);
 }
 
-
-TEST_F(ArpTest, Constructor_StartsCleanupThread) 
+// Test Verify MAC is know after receiving a reply
+TEST_F(ArpTest, ReceiveReply_UpdatesArpCache)
 {
-    // Since the cleanup thread runs indefinitely, we can't directly test it.
-    // Instead, ensure that no exceptions are thrown during construction.
-    EXPECT_NO_THROW({
-        auto tempArp = std::make_unique<Arp>(*mockInterface);
-    });
-}
+    ByteString testIp = "\xC0\xA8\x01\x01";
+    ByteString testMac = "\xAA\xBB\xCC\xDD\xEE\xFF";
 
-
-TEST_F(ArpTest, IsMacKnown_ReturnsFalse_WhenCacheIsEmpty) 
-{
-    ByteString testIp = "192.168.1.1";
-    EXPECT_FALSE(mockInterface->arp->isMacKnown(testIp));
-}
-
-TEST_F(ArpTest, GetMac_ReturnsEmpty_WhenCacheIsEmpty) 
-{
-    ByteString testIp = "192.168.1.1";
-    ByteString mac = mockInterface->arp->getMac(testIp);
-    EXPECT_TRUE(mac.empty());
-}
-
-TEST_F(ArpTest, IsMacKnown_ReturnsTrue_WhenMacIsInCacheAndNotExpired) 
-{
-    ByteString testIp = "192.168.1.2";
-    ByteString testMac = "AA:BB:CC:DD:EE:11";
-
-    {
-        std::lock_guard<std::mutex> lock(getArpCacheMutex());
-        getArpCache()[testIp] = ArpCacheEntry{
-            .macAddress = testMac,
-            .expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(60)
-        };
-    }
-
-    EXPECT_TRUE(mockInterface->arp->isMacKnown(testIp));
-}
-
-TEST_F(ArpTest, GetMac_ReturnsCorrectMac_WhenMacIsAvailable) {
-    ByteString testIp = "192.168.1.3";
-    ByteString testMac = "AA:BB:CC:DD:EE:22";
-
-    {
-        std::lock_guard<std::mutex> lock(getArpCacheMutex());
-        getArpCache()[testIp] = ArpCacheEntry{
-            .macAddress = testMac,
-            .expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(60)
-        };
-    }
-
-    ByteString mac = mockInterface->arp->getMac(testIp);
-    EXPECT_EQ(mac, testMac);
-}
-
-TEST_F(ArpTest, IsMacKnown_ReturnsFalse_AndRemovesEntry_WhenExpired) {
-    ByteString testIp = "192.168.1.4";
-    ByteString testMac = "AA:BB:CC:DD:EE:33";
-
-    {
-        std::lock_guard<std::mutex> lock(getArpCacheMutex());
-        getArpCache()[testIp] = ArpCacheEntry{
-            .macAddress = testMac,
-            .expiryTime = std::chrono::steady_clock::now() - std::chrono::seconds(1) // Already expired
-        };
-    }
-
-    EXPECT_FALSE(mockInterface->arp->isMacKnown(testIp));
-
-    // Verify that the entry is removed
-    {
-        std::lock_guard<std::mutex> lock(getArpCacheMutex());
-        EXPECT_EQ(getArpCache().find(testIp), getArpCache().end());
-    }
-}
-
-TEST_F(ArpTest, ResolveAndSend_EnqueuesPacketAndSendsRequest) {
-    ByteString targetIp = "192.168.1.5";
-    PacketInfo packet;
-
-    // Expect that enqueuePacket is called once for enqueuing
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
-
-    // Call resolveAndSend
-    mockInterface->arp->resolveAndSend(targetIp, packet);
-}
-
-TEST_F(ArpTest, ResolveAndSend_DoesNothing_WhenTargetIpIsEmpty) {
-    ByteString emptyIp = "";
-    PacketInfo packet;
-
-    // Expect that enqueuePacket is never called
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
-
-    // Call resolveAndSend with empty IP
-    mockInterface->arp->resolveAndSend(emptyIp, packet);
-}
-
-TEST_F(ArpTest, SendRequest_SendsArpRequest_WhenMacIsUnknown) {
-    ByteString targetIp = "192.168.1.6";
-
-    // Expect enqueuePacket to be called to send ARP request
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(::testing::AtLeast(1));
-
-    // Call sendRequest
-    mockInterface->arp->sendRequest(targetIp);
-
-    // Allow some time for the asynchronous thread to execute
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-}
-
-TEST_F(ArpTest, SendRequest_DoesNotSendDuplicateRequests_ForSameIp) {
-    ByteString targetIp = "192.168.1.7";
-
-    // First request: expect enqueuePacket
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
-
-    // Second request: no additional enqueuePacket
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
-
-    // Call sendRequest twice
-    mockInterface->arp->sendRequest(targetIp);
-    mockInterface->arp->sendRequest(targetIp);
-
-    // Allow some time for asynchronous threads to execute
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-}
-
-TEST_F(ArpTest, ReceiveReply_AddsToCacheAndSendsQueuedPackets) {
-    ByteString senderIp = "192.168.1.8";
-    ByteString senderMac = "AA:BB:CC:DD:EE:44";
-
-    // Simulate that there are queued packets for this IP
-    PacketInfo packet1;
-    PacketInfo packet2;
-
-    {
-        std::lock_guard<std::mutex> lock(getPacketQueueMutex());
-        getPacketQueuePerIp()[senderIp].push(packet1);
-        getPacketQueuePerIp()[senderIp].push(packet2);
-    }
-
-    // Expect that enqueuePacket is called twice to send the queued packets
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, senderMac)).Times(2);
-
-    // Simulate receiving an ARP reply
     ArpHeader reply;
-    reply.senderIpAddress = senderIp;
-    reply.senderHardwareAddress = senderMac;
+    reply.senderIpAddress = testIp;
+    reply.senderHardwareAddress = testMac;
 
-    mockInterface->arp->receiveReply(reply);
+    arp->receiveReply(reply);
 
-    // Verify that the MAC is now known
-    EXPECT_TRUE(mockInterface->arp->isMacKnown(senderIp));
-    ByteString mac = mockInterface->arp->getMac(senderIp);
-    EXPECT_EQ(mac, senderMac);
-
-    // Verify that the packet queue is empty
     {
-        std::lock_guard<std::mutex> lock(getPacketQueueMutex());
-        EXPECT_EQ(getPacketQueuePerIp().find(senderIp), getPacketQueuePerIp().end());
+        std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
+        auto it = getArpCache().find(testIp);
+        ASSERT_NE(it, getArpCache().end());
+        EXPECT_EQ(it->second.macAddress, testMac);
     }
 }
 
-TEST_F(ArpTest, ReceiveReply_IgnoresUnsolicitedReplies) {
-    ByteString senderIp = "192.168.1.9";
-    ByteString senderMac = "AA:BB:CC:DD:EE:55";
+// Test Verifies resolveAndSend triggers an ARP request and enqueues packet
+TEST_F(ArpTest, ResolveAndSend_EnqueuesPacketWhenResolved)
+{
+    ByteString testIp = "\xC0\xA8\x01\x02";
+    PacketInfo testPacket;
 
-    // No pending requests for this IP
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
+    // Conditional varibale to synchronize with the thread
+    std::condition_variable cv;
+    std::mutex cvMutex;
+    bool packetEnqueued = false;
 
-    // Simulate receiving an unsolicited ARP reply
-    ArpHeader reply;
-    reply.senderIpAddress = senderIp;
-    reply.senderHardwareAddress = senderMac;
+    // Mock behavior for enqueuePacket
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
+        .Times(1)
+        .WillOnce([&](PacketInfo&, ByteString)
+        {
+            // Notify the test once the packet is enqueued
+            std::lock_guard<std::mutex> lock(cvMutex);
+            packetEnqueued = true;
+            cv.notify_one();
+        });
 
-    mockInterface->arp->receiveReply(reply);
+    arp->resolveAndSend(testIp, testPacket);
 
-    // MAC should not be in cache
-    EXPECT_FALSE(mockInterface->arp->isMacKnown(senderIp));
-}
-
-TEST_F(ArpTest, SendReply_SendsCorrectArpReplyPacket) {
-    ByteString targetMac = "FF:FF:FF:FF:FF:FF";
-    ByteString targetIp = "192.168.1.10";
-    ByteString currentMac = "AA:BB:CC:DD:EE:66";
-    ByteString ip = "192.168.1.100";
-
-    // Mock the Interface's Get method
-    // Expect enqueuePacket to be called once with the ARP reply
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
-
-    // Call sendReply
-    mockInterface->arp->sendReply(targetMac, targetIp);
-}
-
-TEST_F(ArpTest, SendReply_DoesNothing_WhenTargetIpIsEmpty) {
-    ByteString targetMac = "FF:FF:FF:FF:FF:FF";
-    ByteString emptyIp = "";
-
-    // Expect enqueuePacket is never called
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
-
-    // Call sendReply with empty IP
-    mockInterface->arp->sendReply(targetMac, emptyIp);
-}
-
-TEST_F(ArpTest, ValidateMacAddress_ReturnsTrue_ForMatchingMac) {
-    ByteString mac = "AA:BB:CC:DD:EE:77";
-    ByteString currentMac = "AA:BB:CC:DD:EE:77";
-    EXPECT_TRUE(Functions::validateMacAddress(mac, currentMac));
-}
-
-TEST_F(ArpTest, ValidateMacAddress_ReturnsTrue_ForMulticastMac) {
-    ByteString multicastMac = "\x01\x00\x5E\x00\x00\xFB"; // Multicast MAC in byte format
-    ByteString currentMac = "AA:BB:CC:DD:EE:77";
-    EXPECT_TRUE(Functions::validateMacAddress(multicastMac, currentMac));
-}
-
-TEST_F(ArpTest, ValidateMacAddress_ReturnsFalse_ForNonMatchingUnicastMac) {
-    ByteString mac = "AA:BB:CC:DD:EE:88";
-    ByteString currentMac = "AA:BB:CC:DD:EE:77";
-    EXPECT_FALSE(Functions::validateMacAddress(mac, currentMac));
-}
-
-TEST_F(ArpTest, ReceiveReply_HandlesNullptrRoutingTable) {
-    ByteString senderIp = "192.168.1.11";
-    ByteString senderMac = "AA:BB:CC:DD:EE:99";
-
-    // Simulate that RoutingTable::getInstance() returns nullptr
-    // This requires modifying RoutingTable to be mockable or handle it appropriately
-
-    // For this test, we'll assume RoutingTable is a singleton that can be mocked similarly to Logger
-    // Skipping implementation details as RoutingTable is not fully defined
-
-    // Simulate receiving an ARP reply
-    ArpHeader reply;
-    reply.senderIpAddress = senderIp;
-    reply.senderHardwareAddress = senderMac;
-
-    // Expect that even if RoutingTable is nullptr, ARP processes the reply
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0); // No packets to send
-
-    mockInterface->arp->receiveReply(reply);
-
-    // Verify that the MAC is now known
-    EXPECT_TRUE(mockInterface->arp->isMacKnown(senderIp));
-    ByteString mac = mockInterface->arp->getMac(senderIp);
-    EXPECT_EQ(mac, senderMac);
-}
-
-TEST_F(ArpTest, ResolveAndSend_HandlesHighLoadGracefully) {
-    ByteString targetIp = "192.168.1.12";
-
-    // Simulate multiple packets being enqueued
-    const int numPackets = 1000;
-    std::vector<PacketInfo> packets(numPackets);
-
-    // Expect enqueuePacket to be called once to send ARP request
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
-
-    for (int i = 0; i < numPackets; ++i) {
-        mockInterface->arp->resolveAndSend(targetIp, packets[i]);
-    }
-
-    // Allow some time for asynchronous threads to execute
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-}
-
-TEST_F(ArpTest, ResolveAndSend_HandlesConcurrentRequestsCorrectly) {
-    ByteString targetIp = "192.168.1.13";
-    PacketInfo packet1;
-    PacketInfo packet2;
-
-    // Expect enqueuePacket to be called once for ARP request
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
-
-    // Simulate concurrent calls to resolveAndSend
-    std::thread t1([&]() { mockInterface->arp->resolveAndSend(targetIp, packet1); });
-    std::thread t2([&]() { mockInterface->arp->resolveAndSend(targetIp, packet2); });
-
-    t1.join();
-    t2.join();
-
-    // Allow some time for asynchronous threads to execute
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-}
-
-TEST_F(ArpTest, ReceiveReply_IsThreadSafe) {
-    ByteString senderIp = "192.168.1.14";
-    ByteString senderMac = "AA:BB:CC:DD:EE:AA";
-
-    // Simulate multiple threads receiving the same ARP reply
-    auto receiveFunc = [&](int) {
-        ArpHeader reply;
-        reply.senderIpAddress = senderIp;
-        reply.senderHardwareAddress = senderMac;
-        mockInterface->arp->receiveReply(reply);
-    };
-
-    std::thread t1(receiveFunc, 1);
-    std::thread t2(receiveFunc, 2);
-    std::thread t3(receiveFunc, 3);
-
-    t1.join();
-    t2.join();
-    t3.join();
-
-    // Verify that the MAC is now known
-    EXPECT_TRUE(mockInterface->arp->isMacKnown(senderIp));
-    ByteString mac = mockInterface->arp->getMac(senderIp);
-    EXPECT_EQ(mac, senderMac);
-
-    // Ensure that the ARP cache has only one entry
+    // Wait for the packet to be enqueued
     {
-        std::lock_guard<std::mutex> lock(getArpCacheMutex());
-        EXPECT_EQ(getArpCache().size(), 1);
+        std::unique_lock<std::mutex> lock(cvMutex);
+        EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(5), [&]() { return packetEnqueued; }));
     }
-}
-
-TEST_F(ArpTest, SendRequest_RetriesOnFailure) {
-    ByteString targetIp = "192.168.1.15";
-
-    // Expect enqueuePacket to be called 3 times for retries
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(3);
-
-    // Call sendRequest
-    mockInterface->arp->sendRequest(targetIp);
-
-    // Allow enough time for retries (3 retries with 2 seconds interval each)
-    std::this_thread::sleep_for(std::chrono::seconds(7));
-
-    // Verify that pendingRequests no longer contains targetIp
+    
+    // Ensure that the IP os added to the pending requests
     {
         std::lock_guard<std::mutex> lock(getPendingRequestsMutex());
-        EXPECT_EQ(getPendingRequests().find(targetIp), getPendingRequests().end());
+        EXPECT_TRUE(getPendingRequests().count(testIp) > 0);
     }
 }
 
-TEST_F(ArpTest, SendRequest_SucceedsOnSecondRetry) {
-    ByteString targetIp = "192.168.1.16";
+// Test Verifies timeout behabior when no ARP reply is recieved
+TEST_F(ArpTest, ResolveAndSend_TimesOutWhenNoReply)
+{
+    ByteString testIp = "\xC0\xA8\x01\x03";
+    ByteString testMac = Variable::Mac::broadcast;
+    PacketInfo testPacket;
 
-    // First ARP request fails
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(testMac))).Times(3);
+
+    arp->resolveAndSend(testIp, testPacket);
+
+    std::this_thread::sleep_for(std::chrono::seconds(7)); // Wait for all retries
+
+    {
+        std::lock_guard<std::mutex> lock(getPendingRequestsMutex());
+        EXPECT_FALSE(getPendingRequests().count(testIp)); // Ensure request is removed
+    }
+
+    {
+        std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
+        EXPECT_TRUE(getArpCache().find(testIp) == getArpCache().end());
+    }
+}
+
+// Test Ensures multiple packets for the same IP are queued and sent
+TEST_F(ArpTest, ResolveAndSend_HandlesMultiplePackets)
+{
+    ByteString testIp = "\xC0\xA8\x01\x04";
+    ByteString testMac = "\xAA\xBB\xCC\xDD\xEE\xFF";
+    PacketInfo packet1, packet2;
+
+    // Conditional varibale to track enqueuedPacket calls
+    std::condition_variable cv;
+    std::mutex cvMutex;
+    int enqueueCallCount = 0;
+
+    // Expectation for enqueuePacket with broadcast MAC (ARP request)
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(Variable::Mac::broadcast)))
+        .Times(1)
+        .WillRepeatedly([&](const PacketInfo&, const ByteString&) {
+            std::lock_guard<std::mutex> lock(cvMutex);
+            enqueueCallCount++;
+            cv.notify_one();
+        });
+
+    // Expectation for enqueuePacket with resolved MAC (actual packet sends)
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(testMac)))
         .Times(2)
-        .WillOnce(::testing::Return())
-        .WillOnce(::testing::Return());
+        .WillRepeatedly([&](const PacketInfo&, const ByteString&) {
+            std::lock_guard<std::mutex> lock(cvMutex);
+            enqueueCallCount++;
+            cv.notify_one();
+        });
 
-    // Simulate receiving an ARP reply after the second request
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
-        .WillOnce(::testing::Invoke([&](const PacketInfo& packet, const ByteString& mac) {
-            // Do nothing
-        }));
+    // Enqueue two packets
+    arp->resolveAndSend(testIp, packet1);
+    arp->resolveAndSend(testIp, packet2);
 
-    // Simulate receiving the ARP reply after the first retry
-    std::thread replyThread([&]() {
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        ArpHeader reply;
-        reply.senderIpAddress = targetIp;
-        reply.senderHardwareAddress = "AA:BB:CC:DD:EE:BB";
-        mockInterface->arp->receiveReply(reply);
-    });
-
-    // Call sendRequest
-    mockInterface->arp->sendRequest(targetIp);
-
-    // Allow enough time for retries and reply
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-
-    replyThread.join();
-
-    // Verify that pendingRequests no longer contains targetIp
+    // Wait for the ARP request to be sent
     {
-        std::lock_guard<std::mutex> lock(getPendingRequestsMutex());
-        EXPECT_EQ(getPendingRequests().find(targetIp), getPendingRequests().end());
+        std::unique_lock<std::mutex> lock(cvMutex);
+        EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(5), [&]() { return enqueueCallCount >= 1; }));
     }
 
-    // Verify that the MAC is now known
-    EXPECT_TRUE(mockInterface->arp->isMacKnown(targetIp));
-    ByteString mac = mockInterface->arp->getMac(targetIp);
-    EXPECT_EQ(mac, "AA:BB:CC:DD:EE:BB");
+    // Simulate ARP reply
+    simulateArpReply(*arp, testIp, testMac);
+
+    // Wait for the actual packets to be sent
+    {
+        std::unique_lock<std::mutex> lock(cvMutex);
+        EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(5), [&]() { return enqueueCallCount >= 3; }));
+    }
+
+    // Final verification
+    EXPECT_EQ(enqueueCallCount, 3);
 }
 
-TEST_F(ArpTest, SendReply_HandlesInvalidInterfaceInfo) {
-    ByteString targetMac = "FF:FF:FF:FF:FF:FF";
-    ByteString targetIp = "192.168.1.17";
+// Test Ensures ARP cache is cleaned up after expiracy
+TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
+{
+    ByteString testIp = "\xC0\xA8\x01\x05";
+    ByteString testMac = "\xFF\xEE\xDD\xCC\xBB\xAA";
 
-    // Expect that enqueuePacket is never called due to invalid interface info
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
+    simulateArpReply(*arp, testIp, testMac);
 
-    // Call sendReply
-    mockInterface->arp->sendReply(targetMac, targetIp);
+    {
+        std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
+        EXPECT_TRUE(arp->isMacKnown(testIp));
+    }
+
+    // Wait for expiracy
+    std::this_thread::sleep_for(std::chrono::seconds(61));
+
+    {
+        std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
+        EXPECT_FALSE(arp->isMacKnown(testIp));
+    }
+}
+
+// Test Simultaneous requests for multiple IPs
+TEST_F(ArpTest, ResolveAndSend_HandlesSumultaneousRequests)
+{
+    ByteString ip1 = "\xC0\xA8\x01\x06";
+    ByteString ip2 = "\xC0\xA8\x01\x07";
+    ByteString mac1 = "\xAA\xBB\xCC\xDD\xEE\xFF";
+    ByteString mac2 = "\x11\x22\x33\x44\x55\x66";
+    PacketInfo packet1, packet2;
+
+    // Conditional variables to track enqueuePacket calls
+    std::condition_variable cv;
+    std::mutex cvMutex;
+    int enqueueCallCount = 0;
+
+    // Expectation for enqueuePacket with broadcast MAC (ARP requests)
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(Variable::Mac::broadcast)))
+        .Times(2)
+        .WillRepeatedly([&](const PacketInfo&, const ByteString&) {
+            std::lock_guard<std::mutex> lock(cvMutex);
+            enqueueCallCount++;
+            cv.notify_one();
+        });
+
+    // Expectation for enqueuePacket with resolved MAC (actual packet sends)
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::AnyOf(::testing::Eq(mac1), ::testing::Eq(mac2))))
+        .Times(2)
+        .WillRepeatedly([&](const PacketInfo&, const ByteString&) {
+            std::lock_guard<std::mutex> lock(cvMutex);
+            enqueueCallCount++;
+            cv.notify_one();
+        });
+
+    // Start sumultaneous resolveAndSend calls
+    std::thread t1([&]() { arp->resolveAndSend(ip1, packet1); });
+    std::thread t2([&]() { arp->resolveAndSend(ip2, packet2); });
+
+    t1.join();
+    t2.join();
+
+    // Wait for ARP requests to be sent
+    {
+        std::unique_lock<std::mutex> lock(cvMutex);
+        EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(5), [&]() { return enqueueCallCount >= 2; }));
+    }
+
+    // Simulate replies
+    simulateArpReply(*arp, ip1, mac1);
+    simulateArpReply(*arp, ip2, mac2);
+
+    // Wait for actual packets to be sent
+    {
+        std::unique_lock<std::mutex> lock(cvMutex);
+        EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(5), [&]() { return enqueueCallCount >= 4; }));
+    }
+
+    // Final verification
+    EXPECT_EQ(enqueueCallCount, 4);
+}
+
+// Test ARP reply for unsolicited IP
+TEST_F(ArpTest, ReceiveReply_Unsolicited)
+{
+    ByteString unsolicitedIp = "\xC0\xA8\x01\x08";
+    ByteString unsolicitedMac = "\xAA\xBB\xCC\xDD\xEE\xFF";
+
+    ArpHeader unsolicitedReply;
+    unsolicitedReply.senderIpAddress = unsolicitedIp;
+    unsolicitedReply.senderHardwareAddress = unsolicitedMac;
+
+    EXPECT_NO_THROW(arp->receiveReply(unsolicitedReply));
+
+    {
+        std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
+        EXPECT_EQ(getArpCache().at(unsolicitedIp).macAddress, unsolicitedMac);
+    }
+}
+
+// Test Unterrupt waitForReply with shutdown
+TEST_F(ArpTest, WaitForReply_InterruptsOnShutdown)
+{
+    ByteString targetIp = "\xC0\xA8\x01\x09";
+    ByteString testMac = Variable::Mac::broadcast;
+    PacketInfo testPacket;
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(testMac))).Times(1);
+
+    std::thread t([&]() {
+        arp->resolveAndSend(targetIp, testPacket);
+    });
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    arp->shutdown();
+    t.join();
+
+    EXPECT_FALSE(arp->isMacKnown(targetIp));
+}
+
+// Test SendReply sends correct ARP reply packet
+TEST_F(ArpTest, SendReply_SendsCorrectPacket)
+{
+    ByteString senderMac = "\x11\x22\x33\x44\x55\x66";
+    ByteString senderIp = "\xC0\xA8\x01\x10";
+    ByteString targetMac = "\xAA\xBB\xCC\xDD\xEE\xFF";
+    ByteString targetIp = "\xC0\xA8\x01\x11";
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(targetMac))).Times(1);
+
+    arp->sendReply(targetMac, targetIp);
+}
+
+// Test Hight Volume of Requests
+TEST_F(ArpTest, ResolveAndSend_StressTestWithHighVolumeRequests)
+{
+    const unsigned int numRequests = 200;
+    std::vector<ByteString> ips;
+    std::vector<ByteString> macs;
+    std::vector<PacketInfo> packets(numRequests);
+
+    // Prepare IPs and MACs
+    for (unsigned int i = 0; i < numRequests; ++i)
+    {
+        ips.push_back(ByteString(i, 1));   // Generate IPs
+        macs.push_back(ByteString(i, 1));               // Generate MACs
+    }
+
+    std::condition_variable cv;
+    std::mutex cvMutex;
+    int completedRequests = 0;
+
+    // Mock behavior for enqueuePacket to track completed requests
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(Variable::Mac::broadcast)))
+        .Times(numRequests)
+        .WillRepeatedly([&](const PacketInfo&, const ByteString) {
+            std::lock_guard<std::mutex> lock(cvMutex);
+            completedRequests++;
+            cv.notify_one();
+        });
+
+    // Mock behavior for ARP replies (resolved MACs)
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Not(::testing::Eq(Variable::Mac::broadcast))))
+        .Times(numRequests)
+        .WillRepeatedly([&](const PacketInfo&, const ByteString&) {
+            {
+                std::lock_guard<std::mutex> lock(cvMutex);
+                completedRequests++;
+            }
+            cv.notify_one();
+        });
+
+    // Simultaneous start ARP resolution for all requests
+    std::vector<std::thread> threads;
+    for (unsigned int i = 0; i < numRequests; ++i)
+    {
+        threads.emplace_back([&, i]() { arp->resolveAndSend(ips[i], packets[i]); });
+    }
+
+    // Wait for all threads to finish
+    for (auto& thread : threads)
+    {
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
+
+    // Wait for all ARP requests to be processed
+    {
+        std::unique_lock<std::mutex> lock(cvMutex);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(30), [&]() {
+            return completedRequests == numRequests;
+        }));
+    }
+
+    // Simulate replies for all IPs
+    for (unsigned int i = 0; i < numRequests; ++i)
+    {
+        simulateArpReply(*arp, ips[i], macs[i]);
+    }
+
+    // Wait for actual packets to be sent
+    {
+        std::unique_lock<std::mutex> lock(cvMutex);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(30), [&]() {
+            return completedRequests == 2 * numRequests;
+        }));
+    }
+
+    EXPECT_EQ(completedRequests, 2 * numRequests);
 }

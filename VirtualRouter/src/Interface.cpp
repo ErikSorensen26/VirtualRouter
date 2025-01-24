@@ -14,7 +14,7 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
       packetCapture(outInterface, "FF000000", inQueSiz),
       packetSend(outInterface),
       threadsRunning(false), 
-      threadPool(1)
+      threadPool(1/*std::thread::hardware_concurrency()*/)
 {
     // Set member variables
     outInt = outInterface;
@@ -22,10 +22,9 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     outQsiz = outQueSiz;
 
     // Configs
-    configs = new IpInfo();
-    configs->macAddress = Functions::hexToByte(mac);
-    configs->interfaceType = interfaceType;
-    configs->id = interfaceId;
+    configs.macAddress = Functions::hexToByte(mac);
+    configs.interfaceType = interfaceType;
+    configs.id = interfaceId;
 
     // Initialize shared pointers for Protocol objects
     arp = new Protocol::Arp(*this);
@@ -34,23 +33,68 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     dhcp = new Protocol::DhcpClient(*this);
 
     // Start background threads
-    startThreads();
+    //startThreads();
 }   
 
 Interface::~Interface()
 {
     stopThreads();
-    delete configs;
     delete arp;
     delete ethernet;
     delete ipPacket;
     delete dhcp;
 }
 
+void Interface::setIPv4(ByteString ip, uint8_t subnet)
+{
+    {
+        std::lock_guard<std::mutex> lock(threadsRunningMutex);
+        {
+            std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
+            configs.ipv4.ipAddress = ip; 
+            configs.ipv4.mask = subnet;
+        }
+        // Send gratuitous arps
+        arp->sendReply(Variable::Mac::broadcast, ip);
+        arp->sendReply(Variable::Mac::broadcast, ip);
+        stateChange();
+    }
+}
+
+void Interface::setIPv6(ByteString ip, uint8_t subnet, bool eui64)
+{
+    {
+        std::lock_guard<std::mutex> lock(threadsRunningMutex);
+        {
+            std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
+            configs.ipv6.ipAddress = ip; 
+            configs.ipv6.mask = subnet;
+        }
+        // NDP
+        stateChangeV6();
+    }
+}
+
+void Interface::Shutdown(bool shut) {
+    if (shut) 
+    {
+        stopThreads();
+    }
+    else if (!shut) 
+    {
+        startThreads();
+    }
+    stateChange();
+    stateChangeV6();
+}
+
+IpInfo* Interface::Get() {
+    return &configs;
+}
+
 void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
 {
     auto serializedPacket = encapsulate(packetInfo);
-
     if (!serializedPacket.has_value() || serializedPacket.value().empty())
     {
         Logger::getInstance().error() << "Invalid Packet" << std::endl;
@@ -69,50 +113,6 @@ void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
     }
 
     packetOutQueueCV.notify_one();
-}
-
-void Interface::setIPv4(ByteString ip, uint8_t subnet)
-{
-    {
-        std::lock_guard<std::mutex> lock(threadsRunningMutex);
-        {
-            std::lock_guard<std::shared_mutex> ipLock(configs->ipMutex);
-            configs->ipv4.ipAddress = ip; 
-            configs->ipv4.mask = subnet;
-        }
-        // Send gratuitous arps
-        arp->sendReply(Variable::Mac::broadcast, ip);
-        arp->sendReply(Variable::Mac::broadcast, ip);
-        stateChange();
-    }
-}
-
-void Interface::setIPv6(ByteString ip, uint8_t subnet, bool eui64)
-{
-    {
-        std::lock_guard<std::mutex> lock(threadsRunningMutex);
-        {
-            std::lock_guard<std::shared_mutex> ipLock(configs->ipMutex);
-            configs->ipv6.ipAddress = ip; 
-            configs->ipv6.mask = subnet;
-        }
-        // NDP
-        stateChangeV6();
-    }
-}
-
-IpInfo* Interface::Get() const {
-    return configs;
-}
-
-void Interface::startThreads() {
-    threadsRunning = true;
-
-    std::lock_guard<std::mutex> lock(threadsRunningMutex); 
-    // Start threads for packet ingress, egress, and processing
-    thread1 = std::thread(&Interface::packetIngress, this);
-    thread2 = std::thread(&Interface::packetEgress, this);
-    thread3 = std::thread(&Interface::process, this);
 }
 
 void Interface::packetIngress() {
@@ -149,7 +149,6 @@ void Interface::packetEgress() {
             // Enqueue the send task to the thread pool
             threadPool.enqueue([this, packet]() {
                 this->packetSend.sendPacket(packet);
-                Logger::getInstance().info() << "Packet sent via egress." << std::endl;
             });
         }
     }
@@ -161,22 +160,30 @@ void Interface::process() {
         {
             std::lock_guard<std::mutex> lock(packetInQueueMutex);
             if (!packetCapture.packetQueue.isEmpty()) {
-                packet = packetCapture.packetQueue.dequeue();
+                packet = packetCapture.packetQueue.dequeue().toString();
             }
         }
-
-        if (!packet.empty()) {
+        if (!packet.empty() && packet.substr(0, 1) != "\xca") {
             // Enqueue the packet processing task to the thread pool
             threadPool.enqueue([this, packet]() {
                 ByteString newPacket = packet;
-                Packet p(newPacket, debug, *this);
-                p.decapsulate();
-                PacketInfo packetInformation = p.packetInfo;
-                ProcessPacket process(packetInformation, vrf, this);
+                Packet* p = new Packet(newPacket, debug, *this);
+                p->decapsulate();
+                ProcessPacket process(p->packetInfo, vrf, this);
             });
         }
         std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
+}
+
+void Interface::startThreads() {
+    threadsRunning = true;
+
+    std::lock_guard<std::mutex> lock(threadsRunningMutex); 
+    // Start threads for packet ingress, egress, and processing
+    thread1 = std::thread(&Interface::packetIngress, this);
+    thread2 = std::thread(&Interface::packetEgress, this);
+    thread3 = std::thread(&Interface::process, this);
 }
 
 void Interface::stopThreads() {
@@ -193,20 +200,9 @@ void Interface::stopThreads() {
     threadPool.shutdown();
 }
 
-void Interface::Shutdown(bool shut) {
-    if (shut) {
-        threadsRunning = false;
-        shutdownFlag = true;
-    } else if (!shut) {
-        threadsRunning = true;
-        shutdownFlag = false;
-    }
-    stateChange();
-    stateChangeV6();
-}
-
 void Interface::stateChange()
 {
+    // Eigrp Updates
     updateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
@@ -220,10 +216,12 @@ void Interface::stateChange()
             }
         }
     }
+    // Other updates...
 }
 
 void Interface::stateChangeV6()
 {
+    // Eigrp Updates
     updateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
@@ -237,6 +235,7 @@ void Interface::stateChangeV6()
             }
         }
     }
+    // Other updates...
 }
 
 // Initialize the shared pointer to the current Interface

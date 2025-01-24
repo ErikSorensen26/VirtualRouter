@@ -5,10 +5,16 @@ namespace Protocol
 {
 
     // Constructor: Initiates the ARP object with the given interface
-    Arp::Arp(Interface& CurrentInterface) : currentInterface(&CurrentInterface)
+    Arp::Arp(Interface& CurrentInterface) 
+        : currentInterface(&CurrentInterface), running(true)
     {
         // Start ARP cache cleanup thread
-        threads.emplace_back(&Arp::arpCacheCleanupThread, this);
+        std::thread cacheThread(&Arp::arpCacheCleanupThread, this);
+
+        {
+            std::lock_guard<std::mutex> lock(threadMutex);
+            threads.emplace_back(std::move(cacheThread));
+        }
     }
 
     // Destructor
@@ -21,39 +27,53 @@ namespace Protocol
     void Arp::shutdown()
     {
         {
-            std::lock_guard<std::mutex> lock(arpCacheMutex);
+            std::lock_guard<std::mutex> lock(requestMutex);
             running.store(false);
         }
         threadCV.notify_all();
-        for (auto& t : threads)
+        
         {
-            if (t.joinable())
+            std::lock_guard<std::mutex> threadLock(threadMutex);
+            for (auto& t : threads)
             {
-                t.join();
+                if (t.joinable())
+                {
+                    t.join();
+                }
             }
+            threads.clear();
         }
-        threads.clear();
+
+        // Clear resources
+        {
+            std::lock_guard<std::mutex> lock(replyStatusMutex);
+            replyStatus.clear();
+        }
+        {
+            std::lock_guard<std::mutex> lock(packetQueueMutex);
+            packetQueuePerIp.clear();
+        }
+        {
+            std::lock_guard<std::mutex> lock(requestMutex);
+            pendingRequests.clear();
+        }
     }
 
     void Arp::arpCacheCleanupThread()
     {
-        std::unique_lock<std::mutex> lock(arpCacheMutex);
-        while (running.load())
+        while (running)
         {
-            std::cout << "waiging fro conedition" << std::endl;
-            if (threadCV.wait_for(lock, std::chrono::seconds(30), [this] { return !running.load(); }))
-            {
-                std::cout << "Thread exiting" << std::endl;
-                break;
-            }
+            std::unique_lock<std::mutex> lock(requestMutex);
+            threadCV.wait_for(lock, std::chrono::seconds(30));
+            if (!running) break;
 
-            // Preform ARP cache cleanup
+            // Cleanup expired entries
             auto now = std::chrono::steady_clock::now();
+            std::unique_lock<std::shared_mutex> cacheLock(arpCacheMutex);
             for (auto it = arpCache.begin(); it != arpCache.end();)
             {
                 if (now >= it->second.expiryTime)
                 {
-                    Logger::getInstance().info() << "Removing expired ARP cache entry for IP " << it->first.toHex() << std::endl;
                     it = arpCache.erase(it);
                 }
                 else
@@ -67,39 +87,19 @@ namespace Protocol
     // Check if MAC is known for the given IP
     bool Arp::isMacKnown(const ByteString& ip)
     {
-        std::lock_guard<std::mutex> lock(arpCacheMutex);
+        std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
         auto it = arpCache.find(ip);
-        if (it != arpCache.end())
-        {
-            if (std::chrono::steady_clock::now() < it->second.expiryTime)
-            {
-                return true;
-            }
-            else
-            {
-                // Expired, remove from cache
-                arpCache.erase(it);
-            }
-        }
-        return false;
+        return (it != arpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime);
     }
 
     // Get MAC address for the given ip
     ByteString Arp::getMac(const ByteString& ip)
     {
-        std::lock_guard<std::mutex> lock(arpCacheMutex);
+        std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
         auto it = arpCache.find(ip);
-        if (it != arpCache.end())
+        if (it != arpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime)
         {
-            if (std::chrono::steady_clock::now() < it->second.expiryTime)
-            {
-                return it->second.macAddress;
-            }
-            else
-            {
-                // Expired, remove from cache
-                arpCache.erase(it);
-            }
+            return it->second.macAddress;
         }
         return "";
     }
@@ -107,235 +107,159 @@ namespace Protocol
     // Enqueue a packet for ARP resolution and send once resolved
     void Arp::resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend)
     {
-        if (targetIp.empty()) {return;}
-
-        // Enqueue the packet to the queue for the target IP
         {
             std::lock_guard<std::mutex> lock(packetQueueMutex);
             packetQueuePerIp[targetIp].push(std::move(packetToSend));
         }
-
-        // Initiates ARP request if not already running
         sendRequest(targetIp);
     }
 
     // Send an ARP request for the given IP
     void Arp::sendRequest(const ByteString& targetIp)
     {
-        if (targetIp.empty()) {return;}
-
-        // Check if MAC is already known
-        {
-            std::lock_guard<std::mutex> lock(arpCacheMutex);
-            auto cacheIt = arpCache.find(targetIp);
-            if (cacheIt != arpCache.end())
-            {
-                if (std::chrono::steady_clock::now() > cacheIt->second.expiryTime)
-                {
-                    // MAC is known, send all queued packets
-                    std::queue<PacketInfo> packets;
-                    {
-                        std::lock_guard<std::mutex> lock2(packetQueueMutex);
-                        packets = std::move(packetQueuePerIp[targetIp]);
-                        packetQueuePerIp.erase(targetIp);
-                    }
-
-                    while (!packets.empty())
-                    {
-                        PacketInfo pkt = packets.front();
-                        packets.pop();
-                        currentInterface->enqueuePacket(pkt, cacheIt->second.macAddress);
-                        Logger::getInstance().info() << "Sending queued packet to MAC " << cacheIt->second.macAddress << " for IP " << targetIp << std::endl;
-                    }
-                    return;
-                }
-                else
-                {
-                    // Removed expired cache entry
-                    arpCache.erase(cacheIt);
-                }
-            }
-        }
-
-        // Check if an ARP request is already pending
         {
             std::lock_guard<std::mutex> lock(requestMutex);
-            if (pendingRequests.find(targetIp) != pendingRequests.end())
-            {
-                // ARP request already pending
-                Logger::getInstance().info() << "ARP request already pending for IP " << targetIp << std::endl;
-                return;
-            }
+            if (pendingRequests.count(targetIp)) return;
+            pendingRequests.insert(targetIp);
 
-            // Mark as pending
-            pendingRequests[targetIp] = true;
+            // Create reply status entry if not already present
+            if (replyStatus.find(targetIp) == replyStatus.end())
+            {
+                replyStatus[targetIp] = std::make_shared<std::atomic<bool>>(false);
+            }
         }
 
-        // Launch async ARP request handler
-        threads.emplace_back([this, targetIp]() {
-            int retryCount = 0;
-            const int maxRetries = 3;
-            const std::chrono::seconds retryInterval(2);
+        std::thread newThread(&Arp::handleArpRequest, this, targetIp);
+        
+        {
+            std::lock_guard<std::mutex> threadLock(threadMutex);
+            threads.emplace_back(std::move(newThread));
+        }
+    }
 
-            while (retryCount < maxRetries)
+    void Arp::handleArpRequest(const ByteString& targetIp)
+    {
+        const auto retryInterval = std::chrono::seconds(2);
+        int retries = 3;
+
+        // Ensure replyStatus[targetIp] is initialized
+        {
+            std::lock_guard<std::mutex> lock(replyStatusMutex);
+            if (replyStatus.find(targetIp) == replyStatus.end())
             {
-                // Create and send ARP request
-                ByteString mac;
-                PacketInfo arpReq;
-                {
-                    auto interfaceInfo = currentInterface->Get();
-                    std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
-                    mac = interfaceInfo->macAddress;
-                    arpReq = arpRequest(mac, interfaceInfo->ipv4.ipAddress, targetIp);
-                }
-                currentInterface->enqueuePacket(arpReq);
-
-                Logger::getInstance().info() << "Sent ARP request for IP " << targetIp << std::endl;
-
-                // Wait for ARP reply
-                bool replyReceived = false;
-                for (int i = 0; i < retryInterval.count() * 10; ++i)
-                {
-                    if (!running.load())
-                    {
-                        return;
-                    }
-                    
-                    {
-                        std::lock_guard<std::mutex> lock(replyStatusMutex);
-                        auto it = replyStatus.find(targetIp);
-                        if (it != replyStatus.end() && it->second->load())
-                        {
-                            replyReceived = true;
-                            break;
-                        }
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-
-                if (replyReceived)
-                {
-                    // Reply received, send queued packets
-                    std::queue<PacketInfo> packets;
-                    {
-                        std::lock_guard<std::mutex> lock(packetQueueMutex);
-                        packets = std::move(packetQueuePerIp[targetIp]);
-                        packetQueuePerIp.erase(targetIp);
-                    }
-
-                    // Retreive MAC from cache
-                    ByteString macAddress;
-                    {
-                        std::lock_guard<std::mutex> lock(arpCacheMutex);
-                        auto it = arpCache.find(targetIp);
-                        if (it != arpCache.end())
-                        {
-                            macAddress = it->second.macAddress;
-                        }
-                    }
-
-                    while (!packets.empty())
-                    {
-                        PacketInfo pkt = packets.front();
-                        packets.pop();
-                        currentInterface->enqueuePacket(pkt, mac);
-                        Logger::getInstance().info() << "Sending queued packet to MAC " << mac << " for IP " << targetIp << std::endl;
-                    }
-
-                    // Clean up
-                    {
-                        std::lock_guard<std::mutex> lock(requestMutex);
-                        pendingRequests.erase(targetIp);
-                    }
-
-                    return;
-                }
-                else
-                {
-                    retryCount++;
-                    Logger::getInstance().warn() << "ARP request failed for IP " << targetIp << ", retrying (" << retryCount << ")" << std::endl;
-                }
+                replyStatus[targetIp] = std::make_shared<std::atomic<bool>>(false);
             }
+        }
 
-            // After retrues, give up
+        for (int retry = 0; retry < retries; ++retry)
+        {
             {
                 std::lock_guard<std::mutex> lock(requestMutex);
-                pendingRequests.erase(targetIp);
+                if (!running || replyStatus[targetIp]->load()) break;
             }
 
-            Logger::getInstance().error() << "ARP resolution failed for IP " << targetIp << " after " << maxRetries << " retries." << std::endl;
-            
-            // Optionally, handle failed ARP resolution (e.g., notify Interface or drop packets)
+            PacketInfo arpReq;
             {
-                std::lock_guard<std::mutex> lock(packetQueueMutex);
-                packetQueuePerIp.erase(targetIp);
+                auto iface = currentInterface->Get();
+                std::shared_lock<std::shared_mutex> lock(iface->ipMutex);
+                arpReq = arpRequest(iface->macAddress, iface->ipv4.ipAddress, targetIp);
             }
-        });
+
+            // Send the ARP request
+            currentInterface->enqueuePacket(arpReq, Variable::Mac::broadcast);
+
+            if (waitForReply(targetIp, retryInterval)) break;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(requestMutex);
+            pendingRequests.erase(targetIp);
+        }
     }
 
     // Method to receive ARP reply
     void Arp::receiveReply(const ArpHeader& receivedReply)
     {
-        ByteString arpIp = receivedReply.senderIpAddress.toString();
-        ByteString arpMac = receivedReply.senderHardwareAddress.toString();
+        ByteString ip = receivedReply.senderIpAddress.toString();
+        ByteString mac = receivedReply.senderHardwareAddress.toString();
 
         {
-            std::lock_guard<std::mutex> lock(requestMutex);
-            // Only process the reply if there is a pending request
-            if (pendingRequests.find(arpIp) == pendingRequests.end())
-            {
-                Logger::getInstance().warn() << "Received unsolicited ARP reply for IP " << arpIp << std::endl;
-                return;
-            }
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(arpCacheMutex);
-            // Add to ARP cache with expiry time
-            arpCache[arpIp] = ArpCacheEntry{
-                .macAddress = arpMac,
-                .expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(60)
-            };
+            std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
+            arpCache[ip] = {mac, std::chrono::steady_clock::now() + std::chrono::seconds(60)};
         }
 
         {
             std::lock_guard<std::mutex> lock(replyStatusMutex);
-            if (replyStatus.find(arpIp) != replyStatus.end())
+            if (replyStatus.count(ip))
             {
-                replyStatus[arpIp]->store(true);
-            }
-            else
-            {
-                std::shared_ptr<std::atomic<bool>> bol = std::make_shared<std::atomic<bool>>(true);
-                replyStatus.emplace(arpIp, bol);
+                replyStatus[ip]->store(true);
             }
         }
 
-        // Add ARP entry to the routing table
-        RoutingTable& routingTable = RoutingTable::getInstance();
-        routingTable.updateArp(receivedReply);
+        threadCV.notify_all();
+        processQueuedPackets(ip, mac);
+    }
 
-        Logger::getInstance().info() << "Received ARP reply: IP " << arpIp << " -> MAC " << arpMac << std::endl;
+    void Arp::processQueuedPackets(const ByteString& targetIp, const ByteString& macAddress)
+    {
+        std::queue<PacketInfo> packets;
+        {
+            std::lock_guard<std::mutex> lock(packetQueueMutex);
+            if (packetQueuePerIp.count(targetIp))
+            {
+                packets = std::move(packetQueuePerIp[targetIp]);
+                packetQueuePerIp.erase(targetIp);
+            }
+        }
+        
+        while (!packets.empty())
+        {
+            PacketInfo pkt = packets.front();
+            packets.pop();
+            currentInterface->enqueuePacket(pkt, macAddress);
+        }
+
+        threadCV.notify_all();
+    }
+
+    bool Arp::waitForReply(const ByteString& targetIp, const std::chrono::milliseconds& timeout)
+    {
+        std::unique_lock<std::mutex> lock(replyStatusMutex);
+
+        // Initialize reply static for the target IP if not already present
+        if (replyStatus.count(targetIp) == 0)
+        {
+            replyStatus[targetIp] = std::make_shared<std::atomic<bool>>(false);
+        }
+
+        auto start = std::chrono::steady_clock::now();
+        auto end = start + timeout;
+
+        // Wait for the conditional variable to be modified or timeout
+        while (std::chrono::steady_clock::now() < end)
+        {
+            if (threadCV.wait_until(lock, std::min(end, std::chrono::steady_clock::now() + std::chrono::milliseconds(50)), [this, &targetIp]() {
+                    return !running || (replyStatus[targetIp] && replyStatus[targetIp]->load());
+                }))
+            {
+                return replyStatus[targetIp]->load();
+            }
+        }
+        return false;
     }
 
     // Method to send an ARP reply
     void Arp::sendReply(ByteString targetMac, ByteString targetIp) 
     {
-        if (targetIp.empty()) { return; }
-        
-        // Create an ARP reply packet
-        PacketInfo arpPacket;
+        auto interfaceInfo = currentInterface->Get();
+        PacketInfo replyPacket;
+
         {
-            auto interfaceInfo = currentInterface->Get();
             std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
-            if (interfaceInfo->ipv4.ipAddress.empty()) { return; }
-            arpPacket = arpReply(interfaceInfo->macAddress, targetMac, interfaceInfo->ipv4.ipAddress, targetIp);
+            replyPacket = arpReply(interfaceInfo->macAddress, targetMac, interfaceInfo->ipv4.ipAddress, targetIp);
         }
 
-        // Enqueue ARP reply for sending
-        currentInterface->enqueuePacket(arpPacket);
-
-        Logger::getInstance().info() << "Sent ARP reply to MAC " << targetMac.toString() << " for IP " << targetIp.toString() << std::endl;
+        currentInterface->enqueuePacket(replyPacket, targetMac);
     }
 
     // Creates an ARP request packet

@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
+#include <string>
 
 class ByteString {
 public:
@@ -31,6 +32,10 @@ public:
             if (!data_ptr_) throw std::bad_alloc();
             std::memcpy(data_ptr_, other.data_ptr_, size_);
         }
+    }
+
+    inline ByteString(const char* cstr, size_t size) {
+        initialize(reinterpret_cast<const byte*>(cstr), size);
     }
 
     inline ByteString(ByteString&& other) noexcept 
@@ -631,7 +636,6 @@ private:
     size_t size_;
 };
 
-
 class ByteStringSpan {
 public:
     using byte = uint8_t;
@@ -641,230 +645,101 @@ public:
     // 1) Constructors
     // -------------------------------------------------
 
-    // Default constructor => an invalid (null) span
-    ByteStringSpan()
-        : bs_(nullptr), offset_(0), length_(0)
-    {
-    }
-
-    // Construct a span referencing [offset, offset+length) in `bs`.
-    // Throws if offset+length > bs.size().
+    // Default constructor => invalid span
     ByteStringSpan(ByteString& bs, size_t offset, size_t length)
-        : bs_(&bs), offset_(offset), length_(length)
-    {
-        if (offset + length > bs.size()) {
+        : bs_(bs), offset_(offset), length_(length) {
+        if (offset_ + length_ > bs_.size()) {
             throw std::out_of_range("ByteStringSpan: range exceeds ByteString size");
         }
     }
 
     // Construct a span referencing the entire ByteString
     explicit ByteStringSpan(ByteString& bs)
-        : bs_(&bs), offset_(0), length_(bs.size()) {}
-
-    // Copy constructor
-    ByteStringSpan(const ByteStringSpan& other)
-        : bs_(other.bs_), offset_(other.offset_), length_(other.length_)
-    {
-    }
-
-    // Move constructor
-    ByteStringSpan(ByteStringSpan&& other) noexcept
-        : bs_(other.bs_), offset_(other.offset_), length_(other.length_)
-    {
-        other.bs_ = nullptr;
-        other.offset_ = 0;
-        other.length_ = 0;
-    }
+        : ByteStringSpan(bs, 0, bs.size()) {}
 
     // -------------------------------------------------
-    // 2) Assignment Operators
+    // 2) Assigning Data Into This Span
     // -------------------------------------------------
 
-    // Copy assignment
-    ByteStringSpan& operator=(const ByteStringSpan& other) {
-        if (this == &other) {
-            return *this;  // self-assignment => no op
-        }
-        bs_     = other.bs_;
-        offset_ = other.offset_;
-        length_ = other.length_;
-        return *this;
-    }
-
-    // Move assignment
-    ByteStringSpan& operator=(ByteStringSpan&& other) noexcept {
-        if (this == &other) {
-            return *this;
-        }
-        bs_      = other.bs_;
-        offset_  = other.offset_;
-        length_  = other.length_;
-
-        // Invalidate the other
-        other.bs_     = nullptr;
-        other.offset_ = 0;
-        other.length_ = 0;
-        return *this;
-    }
-
-    // -------------------------------------------------
-    // 3) Assigning Data *Into* This Span
-    // -------------------------------------------------
-
-    // Assign from a ByteString => copy data *into* the span’s region
+    // Assign from a ByteString
     ByteStringSpan& operator=(const ByteString& src) {
-        if (!bs_) {
-            throw std::runtime_error("ByteStringSpan: invalid (null) span on ByteString assignment");
+        if (src.size() != length_) {
+            throw std::invalid_argument("ByteStringSpan: source size must match span size.");
         }
-        size_t copy_len = std::min(length_, src.size());
-
-        std::memcpy(bs_->data() + offset_, src.data(), copy_len);
-
+        std::memcpy(bs_.data() + offset_, src.data(), length_);
         return *this;
     }
 
-    // Assign from a std::string => copy data *into* the span’s region
+    // Assign from a std::string
     ByteStringSpan& operator=(const std::string& src) {
-        if (!bs_) {
-            throw std::runtime_error("ByteStringSpan: invalid (null) span on std::string assignment");
+        if (src.size() != length_) {
+            throw std::invalid_argument("ByteStringSpan: source size must match span size.");
         }
-        size_t copy_len = std::min(length_, src.size());
-
-        std::memcpy(bs_->data() + offset_, src.data(), copy_len);
-
-        return *this;
-    }
-
-    // Copy the *data* from another ByteStringSpan (without rebinding)
-    ByteStringSpan& copyDataFrom(const ByteStringSpan& other) {
-        if (!bs_) {
-            throw std::runtime_error("ByteStringSpan: invalid dest span in copyDataFrom()");
-        }
-        if (!other.bs_) {
-            throw std::runtime_error("ByteStringSpan: invalid source span in copyDataFrom()");
-        }
-        size_t copy_len = std::min(length_, other.length_);
-
-        std::memmove(
-            bs_->data() + offset_,
-            other.bs_->data() + other.offset_,
-            copy_len
-        );
+        std::memcpy(bs_.data() + offset_, src.data(), length_);
         return *this;
     }
 
     // -------------------------------------------------
-    // 4) Element Access
+    // 3) Accessing Data
     // -------------------------------------------------
 
-    // Non-const index operator
-    byte& operator[](size_t index) {
-        if (!bs_ || index >= length_) {
-            throw std::out_of_range("ByteStringSpan::operator[]: index out of range");
-        }
-        // ByteString::operator[] is safe, or we can do:
-        // return *(bs_->data() + offset_ + index);
-        return (*bs_)[offset_ + index];
-    }
-
-    // Const index operator
-    const byte& operator[](size_t index) const {
-        if (!bs_ || index >= length_) {
-            throw std::out_of_range("ByteStringSpan::operator[]: index out of range");
-        }
-        return (*bs_)[offset_ + index];
-    }
-
-    // Provide direct pointer to the beginning of this span’s data.
-    // WARNING: If `bs_` reallocates afterwards, this pointer becomes stale.
-    byte* data() {
-        if (!bs_) return nullptr;
-
-        return bs_->data() + offset_;
-    }
-
-    // Const version
+    // Access raw data
     const byte* data() const {
-        if (!bs_) return nullptr;
-        return bs_->data() + offset_;
+        return reinterpret_cast<const byte*>(bs_.data() + offset_);
+    }
+
+    byte* data() {
+        return reinterpret_cast<byte*>(bs_.data() + offset_);
+    }
+
+    // Element access
+    byte& operator[](size_t index) {
+        if (index >= length_) {
+            throw std::out_of_range("ByteStringSpan::operator[]: index out of range");
+        }
+        return bs_[offset_ + index];
+    }
+
+    const byte& operator[](size_t index) const {
+        if (index >= length_) {
+            throw std::out_of_range("ByteStringSpan::operator[]: index out of range");
+        }
+        return bs_[offset_ + index];
     }
 
     // -------------------------------------------------
-    // 5) Span info
+    // 4) Span Info
     // -------------------------------------------------
 
     size_t size() const { return length_; }
-    bool empty() const { return (length_ == 0); }
-    bool valid() const { return (bs_ != nullptr); }
+    bool empty() const { return length_ == 0; }
 
-    // -------------------------------------------------
-    // 6) Subspan
-    // -------------------------------------------------
-
-    ByteStringSpan subspan(size_t pos, size_t count = npos) const {
-        if (!bs_) {
-            throw std::runtime_error("ByteStringSpan::subspan of invalid span");
-        }
-        if (pos > length_) {
-            throw std::out_of_range("ByteStringSpan::subspan: pos out of range");
-        }
-        size_t new_len = (count == npos || pos + count > length_)
-                         ? (length_ - pos)
-                         : count;
-        return ByteStringSpan(*bs_, offset_ + pos, new_len);
-    }
-
-    // -------------------------------------------------
-    // 7) Conversions
-    // -------------------------------------------------
-
-    // Copy the subrange into a new ByteString
+    // Get the subrange as a ByteString
     ByteString toByteString() const {
-        if (!bs_) {
-            return ByteString(); // empty
-        }
-        return bs_->substr(offset_, length_);
+        return bs_.substr(offset_, length_);
     }
 
-    // Copy the subrange into an std::string
+    // Get the subrange as a std::string
     std::string toString() const {
-        if (!bs_) {
-            return std::string();
-        }
-        return std::string(
-            reinterpret_cast<const char*>(bs_->data() + offset_),
-            reinterpret_cast<const char*>(bs_->data() + offset_ + length_)
-        );
+        return bs_.substr(offset_, length_).toString();
     }
-
-    // Hex dump of the subrange (like ByteString::toHex())
-    std::string toHex() const {
-        if (!bs_) {
-            return std::string();
-        }
-        static const char hex_table[] = "0123456789ABCDEF";
-        std::string result;
-        result.reserve(length_ * 2);
-        for (size_t i = 0; i < length_; ++i) {
-            byte v = (*bs_)[offset_ + i];
-            result.push_back(hex_table[v >> 4]);
-            result.push_back(hex_table[v & 0x0F]);
-        }
-        return result;
+// Assignment operator for another ByteStringSpan
+ByteStringSpan& operator=(const ByteStringSpan& other) {
+    if (this == &other) {
+        return *this; // Avoid self-assignment
     }
-
-    // -------------------------------------------------
-    // 8) Data Members
-    // -------------------------------------------------
-
-    // Pointer to the underlying ByteString (non-owning)
-    ByteString* bs_;
+    if (other.bs_ != bs_) {
+        throw std::runtime_error("ByteStringSpan: Cannot rebind to a different ByteString.");
+    }
+    offset_ = other.offset_;
+    length_ = other.length_;
+    return *this;
+}
 
 private:
-    // The offset and length of our subview within *bs_.
-    size_t offset_;
-    size_t length_;
+    ByteString& bs_;  // Reference to the underlying ByteString
+    size_t offset_;   // Offset of the span within the ByteString
+    size_t length_;   // Length of the span
 };
-
 
 #endif // BYTE_STRING_HPP

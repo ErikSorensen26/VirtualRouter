@@ -3,6 +3,9 @@
 #include <chrono> 
 #include <Time.h> 
 
+// Returns the number of seconds since the epoch (January 1, 1970).
+double secondsSinceEpoch();
+
 DoTime::DoTime() // Default constructor for the DoTime class.
 {
     // Nothing implemented
