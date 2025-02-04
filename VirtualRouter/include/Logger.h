@@ -18,7 +18,8 @@ class LogStream;
  * @enum LogLevel
  * @brief Enumerates the various levels of logging severity.
  */
-enum class LogLevel {
+enum class LogLevel 
+{
     INFO,   ///< Informationsl messages.
     DEBUG,  ///< Debugging messages.
     WARN,   ///< Warning messages.
@@ -185,7 +186,8 @@ private:
  *
  * Collects log message parts and formats them upon destruction.
  */
-class LogStream {
+class LogStream 
+{
 public:
 
     /**

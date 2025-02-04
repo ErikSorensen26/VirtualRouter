@@ -1128,7 +1128,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
         "\x00\x43"                    // Source Port = 67
         "\x00\x44"                    // Destination Port = 68
         "\x01\x12"                    // Length
-        "\x06\x8C",                   // Checksum
+        "\x58\x3A",                   // Checksum
         8
     );
 
@@ -1141,7 +1141,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
         "\x00"                      // Hops
         "\x39\x03\xf3\x26"          // Transaction ID
         "\x00\x00"                  // Seconds elapsed
-        "\x80"                      // BOOTP flags: Broadcast
+        "\x80\x00"                  // BOOTP flags: Broadcast
         "\x00\x00\x00\x00"          // Client IP address
         "\xC0\xA8\x00\x64"          // Your (client) IP address
         "\xC0\xA8\x00\x01"          // Next server IP address
@@ -1163,7 +1163,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
         "\x63\x82\x53\x63"          // Magic Cookie
         "\x35\x01\x02"             // DHCP Option 53 (Message Type: DHCP Offer)
         "\xFF"                    // End Option
-        "\x00\x00\x00\x00\x00",  // Padding
+        "\x00\x00\x00\x00",  // Padding
         248
     );
 
@@ -1208,7 +1208,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
     dhcp.transID = std::string("\x39\x03\xF3\x26", 4);          // Transaction ID
     dhcp.secondsElapsed = std::string("\x00\x00", 2);           // Seconds elapsed
     dhcp.bootpFlags.broadcast = "1";                            // Broadcast flag
-    dhcp.bootpFlags.reserved = "0000000";                       // Reserved
+    dhcp.bootpFlags.reserved = "000000000000000";               // Reserved
     dhcp.clientIP = std::string("\x00\x00\x00\x00", 4);         // Client IP
     dhcp.yourClientIP = std::string("\xC0\xA8\x00\x64", 4);     // Your (Client) IP
     dhcp.nextServerIP = std::string("\xC0\xA8\x00\x01", 4);     // Next Server IP
@@ -1220,7 +1220,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
     dhcp.magicCookie = ByteString("\x63\x82\x53\x63");
     dhcp.options.push_back({ByteString("\x35", 1), ByteString("\x01", 1), ByteString("\x02", 1)});
     dhcp.end = ByteString("\xFF", 1);
-    dhcp.padding = ByteString(5, '\x00');
+    dhcp.padding = ByteString(4, '\x00');
 
     packetInfo.Layer5.push_back(dhcp);
 
@@ -1274,7 +1274,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Invalid)
         "\x00"                      // Hops
         "\x39\x03\xf3\x26"          // Transaction ID
         "\x00\x00"                  // Seconds elapsed
-        "\x80"                      // BOOTP flags: Broadcast
+        "\x80\x00"                  // BOOTP flags: Broadcast
         "\x00\x00\x00\x00"          // Client IP address
         "\xC0\xA8\x00\x64"          // Your (client) IP address
         "\xC0\xA8\x00\x01"          // Next server IP address

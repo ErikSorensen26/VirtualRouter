@@ -194,7 +194,11 @@ namespace Functions {
 
     uint32_t stringToNum(std::string num) 
     {
-        return static_cast<uint32_t>(std::stoul(num, nullptr, 10));
+        if (Functions::isDecimal(num))
+        {
+            return static_cast<uint32_t>(std::stoul(num, nullptr, 10));
+        }
+        return 0;
     }
 
     #pragma endregion
@@ -322,7 +326,7 @@ namespace Functions {
         {
             stringMask += "1";
         }
-        for (size_t i = 0; i < (32 - mask); i++)
+        for (size_t i = 0; i < ((mask >= 32) ? 128 : 32 - mask); i++)
         {
             stringMask = stringMask + "0";
         }
@@ -331,6 +335,7 @@ namespace Functions {
 
     ByteString computeNetworkAddress(const ByteString& ipAddress, uint8_t mask)
     {   
+        if (ipAddress.empty()) return ByteString("");
         ByteString binMask = numMaskToBin(mask);
         ByteString binIp = byteToBin(ipAddress);
 
@@ -481,7 +486,7 @@ namespace Functions {
     {
         const ByteString binAddress = byteToBin(network);
         const ByteString binMask = numMaskToBin(mask);
-        for (size_t i = 0; i < 32; ++i)
+        for (size_t i = 0; i < binAddress.size(); ++i)
         {
             if (binMask[i] == '0' && binAddress[i] != '0')
             {
@@ -491,7 +496,7 @@ namespace Functions {
         return true;
     }
 
-    ByteString findClassfullNetwork(ByteString& ip)
+    ByteString findClassfullNetwork(const ByteString& ip)
     {
         uint32_t ipInt = byteToNum(ip);
         uint32_t network;

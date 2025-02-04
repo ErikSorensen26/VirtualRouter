@@ -6,12 +6,14 @@
 #include <map>
 #include <memory>
 
-namespace Protocol {
-class Bgp {
-public:
-    Bgp();
-private:
-};
+namespace Protocol 
+{
+    class Bgp 
+    {
+    public:
+        Bgp();
+    private:
+    };
 }
 
 extern Protocol::Bgp* currentBgp;

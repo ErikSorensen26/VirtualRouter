@@ -11,7 +11,8 @@
 #include <iostream>
 #include <string>
 
-class ByteString {
+class ByteString 
+{
 public:
     using byte = uint8_t;
 
@@ -579,7 +580,8 @@ private:
     bool is_sbo_;
 };
 
-namespace std {
+namespace std 
+{
     template <>
     struct hash<ByteString> {
         size_t operator()(const ByteString& bs) const noexcept {
@@ -593,7 +595,8 @@ namespace std {
     };
 }
 
-class ByteSpan {
+class ByteSpan 
+{
 public:
     using byte = uint8_t;
 
@@ -636,7 +639,8 @@ private:
     size_t size_;
 };
 
-class ByteStringSpan {
+class ByteStringSpan 
+{
 public:
     using byte = uint8_t;
     static const size_t npos = static_cast<size_t>(-1);

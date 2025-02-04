@@ -24,7 +24,8 @@ class DhcpServerTest;
 class IPPoolTest;
 enum class InterfaceType;
 
-namespace Protocol {
+namespace Protocol 
+{
  
     /**
      * @brief Represents a dhcp relay agent
@@ -38,7 +39,7 @@ namespace Protocol {
          * @brief Constructor for DHCP relay.
          * @param interface Reference to the associated interface.
          */
-        explicit DhcpRelay(Interface& interface);
+        explicit DhcpRelay(Interface* interface);
 
         /**
          * @brief Destructor for DHCP Relay.
@@ -74,7 +75,7 @@ namespace Protocol {
         void handleServerResponse(PacketInfo& packet);
 
     private:
-        Interface& associatedInterface; ///< Reference to the associated interface.
+        Interface* associatedInterface; ///< Reference to the associated interface.
         std::vector<ByteString> helperAddresses; ///< List of helper addresses for this relay.
         std::mutex relayMutex; ///< Mutex for syncronizing access to helper addresses.
 
@@ -602,7 +603,8 @@ namespace Protocol {
      * DHCP client able to hanble operations such as discovery, offers,
      * acknowledgments, and lease renewals.
      */
-    class DhcpClient {
+    class DhcpClient 
+    {
     public:
         friend class ::ProcessPacket;
         friend class ::DhcpClientTest;
@@ -611,8 +613,9 @@ namespace Protocol {
          * @brief Constructs a DhcpClient with the specific interface.
          *
          * @param CurrentInterface Reference ot the interface object
+         * @param reduced Mode to reduce functions in the constructor for testing.
          */
-        DhcpClient(Interface& CurrentInterface);
+        DhcpClient(Interface* CurrentInterface, bool reduced = false);
 
         /**
          * @brief Destructor to clean up threads and resources.

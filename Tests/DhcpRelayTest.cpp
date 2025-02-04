@@ -16,7 +16,7 @@ protected:
     void SetUp() override
     {
         mockInterface = new ::testing::NiceMock<MockInterface>();
-        dhcpRelay = new DhcpRelay(*mockInterface);
+        dhcpRelay = new DhcpRelay(mockInterface);
     }
 
     void TearDown() override

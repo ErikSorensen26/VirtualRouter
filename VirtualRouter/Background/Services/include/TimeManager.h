@@ -10,7 +10,8 @@
 #include <chrono>
 #include <condition_variable>
 
-class TimeManager {
+class TimeManager 
+{
 public:
     // Get the singleton instance
     static TimeManager& getInstance() {

@@ -56,6 +56,12 @@ struct Mode
 
     // Routing protocol prompts
     std::string routing = "(config-router)#";            ///< Routing Protocol Configuration mode prompt.
+    std::string routingV6 = "(config-rtr)#";             ///< Routing Protocol V6 Configuration mode prompt.
+
+    // Eigrp protocol prompts
+    std::string eigrpAddressFamily = "(config-router-af)#"; ///< Eigrp Address Family Configuration mode prompt.
+    std::string eigrpAddressFamilyInterface = "(config-router-af-interface)#"; ///< Eigrp Address Family Interface Configuration mode prompt.
+    std::string eigrpAddressFamilyTopology = "(config-router-af-topology)#"; ///< Eigrp Address Family Topology Configuration mode prompt.
 };
 
 /**
@@ -160,11 +166,7 @@ private:
 
 class IFileSystem
 {
-public:
-    virtual ~IFileSystem() = default;
-    virtual bool readFile(const std::string& path, std::string& content) = 0;
-    virtual bool writeFile(const std::string& path, const std::string& content) = 0;
-    virtual bool fileExists(const std::string& path) = 0;
+public: virtual ~IFileSystem() = default; virtual bool readFile(const std::string& path, std::string& content) = 0; virtual bool writeFile(const std::string& path, const std::string& content) = 0; virtual bool fileExists(const std::string& path) = 0;
     virtual void removeFile(const std::string& path) = 0;
 };
 

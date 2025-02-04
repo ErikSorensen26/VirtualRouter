@@ -21,7 +21,7 @@ protected:
     {
         // Initialize mock interface
         mockInterface = new ::testing::NiceMock<MockInterface>();
-        dhcpClient = new DhcpClient(*mockInterface);
+        dhcpClient = new DhcpClient(mockInterface, true);
 
         // Initialize DHCP with hardware address
         hardwareAddress = "\x01\x02\x03\x04\x05\x06";

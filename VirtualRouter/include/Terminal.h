@@ -32,7 +32,8 @@ enum RoutingMode
  * The terminal class provides functionalities to interact with the user via the command line.
  * It supports various commands, modes, and maintains the state between sessions.
  */
-class Terminal : public Console {
+class Terminal : public Console 
+{
 public:
     // Friend classes for testing
     friend class TerminalTest;
@@ -485,8 +486,19 @@ private:
      * updates the active routing configurations, and adjusts the working directory accordingly.
      *
      * @param type The string value representing the routing mode to configure.
+     * @param type Indicates whether your running classic v6 mode.
      */
-    void configureRoutingMode(std::string type);
+    void configureRoutingMode(std::string type, bool classicV6 = false);
+
+    /**
+     * @brief Configures the terminal's mode based on a address family.
+     *
+     * Seitches the terminal's operational mode to match the given address family (e.g. IPv4, IPv6),
+     * updates the active address family, and adjusts the working directory accordingly.
+     *
+     * @param addressFamily AddressFamily enum representing the wanted address family.
+     */
+    void configureAddressFamily(AddressFamily addressFamily);
 
     /**
      * @brief Recovers the terminal state from saved configurations.
@@ -497,7 +509,6 @@ private:
     void recoverState();
 
     // Services
-    void runDhcp();     ///< Runs the DHCP service in a seperate thread
     void runEigrp();    ///< Runs the EIGRP service in a seperate thread
     void runOspf();     ///< Runs the OSPF service in a seperate thread
     void runBgp();      ///< Runs the BGP service in a seperate thread
@@ -507,7 +518,7 @@ private:
     uint8_t interfaceID;		///< Unique identifier for interfaces
     uint32_t routingProtocolID;	        ///< ID of the current routing protocol
 	
-    std::map<unsigned int, std::shared_ptr<Interface>>* activeInterfaces; ///< pointer to a map of active interfaces
+    std::map<unsigned int, Interface*>* activeInterfaces; ///< pointer to a map of active interfaces
 
     std::vector<std::string> globalCommandList{"exit", "end", "?", "vk_tab"}; ///< List of global commands
 
@@ -517,13 +528,14 @@ private:
 
     size_t paginationCount = 10;                ///< Pagination count for command help
 
-    std::string currentPattern;		        ///< Current matching pattern
-    std::string endCommandString;	        ///< String for marking the end of a command
-    std::string previousMatch;		        ///< Previous successfull command match
-    std::string currentCommand;		        ///< Current command being processed
-    std::string currentSubMode;		        ///< Current sub-mode (e.g., specific interface or protocol)
+    std::vector<std::string> currentPatterns;   ///< Current matching patterns
+    std::string currentPattern;                ///< Current matching pattern
+    std::string endCommandString;	            ///< String for marking the end of a command
+    std::string previousMatch;		            ///< Previous successfull command match
+    std::string currentCommand;		            ///< Current command being processed
+    std::string currentSubMode;		            ///< Current sub-mode (e.g., specific interface or protocol)
 
-    nlohmann::json commandTree;		        ///< JSON structure holding the command hierarchy
+    nlohmann::json commandTree;		            ///< JSON structure holding the command hierarchy
     nlohmann::json currentDirectory;	        ///< Current directory in the command tree
     nlohmann::json workingDirectory;            ///< Working directory in the JSON structure
 

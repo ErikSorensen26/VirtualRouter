@@ -6,7 +6,7 @@ namespace Protocol {
 
 #pragma region RelayAgent
 
-    DhcpRelay::DhcpRelay(Interface& interface)
+    DhcpRelay::DhcpRelay(Interface* interface)
         : associatedInterface(interface)
     {}
 
@@ -42,7 +42,7 @@ namespace Protocol {
                 if (auto *ipv4Header = &(std::get<IPv4Header>(packet.Layer3.front())))
                 {
                     ipv4Header->destinationAddress = helperAddress;
-                    associatedInterface.enqueuePacket(packet);
+                    associatedInterface->enqueuePacket(packet);
                 }
             }
         }
@@ -55,7 +55,7 @@ namespace Protocol {
             if (auto *ipv4Header = &(std::get<IPv4Header>(packet.Layer3.front())))
             {
                 ipv4Header->destinationAddress = extractAddress(packet);
-                associatedInterface.enqueuePacket(packet);
+                associatedInterface->enqueuePacket(packet);
             }
         }
     }
@@ -68,9 +68,11 @@ namespace Protocol {
         }
 
         auto& dhcpHeader = std::get<DhcpHeader>(packet.Layer5[0]);
-
-        std::shared_lock<std::shared_mutex> lock(associatedInterface.Get()->ipMutex);
-        dhcpHeader.relayAgentIP = associatedInterface.Get()->ipv4.ipAddress;
+        if (associatedInterface->Get())
+        {
+            std::shared_lock<std::shared_mutex> lock(associatedInterface->Get()->ipMutex);
+            dhcpHeader.relayAgentIP = associatedInterface->Get()->ipv4.ipAddress;
+        }
     }
 
     ByteString DhcpRelay::extractAddress(PacketInfo& packet) const
@@ -1061,8 +1063,8 @@ namespace Protocol {
     }
 
     // Constructor for the DhcpClient class, initializes with a reference to an Interface object
-    DhcpClient::DhcpClient(Interface& CurrentInterface) 
-        : currentInterface(&CurrentInterface),
+    DhcpClient::DhcpClient(Interface* CurrentInterface, bool reduced)
+        : currentInterface(CurrentInterface),
           stopFlag(false),
           offered(false),
           acked(false),
@@ -1070,6 +1072,15 @@ namespace Protocol {
           leaseStart(0)
     {
         leaseStart = secondsSinceEpoch();
+        if (!reduced)
+        {
+            ByteString mac;
+            {
+                std::shared_lock<std::shared_mutex> macMutex(currentInterface->Get()->ipMutex);
+                mac = currentInterface->Get()->macAddress;
+            }
+            InitializeDhcp(mac);
+        }
     }
 
     // Destructor to clean up threads and resources
@@ -1156,12 +1167,17 @@ namespace Protocol {
             return; // No need for dhcp discover
         }
 
+        if (currentInterface->Get())
         {
             std::lock_guard<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
             if (!currentInterface->Get()->ipv4.ipAddress.empty())
             {
                 return; // No need for dhcp discover
             }
+        }
+        else
+        {
+            return;
         }
 
         if (leaseStart + Functions::byteToNum(configs.leaseTime) < secondsSinceEpoch())
@@ -1255,6 +1271,7 @@ namespace Protocol {
         if (leaseStart + renewalTime < currentTime)
         {
             ByteString dhcpIP;
+            if (currentInterface->Get())
             {
                 std::lock_guard<std::shared_mutex> ipLock(currentInterface->Get()->ipMutex);
                 dhcpIP = currentInterface->Get()->ipv4.ipAddress;
@@ -1289,12 +1306,15 @@ namespace Protocol {
             return;
         }
         
-        ByteString mac = currentInterface->Get()->macAddress;
-        PacketInfo releasePacket = dhcpRelease(dhcpBody(mac), mac);
+        if (currentInterface->Get())
+        {
+            ByteString mac = currentInterface->Get()->macAddress;
+            PacketInfo releasePacket = dhcpRelease(dhcpBody(mac), mac);
 
-        currentInterface->enqueuePacket(releasePacket);
+            currentInterface->enqueuePacket(releasePacket);
 
-        resetDhcpState();
+            resetDhcpState();
+        }
     }
 
     // Resets the DHCP client state upon receiving a NAC or DECLINE
@@ -1486,6 +1506,8 @@ namespace Protocol {
     {
         DhcpHeader dhcp;
 
+        if (!currentInterface->Get()) return packet;
+
         dhcp.boot = Variable::Dhcp::Type::release;
         dhcp.hardwareType = std::string("\x01", 1);
         dhcp.hardwareAddressLength = std::string("\x06", 1);
@@ -1531,9 +1553,14 @@ namespace Protocol {
         DhcpHeader dhcp;
 
         ByteString ipAddr;
+        if (currentInterface->Get())
         {
             std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
             ipAddr = currentInterface->Get()->ipv4.ipAddress;
+        }
+        else
+        {
+            return packet;
         }
 
         dhcp.boot = Variable::Dhcp::Type::inform; 

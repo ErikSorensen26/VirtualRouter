@@ -29,8 +29,7 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     // Initialize shared pointers for Protocol objects
     arp = new Protocol::Arp(*this);
     ethernet = new Protocol::Ethernet(*this, arp, Functions::hexToByte(mac));
-    ipPacket = new Protocol::IPPacket(*this);
-    dhcp = new Protocol::DhcpClient(*this);
+    ipPacket = new Protocol::IPPacket(this);
 
     // Start background threads
     //startThreads();
@@ -39,10 +38,32 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
 Interface::~Interface()
 {
     stopThreads();
+    cleanupInterface();
+}
+
+void Interface::cleanupInterface()
+{
+    shutdownFlag = true;
+    stateChange();
+    stateChangeV6();
+    
     delete arp;
-    delete ethernet;
+    arp = nullptr;
     delete ipPacket;
-    delete dhcp;
+    ipPacket = nullptr;
+    delete ethernet;
+    ethernet = nullptr;
+    if (dhcp)
+    {
+        delete dhcp;
+        dhcp = nullptr;
+    }
+
+    // Remove interface from list
+    if (interfaceList[configs.interfaceType].find(configs.id) != interfaceList[configs.interfaceType].end())
+    {
+        interfaceList[configs.interfaceType].erase(configs.id);
+    }
 }
 
 void Interface::setIPv4(ByteString ip, uint8_t subnet)
@@ -76,6 +97,7 @@ void Interface::setIPv6(ByteString ip, uint8_t subnet, bool eui64)
 }
 
 void Interface::Shutdown(bool shut) {
+    shutdownFlag = shut;
     if (shut) 
     {
         stopThreads();
@@ -88,7 +110,12 @@ void Interface::Shutdown(bool shut) {
     stateChangeV6();
 }
 
-IpInfo* Interface::Get() {
+IpInfo* Interface::Get() 
+{
+    if (shutdownFlag)
+    {
+        return nullptr;
+    }
     return &configs;
 }
 
@@ -186,7 +213,8 @@ void Interface::startThreads() {
     thread3 = std::thread(&Interface::process, this);
 }
 
-void Interface::stopThreads() {
+void Interface::stopThreads() 
+{
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex); 
         threadsRunning = false; 
@@ -203,17 +231,12 @@ void Interface::stopThreads() {
 void Interface::stateChange()
 {
     // Eigrp Updates
-    updateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
-        for (const auto& as : eigrp.second->autonomousSystems)
+        if (eigrp.second->ipv4)
         {
-            auto af = as.second->addressFamilies.find(AddressFamily::IPv4);
-            if (af != as.second->addressFamilies.end())
-            {
-                af->second->updateInterfaceList();
-                af->second->updateRoutingTableForConnected();
-            }
+            eigrp.second->ipv4->updateInterfaceList();
+            eigrp.second->ipv4->updateRoutingTableForConnected();
         }
     }
     // Other updates...
@@ -222,25 +245,20 @@ void Interface::stateChange()
 void Interface::stateChangeV6()
 {
     // Eigrp Updates
-    updateEigrpInterface(this);
     for (const auto& eigrp : eigrpList)
     {
-        for (const auto& as : eigrp.second->autonomousSystems)
+        if (eigrp.second->ipv6)
         {
-            auto af = as.second->addressFamilies.find(AddressFamily::IPv6);
-            if (af != as.second->addressFamilies.end())
-            {
-                af->second->updateInterfaceList();
-                af->second->updateRoutingTableForConnected();
-            }
+            eigrp.second->ipv6->updateInterfaceList();
+            eigrp.second->ipv6->updateRoutingTableForConnected();
         }
     }
     // Other updates...
 }
 
 // Initialize the shared pointer to the current Interface
-std::weak_ptr<Interface> currentInterface;
+Interface* currentInterface;
 
 // Map to store Interface objects by string key and integer ID
 std::shared_mutex interfaceListMutex;
-std::map<InterfaceType, std::map<unsigned int, std::shared_ptr<Interface>>> interfaceList;
+std::map<InterfaceType, std::map<unsigned int, Interface*>> interfaceList;

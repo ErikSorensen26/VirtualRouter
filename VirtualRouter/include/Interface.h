@@ -21,6 +21,8 @@
 #include <mutex>
 #include <memory>
 
+class EigrpTest;
+
 /**
  * @enum InterfaceType
  * @brief Enunerates the various types of network interfaces supported
@@ -96,6 +98,7 @@ class Interface
 {
 public:
 
+    friend class ::EigrpTest;
     RingBuffer<ByteString> packetOutQueue; ///< Queue for outgoing packets.
 
 
@@ -121,6 +124,11 @@ public:
      * Stops background threads and performs necessary cleanup.
      */
     virtual ~Interface();
+
+    /**
+     * @brief Cleans up all of the interface objects.
+     */
+    void cleanupInterface();
 
     /**
      * @brief Sets the IPv4 address and subnet mask for the interface.
@@ -171,8 +179,11 @@ public:
      */
     virtual void enqueuePacket(PacketInfo& packetInfo, ByteString mac = "");
 
-    bool shutdownFlag; ///< Flag indicating if the interface is in shutdown state.
+    bool shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
     ByteString vrf = "default"; ///< Virtual Routing and Forwarding identifier.
+
+    // Member Variables
+    IpInfo configs;                     ///< Shared pointer to IP configuration information.
 
     //L2 Protocols
     Protocol::Ethernet* ethernet;   ///< Ethernet Protocol handler.
@@ -182,8 +193,8 @@ public:
     Protocol::IPPacket* ipPacket;   ///< IP Packet protocol handler.
 
     // L4 Protocols
-    std::map<uint32_t, std::shared_ptr<Protocol::EigrpInterfaceInstance>> eigrpInterfaceList; ///< EIGRP interface instance.
-    Protocol::DhcpClient* dhcp;     ///< DHCP Client protocol handler.
+    std::map<uint32_t, Protocol::EigrpInterfaceInstance*> eigrpInterfaceList; ///< EIGRP interface instance.
+    Protocol::DhcpClient* dhcp = nullptr;     ///< DHCP Client protocol handler.
 
 private:
 
@@ -251,7 +262,6 @@ private:
     void onArpResolved(const ByteString& ip, const ByteString& mac);
 
     // Member variables
-    IpInfo configs;                     ///< Shared pointer to IP configuration information.
     std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
 
     std::string outInt;     ///< Outgoing interface name.
@@ -277,8 +287,6 @@ private:
 };
 
 // External declarations
-extern std::weak_ptr<Interface> currentInterface; ///< Weak pointer to the current Interface object.
-extern std::shared_mutex interfaceListMutex; ///< Mutex for protecting access to the interface list.
-extern std::map<InterfaceType, std::map<unsigned int, std::shared_ptr<Interface>>> interfaceList; ///< Map storing Interface objects categorized by InterfaceType and ID.
+extern Interface* currentInterface; ///< Weak pointer to the current Interface object.
 
 #endif // INTERFACE_H

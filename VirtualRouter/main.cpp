@@ -1,7 +1,8 @@
 #include <Terminal.h>
 #include <Logger.h>
 
-int main() {
+int main() 
+{
     Logger::getInstance().initialize(true, /*isolateMode*/true);
 
     Terminal* terminal = new Terminal(false);

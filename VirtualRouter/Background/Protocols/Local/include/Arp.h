@@ -22,13 +22,15 @@ class ArpTest;
  * @namespace Protocol
  * Contains network protocol implementations.
  */
-namespace Protocol {
+namespace Protocol 
+{
 
 /**
  * @struct ArpCacheEntry
  * Represents a single ARP cache entry, including the MAC address and expiration time.
  */
-struct ArpCacheEntry {
+struct ArpCacheEntry 
+{
     ByteString macAddress; ///< MAC address associated with the IP.
     std::chrono::steady_clock::time_point expiryTime; ///< Expiration time for this cache entry.
 };
@@ -37,7 +39,8 @@ struct ArpCacheEntry {
  * @class Arp
  * Handles ARP functionality, including cache management, ARP request/reply handling, and packet resolution.
  */
-class Arp {
+class Arp 
+{
 public:
     friend class ::ArpTest;
     /**

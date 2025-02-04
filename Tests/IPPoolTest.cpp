@@ -43,7 +43,7 @@ protected:
         dhcpServer->addNetwork(config);
     }
 
-    ByteString allocateIPAddress(ByteString& network, ByteString& mac) {return dhcpServer->allocateIPAddress(network, mac);}
+    ByteString allocateIPAddress(const ByteString& network, const ByteString& mac) {return dhcpServer->allocateIPAddress(network, mac);}
     void releaseIPAddress(ByteString& network, ByteString& mac) {dhcpServer->releaseIPAddress(network, mac);}
     std::unordered_map<ByteString, IPPool>& getIPPools() {return dhcpServer->ipPools;}
     uint32_t getPoolSize(IPPool& pool) {return pool.poolSize;}
@@ -66,14 +66,14 @@ TEST_F(IPPoolTest, IPPool_AllocateIP_Success) {
     ByteString ip1 = allocateIPAddress(network, mac1);
     ByteString ip2 = allocateIPAddress(network, mac2);
 
-    EXPECT_EQ(ip1, ByteString("\xc0\xa8\x00\x01", 4)); // First IP after network (assuming network address is 192.168.0.0)
-    EXPECT_EQ(ip2, ByteString("\xc0\xa8\x00\x02", 4)); // Next IP
+    EXPECT_EQ(ip1, ByteString("\xc0\xa8\x00\x02", 4)); // First IP after network (assuming network address is 192.168.0.0)
+    EXPECT_EQ(ip2, ByteString("\xc0\xa8\x00\x03", 4)); // Next IP
 
     ByteString mac = ByteString("\x00\x00\x00\x00\x00\x00", 6);
 
     // Allocate all possible IPs
-    for (int i = 2; i <= 253; ++i) {
-        ByteString ip = allocateIPAddress(network, mac);
+    for (int i = 4; i <= 254; ++i) {
+        ByteString ip = allocateIPAddress(network, Functions::numToByte(i, 6));
         EXPECT_FALSE(ip.empty());
     }
 
@@ -95,7 +95,7 @@ TEST_F(IPPoolTest, IPPool_ReleaseIP_Success) {
     ByteString mac = ByteString("\x00\x11\x22\x33\x44\x55", 6);
     ByteString ip = allocateIPAddress(network, mac);
 
-    EXPECT_EQ(ip, ByteString("\xc0\xa8\x00\x01", 4));
+    EXPECT_EQ(ip, ByteString("\xc0\xa8\x00\x02", 4));
 
     // Release the IP
     releaseIPAddress(network, ip);
@@ -121,18 +121,18 @@ TEST_F(IPPoolTest, IPPool_ExcludeAndRemoveIP) {
 
     // Attempt to allocate IP, should skip excluded IP
     ByteString mac = ByteString("\x00\x11\x22\x33\x44\x55", 6);
-    ByteString allocatedIP = allocateIPAddress(network, mac);
-    EXPECT_EQ(allocatedIP, ByteString("\xc0\xa8\x00\x01", 4)); // First IP
+    ByteString allocatedIP = allocateIPAddress(network, Functions::numToByte(1, 6));
+    EXPECT_EQ(allocatedIP, ByteString("\xc0\xa8\x00\x03", 4)); // First IP
 
-    ByteString allocatedIP2 = allocateIPAddress(network, mac);
-    EXPECT_EQ(allocatedIP2, ByteString("\xc0\xa8\x00\x03", 4)); // Skips excluded IP
+    ByteString allocatedIP2 = allocateIPAddress(network, Functions::numToByte(2, 6));
+    EXPECT_EQ(allocatedIP2, ByteString("\xc0\xa8\x00\x04", 4)); // Skips excluded IP
 
     // Remove exclusion
     bool removeResult = getIPPools()[network].removeExclusion(excludeIP);
     EXPECT_TRUE(removeResult);
 
     // Now, allocate should include the previously excluded IP
-    ByteString allocatedIP3 = allocateIPAddress(network, mac);
+    ByteString allocatedIP3 = allocateIPAddress(network, Functions::numToByte(3, 6));
     EXPECT_EQ(allocatedIP3, ByteString("\xc0\xa8\x00\x02", 4)); // Previously excluded IP
 }
 
@@ -146,9 +146,9 @@ TEST_F(IPPoolTest, IPPool_AdjustPool_ResizesCorrectly) {
 
     addTestNetwork(originalNetwork, originalSubnetMask, originalGateway, dnsServers, leaseTime);
 
-    ByteString mac = ByteString("\x00\x11\x22\x33\x44\x55", 4);
-    ByteString ip = allocateIPAddress(originalNetwork, mac);
-    EXPECT_EQ(ip, ByteString("\xc0\xa8\x00\x01", 4));
+    ByteString mac1 = ByteString("\x00\x11\x22\x33\x44\x55", 4);
+    ByteString ip = allocateIPAddress(originalNetwork, mac1);
+    EXPECT_EQ(ip, ByteString("\xc0\xa8\x00\x02", 4));
 
     // Adjust the pool to a smaller subnet
     ByteString newNetwork = ByteString("\xc0\xa8\x00\x00", 4); // 192.168.0.0
@@ -169,8 +169,9 @@ TEST_F(IPPoolTest, IPPool_AdjustPool_ResizesCorrectly) {
     EXPECT_TRUE(isAllocated);
 
     // Attempt to allocate more IPs, ensuring they are within the new subnet
-    ByteString ip2 = allocateIPAddress(newNetwork, mac);
-    EXPECT_EQ(ip2, ByteString("\xc0\xa8\x00\x02", 4));
+    ByteString mac2 = ByteString("\x55\x44\x33\x22\x11\x00", 6);
+    ByteString ip2 = allocateIPAddress(newNetwork, mac2);
+    EXPECT_EQ(ip2, ByteString("\xc0\xa8\x00\x03", 4));
 
     // The pool size for /25 is 126 usable IPs (192.168.0.1 to 192.168.0.126)
     // Verify that pool size is adjusted correctly
@@ -191,8 +192,8 @@ TEST_F(IPPoolTest, IPPool_FindNextAvailableIP_WrapAround) {
     ByteString mac2 = ByteString("\x00\x00\x00\x00\x00\x00", 6);
 
     // Allocate all IPs except the last one
-    for (int i = 1; i < 254; ++i) {
-        ByteString ip = allocateIPAddress(network, mac1);
+    for (int i = 2; i < 254; ++i) {
+        ByteString ip = allocateIPAddress(network, Functions::numToByte(i, 6));
         EXPECT_FALSE(ip.empty());
     }
 
@@ -205,9 +206,9 @@ TEST_F(IPPoolTest, IPPool_FindNextAvailableIP_WrapAround) {
     EXPECT_TRUE(overflowIP.empty());
 
     // Release the first IP and test wrap-around
-    ByteString releaseIP = ByteString("\xc0\xa8\x01\x01", 4); // 192.168.1.1
+    ByteString releaseIP = ByteString("\xc0\xa8\x01\x02", 4); // 192.168.1.2
     releaseIPAddress(network, releaseIP);
 
     ByteString wrappedIP = findNextAvailableIP(getIPPools()[network]);
-    EXPECT_EQ(wrappedIP, ByteString("\xc0\xa8\x01\x01", 4)); // Should wrap around and find the released IP
+    EXPECT_EQ(wrappedIP, ByteString("\xc0\xa8\x01\x02", 4)); // Should wrap around and find the released IP
 }

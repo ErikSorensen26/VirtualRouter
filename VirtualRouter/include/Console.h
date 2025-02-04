@@ -193,7 +193,8 @@ public:
  * The Console class inherits from the Configs class and provides functionalities
  * for managing user input, cursor movements, and command history within the terminal.
  */
-class Console : public Configs {
+class Console : public Configs 
+{
 private:
     friend class ConsoleTest;
 public:

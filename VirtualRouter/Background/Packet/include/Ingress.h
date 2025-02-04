@@ -30,7 +30,8 @@ extern std::mutex packetQueueMutex;
  * @note Ensure that the network interface provided exists and is up before using
  *       the Ingress class to avoid runtime errors.
  */
-class Ingress {
+class Ingress 
+{
 public:
 
     /**

@@ -309,7 +309,7 @@ namespace Functions {
      * @param ip The input IP address.
      * @return The classful network address.
      */
-    ByteString findClassfullNetwork(ByteString& ip);
+    ByteString findClassfullNetwork(const ByteString& ip);
 
     /**
      * @brief Gets the default subnet mask for a network.

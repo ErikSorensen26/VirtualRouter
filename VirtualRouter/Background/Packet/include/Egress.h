@@ -19,7 +19,8 @@
  * @note Ensure that the network interface provided exists and is up before using
  *       the Egress class to avoid runtime errors.
  */
-class Egress {
+class Egress 
+{
 public:
     
     /**

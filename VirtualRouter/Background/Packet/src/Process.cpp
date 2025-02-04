@@ -56,11 +56,14 @@ void ProcessPacket::processEthernet(const EthernetHeader& eth)
     if (print) { Logger::getInstance().info() << "THIS IS ETHERNET" << std::endl; } 
     // Check if packet contains your source address
     macAddress = eth.sourceMac.toString();
-    std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
-    if (eth.sourceMac.toString() == interface->Get()->macAddress.toString())
+    if (interface->Get())
     {
-        // Drop packet
-        return;
+        std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
+        if (eth.sourceMac.toString() == interface->Get()->macAddress.toString())
+        {
+            // Drop packet
+            return;
+        }
     }
 }
 
@@ -127,7 +130,7 @@ void ProcessPacket::processIPv4(const IPv4Header& ipv4)
     }
 
     // Access EthernetHeader object
-    if (ethernet && RoutingTable::getInstance().ArpLookup(ipv4.sourceAddress.toString()))
+    if (ethernet && interface->Get() && RoutingTable::getInstance().ArpLookup(ipv4.sourceAddress.toString()))
     {
         std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
         RoutingTable::getInstance().updateArp(ipv4.sourceAddress.toString(), macAddress, interface->Get()->ipv4.ipAddress);
@@ -207,18 +210,18 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
         }
     }
 
-    auto it = eigrpAutonomousSystems.find(Functions::byteToNum(eigrp.autonomousSystem));
+    auto it = eigrpList.find(Functions::byteToNum(eigrp.autonomousSystem));
     auto iface = interface->eigrpInterfaceList.find((Functions::byteToNum(eigrp.autonomousSystem)));
-    if (it != eigrpAutonomousSystems.end() && iface != interface->eigrpInterfaceList.end()) 
+    if (it != eigrpList.end() && iface != interface->eigrpInterfaceList.end()) 
     {
         uint32_t AS = Functions::byteToNum(eigrp.autonomousSystem);
         if (ipv4 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv4)
         {
-            interface->eigrpInterfaceList[AS]->IPv4->processPacket(&eigrp, ipv4->sourceAddress.toString());
+            interface->eigrpInterfaceList[AS]->IPv4->processPacket(eigrp, ipv4->sourceAddress.toString());
         }
         else if (ipv6 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv6)
         {
-            interface->eigrpInterfaceList[AS]->IPv6->processPacket(&eigrp, ipv6->sourceAddress);
+            interface->eigrpInterfaceList[AS]->IPv6->processPacket(eigrp, ipv6->sourceAddress);
         }
     }
 }
@@ -229,6 +232,17 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
 
 void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
 {
+    ByteString mac;
+    if (interface->Get())
+    {
+        std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
+        mac = interface->Get()->macAddress;
+    }
+    else
+    {
+        return;
+    }
+
     if (print) { Logger::getInstance().info() << "THIS IS DHCP" << std::endl; } 
     for (auto opt : dhcp.options) 
     {
@@ -243,7 +257,7 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpOffer = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::request)
             {
@@ -253,19 +267,19 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpAck = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::nak)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpNak = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::decline)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpDecline = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::release)
             {
@@ -274,7 +288,7 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
             else if (opt.value == Variable::Dhcp::Type::inform)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), interface->Get()->macAddress);
+                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
             }
             else
             {

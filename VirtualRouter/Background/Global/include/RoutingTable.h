@@ -10,6 +10,7 @@
 #include <optional>
 #include <chrono>
 #include <map>
+#include <unordered_set>
 #include <Functions.h>
 #include <Logger.h>
 
@@ -35,8 +36,21 @@ enum class AddressFamily
  * It ensures thread-safe access and manipulation of these tables using mutexes and follows the Singleton design pattern
  * to guarantee a single instance throughout the application lifecycle.
  */
-class RoutingTable {
+class RoutingTable 
+{
 public:
+
+    /**
+     * @brief Private constructor for the RoutingTable class.
+     *
+     * Initializes the RoutingTable instance. The constructor is private to enforce the Singleton pattern.
+     */
+    RoutingTable() = default;
+
+    /**
+     * @brief Default destructor for the RoutingTable class.
+     */
+    virtual ~RoutingTable() = default;
 
     /**
      * @struct RoutingEntry
@@ -276,7 +290,8 @@ public:
 
         bool stuckInActive{};               ///< Stuck in active state.
         std::chrono::system_clock::time_point age; ///< Age of the EIGRP entry.
-        std::vector<ByteString> nextHops{};     ///< List of next hop IP addresses.
+        std::vector<ByteString> nextHopsVector{};       ///< List of next hop IP addresses.
+        std::unordered_set<ByteString> nextHopsSet{};   ///< List of next hop IP addresses.
         bool isIPv6{false};                     ///< Flag indicating if the route is IPv6.
     };
 
@@ -291,24 +306,18 @@ public:
      * @param route The EIGRP route to update.
      * @param variance The variance factor to apply.
      * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
      */
-    void updateEigrpWithVarianceIPv6(const Eigrp& route, uint8_t variance, AddressFamily af);
+    void updateEigrpWithVarianceIPv6(Eigrp* route, uint8_t variance, AddressFamily af, uint32_t as);
 
     /**
      * @brief Adds a new EIGRP route to the table.
      *
      * @param route The EIGRP route to add.
      * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
      */
-    void addEigrp(const Eigrp route, AddressFamily af);
-
-    /**
-     * @brief Updates an existing EIGRP route in the table.
-     *
-     * @param route The EIGRP route to update.
-     * @param af The address family (IPv4 or IPv6).
-     */
-    void updateEigrp(const Eigrp route, AddressFamily af);
+    void addEigrp(Eigrp* route, AddressFamily af, uint32_t as);
 
     /**
      * @brief Removes an EIGRP route from the table.
@@ -316,16 +325,18 @@ public:
      * @param network The network address of the route to remove.
      * @param mask The subnet mask of the route to remove.
      * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
      */
-    void removeEigrp(const ByteString& network, uint8_t mask, AddressFamily af);
+    void removeEigrp(const ByteString& network, uint8_t mask, AddressFamily af, uint32_t as);
 
     /**
      * @brief Retrieves all EIGRP routes for a specific address family.
      *
      * @param af The address family (IPv4 or IPv6).
      * @return std::vector<Eigrp> A vector of EIGRP routes.
+     * @param as The Autonomous system
      */
-    std::vector<Eigrp> getAllEigrpRoutes(AddressFamily af);
+    std::vector<RoutingTable::Eigrp*> getAllEigrpRoutes(AddressFamily af, uint32_t as);
 
     /**
      * @brief Retrieves a specific EIGRP route based on destination and mask.
@@ -333,9 +344,10 @@ public:
      * @param destination The destination network address.
      * @param mask The subnet mask.
      * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
      * @return std::optional<RoutingTable::Eigrp> The EIGRP route if found, otherwise std::nullopt.
      */
-    std::vector<RoutingTable::Eigrp> getAllConnectedEigrpRoutes(AddressFamily af);
+    std::vector<RoutingTable::Eigrp*> getAllConnectedEigrpRoutes(AddressFamily af, uint32_t as);
 
     /**
      * @brief Retrieves a specific EIGRP route based on destination and mask.
@@ -343,9 +355,10 @@ public:
      * @param destination The destination network address.
      * @param mask The subnet mask.
      * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
      * @return std::optional<RoutingTable::Eigrp> The EIGRP route if found, otherwise std::nullopt.
      */
-    std::optional<RoutingTable::Eigrp> getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af);
+    std::optional<RoutingTable::Eigrp*> getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af, uint32_t as);
 
     /**
      * @brief Updates the EIGRP table with a given route, applying variance.
@@ -353,22 +366,9 @@ public:
      * @param route The EIGRP route to update.
      * @param variance The variance factor to apply.
      * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
      */
-    void updateEigrpWithVariance(const Eigrp& route, uint8_t variance, AddressFamily af);
-
-    /**
-     * @brief Retrieves the singleton instance of the RoutingTable.
-     *
-     * This method ensures that only one instance of the RoutingTable class exists.
-     * Subsequent calls to this method will return a reference to the same instance.
-     *
-     * @return RoutingTable& Reference to the singleton RoutingTable instance.
-     */
-    static RoutingTable& getInstance()
-    {
-        static RoutingTable instance;
-        return instance;
-    }
+    void updateEigrpWithVariance(Eigrp* route, uint8_t variance, AddressFamily af, uint32_t as);
 
     /**
      * @brief Determines the next hop for a given destination and mask.
@@ -377,7 +377,7 @@ public:
      * @param mask The subnet mask for the destination.
      * @return ByteString The next hop IP address.
      */
-    ByteString getNextHop(const ByteString& destination, uint8_t mask);
+    ByteString getNextHop(const ByteString& destination, uint8_t mask, uint32_t as);
 
     /**
      * @brief Deleted copy constructor to prevent copying of the singleton instance.
@@ -391,17 +391,20 @@ public:
 
     std::mutex tableMutex; ///< Mutex to ensure thread-safe access to the routing tables.
 
-    /**
-     * @brief Private constructor for the RoutingTable class.
-     *
-     * Initializes the RoutingTable instance. The constructor is private to enforce the Singleton pattern.
-     */
-    RoutingTable() = default;
-
-    /**
-     * @brief Default destructor for the RoutingTable class.
-     */
-    virtual ~RoutingTable() = default;
+    void clear()
+    {
+        routingTable.clear();
+        fib.clear();
+        arp.clear();
+        ndp.clear();
+        mac.clear();
+        rib.clear();
+        prb.clear();
+        multicast.clear();
+        acl.clear();
+        eigrp.clear();
+        eigrpIPv6.clear();
+    }
 
 private:
 
@@ -414,8 +417,8 @@ private:
     std::map<ByteString, Prb> prb;                         ///< Policy-Based Routing (PBR) table.
     std::map<ByteString, Multicast> multicast;             ///< Multicast routing table.
     std::map<ByteString, ACL> acl;                         ///< Access Control List (ACL) table.
-    std::map<ByteString, Eigrp> eigrp;                     ///< EIGRP routing table for IPv4.
-    std::map<ByteString, Eigrp> eigrpIPv6;                 ///< EIGRP routing table for IPv6.
+    std::map<uint32_t, std::map<ByteString, Eigrp*>> eigrp;      ///< EIGRP routing table for IPv4.
+    std::map<uint32_t, std::map<ByteString, Eigrp*>> eigrpIPv6;  ///< EIGRP routing table for IPv6.
 };
 
 #endif // ROUTING_TABLE_H

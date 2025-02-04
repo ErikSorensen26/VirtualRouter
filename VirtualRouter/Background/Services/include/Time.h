@@ -6,7 +6,8 @@
 #include <string>
 
 // Class to handle time formatting and retrieval.
-class DoTime {
+class DoTime 
+{
 public:
     // Constructor: Initializes the DoTime object.
     DoTime();

@@ -29,7 +29,8 @@
  * @note The number of threads should be chosen based on the application's concurrency requirements
  *       and the system's hardware capabilities.
  */
-class ThreadPool {
+class ThreadPool 
+{
 public:
 
     /**

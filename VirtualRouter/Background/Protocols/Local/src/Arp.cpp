@@ -161,8 +161,11 @@ namespace Protocol
             PacketInfo arpReq;
             {
                 auto iface = currentInterface->Get();
-                std::shared_lock<std::shared_mutex> lock(iface->ipMutex);
-                arpReq = arpRequest(iface->macAddress, iface->ipv4.ipAddress, targetIp);
+                if (iface)
+                {
+                    std::shared_lock<std::shared_mutex> lock(iface->ipMutex);
+                    arpReq = arpRequest(iface->macAddress, iface->ipv4.ipAddress, targetIp);
+                }
             }
 
             // Send the ARP request
@@ -252,14 +255,17 @@ namespace Protocol
     void Arp::sendReply(ByteString targetMac, ByteString targetIp) 
     {
         auto interfaceInfo = currentInterface->Get();
-        PacketInfo replyPacket;
-
+        if (interfaceInfo)
         {
-            std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
-            replyPacket = arpReply(interfaceInfo->macAddress, targetMac, interfaceInfo->ipv4.ipAddress, targetIp);
-        }
+            PacketInfo replyPacket;
 
-        currentInterface->enqueuePacket(replyPacket, targetMac);
+            {
+                std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
+                replyPacket = arpReply(interfaceInfo->macAddress, targetMac, interfaceInfo->ipv4.ipAddress, targetIp);
+            }
+
+            currentInterface->enqueuePacket(replyPacket, targetMac);
+        }
     }
 
     // Creates an ARP request packet

@@ -242,7 +242,7 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
 
     ByteString currentMac;
     {
-        if (currentInterface)
+        if (currentInterface && currentInterface->Get())
         {
             std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
             currentMac = currentInterface->Get()->macAddress;

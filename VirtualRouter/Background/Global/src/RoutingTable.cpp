@@ -1,134 +1,142 @@
 #include <RoutingTable.h>
 
-void RoutingTable::addEigrp(const Eigrp route, AddressFamily af)
+void RoutingTable::addEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 {
     // Create key in "network/mask" format
-    ByteString key = route.network + ByteString("/") + ByteString(std::to_string(route.mask));
-    auto optionalExistingRoute = getEigrpRoute(route.network, route.mask, af);
+    ByteString key = route->network + ByteString("/") + ByteString(std::to_string(route->mask));
     std::lock_guard<std::mutex> lock(tableMutex);
 
-    auto it = eigrp.find(key);
-    if (!optionalExistingRoute)
+    auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
+    auto it = eigrpTable.find(key);
+
+    // Handle route removal
+    if (route->metric == std::numeric_limits<std::uint32_t>::max())
     {
-        // New route added to the eigrp routing table
-        eigrp[key] = route;
+        if (it != eigrpTable.end())
+        {
+            delete eigrpTable[key];
+            eigrpTable[key] = nullptr;
+            eigrpTable.erase(key);
+            return;
+        }
+        else
+        {
+            return;
+        }
+    }
+
+    // Summary route handling
+    if (route->routeType == "summary")
+    {
+        uint32_t lowestSummaryMetric = std::numeric_limits<uint32_t>::max();
+        for (auto existingRoute = eigrpTable.begin(); existingRoute != eigrpTable.end();)
+        {
+            if (existingRoute->second->network != route->network && existingRoute->second->routeType != "summary" && Functions::isSubnetOf(existingRoute->second->network, existingRoute->second->mask, route->network, route->mask))
+            {
+                if (existingRoute->second->metric < lowestSummaryMetric)
+                {
+                    lowestSummaryMetric = existingRoute->second->metric;
+                }
+                delete existingRoute->second;
+                existingRoute->second = nullptr;
+                existingRoute = eigrpTable.erase(existingRoute);
+            }
+            else
+            {
+                existingRoute++;
+            }
+        }
+    }
+
+    // Add route to the routing table
+    if (it == eigrpTable.end())
+    {
+        // New route addition
+        eigrpTable[key] = route;
     }
     else
     {
+        // Update existing route
         auto& existingRoute = it->second;
-
-        // Check if the feasible distance or metric has changed
-        bool metricChanged = existingRoute.metric != route.metric;
-        bool fdChanged = existingRoute.feasibleDistance != route.feasibleDistance;
+        bool metricChanged = existingRoute->metric != route->metric;
+        bool fdChanged = existingRoute->feasibleDistance != route->feasibleDistance;
 
         if (metricChanged || fdChanged)
         {
             // Update all relevant fields
-            existingRoute.metric = route.metric;
-            existingRoute.feasibleDistance = route.feasibleDistance;
-            existingRoute.reportedDistance = route.reportedDistance;
-            existingRoute.routeType = route.routeType;
-            existingRoute.interface = route.interface;
+            if (route->feasibleDistance < existingRoute->feasibleDistance ||
+                (route->feasibleDistance == existingRoute->feasibleDistance && route->adminDistance < existingRoute->adminDistance))
+            {
+                existingRoute = route;
+            }
 
             // Add new nextHop if not already present
-            if (std::find(existingRoute.nextHops.begin(), existingRoute.nextHops.end(), route.nextHop) == existingRoute.nextHops.end())
+            if (existingRoute->nextHopsSet.insert(route->nextHop).second)
             {
-                existingRoute.nextHops.push_back(route.nextHop);
+                existingRoute->nextHopsVector.push_back(route->nextHop);
             }
         }
     }
 }
-// void RoutingTable::AddEigrp(const Eigrp& route)
-// {
-//     std::lock_guard<std::mutex> lock(routingMutex);
-// 
-//     auto it = routes.find(route.network + "/" + std::to_string(route.mask));
-//     if (it == routes.end())
-//     {
-        // New route
-//         routes[route.network + "/" + std::to_string(route.mask)] = route;
-//         Logger::getInstance().info() << "Added new EIGRP route: " << route.network << "/" << route.mask;
-//     }
-//     else
-//     {
-        // Existing route, check if it's a new path
-//         if (it->second.nextHop != route.nextHop)
-//         {
-            // Add as a backup path
-//             it->second.backupPaths.push_back(route);
-//             Logger::getInstance().info() << "Added backup EIGRP route: " << route.network << "/" << route.mask << " via " << Functions::byteToHex(route.nextHop);
-//         }
-//         else
-//         {
-            // Update existing route
-//             it->second.metric = route.metric;
-//             Logger::getInstance().info() << "Updated EIGRP route: " << route.network << "/" << route.mask;
-//         }
-//     }
-// }
 
-// void RoutingTable::addEigrp(const Eigrp route, AddressFamily af)
-// {
-//     std::lock_guard<std::mutex> lock(tableMutex);
-//     ByteString key = route.network + "/" + std::to_string(route.mask);
-//     eigrp[key] = route;
-// }
-
-void RoutingTable::removeEigrp(const ByteString& network, uint8_t mask, AddressFamily af)
+void RoutingTable::removeEigrp(const ByteString& network, uint8_t mask, AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     ByteString key = network + "/" + std::to_string(mask);
-    auto it = eigrp.find(key);
-    if (it != eigrp.end())
+    auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
+    auto it = eigrpTable.find(key);
+    if (it != eigrpTable.end())
     {
-        eigrp.erase(it);
+        delete it->second;
+        it->second = nullptr;
+        eigrpTable.erase(it);
     }
 }
 
-void RoutingTable::updateEigrpWithVariance(const Eigrp& route, uint8_t variance, AddressFamily af)
+void RoutingTable::updateEigrpWithVariance(Eigrp* route, uint8_t variance, AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
-    ByteString key = route.network + "/" + std::to_string(route.mask);
-    auto& existingRoute = eigrp[key];
-    double minMetric = existingRoute.metric;
+    ByteString key = route->network + "/" + std::to_string(route->mask);
+    RoutingTable::Eigrp* existingRoute = (af == AddressFamily::IPv4) ? eigrp[as][key] : eigrpIPv6[as][key];
+    double minMetric = existingRoute->metric;
 
     // Allow routes within variance range
-    if (route.metric <= minMetric * variance)
+    if (route->metric <= minMetric * variance)
     {
-        // Avoid duplicate nextHops
-        if (std::find(existingRoute.nextHops.begin(), existingRoute.nextHops.end(), route.nextHop) == existingRoute.nextHops.end())
+        // Avoid duplicate nextHops with the set
+        if (existingRoute->nextHopsSet.insert(route->nextHop).second)
         {
-            existingRoute.nextHops.push_back(route.nextHop);
+            existingRoute->nextHopsVector.push_back(route->nextHop);
         }
 
         // Update metric to the minimum
-        existingRoute.metric = std::min(existingRoute.metric, route.metric);
-        existingRoute.feasibleDistance = std::min(existingRoute.feasibleDistance, route.feasibleDistance);
-        existingRoute.reportedDistance = std::min(existingRoute.reportedDistance, route.reportedDistance);
-        existingRoute.routeType = route.routeType;
-        existingRoute.interface = route.interface;
+        existingRoute->metric = std::min(existingRoute->metric, route->metric);
+        existingRoute->feasibleDistance = std::min(existingRoute->feasibleDistance, route->feasibleDistance);
+        existingRoute->reportedDistance = std::min(existingRoute->reportedDistance, route->reportedDistance);
+        existingRoute->routeType = route->routeType;
+        existingRoute->interface = route->interface;
     }
 }
 
-std::vector<RoutingTable::Eigrp> RoutingTable::getAllEigrpRoutes(AddressFamily af)
+std::vector<RoutingTable::Eigrp*> RoutingTable::getAllEigrpRoutes(AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    std::vector<Eigrp> routes;
-    for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp : eigrpIPv6)
+    std::vector<Eigrp*> routes;
+    for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as])
     {
         routes.push_back(route);
     }
     return routes;
 }
 
-std::vector<RoutingTable::Eigrp> RoutingTable::getAllConnectedEigrpRoutes(AddressFamily af)
+std::vector<RoutingTable::Eigrp*> RoutingTable::getAllConnectedEigrpRoutes(AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    std::vector<Eigrp> routes;
-    for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp : eigrpIPv6)
+    std::vector<Eigrp*> routes;
+    for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as])
     {
-        if (route.routeType == "connected")
+        if (route->routeType == "connected")
         {
             routes.push_back(route);
         }
@@ -136,12 +144,12 @@ std::vector<RoutingTable::Eigrp> RoutingTable::getAllConnectedEigrpRoutes(Addres
     return routes;
 }
 
-std::optional<RoutingTable::Eigrp> RoutingTable::getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af)
+std::optional<RoutingTable::Eigrp*> RoutingTable::getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    for (const auto& [key, entry] : eigrp)
+    for (const auto& [key, entry] : af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as])
     {
-        if (entry.network == destination && entry.mask == mask)
+        if (entry && entry->network == destination && entry->mask == mask)
         {
             return entry;
         }
@@ -198,14 +206,14 @@ std::optional<RoutingTable::Arp> RoutingTable::ArpLookup(const ByteString& ipAdd
     return std::nullopt;
 }
 
-ByteString RoutingTable::getNextHop(const ByteString& destination, uint8_t mask)
+ByteString RoutingTable::getNextHop(const ByteString& destination, uint8_t mask, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    auto it = eigrp.find(destination + "/" + std::to_string(mask));
-    if (it != eigrp.end() && !it->second.nextHops.empty())
+    auto it = eigrp[as].find(destination + "/" + std::to_string(mask));
+    if (it != eigrp[as].end() && !it->second->nextHopsVector.empty())
     {
         static std::atomic<size_t> roundRobinIndex{0};
-        return it->second.nextHops[roundRobinIndex++ % it->second.nextHops.size()];
+        return it->second->nextHopsVector[roundRobinIndex++ % it->second->nextHopsVector.size()];
     }
     return ""; // No route found
 }
@@ -344,35 +352,35 @@ void RoutingTable::printAclTable() {
                   << "\n";
     }
 }
-void RoutingTable::printEigrpTable() {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    Logger::getInstance().debug() << "RoutingTable - EIGRP:\n";
-    for (const auto& entry : eigrp) {
-        Logger::getInstance().debug() << "Network: " << entry.second.network
-                  << ", Next Hop: " << entry.second.nextHop
-                  << ", Out Interface: " << entry.second.interface
-                  << ", Successor: " << entry.second.successor
-                  << ", Feasible Successor: " << entry.second.feasibleSuccessor
-                  << ", Route Source: " << entry.second.routeSource
-                  << ", Route Type: " << entry.second.routeType
-                  << ", Active or Passive: " << entry.second.activeOrPassive
-                  << ", Metric: " << entry.second.metric
-                  << ", Feasible Distance: " << entry.second.feasibleDistance
-                  << ", Reported Distance: " << entry.second.reportedDistance
-                  << ", Admin Distance: " << entry.second.adminDistance
-                  << ", Hold Time: " << entry.second.holdTime
-                  << ", Stuck in Active: " << entry.second.updateTimer
-                  << ", Retransmission Interval: " << entry.second.retransmitInterval
-                  << ", Sequence Number: " << entry.second.sequenceNumber
-                  << ", Route Tag: " << entry.second.routeTag
-                  << ", Hop Count: " << entry.second.hopCount
-                  << ", Bandwidth: " << entry.second.bandwidth
-                  << ", Load: " << entry.second.load
-                  << ", Delay: " << entry.second.delay
-                  << ", Reliability: " << entry.second.reliability
-                  << ", MTU: " << entry.second.mtu
-                  << ", Mask: " << entry.second.mask
-                  << ", Age: " << Functions::timeToString(entry.second.age)
-                  << "\n";
-    }
-}
+// void RoutingTable::printEigrpTable() {
+//     std::lock_guard<std::mutex> lock(tableMutex);
+//     Logger::getInstance().debug() << "RoutingTable - EIGRP:\n";
+//     for (const auto& entry : eigrp[]) {
+//         Logger::getInstance().debug() << "Network: " << entry.second.network
+//                   << ", Next Hop: " << entry.second.nextHop
+//                   << ", Out Interface: " << entry.second.interface
+//                   << ", Successor: " << entry.second.successor
+//                   << ", Feasible Successor: " << entry.second.feasibleSuccessor
+//                   << ", Route Source: " << entry.second.routeSource
+//                   << ", Route Type: " << entry.second.routeType
+//                   << ", Active or Passive: " << entry.second.activeOrPassive
+//                   << ", Metric: " << entry.second.metric
+//                   << ", Feasible Distance: " << entry.second.feasibleDistance
+//                   << ", Reported Distance: " << entry.second.reportedDistance
+//                   << ", Admin Distance: " << entry.second.adminDistance
+//                   << ", Hold Time: " << entry.second.holdTime
+//                   << ", Stuck in Active: " << entry.second.updateTimer
+//                   << ", Retransmission Interval: " << entry.second.retransmitInterval
+//                   << ", Sequence Number: " << entry.second.sequenceNumber
+//                   << ", Route Tag: " << entry.second.routeTag
+//                   << ", Hop Count: " << entry.second.hopCount
+//                   << ", Bandwidth: " << entry.second.bandwidth
+//                   << ", Load: " << entry.second.load
+//                   << ", Delay: " << entry.second.delay
+//                   << ", Reliability: " << entry.second.reliability
+//                   << ", MTU: " << entry.second.mtu
+//                   << ", Mask: " << entry.second.mask
+//                   << ", Age: " << Functions::timeToString(entry.second.age)
+//                   << "\n";
+//     }
+//}

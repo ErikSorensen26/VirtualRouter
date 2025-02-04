@@ -139,8 +139,7 @@ bool RingBuffer<T>::isEmpty() const
 
 // Checks if the ring buffer is full.
 template<typename T>
-bool RingBuffer<T>::isFull() const 
-{
+bool RingBuffer<T>::isFull() const {
     return full_;
 }
 
@@ -169,7 +168,8 @@ size_t RingBuffer<T>::capacity() const
  * @tparam T The type of elements stored in the queue.
  */
 template <typename T>
-class ThreadSafeQueue {
+class ThreadSafeQueue 
+{
 public:
 
     /**

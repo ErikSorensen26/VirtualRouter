@@ -15,7 +15,7 @@ bool Terminal::executeCommand(std::string &command)
 	
 	// Check if it's is a "do" command
 	if (command.empty()) return false;
-	if (isGlobalCommandExecution || (isHelpModeActive && isRunning))return true;
+	if (isGlobalCommandExecution || (isHelpModeActive && isRunning)) return true;
 	if (!isRunning || isCommandInvalid || !isCommandValid) return false;
 
 	std::vector<std::string> TEMPcommandStream = splitIntoWords(command);
@@ -131,6 +131,62 @@ bool Terminal::executeCommand(std::string &command)
 			{
 				Global::getInstance().setHostname(commandStream[1]);
 			}
+			if (commandStream[0] == "ipv6")
+			{
+				if (commandStream[1] == "router")
+				{
+					if (commandStream[2] == "eigrp")
+					{
+						std::string type = commandStream[2];
+						std::string ID;
+						if (commandStream.size() > 3)
+						{
+							ID = commandStream[3];
+							routingProtocolID = Functions::stringToNum(commandStream[2]);
+						}
+						if (type == "eigrp")
+						{
+							std::unique_lock<std::shared_mutex> lock(globalEigrpMutex);
+							// Update autonomous system instance list
+							Protocol::EigrpAutonomousSystem* as;
+							if (eigrpList.find((routingProtocolID)) != eigrpList.end())
+							{
+								if (!eigrpList[routingProtocolID]->isNamed)
+								{
+									as = eigrpList[routingProtocolID];
+								}
+								else
+								{
+									std::cout << "\n%" << "ERROR: AS used by named mode";
+									return false; // AS used in named mode.
+								}
+							}
+							else
+							{
+								eigrpList[routingProtocolID] = new Protocol::EigrpAutonomousSystem();
+								as = eigrpList[routingProtocolID];
+							}
+							if (!as->ipv6)
+							{
+								lock.unlock();
+								as->ipv6 = new Protocol::Eigrp(routingProtocolID, AddressFamily::IPv6);
+								lock.lock();
+							}
+							currentEigrp = as->ipv4;
+							configureRoutingMode("eigrp_classic", true);
+						}
+						else if (type == "ospf")
+						{
+							configureRoutingMode("ospf", true);
+							if (!ospfList[static_cast<uint16_t>(routingProtocolID)])
+							{
+								(ospfList)[static_cast<uint16_t>(routingProtocolID)] = std::make_shared<Protocol::Ospf>();
+							}
+							currentOspf = ospfList.at(static_cast<uint16_t>(routingProtocolID)).get();
+						}
+					}
+				}
+			}
 			if (commandStream[0] == "interface")
 			{
 				std::string type = commandStream[1];
@@ -154,7 +210,7 @@ bool Terminal::executeCommand(std::string &command)
 				{
 					mac = OUI + macAddressList.FastEthernet[interfaceID];
 				}
-			else if (commandStream[1] == "GigabitEthernet" && macAddressList.GigabitEthernet.size() >= interfaceID)
+				else if (commandStream[1] == "GigabitEthernet" && macAddressList.GigabitEthernet.size() >= interfaceID)
 				{
 					mac = OUI + macAddressList.GigabitEthernet[interfaceID];
 				}
@@ -169,7 +225,7 @@ bool Terminal::executeCommand(std::string &command)
 				if (activeInterfaces->count(interfaceID) == 0)
 				{
 					std::lock_guard<std::shared_mutex> lock(interfaceListMutex);
-					(*activeInterfaces)[interfaceID] = std::make_shared<Interface>(getInterfaceType(type), intType, 1024, 1024, mac, interfaceID, isDebugModeEnabled);
+					(*activeInterfaces)[interfaceID] = new Interface(getInterfaceType(type), intType, 1024, 1024, mac, interfaceID, isDebugModeEnabled);
 				}
 				currentInterface = activeInterfaces->at(interfaceID);
 			}
@@ -184,55 +240,46 @@ bool Terminal::executeCommand(std::string &command)
 				}
 				if (type == "eigrp")
 				{
-					if (!eigrpList[ID])
-					{
-						eigrpList[ID] = std::make_shared<Protocol::EigrpInstance>();
-					}
 					if (Functions::isDecimal(ID))
 					{
 						std::unique_lock<std::shared_mutex> lock(globalEigrpMutex);
-						*currentCommunicationMode = EigrpConfigs::CommunicationMode::MULTICAST;
-						auto eigrpAs = eigrpList[ID]->autonomousSystems.find(routingProtocolID);
-						if (eigrpAs == eigrpList[ID]->autonomousSystems.end())
-						{
-							lock.unlock();
-							eigrpList[ID]->autonomousSystems[routingProtocolID] = std::make_shared<Protocol::EigrpAutonomousSystems>();
-							eigrpAs = eigrpList[ID]->autonomousSystems.find(routingProtocolID);
-							lock.lock();
-						}
 						// Update autonomous system instance list
-						for (auto it = eigrpAutonomousSystems.begin(); it != eigrpAutonomousSystems.end();)
+						Protocol::EigrpAutonomousSystem* as;
+						if (eigrpList.find((routingProtocolID)) != eigrpList.end())
 						{
-							if (auto sharedPtr = it->second.lock())
+							if (!eigrpList[routingProtocolID]->isNamed)
 							{
-								++it;
+								as = eigrpList[routingProtocolID];
 							}
 							else
 							{
-								it = eigrpAutonomousSystems.erase(it);
+								std::cout << "ERROR" << std::endl;
+								return false; // AS used in named mode.
 							}
 						}
-						if (eigrpAutonomousSystems.find(routingProtocolID) == eigrpAutonomousSystems.end())
+						else
 						{
-							eigrpAutonomousSystems[routingProtocolID] = eigrpAs->second;
+							eigrpList[routingProtocolID] = new Protocol::EigrpAutonomousSystem();
+							as = eigrpList[routingProtocolID];
 						}
-						auto eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
-						if (eigrpIt == eigrpAs->second->addressFamilies.end())
+						if (!as->ipv4)
 						{
 							lock.unlock();
-							eigrpAs->second->addressFamilies[AddressFamily::IPv4] = std::make_shared<Protocol::ClassicEigrp>(routingProtocolID, AddressFamily::IPv4);
-							eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
+							as->ipv4 = new Protocol::Eigrp(routingProtocolID, AddressFamily::IPv4);
 							lock.lock();
 						}
-						currentEigrp = eigrpIt->second;
+						currentEigrp = as->ipv4;
 						configureRoutingMode("eigrp_classic");
 					}
 					else
 					{
-						*currentCommunicationMode = EigrpConfigs::CommunicationMode::UNICAST;
+						if (namedEigrpList.find(ID) == namedEigrpList.end())
+						{
+							namedEigrpList[ID] = new Protocol::EigrpNamed();
+						}
+						currentEigrpNamed = namedEigrpList[ID];
 						configureRoutingMode("eigrp_named");
 					}
-					currentEigrpInstance = eigrpList[ID];
 				}
 				else if (type == "ospf")
 				{
@@ -268,13 +315,14 @@ bool Terminal::executeCommand(std::string &command)
 			{
 				if (commandStream[2] != "dhcp")
 				{
-					currentInterface.lock()->setIPv4(Functions::addressToByte(ByteString(commandStream[2])), Functions::byteMaskToNum(Functions::addressToByte(ByteString(commandStream[3]))));
+					currentInterface->setIPv4(Functions::addressToByte(ByteString(commandStream[2])), Functions::byteMaskToNum(Functions::addressToByte(ByteString(commandStream[3]))));
 				}
 				else
 				{
-					std::thread dhcpThread([this]()
-									  { this->runDhcp(); });
-					dhcpThread.detach();
+					if (!currentInterface->dhcp)
+					{
+						currentInterface->dhcp = new Protocol::DhcpClient(currentInterface);
+					}
 				}
 			}
 		}
@@ -303,9 +351,9 @@ bool Terminal::executeCommand(std::string &command)
 					{
 						network.mask = Variable::IPv4::broadcast;
 					}
-					currentEigrp.lock()->addNetwork(network);
-					currentEigrp.lock()->updateInterfaceList();
-					currentEigrp.lock()->updateRoutingTableForConnected();
+					currentEigrp->addNetwork(network);
+					currentEigrp->updateInterfaceList();
+					currentEigrp->updateRoutingTableForConnected();
 				}
 			}
 			else if (currentSubMode == "eigrp_named")
@@ -313,6 +361,8 @@ bool Terminal::executeCommand(std::string &command)
 				if (commandStream[0] == "address-family")
 				{
 					AddressFamily af;
+					EigrpConfigs::CommunicationMode comMode = EigrpConfigs::CommunicationMode::UNICAST;
+					std::string comString = "unicast";
 					if (commandStream[1] == "ipv4")
 					{
 						af = AddressFamily::IPv4;
@@ -324,31 +374,19 @@ bool Terminal::executeCommand(std::string &command)
 					if (commandStream[2] == "unicast")
 					{
 						routingProtocolID = Functions::stringToNum(commandStream[4]);
-						if (af == AddressFamily::IPv4)
-						{
-							*currentCommunicationMode = EigrpConfigs::CommunicationMode::UNICAST;
-						}
-						else if (af == AddressFamily::IPv6 && /*IPV6 ENABLED*/false)
-						{
-							*currentCommunicationMode = EigrpConfigs::CommunicationMode::UNICAST;
-						}
 					}
 					else if (commandStream[2] == "multicast")
 					{
-						routingProtocolID = Functions::stringToNum(commandStream[4]);
-						if (/*MULTICAST ENABLED*/false)
+						if (/*multicast enabled*/false)
 						{
-							if (af == AddressFamily::IPv4)
-							{
-								*currentCommunicationMode = EigrpConfigs::CommunicationMode::MULTICAST;
-							}
-							else if (af == AddressFamily::IPv6)
-							{
-								if (/*IPV6 ENABLED*/false)
-								{
-									*currentCommunicationMode = EigrpConfigs::CommunicationMode::MULTICAST;
-								}
-							}
+							routingProtocolID = Functions::stringToNum(commandStream[4]);
+							comMode = EigrpConfigs::CommunicationMode::MULTICAST;
+							comString = "multicast";
+						}
+						else
+						{
+							std::cout << "\n%" << "ERROR multicast not enabled";
+							return false;
 						}
 					}
 					else
@@ -357,36 +395,60 @@ bool Terminal::executeCommand(std::string &command)
 					}
 					if (commandStream[2] == "autonomous-system" || commandStream[3] == "autonomous-system")
 					{
-						auto eigrpAs = currentEigrpInstance.lock()->autonomousSystems.find(routingProtocolID);
-						if (eigrpAs == currentEigrpInstance.lock()->autonomousSystems.end())
+						Protocol::EigrpAutonomousSystem* eigrpAs;
+						if (currentEigrpNamed->autonomousSystems.find(routingProtocolID) == currentEigrpNamed->autonomousSystems.end())
 						{
-							currentEigrpInstance.lock()->autonomousSystems[routingProtocolID] = std::make_shared<Protocol::EigrpAutonomousSystems>();
-							eigrpAs = currentEigrpInstance.lock()->autonomousSystems.find(routingProtocolID);
-						}
-						// Update autonomous system instance list
-						for (auto it = eigrpAutonomousSystems.begin(); it != eigrpAutonomousSystems.end();)
-						{
-							if (auto sharedPtr = it->second.lock())
+							const auto& eigrp = eigrpList.find(routingProtocolID);
+							if (eigrp == eigrpList.end())
 							{
-								++it;
+								auto* newAS = new Protocol::EigrpAutonomousSystem();
+								newAS->isNamed = true;
+								currentEigrpNamed->autonomousSystems[routingProtocolID] = newAS;
+								eigrpList[routingProtocolID] = newAS;
+								eigrpAs = newAS;
+							}
+							else if (!eigrp->second->isNamed)
+							{
+								std::cout << "ERROR" << std::endl;
+							}
+						}
+						else
+						{
+							eigrpAs = currentEigrpNamed->autonomousSystems[routingProtocolID];
+						}
+
+						if (af == AddressFamily::IPv4)
+						{
+							if (eigrpAs->ipv4)
+							{
+								currentEigrp = eigrpAs->ipv4;
 							}
 							else
 							{
-								it = eigrpAutonomousSystems.erase(it);
+								eigrpAs->ipv4 = new Protocol::Eigrp(routingProtocolID, af);
+								currentEigrp = eigrpAs->ipv4;
+								changeMode(mode.eigrpAddressFamily);
+								configureAddressFamily(AddressFamily::IPv4);
 							}
 						}
-						if (eigrpAutonomousSystems.find(routingProtocolID) == eigrpAutonomousSystems.end())
+						else if (af == AddressFamily::IPv6)
 						{
-							eigrpAutonomousSystems[routingProtocolID] = eigrpAs->second;
+							if (eigrpAs->ipv6)
+							{
+								currentEigrp = eigrpAs->ipv6;
+							}
+							else
+							{
+								eigrpAs->ipv6 = new Protocol::Eigrp(routingProtocolID, af);
+								currentEigrp = eigrpAs->ipv6;
+								changeMode(mode.eigrpAddressFamily);
+								configureAddressFamily(AddressFamily::IPv6);
+							}
 						}
-						auto eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
-						if (eigrpIt == eigrpAs->second->addressFamilies.end())
+						if (workingDirectory.size() > 0 && workingDirectory[0].contains(comString))
 						{
-							// eigrpAs->second->addressFamilies[AddressFamily::IPv4] = std::make_shared<Protocol::NamedEigrp>(routingProtocolID, AddressFamily::IPv4, currentEigrpInstance->); NAMED
-							eigrpIt = eigrpAs->second->addressFamilies.find(AddressFamily::IPv4);
+							workingDirectory = workingDirectory[0][comString];
 						}
-						currentEigrp = eigrpIt->second;
-						configureRoutingMode("eigrp_classic");
 					}
 				}
 			}
@@ -448,16 +510,4 @@ bool Terminal::executeCommand(std::string &command)
 		return true;
 	}
 	return false;
-}
-
-void Terminal::runDhcp()
-{
-	ByteString mac;
-	{
-		auto interfaceInfo = currentInterface.lock()->Get();
-		std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
-		mac = interfaceInfo->macAddress;
-	}
-
-	currentInterface.lock()->dhcp->InitializeDhcp(mac);
 }

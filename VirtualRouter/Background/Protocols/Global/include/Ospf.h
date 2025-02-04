@@ -6,12 +6,14 @@
 #include <map>
 #include <memory>
 
-namespace Protocol {
-class Ospf {
-public:
-    Ospf();
-private:
-};
+namespace Protocol 
+{
+    class Ospf 
+    {
+    public:
+        Ospf();
+    private:
+    };
 }
 
 extern Protocol::Ospf* currentOspf;

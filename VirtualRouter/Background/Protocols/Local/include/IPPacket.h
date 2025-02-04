@@ -15,13 +15,13 @@ namespace Protocol
     {
     public:
         // Constructor
-        IPPacket(Interface& iface);
+        IPPacket(Interface* iface);
 
         // Sets the IPv4 header in PacketInfo
         void setIPHeader(PacketInfo& packetInfo, const ByteString destIp, uint8_t DSCP, uint8_t hopLimit, const ByteString type);
     private:
         // Current Interface
-        Interface& currentInterface;
+        Interface* currentInterface;
     };
 }
 

@@ -678,6 +678,7 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
     // Iterate over all commands in the current directory
     nlohmann::json commandNode;
     int matchCount = 0;
+    bool patternMatched = false;
     for (const json& command : currentCommandDirectory) 
     {
         if (command.is_object() && command.contains("name") && command.contains("description"))
@@ -689,10 +690,11 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
 
             // Check if the user input matches a pattern or specific command
             std::string commandName = command["name"];
-            if (matchInputPattern(lowerUserInput, commandName) && !endOfCommand) 
+            if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
             {
                 commandNode = command;
                 matchCount++;
+                patternMatched = true;
                 if (!isValidCommandDirectory(commandNode)) 
                 {
                     endOfCommand = true;
@@ -1323,8 +1325,16 @@ void Terminal::configureInterfaceMode(std::string& type)
     }
 }
 
-void Terminal::configureRoutingMode(std::string type) {
-    changeMode(mode.routing);
+void Terminal::configureRoutingMode(std::string type, bool classicV6) 
+{
+    if (classicV6)
+    {
+        changeMode(mode.routingV6);
+    }
+    else
+    {
+        changeMode(mode.routing);
+    }
     currentSubMode = type;
     if (workingDirectory.size() > 0 && workingDirectory[0].contains(currentSubMode))
     {
@@ -1336,3 +1346,22 @@ void Terminal::configureRoutingMode(std::string type) {
     }
 }
 
+void Terminal::configureAddressFamily(AddressFamily af)
+{
+    std::string addressFamily;
+
+    switch (af)
+    {
+        case AddressFamily::IPv4:
+            addressFamily = "ipv4";
+            break;
+        case AddressFamily::IPv6:
+            addressFamily = "ipv6";
+            break;
+    }
+
+    if (workingDirectory.size() > 0 && workingDirectory[0].contains(addressFamily))
+    {
+        workingDirectory = workingDirectory[0][addressFamily];
+    }
+}

@@ -14,7 +14,8 @@
 #include <cstring>
 #include <ByteString.hpp>
 
-namespace Authentication {
+namespace Authentication 
+{
     static constexpr int AES_BLOCK_SIZE = 16;    // AES block size (128 bits)
     static constexpr int DES_BLOCK_SIZE = 8;     // DES block size (64 bits)
 

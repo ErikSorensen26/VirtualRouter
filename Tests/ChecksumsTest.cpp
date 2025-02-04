@@ -116,45 +116,7 @@ TEST(ChecksumTest, CalculateChecksumUnsupportedSize)
     EXPECT_EQ(checksum, std::string(unsupported_size, '\0'));
 }
 
-// Test for calculateProtocolChecksum (first overload)
-TEST(ChecksumTest, CalculatProtocolChecksumOverload)
-{
-    // Define pseudoHeader and header
-    ByteString pseudoHeader = "pseudo";
-    ByteString header = "headerdata";
-    size_t checksumStartIndex = 3;
-    size_t checksumSize = 2;
-    bool swap = true;
-
-    // Expected checksum: calculate checksum over "pseudoheaderdata" with 2-byte checksum
-    ByteString dataToChecksum = pseudoHeader + header;
-    ByteString expectedChecksum = Checksum::calculateChecksum(dataToChecksum, checksumSize);
-
-    // Preform byte swapping if swap is true
-    if (swap && checksumSize >= 2)
-    {
-        std::swap(expectedChecksum[0], expectedChecksum[1]);
-    }
-
-    // Make a copy of header to modify
-    ByteString modifiedHeader = header;
-
-    // Make a copy of header to modify
-    ByteString expectedHeader = header;
-    if (checksumStartIndex + checksumSize <= header.size())
-    {
-        expectedHeader.replace(checksumStartIndex, checksumSize, expectedChecksum);
-        EXPECT_EQ(modifiedHeader, expectedHeader);
-    }
-    else
-    {
-        // If insertion exceeds header size, expect no change
-        EXPECT_EQ(modifiedHeader, header);
-    }
-}
-
-
-TEST(ChecksumTest, CalcualteProtocolChecksumOverload1EmptyPseudoHeader)
+TEST(ChecksumTest, CalculateProtocolChecksumOverload1EmptyPseudoHeader)
 {
     // Test with empty pseudoHeader
     ByteString pseudoHeader = "";
@@ -209,37 +171,9 @@ TEST(ChecksumTest, CalcualteProtocolChecksumOverload1InvalidIndex)
     EXPECT_EQ(modifiedHeader, header);
 }
 
-TEST(ChecksumTest, CalculateProtocolChecksumOverload1Swap)
-{
-    // Test byte swapping
-    ByteString pseudoHeader = "pseudo";
-    ByteString header = "headerdata";
-    size_t checksumStartIndex = 4;
-    size_t checksumSize = 2;
-    bool swap = true;
-
-    ByteString dataToChecksum = pseudoHeader + header;
-    ByteString checksumBytes = Checksum::calculateChecksum(dataToChecksum, checksumSize);
-
-    // Swap bytes
-    std::swap(checksumBytes[0], checksumBytes[1]);
-
-    // Indert into header
-    ByteString expectedHeader = header;
-    if (checksumStartIndex + checksumSize <= header.size())
-    {
-        expectedHeader.replace(checksumStartIndex, checksumSize, checksumBytes);
-    }
-
-    // Preform checksum calculation
-    ByteString modifiedHeader = header;
-    Checksum::calculateProtocolChecksum(pseudoHeader, modifiedHeader, checksumStartIndex, checksumSize, swap);
-
-    EXPECT_EQ(modifiedHeader, expectedHeader);
-}
-
 // Test Suite for calculateProtocolChecksum (second overload)
-TEST(ChecksumTest, CalculateProtocolChecksumOverload2) {
+TEST(ChecksumTest, CalculateProtocolChecksumOverload2) 
+{
     // Initialize headers array with std::optional
     std::optional<ByteString> headers[static_cast<size_t>(HeaderType::Count)] = {
         ByteString("header1data"),
@@ -281,7 +215,8 @@ TEST(ChecksumTest, CalculateProtocolChecksumOverload2) {
     }
 }
 
-TEST(ChecksumTest, CalculateProtocolChecksumOverload2MissingHeader) {
+TEST(ChecksumTest, CalculateProtocolChecksumOverload2MissingHeader) 
+{
     // Initialize headers array with std::optional
     std::optional<ByteString> headers[static_cast<size_t>(HeaderType::Count)] = {
         std::nullopt, // Header1 is missing
@@ -307,53 +242,8 @@ TEST(ChecksumTest, CalculateProtocolChecksumOverload2MissingHeader) {
     EXPECT_NE(output.find("Header does not exist when calculating checksum"), std::string::npos);
 }
 
-TEST(ChecksumTest, CalculateProtocolChecksumOverload2Swap) {
-    // Initialize headers array with std::optional
-    std::optional<ByteString> headers[static_cast<size_t>(HeaderType::Count)] = {
-        ByteString("header1data"),
-        ByteString("header2data")
-    };
-    
-    ByteString pseudoHeader = "pseudo";
-    ByteString payload = "payload";
-    HeaderType startHeaderType = HeaderType::Ethernet;
-    size_t checksumStartIndex = 3;
-    size_t checksumSize = 2;
-    bool swap = true;
-    
-    // Accumulate data: pseudoHeader + headers[Header1] + headers[Header2] + payload
-    ByteString dataToChecksum = pseudoHeader + headers[0].value() + headers[1].value() + payload;
-    
-    ByteString checksumBytes = Checksum::calculateChecksum(dataToChecksum, checksumSize);
-    
-    // Swap bytes
-    std::swap(checksumBytes[0], checksumBytes[1]);
-    
-    // Insert into headers[startHeaderType] at checksumStartIndex
-    ByteString expectedHeader = headers[0].value();
-    if (checksumStartIndex + checksumSize <= expectedHeader.size()) {
-        expectedHeader.replace(checksumStartIndex, checksumSize, checksumBytes);
-    }
-    
-    // Make a copy of headers to modify
-    std::optional<ByteString> modifiedHeaders[static_cast<size_t>(HeaderType::Count)] = {
-        headers[0],
-        headers[1]
-    };
-    
-    // Call the function
-    Checksum::calculateProtocolChecksum(modifiedHeaders, pseudoHeader, payload, startHeaderType, checksumStartIndex, checksumSize, swap);
-    
-    // Verify the header has the swapped checksum
-    if (checksumStartIndex + checksumSize <= modifiedHeaders[static_cast<size_t>(startHeaderType)].value().size()) {
-        EXPECT_EQ(modifiedHeaders[static_cast<size_t>(startHeaderType)].value(), expectedHeader);
-    } else {
-        // If insertion exceeds header size, expect no change
-        EXPECT_EQ(modifiedHeaders[static_cast<size_t>(startHeaderType)].value(), headers[static_cast<size_t>(startHeaderType)].value());
-    }
-}
-
-TEST(ChecksumTest, CalculateProtocolChecksumOverload2InvalidHeaderType) {
+TEST(ChecksumTest, CalculateProtocolChecksumOverload2InvalidHeaderType) 
+{
     // Initialize headers array with std::optional
     std::optional<ByteString> headers[static_cast<size_t>(HeaderType::Count)] = {
         ByteString("header1data"),

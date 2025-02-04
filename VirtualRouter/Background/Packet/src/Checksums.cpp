@@ -184,9 +184,7 @@ namespace Checksum
             }
 
             default:
-                std::cerr << "Unsupported checksum size: " << checksumSizeBytes << " bytes." << std::endl;
-                // Return a ByteString filled with zeros of the specific size
-                checksumBytes = std::string(checksumSizeBytes, 0);
+                checksumBytes = std::string(checksumSizeBytes, '\x00');
                 break;
         }
 
@@ -222,8 +220,14 @@ namespace Checksum
         // Step 4: Swap bytes if required
         if (swap && checksumSize >= 2)
         {
+            if (checksumSize % 2 != 0)
+            {
+                std::cerr << "Error: Checksum size is not an even number. Byte swapping may cause issues." << std::endl;
+                return;
+            }
+
             // Preform byte swapping for the entire checksum if size permits
-            for (size_t i = 0; i + 1 < checksumBytes.size(); i += 2)
+            for (size_t i = 0; i + 1 < checksumSize; i += 2)
             {
                 std::swap(checksumBytes[i], checksumBytes[i + 1]);
             }
@@ -268,6 +272,12 @@ namespace Checksum
 
         for (size_t i = startIndex; i < headerCount; ++i)
         {
+            if (checksumSize % 2 != 0)
+            {
+                std::cerr << "Error: Checksum size is not an even number. Byte swapping may cause issues." << std::endl;
+                return;
+            }
+
             if (headers[i].has_value())
             {
                 dataToChecksum += headers[i].value();

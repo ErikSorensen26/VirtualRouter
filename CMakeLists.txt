@@ -122,8 +122,8 @@ enable_testing()
 
 # List of test files
 set(TEST_SOURCES
-    #    ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
-    #    ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
+    ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
+    ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
     #    ${TEST_DIR}/ConsoleTest.cpp
     #    ${TEST_DIR}/ConfigsTest.cpp
     #    ${TEST_DIR}/TerminalTest.cpp
@@ -134,7 +134,9 @@ set(TEST_SOURCES
     #    ${TEST_DIR}/DhcpClientTest.cpp
     #    ${TEST_DIR}/IPPoolTest.cpp
     #    ${TEST_DIR}/DhcpRelayTest.cpp
-    ${TEST_DIR}/DhcpServerTest.cpp
+    #    ${TEST_DIR}/DhcpServerTest.cpp
+    #    ${TEST_DIR}/EigrpTest.cpp
+    ${TEST_DIR}/EigrpInterfaceTest.cpp
 )
 
 # Test executable

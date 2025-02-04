@@ -87,7 +87,10 @@ protected:
     // Other functions
     bool batchProcessAndRecover(const std::vector<std::string>& commands, const std::vector<std::string>& expectedOutputs, std::vector<std::string>& recoveredCommands);
     
-    static void TearDownTestSuite() {}
+    static void TearDownTestSuite() {
+        mockFileSystem.reset();
+        realFileSystem.reset();
+    }
 
 public:
     // Helper functions

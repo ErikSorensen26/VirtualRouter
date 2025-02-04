@@ -31,7 +31,8 @@ class Interface;
  * @note Ensure that the `Interface` object provided is valid and properly initialized
  *       before using the `ProcessPacket` class to avoid undefined behavior.
  */
-class ProcessPacket {
+class ProcessPacket 
+{
 public:
     /**
      * @brief Constructs a `ProcessPacket` object.
