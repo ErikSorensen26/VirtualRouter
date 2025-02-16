@@ -225,6 +225,14 @@ namespace Functions {
     ByteString numMaskToBin(uint8_t mask);
 
     /**
+     * @brief Seperates the network address from the mask from a signle string.
+     * @param maskAddress Address with the included mask.
+     * @param address Address that the seperated address will be set to.
+     * @param mask Prefix mask that the mask will be set to.
+     */
+    bool splitSlashMiddle(const std::string& maskAddress, ByteString& address, uint8_t& mask);
+
+    /**
      * @brief Computes the network address from an IP address and a subnet mask.
      * @param ipAddress The input IP address.
      * @param mask The subnet mask in bits.
@@ -332,6 +340,79 @@ namespace Functions {
      * @return True if the IP address is multicast, false otherwise.
      */
     bool isMulticast(const ByteString& ip);
+
+    /**
+     * @brief Expands an abbreviated IPv6 address to its full form.
+     *
+     * Converts a compressed IPv6 address containing "::" into its fully expanded form with all eight hextets,
+     * padding each segment with leading zeros as necessary.
+     *
+     * @param ipv6Address The compressed IPv6 address to expand.
+     * @return std::string The fully expanded IPv6 address.
+     */
+    std::string expandIPv6Address(const std::string& ipv6Address);
+
+    /**
+     * @brief Validates if a string is a valid IPv6 address.
+     *
+     * Uses a regular expression to check if the provided string conforms to IPv6 address standards.
+     *
+     * @param address The IPv6 address string to validate.
+     * @return true If the address is a valid IPv6 format; otherwise, false.
+     */
+    bool isIPv6Address(const std::string& address);
+
+    /**
+     * @brief Validates if a string is a valid IPv6 address with a subnet mask.
+     *
+     * Uses a regular expression to check if the provided string conforms to IPv6 address standards with an appended subnet mask.
+     *
+     * @param addressWithMask The IPv6 address string with subnet mask to validate.
+     * @return true If the address with mask is valid; otherwise, false.
+     */
+    bool isIPv6AddressWithMask(const std::string& addressWithMask);
+
+     /**
+     * @brief Validates if a string is a valid MAC address.
+     *
+     * Uses a regular expression to check if the provided string conforms to MAC address standards,
+     * allowing for different separators such as colons or hyphens.
+     *
+     * @param macAddress The MAC address string to validate.
+     * @return true If the MAC address is valid; otherwise, false.
+     */
+    bool isMACAddress(const std::string& macAddress);
+
+    /**
+     * @brief Validates if an IPv6 address is a local link address.
+     *
+     * Takes in a user typed IP address and validates it as a local-link address.
+     *
+     * @param input IPv6 local-link address.
+     * @return bool Indicates if the ipv6 address is a valid local-link address.
+     */
+    bool isLocalLink(const ByteString& input);
+
+    /**
+     * @brief Splits a string into tokens based on a delimiter.
+     *
+     * Splits the input string into tokens using the provided delimiter character and returns the resulting vector of tokens.
+     *
+     * @param input The input string to tokenize.
+     * @param delimiter The character used to delimit tokens in the input string.
+     * @return std::vector<std::string> A vector containing the individual tokens extracted from the input.
+     */
+    std::vector<std::string> tokenize(const std::string& input, char delimiter);
+
+    /**
+     * @brief Pads a string with leading zeros (e.g., for IPv6 segments).
+     *
+     * Formats the input string by adding leading zeros until it reaches a width of four characters.
+     *
+     * @param input The input string to pad with zeros.
+     * @return std::string The zero-padded string.
+     */
+    std::string padWithZeros(const std::string& input);
 }
 
 #endif // FUNCTIONS_H

@@ -7,7 +7,6 @@
 #include <ByteString.hpp>
 #include <mutex>
 #include <PacketStructure.h>
-#include <optional>
 #include <chrono>
 #include <map>
 #include <unordered_set>
@@ -29,7 +28,7 @@ enum class AddressFamily
  * @brief Singleton class managing various routing-related tables and operations.
  *
  * The RoutingTable class provides a centralized management system for different routing tables,
- * including Routing Entries, Forwarding Information Base (FIB), ARP tables, NDP tables, MAC tables,
+ * including Routing Entries, Forwarding Information Base (FIB)
  * Routing Information Base (RIB), Policy-Based Routing (PBR) tables, Multicast tables, Access Control Lists (ACL),
  * and Enhanced Interior Gateway Routing Protocol (EIGRP) tables.
  *
@@ -88,81 +87,6 @@ public:
      * @brief Prints the Forwarding Information Base (FIB) to the console.
      */
     void printFibTable();
-
-    /**
-     * @struct Arp
-     * @brief Represents an entry in the Address Resolution Protocol (ARP) table.
-     */
-    struct Arp {
-        ByteString ipAddress;      ///< IP address.
-        ByteString mac;            ///< MAC address corresponding to the IP.
-        ByteString interface;      ///< Interface name.
-        ByteString type;           ///< Type of ARP entry.
-        std::chrono::system_clock::time_point age; ///< Age of the ARP entry.
-    };
-
-    /**
-     * @brief Prints the ARP table to the console.
-     */
-    void printArpTable();
-
-    /**
-     * @brief Updates the ARP table with a received ARP packet.
-     *
-     * @param recievedArp The received ARP header information.
-     */
-    virtual void updateArp(const ArpHeader& recievedArp);
-
-    /**
-     * @brief Updates the ARP table with provided IP and MAC addresses.
-     *
-     * @param ip The IP address to update.
-     * @param mac The MAC address corresponding to the IP.
-     * @param interfaceAddress The interface associated with the ARP entry.
-     */
-    void updateArp(const ByteString ip, ByteString mac, ByteString interfaceAddress);
-
-    /**
-     * @brief Looks up an ARP entry based on the IP address.
-     *
-     * @param ipAddress The IP address to look up.
-     * @return std::optional<RoutingTable::Arp> The ARP entry if found, otherwise std::nullopt.
-     */
-    std::optional<RoutingTable::Arp> ArpLookup(const ByteString& ipAddress);
-
-    /**
-     * @struct NDP
-     * @brief Represents an entry in the Neighbor Discovery Protocol (NDP) table.
-     */
-    struct NDP {
-        ByteString ipAddress;      ///< IPv6 address.
-        ByteString macAddress;     ///< MAC address corresponding to the IPv6 address.
-        ByteString interface;      ///< Interface name.
-        ByteString state;          ///< State of the NDP entry.
-        std::chrono::system_clock::time_point age; ///< Age of the NDP entry.
-    };
-
-    /**
-     * @brief Prints the NDP table to the console.
-     */
-    void printNdpTable();
-
-    /**
-     * @struct MAC
-     * @brief Represents an entry in the MAC address table.
-     */
-    struct MAC {
-        ByteString mac;            ///< MAC address.
-        ByteString interface;      ///< Interface name.
-        ByteString vlanID;         ///< VLAN ID.
-        ByteString type;           ///< Type of MAC entry.
-        std::chrono::system_clock::time_point age; ///< Age of the MAC entry.
-    };
-
-    /**
-     * @brief Prints the MAC address table to the console.
-     */
-    void printMacTable();
 
     /**
      * @struct Rib
@@ -317,7 +241,16 @@ public:
      * @param af The address family (IPv4 or IPv6).
      * @param as The Autonomous system
      */
-    void addEigrp(Eigrp* route, AddressFamily af, uint32_t as);
+    bool addEigrp(Eigrp* route, AddressFamily af, uint32_t as);
+
+    /**
+     * @brief Updates a EIGRP route to the table.
+     *
+     * @param route The EIGRP route to add.
+     * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
+     */
+    bool updateEigrp(Eigrp* route, AddressFamily af, uint32_t as);
 
     /**
      * @brief Removes an EIGRP route from the table.
@@ -358,7 +291,7 @@ public:
      * @param as The Autonomous system
      * @return std::optional<RoutingTable::Eigrp> The EIGRP route if found, otherwise std::nullopt.
      */
-    std::optional<RoutingTable::Eigrp*> getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af, uint32_t as);
+    RoutingTable::Eigrp* getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af, uint32_t as);
 
     /**
      * @brief Updates the EIGRP table with a given route, applying variance.
@@ -395,9 +328,6 @@ public:
     {
         routingTable.clear();
         fib.clear();
-        arp.clear();
-        ndp.clear();
-        mac.clear();
         rib.clear();
         prb.clear();
         multicast.clear();
@@ -410,9 +340,6 @@ private:
 
     std::map<ByteString, RoutingEntry> routingTable;       ///< Routing Information Base (RIB).
     std::map<ByteString, Fib> fib;                         ///< Forwarding Information Base (FIB).
-    std::map<ByteString, Arp> arp;                         ///< Address Resolution Protocol (ARP) table.
-    std::map<ByteString, NDP> ndp;                         ///< Neighbor Discovery Protocol (NDP) table.
-    std::map<ByteString, MAC> mac;                         ///< MAC address table.
     std::map<ByteString, Rib> rib;                         ///< Routing Information Base (RIB).
     std::map<ByteString, Prb> prb;                         ///< Policy-Based Routing (PBR) table.
     std::map<ByteString, Multicast> multicast;             ///< Multicast routing table.

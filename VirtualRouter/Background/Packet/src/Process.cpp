@@ -1,9 +1,12 @@
 #include <Process.h>
 #include <Eigrp.h>
 #include <Interface.h>
+#include <Dhcp.h>
+#include <Arp.h>
+#include <Ndp.h>
 
 // Static member definitions
-ProcessPacket::ProcessPacket(PacketInfo& packet, ByteString& vrf, Interface* Interface)
+ProcessPacket::ProcessPacket(PacketInfo& packet, VirtualRouter* vrf, Interface* Interface)
     : interface(Interface), currentVrf(vrf), currentPacket(packet), visitor(nullptr)
 { 
     print = false;
@@ -118,28 +121,19 @@ void ProcessPacket::processLldp(const LldpHeader& lldp)
 void ProcessPacket::processIPv4(const IPv4Header& ipv4)
 {
     if (print) { Logger::getInstance().info() << "THIS IS IPV4" << std::endl; } 
-    // Validate and update the ARP table, routing talbes, ect.
-    const EthernetHeader* ethernet = nullptr;
-    for (const auto& eth : layer2)
-    {
-        if (auto ptr = std::get_if<EthernetHeader>(&eth))
-        {
-            ethernet = ptr;
-            break;
-        }
-    }
-
-    // Access EthernetHeader object
-    if (ethernet && interface->Get() && RoutingTable::getInstance().ArpLookup(ipv4.sourceAddress.toString()))
-    {
-        std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
-        RoutingTable::getInstance().updateArp(ipv4.sourceAddress.toString(), macAddress, interface->Get()->ipv4.ipAddress);
-    }
+    
+    isMulticast = Functions::isMulticast(ipv4.destinationAddress);
+    ipAddress = ipv4.sourceAddress;
+    addressFamily = AddressFamily::IPv4;
 }
 
 void ProcessPacket::processIPv6(const IPv6Header& ipv6)
 {
     if (print) { Logger::getInstance().info() << "THIS IS IPV4" << std::endl; } 
+
+    isMulticast = Functions::isMulticast(ipv6.destinationAddress);
+    ipAddress = ipv6.sourceAddress;
+    addressFamily = AddressFamily::IPv6;
 }
 
 void ProcessPacket::processGre(const GreHeade& gre)
@@ -164,7 +158,56 @@ void ProcessPacket::processIcmp(const IcmpHeader& icmp)
 
 void ProcessPacket::processIcmpV6(const IcmpV6Header& icmp)
 {
-    if (print) { Logger::getInstance().info() << "THIS IS ICMPV6" << std::endl; } 
+    ByteString currentIp;
+    if (!interface || !interface->ndp)
+    {
+        return;
+    }
+    else
+    {
+        std::shared_lock<std::shared_mutex> lock(interface->configs.ipMutex);
+        currentIp = interface->configs.ipv6.ipAddress;
+        if (currentIp.size() != 16) return; // Invalid IP
+    }
+
+    switch (icmp.type[0]) 
+    {
+        case 0x85:
+        {
+            if (icmp.payload != currentIp) break;
+            interface->ndp->sendRouteAdvertisement(macAddress, icmp.payload);
+            break;
+        }
+        case 0x86:
+        {
+            interface->ndp->receiveRouteAdvertisement(icmp);
+            break;
+        }
+        case 0x87:
+        {
+            if (icmp.payload != currentIp) break;
+            ByteString mac;
+            for (auto& opt : icmp.options)
+            {
+                if (opt.option == Variable::ICMPv6::Option::source && opt.value.size() == 6)
+                {
+                    mac = opt.value;
+                    break;
+                }
+            }
+            interface->ndp->sendNeighborAdvertisement(mac, &ipAddress);
+            break;
+        }
+        case 0x88:
+        {
+            interface->ndp->receiveNeighborAdvertisement(icmp);
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
 }
 
 void ProcessPacket::processIgmp(const IgmpHeader& igmp)
@@ -193,7 +236,7 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
     if (print) { Logger::getInstance().info() << "THIS IS EIGRP" << std::endl; } 
 
     // Find IPv4 and IPv6 headers
-    for (const auto& ip : layer3)
+    for (const auto& ip : currentPacket.Layer3)
     {
         if (auto ptr = std::get_if<IPv4Header>(&ip))
         {
@@ -201,7 +244,7 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
             break;
         }
     }
-    for (const auto& ip : layer3)
+    for (const auto& ip : currentPacket.Layer3)
     {
         if (auto ptr = std::get_if<IPv6Header>(&ip))
         {
@@ -210,18 +253,18 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
         }
     }
 
-    auto it = eigrpList.find(Functions::byteToNum(eigrp.autonomousSystem));
+    auto* it = currentVrf->getEigrpAutonomousSystem(Functions::byteToNum(eigrp.autonomousSystem));
     auto iface = interface->eigrpInterfaceList.find((Functions::byteToNum(eigrp.autonomousSystem)));
-    if (it != eigrpList.end() && iface != interface->eigrpInterfaceList.end()) 
+    if (it && iface != interface->eigrpInterfaceList.end()) 
     {
         uint32_t AS = Functions::byteToNum(eigrp.autonomousSystem);
-        if (ipv4 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv4)
+        if (addressFamily == AddressFamily::IPv4 && ipv4 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv4)
         {
-            interface->eigrpInterfaceList[AS]->IPv4->processPacket(eigrp, ipv4->sourceAddress.toString());
+            interface->eigrpInterfaceList[AS]->IPv4->processPacket(eigrp, ipv4->sourceAddress, isMulticast);
         }
-        else if (ipv6 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv6)
+        else if (addressFamily == AddressFamily::IPv6 && ipv6 && interface->eigrpInterfaceList[AS] && interface->eigrpInterfaceList[AS]->IPv6)
         {
-            interface->eigrpInterfaceList[AS]->IPv6->processPacket(eigrp, ipv6->sourceAddress);
+            interface->eigrpInterfaceList[AS]->IPv6->processPacket(eigrp, ipv6->sourceAddress, isMulticast);
         }
     }
 }

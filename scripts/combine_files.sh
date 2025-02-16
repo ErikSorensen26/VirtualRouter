@@ -61,3 +61,24 @@ find "$SPECIFIC_DIR" -type f \( -iname "*.h" -o -iname "*.hpp" -o -iname "*.cpp"
 done
 
 echo "All files have been concatenated into: $OUTPUT_FILE"
+
+# ================================
+# Extraction of Class Declarations
+# ================================
+
+# Define extraction parameters
+EXTRACTION_OUTPUT_FILE="classes_list.txt"
+
+# Remove the extraction output file if it already exists
+if [ -f "$EXTRACTION_OUTPUT_FILE" ]; then
+    echo "Removing existing extraction output file: $EXTRACTION_OUTPUT_FILE"
+    rm "$EXTRACTION_OUTPUT_FILE"
+fi
+
+echo "Extracting class declarations from '$OUTPUT_FILE' to '$EXTRACTION_OUTPUT_FILE'..."
+
+# Use SED to extract class declarations
+sed -n '/^\s*class\s\+\w\+.*$/{
+    N
+    /^\s*class\s\+\w\+.*\n\s*{/p
+}' combined_code.txt > classes_list

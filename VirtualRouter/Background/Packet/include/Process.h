@@ -8,7 +8,6 @@
 #include <Queue.hpp>
 #include <any>
 #include <unordered_map>
-#include <functional>
 #include <typeindex>
 
 /**
@@ -18,6 +17,7 @@
 
 struct HeaderVisitor;
 class Interface;
+class VirtualRouter;
 
 /**
  * @class ProcessPacket
@@ -41,29 +41,25 @@ public:
      * and processes the given packet within the specified VRF context.
      *
      * @param packet Reference to a `PacketInfo` structure containing parsed protocol headers.
-     * @param vrf Reference to a `ByteString` representing the Virtual Routing and Forwarding (VRF) context.
+     * @param vrf Pointer to a `VirtualRouter` representing the Virtual Routing and Forwarding (VRF) context.
      * @param Interface Pointer to an `Interface` object for interacting with network interfaces.
      *
      * @note Ensure that the `Interface` object is valid and properly initialized before using this constructor.
      */
-    ProcessPacket(PacketInfo& packet, ByteString& vrf, Interface* Interface);
+    ProcessPacket(PacketInfo& packet, VirtualRouter* vrf, Interface* Interface);
 
 private:
     Interface* interface;                   ///< Pointer to the associated `Interface` object.
-    ByteString currentVrf;                  ///< Current Virtual Routing and Forwarding (VRF) context.
+    VirtualRouter* currentVrf;              ///< Current Virtual Routing and Forwarding (VRF) context.
     std::unordered_map<std::type_index, std::any> parsedHeaders; ///< Shared map of parsed headers.
-    ByteString macAddress;                  ///< MAC Address found in packet.
     PacketInfo& currentPacket;              ///< Packet being processed.
     bool print = false;                     ///< Debug flag.
 
+    ByteString macAddress;                  ///< MAC Address found in packet.
+    AddressFamily addressFamily;            ///< Address Family being used.
+    ByteString ipAddress;
+
     friend struct HeaderVisitor;
-    
-    // Header storage using std::variant
-    std::vector<Layer2Variant> layer2;
-    std::vector<Layer2_5Variant> layer2_5;
-    std::vector<Layer3Variant> layer3;
-    std::vector<Layer4Variant> layer4;
-    std::vector<Layer5Variant> layer5;
 
     /// Layer-specific header processing functions.
     void processEthernet(const EthernetHeader& header);     ///< Ethernet processing function.
@@ -114,6 +110,8 @@ private:
     void processLayer(const std::vector<VariantType>& headers);
 
     HeaderVisitor* visitor; //< Visitor struct to handle std::visit.
+
+    bool isMulticast = false;
 };
 
 /**

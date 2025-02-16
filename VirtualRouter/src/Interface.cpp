@@ -3,13 +3,18 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
-#include <map>
-#include <memory>
 #include <string>
+#include <Dhcp.h>
+#include <Arp.h>
+#include <Ndp.h>
+#include <Eigrp.h>
+#include <Ethernet.h>
+#include <IPPacket.h>
 #include <Decapsulation.h>
 
-Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, uint8_t interfaceId, bool debug)
+Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, VirtualRouter* vrf, bool debug)
     : packetOutQueue(outQueSiz),
+      routingInstance(vrf),
       debug(debug),
       packetCapture(outInterface, "FF000000", inQueSiz),
       packetSend(outInterface),
@@ -23,16 +28,17 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
 
     // Configs
     configs.macAddress = Functions::hexToByte(mac);
-    configs.interfaceType = interfaceType;
-    configs.id = interfaceId;
+    configs.interfaceType.store(interfaceType, std::memory_order_release);
+    configs.id.store(interfaceId, std::memory_order_release);
 
     // Initialize shared pointers for Protocol objects
     arp = new Protocol::Arp(*this);
-    ethernet = new Protocol::Ethernet(*this, arp, Functions::hexToByte(mac));
+    ndp = new Protocol::Ndp(*this);
+    ethernet = new Protocol::Ethernet(*this, arp, ndp, Functions::hexToByte(mac));
     ipPacket = new Protocol::IPPacket(this);
 
     // Start background threads
-    //startThreads();
+    startThreads();
 }   
 
 Interface::~Interface()
@@ -43,7 +49,7 @@ Interface::~Interface()
 
 void Interface::cleanupInterface()
 {
-    shutdownFlag = true;
+    shutdownFlag.store(true, std::memory_order_release);
     stateChange();
     stateChangeV6();
     
@@ -60,20 +66,20 @@ void Interface::cleanupInterface()
     }
 
     // Remove interface from list
-    if (interfaceList[configs.interfaceType].find(configs.id) != interfaceList[configs.interfaceType].end())
-    {
-        interfaceList[configs.interfaceType].erase(configs.id);
-    }
+    routingInstance->removeInterface(configs.interfaceType, configs.id);
+    Global::getInstance().removeInterface(configs.interfaceType, configs.id);
 }
 
 void Interface::setIPv4(ByteString ip, uint8_t subnet)
 {
     {
-        std::lock_guard<std::mutex> lock(threadsRunningMutex);
         {
-            std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-            configs.ipv4.ipAddress = ip; 
-            configs.ipv4.mask = subnet;
+            std::lock_guard<std::mutex> lock(threadsRunningMutex);
+            {
+                std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
+                configs.ipv4.ipAddress = ip; 
+                configs.ipv4.mask = subnet;
+            }
         }
         // Send gratuitous arps
         arp->sendReply(Variable::Mac::broadcast, ip);
@@ -82,17 +88,108 @@ void Interface::setIPv4(ByteString ip, uint8_t subnet)
     }
 }
 
-void Interface::setIPv6(ByteString ip, uint8_t subnet, bool eui64)
+void Interface::setIPv6(ByteString ip, bool localLink, uint8_t subnet, bool eui64)
 {
     {
-        std::lock_guard<std::mutex> lock(threadsRunningMutex);
+        {
+            std::lock_guard<std::mutex> lock(threadsRunningMutex);
+            {
+                std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
+                if (localLink)
+                {
+                    configs.ipv6.setTemp(ip, true);
+                    configs.ipv6.tentative = true;
+                    configs.ipv6.valid = false;
+                }
+                else
+                {
+                    configs.ipv6.setTemp(ip);
+                    configs.ipv6.mask = subnet;
+                    configs.ipv6.globalTentative = true;
+                    configs.ipv6.globalValid = false;
+                }
+            }
+        }
+        // Run Duplicate Address Detection using NDP
+        ndp->duplicateAddressDetection(localLink);
+
         {
             std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-            configs.ipv6.ipAddress = ip; 
-            configs.ipv6.mask = subnet;
+            if (configs.ipv6.tentative)
+            {
+                std::cout << "\n%" << "Duplicate Address Detected";
+            }
+            else
+            {
+                configs.ipv6.valid = true;
+            }
         }
-        // NDP
+
+        // Trigger NDP state update for IPv6
         stateChangeV6();
+    }
+}
+
+void Interface::removeIPv4()
+{
+    std::lock_guard<std::mutex> lock(threadsRunningMutex);
+    {
+        std::unique_lock<std::shared_mutex> ipLock(configs.ipMutex);
+        configs.ipv4.ipAddress.clear();
+        configs.ipv4.mask = 0;
+    }
+    
+}
+
+void Interface::removeIPv6(bool linkLocal)
+{
+    std::lock_guard<std::mutex> lock(threadsRunningMutex);
+    {
+        std::unique_lock<std::shared_mutex> ipLock(configs.ipMutex);
+        if (linkLocal)
+        {
+            configs.ipv6.ipAddress.clear();
+            configs.ipv6.tempAddress.clear();
+            configs.ipv6.tentative = false;
+            configs.ipv6.valid = false;
+        }
+        else
+        {
+            configs.ipv6.globalIpAddress.clear();
+            configs.ipv6.tempGlobalAddress.clear();
+            configs.ipv6.globalTentative = false;
+            configs.ipv6.globalValid = false;
+        }
+    }
+}
+
+std::vector<ByteString> Interface::getTentativeAddress()
+{
+    std::vector<ByteString> tentative;
+    std::lock_guard<std::shared_mutex> lock(configs.ipMutex);
+    if (configs.ipv6.tentative)
+    {
+        tentative.push_back(configs.ipv6.tempAddress);
+    }
+    if (configs.ipv6.globalTentative)
+    {
+        tentative.push_back(configs.ipv6.tempGlobalAddress);
+    }
+    return tentative;
+}
+
+void Interface::markAddressDuplicate(const ByteString& addr, bool localLink)
+{
+    std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
+    if (localLink && configs.ipv6.ipAddress == addr)
+    {
+        configs.ipv6.tentative = false;
+        configs.ipv6.valid = false;
+    }
+    else if (configs.ipv6.globalIpAddress == addr)
+    {
+        configs.ipv6.globalTentative = false;
+        configs.ipv6.globalValid = false;
     }
 }
 
@@ -196,7 +293,7 @@ void Interface::process() {
                 ByteString newPacket = packet;
                 Packet* p = new Packet(newPacket, debug, *this);
                 p->decapsulate();
-                ProcessPacket process(p->packetInfo, vrf, this);
+                ProcessPacket process(p->packetInfo, routingInstance, this);
             });
         }
         std::this_thread::sleep_for(std::chrono::microseconds(10));
@@ -231,34 +328,30 @@ void Interface::stopThreads()
 void Interface::stateChange()
 {
     // Eigrp Updates
-    for (const auto& eigrp : eigrpList)
+    routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
     {
-        if (eigrp.second->ipv4)
+        if (eigrp->ipv4)
         {
-            eigrp.second->ipv4->updateInterfaceList();
-            eigrp.second->ipv4->updateRoutingTableForConnected();
+            eigrp->ipv4->updateInterfaceList();
+            eigrp->ipv4->updateRoutingTableForConnected();
         }
-    }
+    });
     // Other updates...
 }
 
 void Interface::stateChangeV6()
 {
     // Eigrp Updates
-    for (const auto& eigrp : eigrpList)
+    routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
     {
-        if (eigrp.second->ipv6)
+        if (eigrp->ipv6)
         {
-            eigrp.second->ipv6->updateInterfaceList();
-            eigrp.second->ipv6->updateRoutingTableForConnected();
+            eigrp->ipv6->updateInterfaceList();
+            eigrp->ipv6->updateRoutingTableForConnected();
         }
-    }
+    });
     // Other updates...
 }
 
 // Initialize the shared pointer to the current Interface
 Interface* currentInterface;
-
-// Map to store Interface objects by string key and integer ID
-std::shared_mutex interfaceListMutex;
-std::map<InterfaceType, std::map<unsigned int, Interface*>> interfaceList;

@@ -187,7 +187,7 @@ bool Packet::processLayer4(const ByteString &packet)
     //Profiler::getInstance().notify("Decapsulating Layer 4 Headers");
     const IPv4Header* ipv4 = getLayer3Header<IPv4Header>();
     const IPv6Header* ipv6 = getLayer3Header<IPv6Header>();
-    if (ipv4 && ipv4->protocol.toString() == Variable::IP::tcp)
+    if ((ipv4 && ipv4->protocol.toString() == Variable::IP::tcp) || (ipv6 && ipv6->protocol.toString() == Variable::IP::tcp))
     {
         if (!validateSize(start, 20, packet)) return false;
         size_t tcpSize = Functions::binToNum((Functions::byteToBin(packet.substr(start + 12, 1))).substr(0, 4)) * 4;
@@ -195,7 +195,7 @@ bool Packet::processLayer4(const ByteString &packet)
         ByteString tcpHeader = getSlice(tcpSize);
         if (!decodeTcp(tcpHeader, tcpSize)) return false;
     }
-    else if (ipv4 && ipv4->protocol.toString() == Variable::IP::udp)
+    else if ((ipv4 && ipv4->protocol.toString() == Variable::IP::udp) || (ipv6 && ipv6->protocol.toString() == Variable::IP::udp))
     {
         if (!validateSize(start, 8, packet)) return false;
         ByteString udpHeader = getSlice(8);
@@ -204,6 +204,13 @@ bool Packet::processLayer4(const ByteString &packet)
     else if (ipv4 && ipv4->protocol.toString() == Variable::IP::eigrp)
     {
         size_t eigrpSize = static_cast<size_t>(Functions::byteToNum(ipv4->totalLength.toString()) - 20);
+        if (!validateSize(start, eigrpSize, packet)) return false;
+        ByteString eigrpHeader = getSlice(eigrpSize);
+        if (!decodeEigrp(eigrpHeader)) return false;
+    }
+    else if (ipv6 && ipv6->protocol.toString() == Variable::IP::eigrp)
+    {
+        size_t eigrpSize = static_cast<size_t>(Functions::byteToNum(ipv6->payloadLength.toString()));
         if (!validateSize(start, eigrpSize, packet)) return false;
         ByteString eigrpHeader = getSlice(eigrpSize);
         if (!decodeEigrp(eigrpHeader)) return false;

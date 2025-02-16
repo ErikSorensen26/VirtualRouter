@@ -58,7 +58,9 @@ std::optional<ByteString> encapsulate(PacketInfo &packet, ByteString encapsulate
 
     if (!success) return std::nullopt;
 
-    // ------------------Final-Calculations-----------------------
+//============================================================================================
+// Final-Calculations
+//============================================================================================
 
     //Profiler::getInstance().notify("Checksum Calculations have started");
 
@@ -132,7 +134,7 @@ std::optional<ByteString> encapsulate(PacketInfo &packet, ByteString encapsulate
         }
         else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Eigrp)])
         {
-            ByteString& eigrp = encapsulatedHeaders[static_cast<size_t>(HeaderType::Eigrp)].value();
+            Checksum::calculateProtocolChecksum("", encapsulatedHeaders[static_cast<size_t>(HeaderType::Eigrp)].value(), 2, 2);
         }
         else if (encapsulatedHeaders[static_cast<size_t>(HeaderType::Icmpv6)].has_value())
         {

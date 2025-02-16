@@ -1,11 +1,12 @@
 #include <IPPacket.h>
+#include <Ethernet.h>
 #include <Interface.h>
 
 namespace Protocol
 {
     IPPacket::IPPacket(Interface* iface) : currentInterface(iface) {}
 
-    void IPPacket::setIPHeader(PacketInfo& packetInfo, const ByteString destIp, uint8_t DSCP, uint8_t hopLimit, ByteString type)
+    void IPPacket::setIPHeader(PacketInfo& packetInfo, const ByteString& destIp, ByteString const* sourceIp, ByteString const* destMac, uint8_t DSCP, uint8_t hopLimit, const ByteString type)
     {
         if (!currentInterface || !currentInterface->Get()) return;
 
@@ -13,25 +14,31 @@ namespace Protocol
         if (destIp.size() == 16)
         {        
             {
-                std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
+
                 IPv6Header ip;
+                {
+                    std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
+                    ip.sourceAddress = (sourceIp && sourceIp->size() == 16) ? *sourceIp : currentInterface->configs.ipv6.ipAddress;
+                    ip.flowLabel = Functions::numToHex(currentInterface->Get()->ipv6.ipv6FlowLabel, 5);
+                }
                 ip.version = "6";
                 ip.trafficClass = Functions::numToHex(DSCP, 2);
-                ip.flowLabel = Functions::numToHex(currentInterface->Get()->ipv6.ipv6FlowLabel, 5);
                 ip.payloadLength = ByteString(2, 0x00); // Will be calculated later
                 ip.protocol = type;
                 ip.hopLimit = Functions::numToByte(hopLimit, 1);
-                ip.sourceAddress = currentInterface->Get()->ipv6.ipAddress;
                 ip.destinationAddress = destIp;
                 packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
             }
-            currentInterface->ethernet->setEthernetHeader(packetInfo, destIp, Variable::Ethernet::ipv6);
+            currentInterface->ethernet->setEthernetHeader(packetInfo, destIp, destMac, Variable::Ethernet::ipv6);
         }
         else if (destIp.size() == 4)
         {
             {
-                std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
                 IPv4Header ip;
+                {
+                    std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
+                    ip.sourceAddress = (sourceIp && sourceIp->size() == 4) ? *sourceIp : currentInterface->Get()->ipv4.ipAddress;
+                }
                 ip.version = ByteString("4", 1);
                 ip.headerLength = ByteString("5", 1);
                 ip.serviceField = Functions::numToByte(DSCP, 1);
@@ -44,11 +51,10 @@ namespace Protocol
                 ip.TTL = Functions::numToByte(hopLimit, 1);
                 ip.protocol = type;
                 ip.checksum = ByteString(2, 0x00);
-                ip.sourceAddress = currentInterface->Get()->ipv4.ipAddress;
                 ip.destinationAddress = destIp;
                 packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
             }
-            currentInterface->ethernet->setEthernetHeader(packetInfo, destIp, Variable::Ethernet::ipv4);
+            currentInterface->ethernet->setEthernetHeader(packetInfo, destIp, destMac, Variable::Ethernet::ipv4);
         }
     }
 }

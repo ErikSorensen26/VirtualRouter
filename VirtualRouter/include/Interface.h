@@ -8,20 +8,16 @@
 #include <Process.h>
 #include <Encapsulation.h>
 #include <Functions.h>
-#include <Dhcp.h>
-#include <Arp.h>
-#include <Eigrp.h>
-#include <Ethernet.h>
-#include <IPPacket.h>
 #include <ThreadPool.hpp>
+#include <Global.h>
 #include <string>
 
 #include <map>
 #include <thread>
 #include <mutex>
-#include <memory>
 
 class EigrpTest;
+class VirtualRouter;
 
 /**
  * @enum InterfaceType
@@ -47,6 +43,7 @@ namespace Protocol
     class IPPacket;                 ///< Forward declaration of IPPacket protocol class.
     class DhcpClient;               ///< Forward declaration of DhcpClient protocol class.
     class Arp;                      ///< Forward declaration of Arp protocol class.
+    class Ndp;                      ///< Forward declaration of Arp protocol class.
     struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
 }
 
@@ -58,12 +55,13 @@ struct IpInfo
 {
     std::shared_mutex ipMutex;      ///< Mutex for thread-safe access to IP information
 
-    uint8_t id;                     ///< Identifier for the interface.
-    InterfaceType interfaceType;    ///< Type of interface.
-    uint32_t bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
-    uint32_t delay{10};             ///< Delay of the interface in milliseconds.
-    ByteString macAddress{};        ///< MAC address addociated with the interface.
-    uint16_t mtu{1500};             ///< Maximum Transmission Unit size.
+    std::atomic<float> id;                       ///< Identifier for the interface.
+    std::atomic<InterfaceType> interfaceType;    ///< Type of interface.
+    std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
+    std::atomic<uint32_t> delay{10};             ///< Delay of the interface in milliseconds.
+    std::atomic<uint16_t> mtu{1500};             ///< Maximum Transmission Unit size.
+    std::atomic<uint8_t> ttl{64};                 ///< Time To Live.
+    ByteString macAddress{};                     ///< MAC address addociated with the interface.
 
     /**
      * @struct IPv4
@@ -82,9 +80,51 @@ struct IpInfo
     struct IPv6
     {
         ByteString ipAddress{};     ///< IPv6 address.
+        ByteString globalIpAddress{}; ///< Global IPv6 address.
         uint8_t mask{0};            ///< Subnet Mask.
         uint32_t ipv6FlowLabel{0};  ///< IPv6 flow label
+        bool tentative = false;
+        bool globalTentative = false;
+        bool valid = false;
+        bool globalValid = false;
+        void setTemp(const ByteString& ip, bool local = false)
+        {
+            if (local)
+            {
+                tempAddress = ip;
+            }
+            else
+            {
+                tempGlobalAddress = ip;
+            }
+        }
+        void validateAddress(bool local = false)
+        {
+            if (local)
+            {
+                tentative = false;
+                valid = true;
+                ipAddress = tempAddress;
+            }
+            else
+            {
+                globalTentative = false;
+                globalValid = true;
+                globalIpAddress = tempGlobalAddress;
+            }
+        }
+        ByteString tempAddress;
+        ByteString tempGlobalAddress;
     }  ipv6;
+
+    /**
+     * @struct Eigrp
+     * @brief Stores Eigrp Configs.
+     */
+    struct Eigrp
+    {
+        std::unordered_set<uint32_t> ipv6AutonomousSystems;
+    } eigrp;
 };
 
 /**
@@ -116,7 +156,7 @@ public:
      * @param interfaceId The Identifier for the interface
      * @param debug Flag to enable or disable debug mode.
      */
-    Interface(InterfaceType interfaceType = InterfaceType::UNDEFINED, std::string outInterface = "lo", const size_t inQueSiz = 100, const size_t outQueSiz = 100, std::string mac = "010203040506", uint8_t interfaceId = 0, bool debug = false);
+    Interface(InterfaceType interfaceType = InterfaceType::UNDEFINED, std::string outInterface = "lo", const size_t inQueSiz = 100, const size_t outQueSiz = 100, std::string mac = "010203040506", float interfaceId = 0, VirtualRouter* vrf = Global::getInstance().getRoutingInstance("default"), bool debug = false);
 
     /**
      * @brief Destructs the Interface object.
@@ -146,10 +186,38 @@ public:
      * Updates the IPv6 configuration and triggers Neighbor Discovery Protocol (NDP) updates.
      *
      * @param ip The IPv6 address to assign to the interface.
+     * @param linkLocal Indicates if the address is linkLocal
      * @param subnet The subnet mask for the IPv6 address, Default to 64.
      * @param eui64 Flag indicating whether to use EUI-64 for IPv6 address generation.
      */
-    virtual void setIPv6(ByteString ip, uint8_t subnet = 64, bool eui64 = false);
+    virtual void setIPv6(ByteString ip, bool linkLocal = false, uint8_t subnet = 64, bool eui64 = false);
+
+    /**
+     * @brief Removes the IPv4 address and subnet mask.
+     */
+    void removeIPv4();
+
+    /**
+     * @brief Removes the IPv6 address and subnet mask.
+     *
+     * @param linkLocal Indicates if the address is link-local.
+     */
+    void removeIPv6(bool linkLocal = false);
+
+    /**
+     * @brief Gathers and returns all tentative addresses on the interface.
+     *
+     * Helper address to return all pending IPv6 addresses.
+     */
+    std::vector<ByteString> getTentativeAddress();
+
+    /**
+     * @brief Marks a IPv6 address as a duplicate making it invalid.
+     *
+     * @param address IPv6 address being marked as a duplicate
+     * @param optional param stating if its a link-local address or not.
+     */
+    void markAddressDuplicate(const ByteString& address, bool linkLocal = false);
 
     /**
      * @brief Retrieves the current IP address information
@@ -179,8 +247,8 @@ public:
      */
     virtual void enqueuePacket(PacketInfo& packetInfo, ByteString mac = "");
 
-    bool shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
-    ByteString vrf = "default"; ///< Virtual Routing and Forwarding identifier.
+    std::atomic<bool> shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
+    VirtualRouter* routingInstance;
 
     // Member Variables
     IpInfo configs;                     ///< Shared pointer to IP configuration information.
@@ -188,6 +256,7 @@ public:
     //L2 Protocols
     Protocol::Ethernet* ethernet;   ///< Ethernet Protocol handler.
     Protocol::Arp* arp;             ///< ARP protocol handler.
+    Protocol::Ndp* ndp;             ///< NDP protocol handler.
 
     // L3 Protocols
     Protocol::IPPacket* ipPacket;   ///< IP Packet protocol handler.

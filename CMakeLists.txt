@@ -63,6 +63,7 @@ set(VIRTUAL_ROUTER_SOURCES
     ${VIRTUAL_ROUTER_DIR}/Background/Packet/src/Process.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/Dhcp.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/Arp.cpp
+    ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/Ndp.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/Ethernet.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Local/src/IPPacket.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Protocols/Global/src/Eigrp.cpp
@@ -72,6 +73,7 @@ set(VIRTUAL_ROUTER_SOURCES
     ${VIRTUAL_ROUTER_DIR}/Background/Global/src/SaveToBinary.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Global/src/Global.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Global/src/RoutingTable.cpp
+    ${VIRTUAL_ROUTER_DIR}/Background/Global/src/VirtualRouter.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Services/src/Time.cpp
     ${VIRTUAL_ROUTER_DIR}/Background/Services/src/TimeManager.cpp
     ${VIRTUAL_ROUTER_DIR}/Common/pugixml.cpp
@@ -124,19 +126,18 @@ enable_testing()
 set(TEST_SOURCES
     ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
     ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
-    #    ${TEST_DIR}/ConsoleTest.cpp
-    #    ${TEST_DIR}/ConfigsTest.cpp
-    #    ${TEST_DIR}/TerminalTest.cpp
-    #    ${TEST_DIR}/DecapsulationTest.cpp
-    #    ${TEST_DIR}/EncapsulationTest.cpp
-    #    ${TEST_DIR}/ChecksumsTest.cpp
-    #    ${TEST_DIR}/ArpTest.cpp
-    #    ${TEST_DIR}/DhcpClientTest.cpp
-    #    ${TEST_DIR}/IPPoolTest.cpp
-    #    ${TEST_DIR}/DhcpRelayTest.cpp
-    #    ${TEST_DIR}/DhcpServerTest.cpp
-    #    ${TEST_DIR}/EigrpTest.cpp
-    ${TEST_DIR}/EigrpInterfaceTest.cpp
+    #${TEST_DIR}/ConsoleTest.cpp
+    #${TEST_DIR}/ConfigsTest.cpp
+    #${TEST_DIR}/TerminalTest.cpp
+    #${TEST_DIR}/DecapsulationTest.cpp
+    #${TEST_DIR}/EncapsulationTest.cpp
+    #${TEST_DIR}/ChecksumsTest.cpp
+    #${TEST_DIR}/ArpTest.cpp
+    #${TEST_DIR}/DhcpClientTest.cpp
+    #${TEST_DIR}/IPPoolTest.cpp
+    #${TEST_DIR}/DhcpRelayTest.cpp
+    #${TEST_DIR}/DhcpServerTest.cpp
+    ${TEST_DIR}/EigrpTest.cpp
 )
 
 # Test executable

@@ -92,7 +92,8 @@
         "stdfloat": "cpp",
         "syncstream": "cpp",
         "typeindex": "cpp",
-        "temp": "cpp"
+        "temp": "cpp",
+        "__nullptr": "cpp"
     },
     "cmake.sourceDirectory": "/home/erik/VirtualRouter"
 }

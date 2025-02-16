@@ -4,7 +4,8 @@
         "interface": [
             "GigabitEthernet",
             "FastEthernet"
-        ]
+        ],
+        "router": []
     },
     "(config-cmap)#": {},
     "(config-ext-nacl)#": {},
@@ -26,7 +27,7 @@
         "Virtual-Template": {},
         "Vlan": {}
     },
-    "(config-router)": {
+    "(config-router)#": {
         "bgp": {},
         "eigrp_classic": {},
         "eigrp_named": {},
@@ -36,7 +37,10 @@
     "(config-pmap)#": {},
     "(config-std-nacl)#": {},
     "(dhcp-config)#": {},
-    "(config-router-af)#": {},
+    "(config-router-af)#": {
+        "ipv6": {},
+        "ipv4": {}
+    },
     "(config-router-af-interface)#": {},
     "(config-router-af-topology)#": {}
 }

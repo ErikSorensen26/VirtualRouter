@@ -1,11 +1,13 @@
 #include <Ethernet.h>
 #include <Functions.h>
 #include <Interface.h>
+#include <Arp.h>
+#include <Ndp.h>
 
 namespace Protocol
 {
-    Ethernet::Ethernet(Interface& iface, Arp* arpHandler, ByteString mac)
-        : currentInterface(iface), arp(arpHandler), macAddress(mac) {}
+    Ethernet::Ethernet(Interface& iface, Arp* arpHandler, Ndp* ndpHandler, ByteString mac)
+        : currentInterface(iface), arp(arpHandler), ndp(ndpHandler), macAddress(mac) {}
 
     bool Ethernet::isMulticast(const ByteString& ip)
     {
@@ -37,11 +39,12 @@ namespace Protocol
         {
             return deriveMulticastMac(destIp);
         }
-        else
+        else if (destIp.size() == 4)
         {
-            if (arp->isMacKnown(destIp))
+            auto* mac = arp->getMac(destIp);
+            if (mac)
             {
-                return arp->getMac(destIp);
+                return *mac;
             }
             else
             {
@@ -55,9 +58,28 @@ namespace Protocol
                 return ByteString(""); // Empty MAC signifies that the packet will be sent after ARP resolution
             }
         }
+        else if (destIp.size() == 16)
+        {
+            auto* mac = ndp->getMac(destIp);
+            if (mac)
+            {
+                return *mac;
+            }
+            else
+            {
+                EthernetHeader eth;
+                eth.destinationMac = ByteString("");
+                eth.sourceMac = macAddress;
+                eth.type = type;
+                packet.Layer2.push_back(eth);
+                ndp->resolveAndSend(destIp, packet);
+                Logger::getInstance().info() << "Initiated ARP resolution for IP " << destIp.toHex() << std::endl;
+                return ByteString(""); // Empty MAC signifies that the packet will be sent after NDP resolution
+            }
+        }
     }
 
-    bool Ethernet::setEthernetHeader(PacketInfo& packetInfo, const ByteString& destIp, ByteString type)
+    bool Ethernet::setEthernetHeader(PacketInfo& packetInfo, const ByteString& destIp, ByteString const* destMac, ByteString type)
     {
         // Create Header
         EthernetHeader ethernetHeader;
@@ -66,9 +88,17 @@ namespace Protocol
         ethernetHeader.type = type;
         ethernetHeader.sourceMac = macAddress;
 
-        std::string destMac = getDestinationMac(destIp, packetInfo, type).toString();
+        ByteString destinationMac;
+        if (!destMac || destMac->size() != 6)
+        {
+            destinationMac = getDestinationMac(destIp, packetInfo, type).toString();
+        }
+        else
+        {
+            destinationMac = *destMac;
+        }
 
-        if (destMac.empty())
+        if (destinationMac.empty())
         {
             // MAC resolution is pending; the packet will be sent after
             Logger::getInstance().warn() << "Destination MAC unknown for IP " << destIp.toHex()
@@ -76,7 +106,7 @@ namespace Protocol
             return false; // Indicate that Ethernet header was not set
         }
         // Set the destination MAC
-        ethernetHeader.destinationMac = destMac;
+        ethernetHeader.destinationMac = destinationMac;
 
         packetInfo.Layer2.emplace_back(ethernetHeader);
         

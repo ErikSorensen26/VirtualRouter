@@ -11,6 +11,7 @@ Terminal::Terminal(bool enableDebug) : Console()
 {
     // Set debug mode based on the input parameter
     isDebugModeEnabled = enableDebug;
+    currentVrf = Global::getInstance().addRoutingInstance("default");
     initTerminal();
 }
 
@@ -112,14 +113,14 @@ bool Terminal::handleInput(std::string test)
     // Retrieve the hostname from the global settings and reset cursor position
     std::string hostname = Global::getInstance().getHostname();
     cursorPos = 0;
-    setPrompt(hostname + currentMode);
+    setPrompt(hostname + currentPrompt);
 
     // Read the user's input from the terminal
     std::string userCommand = input(test);
 
     // Handle IPv6 address input and print the expanded version
-    if (isIPv6Address(userCommand)) {
-        std::cout << expandIPv6Address(userCommand);
+    if (Functions::isIPv6Address(userCommand)) {
+        std::cout << Functions::expandIPv6Address(userCommand);
     }
 
     // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
@@ -186,6 +187,7 @@ std::string Terminal::executeDoCommand(std::string remainingCommand)
 {
     attemptingGlobalCommand = true;
     // Save current state
+    std::string previousPrompt = currentPrompt;
     std::string previousMode = currentMode;
     json previousCommandTree = workingDirectory;
     nlohmann::ordered_json* prevModeSchema = modeSchema;
@@ -197,6 +199,7 @@ std::string Terminal::executeDoCommand(std::string remainingCommand)
 
     // Restore old mode / working directory
     changeMode(previousMode, true);
+    currentPrompt    = previousPrompt;
     configNode       = previousConfigNode;
     workingDirectory = previousCommandTree;
     modeSchema       = prevModeSchema;
@@ -221,7 +224,7 @@ void Terminal::processNonLineBasedWord(std::string& word, std::vector<Com>& prev
     if (!isRunning) return;
 
     // Grab the current list of available commands
-    std::vector<Com> availableCommands = getAvailableCommands(currentDirectory, word, isFirstIteration);
+    std::vector<Com> availableCommands = getAvailableCommands(word, isFirstIteration);
     isFirstIteration = false;
 
     // Handle help question "?"
@@ -337,7 +340,7 @@ bool Terminal::handleTabCompletion(const std::string& word, std::vector<Com>& pr
     return true;
 }
 
-    bool Terminal::attemptGlobalCommand(const std::string& inputCommand)
+bool Terminal::attemptGlobalCommand(const std::string& inputCommand)
 {
     if (currentDirectory == "error" &&
         currentMode != mode.globalConfiguration &&
@@ -348,6 +351,7 @@ bool Terminal::handleTabCompletion(const std::string& word, std::vector<Com>& pr
     {
         attemptingGlobalCommand = true;
         // Backup
+        std::string prevPrompt      = currentPrompt;
         std::string prevMode        = currentMode;
         auto        prevDirectory   = workingDirectory;
         auto        prevModeSchema  = modeSchema;
@@ -372,6 +376,7 @@ bool Terminal::handleTabCompletion(const std::string& word, std::vector<Com>& pr
             {
                 // Restore
                 changeMode(prevMode, true);
+                currentPrompt = prevPrompt;
                 configNode       = prevConfig;
                 modeSchema       = prevModeSchema;
                 workingDirectory = prevDirectory;
@@ -629,7 +634,7 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
     commandHistory = splitIntoWords(volatileCommand);
 
     // Check if command is incomplete
-    if (!isCommandValid && !isHelpModeActive && !isPatternMatchEnd && !isLineBasedInput && !isCommandInvalid && !isGlobalCommandExecution && isRunning)
+    if (!isCommandValid && !isHelpModeActive && !isLineBasedInput && !isCommandInvalid && !isGlobalCommandExecution && isRunning)
     {
         if (previousCommandList.size() > 1)
         {
@@ -650,7 +655,7 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
     return fullyFormattedCommand;
 }
 
-std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTree, const std::string& userInput, bool inPrivilegedMode) 
+std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bool inPrivilegedMode)
 {
     // Get lowercase input
     std::string lowerUserInput = Functions::lowerCase(userInput);
@@ -663,6 +668,9 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
 
     // Default response for invalid or unavailable commands
     std::vector<Com> noSubCommands = {errorCommand};
+
+    // Clear the tempDir
+    tempDir.clear();
 
     // Variables for handling exact matches
     Com exactMatchCommand;
@@ -679,20 +687,42 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
     nlohmann::json commandNode;
     int matchCount = 0;
     bool patternMatched = false;
-    for (const json& command : currentCommandDirectory) 
+
+    // Addon for command structure.
+    for (json& command : currentCommandDirectory)
     {
-        if (command.is_object() && command.contains("name") && command.contains("description"))
+        std::string commandName = command["name"];
+        if (commandName != "<cr>" && !isVolatile(commandName) && commandName[0] == '<' && commandName.back() == '>')
+        {
+            std::string newName = commandName.substr(1, commandName.size() - 2);
+            if (commandTree.contains(newName))
+            {
+                for (json& newCommand : commandTree[newName]) 
+                {
+                    tempDir.push_back(&newCommand);
+                }
+            }
+        }
+        else
+        {
+            tempDir.push_back(&command);
+        }
+    }
+
+    for (const json* command : tempDir)
+    {
+        if (command->is_object() && command->contains("name") && command->contains("description"))
         {
             Com commandData;
-            commandData.name = command["name"];
-            commandData.description = command["description"];
+            commandData.name = (*command)["name"];
+            commandData.description = (*command)["description"];
             availableCommands.push_back(commandData);
 
             // Check if the user input matches a pattern or specific command
-            std::string commandName = command["name"];
+            std::string commandName = (*command)["name"];
             if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
             {
-                commandNode = command;
+                commandNode = (*command);
                 matchCount++;
                 patternMatched = true;
                 if (!isValidCommandDirectory(commandNode)) 
@@ -704,15 +734,15 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
             {
                 if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), Functions::lowerCase(commandName).begin()) && !isExactMatch) 
                 {
-                    commandNode = command;
+                    commandNode = *command;
                     matchCount++;
                 }
                 if (commandName == lowerUserInput) 
                 {
                     isExactMatch = true;
-                    exactMatchCommand.name = Functions::lowerCase(command["name"]);
-                    exactMatchCommand.description = command["description"];
-                    commandNode = command;
+                    exactMatchCommand.name = Functions::lowerCase((*command)["name"]);
+                    exactMatchCommand.description = (*command)["description"];
+                    commandNode = (*command);
                 }
             }
         }
@@ -726,6 +756,7 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
     if (matchCount == 1 && isValidCommandDirectory(commandNode)) 
     {
         currentDirectory = commandNode["subcommands"];
+        
         for (const auto& subCommand : currentDirectory) 
         {
             if (subCommand["name"] == "<cr>") 
@@ -753,6 +784,10 @@ std::vector<Com> Terminal::getAvailableCommands(const nlohmann::json& commandTre
         endCommandString = Functions::lowerCase(commandNode["name"]);
         endOfCommand = true;
         return noSubCommands;
+    }
+    else
+    {
+        endOfCommand = false;
     }
 
     // Handle unmatched or invalid commands
@@ -1021,7 +1056,7 @@ bool Terminal::matchInputPattern(const std::string &userInput, const std::string
 
     if (expectedPattern == "X:X:X:X::X")
     {
-        if (isIPv6Address(userInput))
+        if (Functions::isIPv6Address(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1031,7 +1066,7 @@ bool Terminal::matchInputPattern(const std::string &userInput, const std::string
 
     if (expectedPattern == "X:X:X:X::X/<0-128>")
     {
-        if (isIPv6AddressWithMask(userInput))
+        if (Functions::isIPv6AddressWithMask(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1041,7 +1076,7 @@ bool Terminal::matchInputPattern(const std::string &userInput, const std::string
 
     if (expectedPattern == "H.H.H")
     {
-        if (isMACAddress(userInput))
+        if (Functions::isMACAddress(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1133,6 +1168,7 @@ bool Terminal::changeMode(std::string &newMode, bool processing)
 
     prevMode = currentMode;
     currentMode = newMode;
+    currentPrompt = newMode;
     workingDirectory = commandTree[currentMode];
     currentDirectory = workingDirectory;
     isModeChanged = true;
@@ -1164,136 +1200,6 @@ bool Terminal::changeMode(std::string &newMode, bool processing)
     return true;
 }
 
-std::vector<std::string> Terminal::tokenize(const std::string& input, char delimiter) 
-{
-    // Vector to store the resulting tokens
-    std::vector<std::string> tokens;
-
-    // Temporary string to store each token during iteration
-    std::string token;
-
-    // Use an input string stream for easy parsing
-    std::istringstream tokenStream(input);
-
-    // Split the string based on the delimiter
-    while (std::getline(tokenStream, token, delimiter)) 
-    {
-        tokens.push_back(token);
-    }
-
-    return tokens;
-}
-
-std::string Terminal::padWithZeros(const std::string& input) 
-{
-    std::ostringstream paddedStream;
-    paddedStream << std::setfill('0') << std::setw(4) << input;
-    return paddedStream.str();
-}
-
-std::string Terminal::expandIPv6Address(const std::string& ipv6Address) 
-{
-    if (!isIPv6Address(ipv6Address) && !isIPv6AddressWithMask(ipv6Address))
-    {
-        return "";
-    }
-
-    // Seperate any prefix (e.g., /64) from the IP address
-    std::string ip, prefix;
-    {
-        size_t slashPos = ipv6Address.find('/');
-        if (slashPos != std::string::npos)
-        {
-            ip = ipv6Address.substr(0, slashPos);
-            prefix = ipv6Address.substr(slashPos); // Keeps the '/' + prefix
-        }
-        else
-        {
-            ip = ipv6Address;
-        }
-    }
-
-    // Check for '::' (indicates compressed zero block)
-    size_t doubleColonPos = ip.find("::");
-    std::string expandedIP;
-
-    if (doubleColonPos != std::string::npos)
-    {
-        // Split into front/back around the "::"
-        std::vector<std::string> frontSegments = tokenize(ip.substr(0, doubleColonPos), ':');
-        std::vector<std::string> backSegments = tokenize(ip.substr(doubleColonPos + 2), ':');
-
-        // Calculate how many hextets are missing
-        // (IPv6 has exactly 8 hextets)
-        size_t hextetCount = frontSegments.size() + backSegments.size();
-        size_t missingCount = 8 - hextetCount;
-
-        // Combine into one vector
-        std::vector<std::string> allSegments;
-        allSegments.reserve(8);
-
-        // 1. front segments
-        for (auto& seg : frontSegments)
-        {
-            allSegments.push_back(seg);
-        }
-        // 2. insert the missing zero segments
-        for (size_t i = 0; i < missingCount; ++i)
-        {
-            allSegments.push_back("0");
-        }
-        // 3. back segments
-        for (auto& seg : backSegments)
-        {
-            allSegments.push_back(seg);
-        }
-
-        // Now pad each segment to 4 hex digites and join them with ':'
-        for (size_t i = 0; i < allSegments.size(); ++i)
-        {
-            expandedIP += padWithZeros(allSegments[i]);
-            if (i < allSegments.size() - 1)
-            {
-                expandedIP += ":";
-            }
-        }
-    }
-    else
-    {
-        std::vector<std::string> segments = tokenize(ip, ':');
-        for (size_t i = 0; i < segments.size(); ++i)
-        {
-            expandedIP += padWithZeros(segments[i]);
-            if (i < segments.size() - 1)
-            {
-                expandedIP += ":";
-            }
-        }
-    }
-
-    // Append the prefix (e.g., /64) if it exists
-    expandedIP += prefix;
-    return expandedIP;
-}
-
-bool Terminal::isIPv6Address(const std::string& address) 
-{
-    std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))");
-    return std::regex_match(address, ipRegex);
-}
-
-bool Terminal::isIPv6AddressWithMask(const std::string& addressWithMask) 
-{
-    std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))/(12[0-8]|1[01][0-9]|[1-9]?[0-9])");
-    return std::regex_match(addressWithMask, ipRegex);
-}
-
-bool Terminal::isMACAddress(const std::string& macAddress) 
-{
-    std::regex macRegex("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$");
-    return std::regex_match(macAddress, macRegex);
-}
-
 InterfaceType Terminal::getInterfaceType(std::string& type)
 {
     if (type == "Dialer") {return InterfaceType::DIALER;}
@@ -1312,8 +1218,6 @@ InterfaceType Terminal::getInterfaceType(std::string& type)
 void Terminal::configureInterfaceMode(std::string& type) 
 {
     changeMode(mode.interface);
-    std::shared_lock<std::shared_mutex> lock(interfaceListMutex);
-    activeInterfaces = &interfaceList[getInterfaceType(type)]; 
     currentSubMode = type;
     if (workingDirectory.size() > 0 && workingDirectory[0].contains(type))
     {

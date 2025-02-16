@@ -56,11 +56,33 @@ public:
     ~Arp();
 
     /**
+     * @brief Adds an arp entry to the arp cache table
+     *
+     * @parap targetIp The target IP of the resolved arp entry.
+     * @param mac The MAC of the resolved arp entry.
+     */
+    void addArpEntry(const ByteString& targetIp, const ByteString& targetMac);
+
+    /**
      * @brief Resolves an IP address and enqueues a packet to send once resolved.
+     * 
      * @param targetIp The target IP address to resolve.
      * @param packetToSend The packet to be sent once the IP is resolved.
      */
     void resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend);
+
+    /**
+     * @brief Sends an ARP reply to a specified MAC and IP.
+     * @param targetMac The recipient's MAC address.
+     * @param targetIp The recipient's IP address.
+     */
+    void sendReply(const ByteString& targetMac, const ByteString& targetIp);
+
+    /**
+     * @brief Sends an ARP request for a given IP.
+     * @param targetIp The target IP address to resolve.
+     */
+    void sendRequest(const ByteString& targetIp);
 
     /**
      * @brief Processes a received ARP reply and updates the cache.
@@ -69,31 +91,11 @@ public:
     void receiveReply(const ArpHeader& receivedReply);
 
     /**
-     * @brief Checks if a MAC address is known for a given IP address.
-     * @param ip The IP address to check.
-     * @return True if the MAC address is known, false otherwise.
-     */
-    bool isMacKnown(const ByteString& ip);
-
-    /**
      * @brief Retrieves the MAC address for a given IP address.
      * @param ip The IP address to query.
      * @return The associated MAC address if found, or an empty string otherwise.
      */
-    ByteString getMac(const ByteString& ip);
-
-    /**
-     * @brief Sends an ARP reply to a specified MAC and IP.
-     * @param targetMac The recipient's MAC address.
-     * @param targetIp The recipient's IP address.
-     */
-    void sendReply(ByteString targetMac, ByteString targetIp);
-
-    /**
-     * @brief Sends an ARP request for a given IP.
-     * @param targetIp The target IP address to resolve.
-     */
-    void sendRequest(const ByteString& targetIp);
+    ByteString* getMac(const ByteString& ip);
 
     /**
      * @brief Shuts down the ARP service, terminating all threads and cleaning up resources.
@@ -137,7 +139,7 @@ protected:
      * @param targetIp The recipient's IP address.
      * @return The constructed ARP reply packet.
      */
-    PacketInfo arpReply(ByteString& currentMac, ByteString& targetMac, ByteString& ip, ByteString& targetIp);
+    PacketInfo arpReply(const ByteString& currentMac, const ByteString& targetMac, const ByteString& ip, const ByteString& targetIp);
 
     /**
      * @brief Processes queued packets for a resolved IP address and sends them to the resolved MAC address.

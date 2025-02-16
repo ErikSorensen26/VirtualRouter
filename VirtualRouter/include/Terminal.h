@@ -269,7 +269,7 @@ private:
      * @param inPrivilegedMode A boolean indicating if the terminal is in privileged mode.
      * @return std::vector<com> A vector of available commands matching the user input.
      */
-    std::vector<Com> getAvailableCommands(const nlohmann::json& commandTree, const std::string& userInput, bool inPriviledgedMode);
+    std::vector<Com> getAvailableCommands(const std::string& userInput, bool inPriviledgedMode);
 
     /**
      * @brief Checks if a given command name is a global command.
@@ -385,69 +385,6 @@ private:
     inline void exitMode(std::string& newMode) { isExitCommand = true; changeMode(newMode);}
 
     /**
-     * @brief Pads a string with leading zeros (e.g., for IPv6 segments).
-     *
-     * Formats the input string by adding leading zeros until it reaches a width of four characters.
-     *
-     * @param input The input string to pad with zeros.
-     * @return std::string The zero-padded string.
-     */
-    std::string padWithZeros(const std::string& input);
-
-    /**
-     * @brief Expands an abbreviated IPv6 address to its full form.
-     *
-     * Converts a compressed IPv6 address containing "::" into its fully expanded form with all eight hextets,
-     * padding each segment with leading zeros as necessary.
-     *
-     * @param ipv6Address The compressed IPv6 address to expand.
-     * @return std::string The fully expanded IPv6 address.
-     */
-    std::string expandIPv6Address(const std::string& ipv6Address);
-
-    /**
-     * @brief Splits a string into tokens based on a delimiter.
-     *
-     * Splits the input string into tokens using the provided delimiter character and returns the resulting vector of tokens.
-     *
-     * @param input The input string to tokenize.
-     * @param delimiter The character used to delimit tokens in the input string.
-     * @return std::vector<std::string> A vector containing the individual tokens extracted from the input.
-     */
-    std::vector<std::string> tokenize(const std::string& input, char delimiter);
-
-    /**
-     * @brief Validates if a string is a valid IPv6 address.
-     *
-     * Uses a regular expression to check if the provided string conforms to IPv6 address standards.
-     *
-     * @param address The IPv6 address string to validate.
-     * @return true If the address is a valid IPv6 format; otherwise, false.
-     */
-    bool isIPv6Address(const std::string& address);
-
-    /**
-     * @brief Validates if a string is a valid IPv6 address with a subnet mask.
-     *
-     * Uses a regular expression to check if the provided string conforms to IPv6 address standards with an appended subnet mask.
-     *
-     * @param addressWithMask The IPv6 address string with subnet mask to validate.
-     * @return true If the address with mask is valid; otherwise, false.
-     */
-    bool isIPv6AddressWithMask(const std::string& addressWithMask);
-
-     /**
-     * @brief Validates if a string is a valid MAC address.
-     *
-     * Uses a regular expression to check if the provided string conforms to MAC address standards,
-     * allowing for different separators such as colons or hyphens.
-     *
-     * @param macAddress The MAC address string to validate.
-     * @return true If the MAC address is valid; otherwise, false.
-     */
-    bool isMACAddress(const std::string& macAddress);
-    
-    /**
      * @brief Configures the terminal's interface mode based on the specified type.
      *
      * Switches the terminal's operational mode to match the given interface type,
@@ -515,12 +452,10 @@ private:
     void runRip();      ///< Runs the RIP service in a seperate thread
 
     // Member variables
-    uint8_t interfaceID;		///< Unique identifier for interfaces
+    float interfaceID;		///< Unique identifier for interfaces
     uint32_t routingProtocolID;	        ///< ID of the current routing protocol
 	
-    std::map<unsigned int, Interface*>* activeInterfaces; ///< pointer to a map of active interfaces
-
-    std::vector<std::string> globalCommandList{"exit", "end", "?", "vk_tab"}; ///< List of global commands
+    std::vector<std::string> globalCommandList{"end", "?", "vk_tab"}; ///< List of global commands
 
     std::vector<std::string> commandHistory;    ///< History of previous entered commands
 
@@ -538,6 +473,7 @@ private:
     nlohmann::json commandTree;		            ///< JSON structure holding the command hierarchy
     nlohmann::json currentDirectory;	        ///< Current directory in the command tree
     nlohmann::json workingDirectory;            ///< Working directory in the JSON structure
+    std::vector<json*> tempDir;                 ///< Temporary directory for creating temporary directories.
 
     std::vector<std::string> executionHistory;	// History of executed commands
 
@@ -561,6 +497,8 @@ private:
     std::condition_variable stateCondition;     ///< Condition variabel for thread synchronization
     
     static std::string defaultMode;
+
+    VirtualRouter* currentVrf;
 };
 
 #endif // TERMINAL_H

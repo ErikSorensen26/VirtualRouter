@@ -28,7 +28,7 @@ namespace Protocol
     {
         {
             std::lock_guard<std::mutex> lock(requestMutex);
-            running.store(false);
+            running.store(false, std::memory_order_release);
         }
         threadCV.notify_all();
         
@@ -84,24 +84,16 @@ namespace Protocol
         }
     }
 
-    // Check if MAC is known for the given IP
-    bool Arp::isMacKnown(const ByteString& ip)
-    {
-        std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
-        auto it = arpCache.find(ip);
-        return (it != arpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime);
-    }
-
     // Get MAC address for the given ip
-    ByteString Arp::getMac(const ByteString& ip)
+    ByteString* Arp::getMac(const ByteString& ip)
     {
         std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
         auto it = arpCache.find(ip);
         if (it != arpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime)
         {
-            return it->second.macAddress;
+            return &it->second.macAddress;
         }
-        return "";
+        return nullptr;
     }
 
     // Enqueue a packet for ARP resolution and send once resolved
@@ -118,14 +110,19 @@ namespace Protocol
     void Arp::sendRequest(const ByteString& targetIp)
     {
         {
-            std::lock_guard<std::mutex> lock(requestMutex);
-            if (pendingRequests.count(targetIp)) return;
-            pendingRequests.insert(targetIp);
-
-            // Create reply status entry if not already present
-            if (replyStatus.find(targetIp) == replyStatus.end())
             {
-                replyStatus[targetIp] = std::make_shared<std::atomic<bool>>(false);
+                std::lock_guard<std::mutex> lock(requestMutex);
+                if (pendingRequests.count(targetIp)) return;
+                pendingRequests.insert(targetIp);
+            }
+
+            {
+                // Create reply status entry if not already present
+                std::lock_guard<std::mutex> lock(replyStatusMutex);
+                if (replyStatus.find(targetIp) == replyStatus.end())
+                {
+                    replyStatus[targetIp] = std::make_shared<std::atomic<bool>>(false);
+                }
             }
         }
 
@@ -154,8 +151,8 @@ namespace Protocol
         for (int retry = 0; retry < retries; ++retry)
         {
             {
-                std::lock_guard<std::mutex> lock(requestMutex);
-                if (!running || replyStatus[targetIp]->load()) break;
+                std::lock_guard<std::mutex> lock(replyStatusMutex);
+                if (!running || replyStatus[targetIp]->load(std::memory_order_relaxed)) break;
             }
 
             PacketInfo arpReq;
@@ -171,12 +168,18 @@ namespace Protocol
             // Send the ARP request
             currentInterface->enqueuePacket(arpReq, Variable::Mac::broadcast);
 
-            if (waitForReply(targetIp, retryInterval)) break;
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(requestMutex);
-            pendingRequests.erase(targetIp);
+            if (waitForReply(targetIp, retryInterval))
+            {
+                {
+                    std::lock_guard<std::mutex> lock(replyStatusMutex);
+                    replyStatus.erase(targetIp);
+                }
+                {
+                    std::lock_guard<std::mutex> lock(requestMutex);
+                    pendingRequests.erase(targetIp);
+                }
+                break;
+            }
         }
     }
 
@@ -195,11 +198,10 @@ namespace Protocol
             std::lock_guard<std::mutex> lock(replyStatusMutex);
             if (replyStatus.count(ip))
             {
-                replyStatus[ip]->store(true);
+                replyStatus[ip]->store(true, std::memory_order_release);
             }
         }
 
-        threadCV.notify_all();
         processQueuedPackets(ip, mac);
     }
 
@@ -242,17 +244,17 @@ namespace Protocol
         while (std::chrono::steady_clock::now() < end)
         {
             if (threadCV.wait_until(lock, std::min(end, std::chrono::steady_clock::now() + std::chrono::milliseconds(50)), [this, &targetIp]() {
-                    return !running || (replyStatus[targetIp] && replyStatus[targetIp]->load());
+                    return !running || (replyStatus[targetIp] && replyStatus[targetIp]->load(std::memory_order_relaxed));
                 }))
             {
-                return replyStatus[targetIp]->load();
+                return replyStatus[targetIp]->load(std::memory_order_relaxed);
             }
         }
         return false;
     }
 
     // Method to send an ARP reply
-    void Arp::sendReply(ByteString targetMac, ByteString targetIp) 
+    void Arp::sendReply(const ByteString& targetMac, const ByteString& targetIp) 
     {
         auto interfaceInfo = currentInterface->Get();
         if (interfaceInfo)
@@ -299,7 +301,7 @@ namespace Protocol
     }
 
     // Creates an ARP reply packet
-    PacketInfo Arp::arpReply(ByteString& currentMac, ByteString& targetMac, ByteString& ip, ByteString& targetIp) 
+    PacketInfo Arp::arpReply(const ByteString& currentMac, const ByteString& targetMac, const ByteString& ip, const ByteString& targetIp) 
     {
         PacketInfo packet;
         EthernetHeader eth;

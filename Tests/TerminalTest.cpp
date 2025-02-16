@@ -33,6 +33,8 @@ protected:
         mockConsole = std::make_shared<testing::NiceMock<ReducedMockConsole>>();
         
         terminal = std::make_unique<Terminal>(mockConsole, mockFileSystem);
+        Global::getInstance().resetDefault();
+        terminal->currentVrf = Global::getInstance().getRoutingInstance("default");
         terminal->initTerminal();
         terminal->changeMode(terminal->mode.globalConfiguration);
         terminal->paginationCount = 0;

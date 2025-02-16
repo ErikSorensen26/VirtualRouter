@@ -58,10 +58,10 @@ struct Mode
     std::string routing = "(config-router)#";            ///< Routing Protocol Configuration mode prompt.
     std::string routingV6 = "(config-rtr)#";             ///< Routing Protocol V6 Configuration mode prompt.
 
-    // Eigrp protocol prompts
-    std::string eigrpAddressFamily = "(config-router-af)#"; ///< Eigrp Address Family Configuration mode prompt.
-    std::string eigrpAddressFamilyInterface = "(config-router-af-interface)#"; ///< Eigrp Address Family Interface Configuration mode prompt.
-    std::string eigrpAddressFamilyTopology = "(config-router-af-topology)#"; ///< Eigrp Address Family Topology Configuration mode prompt.
+    // Address Family prompts
+    std::string addressFamily = "(config-router-af)#"; ///< Address Family Configuration mode prompt.
+    std::string addressFamilyInterface = "(config-router-af-interface)#"; ///< Address Family Interface Configuration mode prompt.
+    std::string addressFamilyTopology = "(config-router-af-topology)#"; ///< Address Family Topology Configuration mode prompt.
 };
 
 /**
@@ -393,12 +393,12 @@ public:
     
     Mode mode;                          ///< Contains various operationsl modes and their prompts.
     std::string currentMode;            ///< Indicates the current operational mode.
+    std::string currentPrompt;          ///< Indicates the current prompt.
     std::string prevMode;               ///< Stores the previous operational mode
     std::string startupFileName{};      ///< Path to the startup configuration file
 
     MacList macAddressList;             ///< Categorized list of MAC addresses by interface type.
     std::string OUI;                    ///< Organizationally Unique Identifier for MAC addresses.
-    bool no = false;                    ///< Flag indicating negation of a command.
     bool configMode = true;             ///< Flag indicating if the terminal is in configuration mode.
 
     nlohmann::ordered_json root;                        ///< Root of the JSON configuration tree.

@@ -2,6 +2,7 @@
 #include <Logger.h>
 #include <bitset>
 #include <random>
+#include <regex>
 
 namespace Functions {
 
@@ -288,21 +289,68 @@ namespace Functions {
     #pragma endregion
     #pragma region NetConv
 
-    ByteString addressToByte(const ByteString& mask) 
+    ByteString addressToByte(const ByteString& address)
     {
-        unsigned octets[4] = {0};
-        if (sscanf(mask.toString().c_str(), "%u.%u.%u.%u", &octets[0], &octets[1], &octets[2], &octets[3]) != 4)
+        ByteString byteAddress;
+
+        // Check for ipv4
+        std::regex ipv4Range("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
+        if (std::regex_match(address.toString(), ipv4Range))
         {
-            Logger::getInstance().error() << "Invalid IP address format: " << mask.toString() << std::endl;
-            return "";
+            unsigned octets[4] = {0};
+            if (sscanf(address.toString().c_str(), "%u.%u.%u.%u", &octets[0], &octets[1], &octets[2], &octets[3]) != 4)
+            {
+                Logger::getInstance().error() << "Invalid IP address format: " << address.toString() << std::endl;
+                return "";
+            }
+            byteAddress.reserve(4);
+            for (int i = 0; i < 4; ++i)
+            {
+                byteAddress.push_back(static_cast<unsigned char>(octets[i]));
+            }
+            return byteAddress;
         }
-        ByteString byteMask;
-        byteMask.reserve(4);
-        for (int i = 0; i < 4; ++i)
+        else
         {
-            byteMask.push_back(static_cast<unsigned char>(octets[i]));
+            // Check if address is IPv6
+            std::string expandedAddress = expandIPv6Address(address.toString());
+            std::regex ipv6Range("^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$");
+            if (std::regex_match(expandedAddress, ipv6Range))
+            {
+                // IPv6: parse the address
+                byteAddress.reserve(16); // IPv6 is 16 bytes long
+                std::stringstream ss(expandedAddress);
+                std::string group;
+                while (std::getline(ss, group, ':'))
+                {
+                    unsigned short value = static_cast<unsigned short>(std::stoi(group, nullptr, 16)); // Convert from hex
+                    byteAddress.push_back(static_cast<unsigned char>(value >> 8));
+                    byteAddress.push_back(static_cast<unsigned char>(value & 0xFF));
+                }
+                return byteAddress;
+            }
+            else
+            {
+                return "";
+            }
         }
-        return byteMask;
+    }
+
+    bool splitSlashMiddle(const std::string& maskAddress, ByteString& address, uint8_t& mask)
+    {
+        size_t pos = maskAddress.find('/');
+        // Check if the slash exists and is not at the start or end.
+        if (pos != std::string::npos && pos != 0 && pos != maskAddress.size() - 1)
+        {
+            address = maskAddress.substr(0, pos);
+            std::string maskString = maskAddress.substr(pos + 1);
+            if (isDecimal(maskString))
+            {
+                mask = static_cast<uint8_t>(std::stoi(maskString));
+            }
+            return true;
+        }
+        return false;
     }
 
     void printVector(const std::vector<std::string>& vec) 
@@ -326,7 +374,7 @@ namespace Functions {
         {
             stringMask += "1";
         }
-        for (size_t i = 0; i < ((mask >= 32) ? 128 : 32 - mask); i++)
+        for (size_t i = 0; i < (((mask >= 32) ? 128 : 32) - mask); i++)
         {
             stringMask = stringMask + "0";
         }
@@ -336,10 +384,21 @@ namespace Functions {
     ByteString computeNetworkAddress(const ByteString& ipAddress, uint8_t mask)
     {   
         if (ipAddress.empty()) return ByteString("");
+        size_t bitSize = 0;
+                if (ipAddress.size() == 4)
+        {
+            bitSize = 32;
+        }
+        else if (ipAddress.size() == 16)
+        {
+            bitSize = 128;
+        }
+        else return ByteString("");
+
         ByteString binMask = numMaskToBin(mask);
         ByteString binIp = byteToBin(ipAddress);
 
-        for (size_t i = 0; i < 32; i++)
+        for (size_t i = 0; i < bitSize; i++)
         {
             if (binMask[i] == '0')
             {
@@ -367,18 +426,21 @@ namespace Functions {
         size_t byteCount = mask / 8;
         size_t remainingBits = mask % 8;
 
+        // ✅ Compare full bytes
         for (size_t i = 0; i < byteCount; ++i)
         {
-            if (networkAddress[i] != ipAddress[i])
+            if (static_cast<uint8_t>(networkAddress[i]) != static_cast<uint8_t>(ipAddress[i]))
             {
                 return false;
             }
         }
 
-        if (remainingBits > 0)
+        // ✅ Compare remaining bits safely
+        if (remainingBits > 0 && byteCount < networkAddress.size())
         {
-            uint8_t mask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
-            if ((networkAddress[byteCount] & mask) != (ipAddress[byteCount] & mask))
+            uint8_t bitMask = 0xFF << (8 - remainingBits);
+            if ((static_cast<uint8_t>(networkAddress[byteCount]) & bitMask) !=
+                (static_cast<uint8_t>(ipAddress[byteCount]) & bitMask))
             {
                 return false;
             }
@@ -558,6 +620,141 @@ namespace Functions {
         if (firstByte >= 224 && firstByte <= 239) return true;
         if (firstByte == 0xFF) return true;
         return false;
+    }
+
+    std::string expandIPv6Address(const std::string& ipv6Address) 
+    {
+        if (!isIPv6Address(ipv6Address) && !isIPv6AddressWithMask(ipv6Address))
+        {
+            return "";
+        }
+
+        // Seperate any prefix (e.g., /64) from the IP address
+        std::string ip, prefix;
+        {
+            size_t slashPos = ipv6Address.find('/');
+            if (slashPos != std::string::npos)
+            {
+                ip = ipv6Address.substr(0, slashPos);
+                prefix = ipv6Address.substr(slashPos); // Keeps the '/' + prefix
+            }
+            else
+            {
+                ip = ipv6Address;
+            }
+        }
+
+        // Check for '::' (indicates compressed zero block)
+        size_t doubleColonPos = ip.find("::");
+        std::string expandedIP;
+
+        if (doubleColonPos != std::string::npos)
+        {
+            // Split into front/back around the "::"
+            std::vector<std::string> frontSegments = tokenize(ip.substr(0, doubleColonPos), ':');
+            std::vector<std::string> backSegments = tokenize(ip.substr(doubleColonPos + 2), ':');
+
+            // Calculate how many hextets are missing
+            // (IPv6 has exactly 8 hextets)
+            size_t hextetCount = frontSegments.size() + backSegments.size();
+            size_t missingCount = 8 - hextetCount;
+
+            // Combine into one vector
+            std::vector<std::string> allSegments;
+            allSegments.reserve(8);
+
+            // 1. front segments
+            for (auto& seg : frontSegments)
+            {
+                allSegments.push_back(seg);
+            }
+            // 2. insert the missing zero segments
+            for (size_t i = 0; i < missingCount; ++i)
+            {
+                allSegments.push_back("0");
+            }
+            // 3. back segments
+            for (auto& seg : backSegments)
+            {
+                allSegments.push_back(seg);
+            }
+
+            // Now pad each segment to 4 hex digites and join them with ':'
+            for (size_t i = 0; i < allSegments.size(); ++i)
+            {
+                expandedIP += padWithZeros(allSegments[i]);
+                if (i < allSegments.size() - 1)
+                {
+                    expandedIP += ":";
+                }
+            }
+        }
+        else
+        {
+            std::vector<std::string> segments = tokenize(ip, ':');
+            for (size_t i = 0; i < segments.size(); ++i)
+            {
+                expandedIP += padWithZeros(segments[i]);
+                if (i < segments.size() - 1)
+                {
+                    expandedIP += ":";
+                }
+            }
+        }
+
+        // Append the prefix (e.g., /64) if it exists
+        expandedIP += prefix;
+        return expandedIP;
+    }
+
+    bool isIPv6Address(const std::string& address) 
+    {
+        std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))");
+        return std::regex_match(address, ipRegex);
+    }
+
+    bool isIPv6AddressWithMask(const std::string& addressWithMask) 
+    {
+        std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))/(12[0-8]|1[01][0-9]|[1-9]?[0-9])");
+        return std::regex_match(addressWithMask, ipRegex);
+    }
+
+    bool isMACAddress(const std::string& macAddress) 
+    {
+        std::regex macRegex("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$");
+        return std::regex_match(macAddress, macRegex);
+    }
+
+    std::vector<std::string> tokenize(const std::string& input, char delimiter) 
+    {
+        // Vector to store the resulting tokens
+        std::vector<std::string> tokens;
+
+        // Temporary string to store each token during iteration
+        std::string token;
+
+        // Use an input string stream for easy parsing
+        std::istringstream tokenStream(input);
+
+        // Split the string based on the delimiter
+        while (std::getline(tokenStream, token, delimiter)) 
+        {
+            tokens.push_back(token);
+        }
+
+        return tokens;
+    }
+
+    std::string padWithZeros(const std::string& input) 
+    {
+        std::ostringstream paddedStream;
+        paddedStream << std::setfill('0') << std::setw(4) << input;
+        return paddedStream.str();
+    }
+
+    bool isLocalLink(const ByteString& input)
+    {
+        return (byteToBin(input.substr(0, 2)).substr(0, 10) == "1111111010");
     }
     
     #pragma endregion

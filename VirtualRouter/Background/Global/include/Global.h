@@ -4,8 +4,17 @@
 #define GLOBAL_H
 
 #include <string>
+#include <map>
 #include <mutex>
 #include <shared_mutex>
+#include <atomic>
+#include <functional>
+#include <VirtualRouter.h>
+
+class Interface;
+class VirtualRouter;
+
+enum class InterfaceType;
 
 /**
  * @def DEFAULT_HOSTNAME
@@ -22,8 +31,10 @@
  * It ensures that only one instance of the class exists throughout the application,
  * following the Singleton design pattern.
  */
-class Global {
+class Global 
+{
 public:
+    
     /**
      * @brief Retrieves the singleton instance of the Global class.
      *
@@ -34,68 +45,55 @@ public:
      */
     static Global& getInstance()
     {
-        std::unique_lock<std::shared_mutex> lock(instanceMutex);
-        if (!instance)
-        {
-            instance = new Global();
-        }
-        return *instance;
+        static Global instance;
+        return instance;
     }
 
-    /**
-     * @brief Clears all stored configurations and resets the class
-     *
-     * This method ensures that everything is safely reset.
-     *
-     * @note This is mainly for testing purposes, this is dangourus to use on a active router.
-     */
-    static void resetInstance()
+    // Set hostname (protected by hostnameMutex)
+    void setHostname(const std::string& name)
     {
-        std::unique_lock<std::shared_mutex> lock(instanceMutex);
-        delete instance;
-        instance = new Global();
+        std::unique_lock<std::shared_mutex> lock(hostnameMutex);
+        hostname = name;
     }
 
-    /**
-     * @brief Retrieves a thread-safe reference to the hostname.
-     *
-     * This method provides access to the hostname in a thread-safe manner by locking
-     * the associated mutex before returning a reference. However, returning a reference
-     * after unlocking the mutex can lead to potential race conditions. Consider returning
-     * a copy instead to ensure thread safety.
-     *
-     * @return std::string& Reference to the hostname string.
-     */
-    std::string getHostname() { return ProtectedValue<std::string>(hostname, hostnameMutex); }
+    std::string getHostname()
+    {
+        std::shared_lock<std::shared_mutex> lock(hostnameMutex);
+        return hostname;
+    }
 
-    /**
-     * @brief Retrieves a thread-safe reference to the hostname.
-     *
-     * This method provides access to the hostname in a thread-safe manner by locking
-     * the associated mutex before returning a reference. However, returning a reference
-     * after unlocking the mutex can lead to potential race conditions. Consider returning
-     * a copy instead to ensure thread safety.
-     *
-     * @return std::string& Reference to the hostname string.
-     */
-    void setHostname(std::string name) {std::lock_guard<std::mutex> lock(hostnameMutex); hostname = name;}
+    void resetDefault()
+    {
+        std::lock_guard<std::mutex> lock(routingInstanceMutex);
+        delete routingInstances["default"];
+        routingInstances.erase("default");
+        routingInstances["default"] = new VirtualRouter("default");
+    }
 
-    /**
-     * @brief Retrieves a thread-safe reference to the IPv6 enablement status.
-     *
-     * This method provides access to the IPv6 enablement flag in a thread-safe manner by locking
-     * the associated mutex before returning a reference. However, returning a reference
-     * after unlocking the mutex can lead to potential race conditions. Consider returning
-     * a copy instead to ensure thread safety.
-     *
-     * @return bool& Reference to the IPv6 enablement flag.
-     */
-    bool isIPv6Enabled() { return ProtectedValue<bool>(ipv6Enabled, ipv6EnabledMutex); }
+    // IPv6 Unicast routing
+    void setIPv6UnicastRouting(bool enable) { ipv6RoutingUnicast.store(enable, std::memory_order_relaxed); }
+    bool isIPv6UnicastRouting() { return ipv6RoutingUnicast.load(std::memory_order_relaxed); }
 
+    // AAA
+    void setAAA(bool enable) { aaaEnabled.store(enable, std::memory_order_relaxed); }
+    bool isAAA() {return aaaEnabled.load(std::memory_order_relaxed); }
+
+    // Interfaces
+    Interface* addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug);
+    Interface* getInterface(InterfaceType type, float interfaceID);
+    std::map<float, Interface*>* getInterfaceType(InterfaceType type);
+    bool removeInterface(InterfaceType type, float interfaceId);
+    void forEachInterface(const std::function<void(InterfaceType, float, Interface*)>& func, const std::vector<InterfaceType>& types = {}, bool include = true);
+
+    // Routing Instances
+    VirtualRouter* addRoutingInstance(const std::string& name);
+    VirtualRouter* getRoutingInstance(const std::string& name);
+    bool removeRoutingInstance(const std::string& name);
+
+private:
     // Delete copy constructor
     Global(const Global&) = delete;
     Global& operator=(const Global&) = delete;
-private:
 
     /**
      * @brief Constructs the Global class.
@@ -103,7 +101,7 @@ private:
      * Initializes the hostname to the default value and sets IPv6 as disabled.
      * The constructor is private to enforce the Singleton pattern.
      */
-    Global();
+    Global() {};
 
     /**
      * @brief Destructs the Global class.
@@ -112,40 +110,37 @@ private:
      */
     ~Global() = default;
 
+    std::string hostname = DEFAULT_HOSTNAME;    ///< Hostname of the router.
+    std::shared_mutex hostnameMutex;            ///< Mutex protecting the hostname.
+
+    // Boolean options
+    std::atomic<bool> ipv6RoutingUnicast = false;   ///< Flag indicating IPv6 enabled.
+    std::atomic<bool> aaaEnabled = false;
+
+    // Interfaces
+    std::mutex interfaceMutex; ///< Interface list mutex.
+    std::map<InterfaceType, std::map<float, Interface*>> interfaceList; ///< Interface list.
+
+    // Routing Instances
+    std::mutex routingInstanceMutex; ///< Routing Instance mutex.
+    std::unordered_map<std::string, VirtualRouter*> routingInstances; ///< List of Virtual Routers.
+    
+public:
+
     /**
-     * @brief Provides thread-safe access to a value by locking its associated mutex.
+     * @brief Clears all stored configurations and resets the class
      *
-     * This template function locks the provided mutex, ensures that it is unlocked
-     * automatically when the function scope ends, and returns a reference to the value.
-     * 
-     * @tparam T The type of the value to protect.
-     * @param value Reference to the value to be accessed.
-     * @param mtx Reference to the mutex associated with the value.
-     * @return T& Reference to the protected value.
+     * This method ensures that everything is safely reset.
+     *
+     * @note This is mainly for testing purposes, this is dangourus to use on a active router.
      */
-    template <typename T>
-    T ProtectedValue(T& value, std::mutex& mxt)
+    void resetInstance()
     {
-        std::shared_lock<std::shared_mutex> lock(instanceMutex);
-        mxt.lock(); // Manually lock for returning reference
+        setHostname("router");
 
-        // Costom lock structure
-        struct AutoUnlock {
-            std::mutex& mtx;
-            ~AutoUnlock() { mtx.unlock(); }
-        } AutoUnlock{ mxt };
-
-        return value; // Returns reference to the original value
+        setIPv6UnicastRouting(false);
+        setAAA(false);
     }
-
-    std::string hostname;           ///< Hostname of the router.
-    std::mutex hostnameMutex;       ///< Mutex protecting the hostname.
-
-    bool ipv6Enabled;               ///< Flag indicating IPv6 enabled.
-    std::mutex ipv6EnabledMutex;    ///< Mutex protecting the IPv6 enablement flag.
-
-    static Global* instance;
-    static std::shared_mutex instanceMutex;
 };
 
 #endif // GLOBAL_H

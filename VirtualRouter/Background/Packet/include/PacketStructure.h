@@ -61,6 +61,79 @@ namespace Variable
     }
 
     /**
+     * @namespace ICMPv6
+     * @brief Contains ICMPv6-related constants.
+     */
+    namespace ICMPv6
+    {
+        /**
+         * @namespace Types
+         * @brief Contains ICMPv6-related Type Constants.
+         */
+        namespace Type
+        {
+            inline const std::string ureachable("\x01", 1);                         ///< Unreachable error code for ICMPv6.
+            inline const std::string packetTooBig("\x02", 1);                       ///< Packet Too Big error for ICMPv6.
+            inline const std::string timeExceeded("\x03", 1);                       ///< Time Exceeded error for ICMPv6.
+            inline const std::string parameterProblem("\x04", 1);                   ///< Parameter Problem for ICMPv6.
+            
+            inline const std::string echoRequest("\x80", 1);                        ///< Echo request for Ping (128).
+            inline const std::string echoReply("\x81", 1);                          ///< Echo reply for Pint (129).
+
+            inline const std::string mldListenQuery("\x82", 1);                     ///< MLD Listen Query (130).
+            inline const std::string mldListenReport("\x83", 1);                    ///< MLD Listen Report (131).
+            inline const std::string mldListenDone("\x84");                         ///< MLD Listen Done (132).
+            inline const std::string mldListenReportV2("\x8F", 1);                  ///< MDL Listen Report V2 (143);
+
+            inline const std::string ndpRouteSolicitation("\x85", 1);               ///< NDP Route Solicitation (133).
+            inline const std::string ndpRouteAdvertisement("\x86", 1);              ///< NDP Route Advertisement (134).
+            inline const std::string ndpNeighborSolicitation("\x87", 1);            ///< NDP Neighbor Solicitation (135).
+            inline const std::string ndpNeighborAdvertisement("\x88", 1);           ///< NDP Neighbor Advertisement (136).
+            inline const std::string ndpRedirectMessage("\x89", 1);                 ///< NDP Message Redirect (137).
+
+            inline const std::string nodeInformationQuery("\x8B", 1);               ///< Node Information Query (139).
+            inline const std::string nodeInformationResponse("\x8C", 1);            ///< Node Information Response (140).
+
+            inline const std::string routerRenumbering("\x8D", 1);                  ///< Router Renumbering (141).
+
+            inline const std::string nodeInfoQuery("\x8B", 1);                      ///< Node Information Query (139).
+            inline const std::string nodeInfoResponse("\x8C", 1);                   ///< Node Information Response (140).
+
+            inline const std::string homeAgentAddressDiscoveryRequest("\x90", 1);   ///< Home Agent Address Discovery Request (144).
+            inline const std::string homeAgentAddressDiscoveryReply("\x91", 1);     ///< Home Agent Address Discovery Reply (145).
+            inline const std::string mobilePrefixSolicitation("\x92", 1);           ///< Mobile Prefix Solicitation (146).
+            inline const std::string mobilePrefixAdvertisement("\x93", 1);          ///< Mobile Prefix Advertisement (147).
+
+            inline const std::string certificationPathSolicitation("\x94", 1);      ///< Certification Path Solicitation (148).
+            inline const std::string certificationPathAdvertisement("\x95", 1);     ///< Certification Path Advertisement (149).
+
+            inline const std::string icmpExperiment1("\x96", 1);                    ///< ICMP Experimentation (150).
+            inline const std::string icmpExperiment2("\x97", 1);                    ///< ICMP Experimentation (151).
+
+            inline const std::string multicastRouterAdvertisement("\x98", 1);       ///< Multicast Router Advertisement (152).
+            inline const std::string multicastRouterSolicitation("\x99", 1);        ///< Multicast Router Solicitation (153).
+            inline const std::string multicastRouterTermination("\x9A", 1);         ///< Multicast Router Termination (154).
+
+            inline const std::string rplControlMessage("\x9B", 1);                  ///< RPL Control Message (155).
+
+            inline const std::string extendedEchoRequest("\xA0", 1);                ///< Extended Echo Request (160).
+            inline const std::string extendedEchoReply("\xA1", 1);                  ///< Extended Echo Reply (161).
+        }
+
+        /**
+         * @namespace Option
+         * @brief Contains ICMPv6-related Option Constants
+         */
+        namespace Option
+        {
+            inline const std::string source("\x01", 1); ///< Source Option for NDP.
+            inline const std::string target("\x02", 1); ///< Tartet Option for NDP.
+            inline const std::string mtu("\x05", 1);    ///< MTU Option for NDP.
+        }
+
+    }
+
+    /**
      * @namespace IP
      * @brief Contains IP protocol number constants.
      */
@@ -191,6 +264,16 @@ namespace Variable
     {
         inline const std::string broadcast(4, '\xff'); ///< Broadcast IPv4 address (255.255.255.255).
         inline const std::string source(4, '\x00');    ///< Placeholder source IPv4 address (0.0.0.0).
+    }
+
+    /**
+     * @namespace IPv6
+     * @brief Contains IPv6 address-related constants.
+     */
+    namespace IPv6
+    {
+        inline const std::string source(16, '\x00'); ///< Placeholder for source IPv6 address (::);
+        inline const std::string multicast("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16); ///< Multicast address for all neighbors.
     }
 
     /**
@@ -368,6 +451,16 @@ namespace Variable
             inline const std::string mac("\x01\x00\x5e\x00\x00\x0a", 6); ///< EIGRP Multicast MAC Address.
             inline const std::string macv6("\x33\x33\x00\x00\x00\x0a", 6); ///< EIGRP Multicast MAC Address for IPv6.
         }
+
+        /**
+         * @namespace ICMPv6
+         * @brief Contains multicast address constants for ICMPv6
+         */
+        namespace ICMPv6
+        {
+            inline const std::string solicitationAddress("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xFF", 13);
+            
+        }
     }
 }
 
@@ -375,7 +468,7 @@ namespace Variable
 
 static bool validateSize(size_t& beginning, size_t length, const ByteString& packet)
 {
-    return (beginning + length <= packet.toString().size());
+    return (beginning + length <= packet.size());
 }
 
 /**
@@ -827,7 +920,7 @@ struct UdpHeader
 
         return udpString;
     }
-    bool decapsulate(const ByteString udpHeader)
+    bool decapsulate(const ByteString& udpHeader)
     {
         if (udpHeader.size() != 8) return false;
 
@@ -866,7 +959,7 @@ struct IcmpHeader
 
         return icmpString;
     }
-    bool decapsulate(const ByteString icmpHeader)
+    bool decapsulate(const ByteString& icmpHeader)
     {
         if (icmpHeader.size() != 8) return false;
 
@@ -890,6 +983,7 @@ struct IcmpV6Header
     ByteString code{};             ///< ICMPv6 code.
     ByteString checksum{};         ///< ICMPv6 checksum.
     ByteString reserved{};         ///< Reserved field.
+    ByteString payload{};          ///< ICMPv6 payload.
 
     /**
      * @struct Option
@@ -907,13 +1001,14 @@ struct IcmpV6Header
     const std::optional<ByteString> encapsulate() const
     {
         ByteString icmpv6String;
-        if (type.size() != 1 || code.size() != 1 || checksum.size() != 2 || reserved.size() != 4) return std::nullopt;
+        if (type.size() != 1 || code.size() != 1 || reserved.size() != 4) return std::nullopt;
 
         icmpv6String.reserve(8);
         icmpv6String += type;
         icmpv6String += code;
         icmpv6String += ByteString(2, 0x00);
         icmpv6String += reserved;
+        icmpv6String += payload;
         for (const auto& opt : options)
         {
             icmpv6String += opt.option;
@@ -923,28 +1018,50 @@ struct IcmpV6Header
 
         return icmpv6String;
     }
-    bool decapsulate(const ByteString icmpV6Header)
+    bool decapsulate(const ByteString& icmpV6Header)
     {
+        size_t payloadSize = 0;
+        switch(icmpV6Header[0])
+        {
+            case 0x82: payloadSize = 16;
+                break;
+            case 0x83: payloadSize = 16;
+                break;
+            case 0x84: payloadSize = 16;
+                break;
+            case 0x85: payloadSize = 0;
+                break;
+            case 0x86: payloadSize = 4;
+                break;
+            case 0x87: payloadSize = 16;
+                break;
+            case 0x88: payloadSize = 16;
+                break;
+            case 0x89: payloadSize = 32;
+                break;
+        }
+
         size_t icmpv6Start = 0;
         size_t icmpv6End = 0;
-        if (icmpV6Header.size() < 8) return false;
+        if (icmpV6Header.size() < 8 + payloadSize) return false;
 
         type = icmpV6Header.substr(0, 1);
         code = icmpV6Header.substr(1, 1);
         checksum = icmpV6Header.substr(2, 2);
         reserved = icmpV6Header.substr(4, 4);
-        icmpv6Start = 8;
+        payload = icmpV6Header.substr(8, payloadSize);
+        icmpv6Start = 8 + payloadSize;
         icmpv6End = icmpV6Header.size();
         
         while (icmpv6Start != icmpv6End)
         {
             IcmpV6Header::Option option;
-            if (!validateSize(icmpv6Start, 4, icmpV6Header)) return false;
-            option.option = icmpV6Header.substr(icmpv6Start, 2);
-            icmpv6Start += 2;
-            option.length = icmpV6Header.substr(icmpv6Start, 2);
-            icmpv6Start += 2;
-            size_t icmpv6ADD = static_cast<size_t>(Functions::byteToNum(option.length) - 4);
+            if (!validateSize(icmpv6Start, 2, icmpV6Header)) return false;
+            option.option = icmpV6Header.substr(icmpv6Start, 1);
+            icmpv6Start += 1;
+            option.length = icmpV6Header.substr(icmpv6Start, 1);
+            icmpv6Start += 1;
+            size_t icmpv6ADD = static_cast<size_t>((Functions::byteToNum(option.length) * 8) - 2);
             if (!validateSize(icmpv6Start, icmpv6ADD, icmpV6Header)) return false;
             option.value = icmpV6Header.substr(icmpv6Start, icmpv6ADD);
             icmpv6Start += icmpv6ADD;

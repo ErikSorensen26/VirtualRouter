@@ -5,27 +5,28 @@
 
 #include <ByteString.hpp>
 #include <PacketStructure.h>
-#include <Arp.h>
 #include <Logger.h>
 
-class interface;
+class Interface;
 
 namespace Protocol
 {
     class Arp;
+    class Ndp;
     class Ethernet
     {
     public:
         // Constructor takes references to Interface and Arp classes
-        Ethernet(Interface& iface, Arp* arpHandler, ByteString mac);
+        Ethernet(Interface& iface, Arp* arpHandler, Ndp* ndpHandler, ByteString mac);
 
         // Constructs the Ethernet header in PacketInfo based on destination IP
         // Returns true of Ethernet Header was successfully set
-        bool setEthernetHeader(PacketInfo& packetInfo, const ByteString& destIp, ByteString type);
+        bool setEthernetHeader(PacketInfo& packetInfo, const ByteString& destIp, ByteString const* destMac, ByteString type);
 
     private:
         Interface& currentInterface;
         Arp* arp;
+        Ndp* ndp;
 
         // Helper method to determin if IP is multicast
         bool isMulticast(const ByteString& ip);

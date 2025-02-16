@@ -80,6 +80,7 @@ void Configs::initConfigs(const std::string& filePath)
             // Add interface configurations to physicalInterfaces vector
             for (auto obj : configJson["Interface"])
             {
+                std::string type = std::string(obj);
                 physicalInterfaces.push_back(obj);
             }
         }
@@ -346,7 +347,7 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
             {
                 if (!newConfigDir->contains(command[i]))
                 {
-                    (*newConfigDir)[command[i]] = json::object();
+                    (*newConfigDir)[command[i]] = nlohmann::ordered_json::object();
                 }
                 if (newConfigDir)
                 {
@@ -452,13 +453,13 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
             {
                 if (configNode)
                 {
-                    configNode = &((*newConfigDir)[command[i]]);
+                    configNode = &((*configNode)[command[i]]);
                 }
             }
         }
         if (!configNode->contains(MODE_KEY))
         {
-            (*configNode)[MODE_KEY] = json::object();
+            (*configNode)[MODE_KEY] = nlohmann::ordered_json::object();
         }
         configNode = &((*configNode)[MODE_KEY]);
         modeHistory.push_back(configNode);
@@ -496,39 +497,29 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::strin
     {
         if (!modeSchema->contains(mainCommand))
         {
-            (*parentNode)[mainCommand] = nlohmann::ordered_json::object();
             return;
         }
 
         // Insert the main command in order
         const auto& orderArray = *modeSchema; // Top-level order for main commands
-        
-        if (parentNode->is_object())
+        nlohmann::ordered_json tempNode = *parentNode;
+        parentNode->clear();
+
+        // First, insert schema-defined keys in order
+        for (auto& key : orderArray.items())
         {
-            // Handle objects
-            if (!parentNode->contains(mainCommand))
+            if (tempNode.contains(std::string(key.key())))
             {
-                nlohmann::ordered_json tempNode(*parentNode);
-                parentNode->clear();
-                bool inserted = false;
+                (*parentNode)[key.key()] = tempNode[key.key()];
+            }
+        }
 
-                for (auto& key : orderArray.items())
-                {
-                    if (key.key() == mainCommand)
-                    {
-                        (*parentNode)[mainCommand] = nlohmann::ordered_json::object();
-                        inserted = true;
-                    }
-                    if (tempNode.contains(std::string(key.key())))
-                    {
-                        (*parentNode)[std::string(key.key())] = tempNode[std::string(key.key())];
-                    }
-                }
-
-                if (!inserted)
-                {
-                    (*parentNode)[mainCommand] = nlohmann::ordered_json::object();
-                }
+        // Now, append any extra keys that weren't in modeSchema
+        for (auto& key : tempNode.items())
+        {
+            if (!orderArray.contains(key.key()))
+            {
+                (*parentNode)[key.key()] = key.value();
             }
         }
     } 
@@ -539,11 +530,11 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::strin
     {
         if (!modeSchema->contains(mainCommand))
         {
-            (*parentNode)[subCommand] = isListed ? nlohmann::ordered_json::array() : nlohmann::ordered_json::object();
             return;
         }
 
         const auto& subCommands = (*modeSchema)[mainCommand];
+
         if (!subCommands.is_array())
         {
             throw std::runtime_error("SubCommands for '" + mainCommand + "' must be an array in the schema.");
@@ -554,31 +545,23 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::strin
             *parentNode = nlohmann::ordered_json::object();
         }
 
-        if (!parentNode->contains(subCommand))
+        nlohmann::ordered_json tempNode = *parentNode; // Store existing data
+        parentNode->clear(); // Start fresh
+
+        for (auto& key : subCommands)
         {
-            if (parentNode->is_object())
+            if (tempNode.contains(key))
             {
-                nlohmann::ordered_json tempNode = *parentNode;
-                parentNode->clear();
-                bool inserted = false;
+                (*parentNode)[std::string(key)] = tempNode[std::string(key)];
+            }
+        }
 
-                for (auto& key : subCommands)
-                {
-                    if (key == subCommand)
-                    {
-                        (*parentNode)[subCommand] = isListed ? nlohmann::ordered_json::array() : nlohmann::ordered_json::object();
-                        inserted = true;
-                    }
-                    if (tempNode.contains(key))
-                    {
-                        (*parentNode)[std::string(key)] = tempNode[std::string(key)];
-                    }
-                }
-
-                if (!inserted)
-                {
-                    (*parentNode)[subCommand] = isListed ? nlohmann::ordered_json::array() : nlohmann::ordered_json::object();
-                }
+        // Now, append any extra subcommands that weren't in modeSchema
+        for (auto& key : tempNode.items())
+        {
+            if (std::find(subCommands.begin(), subCommands.end(), key.key()) == subCommands.end())
+            {
+                (*parentNode)[key.key()] = key.value();
             }
         }
     }
@@ -609,7 +592,7 @@ bool Configs::isVolatile(const std::string& command)
     }
     
     // Check if the command starts with '<' and is not "<cr>"
-    if (command[0] == '<' && command != "<cr>") 
+    if (command[0] == '<' && command != "<cr>" && command.find('-') != std::string::npos)
     {
         return true;
     }
