@@ -4,7 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
-
+/*
 using json = nlohmann::json;
 
 RouterSetup::RouterSetup(const std::string& configFile)
@@ -164,3 +164,4 @@ void RouterSetup::configureRestconf(TelnetManager& telnet)
 
     std::cout << "RESTCONF enabled successfully" << std::endl;
 }
+*/

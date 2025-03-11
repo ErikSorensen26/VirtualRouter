@@ -39,7 +39,7 @@ namespace Protocol
          * @brief Constructor for DHCP relay.
          * @param interface Reference to the associated interface.
          */
-        explicit DhcpRelay(Interface* interface);
+        explicit DhcpRelay(Interface* interface, AddressFamily af);
 
         /**
          * @brief Destructor for DHCP Relay.

@@ -1,6 +1,12 @@
-// CAN USE PATTERNA AS INPUT
 #include <Terminal.h>
+#include <SaxJson.hpp>
+
 #include <regex>
+#include <functional>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <X11/Xlib.h>
 #include <X11/extensions/xtestconst.h>
@@ -23,71 +29,66 @@ Terminal::Terminal(std::shared_ptr<IConsole> term, std::shared_ptr<IFileSystem> 
 
 void Terminal::initTerminal()
 {
+    // Initialize the base console
     initConsole();
-    // Output a message to indicate terminal initialization
     iConsole->print("Initializing Terminal...\n");
 
     // Initialize default error and carriage return commands
     errorCommand.name = "<error>";
     carriageReturnCommand.name = "<cr>";
 
-    // Initialize the console and configuration settings
-    // Load the command tree configuration from a JSON file
+    // Clear current command tree
     commandTree.clear();
-    std::string configFileString;
-    if (fileSystem->fileExists(COMMAND_TREE))
+
+    // ----- Load Command Tree JSON via SAX Parsing -----
+    std::ifstream fileStream(COMMAND_TREE);
+    if (fileStream.is_open())
     {
-        std::string content;
-        if (fileSystem->readFile(COMMAND_TREE, configFileString))
+        TerminalSaxHandler saxHandler;
+        if (json::sax_parse(fileStream, &saxHandler))
         {
-            try
-            {
-                commandTree = nlohmann::json::parse(configFileString);
-                configFileString.clear();
-            }
-            catch (json::parse_error& e)
-            {
-                commandTree = nlohmann::json::object();
-                configFileString.clear();
-            }
+            commandTree = saxHandler.result;
         }
+        else
+        {
+            std::cerr << "Failed to parse command tree JSON file: " << COMMAND_TREE << std::endl;
+            commandTree = json::object();
+        }
+        fileStream.close();
     }
-    else 
+    else
     {
-        std::cerr << "Failed to open command tree: " << COMMAND_TREE << std::endl;
-        commandTree = nlohmann::ordered_json::object();
+        std::cerr << "Failed to open command tree file: " << COMMAND_TREE << std::endl;
+        commandTree = json::object();
     }
 
-    // Load the JSON order
+    // ----- Load Config Schema JSON (if used) -----
     configSchema.clear();
-    std::string configSchemaString;
-    if (fileSystem->fileExists(CONFIG_SCHEMA))
+    std::ifstream schemaStream(CONFIG_SCHEMA);
+    if (schemaStream.is_open())
     {
-        std::string content;
-        if (fileSystem->readFile(CONFIG_SCHEMA, configSchemaString))
+        TerminalSaxHandler schemaSaxHandler;
+        if (json::sax_parse(schemaStream, &schemaSaxHandler))
         {
-            try
-            {
-                configSchema = nlohmann::ordered_json::parse(configSchemaString);
-                configFileString.clear();
-            }
-            catch (json::parse_error& e)
-            {
-                commandTree = nlohmann::ordered_json::object();
-                configFileString.clear();
-            }
+            configSchema = schemaSaxHandler.result;
         }
+        else
+        {
+            std::cerr << "Failed to parse configuration schema file: " << CONFIG_SCHEMA << std::endl;
+            configSchema = json::object();
+        }
+        schemaStream.close();
     }
     else
     {
         std::cerr << "Failed to open configuration schema file: " << CONFIG_SCHEMA << std::endl;
-        configSchema = nlohmann::ordered_json::object();
+        configSchema = json::object();
     }
 
-    // Set the terminal to Global Configuration mode by default
+    // Set initial mode (for example, global configuration mode)
     changeMode(mode.globalConfiguration, true);
 
-    // Restore the terminal state from saved configurations
+    // Restore any saved state (for example, previous command history)
     recoverState();
 }
 
@@ -189,7 +190,7 @@ std::string Terminal::executeDoCommand(std::string remainingCommand)
     // Save current state
     std::string previousPrompt = currentPrompt;
     std::string previousMode = currentMode;
-    json previousCommandTree = workingDirectory;
+    json* previousCommandTree = workingDirectory;
     nlohmann::ordered_json* prevModeSchema = modeSchema;
     nlohmann::ordered_json* previousConfigNode = configNode;
 
@@ -246,7 +247,7 @@ void Terminal::processNonLineBasedWord(std::string& word, std::vector<Com>& prev
     }
     
     // Check for incorrect command
-    if (currentDirectory == "error" && !isGlobalCommand(word) && !isHelpModeActive && isRunning)
+    if (error && !isGlobalCommand(word) && !isHelpModeActive && isRunning)
     {
         if (availableCommands.size() > 1)
         {
@@ -280,6 +281,13 @@ bool Terminal::handleHelpQuestion(const std::string& word, std::vector<Com>& pre
         {
             nextLine = inputCommand.substr(0, inputCommand.size());
         }
+        else if (!isMatchSuccessful && (word == "?") && ((previousCommandList.size() == 1 && previousCommandList[0].name == "<error>")))
+        {
+            nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
+            std::cout << "\n%" << " Unrecognized command";
+            return word == "?";
+        }
+
         return false;
     }
 
@@ -287,14 +295,18 @@ bool Terminal::handleHelpQuestion(const std::string& word, std::vector<Com>& pre
     volatileCommand       += word;
 
     nextLine = " " + inputCommand.substr(0, inputCommand.size() - 1);
-
-    if (previousCommandList[0].name != "<cr>")
+    if (previousCommandList[0].name == "<error>")
+    {
+        nextLine = inputCommand.substr(0, inputCommand.size() - 1);
+        std::cout << "\n%" << " Unrecognized command";
+    }
+    else if (previousCommandList[0].name != "<cr>")
     {
         displayAvailableCommands(previousCommandList);
     }
     else
     {
-        nextLine = trimString(inputCommand);
+        nextLine = inputCommand.substr(0, inputCommand.size());
     }
     return true;
 }
@@ -342,7 +354,7 @@ bool Terminal::handleTabCompletion(const std::string& word, std::vector<Com>& pr
 
 bool Terminal::attemptGlobalCommand(const std::string& inputCommand)
 {
-    if (currentDirectory == "error" &&
+    if (error &&
         currentMode != mode.globalConfiguration &&
         currentMode != mode.userExec &&
         currentMode != mode.privilegedExec &&
@@ -578,9 +590,6 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
     // Return an empty string if the input command is empty
     if (inputCommand.empty()) return "";
 
-    // Normalize to lowerCase
-    //std::string normalizedCommand = Functions::lowerCase(inputCommand);
-
     // Parse the command
     std::vector<std::string> parsedWords = splitIntoWords(inputCommand);
     if (parsedWords.empty()) return "";
@@ -615,7 +624,8 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
             // If a global command was succcessfull after falure, return
             return "";
         }
-        else if (isLineBasedInput) {
+        else if (isLineBasedInput) 
+        {
             appendLineBasedCommand(parsedWords, currentIndex, fullyFormattedCommand, volatileCommand);
         }
         else
@@ -651,6 +661,13 @@ std::string Terminal::normalizeCommand(const std::string& inputCommand)
 
     isCommandInvalid = false;
 
+    // Remove loose pointers of any were made
+    for (json* ptr : loosePtrs)
+    {
+        delete ptr;
+    }
+    loosePtrs.clear();
+
     // Return the final processed command
     return fullyFormattedCommand;
 }
@@ -664,13 +681,26 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
     std::vector<Com> availableCommands;
 
     // Clone the current command directory
-    nlohmann::json currentCommandDirectory = currentDirectory;
+    nlohmann::json* currentCommandDirectory = currentDirectory;
 
     // Default response for invalid or unavailable commands
     std::vector<Com> noSubCommands = {errorCommand};
 
-    // Clear the tempDir
+    // Clear and move the tempDir
     tempDir.clear();
+
+    // Helper lamda to travel to the end of the command
+    std::function<void(nlohmann::json*, nlohmann::json*)> navigateToLastCommand = [&](nlohmann::json* command, nlohmann::json* nextCommand) {
+        if (command->contains("subcommands") && (*command)["subcommands"].size() > 0)
+        {
+            command = &(*command)["subcommands"][0];
+            navigateToLastCommand(command, nextCommand);
+        }
+        else if ((*command)["name"] != "<cr>")
+        {
+            (*command)["subcommands"] = *nextCommand;
+        }
+    };
 
     // Variables for handling exact matches
     Com exactMatchCommand;
@@ -678,28 +708,69 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
     bool isValidCommand = false;
 
     // If the current directory is invalid, return the default error response
-    if (currentDirectory == "error") 
+    if (error) 
     {
         return noSubCommands;
     }
 
     // Iterate over all commands in the current directory
-    nlohmann::json commandNode;
+    nlohmann::json* commandNode = nullptr;
     int matchCount = 0;
     bool patternMatched = false;
 
-    // Addon for command structure.
-    for (json& command : currentCommandDirectory)
+    // Creates next commands directory
+    for (json& command : *currentCommandDirectory)
     {
         std::string commandName = command["name"];
+        
+
+        if (command.contains("properties") && command["properties"].is_array())
+        {
+            // Process properties
+            for (auto prop : command["properties"])
+            {
+                // Handle recursive property
+                if (prop == "recursive") {
+                    json* recursiveCommand = new json(command);
+                    loosePtrs.push_back(recursiveCommand);
+                    json tempRecursiveDir = json::array();
+
+                    for (json commmand : *currentCommandDirectory)
+                    {
+                        if (command["name"] != commandName)
+                        {
+                            tempRecursiveDir.push_back(command);
+                        }
+                    }
+                    navigateToLastCommand(recursiveCommand, &tempRecursiveDir);
+                    tempDir.push_back(recursiveCommand);
+                    continue;
+                }
+            }
+        }
+
+        // Handles move operator ("<>") in command structure
         if (commandName != "<cr>" && !isVolatile(commandName) && commandName[0] == '<' && commandName.back() == '>')
         {
+            // Next command
+            nlohmann::json* nextCommand = nullptr;
+            if (command.contains("subcommands"))
+            {
+                nextCommand = &command["subcommands"];
+            }
             std::string newName = commandName.substr(1, commandName.size() - 2);
             if (commandTree.contains(newName))
             {
-                for (json& newCommand : commandTree[newName]) 
+                for (json newCommand : commandTree[newName]) 
                 {
-                    tempDir.push_back(&newCommand);
+                    // Craft new command
+                    if (nextCommand)
+                    {
+                        nlohmann::json* commandPtr = new nlohmann::json(std::move(newCommand));
+                        loosePtrs.push_back(commandPtr);
+                        navigateToLastCommand(commandPtr, nextCommand);
+                        tempDir.push_back(commandPtr);
+                    }
                 }
             }
         }
@@ -709,9 +780,9 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
         }
     }
 
-    for (const json* command : tempDir)
+    for (json* command : tempDir)
     {
-        if (command->is_object() && command->contains("name") && command->contains("description"))
+        if (command->contains("name") && command->contains("description"))
         {
             Com commandData;
             commandData.name = (*command)["name"];
@@ -722,7 +793,7 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
             std::string commandName = (*command)["name"];
             if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
             {
-                commandNode = (*command);
+                commandNode = command;
                 matchCount++;
                 patternMatched = true;
                 if (!isValidCommandDirectory(commandNode)) 
@@ -734,7 +805,7 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
             {
                 if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), Functions::lowerCase(commandName).begin()) && !isExactMatch) 
                 {
-                    commandNode = *command;
+                    commandNode = command;
                     matchCount++;
                 }
                 if (commandName == lowerUserInput) 
@@ -742,7 +813,7 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
                     isExactMatch = true;
                     exactMatchCommand.name = Functions::lowerCase((*command)["name"]);
                     exactMatchCommand.description = (*command)["description"];
-                    commandNode = (*command);
+                    commandNode = command;
                 }
             }
         }
@@ -755,9 +826,9 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
     }
     if (matchCount == 1 && isValidCommandDirectory(commandNode)) 
     {
-        currentDirectory = commandNode["subcommands"];
+        currentDirectory = &((*commandNode)["subcommands"]);
         
-        for (const auto& subCommand : currentDirectory) 
+        for (const auto& subCommand : *currentDirectory) 
         {
             if (subCommand["name"] == "<cr>") 
             {
@@ -777,11 +848,11 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
     } 
     else if ((isValidCommandDirectory(commandNode) || matchCount != 1) && !isMatchSuccessful) 
     {
-        currentDirectory = "error";
+        error = true;
     } 
     else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty()) 
     {
-        endCommandString = Functions::lowerCase(commandNode["name"]);
+        endCommandString = Functions::lowerCase((*commandNode)["name"]);
         endOfCommand = true;
         return noSubCommands;
     }
@@ -791,7 +862,7 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
     }
 
     // Handle unmatched or invalid commands
-    if (matchCount == 0 && !userInput.empty() && currentDirectory == "error" &&
+    if (matchCount == 0 && !userInput.empty() && error &&
         lowerUserInput != "?" && lowerUserInput != "vk_tab") 
     {
         return noSubCommands;
@@ -799,7 +870,7 @@ std::vector<Com> Terminal::getAvailableCommands(const std::string& userInput, bo
     if (matchCount == 0 && !isValidCommandDirectory(commandNode) && lowerUserInput != "?" &&
         lowerUserInput != "vk_tab" && !isPatternMatching) 
     {
-        currentDirectory = "error";
+        error = true;
         return noSubCommands;
     }
 
@@ -1117,9 +1188,13 @@ bool Terminal::isNumeric(const std::string &input)
     return (*endPtr == '\0');
 }
 
-bool Terminal::isValidCommandDirectory(nlohmann::json &directory)
+bool Terminal::isValidCommandDirectory(nlohmann::json *directory)
 {
-    return directory.contains("subcommands");
+    if (directory && directory->is_object())
+    {
+        return directory->contains("subcommands");
+    }
+    return false;
 }
 
 bool Terminal::handlePagination(size_t &lineNum)
@@ -1169,7 +1244,7 @@ bool Terminal::changeMode(std::string &newMode, bool processing)
     prevMode = currentMode;
     currentMode = newMode;
     currentPrompt = newMode;
-    workingDirectory = commandTree[currentMode];
+    workingDirectory = &commandTree[currentMode];
     currentDirectory = workingDirectory;
     isModeChanged = true;
 
@@ -1217,11 +1292,15 @@ InterfaceType Terminal::getInterfaceType(std::string& type)
 
 void Terminal::configureInterfaceMode(std::string& type) 
 {
-    changeMode(mode.interface);
     currentSubMode = type;
-    if (workingDirectory.size() > 0 && workingDirectory[0].contains(type))
+    if (type == "Ethernet" || type == "FastEthernet" || type == "GigabitEthernet" || type == "Loopback")
     {
-        workingDirectory = workingDirectory[0][type];
+        type = "Ethernet";
+    }
+    changeMode(mode.interface);
+    if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(type))
+    {
+        workingDirectory = &(*workingDirectory)[0][type];
     }
     if (tempModeSchema->contains(type))
     {
@@ -1240,9 +1319,9 @@ void Terminal::configureRoutingMode(std::string type, bool classicV6)
         changeMode(mode.routing);
     }
     currentSubMode = type;
-    if (workingDirectory.size() > 0 && workingDirectory[0].contains(currentSubMode))
+    if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(currentSubMode))
     {
-        workingDirectory = workingDirectory[0][currentSubMode];
+        workingDirectory = &(*workingDirectory)[0][currentSubMode];
     }
     if (tempModeSchema->contains(currentSubMode))
     {
@@ -1264,8 +1343,8 @@ void Terminal::configureAddressFamily(AddressFamily af)
             break;
     }
 
-    if (workingDirectory.size() > 0 && workingDirectory[0].contains(addressFamily))
+    if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(addressFamily))
     {
-        workingDirectory = workingDirectory[0][addressFamily];
+        workingDirectory = &(*workingDirectory)[0][addressFamily];
     }
 }

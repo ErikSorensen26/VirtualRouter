@@ -7,7 +7,6 @@
 // Include the ARP implementation and mock classes
 #include <Arp.h>
 #include <MockInterface.hpp>
-#include <MockRoutingTable.hpp>
 
 using namespace Protocol;
 
@@ -18,7 +17,6 @@ protected:
     {
         // Initialize mock objects
         mockInterface = std::make_unique<testing::NiceMock<MockInterface>>();
-        mockRoutingTable = std::make_unique<testing::NiceMock<MockRoutingTable>>();
 
         // Initializeee ARP instance from the interface
         arp = mockInterface->arp;
@@ -32,7 +30,6 @@ protected:
 
     // Member variables
     std::unique_ptr<MockInterface> mockInterface;
-    std::unique_ptr<MockRoutingTable> mockRoutingTable;
     Protocol::Arp* arp;
 
     // Helper functions
@@ -197,7 +194,7 @@ TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
 
     {
         std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
-        EXPECT_TRUE(arp->isMacKnown(testIp));
+        EXPECT_TRUE(arp->getMac(testIp));
     }
 
     // Wait for expiracy
@@ -205,7 +202,7 @@ TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
 
     {
         std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
-        EXPECT_FALSE(arp->isMacKnown(testIp));
+        EXPECT_FALSE(arp->getMac(testIp));
     }
 }
 
@@ -303,7 +300,7 @@ TEST_F(ArpTest, WaitForReply_InterruptsOnShutdown)
     arp->shutdown();
     t.join();
 
-    EXPECT_FALSE(arp->isMacKnown(targetIp));
+    EXPECT_FALSE(arp->getMac(targetIp));
 }
 
 // Test SendReply sends correct ARP reply packet

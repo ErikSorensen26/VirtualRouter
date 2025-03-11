@@ -96,7 +96,7 @@ target_include_directories(VirtualRouter PUBLIC
     /usr/include
 )
 
-target_link_libraries(VirtualRouter PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(VirtualRouter PRIVATE pthread ${PCAP_LIBRARIES} ${ZLIB_LIBRARIES} ${TELNET_LIBRARIES} OpenSSL::Crypto OpenSSL::SSL)
 
 # ============================================================
 # Executables
@@ -116,6 +116,11 @@ add_executable(CommandParser ${UTILS_DIR}/src/CommandParser.cpp)
 target_include_directories(CommandParser PRIVATE ${UTILS_DIR})
 target_link_libraries(CommandParser PRIVATE VirtualRouter)
 
+# Command Extractor executable
+add_executable(CommandExtractor ${UTILS_DIR}/src/CommandExtractor.cpp)
+target_include_directories(CommandExtractor PRIVATE ${UTILS_DIR})
+target_link_libraries(CommandExtractor PRIVATE VirtualRouter)
+
 # ============================================================
 # Tests
 # ============================================================
@@ -125,7 +130,6 @@ enable_testing()
 # List of test files
 set(TEST_SOURCES
     ${TEST_DIR}/RouterTesting/src/RouterSetup.cpp
-    ${TEST_DIR}/RouterTesting/src/TelnetManager.cpp
     #${TEST_DIR}/ConsoleTest.cpp
     #${TEST_DIR}/ConfigsTest.cpp
     #${TEST_DIR}/TerminalTest.cpp
@@ -142,7 +146,7 @@ set(TEST_SOURCES
 
 # Test executable
 add_executable(AllTests ${TEST_SOURCES})
-target_link_libraries(AllTests PRIVATE VirtualRouter GTest::GTest GTest::Main gmock gmock_main pthread ${TELNET_LIBRARIES})
+target_link_libraries(AllTests PRIVATE VirtualRouter GTest::GTest GTest::Main gmock gmock_main pthread)
 target_include_directories(AllTests PRIVATE
     ${TEST_DIR}
     ${TEST_DIR}/RouterTesting/include

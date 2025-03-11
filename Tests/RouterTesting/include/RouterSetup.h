@@ -2,9 +2,9 @@
 
 #include <string>
 #include <vector>
-#include "TelnetManager.h"
+#include <TelnetManager.hpp>
 #include <json.hpp>
-
+/*
 struct InterfaceConfig
 {
     std::string name;
@@ -42,3 +42,4 @@ private:
 
     std::vector<RouterConfig> routerConfigs;
 };
+*/

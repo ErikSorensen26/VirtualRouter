@@ -9,6 +9,7 @@ bool Terminal::executeCommand(std::string &command)
 
 	isModeChanged = false;
 	isExitCommand = false;
+	error = false;
 	bool no = false;
 	std::string preProcessMode = currentMode;
 	
@@ -495,9 +496,9 @@ bool Terminal::executeCommand(std::string &command)
 					if (!no)
 					{
 						changeMode(mode.addressFamily);
-						if (workingDirectory.size() > 0 && workingDirectory[0].contains("eigrp_classic_vrf"))
+						if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains("eigrp_classic_vrf"))
 						{
-							workingDirectory = workingDirectory[0]["eigrp_classic_vrf"];
+							workingDirectory = &(*workingDirectory)[0]["eigrp_classic_vrf"];
 						}
 					}
 				}
@@ -604,9 +605,9 @@ bool Terminal::executeCommand(std::string &command)
 				{
 					exitMode(mode.addressFamily);
 					configureAddressFamily(AddressFamily::IPv4);
-					if (workingDirectory.size() > 0 && workingDirectory[0].contains("unicast"))
+					if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains("unicast"))
 					{
-						workingDirectory = workingDirectory[0]["unicast"]; // TODO fix unicast/multicast here
+						workingDirectory = &(*workingDirectory)[0]["unicast"]; // TODO fix unicast/multicast here
 					}
 				}
 				else if (commandStream[0] == "maximum-paths")
@@ -637,9 +638,12 @@ bool Terminal::executeCommand(std::string &command)
 					isList = true;
 					ByteString neighborIp = Functions::addressToByte(commandStream[1]);
 					InterfaceType type = getInterfaceType(commandStream[2]);
-					float interfaceId = std::stof(commandStream[3]);
+					if (type != InterfaceType::UNDEFINED)
+					{
+						float interfaceId = std::stof(commandStream[3]);
 
-					currentEigrp->enableUnicastNeighbor(neighborIp, type, interfaceId);
+						currentEigrp->enableUnicastNeighbor(neighborIp, type, interfaceId);
+					}
 				}
 				else if (commandStream[0] == "network")
 				{
@@ -808,9 +812,9 @@ bool Terminal::executeCommand(std::string &command)
 									configureAddressFamily(AddressFamily::IPv6);
 								}
 							}
-							if (workingDirectory.size() > 0 && workingDirectory[0].contains(comString))
+							if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(comString))
 							{
-								workingDirectory = workingDirectory[0][comString];
+								workingDirectory = &(*workingDirectory)[0][comString];
 							}
 						}
 					}
@@ -1062,9 +1066,9 @@ bool Terminal::executeCommand(std::string &command)
 				{
 					exitMode(mode.addressFamily);
 					configureAddressFamily(AddressFamily::IPv4);
-					if (workingDirectory.size() > 0 && workingDirectory[0].contains("unicast"))
+					if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains("unicast"))
 					{
-						workingDirectory = workingDirectory[0]["unicast"]; // TODO fix unicast/multicast here
+						workingDirectory = &(*workingDirectory)[0]["unicast"]; // TODO fix unicast/multicast here
 					}
 				}
 				else if (commandStream[0] == "hello-interval")

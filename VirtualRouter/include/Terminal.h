@@ -351,7 +351,7 @@ private:
      * @param directory The JSON object representing a command directory.
      * @return true If the directory contains subcommands; otherwise, false.
      */ 
-    bool isValidCommandDirectory(nlohmann::json& directory);
+    bool isValidCommandDirectory(nlohmann::json* directory);
 
     /**
      * @brief Handles pagination for displaying large lists of commands.
@@ -464,20 +464,24 @@ private:
     size_t paginationCount = 10;                ///< Pagination count for command help
 
     std::vector<std::string> currentPatterns;   ///< Current matching patterns
-    std::string currentPattern;                ///< Current matching pattern
-    std::string endCommandString;	            ///< String for marking the end of a command
-    std::string previousMatch;		            ///< Previous successfull command match
-    std::string currentCommand;		            ///< Current command being processed
-    std::string currentSubMode;		            ///< Current sub-mode (e.g., specific interface or protocol)
+    std::string currentPattern;                 ///< Current matching pattern
+    std::string endCommandString;	        ///< String for marking the end of a command
+    std::string previousMatch;		        ///< Previous successfull command match
+    std::string currentCommand;		        ///< Current command being processed
+    std::string currentSubMode;		        ///< Current sub-mode (e.g., specific interface or protocol)
 
-    nlohmann::json commandTree;		            ///< JSON structure holding the command hierarchy
-    nlohmann::json currentDirectory;	        ///< Current directory in the command tree
-    nlohmann::json workingDirectory;            ///< Working directory in the JSON structure
+    nlohmann::json commandTree;		        ///< JSON structure holding the command hierarchy.
+    nlohmann::json* currentDirectory;	        ///< Current directory in the command tree.
+    nlohmann::json* workingDirectory;           ///< Working directory in the JSON structure.
     std::vector<json*> tempDir;                 ///< Temporary directory for creating temporary directories.
+    std::vector<json*> loosePtrs;               ///< Temporary directory for removing loose pointers.
+    
+    std::vector<std::string> recursiveHistory;  ///< Recursive history for using a command once.
 
-    std::vector<std::string> executionHistory;	// History of executed commands
+    std::vector<std::string> executionHistory;	///< History of executed commands
 
     bool isRunning = true;		        ///< Terminal run state
+    bool error = false;                         ///< Indicates if the next command is invalid.
     bool endOfCommand = false;		        ///< Indicates if the command has reached its end
     bool isNextWordHelpRequested = false;       ///< Indicated if help is requested for the next word
     bool isMatchSuccessful = false;             ///< Indicates if a command match was successfull
