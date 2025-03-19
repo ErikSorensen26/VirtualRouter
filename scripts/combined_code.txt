@@ -25924,7 +25924,7 @@ extern std::map<uint32_t, std::shared_ptr<Protocol::Bgp>> bgpList;
 #include <condition_variable>
 #include <RoutingTable.h>
 #include <TimeManager.h>
-#include <Authentication.hpp>
+#include <Encryption.hpp>
 #include <unordered_map>
 #include <ByteString.hpp>
 #include <unordered_set>

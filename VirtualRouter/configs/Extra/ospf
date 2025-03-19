@@ -1,0 +1,1466 @@
+address-family         Enter Address Family command mode
+    ipv4  Address family
+        multicast  Address Family modifier
+            <cr>
+adjacency              Control adjacency formation
+    stagger  Stagger adjacency formation
+        <1-65535>  Initial number of adjacencies allowed to be forming in an area
+            <1-65535>  Maximum number of adjacencies allowed to be forming
+                <cr>
+        none       No initial limit or minimum adjacencies forming in area
+            <1-65535>  Maximum number of adjacencies allowed to be forming
+                <cr>
+area                   OSPF area parameters
+    <0-4294967295>  OSPF area ID as a decimal value
+        authentication  Enable authentication
+            message-digest  Use message-digest authentication
+                <cr>
+            <cr>
+        capability      Enable area specific capability
+            default-exclusion  Enable exclusion of links from base topology
+                <cr>
+        default-cost    Set the summary default-cost of a NSSA/stub area
+            <0-16777214>  Stub's advertised external route metric
+                <cr>
+        filter-list     Filter networks between OSPF areas
+            prefix  Filter prefixes between OSPF areas
+                WORD  Name of an IP prefix-list
+                    in   Filter networks sent to this area
+                        <cr>
+                    out  Filter networks sent from this area
+                        <cr>
+        nssa            Specify a NSSA area
+            default-information-originate  Originate Type 7 default into NSSA area
+                metric             OSPF default metric
+                    <0-16777214>  OSPF metric
+                        metric-type        OSPF metric type for default routes
+                            <1-2>  OSPF Link State type
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        no-summary  Do not send summary LSA into NSSA
+                                            translate  Translate LSA
+                                                type7  From Type 7 to Type 5
+                                                    always       Always translate LSAs on this ABR
+                                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                                            <cr>
+                                                        <cr>
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        always  Always translate LSAs on this ABR
+                                                            <cr>
+                                                        <cr>
+                                            <cr>
+                                        translate   Translate LSA
+                                            type7  From Type 7 to Type 5
+                                                always       Always translate LSAs on this ABR
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        <cr>
+                                                    <cr>
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    always  Always translate LSAs on this ABR
+                                                        <cr>
+                                                    <cr>
+                                        <cr>
+                                    no-summary         Do not send summary LSA into NSSA
+                                        no-redistribution  No redistribution into this NSSA area
+                                            translate  Translate LSA
+                                                type7  From Type 7 to Type 5
+                                                    always       Always translate LSAs on this ABR
+                                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                                            <cr>
+                                                        <cr>
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        always  Always translate LSAs on this ABR
+                                                            <cr>
+                                                        <cr>
+                                            <cr>
+                                        translate          Translate LSA
+                                            type7  From Type 7 to Type 5
+                                                always       Always translate LSAs on this ABR
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        <cr>
+                                                    <cr>
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    always  Always translate LSAs on this ABR
+                                                        <cr>
+                                                    <cr>
+                                        <cr>
+                                    translate          Translate LSA
+                                        type7  From Type 7 to Type 5
+                                            always       Always translate LSAs on this ABR
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    <cr>
+                                                <cr>
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                always  Always translate LSAs on this ABR
+                                                    <cr>
+                                                <cr>
+                                    <cr>
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        no-summary  Do not send summary LSA into NSSA
+                                            translate  Translate LSA
+                                            <cr>
+                                        translate   Translate LSA
+                                        <cr>
+                                    no-summary         Do not send summary LSA into NSSA
+                                    translate          Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        no-redistribution  No redistribution into this NSSA area
+                                            translate  Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    no-redistribution  No redistribution into this NSSA area
+                                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                                            translate  Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                nssa-only          Limit default advertisement to this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        no-redistribution  No redistribution into this NSSA area
+                                            no-summary  Do not send summary LSA into NSSA
+                                                translate  Translate LSA
+                                                <cr>
+                                            translate   Translate LSA
+                                            <cr>
+                                        no-summary         Do not send summary LSA into NSSA
+                                            no-redistribution  No redistribution into this NSSA area
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    no-redistribution  No redistribution into this NSSA area
+                                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                                            no-summary  Do not send summary LSA into NSSA
+                                                translate  Translate LSA
+                                                <cr>
+                                            translate   Translate LSA
+                                            <cr>
+                                        no-summary         Do not send summary LSA into NSSA
+                                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    no-summary         Do not send summary LSA into NSSA
+                                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                                            no-redistribution  No redistribution into this NSSA area
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        no-redistribution  No redistribution into this NSSA area
+                                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate   Translate LSA
+                                    <cr>
+                                translate   Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        no-redistribution  No redistribution into this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate   Translate LSA
+                                    <cr>
+                                translate   Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        nssa-only          Limit default advertisement to this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate   Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate   Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                metric-type        OSPF metric type for default routes
+                    <1-2>  OSPF Link State type
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate  Translate LSA
+                                        type7  From Type 7 to Type 5
+                                            always       Always translate LSAs on this ABR
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    <cr>
+                                                <cr>
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                always  Always translate LSAs on this ABR
+                                                    <cr>
+                                                <cr>
+                                    <cr>
+                                translate   Translate LSA
+                                    type7  From Type 7 to Type 5
+                                        always       Always translate LSAs on this ABR
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                <cr>
+                                            <cr>
+                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                            always  Always translate LSAs on this ABR
+                                                <cr>
+                                            <cr>
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate  Translate LSA
+                                        type7  From Type 7 to Type 5
+                                            always       Always translate LSAs on this ABR
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    <cr>
+                                                <cr>
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                always  Always translate LSAs on this ABR
+                                                    <cr>
+                                                <cr>
+                                    <cr>
+                                translate          Translate LSA
+                                    type7  From Type 7 to Type 5
+                                        always       Always translate LSAs on this ABR
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                <cr>
+                                            <cr>
+                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                            always  Always translate LSAs on this ABR
+                                                <cr>
+                                            <cr>
+                                <cr>
+                            translate          Translate LSA
+                                type7  From Type 7 to Type 5
+                                    always       Always translate LSAs on this ABR
+                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                            <cr>
+                                        <cr>
+                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                        always  Always translate LSAs on this ABR
+                                            <cr>
+                                        <cr>
+                            <cr>
+                        no-redistribution  No redistribution into this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate  Translate LSA
+                                    <cr>
+                                translate   Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                            translate          Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate  Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    translate  Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        nssa-only          Limit default advertisement to this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate  Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate  Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                no-ext-capability  Do not send domain specific capabilities into NSSA
+                    no-redistribution  No redistribution into this NSSA area
+                        no-summary  Do not send summary LSA into NSSA
+                            translate   Translate LSA
+                            <cr>
+                        translate   Translate LSA
+                        <cr>
+                    no-summary         Do not send summary LSA into NSSA
+                        no-redistribution  No redistribution into this NSSA area
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                no-redistribution  No redistribution into this NSSA area
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        no-summary  Do not send summary LSA into NSSA
+                            translate   Translate LSA
+                            <cr>
+                        translate   Translate LSA
+                        <cr>
+                    no-summary         Do not send summary LSA into NSSA
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                no-summary         Do not send summary LSA into NSSA
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        no-redistribution  No redistribution into this NSSA area
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    no-redistribution  No redistribution into this NSSA area
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                nssa-only          Limit default advertisement to this NSSA area
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        no-redistribution  No redistribution into this NSSA area
+                            no-summary  Do not send summary LSA into NSSA
+                                translate   Translate LSA
+                                <cr>
+                            translate   Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    no-redistribution  No redistribution into this NSSA area
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-summary  Do not send summary LSA into NSSA
+                                translate   Translate LSA
+                                <cr>
+                            translate   Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    no-summary         Do not send summary LSA into NSSA
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        no-redistribution  No redistribution into this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            no-ext-capability  Do not send domain specific capabilities into NSSA
+                no-redistribution  No redistribution into this NSSA area
+                    no-summary  Do not send summary LSA into NSSA
+                        translate   Translate LSA
+                        <cr>
+                    translate   Translate LSA
+                    <cr>
+                no-summary         Do not send summary LSA into NSSA
+                    no-redistribution  No redistribution into this NSSA area
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            no-redistribution  No redistribution into this NSSA area
+                no-ext-capability  Do not send domain specific capabilities into NSSA
+                    no-summary  Do not send summary LSA into NSSA
+                        translate   Translate LSA
+                        <cr>
+                    translate   Translate LSA
+                    <cr>
+                no-summary         Do not send summary LSA into NSSA
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            no-summary         Do not send summary LSA into NSSA
+                no-ext-capability  Do not send domain specific capabilities into NSSA
+                    no-redistribution  No redistribution into this NSSA area
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                no-redistribution  No redistribution into this NSSA area
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            translate                      Translate LSA
+            <cr>
+        range           Summarize routes matching address/mask (border routers only)
+            A.B.C.D  IP address to match
+                A.B.C.D  IP mask for address
+                    advertise      Advertise this range (default)
+                        cost  User specified metric for this range
+                            <0-16777214>  Advertised metric for this range
+                                <cr>
+                        <cr>
+                    cost           User specified metric for this range
+                        <0-16777214>  Advertised metric for this range
+                            <cr>
+                    not-advertise  DoNotAdvertise this range
+                        cost  User specified metric for this range
+                            <0-16777214>  Advertised metric for this range
+                                <cr>
+                        <cr>
+                    <cr>
+        sham-link       Define a sham link and its parameters
+            A.B.C.D  IP addr associated with sham-link source
+                A.B.C.D  IP addr associated with sham-link destination
+                    cost          Associate a cost with the sham-link
+                        <1-65535>  Cost of the sham-link
+                            ttl-security  TTL security check
+                                hops  IP hops
+                                    <1-254>  maximum number of hops allowed
+                                        <cr>
+                            <cr>
+                    ttl-security  TTL security check
+                        hops  IP hops
+                            <1-254>  maximum number of hops allowed
+                                <cr>
+                    <cr>
+        stub            Specify a stub area
+            no-ext-capability  Do not send domain specific capabilities into stub area
+                no-summary  Do not send summary LSA into stub area
+                    <cr>
+                <cr>
+            no-summary         Do not send summary LSA into stub area
+                no-ext-capability  Do not send domain specific capabilities into stub area
+                    <cr>
+                <cr>
+            <cr>
+        virtual-link    Define a virtual link and its parameters
+            A.B.C.D  ID (IP addr) associated with virtual link neighbor
+                FINISH
+                <cr>
+    A.B.C.D         OSPF area ID in IP address format
+        authentication  Enable authentication
+            message-digest  Use message-digest authentication
+                <cr>
+            <cr>
+        capability      Enable area specific capability
+            default-exclusion  Enable exclusion of links from base topology
+                <cr>
+        default-cost    Set the summary default-cost of a NSSA/stub area
+            <0-16777214>  Stub's advertised external route metric
+                <cr>
+        filter-list     Filter networks between OSPF areas
+            prefix  Filter prefixes between OSPF areas
+                WORD  Name of an IP prefix-list
+                    in   Filter networks sent to this area
+                        <cr>
+                    out  Filter networks sent from this area
+                        <cr>
+        nssa            Specify a NSSA area
+            default-information-originate  Originate Type 7 default into NSSA area
+                metric             OSPF default metric
+                    <0-16777214>  OSPF metric
+                        metric-type        OSPF metric type for default routes
+                            <1-2>  OSPF Link State type
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        no-summary  Do not send summary LSA into NSSA
+                                            translate  Translate LSA
+                                                type7  From Type 7 to Type 5
+                                                    always       Always translate LSAs on this ABR
+                                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                                            <cr>
+                                                        <cr>
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        always  Always translate LSAs on this ABR
+                                                            <cr>
+                                                        <cr>
+                                            <cr>
+                                        translate   Translate LSA
+                                            type7  From Type 7 to Type 5
+                                                always       Always translate LSAs on this ABR
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        <cr>
+                                                    <cr>
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    always  Always translate LSAs on this ABR
+                                                        <cr>
+                                                    <cr>
+                                        <cr>
+                                    no-summary         Do not send summary LSA into NSSA
+                                        no-redistribution  No redistribution into this NSSA area
+                                            translate  Translate LSA
+                                                type7  From Type 7 to Type 5
+                                                    always       Always translate LSAs on this ABR
+                                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                                            <cr>
+                                                        <cr>
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        always  Always translate LSAs on this ABR
+                                                            <cr>
+                                                        <cr>
+                                            <cr>
+                                        translate          Translate LSA
+                                            type7  From Type 7 to Type 5
+                                                always       Always translate LSAs on this ABR
+                                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                                        <cr>
+                                                    <cr>
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    always  Always translate LSAs on this ABR
+                                                        <cr>
+                                                    <cr>
+                                        <cr>
+                                    translate          Translate LSA
+                                        type7  From Type 7 to Type 5
+                                            always       Always translate LSAs on this ABR
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    <cr>
+                                                <cr>
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                always  Always translate LSAs on this ABR
+                                                    <cr>
+                                                <cr>
+                                    <cr>
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        no-summary  Do not send summary LSA into NSSA
+                                            translate  Translate LSA
+                                            <cr>
+                                        translate   Translate LSA
+                                        <cr>
+                                    no-summary         Do not send summary LSA into NSSA
+                                    translate          Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        no-redistribution  No redistribution into this NSSA area
+                                            translate  Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    no-redistribution  No redistribution into this NSSA area
+                                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                                            translate  Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                nssa-only          Limit default advertisement to this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        no-redistribution  No redistribution into this NSSA area
+                                            no-summary  Do not send summary LSA into NSSA
+                                                translate  Translate LSA
+                                                <cr>
+                                            translate   Translate LSA
+                                            <cr>
+                                        no-summary         Do not send summary LSA into NSSA
+                                            no-redistribution  No redistribution into this NSSA area
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    no-redistribution  No redistribution into this NSSA area
+                                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                                            no-summary  Do not send summary LSA into NSSA
+                                                translate  Translate LSA
+                                                <cr>
+                                            translate   Translate LSA
+                                            <cr>
+                                        no-summary         Do not send summary LSA into NSSA
+                                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    no-summary         Do not send summary LSA into NSSA
+                                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                                            no-redistribution  No redistribution into this NSSA area
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        no-redistribution  No redistribution into this NSSA area
+                                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                                translate          Translate LSA
+                                                <cr>
+                                            translate          Translate LSA
+                                            <cr>
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate   Translate LSA
+                                    <cr>
+                                translate   Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        no-redistribution  No redistribution into this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate   Translate LSA
+                                    <cr>
+                                translate   Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        nssa-only          Limit default advertisement to this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate   Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate   Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                metric-type        OSPF metric type for default routes
+                    <1-2>  OSPF Link State type
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate  Translate LSA
+                                        type7  From Type 7 to Type 5
+                                            always       Always translate LSAs on this ABR
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    <cr>
+                                                <cr>
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                always  Always translate LSAs on this ABR
+                                                    <cr>
+                                                <cr>
+                                    <cr>
+                                translate   Translate LSA
+                                    type7  From Type 7 to Type 5
+                                        always       Always translate LSAs on this ABR
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                <cr>
+                                            <cr>
+                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                            always  Always translate LSAs on this ABR
+                                                <cr>
+                                            <cr>
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate  Translate LSA
+                                        type7  From Type 7 to Type 5
+                                            always       Always translate LSAs on this ABR
+                                                suppress-fa  Suppress forwarding address in translated LSAs
+                                                    <cr>
+                                                <cr>
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                always  Always translate LSAs on this ABR
+                                                    <cr>
+                                                <cr>
+                                    <cr>
+                                translate          Translate LSA
+                                    type7  From Type 7 to Type 5
+                                        always       Always translate LSAs on this ABR
+                                            suppress-fa  Suppress forwarding address in translated LSAs
+                                                <cr>
+                                            <cr>
+                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                            always  Always translate LSAs on this ABR
+                                                <cr>
+                                            <cr>
+                                <cr>
+                            translate          Translate LSA
+                                type7  From Type 7 to Type 5
+                                    always       Always translate LSAs on this ABR
+                                        suppress-fa  Suppress forwarding address in translated LSAs
+                                            <cr>
+                                        <cr>
+                                    suppress-fa  Suppress forwarding address in translated LSAs
+                                        always  Always translate LSAs on this ABR
+                                            <cr>
+                                        <cr>
+                            <cr>
+                        no-redistribution  No redistribution into this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-summary  Do not send summary LSA into NSSA
+                                    translate  Translate LSA
+                                    <cr>
+                                translate   Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                            translate          Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    translate  Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    translate  Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        nssa-only          Limit default advertisement to this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate  Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-redistribution  No redistribution into this NSSA area
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-summary  Do not send summary LSA into NSSA
+                                        translate  Translate LSA
+                                        <cr>
+                                    translate   Translate LSA
+                                    <cr>
+                                no-summary         Do not send summary LSA into NSSA
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            no-summary         Do not send summary LSA into NSSA
+                                no-ext-capability  Do not send domain specific capabilities into NSSA
+                                    no-redistribution  No redistribution into this NSSA area
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                no-redistribution  No redistribution into this NSSA area
+                                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                                        translate          Translate LSA
+                                        <cr>
+                                    translate          Translate LSA
+                                    <cr>
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                no-ext-capability  Do not send domain specific capabilities into NSSA
+                    no-redistribution  No redistribution into this NSSA area
+                        no-summary  Do not send summary LSA into NSSA
+                            translate   Translate LSA
+                            <cr>
+                        translate   Translate LSA
+                        <cr>
+                    no-summary         Do not send summary LSA into NSSA
+                        no-redistribution  No redistribution into this NSSA area
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                no-redistribution  No redistribution into this NSSA area
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        no-summary  Do not send summary LSA into NSSA
+                            translate   Translate LSA
+                            <cr>
+                        translate   Translate LSA
+                        <cr>
+                    no-summary         Do not send summary LSA into NSSA
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                no-summary         Do not send summary LSA into NSSA
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        no-redistribution  No redistribution into this NSSA area
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    no-redistribution  No redistribution into this NSSA area
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                nssa-only          Limit default advertisement to this NSSA area
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        no-redistribution  No redistribution into this NSSA area
+                            no-summary  Do not send summary LSA into NSSA
+                                translate   Translate LSA
+                                <cr>
+                            translate   Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    no-redistribution  No redistribution into this NSSA area
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-summary  Do not send summary LSA into NSSA
+                                translate   Translate LSA
+                                <cr>
+                            translate   Translate LSA
+                            <cr>
+                        no-summary         Do not send summary LSA into NSSA
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    no-summary         Do not send summary LSA into NSSA
+                        no-ext-capability  Do not send domain specific capabilities into NSSA
+                            no-redistribution  No redistribution into this NSSA area
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        no-redistribution  No redistribution into this NSSA area
+                            no-ext-capability  Do not send domain specific capabilities into NSSA
+                                translate          Translate LSA
+                                <cr>
+                            translate          Translate LSA
+                            <cr>
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            no-ext-capability  Do not send domain specific capabilities into NSSA
+                no-redistribution  No redistribution into this NSSA area
+                    no-summary  Do not send summary LSA into NSSA
+                        translate   Translate LSA
+                        <cr>
+                    translate   Translate LSA
+                    <cr>
+                no-summary         Do not send summary LSA into NSSA
+                    no-redistribution  No redistribution into this NSSA area
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            no-redistribution  No redistribution into this NSSA area
+                no-ext-capability  Do not send domain specific capabilities into NSSA
+                    no-summary  Do not send summary LSA into NSSA
+                        translate   Translate LSA
+                        <cr>
+                    translate   Translate LSA
+                    <cr>
+                no-summary         Do not send summary LSA into NSSA
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            no-summary         Do not send summary LSA into NSSA
+                no-ext-capability  Do not send domain specific capabilities into NSSA
+                    no-redistribution  No redistribution into this NSSA area
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                no-redistribution  No redistribution into this NSSA area
+                    no-ext-capability  Do not send domain specific capabilities into NSSA
+                        translate          Translate LSA
+                        <cr>
+                    translate          Translate LSA
+                    <cr>
+                translate          Translate LSA
+                <cr>
+            translate                      Translate LSA
+            <cr>
+        range           Summarize routes matching address/mask (border routers only)
+            A.B.C.D  IP address to match
+                A.B.C.D  IP mask for address
+                    advertise      Advertise this range (default)
+                        cost  User specified metric for this range
+                            <0-16777214>  Advertised metric for this range
+                                <cr>
+                        <cr>
+                    cost           User specified metric for this range
+                        <0-16777214>  Advertised metric for this range
+                            <cr>
+                    not-advertise  DoNotAdvertise this range
+                        cost  User specified metric for this range
+                            <0-16777214>  Advertised metric for this range
+                                <cr>
+                        <cr>
+                    <cr>
+        sham-link       Define a sham link and its parameters
+            A.B.C.D  IP addr associated with sham-link source
+                A.B.C.D  IP addr associated with sham-link destination
+                    cost          Associate a cost with the sham-link
+                        <1-65535>  Cost of the sham-link
+                            ttl-security  TTL security check
+                                hops  IP hops
+                                    <1-254>  maximum number of hops allowed
+                                        <cr>
+                            <cr>
+                    ttl-security  TTL security check
+                        hops  IP hops
+                            <1-254>  maximum number of hops allowed
+                                <cr>
+                    <cr>
+        stub            Specify a stub area
+            no-ext-capability  Do not send domain specific capabilities into stub area
+                no-summary  Do not send summary LSA into stub area
+                    <cr>
+                <cr>
+            no-summary         Do not send summary LSA into stub area
+                no-ext-capability  Do not send domain specific capabilities into stub area
+                    <cr>
+                <cr>
+            <cr>
+        virtual-link    Define a virtual link and its parameters
+            A.B.C.D  ID (IP addr) associated with virtual link neighbor
+                FINISH
+                <cr>
+auto-cost              Calculate OSPF interface cost according to bandwidth
+    reference-bandwidth  Use reference bandwidth method to assign OSPF cost
+        <1-4294967>  The reference bandwidth in terms of Mbits per second
+            <cr>
+    <cr>
+capability             Enable specific OSPF feature
+    lls      Link-local Signaling (LLS) support
+        <cr>
+    opaque   Opaque LSA
+        <cr>
+    transit  Transit Area
+        <cr>
+compatible             OSPF compatibility list
+    rfc1583  compatible with RFC 1583
+        <cr>
+    rfc1587  compatible with RFC 1587
+        <cr>
+    rfc5243  supports DBD exchange optimization
+        <cr>
+default                Set a command to its defaults
+default-information    Control distribution of default information
+    originate  Distribute a default route
+        always       Always advertise default route
+            metric       OSPF default metric
+                <0-16777214>  OSPF metric
+                    metric-type  OSPF metric type for default routes
+                        <1-2>  OSPF Link State type
+                            route-map  Route-map reference
+                                WORD  Route map name
+                                    <cr>
+                            <cr>
+                    route-map    Route-map reference
+                        WORD  Route map name
+                            metric-type  OSPF metric type for default routes
+                                <1-2>  OSPF Link State type
+                                    <cr>
+                            <cr>
+                    <cr>
+            metric-type  OSPF metric type for default routes
+                <1-2>  OSPF Link State type
+                    metric     OSPF default metric
+                        <0-16777214>  OSPF metric
+                            route-map  Route-map reference
+                                WORD  Route map name
+                                    <cr>
+                            <cr>
+                    route-map  Route-map reference
+                        WORD  Route map name
+                            metric  OSPF default metric
+                                <0-16777214>  OSPF metric
+                                    <cr>
+                            <cr>
+                    <cr>
+            route-map    Route-map reference
+                WORD  Route map name
+                    metric       OSPF default metric
+                        <0-16777214>  OSPF metric
+                            metric-type  OSPF metric type for default routes
+                                <1-2>  OSPF Link State type
+                            <cr>
+                    metric-type  OSPF metric type for default routes
+                        <1-2>  OSPF Link State type
+                            metric  OSPF default metric
+                                <0-16777214>  OSPF metric
+                                    <cr>
+                            <cr>
+                    <cr>
+            <cr>
+        metric       OSPF default metric
+            <0-16777214>  OSPF metric
+                always       Always advertise default route
+                    metric-type  OSPF metric type for default routes
+                        <1-2>  OSPF Link State type
+                            route-map  Route-map reference
+                                WORD  Route map name
+                                    <cr>
+                            <cr>
+                    route-map    Route-map reference
+                        WORD  Route map name
+                            metric-type  OSPF metric type for default routes
+                                <1-2>  OSPF Link State type
+                                    <cr>
+                            <cr>
+                    <cr>
+                metric-type  OSPF metric type for default routes
+                    <1-2>  OSPF Link State type
+                        always     Always advertise default route
+                            route-map  Route-map reference
+                                WORD  Route map name
+                                    <cr>
+                            <cr>
+                        route-map  Route-map reference
+                            WORD  Route map name
+                                always  Always advertise default route
+                                    <cr>
+                                <cr>
+                        <cr>
+                route-map    Route-map reference
+                    WORD  Route map name
+                        always       Always advertise default route
+                            metric-type  OSPF metric type for default routes
+                                <1-2>  OSPF Link State type
+                                    <cr>
+                            <cr>
+                        metric-type  OSPF metric type for default routes
+                            <1-2>  OSPF Link State type
+                                always  Always advertise default route
+                                    <cr>
+                                <cr>
+                        <cr>
+                <cr>
+        metric-type  OSPF metric type for default routes
+            <1-2>  OSPF Link State type
+                always     Always advertise default route
+                    route-map  Route-map reference
+                        WORD  Route map name
+                            <cr>
+                    <cr>
+                metric     OSPF default metric
+                    <0-16777214>  OSPF metric
+                        always     Always advertise default route
+                            route-map  Route-map reference
+                                WORD  Route map name
+                                    <cr>
+                            <cr>
+                        route-map  Route-map reference
+                            WORD  Route map name
+                                always     Always advertise default route
+                                    <cr>
+                                <cr>
+                        <cr>
+                route-map  Route-map reference
+                    WORD  Route map name
+                        always  Always advertise default route
+                            <cr>
+                        <cr>
+                <cr>
+        route-map    Route-map reference
+            WORD  Route map name
+                always       Always advertise default route
+                    metric       OSPF default metric
+                        <0-16777214>  OSPF metric
+                            metric-type  OSPF metric type for default routes
+                            <cr>
+                    metric-type  OSPF metric type for default routes
+                        <1-2>  OSPF Link State type
+                            metric       OSPF default metric
+                                <0-16777214>  OSPF metric
+                    <cr>
+                metric       OSPF default metric
+                    <0-16777214>  OSPF metric
+                        always       Always advertise default route
+                            metric-type  OSPF metric type for default routes
+                                <1-2>  OSPF Link State type
+                                    <cr>
+                            <cr>
+                        metric-type  OSPF metric type for default routes
+                            <1-2>  OSPF Link State type
+                                always       Always advertise default route
+                                    <cr>
+                                <cr>
+                        <cr>
+                metric-type  OSPF metric type for default routes
+                    <1-2>  OSPF Link State type
+                        always  Always advertise default route
+                            metric  OSPF default metric
+                                <0-16777214>  OSPF metric
+                                    <cr>
+                            <cr>
+                        metric  OSPF default metric
+                            <0-16777214>  OSPF metric
+                                always  Always advertise default route
+                                    <cr>
+                                <cr>
+                        <cr>
+                <cr>
+        <cr>
+default-metric         Set metric of redistributed routes
+    <1-16777214>  OSPF default metric
+        <cr>
+discard-route          Enable or disable discard-route installation
+    external  Discard route for redistributed summarised routes
+        <1-255>   Administrative distance for redistributed summarised routes
+            internal  Discard route for summarised internal routes
+                <1-255>  Administrative distance for summarised internal routes
+                    <cr>
+                <cr>
+            <cr>
+        internal  Discard route for summarised internal routes
+            <1-255>  Administrative distance for summarised internal routes
+                <cr>
+            <cr>
+        <cr>
+    internal  Discard route for summarised internal routes
+        <1-255>   Administrative distance for summarised internal routes
+            external  Discard route for redistributed summarised routes
+                <1-255>  Administrative distance for redistributed summarised routes
+                    <cr>
+                <cr>
+            <cr>
+        external  Discard route for redistributed summarised routes
+            <1-255>  Administrative distance for redistributed summarised routes
+                <cr>
+            <cr>
+        <cr>
+    <cr>
+distance               Define an administrative distance
+    <1-255>  Administrative distance
+        A.B.C.D  IP Source address
+            A.B.C.D  Wildcard bits
+                <1-99>       IP Standard access list number
+                    <cr>
+                <1300-1999>  IP Standard expanded access list number
+                    <cr>
+                WORD         Standard access-list name
+                    <cr>
+                <cr>
+        <cr>
+    ospf     OSPF distance
+        external    External type 5 and type 7 routes
+            <1-255>  Distance for external type 5 and type 7 routes
+                inter-area  Inter-area routes
+                    <1-255>  Distance for inter-area routes
+                        intra-area  Intra-area routes
+                            <1-255>  Distance for intra-area routes
+                                <cr>
+                        <cr>
+                intra-area  Intra-area routes
+                    <1-255>  Distance for intra-area routes
+                        inter-area  Inter-area routes
+                            <1-255>  Distance for inter-area routes
+                                <cr>
+                        <cr>
+                <cr>
+        inter-area  Inter-area routes
+            <1-255>  Distance for inter-area routes
+                external    External type 5 and type 7 routes
+                    <1-255>  Distance for external type 5 and type 7 routes
+                        intra-area  Intra-area routes
+                            <1-255>  Distance for intra-area routes
+                                <cr>
+                        <cr>
+                intra-area  Intra-area routes
+                    <1-255>  Distance for intra-area routes
+                        external  External type 5 and type 7 routes
+                            <1-255>  Distance for external type 5 and type 7 routes
+                                <cr>
+                        <cr>
+                <cr>
+        intra-area  Intra-area routes
+            <1-255>  Distance for intra-area routes
+                external    External type 5 and type 7 routes
+                    <1-255>  Distance for external type 5 and type 7 routes
+                        inter-area  Inter-area routes
+                            <1-255>  Distance for inter-area routes
+                                <cr>
+                        <cr>
+                inter-area  Inter-area routes
+                    <1-255>  Distance for inter-area routes
+                        external  External type 5 and type 7 routes
+                            <1-255>  Distance for external type 5 and type 7 routes
+                                <cr>
+                        <cr>
+                <cr>
+distribute-list        Filter networks in routing updates
+domain-id              OSPF domain-id
+domain-tag             OSPF domain-tag
+event-log              OSPF Event Logging
+exit                   Exit from routing protocol configuration mode
+help                   Description of the interactive help system
+ignore                 Do not complain about specific event
+interface-id           Source of the interface ID
+ispf                   Enable incremental SPF computation
+limit                  Limit a specific OSPF feature
+local-rib-criteria     Enable or disable usage of local RIB as route criteria
+log-adjacency-changes  Log changes in adjacency state
+max-lsa                maximum number of LSAs OSPF process will receive
+max-metric             Set maximum metric
+maximum-paths          Forward packets over multiple paths
+neighbor               Specify a neighbor router
+network                Enable routing on an IP network
+no                     Negate a command or set its defaults
+nsf                    Non-stop forwarding
+passive-interface      Suppress routing updates on an interface
+prefix-suppression     OSPF prefix suppression
+priority               OSPF topology priority
+queue-depth            OSPF Hello/Router process queue depth
+redistribute           Redistribute information from another routing protocol
+router-id              router-id for this OSPF process
+shutdown               Shutdown the OSPF protocol under the current instance
+snmp                   Modify snmp parameters
+summary-address        Configure IP address summaries
+timers                 Adjust routing timers
+traffic-share          How to compute traffic share over alternate paths
+ttl-security

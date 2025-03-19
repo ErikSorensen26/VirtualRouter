@@ -1,0 +1,10 @@
+{
+    "Packet": {
+        "Arp": {
+            "Request": "packet"
+        },
+        "Dhcp": {
+
+        }
+    }
+}
