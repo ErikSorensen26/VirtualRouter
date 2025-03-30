@@ -133,7 +133,7 @@ namespace Protocol
             }
 
             // Set the IP header and send the packet
-            currentInterface->ipPacket->setIPHeader(nsPacket, generateMulticastSolicitationAddress(targetIp), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
+            IPPacket::buildIp(currentInterface, nsPacket, generateMulticastSolicitationAddress(targetIp), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
 
             // Wait for a reply (using the conditional variable wait).
             if (waitForNeighborReply(targetIp, nsInterval))
@@ -408,7 +408,7 @@ namespace Protocol
             PacketInfo naPacket = neighborAdvertisement(iface->macAddress, targetIp);
             
             // Set the IP header and send the packet.
-            currentInterface->ipPacket->setIPHeader(naPacket, targetIp ? *targetIp : Variable::IPv6::multicast, nullptr, &destMac, 0, 255, Variable::IP::icmpv6);
+            IPPacket::buildIp(currentInterface, naPacket, targetIp ? *targetIp : Variable::IPv6::multicast, nullptr, &destMac, 0, 255, Variable::IP::icmpv6);
         }
     }
     
@@ -420,7 +420,7 @@ namespace Protocol
             PacketInfo rsPacket = routeSolicitation(iface->macAddress);
 
             // Set the IP header and send the packet.
-            currentInterface->ipPacket->setIPHeader(rsPacket, generateMulticastSolicitationAddress(targetIp), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
+            IPPacket::buildIp(currentInterface, rsPacket, generateMulticastSolicitationAddress(targetIp), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
         }
     }
 
@@ -437,7 +437,7 @@ namespace Protocol
             PacketInfo raPacket = routeAdvertisment(iface->macAddress, ttl, lifetime, reachableTime, retransTimer);
             
             // Set the IP header and send the packet.
-            currentInterface->ipPacket->setIPHeader(raPacket, targetIp, nullptr, &targetMac, 0, 255, Variable::IP::icmpv6);
+            IPPacket::buildIp(currentInterface, raPacket, targetIp, nullptr, &targetMac, 0, 255, Variable::IP::icmpv6);
         }
     }
 
@@ -476,7 +476,7 @@ namespace Protocol
                 {
                     PacketInfo dadNS;
                     dadNS = neighborSolicitation(addr, &iface->macAddress);
-                    currentInterface->ipPacket->setIPHeader(dadNS, generateMulticastSolicitationAddress(addr), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
+                    IPPacket::buildIp(currentInterface, dadNS, generateMulticastSolicitationAddress(addr), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
                     if (waitForNeighborReply(addr, std::chrono::milliseconds(configs.dadTime.load(std::memory_order_relaxed))))
                     {
                         duplicate = true;

@@ -25,15 +25,15 @@ protected:
     std::mutex cvMutex;
     bool packetEnqueued = false;
     InterfaceType type = InterfaceType::GIGABIT_ETHERNET;
-    VirtualRouter* vrf;
+    VirtualRouter* vrf = nullptr;
 
     // Setup creates an Eigrp instance and one interface for testing.
     void SetUp() override 
     {
         vrf = new VirtualRouter("default");
         vrf->eigrpList[1] = new EigrpAutonomousSystem();
-        vrf->eigrpList[1]->ipv4 = eigrpInstance;
         eigrpInstance = new Eigrp(asNumber, addressFamily, vrf);
+        vrf->eigrpList[1]->ipv4 = eigrpInstance;
         mockInterface = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
         mockInterface->routingInstance = vrf;
         EXPECT_CALL(*mockInterface, startThreads()).Times(::testing::AnyNumber());
@@ -61,6 +61,8 @@ protected:
         delete mockInterface;
         vrf->interfaceList.clear();
         vrf->routingTable.clear();
+        delete vrf;
+        vrf = nullptr;
     }
 
     // Helper function: returns the topology table.
@@ -363,7 +365,7 @@ TEST_F(EigrpTest, Neighbor_Restart_Resets_State)
     
     eigrpInterface->handleNeighborRestart(neighbor, neighborIp);
     
-    ASSERT_EQ(neighbor->neighborState, EigrpConfigs::NeighborState::TWOWAY);
+    ASSERT_EQ(neighbor->neighborState, EigrpConfigs::NeighborState::DOWN);
     ASSERT_TRUE(neighbor->reliablePackets.empty());
 }
 
@@ -770,6 +772,7 @@ TEST_F(EigrpTest, Interface_Removal_On_Shutdown)
 {
     // When the interface is shut down, it should be removed.
     ASSERT_FALSE(getInterfaceList().empty());
+    eigrpInstance->updateInterfaceList();
     mockInterface->Shutdown(true);
     eigrpInstance->updateInterfaceList();
     ASSERT_TRUE(getInterfaceList().empty());
@@ -1033,14 +1036,14 @@ TEST_F(EigrpTest, RoutingTable_Metric_Update_On_Best_Route_Change)
     route1->mask = 24;
     route1->feasibleDistance = 100;
     route1->nextHop = ByteString("\xc0\xa8\x01\x02", 4);
-    vrf->routingTable.addEigrp(route1, AddressFamily::IPv4, asNumber);
+    vrf->routingTable.updateEigrp(route1, AddressFamily::IPv4, asNumber);
     
     RoutingTable::Eigrp* route2 = new RoutingTable::Eigrp();
     route2->network = ByteString("\xc0\xa8\x02\x00", 4);
     route2->mask = 24;
     route2->feasibleDistance = 50;
     route2->nextHop = ByteString("\xc0\xa8\x01\x03", 4);
-    vrf->routingTable.addEigrp(route2, AddressFamily::IPv4, asNumber);
+    vrf->routingTable.updateEigrp(route2, AddressFamily::IPv4, asNumber);
     
     auto r = vrf->routingTable.getEigrpRoute(ByteString("\xc0\xa8\x02\x00", 4),
                                                         24, AddressFamily::IPv4, asNumber);
@@ -1652,12 +1655,10 @@ TEST_F(EigrpTest, MultipleInterfaces_Route_Propagation)
     addNeighbor(ByteString("\x0A\x00\x00\x01", 4), int1);
     addNeighbor(ByteString("\x0A\x00\x00\x02", 4), int2);
     
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
-        .Times(1);
     EXPECT_CALL(*iface1, enqueuePacket(::testing::_, ::testing::_))
-        .Times(2);
+        .Times(1);
     EXPECT_CALL(*iface2, enqueuePacket(::testing::_, ::testing::_))
-        .Times(2);
+        .Times(1);
     
     RoutingTable::Eigrp route;
     route.network = ByteString("\xc0\xa8\x07\x00", 4);

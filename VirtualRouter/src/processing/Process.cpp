@@ -344,6 +344,11 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
 
 void ProcessPacket::processDhcpv6(const Dhcpv6Header& header)
 {
+    
+}
+
+void ProcessPacket::processDhcpv6Relay(const Dhcpv6RelayHeader& header)
+{
 
 }
 

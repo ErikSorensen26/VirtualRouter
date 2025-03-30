@@ -36,7 +36,7 @@ enum class HeaderType
     Arp, Mpls, Vlan, Lldp,
     IPv4, IPv6, Gre, Ah, Esp, Icmp, Icmpv6, Igmp,
     Tcp, Udp, Eigrp,
-    Dhcp, Dhcpv6,
+    Dhcp, Dhcpv6, Dhcpv6Relay,
 
     // Count
     Count,
@@ -67,5 +67,6 @@ inline HeaderType mapHeaderToEnum(const EigrpHeader&) { return HeaderType::Eigrp
 
 inline HeaderType mapHeaderToEnum(const DhcpHeader&) { return HeaderType::Dhcp; }
 inline HeaderType mapHeaderToEnum(const Dhcpv6Header&) { return HeaderType::Dhcpv6; }
+inline HeaderType mapHeaderToEnum(const Dhcpv6RelayHeader&) { return HeaderType::Dhcpv6Relay; }
 
 #endif // ENCAPSULATION_H

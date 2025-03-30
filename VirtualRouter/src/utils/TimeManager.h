@@ -23,7 +23,7 @@ public:
     uint32_t addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback);
 
     // Cancels a timer based on its ID
-    void cancelTimer(uint32_t timerId);
+    bool cancelTimer(uint32_t timerId);
 
     // Stops the timer manager and its thread
     void stopTimer();
@@ -45,12 +45,13 @@ private:
 
     void Run(); // The worker function for the timer thread
 
+    std::atomic<uint32_t> currentTimerId;
+    std::atomic<bool> stop;
     std::mutex mutex;
     std::condition_variable cv;
-    std::map<uint32_t, TimerEntry> timers;
-    uint32_t currentTimerId;
+    std::unordered_map<uint32_t, TimerEntry> timers;
+    std::atomic<uint32_t> currentExecutingTimerId;
     std::thread timerThread;
-    bool stop;
 };
 
 #endif // TIMERMANAGER_H

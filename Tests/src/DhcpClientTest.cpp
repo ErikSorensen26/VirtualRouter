@@ -65,8 +65,8 @@ protected:
 // Test generating DHCP transaction ID
 TEST_F(DhcpClientTest, GenerateDhcpTransid_UniqueAndCorrectSize)
 {
-    ByteString transId1 = dhcpClient->generateDhcpTransid();
-    ByteString transId2 = dhcpClient->generateDhcpTransid();
+    ByteString transId1 = generateDhcpTransid();
+    ByteString transId2 = generateDhcpTransid();
 
     // Ensure that transaction IDs are 4 bytes long
     EXPECT_EQ(transId1.size(), 4);
@@ -117,7 +117,7 @@ TEST_F(DhcpClientTest, ProcessDhcpOffer_SendsDhcpRequest)
     // Layer5: DHCP Header
     DhcpHeader dhcpOffer;
     dhcpOffer.boot = Variable::Dhcp::Type::offer;
-    dhcpOffer.transID = dhcpClient->generateDhcpTransid();
+    dhcpOffer.transID = generateDhcpTransid();
     dhcpOffer.yourClientIP = "\xc0\xa8\x00\x64"; // 192.168.0.100
     dhcpOffer.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::serverIdentifier,
@@ -191,7 +191,7 @@ TEST_F(DhcpClientTest, ProcessDhcpAck_SetsIPv4AndUpdatesLease)
     // Layer5: DHCP Header
     DhcpHeader dhcpAck;
     dhcpAck.boot = Variable::Dhcp::Type::ack;
-    dhcpAck.transID = dhcpClient->generateDhcpTransid();
+    dhcpAck.transID = generateDhcpTransid();
     dhcpAck.yourClientIP = "\xc0\xa8\x00\x64"; // 192.168.0.100
     dhcpAck.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::leaseTime,
@@ -260,7 +260,7 @@ TEST_F(DhcpClientTest, HandleDhcpNak_ResetState)
     // Layer5: DHCP Header
     DhcpHeader dhcpNak;
     dhcpNak.boot = Variable::Dhcp::Type::nak;
-    dhcpNak.transID = dhcpClient->generateDhcpTransid();
+    dhcpNak.transID = generateDhcpTransid();
     dhcpNak.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::type,
         "\x01",
@@ -297,7 +297,7 @@ TEST_F(DhcpClientTest, HandleDhcpDecline_ResetState)
     // Layer5: DHCP Header
     DhcpHeader dhcpDecline;
     dhcpDecline.boot = Variable::Dhcp::Type::decline;
-    dhcpDecline.transID = dhcpClient->generateDhcpTransid();
+    dhcpDecline.transID = generateDhcpTransid();
     dhcpDecline.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::type,
         "\x01",
@@ -339,7 +339,7 @@ TEST_F(DhcpClientTest, LeaseRenewal_SendsDhcpRequestAfterRenewalTime) {
     // Layer5: DHCP Header
     DhcpHeader dhcpAck;
     dhcpAck.boot = Variable::Dhcp::Type::ack;
-    dhcpAck.transID = dhcpClient->generateDhcpTransid();
+    dhcpAck.transID = generateDhcpTransid();
     dhcpAck.yourClientIP = "\xc0\xa8\x00\x64"; // 192.168.0.100
     dhcpAck.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::leaseTime,
@@ -447,7 +447,7 @@ TEST_F(DhcpClientTest, HandleDhcpInform_ProcessOptions)
     // Layer5: DHCP header
     DhcpHeader dhcpInform;
     dhcpInform.boot = Variable::Dhcp::Type::inform;
-    dhcpInform.transID = dhcpClient->generateDhcpTransid();
+    dhcpInform.transID = generateDhcpTransid();
     dhcpInform.yourClientIP = "\xc0\xa8\x00\x64"; // 192.168.0.100
     dhcpInform.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::leaseTime,
@@ -553,7 +553,7 @@ TEST_F(DhcpClientTest, LeaseExpiration_TriggersRenewal)
 
     DhcpHeader dhcpAck;
     dhcpAck.boot = Variable::Dhcp::Type::ack;
-    dhcpAck.transID = dhcpClient->generateDhcpTransid();
+    dhcpAck.transID = generateDhcpTransid();
     dhcpAck.yourClientIP = "\xc0\xa8\x00\x64"; // 192.168.0.100
     dhcpAck.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::leaseTime,
@@ -658,7 +658,7 @@ TEST_F(DhcpClientTest, FullDhcpLeaseProcess_AcquireLease)
 
     DhcpHeader dhcpOffer;
     dhcpOffer.boot = Variable::Dhcp::Type::offer;
-    dhcpOffer.transID = dhcpClient->generateDhcpTransid();
+    dhcpOffer.transID = generateDhcpTransid();
     dhcpOffer.yourClientIP = "\xc0\xa8\x00\x64"; // 192.168.0.100
     dhcpOffer.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::serverIdentifier,

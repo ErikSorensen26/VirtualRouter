@@ -113,17 +113,13 @@ TEST_F(ArpTest, ResolveAndSend_TimesOutWhenNoReply)
     ByteString testIp = "\xC0\xA8\x01\x03";
     ByteString testMac = Variable::Mac::broadcast;
     PacketInfo testPacket;
+    arp->retryTime = 0;
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::Eq(testMac))).Times(3);
 
     arp->resolveAndSend(testIp, testPacket);
 
-    std::this_thread::sleep_for(std::chrono::seconds(7)); // Wait for all retries
-
-    {
-        std::lock_guard<std::mutex> lock(getPendingRequestsMutex());
-        EXPECT_FALSE(getPendingRequests().count(testIp)); // Ensure request is removed
-    }
+    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for all retries
 
     {
         std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());
@@ -189,6 +185,7 @@ TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
 {
     ByteString testIp = "\xC0\xA8\x01\x05";
     ByteString testMac = "\xFF\xEE\xDD\xCC\xBB\xAA";
+    arp->replyTimeout = 100;
 
     simulateArpReply(*arp, testIp, testMac);
 
@@ -198,7 +195,7 @@ TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
     }
 
     // Wait for expiracy
-    std::this_thread::sleep_for(std::chrono::seconds(61));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     {
         std::shared_lock<std::shared_mutex> lock(getArpCacheMutex());

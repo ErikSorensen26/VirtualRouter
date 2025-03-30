@@ -13,6 +13,8 @@
 #include <ctime>
 #include <chrono>
 
+double secondsSinceEpoch();
+
 namespace Functions {
     /**
      * @brief Adjusts the suze of a string by prepending 'value' until it reaches 'size'.
@@ -92,6 +94,13 @@ namespace Functions {
      * @return The resulting integer.
      */
     uint32_t byteToNum(ByteString str);
+
+    /**
+     * @brief Converts a string of bytes to a 128bit integer.
+     * @param str The input byte string.
+     * @return The resulting integer.
+     */
+    __uint128_t byteToNum128(const ByteString& str);
 
     /**
      * @brief Converts a binary string to a hexadecimal string representation.
@@ -196,6 +205,13 @@ namespace Functions {
      * @return A byte string representation.
      */
     ByteString numToByte(size_t num, size_t size = 0);
+
+    /**
+     * @brief Converts an 128 integer to a byte string.
+     * @param num The input integer.
+     * @return A byte string representation.
+     */
+    ByteString numToByte128(__uint128_t bytes);
 
     /**
      * @brief Converts an IPv4 address in dot-decimal notation to a byte string.

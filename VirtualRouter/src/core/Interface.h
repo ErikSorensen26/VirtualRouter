@@ -40,7 +40,6 @@ enum class InterfaceType
 namespace Protocol 
 {
     class Ethernet;                 ///< Forward declaration of Ethernet protocol class.
-    class IPPacket;                 ///< Forward declaration of IPPacket protocol class.
     class DhcpClient;               ///< Forward declaration of DhcpClient protocol class.``
     //class Dhcpv6Client;             ///< Forward declaration of Dhcpv6Client protocol class.``
     class Arp;                      ///< Forward declaration of Arp protocol class.
@@ -249,18 +248,13 @@ public:
     virtual void enqueuePacket(PacketInfo& packetInfo, ByteString mac = "");
 
     std::atomic<bool> shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
-    VirtualRouter* routingInstance;
+    VirtualRouter* routingInstance = nullptr;
 
     // Member Variables
-    IpInfo configs;                     ///< Shared pointer to IP configuration information.
+    IpInfo configs;         ///< Pointer to IP configuration information.
 
-    //L2 Protocols
-    Protocol::Ethernet* ethernet;   ///< Ethernet Protocol handler.
-    Protocol::Arp* arp;             ///< ARP protocol handler.
-    Protocol::Ndp* ndp;             ///< NDP protocol handler.
-
-    // L3 Protocols
-    Protocol::IPPacket* ipPacket;   ///< IP Packet protocol handler.
+    Protocol::Arp* arp;     ///< ARP protocol handler.
+    Protocol::Ndp* ndp;     ///< NDP protocol handler.
 
     // L4 Protocols
     std::map<uint32_t, Protocol::EigrpInterfaceInstance*> eigrpInterfaceList; ///< EIGRP interface instance.

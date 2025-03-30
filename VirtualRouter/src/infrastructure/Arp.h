@@ -102,6 +102,10 @@ public:
      */
     void shutdown();
 
+    long retryTime = 2000;
+    long replyTimeout = 60000;
+    long cleanTimeout = 30000;
+
 private:
     Interface* currentInterface; ///< Pointer to the associated network interface.
 

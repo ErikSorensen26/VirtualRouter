@@ -34,11 +34,9 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     // Initialize shared pointers for Protocol objects
     arp = new Protocol::Arp(*this);
     ndp = new Protocol::Ndp(*this);
-    ethernet = new Protocol::Ethernet(*this, arp, ndp, Functions::hexToByte(mac));
-    ipPacket = new Protocol::IPPacket(this);
 
     // Start background threads
-    startThreads();
+    //startThreads();
 }   
 
 Interface::~Interface()
@@ -53,20 +51,17 @@ void Interface::cleanupInterface()
     stateChange();
     stateChangeV6();
     
-    delete arp;
+    if (arp) delete arp;
     arp = nullptr;
-    delete ipPacket;
-    ipPacket = nullptr;
-    delete ethernet;
-    ethernet = nullptr;
-    if (dhcp)
-    {
-        delete dhcp;
-        dhcp = nullptr;
-    }
+    if (ndp) delete ndp;
+    ndp = nullptr;
+    if (dhcp) delete dhcp;
 
     // Remove interface from list
-    routingInstance->removeInterface(configs.interfaceType, configs.id);
+    if (routingInstance)
+    {
+        routingInstance->removeInterface(configs.interfaceType, configs.id);
+    }
     Global::getInstance().removeInterface(configs.interfaceType, configs.id);
 }
 
@@ -328,28 +323,34 @@ void Interface::stopThreads()
 void Interface::stateChange()
 {
     // Eigrp Updates
-    routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
+    if (routingInstance)
     {
-        if (eigrp->ipv4)
+        routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
         {
-            eigrp->ipv4->updateInterfaceList();
-            eigrp->ipv4->updateRoutingTableForConnected();
-        }
-    });
+            if (eigrp->ipv4)
+            {
+                eigrp->ipv4->updateInterfaceList();
+                eigrp->ipv4->updateRoutingTableForConnected();
+            }
+        });
+    }
     // Other updates...
 }
 
 void Interface::stateChangeV6()
 {
     // Eigrp Updates
-    routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
+    if (routingInstance)
     {
-        if (eigrp->ipv6)
+        routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
         {
-            eigrp->ipv6->updateInterfaceList();
-            eigrp->ipv6->updateRoutingTableForConnected();
-        }
-    });
+            if (eigrp->ipv6)
+            {
+                eigrp->ipv6->updateInterfaceList();
+                eigrp->ipv6->updateRoutingTableForConnected();
+            }
+        });
+    }
     // Other updates...
 }
 

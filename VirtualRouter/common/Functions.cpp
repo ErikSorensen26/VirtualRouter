@@ -4,6 +4,11 @@
 #include <random>
 #include <regex>
 
+double secondsSinceEpoch()
+{
+    return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
 namespace Functions {
 
     #pragma region TestIf
@@ -65,6 +70,16 @@ namespace Functions {
     uint32_t byteToNum(ByteString str) 
     {
         return hexToNum(byteToHex(str));
+    }
+
+    __uint128_t byteToNum128(const ByteString& bytes)
+    {
+        __uint128_t num = 0;
+        for (uint8_t byte : bytes)
+        {
+            num = (num * 256) + byte;
+        }
+        return num;
     }
 
     #pragma endregion
@@ -286,6 +301,24 @@ namespace Functions {
         return hexToByte(numToHex(num), size);
     }
 
+    ByteString numToByte128(__uint128_t num)
+    {
+         ByteString bytes;
+         if (num == 0)
+         {
+             return ByteString(1, 0);
+         }
+
+         while (num > 0)
+         {
+             bytes.push_back(static_cast<uint8_t>(num % 256));
+             num /= 256;
+         }
+
+         std::reverse(bytes.begin(), bytes.end());
+         return bytes;
+    }
+
     #pragma endregion
     #pragma region NetConv
 
@@ -382,26 +415,37 @@ namespace Functions {
     }
 
     ByteString computeNetworkAddress(const ByteString& ipAddress, uint8_t mask)
-    {   
-        if (ipAddress.empty()) return ByteString("");
+    {    
+        if (ipAddress.empty())
+            return ByteString("");
+
         size_t bitSize = 0;
-                if (ipAddress.size() == 4)
-        {
+        if (ipAddress.size() == 4)
             bitSize = 32;
-        }
         else if (ipAddress.size() == 16)
-        {
             bitSize = 128;
+        else
+            return ByteString("");
+
+        // Handle the case when mask is 0.
+        if (mask == 0) {
+            // For example, return all zeros.
+            if (ipAddress.size() == 4)
+                return ByteString("\x00\x00\x00\x00", 4);
+            else if (ipAddress.size() == 16)
+                return ByteString(16, '\x00');
         }
-        else return ByteString("");
 
         ByteString binMask = numMaskToBin(mask);
         ByteString binIp = byteToBin(ipAddress);
 
-        for (size_t i = 0; i < bitSize; i++)
-        {
-            if (binMask[i] == '0')
-            {
+        // Ensure binMask is as long as expected.
+        while (binMask.size() < bitSize) {
+            binMask.push_back('0');
+        }
+
+        for (size_t i = 0; i < bitSize; i++) {
+            if (binMask[i] == '0') {
                 binIp[i] = '0';
             }
         }

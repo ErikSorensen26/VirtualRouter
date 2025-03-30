@@ -2,9 +2,7 @@
 #include <string> 
 #include <chrono> 
 #include <Time.h> 
-
-// Returns the number of seconds since the epoch (January 1, 1970).
-double secondsSinceEpoch();
+#include <Functions.h>
 
 DoTime::DoTime() // Default constructor for the DoTime class.
 {
@@ -64,13 +62,4 @@ std::string DoTime::getTime()
     formattedTime += bufferEnd; // Append the full date and time string.
 
     return formattedTime; // Return the complete formatted time string.
-}
-
-// Returns the number of seconds since the Unix epoch (January 1, 1970).
-double secondsSinceEpoch() 
-{
-    auto now = std::chrono::system_clock::now(); // Get the current system time.
-    auto duration = now.time_since_epoch(); // Get the duration since the epoch.
-    double seconds = static_cast<double>(std::chrono::duration_cast<std::chrono::seconds>(duration).count()); // Convert duration to seconds and count.
-    return seconds; // Return the number of seconds since the epoch.
 }

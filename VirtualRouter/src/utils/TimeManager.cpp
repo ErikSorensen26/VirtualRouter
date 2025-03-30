@@ -1,7 +1,7 @@
 // TimerManager.cpp
 #include <TimeManager.h>
 
-TimeManager::TimeManager() : currentTimerId(0), stop(false)
+TimeManager::TimeManager() : currentTimerId(1), stop(false)
 {
     timerThread = std::thread(&TimeManager::Run, this);
 }
@@ -14,23 +14,29 @@ TimeManager::~TimeManager()
 uint32_t TimeManager::addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    uint32_t timerId = currentTimerId++;
+    uint32_t timerId = currentTimerId.fetch_add(1);
     timers[timerId] = TimerEntry{ expirationTime, callback};
     cv.notify_one(); // Wake up the timer thread
     return timerId;
 }
 
-void TimeManager::cancelTimer(uint32_t timerId) 
+bool TimeManager::cancelTimer(uint32_t timerId) 
 {
+    std::unique_lock<std::mutex> lock(mutex);
+    // Try to cancel a timer that is still waiting.
+    auto it = timers.find(timerId);
+    if (it != timers.end())
     {
-        std::lock_guard<std::mutex> lock(mutex);
-        auto it = timers.find(timerId);
-        if (it != timers.end())
-        {
-            timers.erase(it);
-            cv.notify_one();
-        }
+        timers.erase(it);
+        cv.notify_one();
+        return true;
     }
+    // Otherwise, check if the timer's callback is currently executing.
+    while (currentExecutingTimerId.load(std::memory_order_relaxed) == currentTimerId)
+    {
+        cv.wait(lock);
+    }
+    return false;
 }
 
 void TimeManager::stopTimer() 
@@ -53,7 +59,7 @@ void TimeManager::Run()
         if (timers.empty()) 
         {
             // Wait indefinitely until a new timer is added or stop is called
-            cv.wait(lock);
+            cv.wait(lock, [this](){ return stop || !timers.empty(); });
         } 
         else 
         {
@@ -65,12 +71,18 @@ void TimeManager::Run()
             auto now = std::chrono::steady_clock::now();
             if (nextTimerIt->second.expirationTime <= now) 
             {
-                // Execute the callback
-                auto callback = nextTimerIt->second.callback;
+                uint32_t timerId = nextTimerIt->first;
+                TimerEntry timerEntry = nextTimerIt->second;
                 timers.erase(nextTimerIt);
+                // Mark this timer as currently executing
+                currentExecutingTimerId.store(timerId, std::memory_order_release);
+                // Unlock while executing the callback.
                 lock.unlock();
-                callback();
+                timerEntry.callback();
                 lock.lock();
+                // Reset curreentExecutingTimerId and notify waiting threads.
+                currentExecutingTimerId.store(0, std::memory_order_release);
+                cv.notify_all();
             }
             else
             {

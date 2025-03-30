@@ -9,7 +9,6 @@
 #include <PacketStructure.h>
 #include <Functions.h>
 #include <mutex>
-#include <thread>
 #include <chrono>
 #include <climits>
 #include <condition_variable>
@@ -301,9 +300,9 @@ namespace EigrpConfigs
                 TimeManager::getInstance().cancelTimer(stuckInInitTimerId);
             }
 
-            if (twoWayThread.joinable())
+            if (twoWayThreadID != 0)
             {
-                twoWayThread.join();
+                TimeManager::getInstance().cancelTimer(twoWayThreadID.load(std::memory_order_relaxed));
             }
 
             if (holdTimerId != 0)
@@ -362,8 +361,7 @@ namespace EigrpConfigs
         std::atomic<uint32_t> stuckInInitTimerId;
 
         std::condition_variable twoWayCV; ///< TWOWAY conditional variable for managing state transition.
-        std::mutex twoWayMutex; ///< TWOWAY mutex for managing state transition.
-        std::thread twoWayThread; ///< Thread used for TWOWAY state transition.
+        std::atomic<uint32_t> twoWayThreadID; ///< Thread used for TWOWAY state transition.
         std::atomic<bool> secondHelloReceived = false; ///< Indicates when a second hello is received.
 
         // Packet Handling
@@ -1361,6 +1359,8 @@ namespace Protocol
         std::shared_mutex neighborMutex; ///< Shared mutex for neighbor operations.
         std::unordered_map<ByteString, EigrpConfigs::NeighborInfo*> neighbors; ///< Map of neighbor IPs to their information.
 
+        std::atomic<bool> destroy{false}; ///< Destroy boolean for destruction of eigrp class.
+
     private:
 
         // Active Timers
@@ -1372,6 +1372,7 @@ namespace Protocol
 
         // Timer IDs
         std::atomic<uint32_t> helloTimerId = 0; ///< Timer ID for the Hello timer.
+        std::atomic<bool> helloDone{true};
 
         // Route Buffer
         std::mutex bufferMutex;

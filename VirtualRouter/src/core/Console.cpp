@@ -332,6 +332,36 @@ std::string Console::input(std::string testInput)
 
 std::string Console::handleSpecialKey(char hInput, std::string& input)
 {
+    auto backspace([&]()
+    {
+        cursorPos--;
+
+        if ((cursorPos + initialLineLength + 1) % getTerminalWidth() == 0)
+        {
+            iConsole->moveCursorUp(1);
+            iConsole->moveCursorRight(getTerminalWidth());
+        }
+        else
+        {
+            iConsole->moveCursorLeft(1);
+            //std::cout << "\b \b";
+        }
+
+        if (!insert)
+        {
+            input.erase(cursorPos, 1);
+            rewriteTail(input, cursorPos, true);
+        }
+        else
+        {
+            if (input.size() > cursorPos)
+            {
+                input[cursorPos] = insertString[cursorPos];
+            }
+            rewriteTail(insertString, cursorPos, true);
+        }
+    });
+
     switch (hInput)
     {
         case '\x3f': // '?'
@@ -364,36 +394,19 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
             }
         }
         case '\x08': // Control-h
+        case '\x15':
+        {
+            while (cursorPos > 0)
+            {
+                backspace();
+            }
+            break;
+        }
         case '\x7f': // Backspace
         {
             if (cursorPos > 0)
             {
-                cursorPos--;
-
-                if ((cursorPos + initialLineLength + 1) % getTerminalWidth() == 0)
-                {
-                    iConsole->moveCursorUp(1);
-                    iConsole->moveCursorRight(getTerminalWidth());
-                }
-                else
-                {
-                    iConsole->moveCursorLeft(1);
-                    //std::cout << "\b \b";
-                }
-
-                if (!insert)
-                {
-                    input.erase(cursorPos, 1);
-                    rewriteTail(input, cursorPos, true);
-                }
-                else
-                {
-                    if (input.size() > cursorPos)
-                    {
-                        input[cursorPos] = insertString[cursorPos];
-                    }
-                    rewriteTail(insertString, cursorPos, true);
-                }
+                backspace();
             }
             break;
         }

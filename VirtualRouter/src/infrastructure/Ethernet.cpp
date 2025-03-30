@@ -6,9 +6,6 @@
 
 namespace Protocol
 {
-    Ethernet::Ethernet(Interface& iface, Arp* arpHandler, Ndp* ndpHandler, ByteString mac)
-        : currentInterface(iface), arp(arpHandler), ndp(ndpHandler), macAddress(mac) {}
-
     bool Ethernet::isMulticast(const ByteString& ip)
     {
         return Functions::isMulticast(ip);
@@ -33,7 +30,7 @@ namespace Protocol
         return multicastMac;
     }
 
-    ByteString Ethernet::getDestinationMac(const ByteString& destIp, PacketInfo& packet, ByteString& type)
+    ByteString Ethernet::getDestinationMac(Interface* iface, const ByteString& destIp, PacketInfo& packet, ByteString& type)
     {
         if (isMulticast(destIp))
         {
@@ -41,7 +38,7 @@ namespace Protocol
         }
         else if (destIp.size() == 4)
         {
-            auto* mac = arp->getMac(destIp);
+            auto* mac = iface->arp->getMac(destIp);
             if (mac)
             {
                 return *mac;
@@ -50,17 +47,16 @@ namespace Protocol
             {
                 EthernetHeader eth;
                 eth.destinationMac = ByteString("");
-                eth.sourceMac = macAddress;
+                eth.sourceMac = iface->configs.macAddress;
                 eth.type = type;
                 packet.Layer2.push_back(eth);
-                arp->resolveAndSend(destIp, packet);
-                Logger::getInstance().info() << "Initiated ARP resolution for IP " << destIp.toHex() << std::endl;
-                return ByteString(""); // Empty MAC signifies that the packet will be sent after ARP resolution
+                iface->arp->resolveAndSend(destIp, packet);
+                return {}; // Empty MAC signifies that the packet will be sent after ARP resolution
             }
         }
         else if (destIp.size() == 16)
         {
-            auto* mac = ndp->getMac(destIp);
+            auto* mac = iface->ndp->getMac(destIp);
             if (mac)
             {
                 return *mac;
@@ -69,29 +65,29 @@ namespace Protocol
             {
                 EthernetHeader eth;
                 eth.destinationMac = ByteString("");
-                eth.sourceMac = macAddress;
+                eth.sourceMac = iface->configs.macAddress;
                 eth.type = type;
                 packet.Layer2.push_back(eth);
-                ndp->resolveAndSend(destIp, packet);
-                Logger::getInstance().info() << "Initiated ARP resolution for IP " << destIp.toHex() << std::endl;
-                return ByteString(""); // Empty MAC signifies that the packet will be sent after NDP resolution
+                iface->ndp->resolveAndSend(destIp, packet);
+                return {}; // Empty MAC signifies that the packet will be sent after NDP resolution
             }
         }
+        return {};
     }
 
-    bool Ethernet::setEthernetHeader(PacketInfo& packetInfo, const ByteString& destIp, ByteString const* destMac, ByteString type)
+    bool Ethernet::build(Interface* iface, PacketInfo& packetInfo, const ByteString* destIp, ByteString const* destMac, ByteString type)
     {
         // Create Header
         EthernetHeader ethernetHeader;
 
         // Set type and destination
         ethernetHeader.type = type;
-        ethernetHeader.sourceMac = macAddress;
+        ethernetHeader.sourceMac = iface->configs.macAddress;
 
         ByteString destinationMac;
-        if (!destMac || destMac->size() != 6)
+        if ((!destMac || destMac->size() != 6) && destIp)
         {
-            destinationMac = getDestinationMac(destIp, packetInfo, type).toString();
+            destinationMac = getDestinationMac(iface, *destIp, packetInfo, type);
         }
         else
         {
@@ -99,18 +95,14 @@ namespace Protocol
         }
 
         if (destinationMac.empty())
-        {
-            // MAC resolution is pending; the packet will be sent after
-            Logger::getInstance().warn() << "Destination MAC unknown for IP " << destIp.toHex()
-                                         << ". Packet will be sent after ARP resolution." << std::endl;
             return false; // Indicate that Ethernet header was not set
-        }
+
         // Set the destination MAC
         ethernetHeader.destinationMac = destinationMac;
 
         packetInfo.Layer2.emplace_back(ethernetHeader);
         
-        currentInterface.enqueuePacket(packetInfo);
+        iface->enqueuePacket(packetInfo);
 
         return true;
     }

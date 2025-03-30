@@ -358,6 +358,15 @@ protected:
     bool decodeDhcpv6(ByteString &dhcpHeader);
 
     /**
+     * @brief Parses and processes the DHCPv6 Relay header.
+     *
+     * @param dhcpHeader The ByteString representation of the DHCPv6 headers.
+     *
+     * @return bool Indicating whether decode was successful.
+     */
+    bool decodeDhcpv6Relay(ByteString &dhcpHeader);
+
+    /**
      * @brief Parses and processes the EIGRP header.
      *
      * @param eigrpHeader The ByteString representation of the EIGRP header.

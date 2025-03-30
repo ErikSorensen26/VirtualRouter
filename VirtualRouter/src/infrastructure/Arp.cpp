@@ -1,5 +1,6 @@
 #include <Arp.h>
 #include <Interface.h>
+#include <Ethernet.h>
 
 namespace Protocol 
 {
@@ -64,7 +65,7 @@ namespace Protocol
         while (running)
         {
             std::unique_lock<std::mutex> lock(requestMutex);
-            threadCV.wait_for(lock, std::chrono::seconds(30));
+            threadCV.wait_for(lock, std::chrono::milliseconds(cleanTimeout));
             if (!running) break;
 
             // Cleanup expired entries
@@ -136,7 +137,7 @@ namespace Protocol
 
     void Arp::handleArpRequest(const ByteString& targetIp)
     {
-        const auto retryInterval = std::chrono::seconds(2);
+        const auto retryInterval = std::chrono::milliseconds(retryTime);
         int retries = 3;
 
         // Ensure replyStatus[targetIp] is initialized
@@ -166,6 +167,7 @@ namespace Protocol
             }
 
             // Send the ARP request
+            //Ethernet::build(currentInterface, arpReq, nullptr, &Variable::Mac::broadcast, Variable::Ethernet::arp);
             currentInterface->enqueuePacket(arpReq, Variable::Mac::broadcast);
 
             if (waitForReply(targetIp, retryInterval))
@@ -191,7 +193,7 @@ namespace Protocol
 
         {
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
-            arpCache[ip] = {mac, std::chrono::steady_clock::now() + std::chrono::seconds(60)};
+            arpCache[ip] = {mac, std::chrono::steady_clock::now() + std::chrono::milliseconds(replyTimeout)};
         }
 
         {
@@ -266,6 +268,7 @@ namespace Protocol
                 replyPacket = arpReply(interfaceInfo->macAddress, targetMac, interfaceInfo->ipv4.ipAddress, targetIp);
             }
 
+            //Ethernet::build(currentInterface, replyPacket, nullptr, &targetMac, Variable::Ethernet::arp);
             currentInterface->enqueuePacket(replyPacket, targetMac);
         }
     }

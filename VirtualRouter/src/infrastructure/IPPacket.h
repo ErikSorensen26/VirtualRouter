@@ -14,14 +14,39 @@ namespace Protocol
     class IPPacket
     {
     public:
-        // Constructor
-        IPPacket(Interface* iface);
-
         // Sets the IPv4 header in PacketInfo
-        void setIPHeader(PacketInfo& packetInfo, const ByteString& destIp, ByteString const* sourceIp, ByteString const* destMac, uint8_t DSCP, uint8_t hopLimit, const ByteString type);
-    private:
-        // Current Interface
-        Interface* currentInterface;
+        static void buildIp(
+            Interface* iface,
+            PacketInfo& packetInfo, 
+            const ByteString& destIp, 
+            ByteString const* sourceIp, 
+            ByteString const* destMac, 
+            uint8_t DSCP, 
+            uint8_t hopLimit,
+            const ByteString& protocolType,
+            bool reserved = false,
+            bool dontFragment = true,
+            bool moreFragment = false,
+            uint16_t fragmentOffset = 0
+        );
+
+        // Sets the UPD header in PacketInfo
+        static void buildUdp(
+            Interface* iface,
+            PacketInfo& packetInfo, 
+            const ByteString& destIp, 
+            ByteString const* sourceIp, 
+            ByteString const* destMac, 
+            uint8_t DSCP, 
+            uint8_t hopLimit, 
+            const ByteString& type,
+            const ByteString& sourcePort,
+            const ByteString& destinationPort,
+            bool reserved = false,
+            bool dontFragment = true,
+            bool moreFragment = false,
+            uint16_t fragmentOffset = 0
+        );
     };
 }
 

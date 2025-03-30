@@ -23,12 +23,12 @@ namespace Variable
      */
     namespace Ethernet
     {
-        inline const std::string arp("\x08\x06", 2);    ///< EtherType for ARP
-        inline const std::string ipv4("\x08\x00", 2);   ///< EtherType for IPv4
-        inline const std::string ipv6("\x86\xdd", 2);   ///< EtherType for IPv6
-        inline const std::string mpls("\x88\x47", 2);   ///< EtherType for MPLS
-        inline const std::string vlan("\x81\x00", 2);   ///< EtherType for VLAN
-        inline const std::string lldp("\x88\xcc", 2);   ///< EtherType for LLDP
+        inline const ByteString arp("\x08\x06", 2);    ///< EtherType for ARP
+        inline const ByteString ipv4("\x08\x00", 2);   ///< EtherType for IPv4
+        inline const ByteString ipv6("\x86\xdd", 2);   ///< EtherType for IPv6
+        inline const ByteString mpls("\x88\x47", 2);   ///< EtherType for MPLS
+        inline const ByteString vlan("\x81\x00", 2);   ///< EtherType fr VLAN
+        inline const ByteString lldp("\x88\xcc", 2);   ///< EtherType for LLDP
     }
     
     /**
@@ -37,8 +37,8 @@ namespace Variable
      */
     namespace Arp
     {
-        inline const std::string ethernet("\x00\x01", 2);   ///< Hardware type for Ethernet
-        inline const std::string ipv4("\x08\x00", 2);       ///< Hardware type for IPv4
+        inline const ByteString ethernet("\x00\x01", 2);   ///< Hardware type for Ethernet
+        inline const ByteString ipv4("\x08\x00", 2);       ///< Hardware type for IPv4
 
         /**
          * @namespace Opcode
@@ -46,16 +46,16 @@ namespace Variable
          */
         namespace Opcode
         {
-            inline const std::string request("\x00\x01", 2);           ///< ARP Request.
-            inline const std::string reply("\x00\x02", 2);             ///< ARP Reply.
-            inline const std::string reverseRequest("\x00\x03", 2);    ///< Reverse ARP Request.
-            inline const std::string reverseReply("\x00\x04", 2);      ///< Reverse ARP Reply.
-            inline const std::string dynamicRequest("\x00\x05", 2);    ///< Dynamic ARP Request.
-            inline const std::string dynamicReply("\x00\x06", 2);      ///< Dynamic ARP Reply.
-            inline const std::string dynamicError("\x00\x07", 2);      ///< Dynamic ARP Error.
-            inline const std::string inverseRequest("\x00\x08", 2);    ///< Inverse ARP Request.
-            inline const std::string inverseReply("\x00\x09", 2);      ///< Inverse ARP Reply.
-            inline const std::string nak("\x00\x0a", 2);               ///< ARP NAK (Negative Acknowledgment).
+            inline const ByteString request("\x00\x01", 2);           ///< ARP Request.
+            inline const ByteString reply("\x00\x02", 2);             ///< ARP Reply.
+            inline const ByteString reverseRequest("\x00\x03", 2);    ///< Reverse ARP Request.
+            inline const ByteString reverseReply("\x00\x04", 2);      ///< Reverse ARP Reply.
+            inline const ByteString dynamicRequest("\x00\x05", 2);    ///< Dynamic ARP Request.
+            inline const ByteString dynamicReply("\x00\x06", 2);      ///< Dynamic ARP Reply.
+            inline const ByteString dynamicError("\x00\x07", 2);      ///< Dynamic ARP Error.
+            inline const ByteString inverseRequest("\x00\x08", 2);    ///< Inverse ARP Request.
+            inline const ByteString inverseReply("\x00\x09", 2);      ///< Inverse ARP Reply.
+            inline const ByteString nak("\x00\x0a", 2);               ///< ARP NAK (Negative Acknowledgment).
         }
     }
 
@@ -71,52 +71,52 @@ namespace Variable
          */
         namespace Type
         {
-            inline const std::string ureachable("\x01", 1);                         ///< Unreachable error code for ICMPv6.
-            inline const std::string packetTooBig("\x02", 1);                       ///< Packet Too Big error for ICMPv6.
-            inline const std::string timeExceeded("\x03", 1);                       ///< Time Exceeded error for ICMPv6.
-            inline const std::string parameterProblem("\x04", 1);                   ///< Parameter Problem for ICMPv6.
+            inline const ByteString ureachable("\x01", 1);                         ///< Unreachable error code for ICMPv6.
+            inline const ByteString packetTooBig("\x02", 1);                       ///< Packet Too Big error for ICMPv6.
+            inline const ByteString timeExceeded("\x03", 1);                       ///< Time Exceeded error for ICMPv6.
+            inline const ByteString parameterProblem("\x04", 1);                   ///< Parameter Problem for ICMPv6.
             
-            inline const std::string echoRequest("\x80", 1);                        ///< Echo request for Ping (128).
-            inline const std::string echoReply("\x81", 1);                          ///< Echo reply for Pint (129).
+            inline const ByteString echoRequest("\x80", 1);                        ///< Echo request for Ping (128).
+            inline const ByteString echoReply("\x81", 1);                          ///< Echo reply for Pint (129).
 
-            inline const std::string mldListenQuery("\x82", 1);                     ///< MLD Listen Query (130).
-            inline const std::string mldListenReport("\x83", 1);                    ///< MLD Listen Report (131).
-            inline const std::string mldListenDone("\x84");                         ///< MLD Listen Done (132).
-            inline const std::string mldListenReportV2("\x8F", 1);                  ///< MDL Listen Report V2 (143);
+            inline const ByteString mldListenQuery("\x82", 1);                     ///< MLD Listen Query (130).
+            inline const ByteString mldListenReport("\x83", 1);                    ///< MLD Listen Report (131).
+            inline const ByteString mldListenDone("\x84");                         ///< MLD Listen Done (132).
+            inline const ByteString mldListenReportV2("\x8F", 1);                  ///< MDL Listen Report V2 (143);
 
-            inline const std::string ndpRouteSolicitation("\x85", 1);               ///< NDP Route Solicitation (133).
-            inline const std::string ndpRouteAdvertisement("\x86", 1);              ///< NDP Route Advertisement (134).
-            inline const std::string ndpNeighborSolicitation("\x87", 1);            ///< NDP Neighbor Solicitation (135).
-            inline const std::string ndpNeighborAdvertisement("\x88", 1);           ///< NDP Neighbor Advertisement (136).
-            inline const std::string ndpRedirectMessage("\x89", 1);                 ///< NDP Message Redirect (137).
+            inline const ByteString ndpRouteSolicitation("\x85", 1);               ///< NDP Route Solicitation (133).
+            inline const ByteString ndpRouteAdvertisement("\x86", 1);              ///< NDP Route Advertisement (134).
+            inline const ByteString ndpNeighborSolicitation("\x87", 1);            ///< NDP Neighbor Solicitation (135).
+            inline const ByteString ndpNeighborAdvertisement("\x88", 1);           ///< NDP Neighbor Advertisement (136).
+            inline const ByteString ndpRedirectMessage("\x89", 1);                 ///< NDP Message Redirect (137).
 
-            inline const std::string nodeInformationQuery("\x8B", 1);               ///< Node Information Query (139).
-            inline const std::string nodeInformationResponse("\x8C", 1);            ///< Node Information Response (140).
+            inline const ByteString nodeInformationQuery("\x8B", 1);               ///< Node Information Query (139).
+            inline const ByteString nodeInformationResponse("\x8C", 1);            ///< Node Information Response (140).
 
-            inline const std::string routerRenumbering("\x8D", 1);                  ///< Router Renumbering (141).
+            inline const ByteString routerRenumbering("\x8D", 1);                  ///< Router Renumbering (141).
 
-            inline const std::string nodeInfoQuery("\x8B", 1);                      ///< Node Information Query (139).
-            inline const std::string nodeInfoResponse("\x8C", 1);                   ///< Node Information Response (140).
+            inline const ByteString nodeInfoQuery("\x8B", 1);                      ///< Node Information Query (139).
+            inline const ByteString nodeInfoResponse("\x8C", 1);                   ///< Node Information Response (140).
 
-            inline const std::string homeAgentAddressDiscoveryRequest("\x90", 1);   ///< Home Agent Address Discovery Request (144).
-            inline const std::string homeAgentAddressDiscoveryReply("\x91", 1);     ///< Home Agent Address Discovery Reply (145).
-            inline const std::string mobilePrefixSolicitation("\x92", 1);           ///< Mobile Prefix Solicitation (146).
-            inline const std::string mobilePrefixAdvertisement("\x93", 1);          ///< Mobile Prefix Advertisement (147).
+            inline const ByteString homeAgentAddressDiscoveryRequest("\x90", 1);   ///< Home Agent Address Discovery Request (144).
+            inline const ByteString homeAgentAddressDiscoveryReply("\x91", 1);     ///< Home Agent Address Discovery Reply (145).
+            inline const ByteString mobilePrefixSolicitation("\x92", 1);           ///< Mobile Prefix Solicitation (146).
+            inline const ByteString mobilePrefixAdvertisement("\x93", 1);          ///< Mobile Prefix Advertisement (147).
 
-            inline const std::string certificationPathSolicitation("\x94", 1);      ///< Certification Path Solicitation (148).
-            inline const std::string certificationPathAdvertisement("\x95", 1);     ///< Certification Path Advertisement (149).
+            inline const ByteString certificationPathSolicitation("\x94", 1);      ///< Certification Path Solicitation (148).
+            inline const ByteString certificationPathAdvertisement("\x95", 1);     ///< Certification Path Advertisement (149).
 
-            inline const std::string icmpExperiment1("\x96", 1);                    ///< ICMP Experimentation (150).
-            inline const std::string icmpExperiment2("\x97", 1);                    ///< ICMP Experimentation (151).
+            inline const ByteString icmpExperiment1("\x96", 1);                    ///< ICMP Experimentation (150).
+            inline const ByteString icmpExperiment2("\x97", 1);                    ///< ICMP Experimentation (151).
 
-            inline const std::string multicastRouterAdvertisement("\x98", 1);       ///< Multicast Router Advertisement (152).
-            inline const std::string multicastRouterSolicitation("\x99", 1);        ///< Multicast Router Solicitation (153).
-            inline const std::string multicastRouterTermination("\x9A", 1);         ///< Multicast Router Termination (154).
+            inline const ByteString multicastRouterAdvertisement("\x98", 1);       ///< Multicast Router Advertisement (152).
+            inline const ByteString multicastRouterSolicitation("\x99", 1);        ///< Multicast Router Solicitation (153).
+            inline const ByteString multicastRouterTermination("\x9A", 1);         ///< Multicast Router Termination (154).
 
-            inline const std::string rplControlMessage("\x9B", 1);                  ///< RPL Control Message (155).
+            inline const ByteString rplControlMessage("\x9B", 1);                  ///< RPL Control Message (155).
 
-            inline const std::string extendedEchoRequest("\xA0", 1);                ///< Extended Echo Request (160).
-            inline const std::string extendedEchoReply("\xA1", 1);                  ///< Extended Echo Reply (161).
+            inline const ByteString extendedEchoRequest("\xA0", 1);                ///< Extended Echo Request (160).
+            inline const ByteString extendedEchoReply("\xA1", 1);                  ///< Extended Echo Reply (161).
         }
 
         /**
@@ -125,9 +125,9 @@ namespace Variable
          */
         namespace Option
         {
-            inline const std::string source("\x01", 1); ///< Source Option for NDP.
-            inline const std::string target("\x02", 1); ///< Tartet Option for NDP.
-            inline const std::string mtu("\x05", 1);    ///< MTU Option for NDP.
+            inline const ByteString source("\x01", 1); ///< Source Option for NDP.
+            inline const ByteString target("\x02", 1); ///< Tartet Option for NDP.
+            inline const ByteString mtu("\x05", 1);    ///< MTU Option for NDP.
         }
 
     }
@@ -139,75 +139,75 @@ namespace Variable
     namespace IP
     {
         // Existing Protocols
-        inline const std::string esp("\x32", 1);      ///< IP protocol number for ESP (50).
-        inline const std::string ah("\x33", 1);       ///< IP protocol number for AH (51).
-        inline const std::string gre("\x2f", 1);      ///< IP protocol number for GRE (47).
-        inline const std::string igmp("\x02", 1);     ///< IP protocol number for IGMP (2).
-        inline const std::string none("\x3b", 1);     ///< IP protocol number for None (59).
-        inline const std::string tcp("\x06", 1);      ///< IP protocol number for TCP (6).
-        inline const std::string udp("\x11", 1);      ///< IP protocol number for UDP (17).
-        inline const std::string icmpv4("\x01", 1);   ///< IP protocol number for ICMPv4 (1).
-        inline const std::string icmpv6("\x3a", 1);   ///< IP protocol number for ICMPv6 (58).
-        inline const std::string sctp("\x84", 1);     ///< IP protocol number for SCTP (132).
-        inline const std::string eigrp("\x58", 1);    ///< IP protocol number for EIGRP (88).
-        inline const std::string ospf("\x59", 1);     ///< IP protocol number for OSPF (89).
-        inline const std::string pim("\x67", 1);      ///< IP protocol number for PIM (103).
-        inline const std::string rsvp("\x2e", 1);     ///< IP protocol number for RSVP (46). Corrected from \x2f to \x2e.
+        inline const ByteString esp("\x32", 1);      ///< IP protocol number for ESP (50).
+        inline const ByteString ah("\x33", 1);       ///< IP protocol number for AH (51).
+        inline const ByteString gre("\x2f", 1);      ///< IP protocol number for GRE (47).
+        inline const ByteString igmp("\x02", 1);     ///< IP protocol number for IGMP (2).
+        inline const ByteString none("\x3b", 1);     ///< IP protocol number for None (59).
+        inline const ByteString tcp("\x06", 1);      ///< IP protocol number for TCP (6).
+        inline const ByteString udp("\x11", 1);      ///< IP protocol number for UDP (17).
+        inline const ByteString icmpv4("\x01", 1);   ///< IP protocol number for ICMPv4 (1).
+        inline const ByteString icmpv6("\x3a", 1);   ///< IP protocol number for ICMPv6 (58).
+        inline const ByteString sctp("\x84", 1);     ///< IP protocol number for SCTP (132).
+        inline const ByteString eigrp("\x58", 1);    ///< IP protocol number for EIGRP (88).
+        inline const ByteString ospf("\x59", 1);     ///< IP protocol number for OSPF (89).
+        inline const ByteString pim("\x67", 1);      ///< IP protocol number for PIM (103).
+        inline const ByteString rsvp("\x2e", 1);     ///< IP protocol number for RSVP (46). Corrected from \x2f to \x2e.
 
         // Additional Protocols
-        inline const std::string hopopt("\x00", 1);       ///< IP protocol number for HOPOPT (0).
-        inline const std::string ggp("\x03", 1);          ///< IP protocol number for GGP (3).
-        inline const std::string ipv4("\x04", 1);         ///< IP protocol number for IPv4 (4).
-        inline const std::string st("\x05", 1);           ///< IP protocol number for ST (5).
-        inline const std::string cbt("\x07", 1);          ///< IP protocol number for CBT (7).
-        inline const std::string egp("\x08", 1);          ///< IP protocol number for EGP (8).
-        inline const std::string igp_v2("\x09", 1);       ///< IP protocol number for IGP (9).
-        inline const std::string bbn_rcc_mon("\x0a", 1);  ///< IP protocol number for BBN_RCC_MON (10).
-        inline const std::string nvp_ii("\x0b", 1);        ///< IP protocol number for NVP-II (11).
-        inline const std::string pup("\x0c", 1);           ///< IP protocol number for PUP (12).
-        inline const std::string argus("\x0d", 1);         ///< IP protocol number for ARGUS (13).
-        inline const std::string emcon("\x0e", 1);         ///< IP protocol number for EMCON (14).
-        inline const std::string xnet("\x0f", 1);          ///< IP protocol number for XNET (15).
-        inline const std::string chaos("\x10", 1);         ///< IP protocol number for CHAOS (16).
-        inline const std::string mux("\x12", 1);           ///< IP protocol number for MUX (18).
-        inline const std::string dcn_meas("\x13", 1);      ///< IP protocol number for DCN_MEAS (19).
-        inline const std::string hmp("\x14", 1);           ///< IP protocol number for HMP (20).
-        inline const std::string prm("\x15", 1);           ///< IP protocol number for PRM (21).
-        inline const std::string xnsIdp("\x16", 1);       ///< IP protocol number for XNS_IDP (22).
-        inline const std::string trunk1("\x17", 1);       ///< IP protocol number for TRUNK-1 (23).
-        inline const std::string trunk2("\x18", 1);       ///< IP protocol number for TRUNK-2 (24).
-        inline const std::string leaf1("\x19", 1);        ///< IP protocol number for LEAF-1 (25).
-        inline const std::string leaf2("\x1a", 1);        ///< IP protocol number for LEAF-2 (26).
-        inline const std::string rdp("\x1b", 1);           ///< IP protocol number for RDP (27).
-        inline const std::string irtp("\x1c", 1);          ///< IP protocol number for IRTP (28).
-        inline const std::string isoTp4("\x1d", 1);       ///< IP protocol number for ISO_TP4 (29).
-        inline const std::string netblt("\x1e", 1);        ///< IP protocol number for NETBLT (30).
-        inline const std::string mfeNsp("\x1f", 1);       ///< IP protocol number for MFE_NSP (31).
-        inline const std::string meritInp("\x20", 1);     ///< IP protocol number for MERIT_INP (32).
-        inline const std::string dccp("\x21", 1);          ///< IP protocol number for DCCP (33).
-        inline const std::string ipcomp("\x22", 1);        ///< IP protocol number for IPCOMP (34).
-        inline const std::string eigrpv6("\x58", 1);      ///< IP protocol number for EIGRP (88).
-        inline const std::string ospfv3("\x59", 1);       ///< IP protocol number for OSPF (89).
-        inline const std::string pimSm("\x67", 1);        ///< IP protocol number for PIM-SM (103).
-        inline const std::string l2tp("\x4e", 1);          ///< IP protocol number for L2TP (78).
-        inline const std::string mplsInIp("\x2b", 1);    ///< IP protocol number for MPLS-in-IP (43).
-        inline const std::string vxlan("\xb7", 1);         ///< IP protocol number for VXLAN (183).
-        inline const std::string dvrp("\x5e", 1);          ///< IP protocol number for DVRP (94).
-        inline const std::string lmtp("\x46", 1);          ///< IP protocol number for LMTP (70).
-        inline const std::string encap("\x8e", 1);         ///< IP protocol number for ENCAPSULATION (142).
-        inline const std::string ipv6("\x29", 1);          ///< IP protocol number for IPv6 (41).
-        inline const std::string pimDm("\x64", 1);        ///< IP protocol number for PIM-DM (100).
-        inline const std::string eigrpv5("\x8a", 1);      ///< IP protocol number for EIGRP for IPv6 (138).
-        inline const std::string rsvp_te("\x73", 1);       ///< IP protocol number for RSVP-TE (115).
-        inline const std::string mpls("\x2b", 1);          ///< IP protocol number for MPLS (43). Note: MPLS has multiple entries.
-        inline const std::string pppoeDiscovery("\x11", 1); ///< IP protocol number for PPPoE Discovery (17).
-        inline const std::string pppoeSession("\x11", 1);   ///< IP protocol number for PPPoE Session (17).
-        inline const std::string pppEcho("\x01", 1);        ///< IP protocol number for PPP Echo (1).
-        inline const std::string pppIpcp("\x21", 1);        ///< IP protocol number for PPP IPCP (33).
-        inline const std::string pppIpv6cp("\x57", 1);      ///< IP protocol number for PPP IPv6CP (87).
-        inline const std::string eap("\x88", 1);             ///< IP protocol number for EAP (136).
-        inline const std::string lispControl("\x8f", 1);    ///< IP protocol number for LISP Control (143).
-        inline const std::string mobileregistrationProtocol("\x8d", 1); ///< IP protocol number for Mobile Registration Protocol (141).
+        inline const ByteString hopopt("\x00", 1);       ///< IP protocol number for HOPOPT (0).
+        inline const ByteString ggp("\x03", 1);          ///< IP protocol number for GGP (3).
+        inline const ByteString ipv4("\x04", 1);         ///< IP protocol number for IPv4 (4).
+        inline const ByteString st("\x05", 1);           ///< IP protocol number for ST (5).
+        inline const ByteString cbt("\x07", 1);          ///< IP protocol number for CBT (7).
+        inline const ByteString egp("\x08", 1);          ///< IP protocol number for EGP (8).
+        inline const ByteString igp_v2("\x09", 1);       ///< IP protocol number for IGP (9).
+        inline const ByteString bbn_rcc_mon("\x0a", 1);  ///< IP protocol number for BBN_RCC_MON (10).
+        inline const ByteString nvp_ii("\x0b", 1);        ///< IP protocol number for NVP-II (11).
+        inline const ByteString pup("\x0c", 1);           ///< IP protocol number for PUP (12).
+        inline const ByteString argus("\x0d", 1);         ///< IP protocol number for ARGUS (13).
+        inline const ByteString emcon("\x0e", 1);         ///< IP protocol number for EMCON (14).
+        inline const ByteString xnet("\x0f", 1);          ///< IP protocol number for XNET (15).
+        inline const ByteString chaos("\x10", 1);         ///< IP protocol number for CHAOS (16).
+        inline const ByteString mux("\x12", 1);           ///< IP protocol number for MUX (18).
+        inline const ByteString dcn_meas("\x13", 1);      ///< IP protocol number for DCN_MEAS (19).
+        inline const ByteString hmp("\x14", 1);           ///< IP protocol number for HMP (20).
+        inline const ByteString prm("\x15", 1);           ///< IP protocol number for PRM (21).
+        inline const ByteString xnsIdp("\x16", 1);       ///< IP protocol number for XNS_IDP (22).
+        inline const ByteString trunk1("\x17", 1);       ///< IP protocol number for TRUNK-1 (23).
+        inline const ByteString trunk2("\x18", 1);       ///< IP protocol number for TRUNK-2 (24).
+        inline const ByteString leaf1("\x19", 1);        ///< IP protocol number for LEAF-1 (25).
+        inline const ByteString leaf2("\x1a", 1);        ///< IP protocol number for LEAF-2 (26).
+        inline const ByteString rdp("\x1b", 1);           ///< IP protocol number for RDP (27).
+        inline const ByteString irtp("\x1c", 1);          ///< IP protocol number for IRTP (28).
+        inline const ByteString isoTp4("\x1d", 1);       ///< IP protocol number for ISO_TP4 (29).
+        inline const ByteString netblt("\x1e", 1);        ///< IP protocol number for NETBLT (30).
+        inline const ByteString mfeNsp("\x1f", 1);       ///< IP protocol number for MFE_NSP (31).
+        inline const ByteString meritInp("\x20", 1);     ///< IP protocol number for MERIT_INP (32).
+        inline const ByteString dccp("\x21", 1);          ///< IP protocol number for DCCP (33).
+        inline const ByteString ipcomp("\x22", 1);        ///< IP protocol number for IPCOMP (34).
+        inline const ByteString eigrpv6("\x58", 1);      ///< IP protocol number for EIGRP (88).
+        inline const ByteString ospfv3("\x59", 1);       ///< IP protocol number for OSPF (89).
+        inline const ByteString pimSm("\x67", 1);        ///< IP protocol number for PIM-SM (103).
+        inline const ByteString l2tp("\x4e", 1);          ///< IP protocol number for L2TP (78).
+        inline const ByteString mplsInIp("\x2b", 1);    ///< IP protocol number for MPLS-in-IP (43).
+        inline const ByteString vxlan("\xb7", 1);         ///< IP protocol number for VXLAN (183).
+        inline const ByteString dvrp("\x5e", 1);          ///< IP protocol number for DVRP (94).
+        inline const ByteString lmtp("\x46", 1);          ///< IP protocol number for LMTP (70).
+        inline const ByteString encap("\x8e", 1);         ///< IP protocol number for ENCAPSULATION (142).
+        inline const ByteString ipv6("\x29", 1);          ///< IP protocol number for IPv6 (41).
+        inline const ByteString pimDm("\x64", 1);        ///< IP protocol number for PIM-DM (100).
+        inline const ByteString eigrpv5("\x8a", 1);      ///< IP protocol number for EIGRP for IPv6 (138).
+        inline const ByteString rsvp_te("\x73", 1);       ///< IP protocol number for RSVP-TE (115).
+        inline const ByteString mpls("\x2b", 1);          ///< IP protocol number for MPLS (43). Note: MPLS has multiple entries.
+        inline const ByteString pppoeDiscovery("\x11", 1); ///< IP protocol number for PPPoE Discovery (17).
+        inline const ByteString pppoeSession("\x11", 1);   ///< IP protocol number for PPPoE Session (17).
+        inline const ByteString pppEcho("\x01", 1);        ///< IP protocol number for PPP Echo (1).
+        inline const ByteString pppIpcp("\x21", 1);        ///< IP protocol number for PPP IPCP (33).
+        inline const ByteString pppIpv6cp("\x57", 1);      ///< IP protocol number for PPP IPv6CP (87).
+        inline const ByteString eap("\x88", 1);             ///< IP protocol number for EAP (136).
+        inline const ByteString lispControl("\x8f", 1);    ///< IP protocol number for LISP Control (143).
+        inline const ByteString mobileregistrationProtocol("\x8d", 1); ///< IP protocol number for Mobile Registration Protocol (141).
     }
 
     /**
@@ -216,10 +216,10 @@ namespace Variable
      */
     namespace Udp
     {
-        inline const std::string dhcpSource("\x00\x44", 2);         ///< UDP source port for DHCP.
-        inline const std::string dhcpDestination("\x00\x43", 2);    ///< UDP destination port for DHCP.
-        inline const std::string dhcpv6Source("\x02\x22", 2);       ///< UDP source port for DHCPv6.
-        inline const std::string dhcpv6Destination("\x02\x23", 2);  ///< UDP destination port for DHCPv6
+        inline const ByteString dhcpClient("\x00\x44", 2);     ///< UDP source port for DHCP.
+        inline const ByteString dhcpServer("\x00\x43", 2);     ///< UDP destination port for DHCP.
+        inline const ByteString dhcpv6Client("\x02\x22", 2);   ///< UDP source port for DHCPv6.
+        inline const ByteString dhcpv6Server("\x02\x23", 2);   ///< UDP destination port for DHCPv6
     }
 
     /**
@@ -237,7 +237,7 @@ namespace Variable
      */
     namespace Gre
     {
-        inline const std::string ppp("\x88\x0b", 2); ///< GRE protocol type for PPP.
+        inline const ByteString ppp("\x88\x0b", 2); ///< GRE protocol type for PPP.
     }
 
     /**
@@ -246,7 +246,7 @@ namespace Variable
      */
     namespace Ah
     {
-        inline const std::string esp("\x32", 1); ///< AH protocol number for ESP.
+        inline const ByteString esp("\x32", 1); ///< AH protocol number for ESP.
     }
 
     /**
@@ -255,8 +255,8 @@ namespace Variable
      */
     namespace Mac
     {
-        inline const std::string broadcast(6, '\xff'); ///< Broadcast MAC address (FF:FF:FF:FF:FF:FF).
-        inline const std::string source(6, '\x00');    ///< Placeholder source MAC address (00:00:00:00:00:00).
+        inline const ByteString broadcast(6, '\xff'); ///< Broadcast MAC address (FF:FF:FF:FF:FF:FF).
+        inline const ByteString source(6, '\x00');    ///< Placeholder source MAC address (00:00:00:00:00:00).
     }
 
     /**
@@ -265,8 +265,8 @@ namespace Variable
      */
     namespace IPv4
     {
-        inline const std::string broadcast(4, '\xff'); ///< Broadcast IPv4 address (255.255.255.255).
-        inline const std::string source(4, '\x00');    ///< Placeholder source IPv4 address (0.0.0.0).
+        inline const ByteString broadcast(4, '\xff'); ///< Broadcast IPv4 address (255.255.255.255).
+        inline const ByteString source(4, '\x00');    ///< Placeholder source IPv4 address (0.0.0.0).
     }
 
     /**
@@ -275,8 +275,8 @@ namespace Variable
      */
     namespace IPv6
     {
-        inline const std::string source(16, '\x00'); ///< Placeholder for source IPv6 address (::);
-        inline const std::string multicast("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16); ///< Multicast address for all neighbors.
+        inline const ByteString source(16, '\x00'); ///< Placeholder for source IPv6 address (::);
+        inline const ByteString multicast("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16); ///< Multicast address for all neighbors.
     }
 
     /**
@@ -291,14 +291,15 @@ namespace Variable
          */
         namespace Type
         {
-            inline const std::string discover("\x01", 1); ///< DHCP Discover message type.
-            inline const std::string offer("\x02", 1);    ///< DHCP Offer message type.
-            inline const std::string request("\x03", 1);  ///< DHCP Request message type.
-            inline const std::string decline("\x04", 1);  ///< DHCP Decline message type.
-            inline const std::string ack("\x05", 1);      ///< DHCP Acknowledgment message type.
-            inline const std::string nak("\x06", 1);      ///< DHCP Negative Acknowledgment message type.
-            inline const std::string release("\x07", 1);  ///< DHCP Release message type
-            inline const std::string inform("\x08", 1);   ///< DHCP Inform message type
+            inline const ByteString discover("\x01", 1); ///< DHCP Discover message type.
+            inline const ByteString offer("\x02", 1);    ///< DHCP Offer message type.
+            inline const ByteString request("\x03", 1);  ///< DHCP Request message type.
+            inline const ByteString decline("\x04", 1);  ///< DHCP Decline message type.
+            inline const ByteString ack("\x05", 1);      ///< DHCP Acknowledgment message type.
+            inline const ByteString nak("\x06", 1);      ///< DHCP Negative Acknowledgment message type.
+            inline const ByteString release("\x07", 1);  ///< DHCP Release message type
+            inline const ByteString inform("\x08", 1);   ///< DHCP Inform message type
+            inline const ByteString forceRenew("\x09", 1);//< DHCP Force Renew message type.
         }
 
         /**
@@ -307,39 +308,50 @@ namespace Variable
          */
         namespace Option
         {
-            inline const std::string mask("\x01", 1);                   ///< DHCP Option for Subnet Mask.
-            inline const std::string broadcast("\x1c", 1);              ///< DHCP Option for Broadcast Address.
-            inline const std::string timeOffset("\x02", 1);             ///< DHCP Option for Time Offset.
-            inline const std::string router("\x03", 1);                 ///< DHCP Option for Router.
-            inline const std::string domainName("\x0f", 1);             ///< DHCP Option for Domain Name.
-            inline const std::string domainServer("\x06", 1);           ///< DHCP Option for Domain Name Server.
-            inline const std::string domainSearch("\x77", 1);           ///< DHCP Option for Domain Search.
-            inline const std::string netbiosNameServer("\x2c", 1);      ///< DHCP Option for NetBIOS Name Server.
-            inline const std::string mtu("\x1a", 1);                    ///< DHCP Option for MTU.
-            inline const std::string classlessStateRoute("\x79", 1);    ///< DHCP Option for Classless Static Route.
-            inline const std::string ntp("\x2a", 1);                    ///< DHCP Option for NTP Servers.
-            inline const std::string type("\x35", 1);                   ///< DHCP Option for Message Type.
-            inline const std::string hostname("\x0c", 1);               ///< DHCP Option for Hostname.
-            inline const std::string clientID("\x3d", 1);               ///< DHCP Option for Client Identifier.
-            inline const std::string serverIdentifier("\x36", 1);       ///< DHCP Option for Server Identifier.
-            inline const std::string leaseTime("\x33", 1);              ///< DHCP Option for Lease Time.
-            inline const std::string renewalTime("\x3a", 1);            ///< DHCP Option for Renewal Time.
-            inline const std::string rebindingTime("\x3b", 1);          ///< DHCP Option for Rebinding Time.
-            inline const std::string requestIP("\x32", 1);              ///< DHCP Option for Requested IP Address.
-            inline const std::string requestList("\x37", 1);            ///< DHCP Option for Parameter Request List.
-            inline const std::string maxSize("\x39", 1);                ///< DHCP Option for Maximum DHCP Message Size.
-            inline const std::string tftpServer("\x42", 1);             ///< DHCP Option for TFTP server.
-            inline const std::string bootfile("\x43", 1);               ///< DHCP Option for Bootfile.
-            inline const std::string staticRoute("\x21", 1);            ///< DHCP Option for obtaining static routes.
-            inline const std::string vendorSpecific("\x2b", 1);         ///< DHCP Option for vendor specific information.
+            inline const ByteString mask("\x01", 1);                   ///< DHCP Option for Subnet Mask.
+            inline const ByteString broadcast("\x1c", 1);              ///< DHCP Option for Broadcast Address.
+            inline const ByteString timeOffset("\x02", 1);             ///< DHCP Option for Time Offset.
+            inline const ByteString router("\x03", 1);                 ///< DHCP Option for Router.
+            inline const ByteString domainName("\x0f", 1);             ///< DHCP Option for Domain Name.
+            inline const ByteString domainServer("\x06", 1);           ///< DHCP Option for Domain Name Server.
+            inline const ByteString domainSearch("\x77", 1);           ///< DHCP Option for Domain Search.
+            inline const ByteString netbiosNameServer("\x2c", 1);      ///< DHCP Option for NetBIOS Name Server.
+            inline const ByteString mtu("\x1a", 1);                    ///< DHCP Option for MTU.
+            inline const ByteString classlessStateRoute("\x79", 1);    ///< DHCP Option for Classless Static Route.
+            inline const ByteString ntp("\x2a", 1);                    ///< DHCP Option for NTP Servers.
+            inline const ByteString type("\x35", 1);                   ///< DHCP Option for Message Type.
+            inline const ByteString hostname("\x0c", 1);               ///< DHCP Option for Hostname.
+            inline const ByteString clientID("\x3d", 1);               ///< DHCP Option for Client Identifier.
+            inline const ByteString serverIdentifier("\x36", 1);       ///< DHCP Option for Server Identifier.
+            inline const ByteString leaseTime("\x33", 1);              ///< DHCP Option for Lease Time.
+            inline const ByteString renewalTime("\x3a", 1);            ///< DHCP Option for Renewal Time.
+            inline const ByteString rebindingTime("\x3b", 1);          ///< DHCP Option for Rebinding Time.
+            inline const ByteString requestIP("\x32", 1);              ///< DHCP Option for Requested IP Address.
+            inline const ByteString requestList("\x37", 1);            ///< DHCP Option for Parameter Request List.
+            inline const ByteString maxSize("\x39", 1);                ///< DHCP Option for Maximum DHCP Message Size.
+            inline const ByteString tftpServer("\x42", 1);             ///< DHCP Option for TFTP server.
+            inline const ByteString bootfile("\x43", 1);               ///< DHCP Option for Bootfile.
+            inline const ByteString staticRoute("\x21", 1);            ///< DHCP Option for obtaining static routes.
+            inline const ByteString vendorSpecific("\x2b", 1);         ///< DHCP Option for vendor specific information.
+            inline const ByteString authentication("\x5a", 1);         ///< DHCP Option for Authentication.
         }
 
-        inline const std::string clientHardwareAddressPadding(10, '\x00'); ///< Padding for Client Hardware Address.
-        inline const std::string serverHostName(64, '\x00');               ///< Server Hostname.
-        inline const std::string bootfile(128, '\x00');                    ///< Bootfile Name.
-        inline const std::string endPadding(25, '\x00');                   ///< Padding after DHCP options.
-        inline const std::string end(1, '\xff');                           ///< DHCP Option End Marker.
-        inline const std::string magicCookie("\x63\x82\x53\x63", 4);       ///< DHCP Magic Cookie.    
+        /**
+         * @namespace Timers
+         * @brief Contains DHCP timer constraints.
+         */
+        namespace Timers
+        {
+            inline constexpr uint32_t minLeaseTime = 3600;
+            inline constexpr uint32_t maxLeaseTime = 86400;
+        }
+
+        inline const ByteString clientHardwareAddressPadding(10, '\x00'); ///< Padding for Client Hardware Address.
+        inline const ByteString serverHostName(64, '\x00');               ///< Server Hostname.
+        inline const ByteString bootfile(128, '\x00');                    ///< Bootfile Name.
+        inline const ByteString endPadding(25, '\x00');                   ///< Padding after DHCP options.
+        inline const ByteString end(1, '\xff');                           ///< DHCP Option End Marker.
+        inline const ByteString magicCookie("\x63\x82\x53\x63", 4);       ///< DHCP Magic Cookie.    
     }
 
     /**
@@ -349,17 +361,108 @@ namespace Variable
     namespace Dhcpv6
     {
         /**
+         * @namespece Type
+         * @brief Contains DHCPv6 type codes.
+         */
+        namespace Type
+        {
+            inline const ByteString solicit("\x01", 1);            ///< DHCPv6 Solicit message type.
+            inline const ByteString advertise("\x02", 1);          ///< DHCPv6 Advertise message type.
+            inline const ByteString request("\x03", 1);            ///< DHCPv6 Request message type.
+            inline const ByteString confirm("\x04", 1);            ///< DHCPv6 Confirm message type.
+            inline const ByteString renew("\x05", 1);              ///< DHCPv6 Renew message type.
+            inline const ByteString rebind("\x06", 1);             ///< DHCPv6 Rebind message type.
+            inline const ByteString reply("\x07", 1);              ///< DHCPv6 Reply message type.
+            inline const ByteString release("\x08", 1);            ///< DHCPv6 Release message type.
+            inline const ByteString decline("\x09", 1);            ///< DHCPv6 Decline message type.
+            inline const ByteString reconfigure("\x0A", 1);        ///< DHCPv6 Reconfigure message type.
+            inline const ByteString informationRequest("\x0B", 1); ///< DHCPv6 Information request message type.
+            inline const ByteString relayForward("\x0C", 1);       ///< DHCPv6 Relay forward message type.
+            inline const ByteString relayReply("\x0D", 1);         ///< DHCPv6 Relay reply message type.
+            inline const ByteString echoRequest("\x0E", 1);        ///< DHCPv6 Echo Request message type.
+            inline const ByteString echoReply("\x10");             ///< DHCPv6 Echo Reply message type.
+        }
+
+        /**
          * @namespace Options
          * @brief Contains DHCPv6 option codes.
          */
         namespace Options
         {
-            inline const std::string clientIdentifier("\x00\x01", 2);       ///< DHCPv6 Option for Client Identifier.
-            inline const std::string serverIdentifier("\x00\x02", 2);       ///< DHCPv6 Option for Server Identifier.
-            inline const std::string IA_NA("\x00\x03", 2);                  ///< DHCPv6 Option for non-temporary IPv6.
-            inline const std::string IA_TA("\x00\x04", 2);                  ///< DHCPv6 Option for temporary IPv6.
-            inline const std::string IA_PD("\x00\x05", 2);                  ///< DHCPv6 Option for prefixe deligation.
-            inline const std::string optionRequest("\x00\x06", 2);          ///< 
+            inline const ByteString clientID("\x00\x01", 2);           ///< DHCPv6 Option for Client ID.
+            inline const ByteString serverID("\x00\x02", 2);           ///< DHCPv6 Option for Server ID.
+            inline const ByteString IA_NA("\x00\x03", 2);              ///< DHCPv6 Option for AI_NA.
+            inline const ByteString IA_TA("\x00\x04", 2);              ///< DHCPv6 Option for IA_TA.
+            inline const ByteString IAAddr("\x00\x05", 2);             ///< DHCPv6 Option for AI Address.
+            inline const ByteString optionRequest("\x00\x06", 2);      ///< DHCPv6 Option for Option Request.
+            inline const ByteString preference("\x00\x07", 2);         ///< DHCPv6 Option for Preference.
+            inline const ByteString elapsedTime("\x00\x08", 2);        ///< DHCPv6 Option for Elapsed Time.
+            inline const ByteString relayMsg("\x00\x09", 2);           ///< DHCPv6 Option for Relay Message.
+            inline const ByteString auth("\x00\x0A", 2);               ///< DHCPv6 Option for Authentication.
+            inline const ByteString unicast("\x00\x12", 2);            ///< DHCPv6 Option for Unicast.
+            inline const ByteString statusCode("\x00\x13", 2);         ///< DHCPv6 Option for Status Code.
+            inline const ByteString rapidCommit("\x00\x14", 2);        ///< DHCPv6 Option for Rapid Commit.
+            inline const ByteString userClass("\x00\x0D", 2);          ///< DHCPv6 Option for User Class.
+            inline const ByteString vendorClass("\x00\x0F", 2);        ///< DHCPv6 Option for Vendor Class.
+            inline const ByteString vendorOpts("\x00\x11", 2);         ///< DHCPv6 Option for Venor Options
+            inline const ByteString interfaceID("\x00\x1E", 2);        ///< DHCPv6 Option for Interface ID.
+            inline const ByteString reconfigureMessage("\x00\x1C", 2); ///< DHCPv6 Option for Reconfigure Message.
+            inline const ByteString dnsServer("\x00\x17", 2);          ///< DHCPv6 Option for DNS Server.
+            inline const ByteString domainName("\x00\x18", 2);         ///< DHCPv6 Option for Domain name.
+            inline const ByteString IA_PD("\x00\x19", 2);              ///< DHCPv6 Option for IA_PD.
+            inline const ByteString IA_Prefix("\x00\x20", 2);          ///< DHCPv6 Option for IA Prefix.
+            inline const ByteString ntpServer("\x00\x2A", 2);          ///< DHCPv6 Option for NTP Server.
+            inline const ByteString sipServerDNS("\x00\x21", 2);       ///< DHCPv6 Option for SIP Server DNS.
+            inline const ByteString sipServerAddress("\x00\x22", 2);   ///< DHCPv6 Option for SIP Server Address.
+            inline const ByteString bootfileURL("\x00\x2F", 2);        ///< DHCPv6 Option for Boot File URL.
+            inline const ByteString bootfileParam("\x00\x30", 2);      ///< DHCPv6 Option for Boot File Parameters.
+            inline const ByteString defaultGateway("\x00\x31", 2);     ///< DHCPv6 Option for Default Gateway.
+            inline const ByteString relayAgentOption("\x00\x32", 2);   ///< DHCPv6 Option for Relay Agent Option.
+            inline const ByteString validLifetime("\x00\x33", 2);      ///< DHCPv6 Option for Valid Lifetime.
+            inline const ByteString preferredLifetime("\x00\x34", 2);  ///< DHCPv6 Option for Preferred Lifetime.
+            inline const ByteString clientIP("\x00\x35", 2);           ///< DHCPv6 Option for Client IP.
+            inline const ByteString hopcount("\x00\x52", 2);           ///< DHCPv6 Option for Hop Count.
+        }
+
+        /**
+         * @namespace Status
+         * @brief Contains DHCPv6 status codes.
+         */
+        namespace Status 
+        {
+            inline const ByteString success("\x00\x00", 2);            ///< Status code for success.
+            inline const ByteString unspecFail("\x00\x01", 2);         ///< Status code for unspecified failure.
+            inline const ByteString noAddrsAvail("\x00\x02", 2);       ///< Status code for no address available.
+            inline const ByteString noBinding("\x00\x03", 2);          ///< Status code for no binding available.
+            inline const ByteString notOnLink("\x00\x04", 2);          ///< Status code for not on link.
+            inline const ByteString useMulticast("\x00\x05", 2);       ///< Status code for using multicast.
+            inline const ByteString noPrefixAvail("\x00\x06", 2);      ///< Status code for no prefix available.
+            inline const ByteString unknownQueryType("\x00\x07", 2);   ///< Status code for unknown query type.
+            inline const ByteString malformedQuery("\x00\x08", 2);     ///< Status code for malformed query.
+            inline const ByteString notConfigured("\x00\x09", 2);      ///< Status code for not configured.
+            inline const ByteString notAllowed("\x00\x0A", 2);         ///< Status code for not allowed.
+        }
+
+        /**
+         * @namespace Timers
+         * @brief Contains DHCPv6 timer constraints.
+         */
+        namespace Timers
+        {        
+            inline constexpr uint32_t solMaxDelay = 1;      // Max delay of first Solicit
+            inline constexpr uint32_t solTimeout = 1;       // Initial Solicit timeout
+            inline constexpr uint32_t solMaxRt = 3600;      // Max Solicit timeout value
+            inline constexpr uint32_t reqTimeout = 1;       // Initial Request timeout
+            inline constexpr uint32_t reqMaxTimeout = 30;   // Max Request timeout
+            inline constexpr uint32_t reqMaxRc = 10;        // Max Request retry attempts
+            inline constexpr uint32_t cfnMaxDelay = 1;      // Max delay of first Confirm
+            inline constexpr uint32_t cnfTimeout = 1;       // Initial Confirm timeout
+            inline constexpr uint32_t cnfMaxRt = 4;         // Max Confirm timeout
+            inline constexpr uint32_t cnfMaxRd = 10;        // Max Confirm duration
+            inline constexpr uint32_t renTimeout = 10;      // Initial Renew timeout
+            inline constexpr uint32_t renMaxRt = 600;       // Max Renew timeout
+            inline constexpr uint32_t rebTimeout = 10;      // Initial Rebind timeout
+            inline constexpr uint32_t rebMaxRt = 600;       // Max Rebind timeout
         }
     }
 
@@ -375,11 +478,11 @@ namespace Variable
          */
         namespace Type
         {
-            inline const std::string update("\x01", 1);   ///< EIGRP Update message type.
-            inline const std::string request("\x02", 1);  ///< EIGRP Request message type.
-            inline const std::string query("\x03", 1);    ///< EIGRP Query message type.
-            inline const std::string reply("\x04", 1);    ///< EIGRP Reply message type.
-            inline const std::string hello("\x05", 1);    ///< EIGRP Hello message type.
+            inline const ByteString update("\x01", 1);   ///< EIGRP Update message type.
+            inline const ByteString request("\x02", 1);  ///< EIGRP Request message type.
+            inline const ByteString query("\x03", 1);    ///< EIGRP Query message type.
+            inline const ByteString reply("\x04", 1);    ///< EIGRP Reply message type.
+            inline const ByteString hello("\x05", 1);    ///< EIGRP Hello message type.
         }
 
         /**
@@ -388,16 +491,16 @@ namespace Variable
          */
         namespace Option
         {
-            inline const std::string parameter("\x00\x01", 2);             ///< EIGRP Option for Parameter.
-            inline const std::string version("\x00\x04", 2);               ///< EIGRP Option for Version.
-            inline const std::string sequence("\x00\x03", 2);              ///< EIGRP Option for Sequence Number.
-            inline const std::string multicastSequence("\x00\x05", 2);     ///< EIGRP Option for Multicast Sequence.
-            inline const std::string internalRoute("\x01\x02", 2);         ///< EIGRP Option for Internal Route.
-            inline const std::string externalRoute("\x01\x03", 2);         ///< EIGRP Option for External Route.
-            inline const std::string internalRouteV6("\x04\x02", 2);       ///< EIGRP Option for Internal Route IPv6.
-            inline const std::string externalRouteV6("\x04\x03", 2);       ///< EIGRP Option for External Route IPv6.
-            inline const std::string stub("\x00\x06", 2);                  ///< EIGRP Option for Stub.
-            inline const std::string authentication("\x00\x02", 2);        ///< EIGRP Option for Authentication.
+            inline const ByteString parameter("\x00\x01", 2);             ///< EIGRP Option for Parameter.
+            inline const ByteString version("\x00\x04", 2);               ///< EIGRP Option for Version.
+            inline const ByteString sequence("\x00\x03", 2);              ///< EIGRP Option for Sequence Number.
+            inline const ByteString multicastSequence("\x00\x05", 2);     ///< EIGRP Option for Multicast Sequence.
+            inline const ByteString internalRoute("\x01\x02", 2);         ///< EIGRP Option for Internal Route.
+            inline const ByteString externalRoute("\x01\x03", 2);         ///< EIGRP Option for External Route.
+            inline const ByteString internalRouteV6("\x04\x02", 2);       ///< EIGRP Option for Internal Route IPv6.
+            inline const ByteString externalRouteV6("\x04\x03", 2);       ///< EIGRP Option for External Route IPv6.
+            inline const ByteString stub("\x00\x06", 2);                  ///< EIGRP Option for Stub.
+            inline const ByteString authentication("\x00\x02", 2);        ///< EIGRP Option for Authentication.
         }
 
         /**
@@ -406,8 +509,8 @@ namespace Variable
          */
         namespace Version
         {
-            inline const std::string release("\x0c\x04", 2);  ///< EIGRP Version Release.
-            inline const std::string tls("\x01\x02", 2);      ///< EIGRP Version TLS.
+            inline const ByteString release("\x0c\x04", 2);  ///< EIGRP Version Release.
+            inline const ByteString tls("\x01\x02", 2);      ///< EIGRP Version TLS.
         }
 
         /**
@@ -416,17 +519,17 @@ namespace Variable
          */
         namespace ExternalProtocol 
         {
-            inline const std::string igrp("\x01", 1);          ///< EIGRP External Protocol IGRP.
-            inline const std::string eigrp("\x02", 1);         ///< EIGRP External Protocol EIGRP.
-            inline const std::string staticRoute("\x03", 1);   ///< EIGRP External Protocol Static Route.
-            inline const std::string rip("\x04", 1);           ///< EIGRP External Protocol RIP.
-            inline const std::string hello("\x05", 1);         ///< EIGRP External Protocol Hello.
-            inline const std::string ospf("\x06", 1);          ///< EIGRP External Protocol OSPF.
-            inline const std::string isis("\x07", 1);          ///< EIGRP External Protocol ISIS.
-            inline const std::string egp("\x08", 1);           ///< EIGRP External Protocol EGP.
-            inline const std::string bgp("\x09", 1);           ///< EIGRP External Protocol BGP.
-            inline const std::string idrp("\x0a", 1);          ///< EIGRP External Protocol IDRP.
-            inline const std::string connected("\x0b", 1);     ///< EIGRP External Protocol Connected.
+            inline const ByteString igrp("\x01", 1);          ///< EIGRP External Protocol IGRP.
+            inline const ByteString eigrp("\x02", 1);         ///< EIGRP External Protocol EIGRP.
+            inline const ByteString staticRoute("\x03", 1);   ///< EIGRP External Protocol Static Route.
+            inline const ByteString rip("\x04", 1);           ///< EIGRP External Protocol RIP.
+            inline const ByteString hello("\x05", 1);         ///< EIGRP External Protocol Hello.
+            inline const ByteString ospf("\x06", 1);          ///< EIGRP External Protocol OSPF.
+            inline const ByteString isis("\x07", 1);          ///< EIGRP External Protocol ISIS.
+            inline const ByteString egp("\x08", 1);           ///< EIGRP External Protocol EGP.
+            inline const ByteString bgp("\x09", 1);           ///< EIGRP External Protocol BGP.
+            inline const ByteString idrp("\x0a", 1);          ///< EIGRP External Protocol IDRP.
+            inline const ByteString connected("\x0b", 1);     ///< EIGRP External Protocol Connected.
         }
 
         /**
@@ -435,11 +538,11 @@ namespace Variable
          */
         namespace DestinationAssignmentEncoding 
         {
-            inline const std::string ipv4("\x01", 1);              ///< EIGRP Destination Assignment Encoding IPv4.
-            inline const std::string ipv6("\x02", 1);              ///< EIGRP Destination Assignment Encoding IPv6.
-            inline const std::string commonService("\x40\x00", 2); ///< EIGRP Destination Assignment Encoding Common Service.
-            inline const std::string ipv4Family("\x40\x01", 2);    ///< EIGRP Destination Assignment Encoding IPv4 Family.
-            inline const std::string ipv6Famil("\x40\x02", 2);     ///< EIGRP Destination Assignment Encoding IPv6 Family.
+            inline const ByteString ipv4("\x01", 1);              ///< EIGRP Destination Assignment Encoding IPv4.
+            inline const ByteString ipv6("\x02", 1);              ///< EIGRP Destination Assignment Encoding IPv6.
+            inline const ByteString commonService("\x40\x00", 2); ///< EIGRP Destination Assignment Encoding Common Service.
+            inline const ByteString ipv4Family("\x40\x01", 2);    ///< EIGRP Destination Assignment Encoding IPv4 Family.
+            inline const ByteString ipv6Famil("\x40\x02", 2);     ///< EIGRP Destination Assignment Encoding IPv6 Family.
         }
 
         /**
@@ -448,13 +551,13 @@ namespace Variable
          */
         namespace CommunityAttribute 
         {
-            inline const std::string EXTCOMM_EIGRP("\x00", 1);       ///< EIGRP Community Attribute for EIGRP.
-            inline const std::string EXTCOMM_DAD("\x01", 1);         ///< EIGRP Community Attribute for DAD.
-            inline const std::string EXTCOMM_VRHB("\x02", 1);        ///< EIGRP Community Attribute for VRHB.
-            inline const std::string EXTCOMM_SRLM("\x03", 1);        ///< EIGRP Community Attribute for SRLM.
-            inline const std::string EXTCOMM_SAR("\x04", 1);         ///< EIGRP Community Attribute for SAR.
-            inline const std::string EXTCOMM_RPM("\x05", 1);         ///< EIGRP Community Attribute for RPM.
-            inline const std::string EXTCOMM_VRR("\x06", 1);         ///< EIGRP Community Attribute for VRR.
+            inline const ByteString EXTCOMM_EIGRP("\x00", 1);       ///< EIGRP Community Attribute for EIGRP.
+            inline const ByteString EXTCOMM_DAD("\x01", 1);         ///< EIGRP Community Attribute for DAD.
+            inline const ByteString EXTCOMM_VRHB("\x02", 1);        ///< EIGRP Community Attribute for VRHB.
+            inline const ByteString EXTCOMM_SRLM("\x03", 1);        ///< EIGRP Community Attribute for SRLM.
+            inline const ByteString EXTCOMM_SAR("\x04", 1);         ///< EIGRP Community Attribute for SAR.
+            inline const ByteString EXTCOMM_RPM("\x05", 1);         ///< EIGRP Community Attribute for RPM.
+            inline const ByteString EXTCOMM_VRR("\x06", 1);         ///< EIGRP Community Attribute for VRR.
         }
     }
 
@@ -470,10 +573,10 @@ namespace Variable
          */
         namespace Eigrp
         {
-            inline const std::string address("\xe0\x00\x00\x0a", 4); ///< EIGRP Multicast IPv4 Address.
-            inline const std::string addressv6("\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0a", 16); ///< EIGRP Multicast IPv6 Address.
-            inline const std::string mac("\x01\x00\x5e\x00\x00\x0a", 6); ///< EIGRP Multicast MAC Address.
-            inline const std::string macv6("\x33\x33\x00\x00\x00\x0a", 6); ///< EIGRP Multicast MAC Address for IPv6.
+            inline const ByteString address("\xe0\x00\x00\x0a", 4); ///< EIGRP Multicast IPv4 Address.
+            inline const ByteString addressv6("\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0a", 16); ///< EIGRP Multicast IPv6 Address.
+            inline const ByteString mac("\x01\x00\x5e\x00\x00\x0a", 6); ///< EIGRP Multicast MAC Address.
+            inline const ByteString macv6("\x33\x33\x00\x00\x00\x0a", 6); ///< EIGRP Multicast MAC Address for IPv6.
         }
 
         /**
@@ -482,7 +585,7 @@ namespace Variable
          */
         namespace ICMPv6
         {
-            inline const std::string solicitationAddress("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xFF", 13);
+            inline const ByteString solicitationAddress("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xFF", 13);
             
         }
     }
@@ -904,7 +1007,7 @@ struct TcpHeader
 
                 option.type = tcpOptions.substr(optionStart, 1);
                 optionStart += 1;
-                if (option.type != std::string("\x01", 1))
+                if (option.type != ByteString("\x01", 1))
                 {
                     option.length = tcpOptions.substr(optionStart, 1);
                     optionStart += 1;
@@ -1689,6 +1792,90 @@ struct Dhcpv6Header
 };
 
 /**
+ * @brief DHCPv6 Relay header for relay agent interactions.
+ */
+struct Dhcpv6RelayHeader
+{
+    ByteString msgType;
+    ByteString hopCount;
+    ByteString linkAddress;
+    ByteString peerAddress;
+
+    /**
+     * @struct option
+     * @brief represents DHCPv6 option
+     */
+    struct Option
+    {
+        ByteString option{};   ///< Option code.
+        ByteString length{};   ///< Option length.
+        ByteString value{};    ///< Option value.
+    };
+
+    std::vector<Option> options{};  ///< Vector of DHCPv6 Options.
+                                    ///
+    const std::optional<ByteString> encapsulate() const
+    {
+        ByteString dhcpString;
+        if (msgType.size() != 1 && hopCount.size() != 1 && linkAddress.size() != 16 && peerAddress.size() != 16) return std::nullopt;
+
+        dhcpString.reserve(34);
+        dhcpString += msgType;
+        dhcpString += hopCount;
+
+        for (Dhcpv6RelayHeader::Option opt : options)
+        {
+            dhcpString += opt.option;
+            dhcpString += opt.length;
+            dhcpString += opt.value;
+        }
+
+        return dhcpString;
+    }
+    bool decapsulate(const ByteString dhcpHeaders)
+    {
+        size_t dhcpStart;
+        ByteString dhcpHeader;
+        if (dhcpHeaders.size() < 34) return false;
+
+        dhcpHeader = dhcpHeaders;
+        msgType = dhcpHeader.substr(0, 1);
+        hopCount = dhcpHeader.substr(1, 1);
+        linkAddress = dhcpHeader.substr(2, 16);
+        peerAddress = dhcpHeader.substr(18, 16);
+
+        dhcpStart = 34;
+
+        size_t dhcpEnd{};
+        size_t dhcpLength = dhcpHeader.size();
+        for (size_t i = dhcpLength - 1; i >= 0; --i)
+        {
+            if (static_cast<unsigned char>(dhcpHeader[i]) == 0xff)
+            {
+                dhcpEnd = i;
+                break;
+            }
+        }
+
+        while (dhcpStart != dhcpEnd)
+        {
+            Dhcpv6RelayHeader::Option option;
+            option.option = dhcpHeader.substr(dhcpStart, 2);
+            dhcpStart += 2;
+            option.length = dhcpHeader.substr(dhcpStart, 2);
+            dhcpStart += 2;
+            size_t length = Functions::byteToNum(option.length);
+            option.value = dhcpHeader.substr(dhcpStart, static_cast<size_t>(length));
+            size_t dhcpADD = static_cast<size_t>(length);
+            dhcpStart += dhcpADD;
+            options.push_back(option);
+        }
+
+        return true;
+    }
+};
+
+/**
  * @struct EigrpHeader
  * @brief Represents an EIGRP (Enhanced Interior Gateway Routing Protocol) header.
  */
@@ -2014,7 +2201,7 @@ using Layer3Variant = std::variant<IPv4Header, IPv6Header, GreHeade, AhHeader, E
 using Layer4Variant = std::variant<TcpHeader, UdpHeader, EigrpHeader>;
 
 // Layer 5 Variants
-using Layer5Variant = std::variant<DhcpHeader, Dhcpv6Header>;
+using Layer5Variant = std::variant<DhcpHeader, Dhcpv6Header, Dhcpv6RelayHeader>;
 
 /**
  * @struct PacketInfo

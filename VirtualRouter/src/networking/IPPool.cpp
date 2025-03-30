@@ -1,0 +1,344 @@
+#include "IPPool.h"
+#include <Functions.h>
+#include <LeaseManager.h>
+
+IPPool::IPPool(const ByteString& network, const uint8_t& subnetPrefix, const ByteString& gateway)
+{
+    // Determine if we're working with IPv4 (4 bytes) or IPv6 (16 bytes)
+    __uint128_t networkInt = Functions::byteToNum128(network);
+    __uint128_t maskInt;
+
+    if (network.size() == 4)
+    {
+        maskInt = (subnetPrefix == 0) ? 0 : (~0U << (32 - subnetPrefix));
+        poolSize = (subnetPrefix < 31) ? (1U << (32 - subnetPrefix)) - 2 : 0;
+    }
+    else if  (network.size() == 16)
+    {
+        maskInt = subnetPrefix == 0 ? 0 : (~__uint128_t(0) << (128 - subnetPrefix));
+        poolSize = (__uint128_t(1) << (128 - subnetPrefix)) - 2;
+    }
+    else
+    {
+        throw std::invalid_argument("Unsupported network size");
+    }
+
+    __uint128_t lastUsableInt = 0;
+    if (network.size() == 4)
+    {
+        lastUsableInt = static_cast<__uint128_t>(static_cast<uint32_t>(networkInt) | ~static_cast<uint32_t>(maskInt));
+    }
+    else if (network.size() == 16)
+    {
+        lastUsableInt = networkInt | ~maskInt;
+    }
+
+
+    baseAddress = Functions::numToByte128(networkInt);
+    lastAddress = Functions::numToByte128(lastUsableInt);
+
+    excludeIP(gateway);
+    currentAddress = baseAddress;
+}
+
+void IPPool::addLeaseManager(LeaseManager* lease)
+{
+    leaseManager = lease;
+}
+
+ByteString IPPool::allocateIP(const ByteString& macAddress)
+{
+    // Check if MAC already is assigned an address
+    {
+        std::lock_guard<std::mutex> lock(poolMutex);
+        for (auto& [ipAddress, mac] : allocatedIPs)
+        {
+            if (macAddress == mac)
+            {
+                return ipAddress;
+            }
+        }
+    }
+
+    // First, check if there are any released IPs available
+    if (!releasedIPs.empty())
+    {
+        // Choose the lowest available released IP
+        ByteString canidateIP;
+        {
+            std::lock_guard<std::mutex> lock(poolMutex);
+            canidateIP = *releasedIPs.begin();
+            releasedIPs.erase(releasedIPs.begin());
+            allocatedIPs[canidateIP] = macAddress;
+        }
+        return canidateIP;
+    }
+
+    // No released IP available, so  allocate dynamically from the pool
+    __uint128_t start;
+    __uint128_t end;
+    {
+        start = Functions::byteToNum128(currentAddress);
+        end = Functions::byteToNum128(lastAddress) - 1;
+    }
+
+    // Allocate dynamically from the pool
+    for (__uint128_t ip = start; ip < end; ++ip)
+    {
+        ByteString canidateIP = Functions::numToByte128(ip + 1);
+        if (!isAllocatedOrExcluded(canidateIP))
+        {
+            std::lock_guard<std::mutex> lock(poolMutex);
+            allocatedIPs[canidateIP] = macAddress;
+            currentAddress = canidateIP;
+            return canidateIP;
+        }
+    }
+
+    return {}; // No available IPs
+}
+
+ByteString IPPool::allocateTempIP(const ByteString& id)
+{
+    // Check if MAC already is assigned an address
+    {
+        std::lock_guard<std::mutex> lock(poolMutex);
+        for (auto& [ipAddress, mac] : allocatedIPs)
+        {
+            if (id == mac)
+            {
+                return ipAddress;
+            }
+        }
+        if (temporaryOffers.count(id))
+        {
+            return temporaryOffers[id];
+        }
+    }
+
+    // Store temporary offers with ID for tracking
+    if (!releasedIPs.empty())
+    {
+        // Choose the lowest available released IP
+        ByteString canidateIP;
+        {
+            std::lock_guard<std::mutex> lock(poolMutex);
+            canidateIP = *releasedIPs.begin();
+            releasedIPs.erase(releasedIPs.begin());
+            temporaryOffers[id] = canidateIP;
+        }
+        return canidateIP;
+    }
+    
+    __uint128_t start;
+    __uint128_t end;
+    {
+        std::lock_guard<std::mutex> lock(poolMutex);
+        start = Functions::byteToNum(currentAddress);
+        end = Functions::byteToNum(lastAddress) - 1;
+    }
+
+    for (__uint128_t ip = start; ip < end; ++ip)
+    {
+        ByteString canidate = Functions::numToByte128(ip + 1);
+        if (!isAllocatedOrExcluded(canidate) && !isTemporarilyOffered(canidate))
+        {
+            temporaryOffers[id] = canidate;
+            return canidate;
+        }
+    }
+    return {};
+}
+
+bool IPPool::excludeIP(const ByteString& ip)
+{
+    if (isExcluded(ip))
+    {
+        return false; // IP already or excluded
+    }
+    else
+    {
+        std::lock_guard<std::mutex> lock(poolMutex);
+        excludedAddresses.insert(ip);
+    }
+    return true;
+}
+
+void IPPool::releaseIP(const ByteString& ip)
+{
+    {
+        std::lock_guard<std::mutex> lock(poolMutex);
+        auto it = allocatedIPs.find(ip);
+        if (it != allocatedIPs.end())
+        {
+            allocatedIPs.erase(it);
+            // Store the released IP so it can be reused first.
+            releasedIPs.insert(ip);
+        }
+        // Check if IP is excluded
+        if (!excludedAddresses.count(ip))
+        {
+            return;
+        }
+    }
+    excludeIP(ip);
+}
+
+bool IPPool::removeExclusion(const ByteString& ip)
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    if (ip.size() == 4 && Functions::byteToNum(ip) <= Functions::byteToNum(currentAddress))
+    {
+        releasedIPs.insert(ip);
+    }
+    else if (ip.size() == 16 && Functions::byteToNum128(ip) <= Functions::byteToNum128(currentAddress))
+    {
+        releasedIPs.insert(ip);
+    }
+    return excludedAddresses.erase(ip) > 0;
+}
+
+bool IPPool::setConflicted(const ByteString& ip)
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    if (allocatedIPs.find(ip) == allocatedIPs.end())
+    {
+        return false;
+    }
+    allocatedIPs[ip].clear();
+    return true;
+}
+
+bool IPPool::isAllocated(const ByteString& ip) const
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    return allocatedIPs.find(ip) != allocatedIPs.end();
+}
+
+bool IPPool::isExcluded(const ByteString& ip) const
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    return excludedAddresses.find(ip) != excludedAddresses.end();
+}
+
+bool IPPool::isAllocatedOrExcluded(const ByteString& ip) const
+{
+    return isAllocated(ip) || isExcluded(ip);
+}
+
+bool IPPool::matchMacToIP(const ByteString ip, const ByteString& mac)
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    auto it = allocatedIPs.find(ip);
+    return it != allocatedIPs.end() && it->second == mac;
+}
+
+void IPPool::adjustPool(const ByteString& network, const uint8_t subnetPrefix, const ByteString& newGatway)
+{
+    // Determine if we're working with IPv4 (4 bytes) or IPv6 (16 bytes)
+    __uint128_t networkInt = Functions::byteToNum(network);
+    __uint128_t maskInt;
+
+    if (network.size() == 4)
+    {
+        maskInt = (subnetPrefix == 0) ? 0 : (~0U << (32 - subnetPrefix));
+        poolSize = (subnetPrefix < 31) ? (1U << (32 - subnetPrefix)) - 2 : 0;
+    }
+    else if  (network.size() == 16)
+    {
+        maskInt = subnetPrefix == 0 ? 0 : (~__uint128_t(0) << (128 - subnetPrefix));
+        poolSize = (__uint128_t(1) << (128 - subnetPrefix)) - 2;
+    }
+    else
+    {
+        throw std::invalid_argument("Unsupported network size");
+    }
+
+    __uint128_t lastUsableInt = 0;
+    if (network.size() == 4)
+    {
+        lastUsableInt = static_cast<__uint128_t>(static_cast<uint32_t>(networkInt) | ~static_cast<uint32_t>(maskInt));
+    }
+    else if (network.size() == 16)
+    {
+        lastUsableInt = networkInt | ~maskInt;
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(poolMutex);
+        baseAddress = Functions::numToByte128(networkInt);
+        lastAddress = Functions::numToByte128(lastUsableInt);
+    }
+
+    if (!gateway.empty() && gateway != newGatway)
+    {
+        releaseIP(gateway);
+        excludeIP(newGatway);
+        {
+            std::lock_guard<std::mutex> lock(poolMutex);
+            gateway = newGatway;
+        }
+    }
+
+    currentAddress = baseAddress;
+
+    // Collect keys for allocated IPs that vall outside the new scope
+    std::vector<ByteString> ipsToRemove;
+    {
+        std::lock_guard<std::mutex> lock(poolMutex);
+        for (const auto& [ip, mac] : allocatedIPs)
+        {
+            __uint128_t ipInt = Functions::byteToNum128(ip);
+            if (ipInt < networkInt + 1 || ipInt > lastUsableInt)
+            {
+                ipsToRemove.push_back(ip);
+            }
+        }
+    }
+
+    // Now, remove these ips
+    for (const auto& ip : ipsToRemove)
+    {
+        if (leaseManager)
+        {
+            leaseManager->releaseIP(ip);
+        }
+        else
+        {
+            releaseIP(ip);
+        }
+    }
+}
+
+bool IPPool::isTemporarilyOffered(const ByteString& ip)
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    for (const auto& [id, offered] : temporaryOffers)
+        if (offered == ip) return true;
+    return false;
+}
+
+ByteString IPPool::getTempIP(const ByteString& id)
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    auto it = temporaryOffers.find(id);
+    if (it != temporaryOffers.end())
+    {
+        return it->second;
+    }
+    return {};
+}
+
+void IPPool::clearTempOffer(const ByteString& id)
+{
+    std::lock_guard<std::mutex> lock(poolMutex);
+    temporaryOffers.erase(id);
+}
+
+ByteString IPPool::activateTempIP(const ByteString& id)
+{
+    ByteString ip = getTempIP(id);
+    if (ip.empty() || isAllocatedOrExcluded(ip)) return {};
+    allocatedIPs[ip] = id;
+    return ip;
+}

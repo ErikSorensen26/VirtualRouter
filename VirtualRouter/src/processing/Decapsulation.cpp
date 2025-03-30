@@ -119,7 +119,7 @@ bool Packet::processLayer3(const ByteString &packet)
         if (!decodeIPv4(ipv4Header, ipv4Size)) return false;
         const IPv4Header* ipv4 = getLayer3Header<IPv4Header>();
 
-        if (ipv4 && ipv4->protocol.toString() == Variable::IP::gre)
+        if (ipv4 && ipv4->protocol == Variable::IP::gre)
         {
             if (!validateSize(start, 12, packet)) return false;
             ByteString greHeader = getSlice(12);
@@ -132,7 +132,7 @@ bool Packet::processLayer3(const ByteString &packet)
                 return true;
             }
         }
-        else if (ipv4 && ipv4->protocol.toString() == Variable::IP::ah)
+        else if (ipv4 && ipv4->protocol == Variable::IP::ah)
         {
             size_t ahSize = (Functions::binToNum(Functions::byteToBin(packet.substr(start + 1, 1))) * 4) + 8;
             if (!validateSize(start, ahSize, packet)) return false;
@@ -145,24 +145,24 @@ bool Packet::processLayer3(const ByteString &packet)
                 if (!decodeEsp(espHeader)) return false;
             }
         }
-        else if (ipv4 && ipv4->protocol.toString() == Variable::Ah::esp)
+        else if (ipv4 && ipv4->protocol == Variable::Ah::esp)
         {
             ByteString espHeader = packet.substr(start);
             if (!decodeEsp(espHeader)) return false;
         }
-        else if (ipv4 && ipv4->protocol.toString() == Variable::IP::icmpv4)
+        else if (ipv4 && ipv4->protocol == Variable::IP::icmpv4)
         {
             if (!validateSize(start, 8, packet)) return false;
             ByteString icmpHeader = getSlice(8);
             if (!decodeIcmp(icmpHeader)) return false;
         }
-        else if (ipv4 && ipv4->protocol.toString() == Variable::IP::igmp)
+        else if (ipv4 && ipv4->protocol == Variable::IP::igmp)
         {
             ByteString igmpHeader = packet.substr(start);
             if (!decodeIgmp(igmpHeader)) return false;
         }
     }
-    if (ethernet->type.toString() == Variable::Ethernet::ipv6)
+    if (ethernet->type == Variable::Ethernet::ipv6)
     {
         if (!validateSize(start, 40, packet)) return false;
         ByteString ipv6Header = getSlice(40);
@@ -187,7 +187,7 @@ bool Packet::processLayer4(const ByteString &packet)
     //Profiler::getInstance().notify("Decapsulating Layer 4 Headers");
     const IPv4Header* ipv4 = getLayer3Header<IPv4Header>();
     const IPv6Header* ipv6 = getLayer3Header<IPv6Header>();
-    if ((ipv4 && ipv4->protocol.toString() == Variable::IP::tcp) || (ipv6 && ipv6->protocol.toString() == Variable::IP::tcp))
+    if ((ipv4 && ipv4->protocol == Variable::IP::tcp) || (ipv6 && ipv6->protocol == Variable::IP::tcp))
     {
         if (!validateSize(start, 20, packet)) return false;
         size_t tcpSize = Functions::binToNum((Functions::byteToBin(packet.substr(start + 12, 1))).substr(0, 4)) * 4;
@@ -195,20 +195,20 @@ bool Packet::processLayer4(const ByteString &packet)
         ByteString tcpHeader = getSlice(tcpSize);
         if (!decodeTcp(tcpHeader, tcpSize)) return false;
     }
-    else if ((ipv4 && ipv4->protocol.toString() == Variable::IP::udp) || (ipv6 && ipv6->protocol.toString() == Variable::IP::udp))
+    else if ((ipv4 && ipv4->protocol == Variable::IP::udp) || (ipv6 && ipv6->protocol == Variable::IP::udp))
     {
         if (!validateSize(start, 8, packet)) return false;
         ByteString udpHeader = getSlice(8);
         if (!decodeUdp(udpHeader)) return false;
     }
-    else if (ipv4 && ipv4->protocol.toString() == Variable::IP::eigrp)
+    else if (ipv4 && ipv4->protocol == Variable::IP::eigrp)
     {
         size_t eigrpSize = static_cast<size_t>(Functions::byteToNum(ipv4->totalLength.toString()) - 20);
         if (!validateSize(start, eigrpSize, packet)) return false;
         ByteString eigrpHeader = getSlice(eigrpSize);
         if (!decodeEigrp(eigrpHeader)) return false;
     }
-    else if (ipv6 && ipv6->protocol.toString() == Variable::IP::eigrp)
+    else if (ipv6 && ipv6->protocol == Variable::IP::eigrp)
     {
         size_t eigrpSize = static_cast<size_t>(Functions::byteToNum(ipv6->payloadLength.toString()));
         if (!validateSize(start, eigrpSize, packet)) return false;
@@ -225,18 +225,18 @@ bool Packet::processLayer5(const ByteString &packet)
     //if (print) { Logger::getInstance().info() << "Layer 5:" << std::endl; }
     //Profiler::getInstance().notify("Decapsulating Layer 5 Headers");
     const UdpHeader* udp = getLayer4Header<UdpHeader>();
-    if (udp && ((udp->sourcePort == Variable::Udp::dhcpSource && udp->destinationPort == Variable::Udp::dhcpDestination) ||
-        (udp->sourcePort == Variable::Udp::dhcpDestination && udp->destinationPort == Variable::Udp::dhcpSource)))
+    if (udp && ((udp->sourcePort == Variable::Udp::dhcpClient && udp->destinationPort == Variable::Udp::dhcpServer) ||
+        (udp->sourcePort == Variable::Udp::dhcpServer && udp->destinationPort == Variable::Udp::dhcpClient)))
     {
         if (!validateSize(start, 240, packet)) return false;
         ByteString dhcpHeader = packet.substr(start);
         if (!decodeDhcp(dhcpHeader)) return false;
     }
-    else if (udp && ((udp->sourcePort == Variable::Udp::dhcpv6Source && udp->destinationPort == Variable::Udp::dhcpv6Source) ||
-        (udp->sourcePort == Variable::Udp::dhcpv6Destination && udp->destinationPort == Variable::Udp::dhcpv6Source)))
+    else if (udp && ((udp->sourcePort == Variable::Udp::dhcpv6Client && udp->destinationPort == Variable::Udp::dhcpv6Server) ||
+        (udp->sourcePort == Variable::Udp::dhcpv6Server && udp->destinationPort == Variable::Udp::dhcpv6Client)))
     {
         ByteString dhcpHeader = packet.substr(start);
-        if (!decodeDhcpv6(dhcpHeader)) return false;
+        if (!decodeDhcpv6(dhcpHeader) && !decodeDhcpv6Relay(dhcpHeader)) return false;
     }
     return true;
 }
@@ -843,6 +843,21 @@ bool Packet::decodeDhcpv6(ByteString &dhcpHeaders)
             Logger::getInstance().info() << "  Length: " << option.length.toHex() << std::endl;
             Logger::getInstance().info() << "  Value: " << option.value.toHex() << std::endl;
         }
+    }
+
+    packetInfo.Layer5.push_back(std::move(dhcp));
+    return true;
+}
+
+// Parse and process the DHCPv6Relay header
+bool Packet::decodeDhcpv6Relay(ByteString& dhcpHeader)
+{
+    Dhcpv6RelayHeader dhcp;
+    if (!dhcp.decapsulate(dhcpHeader)) return false;
+
+    if (print)
+    {
+
     }
 
     packetInfo.Layer5.push_back(std::move(dhcp));

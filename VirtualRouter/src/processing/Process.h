@@ -86,6 +86,7 @@ private:
 
     void processDhcp(const DhcpHeader& header);             ///< DHCP processing function.
     void processDhcpv6(const Dhcpv6Header& header);         ///< DHCPv6 processing function.
+    void processDhcpv6Relay(const Dhcpv6RelayHeader& h);    ///< DHCPv6 Relay processing functions.
 
     /**
      * @brief Processes the captured packet by examining and handling various header types.
@@ -149,6 +150,7 @@ struct HeaderVisitor {
 
     void operator()(const DhcpHeader& dhcp) const { processor->processDhcp(dhcp); }
     void operator()(const Dhcpv6Header& dhcp) const { processor->processDhcpv6(dhcp); }
+    void operator()(const Dhcpv6RelayHeader& dhcp) const { processor->processDhcpv6Relay(dhcp); }
 };
 
 #endif // PROCESS_H
