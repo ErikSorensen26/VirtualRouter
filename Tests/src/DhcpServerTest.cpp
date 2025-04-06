@@ -127,7 +127,7 @@ protected:
     DhcpNetworkConfig* networkConfig = nullptr;
 
     // Helper functions
-    ByteString allocateIPAddress(ByteString& network, uint32_t subnet, ByteString& mac) {return dhcpServer->dhcpNetworks[network + "/" + std::to_string(subnet)]->lease->allocateIP(mac, networkConfig->leaseTime, networkConfig->t1Percentage, networkConfig->t2Percentage); }
+    ByteString allocateIPAddress(ByteString& network, uint32_t subnet, ByteString& mac) {return dhcpServer->dhcpNetworks[network + "/" + std::to_string(subnet)]->lease->allocateIP(networkConfig->leaseTime, networkConfig->t1Percentage, networkConfig->t2Percentage, &mac); }
     void handleDhcpPacket(const PacketInfo& packet) {dhcpServer->handleDhcpPacket(packet);}
     std::unordered_map<ByteString, LeaseManager::Lease>& getLeases(DhcpNetworkConfig* network) { return dhcpServer->dhcpNetworks[network->network + "/" + std::to_string(network->subnetPrefix)]->lease->leases; }
     void cleanupExpiredLeases() {for (auto& config : dhcpServer->dhcpNetworks) {config.second->lease->cleanupExpiredLeases();}}
@@ -642,7 +642,8 @@ TEST_F(DhcpServerTest, HandleInvalidDhcpPacket_IgnoresPacket)
 }
 
 // Test DHCP Server Handling Duplicate MAC Addresses
-TEST_F(DhcpServerTest, HandleDuplicateMacAddress_AssignsSameIP) {
+TEST_F(DhcpServerTest, HandleDuplicateMacAddress_AssignsSameIP) 
+{
     // Define a client MAC address
     ByteString mac = ByteString("\x00\x11\x22\x33\x44\xAA", 6);
 
@@ -793,7 +794,8 @@ TEST_F(DhcpServerTest, HandleDuplicateMacAddress_AssignsSameIP) {
 }
 
 // Test DHCP Server Automatic Lease Expiration and Cleanup
-TEST_F(DhcpServerTest, AutomaticLeaseExpiration_CleansUpLeases) {
+TEST_F(DhcpServerTest, AutomaticLeaseExpiration_CleansUpLeases) 
+{
     // Simulate multiple leases with varying leaseStart times
     ByteString ip1 = ByteString("\xc0\xa8\x00\x04", 4); // 192.168.0.4
     ByteString mac1 = ByteString("\x00\x11\x22\x33\x44\x88", 6);
@@ -1020,6 +1022,7 @@ TEST_F(DhcpServerTest, HandleDhcpDecline_SetIpConflicted) {
 
     // Verify that the timeout is still active for declined IP
     ByteString clientMac("\x00\x11\x22\x33\x44\xDD", 6);
+    auto test = getTimeouts();
     EXPECT_TRUE(getTimeouts()[Protocol::Dhcp::TimerType::DECLINE_HOLD][0].clientID == clientMac);
     EXPECT_TRUE(getAllocatedIPs(networkConfig->getNetworkID())[ByteString("\xc0\xa8\x00\x02")].empty());
 }

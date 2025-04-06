@@ -2,6 +2,9 @@
 #include <iostream>
 #include <Logger.h>
 
+MacList Configs::macAddressList = MacList();
+
+
 void Configs::printConfig() 
 {
     //std::cout << root.dump(4) << std::endl;

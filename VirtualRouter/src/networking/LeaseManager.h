@@ -51,24 +51,25 @@ public:
      *
      * Ensure that the allocated UP is not already in use.
      *
-     * @param macAddress The MAC address of the client.
      * @param leaseTime The time the lease will last.
      * @param t1Percent The percent of the leaseTime for t1.
      * @param t2Percent The percent of the leaseTime for t2.
+     * @param macAddress The MAC address of the client.
+     * @param useIP Indicates whether the IP should be used in the Client ID.
      * @return The allocated IP address, or an empty string if no address is available.
      */
-    ByteString allocateIP(const ByteString& macAddress, double leaseTime, double t1Percent, double t2Percent);
+    ByteString allocateIP(double leaseTime, double t1Percent, double t2Percent, const ByteString* macAddress, bool useIP = false);
 
     /**
      * @brief Allocates a requested IP address from the specified network for a client based on its mac address
      *
-     * @param macAddress The MAC address of the client.
      * @param leaseTime The time the lease will last.
      * @param t1Percent The percent of the leaseTime for t1.
      * @param t2Percent The percent of the leaseTime for t2.
+     * @param macAddress The MAC address of the client.
      * @return True if the address was allocated, otherwise false.
      */
-    bool allocateRequestedIP(const ByteString& macAddress, const ByteString& requestedIP, double leaseTime, double t1Percent, double t2Percent);
+    bool allocateRequestedIP(const ByteString& requestedIP, double leaseTime, double t1Percent, double t2Percent, const ByteString* macAddress);
 
     /**
      * @brief Releases an IP address back to the pool.
@@ -101,7 +102,7 @@ public:
      * @param t2Percent The percent of the leaseTime for t2.
      * @return ByteString The leased IP.
      */
-    ByteString activateLeaseFromTemp(const ByteString& id, double leaseTime, double t1Percent, double t2Percent);
+    ByteString activateLeaseFromTemp(const ByteString& ip, double leaseTime, double t1Percent, double t2Percent, const ByteString* id);
 
     /**
      * @brief Returns a reference to the active list of active leases

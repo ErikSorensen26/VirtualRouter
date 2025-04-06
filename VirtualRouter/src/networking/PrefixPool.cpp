@@ -12,20 +12,28 @@ void PrefixPool::addLeaseManager(PrefixLeaseManager* lease)
     leaseManager = lease;
 }
 
-std::pair<ByteString, uint8_t> PrefixPool::allocatePrefix(const ByteString& duid, uint8_t requestedLength)
+std::pair<ByteString, uint8_t> PrefixPool::allocatePrefix(const ByteString& duid, uint8_t requestedLength, bool usePrefix)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    //std::cout << basePrefix.toHex() << std::endl;
+    __uint128_t count;
+    ByteString tempBasePrefix;
+    uint8_t tempBaseLength;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        tempBasePrefix = basePrefix;
+        tempBaseLength = baseLength;
+        count = __uint128_t(1) << (requestedLength - baseLength);
+    }
 
-    if (requestedLength < baseLength || requestedLength > 128)
+    if (requestedLength < tempBaseLength || requestedLength > 128)
         return {};
 
-    uint64_t count = 1ULL << (requestedLength - baseLength);
-    for (uint64_t i = 0; i < count; ++i)
+    for (__uint128_t i = 1; i < count; ++i)
     {
         ByteString prefix = generatePrefix(i, requestedLength);
-        if (!isAllocatedOrExcluded(prefix) && prefixMatches(basePrefix, prefix, baseLength))
+        if (!isAllocatedOrExcluded(prefix) && prefixMatches(tempBasePrefix, prefix, tempBaseLength))
         {
-            allocated[prefix] = {duid, requestedLength};
+            allocated[prefix] = {duid + (usePrefix ? prefix : ""), requestedLength};
             return {prefix, requestedLength};
         }
     }
@@ -34,30 +42,46 @@ std::pair<ByteString, uint8_t> PrefixPool::allocatePrefix(const ByteString& duid
 
 bool PrefixPool::allocateSpecificPrefix(const ByteString& prefix, uint8_t length, const ByteString& duid)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    if (prefixMatches(basePrefix, prefix, baseLength) && !isAllocatedOrExcluded(prefix))
+    ByteString tempBasePrefix;
+    uint8_t tempBaseLength;
     {
+        std::lock_guard<std::mutex> lock(mutex);
+        tempBasePrefix = basePrefix;
+        tempBaseLength = baseLength;
+    }
+
+    if (prefixMatches(tempBasePrefix, prefix, tempBaseLength) && !isAllocatedOrExcluded(prefix))
+    {
+        std::lock_guard<std::mutex> lock(mutex);
         allocated[prefix] = {duid, length};
         return true;
     }
     return false;
 }
 
-std::pair<ByteString, uint8_t> PrefixPool::allocateTempPrefix(const ByteString& duid, uint8_t requestedLength)
+std::pair<ByteString, uint8_t> PrefixPool::allocateTempPrefix(const ByteString& duid, uint8_t requestedLength, bool usePrefix)
 {
     // Store temporary offers with ID for tracking
-    std::lock_guard<std::mutex> lock(mutex);
+    ByteString tempBasePrefix;
+    uint8_t tempBaseLength;
+    __uint128_t count;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        tempBasePrefix = basePrefix;
+        tempBaseLength = baseLength;
+        count = __uint128_t(1) << (requestedLength - baseLength);
+    }
 
-    if (requestedLength < baseLength || requestedLength > 128)
+    if (requestedLength < tempBaseLength || requestedLength > 128)
         return {};
 
-    uint64_t count = 1ULL << (requestedLength - baseLength);
-    for (uint64_t i = 0; i < count; ++i)
+    for (__uint128_t i = 1; i < count; ++i)
     {
         ByteString prefix = generatePrefix(i, requestedLength);
-        if (!prefixMatches(basePrefix, prefix, baseLength))
+        if (!prefixMatches(tempBasePrefix, prefix, tempBaseLength))
             continue;
-        temporaryOffers[duid] = {prefix, requestedLength};
+        temporaryOffers[duid + (usePrefix ? prefix : "")] = {prefix, requestedLength};
+        //std::cout << prefix.toHex() << std::endl;
         return {prefix, requestedLength};
     }
     return {};
@@ -101,7 +125,7 @@ bool PrefixPool::isAllocated(const ByteString& prefix) const
 bool PrefixPool::isExcluded(const ByteString& prefix) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return excluded.count(prefix) > 0;
+    return excluded.find(prefix) != excluded.end() || allExcluded;
 }
 
 bool PrefixPool::isAllocatedOrExcluded(const ByteString& prefix) const
@@ -141,10 +165,13 @@ std::pair<ByteString, uint8_t> PrefixPool::acivateOfferedPrefix(const ByteString
     return {};
 }
 
-ByteString PrefixPool::generatePrefix(uint64_t index, uint8_t length) const
+ByteString PrefixPool::generatePrefix(__uint128_t index, uint8_t length) const
 {
     __uint128_t base = Functions::byteToNum128(basePrefix);
-    __uint128_t value = base | (__uint128_t(index) << (128 - length));
+    __uint128_t shift = 128 - length;
+    __uint128_t step = (__uint128_t)1 << shift;
+
+    __uint128_t value = base + (index * step);
     return Functions::numToByte128(value);
 }
 
@@ -168,13 +195,20 @@ uint8_t PrefixPool::getPrefixLength(const ByteString& prefix) const
 std::vector<std::pair<ByteString, uint8_t>> PrefixPool::getAvailablePrefixes(uint8_t requestedLength) const
 {
     std::vector<std::pair<ByteString, uint8_t>> result;
-    std::lock_guard<std::mutex> lock(mutex);
+
+    ByteString tempBasePrefix;
+    __uint128_t count;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        tempBasePrefix = basePrefix;
+        count = __uint128_t(1) << (requestedLength - baseLength);
+    }
+
 
     if (requestedLength < baseLength || requestedLength > 128)
         return result;
 
-    uint64_t count = 1ULL << (requestedLength - baseLength);
-    for (uint64_t i = 0; i < count; ++i)
+    for (__uint128_t i = 1; i < count; ++i)
     {
         ByteString prefix = generatePrefix(i, requestedLength);
         if (prefixMatches(basePrefix, prefix, baseLength) && !isAllocatedOrExcluded(prefix))

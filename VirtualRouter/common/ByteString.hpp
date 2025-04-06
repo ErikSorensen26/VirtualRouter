@@ -225,6 +225,7 @@ public:
                 // Mark that we're using SBO now
                 is_sbo_ = true;
                 capacity_ = SBO_BUFFER_SIZE;
+                std::memset(sbo_buffer_ + size_, 0, SBO_BUFFER_SIZE - size_);
             }
         } else {
             // ---------------------
@@ -515,19 +516,19 @@ public:
     }
 
 private:
-    inline void initialize(const byte* data_ptr, size_t len) {
+    inline void initialize(const byte* input, size_t len) {
         size_ = len;
         if (len <= SBO_BUFFER_SIZE) {
             is_sbo_ = true;
             capacity_ = SBO_BUFFER_SIZE;
-            std::memcpy(sbo_buffer_, data_ptr, len);
+            std::memcpy(sbo_buffer_, input, len);
             // No zeroing out needed beyond size_
         } else {
             is_sbo_ = false;
             capacity_ = len * 2;
             data_ptr_ = static_cast<byte*>(std::malloc(capacity_));
             if (!data_ptr_) throw std::bad_alloc();
-            std::memcpy(data_ptr_, data_ptr, len);
+            std::memcpy(data_ptr_, input, len);
         }
     }
 
@@ -544,16 +545,12 @@ private:
             capacity_ = new_cap;
             is_sbo_ = false;
         } else {
-            if (required > capacity_) {
-                size_t new_cap = capacity_;
-                while (new_cap < required) {
-                    new_cap *= 2; // double until we have enough
-                }
-                byte* new_data = static_cast<byte*>(std::realloc(data_ptr_, new_cap));
-                if (!new_data) throw std::bad_alloc();
-                data_ptr_ = new_data;
-                capacity_ = new_cap;
-            }
+            size_t new_cap = capacity_;
+            while (new_cap < required) new_cap *= 2; // double until we have enough
+            byte* new_data = static_cast<byte*>(std::realloc(data_ptr_, new_cap));
+            if (!new_data) throw std::bad_alloc();
+            data_ptr_ = new_data;
+            capacity_ = new_cap;
         }
     }
 

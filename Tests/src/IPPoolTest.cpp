@@ -45,7 +45,7 @@ protected:
         return config;
     }
 
-    ByteString allocateIPAddress(const DhcpNetworkConfig* network, const ByteString& mac) {return dhcpServer->dhcpNetworks[network->network + "/" + std::to_string(network->subnetPrefix)]->lease->allocateIP(mac, network->leaseTime, 1, 1);}
+    ByteString allocateIPAddress(const DhcpNetworkConfig* network, const ByteString& mac) {return dhcpServer->dhcpNetworks[network->network + "/" + std::to_string(network->subnetPrefix)]->lease->allocateIP(network->leaseTime, 1, 1, &mac);}
     void releaseIPAddress(const DhcpNetworkConfig* network, ByteString& ip) {dhcpServer->dhcpNetworks[network->network + "/" + std::to_string(network->subnetPrefix)]->lease->releaseIP(ip);}
     std::unordered_map<ByteString, DhcpNetwork*>& getNetworks() {return dhcpServer->dhcpNetworks;}
     uint32_t getPoolSize(IPPool* pool) {return pool->poolSize;}

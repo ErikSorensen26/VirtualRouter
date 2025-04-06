@@ -12,6 +12,7 @@
 // Forward declarations
 class IPPoolTest;
 class DhcpServerTest;
+class Dhcpv6ServerTest;
 class LeaseManager;
 
 /**
@@ -25,19 +26,22 @@ class IPPool
     ByteString currentAddress;      ///< Pointer to the next IP for dynamic allocations.
     ByteString gateway;             ///< Current gateway to exclude.
 
-    std::unordered_map<ByteString, ByteString> allocatedIPs; ///< Tracks dynamically allocated IPs to MAC addresses.
+    std::unordered_map<ByteString, ByteString> allocatedIPs; ///< Tracks dynamically allocated IPs to ID.
+    std::unordered_set<ByteString> allocatedTempIPs; ///< Tracks dynamically allocated temporary IPs.
+
     std::unordered_set<ByteString> excludedAddresses; ///< Maps excluded IPs.
-    std::unordered_map<ByteString, ByteString> temporaryOffers; ///< Maps ID to temporary offers.
+    std::unordered_map<ByteString, ByteString> temporaryOffers; ///< Maps temporary offers to ID.
     std::set<ByteString> releasedIPs; ///< Set for releasedIPs.
     mutable std::mutex poolMutex; ///< Mutex for thread synchronization.
 public:
     friend class ::IPPoolTest;
     friend class ::DhcpServerTest;
+    friend class ::Dhcpv6ServerTest;
 
     /**
      * @brief Default constructor with no parameters.
      */
-    IPPool() {}
+    IPPool() = default;
 
     /**
      * @brief Constructs an IPPool for a given network and subnet mask.
@@ -56,17 +60,28 @@ public:
      * @brief Allocates the next available IP from the pool.
      *
      * @param macAddress The MAC address of the client.
-     * @return The allocated UP address as a ByteString, or an empty ByteString if none are available.
+     * @return The allocated IP address as a ByteString, or an empty ByteString if none are available.
      */
-    ByteString allocateIP(const ByteString& macAddress);
+    ByteString allocateIP(const ByteString* macAddress);
 
     /**
      * @brief Temporarily allocates an IP address.
      *
      * @param id Tracking id for temporary address.
+     * @param useIp Indicates if the IP should be used in the ID of the client.
      * @return temporarily allocated IP.
      */
-    ByteString allocateTempIP(const ByteString& id);
+    ByteString allocateTempIP(const ByteString* id, bool useIp = false);
+
+    /**
+     * @brief Temporarily allocates an requested IP address.
+     *
+     * @param requestedIP the requested temporary IP
+     * @param id Tracking id for temporary address.
+     * @param useIp Indicates if the IP should be used in the ID of the client.
+     * @return temporarily allocated IP.
+     */
+    bool allocateRequestedTempIP(const ByteString& requestedIP, const ByteString* id);
 
     /**
      * @brief Excludes an IP for a specific MAC address.
@@ -161,16 +176,19 @@ public:
      * @brief Activates a temporary ip being held.
      *
      * @param id The clients identification that is tied to the temporary address.
+     * @param mac ID of the client the ip is leased to.
      * @return The newly leased IP address.
      */
-    ByteString activateTempIP(const ByteString& id);
+    ByteString activateTempIP(const ByteString& ip, const ByteString* mac);
 
     /**
      * @brief Clears Temporary IPs
      *
      * @param ID Id attached to temporary IPs.
      */
-    void clearTempOffer(const ByteString& id);
+    void clearTempOffer(const ByteString& ip);
+
+    bool allExcluded = false; ///< Bool excluding all IPs (for testing).
 
 private:
 

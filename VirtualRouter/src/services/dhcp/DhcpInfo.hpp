@@ -45,7 +45,8 @@ namespace Protocol
     struct DhcpNetworkConfig
     {
         uint8_t subnetPrefix;               ///< The subnet prefix for the DHCP pool.
-        uint8_t serverPreference = 255;       ///< Default server preference.
+        uint8_t defaultSubnetPrefix;        ///< The default subnet Prefix for the DHCP pool.
+        uint8_t serverPreference = 255;     ///< Default server preference.
         ByteString network;                 ///< The base address of the network. (e.g., "192.168.1.0").
         ByteString defaultGateway;          ///< The default gateway address for clients in this network.
         ByteString renewalTime;             ///< Renewal time in bytes for easy access.
@@ -60,8 +61,8 @@ namespace Protocol
         Interface* interface = nullptr;     ///< Pointer to the interface managing this network.
 
         // Additional fields
-        ByteString ntpServer;                   ///< Network Time Protocol (NTP) server for this network.
-        ByteString tftpServer;                  ///< TFTP server address for PXE booting.
+        std::vector<ByteString> ntpServer;      ///< Network Time Protocol (NTP) server for this network.
+        std::vector<ByteString> tftpServer;     ///< TFTP server address for PXE booting.
         std::vector<ByteString> winsServer;     ///< A list of WINS (Windows Internet Name Service) servers.
         std::vector<ByteString> staticRoutes;   ///< Static routes provided to the network clients.
         std::vector<ByteString> helperAddresses;///< List of DHCP relay (helper) addresses.

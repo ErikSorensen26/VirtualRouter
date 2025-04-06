@@ -15,6 +15,7 @@
 
 // Forward declarations
 class NetworkConfigs;
+class Dhcpv6ServerTest;
 
 namespace Protocol 
 {
@@ -101,6 +102,7 @@ namespace Protocol
     class Dhcpv6Server : public DhcpServerBase
     {
     public:
+        friend class ::Dhcpv6ServerTest;
         /**
          * @brief Constructs a DHCPv6 server.
          */
@@ -130,7 +132,7 @@ namespace Protocol
          *
          * @param packet The received DHCPv6 packet.
          */
-        virtual void handleDhcpPacket(const PacketInfo& packet) override;
+        void handleDhcpPacket(const PacketInfo& packet, Interface* iface);
 
         Dhcpv6::Configs dhcpConfigs;
 
@@ -164,8 +166,9 @@ namespace Protocol
          * A client sends a Solicit message to locate servers.
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processSolicit(const Dhcpv6Header& dhcpHeader);
+        void processSolicit(const Dhcpv6Header& dhcpHeader, Interface* iface);
 
         /**
          * @brief Process a DHCPv6 REQUEST message.
@@ -174,8 +177,9 @@ namespace Protocol
          * including addresses and/or delegated prefixes from a specific server.
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processRequest(const Dhcpv6Header& dhcpHeader);
+        void processRequest(const Dhcpv6Header& dhcpHeader, Interface* iface);
 
         /**
          * @brief Processes a DHCPv6 CONFIRM message.
@@ -185,8 +189,9 @@ namespace Protocol
          * the link to which the client is connected.
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processConfirm(const Dhcpv6Header& dhcpHeader);
+        void processConfirm(const Dhcpv6Header& dhcpHeader, Interface* iface);
 
         /**
          * @brief Processes a DHCPv6 RENEW message.
@@ -197,8 +202,9 @@ namespace Protocol
          * to update other configuration parameters.
          * 
          * @param dhcpHeader The DHCPv6 header from the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processRenew(const Dhcpv6Header& dhcpHeader);
+        void processRenew(const Dhcpv6Header& dhcpHeader, Interface* iface);
         
         /**
          * @brief Processes a DHCPv6 REBIND message.
@@ -209,8 +215,9 @@ namespace Protocol
          * did not respond the the clients original Renew message.
          *
          * @param dhcpHeader The DHCPv6 
+         * @param iface Interface the packet was received on.
          */
-        void processRebind(const Dhcpv6Header& dhcpHeader);
+        void processRebind(const Dhcpv6Header& dhcpHeader, Interface* iface);
 
         /**
          * @brief Processes a DHCPv6 RELEASE message.
@@ -220,8 +227,9 @@ namespace Protocol
          * of the assigned leases.
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processRelease(const Dhcpv6Header& dhcpHeader);
+        void processRelease(const Dhcpv6Header& dhcpHeader, Interface* iface);
 
         /**
          * @brief Processes a DHCPv6 DECLINE message.
@@ -231,8 +239,9 @@ namespace Protocol
          * in use on the link to which the client is connected.
          *
          * @param dhcpHeader The DHCPv6 header for the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processDecline(const Dhcpv6Header& dhcpHeader);
+        void processDecline(const Dhcpv6Header& dhcpHeader, Interface* iface);
 
         /**
          * @brief Processes a DHCPv6 INFORM message.
@@ -241,15 +250,17 @@ namespace Protocol
          * parameters without the assignment of my leases to the client.
          *
          * @param dhcpHeader The DHCPv6 header for the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processInformationRequest(const Dhcpv6Header& header);
+        void processInformationRequest(const Dhcpv6Header& header, Interface* iface);
 
         /**
          * @brief Process a DHCPv6 ECHO-REQUEST
          *
          * @param header DHCPv6 header for the packet.
+         * @param iface Interface the packet was received on.
          */
-        void processEchoRequest(const Dhcpv6Header& header);
+        void processEchoRequest(const Dhcpv6Header& header, Interface* iface);
 
         /**
          * @brief Process a DHCPv6 RELAY-FORW
@@ -258,8 +269,9 @@ namespace Protocol
          * either directly or through another relay agent.
          *
          * @param relay DHCPv6 relay header.
+         * @param iface Interface the packet was received on.
          */
-        void processRelayForward(const Dhcpv6RelayHeader& relay);
+        void processRelayForward(const Dhcpv6RelayHeader& relay, Interface* iface);
 
         // SENDS------------------------------------------------
 
@@ -307,25 +319,28 @@ namespace Protocol
          * @brief Extracts the client IA_NA data: IAID, T1, T2, and IAADDR.
          *
          * @param header DHCPv6 message header.
+         * @param iface Interface the packet was received on.
          * @return True if IA_NA and IAADDR were found and parsed.
          */
-        std::vector<Dhcpv6::IANABlock> extractIA_NA(const Dhcpv6Header& header);
+        std::vector<Dhcpv6::IANABlock> extractIA_NA(const Dhcpv6Header& header, Interface* iface);
 
         /**
          * @brief Extracts IA_PD and IAPREFIX for prefix deligation support.
          *
          * @param header DHCPv6 message header.
+         * @param iface Interface the packet was received on.
          * @return True if IA_NA and IAADDR were found and parsed.
          */
-        std::vector<Dhcpv6::IAPDBlock> extractIA_PD(const Dhcpv6Header& header);
+        std::vector<Dhcpv6::IAPDBlock> extractIA_PD(const Dhcpv6Header& header, Interface* iface);
 
         /**
          * @brief Extracts IA_TA and TEMP address for temporary address support.
          *
          * @param header DHCPv6 message header.
+         * @param iface Interface the packet was received on.
          * @return True if IA_TA and IAADDR were found and parsed
          */
-        std::vector<Dhcpv6::IANABlock> extractIA_TA(const Dhcpv6Header& header);
+        std::vector<Dhcpv6::IANABlock> extractIA_TA(const Dhcpv6Header& header, Interface* iface);
 
         /**
          * @brief Extracts requested options from Option Request Option (ORO).

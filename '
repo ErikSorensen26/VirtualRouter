@@ -50,7 +50,7 @@ ByteString IPPool::allocateIP(const ByteString* duid)
 {
     // Check if MAC already is assigned an address
     {
-        if (duid && baseAddress.size() == 4)
+        if (duid)
         {
             std::lock_guard<std::mutex> lock(poolMutex);
             for (auto& [ipAddress, mac] : allocatedIPs)
@@ -74,7 +74,7 @@ ByteString IPPool::allocateIP(const ByteString* duid)
             releasedIPs.erase(releasedIPs.begin());
             if (duid)
             {
-                allocatedIPs[canidateIP] = *duid;
+                allocatedIPs[canidateIP] = *duid + canidateIP;
             }
             else
             {
@@ -101,7 +101,7 @@ ByteString IPPool::allocateIP(const ByteString* duid)
             std::lock_guard<std::mutex> lock(poolMutex);
             if (duid)
             {
-                allocatedIPs[canidateIP] = *duid;
+                allocatedIPs[canidateIP] = *duid + canidateIP;
             }
             else
             {
@@ -115,27 +115,25 @@ ByteString IPPool::allocateIP(const ByteString* duid)
     return {}; // No available IPs
 }
 
-ByteString IPPool::allocateTempIP(const ByteString* duid, bool useIP)
+ByteString IPPool::allocateTempIP(const ByteString* duid)
 {
-    // Check if DUID already is assigned an address
+    // Check if MAC already is assigned an address
     {
-        if (duid && baseAddress.size() == 4)
+        if (duid)
         {
             std::lock_guard<std::mutex> lock(poolMutex);
             for (auto& [ipAddress, id] : allocatedIPs)
             {
-                if (*duid == id)
+                if (*duid + ipAddress == id)
                 {
-                    //std::cout << ipAddress.toHex() << std::endl;
                     return ipAddress;
                 }
             }
             for (auto& [tempAddress, id] : temporaryOffers)
             {
-                if (*duid == id)
+                if (*duid + ipAddress == id)
                 {
-                    //std::cout << tempAddress.toHex() << std::endl;
-                    return tempAddress;
+                    return ipAddress;
                 }
             }
         }
@@ -151,16 +149,15 @@ ByteString IPPool::allocateTempIP(const ByteString* duid, bool useIP)
             canidateIP = *releasedIPs.begin();
             releasedIPs.erase(releasedIPs.begin());
             
-            if (duid)
+            if (id)
             {
-                temporaryOffers[canidateIP] = *duid + (useIP ? canidateIP : "");
+                temporaryOffers[canidateIP] = *id + canidateIP;
             }
             else
             {
                 temporaryOffers[canidateIP] = "";
             }
         }
-        //std::cout << canidateIP.toHex() << std::endl;
         return canidateIP;
     }
     
@@ -174,46 +171,21 @@ ByteString IPPool::allocateTempIP(const ByteString* duid, bool useIP)
 
     for (__uint128_t ip = start; ip < end; ++ip)
     {
-        if (ip >= end) return {};
-
         ByteString canidate = Functions::numToByte128(ip + 1);
         if (!isAllocatedOrExcluded(canidate) && !isTemporarilyOffered(canidate))
         {
-            if (duid)
+            if (id)
             {
-                temporaryOffers[canidate] = *duid + (useIP ? canidate : "");
+                temporaryOffers[canidate] = *id + canidate;
             }
             else
             {
                 temporaryOffers[canidate] = "";
             }
-            //std::cout << canidate.toHex() << std::endl;
             return canidate;
         }
     }
     return {};
-}
-
-bool IPPool::allocateRequestedTempIP(const ByteString& requestedIP, const ByteString* duid)
-{
-    __uint128_t start;
-    __uint128_t end;
-    {
-        std::lock_guard<std::mutex> lock(poolMutex);
-        start = Functions::byteToNum128(currentAddress);
-        end = Functions::byteToNum128(lastAddress) - 1;
-    }
-
-    __uint128_t requested;
-    requested = Functions::byteToNum128(requestedIP);
-
-    if (requested >= end || requested <= start) return false;
-    if (!isAllocatedOrExcluded(requestedIP) || isTemporarilyOffered(requestedIP))
-    {
-        temporaryOffers[requestedIP] = duid ? *duid : "";
-        return true;
-    }
-    return false;
 }
 
 bool IPPool::excludeIP(const ByteString& ip)
@@ -285,22 +257,14 @@ bool IPPool::setConflicted(const ByteString& ip)
 
 bool IPPool::isAllocated(const ByteString& ip) const
 {
-    bool allocated = false;
-    {
-        std::lock_guard<std::mutex> lock(poolMutex);
-        allocated = allocatedIPs.find(ip) != allocatedIPs.end();
-    }
-    return allocated;
+    std::lock_guard<std::mutex> lock(poolMutex);
+    return allocatedIPs.find(ip) != allocatedIPs.end() || allocatedTempIPs.find(ip) != allocatedTempIPs.end();
 }
 
 bool IPPool::isExcluded(const ByteString& ip) const
 {
-    bool excluded = false;
-    {
-        std::lock_guard<std::mutex> lock(poolMutex);
-        excluded = excludedAddresses.find(ip) != excludedAddresses.end() || allExcluded;
-    }
-    return excluded;
+    std::lock_guard<std::mutex> lock(poolMutex);
+    return excludedAddresses.find(ip) != excludedAddresses.end();
 }
 
 bool IPPool::isAllocatedOrExcluded(const ByteString& ip) const
@@ -400,11 +364,11 @@ bool IPPool::isTemporarilyOffered(const ByteString& ip)
     return false;
 }
 
-ByteString IPPool::getTempIP(const ByteString& duid)
+ByteString IPPool::getTempIP(const ByteString& id)
 {
-    for (const auto& [ip, id] : temporaryOffers)
+    for (const auto& [ip, mac] : temporaryOffers)
     {
-        if (duid == id)
+        if (mac == id)
         {
             return ip;
         }
@@ -418,9 +382,9 @@ void IPPool::clearTempOffer(const ByteString& ip)
     temporaryOffers.erase(ip);
 }
 
-ByteString IPPool::activateTempIP(const ByteString& ip, const ByteString* duid)
+ByteString IPPool::activateTempIP(const ByteString& ip, const ByteString* mac)
 {
     if (ip.empty() || isAllocatedOrExcluded(ip)) return {};
-        allocatedIPs[ip] = duid ? *duid : "";
+        allocatedIPs[ip] = mac ? *mac : "";
     return ip;
 }

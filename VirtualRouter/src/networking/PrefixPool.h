@@ -10,6 +10,7 @@
 #include <vector>
 
 class PrefixLeaseManager;
+class Dhcpv6ServerTest;
 
 /**
  * @brief Manages a pool of IPv6 prefixes for delegation.
@@ -23,11 +24,13 @@ class PrefixPool
     std::map<ByteString, std::pair<ByteString, uint8_t>> allocated; ///< Maps the ID to the Prefix of the client.
     std::map<ByteString, std::pair<ByteString, uint8_t>> temporaryOffers; ///< Maps ID to temporary offers.
     std::set<ByteString> excluded;
+    std::map<uint8_t, __uint128_t> lastIndexUsed;
     PrefixLeaseManager* leaseManager;
 
-    ByteString generatePrefix(uint64_t index, uint8_t length) const;
+    ByteString generatePrefix(__uint128_t index, uint8_t length) const;
     bool prefixMatches(const ByteString& a, const ByteString& b, uint8_t length) const;
 public:
+    friend class ::Dhcpv6ServerTest;
     /**
      * @brief Construct a new Prefix Pool object.
      * @param basePrefix The base prefix of the pool (e.g. /48 block)
@@ -44,9 +47,10 @@ public:
      * @brief Allocate a prefix for a given DUID.
      * @param duid The client's DUID
      * @param requestedLength The requested prefix length (e.g., /64)
+     * @param usePrefix Indicates if the prefix should be included in the client ID.
      * @return A pair of (allocated prefix, length). Empty if unavailable.
      */
-    std::pair<ByteString, uint8_t> allocatePrefix(const ByteString& duid, uint8_t requestedLength);
+    std::pair<ByteString, uint8_t> allocatePrefix(const ByteString& duid, uint8_t requestedLength, bool usePrefix = false);
 
     /**
      * @brief Allocate a specific prefix.
@@ -59,11 +63,14 @@ public:
 
     /**
      * @brief Allocate a temporary prefix for a given DUID.
-     * @param duid The client's DUID
+     *
+     * @param prefix the specified prefix for the lease.
      * @param requestedLength The requested prefix length
+     * @param duid The client's DUID
+     * @param usePrefix Indicates if the prefix should be included in the client ID.
      * @return The temporary prefix.
      */
-    std::pair<ByteString, uint8_t> allocateTempPrefix(const ByteString& duid, uint8_t requestedLength);
+    std::pair<ByteString, uint8_t> allocateTempPrefix(const ByteString& duid, uint8_t requestedLength, bool usePrefix = false);
 
     /**
      * @brief Exclude a prefix from being assigned.
@@ -155,6 +162,7 @@ public:
      */
     void clearTempPrefix(const ByteString& id);
 
+    bool allExcluded = false; ///< Boolean excluding all addresses, used for testing.
 };
 
 #endif //PREFIX_POOL_H

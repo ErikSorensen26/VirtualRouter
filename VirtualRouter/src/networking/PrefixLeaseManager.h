@@ -7,12 +7,16 @@
 #include <map>
 #include <mutex>
 
+class Dhcpv6ServerTest;
+
 /**
  * @brief Tracks and manages prefix leases with time-based expiration.
  */
 class PrefixLeaseManager
 {
 public:
+    friend class ::Dhcpv6ServerTest;
+
     /**
      * @struct PrefixLease
      *
@@ -42,9 +46,10 @@ public:
      * @param leaseTime Time in seconds before expiration
      * @param t1Percent The percent of the leaseTime for t1.
      * @param t2Percent The percent of the leaseTime for t2.
+     * @param usePrefix Indicates if the prefix should be used in the client ID.
      * @return The allocated prefix and length
      */
-    std::pair<ByteString, uint8_t> allocatePrefix(const ByteString& duid, uint8_t requestedLength, double leaseTime, double t1Percent, double t2Percent);
+    std::pair<ByteString, uint8_t> allocatePrefix(const ByteString& duid, uint8_t requestedLength, double leaseTime, double t1Percent, double t2Percent, bool usePrefix = false);
 
     /**
      * @brief Allocate a requested prefix with lease tracking.

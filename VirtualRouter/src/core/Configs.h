@@ -82,11 +82,11 @@ struct MacList
         Loopback.clear();
     }
 
-    std::vector<std::string> Ethernet;          ///< List of Ethernet MAC addresses.
-    std::vector<std::string> FastEthernet;      ///< List of Fast Ethernet MAC Addresses.
-    std::vector<std::string> GigabitEthernet;   ///< List of Gigabit Ethernet MAC Addresses.
-    std::vector<std::string> PortChannel;       ///< List of PortChannel MAC Addresses.
-    std::vector<std::string> Loopback;          ///< List of Loopback MAC Addresses.
+    std::vector<std::string> Ethernet{};          ///< List of Ethernet MAC addresses.
+    std::vector<std::string> FastEthernet{};      ///< List of Fast Ethernet MAC Addresses.
+    std::vector<std::string> GigabitEthernet{};   ///< List of Gigabit Ethernet MAC Addresses.
+    std::vector<std::string> PortChannel{};       ///< List of PortChannel MAC Addresses.
+    std::vector<std::string> Loopback{};          ///< List of Loopback MAC Addresses.
 };
 
 /**
@@ -397,7 +397,7 @@ public:
     std::string prevMode;               ///< Stores the previous operational mode
     std::string startupFileName{};      ///< Path to the startup configuration file
 
-    MacList macAddressList;             ///< Categorized list of MAC addresses by interface type.
+    static MacList macAddressList;             ///< Categorized list of MAC addresses by interface type.
     std::string OUI;                    ///< Organizationally Unique Identifier for MAC addresses.
     bool configMode = true;             ///< Flag indicating if the terminal is in configuration mode.
 
@@ -414,7 +414,6 @@ public:
     std::shared_ptr<IFileSystem> fileSystem; ///< File system interface.
 	
 private:
-
 
     std::vector<std::string> volatileInputs{"WORD", "LINE", "A.B.C.D", "X:X:X:X::X", "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"}; ///< List of volatile input types
     std::vector<std::string> inputs{"ip", "subnet", "id", "value", "ipv6", "mac"}; ///< List of inputs parameter names.

@@ -4,16 +4,17 @@
 
 PrefixLeaseManager::PrefixLeaseManager(PrefixPool* p) : pool(p) {}
 
-std::pair<ByteString, uint8_t> PrefixLeaseManager::allocatePrefix(const ByteString& duid, uint8_t requestedLength, double leaseTime, double t1Percent, double t2Percent)
+std::pair<ByteString, uint8_t> PrefixLeaseManager::allocatePrefix(const ByteString& duid, uint8_t requestedLength, double leaseTime, double t1Percent, double t2Percent, bool usePrefix)
 {
     std::lock_guard<std::mutex> lock(leaseMutex);
-    auto prefixPair = pool->allocatePrefix(duid, requestedLength);
+    auto prefixPair = pool->allocatePrefix(duid, requestedLength, usePrefix);
     if (prefixPair.first.empty()) return {};
 
     uint32_t t1 = static_cast<uint32_t>(t1Percent * leaseTime);
     uint32_t t2 = static_cast<uint32_t>(t2Percent * leaseTime);
 
-    leases[prefixPair.first] = { duid, secondsSinceEpoch(), leaseTime, requestedLength, t1, t2 };
+    leases[prefixPair.first] = { duid + (usePrefix ? prefixPair.first : ""), secondsSinceEpoch(), leaseTime, requestedLength, t1, t2 };
+    //std::cout << prefixPair.first.toHex() << std::endl;
     return prefixPair;
 }
 

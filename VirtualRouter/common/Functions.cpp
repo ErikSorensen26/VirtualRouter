@@ -309,6 +309,7 @@ namespace Functions {
              return ByteString(1, 0);
          }
 
+         
          while (num > 0)
          {
              bytes.push_back(static_cast<uint8_t>(num % 256));

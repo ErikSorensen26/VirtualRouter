@@ -29,6 +29,7 @@ void Protocol::DhcpServerBase::addNetwork(DhcpNetworkConfig* config)
         {
             dhcpNetwork->prefixPool = new PrefixPool(config->network, config->subnetPrefix);
             dhcpNetwork->prefixLease = new PrefixLeaseManager(dhcpNetwork->prefixPool);
+            dhcpNetwork->config->defaultSubnetPrefix = std::min(64, dhcpNetwork->config->subnetPrefix + 8);
         }
 
         dhcpNetwork->lease->addGlobalManager(networkID, &globalLeaseManager);
@@ -129,7 +130,7 @@ bool Protocol::DhcpServerBase::updateNetworkConfig(const ByteString& networkID, 
         configIt->second->pool->adjustPool(currentConfig.network, currentConfig.subnetPrefix, currentConfig.defaultGateway);
         // Move old Dhcp Network
         moveConfig(networkID, newKey);
-        }
+    }
     return true;
 }
 
@@ -197,7 +198,7 @@ void Protocol::DhcpServerBase::scheduleTimeout(Dhcp::TimerType type, const ByteS
                             else if (netIt->second->prefixLease && netIt->second->prefixLease->isAllocated(offer))
                             {
                                 netIt->second->prefixLease->releasePrefix(offer);
-        }
+                            }
                         }
                         break;
                     }

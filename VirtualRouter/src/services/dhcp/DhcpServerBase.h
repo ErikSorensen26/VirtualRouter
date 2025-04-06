@@ -9,6 +9,7 @@
 #include <thread>
 #include <atomic>
 #include <vector>
+#include <condition_variable>
 #include <LeaseManager.h>
 #include <IPPool.h>
 #include <PrefixLeaseManager.h>
@@ -116,12 +117,6 @@ namespace Protocol
         bool updateNetworkConfig(const ByteString& network, const DhcpNetworkConfig& newConfig, const std::vector<ByteString>& dnsToRemove, const std::vector<ByteString>& winsToRemove, const std::vector<ByteString>& helperAddressesToRemove);
 
         /**
-         * @brief Processes an incoming DHCP packet.
-         * @param packet The incoming packet information.
-         */
-        virtual void handleDhcpPacket(const PacketInfo& packet) = 0;
-
-        /**
          * @brief moves a NetworkConfig to a different key.
          *
          * @param oldKey Old networkID.
@@ -167,6 +162,8 @@ namespace Protocol
         std::mutex configMutex;     ///< Mutex for synchronizing network configuration access.
         std::atomic<bool> stopFlag { false }; ///< Flag to signal server thread to stop.
         std::thread serverThread;   ///< Server thread for handling DHCP processing.
+        std::mutex serverThreadMutex;
+        std::condition_variable serverCV;
 
         /**
          * @brief Abstract handler loop for DHCP processing.

@@ -188,7 +188,7 @@ ByteString RoutingTable::getNextHop(const ByteString& destination, uint8_t mask,
         static std::atomic<size_t> roundRobinIndex{0};
         return it->second->nextHopsVector[roundRobinIndex++ % it->second->nextHopsVector.size()];
     }
-    return ""; // No route found
+    return {}; // No route found
 }
 
 void RoutingTable::printRoutingTable() {

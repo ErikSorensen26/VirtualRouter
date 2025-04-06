@@ -53,8 +53,9 @@ namespace Protocol
          * determines its type, and preforms the appropriate actions based on the DHCP message.
          *
          * @param packet The received PacketInfo object containing the header and payload.
+         * @param iface The interface the packet was received on.
          */
-        virtual void handleDhcpPacket(const PacketInfo& packet) override;
+        void handleDhcpPacket(const PacketInfo& packet);
 
     private:
         

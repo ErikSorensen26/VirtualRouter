@@ -6,10 +6,7 @@
 #include <thread>
 #include <LeaseManager.h>
 
-Protocol::DhcpServer::DhcpServer()
-{
-    stopFlag.store(false);
-}
+Protocol::DhcpServer::DhcpServer() {}
 
 Protocol::DhcpServer::~DhcpServer()
 {
@@ -93,7 +90,7 @@ void Protocol::DhcpServer::processDiscover(const DhcpHeader& dhcpHeader)
 
     DhcpNetwork* config = dhcpNetworks[matchingNetwork];
     auto& lm = dhcpNetworks[matchingNetwork]->pool;
-    ByteString allocatedIP = lm->allocateTempIP(dhcpHeader.clientMacAddress);
+    ByteString allocatedIP = lm->allocateTempIP(&dhcpHeader.clientMacAddress);
     if (!allocatedIP.empty())
     {
         PacketInfo offerPacket = buildDhcpOffer(dhcpHeader, config->config, allocatedIP);
@@ -120,7 +117,7 @@ void Protocol::DhcpServer::processRequest(const DhcpHeader& dhcpHeader)
     DhcpNetwork* config = it->second;
     if (!requestedIP.empty() && !matchingNetwork.empty() && config->pool->isTemporarilyOffered(requestedIP))
     {
-        config->lease->activateLeaseFromTemp(dhcpHeader.clientMacAddress, config->config->leaseTime, config->config->t1Percentage, config->config->t2Percentage);
+        config->lease->activateLeaseFromTemp(requestedIP, config->config->leaseTime, config->config->t1Percentage, config->config->t2Percentage, &dhcpHeader.clientMacAddress);
         cancelTimeout(Dhcp::TimerType::IP_OFFER_TIMEOUT, dhcpHeader.clientMacAddress, requestedIP);
     }
     else if (!requestedIP.empty() && !matchingNetwork.empty() && config->pool->isAllocated(requestedIP))
@@ -181,7 +178,7 @@ std::vector<ByteString> Protocol::DhcpServer::getRequestedOptions(const std::vec
             // Option 55 found; split its value into individual requested options
             for (const auto& byte : option.value)
             {
-                requestedOptions.emplace_back(ByteString(1, byte));
+                requestedOptions.emplace_back(1, byte);
             }
             break; // No need to continue after finding the required list
         }
@@ -229,7 +226,7 @@ PacketInfo Protocol::DhcpServer::dhcpBody(const ByteString& sourceIP, const Byte
     eth.destinationMac = Variable::Mac::broadcast; 
     eth.sourceMac = sourceMac; 
     eth.type = Variable::Ethernet::ipv4;
-    dhcpPacket.Layer2.emplace_back(std::move(eth));
+    dhcpPacket.Layer2.push_back(std::move(eth));
 
     IPv4Header ip;
     ip.version = "4";
@@ -246,14 +243,14 @@ PacketInfo Protocol::DhcpServer::dhcpBody(const ByteString& sourceIP, const Byte
     ip.checksum = std::string("\x00\x00", 2);
     ip.sourceAddress = sourceIP;
     ip.destinationAddress = destinationIP;
-    dhcpPacket.Layer3.emplace_back(std::move(ip));
+    dhcpPacket.Layer3.push_back(std::move(ip));
 
     UdpHeader udp;
     udp.sourcePort = Variable::Udp::dhcpClient;
     udp.destinationPort = Variable::Udp::dhcpServer;
     udp.length = std::string("\x01\x00", 2);
     udp.checksum = std::string("\x00\x00", 2); 
-    dhcpPacket.Layer4.emplace_back(std::move(udp)); 
+    dhcpPacket.Layer4.push_back(std::move(udp)); 
 
     return dhcpPacket; 
 }
@@ -281,11 +278,11 @@ DhcpHeader Protocol::DhcpServer::buildDhcpHeader(const ByteString& messageType, 
     dhcp.magicCookie = Variable::Dhcp::magicCookie;
 
     // Options
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::type,
-        std::string("\x01", 1),
+        std::string(messageType.size(), 1),
         messageType
-    });
+    );
 
     dhcp.end = Variable::Dhcp::end;
     return dhcp;
@@ -298,11 +295,12 @@ PacketInfo Protocol::DhcpServer::buildDhcpOffer(const DhcpHeader& dhcpHeader, co
     offerHeader.boot = Variable::Dhcp::Type::offer;
 
     // Add DHCP Options
-    offerHeader.options.emplace_back(DhcpHeader::Option{
+    ByteString leaseTime = Functions::numToByte(static_cast<uint32_t>(config->leaseTime), 4);
+    offerHeader.options.emplace_back(
         Variable::Dhcp::Option::leaseTime,
-        std::string("\x04", 1),
-        Functions::numToByte(static_cast<uint32_t>(config->leaseTime), 4)
-    });
+        std::string(leaseTime.size(), 1),
+        std::move(leaseTime)
+    );
     offerHeader.options.emplace_back(DhcpHeader::Option{
         Variable::Dhcp::Option::mask, 
         std::string("\x04", 1),
@@ -418,7 +416,8 @@ std::vector<DhcpHeader::Option> Protocol::DhcpServer::buildRequestedOptions(cons
         // Option 1: Subnet Mask
         if (opt == Variable::Dhcp::Option::mask && config->subnetPrefix != 0)
         {
-            options.emplace_back(DhcpHeader::Option{
+            ByteString 
+
                 Variable::Dhcp::Option::mask,
                 ByteString("\x04", 1),
                 Functions::binToByte(Functions::numMaskToBin(config->subnetPrefix))
@@ -436,14 +435,16 @@ std::vector<DhcpHeader::Option> Protocol::DhcpServer::buildRequestedOptions(cons
         // Option 6: DNS Servers
         if (opt == Variable::Dhcp::Option::domainServer && !config->dnsServer.empty())
         {
+            ByteString dnsServers;
             for (const auto& dns : config->dnsServer)
             {
-                options.emplace_back(DhcpHeader::Option{
-                    Variable::Dhcp::Option::domainServer,
-                    ByteString("\x06", 1),
-                    dns
-                });
+                dnsServers += dns;
             }
+            options.push_back({
+                Variable::Dhcp::Option::domainServer,
+                ByteString(dnsServers.size(), 1),
+                dnsServers
+            });
         }
         // Option 15: Domain Name
         if (opt == Variable::Dhcp::Option::domainName && !config->domainName.empty())

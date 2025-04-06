@@ -20,21 +20,26 @@ void LeaseManager::addGlobalManager(ByteString& ID, GlobalLeaseManager* globalLm
     }
 }
 
-ByteString LeaseManager::allocateIP(const ByteString& macAddress, double leaseTime, double t1Percent, double t2Percent)
+ByteString LeaseManager::allocateIP(double leaseTime, double t1Percent, double t2Percent, const ByteString* duid, bool useIP)
 {
     std::lock_guard<std::mutex> lock(leaseMutex);
 
     // Check if the MAC already has a lease
-    for (const auto& [ip, lease] : leases) 
     {
-        if (lease.clientID == macAddress)
+        for (const auto& [ip, lease] : leases) 
         {
-            return ip;
+            if (ip.size() != 4) break;
+
+            if (lease.clientID == *duid)
+            {
+                //std::cout << ip.toHex() << std::endl;
+                return ip;
+            }
         }
     }
 
     // Get next available IP from the pool
-    ByteString allocatedIP = ipPool->allocateIP(macAddress);
+    ByteString allocatedIP = ipPool->allocateIP(duid);
     if (allocatedIP.empty()) return {}; // No available IPs
 
     uint32_t t1 = static_cast<uint32_t>(leaseTime * t1Percent);
@@ -42,27 +47,31 @@ ByteString LeaseManager::allocateIP(const ByteString& macAddress, double leaseTi
 
     // Store lease info
     double currentTime = secondsSinceEpoch();
-    leases[allocatedIP] = {allocatedIP, macAddress, currentTime, leaseTime, t1, t2};
+    leases[allocatedIP] = {allocatedIP, duid ? *duid + (useIP ? allocatedIP : "") : "", currentTime, leaseTime, t1, t2};
     
     // Add lease to global table if able
     if (globalLeaseManager)
     {
-        globalLeaseManager->updateLeaseRecord(macAddress, networkID, leases[allocatedIP]);
+        globalLeaseManager->updateLeaseRecord(duid ? *duid + (useIP ? allocatedIP : "") : "", networkID, leases[allocatedIP]);
     }
 
+    //std::cout << allocatedIP.toHex() << std::endl;
     return allocatedIP;
 }
 
-bool LeaseManager::allocateRequestedIP(const ByteString& macAddress, const ByteString& requestedIP, double leaseTime, double t1Percent, double t2Percent)
+bool LeaseManager::allocateRequestedIP(const ByteString& requestedIP, double leaseTime, double t1Percent, double t2Percent, const ByteString* duid)
 {
     std::lock_guard<std::mutex> lock(leaseMutex);
 
     // Check if the MAC already has a lease
-    for (const auto& [ip, lease] : leases) 
+    if (duid && requestedIP.size() == 4)
     {
-        if (lease.clientID == macAddress)
+        for (const auto& [ip, lease] : leases) 
         {
-            return false;
+            if (lease.clientID == *duid)
+            {
+                return false;
+            }
         }
     }
 
@@ -74,16 +83,15 @@ bool LeaseManager::allocateRequestedIP(const ByteString& macAddress, const ByteS
 
     // Store lease info
     double currentTime = secondsSinceEpoch();
-    leases[requestedIP] = {requestedIP, macAddress, currentTime, leaseTime, t1, t2};
+    leases[requestedIP] = {requestedIP, duid ? *duid : "", currentTime, leaseTime, t1, t2};
     
     // Add lease to global table if able
     if (globalLeaseManager)
     {
-        globalLeaseManager->updateLeaseRecord(macAddress, networkID, leases[requestedIP]);
+        globalLeaseManager->updateLeaseRecord(duid ? *duid : "", networkID, leases[requestedIP]);
     }
 
     return true;
-    
 }
 
 void LeaseManager::releaseIP(const ByteString& ipAddress)
@@ -141,14 +149,17 @@ void LeaseManager::cleanupExpiredLeases()
     }
 }
 
-ByteString LeaseManager::activateLeaseFromTemp(const ByteString& id, double leaseTime, double t1Percent, double t2Percent)
+ByteString LeaseManager::activateLeaseFromTemp(const ByteString& ip, double leaseTime, double t1Percent, double t2Percent, const ByteString* duid)
 {
-    ByteString tempIP = ipPool->getTempIP(id);
-    if (tempIP.empty()) return {};
+    if (duid)
+    {
+        ByteString tempIP = ipPool->getTempIP(*duid);
+        if (tempIP.empty() || tempIP != ip) return {};
+    }
 
-    ByteString ip = ipPool->activateTempIP(id);
-    ipPool->clearTempOffer(id);
-    if (ip.empty())
+    ByteString newIp = ipPool->activateTempIP(ip, duid);
+    ipPool->clearTempOffer(ip);
+    if (newIp.empty() || newIp != ip)
     {
         return {};
     }
@@ -158,7 +169,7 @@ ByteString LeaseManager::activateLeaseFromTemp(const ByteString& id, double leas
 
     // Store lease info
     double currentTime = secondsSinceEpoch();
-    leases[ip] = {ip, id, currentTime, leaseTime, t1, t2};
+    leases[ip] = {ip, duid ? *duid : "", currentTime, leaseTime, t1, t2};
 
     return {};
 }
