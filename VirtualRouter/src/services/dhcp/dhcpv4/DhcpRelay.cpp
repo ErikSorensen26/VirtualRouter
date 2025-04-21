@@ -63,11 +63,7 @@ void Protocol::DhcpRelay::modifyGiaddr(PacketInfo& packet)
     }
 
     auto& dhcpHeader = std::get<DhcpHeader>(packet.Layer5[0]);
-    if (associatedInterface->Get())
-    {
-        std::shared_lock<std::shared_mutex> lock(associatedInterface->Get()->ipMutex);
-        dhcpHeader.relayAgentIP = associatedInterface->Get()->ipv4.ipAddress;
-    }
+    dhcpHeader.relayAgentIP = associatedInterface->configs.getIPv4();
 }
 
 ByteString Protocol::DhcpRelay::extractAddress(PacketInfo& packet) const

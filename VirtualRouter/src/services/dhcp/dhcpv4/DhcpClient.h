@@ -38,6 +38,9 @@ namespace Protocol
          * @brief Destructor to clean up threads and resources.
          */
         ~DhcpClient();
+
+        void initiate();
+        void shutdown();
     
         /**
          * @brief Creates a DHCP packet body with Ethernet, IP, and UDP headers.
@@ -92,10 +95,8 @@ namespace Protocol
 
         /**
          * @brief Initializes the DHCP client, handling discovery, offers, requests, acknowledgments, and lease renewals.
-         * 
-         * @param hardwareAddress The hardware (MAC) address of the client.
          */
-        void InitializeDhcp(ByteString& hardwareAddress);
+        void initializeDhcp();
 
         /**
          * @brief Extracts DHCP options from the provided list of options and updates the interface's DHCP configuration accordingly.

@@ -7,14 +7,21 @@ namespace Protocol
 
     // Constructor: Initiates the ARP object with the given interface
     Arp::Arp(Interface& CurrentInterface) 
-        : currentInterface(&CurrentInterface), running(true)
+        : currentInterface(&CurrentInterface), running(false)
     {
+        initiateArp();
+    }
+
+    void Arp::initiateArp()
+    {
+        if (running.load(std::memory_order_relaxed)) return;
+        running.store(true, std::memory_order_relaxed);
         // Start ARP cache cleanup thread
         std::thread cacheThread(&Arp::arpCacheCleanupThread, this);
 
         {
             std::lock_guard<std::mutex> lock(threadMutex);
-            threads.emplace_back(std::move(cacheThread));
+            threads.push_back(std::move(cacheThread));
         }
     }
 
@@ -27,10 +34,8 @@ namespace Protocol
     // Shutdown method
     void Arp::shutdown()
     {
-        {
-            std::lock_guard<std::mutex> lock(requestMutex);
-            running.store(false, std::memory_order_release);
-        }
+        if (!running.load(std::memory_order_relaxed)) return;
+        running.store(false, std::memory_order_release);
         threadCV.notify_all();
         
         {
@@ -131,7 +136,7 @@ namespace Protocol
         
         {
             std::lock_guard<std::mutex> threadLock(threadMutex);
-            threads.emplace_back(std::move(newThread));
+            threads.push_back(std::move(newThread));
         }
     }
 
@@ -158,11 +163,11 @@ namespace Protocol
 
             PacketInfo arpReq;
             {
-                auto iface = currentInterface->Get();
-                if (iface)
+                if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
                 {
-                    std::shared_lock<std::shared_mutex> lock(iface->ipMutex);
-                    arpReq = arpRequest(iface->macAddress, iface->ipv4.ipAddress, targetIp);
+                    auto& iface = currentInterface->configs;
+                    std::shared_lock<std::shared_mutex> lock(iface.ipMutex);
+                    arpReq = arpRequest(iface.macAddress, iface.ipv4.ipAddress, targetIp);
                 }
             }
 
@@ -258,14 +263,14 @@ namespace Protocol
     // Method to send an ARP reply
     void Arp::sendReply(const ByteString& targetMac, const ByteString& targetIp) 
     {
-        auto interfaceInfo = currentInterface->Get();
-        if (interfaceInfo)
+        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
+            auto& interfaceInfo = currentInterface->configs;
             PacketInfo replyPacket;
 
             {
-                std::shared_lock<std::shared_mutex> lock(interfaceInfo->ipMutex);
-                replyPacket = arpReply(interfaceInfo->macAddress, targetMac, interfaceInfo->ipv4.ipAddress, targetIp);
+                std::shared_lock<std::shared_mutex> lock(interfaceInfo.ipMutex);
+                replyPacket = arpReply(interfaceInfo.macAddress, targetMac, interfaceInfo.ipv4.ipAddress, targetIp);
             }
 
             //Ethernet::build(currentInterface, replyPacket, nullptr, &targetMac, Variable::Ethernet::arp);
@@ -285,7 +290,7 @@ namespace Protocol
         eth.sourceMac = currentMac; 
         eth.type = Variable::Ethernet::arp; 
 
-        packet.Layer2.push_back(eth);
+        packet.Layer2.push_back(std::move(eth));
 
         // Set up the ARP header for the request
         arp.hardwareType = Variable::Arp::ethernet; 
@@ -298,7 +303,7 @@ namespace Protocol
         arp.targetHardwareAddress = Variable::Mac::source; 
         arp.targetIpAddress = targetIp; 
 
-        packet.Layer2_5.push_back(arp);
+        packet.Layer2_5.push_back(std::move(arp));
 
         return packet;
     }
@@ -315,7 +320,7 @@ namespace Protocol
         eth.sourceMac = currentMac;
         eth.type = Variable::Ethernet::arp;
 
-        packet.Layer2.push_back(eth);
+        packet.Layer2.push_back(std::move(eth));
 
         // Set up the ARP header for the reply
         arp.hardwareType = Variable::Arp::ethernet; 
@@ -328,7 +333,7 @@ namespace Protocol
         arp.targetHardwareAddress = targetMac;
         arp.targetIpAddress = targetIp; 
 
-        packet.Layer2_5.push_back(arp);
+        packet.Layer2_5.push_back(std::move(arp));
 
         return packet;
     }

@@ -1,1 +1,32 @@
-{}
+{
+    "interface": {
+        "GigabitEthernet": [
+            {
+                "id": "0",
+                "commands": {
+                    "ip": {
+                        "address": {
+                            "ip": "10.0.0.10",
+                            "subnet": "255.0.0.0"
+                        }
+                    }
+                }
+            }
+        ]
+    },
+    "router": {
+        "eigrp": [
+            {
+                "id": "1",
+                "commands": {
+                    "network": [
+                        {
+                            "subnet": "0.0.0.0",
+                            "subnet_2": "255.255.255.255"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}

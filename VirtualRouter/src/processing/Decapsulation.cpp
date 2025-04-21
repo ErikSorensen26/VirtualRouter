@@ -12,7 +12,7 @@ Packet::Packet(ByteString &packet, bool debug, Interface& iface)
     inspection(packet);
 }
 
-Packet::Packet(ByteString& packet) : fullPacket(packet), currentInterface(nullptr) {}
+Packet::Packet(ByteString& packet) : currentInterface(nullptr), fullPacket(std::move(packet)) {}
 
 // Inspects the given packet and processes each layer.
 bool Packet::inspection(const ByteString &packet)
@@ -105,7 +105,6 @@ bool Packet::processLayer2_5(const ByteString &packet)
 // Processes Layer 3 headers, focusing on IPv4/IPv6 and its encapsulated protocols.
 bool Packet::processLayer3(const ByteString &packet)
 {
-    //Profiler::getInstance().notify("Decapsulating Layer 3 Headers");
     //if (print) { Logger::getInstance().info() << "Layer 3:" << std::endl; }
     const EthernetHeader* ethernet = getLayer2Header<EthernetHeader>();
     const VlanHeader* vlan = getLayer2_5Header<VlanHeader>();
@@ -184,7 +183,6 @@ bool Packet::processLayer3(const ByteString &packet)
 bool Packet::processLayer4(const ByteString &packet)
 {
     //if (print) { Logger::getInstance().info() << "Layer 4:" << std::endl; }
-    //Profiler::getInstance().notify("Decapsulating Layer 4 Headers");
     const IPv4Header* ipv4 = getLayer3Header<IPv4Header>();
     const IPv6Header* ipv6 = getLayer3Header<IPv6Header>();
     if ((ipv4 && ipv4->protocol == Variable::IP::tcp) || (ipv6 && ipv6->protocol == Variable::IP::tcp))
@@ -223,7 +221,6 @@ bool Packet::processLayer4(const ByteString &packet)
 bool Packet::processLayer5(const ByteString &packet)
 {
     //if (print) { Logger::getInstance().info() << "Layer 5:" << std::endl; }
-    //Profiler::getInstance().notify("Decapsulating Layer 5 Headers");
     const UdpHeader* udp = getLayer4Header<UdpHeader>();
     if (udp && ((udp->sourcePort == Variable::Udp::dhcpClient && udp->destinationPort == Variable::Udp::dhcpServer) ||
         (udp->sourcePort == Variable::Udp::dhcpServer && udp->destinationPort == Variable::Udp::dhcpClient)))
@@ -255,10 +252,9 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
 
     ByteString currentMac;
     {
-        if (currentInterface && currentInterface->Get())
+        if (currentInterface)
         {
-            std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
-            currentMac = currentInterface->Get()->macAddress;
+            currentMac = currentInterface->configs.macAddress;
         }
     }
 
@@ -525,7 +521,7 @@ bool Packet::decodeIPv4(ByteString &ipv4Header, size_t &ipv4Size)
         }
     }
 
-    packetInfo.Layer3.emplace_back(ipv4);
+    packetInfo.Layer3.push_back(std::move(ipv4));
     //Profiler::getInstance().notify("ip decode end");
     return true;
 }

@@ -410,6 +410,26 @@ namespace Functions {
     bool isLocalLink(const ByteString& input);
 
     /**
+     * @brief Validates if an IPv6 address is a global unicast address.
+     *
+     * Takes in a user typed IP address and validates it as a global unicast address.
+     *
+     * @param input IPv6 global unicast address.
+     * @return bool Indicates if the ipv6 address is a valid global unicast address.
+     */
+    bool isGlobalUnicast(const ByteString& input);
+
+    /**
+     * @brief Validates if an IPv6 adderess is a unicast local address
+     *
+     * Takes in a user typed IP addres and validates it as a unicast local address.
+     *
+     * @param input IPv6 unicast local address.
+     * @return bool Indicates if the ipv6 address is a valid global unicast address.
+     */
+    bool isLocalUnicast(const ByteString& input);
+
+    /**
      * @brief Splits a string into tokens based on a delimiter.
      *
      * Splits the input string into tokens using the provided delimiter character and returns the resulting vector of tokens.
@@ -429,6 +449,10 @@ namespace Functions {
      * @return std::string The zero-padded string.
      */
     std::string padWithZeros(const std::string& input);
+
+    std::string generateRandomString(size_t length);
+
+    std::optional<std::pair<std::string, std::string>> splitMiddle(const std::string& full, char delimiter);
 }
 
 #endif // FUNCTIONS_H

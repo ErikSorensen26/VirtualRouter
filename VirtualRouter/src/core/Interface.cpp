@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 #include <Dhcp.h>
+#include <Dhcpv6.h>
 #include <Arp.h>
 #include <Ndp.h>
 #include <Eigrp.h>
@@ -34,10 +35,7 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     // Initialize shared pointers for Protocol objects
     arp = new Protocol::Arp(*this);
     ndp = new Protocol::Ndp(*this);
-
-    // Start background threads
-    //startThreads();
-}   
+}
 
 Interface::~Interface()
 {
@@ -48,8 +46,12 @@ Interface::~Interface()
 void Interface::cleanupInterface()
 {
     shutdownFlag.store(true, std::memory_order_release);
-    stateChange();
-    stateChangeV6();
+    stateChange(StateChange::SHUTDOWN);
+    stateChangeV6(StateChange::SHUTDOWN);
+    if (Global::getInstance().dhcpServer)
+    {
+        Global::getInstance().dhcpv6Server->removeInterface(this);
+    }
     
     if (arp) delete arp;
     arp = nullptr;
@@ -79,50 +81,44 @@ void Interface::setIPv4(ByteString ip, uint8_t subnet)
         // Send gratuitous arps
         arp->sendReply(Variable::Mac::broadcast, ip);
         arp->sendReply(Variable::Mac::broadcast, ip);
-        stateChange();
+        stateChange(StateChange::IPCHANGE);
     }
 }
 
-void Interface::setIPv6(ByteString ip, bool localLink, uint8_t subnet, bool eui64)
+void Interface::setIPv6(ByteString ip, bool localLink, uint8_t prefix, bool eui64)
 {
+    IpInfo::IPv6::IPv6Address* ipv6 = nullptr;
+
     {
-        {
-            std::lock_guard<std::mutex> lock(threadsRunningMutex);
-            {
-                std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-                if (localLink)
-                {
-                    configs.ipv6.setTemp(ip, true);
-                    configs.ipv6.tentative = true;
-                    configs.ipv6.valid = false;
-                }
-                else
-                {
-                    configs.ipv6.setTemp(ip);
-                    configs.ipv6.mask = subnet;
-                    configs.ipv6.globalTentative = true;
-                    configs.ipv6.globalValid = false;
-                }
-            }
-        }
-        // Run Duplicate Address Detection using NDP
-        ndp->duplicateAddressDetection(localLink);
+        std::lock_guard<std::mutex> lock(threadsRunningMutex);
+        std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
 
+        if (localLink)
         {
-            std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-            if (configs.ipv6.tentative)
-            {
-                std::cout << "\n%" << "Duplicate Address Detected";
-            }
-            else
-            {
-                configs.ipv6.valid = true;
-            }
+            ipv6 = configs.ipv6.addAddress(ip, true, prefix);
         }
-
-        // Trigger NDP state update for IPv6
-        stateChangeV6();
+        else if (ip.substr(0, 2) == "\xfc\x00")
+        {
+            ipv6 = configs.ipv6.addUniqueLocalAddress(ip, prefix);
+        }
+        else
+        {
+            ipv6 = configs.ipv6.addAddress(ip, false, prefix);
+        }
     }
+
+    // Run Duplicate Address Detection (dad) using NDP
+    if (ipv6)
+    {
+        ndp->duplicateAddressDetection(*ipv6, localLink);
+    }
+    else 
+    {
+        //TODO duplicate address error
+        return;
+    }
+
+    stateChangeV6(StateChange::IPCHANGE);
 }
 
 void Interface::removeIPv4()
@@ -136,25 +132,13 @@ void Interface::removeIPv4()
     
 }
 
-void Interface::removeIPv6(bool linkLocal)
+void Interface::removeIPv6(const ByteString& ip, bool linkLocal)
 {
     std::lock_guard<std::mutex> lock(threadsRunningMutex);
     {
         std::unique_lock<std::shared_mutex> ipLock(configs.ipMutex);
-        if (linkLocal)
-        {
-            configs.ipv6.ipAddress.clear();
-            configs.ipv6.tempAddress.clear();
-            configs.ipv6.tentative = false;
-            configs.ipv6.valid = false;
-        }
-        else
-        {
-            configs.ipv6.globalIpAddress.clear();
-            configs.ipv6.tempGlobalAddress.clear();
-            configs.ipv6.globalTentative = false;
-            configs.ipv6.globalValid = false;
-        }
+        configs.ipv6.removeAddress(ip, linkLocal);
+        stateChangeV6(StateChange::IPREMOVAL);
     }
 }
 
@@ -162,33 +146,61 @@ std::vector<ByteString> Interface::getTentativeAddress()
 {
     std::vector<ByteString> tentative;
     std::lock_guard<std::shared_mutex> lock(configs.ipMutex);
-    if (configs.ipv6.tentative)
+
+    // Link-local (there can only be one)
+    if (!configs.ipv6.linkLocalAddress.ip.empty() && configs.ipv6.linkLocalAddress.tentative)
     {
-        tentative.push_back(configs.ipv6.tempAddress);
+        tentative.push_back(configs.ipv6.linkLocalAddress.ip);
     }
-    if (configs.ipv6.globalTentative)
+
+    // Global unicast
+    for (const auto& addr : configs.ipv6.globalAddresses)
     {
-        tentative.push_back(configs.ipv6.tempGlobalAddress);
+        if (addr.tentative)
+        {
+            tentative.push_back(addr.ip);
+        }
     }
+
+    // Unique local
+    for (const auto& addr : configs.ipv6.uniqueLocalAddresses)
+    {
+        if (addr.tentative)
+        {
+            tentative.push_back(addr.ip);
+        }
+    }
+
     return tentative;
 }
 
 void Interface::markAddressDuplicate(const ByteString& addr, bool localLink)
 {
     std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-    if (localLink && configs.ipv6.ipAddress == addr)
+
+    if (localLink && configs.ipv6.linkLocalAddress.ip == addr)
     {
-        configs.ipv6.tentative = false;
-        configs.ipv6.valid = false;
+        configs.ipv6.linkLocalAddress.ip.clear();
     }
-    else if (configs.ipv6.globalIpAddress == addr)
+    else
     {
-        configs.ipv6.globalTentative = false;
-        configs.ipv6.globalValid = false;
+        auto markInvalid = [&](std::vector<IpInfo::IPv6::IPv6Address>& list) {
+            for (auto it = list.begin(); it != list.end(); ++it)
+            {
+                if (it->ip == addr)
+                {
+                    list.erase(it);
+                    return;
+                }
+            }
+        };
+        markInvalid(configs.ipv6.globalAddresses);
+        markInvalid(configs.ipv6.uniqueLocalAddresses);
     }
 }
 
-void Interface::Shutdown(bool shut) {
+void Interface::Shutdown(bool shut) 
+{
     shutdownFlag = shut;
     if (shut) 
     {
@@ -198,21 +210,23 @@ void Interface::Shutdown(bool shut) {
     {
         startThreads();
     }
-    stateChange();
-    stateChangeV6();
+    stateChange(StateChange::SHUTDOWN);
+    stateChangeV6(StateChange::SHUTDOWN);
 }
 
-IpInfo* Interface::Get() 
-{
-    if (shutdownFlag)
-    {
-        return nullptr;
-    }
-    return &configs;
-}
+// IpInfo* Interface::Get() 
+// {
+//     if (shutdownFlag)
+//     {
+//         return nullptr;
+//     }
+//     return &configs;
+// }
 
 void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
 {
+    if (!threadsRunning.load(std::memory_order_relaxed)) return;
+
     auto serializedPacket = encapsulate(packetInfo);
     if (!serializedPacket.has_value() || serializedPacket.value().empty())
     {
@@ -234,7 +248,8 @@ void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
     packetOutQueueCV.notify_one();
 }
 
-void Interface::packetIngress() {
+void Interface::packetIngress() 
+{
     while (threadsRunning) {
         if (packetCapture.startCapture(NULL) != 0) {
             std::cerr << "Error starting packet capture." << std::endl;
@@ -245,7 +260,8 @@ void Interface::packetIngress() {
     }
 }
 
-void Interface::packetEgress() {
+void Interface::packetEgress() 
+{
     while (threadsRunning) { 
         ByteString packet;
         {
@@ -273,7 +289,8 @@ void Interface::packetEgress() {
     }
 }
 
-void Interface::process() {
+void Interface::process() 
+{
     while (threadsRunning) {
         ByteString packet;
         {
@@ -295,7 +312,8 @@ void Interface::process() {
     }
 }
 
-void Interface::startThreads() {
+void Interface::startThreads() 
+{
     threadsRunning = true;
 
     std::lock_guard<std::mutex> lock(threadsRunningMutex); 
@@ -309,7 +327,7 @@ void Interface::stopThreads()
 {
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex); 
-        threadsRunning = false; 
+        threadsRunning.store(false, std::memory_order_release); 
     }
     packetOutQueueCV.notify_one();
     if (thread1.joinable()) thread1.detach(); 
@@ -320,38 +338,104 @@ void Interface::stopThreads()
     threadPool.shutdown();
 }
 
-void Interface::stateChange()
+void Interface::stateChange(StateChange state)
 {
     // Eigrp Updates
     if (routingInstance)
     {
-        routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
+        std::shared_lock<std::shared_mutex> lock(routingInstance->eigrpAutonomousSystemMutex);
+        for (const auto& [_, eigrpPtr] : routingInstance->eigrpList)
         {
-            if (eigrp->ipv4)
+            if (eigrpPtr->ipv4)
             {
-                eigrp->ipv4->updateInterfaceList();
-                eigrp->ipv4->updateRoutingTableForConnected();
+                eigrpPtr->ipv4->updateInterfaceList();
+                eigrpPtr->ipv4->updateRoutingTableForConnected();
             }
-        });
+        };
     }
     // Other updates...
+
+    switch (state)
+    {
+        case StateChange::INITIATE:
+        {
+            if (dhcp) dhcp->initializeDhcp();
+            break;
+        }
+        case StateChange::SHUTDOWN:
+        {
+            if (dhcp) dhcp->shutdown();
+            break;
+        }
+        case StateChange::IPCHANGE:
+        {
+            if (arp) 
+            {
+                arp->shutdown();
+                arp->initiateArp();
+            }
+            break;
+        }
+        case StateChange::IPREMOVAL:
+        {
+            if (arp) arp->shutdown();
+            break;
+        }
+    }
 }
 
-void Interface::stateChangeV6()
+void Interface::stateChangeV6(StateChange state)
 {
     // Eigrp Updates
     if (routingInstance)
     {
-        routingInstance->forEachEigrpAutonomousSystem([](uint32_t, Protocol::EigrpAutonomousSystem* eigrp)
+        std::shared_lock<std::shared_mutex> lock(routingInstance->eigrpAutonomousSystemMutex);
+        for (const auto& [_, eigrpPtr] : routingInstance->eigrpList)
         {
-            if (eigrp->ipv6)
+            if (eigrpPtr->ipv6)
             {
-                eigrp->ipv6->updateInterfaceList();
-                eigrp->ipv6->updateRoutingTableForConnected();
+                eigrpPtr->ipv6->updateInterfaceList();
+                eigrpPtr->ipv6->updateRoutingTableForConnected();
             }
-        });
+        };
     }
     // Other updates...
+    
+    switch (state)
+    {
+        case StateChange::INITIATE:
+        {
+            // Ndp
+            if (ndp)
+            {
+                for (auto& addr : configs.ipv6.globalAddresses)
+                {
+                    if (addr.tentative)
+                        ndp->duplicateAddressDetection(addr, false);
+                }
+            }
+            break;
+        }
+        case StateChange::SHUTDOWN:
+        {
+            break;
+        }
+        case StateChange::IPCHANGE:
+        {
+            // Ndp
+            if (ndp)
+            {
+                ndp->shutdown();
+                ndp->initializeNdp();
+            }
+            break;
+        }
+        case StateChange::IPREMOVAL:
+        {
+            if (ndp) ndp->shutdown();
+            break;
+        }
+    }
 }
 
 // Initialize the shared pointer to the current Interface

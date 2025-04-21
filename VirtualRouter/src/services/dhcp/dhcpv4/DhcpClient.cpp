@@ -2,11 +2,10 @@
 #include <shared_mutex>
 #include <Interface.h>
 
-
 // Constructor for the DhcpClient class, initializes with a reference to an Interface object
-Protocol::DhcpClient::DhcpClient(Interface* CurrentInterface, bool reduced)
-    : currentInterface(CurrentInterface),
-      stopFlag(false),
+Protocol::DhcpClient::DhcpClient(Interface* iface, bool reduced) // Reduced is used for testing
+    : currentInterface(iface),
+      stopFlag(true),
       offered(false),
       acked(false),
       naked(false),
@@ -15,18 +14,22 @@ Protocol::DhcpClient::DhcpClient(Interface* CurrentInterface, bool reduced)
     leaseStart = secondsSinceEpoch();
     if (!reduced)
     {
-        ByteString mac;
+        if (!iface->shutdownFlag.load(std::memory_order_relaxed))
         {
-            std::shared_lock<std::shared_mutex> macMutex(currentInterface->Get()->ipMutex);
-            mac = currentInterface->Get()->macAddress;
+            initializeDhcp();
         }
-        InitializeDhcp(mac);
     }
 }
 
 // Destructor to clean up threads and resources
 Protocol::DhcpClient::~DhcpClient()
 {
+    shutdown();
+}
+
+void Protocol::DhcpClient::shutdown()
+{
+    if (stopFlag.load(std::memory_order_relaxed)) return;
     stopFlag.store(true);
     cv.notify_all();
 
@@ -42,11 +45,21 @@ Protocol::DhcpClient::~DhcpClient()
 }
 
 // Initializes DHCP, sends discover requests, handles offers, and sends requests and acknowledgments
-void Protocol::DhcpClient::InitializeDhcp(ByteString& hardwareAddress) 
+void Protocol::DhcpClient::initializeDhcp() 
 {
+    {
+        std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
+        if (!stopFlag.load(std::memory_order_relaxed) || currentInterface->configs.ipv4.ipAddress.empty()) return;
+    }
+    stopFlag.store(false, std::memory_order_release);
+    ByteString mac;
+    {
+        std::shared_lock<std::shared_mutex> macMutex(currentInterface->configs.ipMutex);
+        mac = currentInterface->configs.macAddress;
+    }
     std::string hostname = Global::getInstance().getHostname();
     // Start the DHCP handling thread
-    dhcpThread = std::thread(&DhcpClient::dhcpHandler, this, hostname, hardwareAddress);
+    dhcpThread = std::thread(&DhcpClient::dhcpHandler, this, hostname, mac);
 }
 
 // Main DHCP handling loop running in a seperate thread
@@ -90,10 +103,10 @@ void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, ByteStr
         return; // No need for dhcp discover
     }
 
-    if (currentInterface->Get())
+    if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
-        std::lock_guard<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
-        if (!currentInterface->Get()->ipv4.ipAddress.empty())
+        std::lock_guard<std::shared_mutex> lock(currentInterface->configs.ipMutex);
+        if (!currentInterface->configs.ipv4.ipAddress.empty())
         {
             return; // No need for dhcp discover
         }
@@ -194,10 +207,10 @@ void Protocol::DhcpClient::handleLeaseRenewal(ByteString& hardwareAddress, const
     if (leaseStart + renewalTime < currentTime)
     {
         ByteString dhcpIP;
-        if (currentInterface->Get())
+        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
-            std::lock_guard<std::shared_mutex> ipLock(currentInterface->Get()->ipMutex);
-            dhcpIP = currentInterface->Get()->ipv4.ipAddress;
+            std::lock_guard<std::shared_mutex> ipLock(currentInterface->configs.ipMutex);
+            dhcpIP = currentInterface->configs.ipv4.ipAddress;
         }
         DhcpHeader header;
         header.clientIP = dhcpIP;
@@ -229,9 +242,9 @@ void Protocol::DhcpClient::sendDhcpRelease()
         return;
     }
     
-    if (currentInterface->Get())
+    if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
-        ByteString mac = currentInterface->Get()->macAddress;
+        ByteString mac = currentInterface->configs.macAddress;
         PacketInfo releasePacket = dhcpRelease(dhcpBody(mac), mac);
 
         currentInterface->enqueuePacket(releasePacket);
@@ -257,7 +270,7 @@ PacketInfo Protocol::DhcpClient::dhcpBody(ByteString& hardwareAddress)
     eth.destinationMac = Variable::Mac::broadcast; 
     eth.sourceMac = hardwareAddress; 
     eth.type = Variable::Ethernet::ipv4;
-    dhcpPacket.Layer2.emplace_back(std::move(eth));
+    dhcpPacket.Layer2.push_back(std::move(eth));
 
     IPv4Header ip;
     ip.version = "4";
@@ -274,14 +287,14 @@ PacketInfo Protocol::DhcpClient::dhcpBody(ByteString& hardwareAddress)
     ip.checksum = std::string("\x00\x00", 2);
     ip.sourceAddress = Variable::IPv4::source;
     ip.destinationAddress = Variable::IPv4::broadcast;
-    dhcpPacket.Layer3.emplace_back(std::move(ip));
+    dhcpPacket.Layer3.push_back(std::move(ip));
 
     UdpHeader udp;
     udp.sourcePort = Variable::Udp::dhcpClient;
     udp.destinationPort = Variable::Udp::dhcpServer;
     udp.length = std::string("\x01\x00", 2);
     udp.checksum = std::string("\x00\x00", 2); 
-    dhcpPacket.Layer4.emplace_back(std::move(udp)); 
+    dhcpPacket.Layer4.push_back(std::move(udp)); 
 
     return dhcpPacket; 
 }
@@ -311,33 +324,33 @@ PacketInfo Protocol::DhcpClient::dhcpDiscover(PacketInfo packet, const std::stri
 
     dhcp.options.reserve(4);
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::type,
         std::string("\x01", 1),
         Variable::Dhcp::Type::discover
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::clientID,
-        std::string("\x06", 1),
+        Functions::numToByte(hardwareAddress.size(), 1),
         hardwareAddress
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::maxSize,
         std::string("\x02", 1),
         std::string("\x02\x04", 2)
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::hostname,
         Functions::numToByte(static_cast<uint32_t>(hostname.length())),
         hostname
-    });
+    );
 
     dhcp.end = Variable::Dhcp::end; 
 
-    packet.Layer5.emplace_back(std::move(dhcp));
+    packet.Layer5.push_back(std::move(dhcp));
 
     return packet; 
 }
@@ -364,43 +377,43 @@ PacketInfo Protocol::DhcpClient::dhcpRequest(PacketInfo packet, DhcpHeader& head
 
     dhcp.options.reserve(7); 
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::type,
         std::string("\x01", 1),
         Variable::Dhcp::Type::request
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::clientID,
-        std::string("\x06", 1),
+        std::string(hardwareAddress.size(), 1),
         hardwareAddress
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::serverIdentifier,
-        std::string("\x04", 1),
+        std::string(configs.dhcpServer.size(), 1),
         configs.dhcpServer
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::requestIP,
-        std::string("\x04", 1),
+        std::string(header.yourClientIP.size(), 1),
         header.yourClientIP
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::leaseTime,
         Functions::numToByte(static_cast<uint32_t>(configs.leaseTime.size())),
         configs.leaseTime
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::hostname,
         Functions::numToByte(static_cast<uint32_t>(hostname.length())),
         hostname
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::requestList,
         std::string("\x0d", 1),
         Variable::Dhcp::Option::mask +
@@ -415,11 +428,11 @@ PacketInfo Protocol::DhcpClient::dhcpRequest(PacketInfo packet, DhcpHeader& head
         Variable::Dhcp::Option::mtu +
         Variable::Dhcp::Option::classlessStateRoute + 
         Variable::Dhcp::Option::ntp
-    });
+    );
 
     dhcp.end = Variable::Dhcp::end; 
 
-    packet.Layer5.emplace_back(std::move(dhcp));
+    packet.Layer5.push_back(std::move(dhcp));
 
     return packet; 
 }
@@ -429,7 +442,7 @@ PacketInfo Protocol::DhcpClient::dhcpRelease(PacketInfo packet, const ByteString
 {
     DhcpHeader dhcp;
 
-    if (!currentInterface->Get()) return packet;
+    if (currentInterface->shutdownFlag.load(std::memory_order_relaxed)) return packet;
 
     dhcp.boot = Variable::Dhcp::Type::release;
     dhcp.hardwareType = std::string("\x01", 1);
@@ -440,7 +453,7 @@ PacketInfo Protocol::DhcpClient::dhcpRelease(PacketInfo packet, const ByteString
     dhcp.bootpFlags.broadcast = "0";
     dhcp.bootpFlags.reserved = "000000000000000"; 
     dhcp.clientIP = std::string("\x00\x00\x00\x00", 4);
-    dhcp.yourClientIP = currentInterface->Get()->ipv4.ipAddress; 
+    dhcp.yourClientIP = currentInterface->configs.ipv4.ipAddress; 
     dhcp.nextServerIP = std::string("\x00\x00\x00\x00", 4);
     dhcp.relayAgentIP = Variable::IPv4::source; 
     dhcp.clientMacAddress = hardwareAddress; 
@@ -451,21 +464,21 @@ PacketInfo Protocol::DhcpClient::dhcpRelease(PacketInfo packet, const ByteString
     
     dhcp.options.reserve(2);
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::type,
         std::string("\x01", 1),
         Variable::Dhcp::Type::release
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::clientID,
-        std::string("\x06", 1),
+        std::string(hardwareAddress.size(), 1),
         hardwareAddress
-    });
+    );
 
     dhcp.end = Variable::Dhcp::end;
 
-    packet.Layer5.emplace_back(std::move(dhcp));
+    packet.Layer5.push_back(std::move(dhcp));
 
     return packet;
 }
@@ -476,10 +489,10 @@ PacketInfo Protocol::DhcpClient::dhcpInform(PacketInfo packet, std::string& host
     DhcpHeader dhcp;
 
     ByteString ipAddr;
-    if (currentInterface->Get())
+    if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
-        std::shared_lock<std::shared_mutex> lock(currentInterface->Get()->ipMutex);
-        ipAddr = currentInterface->Get()->ipv4.ipAddress;
+        std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
+        ipAddr = currentInterface->configs.ipv4.ipAddress;
     }
     else
     {
@@ -506,27 +519,27 @@ PacketInfo Protocol::DhcpClient::dhcpInform(PacketInfo packet, std::string& host
 
     dhcp.options.reserve(3);
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::type,
         std::string("\x01", 1),
         Variable::Dhcp::Type::inform
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::clientID,
-        std::string("\x06", 1),
+        std::string(hardwareAddress.size(), 1),
         hardwareAddress
-    });
+    );
 
-    dhcp.options.emplace_back(DhcpHeader::Option{
+    dhcp.options.emplace_back(
         Variable::Dhcp::Option::hostname,
         Functions::numToByte(static_cast<uint32_t>(hostname.length())),
         hostname
-    });
+    );
 
     dhcp.end = Variable::Dhcp::end; 
 
-    packet.Layer5.emplace_back(std::move(dhcp));
+    packet.Layer5.push_back(std::move(dhcp));
 
     return packet; 
 }
@@ -642,9 +655,14 @@ void Protocol::DhcpClient::ExtractOptions(std::vector<DhcpHeader::Option> option
         {
             configs.broadcast = opt.value;
         } 
-        else if (opt.option == Variable::Dhcp::Option::domainServer) 
+        else if (opt.option == Variable::Dhcp::Option::domainServer && opt.value.size() % 4 == 0)
         {
-            configs.dnsServer.push_back(opt.value);
+            uint64_t it = 0;
+            while (it <= opt.value.size())
+            {
+                configs.dnsServer.push_back(opt.value.substr(it, 4));
+                it += 4;
+            }
         } 
         else if (opt.option == Variable::Dhcp::Option::router) 
         {

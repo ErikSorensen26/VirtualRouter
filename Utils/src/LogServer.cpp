@@ -18,7 +18,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define CONFIG_FILE "../VirtualRouter/Configs/Configs.json"
+#define CONFIG_FILE "../VirtualRouter/configs/Configs.json"
 
 // Constants
 const int DEFAULT_PORT = 54000;

@@ -26,9 +26,12 @@ class IPPool
     ByteString currentAddress;      ///< Pointer to the next IP for dynamic allocations.
     ByteString gateway;             ///< Current gateway to exclude.
 
+    __uint128_t firstSlaccAddress = 0;
+    __uint128_t lastSlaccAddress = 0;
+
     std::unordered_map<ByteString, ByteString> allocatedIPs; ///< Tracks dynamically allocated IPs to ID.
     std::unordered_set<ByteString> allocatedTempIPs; ///< Tracks dynamically allocated temporary IPs.
-
+    std::unordered_map<__uint128_t, std::set<__uint128_t>>* AllocatedRanges;
     std::unordered_set<ByteString> excludedAddresses; ///< Maps excluded IPs.
     std::unordered_map<ByteString, ByteString> temporaryOffers; ///< Maps temporary offers to ID.
     std::set<ByteString> releasedIPs; ///< Set for releasedIPs.

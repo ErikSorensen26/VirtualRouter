@@ -10,11 +10,91 @@
 class DhcpServerTest;
 class IPPoolTest;
 class Interface;
+enum class InterfaceType;
 
 namespace Protocol
 {
+    namespace Dhcp
+    {
+        struct Configs
+        {
+            //TODO implement all of this
+            std::shared_mutex configMutex;
 
+            std::atomic<uint16_t> bindingCleanup = 3600;
+            std::atomic<uint16_t> conflictResolution = 10; // minutes
+            std::atomic<uint16_t> leasesPerInterface = 1;
+            std::atomic<uint16_t> pingTimeout = 750; // milliseconds
 
+            std::unordered_map<std::string, uint16_t> databaseSaveInterval;
+            std::unordered_map<std::string, std::pair<uint32_t, uint16_t>> writeDelay;
+            std::vector<ByteString> globalDnsServers;
+
+            std::atomic<uint16_t> declineQuarintine = 3600;
+            std::atomic<uint8_t> conflictInterval = 1;
+            std::atomic<uint8_t> conflictRetry = 10;
+            std::atomic<uint8_t> pingRetryCount = 2;
+            std::atomic<uint16_t> offerExpiration = 600;
+            std::atomic<uint8_t> leaseExpirationOffset = 0;
+            std::atomic<uint8_t> hartbeatInterval = 10;
+            std::atomic<uint8_t> forceRenewInterval = 0;
+
+            std::atomic<bool> logConflicts = false;
+            std::atomic<bool> logAsciiClientID = false; //TODO
+            std::atomic<bool> limitLeases = false;
+            std::atomic<bool> limitBroadcastAddress = false; //TODO
+            std::atomic<bool> remember = false; //TODO
+            std::atomic<bool> addConnected = false; //TODO
+            std::atomic<bool> addStatic = false; //TODO
+            std::atomic<bool> smartRelay = false; //TODO
+            std::atomic<bool> option55Override = false; //TODO
+            std::atomic<bool> sipParameterNak = false; //TODO
+            std::atomic<bool> tunnelUnicastParameter = false; //TODO
+
+            struct DNS
+            {
+                std::atomic<bool> before = false;
+                std::atomic<bool> both = false;
+                std::atomic<bool> override = false;
+            } updateDNS;
+
+            struct Snooping
+            {
+                std::set<std::string> databases; // TODO later
+                std::map<uint16_t, std::set<uint16_t>> vlans;
+                std::atomic<bool> informationOption = false; //TODO
+                std::atomic<bool> allowUntrusted = false;
+                std::atomic<bool> verifyMac = false;
+                std::atomic<bool> verifyGiaddr = false;
+            } snooping;
+
+            struct BOOTP
+            {
+                //TODO later
+                std::atomic<bool> ignore = false;
+                std::atomic<bool> relayIgnore = false;
+                std::atomic<bool> validateRelay = false;
+                std::atomic<bool> includeRelayInfo = false;
+                std::atomic<bool> includeVPNrelayInfo = false;
+
+                std::atomic<bool> drop = false;
+                std::atomic<bool> encapsulate = false;
+                std::atomic<bool> keep = false;
+                std::atomic<bool> replace = false;
+
+                std::atomic<bool> trustAll = false;
+                std::atomic<bool> linkSelectOverride = false;
+            } bootp;
+        };
+
+        struct SnoopingEntry
+        {
+            ByteString mac;
+            ByteString ip;
+            std::pair<InterfaceType, float> interface;
+            std::chrono::steady_clock::time_point expiration;
+        };
+    }
 
     /**
      * @brief Represents a fully functional DHCP server
@@ -55,7 +135,9 @@ namespace Protocol
          * @param packet The received PacketInfo object containing the header and payload.
          * @param iface The interface the packet was received on.
          */
-        void handleDhcpPacket(const PacketInfo& packet);
+        void handleDhcpPacket(const PacketInfo& packet, Interface* iface);
+
+        Dhcp::Configs globalConfig;
 
     private:
         
@@ -113,6 +195,8 @@ namespace Protocol
          * @param optons Vector containing all options received
          */
         std::vector<ByteString> getRequestedOptions(const std::vector<DhcpHeader::Option>& options);
+        
+        std::vector<DhcpHeader::Option> buildDnsAndIdentityOptions(const std::vector<DhcpHeader::Option>& options, const Dhcp::DhcpNetworkConfig* config, bool isAck);
 
         /**
          * @brief Builds a dhcp body with common fields.
@@ -135,9 +219,9 @@ namespace Protocol
          */
         DhcpHeader buildDhcpHeader(const ByteString& messageType, const ByteString& clientIP, const ByteString& relayAgentIP, const ByteString& transID);
 
-        PacketInfo buildDhcpOffer(const DhcpHeader& dhcpHeader, const DhcpNetworkConfig* config, const ByteString& ipAddress);
+        PacketInfo buildDhcpOffer(const DhcpHeader& dhcpHeader, const Dhcp::DhcpNetworkConfig* config, const ByteString& ipAddress);
 
-        PacketInfo buildDhcpAck(const DhcpHeader& dhcpHeader, const DhcpNetworkConfig* config, const ByteString& ipAddress);
+        PacketInfo buildDhcpAck(const DhcpHeader& dhcpHeader, const Dhcp::DhcpNetworkConfig* config, const ByteString& ipAddress);
 
         /**
          * @brief Builds a DHCPACK packet to send back data requested by a clinet from a inform message.
@@ -147,7 +231,7 @@ namespace Protocol
          * @param requestedOptions A vector of Options requested in ByteStrings.
          * @return A PacketInfo object representing the constructed DHCPACK.
          */
-        PacketInfo buildDhcpAckForInform(const DhcpHeader& dhcpHeader, const DhcpNetworkConfig* config, const std::vector<ByteString>& requestedOptions);
+        PacketInfo buildDhcpAckForInform(const DhcpHeader& dhcpHeader, const Dhcp::DhcpNetworkConfig* config, const std::vector<ByteString>& requestedOptions);
 
         /**
          * @brief Builds all requested options from an inform request
@@ -156,7 +240,7 @@ namespace Protocol
          * @param config NetworkConfig object holding the information to fill in.
          * @return A vector of fully made and ready options.
          */
-        std::vector<DhcpHeader::Option> buildRequestedOptions(const std::vector<ByteString>& requestedOptions, const DhcpNetworkConfig* config);
+        std::vector<DhcpHeader::Option> buildRequestedOptions(const std::vector<ByteString>& requestedOptions, const Dhcp::DhcpNetworkConfig* config);
 
         /**
          * @brief Sends a DHCPNAK packet to the client to indicate that its lease request
@@ -224,6 +308,12 @@ namespace Protocol
         // Authentication related members (RFC 3118)
         std::unordered_map<ByteString, uint32_t> replayCache;  // MAC -> last timestamp
         ByteString authenticationSecret;
+        ByteString allocateWithValidation(const ByteString& networkID, IPPool* pool, const DhcpHeader& dhcpHeader);
+        bool isTrustedInterface(Interface* iface);
+        void addSnoopingEntry(const DhcpHeader& header, const ByteString& ip, Interface* iface, uint32_t leaseTime);
+        
+        std::unordered_map<ByteString, Dhcp::SnoopingEntry> snoopingTable;
+        std::mutex snoopingMutex;
     };
 }
 

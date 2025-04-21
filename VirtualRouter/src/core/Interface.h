@@ -37,11 +37,23 @@ enum class InterfaceType
     VLAN                ///< VLAN interface type.
 };
 
+/**
+ * @enum StateChange
+ * @brief Indicates the type of state change.
+ */
+enum class StateChange
+{
+    SHUTDOWN,
+    INITIATE,
+    IPCHANGE,
+    IPREMOVAL
+};
+
 namespace Protocol 
 {
     class Ethernet;                 ///< Forward declaration of Ethernet protocol class.
     class DhcpClient;               ///< Forward declaration of DhcpClient protocol class.``
-    //class Dhcpv6Client;             ///< Forward declaration of Dhcpv6Client protocol class.``
+    class Dhcpv6Client;             ///< Forward declaration of Dhcpv6Client protocol class.``
     class Arp;                      ///< Forward declaration of Arp protocol class.
     class Ndp;                      ///< Forward declaration of Arp protocol class.
     struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
@@ -55,6 +67,8 @@ struct IpInfo
 {
     std::shared_mutex ipMutex;      ///< Mutex for thread-safe access to IP information
 
+    std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
+    std::atomic<bool> trusted = false;           ///< Identifier for trusted interface.
     std::atomic<float> id;                       ///< Identifier for the interface.
     std::atomic<InterfaceType> interfaceType;    ///< Type of interface.
     std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
@@ -73,53 +87,148 @@ struct IpInfo
         uint8_t mask{0};            ///< Subnet mask.
     } ipv4;
 
+    ByteString getIPv4()
+    {
+        std::shared_lock<std::shared_mutex> lock(ipMutex);
+        return ipv4.ipAddress;
+    }
+
     /**
      * @struct IPv6
      * @brief Stores IPv6 address, subnet mask, and flow label information.
      */
     struct IPv6
     {
-        ByteString ipAddress{};     ///< IPv6 address.
-        ByteString globalIpAddress{}; ///< Global IPv6 address.
-        uint8_t mask{0};            ///< Subnet Mask.
-        uint32_t ipv6FlowLabel{0};  ///< IPv6 flow label
-        bool tentative = false;
-        bool globalTentative = false;
-        bool valid = false;
-        bool globalValid = false;
-        void setTemp(const ByteString& ip, bool local = false)
+        // TODO NEEDS MUTEX PROTECTION
+        struct IPv6Address
+        {
+            ByteString ip;
+            bool tentative = false;
+            bool valid = false;
+            bool globalTentative = false;
+            bool globalValid = false;
+            uint8_t prefix = 0;
+
+            bool validateAddress(bool local = false)
+            {
+                if (local)
+                {
+                    tentative = false;
+                    valid = true;
+                }
+                else
+                {
+                    globalTentative = false;
+                    globalValid = true;
+                }
+            }
+        };
+
+        IPv6Address linkLocalAddress; ///< IPv6 address.
+        std::vector<IPv6Address> globalAddresses; ///< Global IPv6 addresses.
+        std::vector<IPv6Address> uniqueLocalAddresses{}; ///< Unique Local Addresses.
+
+        IPv6Address* addAddress(const ByteString& ip, bool local, uint8_t prefix)
         {
             if (local)
             {
-                tempAddress = ip;
+                // Only one local-address can exist
+                if (linkLocalAddress.ip.empty())
+                {
+                    linkLocalAddress.ip = ip;
+                    linkLocalAddress.prefix = prefix;
+                    linkLocalAddress.tentative = true;
+                    linkLocalAddress.valid = false;
+                    return &linkLocalAddress;
+                }
+                else
+                {
+                    std::cerr << "Error: Link-Local address already assigned";
+                }
             }
             else
             {
-                tempGlobalAddress = ip;
+                IPv6Address address;
+                address.ip = ip;
+                address.prefix = prefix;
+                globalAddresses.push_back(address);
+                return &globalAddresses.back();
             }
+            return nullptr;
         }
-        void validateAddress(bool local = false)
+
+        IPv6Address* addUniqueLocalAddress(const ByteString& ip, uint8_t prefixLen)
+        {
+            IPv6Address address;
+            address.ip = ip;
+            address.prefix = prefixLen;
+            uniqueLocalAddresses.push_back(address);
+            return &uniqueLocalAddresses.back();
+        }
+
+        void removeAddress(const ByteString& ip, bool local)
         {
             if (local)
             {
-                tentative = false;
-                valid = true;
-                ipAddress = tempAddress;
+                if (linkLocalAddress.ip == ip)
+                {
+                    linkLocalAddress.ip.clear();
+                }
             }
             else
             {
-                globalTentative = false;
-                globalValid = true;
-                globalIpAddress = tempGlobalAddress;
+                auto& addressList = (ip.substr(0, 2) == "\xfc\x00") ? uniqueLocalAddresses : globalAddresses;
+                addressList.erase(std::remove_if(addressList.begin(), addressList.end(),
+                    [&](const IPv6Address& addr) { return addr.ip == ip; }), addressList.end());
             }
         }
-        ByteString tempAddress;
-        ByteString tempGlobalAddress;
+
+        void validateGlobalAddresses()
+        {
+            for (auto& address : globalAddresses)
+            {
+                address.validateAddress(false);
+            }
+        }
+
+        void validateLinkLocalAddress()
+        {
+            if (!linkLocalAddress.ip.empty())
+            {
+                linkLocalAddress.validateAddress(true);
+            }
+        }
     }  ipv6;
+
+    ByteString getLocalAddress()
+    {
+        std::shared_lock<std::shared_mutex> lock(ipMutex);
+        return ipv6.linkLocalAddress.ip;
+    }
+
+    ByteString getGlobalUnicast()
+    {
+        std::shared_lock<std::shared_mutex> lock(ipMutex);
+        if (!ipv6.globalAddresses.empty())
+        {
+            return ipv6.globalAddresses.front().ip;
+        }
+        return {};
+    }
+
+    ByteString getLocalUnicast()
+    {
+        std::shared_lock<std::shared_mutex> lock(ipMutex);
+        if (!ipv6.uniqueLocalAddresses.empty())
+        {
+            return ipv6.uniqueLocalAddresses.front().ip;
+        }
+        return {};
+    }
 
     /**
      * @struct Eigrp
-     * @brief Stores Eigrp Configs.
+     * @brief Stores Eigrp Configs
      */
     struct Eigrp
     {
@@ -202,7 +311,7 @@ public:
      *
      * @param linkLocal Indicates if the address is link-local.
      */
-    void removeIPv6(bool linkLocal = false);
+    void removeIPv6(const ByteString& ip, bool linkLocal = false);
 
     /**
      * @brief Gathers and returns all tentative addresses on the interface.
@@ -226,7 +335,7 @@ public:
      *
      * @return a pointer of the configs to reduce copies.
      */
-    virtual IpInfo* Get();
+    //virtual IpInfo* Get();
 
     /**
      * @brief Shuts down or restarts the interface.
@@ -263,6 +372,20 @@ public:
     Protocol::DhcpClient* dhcp = nullptr;     ///< DHCP Client protocol handler.
     //Protocol::Dhcpv6Client* dhcpv6 = nullptr; ///< Dhcpv6 client protocol handler.
 
+    /**
+     * @brief Stops the background threads for packet handling.
+     *
+     * Signals threads to stop and joins them to ensure proper shutdown.
+     */
+    void stopThreads();
+
+    /**
+     * @brief Starts the background threads for packet handling.
+     *
+     * Launches threads for packet ingress, egress, and processing.
+     */
+    virtual void startThreads();
+
 private:
 
     /**
@@ -291,32 +414,22 @@ private:
     void process(); // Method for processing packets
 
     /**
-     * @brief Starts the background threads for packet handling.
-     *
-     * Launches threads for packet ingress, egress, and processing.
-     */
-    virtual void startThreads();
-
-    /**
-     * @brief Stops the background threads for packet handling.
-     *
-     * Signals threads to stop and joins them to ensure proper shutdown.
-     */
-    void stopThreads();
-
-    /**
      * @brief Handles state changes relates to IPv4 configuration.
      *
      * Updates several protocols and the routing table based on the new IPv4 configuration.
+     *
+     * @param shut Indicates if the interface is shutting down or starting.
      */
-    void stateChange();
+    void stateChange(StateChange state);
 
     /**
      * @brief Handles state changes related to IPv6 configuration.
      *
      * Updates several protocols and the routing table based on the new IPv6 configuration.
+     *
+     * @param shut Indicates if the interface is shutting down or starting.
      */
-    void stateChangeV6();
+    void stateChangeV6(StateChange state);
 
     /**
      * @brief Handles ARP resolution events.

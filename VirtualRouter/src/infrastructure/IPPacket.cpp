@@ -4,7 +4,7 @@
 
 namespace Protocol
 {
-    void IPPacket::buildIp(Interface* iface, PacketInfo& packetInfo, const ByteString& destIp, ByteString const* sourceIp, ByteString const* destMac, uint8_t DSCP, uint8_t hopLimit, const ByteString& protocolType, bool reserved, bool dontFragment, bool moreFragment, uint16_t fragmentOffset)
+    void IPPacket::buildIp(Interface* iface, PacketInfo& packetInfo, const ByteString& destIp, ByteString const* sourceIp, ByteString const* destMac, uint8_t DSCP, uint8_t hopLimit, const ByteString& protocolType, bool reserved, bool dontFragment, bool moreFragment, uint16_t fragmentOffset, uint32_t v6FlowLabel)
     {
         if (!iface || iface->shutdownFlag.load(std::memory_order_relaxed)) return;
 
@@ -14,27 +14,56 @@ namespace Protocol
             {
                 IPv6Header ip;
                 {
-                    std::shared_lock<std::shared_mutex> lock(iface->Get()->ipMutex);
-                    ip.sourceAddress = (sourceIp && sourceIp->size() == 16) ? *sourceIp : iface->configs.ipv6.ipAddress;
-                    ip.flowLabel = Functions::numToHex(iface->Get()->ipv6.ipv6FlowLabel, 5);
+                    if (sourceIp && sourceIp->size() == 16)
+                    {
+                        ip.sourceAddress = *sourceIp;
+                    }
+                    else
+                    {
+                        // Pick best IP to use
+                        std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+                        ByteString prefix = Functions::byteToBin(destIp.substr(0, 2));
+                        if (prefix.substr(0, 10) == ByteString("1111111010"))
+                        {
+                            ip.sourceAddress = iface->configs.ipv6.linkLocalAddress.ip;
+                        }
+                        else if (prefix.substr(0, 3) == ByteString("001") && !iface->configs.ipv6.globalAddresses.empty())
+                        {
+                            ip.sourceAddress = iface->configs.ipv6.globalAddresses.front().ip;
+                        }
+                        else if (prefix.substr(0, 7) == ByteString("1111110") && !iface->configs.ipv6.uniqueLocalAddresses.empty())
+                        {
+                            ip.sourceAddress = iface->configs.ipv6.uniqueLocalAddresses.front().ip;
+                        }
+                        else
+                        {
+                            return; // Return if no matching scope is found
+                        }
+                    }
                 }
+                ip.flowLabel = Functions::numToHex(v6FlowLabel, 5);
                 ip.version = "6";
                 ip.trafficClass = Functions::numToHex(DSCP, 2);
                 ip.payloadLength = ByteString(2, 0x00); // Will be calculated later
                 ip.protocol = protocolType;
                 ip.hopLimit = Functions::numToByte(hopLimit, 1);
                 ip.destinationAddress = destIp;
-                packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
+                packetInfo.Layer3.insert(packetInfo.Layer3.begin(), std::move(ip));
             }
             Ethernet::build(iface, packetInfo, &destIp, destMac, Variable::Ethernet::ipv6);
+
+            if (!dontFragment)
+            {
+                //TODO handle fragmentation
+            }
         }
         else if (destIp.size() == 4)
         {
             {
                 IPv4Header ip;
                 {
-                    std::shared_lock<std::shared_mutex> lock(iface->Get()->ipMutex);
-                    ip.sourceAddress = (sourceIp && sourceIp->size() == 4) ? *sourceIp : iface->Get()->ipv4.ipAddress;
+                    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+                    ip.sourceAddress = (sourceIp && sourceIp->size() == 4) ? *sourceIp : iface->configs.ipv4.ipAddress;
                 }
 
                 ip.version = ByteString("4", 1);
@@ -52,7 +81,7 @@ namespace Protocol
                 ip.protocol = protocolType;
                 ip.checksum = ByteString(2, 0x00);
                 ip.destinationAddress = destIp;
-                packetInfo.Layer3.insert(packetInfo.Layer3.begin(), ip);
+                packetInfo.Layer3.insert(packetInfo.Layer3.begin(), std::move(ip));
             }
             Ethernet::build(iface, packetInfo, &destIp, destMac, Variable::Ethernet::ipv4);
         }

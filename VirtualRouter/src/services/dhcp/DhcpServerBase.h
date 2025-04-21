@@ -6,6 +6,7 @@
 #include <ByteString.hpp>
 #include <unordered_map>
 #include <mutex>
+#include <shared_mutex>
 #include <thread>
 #include <atomic>
 #include <vector>
@@ -24,23 +25,97 @@ class DhcpServerTest;
 class Dhcpv6ServerTest;
 class IPPoolTest;
 
-namespace Protocol 
+namespace Protocol
 {
+    class DhcpServerBase;
+
     namespace Dhcp
     {
+        struct DhcpNetwork;
         /**
-         * @brief Structure representing a network configuration for DHCP.
-         *
-         * For DHCPv4, subnetMask and defaultGateway are used.
-         * For DHCPv6, these fields are ignored.
+         * @brief Global configs for DHCPv4 and DHCPv6
          */
-        struct networkConfig
+        struct GlobalConfigs
         {
-            ByteString network;         // Network address
-            ByteString subnetMask;      // For DHCPv4 (ignored in v6)
-            ByteString defaultGateway;  // For DHCPv4 (ignored in v6)
-            double leaseTime = 3600.0;  // Lease duration (in seconds)
-            Interface* interface = nullptr; // Network interface for sending packets
+            std::shared_mutex configMutex;
+            std::unordered_map<std::string, std::unordered_map<__uint128_t, std::set<__uint128_t>>> excludedAddresses;
+        };
+        /**
+         * @brief Configuration details for a network managed by the DHCP server.
+         *
+         * Each network includes options such as the subnet, default gateway, DNS servers, domainName, and lease duration.
+         */
+        struct DhcpNetworkConfig
+        {
+            std::atomic<uint8_t> defaultSubnetPrefix;        ///< The default subnet Prefix for the DHCP pool.
+            std::atomic<uint8_t> serverPreference = 255;     ///< Default server preference.
+            std::atomic<double> leaseTime = 0.0;             ///< The default duration of a lease in seconds.
+            std::atomic<double> t1Percentage = 0.5;          ///< Initial T1 percentage for calcualting renewal times.
+            std::atomic<double> t2Percentage = 0.87;          ///< Initial T2 percentage for calcualting rebinding times.
+
+            ByteString renewalTime;             ///< Renewal time in bytes for easy access.
+            ByteString rebindingTime;           ///< Rebinding time in bytes for easy access.
+            std::vector<ByteString> dnsServer;  ///< A list of DNS servers provided with this network.
+            std::vector<std::string> domainName;///< The domain name associated with this network.
+            std::vector<ByteString> netbiosName;///< The name of the NetBIOS server.
+
+            Interface* interface = nullptr;     ///< Pointer to the interface managing this network.
+
+            // Additional fields
+            std::vector<ByteString> ntpServer;      ///< Network Time Protocol (NTP) server for this network.
+            std::vector<ByteString> tftpServer;     ///< TFTP server address for PXE booting.
+            std::vector<ByteString> winsServer;     ///< A list of WINS (Windows Internet Name Service) servers.
+            std::vector<ByteString> staticRoutes;   ///< Static routes provided to the network clients.
+            std::vector<ByteString> helperAddresses;///< List of DHCP relay (helper) addresses.
+            ByteString broadcastAddress;            ///< The broadcast address for this network.
+            ByteString arpTimeout;                  ///< ARP timeout value for this network.
+            std::optional<bool> allowDynamicUpdates; ///< Indicates whether dynamic updates (e.g., for DNS) are enabled.
+            std::vector<std::string> allowedHostnames; ///< A list of hostnames allowed to operate on this network.
+            std::atomic<uint16_t> mtu;                           ///< Maximum Transmission Unit (MTU) for the network.
+            std::string bootfile;                   ///< Bootfile for pool.
+
+            // Metadata
+            std::string description;               ///< Description or label for this network configuration.
+            std::atomic<bool> isPrivate;                        ///< Flag indicating whether this network is private or public.
+            std::atomic<bool> isEnabled;                        ///< Flag indicating whether this network is currently active.
+            
+            mutable std::shared_mutex configMutex;
+            // Methods (optional, if you want to add functions)
+            bool updateNetwork(ByteString* newNetwork, uint8_t* newPrefix, ByteString* gateway, DhcpServerBase* server);
+            ByteString getNetworkID() const { std::shared_lock<std::shared_mutex> lock(configMutex); return network + "/" + std::to_string(subnetPrefix.load(std::memory_order_relaxed)); }
+            ByteString getNetwork() const { std::shared_lock<std::shared_mutex> lock(configMutex); return network; }
+            ByteString getGateway() const { std::shared_lock<std::shared_mutex> lock(configMutex); return defaultGateway; }
+            uint8_t getPrefixLen() const { return subnetPrefix.load(std::memory_order_relaxed); }
+
+            std::string hostname;
+        private:
+            std::atomic<uint8_t> subnetPrefix;  ///< The subnet prefix for the DHCP pool.
+            ByteString network;                 ///< The base address of the network. (e.g., "192.168.1.0").
+            ByteString defaultGateway;          ///< The default gateway address for clients in this network.
+
+        };
+        /**
+         * @struct DhcpNetwork
+         * @brief Holds a IPPool, LeaseManager, and a DhcpNetworkConfig.
+         */
+        struct DhcpNetwork
+        {
+            DhcpNetwork() = default;
+
+            IPPool* pool = nullptr;
+            LeaseManager* lease = nullptr;
+            PrefixLeaseManager* prefixLease = nullptr;
+            PrefixPool* prefixPool = nullptr;
+            DhcpNetworkConfig* config = nullptr;
+
+            ~DhcpNetwork() 
+            {
+                if (pool) delete pool;
+                if (lease) delete lease;
+                if (prefixLease) delete prefixLease;
+                if (prefixPool) delete prefixPool;
+                if (config) delete config;
+            }
         };
 
         enum class TimerType
@@ -77,6 +152,8 @@ namespace Protocol
         friend class ::Dhcpv6ServerTest;
         friend class ::IPPoolTest;
 
+        friend struct Dhcp::DhcpNetworkConfig;
+
         virtual ~DhcpServerBase() = default;
 
         /**
@@ -97,24 +174,13 @@ namespace Protocol
          *
          * @param config The network configuration to add.
          */
-        void addNetwork(DhcpNetworkConfig* config);
+        void addNetwork(Dhcp::DhcpNetworkConfig* config);
 
         /**
          * @brief Removes a network configuration.
          * @param networkID Network identifier.
          */
         void removeNetwork(const ByteString& networkID);
-
-        /**
-         * @brief Updates an existing network configuration.
-         *
-         * @param network The network address idetnfier.
-         * @param config The updated network configuration.
-         * @param dnsToRemove DNS servers to remove from the config.
-         * @param winsToRemove WINS servers to remove from the config.
-         * @param helperAddressesToRemove Helper addresses to remove.
-         */
-        bool updateNetworkConfig(const ByteString& network, const DhcpNetworkConfig& newConfig, const std::vector<ByteString>& dnsToRemove, const std::vector<ByteString>& winsToRemove, const std::vector<ByteString>& helperAddressesToRemove);
 
         /**
          * @brief moves a NetworkConfig to a different key.
@@ -148,6 +214,25 @@ namespace Protocol
         void cancelTimeout(Dhcp::TimerType type, const ByteString& id, const ByteString& offer);
         void clearOfferTimeouts();
 
+        ByteString encodeDnsName(const std::string& name) 
+        {
+            ByteString out;
+            size_t start = 0;
+            while (start < name.size()) 
+            {
+                size_t end = name.find('.', start);
+                if (end == std::string::npos) end = name.size();
+                size_t len = end - start;
+                out.push_back(static_cast<ByteString::byte>(len));
+                out.append(ByteString(name.substr(start, len)));
+                start = end + 1;
+            }
+            out.push_back(0x00);
+            return out;
+        }
+
+        Dhcp::GlobalConfigs vrfConfigs;
+
     private:
 
         std::map<Dhcp::TimerType, std::vector<Dhcp::TrackedTimer>> activeTimers;
@@ -155,7 +240,7 @@ namespace Protocol
 
         std::set<ByteString> outgoingRequests;
 
-        std::unordered_map<ByteString, DhcpNetwork*> dhcpNetworks;   ///< Map of network configurations.
+        std::unordered_map<ByteString, Dhcp::DhcpNetwork*> dhcpNetworks;   ///< Map of network configurations.
 
         GlobalLeaseManager globalLeaseManager; ///< Global lease manager aggregating all leases.
 

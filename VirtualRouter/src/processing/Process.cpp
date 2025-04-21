@@ -59,15 +59,6 @@ void ProcessPacket::processEthernet(const EthernetHeader& eth)
     if (print) { Logger::getInstance().info() << "THIS IS ETHERNET" << std::endl; } 
     // Check if packet contains your source address
     macAddress = eth.sourceMac.toString();
-    if (interface->Get())
-    {
-        std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
-        if (eth.sourceMac.toString() == interface->Get()->macAddress.toString())
-        {
-            // Drop packet
-            return;
-        }
-    }
 }
 
 void ProcessPacket::processPpp(const PppHeader& ppp)
@@ -166,7 +157,7 @@ void ProcessPacket::processIcmpV6(const IcmpV6Header& icmp)
     else
     {
         std::shared_lock<std::shared_mutex> lock(interface->configs.ipMutex);
-        currentIp = interface->configs.ipv6.ipAddress;
+        currentIp = interface->configs.ipv6.linkLocalAddress.ip;
         if (currentIp.size() != 16) return; // Invalid IP
     }
 
@@ -275,16 +266,7 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
 
 void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
 {
-    ByteString mac;
-    if (interface->Get())
-    {
-        std::shared_lock<std::shared_mutex> lock(interface->Get()->ipMutex);
-        mac = interface->Get()->macAddress;
-    }
-    else
-    {
-        return;
-    }
+    ByteString mac = interface->configs.macAddress;
 
     if (print) { Logger::getInstance().info() << "THIS IS DHCP" << std::endl; } 
     for (auto opt : dhcp.options) 

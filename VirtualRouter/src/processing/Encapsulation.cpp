@@ -194,5 +194,5 @@ std::optional<ByteString> encapsulate(PacketInfo &packet, ByteString encapsulate
 
     //Profiler::getInstance().notify("Returning Packet");
     // Append encapsulated data to the final packet string.
-    return std::move(packetString) + std::move(encapsulated);
+    return packetString + encapsulated;
 }

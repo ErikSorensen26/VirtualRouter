@@ -9,101 +9,85 @@
 // Destructor
 VirtualRouter::~VirtualRouter()
 {
-    // Interfaces
-    for (auto& [type, typeList] : interfaceList)
     {
-        for (auto it = typeList.begin(); it != typeList.end();)
+        std::unique_lock<std::shared_mutex> lock(interfaceMutex);
+        // Interfaces
+        for (auto it = interfaceList.begin(); it != interfaceList.end();)
         {
             delete it->second;
             it->second = nullptr;
-            it = typeList.erase(it);
         }
+        interfaceList.clear();
     }
-    // Eigrp Autonomous Systems
-    for (auto it = eigrpList.begin(); it != eigrpList.end();)
+
     {
-        if (it->second->ipv4)
+        std::unique_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
+        // Eigrp Autonomous Systems
+        for (auto it : eigrpList)
         {
-            delete it->second->ipv4;
+            if (it.second->ipv4)
+            {
+                delete it.second->ipv4;
+            }
+            if (it.second->ipv6)
+            {
+                delete it.second->ipv6;
+            }
+            delete it.second;
+            it.second = nullptr;
         }
-        if (it->second->ipv6)
-        {
-            delete it->second->ipv6;
-        }
-        delete it->second;
-        it->second = nullptr;
-        it = eigrpList.erase(it);
+        eigrpList.clear();
     }
-    // Eigrp Named
-    for (auto it = namedEigrpList.begin(); it != namedEigrpList.end();)
+
     {
-        delete it->second;
-        it->second = nullptr;
-        it = namedEigrpList.erase(it);
+        std::unique_lock<std::shared_mutex> lock(eigrpNamedMutex);
+        // Eigrp Named
+        for (auto it : namedEigrpList)
+        {
+            delete it.second;
+            it.second = nullptr;
+        }
+        namedEigrpList.clear();
     }
 }
 
 // Interfaces
 Interface* VirtualRouter::addInterface(Interface* interface, InterfaceType type, float interfaceId)
 {
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (interfaceList[type].find(interfaceId) != interfaceList[type].end())
+    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+    if (interfaceList.find({type, interfaceId}) != interfaceList.end())
     {
         return nullptr;
     }
-    interfaceList[type][interfaceId] = interface;
-    return interfaceList[type][interfaceId];
+    interfaceList[{type, interfaceId}] = interface;
+    return interfaceList[{type, interfaceId}];
 }
 
 Interface* VirtualRouter::getInterface(InterfaceType type, float interfaceID)
 {
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (interfaceList[type].find(interfaceID) != interfaceList[type].end())
+    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+    if (interfaceList.find({type, interfaceID}) != interfaceList.end())
     {
-        return interfaceList[type][interfaceID];
+        return interfaceList[{type, interfaceID}];
     }
     return nullptr;
 }
 
 bool VirtualRouter::removeInterface(InterfaceType type, float interfaceId)
 {
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    auto& interfaceTypeList = interfaceList[type];
-    if (interfaceTypeList.find(interfaceId) != interfaceTypeList.end())
+    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+    if (interfaceList.find({type, interfaceId}) != interfaceList.end())
     {
-        interfaceTypeList.erase(interfaceId);
+        interfaceList.erase({type, interfaceId});
         return true;
     }
     return false;
 }
 
-void VirtualRouter::forEachInterface(const std::function<void(InterfaceType, float, Interface*)>& func, const std::vector<InterfaceType>& types, bool include)
-{
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    for (const auto& [type, innermap] : interfaceList)
-    {
-        if (!types.empty())
-        {
-            if (include && std::find(types.begin(), types.end(), type) == types.end())
-            {
-                continue;
-            }
-            else if (!include && std::find(types.begin(), types.end(), type) != types.end())
-            {
-                continue;
-            }
-        }
-        for (const auto& [index, iface] : innermap)
-        {
-            func(type, index, iface);
-        }
-    }
-}
-
 // Eigrp Autonomous Systems
 Protocol::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
 {
-    std::lock_guard<std::mutex> lock(eigrpAutonomousSystemMutex);
+    std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
     if (eigrpList.find(id) != eigrpList.end())
     {
         return nullptr;
@@ -114,7 +98,7 @@ Protocol::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_
 
 Protocol::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
 {
-    std::lock_guard<std::mutex> lock(eigrpAutonomousSystemMutex);
+    std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
     if (eigrpList.find(id) != eigrpList.end())
     {
         return eigrpList[id];
@@ -124,7 +108,7 @@ Protocol::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_
 
 bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
 {
-    std::lock_guard<std::mutex> lock(eigrpAutonomousSystemMutex);
+    std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
     if (eigrpList.find(id) != eigrpList.end())
     {
         delete eigrpList[id];
@@ -134,19 +118,10 @@ bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
     return false;
 }
 
-void VirtualRouter::forEachEigrpAutonomousSystem(const std::function<void(uint32_t, Protocol::EigrpAutonomousSystem*)>& func)
-{
-    std::lock_guard<std::mutex> lock(eigrpAutonomousSystemMutex);
-    for (const auto& [id, system] : eigrpList)
-    {
-        func(id, system);
-    }
-}
-
 // Eigrp Named Systems
 Protocol::EigrpNamed* VirtualRouter::addEigrpNamed(const std::string& name)
 {
-    std::lock_guard<std::mutex> lock(eigrpNamedMutex);
+    std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
     if (namedEigrpList.find(name) != namedEigrpList.end())
     {
         return nullptr;
@@ -157,7 +132,7 @@ Protocol::EigrpNamed* VirtualRouter::addEigrpNamed(const std::string& name)
 
 Protocol::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
 {
-    std::lock_guard<std::mutex> lock(eigrpNamedMutex);
+    std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
     if (namedEigrpList.find(name) != namedEigrpList.end())
     {
         return namedEigrpList[name];
@@ -167,7 +142,7 @@ Protocol::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
 
 bool VirtualRouter::removeEigrpNamed(const std::string& name)
 {
-    std::lock_guard<std::mutex> lock(eigrpNamedMutex);
+    std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
     if (namedEigrpList.find(name) != namedEigrpList.end())
     {
         auto eigrp = namedEigrpList[name];
@@ -205,13 +180,4 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
         return true;
     }
     return false;
-}
-
-void VirtualRouter::forEachEigrpNamed(const std::function<void(std::string, Protocol::EigrpNamed*)> func)
-{
-    std::lock_guard<std::mutex> lock(eigrpNamedMutex);
-    for (const auto& [name, system] : namedEigrpList)
-    {
-        func(name, system);
-    }
 }

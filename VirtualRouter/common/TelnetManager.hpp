@@ -17,15 +17,15 @@
 #include <vector>
 #include <sstream>
 
-std::vector<std::string> operator/(const std::string& s, char delimiter) {
-    std::vector<std::string> lines;
-    std::istringstream stream(s);
-    std::string line;
-    while (std::getline(stream, line, delimiter)) {
-        lines.push_back(line);
-    }
-    return lines;
-}
+//std::vector<std::string> operator/(const std::string& s, char delimiter) {
+    //std::vector<std::string> lines;
+    //std::istringstream stream(s);
+    //std::string line;
+    //while (std::getline(stream, line, delimiter)) {
+        //lines.push_back(line);
+    //}
+    //return lines;
+//}
 
 class TelnetClient {
 public:
@@ -100,6 +100,14 @@ public:
             close(sockfd);
             sockfd = -1;
         }
+    }
+
+    // Returns and clears the current output buffer
+    std::string ReadSome(std::chrono::milliseconds idleTimeout = std::chrono::milliseconds(100),
+                         std::chrono::milliseconds maxWaitTime = std::chrono::seconds(2))
+    {
+        outputBuffer.clear();
+        return ReadOutput(idleTimeout, maxWaitTime, std::chrono::milliseconds(0));
     }
 
 private:

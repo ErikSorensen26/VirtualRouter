@@ -114,6 +114,11 @@ public:
      */
     void cleanupExpiredLeases();
 
+    /**
+     * @returns The requested lease
+     */
+    Lease* getLease(const ByteString& duid) { std::lock_guard<std::mutex> lock(leaseMutex); return &leases[duid]; }
+
 private:
     IPPool* ipPool; ///< Pointer to the associated IPPool.
     //LeasePool* leasePool; ///< Pointer to the associated LeasePool

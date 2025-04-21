@@ -22,6 +22,7 @@
 #include <ByteString.hpp>
 #include <unordered_set>
 #include <tuple>
+#include <InterfacePairHash.hpp>
 
 #define MAX_RETRANSMISSIONS 16
 #define PACKET_TIMEOUT_MS 5000
@@ -156,6 +157,7 @@ namespace EigrpConfigs
         bool advertiseStatic = true;        ///< Advertise static routes.
         bool advertiseSummary = true;       ///< Advertise summary routes.
         bool advertiseRedistributed = true; ///< Advertise redistributed routes.
+        bool receiveOnly = true;            ///< Only receive routes.
 
         /**
          * @brief Default constructor.
@@ -590,13 +592,13 @@ namespace Protocol
      * including sending and receiving EIGRP packets, maintaining neighbor relationships,
      * handling routing updates, and managing timers and retransmissions.
      */
-    class EigrpInterface : public std::enable_shared_from_this<Protocol::EigrpInterface> 
+    class EigrpInterface
     {
-    protected:
-        EigrpConfigs::InterfaceConfigs configs; ///< Configuration settings for the interface.
     public:
         friend class ::EigrpTest;
         Eigrp* eigrpProcess; ///< Pointer to the EIGRP process.
+
+        EigrpConfigs::InterfaceConfigs configs; ///< Configuration settings for the interface.
 
         /**
          * @brief Constructs an EigrpInterface instance.
@@ -1333,16 +1335,6 @@ namespace Protocol
          */
         ByteString getMulticast();
 
-        /**
-         * @brief Retrieves a shared pointer to the interface configurations.
-         *
-         * Provides access to the current interface's configuration settings, allowing
-         * for inspection or modification as needed.
-         *
-         * @return Shared pointer to InterfaceConfigs.
-         */
-        inline EigrpConfigs::InterfaceConfigs& getConfigs() { return configs; }
-
         // Get the ip address of the interaface
         inline ByteString getInterfaceIp();
 
@@ -1398,10 +1390,10 @@ namespace Protocol
      */
     class Eigrp 
     {
-    protected:
-        EigrpConfigs::EigrpConfigs configs; ///< Configuration settings for EIGRP.
     public:
         friend class ::EigrpTest;
+
+        EigrpConfigs::EigrpConfigs configs; ///< Configuration settings for EIGRP.
 
         /**
          * @brief Constructs an Eigrp instance.
@@ -1526,7 +1518,7 @@ namespace Protocol
          * @param hopCount Number of hops (default is 0).
          * @return Calculated metric value.
          */
-        uint32_t calculateMetric(uint32_t bandwidth, uint8_t load, uint32_t delay, uint8_t reliability, uint8_t hopCount = 0);
+        uint64_t calculateMetric(uint32_t bandwidth, uint8_t load, uint32_t delay, uint8_t reliability, uint8_t hopCount = 0);
 
         /**
          * @brief Calculates the Local Link Cost (LLC) for the interface.
@@ -1781,17 +1773,7 @@ namespace Protocol
         bool advertiseRedistributed() const { return configs.stubConfig.advertiseRedistributed; }
 
         // Lists
-        std::unordered_map<InterfaceType, std::unordered_map<float, EigrpInterface*>> eigrpInterfaceList{}; ///< Map of EIGRP interfaces by identifier.
-        void forEachInterface(std::function<void(InterfaceType, float, EigrpInterface*)> func)
-        {
-            for (const auto& [type, group] : eigrpInterfaceList)
-            {
-                for (const auto& [id, interface] : group)
-                {
-                    func(type, id, interface);
-                }
-            }
-        }
+        std::unordered_map<std::pair<InterfaceType, float>, EigrpInterface*, InterfacePairHash> eigrpInterfaceList{}; ///< Map of EIGRP interfaces by identifier.
 
         // Eigrp data mutex
         std::shared_mutex eigrpDataMutex; ///< Mutex for synchronizing access to EIGRP data structures.
@@ -1817,16 +1799,6 @@ namespace Protocol
          * @return ByteString representing the Router ID.
          */
         inline ByteString getRouterID() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return routerID.ID; }
-
-        /**
-         * @brief Retrieves the EIGRP configurations.
-         *
-         * Provides access to the current EIGRP configuration settings, allowing for
-         * inspection and modification as needed.
-         *
-         * @return Pointer to the EIGRP configuration settings.
-         */
-        inline EigrpConfigs::EigrpConfigs* getConfigs() { return &configs; }
 
         // Topology TablE
         Protocol::TopologyTable* topologyTable; ///< Unique pointer to the EIGRP topology table.

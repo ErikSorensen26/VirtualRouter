@@ -8,11 +8,16 @@
 #include <mutex>
 #include <shared_mutex>
 #include <atomic>
-#include <functional>
 #include <VirtualRouter.h>
+#include <InterfacePairHash.hpp>
 
 class Interface;
 class VirtualRouter;
+namespace Protocol
+{
+    class DhcpServer;
+    class Dhcpv6Server;
+}
 
 enum class InterfaceType;
 
@@ -81,14 +86,16 @@ public:
     // Interfaces
     Interface* addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug);
     Interface* getInterface(InterfaceType type, float interfaceID);
-    std::map<float, Interface*>* getInterfaceType(InterfaceType type);
     bool removeInterface(InterfaceType type, float interfaceId);
-    void forEachInterface(const std::function<void(InterfaceType, float, Interface*)>& func, const std::vector<InterfaceType>& types = {}, bool include = true);
 
     // Routing Instances
     VirtualRouter* addRoutingInstance(const std::string& name);
     VirtualRouter* getRoutingInstance(const std::string& name);
     bool removeRoutingInstance(const std::string& name);
+    
+    // DHCP
+    Protocol::DhcpServer* dhcpServer = nullptr;
+    Protocol::Dhcpv6Server* dhcpv6Server = nullptr;
 
 private:
     // Delete copy constructor
@@ -119,7 +126,7 @@ private:
 
     // Interfaces
     std::mutex interfaceMutex; ///< Interface list mutex.
-    std::map<InterfaceType, std::map<float, Interface*>> interfaceList; ///< Interface list.
+    std::map<std::pair<InterfaceType, float>, Interface*> interfaceList; ///< Interface list.
 
     // Routing Instances
     std::mutex routingInstanceMutex; ///< Routing Instance mutex.

@@ -36,7 +36,9 @@ namespace Authentication
     static ByteString generateHMAC(const ByteString &data, const ByteString &key, const ByteString &algorithm) {
         const EVP_MD *md = nullptr;
 
-        if (algorithm == "SHA1") {
+        if (algorithm == "MD5")
+            md = EVP_md5();
+        else if (algorithm == "SHA1") {
             md = EVP_sha1();
         } else if (algorithm == "SHA256") {
             md = EVP_sha256();

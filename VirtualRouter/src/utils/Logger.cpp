@@ -12,7 +12,7 @@
 
 // Define CONFIG_FILE if not already defined
 #ifndef CONFIG_FILE
-#define CONFIG_FILE "../VirtualRouter/Configs/Configs.json"
+#define CONFIG_FILE "../../configs/Configs.json"
 #endif
 
 // Implementation of Logger methods

@@ -366,21 +366,25 @@ namespace Variable
          */
         namespace Type
         {
-            inline const ByteString solicit("\x01", 1);            ///< DHCPv6 Solicit message type.
-            inline const ByteString advertise("\x02", 1);          ///< DHCPv6 Advertise message type.
-            inline const ByteString request("\x03", 1);            ///< DHCPv6 Request message type.
-            inline const ByteString confirm("\x04", 1);            ///< DHCPv6 Confirm message type.
-            inline const ByteString renew("\x05", 1);              ///< DHCPv6 Renew message type.
-            inline const ByteString rebind("\x06", 1);             ///< DHCPv6 Rebind message type.
-            inline const ByteString reply("\x07", 1);              ///< DHCPv6 Reply message type.
-            inline const ByteString release("\x08", 1);            ///< DHCPv6 Release message type.
-            inline const ByteString decline("\x09", 1);            ///< DHCPv6 Decline message type.
-            inline const ByteString reconfigure("\x0A", 1);        ///< DHCPv6 Reconfigure message type.
-            inline const ByteString informationRequest("\x0B", 1); ///< DHCPv6 Information request message type.
-            inline const ByteString relayForward("\x0C", 1);       ///< DHCPv6 Relay forward message type.
-            inline const ByteString relayReply("\x0D", 1);         ///< DHCPv6 Relay reply message type.
-            inline const ByteString echoRequest("\x0E", 1);        ///< DHCPv6 Echo Request message type.
-            inline const ByteString echoReply("\x10");             ///< DHCPv6 Echo Reply message type.
+            inline const ByteString solicit("\x01", 1);             ///< DHCPv6 Solicit message type.
+            inline const ByteString advertise("\x02", 1);           ///< DHCPv6 Advertise message type.
+            inline const ByteString request("\x03", 1);             ///< DHCPv6 Request message type.
+            inline const ByteString confirm("\x04", 1);             ///< DHCPv6 Confirm message type.
+            inline const ByteString renew("\x05", 1);               ///< DHCPv6 Renew message type.
+            inline const ByteString rebind("\x06", 1);              ///< DHCPv6 Rebind message type.
+            inline const ByteString reply("\x07", 1);               ///< DHCPv6 Reply message type.
+            inline const ByteString release("\x08", 1);             ///< DHCPv6 Release message type.
+            inline const ByteString decline("\x09", 1);             ///< DHCPv6 Decline message type.
+            inline const ByteString reconfigure("\x0A", 1);         ///< DHCPv6 Reconfigure message type.
+            inline const ByteString informationRequest("\x0B", 1);  ///< DHCPv6 Information request message type.
+            inline const ByteString relayForward("\x0C", 1);        ///< DHCPv6 Relay forward message type.
+            inline const ByteString relayReply("\x0D", 1);          ///< DHCPv6 Relay reply message type.
+            inline const ByteString leaseQuery("\x0E", 1);          ///< DHCPv6 Lease Query message type.
+            inline const ByteString leaseQueryReply("\x0F", 1);     ///< DHCPv6 Lease Query reply message type.
+            inline const ByteString leaseQueryDone("\x10", 1);      ///< DHCPv6 Lease Query done message type.
+            inline const ByteString leaseQueryData("\x11", 1);      ///< DHCPv6 Lease Query data message type.
+            inline const ByteString reocnfigureRequest("\x12", 1);  ///< DHCPv6 Reconfigure Request message type.
+            inline const ByteString reconfigureReply("\x13", 1);    ///< DHCPv6 Reconfigure Reply message type.
         }
 
         /**
@@ -389,39 +393,41 @@ namespace Variable
          */
         namespace Options
         {
-            inline const ByteString clientID("\x00\x01", 2);           ///< DHCPv6 Option for Client ID.
-            inline const ByteString serverID("\x00\x02", 2);           ///< DHCPv6 Option for Server ID.
-            inline const ByteString IA_NA("\x00\x03", 2);              ///< DHCPv6 Option for AI_NA.
-            inline const ByteString IA_TA("\x00\x04", 2);              ///< DHCPv6 Option for IA_TA.
-            inline const ByteString IAAddr("\x00\x05", 2);             ///< DHCPv6 Option for AI Address.
-            inline const ByteString optionRequest("\x00\x06", 2);      ///< DHCPv6 Option for Option Request.
-            inline const ByteString preference("\x00\x07", 2);         ///< DHCPv6 Option for Preference.
-            inline const ByteString elapsedTime("\x00\x08", 2);        ///< DHCPv6 Option for Elapsed Time.
-            inline const ByteString relayMsg("\x00\x09", 2);           ///< DHCPv6 Option for Relay Message.
-            inline const ByteString auth("\x00\x0A", 2);               ///< DHCPv6 Option for Authentication.
-            inline const ByteString unicast("\x00\x12", 2);            ///< DHCPv6 Option for Unicast.
-            inline const ByteString statusCode("\x00\x13", 2);         ///< DHCPv6 Option for Status Code.
-            inline const ByteString rapidCommit("\x00\x14", 2);        ///< DHCPv6 Option for Rapid Commit.
-            inline const ByteString userClass("\x00\x0D", 2);          ///< DHCPv6 Option for User Class.
-            inline const ByteString vendorClass("\x00\x0F", 2);        ///< DHCPv6 Option for Vendor Class.
-            inline const ByteString vendorOpts("\x00\x11", 2);         ///< DHCPv6 Option for Venor Options
-            inline const ByteString interfaceID("\x00\x1E", 2);        ///< DHCPv6 Option for Interface ID.
-            inline const ByteString reconfigureMessage("\x00\x1C", 2); ///< DHCPv6 Option for Reconfigure Message.
-            inline const ByteString dnsServer("\x00\x17", 2);          ///< DHCPv6 Option for DNS Server.
-            inline const ByteString domainName("\x00\x18", 2);         ///< DHCPv6 Option for Domain name.
-            inline const ByteString IA_PD("\x00\x19", 2);              ///< DHCPv6 Option for IA_PD.
-            inline const ByteString IA_Prefix("\x00\x20", 2);          ///< DHCPv6 Option for IA Prefix.
-            inline const ByteString ntpServer("\x00\x2A", 2);          ///< DHCPv6 Option for NTP Server.
-            inline const ByteString sipServerDNS("\x00\x21", 2);       ///< DHCPv6 Option for SIP Server DNS.
-            inline const ByteString sipServerAddress("\x00\x22", 2);   ///< DHCPv6 Option for SIP Server Address.
-            inline const ByteString bootfileURL("\x00\x2F", 2);        ///< DHCPv6 Option for Boot File URL.
-            inline const ByteString bootfileParam("\x00\x30", 2);      ///< DHCPv6 Option for Boot File Parameters.
-            inline const ByteString defaultGateway("\x00\x31", 2);     ///< DHCPv6 Option for Default Gateway.
-            inline const ByteString relayAgentOption("\x00\x32", 2);   ///< DHCPv6 Option for Relay Agent Option.
-            inline const ByteString validLifetime("\x00\x33", 2);      ///< DHCPv6 Option for Valid Lifetime.
-            inline const ByteString preferredLifetime("\x00\x34", 2);  ///< DHCPv6 Option for Preferred Lifetime.
-            inline const ByteString clientIP("\x00\x35", 2);           ///< DHCPv6 Option for Client IP.
-            inline const ByteString hopcount("\x00\x52", 2);           ///< DHCPv6 Option for Hop Count.
+            inline const ByteString clientID("\x00\x01", 2);            ///< OPTION_CLIENTID (1)
+            inline const ByteString serverID("\x00\x02", 2);            ///< OPTION_SERVERID (2)
+            inline const ByteString IA_NA("\x00\x03", 2);               ///< OPTION_IA_NA (3)
+            inline const ByteString IA_TA("\x00\x04", 2);               ///< OPTION_IA_TA (4)
+            inline const ByteString IAAddr("\x00\x05", 2);              ///< OPTION_IAADDR (5)
+            inline const ByteString optionRequest("\x00\x06", 2);       ///< OPTION_ORO (6)
+            inline const ByteString preference("\x00\x07", 2);          ///< OPTION_PREFERENCE (7)
+            inline const ByteString elapsedTime("\x00\x08", 2);         ///< OPTION_ELAPSED_TIME (8)
+            inline const ByteString relayMsg("\x00\x09", 2);            ///< OPTION_RELAY_MSG (9)
+            inline const ByteString auth("\x00\x0B", 2);                ///< OPTION_AUTH (11)
+            inline const ByteString unicast("\x00\x0C", 2);             ///< OPTION_UNICAST (12)
+            inline const ByteString statusCode("\x00\x0D", 2);          ///< OPTION_STATUS_CODE (13)
+            inline const ByteString rapidCommit("\x00\x0E", 2);         ///< OPTION_RAPID_COMMIT (14)
+            inline const ByteString reconfigureMessage("\x00\x13", 2);  ///< OPTION_RECONF_MSG (19)
+            inline const ByteString reconfAccept("\x00\x14", 2);        ///< OPTION_RECONF_ACCEPT (20)
+            inline const ByteString dnsServer("\x00\x17", 2);           ///< OPTION_DNS_SERVERS (23)
+            inline const ByteString domainSearch("\x00\x18", 2);        ///< OPTION_DOMAIN_LIST (24)
+            inline const ByteString IA_PD("\x00\x19", 2);               ///< OPTION_IA_PD (25)
+            inline const ByteString fqdn("\x00\x27", 2);                ///< OPTION_CLIENT_FQDN (39)
+            inline const ByteString IA_Prefix("\x00\x1A", 2);           ///< OPTION_IAPREFIX (26)
+            inline const ByteString infoRefreshTime("\x00\x20", 2);     ///< OPTION_INFO_REFRESH (32)
+            inline const ByteString ntpServer("\x00\x38", 2);           ///< OPTION_NTP_SERVER (56)
+            inline const ByteString solMaxRt("\x00\x52", 2);            ///< OPTION_SOL_MAX_RT (82)
+            inline const ByteString infMaxRt("\x00\x53", 2);            ///< OPTION_INF_MAX_RT (83)
+
+            inline const ByteString remoteID("\x00\x25", 2);            ///< OPTION_REMOTE_ID (37)
+            inline const ByteString interfaceID("\x00\x12", 2);         ///< OPTION_INTERFACE_ID (18)
+
+            inline const ByteString leaseQuery("\x00\x2c", 2);          ///< OPTION_LQ_QUERY (44)
+            inline const ByteString leaseClientData("\x00\x2d", 2);     ///< OPTION_QLIENT_DATA (45)
+            inline const ByteString leaseQueryData("\x00\x2e", 2);      ///< OPTION_LQ_RELAY_DATA (46)
+
+            inline const ByteString queryByAddr("\x00\x01", 2);         ///< QUERY_BY_ADDRESS (1)
+            inline const ByteString queryByClientID("\x00\x02", 2);     ///< QUERY_BY_CLIENTID (2)
+
         }
 
         /**
@@ -430,17 +436,13 @@ namespace Variable
          */
         namespace Status 
         {
-            inline const ByteString success("\x00\x00", 2);            ///< Status code for success.
-            inline const ByteString unspecFail("\x00\x01", 2);         ///< Status code for unspecified failure.
-            inline const ByteString noAddrsAvail("\x00\x02", 2);       ///< Status code for no address available.
-            inline const ByteString noBinding("\x00\x03", 2);          ///< Status code for no binding available.
-            inline const ByteString notOnLink("\x00\x04", 2);          ///< Status code for not on link.
-            inline const ByteString useMulticast("\x00\x05", 2);       ///< Status code for using multicast.
-            inline const ByteString noPrefixAvail("\x00\x06", 2);      ///< Status code for no prefix available.
-            inline const ByteString unknownQueryType("\x00\x07", 2);   ///< Status code for unknown query type.
-            inline const ByteString malformedQuery("\x00\x08", 2);     ///< Status code for malformed query.
-            inline const ByteString notConfigured("\x00\x09", 2);      ///< Status code for not configured.
-            inline const ByteString notAllowed("\x00\x0A", 2);         ///< Status code for not allowed.
+            inline const ByteString success("\x00\x00", 2);             ///< Status code for success.
+            inline const ByteString unspecFail("\x00\x01", 2);          ///< Status code for unspecified failure.
+            inline const ByteString noAddrsAvail("\x00\x02", 2);        ///< Status code for no address available.
+            inline const ByteString noBinding("\x00\x03", 2);           ///< Status code for no binding available.
+            inline const ByteString notOnLink("\x00\x04", 2);           ///< Status code for not on link.
+            inline const ByteString useMulticast("\x00\x05", 2);        ///< Status code for using multicast.
+            inline const ByteString noPrefixAvail("\x00\x06", 2);       ///< Status code for no prefix available.
         }
 
         /**
@@ -587,6 +589,17 @@ namespace Variable
         {
             inline const ByteString solicitationAddress("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xFF", 13);
             
+        }
+
+        /**
+         * @namespace DHCP
+         * @brief Contains DHCP multicast address and constants.
+         */
+        namespace Dhcp
+        {
+            inline const ByteString clientToServerv6("\xff\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02", 16);
+            inline const ByteString relayToServerv6("\xff\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x03", 16);
+            inline const ByteString serverToAllv6("\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
         }
     }
 }

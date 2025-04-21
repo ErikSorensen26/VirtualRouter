@@ -39,6 +39,9 @@ struct Mode
     std::string privilegedExec = "#";                   ///< Privileged EXEC mode prompt.
     std::string globalConfiguration = "(config)#";      ///< Global Configuration mode prompt.
 
+    // DHCP related prompts
+    std::string dhcpGlobalOptions = "(config-dhcp-global-options)#"; ///< DHCP Global Options Configuration mode prompt.
+
     // Netflow related prompts
     std::string flowExporter = "(config-flow-exporter)#";   ///< Flow Exporter Configuration mode prompt.
     std::string flowMoniter = "(config-flow-moniter)#";     ///< Flow Monitor Configuration mode prompt.

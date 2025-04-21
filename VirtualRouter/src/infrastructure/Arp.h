@@ -1,5 +1,7 @@
 // Arp.h
 
+// TODO add per-entry timers
+
 #ifndef ARP_H
 #define ARP_H
 
@@ -48,6 +50,8 @@ public:
      * @param CurrentInterface Reference to the network interface associated with this ARP instance.
      */
     explicit Arp(Interface& CurrentInterface);
+
+    void initiateArp();
 
     /**
      * @brief Destructor for the ARP class.

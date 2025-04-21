@@ -3,7 +3,7 @@
 
 int main() 
 {
-    Logger::getInstance().initialize(true, /*isolateMode*/true);
+    Logger::getInstance().initialize(true, /*isolateMode*/false);
 
     Terminal* terminal = new Terminal(false);
     while (true) {

@@ -11,6 +11,8 @@
 #include <PrefixPool.h>
 #include <PrefixLeaseManager.h>
 #include <random>
+#include <atomic>
+#include <shared_mutex>
 
 // Forward declarations
 class Interface;
@@ -37,73 +39,6 @@ namespace Protocol
         transIdBytes[3] = static_cast<unsigned char>(transId & 0xFF);
         return transIdBytes;
     }
-    /**
-     * @brief Configuration details for a network managed by the DHCP server.
-     *
-     * Each network includes options such as the subnet, default gateway, DNS servers, domainName, and lease duration.
-     */
-    struct DhcpNetworkConfig
-    {
-        uint8_t subnetPrefix;               ///< The subnet prefix for the DHCP pool.
-        uint8_t defaultSubnetPrefix;        ///< The default subnet Prefix for the DHCP pool.
-        uint8_t serverPreference = 255;     ///< Default server preference.
-        ByteString network;                 ///< The base address of the network. (e.g., "192.168.1.0").
-        ByteString defaultGateway;          ///< The default gateway address for clients in this network.
-        ByteString renewalTime;             ///< Renewal time in bytes for easy access.
-        ByteString rebindingTime;           ///< Rebinding time in bytes for easy access.
-        std::vector<ByteString> dnsServer;  ///< A list of DNS servers provided with this network.
-        std::string domainName;             ///< The domain name associated with this network.
-        std::string netbiosName;            ///< The name of the NetBIOS server.
-        double leaseTime = 0.0;             ///< The default duration of a lease in seconds.
-        double t1Percentage = 0.5;          ///< Initial T1 percentage for calcualting renewal times.
-        double t2Percentage = 0.87;          ///< Initial T2 percentage for calcualting rebinding times.
-
-        Interface* interface = nullptr;     ///< Pointer to the interface managing this network.
-
-        // Additional fields
-        std::vector<ByteString> ntpServer;      ///< Network Time Protocol (NTP) server for this network.
-        std::vector<ByteString> tftpServer;     ///< TFTP server address for PXE booting.
-        std::vector<ByteString> winsServer;     ///< A list of WINS (Windows Internet Name Service) servers.
-        std::vector<ByteString> staticRoutes;   ///< Static routes provided to the network clients.
-        std::vector<ByteString> helperAddresses;///< List of DHCP relay (helper) addresses.
-        ByteString broadcastAddress;            ///< The broadcast address for this network.
-        ByteString arpTimeout;                  ///< ARP timeout value for this network.
-        std::optional<bool> allowDynamicUpdates; ///< Indicates whether dynamic updates (e.g., for DNS) are enabled.
-        std::vector<std::string> allowedHostnames; ///< A list of hostnames allowed to operate on this network.
-        uint16_t mtu;                           ///< Maximum Transmission Unit (MTU) for the network.
-        std::string bootfile;                   ///< Bootfile for pool.
-
-        // Metadata
-        std::string description;               ///< Description or label for this network configuration.
-        bool isPrivate;                        ///< Flag indicating whether this network is private or public.
-        bool isEnabled;                        ///< Flag indicating whether this network is currently active.
-
-        // Methods (optional, if you want to add functions)
-        ByteString getNetworkID() { return network + "/" + std::to_string(subnetPrefix); }
-    };
-    /**
-     * @struct DhcpNetwork
-     * @brief Holds a IPPool, LeaseManager, and a DhcpNetworkConfig.
-     */
-    struct DhcpNetwork
-    {
-        DhcpNetwork() = default;
-
-        IPPool* pool = nullptr;
-        LeaseManager* lease = nullptr;
-        PrefixLeaseManager* prefixLease = nullptr;
-        PrefixPool* prefixPool = nullptr;
-        DhcpNetworkConfig* config = nullptr;
-
-        ~DhcpNetwork() 
-        {
-            if (pool) delete pool;
-            if (lease) delete lease;
-            if (prefixLease) delete prefixLease;
-            if (prefixPool) delete prefixPool;
-            if (config) delete config;
-        }
-    };
     /**
      * @struct Dhcp
      * @brief Stores DHCP configuration information.

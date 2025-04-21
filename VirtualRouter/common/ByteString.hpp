@@ -394,7 +394,7 @@ public:
         //return count;
     //}
 
-    inline ByteString& replace(size_t pos, size_t len, ByteString& replacement) {
+    inline ByteString& replace(size_t pos, size_t len, const ByteString& replacement) {
         if (pos > size_) {
             throw std::out_of_range("ByteString::replace: position out of range");
         }

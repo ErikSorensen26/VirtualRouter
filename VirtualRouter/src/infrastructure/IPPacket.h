@@ -27,7 +27,8 @@ namespace Protocol
             bool reserved = false,
             bool dontFragment = true,
             bool moreFragment = false,
-            uint16_t fragmentOffset = 0
+            uint16_t fragmentOffset = 0,
+            uint32_t v6FlowLabel = 0
         );
 
         // Sets the UPD header in PacketInfo

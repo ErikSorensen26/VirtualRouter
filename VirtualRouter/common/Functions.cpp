@@ -387,6 +387,22 @@ namespace Functions {
         return false;
     }
 
+    std::optional<std::pair<std::string, std::string>> splitMiddle(const std::string& full, char delimiter)
+    {
+        size_t pos = full.find(delimiter);
+        // Check if the slash exists and is not at the start or end.
+        std::string h1;
+        std::string h2;
+        if (pos != std::string::npos && pos != 0 && pos != full.size() - 1)
+        {
+            std::pair<std::string, std::string> pair;
+            pair.first = full.substr(0, pos);
+            pair.second = full.substr(pos + 1);
+            return pair;
+        }
+        return std::nullopt;
+    }
+
     void printVector(const std::vector<std::string>& vec) 
     {
         return; // Disabled
@@ -799,7 +815,17 @@ namespace Functions {
 
     bool isLocalLink(const ByteString& input)
     {
-        return (byteToBin(input.substr(0, 2)).substr(0, 10) == "1111111010");
+        return (input[0] == 0xFE) && ((input[1] & 0xc0) == 0x80);
+    }
+
+    bool isGlobalUnicast(const ByteString& input)
+    {
+        return (input[0] == 0xfd);
+    }
+
+    bool isLocalUnicast(const ByteString& input)
+    {
+        return (input[0] & 0xE0) == 0x20;
     }
     
     #pragma endregion
@@ -843,6 +869,25 @@ namespace Functions {
     {
         std::time_t time_t_value = std::chrono::system_clock::to_time_t(time);
         return std::to_string(time_t_value);
+    }
+    
+    std::string generateRandomString(size_t length)
+    {
+        static const std::string chars = 
+            "0123456789"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz";
+
+        static std::mt19937 rng(std::random_device{}());
+        static std::uniform_int_distribution<> dist(0, chars.size() - 1);
+
+        std::string result;
+        result.reserve(length);
+
+        for (size_t i = 0; i < length; ++i)
+            result += chars[dist(rng)];
+
+        return result;
     }
 
     #pragma endregion

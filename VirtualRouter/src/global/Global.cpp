@@ -9,65 +9,37 @@
 // Interfaces
 Interface* Global::addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug)
 {
-    if (interfaceList[interfaceType].find(interfaceId) != interfaceList[interfaceType].end())
+    if (interfaceList.find({interfaceType, interfaceId}) != interfaceList.end())
     {
         return nullptr;
     }
-    interfaceList[interfaceType][interfaceId] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, getRoutingInstance("default"), debug);
-    return interfaceList[interfaceType][interfaceId];
+    interfaceList[{interfaceType, interfaceId}] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, getRoutingInstance("default"), debug);
+    interfaceList[{interfaceType, interfaceId}]->startThreads();
+
+    return interfaceList[{interfaceType, interfaceId}];
 }
 
 Interface* Global::getInterface(InterfaceType type, float interfaceID)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (interfaceList[type].find(interfaceID) != interfaceList[type].end())
+    if (interfaceList.find({type, interfaceID}) != interfaceList.end())
     {
-        return interfaceList[type][interfaceID];
+        return interfaceList[{type, interfaceID}];
     }
     return nullptr;
-}
-
-std::map<float, Interface*>* Global::getInterfaceType(InterfaceType type)
-{
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    return &(interfaceList[type]);
 }
 
 bool Global::removeInterface(InterfaceType type, float interfaceId)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
-    auto& interfaceTypeList = interfaceList[type];
-    if (interfaceTypeList.find(interfaceId) != interfaceTypeList.end())
+    if (interfaceList.find({type, interfaceId}) != interfaceList.end())
     {
-        delete interfaceTypeList[interfaceId];
-        interfaceTypeList[interfaceId] = nullptr;
-        interfaceTypeList.erase(interfaceId);
+        delete interfaceList[{type, interfaceId}];
+        interfaceList[{type, interfaceId}] = nullptr;
+        interfaceList.erase({type, interfaceId});
         return true;
     }
     return false;
-}
-
-void Global::forEachInterface(const std::function<void(InterfaceType, float, Interface*)>& func, const std::vector<InterfaceType>& types, bool include)
-{
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    for (const auto& [type, innermap] : interfaceList)
-    {
-        if (!types.empty())
-        {
-            if (include && std::find(types.begin(), types.end(), type) == types.end())
-            {
-                continue;
-            }
-            else if (!include && std::find(types.begin(), types.end(), type) != types.end())
-            {
-                continue;
-            }
-        }
-        for (const auto& [index, iface] : innermap)
-        {
-            func(type, index, iface);
-        }
-    }
 }
 
 VirtualRouter* Global::addRoutingInstance(const std::string& name)

@@ -1,14 +1,23 @@
 #include <Ndp.h>
-#include <Interface.h>
 #include <IPPacket.h>
 
 namespace Protocol
 {
     // Constructor: Initiates the NDP object with the given interface
-    Ndp::Ndp(Interface& CurrentInterface)
-        : currentInterface(&CurrentInterface), running(true)
+    Ndp::Ndp(Interface& iface)
+        : currentInterface(&iface), running(false)
     {
+        initializeNdp();
+    }
 
+    void Ndp::initializeNdp()
+    {
+        {
+            std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
+            if (currentInterface->shutdownFlag.load(std::memory_order_relaxed))
+                return;
+        }
+        running.store(true, std::memory_order_release);
     }
 
     // Destructor
@@ -126,10 +135,10 @@ namespace Protocol
 
             // Create the packet
             PacketInfo nsPacket;
-            auto iface = currentInterface->Get();
-            if (iface)
+            auto& iface = currentInterface->configs;
+            if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
             {
-                nsPacket = neighborSolicitation(targetIp, &iface->macAddress);
+                nsPacket = neighborSolicitation(targetIp, &iface.macAddress);
             }
 
             // Set the IP header and send the packet
@@ -328,7 +337,7 @@ namespace Protocol
             
         {
             std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
-            icmp.payload = currentInterface->configs.ipv6.ipAddress;
+            icmp.payload = currentInterface->configs.ipv6.linkLocalAddress.ip;
         }
 
         IcmpV6Header::Option target;
@@ -387,7 +396,7 @@ namespace Protocol
         source.option = Variable::ICMPv6::Option::mtu;
         source.length = ByteString("\x01", 1);
         source.value = ByteString("\x00\x00", 2) + // Reserved
-            Functions::numToByte(currentInterface->Get()->mtu);
+        Functions::numToByte(currentInterface->configs.mtu);
         icmp.options.push_back(std::move(source));
 
         packet.Layer3.push_back(std::move(icmp));
@@ -397,15 +406,15 @@ namespace Protocol
 
     void Ndp::sendNeighborAdvertisement(const ByteString& destMac, ByteString const* targetIp)
     {
-        auto iface = currentInterface->Get();
-        if (iface)
+        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
+            auto& iface = currentInterface->configs;
             ByteString ip;
             {
-                std::shared_lock<std::shared_mutex> lock(iface->ipMutex);
-                ip = iface->ipv6.ipAddress;
+                std::shared_lock<std::shared_mutex> lock(iface.ipMutex);
+                ip = iface.ipv6.linkLocalAddress.ip;
             }
-            PacketInfo naPacket = neighborAdvertisement(iface->macAddress, targetIp);
+            PacketInfo naPacket = neighborAdvertisement(iface.macAddress, targetIp);
             
             // Set the IP header and send the packet.
             IPPacket::buildIp(currentInterface, naPacket, targetIp ? *targetIp : Variable::IPv6::multicast, nullptr, &destMac, 0, 255, Variable::IP::icmpv6);
@@ -414,10 +423,10 @@ namespace Protocol
     
     void Ndp::sendRouteSolicitation(const ByteString& targetIp)
     {
-        auto iface = currentInterface->Get();
-        if (iface)
+        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
-            PacketInfo rsPacket = routeSolicitation(iface->macAddress);
+            auto& iface = currentInterface->configs;
+            PacketInfo rsPacket = routeSolicitation(iface.macAddress);
 
             // Set the IP header and send the packet.
             IPPacket::buildIp(currentInterface, rsPacket, generateMulticastSolicitationAddress(targetIp), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
@@ -426,15 +435,15 @@ namespace Protocol
 
     void Ndp::sendRouteAdvertisement(const ByteString& targetMac, const ByteString& targetIp)
     {
-        auto iface = currentInterface->Get();
-        if (iface)
+        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
+            auto& iface = currentInterface->configs;
             // Gather interface values.
-            uint8_t ttl = iface->ttl;
+            uint8_t ttl = iface.ttl;
             uint16_t lifetime = configs.lifetime.load(std::memory_order_relaxed);
             uint16_t reachableTime = configs.reachableTime.load();
             uint16_t retransTimer = 1000;
-            PacketInfo raPacket = routeAdvertisment(iface->macAddress, ttl, lifetime, reachableTime, retransTimer);
+            PacketInfo raPacket = routeAdvertisment(iface.macAddress, ttl, lifetime, reachableTime, retransTimer);
             
             // Set the IP header and send the packet.
             IPPacket::buildIp(currentInterface, raPacket, targetIp, nullptr, &targetMac, 0, 255, Variable::IP::icmpv6);
@@ -461,40 +470,49 @@ namespace Protocol
         }
     }
 
-    void Ndp::duplicateAddressDetection(bool localLink)
+    void Ndp::duplicateAddressDetection(IpInfo::IPv6::IPv6Address& addr, bool isLinkLocal)
     {
-        auto iface = currentInterface->Get();
-        if (iface)
+        auto& iface = currentInterface->configs;
+        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
+            return;
+
+        // If DAD is disabled or address is already marked non-tentative
+        if (!addr.tentative)
+            return;
+
+        int attempts = 0;
+        bool duplicate = false;
+
+        const int maxAttempts = configs.dadAttempts.load(std::memory_order_relaxed);
+        const auto delay = std::chrono::milliseconds(configs.dadTime.load(std::memory_order_relaxed));
+
+        while (attempts < maxAttempts)
         {
-            // Retries tantative addresses from the interface.
-            std::vector<ByteString> tentativeAddresses = currentInterface->getTentativeAddress();
-            for (const auto& addr : tentativeAddresses)
+            PacketInfo ns = neighborSolicitation(addr.ip, &iface.macAddress);
+            IPPacket::buildIp(currentInterface, ns, generateMulticastSolicitationAddress(addr.ip), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
+
+            // Wait for response
+            if (waitForNeighborReply(addr.ip, delay))
             {
-                int attempts = 0;
-                bool duplicate = false;
-                while (attempts < configs.dadAttempts.load(std::memory_order_relaxed))
-                {
-                    PacketInfo dadNS;
-                    dadNS = neighborSolicitation(addr, &iface->macAddress);
-                    IPPacket::buildIp(currentInterface, dadNS, generateMulticastSolicitationAddress(addr), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
-                    if (waitForNeighborReply(addr, std::chrono::milliseconds(configs.dadTime.load(std::memory_order_relaxed))))
-                    {
-                        duplicate = true;
-                        break;
-                    }
-                    attempts++;
-                }
-                if (duplicate)
-                {
-                    currentInterface->markAddressDuplicate(addr, localLink);
-                }
-                else
-                {
-                    std::shared_lock<std::shared_mutex> lock(iface->ipMutex);
-                    iface->ipv6.validateAddress(localLink);
-                }
+                duplicate = true;
+                break;
             }
+
+            attempts++;
+        }
+
+        std::unique_lock<std::shared_mutex> lock(iface.ipMutex);
+
+        if (duplicate)
+        {
+            addr.tentative = false;
+            addr.valid = false;
+            currentInterface->markAddressDuplicate(addr.ip, isLinkLocal);
+        }
+        else
+        {
+            addr.tentative = false;
+            addr.valid = true;
         }
     }
-
 }

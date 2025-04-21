@@ -105,6 +105,11 @@ public:
      */
     std::map<ByteString, PrefixLease> getActiveLeases() const;
 
+    /**
+     * @return The requested lease as a pointer
+     */
+    PrefixLease* getLease(const ByteString& duid) {std::lock_guard<std::mutex> lock(leaseMutex); return &leases[duid];}
+
 private:
 
     PrefixPool* pool;

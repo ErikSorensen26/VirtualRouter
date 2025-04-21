@@ -11,7 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 enable_testing()
 
 # Compiler Warnings
-add_compile_options(-Wall -Wextra -pedantic -Wshadow -Wnon-virtual-dtor)
+add_compile_options(-Wall -Wno-unused-parameter)
 
 # External Dependencies
 find_package(PkgConfig REQUIRED)

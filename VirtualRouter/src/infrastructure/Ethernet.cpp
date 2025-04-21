@@ -67,7 +67,7 @@ namespace Protocol
                 eth.destinationMac = ByteString("");
                 eth.sourceMac = iface->configs.macAddress;
                 eth.type = type;
-                packet.Layer2.push_back(eth);
+                packet.Layer2.push_back(std::move(eth));
                 iface->ndp->resolveAndSend(destIp, packet);
                 return {}; // Empty MAC signifies that the packet will be sent after NDP resolution
             }
@@ -100,7 +100,7 @@ namespace Protocol
         // Set the destination MAC
         ethernetHeader.destinationMac = destinationMac;
 
-        packetInfo.Layer2.emplace_back(ethernetHeader);
+        packetInfo.Layer2.push_back(std::move(ethernetHeader));
         
         iface->enqueuePacket(packetInfo);
 

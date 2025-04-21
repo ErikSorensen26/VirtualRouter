@@ -18,6 +18,22 @@ Protocol::Dhcpv6Server::~Dhcpv6Server()
     stopServer();
 }
 
+void Protocol::Dhcpv6Server::removeInterface(Interface* iface)
+{
+    std::lock_guard<std::mutex> lock(trackingMutex);
+    for (auto it = clientReconfAccept.begin(); it != clientReconfAccept.end();)
+    {
+        if (iface == it->second.second)
+        {
+            it = clientReconfAccept.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
 void Protocol::Dhcpv6Server::startServer()
 {
     stopFlag.store(false, std::memory_order_release);
@@ -39,7 +55,7 @@ void Protocol::Dhcpv6Server::stopServer()
     dhcpNetworks.clear();
 }
 
-void Protocol::Dhcpv6Server::handleDhcpPacket(const PacketInfo& packet, Interface* iface)
+void Protocol::Dhcpv6Server::handleDhcpPacket(const PacketInfo& packet, Interface* iface, bool multicast, const ByteString& localAddress)
 {
     if ((packet.Layer5.empty() || !std::holds_alternative<Dhcpv6Header>(packet.Layer5[0])))
         return;
@@ -47,34 +63,34 @@ void Protocol::Dhcpv6Server::handleDhcpPacket(const PacketInfo& packet, Interfac
     const Dhcpv6Header& header = std::get<Dhcpv6Header>(packet.Layer5[0]);
     const ByteString& msgType = header.type;
 
+    processReconfigAccept(header, localAddress, iface);
+
     switch (msgType[0])
     {
     case 0x01:
-        processSolicit(header, iface);
+        processSolicit(header, iface, multicast, &localAddress);
         break;
     case 0x03:
-        processRequest(header, iface);
+        processRequest(header, iface, multicast, &localAddress);
         break;
     case 0x04:
-        processConfirm(header, iface);
+        processConfirm(header, iface, multicast, &localAddress);
         break;
     case 0x05:
-        processRenew(header, iface);
+        processRenew(header, iface, multicast, &localAddress);
         break;
     case 0x06:
-        processRebind(header, iface);
+        processRebind(header, iface, multicast, &localAddress);
         break;
     case 0x08:
-        processRelease(header, iface);
+        processRelease(header, iface, multicast, &localAddress);
         break;
     case 0x09:
-        processDecline(header, iface);
+        processDecline(header, iface, multicast, &localAddress);
         break;
     case 0x0B:
-        processInformationRequest(header, iface);
+        processInformationRequest(header, iface, multicast, &localAddress);
         break;
-    case 0x0E:
-        processEchoRequest(header, iface);
     }
 }
 
@@ -105,7 +121,11 @@ ByteString Protocol::Dhcpv6Server::findMatchingNetwork(const ByteString& ip)
 {
     for (const auto& [id, net] : dhcpNetworks)
     {
-        if (Functions::compareNetworkWithIp(net->config->network, ip, net->config->subnetPrefix))
+        ByteString network;
+        {
+            network = net->config->getNetwork();
+        }
+        if (Functions::compareNetworkWithIp(network, ip, net->config->getPrefixLen()))
             return id;
     }
     return {};
@@ -330,24 +350,25 @@ std::vector<ByteString> Protocol::Dhcpv6Server::extractORO(const Dhcpv6Header& h
     return results;
 }
 
-void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto ianaBlocks = extractIA_NA(header, iface);
     auto iapdBlocks = extractIA_PD(header, iface);
     auto iataBlocks = extractIA_TA(header, iface);
 
-    if (ianaBlocks.empty() && iapdBlocks.empty() && iataBlocks.empty()) return;
+    if (ianaBlocks.empty() && iapdBlocks.empty() && iataBlocks.empty()) return std::nullopt;
 
     auto oro = extractORO(header);
     bool rapidCommitRequest = handleRapidCommit(header.options);
 
     // Extract Client ID (DUID)
     ByteString duid = extractDUID(header);
-    if (duid.empty() || !validateAuthentication(header, duid))
-        return; // No leases will be given without a Client ID.
+    if (duid.empty() || !validateAuthentication(header, duid) || !trackElapsedTime(header, duid))
+        return std::nullopt; // No leases will be given without a Client ID.
 
     if (rapidCommitRequest)
     {
+        ByteString lastLease;
         // Allocate and commit all addresses/prefixes
         for (auto& block : ianaBlocks)
         {
@@ -361,8 +382,15 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
                 {
                     ByteString id = duid + block.iaid + requestedIP;
                     if (!block.network->pool->isAllocatedOrExcluded(requestedIP) && 
-                        block.network->lease->allocateRequestedIP(requestedIP, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, &id))
+                        block.network->lease->allocateRequestedIP(
+                            requestedIP, 
+                            block.network->config->leaseTime.load(std::memory_order_relaxed),
+                            block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                            block.network->config->t2Percentage.load(std::memory_order_relaxed), 
+                            &id
+                        ))
                     {
+                        lastLease = requestedIP;
                         confirmed.push_back(requestedIP);
                     }
                 }
@@ -372,15 +400,27 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
             {
                 // No requested addresses, just allocate one
                 ByteString id = duid + block.iaid;
-                ByteString ip = block.network->lease->allocateIP(block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, &id, true);
+                ByteString ip = block.network->lease->allocateIP(
+                    block.network->config->leaseTime.load(std::memory_order_relaxed),
+                    block.network->config->t1Percentage.load(std::memory_order_relaxed), 
+                    block.network->config->t2Percentage.load(std::memory_order_relaxed),
+                    &id, true
+                );
                 if (!ip.empty())
                 {
+                    lastLease = ip;
                     block.addresses.push_back(ip);
                 }
                 else
                 {
                     //TODO
                 }
+            }
+
+            if (!lastLease.empty())
+            {
+                std::lock_guard<std::mutex> lock(trackingMutex);
+                recentLeases[duid] = lastLease;
             }
         }
 
@@ -393,18 +433,35 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
                 std::vector<std::pair<ByteString, uint8_t>> confirmed;
                 for (const auto& [prefix, length] : block.prefixes)
                 {
+                    ByteString id = duid + block.iaid + prefix;
                     if (!block.network->pool->isAllocatedOrExcluded(prefix) &&
-                        block.network->prefixLease->allocateRequestedPrefix(duid + block.iaid + prefix, prefix, length, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage))
+                        block.network->prefixLease->allocateRequestedPrefix(
+                            id, prefix, length,
+                            block.network->config->leaseTime.load(std::memory_order_relaxed),
+                            block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                            block.network->config->t2Percentage.load(std::memory_order_relaxed)
+                        ))
+                    {
                         block.prefixes.emplace_back(prefix, length);
+                    }
                 }
                 block.prefixes = confirmed;
             }
             else
             {
                 // No specified prefix requested, assign a default
-                auto allocated = block.network->prefixLease->allocatePrefix(duid + block.iaid, block.network->config->defaultSubnetPrefix, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, true);
+                auto allocated = block.network->prefixLease->allocatePrefix(
+                    duid + block.iaid,
+                    block.network->config->defaultSubnetPrefix,
+                    block.network->config->leaseTime.load(std::memory_order_relaxed),
+                    block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                    block.network->config->t2Percentage.load(std::memory_order_relaxed),
+                    true
+                );
                 if (!allocated.first.empty())
+                {
                     block.prefixes.push_back(allocated);
+                }
             }
         }
 
@@ -419,10 +476,15 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
                 {
                     ByteString id = duid + block.iaid + requestedIP;
                     if (!block.network->pool->isAllocatedOrExcluded(requestedIP) && 
-                        block.network->lease->allocateRequestedIP(requestedIP, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, &id))
+                        block.network->lease->allocateRequestedIP(
+                            requestedIP,
+                            block.network->config->leaseTime.load(std::memory_order_relaxed),
+                            block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                            block.network->config->t2Percentage.load(std::memory_order_relaxed),
+                            &id
+                        ))
                     {
                         confirmed.push_back(requestedIP);
-                        //std::cout << requestedIP << std::endl;
                     }
                 }
                 block.addresses = confirmed;
@@ -430,27 +492,41 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
             else
             {
                 // No requested addresses, just allocate one
-                ByteString ip = block.network->lease->allocateIP(block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, nullptr);
+                ByteString ip = block.network->lease->allocateIP(
+                    block.network->config->leaseTime.load(std::memory_order_relaxed),
+                    block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                    block.network->config->t2Percentage.load(std::memory_order_relaxed),
+                    nullptr
+                );
                 if (!ip.empty())
                     block.addresses.push_back(ip);
-                //std::cout << ip.toHex() << std::endl;
             }
         }
 
         Dhcpv6Header reply = buildResponse(
             Variable::Dhcpv6::Type::reply,
             header.transactionID,
+            duid,
             ianaBlocks,
             iapdBlocks,
             iataBlocks
         );
 
+        if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
+        {
+            auto block = ianaBlocks.begin();
+            if (!block->addresses.empty())
+            {
+                addServerUnicast(reply, block->addresses.front(), iface);
+            }
+        }
+
         // Add arpid Commit option to server response
-        reply.options.push_back({
+        reply.options.emplace_back(
             Variable::Dhcpv6::Options::rapidCommit,
             Functions::numToByte(0, 2),
-            {}
-        });
+            ByteString()
+        );
 
         ByteString statusCode;
         std::string message;
@@ -468,8 +544,8 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
 
         reply.options.push_back(buildStatusOption(statusCode, message));
 
-        sendPacket(reply, iface);
-        return;
+        sendPacket(reply, iface, *localAddress);
+        return std::nullopt;
     }
 
     for (auto& block : ianaBlocks)
@@ -573,7 +649,7 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
         }
         else
         {
-            auto offered = block.network->prefixPool->allocateTempPrefix(duid + block.iaid, block.network->config->defaultSubnetPrefix, true);
+            auto offered = block.network->prefixPool->allocateTempPrefix(duid + block.iaid, block.network->config->defaultSubnetPrefix.load(std::memory_order_relaxed), true);
             if (offered.first.empty())
             {
                 block.prefixes.push_back(offered);
@@ -669,10 +745,20 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
     Dhcpv6Header advertise = buildResponse(
         Variable::Dhcpv6::Type::advertise,
         header.transactionID,
+        duid,
         ianaBlocks,
         iapdBlocks,
         iataBlocks
     );
+
+    if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
+    {
+        auto block = ianaBlocks.begin();
+        if (!block->addresses.empty())
+        {
+            addServerUnicast(advertise, block->addresses.front(), iface);
+        }
+    }
 
     for (const auto& block : ianaBlocks)
     {
@@ -692,11 +778,12 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
     {
         if (block.network && block.network->config)
         {
-            Dhcpv6Header::Option prefOpt;
-            prefOpt.option = Variable::Dhcpv6::Options::preference;
-            prefOpt.length = Functions::numToByte(1, 2);
-            prefOpt.value = ByteString(1, getServerPreference(block.network->config));
-            advertise.options.push_back(prefOpt);
+            ByteString pref = ByteString(1, getServerPreference(block.network->config, duid));
+            advertise.options.emplace_back(
+                Variable::Dhcpv6::Options::preference,
+                Functions::numToByte(1, 2),
+                std::move(pref)
+            );
             break;
         }
     }
@@ -717,29 +804,37 @@ void Protocol::Dhcpv6Server::processSolicit(const Dhcpv6Header& header, Interfac
 
     advertise.options.push_back(buildStatusOption(statusCode, message));
 
-    sendPacket(advertise, iface);
+    if (!localAddress)
+    {
+        return advertise.encapsulate();
+    }
+    
+    sendPacket(advertise, iface, *localAddress);
+    return std::nullopt;
 }
 
-void Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto ianaBlocks = extractIA_NA(header, iface);
     auto iapdBlocks = extractIA_PD(header, iface);
     auto iataBlocks = extractIA_TA(header, iface);
-    if (ianaBlocks.empty() && iapdBlocks.empty()) return;
+    if (ianaBlocks.empty() && iapdBlocks.empty()) return std::nullopt;
 
     // Extract the Clients ID
     ByteString duid = extractDUID(header);
-    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header))
-        return; // No leases will be given if no Client ID is present
+    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header) || !trackElapsedTime(header, duid))
+        return std::nullopt; // No leases will be given if no Client ID is present
 
     // Validate Server Identifier
     ByteString expectedServerID = ByteString("\x00\x03", 2) + ByteString("\x00\x00\x00\x00\x00\x01", 6);
-    if (!validateServerID(header)) return;
+    if (!validateServerID(header)) return std::nullopt;
 
     for (auto& block : ianaBlocks)
     {
+        ByteString lastLease;
+
         if (!block.network || !block.network->lease) continue;
-        ByteString id = duid + block.iaid;
+        ByteString baseId = duid + block.iaid;
 
         std::vector<ByteString> committed;
         for (const ByteString& addr : block.addresses)
@@ -747,26 +842,36 @@ void Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interfac
             if (block.network->lease->isAllocated(addr))
             {
                 block.network->lease->renewLease(addr);
+                lastLease = addr;
                 committed.push_back(addr);
             }
             else if (outgoingRequests.count(addr) && block.network->pool->isTemporarilyOffered(addr))
             {
-                ByteString reserved = block.network->lease->activateLeaseFromTemp(addr, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, &id);
+                ByteString id = baseId + addr;
+                ByteString reserved = block.network->lease->activateLeaseFromTemp(
+                    addr,
+                    block.network->config->leaseTime.load(std::memory_order_relaxed),
+                    block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                    block.network->config->t2Percentage.load(std::memory_order_relaxed),
+                    &id
+                );
                 if (!reserved.empty()) 
                 {
+                    lastLease = reserved;
                     committed.push_back(reserved);
-                    cancelTimeout(Dhcp::TimerType::IP_OFFER_TIMEOUT, duid + block.iaid, reserved);
-                    cancelTimeout(Dhcp::TimerType::CLIENT_REQUEST_TIMEOUT, duid + block.iaid, reserved);
+                    cancelTimeout(Dhcp::TimerType::IP_OFFER_TIMEOUT, id + reserved, reserved);
+                    cancelTimeout(Dhcp::TimerType::CLIENT_REQUEST_TIMEOUT, id + reserved, reserved);
                     outgoingRequests.erase(reserved);
+                }
+                {
+                    //TODO fail
                 }
             }
         }
 
-        // If no requested address or all failed, allocate on dynamically
-        if (committed.empty())
+        if (!lastLease.empty())
         {
-            ByteString dynamic = block.network->lease->allocateIP(block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, &id);
-            if (!dynamic.empty()) committed.push_back(dynamic);
+            recentLeases[duid] = lastLease;
         }
 
         block.addresses = committed;
@@ -776,6 +881,7 @@ void Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interfac
     for (auto& block : iapdBlocks)
     {
         if (!block.network || !block.network->prefixLease) continue;
+        ByteString baseId = duid + block.iaid;
 
         std::vector<std::pair<ByteString, uint8_t>> committed;
         for (const auto& [prefix, plen] : block.prefixes)
@@ -787,21 +893,20 @@ void Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interfac
             }
             else if (outgoingRequests.count(prefix) && block.network->prefixPool->isTemporarilyOffered(prefix))
             {
-                auto activated = block.network->prefixLease->activateLeaseFromTemp(duid + block.iaid, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage);
+                auto activated = block.network->prefixLease->activateLeaseFromTemp(
+                    baseId + prefix,
+                    block.network->config->leaseTime.load(std::memory_order_relaxed),
+                    block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                    block.network->config->t2Percentage.load(std::memory_order_relaxed)
+                );
                 if (!activated.first.empty())
                 {
                     committed.push_back(activated);
-                    cancelTimeout(Dhcp::TimerType::PREFIX_OFFER_TIMEOUT, duid + block.iaid, activated.first);
-                    cancelTimeout(Dhcp::TimerType::CLIENT_REQUEST_TIMEOUT, duid + block.iaid, activated.first);
+                    cancelTimeout(Dhcp::TimerType::PREFIX_OFFER_TIMEOUT, baseId + prefix, activated.first);
+                    cancelTimeout(Dhcp::TimerType::CLIENT_REQUEST_TIMEOUT, baseId + prefix, activated.first);
                     outgoingRequests.erase(activated.first);
                 }
             }
-        }
-
-        if (committed.empty())
-        {
-            auto dyn = block.network->prefixLease->allocatePrefix(duid + block.iaid, block.network->config->defaultSubnetPrefix, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage);
-            if (!dyn.first.empty()) committed.push_back(dyn);
         }
 
         block.prefixes = committed;
@@ -811,27 +916,21 @@ void Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interfac
     for (auto& block : iataBlocks)
     {
         if (!block.network || !block.network->lease) continue;
-        ByteString id = duid + block.iaid;
-        
+
         std::vector<ByteString> committed;
         for (const ByteString& addr : block.addresses)
         {
-            if (block.network->lease->isAllocated(addr))
+            if (block.network->pool->isTemporarilyOffered(addr))
             {
-                block.network->lease->renewLease(addr);
-                committed.push_back(addr);
-            }
-            else if (block.network->pool->isTemporarilyOffered(addr))
-            {
-                ByteString reserved = block.network->lease->activateLeaseFromTemp(addr, block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, nullptr);
+                ByteString reserved = block.network->lease->activateLeaseFromTemp(
+                    addr,
+                    block.network->config->leaseTime.load(std::memory_order_relaxed),
+                    block.network->config->t1Percentage.load(std::memory_order_relaxed),
+                    block.network->config->t2Percentage.load(std::memory_order_relaxed),
+                    nullptr
+                );
                 if (!reserved.empty()) committed.push_back(reserved);
             }
-        }
-
-        if (committed.empty())
-        {
-            ByteString dynamic = block.network->lease->allocateIP(block.network->config->leaseTime, block.network->config->t1Percentage, block.network->config->t2Percentage, nullptr);
-            if (!dynamic.empty()) committed.push_back(dynamic);
         }
 
         block.addresses = committed;
@@ -842,10 +941,20 @@ void Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interfac
     Dhcpv6Header reply = buildResponse(
         Variable::Dhcpv6::Type::reply,
         header.transactionID,
+        duid,
         ianaBlocks,
         iapdBlocks,
         iataBlocks
     );
+
+    if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
+    {
+        auto block = ianaBlocks.begin();
+        if (!block->addresses.empty())
+        {
+            addServerUnicast(reply, block->addresses.front(), iface);
+        }
+    }
 
     ByteString statusCode;
     std::string message;
@@ -869,35 +978,30 @@ void Protocol::Dhcpv6Server::processRequest(const Dhcpv6Header& header, Interfac
 
     reply.options.push_back(buildStatusOption(statusCode, message));
 
-    if (anyCommitted)
+    if (!localAddress)
     {
-        std::lock_guard<std::mutex> lock(reconfigMutex);
-        auto it = activeReconfigs.find(duid);
-        if (it != activeReconfigs.end())
-        {
-            TimeManager::getInstance().cancelTimer(it->second.timerID);
-            activeReconfigs.erase(it);
-        }
+        return reply.encapsulate();
     }
 
-    sendPacket(reply, iface);
+    sendPacket(reply, iface, *localAddress);
+    return std::nullopt;
 }
 
-void Protocol::Dhcpv6Server::processRenew(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processRenew(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto ianaBlocks = extractIA_NA(header, iface);
     auto iapdBlocks = extractIA_PD(header, iface);
     auto iataBlocks = extractIA_TA(header, iface);
 
-    if (ianaBlocks.empty() && iapdBlocks.empty()) return;
+    if (ianaBlocks.empty() && iapdBlocks.empty()) return std::nullopt;
 
     // Extract the Clients ID
     ByteString duid = extractDUID(header);
-    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header))
-        return; // No leases will be given if no Client ID is present
+    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header) || !trackElapsedTime(header, duid))
+        return std::nullopt; // No leases will be given if no Client ID is present
 
     // Validate Server Identifier
-    if (!validateServerID(header)) return;
+    if (!validateServerID(header)) return std::nullopt;
 
     for (const auto& block : ianaBlocks)
     {
@@ -927,10 +1031,20 @@ void Protocol::Dhcpv6Server::processRenew(const Dhcpv6Header& header, Interface*
     Dhcpv6Header reply = buildResponse(
         Variable::Dhcpv6::Type::reply,
         header.transactionID,
+        duid,
         ianaBlocks,
         iapdBlocks,
         iataBlocks
     );
+
+    if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
+    {
+        auto block = ianaBlocks.begin();
+        if (!block->addresses.empty())
+        {
+            addServerUnicast(reply, block->addresses.front(), iface);
+        }
+    }
 
     bool valid = false;
     for (const auto& block : ianaBlocks)
@@ -946,20 +1060,27 @@ void Protocol::Dhcpv6Server::processRenew(const Dhcpv6Header& header, Interface*
 
     reply.options.push_back(buildStatusOption(statusCode, msg));
 
-    sendPacket(reply, iface);
+    if (!localAddress)
+    {
+        return reply.encapsulate();
+    }
+
+    sendPacket(reply, iface, *localAddress);
+
+    return std::nullopt;
 }
 
-void Protocol::Dhcpv6Server::processRebind(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processRebind(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto ianaBlocks = extractIA_NA(header, iface);
     auto iapdBlocks = extractIA_PD(header, iface);
 
-    if (ianaBlocks.empty() && iapdBlocks.empty()) return;
+    if (ianaBlocks.empty() && iapdBlocks.empty()) return std::nullopt;
 
     // Extract the Clients ID
     ByteString duid = extractDUID(header);
-    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header))
-        return; // No leases will be given if no Client ID is present
+    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header) || !trackElapsedTime(header, duid))
+        return std::nullopt; // No leases will be given if no Client ID is present
 
     for (const auto& block : ianaBlocks)
     {
@@ -979,10 +1100,20 @@ void Protocol::Dhcpv6Server::processRebind(const Dhcpv6Header& header, Interface
     Dhcpv6Header reply = buildResponse(
         Variable::Dhcpv6::Type::reply,
         header.transactionID,
+        duid,
         ianaBlocks,
         iapdBlocks,
         {}
     );
+
+    if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
+    {
+        auto block = ianaBlocks.begin();
+        if (!block->addresses.empty())
+        {
+            addServerUnicast(reply, block->addresses.front(), iface);
+        }
+    }
 
     bool valid = false;
     for (const auto& block : ianaBlocks)
@@ -998,20 +1129,26 @@ void Protocol::Dhcpv6Server::processRebind(const Dhcpv6Header& header, Interface
 
     reply.options.push_back(buildStatusOption(statusCode, msg));
 
-    sendPacket(reply, iface);
+    if (!localAddress)
+    {
+        return reply.encapsulate();
+    }
+
+    sendPacket(reply, iface, *localAddress);
+    return std::nullopt;
 }
 
-void Protocol::Dhcpv6Server::processRelease(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processRelease(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto ianaBlocks = extractIA_NA(header, iface);
     auto iapdBlocks = extractIA_PD(header, iface);
 
-    if (ianaBlocks.empty() && iapdBlocks.empty()) return;
+    if (ianaBlocks.empty() && iapdBlocks.empty()) return std::nullopt;
 
     // Extract the Clients ID
     ByteString duid = extractDUID(header);
     if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header))
-        return; // No leases will be given if no Client ID is present
+        return std::nullopt; // No leases will be given if no Client ID is present
 
     for (const auto& block : ianaBlocks)
     {
@@ -1019,9 +1156,9 @@ void Protocol::Dhcpv6Server::processRelease(const Dhcpv6Header& header, Interfac
         for (const ByteString& addr : block.addresses)
             scheduleTimeout(
                 Dhcp::TimerType::RELEASE_HOLD,
-                duid + block.iaid,
+                duid + block.iaid + addr,
                 addr,
-                block.network->config->getNetworkID(),
+                block.network->config->getNetworkID(), 
                 dhcpConfigs.declineHoldTime.load(std::memory_order_relaxed)
             );
     }
@@ -1032,7 +1169,7 @@ void Protocol::Dhcpv6Server::processRelease(const Dhcpv6Header& header, Interfac
         for (const auto& [prefix, _] : block.prefixes)
             scheduleTimeout(
                 Dhcp::TimerType::RELEASE_HOLD,
-                duid + block.iaid,
+                duid + block.iaid + prefix,
                 prefix,
                 block.network->config->getNetworkID(),
                 dhcpConfigs.declineHoldTime.load(std::memory_order_relaxed)
@@ -1043,11 +1180,20 @@ void Protocol::Dhcpv6Server::processRelease(const Dhcpv6Header& header, Interfac
     reply.type = Variable::Dhcpv6::Type::reply;
     reply.transactionID = header.transactionID;
 
-    reply.options.push_back({
+    if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
+    {
+        auto block = ianaBlocks.begin();
+        if (!block->addresses.empty())
+        {
+            addServerUnicast(reply, block->addresses.front(), iface);
+        }
+    }
+
+    reply.options.emplace_back(
         Variable::Dhcpv6::Options::statusCode,
         Functions::numToByte(2, 2),
         ByteString("\x00\x00", 2) // Success
-    });
+    );
 
     bool released = false;
     for (const auto& block : ianaBlocks)
@@ -1062,23 +1208,29 @@ void Protocol::Dhcpv6Server::processRelease(const Dhcpv6Header& header, Interfac
 
     reply.options.push_back(buildStatusOption(statusCode, msg));
 
-    sendPacket(reply, iface);
+    if (!localAddress)
+    {
+        return reply.encapsulate();
+    }
+
+    sendPacket(reply, iface, *localAddress);
+    return std::nullopt;
 }
 
-void Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto ianaBlocks = extractIA_NA(header, iface);
     auto iapdBlocks = extractIA_PD(header, iface);
 
-    if (ianaBlocks.empty() && iapdBlocks.empty()) return;
+    if (ianaBlocks.empty() && iapdBlocks.empty()) return std::nullopt;
 
     // Extract the Clients ID
     ByteString duid = extractDUID(header);
-    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header))
-        return; // No leases will be given if no Client ID is present
+    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header) || !trackElapsedTime(header, duid))
+        return std::nullopt; // No leases will be given if no Client ID is present
 
     {
-        std::lock_guard<std::mutex> lock(declineMutex);
+        std::lock_guard<std::mutex> lock(trackingMutex);
 
         for (const auto& block : ianaBlocks)
         {
@@ -1092,7 +1244,7 @@ void Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interfac
                     auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
                     if (duration > 10)
                     {
-                        return; // Rate limit exceeded
+                        return std::nullopt; // Rate limit exceeded
                     }
                 }
 
@@ -1112,7 +1264,7 @@ void Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interfac
                     auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
                     if (duration > 10)
                     {
-                        return; // Rate limit exceeded
+                        return std::nullopt; // Rate limit exceeded
                     }
                 }
                 
@@ -1127,7 +1279,7 @@ void Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interfac
         for (const ByteString& addr : block.addresses)
             scheduleTimeout(
                 Dhcp::TimerType::DECLINE_HOLD, 
-                duid + block.iaid,
+                duid + block.iaid + addr,
                 addr,
                 block.network->config->getNetworkID(),
                 dhcpConfigs.declineHoldTime.load(std::memory_order_relaxed)
@@ -1140,7 +1292,7 @@ void Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interfac
         for (const auto& [prefix, _] : block.prefixes)
             scheduleTimeout(
                 Dhcp::TimerType::DECLINE_HOLD,
-                duid + block.iaid,
+                duid + block.iaid + prefix,
                 prefix,
                 block.network->config->getNetworkID(),
                 dhcpConfigs.declineHoldTime.load(std::memory_order_relaxed)
@@ -1151,11 +1303,20 @@ void Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interfac
     reply.type = Variable::Dhcpv6::Type::reply;
     reply.transactionID = header.transactionID;
 
-    reply.options.push_back({
+    reply.options.emplace_back(
         Variable::Dhcpv6::Options::statusCode,
         Functions::numToByte(2, 2),
         ByteString("\x00\x00", 2) // Success
-    });
+    );
+
+    if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
+    {
+        auto block = ianaBlocks.begin();
+        if (!block->addresses.empty())
+        {
+            addServerUnicast(reply, block->addresses.front(), iface);
+        }
+    }
 
     bool declined = false;
     for (const auto& block : ianaBlocks)
@@ -1170,20 +1331,26 @@ void Protocol::Dhcpv6Server::processDecline(const Dhcpv6Header& header, Interfac
 
     reply.options.push_back(buildStatusOption(statusCode, msg));
 
-    sendPacket(reply, iface);
+    if (!localAddress)
+    {
+        return reply.encapsulate();
+    }
+
+    sendPacket(reply, iface, *localAddress);
+    return std::nullopt;
 }
 
-void Protocol::Dhcpv6Server::processConfirm(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processConfirm(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto ianaBlocks = extractIA_NA(header, iface);
     auto iapdBlocks = extractIA_PD(header, iface);
 
-    if (ianaBlocks.empty() && iapdBlocks.empty()) return;
+    if (ianaBlocks.empty() && iapdBlocks.empty()) return std::nullopt;
 
     // Extract the Clients ID
     ByteString duid = extractDUID(header);
-    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header))
-        return; // No leases will be given if no Client ID is present
+    if (duid.empty() || !validateAuthentication(header, duid) || !validateServerID(header) || !trackElapsedTime(header, duid))
+        return std::nullopt; // No leases will be given if no Client ID is present
 
     Dhcpv6Header reply;
     reply.type = Variable::Dhcpv6::Type::reply;
@@ -1199,7 +1366,7 @@ void Protocol::Dhcpv6Server::processConfirm(const Dhcpv6Header& header, Interfac
         for (const auto& addr : block.addresses)
         {
             const auto& cfg = block.network->config;
-            if (!Functions::compareNetworkWithIp(cfg->network, addr, cfg->subnetPrefix))
+            if (!Functions::compareNetworkWithIp(cfg->getNetwork(), addr, cfg->getPrefixLen()))
             {
                 allOnLink = false;
                 break;
@@ -1216,7 +1383,7 @@ void Protocol::Dhcpv6Server::processConfirm(const Dhcpv6Header& header, Interfac
         for (const auto& [prefix, plen] : block.prefixes)
         {
             const auto& cfg = block.network->config;
-            if (!Functions::compareNetworkWithIp(cfg->network, prefix, cfg->subnetPrefix))
+            if (!Functions::compareNetworkWithIp(cfg->getNetwork(), prefix, cfg->getPrefixLen()))
             {
                 allOnLink = false;
                 break;
@@ -1232,21 +1399,25 @@ void Protocol::Dhcpv6Server::processConfirm(const Dhcpv6Header& header, Interfac
     std::string statusMsg = allOnLink ? "Prefix is on-link" : "Prefix not on-link";
     reply.options.push_back(buildStatusOption(statusCode, statusMsg));
 
-    if (allOnLink)
+    if (multicast && dhcpConfigs.allowUnicast.load(std::memory_order_relaxed) && !ianaBlocks.empty())
     {
-        std::lock_guard<std::mutex> lock(reconfigMutex);
-        auto it = activeReconfigs.find(duid);
-        if (it != activeReconfigs.end())
+        auto block = ianaBlocks.begin();
+        if (!block->addresses.empty())
         {
-            TimeManager::getInstance().cancelTimer(it->second.timerID);
-            activeReconfigs.erase(it);
+            addServerUnicast(reply, block->addresses.front(), iface);
         }
     }
 
-    sendPacket(reply, iface);
+    if (!localAddress)
+    {
+        return reply.encapsulate();
+    }
+
+    sendPacket(reply, iface, *localAddress);
+    return std::nullopt;
 }
 
-void Protocol::Dhcpv6Server::processInformationRequest(const Dhcpv6Header& header, Interface* iface)
+std::optional<ByteString> Protocol::Dhcpv6Server::processInformationRequest(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress)
 {
     auto oro = extractORO(header);
 
@@ -1255,6 +1426,10 @@ void Protocol::Dhcpv6Server::processInformationRequest(const Dhcpv6Header& heade
     reply.type = Variable::Dhcpv6::Type::reply;
     reply.transactionID = header.transactionID;
 
+    ByteString duid = extractDUID(header);
+
+    if (!trackElapsedTime(header, duid)) return std::nullopt;
+
     for (const auto& [_, net] : dhcpNetworks)
     {
         std::vector<Dhcpv6Header::Option> opts = buildOptions(net->config, oro);
@@ -1262,249 +1437,309 @@ void Protocol::Dhcpv6Server::processInformationRequest(const Dhcpv6Header& heade
         break; // We only need one matching config
     }
 
-    sendPacket(reply, iface);
-}
-
-void Protocol::Dhcpv6Server::processEchoRequest(const Dhcpv6Header& header, Interface* iface)
-{
-    ByteString duid = extractDUID(header);
-    if (duid.empty()) return;
-    if (!validateAuthentication(header, duid)) return;
-
-    for (const auto& opt : header.options)
+    if (!localAddress)
     {
-        if (opt.option == Variable::Dhcpv6::Options::serverID)
-        {
-            // Invalid - discard
-            return;
-        }
+        return reply.encapsulate();
     }
 
-    Dhcpv6Header reply;
-    reply.type = Variable::Dhcpv6::Type::echoReply;
-    reply.transactionID = header.transactionID;
-
-    // Server Identifier (required)
-    Dhcpv6Header::Option serverID;
-    serverID.option = Variable::Dhcpv6::Options::serverID;
-    serverID.length = Functions::numToByte(dhcpUniqueIdentifier.size(), 2);
-    serverID.value = dhcpUniqueIdentifier;
-    reply.options.push_back(serverID);
-
-    // Authentication (if enabled)
-    if (authenticationEnabled.load(std::memory_order_relaxed))
-    {
-        reply.options.push_back(buildAuthenticationOption());
-    }
-
-    auto oro = extractORO(header);
-    for (const auto& [_, net] : dhcpNetworks)
-    {
-        std::vector<Dhcpv6Header::Option> opts = buildOptions(net->config, oro);
-        reply.options.insert(reply.options.end(), opts.begin(), opts.end());
-        break;
-    }
-
-    sendPacket(reply, iface);
+    sendPacket(reply, iface, *localAddress);
+    return std::nullopt;
 }
 
 void Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay, Interface* iface)
 {
-    // Find relay-msg option
+    std::vector<Dhcpv6RelayHeader> relayChain;
+
+    auto clientMessage = processRelayChain(relay, relayChain);
+    if (!clientMessage.has_value())
+    {
+        return;
+    }
+
+    // Step 1: handle the message and get reply to send
+    std::optional<ByteString> dhcpHeader;
+    Dhcpv6RelayHeader relayHeader;
+    switch (clientMessage->type[0])
+    {
+        case 0x01: dhcpHeader = processSolicit(*clientMessage, iface, false, nullptr); break;
+        case 0x03: dhcpHeader = processRequest(*clientMessage, iface, false, nullptr); break;
+        case 0x04: dhcpHeader = processConfirm(*clientMessage, iface, false, nullptr); break;
+        case 0x05: dhcpHeader = processRenew(*clientMessage, iface, false, nullptr); break;
+        case 0x06: dhcpHeader = processRebind(*clientMessage, iface, false, nullptr); break;
+        case 0x08: dhcpHeader = processRelease(*clientMessage, iface, false, nullptr); break;
+        case 0x09: dhcpHeader = processDecline(*clientMessage, iface, false, nullptr); break;
+        case 0x0B: dhcpHeader = processInformationRequest(*clientMessage, iface, false, nullptr); break;
+    }
+
+    if (!dhcpHeader.has_value())
+        return;
+
+    // Step 2: Re-encapsulate throught the relay chain in reverse
+    for (auto it = relayChain.rbegin(); it != relayChain.rend(); ++it)
+    {
+        Dhcpv6RelayHeader replyRelay;
+        replyRelay.msgType = Variable::Dhcpv6::Type::relayReply;
+        replyRelay.hopCount = it->hopCount;
+        replyRelay.linkAddress = it->linkAddress;
+        replyRelay.peerAddress = it->peerAddress;
+
+        // Add relay-msg option
+        replyRelay.options.emplace_back(
+            Variable::Dhcpv6::Options::relayMsg,
+            Functions::numToByte(dhcpHeader.value().size(), 2),
+            dhcpHeader.value()
+        );
+
+        // Copy other options
+        for (const auto& opt : it->options)
+        {
+            if (opt.option != Variable::Dhcpv6::Options::relayMsg)
+            {
+                replyRelay.options.push_back(opt);
+            }
+        }
+        
+
+        // Encapsulate
+        auto encapReply = replyRelay.encapsulate();
+        if (encapReply.has_value())
+            dhcpHeader = std::move(encapReply.value());
+
+        relayHeader = std::move(replyRelay);
+    }
+
+    // Step 3: Send final packet from interface
+    sendRelayPacket(relayHeader, iface);
+}
+
+std::optional<Dhcpv6Header> Protocol::Dhcpv6Server::processRelayChain(
+    const Dhcpv6RelayHeader& relay,
+    std::vector<Dhcpv6RelayHeader>& relayChain
+)
+{
+    relayChain.push_back(relay);
+
     for (const auto& opt : relay.options)
     {
         if (opt.option == Variable::Dhcpv6::Options::relayMsg)
         {
-            Dhcpv6Header inner;
-            if (!inner.decapsulate(opt.value)) return;
+            const ByteString& inner = opt.value;
+            if (inner.empty())
+                return {}; // Malformed
 
-            // Build fake PacketInfo to reuse existing handler
-            PacketInfo innerPkt;
-            innerPkt.Layer5.push_back(inner);
+            ByteString msgType = inner.substr(0, 1);
 
-            // Store relay context for later reply
+            if (msgType == Variable::Dhcpv6::Type::relayForward)
             {
-                std::lock_guard<std::mutex> lock(relayMutex);
-                pendingRelays[inner.transactionID] = relay;
-            }
+                // Recurse into inner relay
+                Dhcpv6RelayHeader innerRelay;
+                if (!innerRelay.decapsulate(inner))
+                    return std::nullopt;
 
-            handleDhcpPacket(innerPkt, iface); // Decapsulate and reuse logic
-            return;
+                return processRelayChain(innerRelay, relayChain);
+            }
+            else
+            {
+                Dhcpv6Header header;
+                if (!header.decapsulate(inner))
+                    return std::nullopt;
+
+                return header;
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
+void Protocol::Dhcpv6Server::processReconfigAccept(const Dhcpv6Header& header, const ByteString& localAddress, Interface*& iface)
+{
+    {
+        std::lock_guard<std::mutex> lock(trackingMutex);
+
+        ByteString clientID = nullptr;
+        bool hasReconfigAccept = false;
+
+        for (const auto& opt : header.options)
+        {
+            if (opt.option == Variable::Dhcpv6::Options::reconfAccept)
+            {
+                hasReconfigAccept = opt.value.empty();
+            }
+            else if (opt.option == Variable::Dhcpv6::Options::clientID)
+            {
+                clientID = opt.value;
+            }
+        }
+
+        if (hasReconfigAccept && !clientID.empty())
+        {
+            clientReconfAccept[clientID] = {localAddress, iface};
         }
     }
 }
 
-void Protocol::Dhcpv6Server::sendRelayReply(const ByteString& transactionID, const Dhcpv6Header& response)
+void Protocol::Dhcpv6Server::sendReconfigure(const ByteString& duid, Dhcpv6::ReconfigReason reason, bool isRelay)
 {
-    Dhcpv6RelayHeader relay;
-    {
-        std::lock_guard<std::mutex> lock(relayMutex);
-        auto it = pendingRelays.find(transactionID);
-        if (it == pendingRelays.end()) return;
-        relay = it->second;
-        pendingRelays.erase(it);
-    }
+    if (!rkapAuthenticationEnabled.load(std::memory_order_relaxed)) return;
 
-    auto serialized = response.encapsulate();
-    if (!serialized.has_value()) return;
-
-    Dhcpv6RelayHeader::Option relayOpt;
-    relayOpt.option = Variable::Dhcpv6::Options::relayMsg;
-    relayOpt.length = Functions::numToByte(serialized->size(), 2);
-    relayOpt.value = serialized.value();
-
-    relay.options = { relayOpt };
-
-    // Send back on interface corresponding to the link-address
-    Interface* iface = nullptr;
-
-    {
+    auto getClient = [&](const ByteString& duid) -> std::optional<std::pair<ByteString, Interface*>> {
         std::lock_guard<std::mutex> lock(configMutex);
-        for (const auto& [_, net] : dhcpNetworks)
+        auto it = clientReconfAccept.find(duid);
+        if (it == clientReconfAccept.end()) return std::nullopt;
+        return it->second;
+    };
+
+    if (auto client = getClient(duid))
+    {
+        ByteString validIp;
+
+        // Step 1: see if most recent lease is valid.
+        auto it = recentLeases.find(client->first);
+        if (it != recentLeases.end())
         {
-            if (net->config && net->config->interface &&
-                Functions::compareNetworkWithIp(net->config->network, relay.linkAddress, net->config->subnetPrefix))
+            // Find lease
+            auto network = dhcpNetworks[findMatchingNetwork(it->second)];
+            if (network->lease->isAllocated(it->second))
             {
-                iface = net->config->interface;
-                break;
+                validIp = it->second;
+            }
+            else
+            {
+                recentLeases.erase(it);
             }
         }
-    }
 
-    if (!iface) return;
-
-    sendRelayPacket(relay, iface);
-}
-
-void Protocol::Dhcpv6Server::sendReconfigure()
-{
-    ByteString secret;
-    {
-        std::lock_guard<std::mutex> lock(authMutex);
-        secret = authConfig.sharedSecret;
-    }
-    std::lock_guard<std::mutex> lock(configMutex);
-    for (const auto& [_, net] : dhcpNetworks)
-    {
-        if (!net || !net->config || !net->config->interface) continue;
-
-        // Iterate over allocated leases
-        auto activeLeases = net->lease->getActiveLeases();
-        for (const auto& [ip, lease] : activeLeases)
-        {
-            // Build RECONFIGURE message
-            Dhcpv6Header reconfig;
-            reconfig.type = Variable::Dhcpv6::Type::reconfigure;
-            reconfig.transactionID = generateDhcpTransid();
-
-            // Create or replace state
-            {
-                std::lock_guard<std::mutex> configMutex(reconfigMutex);
-                Dhcpv6::ReconfigureState state;
-                state.duid = lease.clientID;
-                state.attempts = 1;
-                state.iface = net->config->interface;
-                state.transactionID = reconfig.transactionID;
-
-                // First attempt is immediate so no need to schedule yet
-                activeReconfigs[lease.clientID] = state;
-            }
-
-            // Add server ID
-            reconfig.options.push_back({
-                Variable::Dhcpv6::Options::serverID,
-                Functions::numToByte(dhcpUniqueIdentifier.size(), 2),
-                dhcpUniqueIdentifier
-            });
-
-            // Add Client ID (from lease)
-            reconfig.options.push_back({
-                Variable::Dhcpv6::Options::clientID,
-                Functions::numToByte(lease.clientID.size(), 2),
-                lease.clientID
-            });
-
-            // Reconfigure message type: 5 = Renew
-            reconfig.options.push_back({
-                Variable::Dhcpv6::Options::reconfigureMessage,
-                Functions::numToByte(1, 2),
-                ByteString("\x0b", 1) // RENEW
-            });
-
-            // Authentication Option (if configured)
-            if (authenticationEnabled.load(std::memory_order_relaxed))
-                reconfig.options.push_back(buildAuthenticationOption());
-
-            sendPacket(reconfig, net->config->interface);
-
-            scheduleReconfigureRetry(lease.clientID);
-        }
+        buildReconfigPacket(duid, validIp.empty() ? Variable::Multicast::Dhcp::serverToAllv6 : validIp, client.value(), reason, isRelay);
     }
 }
 
-void Protocol::Dhcpv6Server::scheduleReconfigureRetry(const ByteString& duid)
+void Protocol::Dhcpv6Server::buildReconfigPacket(const ByteString& clientID, const ByteString& leaseIp, const std::pair<ByteString, Interface*>& ifacePair, Dhcpv6::ReconfigReason reason, bool isRelay)
 {
-    std::lock_guard<std::mutex> lock(reconfigMutex);
-    auto it = activeReconfigs.find(duid);
-    if (it == activeReconfigs.end()) return;
-
-    Dhcpv6::ReconfigureState& state = it->second;
-
-    if (++state.attempts > dhcpConfigs.recMaxRc.load(std::memory_order_relaxed))
-    {
-        activeReconfigs.erase(it);
-        return;
-    }
-
-    // Schedule next attempt
-    state.timerID = TimeManager::getInstance().addTimer(
-        std::chrono::steady_clock::now() + std::chrono::seconds(dhcpConfigs.recTimeout),
-        [this, duid]() { retryReconfigure(duid); }
-    );
-}
-
-void Protocol::Dhcpv6Server::retryReconfigure(const ByteString& duid)
-{
-    std::lock_guard<std::mutex> lock(reconfigMutex);
-    auto it = activeReconfigs.find(duid);
-    if (it == activeReconfigs.end()) return;
-
-    Dhcpv6::ReconfigureState& state = it->second;
-    if (!state.iface) return;
-
     // Build RECONFIGURE message
     Dhcpv6Header reconfig;
     reconfig.type = Variable::Dhcpv6::Type::reconfigure;
-    reconfig.transactionID = state.transactionID;
+    reconfig.transactionID = generateDhcpTransid();
 
-    reconfig.options.push_back({
+    // Add server ID
+    reconfig.options.emplace_back(
         Variable::Dhcpv6::Options::serverID,
         Functions::numToByte(dhcpUniqueIdentifier.size(), 2),
         dhcpUniqueIdentifier
-    });
+    );
 
-    reconfig.options.push_back({
+    // Add Client ID (from lease)
+    reconfig.options.emplace_back(
         Variable::Dhcpv6::Options::clientID,
-        Functions::numToByte(duid.size(), 2),
-        duid
-    });
+        Functions::numToByte(clientID.size(), 2),
+        clientID
+    );
 
-    reconfig.options.push_back({
+    // Reconfigure message type: 5 = Renew
+    reconfig.options.emplace_back(
         Variable::Dhcpv6::Options::reconfigureMessage,
         Functions::numToByte(1, 2),
-        ByteString("\x0b", 1)
-    });
+        ByteString(1, static_cast<uint8_t>(reason)) // RENEW
+    );
 
-    if (authenticationEnabled.load(std::memory_order_relaxed))
-        reconfig.options.push_back(buildAuthenticationOption());
+    // Authentication Option (if configured)
+    if (delayedAuthenticationEnabled.load(std::memory_order_relaxed))
+        addAuthenticationOption(reconfig, clientID);
 
-    sendPacket(reconfig, state.iface);
+    if (isRelay)
+    {
+        // Look up relay chain
+        std::optional<Dhcpv6::RelayClient> relay;
+        {
+            std::lock_guard<std::mutex> lock(trackingMutex);
+            auto it = relayClients.find(clientID);
+            if (it != relayClients.end())
+                relay = it->second;
+        }
 
-    // Schedule next retry if needed
-    scheduleReconfigureRetry(duid);
+        if (!relay.has_value()) return;
+
+        // Encapsulate DHCPv6 header
+        auto inner = reconfig.encapsulate();
+        if (!inner.has_value()) return;
+
+        Dhcpv6RelayHeader relayReply;
+
+        // Re-wrap the message through each hop (in reverse order)
+        for (auto it = relay->relayChain.rbegin(); it != relay->relayChain.rend(); ++it)
+        {
+            relayReply.msgType = Variable::Dhcpv6::Type::relayReply;
+            relayReply.hopCount = it->hopCount;
+            relayReply.linkAddress = it->linkAddress;
+            relayReply.peerAddress = it->peerAddress;
+
+            relayReply.options.clear();
+            relayReply.options.emplace_back(
+                Variable::Dhcpv6::Options::relayMsg,
+                Functions::numToByte(inner->size(), 2),
+                *inner
+            );
+
+            for (const auto& opt : it->options)
+            {
+                if (opt.option != Variable::Dhcpv6::Options::relayMsg)
+                    relayReply.options.push_back(opt);
+            }
+
+            auto encapsulated = relayReply.encapsulate();
+            if (!encapsulated.has_value()) return;
+
+            inner = encapsulated;
+        }
+
+        // Send relay-encapsulated packet
+        if (inner.has_value())
+        {
+            PacketInfo pkt;
+            pkt.Layer5.push_back(relayReply);
+            IPPacket::buildUdp(
+                ifacePair.second,
+                pkt,
+                relayReply.peerAddress,
+                nullptr,
+                nullptr,
+                0,
+                dhcpConfigs.hopCountLimit.load(std::memory_order_relaxed),
+                Variable::Ethernet::ipv6,
+                Variable::Udp::dhcpv6Server,
+                Variable::Udp::dhcpv6Client
+            );
+        }
+    }
+    else
+    {
+        // Regular (non-relay) sending
+        PacketInfo pkt;
+        pkt.Layer5.push_back(std::move(reconfig));
+
+        IPPacket::buildUdp(
+            ifacePair.second,
+            pkt,
+            leaseIp,
+            nullptr,
+            nullptr,
+            0,
+            dhcpConfigs.hopCountLimit.load(std::memory_order_relaxed),
+            Variable::Ethernet::ipv6,
+            Variable::Udp::dhcpv6Server,
+            Variable::Udp::dhcpv6Client
+        );
+    }
 }
 
-Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const ByteString& transactionID, const std::vector<Dhcpv6::IANABlock>& ianaBlocks, const std::vector<Dhcpv6::IAPDBlock>& iapdBlocks, const std::vector<Dhcpv6::IANABlock>& iataBlocks)
+Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(
+    const ByteString& type,
+    const ByteString& transactionID,
+    const ByteString& duid,
+    const std::vector<Dhcpv6::IANABlock>& ianaBlocks,
+    const std::vector<Dhcpv6::IAPDBlock>& iapdBlocks,
+    const std::vector<Dhcpv6::IANABlock>& iataBlocks
+)
 {
     Dhcpv6Header header;
     header.type = type;
@@ -1533,8 +1768,14 @@ Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const
         {
 
             ByteString addrVal = addr;
-            addrVal += Functions::numToByte(static_cast<uint32_t>(block.network->config->leaseTime * block.network->config->t1Percentage), 4);
-            addrVal += Functions::numToByte(static_cast<uint32_t>(block.network->config->leaseTime * block.network->config->t2Percentage), 4);
+
+            addrVal += Functions::numToByte(
+                static_cast<uint32_t>(block.network->config->leaseTime.load(std::memory_order_relaxed)
+                * block.network->config->t1Percentage.load(std::memory_order_relaxed)), 4);
+
+            addrVal += Functions::numToByte(
+                static_cast<uint32_t>(block.network->config->leaseTime.load(std::memory_order_relaxed)
+                * block.network->config->t2Percentage.load(std::memory_order_relaxed)), 4);
 
             value += Variable::Dhcpv6::Options::IAAddr;
             value += Functions::numToByte(addrVal.size(), 2);
@@ -1553,11 +1794,11 @@ Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const
         }
 
         // IA_NA
-        Dhcpv6Header::Option ia_na;
-        ia_na.option = Variable::Dhcpv6::Options::IA_NA;
-        ia_na.length = Functions::numToByte(value.size(), 2);
-        ia_na.value = value;
-        header.options.push_back(ia_na);
+        header.options.emplace_back(
+            Variable::Dhcpv6::Options::IA_NA,
+            Functions::numToByte(value.size(), 2),
+            std::move(value)
+        );
     }
 
     // IA_PD
@@ -1572,8 +1813,15 @@ Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const
         for (const auto& [prefix, prefixLen] : block.prefixes)
         {
             ByteString pval;
-            pval += Functions::numToByte(static_cast<uint32_t>(block.network->config->leaseTime * block.network->config->t1Percentage), 4);
-            pval += Functions::numToByte(static_cast<uint32_t>(block.network->config->leaseTime * block.network->config->t2Percentage), 4);
+
+            pval += Functions::numToByte(static_cast<uint32_t>(
+                block.network->config->leaseTime.load(std::memory_order_relaxed)
+                * block.network->config->t1Percentage.load(std::memory_order_relaxed)), 4);
+
+            pval += Functions::numToByte(
+                static_cast<uint32_t>(block.network->config->leaseTime.load(std::memory_order_relaxed)
+                * block.network->config->t2Percentage.load(std::memory_order_relaxed)), 4);
+
             pval += Functions::numToByte(prefixLen, 1);
             pval += ByteString(3, '\x00'); // Reserved
             pval += prefix.substr(0, 16);
@@ -1594,11 +1842,11 @@ Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const
             hasIAPD = true;
         }
 
-        Dhcpv6Header::Option ia_pd;
-        ia_pd.option = Variable::Dhcpv6::Options::IA_PD;
-        ia_pd.length = Functions::numToByte(value.size(), 2);
-        ia_pd.value = value;
-        header.options.push_back(ia_pd);
+        header.options.emplace_back(
+            Variable::Dhcpv6::Options::IA_PD,
+            Functions::numToByte(value.size(), 2),
+            std::move(value)
+        );
     }
 
     // IA_TA
@@ -1613,8 +1861,14 @@ Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const
         for (const auto& addr : block.addresses)
         {
             ByteString addrVal = addr;
-            addrVal += Functions::numToByte(static_cast<uint32_t>(block.network->config->leaseTime * block.network->config->t1Percentage), 4);
-            addrVal += Functions::numToByte(static_cast<uint32_t>(block.network->config->leaseTime * block.network->config->t2Percentage), 4);
+
+            addrVal += Functions::numToByte(
+                static_cast<uint32_t>(block.network->config->leaseTime.load(std::memory_order_relaxed)
+                * block.network->config->t1Percentage.load(std::memory_order_relaxed)), 4);
+
+            addrVal += Functions::numToByte(
+                static_cast<uint32_t>(block.network->config->leaseTime.load(std::memory_order_relaxed)
+                * block.network->config->t2Percentage.load(std::memory_order_relaxed)), 4);
 
             value += Variable::Dhcpv6::Options::IAAddr;
             value += Functions::numToByte(addrVal.size(), 2);
@@ -1632,45 +1886,11 @@ Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const
             hasIATA = true;
         }
 
-        Dhcpv6Header::Option ia_ta;
-        ia_ta.option = Variable::Dhcpv6::Options::IA_TA;
-        ia_ta.length = Functions::numToByte(value.size(), 2);
-        ia_ta.value = value;
-        header.options.push_back(ia_ta);
-    }
-
-    if (authenticationEnabled.load(std::memory_order_relaxed))
-    {
-        ByteString authData;
-        Dhcpv6::AuthConfig auth;
-        {
-            std::lock_guard<std::mutex> lock(authMutex);
-            auth = authConfig;
-            ++authConfig.replayCounter;
-        }
-
-        uint16_t protocol = auth.protocol;
-        uint16_t algorithm = auth.algorithm;
-
-        authData += Functions::numToByte(protocol, 2);
-        authData += Functions::numToByte(algorithm, 2);
-        authData += Functions::numToByte(auth.rdm, 1);
-        authData += Functions::numToByte(auth.replayCounter, 8);
-
-        ByteString mac;
-        if (auth.protocol == 1)
-        {
-            mac = Authentication::generateMD5(authData, auth.sharedSecret);
-        } // TODO add other encryptions
-
-        Dhcpv6Header::Option authOpt;
-        authOpt.option = Variable::Dhcpv6::Options::auth;
-        authOpt.length = Functions::numToByte(authData.size() + mac.size(), 2);
-        authOpt.value = authData + mac;
-        {
-            authConfig.replayCounter++;
-        }
-        header.options.push_back(authOpt);
+        header.options.emplace_back(
+            Variable::Dhcpv6::Options::IA_TA,
+            Functions::numToByte(value.size(), 2),
+            std::move(value)
+        );
     }
 
     bool noAddr = true;
@@ -1685,79 +1905,99 @@ Dhcpv6Header Protocol::Dhcpv6Server::buildResponse(const ByteString& type, const
     if (noAddr)
     {
         ByteString status = Variable::Dhcpv6::Status::noAddrsAvail + ByteString("No address available");
-        header.options.push_back({
+        header.options.emplace_back(
             Variable::Dhcpv6::Options::statusCode,
             Functions::numToByte(status.size(), 2),
             status
-        });
+        );
     }
 
     // Server ID
-    Dhcpv6Header::Option serverID;
-    serverID.option = Variable::Dhcpv6::Options::serverID;
-    serverID.length = Functions::numToByte(8, 2);
-    serverID.value = dhcpUniqueIdentifier;
-    header.options.push_back(serverID);
+    header.options.emplace_back(
+        Variable::Dhcpv6::Options::serverID,
+        Functions::numToByte(dhcpUniqueIdentifier.size(), 2),
+        dhcpUniqueIdentifier
+    );
+
+    if (!duid.empty())
+    {
+        header.options.emplace_back(
+            Variable::Dhcpv6::Options::clientID,
+            Functions::numToByte(duid.size(), 2),
+            duid
+        );
+    }
+
+    if (delayedAuthenticationEnabled.load(std::memory_order_relaxed))
+        addAuthenticationOption(header, duid);
 
     return header;
 }
 
-std::vector<Dhcpv6Header::Option> Protocol::Dhcpv6Server::buildOptions(const DhcpNetworkConfig* config, const std::vector<ByteString>& oro)
+std::vector<Dhcpv6Header::Option> Protocol::Dhcpv6Server::buildOptions(Dhcp::DhcpNetworkConfig* config, const std::vector<ByteString>& oro)
 {
     std::vector<Dhcpv6Header::Option> options;
 
-    for (const ByteString& opt : oro)
     {
-        if (opt == Variable::Dhcpv6::Options::dnsServer && !config->dnsServer.empty())
+        std::shared_lock<std::shared_mutex> lock(config->configMutex);
+
+        for (const ByteString& opt : oro)
         {
-            ByteString dnsServer;
-            for (const auto& dns : config->dnsServer)
+            if (opt == Variable::Dhcpv6::Options::dnsServer && !config->dnsServer.empty())
             {
-                if (dns.size() == 16)
+                ByteString dnsServer;
+                for (const auto& dns : config->dnsServer)
                 {
-                    dnsServer += dns;
+                    if (dns.size() == 16)
+                    {
+                        dnsServer += dns;
+                    }
+                }
+                if (!dnsServer.empty())
+                {
+                    options.emplace_back(
+                        Variable::Dhcpv6::Options::dnsServer,
+                        Functions::numToByte(dnsServer.size(), 2),
+                        dnsServer
+                    );
                 }
             }
-            if (!dnsServer.empty())
-            {
-                options.push_back({
-                    Variable::Dhcpv6::Options::dnsServer,
-                    Functions::numToByte(dnsServer.size(), 2),
-                    dnsServer
-                });
-            }
-        }
 
-        else if (opt == Variable::Dhcpv6::Options::domainName && !config->domainName.empty())
-        {
-            ByteString domain = config->domainName;
-            if (!domain.empty())
+            else if (opt == Variable::Dhcpv6::Options::domainSearch && !config->domainName.empty())
             {
-                options.push_back({
-                    Variable::Dhcpv6::Options::domainName,
-                    Functions::numToByte(domain.size(), 2),
-                    domain
-                });
-            }
-        }
-
-        else if (opt == Variable::Dhcpv6::Options::ntpServer && !config->ntpServer.empty())
-        {
-            ByteString ntpServers;
-            for (const auto& ntp : config->ntpServer)
-            {
-                if (ntp.size() == 16)
+                ByteString domainNames;
+                for (const auto& name : config->domainName)
                 {
-                    ntpServers += ntp;
+                    domainNames += encodeDnsName(name);
+                }
+                if (!domainNames.empty())
+                {
+                    options.emplace_back(
+                        Variable::Dhcpv6::Options::domainSearch,
+                        Functions::numToByte(domainNames.size(), 2),
+                        std::move(domainNames)
+                    );
                 }
             }
-            if (!ntpServers.empty())
+
+            else if (opt == Variable::Dhcpv6::Options::ntpServer && !config->ntpServer.empty())
             {
-                options.push_back({
-                    Variable::Dhcpv6::Options::ntpServer,
-                    Functions::numToByte(ntpServers.size(), 2),
-                    ntpServers
-                });
+                ByteString ntpServers;
+                for (const auto& ntp : config->ntpServer)
+                {
+                    if (ntp.size() == 16)
+                    {
+                        ntpServers += ntp;
+                    }
+                }
+                if (!ntpServers.empty())
+                {
+                    options.emplace_back(
+                        Variable::Dhcpv6::Options::ntpServer,
+                        Functions::numToByte(ntpServers.size(), 2),
+                        ntpServers
+                    );
+                }
             }
         }
     }
@@ -1765,83 +2005,203 @@ std::vector<Dhcpv6Header::Option> Protocol::Dhcpv6Server::buildOptions(const Dhc
     return options;
 }
 
-void Protocol::Dhcpv6Server::configureAuthentication(ByteString secret, uint16_t protocol, uint16_t algorithm, uint8_t rdm)
+void Protocol::Dhcpv6Server::addDelayedAuthKey(uint64_t id, const ByteString& secret, std::chrono::seconds lifetime)
 {
-    {
-        std::lock_guard<std::mutex> lock(authMutex);
-        authConfig.sharedSecret = std::move(secret);
-        authConfig.protocol = protocol;
-        authConfig.algorithm = algorithm;
-        authConfig.rdm = rdm;
-    }
+    std::lock_guard<std::mutex> lock(authMutex);
+    authConfig.delayedKeys.emplace_back(
+        id,
+        secret,
+        std::chrono::steady_clock::now(),
+        lifetime
+    );
 }
 
-Dhcpv6Header::Option Protocol::Dhcpv6Server::buildAuthenticationOption()
+void Protocol::Dhcpv6Server::addRKAPAuthKey(const ByteString& secret, std::chrono::seconds lifetime)
 {
-    Dhcpv6Header::Option opt;
-    opt.option = Variable::Dhcpv6::Options::auth;
+    std::lock_guard<std::mutex> lock(authMutex);
+    authConfig.rkapKeys.emplace_back(
+        0,
+        secret,
+        std::chrono::steady_clock::now(),
+        lifetime
+    );
+}
 
-    ByteString reply;
-    ByteString authWithoutMAC;
-    {
-        reply = Functions::numToByte(authConfig.replayCounter, 8);
-        authWithoutMAC += Functions::numToByte(authConfig.protocol, 2);
-        authWithoutMAC += Functions::numToByte(authConfig.algorithm, 2);
-        authWithoutMAC += Functions::numToByte(authConfig.rdm, 1);
-        authWithoutMAC += reply;
-    }
-    ByteString mac = Authentication::generateMD5(authWithoutMAC, authConfig.sharedSecret);
+void Protocol::Dhcpv6Server::cleanupExpiredKeys()
+{
+    std::lock_guard<std::mutex> lock (authMutex);
+    authConfig.rkapKeys.erase(
+        std::remove_if(authConfig.rkapKeys.begin(), authConfig.rkapKeys.end(),
+            [](const auto& key) { return key.isExpired(); }),
+        authConfig.rkapKeys.end()
+    );
 
-    opt.length = Functions::numToByte(authWithoutMAC.size() + mac.size(), 2);
-    opt.value = authWithoutMAC + mac;
+    authConfig.delayedKeys.erase(
+        std::remove_if(authConfig.delayedKeys.begin(), authConfig.delayedKeys.end(),
+            [](const auto& key) { return key.isExpired(); }),
+        authConfig.delayedKeys.end()
+    );
+}
+
+bool Protocol::Dhcpv6Server::addAuthenticationOption(Dhcpv6Header& header, const ByteString& duid)
+{
+    if (!delayedAuthenticationEnabled.load(std::memory_order_relaxed)) return false;
+
+    ByteString secret;
+    Protocol::Dhcpv6::AuthConfig::AuthProtocol protocol;
+    Protocol::Dhcpv6::AuthConfig::AuthAlgorithm algorithm;
+    Protocol::Dhcpv6::AuthConfig::AuthRDM rdm;
+    uint64_t counter = 0;
+
     {
-        authConfig.replayCounter++;
+        std::lock_guard<std::mutex> lock(authMutex);
+
+        // Determin Protocol
+        uint8_t type = header.type[0];
+        if (type == Variable::Dhcpv6::Type::reconfigure[0])
+        {
+            if (authConfig.rkapKeys.empty()) return false;
+            secret = authConfig.rkapKeys.front().secret;
+            protocol = Protocol::Dhcpv6::AuthConfig::AuthProtocol::RKAP;
+            algorithm = Protocol::Dhcpv6::AuthConfig::AuthAlgorithm::HMACMD5;
+            rdm = Protocol::Dhcpv6::AuthConfig::AuthRDM::TIMESTAMP;
+            counter = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+        }
+        else
+        {
+            auto it = authConfig.clientToKey.find(duid);
+            auto key = getKey(it->second);
+            if (authConfig.delayedKeys.empty() || it == authConfig.clientToKey.end() || !key.has_value()) return false;
+            secret = key->secret;
+            protocol = Protocol::Dhcpv6::AuthConfig::AuthProtocol::DELAYED;
+            algorithm = Protocol::Dhcpv6::AuthConfig::AuthAlgorithm::HMACSHA1;
+            rdm = Protocol::Dhcpv6::AuthConfig::AuthRDM::MONO;
+            counter = authConfig.replayCounter[duid];
+        }
     }
-    return opt;
+
+    // 1. Construct auth option with zeroes MAC
+    ByteString authValue;
+    authValue += Functions::numToByte(static_cast<uint8_t>(protocol), 1);
+    authValue += Functions::numToByte(static_cast<uint8_t>(algorithm), 1);
+    authValue += Functions::numToByte(static_cast<uint8_t>(rdm), 1);
+    authValue += Functions::numToByte(counter, 8); // Replay counter
+    authValue += ByteString(16, 0x00); // Placeholder MAC
+
+    Dhcpv6Header::Option authOption;
+    authOption.option = Variable::Dhcpv6::Options::auth;
+    authOption.length = Functions::numToByte (authValue.size(), 2);
+    authOption.value = authValue;
+    header.options.push_back(authOption);
+
+    // 2. Get full message with zeroes MAC
+    auto encapsulated = header.encapsulate();
+    if (!encapsulated.has_value()) return false;
+    
+    ByteString raw = encapsulated.value();
+
+    ByteString mac;
+    if (protocol == Protocol::Dhcpv6::AuthConfig::AuthProtocol::DELAYED)
+    {
+        mac = Authentication::generateHMAC(raw, secret, "SHA1");
+    }
+    else if (protocol == Protocol::Dhcpv6::AuthConfig::AuthProtocol::RKAP)
+    {
+        mac = Authentication::generateHMAC(raw, secret, "MD5");
+    }
+
+    // 3. Replace MAC at offset
+    if (mac.size() == 16)
+        authOption.value.replace(11, 16, mac);
+    header.options.back() = authOption;
+    return true;
 }
 
 bool Protocol::Dhcpv6Server::validateAuthentication(const Dhcpv6Header& header, const ByteString& duid)
 {
-    Dhcpv6::AuthConfig auth;
-    {
-        std::lock_guard<std::mutex> lock(authMutex);
-        auth = authConfig;
-    }
     for (const auto& opt : header.options)
     {
         if (opt.option == Variable::Dhcpv6::Options::auth && opt.value.size() >= 13 + 16)
         {
-            uint16_t protocol = static_cast<uint16_t>(Functions::byteToNum(opt.value.substr(0, 2)));
-            uint16_t algorithm = static_cast<uint16_t>(Functions::byteToNum(opt.value.substr(2, 2)));
-            uint8_t rdm = opt.value[4];
-            uint64_t counter = Functions::byteToNum(opt.value.substr(5, 8));
-            ByteString receivedMAC = opt.value.substr(13, 16);
+            Dhcpv6::AuthConfig::AuthProtocol protocol = static_cast<Protocol::Dhcpv6::AuthConfig::AuthProtocol>(opt.value[0]);
+            auto algorithm = static_cast<Protocol::Dhcpv6::AuthConfig::AuthAlgorithm>(opt.value[1]);
+            auto rdm = static_cast<Protocol::Dhcpv6::AuthConfig::AuthRDM>(opt.value[2]);
+            uint64_t counter = Functions::byteToNum(opt.value.substr(3, 8));
+            ByteString receivedMAC = opt.value.substr(11, 16);
 
-            if (protocol != auth.protocol || algorithm != auth.algorithm || rdm != auth.rdm)
-                return false;
+            // Validate counter
+            if (counter <= authConfig.replayCounter[duid]) return false;
 
-            // Reply protection
-            if (auth.replayCounters.count(duid) && counter <= auth.replayCounters[duid])
-                return false;
-
-            ByteString authData = opt.value.substr(0, 13);
-            ByteString computedMAC;
-            if (protocol == 1)
+            // Re-encapsulate with MAC zeroed
+            Dhcpv6Header headerCopy = header;
+            for (auto& o : headerCopy.options)
             {
-                computedMAC = Authentication::generateMD5(authData, auth.sharedSecret);
-            } // Add others
-
-            if (computedMAC != receivedMAC)
-                return false;
-    
-            {
-                std::lock_guard<std::mutex> lock(authMutex);
-                authConfig.replayCounters[duid] = counter;
-                return true;
+                if (o.option == Variable::Dhcpv6::Options::auth)
+                {
+                    o.value.replace(11, 16, ByteString(16, 0x00));
+                    break;
+                }
             }
+
+            auto rawEncap = headerCopy.encapsulate();
+            if (!rawEncap.has_value()) return false;
+
+            auto validateAuth = ([&](const Dhcpv6::AuthConfig::Key key) -> bool {
+                ByteString mac = (protocol == Dhcpv6::AuthConfig::AuthProtocol::DELAYED)
+                    ? Authentication::generateHMAC(rawEncap.value(), key.secret, "SHA1")
+                    : Authentication::generateHMAC(rawEncap.value(), key.secret, "MD5");
+                return mac == receivedMAC;
+            });
+
+            std::lock_guard<std::mutex> lock(authMutex);
+            bool validated = false;
+
+            {
+                auto clientIt = authConfig.clientToKey.find(duid);
+                if (clientIt != authConfig.clientToKey.end())
+                {
+                    auto key = getKey(clientIt->second);
+                    if (!key.has_value()) return false;
+                    if (validateAuth(key.value()))
+                    {
+                        validated = true;
+                    }
+                }
+                else
+                {
+                    for (const auto& key : authConfig.delayedKeys)
+                    {
+                        if (validateAuth(key))
+                        {
+                            authConfig.clientToKey[duid] = key.keyId;
+                            validated = true;
+                        }
+                    }
+                }
+
+                if (!validated) return false;
+            }
+
+            authConfig.replayCounter[duid] = counter;
+            return true;
         }
     }
-    return true;
+    return !delayedAuthenticationEnabled.load(std::memory_order_relaxed);
+}
+
+std::optional<Protocol::Dhcpv6::AuthConfig::Key> Protocol::Dhcpv6Server::getKey(uint64_t keyID)
+{
+    cleanupExpiredKeys();
+    std::lock_guard<std::mutex> lock(authMutex);
+    for (const auto& key : authConfig.delayedKeys)
+    {
+        if (key.keyId == keyID)
+        {
+            return key;
+        }
+    }
+    return std::nullopt;
 }
 
 bool Protocol::Dhcpv6Server::validateStatusCode(const std::vector<Dhcpv6Header::Option>& options)
@@ -1883,7 +2243,7 @@ bool Protocol::Dhcpv6Server::handleRapidCommit(const std::vector<Dhcpv6Header::O
     {
         if (option.option == Variable::Dhcpv6::Options::rapidCommit)
         {
-            return true;
+            return option.value.empty();
         }
     }
     return false;
@@ -1892,40 +2252,52 @@ bool Protocol::Dhcpv6Server::handleRapidCommit(const std::vector<Dhcpv6Header::O
 bool Protocol::Dhcpv6Server::validateRelayMessage(const std::vector<Dhcpv6Header::Option>& options)
 {
     bool foundRelayMsg;
-    uint8_t hopCount = 0;
 
     for (const auto& opt : options)
     {
         if (opt.option == Variable::Dhcpv6::Options::relayMsg)
             foundRelayMsg = true;
-        else if (opt.option == Variable::Dhcpv6::Options::hopcount && !opt.value.empty())
-            hopCount = opt.value[0];
     }
 
-    return foundRelayMsg && hopCount <= dhcpConfigs.hopCountLimit.load(std::memory_order_relaxed);
+    return foundRelayMsg;
 }
 
-uint8_t Protocol::Dhcpv6Server::getServerPreference(const DhcpNetworkConfig* config)
+uint8_t Protocol::Dhcpv6Server::getServerPreference(const Dhcp::DhcpNetworkConfig* config, const ByteString& duid)
 {
-    if (!config)
+    if (!config) return 0;
+    
+    uint16_t elapsed = 0;
     {
-        return 0;
+        std::lock_guard<std::mutex> lock(trackingMutex);
+        auto it = clientElapsedTime.find(duid);
+        if (it != clientElapsedTime.end())
+            elapsed = it->second;
     }
-    else
-    {
-        std::lock_guard<std::mutex> lock(configMutex);
-        return config->serverPreference;
-    }
+
+    uint8_t base = config->serverPreference.load(std::memory_order_relaxed);
+    uint8_t boost = std::min<uint16_t>(elapsed / 10, 155);
+    return std::min<uint16_t>(base + boost, 255);
 }
 
-void Protocol::Dhcpv6Server::sendPacket(Dhcpv6Header& header, Interface* iface)
+void Protocol::Dhcpv6Server::sendPacket(Dhcpv6Header& header, Interface* iface, const ByteString& destination)
 {
     if (!iface || iface->shutdownFlag.load(std::memory_order_relaxed)) return;
 
     PacketInfo pkt;
     pkt.Layer5.push_back(std::move(header));
 
-    IPPacket::buildUdp(iface, pkt, Variable::IPv6::source, &Variable::IPv6::source, &Variable::Mac::broadcast, 0, dhcpConfigs.hopCountLimit.load(), Variable::Ethernet::ipv6, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    IPPacket::buildUdp(
+        iface,
+        pkt,
+        destination,
+        nullptr,
+        nullptr,
+        0,
+        dhcpConfigs.hopCountLimit.load(std::memory_order_relaxed),
+        Variable::Ethernet::ipv6,
+        Variable::Udp::dhcpv6Server,
+        Variable::Udp::dhcpv6Client
+    );
 }
 
 void Protocol::Dhcpv6Server::sendRelayPacket(Dhcpv6RelayHeader& header, Interface* iface)
@@ -1937,7 +2309,18 @@ void Protocol::Dhcpv6Server::sendRelayPacket(Dhcpv6RelayHeader& header, Interfac
 
     if (iface)
     {
-        IPPacket::buildUdp(iface, pkt, Variable::IPv6::source, &Variable::IPv6::source, &peerAddress, 0, dhcpConfigs.hopCountLimit.load(std::memory_order_relaxed), Variable::Ethernet::ipv6, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+        IPPacket::buildUdp(
+            iface,
+            pkt,
+            header.peerAddress,
+            nullptr,
+            nullptr,
+            0,
+            dhcpConfigs.hopCountLimit.load(std::memory_order_relaxed),
+            Variable::Ethernet::ipv6,
+            Variable::Udp::dhcpv6Server,
+            Variable::Udp::dhcpv6Client
+        );
     }
 }
 
@@ -1951,7 +2334,7 @@ ByteString Protocol::Dhcpv6Server::generateUniqueIdentifier()
     // Pick any interface MAC address (for now first interface)
     for (const auto& [_, net] : dhcpNetworks)
     {
-        if (net && net->config && net->config->interface && net->config->interface->Get())
+        if (net && net->config && net->config->interface)
         {
             duid += net->config->interface->configs.macAddress;
             break;
@@ -1965,6 +2348,15 @@ ByteString Protocol::Dhcpv6Server::generateUniqueIdentifier()
     duid += ByteString(Configs::macAddressList.GigabitEthernet.front());
 
     return duid;
+}
+
+Dhcpv6Header::Option Protocol::Dhcpv6Server::buildStatusOption(const ByteString& code, const std::string& message)
+{
+    Dhcpv6Header::Option statusOpt;
+    statusOpt.option = Variable::Dhcpv6::Options::statusCode;
+    statusOpt.length = Functions::numToByte(2 + message.size(), 2);
+    statusOpt.value = code + message;
+    return statusOpt;
 }
 
 bool Protocol::Dhcpv6Server::validateServerID(const Dhcpv6Header& header)
@@ -1992,11 +2384,38 @@ ByteString Protocol::Dhcpv6Server::extractDUID(const Dhcpv6Header& header)
     return {};
 }
 
-Dhcpv6Header::Option Protocol::Dhcpv6Server::buildStatusOption(const ByteString& code, const std::string& message)
+bool Protocol::Dhcpv6Server::trackElapsedTime(const Dhcpv6Header& header, const ByteString& duid)
 {
-    Dhcpv6Header::Option statusOpt;
-    statusOpt.option = Variable::Dhcpv6::Options::statusCode;
-    statusOpt.length = Functions::numToByte(2 + message.size(), 2);
-    statusOpt.value = code + message;
-    return statusOpt;
+    for (const auto& opt : header.options)
+    {
+        if (opt.option == Variable::Dhcpv6::Options::elapsedTime && opt.value.size() == 2)
+        {
+            uint16_t elapsed = static_cast<uint16_t>(Functions::byteToNum(opt.value));
+            std::lock_guard<std::mutex> lock(trackingMutex);
+            clientElapsedTime[duid] = elapsed;
+            return true;
+        }
+    }
+    return false;
+}
+
+void Protocol::Dhcpv6Server::addServerUnicast(Dhcpv6Header& header, const ByteString& leaseIp, Interface* iface)
+{
+    ByteString ip;
+    if (Functions::isGlobalUnicast(leaseIp))
+    {
+        ip = iface->configs.getGlobalUnicast();
+    }
+    else if (Functions::isLocalUnicast(leaseIp))
+    {
+        ip = iface->configs.getLocalUnicast();
+    }
+    if (!ip.empty() && ip.size() == 16)
+    {
+        header.options.emplace_back(
+            Variable::Dhcpv6::Options::unicast,
+            Functions::numToByte(ip.size(), 2),
+            ip
+        );
+    }
 }

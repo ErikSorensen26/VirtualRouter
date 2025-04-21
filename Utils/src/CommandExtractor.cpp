@@ -280,6 +280,14 @@ json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth =
             {
                 isLine = true;
             }
+            else if (next.find("A.B.C.D") != std::string::npos)
+            {
+                next = "1.1.1.1";
+            }
+            else if (next.find("X:X:X:X") != std::string::npos)
+            {
+                next = "1::1";
+            }
 
             if (prefix == "dspu" || prefix == "dlsw" || prefix == "privilege" || prefix == "logging" || prefix == "no" || prefix == "translate" || prefix == "username" || prefix == "access-list" || prefix == "alias" || prefix == "crypto" || prefix == "default" || next == "access-list" || next == "community-list" || next == "extcommunity-list" || prefix == "ip host" || prefix == "ip name-server" || prefix == "ip sla" || prefix == "do-exec" || next == "range")
             {
@@ -323,7 +331,7 @@ int main() {
     std::string line;
 
     json existingData;
-    std::ifstream existingFile("../Utils/Dir/temp.json");
+    std::ifstream existingFile("../Dir/temp.json");
     if (existingFile)
     {
         existingFile >> existingData;
@@ -336,10 +344,10 @@ int main() {
     try {
         // Initialize and connect the Telnet client to your Cisco device.
         TelnetClient telnet;
-        telnet.Connect("127.0.0.1", 5002);  // Adjust IP and port as needed.
+        telnet.Connect("127.0.0.1", 5032);  // Adjust IP and port as needed.
         
         // Start at the root level (empty prefix) and recursively build the tree.
-        json commandTree = getCommandTree(telnet, "ipv6 route 1::1/5 gig 0/0");
+        json commandTree = getCommandTree(telnet, "");
         
         // Disconnect from the device once done.
         telnet.Disconnect();

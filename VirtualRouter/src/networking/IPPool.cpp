@@ -15,8 +15,12 @@ IPPool::IPPool(const ByteString& network, const uint8_t& subnetPrefix, const Byt
     }
     else if  (network.size() == 16)
     {
+        firstSlaccAddress = Functions::byteToNum128(network.substr(0, 11) + ByteString("\xff\xfe\x00\x00\x00", 5));
+        lastSlaccAddress = Functions::byteToNum128(network.substr(0, 11) + ByteString("\xff\xfe\xff\xff\xff", 5));
+        __uint128_t slackAmmount = lastSlaccAddress - firstSlaccAddress;
+
         maskInt = subnetPrefix == 0 ? 0 : (~__uint128_t(0) << (128 - subnetPrefix));
-        poolSize = (__uint128_t(1) << (128 - subnetPrefix)) - 2;
+        poolSize = (__uint128_t(1) << (128 - subnetPrefix)) - 4096 - slackAmmount;
     }
     else
     {
@@ -95,6 +99,7 @@ ByteString IPPool::allocateIP(const ByteString* duid)
     // Allocate dynamically from the pool
     for (__uint128_t ip = start; ip < end; ++ip)
     {
+        if (ip + 1 == firstSlaccAddress) ip = lastSlaccAddress;
         ByteString canidateIP = Functions::numToByte128(ip + 1);
         if (!isAllocatedOrExcluded(canidateIP))
         {
@@ -176,6 +181,7 @@ ByteString IPPool::allocateTempIP(const ByteString* duid, bool useIP)
     {
         if (ip >= end) return {};
 
+        if (ip + 1 == firstSlaccAddress) ip = lastSlaccAddress;
         ByteString canidate = Functions::numToByte128(ip + 1);
         if (!isAllocatedOrExcluded(canidate) && !isTemporarilyOffered(canidate))
         {
@@ -196,6 +202,9 @@ ByteString IPPool::allocateTempIP(const ByteString* duid, bool useIP)
 
 bool IPPool::allocateRequestedTempIP(const ByteString& requestedIP, const ByteString* duid)
 {
+    __uint128_t ipNum = Functions::byteToNum128(requestedIP);
+    if (ipNum >= firstSlaccAddress || ipNum <= lastSlaccAddress) return false;
+
     __uint128_t start;
     __uint128_t end;
     {
@@ -218,6 +227,9 @@ bool IPPool::allocateRequestedTempIP(const ByteString& requestedIP, const ByteSt
 
 bool IPPool::excludeIP(const ByteString& ip)
 {
+    __uint128_t ipNum = Functions::byteToNum128(ip);
+    if (ip.size() == 16 && (ipNum >= firstSlaccAddress || ipNum <= lastSlaccAddress)) return false;
+
     if (isExcluded(ip))
     {
         return false; // IP already or excluded
@@ -232,6 +244,9 @@ bool IPPool::excludeIP(const ByteString& ip)
 
 void IPPool::releaseIP(const ByteString& ip)
 {
+    __uint128_t ipNum = Functions::byteToNum128(ip);
+    if (ipNum >= firstSlaccAddress || ipNum <= lastSlaccAddress) return;
+
     {
         std::lock_guard<std::mutex> lock(poolMutex);
         auto it = allocatedIPs.find(ip);
@@ -328,8 +343,12 @@ void IPPool::adjustPool(const ByteString& network, const uint8_t subnetPrefix, c
     }
     else if  (network.size() == 16)
     {
+        firstSlaccAddress = Functions::byteToNum128(network.substr(0, 11) + ByteString("\xff\xfe\x00\x00\x00", 5));
+        lastSlaccAddress = Functions::byteToNum128(network.substr(0, 11) + ByteString("\xff\xfe\xff\xff\xff", 5));
+        __uint128_t slackAmmount = lastSlaccAddress - firstSlaccAddress;
+
         maskInt = subnetPrefix == 0 ? 0 : (~__uint128_t(0) << (128 - subnetPrefix));
-        poolSize = (__uint128_t(1) << (128 - subnetPrefix)) - 2;
+        poolSize = (__uint128_t(1) << (128 - subnetPrefix)) - 4096 - slackAmmount;
     }
     else
     {

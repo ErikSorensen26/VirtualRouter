@@ -17,9 +17,7 @@
 #include <vector>
 #include <thread>
 #include <TimeManager.h>
-
-// Forward declarations
-class Interface;
+#include <Interface.h>
 
 /**
  * @namespace Protocol
@@ -66,6 +64,8 @@ public:
      */
     explicit Ndp(Interface& CurrentInterface);
 
+    void initializeNdp();
+
     /**
      * @brief Destructor for the Ndp class.
      * Ensures a clean shutdown of threads and resources.
@@ -100,7 +100,7 @@ public:
 
     void autoConfig();
 
-    void duplicateAddressDetection(bool localLink = false);
+    void duplicateAddressDetection(IpInfo::IPv6::IPv6Address& address, bool isLinkLocal = false);
 
     /**
      * @struct Configs

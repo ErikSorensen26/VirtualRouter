@@ -12,10 +12,12 @@
 #include <PrefixPool.h>
 #include <DhcpServerBase.h>
 #include <atomic>
+#include <unordered_map>
 
 // Forward declarations
 class NetworkConfigs;
 class Dhcpv6ServerTest;
+enum class InterfaceType;
 
 namespace Protocol 
 {
@@ -39,7 +41,11 @@ namespace Protocol
 
             std::atomic<double> t1Percentage = 0.5; ///< Initial T1 percentage for calcualting renewal times.
             std::atomic<double> t2Percentage = 0.8; ///< Initial T2 percentage for calcualting rebinding times.
+
+            std::atomic<bool> allowUnicast{false};     // Whether to allow unicast messages
+            std::atomic<bool> requireReconfigureAccept{true}; // Require reconfigure-accept
         };
+
 
         /**
          * @struct AuthConfig
@@ -48,12 +54,36 @@ namespace Protocol
          */
         struct AuthConfig
         {
-            uint16_t protocol = 1; ///< Authentication protocol (defaulted to RECONFIGURE).
-            uint16_t algorithm = 1; ///< Authentication algorithm (defaulted to HMAC-MD5).
-            uint8_t rdm = 0; ///< Replay Detection Method.
-            uint64_t replayCounter = 1; ///< Replay counter starting at 1.
-            ByteString sharedSecret; ///< Server's pre-shared secret key.
-            std::map<ByteString, uint64_t> replayCounters; // DUID -> last counter seen.
+            /**
+             * @struct key
+             * @brief Authentication key
+             */
+            struct Key
+            {
+                uint64_t keyId;
+                ByteString secret;
+                std::chrono::steady_clock::time_point created;
+                std::chrono::seconds lifetime;
+
+                bool isExpired() const 
+                {
+                    return std::chrono::steady_clock::now() - created > lifetime;
+                }
+            };
+
+            std::vector<Key> delayedKeys; // All configured keys
+            std::vector<Key> rkapKeys;
+            std::map<ByteString, uint64_t> clientToKey; // Duid -> keyID
+            std::map<ByteString, uint64_t> replayCounter; // Per-client DUID -> replay counter
+            std::atomic<uint64_t> globalCounter = 1; // Used when sending replies
+
+            enum class AuthProtocol { DELAYED = 2, RKAP = 3 };
+            enum class AuthAlgorithm { HMACMD5 = 1, HMACSHA1 = 2 };
+            enum class AuthRDM { MONO = 0, TIMESTAMP = 1, };
+            
+            AuthProtocol protocol = AuthProtocol::DELAYED;
+            AuthAlgorithm algorithm = AuthAlgorithm::HMACMD5;
+            AuthRDM rdm = AuthRDM::MONO;
         };
 
         /**
@@ -68,6 +98,19 @@ namespace Protocol
             int attempts = 0;
             uint32_t timerID = 0;
             ByteString transactionID;
+            ByteString localAddress;
+        };
+
+        /**
+         * @enum ReconfigReason
+         *
+         * This holds resonds for the reconfiguration.
+         */
+        enum class ReconfigReason
+        {
+            RENEW = 5,
+            REBIND = 6,
+            INFORMATION = 11
         };
 
         /**
@@ -78,7 +121,7 @@ namespace Protocol
             ByteString iaid;
             uint32_t t1, t2;
             std::vector<ByteString> addresses;
-            DhcpNetwork* network;
+            Dhcp::DhcpNetwork* network;
         };
 
         /**
@@ -89,7 +132,18 @@ namespace Protocol
             ByteString iaid;
             uint32_t t1, t2;
             std::vector<std::pair<ByteString, uint8_t>> prefixes;
-            DhcpNetwork* network;
+            Dhcp::DhcpNetwork* network;
+        };
+
+        /**
+         * @struct RelayInfo
+         * @brief holds information on a relay hop.
+         */
+        struct RelayClient
+        {
+            std::vector<Dhcpv6RelayHeader> relayChain; // Full relay chain
+            Interface* iface; // Interface
+            std::chrono::steady_clock::time_point lastSeen;
         };
     }
 
@@ -113,6 +167,8 @@ namespace Protocol
          */
         virtual ~Dhcpv6Server();
 
+        void removeInterface(Interface* iface);
+
         /**
          * @brief Starts the DHCPv6 server.
          *
@@ -131,8 +187,11 @@ namespace Protocol
          * @brief Process an incoming DHCPv6 packet.
          *
          * @param packet The received DHCPv6 packet.
+         * @param iface Interface that the header was received on.
+         * @param multicast Indicates if the message was sent with multicast.
+         * @param localAddress The local-link address for the client.
          */
-        void handleDhcpPacket(const PacketInfo& packet, Interface* iface);
+        void handleDhcpPacket(const PacketInfo& packet, Interface* iface, bool multicast, const ByteString& localAddress);
 
         Dhcpv6::Configs dhcpConfigs;
 
@@ -140,19 +199,19 @@ namespace Protocol
 
         ByteString dhcpUniqueIdentifier; ///< Unique Identifier for DHCP server.
 
-        std::map<ByteString, Dhcpv6RelayHeader> pendingRelays;
-        std::mutex relayMutex;
-
+        std::mutex trackingMutex;
         std::unordered_map<ByteString, std::chrono::steady_clock::time_point> declineTimestamps;
-        std::mutex declineMutex;
+        std::unordered_map<ByteString, std::pair<ByteString, Interface*>> clientReconfAccept;
+        std::unordered_map<ByteString, ByteString> recentLeases;
+        std::unordered_map<ByteString, uint16_t> clientElapsedTime;
+        std::unordered_map<ByteString, uint16_t> clientStatusCodes;
+        std::unordered_map<ByteString, Dhcpv6::RelayClient> relayClients;
 
-        std::map<ByteString, Dhcpv6::ReconfigureState> activeReconfigs;
-        std::mutex reconfigMutex;
-
-        std::atomic<bool> authenticationEnabled = false;
+        std::atomic<bool> rkapAuthenticationEnabled = false;
+        std::atomic<bool> delayedAuthenticationEnabled = false;
         Dhcpv6::AuthConfig authConfig;
         std::mutex authMutex;
-        
+
         /**
          * @brief Main loop for DHCPv6 server operations.
          */
@@ -167,8 +226,11 @@ namespace Protocol
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
          * @param iface Interface the packet was received on.
+         * @param multicast Indicates if this was sent via multicast.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processSolicit(const Dhcpv6Header& dhcpHeader, Interface* iface);
+        std::optional<ByteString> processSolicit(const Dhcpv6Header& dhcpHeader, Interface* iface, bool multicast, const ByteString* localAddress);
 
         /**
          * @brief Process a DHCPv6 REQUEST message.
@@ -178,8 +240,11 @@ namespace Protocol
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
          * @param iface Interface the packet was received on.
+         * @param multicast Indicates if this was sent via multicast.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processRequest(const Dhcpv6Header& dhcpHeader, Interface* iface);
+        std::optional<ByteString> processRequest(const Dhcpv6Header& dhcpHeader, Interface* iface, bool multicast, const ByteString* localAddress);
 
         /**
          * @brief Processes a DHCPv6 CONFIRM message.
@@ -190,8 +255,11 @@ namespace Protocol
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
          * @param iface Interface the packet was received on.
+         * @param multicast Indicates if this was sent via multicast.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processConfirm(const Dhcpv6Header& dhcpHeader, Interface* iface);
+        std::optional<ByteString> processConfirm(const Dhcpv6Header& dhcpHeader, Interface* iface, bool multicast, const ByteString* localAddress);
 
         /**
          * @brief Processes a DHCPv6 RENEW message.
@@ -203,8 +271,11 @@ namespace Protocol
          * 
          * @param dhcpHeader The DHCPv6 header from the packet.
          * @param iface Interface the packet was received on.
+         * @param multicast Indicates if this was sent via multicast.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processRenew(const Dhcpv6Header& dhcpHeader, Interface* iface);
+        std::optional<ByteString> processRenew(const Dhcpv6Header& dhcpHeader, Interface* iface, bool multicast, const ByteString* localAddress);
         
         /**
          * @brief Processes a DHCPv6 REBIND message.
@@ -216,8 +287,11 @@ namespace Protocol
          *
          * @param dhcpHeader The DHCPv6 
          * @param iface Interface the packet was received on.
+         * @param multicast Indicates if this was sent via multicast.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processRebind(const Dhcpv6Header& dhcpHeader, Interface* iface);
+        std::optional<ByteString> processRebind(const Dhcpv6Header& dhcpHeader, Interface* iface, bool multicast, const ByteString* localAddress);
 
         /**
          * @brief Processes a DHCPv6 RELEASE message.
@@ -228,8 +302,11 @@ namespace Protocol
          *
          * @param dhcpHeader The DHCPv6 header from the packet.
          * @param iface Interface the packet was received on.
+         * @param multicast Indicates if this was sent via multicast.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processRelease(const Dhcpv6Header& dhcpHeader, Interface* iface);
+        std::optional<ByteString> processRelease(const Dhcpv6Header& dhcpHeader, Interface* iface, bool multicast, const ByteString* localAddress);
 
         /**
          * @brief Processes a DHCPv6 DECLINE message.
@@ -240,8 +317,11 @@ namespace Protocol
          *
          * @param dhcpHeader The DHCPv6 header for the packet.
          * @param iface Interface the packet was received on.
+         * @param multicast Indicates if this was sent via multicast.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processDecline(const Dhcpv6Header& dhcpHeader, Interface* iface);
+        std::optional<ByteString> processDecline(const Dhcpv6Header& dhcpHeader, Interface* iface, bool multicast, const ByteString* localAddress);
 
         /**
          * @brief Processes a DHCPv6 INFORM message.
@@ -251,16 +331,10 @@ namespace Protocol
          *
          * @param dhcpHeader The DHCPv6 header for the packet.
          * @param iface Interface the packet was received on.
+         * @param localAddress Local Address of the client.
+         * @return Will return the packet if no local address is given.
          */
-        void processInformationRequest(const Dhcpv6Header& header, Interface* iface);
-
-        /**
-         * @brief Process a DHCPv6 ECHO-REQUEST
-         *
-         * @param header DHCPv6 header for the packet.
-         * @param iface Interface the packet was received on.
-         */
-        void processEchoRequest(const Dhcpv6Header& header, Interface* iface);
+        std::optional<ByteString> processInformationRequest(const Dhcpv6Header& header, Interface* iface, bool multicast, const ByteString* localAddress);
 
         /**
          * @brief Process a DHCPv6 RELAY-FORW
@@ -272,20 +346,19 @@ namespace Protocol
          * @param iface Interface the packet was received on.
          */
         void processRelayForward(const Dhcpv6RelayHeader& relay, Interface* iface);
-
-        // SENDS------------------------------------------------
+        
+        // Enhanced relay support
+        std::optional<Dhcpv6Header> processRelayChain(const Dhcpv6RelayHeader& relay, std::vector<Dhcpv6RelayHeader>& chain);
 
         /**
-         * @brief Sends a DHCPv6 RELAY-REPL message.
+         * @brief Finds and processes a DHCPv6 reconfig-accept option
          *
-         * A server sends a Relay-reply message to a relay agent containing a message that the relay
-         * agent delivers to a client. The Relay-reply message may be relayed by other relay agents for 
-         * delivery to destination relay agents.
-         *
-         * @param transactionID The transaction ID of the client.
-         * @param response Dhcpv6 Header that is being responded to
+         * @param header DHCPv6 header.
+         * @param bool Indicates if this is a relay packet.
+         * @param interface
+         * @return Will return the packet if relay is enabled.
          */
-        void sendRelayReply(const ByteString& transactionID, const Dhcpv6Header& response);
+        void processReconfigAccept(const Dhcpv6Header& header, const ByteString& localAddress, Interface*& iface);
 
         // RECONFIGURE-------------------------------------
 
@@ -294,24 +367,7 @@ namespace Protocol
          *
          * A server sends a reconfigure message to all client
          */
-        void sendReconfigure();
-
-        /**
-         * @brief Schedules a reconfigure retry.
-         *
-         * Reschedules a retry for reconfiguring the client in scenareos where the 
-         * reconfiguration was unsuccessful.
-         *
-         * @param duid Clients identifier.
-         */
-        void scheduleReconfigureRetry(const ByteString& duid);
-        
-        /**
-         * @brief this function actively retries to reconfigure the client.
-         *
-         * @param duid Client identifier.
-         */
-        void retryReconfigure(const ByteString& duid);
+        void sendReconfigure(const ByteString& duid, Dhcpv6::ReconfigReason reason, bool relay = false);
 
         // EXTRACTIONS-------------------------------------
 
@@ -362,7 +418,7 @@ namespace Protocol
          * @param iapdBlocks Blocks of IAPD information.
          * @return A fully constructed DHCPv6 object.
          */
-        Dhcpv6Header buildResponse(const ByteString& type, const ByteString& transactionID, const std::vector<Dhcpv6::IANABlock>& ianaBlocks, const std::vector<Dhcpv6::IAPDBlock>& iapdBlocks, const std::vector<Dhcpv6::IANABlock>& iataBlocks);
+        Dhcpv6Header buildResponse(const ByteString& type, const ByteString& transactionID, const ByteString& duid, const std::vector<Dhcpv6::IANABlock>& ianaBlocks, const std::vector<Dhcpv6::IAPDBlock>& iapdBlocks, const std::vector<Dhcpv6::IANABlock>& iataBlocks);
 
         /**
          * @brief Constructs DHCPv6 options to send in response.
@@ -371,7 +427,7 @@ namespace Protocol
          * @param oroOptions Options requested by client (via ORO).
          * @return Vector of DHCPv6 options.
          */
-        std::vector<Dhcpv6Header::Option> buildOptions(const DhcpNetworkConfig* config, const std::vector<ByteString>& oroOptions);
+        std::vector<Dhcpv6Header::Option> buildOptions(Dhcp::DhcpNetworkConfig* config, const std::vector<ByteString>& oroOptions);
 
         // UTILS---------------------------------------------------
 
@@ -394,7 +450,7 @@ namespace Protocol
          * @param header The dhcpv6 header to send.
          * @param iface The interface to send it through.
          */
-        void sendPacket(Dhcpv6Header& header, Interface* iface);
+        void sendPacket(Dhcpv6Header& header, Interface* iface, const ByteString& destination);
         
         void sendRelayPacket(Dhcpv6RelayHeader& header, Interface* iface);
 
@@ -417,17 +473,18 @@ namespace Protocol
         /**
          * @brief Configures authentication for DHCPv6.
          *
+         * @param id ID used for tracking the secret key.
          * @param secret Secret key shared with clients for authentication.
-         * @param protocol Encryption protocol being used for authentication.
-         * @param algorithm Encryption Algorithm being used for authentication.
-         * @param rdm Monotonic Counter.
          */
-        void configureAuthentication(ByteString secret, uint16_t protocol, uint16_t algorithm, uint8_t rdm);
+        void addDelayedAuthKey(uint64_t id, const ByteString& secret, std::chrono::seconds lifetime);
+        void addRKAPAuthKey(const ByteString& secret, std::chrono::seconds lifetime);
+
+        void cleanupExpiredKeys();
 
         /**
          * @brief Builds a Authentication Option for secure dhcp handling.
          */
-        Dhcpv6Header::Option buildAuthenticationOption();
+        bool addAuthenticationOption(Dhcpv6Header& header, const ByteString& clientID);
 
         /**
          * @brief Validates the Authentication on a incoming dhcpv6 packet
@@ -444,37 +501,10 @@ namespace Protocol
          * @param message The message to be sent along with the status.
          */
         Dhcpv6Header::Option buildStatusOption(const ByteString& code, const std::string& message);
-
-        // Message validation methods
-        bool validateMessage(const Dhcpv6Header& header, bool requireClientId = true);
-        bool validateRelayMessage(const Dhcpv6RelayHeader& header);
-        bool validateTimers(uint32_t t1, uint32_t t2, uint32_t preferred, uint32_t valid);
-        bool validatePrefix(const ByteString& prefix, uint8_t prefixLen);
-        
-        // Enhanced configuration
-        std::atomic<uint8_t> serverPreference{0};  // Server preference value (0-255)
-        std::atomic<bool> allowUnicast{false};     // Whether to allow unicast messages
-        std::atomic<bool> requireReconfigureAccept{true}; // Require reconfigure-accept
         
         // Enhanced timer management
         void scheduleTimers(const ByteString& duid, const ByteString& iaid, uint32_t t1, uint32_t t2);
         void handleTimerExpiry(const ByteString& duid, const ByteString& iaid, Dhcp::TimerType type);
-        
-        // Enhanced authentication
-        struct DelayedAuth {
-            ByteString replyData;
-            ByteString authInfo;
-            std::chrono::steady_clock::time_point timestamp;
-        };
-
-        std::map<ByteString, DelayedAuth> delayedAuthData;
-        std::mutex delayedAuthMutex;
-        
-        bool processDelayedAuth(const Dhcpv6Header& header, const ByteString& duid);
-        ByteString generateAuthData(const ByteString& duid, const ByteString& replyData);
-        
-        // Enhanced relay support
-        void processRelayChain(const std::vector<Dhcpv6RelayHeader>& chain);
 
         /**
          * @brief Validates Status Code option in responses
@@ -502,10 +532,16 @@ namespace Protocol
          * @param config Network configuration
          * @return preference value to be sent to client
          */
-        uint8_t getServerPreference(const DhcpNetworkConfig* config);
+        uint8_t getServerPreference(const Dhcp::DhcpNetworkConfig* config, const ByteString& duid);
 
+        void buildReconfigPacket(const ByteString& clientID, const ByteString& leaseIp, const std::pair<ByteString, Interface*>& ifacePair, Dhcpv6::ReconfigReason reason, bool relay);
+
+        bool trackElapsedTime(const Dhcpv6Header& header, const ByteString& duid);
+
+        void addServerUnicast(Dhcpv6Header& header, const ByteString& leasedIp, Interface* iface);
+
+        std::optional<Dhcpv6::AuthConfig::Key> getKey(uint64_t keyID);
         // Status code tracking
-        std::unordered_map<ByteString, uint16_t> clientStatusCodes;  // DUID -> last statusByteString buildRelayReplyChain(const ByteString& response, const std::vector<Dhcpv6RelayHeader>& chain);
     };
 }
 
