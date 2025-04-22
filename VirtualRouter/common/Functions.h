@@ -13,6 +13,11 @@
 #include <ctime>
 #include <chrono>
 
+static bool validateSize(size_t& beginning, size_t length, const ByteString& packet)
+{
+    return (beginning + length <= packet.size());
+}
+
 double secondsSinceEpoch();
 
 namespace Functions {
