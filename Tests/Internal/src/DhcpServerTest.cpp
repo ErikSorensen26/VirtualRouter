@@ -130,7 +130,7 @@ protected:
     // Helper functions
     std::unordered_map<ByteString, Dhcp::DhcpNetwork*> getDhcpNetworks() { return dhcpServer->dhcpNetworks; }
     ByteString allocateIPAddress(const ByteString& network, uint32_t subnet, ByteString& mac) {return dhcpServer->dhcpNetworks[network + "/" + std::to_string(subnet)]->lease->allocateIP(networkConfig->leaseTime, networkConfig->t1Percentage, networkConfig->t2Percentage, &mac); }
-    void handleDhcpPacket(const PacketInfo& packet) {dhcpServer->handleDhcpPacket(packet);}
+    void handleDhcpPacket(const PacketInfo& packet) {dhcpServer->handleDhcpPacket(packet, mockInterface);}
     std::unordered_map<ByteString, LeaseManager::Lease>& getLeases(Dhcp::DhcpNetworkConfig* network) { return dhcpServer->dhcpNetworks[network->getNetworkID()]->lease->leases; }
     void cleanupExpiredLeases() {for (auto& config : dhcpServer->dhcpNetworks) {config.second->lease->cleanupExpiredLeases();}}
     std::unordered_map<ByteString, ByteString>& getAllocatedIPs(ByteString networkID) {return dhcpServer->dhcpNetworks[networkID]->pool->allocatedIPs;}
@@ -222,7 +222,7 @@ TEST_F(DhcpServerTest, HandleDhcpRequest_SendsDhcpAck)
     discoverPacket.Layer5.emplace_back(std::move(dhcpDiscover));
 
     // Handle the DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket);
+    dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
 
     // Prepare a DHCP Request packet
     PacketInfo requestPacket;
@@ -262,7 +262,7 @@ TEST_F(DhcpServerTest, HandleDhcpRequest_SendsDhcpAck)
         }));
 
     // Handle the DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket);
+    dhcpServer->handleDhcpPacket(requestPacket, mockInterface);
 }
 
 // Test DHCP Server Handling DHCP Release
@@ -286,7 +286,7 @@ TEST_F(DhcpServerTest, HandleDhcpRelease_ReleaseIP)
     discoverPacket.Layer5.emplace_back(std::move(dhcpDiscover));
 
     // Handle the DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket);
+    dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
 
     // Prepare a DHCP Request packet
     PacketInfo requestPacket;
@@ -313,7 +313,7 @@ TEST_F(DhcpServerTest, HandleDhcpRelease_ReleaseIP)
     requestPacket.Layer5.emplace_back(std::move(dhcpRequest));
 
     // Handle the DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket);
+    dhcpServer->handleDhcpPacket(requestPacket, mockInterface);
 
     // Verify that the IP is allocated
     EXPECT_TRUE(getLeases(networkConfig).find(ByteString("\xc0\xa8\x00\x02", 4)) != getLeases(networkConfig).end());
@@ -344,7 +344,7 @@ TEST_F(DhcpServerTest, HandleDhcpRelease_ReleaseIP)
         .Times(0);
 
     // Handle the DHCP Release packet
-    dhcpServer->handleDhcpPacket(releasePacket);
+    dhcpServer->handleDhcpPacket(releasePacket, mockInterface);
 
     // Verify that the lease has been removed
     EXPECT_TRUE(getLeases(networkConfig).find(ByteString("\xc0\xa8\x00\x02", 4)) == getLeases(networkConfig).end());
@@ -392,7 +392,7 @@ TEST_F(DhcpServerTest, HandleDhcpNak_SendsDhcpNak)
         }));
 
     // Handle the DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket);
+    dhcpServer->handleDhcpPacket(requestPacket, mockInterface);
 }
 
 // Test DHCP Server Lease Expiration and Cleanup
@@ -466,7 +466,7 @@ TEST_F(DhcpServerTest, LeaseRenewal_HandlesRenewalProperly)
         }));
 
     // Handle the DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket);
+    dhcpServer->handleDhcpPacket(requestPacket, mockInterface);
 
     // Verify that the lease start time has been updated
     EXPECT_NE(getLeases(networkConfig)[ip].leaseStart, leaseStart);
@@ -520,7 +520,7 @@ TEST_F(DhcpServerTest, HandleMultipleClients_AllReceiveUniqueIPs)
             }));
 
         // Handle the DHCP Discover packet
-        dhcpServer->handleDhcpPacket(discoverPacket);
+        dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
     }
 
     // Now, simulate DHCP Requests from all clients
@@ -563,7 +563,7 @@ TEST_F(DhcpServerTest, HandleMultipleClients_AllReceiveUniqueIPs)
             }));
 
         // Handle the DHCP Request packet
-        dhcpServer->handleDhcpPacket(requestPacket);
+        dhcpServer->handleDhcpPacket(requestPacket, mockInterface);
     }
 
     // Verify that each client has a unique lease
@@ -619,7 +619,7 @@ TEST_F(DhcpServerTest, HandleDhcpInform_SendsDhcpAckWithoutIPAssignment)
         }));
 
     // Handle the DHCP Inform packet
-    dhcpServer->handleDhcpPacket(informPacket);
+    dhcpServer->handleDhcpPacket(informPacket, mockInterface);
 }
 
 // Test DHCP Server Handling Invalid DHCP Packets
@@ -641,7 +641,7 @@ TEST_F(DhcpServerTest, HandleInvalidDhcpPacket_IgnoresPacket)
         .Times(0);
 
     // Handle the invalid DHCP packet
-    dhcpServer->handleDhcpPacket(invalidPacket);
+    dhcpServer->handleDhcpPacket(invalidPacket, mockInterface);
 }
 
 // Test DHCP Server Handling Duplicate MAC Addresses
@@ -679,7 +679,7 @@ TEST_F(DhcpServerTest, HandleDuplicateMacAddress_AssignsSameIP)
         }));
 
     // Handle the first DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket1);
+    dhcpServer->handleDhcpPacket(discoverPacket1, mockInterface);
 
     // Simulate first DHCP Request
     PacketInfo requestPacket1;
@@ -718,7 +718,7 @@ TEST_F(DhcpServerTest, HandleDuplicateMacAddress_AssignsSameIP)
         }));
 
     // Handle the first DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket1);
+    dhcpServer->handleDhcpPacket(requestPacket1, mockInterface);
 
     // Simulate second DHCP Discover and Request with the same MAC
     PacketInfo discoverPacket2;
@@ -749,7 +749,7 @@ TEST_F(DhcpServerTest, HandleDuplicateMacAddress_AssignsSameIP)
         }));
 
     // Handle the second DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket2);
+    dhcpServer->handleDhcpPacket(discoverPacket2, mockInterface);
 
     // Simulate second DHCP Request
     PacketInfo requestPacket2;
@@ -788,7 +788,7 @@ TEST_F(DhcpServerTest, HandleDuplicateMacAddress_AssignsSameIP)
         }));
 
     // Handle the second DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket2);
+    dhcpServer->handleDhcpPacket(requestPacket2, mockInterface);
 
     // Verify that only one lease exists for the IP
     EXPECT_EQ(getLeases(networkConfig).size(), 1);
@@ -921,7 +921,7 @@ TEST_F(DhcpServerTest, HandleDhcpInform_SendsDhcpAckWithConfiguration) {
         }));
 
     // Handle the DHCP Inform packet
-    dhcpServer->handleDhcpPacket(informPacket);
+    dhcpServer->handleDhcpPacket(informPacket, mockInterface);
 }
 
 // Test DHCP Server Handling DHCP Packets with Invalid Options
@@ -958,7 +958,7 @@ TEST_F(DhcpServerTest, HandleDhcpPacket_InvalidOptions_IgnoresPacket) {
         .Times(0);
 
     // Handle the invalid DHCP Discover packet
-    dhcpServer->handleDhcpPacket(invalidRequestPacket);
+    dhcpServer->handleDhcpPacket(invalidRequestPacket, mockInterface);
 }
 
 // Test DHCP Server Handling DHCP Decline
@@ -993,7 +993,7 @@ TEST_F(DhcpServerTest, HandleDhcpDecline_SetIpConflicted) {
         }));
 
     // Handle the DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket);
+    dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
 
     // Prepare a DHCP Decline packet to decline the offered IP
     PacketInfo declinePacket;
@@ -1022,7 +1022,7 @@ TEST_F(DhcpServerTest, HandleDhcpDecline_SetIpConflicted) {
     declinePacket.Layer5.emplace_back(std::move(dhcpDecline));
 
     // Handle the DHCP Decline packet
-    dhcpServer->handleDhcpPacket(declinePacket);
+    dhcpServer->handleDhcpPacket(declinePacket, mockInterface);
 
     // Verify that the timeout is still active for declined IP
     ByteString clientMac("\x00\x11\x22\x33\x44\xDD", 6);
@@ -1080,7 +1080,7 @@ TEST_F(DhcpServerTest, LeaseRenewal_ProcessRenewalCorrectly) {
         }));
 
     // Handle the DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket);
+    dhcpServer->handleDhcpPacket(requestPacket, mockInterface);
 
     // Verify that the leaseStart has been updated to current time
     EXPECT_GE(getLeases(networkConfig)[ip].leaseStart, leaseStart + 1800); // At least renewalTime later
@@ -1145,7 +1145,7 @@ TEST_F(DhcpServerTest, HandleConcurrentDhcpDiscover_PrioritizesThreadSafety) {
         discoverPacket.Layer5.emplace_back(std::move(dhcpDiscover));
 
         // Handle the DHCP Discover packet
-        dhcpServer->handleDhcpPacket(discoverPacket);
+        dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
     };
 
     // Launch multiple threads to send DHCP Discover packets concurrently
@@ -1191,7 +1191,7 @@ TEST_F(DhcpServerTest, HandleDhcpRequest_AlreadyAllocatedIP_SendsNak) {
     discoverPacket.Layer5.emplace_back(std::move(dhcpDiscover));
 
     // Handle the DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket);
+    dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
 
     // Prepare a DHCP Request packet to allocate the IP
     PacketInfo requestPacket1;
@@ -1230,7 +1230,7 @@ TEST_F(DhcpServerTest, HandleDhcpRequest_AlreadyAllocatedIP_SendsNak) {
         }));
 
     // Handle the first DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket1);
+    dhcpServer->handleDhcpPacket(requestPacket1, mockInterface);
 
     // Prepare another DHCP Request packet from a different client trying to request the same IP
     PacketInfo requestPacket2;
@@ -1270,7 +1270,7 @@ TEST_F(DhcpServerTest, HandleDhcpRequest_AlreadyAllocatedIP_SendsNak) {
         }));
 
     // Handle the second DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket2);
+    dhcpServer->handleDhcpPacket(requestPacket2, mockInterface);
 }
 
 // Test DHCP Server Start and Stop
@@ -1367,7 +1367,7 @@ TEST_F(DhcpServerTest, UpdateDhcpNetworkConfig_Success) {
         }));
 
     // Handle the DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket);
+    dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
 }
 
 // Test DHCP Server Handling Exhausted IP Pool
@@ -1411,7 +1411,7 @@ TEST_F(DhcpServerTest, HandleExhaustedIpPool_SendsDhcpNak) {
         }));
 
     // Handle the DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket);
+    dhcpServer->handleDhcpPacket(discoverPacket, mockInterface);
 }
 
 // Test DHCP Server Handling Invalid DHCP Message Types
@@ -1445,7 +1445,7 @@ TEST_F(DhcpServerTest, HandleInvalidDhcpMessageType_IgnoresPacket) {
         .Times(0);
 
     // Handle the invalid DHCP packet
-    dhcpServer->handleDhcpPacket(invalidPacket);
+    dhcpServer->handleDhcpPacket(invalidPacket, mockInterface);
 }
 
 // Test DHCP Server Handling Lease Renewal Requests Without Existing Lease
@@ -1488,7 +1488,7 @@ TEST_F(DhcpServerTest, HandleDhcpRequest_NoExistingLease_SendsDhcpNak) {
         }));
 
     // Handle the DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket);
+    dhcpServer->handleDhcpPacket(requestPacket, mockInterface);
 }
 
 // Test DHCP Server Update Network Config and Remove Leases Outside New Subnet
@@ -1556,7 +1556,7 @@ TEST_F(DhcpServerTest, PreventsDuplicateIpAllocation_ToDifferentMACs) {
         }));
 
     // Handle the first DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket1);
+    dhcpServer->handleDhcpPacket(discoverPacket1, mockInterface);
 
     // Simulate first DHCP Request
     PacketInfo requestPacket1;
@@ -1595,7 +1595,7 @@ TEST_F(DhcpServerTest, PreventsDuplicateIpAllocation_ToDifferentMACs) {
         }));
 
     // Handle the first DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket1);
+    dhcpServer->handleDhcpPacket(requestPacket1, mockInterface);
 
     // Simulate second client DHCP Discover and Request for the same IP
     ByteString mac2 = ByteString("\x00\x11\x22\x33\x44\x22", 6);
@@ -1627,7 +1627,7 @@ TEST_F(DhcpServerTest, PreventsDuplicateIpAllocation_ToDifferentMACs) {
         }));
 
     // Handle the second DHCP Discover packet
-    dhcpServer->handleDhcpPacket(discoverPacket2);
+    dhcpServer->handleDhcpPacket(discoverPacket2, mockInterface);
 
     // Simulate second DHCP Request
     PacketInfo requestPacket2;
@@ -1666,7 +1666,7 @@ TEST_F(DhcpServerTest, PreventsDuplicateIpAllocation_ToDifferentMACs) {
         }));
 
     // Handle the second DHCP Request packet
-    dhcpServer->handleDhcpPacket(requestPacket2);
+    dhcpServer->handleDhcpPacket(requestPacket2, mockInterface);
 
     // Verify that both leases exist
     EXPECT_EQ(getLeases(networkConfig).size(), 2);

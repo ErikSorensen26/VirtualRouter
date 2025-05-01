@@ -63,13 +63,10 @@ private:
 
     /// Layer-specific header processing functions.
     void processEthernet(const EthernetHeader& header);     ///< Ethernet processing function.
-    void processPpp(const PppHeader& header);               ///< PPP processing function.
-    void processFrame(const FrameHeader& header);           ///< Frame processing function.
 
     void processArp(const ArpHeader& header);               ///< ARP processing function.
     void processMpls(const MplsHeader& header);             ///< MPLS processing function.
     void processVlan(const VlanHeader& header);             ///< VLAN processing function.
-    void processLldp(const LldpHeader& header);             ///< LLDP processing function.
 
     void processIPv4(const IPv4Header& header);             ///< IPv4 processing function.
     void processIPv6(const IPv6Header& header);             ///< IPv6 processing function.
@@ -127,13 +124,10 @@ struct HeaderVisitor {
     ProcessPacket* processor;
 
     void operator()(const EthernetHeader& eth) const { processor->processEthernet(eth); }
-    void operator()(const PppHeader& ppp) const { processor->processPpp(ppp); }
-    void operator()(const FrameHeader& frame) const { processor->processFrame(frame); }
 
     void operator()(const ArpHeader& arp) const { processor->processArp(arp); }
     void operator()(const MplsHeader& mpls) const { processor->processMpls(mpls); }
     void operator()(const VlanHeader& vlan) const { processor->processVlan(vlan); }
-    void operator()(const LldpHeader& lldp) const { processor->processLldp(lldp); }
 
     void operator()(const IPv4Header& ipv4) const { processor->processIPv4(ipv4); }
     void operator()(const IPv6Header& ipv6) const { processor->processIPv6(ipv6); }

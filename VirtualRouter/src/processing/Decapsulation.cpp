@@ -52,13 +52,7 @@ bool Packet::processLayer2(const ByteString &packet)
 {
     //Profiler::getInstance().notify("Decapsulating Layer 2 Headers");
     //if (print) { Logger::getInstance().info() << "Layer 2:" << std::endl; }
-    const GreHeade* gre = getLayer3Header<GreHeade>();
-    if (gre && gre->protocol == Variable::Gre::ppp && validateSize(start, 4, packet))
-    {
-        ByteString pppHeader = getSlice(4);
-        if (!decodePpp(pppHeader)) return false;
-    }
-    else if (validateSize(start, 14, packet))
+    if (validateSize(start, 14, packet))
     {
         ByteString ethernetHeader = getSlice(14);
         if (!decodeEthernet(ethernetHeader)) return false;
@@ -92,11 +86,6 @@ bool Packet::processLayer2_5(const ByteString &packet)
         if (!validateSize(start, 4, packet)) return false;
         ByteString vlanHeader = getSlice(4);
         if (!decodeVlan(vlanHeader)) return false;
-    }
-    else if (ethernet && ethernet->type == Variable::Ethernet::lldp)
-    {
-        ByteString lldpHeader = packet.substr(start);
-        if (!decodeLldp(lldpHeader)) return false;
     }
     afterPacket = packet.substr(start);
     return true;
@@ -277,52 +266,6 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
     return true;
 }
 
-// Parses and processes the PPP header.
-bool Packet::decodePpp(ByteString &pppHeader)
-{
-    //std::cout << "ppp " << pppHeader.toHex() << std::endl;
-    PppHeader ppp;
-    if (!ppp.decapsulate(pppHeader)) return false;
-
-    if (print)
-    {
-
-        Logger::getInstance().info() << "PPP: " << std::endl;
-        Logger::getInstance().info() << "Address: " << ppp.address.toHex() << std::endl;
-        Logger::getInstance().info() << "Control: " << ppp.control.toHex() << std::endl;
-        Logger::getInstance().info() << "Protocol: " << ppp.protocol.toHex() << std::endl;
-    }
-
-    packetInfo.Layer2.push_back(std::move(ppp));
-    return true;
-}
-
-// Parses and processes the Frame Relay header.
-bool Packet::decodeFrame(ByteString &frameHeader)
-{
-    //std::cout << "frame " << frameHeader.toHex() << std::endl;
-    FrameHeader frame;
-    if (!frame.decapsulate(frameHeader)) return true;
-
-    if (print)
-    {
-
-        Logger::getInstance().info() << "Frame Relay:" << std::endl;
-        Logger::getInstance().info() << "First DLCI: " << frame.firstAddress.dlci << std::endl;
-        Logger::getInstance().info() << "First CR: " << frame.firstAddress.cr << std::endl;
-        Logger::getInstance().info() << "First EA: " << frame.firstAddress.ea << std::endl;
-        Logger::getInstance().info() << "Second DLCI: " << frame.secondAddress.dlci << std::endl;
-        Logger::getInstance().info() << "Second FECN: " << frame.secondAddress.fecn << std::endl;
-        Logger::getInstance().info() << "Second BECN: " << frame.secondAddress.becn << std::endl;
-        Logger::getInstance().info() << "Second DE: " << frame.secondAddress.de << std::endl;
-        Logger::getInstance().info() << "Second EA: " << frame.secondAddress.ea << std::endl;
-        Logger::getInstance().info() << "Type: " << frame.type.toHex() << std::endl;
-    }
-
-    packetInfo.Layer2.push_back(std::move(frame));
-    return true;
-}
-
 //-----------------------------------------------------------------------------------------------
 // Layer 2.5
 //-----------------------------------------------------------------------------------------------
@@ -392,85 +335,6 @@ bool Packet::decodeVlan(ByteString &vlanHeader)
 
     packetInfo.Layer2_5.push_back(std::move(vlan));
     return true;
-}
-
-// Parses and processes the LLDP header.
-bool Packet::decodeLldp(ByteString &lldpHeader)
-{
-    //std::cout << "lldp " << lldpHeader.toHex() << std::endl;
-    LldpHeader tempLlsp;
-
-//     size_t pos = 0;
-//     while (pos < lldpHeader.size())
-//     {
-// 
-//         LldpHeader::TLV tlv;
-// 
-//         ByteString sec = Functions::byteToBin(lldpHeader.substr(pos, 2));
-//         tlv.type = Functions::binToByte(sec.substr(0, 7), 1);
-//         tlv.length = Functions::binToByte(sec.substr(7, 9), 2);
-//         pos += 2;
-// 
-//         tlv.value = lldpHeader.substr(pos, tlv.length);
-//         pos += tlv;
-// 
-//         switch (tlv.type)
-//         {
-//         case 1:
-//             lldp.chassisID = tlv;
-//             break;
-//         case 2:
-//             lldp.portID = tlv;
-//             break;
-//         case 3:
-//             lldp.ttl = tlv;
-//             break;
-//         case 4:
-//             lldp.portDescription = tlv;
-//             break;
-//         case 5:
-//             lldp.systemName = tlv;
-//             break;
-//         case 6:
-//             lldp.systemDescription = tlv;
-//             break;
-//         case 7:
-//             lldp.systemCapabilities = tlv;
-//             break;
-//         case 8:
-//             lldp.managementAddress = tlv;
-//             break;
-//         case 127:
-//             lldp.organizationallySpecific = tlv;
-//             break;
-//         case 0:
-//             lldp.endOfLLDPDU = tlv;
-//             break;
-//         default:
-//             break;
-//         }
-//         if (tlv.type == 0)
-//         {
-//             break;
-//         }
-//     }
-
-//     if (print)
-//     {
-// 
-//         Logger::getInstance().info() << "LLDP Frame:" << std::endl;
-//         Logger::getInstance().info() << "Chassis ID: " << lldp->chassisID.value << std::endl;
-//         Logger::getInstance().info() << "Port ID: " << lldp->portID.value << std::endl;
-//         Logger::getInstance().info() << "TTL: " << lldp->ttl.value << std::endl;
-//         Logger::getInstance().info() << "Port Description: " << lldp->portDescription.value << std::endl;
-//         Logger::getInstance().info() << "System Name: " << lldp->systemName.value << std::endl;
-//         Logger::getInstance().info() << "System Description: " << lldp->systemDescription.value << std::endl;
-//         Logger::getInstance().info() << "System Capabilities: " << lldp->systemCapabilities.value << std::endl;
-//         Logger::getInstance().info() << "Management Address: " << lldp->managementAddress.value << std::endl;
-//         Logger::getInstance().info() << "Organizationally Specific: " << lldp->organizationallySpecific.value << std::endl;
-//         Logger::getInstance().info() << "End of LLDPDU" << std::endl;
-//     }
-    return false;
 }
 
 //-----------------------------------------------------------------------------------------------

@@ -28,43 +28,13 @@
 
 using json = nlohmann::json;
 
-/**
- * @struct Mode
- * @brief Represents various operational modes of the terminal with corresponding command-line prompts.
- */
-struct Mode 
+struct ModeConfig
 {
-    // Various modes and their corresponding command-line prompts.
-    std::string userExec = ">";                         ///< User EXEC mode prompt.
-    std::string privilegedExec = "#";                   ///< Privileged EXEC mode prompt.
-    std::string globalConfiguration = "(config)#";      ///< Global Configuration mode prompt.
-
-    // DHCP related prompts
-    std::string dhcpGlobalOptions = "(config-dhcp-global-options)#"; ///< DHCP Global Options Configuration mode prompt.
-
-    // Netflow related prompts
-    std::string flowExporter = "(config-flow-exporter)#";   ///< Flow Exporter Configuration mode prompt.
-    std::string flowMoniter = "(config-flow-moniter)#";     ///< Flow Monitor Configuration mode prompt.
-    std::string flowRecord = "(config-flow-record)#";       ///< Flow Record Configuration mode prompt.
-
-    // Interface-related prompts.
-    std::string interface = "(config-if)#";             ///< Interface configuration mode prompt
-
-    // Policy based routing
-    std::string classMap = "(config-cmap)#";            ///< Class Map mode prompt.
-    std::string dhcp = "(config-dhcp)#";                ///< DHCP Configuration mode prompt.
-    std::string extendedACL = "(config-ext-nacl)";      ///< Extended ACL Configuration mode prompt.
-    std::string standardACL = "(config-std-nacl)#";     ///< Standard ACL Configuration mode prompt.
-    std::string policyMap = "(config-pmap)#";           ///< Policy Map Configuration mode prompt.
-
-    // Routing protocol prompts
-    std::string routing = "(config-router)#";            ///< Routing Protocol Configuration mode prompt.
-    std::string routingV6 = "(config-rtr)#";             ///< Routing Protocol V6 Configuration mode prompt.
-
-    // Address Family prompts
-    std::string addressFamily = "(config-router-af)#"; ///< Address Family Configuration mode prompt.
-    std::string addressFamilyInterface = "(config-router-af-interface)#"; ///< Address Family Interface Configuration mode prompt.
-    std::string addressFamilyTopology = "(config-router-af-topology)#"; ///< Address Family Topology Configuration mode prompt.
+    std::string currentMode;            ///< Indicates the current operational mode.
+    nlohmann::ordered_json* configNode = nullptr;       ///< Pointer to the current configuration node.
+    std::vector<nlohmann::ordered_json*> modeHistory;   ///< History of configuration nodes for mode management
+    nlohmann::ordered_json* modeSchema = nullptr;       ///< Pointer to the current mode's schema
+    nlohmann::ordered_json* tempModeSchema = nullptr;   ///< Temporary pointer for schema operations.
 };
 
 /**
@@ -102,6 +72,8 @@ struct Com
     std::string name;   
     // Description of the communication object.
     std::string description; 
+    // Properties
+    std::vector<std::string> properties;
 };
 
 /**
@@ -274,12 +246,13 @@ public:
      *
      * @param oldCommand A vector of strings representing the previous command.
      * @param command A vector of strings representing the current command to save.
+     * @param modeConfig A struct with mode configs for session.
      * @param changeMode Boolean flag indicating whether the command triggers a mode change.
      * @param exitMode Boolean flag indicating whether the command triggers an exit from the current mode.
      * @param isList Boolean flag indicating if the command should be listed.
      * @return bool Indicating if the save was successful
      */
-    bool saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool isList); 
+    bool saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, ModeConfig& modeConfig, bool changeMode, bool exitMode, bool isList); 
 
      /**
      * @brief Inserts commands into the configuration tree in the correct order.
@@ -287,11 +260,12 @@ public:
      * Ensures that commands are inserted into the JSON configuration tree following the predefined schema order.
      *
      * @param parentNode Pointer to the parent JSON node where the command should be inserted.
+     * @param modeConfig A struct with mode configs for session.
      * @param mainCommand The main command string.
      * @param subCommand The sub-command string. Defaults to an empty string.
      * @param isListed Boolean flag indicating if the command is listed. Defaults to false.
      */
-    void insertOrdered(nlohmann::ordered_json* parentNode, const std::string& mainCommand, const std::string& subCommand = "", bool isListed = false);
+    void insertOrdered(nlohmann::ordered_json* parentNode, ModeConfig& modeConfig, const std::string& mainCommand, const std::string& subCommand = "", bool isListed = false);
 
     /**
      * @brief Saves the entire configuration to the startup file.
@@ -370,13 +344,6 @@ public:
     std::string getVolatileValueHelper(std::string& command, std::string& com);
 
     /**
-     * @brief Updates the global configuration history from the local history.
-     *
-     * Clears the previous global configuration and appends the current root node.
-     */
-    void historyToGlobal();
-
-    /**
      * @brief Sets the schema mode for setting configurations
      *
      * Sets the schema mode for setting configurations in order to pre-set the command order in the configurations file.
@@ -394,25 +361,15 @@ public:
 
     // Public member variables
     
-    Mode mode;                          ///< Contains various operationsl modes and their prompts.
-    std::string currentMode;            ///< Indicates the current operational mode.
-    std::string currentPrompt;          ///< Indicates the current prompt.
-    std::string prevMode;               ///< Stores the previous operational mode
-    std::string startupFileName{};      ///< Path to the startup configuration file
-
     static MacList macAddressList;             ///< Categorized list of MAC addresses by interface type.
     std::string OUI;                    ///< Organizationally Unique Identifier for MAC addresses.
-    bool configMode = true;             ///< Flag indicating if the terminal is in configuration mode.
+    std::string startupFileName{};      ///< Path to the startup configuration file
 
     nlohmann::ordered_json root;                        ///< Root of the JSON configuration tree.
-    nlohmann::ordered_json* configNode = &root;         ///< Pointer to the current configuration node.
 
     nlohmann::ordered_json configSchema;                ///< Schema defining the configuration structure
-    nlohmann::ordered_json* modeSchema;                 ///< Pointer to the current mode's schema
-    nlohmann::ordered_json* tempModeSchema;             ///< Temporary pointer for schema operations.
 
     std::vector<std::string> physicalInterfaces;        ///< List of physical interface names.
-    std::vector<nlohmann::ordered_json*> modeHistory;   ///< History of configuration nodes for mode management
 
     std::shared_ptr<IFileSystem> fileSystem; ///< File system interface.
 	
@@ -421,7 +378,6 @@ private:
     std::vector<std::string> volatileInputs{"WORD", "LINE", "A.B.C.D", "X:X:X:X::X", "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"}; ///< List of volatile input types
     std::vector<std::string> inputs{"ip", "subnet", "id", "value", "ipv6", "mac"}; ///< List of inputs parameter names.
 
-    nlohmann::ordered_json *prevConfig;     ///< Pointer to the previous configuration node
     std::vector<std::string> recover;       ///< List of commands recovered from the configuration.
 };
 

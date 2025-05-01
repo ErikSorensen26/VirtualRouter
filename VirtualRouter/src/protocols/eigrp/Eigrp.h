@@ -56,19 +56,28 @@ namespace EigrpConfigs
     };
 
     /**
+     * @struct OutgoingQuery
+     * @brief holds information on an active query.
+     */ 
+    struct OutgoingQuery
+    {
+        uint32_t sequenceNumber; ///< Sequence assigned for outgoing query.
+        uint32_t siaTimerId = 0; ///< ID of the SIA timer for this neighbor.
+        uint32_t retries = 0; ///< Number of SIA-Query retries if needed.
+        std::chrono::steady_clock::time_point lastSIARefreshTime; ///< Time of last SIA activity.
+    };
+
+    /**
      * @struct ActiveRoute
      * @brief holds information on an active route.
      */
     struct ActiveRoute
     {
-        std::vector<std::tuple<NeighborInfo*, ByteString, RoutingTable::Eigrp*>> feasibleRoutes;
-        uint32_t retryCount = 0;
-        RoutingTable::Eigrp* route;
-        uint32_t sequenceNumber;
-        ByteString originNeighbor;
-        std::unordered_set<ByteString> pendingReplies;
-        uint32_t siaTimerId;
-        bool retried;
+        RoutingTable::Eigrp* route; ///< The actual route.
+        ByteString originNeighbor; ///< Who started this query.
+        uint32_t sequenceNumber; /// < Sequence assigned when you flooded query.
+        std::unordered_map<ByteString, OutgoingQuery> pendingQueries; ///< Per-neighbor tracking
+        std::vector<std::tuple<NeighborInfo*, ByteString, RoutingTable::Eigrp*, bool>> feasibleRoutes;
     };
 
     /**
@@ -194,6 +203,7 @@ namespace EigrpConfigs
      */
     struct AuthKey
     {
+        std::atomic<bool> fullyEnabled = false; ///< Indicates if authentication is enabled.
         uint8_t keyId;              ///< Identifier for the authentication key.
         ByteString key;             ///< The authentication key.
         AuthType authType = AuthType::NONE; ///< Type of authentication.
@@ -276,6 +286,11 @@ namespace EigrpConfigs
     {
         ByteString ip;    ///< IP address of the network.
         ByteString mask;  ///< Subnet mask of the network.
+
+        bool operator==(const Network& other) const
+        {
+            return ip == other.ip && mask == other.mask;
+        }
     };
 
     /**
@@ -397,12 +412,6 @@ namespace EigrpConfigs
         // Synchronization
         std::shared_mutex neighborDataMutex; ///< Protects neighbor-specific data.
         std::condition_variable cv; ///< Condition variable for synchronization
-
-        // Authentication
-        uint8_t authKeyId = 1; ///< Authentication key ID.
-        ByteString authKey; ///< Authentication key.
-        std::atomic<bool> authenticationEnabled = false; ///< Indicates if authentication is enabled.
-        AuthType authType = AuthType::NONE; ///< Type of authentication.
 
         /**
          * @struct ReliablePacketInfo
@@ -561,10 +570,10 @@ namespace EigrpConfigs
         std::atomic<uint8_t> DSCP = 0; ///< Differentiated Services Code Point.
         std::atomic<uint8_t> interfaceMask; ///< Interface subnet mask.
         std::atomic<uint8_t> dampeningChange = 0; ///< Percent metric change needed for update.
-        std::atomic<uint16_t> dampeningInterval = 900; /// Interval the interface will check for changed routes.
+        std::atomic<uint16_t> dampeningInterval = 5; /// Interval the interface will check for changed routes.
         std::atomic<uint16_t> helloTime = 5; ///< Hello interval in seconds.
         std::atomic<uint16_t> holdTime = 15; ///< Hold time in seconds.
-        std::atomic<uint32_t> bandwidthPercentage; ///< Bandwidth percentage to use.
+        std::atomic<uint32_t> bandwidthPercentage = 50; ///< Bandwidth percentage to use.
         std::atomic<bool> splitHorizon = true; ///< Enable split horizon.
         std::atomic<bool> nextHopSelf = false; ///< Enable next hop self.
         std::atomic<bool> isPassive = false; ///< Enable passive mode.
@@ -596,9 +605,9 @@ namespace Protocol
     {
     public:
         friend class ::EigrpTest;
-        Eigrp* eigrpProcess; ///< Pointer to the EIGRP process.
 
-        EigrpConfigs::InterfaceConfigs configs; ///< Configuration settings for the interface.
+        Eigrp& eigrpProcess; ///< Pointer to the EIGRP process.
+        EigrpConfigs::InterfaceConfigs& configs; ///< Configuration settings for the interface.
 
         /**
          * @brief Constructs an EigrpInterface instance.
@@ -609,7 +618,7 @@ namespace Protocol
          * @param eigrpSystem Reference to the EIGRP process.
          * @param interface Shared pointer to the network interface.
          */
-        EigrpInterface(Eigrp& eigrpSystem, Interface* interface);
+        EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfigs* intConfigs, Interface* interface);
 
         /**
          * @brief Destructor for EigrpInterface.
@@ -718,8 +727,21 @@ namespace Protocol
          *
          * @param neighbor Pointer to the neighbor information.
          * @param receivedQuery Pointer to the received Query packet header.
+         * @param neighborIp IP of the neighbor that sent the query.
          */
         void processQuery(EigrpConfigs::NeighborInfo* neighbor, const EigrpHeader& receivedQuery, const ByteString& neighborIp);
+
+        /**
+         * @brief Processes an incoming SIAQuery packet from a neighbor
+         * 
+         * Handles the SIAQuery by checking the feasibility of the routes in question and immedietly
+         * responsing with appropriate Reply packets.Arp
+         * 
+         * @param neighbor Pointer to the neighbor information.
+         * @param receivedQuery Pointer to the received Query packet header.
+         * @param neighborIp IP of the neighbor that sent the query.
+         */
+        void processSIAQuery(EigrpConfigs::NeighborInfo* neighbor, const EigrpHeader& receivedQuery, const ByteString& neighborIp);
 
         /**
          * @brief Processes an incoming Reply packet from a neighbor.
@@ -732,6 +754,18 @@ namespace Protocol
          * @param recievedReply Pointer to the received Reply packet header.
          */
         void processReply(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, const EigrpHeader& recievedReply);
+
+        /**
+         * @brief Processes an incoming SIAReply packet from a neighbor.
+         *
+         * Updates the topology table based on the SIAReply, recalculates the best routes,
+         * and resolves any pending queries.
+         *
+         * @param neighbor Pointer to the neighbor information.
+         * @param neighborIp Reference to neighbors IP.
+         * @param recievedReply Pointer to the received Reply packet header.
+         */
+        void processSIAReply(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, const EigrpHeader& recievedReply);
 
         /**
          * @brief Sends an ACK to a neighbor.
@@ -767,8 +801,9 @@ namespace Protocol
          * @param neighbor Pointer to the neighbor information.
          * @param neighborIp Reference to neighbors IP address.
          * @param failedRoutes Routes that have failed and need to be queried.
+         * @return the sequence number for the query.
          */
-        virtual void sendQueryToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, std::vector<RoutingTable::Eigrp*> failedRoutes);
+        virtual uint32_t sendQueryToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, std::vector<RoutingTable::Eigrp*> failedRoutes);
 
         /**
          * @brief Sends a query to all connected neighbors
@@ -780,6 +815,18 @@ namespace Protocol
         void sendQueryToNeighbors(std::vector<RoutingTable::Eigrp*> failedRoutes);
 
         /**
+         * @brief Sends a SIAQuery packet to a specific neighbor.
+         *
+         * Directly queries a single neighbor about specific failed routes to ascertain their status
+         * and potential alternatives.
+         *
+         * @param neighbor Pointer to the neighbor information.
+         * @param neighborIp Reference to neighbors IP address.
+         * @param failedRoutes Routes that have failed and need to be queried.
+         */
+        void sendSIAQueryToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, std::vector<RoutingTable::Eigrp*> failedRoutes);
+
+        /**
          * @brief Sends a Reply packet to a neighbor in response to a Query.
          *
          * Responds to a neighbor's Query packet by providing detailed routing information about
@@ -789,9 +836,21 @@ namespace Protocol
          * @param neighborIp Reference to the neighbors IP.
          * @param queryRoutes Routes queried from the neighbor.
          * @param existingRoutes existing route to send to neighbor.
+         * @param querySequence Outgoing query configs.
+         */
+        virtual void sendReplyToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, std::vector<RoutingTable::Eigrp*> queryRoutes, std::vector<RoutingTable::Eigrp*> existingRoutes, uint32_t sequenceNumber);
+
+        /**
+         * @brief Sends a SIAReply packet to a neighbor in response to a Query.
+         *
+         * Responds to a neighbor's Query packet by providing detailed routing information about
+         * the requested routes.
+         *
+         * @param neighbor Pointer to the neighbor information.
+         * @param neighborIp Reference to the neighbors IP.
          * @param querySequence Query sequence number that the reply needs to match to.
          */
-        virtual void sendReplyToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, std::vector<RoutingTable::Eigrp*> queryRoutes, std::vector<RoutingTable::Eigrp*> existingRoutes, uint32_t querySequence);
+        void sendSIAReplyToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, uint32_t querySequence);
 
         /**
          * @brief Checks if a timeout has occurred for missing packets.
@@ -818,17 +877,6 @@ namespace Protocol
          * @return Maximum number of routes per packet.
          */
         size_t calculateMaxRoutesPerPacket(AddressFamily af, bool isExernal);
-
-        /**
-         * @brief Encodes a Query option for a specific route.
-         *
-         * Serializes the Query option for a given route into a ByteString suitable for
-         * inclusion in an EIGRP packet.
-         *
-         * @param route Route information.
-         * @return Encoded Query option as ByteString.
-         */
-        ByteString encodeQueryOption(RoutingTable::Eigrp* route);
 
         /**
          * @brief Encodes a Route option for a specific route.
@@ -904,8 +952,9 @@ namespace Protocol
          * @param neighborIp Reference to neighbor's IP address.
          * @param routes Vector of received routes.
          * @param init Indicates if the update is part of initialization.
+         * @param remove Indicates if routes are being removed.
          */
-        void updateRoutingTable(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, const std::vector<RoutingTable::Eigrp*>& routes);
+        void updateRoutingTable(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, const std::vector<RoutingTable::Eigrp*>& routes, const std::vector<RoutingTable::Eigrp*>& removedRoutes = {});
 
         /**
          * @brief Updates the routing table for a specific destination.
@@ -1190,8 +1239,9 @@ namespace Protocol
          * configured timeframe.
          *
          * @param route Failed route information.
+         * @returns the timer ID.
          */
-        void startSIATimer(RoutingTable::Eigrp* route); 
+        uint32_t startSIATimer(RoutingTable::Eigrp* route, const ByteString& neighborIp, EigrpConfigs::OutgoingQuery& outgoing);
 
         /**
          * @brief Handles a query resend when the SIA time runs out.
@@ -1199,7 +1249,7 @@ namespace Protocol
          * @param route Route that is in transitioning to Stuck-In-Active
          * @param queryKey Key corresponding to the query information.
          */
-        void handleSIATimeout(RoutingTable::Eigrp* route, const ByteString& queryId);
+        void handleSIATimeout(RoutingTable::Eigrp* route, const ByteString& neighborIp);
 
         /**
          * @brief Handles the expiration of an Active timer for a failed route.
@@ -1231,17 +1281,6 @@ namespace Protocol
          * @param mask Subnet mask of the destination.
          */
         void cancelActiveTimer(const ByteString &destination, uint8_t mask);
-
-        /**
-         * @brief Cancels an SIA timer for a specific route.
-         *
-         * Stops and removes the SIA timer associated with the specified route,
-         * preventing further timeout actions for that route.
-         *
-         * @param destination Destination network.
-         * @param mask Subnet mask of the destination.
-         */
-        void cancelSIATimer(const ByteString &destination, uint8_t mask);
 
         /**
          * @brief Starts a Hold timer for a specific neighbor.
@@ -1339,10 +1378,9 @@ namespace Protocol
         inline ByteString getInterfaceIp();
 
         // Authentication
-        bool isNeighborAuthenticated(EigrpConfigs::NeighborInfo* neighbor);
-        void configureAuthentication(EigrpConfigs::NeighborInfo* neighbor, uint8_t keyId, const ByteString& key, bool enable);
+        void configureAuthentication(uint8_t* keyId = nullptr, const ByteString* key = nullptr, EigrpConfigs::AuthType* type = nullptr, bool enable = false);
         ByteString serializeEigrpHeader(const EigrpHeader& eigrp, bool exclusiveAuthTLV);
-        virtual EigrpHeader::Option generateAuthenticatedTLV(const EigrpHeader& eigrp, EigrpConfigs::NeighborInfo* neighbor);
+        virtual EigrpHeader::Option generateAuthenticatedTLV(const EigrpHeader& eigrp);
         
         Interface* currentInterface; ///< Pointer to the current network interface.
         IpInfo* currentInterfaceInfo; ///< Pointer to the current interface's IP information.
@@ -1369,6 +1407,7 @@ namespace Protocol
         // Route Buffer
         std::mutex bufferMutex;
         std::vector<RoutingTable::Eigrp*> routeBuffer = {}; ///< Buffer for routing updates.
+        std::vector<RoutingTable::Eigrp*> withdrawnBuffer = {}; ///< Buffer for removing routes.
 
         // Mutexes
         std::mutex helloTimerMutex; ///< Mutex for Hello timer operations.
@@ -1774,6 +1813,7 @@ namespace Protocol
 
         // Lists
         std::unordered_map<std::pair<InterfaceType, float>, EigrpInterface*, InterfacePairHash> eigrpInterfaceList{}; ///< Map of EIGRP interfaces by identifier.
+        std::unordered_map<std::pair<InterfaceType, float>, EigrpConfigs::InterfaceConfigs*, InterfacePairHash> eigrpInterfaceConfigList{}; ///< Map of EIGRP interface config by identifier.
 
         // Eigrp data mutex
         std::shared_mutex eigrpDataMutex; ///< Mutex for synchronizing access to EIGRP data structures.
@@ -1795,7 +1835,6 @@ namespace Protocol
          *
          * Returns the Router ID configured for the EIGRP process, serving as a unique
          * identifier within the EIGRP routing domain.
-         *
          * @return ByteString representing the Router ID.
          */
         inline ByteString getRouterID() { std::shared_lock<std::shared_mutex> lock(eigrpDataMutex); return routerID.ID; }
@@ -1813,6 +1852,8 @@ namespace Protocol
         const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
         const uint32_t asNumber; ///< Autonomous System number.
         std::shared_mutex interfaceMutex;
+        std::unordered_map<ByteString, EigrpConfigs::NeighborInfo*> allNeighbors;
+        std::mutex neighborMutex;
 
     private:
         ByteString virtualRouterID = ByteString(2, '\x00'); ///< Virtual Router ID.
@@ -1976,6 +2017,7 @@ namespace Protocol
             bool isFeasibleSuccessor; ///< Indicates if this route is a feasible successor.
             bool notFeasible; ///< Indicates if this route is feasible or not.
             std::chrono::steady_clock::time_point lastUpdate; ///< Timestamp of the last update.
+            ByteString routeType;
         };
 
         /**
@@ -2013,9 +2055,11 @@ namespace Protocol
         /**
          * @brief gathers all of the best routes in the routing table
          *
-         * @return Returns a vector of all successors
+         * @param network Network that you want successors for.
+         * @param mask Prefix length for the network you want successors for.
+         * @return Returns a vector of all successors for a specific route.
          */
-        std::vector<RoutingTable::Eigrp*> getSuccessorsForRoutingTable();
+        std::vector<RoutingTable::Eigrp*> getSuccessorsForRoute(const ByteString& network, uint8_t mask);
 
         /**
          * @brief Adds or updates a route in the topology table.
@@ -2048,11 +2092,11 @@ namespace Protocol
          * variance setting to allow unequal-cost load balancing, and identifies the
          * optimal route based on feasible distance and other metrics.
          *
-         * @param destination Destination network.
-         * @param variance Variance factor for route selection.
+         * @param prefix Destination prefix.
+         * @param mask Mask of prefix.
          * @return Optional RouteInfo if a best route is found.
          */
-        std::optional<RouteInfo> findBestRoute(const ByteString& destination, uint8_t variance);
+        std::optional<RouteInfo> findBestRoute(const ByteString& prefix, uint8_t mask);
 
         /**
          * @brief Updates successors and feasible successors for a topology entry.
@@ -2070,10 +2114,11 @@ namespace Protocol
          * Searches for and returns the topology entry associated with the given destination
          * network, facilitating detailed route inspections and modifications.
          *
-         * @param destination Destination network.
+         * @param prefix Destination prefix.
+         * @param mask Mask of prefix.
          * @return Shared pointer to the TopologyEntry or nullptr if not found.
          */
-        TopologyEntry* getEntryForRoute(const ByteString& destination);
+        TopologyEntry* getEntryForRoute(const ByteString& prefix, uint8_t mask);
 
         /**
          * @brief Handles the failure of a route by removing it from the topology table.
@@ -2081,10 +2126,11 @@ namespace Protocol
          * Removes the specified route from the topology table due to neighbor failure,
          * triggering route recalculations and potential advertisements to other neighbors.
          *
-         * @param destination Destination network.
+         * @param prefix Destination prefix.
+         * @param mask Mask of prefix.
          * @param failedNeighborIp IP address of the failed neighbor.
          */
-        void handleRouteFailure(const ByteString& destination, const ByteString& failedNeighborIp);
+        void handleRouteFailure(const ByteString& prefix, uint8_t mask, const ByteString& failedNeighborIp);
 
         /**
          * @brief Marks a route as passive, disabling further updates.
@@ -2092,20 +2138,22 @@ namespace Protocol
          * Sets the specified route to a passive state, preventing it from being updated
          * or advertised further, often used during route maintenance or controlled shutdowns.
          *
-         * @param destination Destination network.
+         * @param prefix Destination prefix.
+         * @param mask Mask of prefix.
          * @param eigrp Pointer to the EIGRP interface.
          */
-        void markRouteAsPassive(const ByteString& destination, EigrpInterface* eigrp);
+        void markRouteAsPassive(const ByteString& prefix, uint8_t mask, EigrpInterface* eigrp);
 
         /**
-         * @brief Removes a topology entry for a specific destination.
+         * @brief Removes a route from a specific neighbor for a specific destination.
          *
          * Deletes the entire topology entry for the given destination network,
          * effectively removing all associated routing information.
          *
-         * @param destination Destination network.
+         * @param prefix Destination prefix.
+         * @param mask Mask of prefix.
          */
-        void removeEntry(const ByteString& destination);
+        bool removeRoute(const ByteString& prefix, uint8_t mask, const ByteString& neighbor);
 
         /**
          * @brief Prunes stale routes that have not been updated within the threshold.
@@ -2143,6 +2191,12 @@ namespace Protocol
         std::unordered_map<ByteString, TopologyEntry*> topologyEntries; ///< Map of destination networks to their topology entries.
         Eigrp* eigrpProcess; ///< Shared pointer to the EIGRP process.
     };
+}
+
+inline bool isFeasibleSuccessor(RoutingTable::Eigrp* candidate, RoutingTable::Eigrp* currentSuccessor)
+{
+    if (!currentSuccessor) return true;
+    return candidate->reportedDistance < currentSuccessor->feasibleDistance;
 }
 
 /**

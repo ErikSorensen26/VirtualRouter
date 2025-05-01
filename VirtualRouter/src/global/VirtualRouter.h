@@ -13,7 +13,7 @@ class Interface;
 namespace Protocol
 {
     class EigrpAutonomousSystem;
-    class EigrpNamed;
+    struct EigrpNamed;
 }
 
 enum class InterfaceType;
@@ -27,6 +27,7 @@ public:
     ~VirtualRouter();
 
     RoutingTable routingTable; ///< VRF RoutingTable
+    std::unordered_set<AddressFamily> enabledAddressFamilies;
 
     // Interface management
     Interface* addInterface(Interface* interface, InterfaceType type, float interfaceID);

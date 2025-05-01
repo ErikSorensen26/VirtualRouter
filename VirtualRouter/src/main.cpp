@@ -1,15 +1,17 @@
-#include <Terminal.h>
+#include <CliEngine.h>
+#include <CliSession.h>
 #include <Logger.h>
 
 int main() 
 {
     Logger::getInstance().initialize(true, /*isolateMode*/false);
 
-    Terminal* terminal = new Terminal(false);
+    CliEngine* engine = new CliEngine();
+    auto session = engine->createSession(false);
     while (true) {
-        terminal->handleInput();
+        session->handleInput();
     }
-    delete terminal;
+    delete engine;
     std::string bin;
     std::cin >> bin;
     return 0;

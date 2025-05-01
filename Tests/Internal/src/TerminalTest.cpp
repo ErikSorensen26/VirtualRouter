@@ -2,6 +2,7 @@
 #include <Terminal.h>
 #include <MockConsole.hpp>
 #include <MockFileSystem.hpp>
+#include <CommandProcessor.h>
 
 using json = nlohmann::json;
 
@@ -27,14 +28,14 @@ protected:
     // Terminal instance
     std::unique_ptr<Terminal> terminal;
 
-    void SetUp() override
+    void SetUp() override 
     {
         // Create the terminal instance with nexessary dependencies
         mockConsole = std::make_shared<testing::NiceMock<ReducedMockConsole>>();
         
         terminal = std::make_unique<Terminal>(mockConsole, mockFileSystem);
         Global::getInstance().resetDefault();
-        terminal->currentVrf = Global::getInstance().getRoutingInstance("default");
+        terminal->commandProcessor->currentVrf = Global::getInstance().getRoutingInstance("default");
         terminal->initTerminal();
         terminal->changeMode(terminal->mode.globalConfiguration);
         terminal->paginationCount = 0;

@@ -13,6 +13,7 @@
 
 class Interface;
 class VirtualRouter;
+enum class AddressFamily;
 namespace Protocol
 {
     class DhcpServer;
@@ -90,7 +91,7 @@ public:
 
     // Routing Instances
     VirtualRouter* addRoutingInstance(const std::string& name);
-    VirtualRouter* getRoutingInstance(const std::string& name);
+    VirtualRouter* getRoutingInstance(const std::string& name, AddressFamily = AddressFamily::NONE);
     bool removeRoutingInstance(const std::string& name);
     
     // DHCP

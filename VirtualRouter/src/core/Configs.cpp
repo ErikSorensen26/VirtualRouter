@@ -1,6 +1,7 @@
 #include <Configs.h>
 #include <iostream>
 #include <Logger.h>
+#include "Mode.hpp"
 
 MacList Configs::macAddressList = MacList();
 
@@ -10,20 +11,18 @@ void Configs::printConfig()
     //std::cout << root.dump(4) << std::endl;
 }
 
-Configs::Configs(std::shared_ptr<IFileSystem> fs) : configNode(&root), fileSystem(fs) {}
+Configs::Configs(std::shared_ptr<IFileSystem> fs) : fileSystem(fs) {}
 
 void Configs::initConfigs(const std::string& filePath) 
 {
     // Reset all variables before
     root.clear();
-    configNode->clear();
     physicalInterfaces.clear();
     macAddressList.clear();
 
     if (configSchema.is_null() || !configSchema.is_object())
     {
         configSchema = nlohmann::ordered_json::object();
-        modeSchema = &configSchema;
     }
 
     startupFileName = filePath;
@@ -49,10 +48,6 @@ void Configs::initConfigs(const std::string& filePath)
         root = nlohmann::ordered_json::object();
     }
     
-    // Get the root node of the JSON configuration
-    configNode = &root;
-    modeHistory.push_back(configNode);
-
     // Load JSON data for interface configurations
     json configJson;
     if (fileSystem->fileExists(CONFIG_FILE))
@@ -271,13 +266,20 @@ bool Configs::saveConfig()
     return false;
 }
 
-bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool changeMode, bool exitMode, bool isListed)
+bool Configs::saveCommand(
+    std::vector<std::string>& oldCommand,
+    std::vector<std::string>& command,
+    ModeConfig& modeConfig,
+    bool changeMode,
+    bool exitMode,
+    bool isListed
+)
 {
-    if (currentMode == mode.userExec || currentMode == mode.privilegedExec) return false;
+    if (modeConfig.currentMode == Mode::userExec || modeConfig.currentMode == Mode::privilegedExec) return false;
     
     if (oldCommand.empty() || command.empty()) return false;
 
-    nlohmann::ordered_json* currentNode = &(*configNode);
+    nlohmann::ordered_json* currentNode = &(*modeConfig.configNode);
 
     // Indicates of the subCommand is the first command
     bool firstIsSub = false;
@@ -295,7 +297,7 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
         // Main command
         if (!currentNode->contains(subCommand))
         {
-            insertOrdered(currentNode, subCommand);
+            insertOrdered(currentNode, modeConfig, subCommand);
             
             (*currentNode)[subCommand] = (isListed ? json::array() : json::object());
         }
@@ -312,7 +314,7 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
         if (!currentNode->contains(mainCommand))
         {
             {
-                insertOrdered(currentNode, mainCommand);
+                insertOrdered(currentNode, modeConfig, mainCommand);
             }
         }
         if (currentNode)
@@ -326,7 +328,7 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
         {
             if (!currentNode->contains(subCommand))
             {
-                insertOrdered(currentNode, mainCommand, subCommand, isListed);
+                insertOrdered(currentNode, modeConfig, mainCommand, subCommand, isListed);
             }
         }
         currentNode = &((*currentNode)[subCommand]);
@@ -419,7 +421,7 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
                     match = true;
                     if (changeMode)
                     {
-                        configNode = &obj;
+                        modeConfig.configNode = &obj;
                     }
                     break;
                 }
@@ -431,7 +433,7 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
                 currentNode->push_back(newConfig);
                 if (changeMode)
                 {
-                    configNode = &((*currentNode)[currentNode->size() - 1]);
+                    modeConfig.configNode = &((*currentNode)[currentNode->size() - 1]);
                 }
             }
 
@@ -441,7 +443,7 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
             *currentNode = newConfig;
             if (changeMode)
             {
-                configNode = currentNode;
+                modeConfig.configNode = currentNode;
             }
         }
         printConfig();
@@ -454,38 +456,38 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
         {
             if (!isVolatile(oldCommand[i]))
             {
-                if (configNode)
+                if (modeConfig.configNode)
                 {
-                    configNode = &((*configNode)[command[i]]);
+                    modeConfig.configNode = &((*modeConfig.configNode)[command[i]]);
                 }
             }
         }
-        if (!configNode->contains(MODE_KEY))
+        if (!modeConfig.configNode->contains(MODE_KEY))
         {
-            (*configNode)[MODE_KEY] = nlohmann::ordered_json::object();
+            (*modeConfig.configNode)[MODE_KEY] = nlohmann::ordered_json::object();
         }
-        configNode = &((*configNode)[MODE_KEY]);
-        modeHistory.push_back(configNode);
+        modeConfig.configNode = &((*modeConfig.configNode)[MODE_KEY]);
+        modeConfig.modeHistory.push_back(modeConfig.configNode);
     }
     else if (exitMode)
     {
-        if (!modeHistory.empty())
+        if (!modeConfig.modeHistory.empty())
         {
-            modeHistory.pop_back();
-            if (!modeHistory.empty())
+            modeConfig.modeHistory.pop_back();
+            if (!modeConfig.modeHistory.empty())
             {
-                configNode = &(*(modeHistory[modeHistory.size() - 1]));
+                modeConfig.configNode = &(*(modeConfig.modeHistory[modeConfig.modeHistory.size() - 1]));
             }
             else
             {
                 Logger::getInstance().warn() << "Mode history empty after pop_back. Resetting to root." << std::endl;
-                configNode = &root;
+                modeConfig.configNode = &root;
             }
         }
         else
         {
             Logger::getInstance().error() << "Mode history is already empty during exitMode." << std::endl;
-            configNode = &root;
+            modeConfig.configNode = &root;
         }
     }
     printConfig();
@@ -493,18 +495,18 @@ bool Configs::saveCommand(std::vector<std::string>& oldCommand, std::vector<std:
     return true;
 }
     
-void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::string& mainCommand, const std::string& subCommand, bool isListed)
+void Configs::insertOrdered(nlohmann::ordered_json* parentNode, ModeConfig& modeConfig, const std::string& mainCommand, const std::string& subCommand, bool isListed)
 {
     // Handle main command
     if (!mainCommand.empty() && subCommand.empty())
     {
-        if (!modeSchema->contains(mainCommand))
+        if (!modeConfig.modeSchema || !modeConfig.modeSchema->contains(mainCommand))
         {
             return;
         }
 
         // Insert the main command in order
-        const auto& orderArray = *modeSchema; // Top-level order for main commands
+        const auto& orderArray = *modeConfig.modeSchema; // Top-level order for main commands
         nlohmann::ordered_json tempNode = *parentNode;
         parentNode->clear();
 
@@ -531,12 +533,12 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, const std::strin
     // Handle SubCommands
     if (!mainCommand.empty() && !subCommand.empty())
     {
-        if (!modeSchema->contains(mainCommand))
+        if (!modeConfig.modeSchema || !modeConfig.modeSchema->contains(mainCommand))
         {
             return;
         }
 
-        const auto& subCommands = (*modeSchema)[mainCommand];
+        const auto& subCommands = (*modeConfig.modeSchema)[mainCommand];
 
         if (!subCommands.is_array())
         {
@@ -574,18 +576,8 @@ void Configs::deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>
 {
 }
 
-bool Configs::isVolatile(const std::string& command) 
+bool Configs::isVolatile(const std::string& command)
 {
-    // Check if the root node's name is "config" to set configMode flag
-    if (configNode && * configNode == root) 
-    {
-        configMode = true;
-    } 
-    else 
-    {
-        configMode = false;
-    }
-    
     // Check if the command matches any in the volatile inputs list
     for (const std::string& str : volatileInputs) 
     {
@@ -741,13 +733,4 @@ std::string Configs::getVolatileValueHelper(std::string& command, std::string& c
     }
     
     return ""; // Return empty string for unknown commands
-}
-
-void Configs::historyToGlobal() 
-{
-    prevConfig = configNode; 
-    modeHistory.clear();
-    modeHistory.push_back(&root); 
-    configNode = &root;
-
 }

@@ -61,16 +61,6 @@ void ProcessPacket::processEthernet(const EthernetHeader& eth)
     macAddress = eth.sourceMac.toString();
 }
 
-void ProcessPacket::processPpp(const PppHeader& ppp)
-{
-    if (print) { Logger::getInstance().info() << "THIS IS PPP" << std::endl; } 
-}
-
-void ProcessPacket::processFrame(const FrameHeader& frame)
-{
-    if (print) { Logger::getInstance().info() << "THIS IS FRAME" << std::endl; }
-}
-
 //------------------------------------------------------------------------------------
 // Layer 2.5
 //------------------------------------------------------------------------------------
@@ -98,11 +88,6 @@ void ProcessPacket::processMpls(const MplsHeader& mpls)
 void ProcessPacket::processVlan(const VlanHeader& vlan)
 {
     if (print) { Logger::getInstance().info() << "THIS IS VLAN" << std::endl; }
-}
-
-void ProcessPacket::processLldp(const LldpHeader& lldp)
-{
-    if (print) { Logger::getInstance().info() << "THIS IS LLDP" << std::endl; } 
 }
 
 //------------------------------------------------------------------------------------

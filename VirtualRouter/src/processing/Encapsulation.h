@@ -32,8 +32,8 @@ std::optional<ByteString> encapsulate(PacketInfo& packet, ByteString encapsulate
 enum class HeaderType
 {
     // Headers
-    Ethernet, Ppp, Frame,
-    Arp, Mpls, Vlan, Lldp,
+    Ethernet,
+    Arp, Mpls, Vlan,
     IPv4, IPv6, Gre, Ah, Esp, Icmp, Icmpv6, Igmp,
     Tcp, Udp, Eigrp,
     Dhcp, Dhcpv6, Dhcpv6Relay,
@@ -44,13 +44,10 @@ enum class HeaderType
 
 // Maps the header to HeaderType (Can be used for indexing headers)
 inline HeaderType mapHeaderToEnum(const EthernetHeader&) { return HeaderType::Ethernet; }
-inline HeaderType mapHeaderToEnum(const PppHeader&) { return HeaderType::Ppp; }
-inline HeaderType mapHeaderToEnum(const FrameHeader&) { return HeaderType::Frame; }
 
 inline HeaderType mapHeaderToEnum(const ArpHeader&) { return HeaderType::Arp; }
 inline HeaderType mapHeaderToEnum(const MplsHeader&) { return HeaderType::Mpls; }
 inline HeaderType mapHeaderToEnum(const VlanHeader&) { return HeaderType::Vlan; }
-inline HeaderType mapHeaderToEnum(const LldpHeader&) { return HeaderType::Lldp; }
 
 inline HeaderType mapHeaderToEnum(const IPv4Header&) { return HeaderType::IPv4; }
 inline HeaderType mapHeaderToEnum(const IPv6Header&) { return HeaderType::IPv6; }

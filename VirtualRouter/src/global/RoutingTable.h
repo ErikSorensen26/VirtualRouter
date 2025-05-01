@@ -19,6 +19,7 @@
  */
 enum class AddressFamily 
 {
+    NONE,   ///< NONE, optional default value.
     IPv4,   ///< IPv4 address family.
     IPv6    ///< IPv6 address family.
 };

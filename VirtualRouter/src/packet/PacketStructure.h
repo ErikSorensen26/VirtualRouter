@@ -505,6 +505,8 @@ namespace Variable
             inline const ByteString query("\x03", 1);    ///< EIGRP Query message type.
             inline const ByteString reply("\x04", 1);    ///< EIGRP Reply message type.
             inline const ByteString hello("\x05", 1);    ///< EIGRP Hello message type.
+            inline const ByteString siaQuery("\xa0", 1); ///< Eigrp SIAQuery message type.
+            inline const ByteString siaReply("\xa1", 1); ///< Eigrp SIAReply message type
         }
 
         /**

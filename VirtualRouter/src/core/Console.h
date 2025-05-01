@@ -193,7 +193,7 @@ public:
  * The Console class inherits from the Configs class and provides functionalities
  * for managing user input, cursor movements, and command history within the terminal.
  */
-class Console : public Configs 
+class Console
 {
 private:
     friend class ConsoleTest;
@@ -214,16 +214,6 @@ public:
      * @param term Terminal deciding whether it's simulated or not
      */
     explicit Console(std::shared_ptr<IConsole> term);
-
-    /**
-     * @brief Constructor for the Console class.
-     *
-     * Initializes the Console object of invoking the Configs constructor
-     *
-     * @param term Terminal deciding whether it's simulated or not
-     * @param fs File system deciding whether it's simulated or not
-     */
-    explicit Console(std::shared_ptr<IConsole> term, std::shared_ptr<IFileSystem> fs);
 
     /**
      * @brief Destructor for the Console class

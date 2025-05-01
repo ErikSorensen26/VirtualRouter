@@ -437,6 +437,3 @@ void Interface::stateChangeV6(StateChange state)
         }
     }
 }
-
-// Initialize the shared pointer to the current Interface
-Interface* currentInterface;

@@ -285,24 +285,6 @@ protected:
     bool decodeGre(ByteString &greHeader);
 
     /**
-     * @brief Parses and processes the PPP header.
-     *
-     * @param pppHeader The ByteString representation of the PPP header.
-     *
-     * @return bool Indicating whether decode was successful.
-     */
-    bool decodePpp(ByteString &pppHeader);
-
-    /**
-     * @brief Parses and processes the Frame Relay header.
-     *
-     * @param frameHeader The ByteString representation of the Frame Relay header.
-     *
-     * @return bool Indicating whether decode was successful.
-     */
-    bool decodeFrame(ByteString &frameHeader);
-
-    /**
      * @brief Parses and processes the AH header.
      *
      * @param ahHeader The ByteString representation of the AH header.
@@ -329,15 +311,6 @@ protected:
      * @return bool Indicating whether decode was successful.
      */
     bool decodeVlan(ByteString &vlanHeader);
-
-    /**
-     * @brief Parses and processes the LLDP header.
-     *
-     * @param lldpHeader The ByteString representation of the LLDP header.
-     *
-     * @return bool Indicating whether decode was successful.
-     */
-    bool decodeLldp(ByteString &lldpHeader);
 
     /**
      * @brief Parses and processes the DHCP header.

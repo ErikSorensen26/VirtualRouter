@@ -53,10 +53,13 @@ VirtualRouter* Global::addRoutingInstance(const std::string& name)
     return routingInstances[name];
 }
 
-VirtualRouter* Global::getRoutingInstance(const std::string& name)
+VirtualRouter* Global::getRoutingInstance(const std::string& name, AddressFamily ad)
 {
     std::lock_guard<std::mutex> lock(routingInstanceMutex);
-    if (routingInstances.find(name) != routingInstances.end())
+    if (routingInstances.find(name) != routingInstances.end() && 
+        ad != AddressFamily::NONE 
+        ? routingInstances[name]->enabledAddressFamilies.contains(ad)
+        : true)
     {
         return routingInstances[name];
     }

@@ -233,6 +233,8 @@ namespace Protocol
 
         Dhcp::GlobalConfigs vrfConfigs;
 
+        std::unordered_map<std::string, Dhcp::DhcpNetworkConfig*> poolConfigs;
+
     private:
 
         std::map<Dhcp::TimerType, std::vector<Dhcp::TrackedTimer>> activeTimers;

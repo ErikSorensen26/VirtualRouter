@@ -7,6 +7,11 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <unordered_set>
+#include <chrono>
+
+auto lastBackupTime = std::chrono::steady_clock::now();
+const std::chrono::minutes backup(1);
 
 using json = nlohmann::json;
 
@@ -28,6 +33,145 @@ auto trim ([](const std::string& str) -> std::string
     size_t last = filteredString.find_last_not_of(" \t\n\r");
     return filteredString.substr(first, last - first + 1);
 });
+
+std::vector<std::pair<std::string, std::vector<std::string>>> presets{
+    {"<interface>", {"GigabitEthernet", "LISP", "Ethernet"}},
+    {"<cef>", {"IPv4-to-MPLS", "IPv6-to-MPLS", "MPLS-end-of-stack", "MPLS-non-end-of-stack"}},
+    {"<dscp>", {"af11", "cs2", "af12", "cs3", "cs5"}},
+    {"<ntp>", {"burst", "iburst", "key", "prefer", "minpoll", "version"}},
+    {"<traps>", {"bfd", "eigrp", "aaa_server", "config", "channel", "pfr", "ip", "isis", "pim"}},
+    {"<file-protocols>", {"ftp", "rcp", "scp", "sftp", "tftp"}},
+    {"<snmp-groups>", {"access", "context", "notify", "read", "write"}},
+    {"<monitor-pwoam>", {"detail", "error", "event", "exact-match"}},
+    {"<monitor-l2vpn>", {"bfd", "detail", "error", "event"}},
+};
+
+void updatePrefix(const std::string& prefix, std::string& next, bool& isLine)
+{
+    if (next == "A.B.C.D")
+    {
+        next = "1.1.1.1";
+    }
+    else if (next == "X:X:X:X::X")
+    {
+        next = "fe80::1";
+    }
+    else if (next == "X:X:X:X::X/<0-128>")
+    {
+        next = "fe80::1/64";
+    }
+    else if ( next == "H.H.H")
+    {
+        next = "11:22:33:44:55:66";
+    }
+    else if (next[0] == '<' && Functions::isDecimal(std::string(1, next[1])))
+    {
+        size_t start = next.find('<');
+        size_t dash = next.find('-');
+
+        if (start != std::string::npos && dash != std::string::npos)
+        {
+            next = next.substr(start + 1, dash - start - 1);
+        }
+    }
+    else if (next[0] == '<' && next[1] == '-' && Functions::isDecimal(std::string(1, next[2])))
+    {
+        size_t start = next.find('<');
+        size_t dash = next.substr(2).find('-') + 2;
+
+        if (start != std::string::npos && dash != std::string::npos)
+        {
+            next = next.substr(start + 1, dash - start - 1);
+        }
+    }
+    else if (next == "N-N.H")
+    {
+        next = "10-10.0";
+    }
+    else if (next == "N.H")
+    {
+        next = "10.1";
+    }
+    else if (next == "Start-End")
+    {
+        next = "10-1";
+    }
+    else if (next == "LINE")
+    {
+        isLine = true;
+    }
+    else if (next == ":Host or :A.B.C.D")
+    {
+        next = ":1.1.1.1";
+    }
+    else if (next == "hh:mm")
+    {
+        next = "14:30";
+    }
+    else if (next == "hh:mm:ss")
+    {
+        next = "14:30:10";
+    }
+    else if (next == "DAY")
+    {
+        next = "monday";
+    }
+    else if (next == "MONTH")
+    {
+        next = "jan";
+    }
+    else if (next == "N")
+    {
+        next = "10";
+    }
+    else if (next == "Hex-string")
+    {
+        next = "ff";
+    }
+    else if (next == "X.121 Addr")
+    {
+        next = "2";
+    }
+    else if (next == "OUI:VPN-Index")
+    {
+        next = "111111:111111";
+    }
+    else if (next == "H.H...")
+    {
+        next = "1111.1111.1111";
+    }
+    else if (next == "XX.XXXX. ... .XXX.XX")
+    {
+        next = "1.1";
+    }
+    else if (next == "<cr>")
+    {
+        isLine = true;
+    }
+    else if (next.find("A.B.C.D") != std::string::npos)
+    {
+        next = "1.1.1.1";
+    }
+    else if (next.find("X:X:X:X") != std::string::npos)
+    {
+        next = "1::1";
+    }
+
+    if (prefix == "dspu" || prefix == "dlsw" || prefix == "privilege" || prefix == "logging" || prefix == "no" || prefix == "translate" || prefix == "username" || prefix == "access-list" || prefix == "alias" || prefix == "crypto" || prefix == "default" || next == "access-list" || next == "community-list" || next == "extcommunity-list" || prefix == "ip host" || prefix == "ip name-server" || prefix == "ip sla" || prefix == "do-exec" || next == "range")
+    {
+        isLine = true;
+    }
+
+    if (prefix == "clear" || prefix == "debug" || prefix == "show")
+    {
+        isLine = true;
+    }
+
+    if (prefix == "access-expression" || prefix == "apollo" || prefix == "appletalk" || prefix == "backup" || prefix == "bridge-group" || prefix == "clns" || prefix == "cmns" || prefix == "decnet" || prefix == "dspu" || prefix == "fras" || prefix == "iso-igrp" || prefix == "lat" || prefix == "llc2" || prefix == "mop" || prefix == "netbios" || prefix == "sap-priority" || prefix == "smrp" || prefix == "sna" || prefix == "tarp" || prefix == "vines" || prefix == "vpdn" || prefix == "ctunnel" || prefix == "media" || prefix == "media-type" || prefix == "location" || prefix == "snapshot" || prefix == "source" || prefix == "topology" || prefix == "transmit-interface" || prefix == "tx-ring-limit" || prefix == "vnet" || prefix == "xconnect" || prefix == "history" || prefix == "ip dhcp" || prefix == "ip security" || prefix == "rate-limit")
+    {
+        isLine = true;
+    }
+}
 
 // Utility: Split a string into lines.
 std::vector<std::string> splitLines(const std::string& input) {
@@ -137,17 +281,6 @@ json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth =
     // Parse the response into lines.
     std::vector<std::string> lines = splitLines(response);
     json commands = json::array();
-    std::vector<std::pair<std::string, std::vector<std::string>>> presets{
-        {"<interface>", {"GigabitEthernet", "LISP", "Ethernet"}},
-        {"<cef>", {"IPv4-to-MPLS", "IPv6-to-MPLS", "MPLS-end-of-stack", "MPLS-non-end-of-stack"}},
-        {"<dscp>", {"af11", "cs2", "af12", "cs3", "cs5"}},
-        {"<ntp>", {"burst", "iburst", "key", "prefer", "minpoll", "version"}},
-        {"<traps>", {"bfd", "eigrp", "aaa_server", "config", "channel", "pfr", "ip", "isis", "pim"}},
-        {"<file-protocols>", {"ftp", "rcp", "scp", "sftp", "tftp"}},
-        {"<snmp-groups>", {"access", "context", "notify", "read", "write"}},
-        {"<monitor-pwoam>", {"detail", "error", "event", "exact-match"}},
-        {"<monitor-l2vpn>", {"bfd", "detail", "error", "event"}},
-    };
     {
         if (true)
         {
@@ -180,130 +313,7 @@ json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth =
         else
         {
             std::string next = cmdObj["name"].get<std::string>();
-            if (next == "A.B.C.D")
-            {
-                next = "1.1.1.1";
-            }
-            else if (next == "X:X:X:X::X")
-            {
-                next = "fe80::1";
-            }
-            else if (next == "X:X:X:X::X/<0-128>")
-            {
-                next = "fe80::1/64";
-            }
-            else if ( next == "H.H.H")
-            {
-                next = "11:22:33:44:55:66";
-            }
-            else if (next[0] == '<' && Functions::isDecimal(std::string(1, next[1])))
-            {
-                size_t start = next.find('<');
-                size_t dash = next.find('-');
-
-                if (start != std::string::npos && dash != std::string::npos)
-                {
-                    next = next.substr(start + 1, dash - start - 1);
-                }
-            }
-            else if (next[0] == '<' && next[1] == '-' && Functions::isDecimal(std::string(1, next[2])))
-            {
-                size_t start = next.find('<');
-                size_t dash = next.substr(2).find('-') + 2;
-
-                if (start != std::string::npos && dash != std::string::npos)
-                {
-                    next = next.substr(start + 1, dash - start - 1);
-                }
-            }
-            else if (next == "N-N.H")
-            {
-                next = "10-10.0";
-            }
-            else if (next == "N.H")
-            {
-                next = "10.1";
-            }
-            else if (next == "Start-End")
-            {
-                next = "10-1";
-            }
-            else if (next == "LINE")
-            {
-                isLine = true;
-            }
-            else if (next == ":Host or :A.B.C.D")
-            {
-                next = ":1.1.1.1";
-            }
-            else if (next == "hh:mm")
-            {
-                next = "14:30";
-            }
-            else if (next == "hh:mm:ss")
-            {
-                next = "14:30:10";
-            }
-            else if (next == "DAY")
-            {
-                next = "monday";
-            }
-            else if (next == "MONTH")
-            {
-                next = "jan";
-            }
-            else if (next == "N")
-            {
-                next = "10";
-            }
-            else if (next == "Hex-string")
-            {
-                next = "ff";
-            }
-            else if (next == "X.121 Addr")
-            {
-                next = "2";
-            }
-            else if (next == "OUI:VPN-Index")
-            {
-                next = "111111:111111";
-            }
-            else if (next == "H.H...")
-            {
-                next = "1111.1111.1111";
-            }
-            else if (next == "XX.XXXX. ... .XXX.XX")
-            {
-                next = "1.1";
-            }
-            else if (next == "<cr>")
-            {
-                isLine = true;
-            }
-            else if (next.find("A.B.C.D") != std::string::npos)
-            {
-                next = "1.1.1.1";
-            }
-            else if (next.find("X:X:X:X") != std::string::npos)
-            {
-                next = "1::1";
-            }
-
-            if (prefix == "dspu" || prefix == "dlsw" || prefix == "privilege" || prefix == "logging" || prefix == "no" || prefix == "translate" || prefix == "username" || prefix == "access-list" || prefix == "alias" || prefix == "crypto" || prefix == "default" || next == "access-list" || next == "community-list" || next == "extcommunity-list" || prefix == "ip host" || prefix == "ip name-server" || prefix == "ip sla" || prefix == "do-exec" || next == "range")
-            {
-                //isLine = true;
-            }
-
-            if (prefix == "clear" || prefix == "debug" || prefix == "show")
-            {
-                //isLine = true;
-            }
-
-            if (prefix == "access-expression" || prefix == "apollo" || prefix == "appletalk" || prefix == "backup" || prefix == "bridge-group" || prefix == "clns" || prefix == "cmns" || prefix == "decnet" || prefix == "dspu" || prefix == "fras" || prefix == "iso-igrp" || prefix == "lat" || prefix == "llc2" || prefix == "mop" || prefix == "netbios" || prefix == "sap-priority" || prefix == "smrp" || prefix == "sna" || prefix == "tarp" || prefix == "vines" || prefix == "vpdn" || prefix == "ctunnel" || prefix == "media" || prefix == "media-type" || prefix == "location" || prefix == "snapshot" || prefix == "source" || prefix == "topology" || prefix == "transmit-interface" || prefix == "tx-ring-limit" || prefix == "vnet" || prefix == "xconnect" || prefix == "history" || prefix == "ip dhcp" || prefix == "ip security" || prefix == "rate-limit")
-            {
-                //isLine = true;
-            }
-
+            updatePrefix(prefix, next, isLine);
             newPrefix = prefix + " " + next;
         }
                                                
@@ -324,14 +334,217 @@ json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth =
     return commands;
 }
 
+void updateNegates(json& existingData, json& node, TelnetClient& telnet, const std::string& prefix = "", int depth = 0, int maxDepth = 30)
+{
+    if (depth >= maxDepth || !node.contains("name"))
+        return;
+
+    auto now = std::chrono::steady_clock::now();
+    if (now - lastBackupTime >= backup)
+    {
+        std::ofstream backupFile("../Utils/Dir/temp_backup.json");
+        backupFile << existingData;
+    }
+
+    // Build the prefix for the current node
+    std::string next = node["name"].get<std::string>();
+    bool end = false;
+    updatePrefix(prefix, next, end);
+    if (end) return;
+
+    bool isDifferent = false;
+    std::string different;
+
+
+
+    if (node.contains("subcommands"))
+    {
+        for (const auto& com : node["subcommands"])
+        {
+            if (!com.contains("name")) return;
+            else if (com.contains("name") && com["name"] == "<interface>")
+            {
+                isDifferent = true;
+                different = " gig 0/0";
+            }
+            else if (com.contains("name") && com["name"] == "do-exec")
+            {
+                return;
+            }
+            else
+            {
+                for (const auto& preset : presets)
+                {
+                    if (com.contains("name") && com["name"] == preset.first) return;
+                }
+            }
+        }
+    }
+    
+    std::string currentPrefix = prefix.empty() ? node["name"].get<std::string>() + (isDifferent ? different : "") : prefix + " " + next + (isDifferent ? different : "");
+
+    bool negateHasOnlyCr = false;
+
+    // Only check if node has subcommands
+    if (node.contains("subcommands"))
+    {
+        // Send "no" command
+        telnet.SendCommand("\x15");
+
+        // Normal ? output
+        std::vector<std::string> normalSubCommands;
+        for (auto& sub : node["subcommands"])
+        {
+            normalSubCommands.push_back(sub["name"].get<std::string>());
+        }
+
+        std::string query = "no " + currentPrefix + " ?";
+        std::string response = telnet.SendCommand(query, true);
+        std::vector<std::string> negateSubCommands = splitLines(response);
+
+        if (negateSubCommands.empty()) return;
+
+        negateHasOnlyCr = (negateSubCommands.size() == 1 && negateSubCommands[0] == "<cr>");
+        bool negateHasCr = false;
+        bool normalHasCr = false;
+        for (auto& sub : negateSubCommands)
+        {
+            if (sub == "<cr>")
+            {
+                negateHasCr = true;
+                break;
+            }
+        }
+        for (auto& sub : normalSubCommands)
+        {
+            if (sub == "<cr>")
+            {
+                normalHasCr = true;
+                break;
+            }
+        }
+
+        bool preset = false;
+
+        if (negateHasOnlyCr && normalSubCommands != negateSubCommands && normalSubCommands.size() > 0)
+        {
+            if (!node.contains("properties"))
+            {
+                node["properties"] = json::array();
+            }
+            node["properties"].push_back("negate_all");
+        }
+        else if (negateHasCr && !normalHasCr && normalSubCommands.size() > 0)
+        {
+            if (!node.contains("properties"))
+            {
+                node["properties"] = json::array();
+            }
+            node["properties"].push_back("negate");
+        }
+        else
+        {
+            std::unordered_set<std::string> normalSet(normalSubCommands.begin(), normalSubCommands.end());
+
+            for (const std::string& line : negateSubCommands)
+            {
+                if (line == "<cr>") continue;
+
+                json parsedNegCmd = parseCommandLine(line);
+                std::string negCmdName = parsedNegCmd["name"];
+
+                if (normalSet.find(negCmdName) == normalSet.end())
+                {
+                    std::cout << "\n[negate_show] New command found: \"" << negCmdName << "\" under \"" << currentPrefix << "\".\n";
+                    std::cout << "Do you want to add this command? (y/n): ";
+                    std::string choice;
+                    std::getline(std::cin, choice);
+
+                    if (choice == "y" || choice == "Y")
+                    {
+                        if (!node.contains("properties"))
+                        {
+                            parsedNegCmd["properties"] = json::array();
+                        }
+                        parsedNegCmd["properties"].push_back("negate_show");
+                        json subcommands = getCommandTree(telnet, "no " + currentPrefix + " " + parsedNegCmd["name"].get<std::string>(), depth + 1, maxDepth);
+                        if (!subcommands.empty()) {
+                            parsedNegCmd["subcommands"] = subcommands;
+                        }
+                        node["subcommands"].push_back(parsedNegCmd);
+                        std::cout << "Added.\n";
+                    }
+                    else
+                    {
+                        std::cout << "Skipped.\n";
+                    }
+                }
+            }
+
+            for (auto& sub : node["subcommands"])
+            {
+                std::string subName = sub["name"];
+                bool foundInNegate = false;
+                for (const std::string& line : negateSubCommands)
+                {
+                    json parsedNegCmd = parseCommandLine(line);
+                    if (parsedNegCmd["name"] == subName)
+                    {
+                        foundInNegate = true;
+                        break;
+                    }
+                }
+                if (!foundInNegate && !negateHasOnlyCr)
+                {
+                    if (!sub.contains("properties"))
+                        sub["properties"] = json::array();
+                    sub["properties"].push_back("negate_hide");
+                }
+            }
+        }
+    }
+
+    std::cout << node.dump(4) << std::endl;
+
+    if (node["name"] == "Hex-string")
+    {
+        int i = 0;
+    }
+
+    // Recurse into subcommands
+    if (node.contains("subcommands"))
+    {
+        auto validate = [](const json& obj) -> bool {
+            if (!obj.contains("properties")) return true;
+            // Check for "negate_hide" or "negate_show"
+            for (const auto& prop : obj["properties"])
+            {
+                if (prop == "negate_hide" || prop == "negate_show")
+                    return false;
+            }
+            return true;
+        };
+
+        if (negateHasOnlyCr) return;
+        for (auto& subnode : node["subcommands"])
+        {
+            std::cout << subnode.dump(4) << std::endl;
+            if (validate(subnode))
+            {
+                updateNegates(existingData, subnode, telnet, currentPrefix, depth + 1, maxDepth);
+            }
+        }
+    }
+}
+
 int main() {
-    std::string mode = "ipROute";
+    std::string mode = "ipRoute";
 
     std::vector<std::string> lines;
     std::string line;
 
     json existingData;
-    std::ifstream existingFile("../Dir/temp.json");
+    std::ifstream existingFile("../Utils/Dir/temp.json");
     if (existingFile)
     {
         existingFile >> existingData;
@@ -341,25 +554,50 @@ int main() {
         existingData = json::object();
     }
 
-    try {
-        // Initialize and connect the Telnet client to your Cisco device.
-        TelnetClient telnet;
-        telnet.Connect("127.0.0.1", 5032);  // Adjust IP and port as needed.
-        
-        // Start at the root level (empty prefix) and recursively build the tree.
-        json commandTree = getCommandTree(telnet, "");
-        
-        // Disconnect from the device once done.
-        telnet.Disconnect();
+    bool negate = true;
+    uint16_t port = 5032;
 
-        existingData[mode] = commandTree;
-        
-        // Output the complete command tree.
-        std::cout << commandTree.dump(4) << std::endl;
+    if (!negate)
+    {
+        try {
+            // Initialize and connect the Telnet client to your Cisco device.
+            TelnetClient telnet;
+            telnet.Connect("127.0.0.1", port);  // Adjust IP and port as needed.
+            
+            // Start at the root level (empty prefix) and recursively build the tree.
+            json commandTree = getCommandTree(telnet, "");
+            
+            // Disconnect from the device once done.
+            telnet.Disconnect();
+
+            existingData[mode] = commandTree;
+            
+            // Output the complete command tree.
+            std::cout << commandTree.dump(4) << std::endl;
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Error: " << ex.what() << std::endl;
+            return 1;
+        }
     }
-    catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << std::endl;
-        return 1;
+    else
+    {
+        try
+        {
+            TelnetClient telnet;
+            telnet.Connect("127.0.0.1", port);
+
+            for (auto& node : existingData[mode])
+            {
+                updateNegates(existingData, node, telnet);
+            }
+
+            telnet.Disconnect();
+        }
+        catch (const std::exception& ex) {
+            std::cerr << "Error: " << ex.what() << std::endl;
+            return 1;
+        }
     }
 
     std::ofstream outfile("../Utils/Dir/temp.json");

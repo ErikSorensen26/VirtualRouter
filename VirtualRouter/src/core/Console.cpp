@@ -7,11 +7,9 @@
 #include <fcntl.h>
 #include <vector>
 
-Console::Console() : Configs(), iConsole(std::make_shared<RealConsole>()) {}
+Console::Console() : iConsole(std::make_shared<RealConsole>()) {}
 
-Console::Console(std::shared_ptr<IConsole> term) : Configs(), iConsole(std::move(term)) {}
-
-Console::Console(std::shared_ptr<IConsole> term, std::shared_ptr<IFileSystem> fs) : Configs(std::move(fs)), iConsole(std::move(term)) {}
+Console::Console(std::shared_ptr<IConsole> term) : iConsole(std::move(term)) {}
 
 Console::~Console() {}
 
@@ -34,7 +32,6 @@ bool Console::isCursorAtLineEnd()
 
 void Console::initConsole()
 {
-    initConfigs();
     // Clear the screen once
     iConsole->clearScreen(); // ANSI escape to clear and move cursor to top
     iConsole->enableLineWrapping(); // Enable line wrapping

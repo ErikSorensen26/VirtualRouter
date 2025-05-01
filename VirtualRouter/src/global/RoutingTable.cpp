@@ -109,8 +109,11 @@ void RoutingTable::removeEigrp(const ByteString& network, uint8_t mask, AddressF
     auto it = eigrpTable.find(key);
     if (it != eigrpTable.end())
     {
-        delete it->second;
-        it->second = nullptr;
+        if (it->second)
+        {
+            delete it->second;
+            it->second = nullptr;
+        }
         eigrpTable.erase(it);
     }
 }

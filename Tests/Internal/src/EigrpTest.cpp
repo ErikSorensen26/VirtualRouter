@@ -20,6 +20,7 @@ protected:
     Eigrp* eigrpInstance;
     MockInterface* mockInterface;
     // We use the real EigrpInterface (constructed using our MockInterface)
+    EigrpConfigs::InterfaceConfigs* configs;
     EigrpInterface* eigrpInterface;
     std::condition_variable cv;
     std::mutex cvMutex;
@@ -46,7 +47,8 @@ protected:
         vrf->interfaceList[{InterfaceType::GIGABIT_ETHERNET, 0}] = mockInterface;
         // Create the real EigrpInterface using the mock interface.
         EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(::testing::AtLeast(1));
-        eigrpInterface = new EigrpInterface(*eigrpInstance, mockInterface);
+        configs = new EigrpConfigs::InterfaceConfigs();
+        eigrpInterface = new EigrpInterface(*eigrpInstance, configs, mockInterface);
         eigrpInstance->eigrpInterfaceList[{type, 0}] = eigrpInterface;
     }
 
@@ -144,10 +146,10 @@ TEST_F(EigrpTest, AuthTLV_MD5_Correct)
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
     auto neighbor = optNeighbor;
-    neighbor->authenticationEnabled = true;
-    neighbor->authType = EigrpConfigs::AuthType::MD5;
-    neighbor->authKeyId = 1;
-    neighbor->authKey = ByteString("secretkey", 9);
+    uint8_t keyId = 1;
+    ByteString key = ByteString("secretKey", 9);
+    EigrpConfigs::AuthType type = EigrpConfigs::AuthType::MD5;
+    eigrpInterface->configureAuthentication(&keyId, &key, &type, true);
 
     // Block enqueues
     mockInterface->blockEnqueues();
@@ -174,10 +176,10 @@ TEST_F(EigrpTest, AuthTLV_SHA1_Correct)
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
     auto neighbor = optNeighbor;
-    neighbor->authenticationEnabled = true;
-    neighbor->authType = EigrpConfigs::AuthType::SHA1;
-    neighbor->authKeyId = 2;
-    neighbor->authKey = ByteString("anothersecret", 13);
+    uint8_t keyId = 2;
+    ByteString key = ByteString("anothersecret", 13);
+    EigrpConfigs::AuthType type = EigrpConfigs::AuthType::SHA1;
+    eigrpInterface->configureAuthentication(&keyId, &key, &type, true);
 
     // Block enqueues
     mockInterface->blockEnqueues();
@@ -201,7 +203,7 @@ TEST_F(EigrpTest, AuthTLV_Disabled_NoTLV)
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
     auto neighbor = optNeighbor;
-    neighbor->authenticationEnabled = false;
+    eigrpInterface->configureAuthentication();
 
     // Block enqueues
     mockInterface->blockEnqueues();
@@ -224,10 +226,10 @@ TEST_F(EigrpTest, Auth_InvalidKey_Handled)
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
     auto neighbor = optNeighbor;
-    neighbor->authenticationEnabled = true;
-    neighbor->authType = EigrpConfigs::AuthType::MD5;
-    neighbor->authKeyId = 1;
-    neighbor->authKey = ByteString(); // empty key
+    uint8_t keyId = 1;
+    ByteString key = ByteString();
+    EigrpConfigs::AuthType type = EigrpConfigs::AuthType::MD5;
+    eigrpInterface->configureAuthentication(&keyId, &key, &type, true);
 
     // Block enqueues
     mockInterface->blockEnqueues();
@@ -663,10 +665,10 @@ TEST_F(EigrpTest, Authentication_TLV_Insertion_Correct)
     ByteString neighborIp("\xC0\xA8\x01\x1E", 4);
     addNeighbor(neighborIp, eigrpInterface);
     auto neighbor = getNeighbor(neighborIp);
-    neighbor->authenticationEnabled = true;
-    neighbor->authType = EigrpConfigs::AuthType::MD5;
-    neighbor->authKeyId = 1;
-    neighbor->authKey = ByteString("secret", 6);
+    uint8_t keyId = 1;
+    ByteString key = ByteString("secret", 6);
+    EigrpConfigs::AuthType type = EigrpConfigs::AuthType::MD5;
+    eigrpInterface->configureAuthentication(&keyId, &key, &type, true);
     
     EigrpHeader helloPacket;
     eigrpInstance->eigrpHello(helloPacket, eigrpInterface, neighbor, neighborIp, 705, false, false);
@@ -982,7 +984,7 @@ TEST_F(EigrpTest, TopologyTable_Add_Or_Update_Route)
     rInfo.hopCount = 1;
     getTopologyTable()->addOrUpdateRoute(ByteString("\xc0\xa8\x01\x02", 4),
                                            ByteString("\x0a\x00\x00\x00", 4), 8, rInfo);
-    auto entry = getTopologyTable()->getEntryForRoute(ByteString("\x0a\x00\x00\x00", 4));
+    auto entry = getTopologyTable()->getEntryForRoute(ByteString("\x0a\x00\x00\x00", 4), 8);
     ASSERT_NE(entry, nullptr);
 }
 
@@ -1011,7 +1013,7 @@ TEST_F(EigrpTest, TopologyTable_Update_Successors)
                          ByteString("\x0a\x00\x00\x00", 4), 8, rInfo1);
     tt->addOrUpdateRoute(ByteString("\xc0\xa8\x01\x03", 4),
                          ByteString("\x0a\x00\x00\x00", 4), 8, rInfo2);
-    auto entry = tt->getEntryForRoute(ByteString("\x0a\x00\x00\x00", 4));
+    auto entry = tt->getEntryForRoute(ByteString("\x0a\x00\x00\x00", 4), 8);
     ASSERT_NE(entry, nullptr);
     ASSERT_FALSE(entry->successors.empty());
 }
@@ -1202,7 +1204,8 @@ TEST_F(EigrpTest, SIATimer_Resends_Query_For_Pending_Neighbor)
     EigrpConfigs::ActiveRoute activeRoute;
     ByteString pendingNeighbor("\xC0\xA8\x01\x02", 4);
     addNeighbor(pendingNeighbor);
-    activeRoute.pendingReplies.insert(pendingNeighbor);
+    EigrpConfigs::OutgoingQuery outgoing;
+    activeRoute.pendingQueries[pendingNeighbor] = (outgoing);
     activeRoute.originNeighbor = pendingNeighbor;
     eigrpInstance->outstandingReplies[queryKey] = activeRoute;
     
@@ -1254,9 +1257,11 @@ TEST_F(EigrpTest, ActiveQuery_Multiple_Pending_Neighbors)
     ByteString pendingNeighbor2("\xC0\xA8\x01\x04", 4);
     addNeighbor(pendingNeighbor1);
     addNeighbor(pendingNeighbor2);
-    activeRoute.pendingReplies.insert(pendingNeighbor1);
-    activeRoute.pendingReplies.insert(pendingNeighbor2);
-    activeRoute.originNeighbor = pendingNeighbor1;
+    EigrpConfigs::OutgoingQuery out1;
+    EigrpConfigs::OutgoingQuery out2;
+    activeRoute.pendingQueries[pendingNeighbor1] = out1;
+    activeRoute.pendingQueries[pendingNeighbor2] = out2;
+    activeRoute.originNeighbor = ByteString("\x00\x00\x00\x00", 4);
     eigrpInstance->outstandingReplies[queryKey] = activeRoute;
     
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
@@ -1281,7 +1286,8 @@ TEST_F(EigrpTest, ActiveQuery_Clear_After_Neighbor_Response)
     EigrpConfigs::ActiveRoute activeRoute;
     ByteString pendingNeighbor("\xC0\xA8\x01\x05", 4);
     addNeighbor(pendingNeighbor);
-    activeRoute.pendingReplies.insert(pendingNeighbor);
+    EigrpConfigs::OutgoingQuery outgoing;
+    activeRoute.pendingQueries[pendingNeighbor] = outgoing;
     activeRoute.originNeighbor = pendingNeighbor;
     eigrpInstance->outstandingReplies[queryKey] = activeRoute;
     
@@ -1303,7 +1309,7 @@ TEST_F(EigrpTest, ActiveQuery_Timeout_Leads_To_Neighbor_Down)
     std::string keyStr = testRoute->network.toString() + "/" + std::to_string(testRoute->mask);
     ByteString queryKey(keyStr);
     EigrpConfigs::ActiveRoute activeRoute;
-    activeRoute.pendingReplies.insert(neighborIp);
+    activeRoute.pendingQueries[neighborIp] = EigrpConfigs::OutgoingQuery();
     activeRoute.originNeighbor = neighborIp;
     eigrpInstance->outstandingReplies[queryKey] = activeRoute;
     
@@ -1350,7 +1356,8 @@ TEST_F(EigrpTest, IPv6_HelloPacket_Construction)
     ipv6Interface->enableShutdown();
     setIPv6(ByteString("\x20\x01\x0D\xB8\x00\x00\x00\x01", 16), 64, ipv6Interface);
     getAllInterfaceList()[{InterfaceType::GIGABIT_ETHERNET, 10}] = ipv6Interface;
-    EigrpInterface* ipv6Int = new EigrpInterface(*ipv6Eigrp, ipv6Interface);
+    EigrpConfigs::InterfaceConfigs configs;
+    EigrpInterface* ipv6Int = new EigrpInterface(*ipv6Eigrp, &configs, ipv6Interface);
     ipv6Eigrp->eigrpInterfaceList[{type, 10}] = ipv6Int;
     
     EigrpHeader helloPacket;
@@ -1384,7 +1391,8 @@ TEST_F(EigrpTest, IPv6_PacketSerialization_Correct_Length)
     ipv6Interface->enableShutdown();
     setIPv6(ByteString("\x20\x01\x0D\xB8\x00\x00\x00\x01", 16), 64, ipv6Interface);
     getAllInterfaceList()[{InterfaceType::GIGABIT_ETHERNET, 10}] = ipv6Interface;
-    EigrpInterface* ipv6Int = new EigrpInterface(*ipv6Eigrp, ipv6Interface);
+    EigrpConfigs::InterfaceConfigs configs;
+    EigrpInterface* ipv6Int = new EigrpInterface(*ipv6Eigrp, &configs, ipv6Interface);
     ipv6Eigrp->eigrpInterfaceList[{type, 10}] = ipv6Int;
     
     EigrpHeader helloPacket;
@@ -1563,8 +1571,10 @@ TEST_F(EigrpTest, MultiInterface_Massive_Concurrent_Updates)
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
     iface2->blockEnqueues();
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, iface2);
+    EigrpConfigs::InterfaceConfigs intConf1;
+    EigrpConfigs::InterfaceConfigs intConf2;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
+    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
     getInterfaceList()[{type, 1}] = int1;
     getInterfaceList()[{type, 2}] = int2;
     addNeighbor(ByteString("\x0A\x00\x00\x01", 4), int1);
@@ -1647,8 +1657,10 @@ TEST_F(EigrpTest, MultipleInterfaces_Route_Propagation)
     iface2->enableShutdown();
     setIPv4(ByteString("\xc0\xa8\x02\x01", 4), 24, iface1);
     setIPv4(ByteString("\xc0\xa8\x03\x01", 4), 24, iface2);
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, iface2);
+    EigrpConfigs::InterfaceConfigs intConf1;
+    EigrpConfigs::InterfaceConfigs intConf2;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
+    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
     getInterfaceList()[{type, 1}] = int1;
     getInterfaceList()[{type, 2}] = int2;
     addNeighbor(ByteString("\x0A\x00\x00\x01", 4), int1);
@@ -1680,8 +1692,10 @@ TEST_F(EigrpTest, MultiInterface_Adjacency_Formation)
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
     iface2->blockEnqueues();
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, iface2);
+    EigrpConfigs::InterfaceConfigs intConf1;
+    EigrpConfigs::InterfaceConfigs intConf2;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
+    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
     getInterfaceList()[{type, 1}] = int1;
     getInterfaceList()[{type, 2}] = int2;
     addNeighbor(ByteString("\x0A\x00\x00\x03", 4), int1);
@@ -1704,8 +1718,10 @@ TEST_F(EigrpTest, MultiInterface_Failure_Isolation)
     iface2->blockEnqueues();
     iface1->enableShutdown();
     iface2->enableShutdown();
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, iface2);
+    EigrpConfigs::InterfaceConfigs intConf1;
+    EigrpConfigs::InterfaceConfigs intConf2;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
+    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
     getInterfaceList()[{type, 1}] = int1;
     getInterfaceList()[{type, 2}] = int2;
     addNeighbor(ByteString("\x0A\x00\x00\x05", 4), int1);
@@ -1816,8 +1832,10 @@ TEST_F(EigrpTest, MultiInterface_Massive_Concurrent_Updates_Extended)
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
     iface2->blockEnqueues();
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, iface2);
+    EigrpConfigs::InterfaceConfigs intConf1;
+    EigrpConfigs::InterfaceConfigs intConf2;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
+    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
     getInterfaceList()[{type, 1}] = int1;
     getInterfaceList()[{type, 2}] = int2;
     ByteString neighbor1 = ByteString("\x0A\x00\x00\x01", 4);
@@ -1894,8 +1912,10 @@ TEST_F(EigrpTest, MultiInterface_Adjacency_Formation_Extended)
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
     iface2->blockEnqueues();
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, iface2);
+    EigrpConfigs::InterfaceConfigs intConf1;
+    EigrpConfigs::InterfaceConfigs intConf2;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
+    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
     getInterfaceList()[{type, 1}] = int1;
     getInterfaceList()[{type, 2}] = int2;
     addNeighbor(ByteString("\x0A\x00\x00\x03", 4), int1);
@@ -1918,8 +1938,10 @@ TEST_F(EigrpTest, MultiInterface_Failure_Isolation_Extended)
     iface2->blockEnqueues();
     iface1->enableShutdown();
     iface2->enableShutdown();
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, iface2);
+    EigrpConfigs::InterfaceConfigs intConf1;
+    EigrpConfigs::InterfaceConfigs intConf2;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
+    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
     getInterfaceList()[{type, 1}] = int1;
     getInterfaceList()[{type, 2}] = int2;
     addNeighbor(ByteString("\x0A\x00\x00\x05", 4), int1);
@@ -1941,7 +1963,8 @@ TEST_F(EigrpTest, MultiInterface_Coordinated_RoutingUpdates_Extended)
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, iface1);
+    EigrpConfigs::InterfaceConfigs configs;
+    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &configs, iface1);
     getInterfaceList()[{type, 1}] = int1;
     ByteString neighborIp = ByteString("\x0A\x00\x00\x07", 4);
     addNeighbor(neighborIp, int1);
