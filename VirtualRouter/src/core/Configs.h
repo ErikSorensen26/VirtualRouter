@@ -141,7 +141,10 @@ private:
 
 class IFileSystem
 {
-public: virtual ~IFileSystem() = default; virtual bool readFile(const std::string& path, std::string& content) = 0; virtual bool writeFile(const std::string& path, const std::string& content) = 0; virtual bool fileExists(const std::string& path) = 0;
+public: virtual ~IFileSystem() = default; 
+    virtual bool readFile(const std::string& path, std::string& content) = 0; 
+    virtual bool writeFile(const std::string& path, const std::string& content) = 0;
+    virtual bool fileExists(const std::string& path) = 0;
     virtual void removeFile(const std::string& path) = 0;
 };
 
@@ -197,7 +200,7 @@ public:
 class Configs 
 {
 public:
-    friend class ConfigsTest;
+    friend class Internal_ConfigTest;
 
     /**
      * @brief Constructor for the Configs class.
@@ -281,12 +284,12 @@ public:
      *
      * Removes the specified configuration command from the JSON structure based on the provided parameters.
      *
-     * @param obj Reference to the JSON object from which the configuration should be deleted.
+     * @param modeConfig Reference to the mode configs with config objects
      * @param oldCommand A vector of strings representing the previous command.
      * @param command A vector of strings representing the current command to delete.
      * @param isList Boolean flag indicating if the command is listed.
      */
-    void deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isList);
+    bool deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isList);
 
     /**
      * @brief Determines if a given command string is volatile.
@@ -368,6 +371,8 @@ public:
     nlohmann::ordered_json root;                        ///< Root of the JSON configuration tree.
 
     nlohmann::ordered_json configSchema;                ///< Schema defining the configuration structure
+
+    nlohmann::json configJson;
 
     std::vector<std::string> physicalInterfaces;        ///< List of physical interface names.
 

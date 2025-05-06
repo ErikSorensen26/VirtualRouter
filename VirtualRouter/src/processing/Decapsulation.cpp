@@ -2,17 +2,20 @@
 #include <Profiler.hpp>
 
 // Constructor for Packet class, starts packet inspection
-Packet::Packet(ByteString &packet, bool debug, Interface& iface)
+Packet::Packet(ByteString &packet, bool debug, Interface& iface, bool bypass)
      : currentInterface(&iface),
       start(0),
       fullPacket(packet),
-      print(debug)
+      print(debug),
+      macBypass(bypass)
 {
     if (print) {Logger::getInstance().info() << packet.toHex() << std::endl;}
     inspection(packet);
 }
 
-Packet::Packet(ByteString& packet) : currentInterface(nullptr), fullPacket(std::move(packet)) {}
+Packet::Packet(ByteString& packet, bool bypass) : currentInterface(nullptr), fullPacket(packet), macBypass(bypass) {
+    inspection(packet);
+}
 
 // Inspects the given packet and processes each layer.
 bool Packet::inspection(const ByteString &packet)
@@ -237,7 +240,8 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
     //std::cout << "eth " << ethernetHeader.toHex() << std::endl;
     //Profiler::getInstance().notify("decoding ethernet");
     EthernetHeader ethernet;
-    if (!ethernet.decapsulate(ethernetHeader)) return false;
+    if (!ethernet.decapsulate(ethernetHeader))
+        return false;
 
     ByteString currentMac;
     {
@@ -247,7 +251,7 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
         }
     }
 
-    if (currentMac == ethernet.sourceMac.toString())
+    if (!macBypass && currentMac == ethernet.sourceMac.toString())
     {
         Logger::getInstance().info() << "Packet dropped due to receiving current MAC" << std::endl;
         return false;

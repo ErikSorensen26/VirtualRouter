@@ -61,7 +61,6 @@ void Logger::initialize(bool start, bool isolateMode)
         {
             configFile >> configJson;
             configFile.close();
-            std::cout << configJson.dump(4) << std::endl;
         }
         catch(nlohmann::json::parse_error &e)
         {

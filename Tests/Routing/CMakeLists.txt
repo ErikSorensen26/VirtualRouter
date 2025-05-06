@@ -17,9 +17,9 @@ foreach(test_file ${CONFIG_SOURCES})
     # Create an executable for each test file
     add_executable(${test_name} ${test_file} ${UTIL_SOURCES})
 
-    set_target_properties(${test_name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/router"
-    )
+    #set_target_properties(${test_name} PROPERTIES
+        #RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/router"
+    #)
     
     # Include necessary directories (your src and mocks directories)
     target_include_directories(${test_name} PRIVATE

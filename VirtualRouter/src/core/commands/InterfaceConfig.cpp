@@ -98,17 +98,17 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 				}
 				{
 					std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
-					currentInterface->configs.eigrp.ipv6AutonomousSystems.insert(as);
+					currentInterface->configs.eigrp.ipv6AutonomousSystems[currentVrf->instanceName].insert(as);
 				}
 			}
 			else
 			{
-				if (eigrpAs && eigrpAs->ipv6)
-				{
-					delete eigrpAs->ipv6->eigrpInterfaceList[{currentInterface->configs.interfaceType, currentInterface->configs.id}];
-					eigrpAs->ipv6->eigrpInterfaceList[{currentInterface->configs.interfaceType, currentInterface->configs.id}] = nullptr;
-					eigrpAs->ipv6->eigrpInterfaceList.erase({currentInterface->configs.interfaceType, currentInterface->configs.id});
-				}
+				currentInterface->configs.eigrp.ipv6AutonomousSystems[currentVrf->instanceName].erase(std::stoi(commandStream[2]));
+			}
+
+			if (eigrpAs && eigrpAs->ipv6)
+			{
+				eigrpAs->ipv6->updateInterfaceList();
 			}
 		}
 	}

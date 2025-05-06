@@ -173,10 +173,6 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		{
 			terminal.exitMode(Mode::routerAddressFamily);
 			terminal.configureAddressFamily(AddressFamily::IPv4);
-			if (terminal.workingDirectory->size() > 0 && (*terminal.workingDirectory)[0].contains("unicast"))
-			{
-				terminal.workingDirectory = &(*terminal.workingDirectory)[0]["unicast"]; // TODO fix unicast/multicast here
-			}
 		}
 		else if (commandStream[0] == "maximum-paths")
 		{
@@ -262,12 +258,13 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			}
 			else
 			{
-				std::unique_lock<std::shared_mutex> lock(currentEigrp->configs.configsMutex);
-				auto& networks = currentEigrp->configs.networks;
-				networks.erase(std::remove(networks.begin(), networks.end(), network), networks.end());
+				{
+					std::unique_lock<std::shared_mutex> lock(currentEigrp->configs.configsMutex);
+					auto& networks = currentEigrp->configs.networks;
+					networks.erase(std::remove(networks.begin(), networks.end(), network), networks.end());
+				}
 
 				currentEigrp->updateInterfaceList();
-				currentEigrp->updateRoutingTableForConnected();
 			}
 		}
 		else if (commandStream[0] == "offset-list")
@@ -329,9 +326,9 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		{
 			if (!negate)
 			{
-				if (commandStream[1] == "balenced")
+				if (commandStream[1] == "balanced")
 				{
-					currentEigrp->configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Balenced, std::memory_order_release);
+					currentEigrp->configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Balanced, std::memory_order_release);
 				}
 				else if (commandStream[1] == "min")
 				{
@@ -340,7 +337,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			}
 			else
 			{
-				currentEigrp->configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Balenced, std::memory_order_release);
+				currentEigrp->configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Balanced, std::memory_order_release);
 			}
 		}
 		else if (commandStream[0] == "variance" && Functions::isDecimal(commandStream[1]))
@@ -426,25 +423,21 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				{
 					if (af == AddressFamily::IPv4 && currentEigrpNamed->ipv4)
 					{
-						if (currentEigrpNamed->ipv4->asNumber != terminal.routingProtocolID)
+						if (currentEigrpNamed->ipv4->asNumber != terminal.routingProtocolID && !negate)
 						{
 							std::cout << "\nChanging from AS(" << currentEigrpNamed->ipv4->asNumber << ") to AS(" << terminal.routingProtocolID << ") is not allowed";
 							return false;
 						}
 						currentEigrp = currentEigrpNamed->ipv4;
-						terminal.changeMode(Mode::routerAddressFamily);
-						terminal.configureAddressFamily(AddressFamily::IPv4);
 					}
 					else if (af == AddressFamily::IPv6 && currentEigrpNamed->ipv6)
 					{
-						if (currentEigrpNamed->ipv6->asNumber != terminal.routingProtocolID)
+						if (currentEigrpNamed->ipv6->asNumber != terminal.routingProtocolID && !negate)
 						{
-							std::cout << "\nChanging from AS(" << currentEigrpNamed->ipv4->asNumber << ") to AS(" << terminal.routingProtocolID << ") is not allowed";
+							std::cout << "\nChanging from AS(" << currentEigrpNamed->ipv6->asNumber << ") to AS(" << terminal.routingProtocolID << ") is not allowed";
 							return false;
 						}
 						currentEigrp = currentEigrpNamed->ipv6;
-						terminal.changeMode(Mode::routerAddressFamily);
-						terminal.configureAddressFamily(AddressFamily::IPv6);
 					}
 					{
 						Protocol::EigrpAutonomousSystem* eigrpAs = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
@@ -452,7 +445,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 						{
 							eigrpAs = currentVrf->addEigrpAutonomousSystem(terminal.routingProtocolID);
 						}
-						else if (negate) return true; // Already removed
+						else if (!eigrpAs && negate) return true; // Already removed
 						
 						if (af == AddressFamily::IPv4)
 						{
@@ -461,6 +454,9 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 								if (eigrpAs->ipv4)
 								{
 									delete eigrpAs->ipv4;
+									eigrpAs->ipv4 = nullptr;
+									eigrpAs->ipv4Named = false;
+									currentEigrpNamed->ipv4 = nullptr;
 									if (!eigrpAs->ipv6)
 									{
 										currentVrf->removeEigrpAutonomousSystem(terminal.routingProtocolID);
@@ -469,10 +465,16 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							}
 							else if (!eigrpAs->ipv4)
 							{
-								eigrpAs->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, af, Global::getInstance().getRoutingInstance("default"));
+								eigrpAs->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, af, Global::getInstance().getRoutingInstance("default"), true);
 								eigrpAs->ipv4Named = true;
 								currentEigrpNamed->ipv4 = eigrpAs->ipv4;
 								currentEigrp = eigrpAs->ipv4;
+								terminal.changeMode(Mode::routerAddressFamily);
+								terminal.configureAddressFamily(AddressFamily::IPv4);
+							}
+							else if (currentEigrpNamed && currentEigrpNamed->ipv4)
+							{
+								currentEigrp = currentEigrpNamed->ipv4;
 								terminal.changeMode(Mode::routerAddressFamily);
 								terminal.configureAddressFamily(AddressFamily::IPv4);
 							}
@@ -489,15 +491,18 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 								if (eigrpAs->ipv6)
 								{
 									delete eigrpAs->ipv6;
+									eigrpAs->ipv6 = nullptr;
+									eigrpAs->ipv6Named = false;
+									currentEigrpNamed->ipv6 = nullptr;
 									if (!eigrpAs->ipv4)
 									{
 										currentVrf->removeEigrpAutonomousSystem(terminal.routingProtocolID);
 									}
 								}
 							}
-							if (!eigrpAs->ipv6)
+							else if (!eigrpAs->ipv6)
 							{
-								eigrpAs->ipv6 = new Protocol::Eigrp(terminal.routingProtocolID, af, Global::getInstance().getRoutingInstance("default"));
+								eigrpAs->ipv6 = new Protocol::Eigrp(terminal.routingProtocolID, af, Global::getInstance().getRoutingInstance("default"), true);
 								eigrpAs->ipv6Named = true;
 								currentEigrpNamed->ipv6 = eigrpAs->ipv6;
 								currentEigrp = eigrpAs->ipv6;
@@ -506,7 +511,9 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							}
 							else if (currentEigrpNamed && currentEigrpNamed->ipv6)
 							{
-								std::cout << "\nChanging from AS(" << eigrpAs->ipv4->asNumber << ") to AS(" << terminal.routingProtocolID << ") is not allowed";
+								currentEigrp = currentEigrpNamed->ipv6;
+								terminal.changeMode(Mode::routerAddressFamily);
+								terminal.configureAddressFamily(AddressFamily::IPv6);
 							}
 							else
 							{
@@ -515,15 +522,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							}
 						}
 					}
-					if (negate && terminal.workingDirectory->size() > 0 && (*terminal.workingDirectory)[0].contains(comString))
-					{
-						terminal.workingDirectory = &(*terminal.workingDirectory)[0][comString];
-					}
 				}
-			}
-			else if (commandStream[0] == "default")
-			{
-				//TODO
 			}
 			else if (commandStream[0] == "exit")
 			{
@@ -564,54 +563,46 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 
 				InterfaceType type = terminal.engine.getInterfaceType(commandStream[1]);
 				float interfaceId = std::stof(commandStream[2]);
-				auto intIt = currentEigrp->eigrpInterfaceList.find({type, interfaceId});
+				
+				{
+					std::unique_lock<std::shared_mutex> lock(currentEigrp->interfaceMutex);
+					auto intIt = currentEigrp->eigrpInterfaceConfigList.find({type, interfaceId});
 
-				if (intIt != currentEigrp->eigrpInterfaceList.end())
-				{
-					currentEigrpInterface = intIt->second;
-				}
-				else
-				{
-					currentEigrpInterface = currentEigrp->addEigrpInterface(currentVrf->getInterface(type, interfaceId));
-				}
-
-				if (!negate)
-				{
-					terminal.changeMode(Mode::routerAddressFamilyInterface);
-					terminal.configureAddressFamily(currentEigrp->addressFamily);
-				}
-				else
-				{
-					auto& eigrpInt = *currentEigrpInterface;
-					// Reset all of the settings on the interface
-					eigrpInt.configureAuthentication();
-					eigrpInt.configs.bandwidthPercentage.store(50, std::memory_order_release);
-					//TODO disable bfd if enabled
-					eigrpInt.configs.dampeningChange.store(0, std::memory_order_release);
-					eigrpInt.configs.dampeningInterval.store(5, std::memory_order_release);
-					eigrpInt.configs.helloTime.store(5, std::memory_order_release);
-					eigrpInt.configs.holdTime.store(15, std::memory_order_relaxed);
-					eigrpInt.configs.nextHopSelf.store(false, std::memory_order_release);
-					eigrpInt.setPassive(false);
-					eigrpInt.configs.splitHorizon.store(true, std::memory_order_relaxed);
-					auto summaries = eigrpInt.configs.summaryRoutes;
-					for (const auto& route : summaries)
+					if (!negate)
 					{
-						eigrpInt.removeSummaryRoute(route.summary->network, route.summary->mask);
-					}
-
-					{
-						std::unique_lock<std::shared_mutex> lock(eigrpInt.neighborMutex);
-						for (const auto& [ip, neighbor] : eigrpInt.neighbors)
+						if (intIt != currentEigrp->eigrpInterfaceConfigList.end())
 						{
-							eigrpInt.handleNeighborRestart(neighbor, ip);
+							currentEigrpInterface = intIt->second;
+							currentEigrpInterface->userMade = true;
+						}
+						else
+						{
+							EigrpConfigs::InterfaceConfigs* newConfigs = new EigrpConfigs::InterfaceConfigs(type, interfaceId);
+							newConfigs->userMade = true;
+							currentEigrp->eigrpInterfaceConfigList[{type, interfaceId}] = newConfigs;
+						}
+						terminal.changeMode(Mode::routerAddressFamilyInterface);
+						terminal.configureAddressFamily(currentEigrp->addressFamily);
+					}
+					else
+					{
+						if (intIt != currentEigrp->eigrpInterfaceConfigList.end())
+						{
+							currentEigrpInterface = intIt->second;
+							if (currentEigrpInterface->userMade)
+							{
+								delete currentEigrp->eigrpInterfaceConfigList[{type, interfaceId}];
+								currentEigrp->eigrpInterfaceConfigList.erase({type, interfaceId});
+							}
+							else return true;
+						}
+						else
+						{
+							return true;
 						}
 					}
 				}
-			}
-			else if (commandStream[0] == "default")
-			{
-				// TODO
+				currentEigrp->updateInterfaceList();
 			}
 			else if (commandStream[0] == "eigrp")
 			{
@@ -620,36 +611,78 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				if (commandStream[1] == "default-route-tag") 
 				{
 					uint32_t routeTag;
-					if (Functions::isDecimal(commandStream[2]))
+					if (!negate)
 					{
-						routeTag = static_cast<uint32_t>(std::stoi(commandStream[2]));
+						if (Functions::isDecimal(commandStream[2]))
+						{
+							routeTag = static_cast<uint32_t>(std::stoi(commandStream[2]));
+						}
+						else
+						{
+							routeTag = Functions::byteToNum(Functions::addressToByte(commandStream[2]));
+						}
 					}
 					else
 					{
-						routeTag = Functions::byteToNum(Functions::addressToByte(commandStream[2]));
+						
 					}
 					// TODO set the route tag
 				}
-				else if (commandStream[1] == "event-log-size" && Functions::isDecimal(commandStream[2])) { currentEigrp->configs.eventLogSize = static_cast<uint32_t>(std::stoi(commandStream[2])); }
-				else if (commandStream[1] == "logNeighborChanges") { currentEigrp->configs.logNeighborChanges = true; }
-				else if (commandStream[1] == "logNeighborWarnings") { currentEigrp->configs.logNeighborWarnings = true; }
-				else if (commandStream[1] == "router-id") { currentEigrp->setRouterID(Functions::addressToByte(commandStream[2])); }
+				else if (commandStream[1] == "event-log-size" && Functions::isDecimal(commandStream[2])) 
+				{
+					if (!negate)
+					{
+						if (Functions::isDecimal(commandStream[2]))
+							currentEigrp->configs.eventLogSize.store(static_cast<uint32_t>(std::stoi(commandStream[2])), std::memory_order_release);
+					}
+					else
+					{
+						currentEigrp->configs.eventLogSize.store(500, std::memory_order_relaxed);
+					}
+				}
+				else if (commandStream[1] == "logNeighborChanges") 
+				{
+					currentEigrp->configs.logNeighborChanges = !negate;
+				}
+				else if (commandStream[1] == "logNeighborWarnings")
+				{
+					currentEigrp->configs.logNeighborWarnings = !negate;
+				}
+				else if (commandStream[1] == "router-id")
+				{
+					if (!negate)
+					{
+						currentEigrp->setRouterID(Functions::addressToByte(commandStream[2]));
+					}
+					else
+					{
+						currentEigrp->clearRouterID();
+					}
+				}
 				else if (commandStream[1] == "stub")
 				{
-					bool connected = false;
-					bool leakMap = false;
-					bool redistributed = false;
-					bool stat = false;
-					bool summary = false;
-					for (size_t i = 2; i <= commandStream.size(); i++)
+					if (!negate)
 					{
-						if (commandStream[i] == "connected") { connected = true; }
-						else if (commandStream[i] == "leak-map") { leakMap = true; }
-						else if (commandStream[i] == "redistrubuted") { redistributed = true; }
-						else if (commandStream[i] == "static") { stat = true; }
-						else if (commandStream[i] == "summary") { summary = true; }
+						bool connected = false;
+						bool leakMap = false;
+						bool redistributed = false;
+						bool stat = false;
+						bool summary = false;
+						for (size_t i = 2; i <= commandStream.size(); i++)
+						{
+							if (commandStream[i] == "connected") { connected = true; }
+							else if (commandStream[i] == "leak-map") { leakMap = true; }
+							else if (commandStream[i] == "redistrubuted") { redistributed = true; }
+							else if (commandStream[i] == "static") { stat = true; }
+							else if (commandStream[i] == "summary") { summary = true; }
+						}
+						currentEigrp->setStub(true, connected, stat, leakMap, summary, redistributed);
 					}
-					currentEigrp->setStub(true, connected, stat, leakMap, summary, redistributed);
+					else
+					{
+						currentEigrp->setStub(false);
+					}
+
 				}
 				else if (commandStream[1] == "stub-site")
 				{
@@ -672,29 +705,91 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			}
 			else if (commandStream[1] == "maximum-prefix")
 			{
-				uint32_t prefNum = static_cast<uint32_t>(std::stoi(commandStream[1]));
-				if (Functions::isDecimal(commandStream[2]))
+				if (!negate)
 				{
-					// TODO
+					currentEigrp->configs.maximumPrefix.store(static_cast<uint32_t>(std::stoi(commandStream[1])), std::memory_order_release);
+					if (commandStream.size() > 2)
+					{
+						for (size_t i = 2; i < commandStream.size(); i++)
+						{
+							if (Functions::isDecimal(commandStream[i]))
+							{
+								currentEigrp->configs.dampeningInterval.store(std::stoi(commandStream[i]));
+							}
+							else if (commandStream[i] == "dampened")
+							{
+								currentEigrp->configs.dampening.store(true, std::memory_order_release);
+							}
+							else if (commandStream[i] == "reset-time")
+							{
+								currentEigrp->configs.dampeningResetTime.store(std::stoi(commandStream[i + 1]), std::memory_order_release);
+								i++;
+							}
+							else if (commandStream[i] == "restart")
+							{
+								currentEigrp->configs.dampeningRestart.store(std::stoi(commandStream[i + 1]), std::memory_order_release);
+								i++;
+							}
+							else if (commandStream[i] == "restart-count")
+							{
+								currentEigrp->configs.dampeningRestartCount.store(std::stoi(commandStream[i + 1]), std::memory_order_release);
+								i++;
+							}
+							else if (commandStream[i] == "warning-only")
+							{
+								currentEigrp->configs.dampeningWarnings.store(true, std::memory_order_release);
+							}
+						}
+					}
+				}
+				else
+				{
+					currentEigrp->configs.maximumPrefix.store(0, std::memory_order_relaxed);
+					currentEigrp->configs.dampeningInterval.store(75, std::memory_order_release);
+					currentEigrp->configs.dampening.store(false, std::memory_order_release);
+					currentEigrp->configs.dampeningResetTime.store(0, std::memory_order_release);
+					currentEigrp->configs.dampeningRestart.store(0, std::memory_order_release);
+					currentEigrp->configs.dampeningRestartCount.store(1, std::memory_order_release);
+					currentEigrp->configs.dampeningWarnings.store(false, std::memory_order_release);
 				}
 			}
 			else if (commandStream[0] == "metric")
 			{
-				if (commandStream[1] == "rib-scale" && Functions::isDecimal(commandStream[1]))
+				if (commandStream[1] == "rib-scale")
 				{
-					uint8_t ribScale = static_cast<uint8_t>(std::stoi(commandStream[2]));
-					// TODO
+					if (!negate)
+					{
+						if (Functions::isDecimal(commandStream[2]))
+							currentEigrp->configs.ribScale.store(std::stoi(commandStream[2]), std::memory_order_release);
+					}
+					else
+					{
+						currentEigrp->configs.ribScale.store(128, std::memory_order_release);
+					}
 				}
 				else if (commandStream[1] == "weights")
 				{
+					EigrpConfigs::KValue kvalue;
+					if (!negate)
+					{
+						currentEigrp->configs.TOS.store(static_cast<uint8_t>(std::stoi(commandStream[2])), std::memory_order_release);
+						kvalue.k1_Bandwidth = static_cast<uint8_t>(std::stoi(commandStream[3]));
+						kvalue.k3_Delay = static_cast<uint32_t>(std::stoi(commandStream[4]));
+						kvalue.k4_Reliability = static_cast<uint8_t>(std::stoi(commandStream[5]));
+						kvalue.k2_Load = static_cast<uint8_t>(std::stoi(commandStream[6]));
+						kvalue.k5_MTU = static_cast<uint16_t>(std::stoi(commandStream[7]));
+					}
+					else
+					{
+						currentEigrp->configs.TOS.store(0, std::memory_order_release);
+						kvalue.k1_Bandwidth = 1;
+						kvalue.k3_Delay = 0;
+						kvalue.k4_Reliability = 1;
+						kvalue.k2_Load = 0;
+						kvalue.k5_MTU = 0;
+					}
 					std::unique_lock<std::shared_mutex> lock(currentEigrp->configs.configsMutex);
-					currentEigrp->configs.TOS = static_cast<uint8_t>(std::stoi(commandStream[2]));
-					auto& kvalue = currentEigrp->configs.kvalue;
-					kvalue.k1_Bandwidth = static_cast<uint8_t>(std::stoi(commandStream[3]));
-					kvalue.k3_Delay = static_cast<uint32_t>(std::stoi(commandStream[4]));
-					kvalue.k4_Reliability = static_cast<uint8_t>(std::stoi(commandStream[5]));
-					kvalue.k2_Load = static_cast<uint8_t>(std::stoi(commandStream[6]));
-					kvalue.k5_MTU = static_cast<uint16_t>(std::stoi(commandStream[7]));
+					currentEigrp->configs.kvalue = kvalue;
 				}
 			}
 			else if (commandStream[0] == "neighbor")
@@ -704,7 +799,9 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				InterfaceType type = terminal.engine.getInterfaceType(commandStream[2]);
 				float interfaceId = std::stof(commandStream[3]);
 
-				currentEigrp->enableUnicastNeighbor(neighborIp, type, interfaceId);
+				negate
+				  ? currentEigrp->disableUnicastNeighbor(neighborIp, type, interfaceId)
+				  : currentEigrp->enableUnicastNeighbor(neighborIp, type, interfaceId);
 			}
 			else if (commandStream[0] == "network")
 			{
@@ -719,41 +816,80 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				{
 					network.mask = Variable::IPv4::broadcast;
 				}
-				currentEigrp->addNetwork(network);
-				currentEigrp->updateInterfaceList();
-				currentEigrp->updateRoutingTableForConnected();
-			}
-			else if (commandStream[0] == "no")
-			{
-				// TODO
+
+				if (!negate)
+				{
+					currentEigrp->addNetwork(network);
+				}
+				else
+				{
+					{
+						std::unique_lock<std::shared_mutex> lock(currentEigrp->configs.configsMutex);
+						auto& networks = currentEigrp->configs.networks;
+						networks.erase(std::remove(networks.begin(), networks.end(), network), networks.end());
+					}
+
+					currentEigrp->updateInterfaceList();
+				}
 			}
 			else if (commandStream[0] == "soft-sia")
 			{
-				currentEigrp->configs.nonStopForwarding.store(true, std::memory_order_relaxed);
+				currentEigrp->configs.nonStopForwarding.store(!negate, std::memory_order_release);
 			}
 			else if (commandStream[0] == "timers")
 			{
 				if (commandStream[1] == "graceful-restart")
 				{
-					currentEigrp->configs.purgeTime.store(static_cast<uint16_t>(std::stoi(commandStream[3])));
+					negate
+					  ? currentEigrp->configs.purgeTime.store(240, std::memory_order_release)
+					  : currentEigrp->configs.purgeTime.store(static_cast<uint16_t>(std::stoi(commandStream[3])), std::memory_order_release);
 				}
 			}
 			else if (commandStream[0] == "topology")
 			{
-				terminal.changeMode(Mode::routerAddressFamilyTopology);
-				terminal.configureAddressFamily(currentEigrp->addressFamily);
-				terminal.isModeChanged = true;
+				if (!negate)
+				{
+					if (commandStream[1] == "base")
+					{
+						terminal.changeMode(Mode::routerAddressFamilyTopology);
+						terminal.configureAddressFamily(currentEigrp->addressFamily);
+						terminal.isModeChanged = true;
+					}
+					else
+					{
+						//TODO ADD named topologies based on route distinguishers - maybe
+					}
+				}
+				else
+				{
+					if (commandStream[1] != "base")
+					{
+						//TODO ADD named topologies based on route distinguishers - maybe
+					}
+				}
 			}
 		}
 	}
 	else if (terminal.currentSubMode == "ospf")
 	{
+		if (commandStream[0] == "exit")
+		{
+			terminal.exitMode(Mode::globalConfiguration);
+		}
 	}
 	else if (terminal.currentSubMode == "bgp")
 	{
+		if (commandStream[0] == "exit")
+		{
+			terminal.exitMode(Mode::globalConfiguration);
+		}
 	}
 	else if (terminal.currentSubMode == "rip")
 	{
+		if (commandStream[0] == "exit")
+		{
+			terminal.exitMode(Mode::globalConfiguration);
+		}
 	}
 	else return false;
 	return true;

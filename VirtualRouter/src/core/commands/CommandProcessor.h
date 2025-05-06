@@ -11,12 +11,16 @@ namespace Protocol
 {
     class Eigrp;
     struct EigrpNamed;
-    class EigrpInterface;
+
 
     namespace Dhcp
     {
         struct DhcpNetworkConfig;
     }
+}
+namespace EigrpConfigs 
+{
+    struct InterfaceConfigs;
 }
 
 class CommandProcessor
@@ -45,7 +49,7 @@ private:
 
     Protocol::Eigrp* currentEigrp;
     Protocol::EigrpNamed* currentEigrpNamed;
-    Protocol::EigrpInterface* currentEigrpInterface;
+    EigrpConfigs::InterfaceConfigs* currentEigrpInterface;
 
     Protocol::Dhcp::DhcpNetworkConfig* currentDhcpPool;
 };

@@ -14,7 +14,6 @@ Interface* Global::addInterface(InterfaceType interfaceType, std::string outInte
         return nullptr;
     }
     interfaceList[{interfaceType, interfaceId}] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, getRoutingInstance("default"), debug);
-    interfaceList[{interfaceType, interfaceId}]->startThreads();
 
     return interfaceList[{interfaceType, interfaceId}];
 }
@@ -34,8 +33,6 @@ bool Global::removeInterface(InterfaceType type, float interfaceId)
     std::lock_guard<std::mutex> lock(interfaceMutex);
     if (interfaceList.find({type, interfaceId}) != interfaceList.end())
     {
-        delete interfaceList[{type, interfaceId}];
-        interfaceList[{type, interfaceId}] = nullptr;
         interfaceList.erase({type, interfaceId});
         return true;
     }
@@ -58,7 +55,7 @@ VirtualRouter* Global::getRoutingInstance(const std::string& name, AddressFamily
     std::lock_guard<std::mutex> lock(routingInstanceMutex);
     if (routingInstances.find(name) != routingInstances.end() && 
         ad != AddressFamily::NONE 
-        ? routingInstances[name]->enabledAddressFamilies.contains(ad)
+        ? routingInstances[name]->enabledAddressFamilies.count(ad)
         : true)
     {
         return routingInstances[name];

@@ -68,38 +68,46 @@ class RealConsole : public IConsole
 {
 public:
     virtual ~RealConsole() override = default;
+    bool testingMode = Global::getInstance().testingMode;
 
     void clearScreen() override 
     {
+        if (testingMode) return;
         std::cout << "\033[2J\033[H"; // ANSI escape to clear screen and move cursor to home
     }
 
     void enableLineWrapping() override 
     {
+        if (testingMode) return;
         std::cout << "\033[?7h"; // Enable line wrapping
     }
 
     void clearLineAfterCursor() override 
     {
+        if (testingMode) return;
         std::cout << "\033[K"; // Clear from cursor to end of line
     }
 
     void saveCursorPosition() override 
     {
+        if (testingMode) return;
         std::cout << "\033[s"; // Save cursor position
     }
 
     void restoreCursorPosition() override 
     {
+        if (testingMode) return;
         std::cout << "\033[u"; // Restore cursor position
     }
     void moveCursorToStart() override
     {
+        if (testingMode) return;
         std::cout << "\033[1G";
     }
 
     void moveCursorLeft(size_t count) override 
     {
+        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "D"; // Move cursor left
         }
@@ -107,6 +115,7 @@ public:
 
     void moveCursorRight(size_t count) override 
     {
+        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "C"; // Move cursor right
         }
@@ -114,6 +123,7 @@ public:
 
     void moveCursorUp(size_t count) override 
     {
+        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "A"; // Move cursor up
         }
@@ -121,6 +131,7 @@ public:
 
     void moveCursorDown(size_t count) override 
     {
+        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "B"; // Move cursor down
         }
@@ -128,6 +139,7 @@ public:
 
     void print(std::string str) override 
     {
+        if (testingMode) return;
         std::cout << str;
     }
 
@@ -196,7 +208,7 @@ public:
 class Console
 {
 private:
-    friend class ConsoleTest;
+    friend class Internal_ConsoleTest;
 public:
 
     /**

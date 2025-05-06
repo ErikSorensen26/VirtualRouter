@@ -5,6 +5,7 @@
 int main() 
 {
     Logger::getInstance().initialize(true, /*isolateMode*/false);
+    Global::getInstance().routingEnabled = true;
 
     CliEngine* engine = new CliEngine();
     auto session = engine->createSession(false);

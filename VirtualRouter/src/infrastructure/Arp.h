@@ -18,7 +18,7 @@
 
 // Forward declarations
 class Interface;
-class ArpTest;
+class Internal_ArpTest;
 
 /**
  * @namespace Protocol
@@ -44,7 +44,7 @@ struct ArpCacheEntry
 class Arp 
 {
 public:
-    friend class ::ArpTest;
+    friend class ::Internal_ArpTest;
     /**
      * @brief Constructor for the ARP class.
      * @param CurrentInterface Reference to the network interface associated with this ARP instance.

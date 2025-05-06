@@ -49,7 +49,6 @@ void Configs::initConfigs(const std::string& filePath)
     }
     
     // Load JSON data for interface configurations
-    json configJson;
     if (fileSystem->fileExists(CONFIG_FILE))
     {
         std::string content;
@@ -572,8 +571,9 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, ModeConfig& mode
     }
 }
 
-void Configs::deleteConfig(nlohmann::ordered_json& obj, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isListed)
+bool Configs::deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isListed)
 {
+    return true;
 }
 
 bool Configs::isVolatile(const std::string& command)

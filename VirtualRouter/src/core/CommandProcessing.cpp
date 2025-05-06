@@ -1,8 +1,6 @@
 #include <CliEngine.h>
 #include <CommandProcessor.h>
 
-//TODO fix "end" command when in router config mode
-
 bool CliSession::executeCommand(std::string &command)
 {
 	// Reset the command directory
@@ -31,6 +29,7 @@ bool CliSession::executeCommand(std::string &command)
 	// Compile LINE command
 	for (size_t index = 0; index < TEMPcommandStream.size(); index++)
 	{
+		if (commandProcessor->negate && index == 0) continue;
 		if (!textLine)
 		{
 			commandStream.push_back(TEMPcommandStream[index]);
@@ -95,7 +94,9 @@ bool CliSession::executeCommand(std::string &command)
 			commandHistory = commandStream;
 		}
 		
-		executeSuccess = engine.saveCommand(commandHistory, commandStream, modeConfig, isModeChanged, isExitCommand, isList);
+		executeSuccess = commandProcessor->negate 
+		  ? engine.deleteConfig(modeConfig, commandHistory, commandStream, isList)
+		  : engine.saveCommand(commandHistory, commandStream, modeConfig, isModeChanged, isExitCommand, isList);
 		
 		// Check if mode changed
 		if (isModeChanged)

@@ -23,8 +23,8 @@
 class RestClient
 {
 public:
-    explicit RestClient(uint16_t port = 3000, std::string host = "127.0.0.1")
-        : host(std::move(host)), port(port) {};
+    explicit RestClient(uint16_t port = 3000, std::string_view h = "127.0.0.1")
+        : host(std::move(h)), port(port) {};
 
     /// Perform HTTP GET, return body as std::string
     std::string get(const std::string& path)

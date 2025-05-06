@@ -10,24 +10,25 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 			if (commandStream[1] == "key-chain")
 			{
 				std::string keychain = commandStream[2];
-				//currentEigrpInterface->configs.authKey.key
 				// TODO
 			}
 			else if (commandStream[1] == "mode")
 			{
 				if (commandStream[2] == "hmac-sha-256")
 				{
-					currentEigrpInterface->configs.authKey.authType = EigrpConfigs::AuthType::SHA1;
+					currentEigrpInterface->authKey.authType = EigrpConfigs::AuthType::SHA1;
 				}
 				else if (commandStream[2] == "md5")
 				{
-					currentEigrpInterface->configs.authKey.authType = EigrpConfigs::AuthType::MD5;
+					currentEigrpInterface->authKey.authType = EigrpConfigs::AuthType::MD5;
 				}
 			}
 		}
 		else if (commandStream[0] == "bandwidth-percentage")
 		{
-			currentEigrpInterface->configs.bandwidthPercentage.store(static_cast<uint32_t>(std::stoi(commandStream[1])), std::memory_order_release);
+			negate
+			  ? currentEigrpInterface->bandwidthPercentage.store(50, std::memory_order_release)
+			  : currentEigrpInterface->bandwidthPercentage.store(static_cast<uint32_t>(std::stoi(commandStream[1])), std::memory_order_release);
 		}
 		else if (commandStream[0] == "bfd")
 		{
@@ -35,15 +36,15 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 		}
 		else if (commandStream[0] == "dampening-change")
 		{
-			currentEigrpInterface->configs.dampeningChange.store(static_cast<uint8_t>(std::stoi(commandStream[1])), std::memory_order_release);
+			negate
+			  ? currentEigrpInterface->dampeningChange.store(0, std::memory_order_release)
+			  : currentEigrpInterface->dampeningChange.store(static_cast<uint8_t>(std::stoi(commandStream[1])), std::memory_order_release);
 		}
 		else if (commandStream[0] == "dampening-interval")
 		{
-			currentEigrpInterface->configs.dampeningInterval.store(static_cast<uint16_t>(std::stoi(commandStream[1])), std::memory_order_release);
-		}
-		else if (commandStream[0] == "default")
-		{
-			// XXX
+			negate
+			  ? currentEigrpInterface->dampeningInterval.store(5, std::memory_order_release)
+			  : currentEigrpInterface->dampeningInterval.store(static_cast<uint16_t>(std::stoi(commandStream[1])), std::memory_order_release);
 		}
 		else if (commandStream[0] == "exit-af-interface")
 		{
@@ -56,37 +57,56 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 		}
 		else if (commandStream[0] == "hello-interval")
 		{
-			currentEigrpInterface->configs.helloTime.store(static_cast<uint16_t>(std::stoi(commandStream[1])), std::memory_order_release);
+			negate
+			  ? currentEigrpInterface->helloTime.store(5, std::memory_order_release)
+			  : currentEigrpInterface->helloTime.store(static_cast<uint16_t>(std::stoi(commandStream[1])), std::memory_order_release);
 		}
 		else if (commandStream[0] == "hold-time")
 		{
-			currentEigrpInterface->configs.holdTime.store(static_cast<uint16_t>(std::stoi(commandStream[1])), std::memory_order_release);
+			negate
+			  ? currentEigrpInterface->holdTime.store(15, std::memory_order_release)
+			  : currentEigrpInterface->holdTime.store(static_cast<uint16_t>(std::stoi(commandStream[1])), std::memory_order_release);
 		}
 		else if (commandStream[0] == "next-hop-self")
 		{
-			currentEigrpInterface->configs.nextHopSelf.store(true, std::memory_order_release);
-		}
-		else if (commandStream[0] == "no")
-		{
-			// XXX
+			currentEigrpInterface->nextHopSelf.store(!negate, std::memory_order_release);
 		}
 		else if (commandStream[0] == "passive-interface")
 		{
-			currentEigrpInterface->setPassive(true);
+			terminal.isList = true;
+			if (!negate)
+			{
+				currentEigrp->addPassiveInterface(currentEigrpInterface->type, currentEigrpInterface->id);
+			}
+			else
+			{
+				currentEigrp->addPassiveInterface(currentEigrpInterface->type, currentEigrpInterface->id, false);
+			}
 		}
 		else if (commandStream[0] == "shutdown")
 		{
-			// XXX
+			currentEigrpInterface->shutdown = negate;
+			currentEigrp->updateInterfaceList();
 		}
 		else if (commandStream[0] == "split-horizon")
 		{
-			currentEigrpInterface->configs.splitHorizon.store(true, std::memory_order_release);
+			currentEigrpInterface->splitHorizon.store(!negate, std::memory_order_release);
 		}
 		else if (commandStream[0] == "summary-address")
 		{
 			uint8_t size = 0;
 			ByteString network;
 			uint8_t mask;
+			Protocol::EigrpInterface* iface = nullptr;
+			{
+				std::shared_lock<std::shared_mutex> lock(currentEigrp->interfaceMutex);
+				auto intIt = currentEigrp->eigrpInterfaceList.find({currentEigrpInterface->type, currentEigrpInterface->id});
+				if (intIt != currentEigrp->eigrpInterfaceList.end())
+				{
+					iface = intIt->second;
+				}
+			}
+
 			if (!Functions::splitSlashMiddle(commandStream[1], network, mask))
 			{
 				network = Functions::addressToByte(commandStream[1]);
@@ -101,6 +121,38 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 			if (commandStream.size() != size && commandStream[size] == "leak-map")
 			{
 				// XXX
+			}
+
+			if (iface)
+			{
+				negate
+				  ? iface->removeSummaryRoute(network, mask)
+				  : iface->addSummaryRoute(network, mask);
+			}
+			else
+			{
+				if (!negate)
+				{
+					std::shared_lock<std::shared_mutex> lock(currentEigrpInterface->configsMutex);
+					if (!std::any_of(currentEigrpInterface->summaryRoutes.begin(), currentEigrpInterface->summaryRoutes.end(),
+						[&](EigrpConfigs::SummaryRoute& summary) {
+							return summary.summary->network == network && summary.summary->mask == mask;
+						})
+					)
+					{
+						currentEigrpInterface->pendingSummaryRoutes.push_back({network, mask});
+					}
+				}
+				else
+				{
+					std::shared_lock<std::shared_mutex> lock(currentEigrpInterface->configsMutex);
+					std::erase_if(currentEigrpInterface->summaryRoutes, [&](EigrpConfigs::SummaryRoute& summary) {
+						return summary.summary->network == network && summary.summary->mask == mask;
+					});
+					std::erase_if(currentEigrpInterface->pendingSummaryRoutes, [&](std::pair<ByteString, uint8_t>& summary) {
+						return summary.first == network && summary.second == mask;
+					});
+				}
 			}
 		}
 	}

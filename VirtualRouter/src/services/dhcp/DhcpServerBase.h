@@ -21,9 +21,9 @@
 
 // Forward declarations
 class Interface;
-class DhcpServerTest;
-class Dhcpv6ServerTest;
-class IPPoolTest;
+class Internal_DhcpServerTest;
+class Internal_Dhcpv6ServerTest;
+class Internal_IPPoolTest;
 
 namespace Protocol
 {
@@ -148,9 +148,9 @@ namespace Protocol
     public:
         friend class DhcpServer;
         friend class Dhcpv6Server;
-        friend class ::DhcpServerTest;
-        friend class ::Dhcpv6ServerTest;
-        friend class ::IPPoolTest;
+        friend class ::Internal_DhcpServerTest;
+        friend class ::Internal_Dhcpv6ServerTest;
+        friend class ::Internal_IPPoolTest;
 
         friend struct Dhcp::DhcpNetworkConfig;
 

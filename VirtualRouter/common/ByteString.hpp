@@ -23,6 +23,10 @@ public:
         std::memset(sbo_buffer_, 0, SBO_BUFFER_SIZE);
     }
 
+    inline ByteString(const void* data, size_t size) {
+        initialize(reinterpret_cast<const byte*>(data), size);
+    }
+
     inline ByteString(const ByteString& other) : size_(other.size_), is_sbo_(other.is_sbo_) {
         if (is_sbo_) {
             capacity_ = SBO_BUFFER_SIZE;

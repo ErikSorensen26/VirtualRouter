@@ -33,7 +33,7 @@ enum RoutingMode
 class CliEngine : public Configs
 {
 public:
-
+    friend class Internal_CliTest;
     Com errorCommand;           ///< Represents an error command
     Com carriageReturnCommand;  ///< Represents a carriage return command
 
@@ -41,6 +41,12 @@ public:
      * @brief Constructor. Initializes the engine.
      */
     CliEngine();
+
+    /**
+     * @brief Constructor. Initializes the engine.
+     * @param fileSystem Custom file system.
+     */
+    CliEngine(std::shared_ptr<IFileSystem> fs);
 
     /**
      * @brief Destructor.
@@ -115,6 +121,8 @@ public:
      */
     InterfaceType getInterfaceType(const std::string& type);
 
+    std::string getMac(InterfaceType type, size_t id);
+
     /**
      * @brief Retrieves the command tree;
      */
@@ -124,8 +132,10 @@ public:
     size_t paginationCount = 10; ///< Pagination count for command help
     DoTime timeManager; ///< Manages time-related functionality
     static std::string defaultMode;
+    void clearSessions();
 
     std::vector<CliSession*> sessions;
+
 private:
 
     /**

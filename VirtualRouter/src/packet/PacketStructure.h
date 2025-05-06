@@ -31,6 +31,7 @@
 #include "OspfHeader.hpp"
 #include "SyslogHeader.hpp"
 
+
 /**
  * @file Encapsulation.h
  * @brief Defines constants, structures, and utility functions for packet encapsulation.
@@ -550,9 +551,7 @@ namespace Variable
             inline const ByteString hello("\x05", 1);         ///< EIGRP External Protocol Hello.
             inline const ByteString ospf("\x06", 1);          ///< EIGRP External Protocol OSPF.
             inline const ByteString isis("\x07", 1);          ///< EIGRP External Protocol ISIS.
-            inline const ByteString egp("\x08", 1);           ///< EIGRP External Protocol EGP.
             inline const ByteString bgp("\x09", 1);           ///< EIGRP External Protocol BGP.
-            inline const ByteString idrp("\x0a", 1);          ///< EIGRP External Protocol IDRP.
             inline const ByteString connected("\x0b", 1);     ///< EIGRP External Protocol Connected.
         }
 
@@ -582,6 +581,20 @@ namespace Variable
             inline const ByteString EXTCOMM_SAR("\x04", 1);         ///< EIGRP Community Attribute for SAR.
             inline const ByteString EXTCOMM_RPM("\x05", 1);         ///< EIGRP Community Attribute for RPM.
             inline const ByteString EXTCOMM_VRR("\x06", 1);         ///< EIGRP Community Attribute for VRR.
+        }
+
+        /**
+         * @namespace Dampening
+         * @brief Contains Eigrp Dampening constants
+         */
+        namespace Dampening
+        {
+            inline const uint32_t flapPenalty = 1000; ///< Eigrp dampening flap penalty.
+            inline const uint32_t supressThreshold = 2000; ///< Supression threshold from penalty.
+            inline const uint32_t reuseThreshold = 750; ///< Penalty needed to be unsupressed.
+            inline const uint32_t decayInterval = 5; ///< Penalty decays every 5 seconds.
+            inline const uint32_t halflifeTime = 15; ///< Penalty is halfed every 15 seconds.
+            inline const uint32_t maxSuppressTime = 10; ///< Maximum time a route can be supressed.
         }
     }
 
@@ -643,6 +656,9 @@ using Layer4Variant = std::variant<TcpHeader, UdpHeader, EigrpHeader>;
 // Layer 5 Variants
 using Layer5Variant = std::variant<DhcpHeader, Dhcpv6Header, Dhcpv6RelayHeader>;
 
+// All Packet Headers Varient
+using AllPacketHeaders = std::variant<Layer2Variant, Layer2_5Variant, Layer3Variant, Layer4Variant, Layer5Variant>;
+
 /**
  * @struct PacketInfo
  * @brief Aggregates packet information across different protocol layers.
@@ -669,6 +685,34 @@ template <typename T>
 bool is_type(const std::any &a)
 {
     return std::any_cast<T>(&a) != nullptr;
+}
+
+/**
+ * @brief Flattens a PacketInfo object to a list of all headers in the packet
+ */
+inline std::vector<AllPacketHeaders> flattenHeaders(const PacketInfo& pkt)
+{
+    std::vector<AllPacketHeaders> result;
+
+    // Helper lamda to append header from each layer to the result
+    auto append = [&result](const auto& layerVac)
+    {
+        for (const auto& v : layerVac)
+        {
+            std::visit([&](const auto& header)
+            {
+                result.emplace_back(header);
+            }, v);
+        }
+    };
+
+    append(pkt.Layer2);
+    append(pkt.Layer2_5);
+    append(pkt.Layer3);
+    append(pkt.Layer4);
+    append(pkt.Layer5);
+
+    return result;
 }
 
 #endif // PACKET_STRUCTURE_H

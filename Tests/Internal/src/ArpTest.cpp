@@ -10,7 +10,7 @@
 
 using namespace Protocol;
 
-class ArpTest : public ::testing::Test
+class Internal_ArpTest : public ::testing::Test
 {
 protected:
     void SetUp() override
@@ -51,7 +51,7 @@ void simulateArpReply(Arp& arp, const ByteString& ip, const ByteString& mac)
 }
 
 // Test Verify MAC is know after receiving a reply
-TEST_F(ArpTest, ReceiveReply_UpdatesArpCache)
+TEST_F(Internal_ArpTest, ReceiveReply_UpdatesArpCache)
 {
     ByteString testIp = "\xC0\xA8\x01\x01";
     ByteString testMac = "\xAA\xBB\xCC\xDD\xEE\xFF";
@@ -71,7 +71,7 @@ TEST_F(ArpTest, ReceiveReply_UpdatesArpCache)
 }
 
 // Test Verifies resolveAndSend triggers an ARP request and enqueues packet
-TEST_F(ArpTest, ResolveAndSend_EnqueuesPacketWhenResolved)
+TEST_F(Internal_ArpTest, ResolveAndSend_EnqueuesPacketWhenResolved)
 {
     ByteString testIp = "\xC0\xA8\x01\x02";
     PacketInfo testPacket;
@@ -108,7 +108,7 @@ TEST_F(ArpTest, ResolveAndSend_EnqueuesPacketWhenResolved)
 }
 
 // Test Verifies timeout behabior when no ARP reply is recieved
-TEST_F(ArpTest, ResolveAndSend_TimesOutWhenNoReply)
+TEST_F(Internal_ArpTest, ResolveAndSend_TimesOutWhenNoReply)
 {
     ByteString testIp = "\xC0\xA8\x01\x03";
     ByteString testMac = Variable::Mac::broadcast;
@@ -128,7 +128,7 @@ TEST_F(ArpTest, ResolveAndSend_TimesOutWhenNoReply)
 }
 
 // Test Ensures multiple packets for the same IP are queued and sent
-TEST_F(ArpTest, ResolveAndSend_HandlesMultiplePackets)
+TEST_F(Internal_ArpTest, ResolveAndSend_HandlesMultiplePackets)
 {
     ByteString testIp = "\xC0\xA8\x01\x04";
     ByteString testMac = "\xAA\xBB\xCC\xDD\xEE\xFF";
@@ -181,7 +181,7 @@ TEST_F(ArpTest, ResolveAndSend_HandlesMultiplePackets)
 }
 
 // Test Ensures ARP cache is cleaned up after expiracy
-TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
+TEST_F(Internal_ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
 {
     ByteString testIp = "\xC0\xA8\x01\x05";
     ByteString testMac = "\xFF\xEE\xDD\xCC\xBB\xAA";
@@ -204,7 +204,7 @@ TEST_F(ArpTest, ArpCacheCleanup_RemovesExpiresEntries)
 }
 
 // Test Simultaneous requests for multiple IPs
-TEST_F(ArpTest, ResolveAndSend_HandlesSumultaneousRequests)
+TEST_F(Internal_ArpTest, ResolveAndSend_HandlesSumultaneousRequests)
 {
     ByteString ip1 = "\xC0\xA8\x01\x06";
     ByteString ip2 = "\xC0\xA8\x01\x07";
@@ -263,7 +263,7 @@ TEST_F(ArpTest, ResolveAndSend_HandlesSumultaneousRequests)
 }
 
 // Test ARP reply for unsolicited IP
-TEST_F(ArpTest, ReceiveReply_Unsolicited)
+TEST_F(Internal_ArpTest, ReceiveReply_Unsolicited)
 {
     ByteString unsolicitedIp = "\xC0\xA8\x01\x08";
     ByteString unsolicitedMac = "\xAA\xBB\xCC\xDD\xEE\xFF";
@@ -281,7 +281,7 @@ TEST_F(ArpTest, ReceiveReply_Unsolicited)
 }
 
 // Test Unterrupt waitForReply with shutdown
-TEST_F(ArpTest, WaitForReply_InterruptsOnShutdown)
+TEST_F(Internal_ArpTest, WaitForReply_InterruptsOnShutdown)
 {
     ByteString targetIp = "\xC0\xA8\x01\x09";
     ByteString testMac = Variable::Mac::broadcast;
@@ -301,7 +301,7 @@ TEST_F(ArpTest, WaitForReply_InterruptsOnShutdown)
 }
 
 // Test SendReply sends correct ARP reply packet
-TEST_F(ArpTest, SendReply_SendsCorrectPacket)
+TEST_F(Internal_ArpTest, SendReply_SendsCorrectPacket)
 {
     ByteString senderMac = "\x11\x22\x33\x44\x55\x66";
     ByteString senderIp = "\xC0\xA8\x01\x10";
@@ -314,7 +314,7 @@ TEST_F(ArpTest, SendReply_SendsCorrectPacket)
 }
 
 // Test Hight Volume of Requests
-TEST_F(ArpTest, ResolveAndSend_StressTestWithHighVolumeRequests)
+TEST_F(Internal_ArpTest, ResolveAndSend_StressTestWithHighVolumeRequests)
 {
     const unsigned int numRequests = 200;
     std::vector<ByteString> ips;

@@ -45,8 +45,8 @@ public:
         EXPECT_CALL(*this, setIPv6).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([this](ByteString ip, bool local, uint8_t subnet, bool eui64) {
             if (shutdownFlag.load(std::memory_order_relaxed)) return;
             std::lock_guard<std::shared_mutex> lock(configs.ipMutex);
-            configs.ipv6.linkLocalAddress.ip = ip; 
-            configs.ipv6.linkLocalAddress.prefix = subnet;
+            configs.ipv6.linkLocalAddress->ip = ip; 
+            configs.ipv6.linkLocalAddress->prefix = subnet;
         }));
     }
     void enableShutdown()

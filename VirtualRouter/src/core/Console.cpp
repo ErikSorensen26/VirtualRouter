@@ -341,7 +341,6 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
         else
         {
             iConsole->moveCursorLeft(1);
-            //std::cout << "\b \b";
         }
 
         if (!insert)

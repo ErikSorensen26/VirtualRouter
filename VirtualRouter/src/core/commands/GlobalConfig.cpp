@@ -436,7 +436,6 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		terminal.interfaceID = static_cast<uint8_t>(Functions::stringToNum(commandStream[2]));
 		InterfaceType interfaceType = terminal.engine.getInterfaceType(type);
 		std::string intType;
-		std::string mac;
 		size_t id = static_cast<size_t>(std::floor(terminal.interfaceID));
 		if (!Global::getInstance().getInterface(terminal.engine.getInterfaceType(type), terminal.interfaceID))
 		{
@@ -449,32 +448,15 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			{
 				if ((type == "Ethernet" || type == "GigabitEthernet" || type == "FastEthernet") && terminal.engine.physicalInterfaces.size() >= id)
 				{
-					intType = terminal.engine.physicalInterfaces[id];
+						intType = terminal.engine.physicalInterfaces[id];
 				}
 				else
 				{
-					intType = "NO_INTERFACE";
-				}
-				if (commandStream[1] == "Ethernet" && terminal.engine.macAddressList.Ethernet.size() >= id)
-				{
-					mac = terminal.engine.OUI + terminal.engine.macAddressList.Ethernet[id];
-				}
-				else if (commandStream[1] == "FastEthernet" && terminal.engine.macAddressList.FastEthernet.size() >= id)
-				{
-					mac = terminal.engine.OUI + terminal.engine.macAddressList.FastEthernet[id];
-				}
-				else if (commandStream[1] == "GigabitEthernet" && terminal.engine.macAddressList.GigabitEthernet.size() >= id)
-				{
-					mac = terminal.engine.OUI + terminal.engine.macAddressList.GigabitEthernet[id];
-				}
-				else if (commandStream[1] == "Dot11Radio")
-				{
-					mac = terminal.engine.OUI + "0d";
-					char buffer[5];
-					std::sprintf(buffer, "%04ld", static_cast<long>(terminal.interfaceID));
-					mac += buffer;
+						intType = "NO_INTERFACE";
 				}
 				InterfaceType interfaceTypeEnum = terminal.engine.getInterfaceType(type);
+				std::string mac = terminal.engine.getMac(interfaceTypeEnum, id);
+				if (mac.empty() || intType == "NO_INTERFACE") return false;
 				Global::getInstance().addInterface(interfaceType, intType, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
 				currentVrf->addInterface(Global::getInstance().getInterface(interfaceTypeEnum, terminal.interfaceID), interfaceType, terminal.interfaceID);
 			}

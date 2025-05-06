@@ -33,7 +33,8 @@ struct EthernetHeader
     bool decapsulate(const ByteString ethernetHeader)
     {
         //Profiler::getInstance().notify("ethernet decap start");
-        if (ethernetHeader.size() != 14) return false;
+        if (ethernetHeader.size() != 14) 
+            return false;
         destinationMac = ethernetHeader.substr(0, 6);
         sourceMac = ethernetHeader.substr(6, 6);
         type = ethernetHeader.substr(12, 2);

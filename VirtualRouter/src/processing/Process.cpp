@@ -142,7 +142,7 @@ void ProcessPacket::processIcmpV6(const IcmpV6Header& icmp)
     else
     {
         std::shared_lock<std::shared_mutex> lock(interface->configs.ipMutex);
-        currentIp = interface->configs.ipv6.linkLocalAddress.ip;
+        currentIp = interface->configs.ipv6.linkLocalAddress->ip;
         if (currentIp.size() != 16) return; // Invalid IP
     }
 

@@ -109,7 +109,7 @@ struct IpInfo
             bool globalValid = false;
             uint8_t prefix = 0;
 
-            bool validateAddress(bool local = false)
+            void validateAddress(bool local = false)
             {
                 if (local)
                 {
@@ -124,62 +124,27 @@ struct IpInfo
             }
         };
 
-        IPv6Address linkLocalAddress; ///< IPv6 address.
-        std::vector<IPv6Address> globalAddresses; ///< Global IPv6 addresses.
-        std::vector<IPv6Address> uniqueLocalAddresses{}; ///< Unique Local Addresses.
+        IPv6Address* linkLocalAddress = new IPv6Address(); ///< IPv6 address.
+        std::vector<IPv6Address*> globalAddresses; ///< Global IPv6 addresses.
+        std::vector<IPv6Address*> uniqueLocalAddresses{}; ///< Unique Local Addresses.
 
-        IPv6Address* addAddress(const ByteString& ip, bool local, uint8_t prefix)
-        {
-            if (local)
-            {
-                // Only one local-address can exist
-                if (linkLocalAddress.ip.empty())
-                {
-                    linkLocalAddress.ip = ip;
-                    linkLocalAddress.prefix = prefix;
-                    linkLocalAddress.tentative = true;
-                    linkLocalAddress.valid = false;
-                    return &linkLocalAddress;
-                }
-                else
-                {
-                    std::cerr << "Error: Link-Local address already assigned";
-                }
-            }
-            else
-            {
-                IPv6Address address;
-                address.ip = ip;
-                address.prefix = prefix;
-                globalAddresses.push_back(address);
-                return &globalAddresses.back();
-            }
-            return nullptr;
-        }
+        IPv6Address* addAddress(const ByteString& ip, bool local, uint8_t prefix);
 
-        IPv6Address* addUniqueLocalAddress(const ByteString& ip, uint8_t prefixLen)
-        {
-            IPv6Address address;
-            address.ip = ip;
-            address.prefix = prefixLen;
-            uniqueLocalAddresses.push_back(address);
-            return &uniqueLocalAddresses.back();
-        }
+        IPv6Address* addUniqueLocalAddress(const ByteString& ip, uint8_t prefixLen);
 
         void removeAddress(const ByteString& ip, bool local)
         {
             if (local)
             {
-                if (linkLocalAddress.ip == ip)
-                {
-                    linkLocalAddress.ip.clear();
-                }
+                auto ipv6 = linkLocalAddress;
+                linkLocalAddress = new IPv6Address();
+                delete ipv6;
             }
             else
             {
                 auto& addressList = (ip.substr(0, 2) == "\xfc\x00") ? uniqueLocalAddresses : globalAddresses;
                 addressList.erase(std::remove_if(addressList.begin(), addressList.end(),
-                    [&](const IPv6Address& addr) { return addr.ip == ip; }), addressList.end());
+                    [&](const IPv6Address* addr) { return addr->ip == ip; }), addressList.end());
             }
         }
 
@@ -187,15 +152,15 @@ struct IpInfo
         {
             for (auto& address : globalAddresses)
             {
-                address.validateAddress(false);
+                address->validateAddress(false);
             }
         }
 
         void validateLinkLocalAddress()
         {
-            if (!linkLocalAddress.ip.empty())
+            if (!linkLocalAddress->ip.empty())
             {
-                linkLocalAddress.validateAddress(true);
+                linkLocalAddress->validateAddress(true);
             }
         }
     }  ipv6;
@@ -203,7 +168,7 @@ struct IpInfo
     ByteString getLocalAddress()
     {
         std::shared_lock<std::shared_mutex> lock(ipMutex);
-        return ipv6.linkLocalAddress.ip;
+        return ipv6.linkLocalAddress->ip;
     }
 
     ByteString getGlobalUnicast()
@@ -211,7 +176,7 @@ struct IpInfo
         std::shared_lock<std::shared_mutex> lock(ipMutex);
         if (!ipv6.globalAddresses.empty())
         {
-            return ipv6.globalAddresses.front().ip;
+            return ipv6.globalAddresses.front()->ip;
         }
         return {};
     }
@@ -221,7 +186,7 @@ struct IpInfo
         std::shared_lock<std::shared_mutex> lock(ipMutex);
         if (!ipv6.uniqueLocalAddresses.empty())
         {
-            return ipv6.uniqueLocalAddresses.front().ip;
+            return ipv6.uniqueLocalAddresses.front()->ip;
         }
         return {};
     }
@@ -232,7 +197,7 @@ struct IpInfo
      */
     struct Eigrp
     {
-        std::unordered_set<uint32_t> ipv6AutonomousSystems;
+        std::map<std::string, std::unordered_set<uint32_t>> ipv6AutonomousSystems; ///< Vrf to enabled autonomous system list
     } eigrp;
 };
 

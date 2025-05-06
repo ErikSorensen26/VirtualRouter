@@ -100,7 +100,7 @@ public:
 
     void autoConfig();
 
-    void duplicateAddressDetection(IpInfo::IPv6::IPv6Address& address, bool isLinkLocal = false);
+    void duplicateAddressDetection(IpInfo::IPv6::IPv6Address* address, bool isLinkLocal = false);
 
     /**
      * @struct Configs

@@ -1,5 +1,5 @@
 
-// EncapsulationTest.cpp
+// Internal_EncapsulationTest.cpp
 
 #include <gtest/gtest.h>
 #include "Encapsulation.h"         // Your encapsulate function
@@ -11,7 +11,7 @@
 //--------------------------------------------------------------------------------
 // Test Fixture
 //--------------------------------------------------------------------------------
-class EncapsulationTest : public ::testing::Test 
+class Internal_EncapsulationTest : public ::testing::Test 
 {
 protected:
     void SetUp() override
@@ -35,7 +35,7 @@ protected:
 
 
 // Test EthernetOnly_Valid
-TEST_F(EncapsulationTest, EthernetOnly_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetOnly_Valid)
 {
     // Build a minimal Ethernet "whole packet":
     // [Ethernet(14)] + [Payload]
@@ -67,7 +67,7 @@ TEST_F(EncapsulationTest, EthernetOnly_Valid)
 }
 
 // Test EthernetOnly_Invalid
-TEST_F(EncapsulationTest, EthernetOnly_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetOnly_Invalid)
 {
     // No Layer2.5 or higher headers
     PacketInfo packetInfo;
@@ -89,7 +89,7 @@ TEST_F(EncapsulationTest, EthernetOnly_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetArp_Valid
-TEST_F(EncapsulationTest, EthernetArp_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetArp_Valid)
 {
     // Build a minimal Ethernet + ARP "whole packet":
     // [Ethernet(14)] + [ARP(28)] = 42 bytes
@@ -150,7 +150,7 @@ TEST_F(EncapsulationTest, EthernetArp_Valid)
 }
 
 // Test EthernetArp_Invalid
-TEST_F(EncapsulationTest, EthernetArp_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetArp_Invalid)
 {
     // Build an Ethernet + ARP packet with incomplete ARP header
     ByteString ethernetHeader = std::string(
@@ -208,7 +208,7 @@ TEST_F(EncapsulationTest, EthernetArp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetMplsIPv4_Valid
-TEST_F(EncapsulationTest, EthernetMplsIPv4_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetMplsIPv4_Valid)
 {
     // Ethernet(14) + MPLS(4) + IPv4(20) = 38 bytes
     ByteString ethernetHeader = std::string(
@@ -278,7 +278,7 @@ TEST_F(EncapsulationTest, EthernetMplsIPv4_Valid)
 }
 
 // Test EthernetMplsIPv4_Invalid
-TEST_F(EncapsulationTest, EthernetMplsIPv4_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetMplsIPv4_Invalid)
 {
     // Ethernet(14) + MPLS(4) + incomplete IPv4(10) = 28 bytes
     ByteString ethernetHeader = std::string(
@@ -345,7 +345,7 @@ TEST_F(EncapsulationTest, EthernetMplsIPv4_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Icmp_Valid
-TEST_F(EncapsulationTest, EthernetIPv4Icmp_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Icmp_Valid)
 {
     // Ethernet(14) + IPv4(20) + ICMP(8) = 42 bytes
     ByteString ethernetHeader = std::string(
@@ -420,7 +420,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Icmp_Valid)
 }
 
 // Test EthernetIPv4Icmp_Invalid
-TEST_F(EncapsulationTest, EthernetIPv4Icmp_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Icmp_Invalid)
 {
     // Ethernet(14) + IPv4(20) + incomplete ICMP(4) = 38 bytes
     ByteString ethernetHeader = std::string(
@@ -495,7 +495,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Icmp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv6Icmpv6_Valid
-TEST_F(EncapsulationTest, EthernetIPv6Icmpv6_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv6Icmpv6_Valid)
 {
     // Ethernet(14) + IPv6(40) + ICMPv6(8) = 62 bytes
     ByteString ethernetHeader = std::string(
@@ -561,7 +561,7 @@ TEST_F(EncapsulationTest, EthernetIPv6Icmpv6_Valid)
 }
 
 // Test EthernetIPv6Icmpv6_Invalid
-TEST_F(EncapsulationTest, EthernetIPv6Icmpv6_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv6Icmpv6_Invalid)
 {
     // Ethernet(14) + IPv6(40) + incomplete ICMPv6(4) = 58 bytes
     ByteString ethernetHeader = std::string(
@@ -621,7 +621,7 @@ TEST_F(EncapsulationTest, EthernetIPv6Icmpv6_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Igmp_Valid
-TEST_F(EncapsulationTest, EthernetIPv4Igmp_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Igmp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=2 => IGMP) + IGMP(8) = 42 bytes
     ByteString ethernetHeader = std::string(
@@ -695,7 +695,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Igmp_Valid)
 }
 
 // Test EthernetIPv4Igmp_Invalid
-TEST_F(EncapsulationTest, EthernetIPv4Igmp_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Igmp_Invalid)
 {
     // Ethernet(14) + IPv4(20, proto=2 => IGMP) + incomplete IGMP(4) = 38 bytes
     ByteString ethernetHeader = std::string(
@@ -774,7 +774,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Igmp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Tcp_Valid
-TEST_F(EncapsulationTest, EthernetIPv4Tcp_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Tcp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=6 => TCP) + TCP(20) = 54 bytes
     ByteString ethernetHeader = std::string(
@@ -865,7 +865,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Tcp_Valid)
 }
 
 // Test EthernetIPv4Tcp_Invalid
-TEST_F(EncapsulationTest, EthernetIPv4Tcp_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Tcp_Invalid)
 {
     // Incomplete TCP header
     ByteString ethernetHeader = std::string(
@@ -954,7 +954,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Tcp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Udp_Valid
-TEST_F(EncapsulationTest, EthernetIPv4Udp_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Udp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=17 => UDP) + UDP(8) = 42 bytes
     ByteString ethernetHeader = std::string(
@@ -1028,7 +1028,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Udp_Valid)
 }
 
 // Test EthernetIPv4Udp_Invalid
-TEST_F(EncapsulationTest, EthernetIPv4Udp_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Udp_Invalid)
 {
     // Ethernet(14) + IPv4(20, proto=17 => UDP) + incomplete UDP(4) = 38 bytes
     ByteString ethernetHeader = std::string(
@@ -1102,7 +1102,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Udp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4UdpDhcp_Valid
-TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=17 => UDP) + UDP(8) + DHCP(248)
     ByteString ethernetHeader = std::string(
@@ -1235,7 +1235,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Valid)
 }
 
 // Test EthernetIPv4UdpDhcp_Invalid
-TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4UdpDhcp_Invalid)
 {
     // Ethernet(14) + IPv4(20, proto=17 => UDP) + UDP(8) + incomplete DHCP
     ByteString ethernetHeader = std::string(
@@ -1364,7 +1364,7 @@ TEST_F(EncapsulationTest, EthernetIPv4UdpDhcp_Invalid)
 }
 
 // Test EthernetIPv4Eigrp_Valid
-TEST_F(EncapsulationTest, EthernetIPv4Eigrp_Valid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Eigrp_Valid)
 {
     // Build Ethernet Header
     ByteString ethernetHeader = std::string(
@@ -1454,7 +1454,7 @@ TEST_F(EncapsulationTest, EthernetIPv4Eigrp_Valid)
 }
 
 // Test EthernetIPv4Eigrp_Invalid
-TEST_F(EncapsulationTest, EthernetIPv4Eigrp_Invalid)
+TEST_F(Internal_EncapsulationTest, EthernetIPv4Eigrp_Invalid)
 {
     // Build Ethernet Header
     ByteString ethernetHeader = std::string(

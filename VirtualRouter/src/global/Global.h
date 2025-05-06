@@ -71,8 +71,10 @@ public:
     void resetDefault()
     {
         std::lock_guard<std::mutex> lock(routingInstanceMutex);
-        delete routingInstances["default"];
-        routingInstances.erase("default");
+        if (routingInstances.find("default") != routingInstances.end())
+        {
+            delete routingInstances["default"];
+        }
         routingInstances["default"] = new VirtualRouter("default");
     }
 
@@ -135,6 +137,9 @@ private:
     
 public:
 
+    bool routingEnabled = false;
+    bool testingMode = false;
+
     /**
      * @brief Clears all stored configurations and resets the class
      *
@@ -148,6 +153,17 @@ public:
 
         setIPv6UnicastRouting(false);
         setAAA(false);
+        for (auto& [_, interface] : interfaceList)
+        {
+            delete interface;
+        }
+        interfaceList.clear();
+        for (auto [name, vrf] : routingInstances)
+        {
+            vrf->interfaceList.clear();
+            delete vrf;
+        }
+        routingInstances.clear();
     }
 };
 

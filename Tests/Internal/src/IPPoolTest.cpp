@@ -1,4 +1,4 @@
-// IPPoolTest.cpp
+// Internal_IPPoolTest.cpp
 
 #include <gtest/gtest.h>
 #include <Dhcp.h>
@@ -9,7 +9,7 @@
 using namespace Protocol;
 
 // Test Fixture
-class IPPoolTest : public ::testing::Test
+class Internal_IPPoolTest : public ::testing::Test
 {
 protected:
     void SetUp() override
@@ -54,7 +54,7 @@ protected:
 };
 
 // Test IPPool Allocation
-TEST_F(IPPoolTest, IPPool_AllocateIP_Success) {
+TEST_F(Internal_IPPoolTest, IPPool_AllocateIP_Success) {
     ByteString network = ByteString("\xc0\xa8\x00\x00", 4); // 192.168.0.0
     uint8_t subnetMask = 24; // 255.255.255.0
     ByteString gateway = ByteString("\xc0\xa8\x00\x01", 4); // 192.168.0.1
@@ -86,7 +86,7 @@ TEST_F(IPPoolTest, IPPool_AllocateIP_Success) {
 }
 
 // Test IPPool Release IP
-TEST_F(IPPoolTest, IPPool_ReleaseIP_Success) {
+TEST_F(Internal_IPPoolTest, IPPool_ReleaseIP_Success) {
     ByteString network = ByteString("\xc0\xa8\x00\x00", 4); // 192.168.0.0
     uint8_t subnetMask = 24; // 255.255.255.0
     ByteString gateway = ByteString("\xc0\xa8\x00\x01", 4); // 192.168.0.1
@@ -109,7 +109,7 @@ TEST_F(IPPoolTest, IPPool_ReleaseIP_Success) {
 }
 
 // Test IPPool Exclude and Remove Exclusion
-TEST_F(IPPoolTest, IPPool_ExcludeAndRemoveIP) {
+TEST_F(Internal_IPPoolTest, IPPool_ExcludeAndRemoveIP) {
     ByteString network = ByteString("\xc0\xa8\x00\x00", 4); // 192.168.0.0
     uint8_t subnetMask = 24; // 255.255.255.0
     ByteString gateway = ByteString("\xc0\xa8\x00\x01", 4); // 192.168.0.1
@@ -141,7 +141,7 @@ TEST_F(IPPoolTest, IPPool_ExcludeAndRemoveIP) {
 }
 
 // Test IPPool Adjust Pool
-TEST_F(IPPoolTest, IPPool_AdjustPool_ResizesCorrectly) {
+TEST_F(Internal_IPPoolTest, IPPool_AdjustPool_ResizesCorrectly) {
     ByteString originalNetwork = ByteString("\xc0\xa8\x00\x00", 4); // 192.168.0.0
     uint8_t originalSubnetMask = 24; // 255.255.255.0
     ByteString originalGateway = ByteString("\xc0\xa8\x00\x01", 4); // 192.168.0.1

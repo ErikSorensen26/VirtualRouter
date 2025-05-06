@@ -1,12 +1,12 @@
 #include <Console.h>
-#include <Terminal.h>
+#include <CliEngine.h>
 #include <MockConsole.hpp>
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
 
 // Test Fixture for Console
-class ConsoleTest : public ::testing::Test
+class Internal_ConsoleTest : public ::testing::Test
 {
 protected:
     // Create the MockTerminal instance
@@ -56,7 +56,7 @@ protected:
 #pragma region Initialization
 
 // Test setting the prompt
-TEST_F(ConsoleTest, SetPrompt_ShouldUpdatePromptCorrectly)
+TEST_F(Internal_ConsoleTest, SetPrompt_ShouldUpdatePromptCorrectly)
 {
     std::string newPrompt = "TestPrompt>";
 
@@ -72,7 +72,7 @@ TEST_F(ConsoleTest, SetPrompt_ShouldUpdatePromptCorrectly)
 }
 
 // Test initConsole
-TEST_F(ConsoleTest, InitConsole_ShouldClearScreenAndSetPrompt)
+TEST_F(Internal_ConsoleTest, InitConsole_ShouldClearScreenAndSetPrompt)
 {
     std::string prompt = "InitPrompt>";
 
@@ -99,21 +99,21 @@ TEST_F(ConsoleTest, InitConsole_ShouldClearScreenAndSetPrompt)
 #pragma region Cursor
 
 // Test isCursorAtLineEnd when cursor is at line end
-TEST_F(ConsoleTest, IsCursorAtLineEnd_CursorAtLineEnd_ShouldReturnTrue)
+TEST_F(Internal_ConsoleTest, IsCursorAtLineEnd_CursorAtLineEnd_ShouldReturnTrue)
 {
     setCursorPos(80);
     EXPECT_TRUE(isCursorAtLineEnd());
 }
 
 // Test isCursorAtLineEnd when cursor is not at line end
-TEST_F(ConsoleTest, IsCursorAtLineEnd_CursorNotAtLineEnd_ShouldReturnFalse)
+TEST_F(Internal_ConsoleTest, IsCursorAtLineEnd_CursorNotAtLineEnd_ShouldReturnFalse)
 {
     setCursorPos(30);
     EXPECT_FALSE(isCursorAtLineEnd());
 }
 
 // Test isCursorAtLineEnd with cursor at different positions
-TEST_F(ConsoleTest, IsCursorAtLineEnd_VariousPositions_ShouldReturnCorrectly)
+TEST_F(Internal_ConsoleTest, IsCursorAtLineEnd_VariousPositions_ShouldReturnCorrectly)
 {
     // Position 0
     setCursorPos(0);
@@ -129,7 +129,7 @@ TEST_F(ConsoleTest, IsCursorAtLineEnd_VariousPositions_ShouldReturnCorrectly)
 }
 
 // Test isCursorAtLineEnd after multiple cursor movements
-TEST_F(ConsoleTest, IsCursorAtLineEnd_AfterMultipleMovements_ShouldReturnCorrectly)
+TEST_F(Internal_ConsoleTest, IsCursorAtLineEnd_AfterMultipleMovements_ShouldReturnCorrectly)
 {
     // Expect default width of 80
 
@@ -153,7 +153,7 @@ TEST_F(ConsoleTest, IsCursorAtLineEnd_AfterMultipleMovements_ShouldReturnCorrect
 }
 
 // Test isCursorAtLineEnd with varying terminal widths
-TEST_F(ConsoleTest, IsCursorAtLineEnd_VaryingTerminalWidths_ShouldReturnCorrectly)
+TEST_F(Internal_ConsoleTest, IsCursorAtLineEnd_VaryingTerminalWidths_ShouldReturnCorrectly)
 {
     // Mock getTerminalWidth to return different widths
     // Assuming getTerminalWidth is called within isCursorAtLineEnd
@@ -178,7 +178,7 @@ TEST_F(ConsoleTest, IsCursorAtLineEnd_VaryingTerminalWidths_ShouldReturnCorrectl
 }
 
 // Test moveCursorLeft
-TEST_F(ConsoleTest, MoveCursorLeft_ShouldMoveCursorLeftProperly)
+TEST_F(Internal_ConsoleTest, MoveCursorLeft_ShouldMoveCursorLeftProperly)
 {
     setCursorPos(5);
     size_t moveCount = 3;
@@ -192,7 +192,7 @@ TEST_F(ConsoleTest, MoveCursorLeft_ShouldMoveCursorLeftProperly)
 }
 
 // Test moveCursorLeft beyone boundary
-TEST_F(ConsoleTest, MoveCursorLeft_AtBoundary_ShouldNotMoveCursorPastBoundry)
+TEST_F(Internal_ConsoleTest, MoveCursorLeft_AtBoundary_ShouldNotMoveCursorPastBoundry)
 {
     setCursorPos(2);
 
@@ -207,7 +207,7 @@ TEST_F(ConsoleTest, MoveCursorLeft_AtBoundary_ShouldNotMoveCursorPastBoundry)
 }
 
 // Test moveCursorLeft across line boundaries
-TEST_F(ConsoleTest, MoveCursorLeft_AcrossLineBoundaries_ShouldHandleLineTransition)
+TEST_F(Internal_ConsoleTest, MoveCursorLeft_AcrossLineBoundaries_ShouldHandleLineTransition)
 {
     setCursorPos(81); // One character into the second line
     size_t moveCount = 2;
@@ -223,7 +223,7 @@ TEST_F(ConsoleTest, MoveCursorLeft_AcrossLineBoundaries_ShouldHandleLineTransiti
 }
 
 // Test moveCursorRight
-TEST_F(ConsoleTest, MoveCursorRight_ShouldMoveCursorRightProperly)
+TEST_F(Internal_ConsoleTest, MoveCursorRight_ShouldMoveCursorRightProperly)
 {
     setCursorPos(5);
     size_t moveCount = 3;
@@ -238,7 +238,7 @@ TEST_F(ConsoleTest, MoveCursorRight_ShouldMoveCursorRightProperly)
 }
 
 // Test moveCursorRight at boundry
-TEST_F(ConsoleTest, MoveCursorRight_AtBoundary_ShouldNotMoveCursorPastBoundry)
+TEST_F(Internal_ConsoleTest, MoveCursorRight_AtBoundary_ShouldNotMoveCursorPastBoundry)
 {
     setCursorPos(8);
     size_t moveCount = 5;
@@ -253,7 +253,7 @@ TEST_F(ConsoleTest, MoveCursorRight_AtBoundary_ShouldNotMoveCursorPastBoundry)
 }
 
 // Test moveCursorRight across line boundry
-TEST_F(ConsoleTest, MoveCursorRight_AcrossLineBoundaries_ShouldHandleLineTransition)
+TEST_F(Internal_ConsoleTest, MoveCursorRight_AcrossLineBoundaries_ShouldHandleLineTransition)
 {
     setCursorPos(79); // Last comumn of first line
     size_t moveCount = 2;
@@ -268,7 +268,7 @@ TEST_F(ConsoleTest, MoveCursorRight_AcrossLineBoundaries_ShouldHandleLineTransit
 }
 
 // Test moveCursorUp with valid steps
-TEST_F(ConsoleTest, MoveCursorUp_WithValidSteps_ShouldMoveCursorUpProperly)
+TEST_F(Internal_ConsoleTest, MoveCursorUp_WithValidSteps_ShouldMoveCursorUpProperly)
 {
     size_t moveCount = 2;
 
@@ -282,7 +282,7 @@ TEST_F(ConsoleTest, MoveCursorUp_WithValidSteps_ShouldMoveCursorUpProperly)
 }
 
 // Test moveCursorUp with zero steps
-TEST_F(ConsoleTest, MoveCursorUp_ZeroSteps_ShouldNotMoveCursor)
+TEST_F(Internal_ConsoleTest, MoveCursorUp_ZeroSteps_ShouldNotMoveCursor)
 {
     size_t moveCount = 0;
 
@@ -296,7 +296,7 @@ TEST_F(ConsoleTest, MoveCursorUp_ZeroSteps_ShouldNotMoveCursor)
 }
 
 // Test moveCursorDown with valid steps
-TEST_F(ConsoleTest, MoveCursorDown_WithValidSteps_ShouldMoveCursorDownProperly)
+TEST_F(Internal_ConsoleTest, MoveCursorDown_WithValidSteps_ShouldMoveCursorDownProperly)
 {
     size_t moveCount = 3;
 
@@ -310,7 +310,7 @@ TEST_F(ConsoleTest, MoveCursorDown_WithValidSteps_ShouldMoveCursorDownProperly)
 }
 
 // Test moveCursorDown with zero steps
-TEST_F(ConsoleTest, MoveCursorDown_ZeroSteps_ShouldNotMoveCursor)
+TEST_F(Internal_ConsoleTest, MoveCursorDown_ZeroSteps_ShouldNotMoveCursor)
 {
     size_t moveCount = 0;
 
@@ -324,7 +324,7 @@ TEST_F(ConsoleTest, MoveCursorDown_ZeroSteps_ShouldNotMoveCursor)
 }
 
 // Test moveCursorToStart from middle
-TEST_F(ConsoleTest, MoveCursorToStart_FromMiddle_ShouldMoveCursorToStart)
+TEST_F(Internal_ConsoleTest, MoveCursorToStart_FromMiddle_ShouldMoveCursorToStart)
 {
     setCursorPos(10);
 
@@ -337,7 +337,7 @@ TEST_F(ConsoleTest, MoveCursorToStart_FromMiddle_ShouldMoveCursorToStart)
 }
 
 // Test moveCursorToStart when already at start
-TEST_F(ConsoleTest, MoveCursorToStart_AlreadyAtStart_ShouldNotMoveCursor)
+TEST_F(Internal_ConsoleTest, MoveCursorToStart_AlreadyAtStart_ShouldNotMoveCursor)
 {
     setCursorPos(0);
 
@@ -350,7 +350,7 @@ TEST_F(ConsoleTest, MoveCursorToStart_AlreadyAtStart_ShouldNotMoveCursor)
 }
 
 // Test moveCursorToEnd when from middle
-TEST_F(ConsoleTest, MoveCursorToEnd_FromMiddle_ShouldMoveCursorToEnd)
+TEST_F(Internal_ConsoleTest, MoveCursorToEnd_FromMiddle_ShouldMoveCursorToEnd)
 {
     setCursorPos(4);
     std::string input = "helloWorld";
@@ -364,7 +364,7 @@ TEST_F(ConsoleTest, MoveCursorToEnd_FromMiddle_ShouldMoveCursorToEnd)
 }
 
 // Test moveCursorToEnd when already at end
-TEST_F(ConsoleTest, MoveCursorToEnd_AlreadyAtEnd_ShouldNotMoveCursor)
+TEST_F(Internal_ConsoleTest, MoveCursorToEnd_AlreadyAtEnd_ShouldNotMoveCursor)
 {
     setCursorPos(10);
     std::string input = "HelloWorld";
@@ -381,7 +381,7 @@ TEST_F(ConsoleTest, MoveCursorToEnd_AlreadyAtEnd_ShouldNotMoveCursor)
 #pragma region AdvancedCursor
 
 // Test skipWordLeft in the middle of input
-TEST_F(ConsoleTest, SkipWordLeft_InMiddle_ShouldMoveCursorLeftToPreviousWord)
+TEST_F(Internal_ConsoleTest, SkipWordLeft_InMiddle_ShouldMoveCursorLeftToPreviousWord)
 {
     std::string input = "Hello World";
     setCursorPos(8); // Position before 'o'
@@ -395,7 +395,7 @@ TEST_F(ConsoleTest, SkipWordLeft_InMiddle_ShouldMoveCursorLeftToPreviousWord)
 }
 
 // Test skipWordLeft at start (no movement)
-TEST_F(ConsoleTest, SkipWordLeft_AtStart_ShouldNotMoveCursor)
+TEST_F(Internal_ConsoleTest, SkipWordLeft_AtStart_ShouldNotMoveCursor)
 {
     std::string input = "Hello World";
     setCursorPos(0); // Start position
@@ -409,7 +409,7 @@ TEST_F(ConsoleTest, SkipWordLeft_AtStart_ShouldNotMoveCursor)
 }
 
 // Test skipWordRight in the middle of input
-TEST_F(ConsoleTest, SkipWordRight_InMiddle_ShouldMoveCursorRightToNextWord)
+TEST_F(Internal_ConsoleTest, SkipWordRight_InMiddle_ShouldMoveCursorRightToNextWord)
 {
     std::string input = "Hello World";
     setCursorPos(3); // Position at space before 'l'
@@ -423,7 +423,7 @@ TEST_F(ConsoleTest, SkipWordRight_InMiddle_ShouldMoveCursorRightToNextWord)
 }
 
 // Test skipWordRight at end (no movement)
-TEST_F(ConsoleTest, SkipWordRight_AtEnd_ShouldNotMoveCursor)
+TEST_F(Internal_ConsoleTest, SkipWordRight_AtEnd_ShouldNotMoveCursor)
 {
     std::string input = "Hello World";
     setCursorPos(11); // After 'd'
@@ -437,7 +437,7 @@ TEST_F(ConsoleTest, SkipWordRight_AtEnd_ShouldNotMoveCursor)
 }
 
 // Test skipWordLeft with multiple spaces
-TEST_F(ConsoleTest, SkipWordLeft_WithMultipleSpaces_ShouldSkipAllSpaces)
+TEST_F(Internal_ConsoleTest, SkipWordLeft_WithMultipleSpaces_ShouldSkipAllSpaces)
 {
     std::string input = "Hello    World";
     setCursorPos(11); // Before 'o'
@@ -451,7 +451,7 @@ TEST_F(ConsoleTest, SkipWordLeft_WithMultipleSpaces_ShouldSkipAllSpaces)
 }
 
 // Test skipWordRight with multiple spaces
-TEST_F(ConsoleTest, SkipWordRight_WithMultipleSpaces_ShouldSkipAllSpaces)
+TEST_F(Internal_ConsoleTest, SkipWordRight_WithMultipleSpaces_ShouldSkipAllSpaces)
 {
     std::string input = "Hello    World";
     setCursorPos(4); // After 'Hell'
@@ -468,7 +468,7 @@ TEST_F(ConsoleTest, SkipWordRight_WithMultipleSpaces_ShouldSkipAllSpaces)
 #pragma region TerminalWidth
 
 // Test getTerminalWidth
-TEST_F(ConsoleTest, GetTerminalWidth_ShouldReturnTerminalWidth)
+TEST_F(Internal_ConsoleTest, GetTerminalWidth_ShouldReturnTerminalWidth)
 {
     size_t expectedWidth = 100;
 
@@ -484,7 +484,7 @@ TEST_F(ConsoleTest, GetTerminalWidth_ShouldReturnTerminalWidth)
 #pragma region RewriteTail
 
 // Test rewriteTail from a specific position
-TEST_F(ConsoleTest, RewriteTail_FromSpecificPosition_ShouldRewriteInputCorrectly)
+TEST_F(Internal_ConsoleTest, RewriteTail_FromSpecificPosition_ShouldRewriteInputCorrectly)
 {
     std::string input = "Hello World";
     size_t startPosition = 6; // After "Hello "
@@ -506,7 +506,7 @@ TEST_F(ConsoleTest, RewriteTail_FromSpecificPosition_ShouldRewriteInputCorrectly
 }
 
 // Test rewriteTail with startPosition beyond input size
-TEST_F(ConsoleTest, RewriteTail_StartPositionBeyondInput_ShouldDoNothing)
+TEST_F(Internal_ConsoleTest, RewriteTail_StartPositionBeyondInput_ShouldDoNothing)
 {
     std::string input = "Hello";
     size_t startPosition = 10; // Beyond input size
@@ -522,7 +522,7 @@ TEST_F(ConsoleTest, RewriteTail_StartPositionBeyondInput_ShouldDoNothing)
 }
 
 // Test rewriteTail with partially overlapping input
-TEST_F(ConsoleTest, RewriteTail_PartiallyOverlappingInput_ShouldRewriteCorrectly)
+TEST_F(Internal_ConsoleTest, RewriteTail_PartiallyOverlappingInput_ShouldRewriteCorrectly)
 {
     std::string input = "Hello World";
     size_t startPosition = 5; // After "Hello"
@@ -541,7 +541,7 @@ TEST_F(ConsoleTest, RewriteTail_PartiallyOverlappingInput_ShouldRewriteCorrectly
 #pragma region ClearLine
 
 // Test clearLineAfterCursor
-TEST_F(ConsoleTest, ClearLineAfterCursor_ShouldClearAndMoveCursorLeft)
+TEST_F(Internal_ConsoleTest, ClearLineAfterCursor_ShouldClearAndMoveCursorLeft)
 {
     setCursorPos(20);
     size_t width = 80;
@@ -555,7 +555,7 @@ TEST_F(ConsoleTest, ClearLineAfterCursor_ShouldClearAndMoveCursorLeft)
 }
 
 // Test clearCurrentLine
-TEST_F(ConsoleTest, ClearCurrentLine_ShouldClearLineAndSetNextLine)
+TEST_F(Internal_ConsoleTest, ClearCurrentLine_ShouldClearLineAndSetNextLine)
 {
     std::string input = "Old Input";
     std::string nextLine = "New Input";
@@ -575,7 +575,7 @@ TEST_F(ConsoleTest, ClearCurrentLine_ShouldClearLineAndSetNextLine)
 }
 
 // Test clearCurrentLine with empty next line
-TEST_F(ConsoleTest, ClearCurrentLine_WithEmptyNextLine_ShouldClearAndSetEmptyInput)
+TEST_F(Internal_ConsoleTest, ClearCurrentLine_WithEmptyNextLine_ShouldClearAndSetEmptyInput)
 {
     std::string input = "SomeInput";
     std::string nextLine = "";
@@ -590,7 +590,7 @@ TEST_F(ConsoleTest, ClearCurrentLine_WithEmptyNextLine_ShouldClearAndSetEmptyInp
 }
 
 // Test clearLineAfterCursor when cursor is in the middle
-TEST_F(ConsoleTest, ClearLineAfterCursor_CursorInMiddle_ShouldClearProperly)
+TEST_F(Internal_ConsoleTest, ClearLineAfterCursor_CursorInMiddle_ShouldClearProperly)
 {
     size_t width = 80;
     setCursorPos(40);
@@ -609,7 +609,7 @@ TEST_F(ConsoleTest, ClearLineAfterCursor_CursorInMiddle_ShouldClearProperly)
 #pragma region CharacterPrinting
 
 // Test handlePrintableChar at the end of the input
-TEST_F(ConsoleTest, HandlePrintableChar_ShouldInsertCharacterAtEndOfInput)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_ShouldInsertCharacterAtEndOfInput)
 {
     std::string input = "Hello Worl";
     char newChar = 'd';
@@ -630,7 +630,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_ShouldInsertCharacterAtEndOfInput)
 }
 
 // Test handlePrintableChar
-TEST_F(ConsoleTest, HandlePrintableChar_ShouldInsertCharacter)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_ShouldInsertCharacter)
 {
     std::string input = "Hell World";
     char newChar = 'o';
@@ -650,7 +650,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_ShouldInsertCharacter)
 }
 
 // Test handlePrintableChar with multiple characters
-TEST_F(ConsoleTest, HandlePrintableChar_WithMultipleCharacters_ShouldInsertSequentially)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_WithMultipleCharacters_ShouldInsertSequentially)
 {
     std::string input = "Hell World";
     char newChar1 = 'o';
@@ -676,7 +676,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_WithMultipleCharacters_ShouldInsertSeque
 }
 
 // Test handlePrintableChar with non-printable characters
-TEST_F(ConsoleTest, HandlePrintableChar_NonPrintable_ShouldIgnore)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_NonPrintable_ShouldIgnore)
 {
     std::string input = "Hello";
     char newChar = '\n'; // Newline is non-printable
@@ -693,7 +693,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_NonPrintable_ShouldIgnore)
 }
 
 // Test handlePrintableChar after moving cursor left
-TEST_F(ConsoleTest, HandlePrintableChar_AfterMoveLeft_ShouldInsertAtNewPosition)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_AfterMoveLeft_ShouldInsertAtNewPosition)
 {
     std::string input = "Helo World";
     char newChar = 'l';
@@ -712,7 +712,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_AfterMoveLeft_ShouldInsertAtNewPosition)
 }
 
 // Test handlePrintableChar with empty input
-TEST_F(ConsoleTest, HandlePrintableChar_EmptyInput_ShouldInsertCharacter)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_EmptyInput_ShouldInsertCharacter)
 {
     std::string input = "";
     char newChar = 'A';
@@ -731,7 +731,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_EmptyInput_ShouldInsertCharacter)
 }
 
 // Test handlePrintableChar with multiple insertions exceeding terminal width
-TEST_F(ConsoleTest, HandlePrintableChar_MultipleInsertions_ExceedTerminalWidth_ShouldHandleWrapping)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_MultipleInsertions_ExceedTerminalWidth_ShouldHandleWrapping)
 {
     std::string input = "";
     setCursorPos(0);
@@ -766,7 +766,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_MultipleInsertions_ExceedTerminalWidth_S
 }
 
 // Test handlePrintableChar with wrapping and rewriting tail
-TEST_F(ConsoleTest, HandlePrintableChar_WithWrapping_ShouldRewriteTailCorrectly)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_WithWrapping_ShouldRewriteTailCorrectly)
 {
     // Assuming the terminal width is 80
     std::string input = std::string(80, 'A');
@@ -788,7 +788,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_WithWrapping_ShouldRewriteTailCorrectly)
 }
 
 // Test handlePrintableChar after deleting all characters
-TEST_F(ConsoleTest, HandlePrintableChar_AfterDeletingAllCharacters_ShouldInsertNewCharacter)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_AfterDeletingAllCharacters_ShouldInsertNewCharacter)
 {
     std::string input = "";
     setCursorPos(0);
@@ -808,7 +808,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_AfterDeletingAllCharacters_ShouldInsertN
 }
 
 // Test handlePrintableChar with uppercase and lowercase mix
-TEST_F(ConsoleTest, HandlePrintableChar_UppercaseAndLowercase_ShouldHandleCorrectly)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_UppercaseAndLowercase_ShouldHandleCorrectly)
 {
     std::string input = "Hello";
     char newChar1 = 'W';
@@ -841,7 +841,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_UppercaseAndLowercase_ShouldHandleCorrec
 }
 
 // Test handlePrintableChar with cursor wrapping multiple lines
-TEST_F(ConsoleTest, HandlePrintableChar_CursorWrappingMultipleLines_ShouldHandleCorrectly)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_CursorWrappingMultipleLines_ShouldHandleCorrectly)
 {
     std::string input = "";
     std::string expectedOutput = "";
@@ -866,7 +866,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_CursorWrappingMultipleLines_ShouldHandle
 }
 
 // Test handlePrintableChar with non-printable ASCII characters
-TEST_F(ConsoleTest, HandlePrintableChar_NonPrintableASCII_ShouldIgnore)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_NonPrintableASCII_ShouldIgnore)
 {
     std::string input = "Hello";
     char newChar = '\x01'; // SOH (Start of Header), non-printable
@@ -883,7 +883,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_NonPrintableASCII_ShouldIgnore)
 }
 
 // Test handlePrintableChar with cursor at various positions
-TEST_F(ConsoleTest, HandlePrintableChar_VariousCursorPositions_ShouldHandleCorrectly)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_VariousCursorPositions_ShouldHandleCorrectly)
 {
     std::string input = "ABCDE";
     char newChar = 'X';
@@ -913,7 +913,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_VariousCursorPositions_ShouldHandleCorre
 #pragma region CharacterPrintingInInsertMode
 
 // Test handlePrintableChar with cursor at start in overwrite mode
-TEST_F(ConsoleTest, HandlePrintableChar_OverwriteMode_CursorAtStart_ShouldOverwriteFirstCharacter)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_OverwriteMode_CursorAtStart_ShouldOverwriteFirstCharacter)
 {
     std::string input = "Hello";
     char newChar = 'Y';
@@ -934,7 +934,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_OverwriteMode_CursorAtStart_ShouldOverwr
 }
 
 // Test handlePrintableChar with mixed insert and overwrite modes
-TEST_F(ConsoleTest, HandlePrintableChar_MixedModes_ShouldHandleCorrectly)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_MixedModes_ShouldHandleCorrectly)
 {
     std::string input = "Hell World";
     char newChar1 = 'o';
@@ -964,7 +964,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_MixedModes_ShouldHandleCorrectly)
 }
 
 // Test handlePrintableChar with multiple overwrites beyond input length
-TEST_F(ConsoleTest, HandlePrintableChar_OverwriteMode_BeyondInputLength_ShouldAppend)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_OverwriteMode_BeyondInputLength_ShouldAppend)
 {
     std::string input = "Hello";
     char newChar = '!';
@@ -985,7 +985,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_OverwriteMode_BeyondInputLength_ShouldAp
 }
 
 // Test handlePrintableChar with mixed modes and cursor positions
-TEST_F(ConsoleTest, HandlePrintableChar_MixedModesAndCursorPositions_ShouldHandleCorrectly)
+TEST_F(Internal_ConsoleTest, HandlePrintableChar_MixedModesAndCursorPositions_ShouldHandleCorrectly)
 {
     std::string input = "HelloWorld";
     char newChar1 = ' ';
@@ -1029,7 +1029,7 @@ TEST_F(ConsoleTest, HandlePrintableChar_MixedModesAndCursorPositions_ShouldHandl
 #pragma region GenericSpecialKeys
 
 // Test handleSpecialKey with Enter key
-TEST_F(ConsoleTest, HandleSpecialKey_Enter_ShouldAddToHistoryAndReturnInput)
+TEST_F(Internal_ConsoleTest, HandleSpecialKey_Enter_ShouldAddToHistoryAndReturnInput)
 {
     std::string input = "TestCommand";
     setCursorPos(11); // End of input
@@ -1047,7 +1047,7 @@ TEST_F(ConsoleTest, HandleSpecialKey_Enter_ShouldAddToHistoryAndReturnInput)
 }
 
 // Test handleSpecialKey with Backspace key
-TEST_F(ConsoleTest, HandleSpecialKey_Backspace_ShouldEraseCharacter)
+TEST_F(Internal_ConsoleTest, HandleSpecialKey_Backspace_ShouldEraseCharacter)
 {
     std::string input = "Hello World";
     setCursorPos(11); // End of input
@@ -1069,7 +1069,7 @@ TEST_F(ConsoleTest, HandleSpecialKey_Backspace_ShouldEraseCharacter)
 }
 
 // Test handleSpecialKey with Backspace key in overwrite mode
-TEST_F(ConsoleTest, HandleSpecialKey_BackspaceInOverwriteMode_ShouldEraseCharacterLeavingBehindPrevious)
+TEST_F(Internal_ConsoleTest, HandleSpecialKey_BackspaceInOverwriteMode_ShouldEraseCharacterLeavingBehindPrevious)
 {
     std::string input = "Hello World";
     setCursorPos(7); // Right before 'o'
@@ -1094,7 +1094,7 @@ TEST_F(ConsoleTest, HandleSpecialKey_BackspaceInOverwriteMode_ShouldEraseCharact
 }
 
 // Test handleSpecialKey with Tab key
-TEST_F(ConsoleTest, HandleSpecialKey_Tab_ShouldInsertTabCharacter)
+TEST_F(Internal_ConsoleTest, HandleSpecialKey_Tab_ShouldInsertTabCharacter)
 {
     std::string input = "Hello";
     setCursorPos(5); // End of input
@@ -1112,7 +1112,7 @@ TEST_F(ConsoleTest, HandleSpecialKey_Tab_ShouldInsertTabCharacter)
 }
 
 // Test handleSpecialKey with unknown key (should do nothing)
-TEST_F(ConsoleTest, HandleSpecialKey_UnknownKey_ShouldDoNothing)
+TEST_F(Internal_ConsoleTest, HandleSpecialKey_UnknownKey_ShouldDoNothing)
 {
     std::string input = "Hello";
 
@@ -1134,7 +1134,7 @@ TEST_F(ConsoleTest, HandleSpecialKey_UnknownKey_ShouldDoNothing)
 #pragma region EscapeSequences
 
 // Test handleEscapeSequence with unknown escape sequence
-TEST_F(ConsoleTest, HandleEscapeSequence_UnknownSequence_ShouldIgnore)
+TEST_F(Internal_ConsoleTest, HandleEscapeSequence_UnknownSequence_ShouldIgnore)
 {
     // Simulate an unknown escape sequence: '\x1b', '[', 'Z'
 
@@ -1152,7 +1152,7 @@ TEST_F(ConsoleTest, HandleEscapeSequence_UnknownSequence_ShouldIgnore)
 }
 
 // Test handleEscapeSequence with Home key
-TEST_F(ConsoleTest, HandleEscapeSequence_HomeKey_ShouldMoveCursorToStart)
+TEST_F(Internal_ConsoleTest, HandleEscapeSequence_HomeKey_ShouldMoveCursorToStart)
 {
     std::string input = "SomeInput";
     // Simulate escape sequence for Home key: '\x1b', '[', '1', '~'
@@ -1184,7 +1184,7 @@ TEST_F(ConsoleTest, HandleEscapeSequence_HomeKey_ShouldMoveCursorToStart)
 }
 
 // Test handleEscapeSequence with End key
-TEST_F(ConsoleTest, HandleEscapeSequence_EndKey_ShouldMoveCursorToEnd)
+TEST_F(Internal_ConsoleTest, HandleEscapeSequence_EndKey_ShouldMoveCursorToEnd)
 {
     std::string input = "SomeInput";
     // Simulate escape sequence for End key: '\x1b', '[', '4', '~'
@@ -1208,7 +1208,7 @@ TEST_F(ConsoleTest, HandleEscapeSequence_EndKey_ShouldMoveCursorToEnd)
 }
 
 // Test handleEscapeSequence with Insert key
-TEST_F(ConsoleTest, HandleEscapeSequence_InsertKey_ShouldToggleInsertMode)
+TEST_F(Internal_ConsoleTest, HandleEscapeSequence_InsertKey_ShouldToggleInsertMode)
 {
     // Simulate escape sequence for Insert key: '\x1b', '[', '2', '~'
     std::string input = "";
@@ -1230,7 +1230,7 @@ TEST_F(ConsoleTest, HandleEscapeSequence_InsertKey_ShouldToggleInsertMode)
 }
 
 // Test handleEscapeSequence with Home and End keys sequentially
-TEST_F(ConsoleTest, HandleEscapeSequence_HomeAndEndKeys_ShouldMoveCursorCorrectly)
+TEST_F(Internal_ConsoleTest, HandleEscapeSequence_HomeAndEndKeys_ShouldMoveCursorCorrectly)
 {
     // Simulate Home key: '\x1b', '[', 'H'
     EXPECT_CALL(*mockConsole, moveCursorLeft(1)).Times(2);
@@ -1248,7 +1248,7 @@ TEST_F(ConsoleTest, HandleEscapeSequence_HomeAndEndKeys_ShouldMoveCursorCorrectl
 }
 
 // Test handleEscapeSequence with incomplete escape sequence
-TEST_F(ConsoleTest, HandleEscapeSequence_IncompleteSequence_ShouldIgnore)
+TEST_F(Internal_ConsoleTest, HandleEscapeSequence_IncompleteSequence_ShouldIgnore)
 {
     // Simulate incomplete escape sequence: '\x1b', '[' without a final character
 
@@ -1266,7 +1266,7 @@ TEST_F(ConsoleTest, HandleEscapeSequence_IncompleteSequence_ShouldIgnore)
 }
 
 // Test handleEscapeSequence with incomplete character
-TEST_F(ConsoleTest, HandleEscapeSequence_IncompleteCharacter_ShouldIgnore)
+TEST_F(Internal_ConsoleTest, HandleEscapeSequence_IncompleteCharacter_ShouldIgnore)
 {
     // Simulate incomplete escape sequence: '\x1b' only
 
@@ -1284,7 +1284,7 @@ TEST_F(ConsoleTest, HandleEscapeSequence_IncompleteCharacter_ShouldIgnore)
 }
 
 // Test if insertString gets updates if a escape key is ran
-TEST_F(ConsoleTest, HandleInsertWithEscapeSequence_ShouldUpdateInsertString)
+TEST_F(Internal_ConsoleTest, HandleInsertWithEscapeSequence_ShouldUpdateInsertString)
 {
     // Initial input
     std::string input = "";
@@ -1309,7 +1309,7 @@ TEST_F(ConsoleTest, HandleInsertWithEscapeSequence_ShouldUpdateInsertString)
 #pragma region History
 
 // Test getHistory when history is empty
-TEST_F(ConsoleTest, GetHistory_EmptyHistory_ShouldReturnCurrentInput)
+TEST_F(Internal_ConsoleTest, GetHistory_EmptyHistory_ShouldReturnCurrentInput)
 {
     std::string input = "";
 
@@ -1323,7 +1323,7 @@ TEST_F(ConsoleTest, GetHistory_EmptyHistory_ShouldReturnCurrentInput)
 }
 
 // Test navigateHistory moving up
-TEST_F(ConsoleTest, NavigateHistory_Up_ShouldSetInputFromHistory)
+TEST_F(Internal_ConsoleTest, NavigateHistory_Up_ShouldSetInputFromHistory)
 {
     // Simulate adding commands to history via handleSpecialKey with Enter
     std::string input = "first command";
@@ -1394,7 +1394,7 @@ TEST_F(ConsoleTest, NavigateHistory_Up_ShouldSetInputFromHistory)
 }
 
 // Test navigateHistory moving down
-TEST_F(ConsoleTest, NavigateHistory_Down_ShouldSetInputFromHistory)
+TEST_F(Internal_ConsoleTest, NavigateHistory_Down_ShouldSetInputFromHistory)
 {
     // Simulate adding commands to history via handleSpecialKey with Enter
     std::string input = "first command";
@@ -1473,7 +1473,7 @@ TEST_F(ConsoleTest, NavigateHistory_Down_ShouldSetInputFromHistory)
 }
 
 // Test updateDisplayInput after navigating history
-TEST_F(ConsoleTest, UpdateDisplayInput_ShouldUpdateInputDisplayCorrectly)
+TEST_F(Internal_ConsoleTest, UpdateDisplayInput_ShouldUpdateInputDisplayCorrectly)
 {
     std::string oldInput = "OldCommand";
     std::string newInput = "NewCommand";
@@ -1498,7 +1498,7 @@ TEST_F(ConsoleTest, UpdateDisplayInput_ShouldUpdateInputDisplayCorrectly)
 #pragma region Kbhit
 
 // Test kbhit when key is pressed
-TEST_F(ConsoleTest, Kbhit_KeyPressed_ShouldReturnTrue)
+TEST_F(Internal_ConsoleTest, Kbhit_KeyPressed_ShouldReturnTrue)
 {
     // Mock getchar to return a character
     // Since kbhit is implemented within Console class, it's challenging to mock
@@ -1508,7 +1508,7 @@ TEST_F(ConsoleTest, Kbhit_KeyPressed_ShouldReturnTrue)
 }
 
 // Test kbhit when no key is pressed
-TEST_F(ConsoleTest, Kbhit_NoKeyPressed_ShouldReturnFalse)
+TEST_F(Internal_ConsoleTest, Kbhit_NoKeyPressed_ShouldReturnFalse)
 {
     // Similar to the above test, requires refactoring
     //SUCCEED() << "kbhit method requires refactoring for testability.";

@@ -23,21 +23,62 @@ namespace Protocol
                         // Pick best IP to use
                         std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
                         ByteString prefix = Functions::byteToBin(destIp.substr(0, 2));
-                        if (prefix.substr(0, 10) == ByteString("1111111010"))
+
+                        uint8_t firstByte = destIp[0];
+                        uint8_t secondByte = destIp[1];
+
+                        // Multicast (FF00::/8)
+                        if (firstByte == 0xFF)
                         {
-                            ip.sourceAddress = iface->configs.ipv6.linkLocalAddress.ip;
+                            uint8_t scope = secondByte & 0x0F; // Low nibble = bits 12-15
+                        
+                            if (scope == 0x01 || scope == 0x02)
+                            {
+                                if (iface->configs.ipv6.linkLocalAddress)
+                                    ip.sourceAddress = iface->configs.ipv6.linkLocalAddress->ip;
+                            }
+                            else if (scope == 0x05 || scope == 0x08) // Site/org-local
+                            {
+                                if (!iface->configs.ipv6.uniqueLocalAddresses.empty())
+                                    ip.sourceAddress = iface->configs.ipv6.uniqueLocalAddresses.front()->ip;
+                            }
+                            else if (scope == 0x0E) // Global scope
+                            {
+                                if (!iface->configs.ipv6.globalAddresses.empty())
+                                    ip.sourceAddress = iface->configs.ipv6.globalAddresses.front()->ip;
+                            }
+                            else
+                            {
+                                return; // Return if no matching scope is found
+                            }
                         }
-                        else if (prefix.substr(0, 3) == ByteString("001") && !iface->configs.ipv6.globalAddresses.empty())
+                        // Global Unicast (2000::/3 = 001xxxxx)
+                        else if ((firstByte & 0b11100000) == 0b00100000)
                         {
-                            ip.sourceAddress = iface->configs.ipv6.globalAddresses.front().ip;
+                            if (!iface->configs.ipv6.globalAddresses.empty())
+                                ip.sourceAddress = iface->configs.ipv6.globalAddresses.front()->ip;
                         }
-                        else if (prefix.substr(0, 7) == ByteString("1111110") && !iface->configs.ipv6.uniqueLocalAddresses.empty())
+                        // Unique Local (FC00::/7 = 1111110x)
+                        else if ((firstByte & 0b11111110) == 0b11111100)
                         {
-                            ip.sourceAddress = iface->configs.ipv6.uniqueLocalAddresses.front().ip;
+                            if (!iface->configs.ipv6.uniqueLocalAddresses.empty())
+                                ip.sourceAddress = iface->configs.ipv6.uniqueLocalAddresses.front()->ip;
+                        }
+                        // Link-local (FE80::/10 = 1111111010xxxxxxx)
+                        else if ((firstByte & 0b11111100) == 0b11111100 && (secondByte & 0b00001111) == 0x00)
+                        {
+                            if (iface->configs.ipv6.linkLocalAddress)
+                                ip.sourceAddress = iface->configs.ipv6.linkLocalAddress->ip;
+                        }
+                        // Loopback (::1)
+                        else if (std::all_of(destIp.begin(), destIp.end() - 1, [](uint8_t b) { return b == 0; }) && destIp[15] == 1)
+                        {
+                            ip.sourceAddress = ByteString(16, 0x00); // 16 bytes initialized to 0
+                            ip.sourceAddress[15] = 0x01;             // Set last byte to 1 using bitwise operator
                         }
                         else
                         {
-                            return; // Return if no matching scope is found
+                            return; // Unsuported or unconfigured destination
                         }
                     }
                 }

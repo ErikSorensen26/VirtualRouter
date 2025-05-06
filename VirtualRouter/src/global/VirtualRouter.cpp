@@ -10,14 +10,16 @@
 VirtualRouter::~VirtualRouter()
 {
     {
-        std::unique_lock<std::shared_mutex> lock(interfaceMutex);
-        // Interfaces
-        for (auto it = interfaceList.begin(); it != interfaceList.end();)
+        std::unordered_map<std::pair<InterfaceType, float>, Interface*, InterfacePairHash> interfaceListCopy;
         {
-            delete it->second;
-            it->second = nullptr;
+            std::unique_lock<std::shared_mutex> lock(interfaceMutex);
+            interfaceListCopy = interfaceList;
         }
-        interfaceList.clear();
+        // Interfaces
+        for (auto [_, interface] : interfaceListCopy)
+        {
+            delete interface;
+        }
     }
 
     {

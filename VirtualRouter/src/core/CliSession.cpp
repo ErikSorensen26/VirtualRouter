@@ -21,18 +21,32 @@ CliSession::CliSession(CliEngine& eng, bool enableDebug) : Console(), engine(eng
     iConsole->print("Initializing Terminal...\n");
 }
 
+CliSession::CliSession(CliEngine& engine, std::shared_ptr<IConsole> term) : Console(std::move(term)), engine(engine)
+{
+    // Set debug mode based on the input parameter
+    isDebugModeEnabled = false;
+
+    // Set debug mode based on the input parameter
+    modeConfig.configNode = &engine.root;
+    modeConfig.modeHistory.push_back(modeConfig.configNode);
+
+    // Set initial mode
+    changeMode(engine.defaultMode, true);
+    initializeProcessingState();
+
+    // Initialize Console
+    initConsole();
+    commandProcessor = new CommandProcessor(this);
+    commandProcessor->currentVrf = Global::getInstance().getRoutingInstance("default");
+    iConsole->print("Initializing Terminal...\n");
+}
+
 CliSession::~CliSession()
 {
     if (commandProcessor)
     {
         delete commandProcessor;
     }
-}
-
-CliSession::CliSession(CliEngine& engine, std::shared_ptr<IConsole> term) : Console(std::move(term)), engine(engine)
-{
-    // Set debug mode based on the input parameter
-    isDebugModeEnabled = false;
 }
 
 bool CliSession::handleInput(std::string test)
@@ -44,11 +58,6 @@ bool CliSession::handleInput(std::string test)
 
     // Read the user's input from the terminal
     std::string userCommand = input(test);
-
-    // Handle IPv6 address input and print the expanded version
-    if (Functions::isIPv6Address(userCommand)) {
-        std::cout << Functions::expandIPv6Address(userCommand);
-    }
 
     // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
     if (userCommand == "CRT-Z" && modeConfig.currentMode != Mode::userExec) {
@@ -1269,7 +1278,7 @@ bool CliSession::changeMode(std::string &newMode, bool processing)
     }
     else
     {
-        std::cout << "\nMode: \"" << newMode << "\" not found in schema";
+        //std::cout << "\nMode: \"" << newMode << "\" not found in schema";
     }
 
 

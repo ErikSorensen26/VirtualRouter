@@ -31,7 +31,7 @@ public:
 // Test Fixture
 //--------------------------------------------------------------------------------
 
-class DecapsulationTest : public ::testing::Test 
+class Internal_DecapsulationTest : public ::testing::Test 
 {
 protected:
     TestablePacket* pkt; // Each test has a fresh Packet instance
@@ -81,7 +81,7 @@ protected:
 //--------------------------------------------------------------------------------
 
 // Test EthernetArp_Valid
-TEST_F(DecapsulationTest, EthernetArp_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetArp_Valid)
 {
     // Build a minimal Ethernet + ARP "whole packet":
     // [Ethernet(14)] + [ARP(28)] = 42 bytes
@@ -112,7 +112,7 @@ TEST_F(DecapsulationTest, EthernetArp_Valid)
 }
 
 // Test EthernetArp_Invalid
-TEST_F(DecapsulationTest, EthernetArp_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetArp_Invalid)
 {
     // Make it too short to contain ARP (only 20 bytes total)
     // Ethernet alone needs 14 bytes, so ARP can't fit
@@ -141,7 +141,7 @@ TEST_F(DecapsulationTest, EthernetArp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetMplsIPv4_Valid
-TEST_F(DecapsulationTest, EthernetMplsIPv4_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetMplsIPv4_Valid)
 {
     // Ethernet(14) + MPLS(4) + minimal IPv4(20) = 38 bytes
     ByteString packet = std::string(
@@ -175,7 +175,7 @@ TEST_F(DecapsulationTest, EthernetMplsIPv4_Valid)
 }
 
 // Test EthernetMplsIPv4_Invalid
-TEST_F(DecapsulationTest, EthernetMplsIPv4_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetMplsIPv4_Invalid)
 {
     // We'll have Ethernet(14) + MPLS(4) but only 10 bytes for IPv4 => insufficient
     ByteString packet = std::string(
@@ -203,7 +203,7 @@ TEST_F(DecapsulationTest, EthernetMplsIPv4_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Icmp_Valid
-TEST_F(DecapsulationTest, EthernetIPv4Icmp_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Icmp_Valid)
 {
     // Ethernet(14) + IPv4(20) + ICMP(8) = 42
     ByteString packet = std::string(
@@ -234,7 +234,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Icmp_Valid)
 }
 
 // Test EthernetIPv4Icmp_Invalid
-TEST_F(DecapsulationTest, EthernetIPv4Icmp_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Icmp_Invalid)
 {
     // We'll do Ethernet(14) + IPv4(20) but only 4 bytes left for ICMP => incomplete
     ByteString packet = std::string(
@@ -262,7 +262,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Icmp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv6Icmpv6_Valid
-TEST_F(DecapsulationTest, EthernetIPv6Icmpv6_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Icmpv6_Valid)
 {
     // Ethernet(14) + IPv6(40) + ICMPv6(8) = 62
     ByteString packet = std::string(
@@ -291,7 +291,7 @@ TEST_F(DecapsulationTest, EthernetIPv6Icmpv6_Valid)
 }
 
 // Test EthernetIPv6Icmpv6_Invalid
-TEST_F(DecapsulationTest, EthernetIPv6Icmpv6_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Icmpv6_Invalid)
 {
     // Just remove some bytes from ICMPv6 => incomplete
     ByteString packet = std::string(
@@ -320,7 +320,7 @@ TEST_F(DecapsulationTest, EthernetIPv6Icmpv6_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Igmp_Valid
-TEST_F(DecapsulationTest, EthernetIPv4Igmp_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Igmp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=2 => IGMP) + IGMP(8)
     ByteString packet = std::string(
@@ -347,7 +347,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Igmp_Valid)
 }
 
 // Test EthernetIPv4Igmp_Invalid
-TEST_F(DecapsulationTest, EthernetIPv4Igmp_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Igmp_Invalid)
 {
     // Truncate IGMP => only 4 bytes
     ByteString packet = std::string(
@@ -373,7 +373,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Igmp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Tcp_Valid
-TEST_F(DecapsulationTest, EthernetIPv4Tcp_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Tcp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=6) + TCP(20) => 54
     ByteString packet = std::string(
@@ -404,7 +404,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Tcp_Valid)
 }
 
 // Test EthernetIPv4Tcp_Invalid
-TEST_F(DecapsulationTest, EthernetIPv4Tcp_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Tcp_Invalid)
 {
     // Truncate TCP => only 10 bytes
     ByteString packet = std::string(
@@ -431,7 +431,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Tcp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Udp_Valid
-TEST_F(DecapsulationTest, EthernetIPv4Udp_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Udp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=17 => UDP) + UDP(8)
     ByteString packet = std::string(
@@ -457,7 +457,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Udp_Valid)
 }
 
 // Test EthernetIPv4Udp_Invalid
-TEST_F(DecapsulationTest, EthernetIPv4Udp_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Udp_Invalid)
 {
     // Truncated UDP => 4 bytes
     ByteString packet = std::string(
@@ -484,7 +484,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Udp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4UdpDhcp_Valid
-TEST_F(DecapsulationTest, EthernetIPv4UdpDhcp_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4UdpDhcp_Valid)
 {
     // Build a minimal packet with DHCP ports: (src=67,dst=68 or vice versa)
     // We'll keep it short but at least enough that decodeDhcp won't crash
@@ -521,7 +521,7 @@ TEST_F(DecapsulationTest, EthernetIPv4UdpDhcp_Valid)
 }
 
 // Test EthernetIPv4UdpDhcp_Invalid
-TEST_F(DecapsulationTest, EthernetIPv4UdpDhcp_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4UdpDhcp_Invalid)
 {
     // Not enough data for minimal DHCP => only 100 bytes
     const size_t DHCP_SIZE = 100;
@@ -556,15 +556,17 @@ TEST_F(DecapsulationTest, EthernetIPv4UdpDhcp_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv6UdpDhcpv6_Valid
-TEST(DecapsulationTest, EthernetIPv6Dhcpv6_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Dhcpv6_Valid)
 {
-    SUCCEED();
+    std::cout << "DHCPV6 IS NEEDED" << std::endl;
+    GTEST_SKIP();
 }
 
 // Test EthernetIPv6UdpDhcpv6_Invalid
-TEST(DecapsulationTest, EthernetIPv6Dhcpv6_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Dhcpv6_Invalid)
 {
-    SUCCEED();
+    std::cout << "DHCPV6 IS NEEDED" << std::endl;
+    GTEST_SKIP();
 }
 
 //--------------------------------------------------------------------------------
@@ -572,7 +574,7 @@ TEST(DecapsulationTest, EthernetIPv6Dhcpv6_Invalid)
 //--------------------------------------------------------------------------------
 
 // Test EthernetIPv4Eigrp_Valid
-TEST_F(DecapsulationTest, EthernetIPv4Eigrp_Valid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Eigrp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=88 => EIGRP) + EIGRP(20+)
     ByteString eigrpData = createFilled(20, 0x01); // minimal EIGRP content
@@ -601,7 +603,7 @@ TEST_F(DecapsulationTest, EthernetIPv4Eigrp_Valid)
 }
 
 // Test EthernetIPv4Eigrp_Invalid
-TEST_F(DecapsulationTest, EthernetIPv4Eigrp_Invalid)
+TEST_F(Internal_DecapsulationTest, EthernetIPv4Eigrp_Invalid)
 {
     // Provide only 8 bytes for EIGRP => incomplete
     ByteString shortEigrp = createFilled(8, 0x55);

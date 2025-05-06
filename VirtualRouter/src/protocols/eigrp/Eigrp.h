@@ -33,8 +33,8 @@
  */
 
 class Interface;
-class EigrpTest;
 class VirtualRouter;
+class Internal_EigrpTest;
 enum class InterfaceType;
 
 /**
@@ -215,7 +215,7 @@ namespace EigrpConfigs
      */
     enum class TrafficShareMode
     {
-        Balenced, ///< Balanced traffic sharing.
+        Balanced, ///< Balanced traffic sharing.
         Minimum   ///< Minimum traffic sharing.
     };
 
@@ -530,18 +530,24 @@ namespace EigrpConfigs
         std::shared_mutex configsMutex;
         std::atomic<uint8_t> maxPaths = 4; ///< Maximum number of equal-cost paths.
         std::atomic<uint8_t> maxHops = 100; ///< Maximum hops for path. // TODO
-        std::atomic<uint8_t> TOS = 0;
+        std::atomic<uint8_t> TOS = 0; ///< Type of service, should remain 0.
         std::atomic<uint8_t> adminDistance = 90; ///< Administrative distance for internal routes.
         std::atomic<uint8_t> externalAdminDistance = 170; ///< Administrative distance for external routes.
         std::atomic<uint8_t> variance = 1; ///< Variance for unequal-cost load balancing.
         std::atomic<uint8_t> trafficShare = 0; ///< Traffic sharing mode.
+        std::atomic<uint8_t> dampeningInterval = 75; ///< Dampening interval for route dampening.
+        std::atomic<uint8_t> ribScale = 128; ///< Rib scale for metric when adding to RIB. //TODO
+        std::atomic<uint16_t> dampeningResetTime = 0; ///< Reset time for dampening.
+        std::atomic<uint16_t> dampeningRestart = 0; ///< Restart time for dampening.
+        std::atomic<uint16_t> dampeningRestartCount = 1; ///< Restart count for dampening.
         std::atomic<uint16_t> activeTime = 180; ///< Active time in seconds.
         std::atomic<uint16_t> stuckInActiveTime = 90; ///< Stuck-in-active time in seconds.
         std::atomic<uint16_t> purgeTime = 240; ///< Purge time for nsf mode with graceful restarts.
-        std::atomic<uint32_t> redistributionMetricOffset = 0; ///< Metric offset for redistribution.
+        std::atomic<uint32_t> redistributionMetricOffset = 0; ///< Metric offset for redistribution. //TODO
         std::atomic<uint32_t> wideMetric = 10000000; ///< Wide metric setting.
         std::atomic<uint32_t> eventLogSize = 500; //< Event log size for eigrp.
         std::atomic<uint32_t> lowestBandwidth = std::numeric_limits<uint32_t>::max(); ///< Holds the lowest bandwidth on all interfaces.
+        std::atomic<uint32_t> maximumPrefix = 0; ///< Max number of prefixes that will be accepted.
         std::atomic<bool> logNeighborChanges = true; ///< Enable logging of neighbor changes.
         std::atomic<bool> logNeighborWarnings = false; ///< Enable logging of neighbor warnings.
         std::atomic<bool> advertiseDefault = false; ///< Advertise default route.
@@ -550,10 +556,12 @@ namespace EigrpConfigs
         std::atomic<bool> nonStopForwarding = false; ///< Enable non-stop-forwarding.
         std::atomic<bool> activeDisabled = false; ///< Disables active routes from becoming stuck in active.
         std::atomic<bool> routingMulticast = false; ///< Indicates if multicast is being routed.
+        std::atomic<bool> dampening = false; ///< Indicates that dampening is enabled.
+        std::atomic<bool> dampeningWarnings = false; ///< Show warning when dampening limit is reached.
         std::vector<Network> networks; ///< List of configured networks.
         std::unordered_map<InterfaceType, std::unordered_set<float>> passiveInterfaces; ///< List of all passive interfaces.
         std::unordered_map<InterfaceType, std::unordered_map<float, std::unordered_set<ByteString>>> unicastNeighbors; ///< Manually defined unicast neighbors.
-        std::atomic<TrafficShareMode> trafficShareMode = TrafficShareMode::Balenced; ///< Traffic sharing mode.
+        std::atomic<TrafficShareMode> trafficShareMode = TrafficShareMode::Balanced; ///< Traffic sharing mode.
         KValue kvalue; ///< K-values for metric calculation.
         StubConfig stubConfig; ///< Stub routing configuration.
         KValue defaultMetrics; ///< Default metrics.
@@ -565,11 +573,17 @@ namespace EigrpConfigs
      */
     struct InterfaceConfigs
     {
+        InterfaceConfigs(InterfaceType type, float id) : type(type), id(id) {}
+        InterfaceType type;
+        float id;
+        bool shutdown = false;
+        bool userMade = false;
         std::shared_mutex configsMutex;
+        std::vector<std::pair<ByteString, uint8_t>> pendingSummaryRoutes;
         std::vector<SummaryRoute> summaryRoutes; ///< List of summary routes.
         std::atomic<uint8_t> DSCP = 0; ///< Differentiated Services Code Point.
         std::atomic<uint8_t> interfaceMask; ///< Interface subnet mask.
-        std::atomic<uint8_t> dampeningChange = 0; ///< Percent metric change needed for update.
+        std::atomic<uint8_t> dampeningChange = 1; ///< Number of prefix changes that triggers dampening. //TODO
         std::atomic<uint16_t> dampeningInterval = 5; /// Interval the interface will check for changed routes.
         std::atomic<uint16_t> helloTime = 5; ///< Hello interval in seconds.
         std::atomic<uint16_t> holdTime = 15; ///< Hold time in seconds.
@@ -604,7 +618,7 @@ namespace Protocol
     class EigrpInterface
     {
     public:
-        friend class ::EigrpTest;
+        friend class ::Internal_EigrpTest;
 
         Eigrp& eigrpProcess; ///< Pointer to the EIGRP process.
         EigrpConfigs::InterfaceConfigs& configs; ///< Configuration settings for the interface.
@@ -822,9 +836,8 @@ namespace Protocol
          *
          * @param neighbor Pointer to the neighbor information.
          * @param neighborIp Reference to neighbors IP address.
-         * @param failedRoutes Routes that have failed and need to be queried.
          */
-        void sendSIAQueryToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, std::vector<RoutingTable::Eigrp*> failedRoutes);
+        void sendSIAQueryToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp);
 
         /**
          * @brief Sends a Reply packet to a neighbor in response to a Query.
@@ -1365,6 +1378,29 @@ namespace Protocol
         void updateRTTEstimate(EigrpConfigs::NeighborInfo* neighbor, uint32_t sequenceNumber);
 
         /**
+         * @brief Updates dampening timestamps for the current route change.
+         *
+         * Updates tracking timestamps and counters for this AS if dampening is enabled and tracking
+         */
+        void recordRouteChange();
+
+        /**
+         * @brief Checks suppression status every couple of seconds.
+         *
+         * This is ran when dampening detects too many route changes in order
+         * to supress changes to not overwhelm the system.
+         */
+        void checkSuppressionStatus();
+
+        /**
+         * @brief counts prefixes for route dampening.
+         *
+         * This is ran when a prefix is learned in order to cap a maximum amount of routes
+         * if route dampening is enabled.
+         */
+        void onPrefixLearned();
+
+        /**
          * @brief Retrieves the multicast address based on the address family.
          *
          * Determines and returns the appropriate multicast address for EIGRP packet
@@ -1416,6 +1452,13 @@ namespace Protocol
         // Sequence number
         std::atomic<uint32_t> nextSequenceNumber = 1; ///< Next sequence number for packets.
         std::atomic<uint32_t> conditionalReceive = 0; ///< Holds conditional receive sequence number.
+
+        std::deque<std::chrono::steady_clock::time_point> routeChangeTimes;
+        std::chrono::steady_clock::time_point supressedUntil;
+        uint8_t restartCounter = 0;
+        std::atomic<bool> isSupressed = false;
+        std::atomic<uint32_t> dampeningTimerId = 0;
+        std::atomic<uint32_t> prefixCount = 0;
     };
 
 
@@ -1430,7 +1473,7 @@ namespace Protocol
     class Eigrp 
     {
     public:
-        friend class ::EigrpTest;
+        friend class ::Internal_EigrpTest;
 
         EigrpConfigs::EigrpConfigs configs; ///< Configuration settings for EIGRP.
 
@@ -1443,7 +1486,7 @@ namespace Protocol
          * @param as Autonomous System number.
          * @param af Address family (IPv4/IPv6).
          */
-        Eigrp(uint32_t& as, AddressFamily af, VirtualRouter* vrf);
+        Eigrp(uint32_t as, AddressFamily af, VirtualRouter* vrf, bool named = false);
 
         /**
          * @brief Destructor for Eigrp.
@@ -1854,6 +1897,7 @@ namespace Protocol
         std::shared_mutex interfaceMutex;
         std::unordered_map<ByteString, EigrpConfigs::NeighborInfo*> allNeighbors;
         std::mutex neighborMutex;
+        bool namedMode = false;
 
     private:
         ByteString virtualRouterID = ByteString(2, '\x00'); ///< Virtual Router ID.

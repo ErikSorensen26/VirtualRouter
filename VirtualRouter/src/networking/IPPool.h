@@ -10,9 +10,9 @@
 #include <set>
 
 // Forward declarations
-class IPPoolTest;
-class DhcpServerTest;
-class Dhcpv6ServerTest;
+class Internal_IPPoolTest;
+class Internal_DhcpServerTest;
+class Internal_Dhcpv6ServerTest;
 class LeaseManager;
 
 /**
@@ -37,9 +37,9 @@ class IPPool
     std::set<ByteString> releasedIPs; ///< Set for releasedIPs.
     mutable std::mutex poolMutex; ///< Mutex for thread synchronization.
 public:
-    friend class ::IPPoolTest;
-    friend class ::DhcpServerTest;
-    friend class ::Dhcpv6ServerTest;
+    friend class ::Internal_IPPoolTest;
+    friend class ::Internal_DhcpServerTest;
+    friend class ::Internal_Dhcpv6ServerTest;
 
     /**
      * @brief Default constructor with no parameters.

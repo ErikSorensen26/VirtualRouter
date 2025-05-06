@@ -1,4 +1,4 @@
-// ConfigsTest.cpp
+// Internal_ConfigTest.cpp
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <CliEngine.h>
+#include <Mode.hpp>
 #include "Configs.h"           // Your Configs class header
 #include "MockFileSystem.hpp" // Mocked file system interface
 
@@ -54,11 +56,12 @@ void validateJson(const std::string& json)
 }
 
 // Test Fixture for Configs Function Tests
-class ConfigsTest : public ::testing::Test 
+class Internal_ConfigTest : public ::testing::Test 
 {
 protected:
     std::shared_ptr<Configs> configs;
     std::shared_ptr<MockFileSystem> mockFileSystem;
+    std::shared_ptr<ModeConfig> modeConfig;
 
     // Paths to configuration files
     std::string startupFilePath = STARTUP_FILE;
@@ -69,6 +72,8 @@ protected:
     {
         mockFileSystem = std::make_shared<MockFileSystem>();
         configs = std::make_shared<Configs>(mockFileSystem);
+        modeConfig = std::make_shared<ModeConfig>();
+        modeConfig->currentMode = Mode::globalConfiguration;
     }
 
     // TearDown runs after each test
@@ -100,7 +105,7 @@ protected:
 };
 
 // Test Initialization with an empty startup file
-TEST_F(ConfigsTest, InitConfigs_EmptyStartupFile)
+TEST_F(Internal_ConfigTest, InitConfigs_EmptyStartupFile)
 {
     // Set the mock to indicate that the startup file exists but is empty
     mockFileSystem->setupMockFile(startupFilePath, "{}");
@@ -123,7 +128,7 @@ TEST_F(ConfigsTest, InitConfigs_EmptyStartupFile)
 }
 
 // Test Initialization with a valid startup file and additional Configs.json.
-TEST_F(ConfigsTest, InitConfigs_ValidStartupAndAdditionalConfig) {
+TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig) {
     // Define valid startup configuration
     std::string startupConfig = R"(
     {
@@ -217,7 +222,7 @@ TEST_F(ConfigsTest, InitConfigs_ValidStartupAndAdditionalConfig) {
 }
 
 // Test Initialization with Valid Startup and Additional Configs
-TEST_F(ConfigsTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldInitializeCorrectly) {
+TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldInitializeCorrectly) {
     // Define valid startup configuration JSON
     std::string startupConfig = R"(
     {
@@ -328,7 +333,7 @@ TEST_F(ConfigsTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldInitialize
 }
 
 // Test Initialization with Empty Startup and Additional Configs
-TEST_F(ConfigsTest, InitConfigs_EmptyStartupAndAdditionalConfig_ShouldInitializeWithEmptyConfigs) {
+TEST_F(Internal_ConfigTest, InitConfigs_EmptyStartupAndAdditionalConfig_ShouldInitializeWithEmptyConfigs) {
     // Define empty startup configuration JSON
     std::string startupConfig = "{}";
 
@@ -358,7 +363,7 @@ TEST_F(ConfigsTest, InitConfigs_EmptyStartupAndAdditionalConfig_ShouldInitialize
 }
 
 // Test Initialization with Missing Startup File
-TEST_F(ConfigsTest, InitConfigs_MissingStartupFile_ShouldFailInitialization) {
+TEST_F(Internal_ConfigTest, InitConfigs_MissingStartupFile_ShouldFailInitialization) {
     // Mock fileExists to return false for startup file
 
     // Initialize configurations
@@ -374,7 +379,7 @@ TEST_F(ConfigsTest, InitConfigs_MissingStartupFile_ShouldFailInitialization) {
 }
 
 // Test Initialization with Malformed JSON in Startup File
-TEST_F(ConfigsTest, InitConfigs_MalformedStartupJSON_ShouldInitializeWithEmptyRoot) {
+TEST_F(Internal_ConfigTest, InitConfigs_MalformedStartupJSON_ShouldInitializeWithEmptyRoot) {
     // Define malformed startup configuration JSON
     std::string malformedStartupConfig = R"(
     {
@@ -411,7 +416,7 @@ TEST_F(ConfigsTest, InitConfigs_MalformedStartupJSON_ShouldInitializeWithEmptyRo
 }
 
 // Test Initialization with Missing Required Fields in Startup Config
-TEST_F(ConfigsTest, InitConfigs_MissingRequiredFields_ShouldInitializeWithPartialConfigs) {
+TEST_F(Internal_ConfigTest, InitConfigs_MissingRequiredFields_ShouldInitializeWithPartialConfigs) {
     // Define startup configuration missing the 'hostname' field
     std::string startupConfig = R"(
     {
@@ -482,7 +487,7 @@ TEST_F(ConfigsTest, InitConfigs_MissingRequiredFields_ShouldInitializeWithPartia
 }
 
 // Test Hostname Parsing
-TEST_F(ConfigsTest, ParseHostname_ShouldSetHostnameCorrectly) {
+TEST_F(Internal_ConfigTest, ParseHostname_ShouldSetHostnameCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -511,7 +516,7 @@ TEST_F(ConfigsTest, ParseHostname_ShouldSetHostnameCorrectly) {
 }
 
 // Test Interface Parsing for GigabitEthernet and FastEthernet
-TEST_F(ConfigsTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
+TEST_F(Internal_ConfigTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -597,7 +602,7 @@ TEST_F(ConfigsTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
 }
 
 // Test Command Parsing for IP, Subnet, and Bandwidth
-TEST_F(ConfigsTest, ParseCommands_ShouldSetCommandsCorrectly) {
+TEST_F(Internal_ConfigTest, ParseCommands_ShouldSetCommandsCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -659,7 +664,7 @@ TEST_F(ConfigsTest, ParseCommands_ShouldSetCommandsCorrectly) {
 }
 
 // Test Router Protocol Parsing (EIGRP, OSPF, BGP)
-TEST_F(ConfigsTest, ParseRouterProtocols_ShouldSetRouterProtocolsCorrectly) {
+TEST_F(Internal_ConfigTest, ParseRouterProtocols_ShouldSetRouterProtocolsCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -773,7 +778,7 @@ TEST_F(ConfigsTest, ParseRouterProtocols_ShouldSetRouterProtocolsCorrectly) {
 }
 
 // Test Policy Map Parsing
-TEST_F(ConfigsTest, ParsePolicyMap_ShouldSetPolicyMapCorrectly) {
+TEST_F(Internal_ConfigTest, ParsePolicyMap_ShouldSetPolicyMapCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -842,7 +847,7 @@ TEST_F(ConfigsTest, ParsePolicyMap_ShouldSetPolicyMapCorrectly) {
 }
 
 // Test RecoverConfigs returns correct list of commands
-TEST_F(ConfigsTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
+TEST_F(Internal_ConfigTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -933,7 +938,7 @@ TEST_F(ConfigsTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
 }
 
 // Test RecoverConfigs handles nested commands correctly
-TEST_F(ConfigsTest, RecoverConfigs_NestedCommands_ShouldHandleNestedCommandsCorrectly) {
+TEST_F(Internal_ConfigTest, RecoverConfigs_NestedCommands_ShouldHandleNestedCommandsCorrectly) {
     
     std::string startupConfig = R"(
     {
@@ -1012,7 +1017,7 @@ TEST_F(ConfigsTest, RecoverConfigs_NestedCommands_ShouldHandleNestedCommandsCorr
 }
 
 // Test RecoverConfigs handles volatile and non-volatile commands correctly
-TEST_F(ConfigsTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCorrectly) {
+TEST_F(Internal_ConfigTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -1107,7 +1112,7 @@ TEST_F(ConfigsTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCorrectly)
 }
 
 // Test isVolatile function
-TEST_F(ConfigsTest, IsVolatile_ShouldIdentifyVolatileCommandsCorrectly) {
+TEST_F(Internal_ConfigTest, IsVolatile_ShouldIdentifyVolatileCommandsCorrectly) {
     // Define some volatile and non-volatile commands
     std::vector<std::pair<std::string, bool>> testCases = {
         // Not Volatile
@@ -1132,7 +1137,7 @@ TEST_F(ConfigsTest, IsVolatile_ShouldIdentifyVolatileCommandsCorrectly) {
 }
 
 // Test getVolatileValue function (overload with json)
-TEST_F(ConfigsTest, GetVolatileValue_WithJson_ShouldReturnCorrectValue) {
+TEST_F(Internal_ConfigTest, GetVolatileValue_WithJson_ShouldReturnCorrectValue) {
     // Example command and com
     std::string type = "A.B.C.D";
     std::string value = "10.0.0.1";
@@ -1180,7 +1185,7 @@ TEST_F(ConfigsTest, GetVolatileValue_WithJson_ShouldReturnCorrectValue) {
 }
 
 // Test getVolatileValue function (overload with vector)
-TEST_F(ConfigsTest, GetVolatileValue_WithVector_ShouldReturnCorrectValue) {
+TEST_F(Internal_ConfigTest, GetVolatileValue_WithVector_ShouldReturnCorrectValue) {
     // Example command and com
     std::string command = "A.B.C.D";
     std::string com = "10.0.0.1";
@@ -1224,7 +1229,7 @@ TEST_F(ConfigsTest, GetVolatileValue_WithVector_ShouldReturnCorrectValue) {
 }
 
 // Test joinCommand function
-TEST_F(ConfigsTest, JoinCommand_ShouldJoinCommandPartsCorrectly) {
+TEST_F(Internal_ConfigTest, JoinCommand_ShouldJoinCommandPartsCorrectly) {
     std::vector<std::string> commandParts1 = {"interface", "GigabitEthernet", "1"};
     std::string expected1 = "interface GigabitEthernet 1";
     std::string actual1 = configs->joinCommand(commandParts1);
@@ -1247,7 +1252,7 @@ TEST_F(ConfigsTest, JoinCommand_ShouldJoinCommandPartsCorrectly) {
 }
 
 // Test Initialization with Duplicate Interface IDs
-TEST_F(ConfigsTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracefully) {
+TEST_F(Internal_ConfigTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracefully) {
     // Define startup configuration with duplicate interface IDs
     std::string startupConfig = R"(
     {
@@ -1340,7 +1345,7 @@ TEST_F(ConfigsTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracefully) {
 }
 
 // Test Initialization with Invalid Interface Types
-TEST_F(ConfigsTest, InitConfigs_InvalidInterfaceTypes_ShouldHandleGracefully) 
+TEST_F(Internal_ConfigTest, InitConfigs_InvalidInterfaceTypes_ShouldHandleGracefully) 
 {
     // Define startup configuration with invalid interface type
     std::string startupConfig = R"(
@@ -1408,7 +1413,7 @@ TEST_F(ConfigsTest, InitConfigs_InvalidInterfaceTypes_ShouldHandleGracefully)
 }
 
 // Test Initialization with Empty Interface Lists
-TEST_F(ConfigsTest, InitConfigs_EmptyInterfaceList_ShouldHandleGracefully) 
+TEST_F(Internal_ConfigTest, InitConfigs_EmptyInterfaceList_ShouldHandleGracefully) 
 {
     // Define startup configuration with empty interface lists
     std::string startupConfig = R"(
@@ -1455,7 +1460,7 @@ TEST_F(ConfigsTest, InitConfigs_EmptyInterfaceList_ShouldHandleGracefully)
 }
 
 // Test Initialization with Interface Missing Commands
-TEST_F(ConfigsTest, InitConfigs_InterfaceMissingCommands_ShouldHandleGracefully) 
+TEST_F(Internal_ConfigTest, InitConfigs_InterfaceMissingCommands_ShouldHandleGracefully) 
 {
     // Define startup configuration with interface missing 'commands'
     std::string startupConfig = R"(
@@ -1508,7 +1513,7 @@ TEST_F(ConfigsTest, InitConfigs_InterfaceMissingCommands_ShouldHandleGracefully)
 }
 
 // Test Correct Loading of All Configurations
-TEST_F(ConfigsTest, LoadAllConfigurations_ShouldLoadCorrectly) 
+TEST_F(Internal_ConfigTest, LoadAllConfigurations_ShouldLoadCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -1656,7 +1661,7 @@ TEST_F(ConfigsTest, LoadAllConfigurations_ShouldLoadCorrectly)
 }
 
 // Test Initialization with Invalid MAC Address Formats
-TEST_F(ConfigsTest, InitConfigs_InvalidMacAddressFormats_ShouldHandleGracefully) 
+TEST_F(Internal_ConfigTest, InitConfigs_InvalidMacAddressFormats_ShouldHandleGracefully) 
 {
     // Define startup configuration
     std::string startupConfig = R"(
@@ -1710,7 +1715,7 @@ TEST_F(ConfigsTest, InitConfigs_InvalidMacAddressFormats_ShouldHandleGracefully)
 }
 
 // Test RecoverConfigs with Empty Configurations
-TEST_F(ConfigsTest, RecoverConfigs_EmptyConfig_ShouldReturnEmptyList) {
+TEST_F(Internal_ConfigTest, RecoverConfigs_EmptyConfig_ShouldReturnEmptyList) {
     // Define empty startup configuration
     std::string startupConfig = "{}";
 
@@ -1735,7 +1740,7 @@ TEST_F(ConfigsTest, RecoverConfigs_EmptyConfig_ShouldReturnEmptyList) {
 }
 
 // Test Re-initializing Configurations After Changes
-TEST_F(ConfigsTest, ReInitConfigs_ShouldResetAndLoadNewConfigurations) {
+TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetAndLoadNewConfigurations) {
     // Define initial startup configuration
     std::string startupConfig1 = R"(
     {
@@ -1794,7 +1799,7 @@ TEST_F(ConfigsTest, ReInitConfigs_ShouldResetAndLoadNewConfigurations) {
 }
 
 // Test No State Leakage Between Tests
-TEST_F(ConfigsTest, Test_NoStateLeakage_BetweenTests_ShouldBeIsolated) {
+TEST_F(Internal_ConfigTest, Test_NoStateLeakage_BetweenTests_ShouldBeIsolated) {
     // Assuming that each test runs independently
     // No actual state leakage needs to be tested since each test uses a fresh fixture
     // But to confirm, run a test that verifies default state
@@ -1822,7 +1827,7 @@ TEST_F(ConfigsTest, Test_NoStateLeakage_BetweenTests_ShouldBeIsolated) {
 }
 
 // Test saveConfig writes the correct JSON to file
-TEST_F(ConfigsTest, SaveConfig_ShouldWriteCorrectJSONToFile) {
+TEST_F(Internal_ConfigTest, SaveConfig_ShouldWriteCorrectJSONToFile) {
     // Define startup configuration
     std::string startupConfig = R"(
     {
@@ -1865,7 +1870,7 @@ TEST_F(ConfigsTest, SaveConfig_ShouldWriteCorrectJSONToFile) {
 
 
 // Test saveConfig when root is empty
-TEST_F(ConfigsTest, SaveConfig_EmptyRoot_ShouldWriteEmptyJSON) {
+TEST_F(Internal_ConfigTest, SaveConfig_EmptyRoot_ShouldWriteEmptyJSON) {
     // Define empty startup configuration
     std::string startupConfig = "{}";
 
@@ -1891,7 +1896,7 @@ TEST_F(ConfigsTest, SaveConfig_EmptyRoot_ShouldWriteEmptyJSON) {
 }
 
 // Test Initialization with Extremely Long Interface IDs
-TEST_F(ConfigsTest, InitConfigs_ExtremelyLongInterfaceIDs_ShouldHandleGracefully) {
+TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLongInterfaceIDs_ShouldHandleGracefully) {
     // Define startup configuration with extremely long interface IDs
     std::string startupConfig = R"(
     {
@@ -1957,7 +1962,7 @@ TEST_F(ConfigsTest, InitConfigs_ExtremelyLongInterfaceIDs_ShouldHandleGracefully
 }
 
 // Test Parsing Nested Commands within Interfaces
-TEST_F(ConfigsTest, ParseNestedCommands_ShouldLoadNestedCommandsCorrectly) {
+TEST_F(Internal_ConfigTest, ParseNestedCommands_ShouldLoadNestedCommandsCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -2007,7 +2012,7 @@ TEST_F(ConfigsTest, ParseNestedCommands_ShouldLoadNestedCommandsCorrectly) {
 }
 
 // Test Parsing Policy Map with Multiple Classes
-TEST_F(ConfigsTest, ParsePolicyMapMultipleClasses_ShouldLoadAllClassesCorrectly) {
+TEST_F(Internal_ConfigTest, ParsePolicyMapMultipleClasses_ShouldLoadAllClassesCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -2092,7 +2097,7 @@ TEST_F(ConfigsTest, ParsePolicyMapMultipleClasses_ShouldLoadAllClassesCorrectly)
 }
 
 // Test Parsing Router Protocol Neighbors
-TEST_F(ConfigsTest, ParseRouterProtocolNeighbors_ShouldLoadAllNeighborsCorrectly) {
+TEST_F(Internal_ConfigTest, ParseRouterProtocolNeighbors_ShouldLoadAllNeighborsCorrectly) {
     std::string startupConfig = R"(
     {
         "hostname": {
@@ -2148,7 +2153,7 @@ TEST_F(ConfigsTest, ParseRouterProtocolNeighbors_ShouldLoadAllNeighborsCorrectly
 }
 
 // Test Parsing Configurations with Nested Security Commands
-TEST_F(ConfigsTest, ParseNestedSecurityCommands_ShouldLoadCorrectly) 
+TEST_F(Internal_ConfigTest, ParseNestedSecurityCommands_ShouldLoadCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2204,7 +2209,7 @@ TEST_F(ConfigsTest, ParseNestedSecurityCommands_ShouldLoadCorrectly)
 }
 
 // Test Parsing Configurations with Modes and Exits
-TEST_F(ConfigsTest, RecoverConfigs_WithModeAndExits_ShouldRecoverCommandsCorrectly) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_WithModeAndExits_ShouldRecoverCommandsCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2265,7 +2270,7 @@ TEST_F(ConfigsTest, RecoverConfigs_WithModeAndExits_ShouldRecoverCommandsCorrect
 }
 
 // Test Initialization with Recovery Commands
-TEST_F(ConfigsTest, InitConfigs_WithRecoveryCommands_ShouldLoadRecoveryCommandsCorrectly) 
+TEST_F(Internal_ConfigTest, InitConfigs_WithRecoveryCommands_ShouldLoadRecoveryCommandsCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2328,7 +2333,7 @@ TEST_F(ConfigsTest, InitConfigs_WithRecoveryCommands_ShouldLoadRecoveryCommandsC
 }
 
 // Test RecoverConfigs handles special characters in recovery commands
-TEST_F(ConfigsTest, RecoverConfigs_WithSpecialCharacters_ShouldHandleCorrectly) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_WithSpecialCharacters_ShouldHandleCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2374,7 +2379,7 @@ TEST_F(ConfigsTest, RecoverConfigs_WithSpecialCharacters_ShouldHandleCorrectly)
 }
 
 // Test RecoverConfigs with Empty Commands
-TEST_F(ConfigsTest, RecoverConfigs_WithEmptyCommands_ShouldHandleCorrectly) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_WithEmptyCommands_ShouldHandleCorrectly) 
 {
     // Define startup configuration with empty commands
     std::string startupConfig = R"(
@@ -2425,7 +2430,7 @@ TEST_F(ConfigsTest, RecoverConfigs_WithEmptyCommands_ShouldHandleCorrectly)
 }
 
 // Test RecoverConfigs with Multiple Lines and VTY Configurations
-TEST_F(ConfigsTest, RecoverConfigs_MultipleLinesAndVTY_ShouldRecoverCorrectly) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleLinesAndVTY_ShouldRecoverCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2559,7 +2564,7 @@ TEST_F(ConfigsTest, RecoverConfigs_MultipleLinesAndVTY_ShouldRecoverCorrectly)
 }
 
 // Test Initialization with Completely Empty JSON
-TEST_F(ConfigsTest, InitConfigs_CompletelyEmptyJSON_ShouldInitializeWithEmptyRoot) 
+TEST_F(Internal_ConfigTest, InitConfigs_CompletelyEmptyJSON_ShouldInitializeWithEmptyRoot) 
 {
     // Define completely empty startup configuration
     std::string startupConfig = "{}";
@@ -2586,7 +2591,7 @@ TEST_F(ConfigsTest, InitConfigs_CompletelyEmptyJSON_ShouldInitializeWithEmptyRoo
 }
 
 // Test Parsing Configurations with VLAN and Security Commands
-TEST_F(ConfigsTest, RecoverConfigs_WithVLANAndSecurity_ShouldRecoverCorrectly) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_WithVLANAndSecurity_ShouldRecoverCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2650,7 +2655,7 @@ TEST_F(ConfigsTest, RecoverConfigs_WithVLANAndSecurity_ShouldRecoverCorrectly)
     EXPECT_EQ(expectedCommands, recoveryCommands);
 }
 
-TEST_F(ConfigsTest, InitConfigs_PartialAdditionalConfig_ShouldInitializePartialConfigs) 
+TEST_F(Internal_ConfigTest, InitConfigs_PartialAdditionalConfig_ShouldInitializePartialConfigs) 
 {
     std::string startupConfig = R"(
     {
@@ -2692,7 +2697,7 @@ TEST_F(ConfigsTest, InitConfigs_PartialAdditionalConfig_ShouldInitializePartialC
     EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
 }
 
-TEST_F(ConfigsTest, InitConfigs_DifferentInterfaceTypes_ShouldInitializeCorrectly) 
+TEST_F(Internal_ConfigTest, InitConfigs_DifferentInterfaceTypes_ShouldInitializeCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2778,7 +2783,7 @@ TEST_F(ConfigsTest, InitConfigs_DifferentInterfaceTypes_ShouldInitializeCorrectl
 }
 
 // Parsing multiple objects at once
-TEST_F(ConfigsTest, ParseMultipleVLANs_ShouldLoadAllVLANsCorrectly) 
+TEST_F(Internal_ConfigTest, ParseMultipleVLANs_ShouldLoadAllVLANsCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2833,7 +2838,7 @@ TEST_F(ConfigsTest, ParseMultipleVLANs_ShouldLoadAllVLANsCorrectly)
 }
 
 // Expect empty lists to return no commands
-TEST_F(ConfigsTest, RecoverConfigs_NoRecoverySection_ShouldReturnEmptyList) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_NoRecoverySection_ShouldReturnEmptyList) 
 {
     std::string startupConfig = R"(
     {
@@ -2861,7 +2866,7 @@ TEST_F(ConfigsTest, RecoverConfigs_NoRecoverySection_ShouldReturnEmptyList)
 }
 
 // Test empty commands in configuration
-TEST_F(ConfigsTest, RecoverConfigs_PartialRecoveryCommands_ShouldHandleGracefully) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_PartialRecoveryCommands_ShouldHandleGracefully) 
 {
     std::string startupConfig = R"(
     {
@@ -2902,7 +2907,7 @@ TEST_F(ConfigsTest, RecoverConfigs_PartialRecoveryCommands_ShouldHandleGracefull
 }
 
 // Test complex JSONs with volitile values
-TEST_F(ConfigsTest, GetVolatileValue_ComplexJSON_ShouldReturnCorrectValue) 
+TEST_F(Internal_ConfigTest, GetVolatileValue_ComplexJSON_ShouldReturnCorrectValue) 
 {
     std::string command = "A.B.C.D";
     std::string com = "10.0.0.1";
@@ -2926,7 +2931,7 @@ TEST_F(ConfigsTest, GetVolatileValue_ComplexJSON_ShouldReturnCorrectValue)
 }
 
 // Test saving configuration
-TEST_F(ConfigsTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrectly) 
+TEST_F(Internal_ConfigTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -2992,7 +2997,7 @@ TEST_F(ConfigsTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrectly)
 }
 
 // Test resetting the internal state of the router
-TEST_F(ConfigsTest, ReInitConfigs_ShouldResetInternalState) 
+TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetInternalState) 
 {
     std::string startupConfig1 = R"(
     {
@@ -3054,7 +3059,7 @@ TEST_F(ConfigsTest, ReInitConfigs_ShouldResetInternalState)
 }
 
 // Test command order, make sure order is correct
-TEST_F(ConfigsTest, RecoverConfigs_CommandOrder_ShouldRespectDependencies) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_CommandOrder_ShouldRespectDependencies) 
 {
     std::string startupConfig = R"(
     {
@@ -3111,7 +3116,7 @@ TEST_F(ConfigsTest, RecoverConfigs_CommandOrder_ShouldRespectDependencies)
 }
 
 // Test parsing policy maps correctly
-TEST_F(ConfigsTest, ParsePolicyMapMultipleClassesNestedCommands_ShouldLoadCorrectly) 
+TEST_F(Internal_ConfigTest, ParsePolicyMapMultipleClassesNestedCommands_ShouldLoadCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -3199,7 +3204,7 @@ TEST_F(ConfigsTest, ParsePolicyMapMultipleClassesNestedCommands_ShouldLoadCorrec
 }
 
 // Test loading multiple policy maps correctly
-TEST_F(ConfigsTest, ParseMultiplePolicyMaps_ShouldLoadAllPolicyMapsCorrectly) 
+TEST_F(Internal_ConfigTest, ParseMultiplePolicyMaps_ShouldLoadAllPolicyMapsCorrectly) 
 {
     std::string startupConfig = R"(
     {
@@ -3271,7 +3276,7 @@ TEST_F(ConfigsTest, ParseMultiplePolicyMaps_ShouldLoadAllPolicyMapsCorrectly)
 }
 
 // Test Initialization with Multiple Sub-Commands Sharing the Same Parent Key
-TEST_F(ConfigsTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoadCorrectly) 
+TEST_F(Internal_ConfigTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoadCorrectly) 
 {
     // Define startup configuration with 'ip' having both 'address' and 'mtu'
     std::string startupConfig = R"(
@@ -3353,7 +3358,7 @@ TEST_F(ConfigsTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoadCorrect
 }
 
 // Test Recovery with Multiple Sub-Commands Sharing the Same Parent Key
-TEST_F(ConfigsTest, RecoverConfigs_MultipleSubCommands_SameParent_ShouldRecoverAllCommands) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleSubCommands_SameParent_ShouldRecoverAllCommands) 
 {
     // Define startup configuration with 'ip' having both 'address' and 'mtu'
     std::string startupConfig = R"(
@@ -3434,7 +3439,7 @@ TEST_F(ConfigsTest, RecoverConfigs_MultipleSubCommands_SameParent_ShouldRecoverA
 }
 
 // Test adding duplicate interfaces
-TEST_F(ConfigsTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrectlyAndOverwriteValues) {
+TEST_F(Internal_ConfigTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrectlyAndOverwriteValues) {
     // Define initial startup configuration with one GigabitEthernet interface
     std::string startupConfig = R"(
     {
@@ -3502,7 +3507,7 @@ TEST_F(ConfigsTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrectlyAndOve
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the duplicate
     for (size_t i = 0; i < duplicateCommandVectors.size(); ++i)
@@ -3511,11 +3516,11 @@ TEST_F(ConfigsTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrectlyAndOve
         if (duplicateCommandVectors[i][0] == "interface")
         {
             list = true;
-            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], true, false, list);
+            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], *modeConfig, true, false, list);
         }
         else
         {
-            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], false, false, list);
+            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], *modeConfig, false, false, list);
         }
     }
 
@@ -3539,7 +3544,7 @@ TEST_F(ConfigsTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrectlyAndOve
 }
 
 // Test adding multiple duplicates across different interfaces
-TEST_F(ConfigsTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandleEachCorrectly) 
+TEST_F(Internal_ConfigTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandleEachCorrectly) 
 {
     // Define initial startup configuration with two GigabitEthernet interfaces
     std::string startupConfig = R"(
@@ -3639,7 +3644,7 @@ TEST_F(ConfigsTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandleEachCorr
     };
 
     // Reset config directory to root
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the duplicate
     for (size_t i = 0; i < duplicateCommandVectors.size(); ++i)
@@ -3648,15 +3653,15 @@ TEST_F(ConfigsTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandleEachCorr
         if (duplicateCommandVectors[i][0] == "interface")
         {
             list = true;
-            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], true, false, list);
+            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], *modeConfig, true, false, list);
         }
         else if (duplicateCommandVectors[i][0] == "exit")
         {
-            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], true, true, list);
+            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], *modeConfig, true, true, list);
         }
         else
         {
-            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], false, false, list);
+            configs->saveCommand(duplicatePathVectors[i], duplicateCommandVectors[i], *modeConfig, false, false, list);
         }
     }
 
@@ -3687,7 +3692,7 @@ TEST_F(ConfigsTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandleEachCorr
 }
 
 // Test saving configuration after modifications using processConfigs
-TEST_F(ConfigsTest, ProcessConfigs_SaveAfterModification_ShouldPersistChanges) 
+TEST_F(Internal_ConfigTest, ProcessConfigs_SaveAfterModification_ShouldPersistChanges) 
 {
     // Define initial startup configuration
     std::string startupConfig = R"(
@@ -3767,7 +3772,7 @@ TEST_F(ConfigsTest, ProcessConfigs_SaveAfterModification_ShouldPersistChanges)
 }
 
 // Test saving multiple configuration modifications using processConfigs
-TEST_F(ConfigsTest, ProcessConfigs_SaveMultipleModifications_ShouldPersistAllChanges) 
+TEST_F(Internal_ConfigTest, ProcessConfigs_SaveMultipleModifications_ShouldPersistAllChanges) 
 {
     // Define initial startup configuration
     std::string startupConfig = R"(
@@ -3864,7 +3869,7 @@ TEST_F(ConfigsTest, ProcessConfigs_SaveMultipleModifications_ShouldPersistAllCha
 }
 
 // Test handling of save failures in processConfigs
-TEST_F(ConfigsTest, ProcessConfigs_SaveFailure_ShouldReturnFalse) 
+TEST_F(Internal_ConfigTest, ProcessConfigs_SaveFailure_ShouldReturnFalse) 
 {
     // Define startup configuration
     std::string startupConfig = R"(
@@ -3931,7 +3936,7 @@ TEST_F(ConfigsTest, ProcessConfigs_SaveFailure_ShouldReturnFalse)
 }
 
 // Test idempotency of processConfigs when no changes are made
-TEST_F(ConfigsTest, ProcessConfigs_Idempotent_WhenNoChanges_ShouldSaveConsistently) 
+TEST_F(Internal_ConfigTest, ProcessConfigs_Idempotent_WhenNoChanges_ShouldSaveConsistently) 
 {
     // Define startup configuration
     std::string startupConfig = R"(
@@ -4009,7 +4014,7 @@ TEST_F(ConfigsTest, ProcessConfigs_Idempotent_WhenNoChanges_ShouldSaveConsistent
 }
 
 // Test handling of completely empty configuration
-TEST_F(ConfigsTest, InitConfigs_EmptyConfiguration_ShouldInitializeWithDefaults) 
+TEST_F(Internal_ConfigTest, InitConfigs_EmptyConfiguration_ShouldInitializeWithDefaults) 
 {
     // Define an empty startup configuration
     std::string startupConfig = "{}";
@@ -4036,7 +4041,7 @@ TEST_F(ConfigsTest, InitConfigs_EmptyConfiguration_ShouldInitializeWithDefaults)
 }
 
 // Test deleting an interface and saving the configuration
-TEST_F(ConfigsTest, ProcessConfigs_DeleteInterface_ShouldRemoveInterfaceAndSaveCorrectly) 
+TEST_F(Internal_ConfigTest, ProcessConfigs_DeleteInterface_ShouldRemoveInterfaceAndSaveCorrectly) 
 {
     // Define initial startup configuration with two interfaces
 //     std::string startupConfig = R"(
@@ -4163,7 +4168,7 @@ TEST_F(ConfigsTest, ProcessConfigs_DeleteInterface_ShouldRemoveInterfaceAndSaveC
 }
 
 // Test adding a new GigabitEthernet interface
-TEST_F(ConfigsTest, SaveCommand_AddNewGigabitEthernetInterface_ShouldCreateInterface) 
+TEST_F(Internal_ConfigTest, SaveCommand_AddNewGigabitEthernetInterface_ShouldCreateInterface) 
 {
     // Define initial startup configuration without any interfaces
     std::string startupConfig = R"(
@@ -4210,18 +4215,18 @@ TEST_F(ConfigsTest, SaveCommand_AddNewGigabitEthernetInterface_ShouldCreateInter
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the new interface
     for (size_t i = 0; i < command.size(); ++i)
     {
         if (command[i][0] == "interface")
         {
-            configs->saveCommand(path[i], command[i], true, false, true);
+            configs->saveCommand(path[i], command[i], *modeConfig, true, false, true);
         }
         else
         {
-            configs->saveCommand(path[i], command[i], false, false, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, false);
         }
     }
 
@@ -4243,7 +4248,7 @@ TEST_F(ConfigsTest, SaveCommand_AddNewGigabitEthernetInterface_ShouldCreateInter
 }
 
 // Test updating an existing GigabitEthernet interface's IP address
-TEST_F(ConfigsTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAddressOnly) {
+TEST_F(Internal_ConfigTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAddressOnly) {
     // Define initial startup configuration with one GigabitEthernet interface
     std::string startupConfig = R"(
     {
@@ -4307,18 +4312,18 @@ TEST_F(ConfigsTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAddressOnl
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the updates
     for (size_t i = 0; i < command.size(); ++i)
     {
         if (command[i][0] == "interface")
         {
-            configs->saveCommand(path[i], command[i], true, false, true);
+            configs->saveCommand(path[i], command[i], *modeConfig, true, false, true);
         }
         else
         {
-            configs->saveCommand(path[i], command[i], false, false, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, false);
         }
     }
 
@@ -4339,7 +4344,7 @@ TEST_F(ConfigsTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAddressOnl
 }
 
 // Test adding a nested command (e.g., enabling DHCP) under an existing parent
-TEST_F(ConfigsTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
+TEST_F(Internal_ConfigTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
     // Define initial startup configuration with one GigabitEthernet interface
     std::string startupConfig = R"(
     {
@@ -4398,18 +4403,18 @@ TEST_F(ConfigsTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the nested command
     for (size_t i = 0; i < command.size(); ++i)
     {
         if (command[i][0] == "interface")
         {
-            configs->saveCommand(path[i], command[i], true, false, true);
+            configs->saveCommand(path[i], command[i], *modeConfig, true, false, true);
         }
         else
         {
-            configs->saveCommand(path[i], command[i], false, false, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, false);
         }
     }
 
@@ -4422,7 +4427,7 @@ TEST_F(ConfigsTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
 }
 
 // Test handling of volatile commands (e.g., adding multiple VLANs)
-TEST_F(ConfigsTest, SaveCommand_HandleVolatileCommands_ShouldAddMultipleVLANs) {
+TEST_F(Internal_ConfigTest, SaveCommand_HandleVolatileCommands_ShouldAddMultipleVLANs) {
     // Define initial startup configuration without any VLANs
     std::string startupConfig = R"(
     {
@@ -4462,18 +4467,18 @@ TEST_F(ConfigsTest, SaveCommand_HandleVolatileCommands_ShouldAddMultipleVLANs) {
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the VLAN additions
     for (size_t i = 0; i < command.size(); ++i)
     {
         if (command[i][0] == "vlan")
         {
-            configs->saveCommand(path[i], command[i], false, false, true);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, true);
         }
         else
         {
-            configs->saveCommand(path[i], command[i], false, false, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, false);
         }
     }
 
@@ -4484,7 +4489,7 @@ TEST_F(ConfigsTest, SaveCommand_HandleVolatileCommands_ShouldAddMultipleVLANs) {
 }
 
 // Test adding multiple commands in a single call (e.g., setting hostname and adding an interface)
-TEST_F(ConfigsTest, SaveCommand_AddMultipleCommandsInSingleCall_ShouldProcessAllCommands) {
+TEST_F(Internal_ConfigTest, SaveCommand_AddMultipleCommandsInSingleCall_ShouldProcessAllCommands) {
     // Define initial startup configuration without hostname and interfaces
     std::string startupConfig = R"(
     {
@@ -4523,18 +4528,18 @@ TEST_F(ConfigsTest, SaveCommand_AddMultipleCommandsInSingleCall_ShouldProcessAll
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the commands
     for (size_t i = 0; i < command.size(); ++i)
     {
         if (command[i][0] == "interface")
         {
-            configs->saveCommand(path[i], command[i], true, false, true);
+            configs->saveCommand(path[i], command[i], *modeConfig, true, false, true);
         }
         else
         {
-            configs->saveCommand(path[i], command[i], false, false, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, false);
         }
     }
 
@@ -4550,7 +4555,7 @@ TEST_F(ConfigsTest, SaveCommand_AddMultipleCommandsInSingleCall_ShouldProcessAll
 }
 
 // Test adding commands to multiple GigabitEthernet interfaces and testing exit
-TEST_F(ConfigsTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHandleEachCorrectly) {
+TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHandleEachCorrectly) {
     // Define initial startup configuration with two GigabitEthernet interfaces
     std::string startupConfig = R"(
     {
@@ -4618,22 +4623,22 @@ TEST_F(ConfigsTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHandleEach
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the commands for both interfaces
     for (size_t i = 0; i < command.size(); ++i)
     {
         if (command[i][0] == "interface")
         {
-            configs->saveCommand(path[i], command[i], true, false, true);
+            configs->saveCommand(path[i], command[i], *modeConfig, true, false, true);
         }
         else if (command[i][0] == "exit")
         {
-            configs->saveCommand(path[i], command[i], true, true, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, true, true, false);
         }
         else
         {
-            configs->saveCommand(path[i], command[i], false, false, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, false);
         }
     }
 
@@ -4649,7 +4654,7 @@ TEST_F(ConfigsTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHandleEach
 }
 
 // Test adding commands with special characters and spaces in command names and values
-TEST_F(ConfigsTest, SaveCommand_AddCommandsWithSpecialCharsAndSpaces_ShouldHandleCorrectly) 
+TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsWithSpecialCharsAndSpaces_ShouldHandleCorrectly) 
 {
     // Define initial startup configuration with one GigabitEthernet interface
     std::string startupConfig = R"(
@@ -4697,18 +4702,18 @@ TEST_F(ConfigsTest, SaveCommand_AddCommandsWithSpecialCharsAndSpaces_ShouldHandl
     };
 
     // Reset config directory
-    configs->configNode = &configs->root;
+    modeConfig->configNode = &configs->root;
 
     // Re-initialize to process the commands
     for (size_t i = 0; i < command.size(); ++i)
     {
         if (command[i][0] == "interface")
         {
-            configs->saveCommand(path[i], command[i], true, false, true);
+            configs->saveCommand(path[i], command[i], *modeConfig, true, false, true);
         }
         else
         {
-            configs->saveCommand(path[i], command[i], false, false, false);
+            configs->saveCommand(path[i], command[i], *modeConfig, false, false, false);
         }
     }
 
@@ -4719,9 +4724,8 @@ TEST_F(ConfigsTest, SaveCommand_AddCommandsWithSpecialCharsAndSpaces_ShouldHandl
     EXPECT_TRUE(configs->root["interface"]["GigabitEthernet"][0]["commands"].contains("shutdown"));
 }
 
-/*
 // Test outputting saving very large amounts of data
-TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeNumberOfInterfaces_ShouldLoadAllInterfaces) 
+TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfInterfaces_ShouldLoadAllInterfaces) 
 {
     const int numGigabitInterfaces = 1000; // Adjust as needed for "extremely large"
     const int numFastEthernetInterfaces = 1000;
@@ -4781,7 +4785,7 @@ TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeNumberOfInterfaces_ShouldLoadAllIn
 }
 
 // Test Extremely large number of interfaces
-TEST_F(ConfigsTest, RecoverConfigs_ExtremelyLargeNumberOfInterfaces_ShouldRecoverAllCommands) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargeNumberOfInterfaces_ShouldRecoverAllCommands) 
 {
     const int numInterfaces = 1000; // Adjust as needed for "extremely large"
 
@@ -4839,7 +4843,7 @@ TEST_F(ConfigsTest, RecoverConfigs_ExtremelyLargeNumberOfInterfaces_ShouldRecove
 }
 
 // Test saving large ammounts of policy maps
-TEST_F(ConfigsTest, InitConfigs_ExtremelyLargePolicyMap_ShouldLoadAllClasses) 
+TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargePolicyMap_ShouldLoadAllClasses) 
 {
     const int numClasses = 1000; // Adjust as needed for "extremely large"
 
@@ -4886,7 +4890,7 @@ TEST_F(ConfigsTest, InitConfigs_ExtremelyLargePolicyMap_ShouldLoadAllClasses)
 }
 
 // Test Recovering Large Policy Maps
-TEST_F(ConfigsTest, RecoverConfigs_ExtremelyLargePolicyMap_ShouldRecoverAllClasses) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargePolicyMap_ShouldRecoverAllClasses) 
 {
     const int numClasses = 1000; // Adjust as needed for "extremely large"
 
@@ -4941,7 +4945,7 @@ TEST_F(ConfigsTest, RecoverConfigs_ExtremelyLargePolicyMap_ShouldRecoverAllClass
 }
 
 // Test Deeply nested commands
-TEST_F(ConfigsTest, InitConfigs_DeeplyNestedCommands_ShouldParseCorrectly) 
+TEST_F(Internal_ConfigTest, InitConfigs_DeeplyNestedCommands_ShouldParseCorrectly) 
 {
     // Define a deeply nested commands structure
     std::string startupConfig = R"(
@@ -5003,7 +5007,7 @@ TEST_F(ConfigsTest, InitConfigs_DeeplyNestedCommands_ShouldParseCorrectly)
 }
 
 // Test Recovering Deeply Nested Configurations
-TEST_F(ConfigsTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCorrectly) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCorrectly) 
 {
     // Define a deeply nested commands structure
     std::string startupConfig = R"(
@@ -5077,7 +5081,7 @@ TEST_F(ConfigsTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCorrectly)
 }
 
 // Test Testing large and extremely nested configurations
-TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeAndDeeplyNested_ShouldLoadAllCorrectly) 
+TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNested_ShouldLoadAllCorrectly) 
 {
     const int numInterfaces = 1000; // Adjust as needed
 
@@ -5130,7 +5134,7 @@ TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeAndDeeplyNested_ShouldLoadAllCorre
 }
 
 // Test Recovery of Extremely Large and Deeply Nested Configurations
-TEST_F(ConfigsTest, RecoverConfigs_ExtremelyLargeAndDeeplyNested_ShouldRecoverAllCommands) 
+TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargeAndDeeplyNested_ShouldRecoverAllCommands) 
 {
     const int numInterfaces = 1000; // Adjust as needed
 
@@ -5192,7 +5196,7 @@ TEST_F(ConfigsTest, RecoverConfigs_ExtremelyLargeAndDeeplyNested_ShouldRecoverAl
 }
 
 // Test Extremely large number of vlans
-TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeNumberOfVLANs_ShouldLoadAllVLANs) 
+TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfVLANs_ShouldLoadAllVLANs) 
 {
     const int numVLANs = 1000; // Adjust as needed
 
@@ -5232,7 +5236,7 @@ TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeNumberOfVLANs_ShouldLoadAllVLANs)
 }
 
 // Test Extremely Large and Deeply Nested Configuration
-TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeAndDeeplyNestedCombined_ShouldLoadAllCorrectly) 
+TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNestedCombined_ShouldLoadAllCorrectly) 
 {
     const int numInterfaces = 500; // Adjust as needed
     const int vlansPerInterface = 10;
@@ -5300,4 +5304,3 @@ TEST_F(ConfigsTest, InitConfigs_ExtremelyLargeAndDeeplyNestedCombined_ShouldLoad
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][numInterfaces - 1]["commands"]["level1"]["level2"]["level3"]["level4"]["level5"]["ip"]["address"]["ip"], "10." + std::to_string(numInterfaces) + "." + std::to_string(numInterfaces % 256) + ".1");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][numInterfaces - 1]["commands"]["level1"]["level2"]["level3"]["level4"]["level5"]["bandwidth"]["id"], std::to_string(100000 + numInterfaces));
 }
-*/

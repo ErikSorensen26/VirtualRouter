@@ -337,7 +337,7 @@ namespace Protocol
             
         {
             std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
-            icmp.payload = currentInterface->configs.ipv6.linkLocalAddress.ip;
+            icmp.payload = currentInterface->configs.ipv6.linkLocalAddress->ip;
         }
 
         IcmpV6Header::Option target;
@@ -412,7 +412,7 @@ namespace Protocol
             ByteString ip;
             {
                 std::shared_lock<std::shared_mutex> lock(iface.ipMutex);
-                ip = iface.ipv6.linkLocalAddress.ip;
+                ip = iface.ipv6.linkLocalAddress->ip;
             }
             PacketInfo naPacket = neighborAdvertisement(iface.macAddress, targetIp);
             
@@ -470,14 +470,14 @@ namespace Protocol
         }
     }
 
-    void Ndp::duplicateAddressDetection(IpInfo::IPv6::IPv6Address& addr, bool isLinkLocal)
+    void Ndp::duplicateAddressDetection(IpInfo::IPv6::IPv6Address* addr, bool isLinkLocal)
     {
         auto& iface = currentInterface->configs;
-        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
+        if (currentInterface->shutdownFlag.load(std::memory_order_relaxed))
             return;
 
         // If DAD is disabled or address is already marked non-tentative
-        if (!addr.tentative)
+        if (!addr->tentative)
             return;
 
         int attempts = 0;
@@ -488,11 +488,11 @@ namespace Protocol
 
         while (attempts < maxAttempts)
         {
-            PacketInfo ns = neighborSolicitation(addr.ip, &iface.macAddress);
-            IPPacket::buildIp(currentInterface, ns, generateMulticastSolicitationAddress(addr.ip), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
+            PacketInfo ns = neighborSolicitation(addr->ip, &iface.macAddress);
+            IPPacket::buildIp(currentInterface, ns, generateMulticastSolicitationAddress(addr->ip), &Variable::IPv6::source, nullptr, 0, 255, Variable::IP::icmpv6);
 
             // Wait for response
-            if (waitForNeighborReply(addr.ip, delay))
+            if (waitForNeighborReply(addr->ip, delay))
             {
                 duplicate = true;
                 break;
@@ -505,14 +505,14 @@ namespace Protocol
 
         if (duplicate)
         {
-            addr.tentative = false;
-            addr.valid = false;
-            currentInterface->markAddressDuplicate(addr.ip, isLinkLocal);
+            addr->tentative = false;
+            addr->valid = false;
+            currentInterface->markAddressDuplicate(addr->ip, isLinkLocal);
         }
         else
         {
-            addr.tentative = false;
-            addr.valid = true;
+            addr->tentative = false;
+            addr->valid = true;
         }
     }
 }

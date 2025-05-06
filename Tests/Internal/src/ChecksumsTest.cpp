@@ -6,7 +6,7 @@
 #include <Encapsulation.h>
 
 // Test Suite for base256StringToBytes
-TEST(ChecksumTest, Base256StringToBytes)
+TEST(Internal_ChecksumTest, Base256StringToBytes)
 {
     std::string base256Str = "\x01\x02\xFF\x00";
     std::vector<uint8_t> expected = {0x01, 0x02, 0xFF};
@@ -21,7 +21,7 @@ TEST(ChecksumTest, Base256StringToBytes)
 }
 
 // Test Suite for calculateChecksum
-TEST(ChecksumTest, CalculateChecksum1Byte)
+TEST(Internal_ChecksumTest, CalculateChecksum1Byte)
 {
     // 1-byte checksum is simple sum modulo 256
     struct Checksum1ByteTest
@@ -45,7 +45,7 @@ TEST(ChecksumTest, CalculateChecksum1Byte)
     }
 }
 
-TEST(ChecksumTest, CalculateChecksum2Byte)
+TEST(Internal_ChecksumTest, CalculateChecksum2Byte)
 {
     // 2-byte checksum: Internet checksum
     struct Checksum2ByteTest
@@ -76,7 +76,7 @@ TEST(ChecksumTest, CalculateChecksum2Byte)
     EXPECT_EQ(checksum_empty.toHex(), "FFFF");
 }
 
-TEST(ChecksumTest, CalculateChecksum4Byte)
+TEST(Internal_ChecksumTest, CalculateChecksum4Byte)
 {
     // 4-byte checksum: 32-bit sum
     struct Checksum4ByteTest
@@ -107,7 +107,7 @@ TEST(ChecksumTest, CalculateChecksum4Byte)
     EXPECT_EQ(checksum_empty.toHex(), "FFFFFFFF");
 }
 
-TEST(ChecksumTest, CalculateChecksumUnsupportedSize)
+TEST(Internal_ChecksumTest, CalculateChecksumUnsupportedSize)
 {
     ByteString data = "test data";
     size_t unsupported_size = 3;
@@ -116,7 +116,7 @@ TEST(ChecksumTest, CalculateChecksumUnsupportedSize)
     EXPECT_EQ(checksum, std::string(unsupported_size, '\0'));
 }
 
-TEST(ChecksumTest, CalculateProtocolChecksumOverload1EmptyPseudoHeader)
+TEST(Internal_ChecksumTest, CalculateProtocolChecksumOverload1EmptyPseudoHeader)
 {
     // Test with empty pseudoHeader
     ByteString pseudoHeader = "";
@@ -148,7 +148,7 @@ TEST(ChecksumTest, CalculateProtocolChecksumOverload1EmptyPseudoHeader)
     }
 }
 
-TEST(ChecksumTest, CalcualteProtocolChecksumOverload1InvalidIndex)
+TEST(Internal_ChecksumTest, CalcualteProtocolChecksumOverload1InvalidIndex)
 {
     // Test with invalid checksumStartIndex
     ByteString pseudoHeader = "pseudo";
@@ -172,7 +172,7 @@ TEST(ChecksumTest, CalcualteProtocolChecksumOverload1InvalidIndex)
 }
 
 // Test Suite for calculateProtocolChecksum (second overload)
-TEST(ChecksumTest, CalculateProtocolChecksumOverload2) 
+TEST(Internal_ChecksumTest, CalculateProtocolChecksumOverload2) 
 {
     // Initialize headers array with std::optional
     std::optional<ByteString> headers[static_cast<size_t>(HeaderType::Count)] = {
@@ -215,7 +215,7 @@ TEST(ChecksumTest, CalculateProtocolChecksumOverload2)
     }
 }
 
-TEST(ChecksumTest, CalculateProtocolChecksumOverload2MissingHeader) 
+TEST(Internal_ChecksumTest, CalculateProtocolChecksumOverload2MissingHeader) 
 {
     // Initialize headers array with std::optional
     std::optional<ByteString> headers[static_cast<size_t>(HeaderType::Count)] = {
@@ -242,7 +242,7 @@ TEST(ChecksumTest, CalculateProtocolChecksumOverload2MissingHeader)
     EXPECT_NE(output.find("Header does not exist when calculating checksum"), std::string::npos);
 }
 
-TEST(ChecksumTest, CalculateProtocolChecksumOverload2InvalidHeaderType) 
+TEST(Internal_ChecksumTest, CalculateProtocolChecksumOverload2InvalidHeaderType) 
 {
     // Initialize headers array with std::optional
     std::optional<ByteString> headers[static_cast<size_t>(HeaderType::Count)] = {

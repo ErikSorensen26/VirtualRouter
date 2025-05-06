@@ -35,12 +35,12 @@ public:
      * @param debug Boolean flag to enable or disable debug logging.
      * @param iface Reference to the Interface object associated with the packet.
      */
-    Packet(ByteString &packet, bool debug, Interface& iface);
+    Packet(ByteString &packet, bool debug, Interface& iface, bool macBypass = false);
 
     /**
      * @brief Constructs a Packet object without starting processing.
      */
-    Packet(ByteString& packet);
+    Packet(ByteString& packet, bool macBypass = false);
 
     /**
      * @brief Destructor for the Packet class
@@ -71,6 +71,7 @@ protected:
     ByteString fullPacket;      ///< Holds the complete packet data for processing.
     bool options;               ///< Boolean flag indicating whether additional options are present.
     bool print = false;         ///< Boolesn flag to control debug printing.
+    bool macBypass = false;     ///< Bypasses mac check.
 
     // Header search for layer 2
     template <typename HeaderType>

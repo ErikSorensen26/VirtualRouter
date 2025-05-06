@@ -32,6 +32,8 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     configs.interfaceType.store(interfaceType, std::memory_order_release);
     configs.id.store(interfaceId, std::memory_order_release);
 
+    startThreads(); // TEMPORARY: will be shutdown by default once shits working
+
     // Initialize shared pointers for Protocol objects
     arp = new Protocol::Arp(*this);
     ndp = new Protocol::Ndp(*this);
@@ -110,7 +112,7 @@ void Interface::setIPv6(ByteString ip, bool localLink, uint8_t prefix, bool eui6
     // Run Duplicate Address Detection (dad) using NDP
     if (ipv6)
     {
-        ndp->duplicateAddressDetection(*ipv6, localLink);
+        ndp->duplicateAddressDetection(ipv6, localLink);
     }
     else 
     {
@@ -148,26 +150,26 @@ std::vector<ByteString> Interface::getTentativeAddress()
     std::lock_guard<std::shared_mutex> lock(configs.ipMutex);
 
     // Link-local (there can only be one)
-    if (!configs.ipv6.linkLocalAddress.ip.empty() && configs.ipv6.linkLocalAddress.tentative)
+    if (!configs.ipv6.linkLocalAddress->ip.empty() && configs.ipv6.linkLocalAddress->tentative)
     {
-        tentative.push_back(configs.ipv6.linkLocalAddress.ip);
+        tentative.push_back(configs.ipv6.linkLocalAddress->ip);
     }
 
     // Global unicast
     for (const auto& addr : configs.ipv6.globalAddresses)
     {
-        if (addr.tentative)
+        if (addr->tentative)
         {
-            tentative.push_back(addr.ip);
+            tentative.push_back(addr->ip);
         }
     }
 
     // Unique local
     for (const auto& addr : configs.ipv6.uniqueLocalAddresses)
     {
-        if (addr.tentative)
+        if (addr->tentative)
         {
-            tentative.push_back(addr.ip);
+            tentative.push_back(addr->ip);
         }
     }
 
@@ -178,16 +180,16 @@ void Interface::markAddressDuplicate(const ByteString& addr, bool localLink)
 {
     std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
 
-    if (localLink && configs.ipv6.linkLocalAddress.ip == addr)
+    if (localLink && configs.ipv6.linkLocalAddress->ip == addr)
     {
-        configs.ipv6.linkLocalAddress.ip.clear();
+        configs.ipv6.linkLocalAddress->ip.clear();
     }
     else
     {
-        auto markInvalid = [&](std::vector<IpInfo::IPv6::IPv6Address>& list) {
+        auto markInvalid = [&](std::vector<IpInfo::IPv6::IPv6Address*>& list) {
             for (auto it = list.begin(); it != list.end(); ++it)
             {
-                if (it->ip == addr)
+                if ((*it)->ip == addr)
                 {
                     list.erase(it);
                     return;
@@ -314,13 +316,16 @@ void Interface::process()
 
 void Interface::startThreads() 
 {
-    threadsRunning = true;
+    if (Global::getInstance().routingEnabled)
+    {
+        threadsRunning = true;
 
-    std::lock_guard<std::mutex> lock(threadsRunningMutex); 
-    // Start threads for packet ingress, egress, and processing
-    thread1 = std::thread(&Interface::packetIngress, this);
-    thread2 = std::thread(&Interface::packetEgress, this);
-    thread3 = std::thread(&Interface::process, this);
+        std::lock_guard<std::mutex> lock(threadsRunningMutex); 
+        // Start threads for packet ingress, egress, and processing
+        thread1 = std::thread(&Interface::packetIngress, this);
+        thread2 = std::thread(&Interface::packetEgress, this);
+        thread3 = std::thread(&Interface::process, this);
+    }
 }
 
 void Interface::stopThreads() 
@@ -349,7 +354,6 @@ void Interface::stateChange(StateChange state)
             if (eigrpPtr->ipv4)
             {
                 eigrpPtr->ipv4->updateInterfaceList();
-                eigrpPtr->ipv4->updateRoutingTableForConnected();
             }
         };
     }
@@ -395,7 +399,6 @@ void Interface::stateChangeV6(StateChange state)
             if (eigrpPtr->ipv6)
             {
                 eigrpPtr->ipv6->updateInterfaceList();
-                eigrpPtr->ipv6->updateRoutingTableForConnected();
             }
         };
     }
@@ -410,7 +413,7 @@ void Interface::stateChangeV6(StateChange state)
             {
                 for (auto& addr : configs.ipv6.globalAddresses)
                 {
-                    if (addr.tentative)
+                    if (addr->tentative)
                         ndp->duplicateAddressDetection(addr, false);
                 }
             }
@@ -436,4 +439,46 @@ void Interface::stateChangeV6(StateChange state)
             break;
         }
     }
+}
+
+IpInfo::IPv6::IPv6Address* IpInfo::IPv6::addAddress(const ByteString& ip, bool local, uint8_t prefix)
+{
+    if (local)
+    {
+        // Only one local-address can exist
+        if (linkLocalAddress->ip.empty())
+        {
+            linkLocalAddress->ip = ip;
+            linkLocalAddress->prefix = prefix;
+            linkLocalAddress->tentative = true;
+            linkLocalAddress->valid = false;
+            return linkLocalAddress;
+        }
+        else
+        {
+            std::cerr << "Error: Link-Local address already assigned";
+        }
+    }
+    else
+    {
+        IPv6Address* address = new IPv6Address();
+        address->ip = ip;
+        address->prefix = prefix;
+        address->tentative = true;
+        address->valid = false;
+        globalAddresses.push_back(address);
+        return globalAddresses.back();
+    }
+    return nullptr;
+}
+
+IpInfo::IPv6::IPv6Address* IpInfo::IPv6::addUniqueLocalAddress(const ByteString& ip, uint8_t prefixLen)
+{
+    IPv6Address* address = new IPv6Address();
+    address->ip = ip;
+    address->prefix = prefixLen;
+    address->tentative = true;
+    address->valid = false;
+    uniqueLocalAddresses.push_back(address);
+    return uniqueLocalAddresses.back();
 }

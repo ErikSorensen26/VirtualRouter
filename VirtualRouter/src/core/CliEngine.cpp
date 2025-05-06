@@ -16,6 +16,13 @@ CliEngine::CliEngine() : Configs()
     initEngine();
 }
 
+CliEngine::CliEngine(std::shared_ptr<IFileSystem> fs) : Configs(std::move(fs))
+{
+    // Set debug mode based on the input parameter
+    auto& global = Global::getInstance();
+    initEngine();
+}
+
 CliEngine::~CliEngine() 
 {
     for (const auto& i : sessions)
@@ -38,8 +45,8 @@ void CliEngine::initEngine()
     commandTree.clear();
 
     // ----- Load Command Tree JSON via SAX Parsing -----
-    std::ifstream fileStream(COMMAND_TREE);
-    if (fileStream.is_open())
+    std::string fileStream;
+    if (fileSystem->fileExists(COMMAND_TREE) && fileSystem->readFile(COMMAND_TREE, fileStream))
     {
         TerminalSaxHandler saxHandler;
         if (json::sax_parse(fileStream, &saxHandler))
@@ -51,7 +58,6 @@ void CliEngine::initEngine()
             std::cerr << "Failed to parse command tree JSON file: " << COMMAND_TREE << std::endl;
             commandTree = json::object();
         }
-        fileStream.close();
     }
     else
     {
@@ -61,8 +67,8 @@ void CliEngine::initEngine()
 
     // ----- Load Config Schema JSON (if used) -----
     configSchema.clear();
-    std::ifstream schemaStream(CONFIG_SCHEMA);
-    if (schemaStream.is_open())
+    std::string schemaStream;
+    if (fileSystem->fileExists(CONFIG_SCHEMA) && fileSystem->readFile(CONFIG_SCHEMA, schemaStream))
     {
         TerminalSaxHandler schemaSaxHandler;
         if (json::sax_parse(schemaStream, &schemaSaxHandler))
@@ -74,7 +80,6 @@ void CliEngine::initEngine()
             std::cerr << "Failed to parse configuration schema file: " << CONFIG_SCHEMA << std::endl;
             configSchema = json::object();
         }
-        schemaStream.close();
     }
     else
     {
@@ -89,7 +94,15 @@ CliSession* CliEngine::createSession(bool debug)
 {
     sessions.push_back(new CliSession(*this, debug));
     return sessions.back();
+}
 
+void CliEngine::clearSessions()
+{
+    for (auto& session : sessions)
+    {
+        delete session;
+    }
+    sessions.clear();
 }
 
 void CliEngine::recoverState() 
@@ -142,6 +155,23 @@ std::string CliEngine::maskInput(const std::string& prefix, std::string original
     std::copy(prefix.begin(), prefix.end(), original.begin());
 
     return original;
+}
+std::string CliEngine::getMac(InterfaceType type, size_t id)
+{
+    std::string mac;
+    if (type == InterfaceType::ETHERNET && macAddressList.Ethernet.size() >= id)
+    {
+            mac = OUI + macAddressList.Ethernet[id];
+    }
+    else if (type == InterfaceType::FAST_ETHERNET && macAddressList.FastEthernet.size() >= id)
+    {
+            mac = OUI + macAddressList.FastEthernet[id];
+    }
+    else if (type == InterfaceType::GIGABIT_ETHERNET && macAddressList.GigabitEthernet.size() >= id)
+    {
+            mac = OUI + macAddressList.GigabitEthernet[id];
+    }
+    return mac;
 }
 
 InterfaceType CliEngine::getInterfaceType(const std::string& type)

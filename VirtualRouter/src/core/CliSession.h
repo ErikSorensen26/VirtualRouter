@@ -39,7 +39,7 @@ class CliSession : public Console
 {
 public:
     // Friend classes for testing
-    friend class TerminalTest;
+    friend class Internal_CliTest;
     friend class CommandProcessor;
     friend class CliEngine;
     friend Configs;
@@ -483,9 +483,8 @@ private:
 
     nlohmann::ordered_json *prevConfig;     ///< Pointer to the previous configuration node
 
-    CommandProcessor* commandProcessor = nullptr;
-
 public:
+    CommandProcessor* commandProcessor = nullptr;
     CliEngine& engine;
 };
 
