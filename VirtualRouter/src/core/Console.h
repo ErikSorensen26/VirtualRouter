@@ -8,10 +8,27 @@
 class ConsoleTest; ///< Forward declaration of ConsoleTest
 
 /**
+ * @enum Color
+ * @brief Represents all available terminal colors.
+ */
+enum class Color
+{
+    BLACK,
+    RED,
+    GREEN,
+    YELLOW,
+    BLUE,
+    MAGENTA,
+    CYAN,
+    WHITE
+};
+
+/**
  * @struct CursorPosition
  * @brief Represents the cursor's position in terms of row and comumn.
  */
-struct CursorPosition {
+struct CursorPosition 
+{
     int row = 0; ///< The row position of the cursor.
     int col = 0; ///< The column position of the cursor.
 };
@@ -19,6 +36,7 @@ struct CursorPosition {
 class IConsole
 {
 public:
+
     virtual ~IConsole() = default;
 
     // Clears the terminal screen and moves the cursor to home
@@ -52,7 +70,7 @@ public:
     virtual void moveCursorDown(size_t count = 1) = 0;
 
     // Prints a string to the terminal
-    virtual void print(std::string str) = 0;
+    virtual void print(std::string str, Color color = Color::WHITE) = 0;
 
     // Gets the current cursor position
     virtual CursorPosition getCursorPosition() = 0;
@@ -137,10 +155,38 @@ public:
         }
     }
 
-    void print(std::string str) override 
+    void print(std::string str, Color color = Color::WHITE) override 
     {
         if (testingMode) return;
-        std::cout << str;
+        switch (color)
+        {
+            case Color::BLACK:
+                std::cout << "\033[1;30m" << str << "\033[0m";
+                break;
+            case Color::RED:
+                std::cout << "\033[1;31m" << str << "\033[0m";
+                break;
+            case Color::GREEN:
+                std::cout << "\033[1;32m" << str << "\033[0m";
+                break;
+            case Color::YELLOW:
+                std::cout << "\033[1;33m" << str << "\033[0m";
+                break;
+            case Color::BLUE:
+                std::cout << "\033[1;34m" << str << "\033[0m";
+                break;
+            case Color::MAGENTA:
+                std::cout << "\033[1;35m" << str << "\033[0m";
+                break;
+            case Color::CYAN:
+                std::cout << "\033[1;36m" << str << "\033[0m";
+                break;
+            case Color::WHITE:
+                std::cout << "\033[1;37m" << str << "\033[0m";
+                break;
+            default:
+                std::cout << str;
+        }
     }
 
     CursorPosition getCursorPosition() override 

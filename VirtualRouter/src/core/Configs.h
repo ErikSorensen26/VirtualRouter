@@ -74,6 +74,15 @@ struct Com
     std::string description; 
     // Properties
     std::vector<std::string> properties;
+
+    // Support
+    enum class Support 
+    {
+        SUPPORTED,
+        PARTIAL,
+        NO_SUPPORT
+    };
+    Support support = Support::NO_SUPPORT;
 };
 
 /**

@@ -103,11 +103,23 @@ struct IpInfo
         struct IPv6Address
         {
             ByteString ip;
+            uint8_t prefix = 0;
+            
+            // Tentative/valid for link-local address
             bool tentative = false;
             bool valid = false;
+
+            // Tentative/valid for SLAAC global addresses
             bool globalTentative = false;
             bool globalValid = false;
-            uint8_t prefix = 0;
+
+            // Timer ID for address expiration (valid lifetime)
+            uint32_t expirationId = 0;
+
+            // Preferred lifetime tracking
+            uint32_t preferredLifetime = 0;
+            bool deprecated = false;
+            uint32_t preferedExpirationId = 0;
 
             void validateAddress(bool local = false)
             {
@@ -163,6 +175,7 @@ struct IpInfo
                 linkLocalAddress->validateAddress(true);
             }
         }
+
     }  ipv6;
 
     ByteString getLocalAddress()
@@ -189,6 +202,24 @@ struct IpInfo
             return ipv6.uniqueLocalAddresses.front()->ip;
         }
         return {};
+    }
+
+    bool hasAddress(const ByteString& address)
+    {
+        std::shared_lock<std::shared_mutex> lock(ipMutex);
+        if (ipv6.linkLocalAddress->ip == address)
+            return true;
+        for (auto* ip : ipv6.globalAddresses)
+        {
+            if (ip->ip == address)
+                return true;
+        }
+        for (auto* ip : ipv6.uniqueLocalAddresses)
+        {
+            if (ip->ip == address)
+                return true;
+        }
+        return false;
     }
 
     /**
@@ -327,8 +358,8 @@ public:
     // Member Variables
     IpInfo configs;         ///< Pointer to IP configuration information.
 
-    Protocol::Arp* arp;     ///< ARP protocol handler.
-    Protocol::Ndp* ndp;     ///< NDP protocol handler.
+    Protocol::Arp* arp = nullptr;     ///< ARP protocol handler.
+    Protocol::Ndp* ndp = nullptr;     ///< NDP protocol handler.
 
     // L4 Protocols
     std::map<uint32_t, Protocol::EigrpInterfaceInstance*> eigrpInterfaceList; ///< EIGRP interface instance.

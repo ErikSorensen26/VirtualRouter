@@ -203,7 +203,7 @@ TEST_F(Internal_CliTest, InputHandling_SpacesOnly_ShouldRejectCommand)
     std::string command = "   \n";
 
     // Expectation: Terminal prints an error and prompt
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(5);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(5);
 
     // Act
     bool result = handleInput(command);
@@ -222,7 +222,7 @@ TEST_F(Internal_CliTest, InputHandling_ValidInputWithSpaces_ShouldProcessCommand
     std::string rawCommand = "  hostname Router1  \n";
 
     // Expectation: Terminal normalizes and executes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(22);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(22);
 
     // Act
     bool result = handleInput(rawCommand);
@@ -245,7 +245,7 @@ TEST_F(Internal_CliTest, DoCommand_FromConfigurationMode_ShouldExecutePrivileged
     std::string doCommand = "do show running-config\n";
 
     // Expectation: Terminal executes the "do" command and prints output
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(24);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(24);
 
     // Act
     bool result = handleInput(doCommand);
@@ -263,7 +263,7 @@ TEST_F(Internal_CliTest, DoCommand_InvalidCommand_ShouldRejectCommand) {
     std::string doCommand = "do invalidcmd\n";
 
     // Expectation: Terminal rejects the "do" command and prints error
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(16);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(16);
 
     // Act
     bool result = handleInput(doCommand);
@@ -281,7 +281,7 @@ TEST_F(Internal_CliTest, DoCommand_MissingParameters_ShouldRejectCommand) {
     std::string doCommand = "do ping\n";
 
     // Expectation: Terminal rejects the "do" command due to missing parameters
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(10);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(10);
 
     // Act
     bool result = handleInput(doCommand);
@@ -301,7 +301,7 @@ TEST_F(Internal_CliTest, DoCommand_FromSubMode_ShouldExecuteCommandWithinSubMode
     std::string enterSubModeCmd = "interface GigabitEthernet 1\n";
     std::string doCommand = "do show interface GigabitEthernet 1";
 
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(66);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(66);
 
     // Act: Enter sub-mode
     bool result1 = handleInput(enterSubModeCmd);
@@ -328,7 +328,7 @@ TEST_F(Internal_CliTest, HelpRequest_WithQuestionMark_ShouldDisplayAvailableComm
     std::string expectedOutput;
 
     // Expectation: Terminal prints available commands and prompt
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(16);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(16);
 
     // Act
     bool result = handleInput(helpCommand);
@@ -348,7 +348,7 @@ TEST_F(Internal_CliTest, AutoComplete_UniquePartialCommand_ShouldCompleteCommand
     std::string finishInput = " Router1\n";
 
     // Expectation: Terminal auto-completes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(17);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(17);
 
     // Act
     bool result = handleInput(partialInput);
@@ -369,7 +369,7 @@ TEST_F(Internal_CliTest, AutoComplete_AmbiguousPartialCommand_ShouldListSuggesti
     std::string partialInput = "a\t";
 
     // Expectation: Terminal lists available suggestions
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(3);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(3);
 
     // Act
     bool result = handleInput(partialInput);
@@ -388,7 +388,7 @@ TEST_F(Internal_CliTest, AutoComplete_ExactCommand_ShouldNotChangeInput)
     std::string exactCommand = "exit\t";
 
     // Expectation: Terminal does not attempt to auto-complete
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(6);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(6);
 
     // Act
     bool result = handleInput(exactCommand);
@@ -407,7 +407,7 @@ TEST_F(Internal_CliTest, HelpRequest_InSubMode_ShouldDisplayAvailableSubCommands
     std::string enterSubModeCmd = "interface GigabitEthernet 1\n";
     std::string helpCommand = "?";
 
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(77);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(77);
 
     // Act: Enter sub-mode
     bool result1 = handleInput(enterSubModeCmd);
@@ -430,7 +430,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ValidGlobalCommand_ShouldProcessSucce
     std::string command = "hostname Router1\n";
 
     // Expectation: Terminal prints the command and prompt
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(18);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(18);
 
     // Act
     bool result = handleInput(command);
@@ -450,7 +450,7 @@ TEST_F(Internal_CliTest, CommandProcessing_InvalidGlobalCommand_ShouldRejectComm
     std::string command = "invalidcmd\n";
 
     // Expectation: Terminal prints an error and prompt
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(13);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(13);
 
     // Act
     bool result = handleInput(command);
@@ -469,7 +469,7 @@ TEST_F(Internal_CliTest, CommandProcessing_MissingArguments_ShouldRejectCommand)
     std::string command = "hostname\n"; // Missing hostname value
 
     // Expectation: Terminal prints an error and prompt
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(11);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(11);
 
     // Act
     bool result = handleInput(command);
@@ -489,7 +489,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ExcessiveArguments_ShouldRejectComman
     std::string command = "hostname Router1 ExtraArg\n";
 
     // Expectation: Terminal prints an error and prompt
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(28);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(28);
 
     // Act
     bool result = handleInput(command);
@@ -509,7 +509,7 @@ TEST_F(Internal_CliTest, CommandProcessing_VolatileCommand_ShouldValidatePattern
     std::string command = "do ping 192.168.1.1\n";
 
     // Expectation: Terminal processes the command and prints output
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(21);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(21);
 
     // Act
     bool result = handleInput(command);
@@ -527,7 +527,7 @@ TEST_F(Internal_CliTest, CommandProcessing_VolatileCommand_InvalidPattern_Should
     std::string command = "do ping #@*\n";
 
     // Expectation: Terminal rejects the command due to invalid IP
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(14);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(14);
 
     // Act
     bool result = handleInput(command);
@@ -545,7 +545,7 @@ TEST_F(Internal_CliTest, CommandProcessing_SpecialCharacters_ShouldRejectCommand
     std::string command = "hostname Router@123\n"; // Assuming '@' is invalid
 
     // Expectation: Terminal rejects the command and prints error
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(22);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(22);
 
     // Act
     bool result = handleInput(command);
@@ -567,7 +567,7 @@ TEST_F(Internal_CliTest, MatchingCommands_ExactCase_ShouldMatchSuccessfully)
     std::string command = "hostname RouterExact";
 
     // Expectation: Terminal processes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(22);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(22);
 
     // Act
     bool result = handleInput(command);
@@ -586,7 +586,7 @@ TEST_F(Internal_CliTest, MatchingCommands_DifferentCasing_ShouldMatchSuccessfull
     std::string command = "HoStNaMe RouterCase\n";
 
     // Expectation: Terminal normalizes and processes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(21);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(21);
 
     // Act
     bool result = handleInput(command);
@@ -605,7 +605,7 @@ TEST_F(Internal_CliTest, MatchingCommands_PartialToFull_ShouldMatchSuccessfully)
     std::string partialCommand = "host RouterPartial\n";
 
     // Expectation: Terminal normalizes and executes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(20);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(20);
 
     // Act
     bool result = handleInput(partialCommand);
@@ -624,7 +624,7 @@ TEST_F(Internal_CliTest, MatchingCommands_InvalidHierarchy_ShouldRejectCommand)
     std::string command = "interface GigabitEthernet 1 ip address 10.0.0.1 255.255.255.0 extraArg\n";
 
     // Expectation: Terminal rejects the command due to excessive arguments
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(73);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(73);
 
     // Act
     bool result = handleInput(command);
@@ -645,7 +645,7 @@ TEST_F(Internal_CliTest, Normalization_FillInRequiredWords_ShouldNormalizeComman
     std::string normalizedCommand = "hostname Router1";
 
     // Expectation: Terminal normalizes and executes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(0);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
 
     // Act
     std::string result = normalizeCommand(partialCommand);
@@ -667,7 +667,7 @@ TEST_F(Internal_CliTest, Normalization_AbbreviatedSubcommands_ShouldNormalizeCom
     std::string subType = "GigabitEthernet";
 
     // Expectation: Terminal normalizes and executes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(0);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
 
     // Act
     std::string result = normalizeCommand(command);
@@ -689,7 +689,7 @@ TEST_F(Internal_CliTest, Normalization_MixedCaseAndSpaces_ShouldNormalizeCommand
     std::string normalizedCommand = "hostname RouterMixedCase";
 
     // Expectation: Terminal normalizes and executes the command
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(0);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
 
     // Act
     std::string result = normalizeCommand(command);
@@ -711,7 +711,7 @@ TEST_F(Internal_CliTest, GlobalCommand_ExitConfigurationMode_ShouldChangeMode)
     std::string command = "exit";
 
     // Expectation: Terminal processes the 'exit' command and changes mode
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(6);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(6);
 
     // Act
     bool result = handleInput(command);
@@ -730,7 +730,7 @@ TEST_F(Internal_CliTest, GlobalCommand_EndConfigurationMode_ShouldChangeMode)
     std::string command = "end";
 
     // Expectation: Terminal processes the 'end' command and changes mode
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(5);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(5);
 
     // Act
     bool result = handleInput(command);
@@ -752,7 +752,7 @@ TEST_F(Internal_CliTest, InvalidInput_UnknownCommand_ShouldRejectCommand)
     std::string command = "foobar";
 
     // Expectation: Terminal rejects the command and prints error
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(9);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(9);
 
     // Act
     bool result = handleInput(command);
@@ -770,7 +770,7 @@ TEST_F(Internal_CliTest, InvalidInput_InvalidSyntax_ShouldRejectCommand)
     std::string command = "interface GigabitEthernet 1 ip address";
 
     // Expectation: Terminal rejects the command due to missing arguments
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(41);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(41);
 
     // Act
     bool result = handleInput(command);
@@ -788,7 +788,7 @@ TEST_F(Internal_CliTest, InvalidInput_InvalidCharacters_ShouldRejectCommand)
     std::string command = "hostname Router!@#";
 
     // Expectation: Terminal rejects the command due to invalid characters
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(21);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(21);
 
     // Act
     bool result = handleInput(command);
@@ -806,7 +806,7 @@ TEST_F(Internal_CliTest, InvalidInput_InvalidModeHierarchy_ShouldRejectCommand)
     std::string command = "router ospf 1 area 0";
 
     // Expectation: Terminal rejects the command due to invalid mode hierarchy
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(23);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(23);
 
     // Act
     bool result = handleInput(command);
@@ -1128,7 +1128,7 @@ TEST_F(Internal_CliTest, IPv6Expanding_InvalidCompressedAddress_ShouldHandleErro
     std::string compressedIPv6 = "2001::db8::1";
 
     // Expectation: Terminal rejects the invalid IPv6 address
-    EXPECT_CALL(*mockConsole, print(::testing::_)).Times(0);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(0);
 
     // Act
     std::string expanded = expandIPv6Address(compressedIPv6);

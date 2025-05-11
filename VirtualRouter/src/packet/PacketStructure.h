@@ -146,9 +146,21 @@ namespace Variable
          */
         namespace Option
         {
-            inline const ByteString source("\x01", 1); ///< Source Option for NDP.
-            inline const ByteString target("\x02", 1); ///< Tartet Option for NDP.
-            inline const ByteString mtu("\x05", 1);    ///< MTU Option for NDP.
+            inline const ByteString source("\x01", 1);      ///< Source Option for NDP.
+            inline const ByteString target("\x02", 1);      ///< Tartet Option for NDP.
+            inline const ByteString prefix("\x03", 1);      ///< Prefix Information Option for NDP.
+            inline const ByteString redirect("\x04", 1);    ///< Redirect Option for NDP.
+            inline const ByteString mtu("\x05", 1);         ///< MTU Option for NDP.
+            inline const ByteString nbma("\x06", 1);        ///< NBMA Option for NDP.
+            inline const ByteString cga("\x0b", 1);         ///< CGA Option for NDP.
+            inline const ByteString rsa("\x0c", 1);         ///< RSA Option for NDP.
+            inline const ByteString timestamp("\x0d", 1);   ///< Timestamp Option for NDP.
+            inline const ByteString nonce("\x0e", 1);       ///< Nonce Option for NDP.
+            inline const ByteString trustAnchor("\x0f", 1); ///< Trust Anchor Option for NDP.
+            inline const ByteString certificate("\x10", 1); ///< Certification Option for NDP.
+            inline const ByteString routeInfo("\x18", 1);   ///< Route Information Option for NDP.
+            inline const ByteString dnsServer("\x19", 1);   ///< DNS Server Option for NDP.
+            inline const ByteString dnsSearch("\x1F", 1);   ///< DNS Search Option for NDP.
         }
 
     }
@@ -623,6 +635,7 @@ namespace Variable
         namespace ICMPv6
         {
             inline const ByteString solicitationAddress("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\xFF", 13);
+            inline const ByteString allRouters("\xFF\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02", 16);
             
         }
 

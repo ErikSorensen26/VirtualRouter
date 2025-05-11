@@ -537,6 +537,19 @@ void updateNegates(json& existingData, json& node, TelnetClient& telnet, const s
     }
 }
 
+void markUnsupported(json& j) {
+    if (j.is_object()) {
+        j["_unsupported"] = true;
+        for (auto& [key, value] : j.items()) {
+            markUnsupported(value);
+        }
+    } else if (j.is_array()) {
+        for (auto& element : j) {
+            markUnsupported(element);
+        }
+    }
+}
+
 int main() {
     std::string mode = "ipRoute";
 
@@ -556,6 +569,9 @@ int main() {
 
     bool negate = true;
     uint16_t port = 5032;
+
+    markUnsupported(existingData);
+    return 0;
 
     if (!negate)
     {

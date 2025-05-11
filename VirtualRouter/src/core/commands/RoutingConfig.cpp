@@ -1,6 +1,7 @@
 #include "CommandProcessor.h"
 #include <CliEngine.h>
 #include <Eigrp.h>
+#include <algorithm>
 
 bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
 {
@@ -823,10 +824,26 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				}
 				else
 				{
+					if (commandStream.size() == 2)
 					{
 						std::unique_lock<std::shared_mutex> lock(currentEigrp->configs.configsMutex);
 						auto& networks = currentEigrp->configs.networks;
-						networks.erase(std::remove(networks.begin(), networks.end(), network), networks.end());
+						for (auto net = networks.begin(); net != networks.end();)
+						{
+							if (net->ip == network.ip)
+							{
+								networks.erase(std::remove(networks.begin(), networks.end(), network), networks.end());
+							}
+						}
+					}
+					else
+					{
+						std::unique_lock<std::shared_mutex> lock(currentEigrp->configs.configsMutex);
+						auto& networks = currentEigrp->configs.networks;
+						std::erase_if(networks, [&](EigrpConfigs::Network net) {
+							return net.ip == network.ip && commandStream.size() > 2
+								? net.mask == network.mask : true;
+						});
 					}
 
 					currentEigrp->updateInterfaceList();

@@ -33,10 +33,6 @@ Interface::Interface(InterfaceType interfaceType, std::string outInterface, cons
     configs.id.store(interfaceId, std::memory_order_release);
 
     startThreads(); // TEMPORARY: will be shutdown by default once shits working
-
-    // Initialize shared pointers for Protocol objects
-    arp = new Protocol::Arp(*this);
-    ndp = new Protocol::Ndp(*this);
 }
 
 Interface::~Interface()
@@ -55,10 +51,6 @@ void Interface::cleanupInterface()
         Global::getInstance().dhcpv6Server->removeInterface(this);
     }
     
-    if (arp) delete arp;
-    arp = nullptr;
-    if (ndp) delete ndp;
-    ndp = nullptr;
     if (dhcp) delete dhcp;
 
     // Remove interface from list
@@ -318,6 +310,12 @@ void Interface::startThreads()
 {
     if (Global::getInstance().routingEnabled)
     {
+        // Initialize shared pointers for Protocol objects
+        if (!arp)
+            arp = new Protocol::Arp(*this);
+        if (!ndp)
+            ndp = new Protocol::Ndp(*this);
+
         threadsRunning = true;
 
         std::lock_guard<std::mutex> lock(threadsRunningMutex); 
@@ -330,6 +328,17 @@ void Interface::startThreads()
 
 void Interface::stopThreads() 
 {
+    if (arp)
+    {
+        delete arp;
+        arp = nullptr;
+    }
+    if (ndp)
+    {
+        delete ndp;
+        ndp = nullptr;
+    }
+        
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex); 
         threadsRunning.store(false, std::memory_order_release); 

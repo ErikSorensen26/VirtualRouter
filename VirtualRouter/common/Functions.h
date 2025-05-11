@@ -302,11 +302,13 @@ namespace Functions {
 
     /**
      * @brief Calculates an EUI-64 address.
+     *
+     * @param prefix The prefix the address is being created from.
      * @param mac The MAC address.
-     * @param fullIPv6 The full IPv6 address.
+     * @param prefixLen The prefix length of the network.
      * @return The calculated EUI-64 address, or nullopt if calculation fails.
      */
-    std::optional<ByteString> calculateEui64(ByteString mac, ByteString fullIPv6);
+    ByteString calculateEui64(const ByteString& prefix, const ByteString& mac, uint8_t prefixLen);
 
     /**
      * @brief Converts a time point to a string.

@@ -36,7 +36,7 @@ namespace Protocol
         {
             return deriveMulticastMac(destIp);
         }
-        else if (destIp.size() == 4)
+        else if (destIp.size() == 4 && iface->arp)
         {
             auto* mac = iface->arp->getMac(destIp);
             if (mac)
@@ -54,7 +54,7 @@ namespace Protocol
                 return {}; // Empty MAC signifies that the packet will be sent after ARP resolution
             }
         }
-        else if (destIp.size() == 16)
+        else if (destIp.size() == 16 && iface->ndp)
         {
             auto* mac = iface->ndp->getMac(destIp);
             if (mac)
@@ -72,7 +72,7 @@ namespace Protocol
                 return {}; // Empty MAC signifies that the packet will be sent after NDP resolution
             }
         }
-        return {};
+        else return ByteString(6, 0x00); // Resolution is disabled.
     }
 
     bool Ethernet::build(Interface* iface, PacketInfo& packetInfo, const ByteString* destIp, ByteString const* destMac, ByteString type)

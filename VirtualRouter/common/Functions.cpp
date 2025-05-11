@@ -487,7 +487,7 @@ namespace Functions {
         size_t byteCount = mask / 8;
         size_t remainingBits = mask % 8;
 
-        // ✅ Compare full bytes
+        // Compare full bytes
         for (size_t i = 0; i < byteCount; ++i)
         {
             if (static_cast<uint8_t>(networkAddress[i]) != static_cast<uint8_t>(ipAddress[i]))
@@ -496,7 +496,7 @@ namespace Functions {
             }
         }
 
-        // ✅ Compare remaining bits safely
+        // Compare remaining bits safely
         if (remainingBits > 0 && byteCount < networkAddress.size())
         {
             uint8_t bitMask = 0xFF << (8 - remainingBits);
@@ -530,61 +530,23 @@ namespace Functions {
         return compactNet;
     }
 
-    std::optional<ByteString> calculateEui64(ByteString mac, ByteString fullIPv6)
+    ByteString calculateEui64(const ByteString& prefix, const ByteString& mac, uint8_t prefixLen)
     {
-        Logger::getInstance().debug() << "Calculating EUI-64 address with IPv6 address: " << byteToHex(fullIPv6) << " and MAC: " << mac << "." << std::endl;
-        // Check if parameters are valid
-        if (fullIPv6.size() != 16 || mac.size() != 6) { 
-            Logger::getInstance().error() << "EUI-64 invalid parameters.";
-            // Return due to invalid parameters
-            return nullptr;
-        }
-        // New variables
-        ByteString newAddress;
-        ByteString network = fullIPv6.substr(0, 8);
-        ByteString host = fullIPv6.substr(8);
-        // Checks if host address if blank
-        if (host == std::string("\x00\x00\x00\x00\x00\x00\x00\x00", 8))
-        {
-            ByteString newHost = mac.substr(0, 3) +
-                ByteString("\xff\xfe", 2) +
-                mac.substr(3, 3);
+        ByteString ip(16, 0);
+        int prefixBytes = prefixLen / 8;
+        for (int i = 0; i < prefixBytes && i < 16; ++i)
+            ip[i] = prefix[i];
 
-            // Convert first byte to a binary string
-            ByteString firstByte = byteToBin(mac.substr(0, 1));
+        ip[8]  = mac[0] ^ 0x02;
+        ip[9]  = mac[1];
+        ip[10] = mac[2];
+        ip[11] = 0xFF;
+        ip[12] = 0xFE;
+        ip[13] = mac[3];
+        ip[14] = mac[4];
+        ip[15] = mac[5];
 
-            // Logging
-            Logger::getInstance().debug() << "First byte converted to binary: " << firstByte << "." << std::endl;
-            Logger::getInstance().info() << "Flipping seventh bit of EUI-64." << std::endl;
-
-            // Flip 7th (6th index) bit
-            if (firstByte[6] == '1') { firstByte[6] = '0'; }
-            else if (firstByte[6] == '0') { firstByte[6] = '1'; }
-
-            // Logging
-            Logger::getInstance().debug() << "New first byte: " << firstByte << "." << std::endl;
-
-            // Converts back to byte form
-            firstByte = binToByte(firstByte, 1);
-
-            Logger::getInstance().info() << "Adding flipped byte back to the host address" << std::endl;
-
-            // Add first byte back to the host portion
-            newHost[0] = firstByte[0];
-
-            Logger::getInstance().debug() << "New host portion: " << byteToHex(newHost) << "." << std::endl;
-
-            // Calculate new IPv6 Address
-            newAddress = network + newHost;
-
-            return newAddress;
-        }
-        else
-        {
-            Logger::getInstance().error() << "Host portion not empty" << std::endl;
-            // Host field not empty
-            return nullptr;
-        }
+        return ip;
     }
 
     ByteString ipv6ToByte(std::string ip)

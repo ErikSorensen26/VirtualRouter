@@ -151,12 +151,13 @@ void ProcessPacket::processIcmpV6(const IcmpV6Header& icmp)
         case 0x85:
         {
             if (icmp.payload != currentIp) break;
+            //TODO check nextHeader on ipv6
             interface->ndp->sendRouteAdvertisement(macAddress, icmp.payload);
             break;
         }
         case 0x86:
         {
-            interface->ndp->receiveRouteAdvertisement(icmp);
+            interface->ndp->receiveRouteAdvertisement(icmp, ipAddress, macAddress);
             break;
         }
         case 0x87:
@@ -176,7 +177,7 @@ void ProcessPacket::processIcmpV6(const IcmpV6Header& icmp)
         }
         case 0x88:
         {
-            interface->ndp->receiveNeighborAdvertisement(icmp);
+            interface->ndp->receiveNeighborAdvertisement(icmp, ipAddress);
             break;
         }
         default:

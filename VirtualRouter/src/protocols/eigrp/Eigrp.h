@@ -1006,7 +1006,7 @@ namespace Protocol
          *
          * @param summaryRoute Summary route information.
          */
-        void advertiseSummaryRoute(const EigrpConfigs::SummaryRoute& summaryRoute);
+        void advertiseSummaryRoute(RoutingTable::Eigrp* summaryRoute);
 
         /**
          * @brief Withdraws a summary route from a neighbor.
@@ -1014,10 +1014,17 @@ namespace Protocol
          * Sends a Withdraw (WITHDRAW) packet to the neighbor to remove the previously advertised
          * summary route, ensuring that outdated or no longer valid summary routes are cleaned up.
          *
-         * @param network Network address of the summary route.
-         * @param mask Subnet mask of the summary route.
+         * @param route Summary route information.
          */
-        void withdrawSummaryRoute(const ByteString& network, uint8_t mask);
+        void withdrawSummaryRoute(RoutingTable::Eigrp* route);
+
+        /**
+         * @brief Removes all auto summarized route on an interface
+         *
+         * Finds all summarized routes and removes all automatically assigned summarizations
+         * for the specific interface.
+         */
+        void removeAllAutoSummaries();
 
         /**
          * @brief Encodes a Summary Route for advertisement.
@@ -1193,7 +1200,7 @@ namespace Protocol
          * @param mask Subnet mask.
          * @return True if the route is summarized, false otherwise.
          */
-        bool isRouteSummarized(const ByteString& network, uint8_t mask);
+        EigrpConfigs::SummaryRoute* isRouteSummarized(const ByteString& network, uint8_t mask);
 
         /**
          * @brief Starts the Hello timer.
@@ -1671,6 +1678,13 @@ namespace Protocol
          * @param enable True to enable, false to disable.
          */
         void enableAutoSummary(bool enable);
+
+        /**
+         * @brief Recomputes auto summaries when a new routes is learned
+         *
+         * Takes all existing auto summarized routes and recalculates the summarized routes
+         */
+        void recomputeAutoSummaries();
 
         /**
          * @brief Sets the EIGRP process as a stub.

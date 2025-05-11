@@ -21,7 +21,7 @@ public:
     MOCK_METHOD(void, moveCursorRight, (size_t count), (override));
     MOCK_METHOD(void, moveCursorUp, (size_t count), (override));
     MOCK_METHOD(void, moveCursorDown, (size_t count), (override));
-    MOCK_METHOD(void, print, (std::string str), (override));
+    MOCK_METHOD(void, print, (std::string str, Color color), (override));
     MOCK_METHOD(CursorPosition, getCursorPosition, (), (override));
     MOCK_METHOD(void, beep, (), (override)); // Remove or comment out if not used
 
@@ -40,8 +40,8 @@ public:
     MockConsole()
     {
         // Set the default behavior of the 'print' method to append to 'capturedOutput'
-        ON_CALL(*this, print(::testing::_))
-            .WillByDefault([this](std::string str) {
+        ON_CALL(*this, print(::testing::_, ::testing::_))
+            .WillByDefault([this](std::string str, Color) {
                 capturedOutput += str; // Append the string to 'capturedOutput'
             });
     }
@@ -71,7 +71,7 @@ private:
 class ReducedMockConsole : public IConsole
 {
 public:
-    MOCK_METHOD(void, print, (std::string str), (override));
+    MOCK_METHOD(void, print, (std::string, Color), (override));
     void clearScreen() override {}
     void enableLineWrapping() override {}
     void clearLineAfterCursor() override {}
@@ -100,8 +100,8 @@ public:
     ReducedMockConsole()
     {
         // Set the default behavior of the 'print' method to append to 'capturedOutput'
-        ON_CALL(*this, print(::testing::_))
-            .WillByDefault([this](std::string str) {
+        ON_CALL(*this, print(::testing::_, ::testing::_))
+            .WillByDefault([this](std::string str, Color) {
                 capturedOutput += str; // Append the string to 'capturedOutput'
             });
     }

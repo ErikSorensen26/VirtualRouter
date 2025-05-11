@@ -562,7 +562,7 @@ std::string CliSession::normalizeCommand(const std::string& inputCommand)
     }
 
     // Handle "do" command
-    if (isDoCommand(parsedWords))
+    if (!isHelpModeActive && isDoCommand(parsedWords))
     {
         return executeDoCommand(inputCommand.substr(2));
     } 
@@ -570,7 +570,7 @@ std::string CliSession::normalizeCommand(const std::string& inputCommand)
     // Mark as valid if the first word is "?" or "vk_tab"
     isMatchSuccessful = (!parsedWords.empty() && (parsedWords[0] == "?" || parsedWords[0] == "vk_tab"));
 
-    if (isGlobalCommand(parsedWords[0]) && !isMatchSuccessful)
+    if (!isHelpModeActive && isGlobalCommand(parsedWords[0]) && !isMatchSuccessful)
     {
         isCommandValid = true;
         return parsedWords[0];
@@ -706,7 +706,6 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     for (const json& command : *currentCommandDirectory)
     {
         std::string commandName = command["name"];
-        
 
         if (command.contains("properties") && command["properties"].is_array())
         {
@@ -768,6 +767,13 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     {
         if (command->contains("name") && command->contains("description"))
         {
+            // Handle Command Support
+            Com::Support support = (command->contains("support") && (*command)["support"].is_boolean())
+                ? ((*command)["support"] == true
+                    ? Com::Support::SUPPORTED
+                    : Com::Support::PARTIAL)
+                : Com::Support::NO_SUPPORT;
+
             // Handle command properties
             if (command->contains("properties"))
             {
@@ -784,6 +790,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
             Com commandData;
             commandData.name = (*command)["name"];
             commandData.description = (*command)["description"];
+            commandData.support = support;
             if (command->contains("properties"))
             {
                 for (const auto& prop : (*command)["properties"])
@@ -937,7 +944,19 @@ void CliSession::displayAvailableCommands(std::vector<Com> commandList)
                 }
                 // Uncomment if you want to display descriptions
                 display += command.description;
-                iConsole->print(display);
+                Color color;
+                switch (command.support)
+                {
+                    case Com::Support::SUPPORTED:
+                        color = Color::WHITE;
+                        break;
+                    case Com::Support::PARTIAL:
+                        color = Color::YELLOW;
+                        break;
+                    case Com::Support::NO_SUPPORT:
+                        color = Color::RED;
+                }
+                iConsole->print(display, color);
                 lineCount++;
             }
             else
