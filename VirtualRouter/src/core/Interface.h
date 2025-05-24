@@ -5,13 +5,9 @@
 
 #include <Ingress.h>
 #include <Egress.h>
-#include <Process.h>
-#include <Encapsulation.h>
-#include <Functions.h>
-#include <ThreadPool.hpp>
 #include <string>
-#include <TimeManager.h>
 #include <InterfaceConfigs.h>
+#include <PacketStructure.h>
 
 #include <map>
 #include <thread>

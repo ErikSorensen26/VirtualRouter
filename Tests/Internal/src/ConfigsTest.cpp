@@ -60,8 +60,8 @@ class Internal_ConfigTest : public ::testing::Test
 {
 protected:
     Configs* configs = nullptr;
-    MockFileSystem* mockFileSystem;
-    ModeConfig* modeConfig;
+    MockFileSystem* mockFileSystem = nullptr;
+    ModeConfig* modeConfig = nullptr;
 
     // Paths to configuration files
     std::string startupFilePath = STARTUP_FILE;
@@ -71,7 +71,7 @@ protected:
     void SetUp() override 
     {
         mockFileSystem = new MockFileSystem;
-        configs = new Configs();
+        configs = new Configs(mockFileSystem);
         modeConfig = new ModeConfig;
         modeConfig->currentMode = Mode::globalConfiguration;
     }

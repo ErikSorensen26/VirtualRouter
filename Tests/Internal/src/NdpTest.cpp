@@ -18,7 +18,7 @@ protected:
 
     void SetUp() override
     {
-        global = new Global();
+        global = new Global(false, true);
         iface = new MockInterface(*global);
         iface->enableShutdown();
         iface->configs.ipv6.addAddress(intIp, false, 64);
@@ -31,9 +31,9 @@ protected:
 
     void TearDown() override
     {
-        delete global;
         ndp->shutdown();
         delete iface;
+        delete global;
     }
 
     void onReachableTimeout(const ByteString& targetIp) { ndp->onReachableTimeout(targetIp); }

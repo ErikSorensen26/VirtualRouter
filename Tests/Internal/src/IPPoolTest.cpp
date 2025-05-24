@@ -16,16 +16,16 @@ protected:
     
     void SetUp() override
     {
-        global = new Global(true);
+        global = new Global(false, true);
         mockInterface = new ::testing::NiceMock<MockInterface>(*global);
-        dhcpServer = new DhcpServer(*global);
+        global->dhcpServer = new DhcpServer(*global);
+        dhcpServer = global->dhcpServer;
     }
 
     void TearDown() override
     {
-        delete global;
-        delete dhcpServer;
         delete mockInterface;
+        delete global;
     }
 
     // Mock Interface and DhcpServer instance

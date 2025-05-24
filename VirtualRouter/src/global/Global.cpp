@@ -7,8 +7,35 @@
 #include <map>
 #include <mutex>
 
-Global::Global(bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, test)
+Global::Global(bool enableRouting, bool test) : routingEnabled(enableRouting), threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, test) {}
+Global::Global(IFileSystem* fs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, fs, test) {}
+
+Global::~Global()
 {
+    if (dhcpServer)
+        delete dhcpServer;
+    if (dhcpv6Server)
+        delete dhcpv6Server;
+
+    std::lock_guard<std::mutex> lock(routingInstanceMutex);
+    for (auto& [_, instance] : routingInstances)
+        delete instance;
+}
+
+void Global::reset()
+{
+    setHostname(DEFAULT_HOSTNAME);
+    setIPv6UnicastRouting(false);
+    setAAA(false);
+
+    {
+        std::lock_guard<std::mutex> lock(routingInstanceMutex);
+        for (auto& [_, instance] : routingInstances)
+            delete instance;
+        routingInstances.clear();
+    }
+    
+    addRoutingInstance("default");
 }
       
 // Interfaces

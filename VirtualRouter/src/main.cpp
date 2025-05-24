@@ -6,8 +6,8 @@
 int main() 
 {
     Logger::getInstance().initialize(true, /*isolateMode*/false);
-    Global global;
-    CliEngine& engine = global.engine;
+    Global* global = new Global(true);
+    CliEngine& engine = global->engine;
     auto session = engine.createSession(false);
     while (true) {
         session->handleInput();

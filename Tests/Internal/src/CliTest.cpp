@@ -28,7 +28,6 @@ protected:
     static void SetUpTestSuite()
     {
         // Create Initiate file systems
-        global = new Global();
         realFileSystem = new FileSystem();
         mockFileSystem = new testing::NiceMock<MockFileSystem>();
 
@@ -66,17 +65,16 @@ protected:
         mockFileSystem->setupMockFile(CONFIG_FILE, configFileString);
         mockFileSystem->setupMockFile(STARTUP_FILE, "{}");
 
-        engine = new CliEngine(*global);
+        global = new Global(mockFileSystem);
+        engine = &global->engine;
         engine->initEngine();
         engine->paginationCount = 0;
     }
 
     void SetUp() override 
     {
+        global->reset();
         mockConsole = std::make_shared<testing::NiceMock<ReducedMockConsole>>();
-        
-        // Create the terminal instance with nexessary dependencies
-        global->addRoutingInstance("default");
 
         terminal = new CliSession(*engine, mockConsole);
         engine->sessions.push_back(terminal);
@@ -93,9 +91,9 @@ protected:
 
     static void TearDownTestSuite()
     {
-        delete engine;
         delete realFileSystem;
         delete mockFileSystem;
+        delete global;
     }
 
     // Other functions

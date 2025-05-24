@@ -12,6 +12,7 @@
 #include <Ethernet.h>
 #include <IPPacket.h>
 #include <Decapsulation.h>
+#include <Encapsulation.h>
 #include <VirtualRouter.h>
 #include <InterfaceConfigs.h>
 

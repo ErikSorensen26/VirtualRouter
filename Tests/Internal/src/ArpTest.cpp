@@ -25,7 +25,7 @@ protected:
 
     void SetUp() override
     {
-        global = new Global(true);
+        global = new Global(false, true);
 
         mockInterface = new MockInterface(*global);
         mockInterface->enableShutdown();
@@ -39,6 +39,7 @@ protected:
     {
         arp->shutdown();
         delete mockInterface;
+        delete global;
     }
 
     // Member variables

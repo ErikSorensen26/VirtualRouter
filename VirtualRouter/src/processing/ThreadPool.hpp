@@ -140,13 +140,13 @@ inline ThreadPool::ThreadPool(size_t numThreads) : stop(false) {
                     std::function<void()> task;
 
                     {   // Acquire lock
-                        std::unique_lock<std::mutex> lock(this->queueMutex);
-                        this->condition.wait(lock, 
-                            [this]{ return this->stop.load() || !this->tasks.empty(); });
-                        if (this->stop.load() && this->tasks.empty())
+                        std::unique_lock<std::mutex> lock(queueMutex);
+                        condition.wait(lock, 
+                            [this]{ return stop.load() || !tasks.empty(); });
+                        if (stop.load() && tasks.empty())
                             return;
-                        task = std::move(this->tasks.front());
-                        this->tasks.pop();
+                        task = std::move(tasks.front());
+                        tasks.pop();
                     }
 
                     // Execute the task
@@ -200,7 +200,10 @@ void ThreadPool::enqueueDetached(F&& f)
 
 // Shutdown method
 inline void ThreadPool::shutdown() {
-    stop.store(true);
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        stop.store(true);
+    }
     condition.notify_all();
     for (std::thread &worker: workers)
         if (worker.joinable())

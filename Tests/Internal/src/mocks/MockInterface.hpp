@@ -27,6 +27,7 @@ public:
     // Destructor
     ~MockInterface() override 
     {
+        Interface::stopThreads();
         Interface::cleanupInterface();
     }
 

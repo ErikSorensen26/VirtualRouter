@@ -122,14 +122,15 @@ public:
      * Initializes the hostname to the default value and sets IPv6 as disabled.
      * The constructor is private to enforce the Singleton pattern.
      */
-    Global(bool test = false);
+    Global(bool enableRouting = false, bool test = false);
+    Global(IFileSystem* fs, bool test = false);
 
     /**
      * @brief Destructs the Global class.
      *
-     * The destructor is defaulted as no special cleanup is required.
+     * The destructor deletes all virtual instances.
      */
-    ~Global() {}
+    ~Global();
 
     // Set hostname (protected by hostnameMutex)
     void setHostname(const std::string& name)
@@ -167,6 +168,11 @@ public:
     Protocol::DhcpServer* dhcpServer = nullptr;
     Protocol::Dhcpv6Server* dhcpv6Server = nullptr;
 
+    /**
+     * @brief Resets the global state of the router.
+     */
+    void reset();
+
 private:
     // Delete copy constructor
     Global& operator=(const Global&) = delete;
@@ -188,13 +194,13 @@ private:
     
 public:
 
+    bool routingEnabled = false;
+    bool testingMode = false;
+
     GlobalConfigs configs;
     ThreadPool threadPool;  ///< Global thread pool for off-loading.
     TimeManager timeManager; ///< Global time manager for time keeping.
     CliEngine engine; ///< Global CLI engine for user interface.
-
-    bool routingEnabled = false;
-    bool testingMode = false;
 };
 
 #endif // GLOBAL_H

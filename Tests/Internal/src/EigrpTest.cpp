@@ -29,13 +29,13 @@ protected:
     bool packetEnqueued = false;
     InterfaceType type = InterfaceType::GIGABIT_ETHERNET;
     VirtualRouter* vrf = nullptr;
-    Global* global;
+    Global* global = nullptr;
 
     // Setup creates an Eigrp instance and one interface for testing.
     void SetUp() override 
     {
-        global = new Global(true);
-        vrf = global->getRoutingInstance("default");
+        global = new Global(false, true);
+        vrf = new VirtualRouter(*global, "default");
         vrf->eigrpList[1] = new EigrpAutonomousSystem();
         eigrpInstance = new Eigrp(asNumber, addressFamily, vrf);
         vrf->eigrpList[1]->ipv4 = eigrpInstance;
@@ -797,6 +797,7 @@ TEST_F(Internal_EigrpTest, Dynamic_Interface_Addition_And_Removal)
 {
     // Add a new interface and then remove it.
     MockInterface* extraIface = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    vrf->interfaceList[{InterfaceType::GIGABIT_ETHERNET, 1}] = extraIface;
     extraIface->routingInstance = vrf;
     extraIface->blockEnqueues();
     extraIface->configs.id = 1;
@@ -814,8 +815,6 @@ TEST_F(Internal_EigrpTest, Dynamic_Interface_Addition_And_Removal)
     eigrpInstance->updateInterfaceList();
     EXPECT_EQ(getInterfaceList().size(), 1);
     eigrpInstance->shutdown();
-    delete extraIface;
-    extraIface = nullptr;
 }
 
 // Test: Global_Interface_List_Consistency
@@ -890,6 +889,7 @@ TEST_F(Internal_EigrpTest, Multiple_Connected_Routes_From_Different_Interfaces)
 {
     // Add a second interface and verify both connected routes appear.
     MockInterface* extraIface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    vrf->interfaceList[{InterfaceType::GIGABIT_ETHERNET, 1}] = extraIface1;
     extraIface1->routingInstance = vrf;
     extraIface1->configs.id = 1;
     extraIface1->configs.interfaceType = InterfaceType::GIGABIT_ETHERNET;
@@ -900,6 +900,7 @@ TEST_F(Internal_EigrpTest, Multiple_Connected_Routes_From_Different_Interfaces)
     getAllInterfaceList()[{InterfaceType::GIGABIT_ETHERNET, 1}] = extraIface1;
 
     MockInterface* extraIface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    vrf->interfaceList[{InterfaceType::GIGABIT_ETHERNET, 2}] = extraIface2;
     extraIface2->routingInstance = vrf;
     extraIface2->configs.id = 2;
     extraIface2->configs.interfaceType = InterfaceType::GIGABIT_ETHERNET;
@@ -921,10 +922,6 @@ TEST_F(Internal_EigrpTest, Multiple_Connected_Routes_From_Different_Interfaces)
     extraIface2->Shutdown(true);
 
     eigrpInstance->shutdown();
-    delete extraIface1;
-    extraIface1 = nullptr;
-    delete extraIface2;
-    extraIface2 = nullptr;
 }
 
 #pragma endregion
@@ -2300,7 +2297,6 @@ TEST_F(Internal_EigrpTest, Query_Triggers_SIA_Timer)
     // Expect one packet to be enqueued (since we're sending a query)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
 
-    std::cout << "test" << std::endl;
     eigrpInterface->sendQueryToNeighbor(neighbor, neighborIp, {route});  // Send query to neighbor
 
     delete route;  // Clean up
@@ -2482,8 +2478,6 @@ TEST_F(Internal_EigrpTest, VRF_Isolation_Enforced) {
     vrf->routingTable.updateEigrp(route, AddressFamily::IPv4, asNumber);
     auto wrongRoute = otherVRF->routingTable.getEigrpRoute(route->network, route->mask, AddressFamily::IPv4, asNumber);
     ASSERT_EQ(wrongRoute, nullptr);
-
-    delete otherVRF;
 }
 
 // Test: ECMP_Support_Multiple_NextHops

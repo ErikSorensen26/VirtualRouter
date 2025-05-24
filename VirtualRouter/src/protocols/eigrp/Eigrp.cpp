@@ -231,8 +231,8 @@ namespace Protocol
             // Add the interface to eigrp even if its down
             InterfaceConfigs& interfaceInfo = interface->configs;
             float intID = interfaceInfo.id;
-            ByteString ipv6Address = interfaceInfo.ipv4.getAddress();
-            ByteString ipv4Address = interfaceInfo.ipv6.getGlobalUnicast();
+            ByteString ipv4Address = interfaceInfo.ipv4.getAddress();
+            ByteString ipv6Address = interfaceInfo.ipv6.getGlobalUnicast();
             EigrpInterface* instance = nullptr;
             EigrpInterfaceInstance* interfaceInstance = nullptr;
             InterfaceType type = interfaceInfo.interfaceType;
