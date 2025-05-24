@@ -3,8 +3,6 @@
 #ifndef EIGRP_H
 #define EIGRP_H
 
-#include <map>
-#include <memory>
 #include <vector>
 #include <PacketStructure.h>
 #include <Functions.h>
@@ -23,6 +21,7 @@
 #include <unordered_set>
 #include <tuple>
 #include <InterfacePairHash.hpp>
+#include <Global.h>
 
 #define MAX_RETRANSMISSIONS 16
 #define PACKET_TIMEOUT_MS 5000
@@ -53,6 +52,16 @@ namespace EigrpConfigs
     {
         ByteString ID = ByteString(4, '\x00'); ///< Router ID.
         bool isStatic = false;                 ///< Indicates if the Router ID is static.
+    };
+
+    /**
+     * @struct RoutingUpdate
+     * @brief Represents a routing update.
+     */
+    struct RoutingUpdate
+    {
+        RoutingTable::Eigrp* route;
+        bool withdraw;
     };
 
     /**
@@ -135,23 +144,6 @@ namespace EigrpConfigs
         uint8_t mask;
         KValue kvalue;
         uint8_t adminDistance = 0;
-    };
-
-    /**
-     * @struct Sequence
-     * @brief Represents sequence-related flags for neighbor initialization.
-     */
-    struct Sequence 
-    {
-        bool init;                 ///< Initialization flag.
-        bool conditionalReceive;   ///< Conditional receive flag.
-        bool endOfTable;           ///< End of table flag.
-
-        /**
-         * @brief Default constructor initializing all flags to false.
-         */
-        Sequence() : init(false), conditionalReceive(false), endOfTable(false) {}
-
     };
 
     /**
@@ -240,7 +232,6 @@ namespace EigrpConfigs
         RESPONSE_QUERY,  ///< Response to a query.
         PARTIAL,         ///< Partial update.
         TRIGGERED,       ///< Triggered update.
-        WITHDRAW         ///< Withdraw update.
     };
 
     /**
@@ -303,57 +294,61 @@ namespace EigrpConfigs
      */
     struct NeighborInfo 
     {
-
         ~NeighborInfo()
         {
             clearTimers();
         }
+
+        TimeManager& timeManager;
 
         void clearTimers()
         {
             // Cancel timers
             if (stuckInInitCheckActive)
             {
-                TimeManager::getInstance().cancelTimer(stuckInInitTimerId);
+                timeManager.cancelTimer(stuckInInitTimerId);
             }
 
             if (twoWayThreadID != 0)
             {
-                TimeManager::getInstance().cancelTimer(twoWayThreadID.load(std::memory_order_relaxed));
+                timeManager.cancelTimer(twoWayThreadID.load(std::memory_order_relaxed));
             }
 
             if (holdTimerId != 0)
             {
-                TimeManager::getInstance().cancelTimer(holdTimerId);
+                timeManager.cancelTimer(holdTimerId);
             }
 
             if (gracefulRestartTimerId != 0)
             {
-                TimeManager::getInstance().cancelTimer(gracefulRestartTimerId);
+                timeManager.cancelTimer(gracefulRestartTimerId);
             }
 
             for (auto& relPkt : reliablePackets)
             {
                 if (relPkt.second.timerId != 0)
                 {
-                    TimeManager::getInstance().cancelTimer(relPkt.second.timerId);
+                    timeManager.cancelTimer(relPkt.second.timerId);
                 }
             }
         }
 
         void restart()
         {
+            {
+                std::lock_guard<std::mutex> lock(initFlagMutex);
+                initFlags.initUpdateReceived = false;
+                initFlags.nullSent = false;
+                initFlags.slaveInit = false;
+                initFlags.masterInit = false;
+                initFlags.initRole = InitRole::MASTER;
+            }
             neighborState.store(NeighborState::DOWN);
-            initUpdateReceived.store(false, std::memory_order_release);
-            nullSent.store(false, std::memory_order_release);
-            slaveInit.store(false, std::memory_order_release);
-            masterInit.store(false, std::memory_order_release);
             initComplete.store(false, std::memory_order_release);
             initSequence.store(0, std::memory_order_release);
             nullUpdateSequence.store(0, std::memory_order_release);
             stuckInInitCheckActive.store(false, std::memory_order_release);
             secondHelloReceived.store(false, std::memory_order_release);
-            initRole.store(InitRole::MASTER, std::memory_order_release);
         }
 
         // Basic Neighbor Information
@@ -363,15 +358,22 @@ namespace EigrpConfigs
 
         // Initialization
         std::atomic<NeighborState> neighborState = NeighborState::DOWN; ///< Current state of the neighbor.
-        std::atomic<InitRole> initRole = InitRole::MASTER; ///< Initialization role (MASTER/SLAVE).
-        std::atomic<bool> initUpdateReceived =   false; ///< Inidcates if an initialization update has been received
-        std::atomic<bool> nullSent =             false; ///< Indicates if a null update has been sent.
-        std::atomic<bool> slaveInit =            false; ///< Indicates if the neighbor is in slave initialization.
-        std::atomic<bool> masterInit =           false; ///< Indicates if the nieghbor is in master initialization.
-        std::atomic<bool> initComplete =         false; ///< Indicates if neighbor initialization is complete.
-        std::atomic<bool> processAcks =          false; ///< Indicates if ACKs should be processed.
+
+        std::mutex initFlagMutex;
+        struct InitFlags {
+            InitRole initRole = InitRole::MASTER; ///< Initialization role (MASTER/SLAVE).
+            bool initUpdateReceived =   false; ///< Inidcates if an initialization update has been received
+            bool nullSent =             false; ///< Indicates if a null update has been sent.
+            bool slaveInit =            false; ///< Indicates if the neighbor is in slave initialization.
+            bool masterInit =           false; ///< Indicates if the nieghbor is in master initialization.
+        } initFlags;
+
+        std::atomic<bool> initComplete = false; ///< Indicates if neighbor initialization is complete.
+        std::atomic<bool> processAcks = false; ///< Indicates if ACKs should be processed.
+
         std::atomic<uint32_t> initSequence{0}; ///< Initialization sequence number.
         std::atomic<uint32_t> nullUpdateSequence{0}; ///< Last sequence number for received for null update.
+
 
         std::chrono::steady_clock::time_point initStartTime; ///< Init start time.
         std::atomic<bool> stuckInInitCheckActive = false; ///< Indicating if neighbor is stuck initializing.
@@ -392,6 +394,7 @@ namespace EigrpConfigs
             EigrpHeader eigrp;      ///< EIGRP packet header.
         };
         std::unordered_map<uint32_t, PacketBuffer> packetBuffer; ///< Buffer for packets from neighbors.
+        std::mutex bufferMutex;
 
         // Acknowledgements
         std::unordered_set<uint32_t> pendingAcks; ///< List of pending ACKs.
@@ -431,14 +434,13 @@ namespace EigrpConfigs
                  * @param routes Updated routes included in the packet.
                  * @param isRemove Indicates if the packet is for route removal.
                  */
-                Packet(EigrpHeader eigrp, ByteString destination, std::vector<RoutingTable::Eigrp*> routes = {}, bool isRemove = false)
-                    : eigrp(eigrp), destination(destination), updatedRoutes(routes), remove(isRemove) {}
+                Packet(EigrpHeader eigrp, ByteString destination, std::vector<RoutingUpdate> routes = {}, bool isRemove = false)
+                    : eigrp(eigrp), destination(destination), updatedRoutes(routes) {}
                 Packet() = default;
 
                 EigrpHeader eigrp = EigrpHeader(); ///< EIGRP packet header.
                 ByteString destination{}; ///< Destination IP address.
-                std::vector<RoutingTable::Eigrp*> updatedRoutes{}; ///< Updated routes in the packet.
-                bool remove = false; ///< Indicates if the packet is for route removal.
+                std::vector<RoutingUpdate> updatedRoutes{}; ///< Updated routes in the packet.
             };
 
             Packet packet; ///< Reliable packet information.
@@ -481,8 +483,6 @@ namespace EigrpConfigs
         };
 
         // Routing Updates
-        std::map<uint32_t, Sequence> sequenceList; ///< Map of sequence numbers to sequence flags.
-        std::vector<std::vector<RoutingTable::Eigrp*>> routingBuffers; ///< Buffer for routing updates.
         std::unordered_map<ByteString, AdvertisedRoute> advertisedRoutes; ///< Map of advertised routes.
 
         // Neighbor Flags
@@ -499,7 +499,7 @@ namespace EigrpConfigs
          * 
          * @param unicast 
          */
-        NeighborInfo(const ByteString& neighborIp, bool unicast = false) : ipAddress(neighborIp), unicast(unicast) {}
+        NeighborInfo(TimeManager& manager, const ByteString& neighborIp, bool unicast = false) : timeManager(manager), ipAddress(neighborIp), unicast(unicast) {}
 
         // Delete copy constructor and copy assignment operator
         NeighborInfo(const NeighborInfo&) = delete;
@@ -573,12 +573,19 @@ namespace EigrpConfigs
      */
     struct InterfaceConfigs
     {
+    private:
+        InterfaceConfigs() {};
+    public:
+        ~InterfaceConfigs() {
+            std::cout << "";
+        }
+
         InterfaceConfigs(InterfaceType type, float id) : type(type), id(id) {}
         InterfaceType type;
         float id;
         bool shutdown = false;
         bool userMade = false;
-        std::shared_mutex configsMutex;
+        mutable std::shared_mutex configsMutex;
         std::vector<std::pair<ByteString, uint8_t>> pendingSummaryRoutes;
         std::vector<SummaryRoute> summaryRoutes; ///< List of summary routes.
         std::atomic<uint8_t> DSCP = 0; ///< Differentiated Services Code Point.
@@ -595,11 +602,36 @@ namespace EigrpConfigs
         std::unordered_map<uint32_t, uint32_t> retransmissionTimers; ///< Retransmission timers.
         std::atomic<Mode> interfaceMode = Mode::MULTIPOINT; ///< Interface mode.
         std::atomic<uint32_t> localMetric; ///< Local metric of the interface.
+        std::atomic<bool> noEcmpMode = false; ///< No ECMP mode used for VPNs. //TODO
         AuthKey authKey; ///< Authentication key.
+
+        /**
+         * @brief used to see if configs are defaulted
+         *
+         * Used for classic mode to detect default configurations so
+         * the configuration object can be removed if its not being used.
+         */
+        bool isDefault() const {
+            InterfaceConfigs other;
+            std::shared_lock<std::shared_mutex> lock(configsMutex);
+            return 
+                pendingSummaryRoutes.empty() &&
+                helloTime.load() == other.helloTime.load() &&
+                holdTime.load() == other.holdTime.load() &&
+                bandwidthPercentage.load() == other.bandwidthPercentage.load() &&
+                splitHorizon.load() == other.splitHorizon.load() &&
+                nextHopSelf.load() == other.nextHopSelf.load() &&
+                dampeningChange.load() == other.dampeningChange.load() &&
+                dampeningInterval.load() == other.dampeningInterval.load() &&
+                authKey.authType == other.authKey.authType && 
+                authKey.fullyEnabled.load() == other.authKey.fullyEnabled.load() &&
+                authKey.key == other.authKey.key &&
+                authKey.keyId == other.authKey.keyId;
+        }
     };
 }
 
-struct IpInfo;
+struct InterfaceConfigs;
 
 namespace Protocol 
 {
@@ -621,7 +653,7 @@ namespace Protocol
         friend class ::Internal_EigrpTest;
 
         Eigrp& eigrpProcess; ///< Pointer to the EIGRP process.
-        EigrpConfigs::InterfaceConfigs& configs; ///< Configuration settings for the interface.
+        EigrpConfigs::InterfaceConfigs* configs; ///< Configuration settings for the interface.
 
         /**
          * @brief Constructs an EigrpInterface instance.
@@ -804,7 +836,7 @@ namespace Protocol
          * @param conditional Indicates if this update is conditional.
          * @param conditionalNeighbors List of neighbors for conditional updates.
          */
-        virtual void sendUpdateToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const std::vector<RoutingTable::Eigrp*>& routes, EigrpConfigs::UpdateType updateType, bool restart = false, bool conditional = false, std::vector<ByteString> conditionalNeighbors = {});
+        virtual void sendUpdateToNeighbor(EigrpConfigs::NeighborInfo* neighbor, const std::vector<EigrpConfigs::RoutingUpdate>& routes, EigrpConfigs::UpdateType updateType, bool restart = false, bool conditional = false, std::vector<ByteString> conditionalNeighbors = {});
 
         /**
          * @brief Sends a Query packet to a specific neighbor.
@@ -967,7 +999,7 @@ namespace Protocol
          * @param init Indicates if the update is part of initialization.
          * @param remove Indicates if routes are being removed.
          */
-        void updateRoutingTable(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, const std::vector<RoutingTable::Eigrp*>& routes, const std::vector<RoutingTable::Eigrp*>& removedRoutes = {});
+        void updateRoutingTable(EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, const std::vector<EigrpConfigs::RoutingUpdate>& routes);
 
         /**
          * @brief Updates the routing table for a specific destination.
@@ -1426,11 +1458,13 @@ namespace Protocol
         virtual EigrpHeader::Option generateAuthenticatedTLV(const EigrpHeader& eigrp);
         
         Interface* currentInterface; ///< Pointer to the current network interface.
-        IpInfo* currentInterfaceInfo; ///< Pointer to the current interface's IP information.
+        InterfaceConfigs* currentInterfaceInfo; ///< Pointer to the current interface's IP information.
         
         // Neighbor management
         std::shared_mutex neighborMutex; ///< Shared mutex for neighbor operations.
         std::unordered_map<ByteString, EigrpConfigs::NeighborInfo*> neighbors; ///< Map of neighbor IPs to their information.
+
+        ByteString interfaceKey;
 
         std::atomic<bool> destroy{false}; ///< Destroy boolean for destruction of eigrp class.
 
@@ -1448,9 +1482,8 @@ namespace Protocol
         std::atomic<bool> helloDone{true};
 
         // Route Buffer
+        std::vector<EigrpConfigs::RoutingUpdate> routeBuffer; ///< Buffer for routing updates.
         std::mutex bufferMutex;
-        std::vector<RoutingTable::Eigrp*> routeBuffer = {}; ///< Buffer for routing updates.
-        std::vector<RoutingTable::Eigrp*> withdrawnBuffer = {}; ///< Buffer for removing routes.
 
         // Mutexes
         std::mutex helloTimerMutex; ///< Mutex for Hello timer operations.
@@ -1458,7 +1491,6 @@ namespace Protocol
 
         // Sequence number
         std::atomic<uint32_t> nextSequenceNumber = 1; ///< Next sequence number for packets.
-        std::atomic<uint32_t> conditionalReceive = 0; ///< Holds conditional receive sequence number.
 
         std::deque<std::chrono::steady_clock::time_point> routeChangeTimes;
         std::chrono::steady_clock::time_point supressedUntil;
@@ -1480,6 +1512,7 @@ namespace Protocol
     class Eigrp 
     {
     public:
+        using InterfaceKey = std::pair<InterfaceType, float>;
         friend class ::Internal_EigrpTest;
 
         EigrpConfigs::EigrpConfigs configs; ///< Configuration settings for EIGRP.
@@ -1530,6 +1563,21 @@ namespace Protocol
         void addNetwork(const EigrpConfigs::Network& newNetwork);
 
         /**
+         * @brief Adds common TLVs to an EIGRP header
+         *
+         * Adds common TLVs to an EIGRP header such as stub, version, sequence,
+         * auth, parameter.
+         *
+         * @param hdr Header that TLVs are heing added to.
+         * @param cfg EigrpInterface object with needed interface configs.
+         * @param isUpdate Indicates if this is for a UPDATE header.
+         * @param isAck Indicates if this is for a ACK header
+         * @param neighborIp IP of the neighbor that this packet is being sent to.
+         * @param sequence Sequence number of the packet being sent.
+         */
+        void addCommonTlvs(EigrpHeader& hdr, EigrpInterface& cfg, bool isUpdate, bool isAck, const ByteString neighborIp, uint32_t sequence);
+
+        /**
          * @brief Configures an EIGRP Hello packet with specific settings.
          *
          * Constructs and sends a Hello packet to a neighbor, initiating or maintaining
@@ -1543,7 +1591,7 @@ namespace Protocol
          * @param ack Indicates if this Hello is an ACK.
          * @param update Indicates if this Hello is part of an update.
          */
-        void eigrpHello(EigrpHeader& eigrp, EigrpInterface* eigrpInt, EigrpConfigs::NeighborInfo* neighbor, const ByteString& neighborIp, uint32_t sequenceNumber = 0, bool ack = false, bool update = false);
+        void eigrpHello(EigrpHeader& eigrp, EigrpInterface& eigrpInt, const ByteString& neighborIp, uint32_t sequenceNumber = 0, bool ack = false, bool update = false);
 
         /**
          * @brief Configures an EIGRP Update packet with specific settings.
@@ -1651,9 +1699,8 @@ namespace Protocol
          * information across the network.
          *
          * @param changedRoutes Vector of routes that have changed.
-         * @param isRemoval Indicates if the routes are being removed.
          */
-        void notifyRoutingChange(const std::vector<RoutingTable::Eigrp*>& changedRoutes, bool isRemoval = false);
+        void notifyRoutingChange(const std::vector<EigrpConfigs::RoutingUpdate>& changedRoutes);
 
         /**
          * @brief Redistributes a route from another protocol into EIGRP.
@@ -1869,8 +1916,8 @@ namespace Protocol
         bool advertiseRedistributed() const { return configs.stubConfig.advertiseRedistributed; }
 
         // Lists
-        std::unordered_map<std::pair<InterfaceType, float>, EigrpInterface*, InterfacePairHash> eigrpInterfaceList{}; ///< Map of EIGRP interfaces by identifier.
-        std::unordered_map<std::pair<InterfaceType, float>, EigrpConfigs::InterfaceConfigs*, InterfacePairHash> eigrpInterfaceConfigList{}; ///< Map of EIGRP interface config by identifier.
+        std::unordered_map<InterfaceKey, EigrpInterface*, InterfacePairHash> eigrpInterfaceList{}; ///< Map of EIGRP interfaces by identifier.
+        std::unordered_map<InterfaceKey, EigrpConfigs::InterfaceConfigs*, InterfacePairHash> eigrpInterfaceConfigList{}; ///< Map of EIGRP interface config by identifier.
 
         // Eigrp data mutex
         std::shared_mutex eigrpDataMutex; ///< Mutex for synchronizing access to EIGRP data structures.
@@ -2071,11 +2118,11 @@ namespace Protocol
             uint8_t hopCount; ///< Number of hops to the destination.
             uint8_t adminDistance = 90; ///< Administrative distance.
             ByteString nextHop; ///< Next hop IP address.
-            bool isSuccessor; ///< Indicates if this route is a successor.
-            bool isFeasibleSuccessor; ///< Indicates if this route is a feasible successor.
-            bool notFeasible; ///< Indicates if this route is feasible or not.
+            bool isSuccessor = false; ///< Indicates if this route is a successor.
+            bool isFeasibleSuccessor = false; ///< Indicates if this route is a feasible successor.
+            bool notFeasible = false; ///< Indicates if this route is feasible or not.
             std::chrono::steady_clock::time_point lastUpdate; ///< Timestamp of the last update.
-            ByteString routeType;
+            RoutingTable::Eigrp::RouteType routeType;
         };
 
         /**
