@@ -41,7 +41,7 @@ TEST(Internal_ChecksumTest, CalculateChecksum1Byte)
     {
         ByteString checksum = Checksum::calculateChecksum(test.data, 1);
         ASSERT_EQ(checksum.size(), 1u);
-        EXPECT_EQ(static_cast<uint8_t>(checksum[0]), test.expected);
+        EXPECT_EQ(checksum[0], test.expected);
     }
 }
 

@@ -12,7 +12,8 @@ set(ALL_TEST_EXECUTABLES)
 
 foreach(test_file ${TEST_SOURCES})
     # Get a test name from the source file name (without extension)
-    get_filename_component(test_name ${test_file} NAME_WE)
+    get_filename_component(base_name ${test_file} NAME_WE)
+    set(test_name "Internal_${base_name}")
 
     # Create an executable for each test file
     add_executable(${test_name} ${test_file} ${MOCK_SOURCES})

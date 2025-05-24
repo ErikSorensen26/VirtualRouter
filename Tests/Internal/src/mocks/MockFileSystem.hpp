@@ -5,7 +5,6 @@
 
 #include <gmock/gmock.h>
 #include <string>
-#include <unordered_map>
 #include <Configs.h>
 
 class MockFileSystem : public IFileSystem {

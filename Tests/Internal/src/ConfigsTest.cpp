@@ -9,7 +9,7 @@
 #include <sstream>
 #include <CliEngine.h>
 #include <Mode.hpp>
-#include "Configs.h"           // Your Configs class header
+#include <Configs.h>           // Your Configs class header
 #include "MockFileSystem.hpp" // Mocked file system interface
 
 using json = nlohmann::json;
@@ -59,9 +59,9 @@ void validateJson(const std::string& json)
 class Internal_ConfigTest : public ::testing::Test 
 {
 protected:
-    std::shared_ptr<Configs> configs;
-    std::shared_ptr<MockFileSystem> mockFileSystem;
-    std::shared_ptr<ModeConfig> modeConfig;
+    Configs* configs = nullptr;
+    MockFileSystem* mockFileSystem;
+    ModeConfig* modeConfig;
 
     // Paths to configuration files
     std::string startupFilePath = STARTUP_FILE;
@@ -70,17 +70,17 @@ protected:
     // SetUp runs before each test
     void SetUp() override 
     {
-        mockFileSystem = std::make_shared<MockFileSystem>();
-        configs = std::make_shared<Configs>(mockFileSystem);
-        modeConfig = std::make_shared<ModeConfig>();
+        mockFileSystem = new MockFileSystem;
+        configs = new Configs();
+        modeConfig = new ModeConfig;
         modeConfig->currentMode = Mode::globalConfiguration;
     }
 
     // TearDown runs after each test
     void TearDown() override 
     {
-        configs.reset();
-        mockFileSystem.reset();
+        delete configs;
+        delete mockFileSystem;
     }
 
     // Helper method to capture std::cout output

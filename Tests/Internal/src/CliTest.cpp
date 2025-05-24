@@ -12,9 +12,10 @@ class Internal_CliTest : public ::testing::Test
 public:
     // Mock objects
     std::shared_ptr<testing::NiceMock<ReducedMockConsole>> mockConsole;
-    static std::shared_ptr<MockFileSystem> mockFileSystem;
-    static std::shared_ptr<RealFileSystem> realFileSystem;
-    static std::shared_ptr<CliEngine> engine;
+    static MockFileSystem* mockFileSystem;
+    static FileSystem* realFileSystem;
+    static CliEngine* engine;
+    static Global* global;
 protected:
 
     // Terminal instance
@@ -27,13 +28,14 @@ protected:
     static void SetUpTestSuite()
     {
         // Create Initiate file systems
-        realFileSystem = std::make_shared<RealFileSystem>();
-        mockFileSystem = std::make_shared<testing::NiceMock<MockFileSystem>>();
+        global = new Global();
+        realFileSystem = new FileSystem();
+        mockFileSystem = new testing::NiceMock<MockFileSystem>();
 
         // Load the JSON file into the sampleCommandTree
-        if (realFileSystem->fileExists("../" + std::string(COMMAND_TREE)))
+        if (realFileSystem->fileExists("./" + std::string(COMMAND_TREE)))
         {
-            realFileSystem->readFile("../" + std::string(COMMAND_TREE), commandTreeString);
+            realFileSystem->readFile("./" + std::string(COMMAND_TREE), commandTreeString);
         }
         else
         {
@@ -41,18 +43,18 @@ protected:
         }
 
         // Load the JSON file into the config schema
-        if (realFileSystem->fileExists("../" + std::string(CONFIG_SCHEMA)))
+        if (realFileSystem->fileExists("./" + std::string(CONFIG_SCHEMA)))
         {
-            realFileSystem->readFile("../" + std::string(CONFIG_SCHEMA), configSchemaString);
+            realFileSystem->readFile("./" + std::string(CONFIG_SCHEMA), configSchemaString);
         }
         else
         {
             FAIL() << "Failed to open the config schema file: " << CONFIG_SCHEMA;
         }
 
-        if (realFileSystem->fileExists("../" + std::string(CONFIG_FILE)))
+        if (realFileSystem->fileExists("./" + std::string(CONFIG_FILE)))
         {
-            realFileSystem->readFile("../" + std::string(CONFIG_FILE), configFileString);
+            realFileSystem->readFile("./" + std::string(CONFIG_FILE), configFileString);
         }
         else
         {
@@ -64,7 +66,7 @@ protected:
         mockFileSystem->setupMockFile(CONFIG_FILE, configFileString);
         mockFileSystem->setupMockFile(STARTUP_FILE, "{}");
 
-        engine = std::make_unique<CliEngine>(mockFileSystem);
+        engine = new CliEngine(*global);
         engine->initEngine();
         engine->paginationCount = 0;
     }
@@ -74,7 +76,8 @@ protected:
         mockConsole = std::make_shared<testing::NiceMock<ReducedMockConsole>>();
         
         // Create the terminal instance with nexessary dependencies
-        Global::getInstance().resetDefault();
+        global->addRoutingInstance("default");
+
         terminal = new CliSession(*engine, mockConsole);
         engine->sessions.push_back(terminal);
         terminal->changeMode(Mode::globalConfiguration);
@@ -82,7 +85,7 @@ protected:
     }
 
     void TearDown() override {
-        Global::getInstance().resetInstance();
+        global->removeRoutingInstance("default");
         engine->sessions.clear();
         delete terminal;
         terminal = nullptr;
@@ -90,9 +93,9 @@ protected:
 
     static void TearDownTestSuite()
     {
-        engine.reset();
-        realFileSystem.reset();
-        mockFileSystem.reset();
+        delete engine;
+        delete realFileSystem;
+        delete mockFileSystem;
     }
 
     // Other functions
@@ -105,7 +108,7 @@ public:
     void changeMode(std::string& newMode) {terminal->changeMode(newMode);}
     void configureRoutingMode(std::string& newMode) {terminal->configureRoutingMode(newMode);}
     void configureInterfaceMode(std::string& interface) {terminal->configureInterfaceMode(interface);}
-    std::string getHostname() {return Global::getInstance().getHostname();}
+    std::string getHostname() {return global->getHostname();}
     std::string getCurrentMode() {return terminal->modeConfig.currentMode;}
     std::string getCurrentSubMode() {return terminal->currentSubMode;}
     std::string getNextLine() {return terminal->nextLine;}
@@ -122,9 +125,10 @@ public:
     bool isIPv6Address(const std::string ip) {return Functions::isIPv6Address(ip);}
 };
 
-std::shared_ptr<CliEngine> Internal_CliTest::engine = nullptr;
-std::shared_ptr<RealFileSystem> Internal_CliTest::realFileSystem = nullptr;
-std::shared_ptr<MockFileSystem> Internal_CliTest::mockFileSystem = nullptr;
+CliEngine* Internal_CliTest::engine = nullptr;
+FileSystem* Internal_CliTest::realFileSystem = nullptr;
+MockFileSystem* Internal_CliTest::mockFileSystem = nullptr;
+Global* Internal_CliTest::global = nullptr;
 std::string Internal_CliTest::commandTreeString;
 std::string Internal_CliTest::configSchemaString;
 std::string Internal_CliTest::configFileString;
@@ -437,7 +441,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ValidGlobalCommand_ShouldProcessSucce
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(Global::getInstance().getHostname(), "Router1");
+    EXPECT_EQ(global->getHostname(), "Router1");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname Router1\n");
 }
@@ -476,7 +480,7 @@ TEST_F(Internal_CliTest, CommandProcessing_MissingArguments_ShouldRejectCommand)
 
     // Assert
     EXPECT_FALSE(result);
-    EXPECT_EQ(Global::getInstance().getHostname(), "router"); // Hostname should remain default
+    EXPECT_EQ(global->getHostname(), "router"); // Hostname should remain default
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname\n% Incomplete Command\n");
 }
@@ -496,7 +500,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ExcessiveArguments_ShouldRejectComman
 
     // Assert
     EXPECT_FALSE(result);
-    EXPECT_EQ(Global::getInstance().getHostname(), "router"); // Hostname should remain default
+    EXPECT_EQ(global->getHostname(), "router"); // Hostname should remain default
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname Router1 ExtraArg\n                                ^\n% Invlid input detected at '^' marker.\n\n");
 }
@@ -552,7 +556,7 @@ TEST_F(Internal_CliTest, CommandProcessing_SpecialCharacters_ShouldRejectCommand
 
     // Assert
     EXPECT_FALSE(result);
-    EXPECT_EQ(Global::getInstance().getHostname(), "router"); // Hostname should remain default
+    EXPECT_EQ(global->getHostname(), "router"); // Hostname should remain default
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname Router@123\n                        ^\n% Invlid input detected at '^' marker.\n\n");
 }
@@ -574,7 +578,7 @@ TEST_F(Internal_CliTest, MatchingCommands_ExactCase_ShouldMatchSuccessfully)
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(Global::getInstance().getHostname(), "RouterExact");
+    EXPECT_EQ(global->getHostname(), "RouterExact");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname RouterExact\n");
 }
@@ -593,7 +597,7 @@ TEST_F(Internal_CliTest, MatchingCommands_DifferentCasing_ShouldMatchSuccessfull
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(Global::getInstance().getHostname(), "RouterCase");
+    EXPECT_EQ(global->getHostname(), "RouterCase");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#HoStNaMe RouterCase\n");
 }
@@ -612,7 +616,7 @@ TEST_F(Internal_CliTest, MatchingCommands_PartialToFull_ShouldMatchSuccessfully)
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(Global::getInstance().getHostname(), "RouterPartial");
+    EXPECT_EQ(global->getHostname(), "RouterPartial");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#host RouterPartial\n");
 }
@@ -924,7 +928,7 @@ TEST_F(Internal_CliTest, BatchProcessing_MultipleCommands_ShouldProcessAndRecove
     EXPECT_TRUE(recoveryResult);
 
     // Additional assertions based on internal state
-    EXPECT_EQ(Global::getInstance().getHostname(), "BatchRouter");
+    EXPECT_EQ(global->getHostname(), "BatchRouter");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname BatchRouter\nBatchRouter(config)#interface GigabitEthernet 1\nBatchRouter(config-if)#ip address 172.16.0.1 255.255.255.0\nBatchRouter(config-if)#exit\n");
 }
@@ -954,7 +958,7 @@ TEST_F(Internal_CliTest, BatchProcessing_InvalidCommands_ShouldHandleErrorsAndCo
 
     // Additional assertions based on internal state
     EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
-    EXPECT_EQ(Global::getInstance().getHostname(), "BatchRouter");
+    EXPECT_EQ(global->getHostname(), "BatchRouter");
 
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname BatchRouter\nBatchRouter(config)#invalidcmd\n                    ^\n% Invlid input detected at '^' marker.\n\nBatchRouter(config)#interface GigabitEthernet 1\nBatchRouter(config-if)#ip address 10.0.0.1 255.255.255.0\nBatchRouter(config-if)#exit\n");
 }
@@ -990,7 +994,7 @@ TEST_F(Internal_CliTest, ComprehensiveConfiguration_ValidCommands_ShouldUpdateSt
 
     // Additional assertions based on internal state
     EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
-    EXPECT_EQ(Global::getInstance().getHostname(), "ComprehensiveRouter");
+    EXPECT_EQ(global->getHostname(), "ComprehensiveRouter");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname ComprehensiveRouter\nComprehensiveRouter(config)#interface GigabitEthernet 1\nComprehensiveRouter(config-if)#ip address 192.168.1.1 255.255.255.0\nComprehensiveRouter(config-if)#no shutdown\nComprehensiveRouter(config-if)#exit\nComprehensiveRouter(config)#router ospf 1\nComprehensiveRouter(config-router)#network 192.168.1.0 0.0.0.255 area 0\nComprehensiveRouter(config-router)#exit\n");
 }
@@ -1026,7 +1030,7 @@ TEST_F(Internal_CliTest, StateRecovery_AfterSeriesOfCommands_ShouldRestoreCorrec
 
     // Additional assertions based on internal state
     EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
-    EXPECT_EQ(Global::getInstance().getHostname(), "RecoverRouter");
+    EXPECT_EQ(global->getHostname(), "RecoverRouter");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname RecoverRouter\nRecoverRouter(config)#interface GigabitEthernet 1\nRecoverRouter(config-if)#ip address 10.0.0.1 255.255.255.0\nRecoverRouter(config-if)#invalidcmd\n                         ^\n% Invlid input detected at '^' marker.\n\nRecoverRouter(config-if)#exit\nRecoverRouter(config)#router ospf 1\nRecoverRouter(config-router)#network 10.0.0.0 0.0.0.255 area 0\nRecoverRouter(config-router)#exit\n");
 }
@@ -1064,7 +1068,7 @@ TEST_F(Internal_CliTest, BatchProcessing_MixedValidAndInvalidCommands_ShouldHand
 
     // Additional assertions based on internal state
     EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
-    EXPECT_EQ(Global::getInstance().getHostname(), "RecoverRouter");
+    EXPECT_EQ(global->getHostname(), "RecoverRouter");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#host RecoverRouter\nRecoverRouter(config)#interf Gig 1\nRecoverRouter(config-if)#ip add 10.0.0.1 255.255.255.0\nRecoverRouter(config-if)#invalidcmd\n                         ^\n% Invlid input detected at '^' marker.\n\nRecoverRouter(config-if)#exit\nRecoverRouter(config)#router osp 1\nRecoverRouter(config-router)#netw 10.0.0.0 0.0.0.255 are 0\nRecoverRouter(config-router)#exit\n");
 }

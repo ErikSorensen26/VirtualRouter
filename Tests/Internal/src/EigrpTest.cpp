@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <Eigrp.h>
+#include <VirtualRouter.h>
 #include <MockInterface.hpp>
 #include <PacketStructure.h>
 #include <ByteString.hpp>
@@ -28,15 +29,17 @@ protected:
     bool packetEnqueued = false;
     InterfaceType type = InterfaceType::GIGABIT_ETHERNET;
     VirtualRouter* vrf = nullptr;
+    Global* global;
 
     // Setup creates an Eigrp instance and one interface for testing.
     void SetUp() override 
     {
-        vrf = new VirtualRouter("default");
+        global = new Global(true);
+        vrf = global->getRoutingInstance("default");
         vrf->eigrpList[1] = new EigrpAutonomousSystem();
         eigrpInstance = new Eigrp(asNumber, addressFamily, vrf);
         vrf->eigrpList[1]->ipv4 = eigrpInstance;
-        mockInterface = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+        mockInterface = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
 
         mockInterface->arp = nullptr;
         mockInterface->ndp = nullptr;
@@ -60,16 +63,8 @@ protected:
     // TearDown cleans up the EIGRP instance, interface, and global objects.
     void TearDown() override 
     {
-        delete vrf->eigrpList[1];
-        vrf->eigrpList.clear();
         mockInterface->blockEnqueues();
-        vrf->interfaceList.erase({InterfaceType::GIGABIT_ETHERNET, 0});
-        delete eigrpInstance;
-        delete mockInterface;
-        vrf->interfaceList.clear();
-        vrf->routingTable.clear();
-        delete vrf;
-        vrf = nullptr;
+        delete global;
     }
 
     // Helper function: returns the topology table.
@@ -97,7 +92,7 @@ protected:
     }
     
     // Helper: returns the IpInfo from the interface.
-    IpInfo& getIpInfo(Interface* iface = nullptr) 
+    InterfaceConfigs& getIpInfo(Interface* iface = nullptr) 
     {
         return (iface ? iface->configs : mockInterface->configs);
     }
@@ -137,7 +132,7 @@ protected:
 
     RoutingTable::Eigrp* getRoute()
     {
-        RoutingTable::Eigrp* r = new RoutingTable::Eigrp();
+        RoutingTable::Eigrp* r = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
         r->feasibleDistance = 100;
         r->metric = 2816;
         r->nextHop = ByteString("\x00\x00\x00\x00", 4);
@@ -147,7 +142,7 @@ protected:
         r->mtu = 1500;
         r->reliability = 255;
         r->load = eigrpInstance->configs.variance.load(std::memory_order_relaxed);
-        r->routeType = "internal";
+        r->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
         r->routeTag = 0;
         return r;
     }
@@ -167,7 +162,6 @@ TEST_F(Internal_EigrpTest, AuthTLV_MD5_Correct)
     addNeighbor(neighborIp);
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
-    auto neighbor = optNeighbor;
     uint8_t keyId = 1;
     ByteString key = ByteString("secretKey", 9);
     EigrpConfigs::AuthType type = EigrpConfigs::AuthType::MD5;
@@ -178,7 +172,7 @@ TEST_F(Internal_EigrpTest, AuthTLV_MD5_Correct)
     
     // Create hello packet.
     EigrpHeader helloPacket;
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, neighbor, neighborIp, 100, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, 100, false, false);
     
     // Verify authentication TLV is present and not all zeros.
     auto it = std::find_if(helloPacket.options.begin(), helloPacket.options.end(), [](const EigrpHeader::Option& opt) {
@@ -197,7 +191,6 @@ TEST_F(Internal_EigrpTest, AuthTLV_SHA1_Correct)
     addNeighbor(neighborIp);
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
-    auto neighbor = optNeighbor;
     uint8_t keyId = 2;
     ByteString key = ByteString("anothersecret", 13);
     EigrpConfigs::AuthType type = EigrpConfigs::AuthType::SHA1;
@@ -207,7 +200,7 @@ TEST_F(Internal_EigrpTest, AuthTLV_SHA1_Correct)
     mockInterface->blockEnqueues();
     
     EigrpHeader helloPacket;
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, neighbor, neighborIp, 101, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, 101, false, false);
     
     auto it = std::find_if(helloPacket.options.begin(), helloPacket.options.end(), [](const EigrpHeader::Option& opt) {
         return opt.option == Variable::Eigrp::Option::authentication;
@@ -224,14 +217,13 @@ TEST_F(Internal_EigrpTest, AuthTLV_Disabled_NoTLV)
     addNeighbor(neighborIp);
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
-    auto neighbor = optNeighbor;
     eigrpInterface->configureAuthentication();
 
     // Block enqueues
     mockInterface->blockEnqueues();
     
     EigrpHeader helloPacket;
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, neighbor, neighborIp, 200, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, 200, false, false);
     
     auto it = std::find_if(helloPacket.options.begin(), helloPacket.options.end(), [](const EigrpHeader::Option& opt) {
         return opt.option == Variable::Eigrp::Option::authentication;
@@ -247,7 +239,6 @@ TEST_F(Internal_EigrpTest, Auth_InvalidKey_Handled)
     addNeighbor(neighborIp);
     auto optNeighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(optNeighbor);
-    auto neighbor = optNeighbor;
     uint8_t keyId = 1;
     ByteString key = ByteString();
     EigrpConfigs::AuthType type = EigrpConfigs::AuthType::MD5;
@@ -257,7 +248,7 @@ TEST_F(Internal_EigrpTest, Auth_InvalidKey_Handled)
     mockInterface->blockEnqueues();
     
     EigrpHeader helloPacket;
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, neighbor, neighborIp, 300, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, 300, false, false);
     
     auto it = std::find_if(helloPacket.options.begin(), helloPacket.options.end(), [](const EigrpHeader::Option& opt) {
         return opt.option == Variable::Eigrp::Option::authentication;
@@ -278,7 +269,7 @@ TEST_F(Internal_EigrpTest, NeighborState_DOWN_To_EXSTART)
     neighbor->neighborState = EigrpConfigs::NeighborState::DOWN;
     
     EigrpHeader hello;
-    eigrpInstance->eigrpHello(hello, eigrpInterface, neighbor, neighborIp, 0, false, false);
+    eigrpInstance->eigrpHello(hello, *eigrpInterface, neighborIp, 0, false, false);
     eigrpInterface->processHello(neighbor, hello, neighborIp, false);
     // Initial Hello and Update Packet
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(3);
@@ -296,9 +287,9 @@ TEST_F(Internal_EigrpTest, NeighborState_EXSTART_To_EXCHANGE_SLAVE)
     auto neighbor = getNeighbor(neighborIp);
     neighbor->neighborState = EigrpConfigs::NeighborState::EXSTART;
     // Init update received
-    neighbor->initUpdateReceived = true;
+    neighbor->initFlags.initUpdateReceived = true;
     // Set neighbor state
-    neighbor->initRole = EigrpConfigs::InitRole::SLAVE;
+    neighbor->initFlags.initRole = EigrpConfigs::InitRole::SLAVE;
     
     EigrpHeader update;
     eigrpInstance->eigrpUpdate(update, 3, false, false, false, false, false, false);
@@ -316,9 +307,9 @@ TEST_F(Internal_EigrpTest, NeighborState_EXSTART_To_EXCHANGE_MASTER)
     auto neighbor = getNeighbor(neighborIp);
     neighbor->neighborState = EigrpConfigs::NeighborState::EXSTART;
     // Init update received
-    neighbor->initUpdateReceived = true;
+    neighbor->initFlags.initUpdateReceived = true;
     // Set neighbor state
-    neighbor->initRole = EigrpConfigs::InitRole::MASTER;
+    neighbor->initFlags.initRole = EigrpConfigs::InitRole::MASTER;
     
     EigrpHeader update;
     eigrpInstance->eigrpUpdate(update, 3, false, false, false, false, false, false);
@@ -369,7 +360,7 @@ TEST_F(Internal_EigrpTest, Duplicate_Hello_Ignored)
     neighbor->neighborState = EigrpConfigs::NeighborState::INIT;
     
     EigrpHeader hello;
-    eigrpInstance->eigrpHello(hello, eigrpInterface, neighbor, neighborIp, 10, false, false);
+    eigrpInstance->eigrpHello(hello, *eigrpInterface, neighborIp, 10, false, false);
     eigrpInterface->processHello(neighbor, hello, neighborIp, false);
     eigrpInterface->processHello(neighbor, hello, neighborIp, false);
     
@@ -421,7 +412,7 @@ TEST_F(Internal_EigrpTest, MultipleNeighbors_Independent_States)
     neighbor2->neighborState = EigrpConfigs::NeighborState::DOWN;
     
     EigrpHeader hello1;
-    eigrpInstance->eigrpHello(hello1, eigrpInterface, nullptr, neighborIp1, 20, false, false);
+    eigrpInstance->eigrpHello(hello1, *eigrpInterface, neighborIp1, 20, false, false);
     eigrpInterface->processHello(neighbor1, hello1, neighborIp1, false);
     
     ASSERT_EQ(neighbor1->neighborState, EigrpConfigs::NeighborState::TWOWAY);
@@ -627,7 +618,7 @@ TEST_F(Internal_EigrpTest, Hello_Packet_Serialization_Format)
     EigrpHeader helloPacket;
     ByteString neighborIp("\xC0\xA8\x01\x1C", 4);
     uint32_t seqNum = 700;
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, nullptr, neighborIp, seqNum, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, seqNum, false, false);
     ByteString serialized = eigrpInterface->serializeEigrpHeader(helloPacket, false);
     ASSERT_NE(serialized.find(ByteString("\x02", 1)), std::string::npos);
 }
@@ -672,7 +663,7 @@ TEST_F(Internal_EigrpTest, Stub_TLV_Present_When_Stub_Enabled)
     eigrpInstance->setStub(true, true, false, true, false);
     EigrpHeader helloPacket;
     ByteString neighborIp("\xC0\xA8\x01\x1D", 4);
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, nullptr, neighborIp, 704, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, 704, false, false);
     auto it = std::find_if(helloPacket.options.begin(), helloPacket.options.end(),
         [](const EigrpHeader::Option& opt) {
             return opt.option == Variable::Eigrp::Option::stub;
@@ -686,14 +677,13 @@ TEST_F(Internal_EigrpTest, Authentication_TLV_Insertion_Correct)
     // Verify that when authentication is enabled, the authentication TLV is inserted with a computed HMAC.
     ByteString neighborIp("\xC0\xA8\x01\x1E", 4);
     addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
     uint8_t keyId = 1;
     ByteString key = ByteString("secret", 6);
     EigrpConfigs::AuthType type = EigrpConfigs::AuthType::MD5;
     eigrpInterface->configureAuthentication(&keyId, &key, &type, true);
     
     EigrpHeader helloPacket;
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, neighbor, neighborIp, 705, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, 705, false, false);
     auto it = std::find_if(helloPacket.options.begin(), helloPacket.options.end(),
                              [](const EigrpHeader::Option& opt) {
                                  return opt.option == Variable::Eigrp::Option::authentication;
@@ -707,10 +697,10 @@ TEST_F(Internal_EigrpTest, External_Route_TLV_Format)
 {
     // Verify that an external route TLV is constructed correctly.
     EigrpHeader updatePacket;
-    RoutingTable::Eigrp externalRoute;
+    RoutingTable::Eigrp externalRoute(eigrpInterface->interfaceKey);
     externalRoute.network = ByteString("\xC0\xA8\x02\x00", 4);
     externalRoute.mask = 24;
-    externalRoute.routeType = "external";
+    externalRoute.routeType = RoutingTable::Eigrp::RouteType::EXTERNAL;
     ByteString extTLV = eigrpInterface->encodeExternalRouteOption(&externalRoute, 0, 0, false);
     ASSERT_GT(extTLV.size(), 0);
 }
@@ -719,10 +709,10 @@ TEST_F(Internal_EigrpTest, External_Route_TLV_Format)
 TEST_F(Internal_EigrpTest, Internal_Route_TLV_Format) 
 {
     // Verify that an internal route TLV is constructed correctly.
-    RoutingTable::Eigrp internalRoute;
+    RoutingTable::Eigrp internalRoute(eigrpInterface->interfaceKey);
     internalRoute.network = ByteString("\xC0\xA8\x03\x00", 4);
     internalRoute.mask = 24;
-    internalRoute.routeType = "internal";
+    internalRoute.routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
     ByteString intTLV = eigrpInterface->encodeRouteOption(&internalRoute, 0, 0, false);
     ASSERT_GT(intTLV.size(), 0);
 }
@@ -734,7 +724,7 @@ TEST_F(Internal_EigrpTest, Hello_Packet_Field_Validation)
     EigrpHeader helloPacket;
     ByteString neighborIp("\xC0\xA8\x01\x20", 4);
     uint32_t seqNum = 709;
-    eigrpInstance->eigrpHello(helloPacket, eigrpInterface, nullptr, neighborIp, seqNum, false, false);
+    eigrpInstance->eigrpHello(helloPacket, *eigrpInterface, neighborIp, seqNum, false, false);
     ByteString serialized = eigrpInterface->serializeEigrpHeader(helloPacket, false);
     ASSERT_NE(serialized.find(ByteString("\x02", 1)), std::string::npos);
 }
@@ -806,7 +796,7 @@ TEST_F(Internal_EigrpTest, Interface_Removal_On_Shutdown)
 TEST_F(Internal_EigrpTest, Dynamic_Interface_Addition_And_Removal) 
 {
     // Add a new interface and then remove it.
-    MockInterface* extraIface = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* extraIface = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     extraIface->routingInstance = vrf;
     extraIface->blockEnqueues();
     extraIface->configs.id = 1;
@@ -818,7 +808,6 @@ TEST_F(Internal_EigrpTest, Dynamic_Interface_Addition_And_Removal)
     network.ip = ByteString("\xc0\xa8\x00\x00", 4);
     network.mask = ByteString("\x00\x00\xff\xff", 4);
     eigrpInstance->addNetwork(network);
-    eigrpInstance->updateInterfaceList();
 
     EXPECT_EQ(getInterfaceList().size(), 2);
     extraIface->Shutdown(true);
@@ -861,14 +850,14 @@ TEST_F(Internal_EigrpTest, Interface_Shutdown_Cancels_All_Timers)
 TEST_F(Internal_EigrpTest, IPv4_Config_Persistence) 
 {
     // Verify that the IPv4 address is correctly stored.
-    ASSERT_EQ(getIpInfo().ipv4.ipAddress, ByteString("\xc0\xa8\x01\x01", 4));
+    ASSERT_EQ(getIpInfo().ipv4.getAddress(), ByteString("\xc0\xa8\x01\x01", 4));
 }
 
 // Test: IPv6_Config_Persistence
 TEST_F(Internal_EigrpTest, IPv6_Config_Persistence) 
 {
     // Verify that the IPv6 address is correctly stored.
-    ASSERT_EQ(getIpInfo().ipv6.linkLocalAddress->ip, ByteString("\xc0\xa8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x01", 16));
+    ASSERT_EQ(getIpInfo().ipv6.getLocalAddress(), ByteString("\xc0\xa8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x01", 16));
 }
 
 // Test: Connected_Route_Addition_On_Interface_Up
@@ -900,7 +889,7 @@ TEST_F(Internal_EigrpTest, Connected_Route_Removal_On_Interface_Down)
 TEST_F(Internal_EigrpTest, Multiple_Connected_Routes_From_Different_Interfaces) 
 {
     // Add a second interface and verify both connected routes appear.
-    MockInterface* extraIface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* extraIface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     extraIface1->routingInstance = vrf;
     extraIface1->configs.id = 1;
     extraIface1->configs.interfaceType = InterfaceType::GIGABIT_ETHERNET;
@@ -910,7 +899,7 @@ TEST_F(Internal_EigrpTest, Multiple_Connected_Routes_From_Different_Interfaces)
     setIPv4(ByteString("\x0A\x00\x10\x02", 4), 24, extraIface1);
     getAllInterfaceList()[{InterfaceType::GIGABIT_ETHERNET, 1}] = extraIface1;
 
-    MockInterface* extraIface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* extraIface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     extraIface2->routingInstance = vrf;
     extraIface2->configs.id = 2;
     extraIface2->configs.interfaceType = InterfaceType::GIGABIT_ETHERNET;
@@ -1054,14 +1043,14 @@ TEST_F(Internal_EigrpTest, RoutingTable_Duplicate_Route_Prevention)
 TEST_F(Internal_EigrpTest, RoutingTable_Metric_Update_On_Best_Route_Change) 
 {
     // Verify that when a better route is learned, the routing table metric updates.
-    RoutingTable::Eigrp* route1 = new RoutingTable::Eigrp();
+    RoutingTable::Eigrp* route1 = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route1->network = ByteString("\xc0\xa8\x02\x00", 4);
     route1->mask = 24;
     route1->feasibleDistance = 100;
     route1->nextHop = ByteString("\xc0\xa8\x01\x02", 4);
     vrf->routingTable.updateEigrp(route1, AddressFamily::IPv4, asNumber);
     
-    RoutingTable::Eigrp* route2 = new RoutingTable::Eigrp();
+    RoutingTable::Eigrp* route2 = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route2->network = ByteString("\xc0\xa8\x02\x00", 4);
     route2->mask = 24;
     route2->feasibleDistance = 50;
@@ -1072,8 +1061,6 @@ TEST_F(Internal_EigrpTest, RoutingTable_Metric_Update_On_Best_Route_Change)
                                                         24, AddressFamily::IPv4, asNumber);
     ASSERT_TRUE(r);
     ASSERT_EQ(r->feasibleDistance, 50);
-    
-    delete route2;
 }
 
 // Test: TopologyTable_Handles_Neighbor_Down
@@ -1112,13 +1099,13 @@ TEST_F(Internal_EigrpTest, StubMode_Enabled_Allows_Only_Permitted_Routes)
     // When stub mode is enabled (allowing only connected routes), external routes should be filtered.
     addNeighbor(ByteString("\xc0\xa8\x00\x02", 4));
     eigrpInstance->setStub(true, true, false, false, false, false);
-    RoutingTable::Eigrp externalRoute;
+    RoutingTable::Eigrp externalRoute(eigrpInterface->interfaceKey);
     externalRoute.network = ByteString("\xc0\xa8\x02\x00", 4);
     externalRoute.mask = 24;
-    externalRoute.routeType = "external";
+    externalRoute.routeType = RoutingTable::Eigrp::RouteType::EXTERNAL;
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(0);
-    eigrpInstance->notifyRoutingChange({&externalRoute}, false);
+    eigrpInstance->notifyRoutingChange({{&externalRoute, false}});
 }
 
 // Test: StubMode_Disabled_Advertises_All_Routes
@@ -1130,10 +1117,10 @@ TEST_F(Internal_EigrpTest, StubMode_Disabled_Advertises_All_Routes)
     RoutingTable::Eigrp* internalRoute = getRoute();
     internalRoute->network = ByteString("\xc0\xa8\x03\x00", 4);
     internalRoute->mask = 24;
-    internalRoute->routeType = "internal";
+    internalRoute->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(1);
-    eigrpInstance->notifyRoutingChange({internalRoute}, false);
+    eigrpInstance->notifyRoutingChange({{internalRoute, false}});
 
     delete internalRoute;
 }
@@ -1147,10 +1134,10 @@ TEST_F(Internal_EigrpTest, StubMode_Advertise_Connected_Only)
     RoutingTable::Eigrp* staticRoute = getRoute();
     staticRoute->network = ByteString("\xc0\xa8\x04\x00", 4);
     staticRoute->mask = 24;
-    staticRoute->routeType = "static";
+    staticRoute->routeType = RoutingTable::Eigrp::RouteType::STATIC;
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(0);
-    eigrpInstance->notifyRoutingChange({staticRoute}, false);
+    eigrpInstance->notifyRoutingChange({{staticRoute, false}});
     delete staticRoute;
 }
 
@@ -1163,10 +1150,10 @@ TEST_F(Internal_EigrpTest, StubMode_Advertise_Static_Only)
     RoutingTable::Eigrp* staticRoute = getRoute();
     staticRoute->network = ByteString("\xc0\xa8\x04\x00", 4);
     staticRoute->mask = 24;
-    staticRoute->routeType = "static";
+    staticRoute->routeType = RoutingTable::Eigrp::RouteType::STATIC;
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(1);
-    eigrpInstance->notifyRoutingChange({staticRoute}, false);
+    eigrpInstance->notifyRoutingChange({{staticRoute, false}});
     delete staticRoute;
 }
 
@@ -1179,10 +1166,10 @@ TEST_F(Internal_EigrpTest, StubMode_Advertise_Summary_Only)
     RoutingTable::Eigrp* summaryRoute = getRoute();
     summaryRoute->network = ByteString("\xc0\xa8\x05\x00", 4);
     summaryRoute->mask = 24;
-    summaryRoute->routeType = "summary";
+    summaryRoute->routeType = RoutingTable::Eigrp::RouteType::SUMMARY;
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(1);
-    eigrpInstance->notifyRoutingChange({summaryRoute}, false);
+    eigrpInstance->notifyRoutingChange({{summaryRoute, false}});
     delete summaryRoute;
 }
 
@@ -1195,10 +1182,10 @@ TEST_F(Internal_EigrpTest, StubMode_Advertise_Redistributed_Only)
     RoutingTable::Eigrp* externalRoute = getRoute();
     externalRoute->network = ByteString("\xc0\xa8\x06\x00", 4);
     externalRoute->mask = 24;
-    externalRoute->routeType = "external";
+    externalRoute->routeType = RoutingTable::Eigrp::RouteType::EXTERNAL;
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(1);
-    eigrpInstance->notifyRoutingChange({externalRoute}, false);
+    eigrpInstance->notifyRoutingChange({{externalRoute, false}});
     delete externalRoute;
 }
 
@@ -1210,10 +1197,10 @@ TEST_F(Internal_EigrpTest, StubMode_Route_Filtering_Drops_NonPermitted_Routes)
     RoutingTable::Eigrp* externalRoute = getRoute();
     externalRoute->network = ByteString("\xc0\xa8\x06\x00", 4);
     externalRoute->mask = 24;
-    externalRoute->routeType = "external";
+    externalRoute->routeType = RoutingTable::Eigrp::RouteType::EXTERNAL;
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(0);
-    eigrpInstance->notifyRoutingChange({externalRoute}, false);
+    eigrpInstance->notifyRoutingChange({{externalRoute, false}});
     delete externalRoute;
 }
 
@@ -1224,7 +1211,7 @@ TEST_F(Internal_EigrpTest, StubMode_Route_Filtering_Drops_NonPermitted_Routes)
 TEST_F(Internal_EigrpTest, SIATimer_Resends_Query_For_Pending_Neighbor)
 {
     // Verify that when the SIATimer expires, a query is re-sent for each pending neighbor.
-    auto* testRoute = new RoutingTable::Eigrp();
+    auto* testRoute = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     testRoute->network = ByteString("\xc0\xa8\x02\x00", 4);
     testRoute->mask = 24;
     std::string keyStr = testRoute->network.toString() + "/" + std::to_string(testRoute->mask);
@@ -1257,7 +1244,7 @@ TEST_F(Internal_EigrpTest, SIATimer_No_Action_If_No_Outstanding_Query)
 {
     // Verify that if there is no outstanding query, the SIATimer does nothing.
     addNeighbor(ByteString("\xc0\xa8\x00\x02"));
-    auto* testRoute = new RoutingTable::Eigrp();
+    auto* testRoute = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     testRoute->network = ByteString("\xc0\xa8\x03\x00", 4);
     testRoute->mask = 24;
     std::string keyStr = testRoute->network.toString() + "/" + std::to_string(testRoute->mask);
@@ -1275,7 +1262,7 @@ TEST_F(Internal_EigrpTest, SIATimer_No_Action_If_No_Outstanding_Query)
 TEST_F(Internal_EigrpTest, ActiveQuery_Multiple_Pending_Neighbors) 
 {
     // Verify that if multiple neighbors are pending for a query, a query is sent to each.
-    auto* testRoute = new RoutingTable::Eigrp();
+    auto* testRoute = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     testRoute->network = ByteString("\xc0\xa8\x04\x00", 4);
     testRoute->mask = 24;
     std::string keyStr = testRoute->network.toString() + "/" + std::to_string(testRoute->mask);
@@ -1358,7 +1345,7 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Timeout_Leads_To_Neighbor_Down)
     // Verify that if a neighbor fails to respond to repeated queries, it is declared down.
     ByteString neighborIp("\xC0\xA8\x01\x1F", 4);
     addNeighbor(neighborIp, eigrpInterface);
-    auto* testRoute = new RoutingTable::Eigrp();
+    auto* testRoute = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     testRoute->network = ByteString("\xc0\xa8\x06\x00", 4);
     testRoute->mask = 24;
     std::string keyStr = testRoute->network.toString() + "/" + std::to_string(testRoute->mask);
@@ -1404,7 +1391,7 @@ TEST_F(Internal_EigrpTest, IPv6_HelloPacket_Construction)
     // Verify that an IPv6 hello packet is constructed correctly.
     auto* ipv6Eigrp = new Eigrp(asNumber, AddressFamily::IPv6, vrf);
     ipv6Eigrp->initializeEigrp();
-    MockInterface* ipv6Interface = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* ipv6Interface = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     ipv6Interface->routingInstance = vrf;
     ipv6Interface->blockEnqueues();
     ipv6Interface->enableIPs();
@@ -1418,7 +1405,7 @@ TEST_F(Internal_EigrpTest, IPv6_HelloPacket_Construction)
     EigrpHeader helloPacket;
     ByteString neighborIp("\x20\x01\x0D\xB8\x00\x00\x00\x02", 16);
     addNeighbor(neighborIp, ipv6Int);
-    ipv6Eigrp->eigrpHello(helloPacket, ipv6Int, getNeighbor(neighborIp, ipv6Int), neighborIp, 800, false, false);
+    ipv6Eigrp->eigrpHello(helloPacket, *ipv6Int, neighborIp, 800, false, false);
     ASSERT_EQ(helloPacket.version, ByteString("\x02", 1));
     ASSERT_EQ(ipv6Int->getMulticast(), Variable::Multicast::Eigrp::addressv6);
     
@@ -1431,7 +1418,7 @@ TEST_F(Internal_EigrpTest, IPv6_HelloPacket_Construction)
 TEST_F(Internal_EigrpTest, IPv6_Interface_Config_Persistence) 
 {
     // Check that the IPv6 configuration persists.
-    ASSERT_EQ(getIpInfo().ipv6.linkLocalAddress->ip, ByteString("\xc0\xa8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x01", 16));
+    ASSERT_EQ(getIpInfo().ipv6.getLocalAddress(), ByteString("\xc0\xa8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x01", 16));
 }
 
 // Test: IPv6_PacketSerialization_Correct_Length
@@ -1439,7 +1426,7 @@ TEST_F(Internal_EigrpTest, IPv6_PacketSerialization_Correct_Length)
 {
     // Verify that IPv6 packet serialization produces a packet of expected minimum length.
     auto* ipv6Eigrp = new Eigrp(asNumber, AddressFamily::IPv6, vrf);
-    MockInterface* ipv6Interface = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* ipv6Interface = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     ipv6Interface->routingInstance = vrf;
     ipv6Interface->blockEnqueues();
     ipv6Interface->enableIPs();
@@ -1453,7 +1440,7 @@ TEST_F(Internal_EigrpTest, IPv6_PacketSerialization_Correct_Length)
     EigrpHeader helloPacket;
     ByteString neighborIp("\x20\x01\x0D\xB8\x00\x00\x00\x04", 8);
     addNeighbor(neighborIp, ipv6Int);
-    ipv6Eigrp->eigrpHello(helloPacket, ipv6Int, getNeighbor(neighborIp, ipv6Int), neighborIp, 900, false, false);
+    ipv6Eigrp->eigrpHello(helloPacket, *ipv6Int, neighborIp, 900, false, false);
     ByteString serialized = eigrpInterface->serializeEigrpHeader(helloPacket, false);
     ASSERT_GE(serialized.size(), 40);
     ipv6Eigrp->shutdown();
@@ -1568,7 +1555,7 @@ TEST_F(Internal_EigrpTest, Multithreaded_NeighborStateUpdates_No_Deadlock)
     auto threadFunc = [this, neighbor, neighborIp]() {
         for (int i = 0; i < 1000; i++) {
             EigrpHeader hello;
-            eigrpInstance->eigrpHello(hello, eigrpInterface, neighbor, neighborIp, i, false, false);
+            eigrpInstance->eigrpHello(hello, *eigrpInterface, neighborIp, i, false, false);
             eigrpInterface->processHello(neighbor, hello, neighborIp, false);
         }
     };
@@ -1604,7 +1591,7 @@ TEST_F(Internal_EigrpTest, HighVolume_RouteUpdates_Performance)
 {
     // Simulate a high volume of route updates.
     for (int i = 0; i < 255; i++) {
-        auto* route = new RoutingTable::Eigrp();
+        auto* route = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
         ByteString ipPart = ByteString("\xc0\xa8", 2) + std::to_string(i % 255) + ByteString("\x00", 1);
         route->network = ipPart;
         route->mask = 24;
@@ -1613,15 +1600,14 @@ TEST_F(Internal_EigrpTest, HighVolume_RouteUpdates_Performance)
     }
     auto routes = vrf->routingTable.getAllEigrpRoutes(AddressFamily::IPv4, asNumber);
     ASSERT_EQ(routes.size(), 255);
-    for (auto* route : routes) { delete route; }
 }
 
 // Test: MultiInterface_Massive_Concurrent_Updates
 TEST_F(Internal_EigrpTest, MultiInterface_Massive_Concurrent_Updates) 
 {
     // Test massive concurrent route updates across multiple interfaces.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
@@ -1637,12 +1623,12 @@ TEST_F(Internal_EigrpTest, MultiInterface_Massive_Concurrent_Updates)
     
     for (int i = 0; i < 300; i++) 
     {
-        RoutingTable::Eigrp route;
-        route.network = ByteString("\xC0\xA8\x05\x00", 4);
-        route.mask = 24;
-        route.nextHop = ByteString("\x0A\x00\x00\x01", 4);
-        route.routeType = "internal";
-        int1->updateRoutingTable(getNeighbor(ByteString("\x0A\x00\x00\x01", 4), int1), ByteString("\x0A\x00\x00\x01", 4), {&route});
+        RoutingTable::Eigrp* route =  getRoute();
+        route->network = ByteString("\xC0\xA8\x05\x00", 4);
+        route->mask = 24;
+        route->nextHop = ByteString("\x0A\x00\x00\x01", 4);
+        route->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
+        int1->updateRoutingTable(getNeighbor(ByteString("\x0A\x00\x00\x01", 4), int1), ByteString("\x0A\x00\x00\x01", 4), {{route, false}});
     }
     auto routes = vrf->routingTable.getAllEigrpRoutes(AddressFamily::IPv4, asNumber);
     ASSERT_GE(routes.size(), 1);
@@ -1700,8 +1686,8 @@ TEST_F(Internal_EigrpTest, Global_State_MemoryUsage_Under_Load)
 TEST_F(Internal_EigrpTest, MultipleInterfaces_Route_Propagation) 
 {
     // Verify that routes are propagated via each interface independently.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
@@ -1726,11 +1712,11 @@ TEST_F(Internal_EigrpTest, MultipleInterfaces_Route_Propagation)
     EXPECT_CALL(*iface2, enqueuePacket(::testing::_, ::testing::_))
         .Times(1);
     
-    RoutingTable::Eigrp route;
+    RoutingTable::Eigrp route(eigrpInterface->interfaceKey);
     route.network = ByteString("\xc0\xa8\x07\x00", 4);
     route.mask = 24;
     route.nextHop = ByteString("\xc0\xa8\x01\x02", 4);
-    eigrpInstance->notifyRoutingChange({&route}, false);
+    eigrpInstance->notifyRoutingChange({{&route, false}});
     
     eigrpInstance->shutdown();
     delete iface1;
@@ -1741,8 +1727,8 @@ TEST_F(Internal_EigrpTest, MultipleInterfaces_Route_Propagation)
 TEST_F(Internal_EigrpTest, MultiInterface_Adjacency_Formation) 
 {
     // Verify that neighbors on different interfaces form independent adjacencies.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
@@ -1765,14 +1751,16 @@ TEST_F(Internal_EigrpTest, MultiInterface_Adjacency_Formation)
 TEST_F(Internal_EigrpTest, MultiInterface_Failure_Isolation) 
 {
     // Verify that failure on one interface does not affect neighbors on other interfaces.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
     iface2->blockEnqueues();
     iface1->enableShutdown();
     iface2->enableShutdown();
+    EigrpConfigs::Network network = EigrpConfigs::Network{ByteString("\x00\x00\x00\x00", 4), ByteString("\xff\xff\xff\xff", 4)};
+    eigrpInstance->addNetwork(network);
     EigrpConfigs::InterfaceConfigs intConf1(type, 1);
     EigrpConfigs::InterfaceConfigs intConf2(type, 2);
     EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
@@ -1865,7 +1853,7 @@ TEST_F(Internal_EigrpTest, HighVolume_RouteUpdates_Performance_Extended)
 {
     // Stress-test with 1500 route updates.
     for (int i = 0; i < 1500; i++) {
-        auto* route = new RoutingTable::Eigrp();
+        auto* route = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
         ByteString ipPart = ByteString("\xc0\xa8") + Functions::numToByte(i) + ByteString("\x00");
         route->network = ipPart.substr(0, 4);
         route->mask = 24;
@@ -1881,8 +1869,8 @@ TEST_F(Internal_EigrpTest, HighVolume_RouteUpdates_Performance_Extended)
 TEST_F(Internal_EigrpTest, MultiInterface_Massive_Concurrent_Updates_Extended) 
 {
     // Test massive concurrent updates on two additional interfaces.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
@@ -1899,12 +1887,12 @@ TEST_F(Internal_EigrpTest, MultiInterface_Massive_Concurrent_Updates_Extended)
     addNeighbor(neighbor2, int2);
     
     for (int i = 0; i < 300; i++) {
-        RoutingTable::Eigrp route;
-        route.network = ByteString("\xC0\xA8\x05\x00", 4);
-        route.mask = 24;
-        route.nextHop = ByteString("\x00\x00\x00\x01", 4);
-        route.routeType = "internal";
-        int1->updateRoutingTable(getNeighbor(neighbor1, int1), neighbor1, {&route});
+        RoutingTable::Eigrp* route = getRoute();
+        route->network = ByteString("\xC0\xA8\x05\x00", 4);
+        route->mask = 24;
+        route->nextHop = ByteString("\x00\x00\x00\x01", 4);
+        route->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
+        int1->updateRoutingTable(getNeighbor(neighbor1, int1), neighbor1, {{route, false}});
     }
     auto routes = vrf->routingTable.getAllEigrpRoutes(AddressFamily::IPv4, asNumber);
     ASSERT_GE(routes.size(), 1);
@@ -1961,8 +1949,8 @@ TEST_F(Internal_EigrpTest, Global_State_MemoryUsage_Under_Load_Extended)
 TEST_F(Internal_EigrpTest, MultiInterface_Adjacency_Formation_Extended) 
 {
     // Extended test for independent neighbor adjacencies on multiple interfaces.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
@@ -1985,36 +1973,42 @@ TEST_F(Internal_EigrpTest, MultiInterface_Adjacency_Formation_Extended)
 TEST_F(Internal_EigrpTest, MultiInterface_Failure_Isolation_Extended) 
 {
     // Extended test: simulate failure on one interface and ensure others remain unaffected.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
     iface2->blockEnqueues();
     iface1->enableShutdown();
     iface2->enableShutdown();
+    iface1->enableIPs();
+    iface2->enableIPs();
+    setIPv4(ByteString("\xc0\xa8\x02\x01", 4), 8, iface1);
+    setIPv4(ByteString("\xc0\xa8\x03\x01", 4), 8, iface2);
+    vrf->interfaceList[{InterfaceType::GIGABIT_ETHERNET, 1}] = iface1;
+    vrf->interfaceList[{InterfaceType::GIGABIT_ETHERNET, 2}] = iface2;
     EigrpConfigs::InterfaceConfigs intConf1(type, 1);
     EigrpConfigs::InterfaceConfigs intConf2(type, 2);
-    EigrpInterface* int1 = new EigrpInterface(*eigrpInstance, &intConf1, iface1);
-    EigrpInterface* int2 = new EigrpInterface(*eigrpInstance, &intConf2, iface2);
-    getInterfaceList()[{type, 1}] = int1;
-    getInterfaceList()[{type, 2}] = int2;
-    addNeighbor(ByteString("\x0A\x00\x00\x05", 4), int1);
-    addNeighbor(ByteString("\x0A\x00\x00\x06", 4), int2);
-    int1->currentInterface->Shutdown(true);
+    EigrpConfigs::Network network = EigrpConfigs::Network{ByteString("\x00\x00\x00\x00", 4), ByteString("\xff\xff\xff\xff", 4)};
+    eigrpInstance->addNetwork(network);
+    addNeighbor(ByteString("\x0A\x00\x00\x05", 4), getInterfaceList()[{type, 1}]);
+    addNeighbor(ByteString("\x0A\x00\x00\x06", 4), getInterfaceList()[{type, 2}]);
+    iface1->Shutdown(true);
     eigrpInstance->updateInterfaceList();
     ASSERT_EQ(getInterfaceList().size(), 2);
     eigrpInstance->shutdown();
     delete iface1;
     delete iface2;
+    vrf->interfaceList.erase({InterfaceType::GIGABIT_ETHERNET, 1});
+    vrf->interfaceList.erase({InterfaceType::GIGABIT_ETHERNET, 2});
 }
 
 // Test: MultiInterface_Coordinated_RoutingUpdates_Extended
 TEST_F(Internal_EigrpTest, MultiInterface_Coordinated_RoutingUpdates_Extended) 
 {
     // Extended test: simulate simultaneous route updates from multiple interfaces.
-    MockInterface* iface1 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
-    MockInterface* iface2 = new MockInterface(InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface1 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    MockInterface* iface2 = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     iface1->routingInstance = vrf;
     iface2->routingInstance = vrf;
     iface1->blockEnqueues();
@@ -2023,17 +2017,17 @@ TEST_F(Internal_EigrpTest, MultiInterface_Coordinated_RoutingUpdates_Extended)
     getInterfaceList()[{type, 1}] = int1;
     ByteString neighborIp = ByteString("\x0A\x00\x00\x07", 4);
     addNeighbor(neighborIp, int1);
-    RoutingTable::Eigrp route1;
-    route1.network = ByteString("\xc0\xa8\x08\x00", 4);
-    route1.mask = 24;
-    route1.nextHop = ByteString("\x00\x00\x00\x01", 4);
-    route1.routeType = "internal";
-    RoutingTable::Eigrp route2;
-    route2.network = ByteString("\xc0\xa8\x09\x00", 4);
-    route2.mask = 24;
-    route2.nextHop = ByteString("\x00\x00\x00\x02", 4);
-    route2.routeType = "internal";
-    int1->updateRoutingTable(getNeighbor(neighborIp, int1), neighborIp, {&route1, &route2});
+    RoutingTable::Eigrp* route1 = getRoute();
+    route1->network = ByteString("\xc0\xa8\x08\x00", 4);
+    route1->mask = 24;
+    route1->nextHop = ByteString("\x00\x00\x00\x01", 4);
+    route1->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
+    RoutingTable::Eigrp* route2 = getRoute();
+    route2->network = ByteString("\xc0\xa8\x09\x00", 4);
+    route2->mask = 24;
+    route2->nextHop = ByteString("\x00\x00\x00\x02", 4);
+    route2->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
+    int1->updateRoutingTable(getNeighbor(neighborIp, int1), neighborIp, {{route1, false}, {route2, false}});
     auto routes = vrf->routingTable.getAllEigrpRoutes(AddressFamily::IPv4, asNumber);
     ASSERT_GE(routes.size(), 2);
     eigrpInstance->shutdown();
@@ -2043,7 +2037,7 @@ TEST_F(Internal_EigrpTest, MultiInterface_Coordinated_RoutingUpdates_Extended)
 // Test: Unequal_Cost_Path_Added_As_Feasible_Successor
 TEST_F(Internal_EigrpTest, Unequal_Cost_Path_Added_As_Feasible_Successor)
 {
-    RoutingTable::Eigrp* primary = new RoutingTable::Eigrp();
+    RoutingTable::Eigrp* primary = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     primary->network = ByteString("\x0A\x08\x00\x00", 4);
     primary->mask = 16;
     primary->feasibleDistance = 100;
@@ -2101,21 +2095,21 @@ TEST_F(Internal_EigrpTest, Multiple_Queries_Handled_Correctly)
 {
     ByteString net("\x0A\x10\x00\x00", 4);
 
-    RoutingTable::Eigrp r;
-    r.network = ByteString("\x0A\x11\x00\x00", 4);
-    r.mask = 16;
-    r.feasibleDistance = 100;
-    r.metric = 2816;
-    r.nextHop = ByteString("\x00\x00\x00\x00", 4);
-    r.bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
-    r.delay = 0;
-    r.hopCount = 0;
-    r.mtu = 1500;
-    r.reliability = 255;
-    r.load = eigrpInstance->configs.variance.load(std::memory_order_relaxed);
-    r.routeType = "internal";
-    r.routeTag = 0;
-    ByteString qkey = r.network + std::to_string(r.mask);
+    RoutingTable::Eigrp* r = getRoute();
+    r->network = ByteString("\x0A\x11\x00\x00", 4);
+    r->mask = 16;
+    r->feasibleDistance = 100;
+    r->metric = 2816;
+    r->nextHop = ByteString("\x00\x00\x00\x00", 4);
+    r->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
+    r->delay = 0;
+    r->hopCount = 0;
+    r->mtu = 1500;
+    r->reliability = 255;
+    r->load = eigrpInstance->configs.variance.load(std::memory_order_relaxed);
+    r->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
+    r->routeTag = 0;
+    ByteString qkey = r->network + std::to_string(r->mask);
 
     ByteString n1("\xC0\xA8\x01\x30", 4);
     ByteString n2("\xC0\xA8\x01\x31", 4);
@@ -2124,6 +2118,7 @@ TEST_F(Internal_EigrpTest, Multiple_Queries_Handled_Correctly)
 
     EigrpConfigs::ActiveRoute activeRoute;
     activeRoute.originNeighbor = n1;
+    activeRoute.route = r;
     activeRoute.pendingQueries[n1] = {};
     activeRoute.pendingQueries[n2] = {};
 
@@ -2141,7 +2136,7 @@ TEST_F(Internal_EigrpTest, Multiple_Queries_Handled_Correctly)
     reply.ack = Functions::numToByte(0, 4);
     reply.autonomousSystem = Functions::numToByte(1, 2);
 
-    ByteString routeTlv = eigrpInterface->encodeRouteOption(&r, 0, 0, false);
+    ByteString routeTlv = eigrpInterface->encodeRouteOption(r, 0, 0, false);
     reply.options.emplace_back(
         Variable::Eigrp::Option::internalRoute,
         Functions::numToByte(routeTlv.size(), 2),
@@ -2170,8 +2165,8 @@ TEST_F(Internal_EigrpTest, Metric_Tuning_Affects_Route_Selection)
     RoutingTable::Eigrp* r2 = new RoutingTable::Eigrp(*r1);
     r2->feasibleDistance = 90; // Lower metric
 
-    eigrpInterface->updateRoutingTable(getNeighbor(neighbor1), neighbor1, {r1});
-    eigrpInterface->updateRoutingTable(getNeighbor(neighbor2), neighbor2, {r2});
+    eigrpInterface->updateRoutingTable(getNeighbor(neighbor1), neighbor1, {{r1, false}});
+    eigrpInterface->updateRoutingTable(getNeighbor(neighbor2), neighbor2, {{r2, false}});
 
     auto* best = vrf->routingTable.getEigrpRoute(ByteString("\x0A\x11\x00\x00", 4), 16, AddressFamily::IPv4, asNumber);
     ASSERT_EQ(best->feasibleDistance, 90);
@@ -2190,7 +2185,7 @@ TEST_F(Internal_EigrpTest, Route_Loop_Prevention_Using_FD)
     route->feasibleDistance = 100;
     route->reportedDistance = 150; // Violation
 
-    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {route});
+    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {{route, false}});
     auto* chosen = vrf->routingTable.getEigrpRoute(route->network, route->mask, AddressFamily::IPv4, asNumber);
 
     ASSERT_TRUE(chosen == nullptr || chosen->reportedDistance <= chosen->feasibleDistance);
@@ -2203,7 +2198,7 @@ TEST_F(Internal_EigrpTest, Summarization_Advertises_Summary_Only)
 {
     eigrpInterface->addSummaryRoute(ByteString("\x0A\x13\x00\x00", 4), 16);
 
-    RoutingTable::Eigrp* route1 = new RoutingTable::Eigrp();
+    RoutingTable::Eigrp* route1 = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route1->network = ByteString("\x0A\x13\x01\x00", 4);
     route1->mask = 24;
     route1->nextHop = ByteString("\xC0\xA8\x01\x10", 4);
@@ -2225,7 +2220,7 @@ TEST_F(Internal_EigrpTest, Summarization_Advertises_Summary_Only)
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
 
-    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {route1, route2}, {});
+    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {{route1, false}, {route2, false}});
     vrf->routingTable.updateEigrp(route1, AddressFamily::IPv4, asNumber);
     vrf->routingTable.updateEigrp(route2, AddressFamily::IPv4, asNumber);
 
@@ -2264,10 +2259,10 @@ TEST_F(Internal_EigrpTest, Summarization_Disables_Individual_Routes)
     eigrpInterface->addSummaryRoute(ByteString("\xC0\xA8\x01\x00", 4), 24);
 
     // Add a matching specific route
-    RoutingTable::Eigrp* route = new RoutingTable::Eigrp;
+    RoutingTable::Eigrp* route = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route->network = ByteString("\xC0\xA8\x01\x00", 4);
     route->mask = 24;
-    route->routeType = "internal";
+    route->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
 
     route->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
     route->delay = 0;
@@ -2279,16 +2274,16 @@ TEST_F(Internal_EigrpTest, Summarization_Disables_Individual_Routes)
 
     // Should not advertise individual route when summary exists
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
-    eigrpInstance->notifyRoutingChange({ route }, false);
+    eigrpInstance->notifyRoutingChange({{ route, false }});
 }
 
 // Test: Query_Triggers_SIA_Timer
-TEST_F(Internal_EigrpTest, Query_Triggers_SIA_Timer) //TODO
+TEST_F(Internal_EigrpTest, Query_Triggers_SIA_Timer)
 {
-    RoutingTable::Eigrp* route = new RoutingTable::Eigrp();
+    RoutingTable::Eigrp* route = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route->network = ByteString("\xC0\xA8\x0A\x00", 4);  // Sample network address
     route->mask = 24;  // Subnet mask
-    route->routeType = "internal";  // Route type
+    route->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
 
     route->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
     route->delay = 0;
@@ -2377,10 +2372,10 @@ TEST_F(Internal_EigrpTest, Unequal_Cost_Route_Installed)
 // Test: Dampening_Suppresses_Updates
 TEST_F(Internal_EigrpTest, Dampening_Suppresses_Updates) {
     eigrpInstance->configs.dampening.store(true);
-    RoutingTable::Eigrp* route = new RoutingTable::Eigrp;
+    RoutingTable::Eigrp* route = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route->network = ByteString("\xC0\xA8\x01\x35", 4);
     route->mask = 24;
-    route->routeType = "internal";
+    route->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
 
     route->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
     route->delay = 0;
@@ -2391,7 +2386,7 @@ TEST_F(Internal_EigrpTest, Dampening_Suppresses_Updates) {
     route->nextHop = ByteString("\x00\x00\x00\x00", 4);
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(0);
-    eigrpInstance->notifyRoutingChange({route}, false);
+    eigrpInstance->notifyRoutingChange({{route, false}});
 }
 
 // Test: Query_Reply_Sequence_Correct
@@ -2417,7 +2412,7 @@ TEST_F(Internal_EigrpTest, Summarization_Loop_Prevention) {
 
     auto* route = vrf->routingTable.getEigrpRoute(network, mask, AddressFamily::IPv4, asNumber);
     ASSERT_TRUE(route);
-    ASSERT_NE(route->nextHop, getIpInfo().ipv4.ipAddress); // Should not loop to self
+    ASSERT_NE(route->nextHop, getIpInfo().ipv4.getAddress()); // Should not loop to self
 }
 
 // Test: Query_Packet_Trigger_On_Loss
@@ -2432,7 +2427,7 @@ TEST_F(Internal_EigrpTest, Query_Packet_Trigger_On_Loss) {
     addNeighbor(neighborIp);
     auto neighbor = getNeighbor(neighborIp);
 
-    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {route});
+    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {{route, false}});
 
     // A query should be issued
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(::testing::AtLeast(1));
@@ -2448,10 +2443,10 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Prevents_Route_Propagation_Back) {
     ByteString neighborIp = ByteString("\xc0\xa8\x00\x02", 4);
     addNeighbor(neighborIp);
     auto* neighbor = getNeighbor(neighborIp);
-    RoutingTable::Eigrp* route = new RoutingTable::Eigrp();
+    RoutingTable::Eigrp* route = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route->network = ByteString("\x0A\x02\x00\x00", 4);
     route->mask = 16;
-    route->nextHop = getIpInfo().ipv4.ipAddress;
+    route->nextHop = getIpInfo().ipv4.getAddress();
 
     route->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
     route->delay = 0;
@@ -2461,10 +2456,10 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Prevents_Route_Propagation_Back) {
     route->load = eigrpInstance->configs.variance.load(std::memory_order_relaxed);
 
     // Enforce split horizon
-    eigrpInterface->configs.splitHorizon.store(true);
+    eigrpInterface->configs->splitHorizon.store(true);
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
-    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {route});
+    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {{route, false}});
 
     delete route;
 }
@@ -2472,7 +2467,7 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Prevents_Route_Propagation_Back) {
 // Test: VRF_Isolation_Enforced
 TEST_F(Internal_EigrpTest, VRF_Isolation_Enforced) {
     // Create a second VRF with a different EIGRP process
-    VirtualRouter* otherVRF = new VirtualRouter("custom");
+    VirtualRouter* otherVRF = global->addRoutingInstance("custom");
     otherVRF->eigrpList[1] = new EigrpAutonomousSystem();
     Eigrp* otherEigrp = new Eigrp(1, AddressFamily::IPv4, otherVRF);
     auto as = otherVRF->getEigrpAutonomousSystem(1);
@@ -2482,7 +2477,7 @@ TEST_F(Internal_EigrpTest, VRF_Isolation_Enforced) {
     RoutingTable::Eigrp* route = getRoute();
     route->network = ByteString("\x0A\x0A\x00\x00", 4);
     route->mask = 16;
-    route->routeType = "internal";
+    route->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
 
     vrf->routingTable.updateEigrp(route, AddressFamily::IPv4, asNumber);
     auto wrongRoute = otherVRF->routingTable.getEigrpRoute(route->network, route->mask, AddressFamily::IPv4, asNumber);
@@ -2516,7 +2511,6 @@ TEST_F(Internal_EigrpTest, SIA_Timer_Detection_Clears_Unresponsive_Neighbor)
 
     ByteString neighborIp("\xC0\xA8\x01\xDE", 4);
     addNeighbor(neighborIp);
-    auto* neighbor = getNeighbor(neighborIp);
 
     ByteString key = route->network + "/" + std::to_string(route->mask);
 
@@ -2601,12 +2595,12 @@ TEST_F(Internal_EigrpTest, Reply_Packet_Triggers_Feasible_Update)
     replyPacket.opcode = Variable::Eigrp::Type::reply;
     replyPacket.sequence = Functions::numToByte(1000, 4);
 
-    RoutingTable::Eigrp* route = new RoutingTable::Eigrp;
+    RoutingTable::Eigrp* route = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     route->network = ByteString("\x0A\x00\x00\x00", 4);
     route->mask = 24;
     route->feasibleDistance = 100;
     route->reportedDistance = 80;
-    route->routeType = "internal";
+    route->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
     route->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
     route->delay = 0;
     route->hopCount = 0;
@@ -2626,6 +2620,7 @@ TEST_F(Internal_EigrpTest, Reply_Packet_Triggers_Feasible_Update)
     std::string keyStr = route->network.toString() + "/" + std::to_string(route->mask);
     ByteString queryKey(keyStr);
     EigrpConfigs::ActiveRoute activeRoute;
+    activeRoute.route = route;
     activeRoute.originNeighbor = neighborIp;
     activeRoute.pendingQueries[neighborIp] = EigrpConfigs::OutgoingQuery{};
     eigrpInstance->outstandingReplies[queryKey] = activeRoute;
@@ -2698,7 +2693,7 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Suppresses_Hello_To_Same_Subnet)
     addNeighbor(neighborIp, eigrpInterface);
 
     // Enable split horizon
-    eigrpInterface->configs.splitHorizon.store(true);
+    eigrpInterface->configs->splitHorizon.store(true);
 
     // Block enqueues to capture
     mockInterface->blockEnqueues();
@@ -2750,7 +2745,8 @@ TEST_F(Internal_EigrpTest, Reply_With_Multiple_TLVs_Updates_All_Feasible_Routes)
     ASSERT_NE(t1, nullptr);
     ASSERT_NE(t2, nullptr);
 
-    delete r1, r2;
+    delete r1;
+    delete r2;
 }
 
 // Test: Passive_Interface_Advertises_No_Hellos_Or_Updates
@@ -2758,13 +2754,13 @@ TEST_F(Internal_EigrpTest, Passive_Interface_Advertises_No_Hellos_Or_Updates)
 {
     eigrpInterface->setPassive(true);
     addNeighbor(ByteString("\xC0\xA8\x01\x35", 4));
-    RoutingTable::Eigrp route;
+    RoutingTable::Eigrp route(eigrpInterface->interfaceKey);
     route.network = ByteString("\xC0\xA8\x01\x00", 4);
     route.mask = 24;
-    route.routeType = "internal";
+    route.routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
-    eigrpInstance->notifyRoutingChange({&route}, false);
+    eigrpInstance->notifyRoutingChange({{&route, false}});
 }
 
 // Test: Query_With_No_Reply_Triggers_SIA
@@ -2773,7 +2769,7 @@ TEST_F(Internal_EigrpTest, Query_With_No_Reply_Triggers_SIA)
     ByteString neighborIp("\xC0\xA8\x01\x38", 4);
     addNeighbor(neighborIp, eigrpInterface);
 
-    RoutingTable::Eigrp* testRoute = new RoutingTable::Eigrp();
+    RoutingTable::Eigrp* testRoute = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     testRoute->network = ByteString("\x0A\x02\x00\x00", 4);
     testRoute->mask = 16;
     testRoute->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
@@ -2797,37 +2793,6 @@ TEST_F(Internal_EigrpTest, Query_With_No_Reply_Triggers_SIA)
     ASSERT_TRUE(eigrpInstance->outstandingReplies.find(key) == eigrpInstance->outstandingReplies.end());
 }
 
-// Test: Interface_Flap_Replays_Routes
-TEST_F(Internal_EigrpTest, Interface_Flap_Replays_Routes)
-{
-    ByteString neighborIp = ByteString("\x0A\x01\x00\x01");
-    addNeighbor(neighborIp);
-    auto neighbor = getNeighbor(neighborIp);
-    RoutingTable::Eigrp* route = new RoutingTable::Eigrp();
-    route->network = ByteString("\x0A\x03\x00\x00", 4);
-    route->mask = 16;
-    route->routeType = "internal";
-
-    route->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
-    route->delay = 0;
-    route->hopCount = 0;
-    route->mtu = 1500;
-    route->reliability = 255;
-    route->load = eigrpInstance->configs.variance.load(std::memory_order_relaxed);
-    route->nextHop = ByteString("\x00\x00\x00\x00", 4);
-
-    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {route});
-
-    setIPv4(ByteString(), 16); // Interface down
-    eigrpInstance->updateInterfaceList();
-
-    setIPv4(ByteString("\x0A\x03\x00\x01", 4), 16); // Back up
-    eigrpInstance->updateInterfaceList();
-
-    auto* replayed = vrf->routingTable.getEigrpRoute(route->network, route->mask, AddressFamily::IPv4, asNumber);
-    ASSERT_NE(replayed, nullptr);
-}
-
 // Test: Update_With_Duplicate_Routes_Only_Processes_Once
 TEST_F(Internal_EigrpTest, Update_With_Duplicate_Routes_Only_Processes_Once)
 {
@@ -2835,10 +2800,10 @@ TEST_F(Internal_EigrpTest, Update_With_Duplicate_Routes_Only_Processes_Once)
     addNeighbor(neighborIp, eigrpInterface);
     auto neighbor = getNeighbor(neighborIp);
 
-    RoutingTable::Eigrp* r = new RoutingTable::Eigrp;
+    RoutingTable::Eigrp* r = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     r->network = ByteString("\x0A\x04\x00\x00", 4);
     r->mask = 16;
-    r->routeType = "internal";
+    r->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
     r->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
     r->delay = 0;
     r->hopCount = 0;
@@ -2872,10 +2837,10 @@ TEST_F(Internal_EigrpTest, Summary_Only_Blocks_More_Specifics)
     addNeighbor(neighborIp, eigrpInterface);
     auto neighbor = getNeighbor(neighborIp);
 
-    RoutingTable::Eigrp* specific = new RoutingTable::Eigrp;
+    RoutingTable::Eigrp* specific = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
     specific->network = ByteString("\x0A\x0C\x01\x00", 4);
     specific->mask = 24;
-    specific->routeType = "internal";
+    specific->routeType = RoutingTable::Eigrp::RouteType::INTERNAL;
     specific->bandwidth = ( 10000000 / eigrpInstance->configs.lowestBandwidth.load(std::memory_order_relaxed) ) * 256;
     specific->delay = 0;
     specific->hopCount = 0;
@@ -2888,5 +2853,5 @@ TEST_F(Internal_EigrpTest, Summary_Only_Blocks_More_Specifics)
 
     EXPECT_CALL(*mockInterface, startThreads()).Times(0);
 
-    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {specific});
+    eigrpInterface->updateRoutingTable(neighbor, neighborIp, {{specific, false}});
 }

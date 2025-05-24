@@ -7,20 +7,22 @@
 #include <Interface.h>
 #include <PacketStructure.h>
 #include <ByteString.hpp>
+#include <Global.h>
 
 class MockInterface : public Interface
 {
 public:
     // Constructor forwarding to base class constructor
-    MockInterface(InterfaceType interfaceType = InterfaceType::GIGABIT_ETHERNET,
+    MockInterface(Global& global,
+                  InterfaceType interfaceType = InterfaceType::GIGABIT_ETHERNET,
                   std::string outInterface = "lo",
                   size_t inQueSiz = 100,
                   size_t outQueSiz = 100,
                   std::string mac = "010203040506",
                   uint8_t interfaceId = 0,
-                  VirtualRouter* vrf = Global::getInstance().getRoutingInstance("default"),
+                  VirtualRouter* vrf = nullptr,
                   bool debug = false)
-        : Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, vrf, debug) {}
+        : Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, vrf ? *vrf : *global.getRoutingInstance("default"), debug) {}
 
     // Destructor
     ~MockInterface() override 
@@ -52,7 +54,17 @@ public:
     void enableShutdown()
     {
         EXPECT_CALL(*this, Shutdown).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([this](bool shut) {
-            Interface::Shutdown(shut);
+            shutdownFlag = shut;
+            if (shut) 
+            {
+                stopThreads();
+            }
+            else if (!shut) 
+            {
+                startThreads();
+            }
+            stateChange(StateChange::SHUTDOWN);
+            stateChangeV6(StateChange::SHUTDOWN);
         }));
     }
     void blockEnqueues()

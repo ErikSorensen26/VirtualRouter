@@ -12,14 +12,18 @@ using namespace Protocol;
 class Internal_IPPoolTest : public ::testing::Test
 {
 protected:
+    Global* global = nullptr;
+    
     void SetUp() override
     {
-        mockInterface = new ::testing::NiceMock<MockInterface>();
-        dhcpServer = new DhcpServer();
+        global = new Global(true);
+        mockInterface = new ::testing::NiceMock<MockInterface>(*global);
+        dhcpServer = new DhcpServer(*global);
     }
 
     void TearDown() override
     {
+        delete global;
         delete dhcpServer;
         delete mockInterface;
     }
