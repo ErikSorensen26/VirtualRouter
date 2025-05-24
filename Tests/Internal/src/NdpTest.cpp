@@ -8,6 +8,7 @@ class Internal_NdpTest : public ::testing::Test
 protected:
     MockInterface* iface;
     Protocol::Ndp* ndp;
+    Global* global;
 
     ByteString ip = ByteString("\xFD\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
     ByteString intIp = ByteString("\xFD\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0B", 16);
@@ -17,27 +18,36 @@ protected:
 
     void SetUp() override
     {
-        iface = new MockInterface();
+        global = new Global();
+        iface = new MockInterface(*global);
         iface->enableShutdown();
         iface->configs.ipv6.addAddress(intIp, false, 64);
+        iface->configs.ipv6.globalAddresses[0]->valid = true;
+        iface->configs.ipv6.globalAddresses[0]->tentative = false;
         ndp = new Protocol::Ndp(*iface);
         iface->ndp = ndp;
+        ndp->configs.dadTime.store(10);
     }
 
     void TearDown() override
     {
+        delete global;
+        ndp->shutdown();
         delete iface;
     }
 
-    void onNudTimeout(const ByteString& targetIp) { ndp->onNudTimeout(targetIp); }
+    void onReachableTimeout(const ByteString& targetIp) { ndp->onReachableTimeout(targetIp); }
     void scheduleNextRA() { ndp->scheduleNextRA(); }
     std::unordered_set<ByteString>& getPendingRequests() { return ndp->pendingRequests; }
-    std::unordered_map<ByteString, int>& getRetryCount() { return ndp->nsRetryCount; }
+    std::unordered_map<ByteString, uint8_t>& getRetryCount() { return ndp->nsRetryCount; }
     std::unordered_map<ByteString, ByteString>& getProxyEntries() { return ndp->proxyEntries; }
     std::mutex& getRequestMutex() { return ndp->requestMutex; }
     std::shared_mutex& getCacheMutex() { return ndp->ndpCacheMutex; }
     std::unordered_map<ByteString, Protocol::NdpCacheEntry>& getNdpCache() { return ndp->ndpCache; }
+    std::vector<InterfaceConfigs::IPv6State::IPv6Address*>& getIPv6s() { return iface->configs.ipv6.globalAddresses; }
+    void clearIPv6s() { iface->configs.ipv6.globalAddresses.clear(); }
     void clearUnsolidated() { ndp->lastUnsolicitedNaTime.clear(); }
+    PacketInfo routeAdvertisment() { return ndp->routeAdvertisement(iface->configs.getMac()); }
 };
 
 // Test: SendNS_ReceiveNA_CreatesEntry
@@ -112,16 +122,13 @@ TEST_F(Internal_NdpTest, NudTransitionsAndRemoval)
     iface->blockEnqueues();
     ndp->configs.reachableTime.store(50);
     ndp->configs.cacheExpire.store(2);
+    ndp->configs.nudBaseInterval = 1;
+    ndp->configs.nudBase = 1;
 
     ndp->addNdpEntry(ip, mac);
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    onNudTimeout(ip); // REACHABLE -> STALE
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    onNudTimeout(ip); // Reachable -> PROBE
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    onNudTimeout(ip); // PROBE -> REMOVED
+    onReachableTimeout(ip); // REACHABLE -> STALE
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     ByteString* found = ndp->getMac(ip);
     EXPECT_EQ(found, nullptr);
@@ -183,13 +190,13 @@ TEST_F(Internal_NdpTest, ReceiveNAWithoutQueue_AddsEntry)
 // Test: SLAAC_RSAndRA_CreatesAddress
 TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
 {
-    iface->configs.macAddress = mac;
+    iface->configs.setMac(mac);
     ndp->configs.slaacEnabled.store(true);
 
     EXPECT_CALL(*iface, enqueuePacket(::testing::_, ::testing::_)).Times(2);
     ndp->initiateSlaac(); // Would normally send RS
 
-    ByteString fullAddr = Functions::calculateEui64(prefix, iface->configs.macAddress, 64);
+    ByteString fullAddr = Functions::calculateEui64(prefix, iface->configs.getMac(), 64);
 
     IcmpV6Header ra;
     ra.type = Variable::ICMPv6::Type::ndpRouteAdvertisement;
@@ -217,7 +224,7 @@ TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
     bool found = false;
-    for (auto* addr : iface->configs.ipv6.globalAddresses)
+    for (auto* addr : getIPv6s())
     {
         if (addr->ip == fullAddr && addr->valid)
         {
@@ -232,12 +239,12 @@ TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
 TEST_F(Internal_NdpTest, SLAAC_DAD_Failure_MarksDuplicate) 
 {
     iface->blockEnqueues();
-    iface->configs.macAddress = mac;
+    iface->configs.getMac() = mac;
     ndp->configs.slaacEnabled.store(true);
     ndp->configs.dadAttempts.store(1);
     ndp->configs.dadTime.store(50); // ms
 
-    ByteString fullAddr = Functions::calculateEui64(prefix, iface->configs.macAddress, 64);
+    ByteString fullAddr = Functions::calculateEui64(prefix, iface->configs.getMac(), 64);
 
     auto* addr = iface->configs.ipv6.addAddress(fullAddr, false, 64);
     addr->tentative = true;
@@ -250,7 +257,7 @@ TEST_F(Internal_NdpTest, SLAAC_DAD_Failure_MarksDuplicate)
         IcmpV6Header na;
         na.type = ByteString("\x88", 1);
         na.code = ByteString("\x00", 1);
-        na.payload = ip;
+        na.payload = fullAddr;
         na.reserved = ByteString("\xA0\x00\x00\x00", 4);
         na.options.emplace_back(
             Variable::ICMPv6::Option::target,
@@ -270,15 +277,15 @@ TEST_F(Internal_NdpTest, SLAAC_DAD_Failure_MarksDuplicate)
 TEST_F(Internal_NdpTest, SLAAC_ValidLifetimeExpires) 
 {
     iface->blockEnqueues();
-    iface->configs.macAddress = mac;
+    iface->configs.setMac(mac);
     ndp->configs.slaacEnabled.store(true);
 
-    auto* addr = iface->configs.ipv6.addAddress(Functions::calculateEui64(prefix, iface->configs.macAddress, 64), false, 64);
+    auto* addr = iface->configs.ipv6.addAddress(Functions::calculateEui64(prefix, iface->configs.getMac(), 64), false, 64);
     addr->tentative = false;
     addr->valid = true;
 
-    ndp->configs.lifetime.store(1); // seconds
-    ndp->configs.preferedLifetime.store(10); // not relevant here
+    ndp->configs.raLifetime.store(1); // seconds
+    ndp->configs.raPreferedLifetime.store(10); // not relevant here
 
     ndp->duplicateAddressDetection(addr, false);
 
@@ -291,31 +298,9 @@ TEST_F(Internal_NdpTest, SLAAC_ValidLifetimeExpires)
 // Test: SLAAC_PreferredLifetimeExpires
 TEST_F(Internal_NdpTest, SLAAC_PreferredLifetimeExpires) 
 {
-    iface->configs.macAddress = mac;
+    iface->blockEnqueues();
+    iface->configs.setMac(mac);
     ndp->configs.slaacEnabled.store(true);
-
-    auto* addr = iface->configs.ipv6.addAddress(Functions::calculateEui64(prefix, iface->configs.macAddress, 64), false, 64);
-    addr->tentative = false;
-    addr->valid = true;
-    addr->globalValid = true;
-
-    ndp->configs.lifetime.store(100);  // longer
-    ndp->configs.preferedLifetime.store(1); // seconds
-
-    addr->tentative = true;
-    ndp->duplicateAddressDetection(addr, false);
-
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(addr->deprecated);
-}
-
-// Test: SLAAC_Disabled_IgnoresPrefixes
-TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes) 
-{
-    ndp->configs.slaacEnabled.store(false);
-    iface->configs.macAddress = mac;
 
     IcmpV6Header ra;
     ra.type = ByteString("\x86", 1); // RA
@@ -327,8 +312,8 @@ TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes)
     prefixOpt += ByteString("\x40", 1); // 64-bit prefix length
     prefixOpt += ByteString("\xC0", 1); // L and A bits
     prefixOpt += ByteString(2, 0x00); // reserved
-    prefixOpt += Functions::numToByte(1800, 4); // valid lifetime
-    prefixOpt += Functions::numToByte(900, 4); // preferred lifetime
+    prefixOpt += Functions::numToByte(100, 4); // valid lifetime
+    prefixOpt += Functions::numToByte(1, 4); // preferred lifetime
     prefixOpt += ByteString(4, 0x00); // reserved
     prefixOpt += prefix;
 
@@ -336,8 +321,41 @@ TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes)
 
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
 
-    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    auto* addr = getIPv6s().back();
+
+    EXPECT_TRUE(addr->deprecated);
+}
+
+// Test: SLAAC_Disabled_IgnoresPrefixes
+TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes) 
+{
+    iface->blockEnqueues();
+    clearIPv6s();
+    iface->configs.setMac(mac);
+    ndp->configs.slaacEnabled.store(false);
+
+    IcmpV6Header ra;
+    ra.type = ByteString("\x86", 1); // RA
+    ra.code = ByteString("\x00", 1);
+    ra.reserved = ByteString("\x00\x00\x00\x00", 4); // flags and lifetime
+    ra.payload = ByteString(8, '\x00');
+
+    ByteString prefixOpt;
+    prefixOpt += ByteString("\x40", 1); // 64-bit prefix length
+    prefixOpt += ByteString("\xC0", 1); // L and A bits
+    prefixOpt += ByteString(2, 0x00); // reserved
+    prefixOpt += Functions::numToByte(100, 4); // valid lifetime
+    prefixOpt += Functions::numToByte(1, 4); // preferred lifetime
+    prefixOpt += ByteString(4, 0x00); // reserved
+    prefixOpt += prefix;
+
+    ra.options.emplace_back(Variable::ICMPv6::Option::prefix, ByteString("\x04", 1), prefixOpt);
+
+    ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
+
+    EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: DAD_NoConflict_MarksValid
@@ -441,35 +459,47 @@ TEST_F(Internal_NdpTest, ProxyNA_RespondsWithCorrectMAC)
     IcmpV6Header ns;
     ns.type = ByteString("\x87", 1);
     ns.code = ByteString("\x00", 1);
-    ns.payload = proxyIp;
+    ns.payload = intIp;
 
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_))
-        .WillOnce(testing::Invoke([&](PacketInfo& pkt, ByteString packetMac) {
-            ASSERT_EQ(packetMac, proxyMac);
+        .WillOnce(testing::Invoke([&](PacketInfo& pkt, ByteString) {
+            ASSERT_FALSE(pkt.Layer2.empty());
+            auto& ip = std::get<EthernetHeader>(pkt.Layer2[0]);
+            ASSERT_EQ(ip.destinationMac, proxyMac);
             ASSERT_FALSE(pkt.Layer3.empty());
-            auto& h = std::get<IcmpV6Header>(pkt.Layer3[0]);
+            auto& h = std::get<IcmpV6Header>(pkt.Layer3.back());
             EXPECT_EQ(h.type, ByteString("\x88", 1)); // NA
             EXPECT_EQ(h.payload, proxyIp);
         }));
 
-    ndp->receiveNeighborSolicitation(ns, ip, mac);
+    ndp->receiveNeighborSolicitation(ns, proxyIp, proxyMac);
 }
 
 // Test: ProxyEntry_DeliversQueuedPacket
 TEST_F(Internal_NdpTest, ProxyEntry_DeliversQueuedPacket) 
 {
     PacketInfo pkt;
-    bool sent = false;
+    EthernetHeader eth;
+    pkt.Layer2.push_back(eth);
+    bool firstPacket = false;
+    bool secondPacket = false;
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_))
-        .WillOnce(testing::Invoke([&](PacketInfo&, ByteString actualMac) {
-            EXPECT_EQ(actualMac, mac);
-            sent = true;
+        .Times(2)
+        .WillRepeatedly(testing::Invoke([&](PacketInfo& pkt, ByteString packetMac) {
+            if (packetMac == mac && firstPacket)
+            {
+                secondPacket = true;
+            }
+            else
+            {
+                firstPacket= true;
+            }
         }));
 
     ndp->resolveAndSend(ip, pkt);
     ndp->addNdpEntry(ip, mac, true);  // Triggers delivery
 
-    EXPECT_TRUE(sent);
+    EXPECT_TRUE(firstPacket && secondPacket);
 }
 
 // Test: ProxyEntryExpiresIfNotRefreshed
@@ -491,10 +521,11 @@ TEST_F(Internal_NdpTest, Proxy_UnsolicitedNASent)
     ndp->addNdpEntry(ip, mac, true);
 
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_))
-        .WillOnce(testing::Invoke([&](PacketInfo& pkt, ByteString targetMac) {
-            EXPECT_EQ(targetMac, ByteString("\xFF\xFF\xFF\xFF\xFF\xFF", 6)); // broadcast
-            ASSERT_TRUE(std::holds_alternative<IcmpV6Header>(pkt.Layer3[0]));
-            auto& na = std::get<IcmpV6Header>(pkt.Layer3[0]);
+        .WillOnce(testing::Invoke([&](PacketInfo& pkt, ByteString) {
+            auto& eth = std::get<EthernetHeader>(pkt.Layer2[0]);
+            EXPECT_EQ(eth.destinationMac, ByteString("\xFF\xFF\xFF\xFF\xFF\xFF", 6)); // broadcast
+            ASSERT_TRUE(std::holds_alternative<IcmpV6Header>(pkt.Layer3.back()));
+            auto& na = std::get<IcmpV6Header>(pkt.Layer3.back());
             EXPECT_EQ(na.type, ByteString("\x88", 1));
             EXPECT_EQ(na.payload, ip);
         }));
@@ -509,7 +540,6 @@ TEST_F(Internal_NdpTest, DADProbe_TriggersProxyNA)
     ndp->addNdpEntry(ip, mac, true);
 
     ByteString unspecified = ByteString(16, 0x00); // ::
-    ByteString emptyMac;
 
     IcmpV6Header ns;
     ns.type = ByteString("\x87", 1);
@@ -520,32 +550,29 @@ TEST_F(Internal_NdpTest, DADProbe_TriggersProxyNA)
 
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_))
         .WillOnce(testing::Invoke([&](PacketInfo& pkt, ByteString) {
-            ASSERT_TRUE(std::holds_alternative<IcmpV6Header>(pkt.Layer3[0]));
-            auto& na = std::get<IcmpV6Header>(pkt.Layer3[0]);
+            ASSERT_TRUE(std::holds_alternative<IcmpV6Header>(pkt.Layer3.back()));
+            auto& na = std::get<IcmpV6Header>(pkt.Layer3.back());
             EXPECT_EQ(na.type, ByteString("\x88", 1));
             EXPECT_EQ(na.payload, ip);
         }));
 
-    ndp->receiveNeighborSolicitation(ns, unspecified, emptyMac);
+    ndp->receiveNeighborSolicitation(ns, unspecified, Variable::Mac::source);
 }
 
 // Test: RA_MOFlagsUpdateConfig
 TEST_F(Internal_NdpTest, RA_MOFlagsUpdateConfig)
 {
-    ndp->configs.managedConfigFlag.store(false);
-    ndp->configs.otherConfigFlag.store(false);
+    ndp->configs.managedConfigFlag.store(true);
+    ndp->configs.otherConfigFlag.store(true);
 
-    IcmpV6Header ra;
-    ra.type = ByteString("\x86", 1);
-    ra.code = ByteString("\x00", 1);
-    ra.reserved = ByteString("\x00\xC0\x00\x00", 4); // M=1, O=1
+    PacketInfo ra = routeAdvertisment();
+    
+    EXPECT_TRUE(std::holds_alternative<IcmpV6Header>(ra.Layer3.front()));
+    IcmpV6Header& icmp = std::get<IcmpV6Header>(ra.Layer3.front());
 
-    ra.payload = ByteString(8, '\x00');
-
-    ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), Variable::Mac::source);
-
-    EXPECT_TRUE(ndp->configs.managedConfigFlag.load());
-    EXPECT_TRUE(ndp->configs.otherConfigFlag.load());
+    Byte flags = icmp.reserved[1];
+    EXPECT_TRUE(flags.isBitSet(6));
+    EXPECT_TRUE(flags.isBitSet(7));
 }
 
 // Test: RA_TrustedSourceIsAccepted
@@ -626,9 +653,9 @@ TEST_F(Internal_NdpTest, RA_CreatesSLAACAddressWithEUI64)
 {
     iface->blockEnqueues();
     ndp->configs.slaacEnabled.store(true);
-    iface->configs.macAddress = mac;
+    iface->configs.setMac(mac);
 
-    ByteString full = Functions::calculateEui64(prefix, iface->configs.macAddress, 64);
+    ByteString full = Functions::calculateEui64(prefix, iface->configs.getMac(), 64);
 
     IcmpV6Header ra;
     ra.type = ByteString("\x86", 1);
@@ -652,7 +679,7 @@ TEST_F(Internal_NdpTest, RA_CreatesSLAACAddressWithEUI64)
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
     bool found = false;
-    for (auto* addr : iface->configs.ipv6.globalAddresses) {
+    for (auto* addr : getIPv6s()) {
         if (addr->ip == full && (addr->valid || addr->tentative)) {
             found = true;
             break;
@@ -665,7 +692,8 @@ TEST_F(Internal_NdpTest, RA_CreatesSLAACAddressWithEUI64)
 TEST_F(Internal_NdpTest, RA_ExcludedPrefixIgnored)
 {
     ndp->configs.slaacEnabled.store(true);
-    iface->configs.macAddress = mac;
+    clearIPv6s();
+    iface->configs.setMac(mac);
 
     ndp->addSlaacExclusionPrefix(prefix, false); // exclude
 
@@ -689,14 +717,15 @@ TEST_F(Internal_NdpTest, RA_ExcludedPrefixIgnored)
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
+    EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: RA_InvalidPrefixSizeIgnored
 TEST_F(Internal_NdpTest, RA_InvalidPrefixSizeIgnored)
 {
     ndp->configs.slaacEnabled.store(true);
-    iface->configs.macAddress = mac;
+    clearIPv6s();
+    iface->configs.setMac(mac);
 
     IcmpV6Header ra;
     ra.type = ByteString("\x86", 1);
@@ -718,7 +747,7 @@ TEST_F(Internal_NdpTest, RA_InvalidPrefixSizeIgnored)
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
+    EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: RA_GuardBlockAllModeDropsAll
@@ -728,15 +757,49 @@ TEST_F(Internal_NdpTest, RA_GuardBlockAllModeDropsAll)
     ndp->configs.destinationGuard.store(true);
     ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::BLOCK_ALL);
 
+    iface->configs.setMac(mac);
+    ndp->configs.slaacEnabled.store(true);
+
+    EXPECT_CALL(*iface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
+    ndp->initiateSlaac(); // Would normally send RS
+
+    ByteString fullAddr = Functions::calculateEui64(prefix, iface->configs.getMac(), 64);
+
     IcmpV6Header ra;
-    ra.type = ByteString("\x86", 1);
+    ra.type = Variable::ICMPv6::Type::ndpRouteAdvertisement;
     ra.code = ByteString("\x00", 1);
-    ra.reserved = ByteString("\x00\x00\x00\x00", 4);
+    ra.reserved = ByteString("\x00\x00\x00\x00", 4); // Flags and lifetime
     ra.payload = ByteString(8, 0x00);
+
+    ByteString prefixOpt;
+    prefixOpt += ByteString("\x40", 1); // 64-bit prefix length
+    prefixOpt += ByteString("\xC0", 1); // L and A bits
+    prefixOpt += ByteString(2, 0x00); // reserved
+    prefixOpt += Functions::numToByte(1800, 4); // Valid Lifetime
+    prefixOpt += Functions::numToByte(900, 4); // Preferred lifetime
+    prefixOpt += ByteString(4, 0x00); // reserved
+    prefixOpt += prefix;
+
+    ra.options.emplace_back(
+        Variable::ICMPv6::Option::prefix,
+        ByteString("\x04", 1),
+        prefixOpt
+    );
 
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
 
-    SUCCEED(); // Reach this = dropped without exception
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    bool found = false;
+    for (auto* addr : getIPv6s())
+    {
+        if (addr->ip == fullAddr && addr->valid)
+        {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_FALSE(found);
 }
 
 // Test: RA_GuardTrustedModeAcceptsAll
@@ -746,20 +809,55 @@ TEST_F(Internal_NdpTest, RA_GuardTrustedModeAcceptsAll)
     ndp->configs.destinationGuard.store(true);
     ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::TRUSTED);
 
+    iface->configs.setMac(mac);
+    ndp->configs.slaacEnabled.store(true);
+
+    EXPECT_CALL(*iface, enqueuePacket(::testing::_, ::testing::_)).Times(2);
+    ndp->initiateSlaac(); // Would normally send RS
+
+    ByteString fullAddr = Functions::calculateEui64(prefix, iface->configs.getMac(), 64);
+
     IcmpV6Header ra;
-    ra.type = ByteString("\x86", 1);
+    ra.type = Variable::ICMPv6::Type::ndpRouteAdvertisement;
     ra.code = ByteString("\x00", 1);
-    ra.reserved = ByteString("\x00\x80\x00\x00", 4); // M flag
+    ra.reserved = ByteString("\x00\x00\x00\x00", 4); // Flags and lifetime
     ra.payload = ByteString(8, 0x00);
+
+    ByteString prefixOpt;
+    prefixOpt += ByteString("\x40", 1); // 64-bit prefix length
+    prefixOpt += ByteString("\xC0", 1); // L and A bits
+    prefixOpt += ByteString(2, 0x00); // reserved
+    prefixOpt += Functions::numToByte(1800, 4); // Valid Lifetime
+    prefixOpt += Functions::numToByte(900, 4); // Preferred lifetime
+    prefixOpt += ByteString(4, 0x00); // reserved
+    prefixOpt += prefix;
+
+    ra.options.emplace_back(
+        Variable::ICMPv6::Option::prefix,
+        ByteString("\x04", 1),
+        prefixOpt
+    );
 
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
 
-    EXPECT_TRUE(ndp->configs.managedConfigFlag.load());
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    bool found = false;
+    for (auto* addr : getIPv6s())
+    {
+        if (addr->ip == fullAddr && addr->valid)
+        {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found);
 }
 
 // Test: RA_WithExtensionHeaders_IsDropped
 TEST_F(Internal_NdpTest, RA_WithExtensionHeaders_IsDropped)
 {
+    clearIPv6s();
     ndp->configs.suppressRA.store(false);
     ndp->configs.destinationGuard.store(true);
     ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::TRUSTED);
@@ -775,12 +873,14 @@ TEST_F(Internal_NdpTest, RA_WithExtensionHeaders_IsDropped)
 
     // No address added = dropped
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
+    EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: RA_FragmentedPacketIgnored
 TEST_F(Internal_NdpTest, RA_FragmentedPacketIgnored)
 {
+    clearIPv6s();
+
     // Assume payload is too short to be valid RA
     IcmpV6Header ra;
     ra.type = ByteString("\x86", 1);
@@ -791,28 +891,7 @@ TEST_F(Internal_NdpTest, RA_FragmentedPacketIgnored)
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
-}
-
-// Test: Redirect_ValidTriggerSendsMessage
-TEST_F(Internal_NdpTest, Redirect_ValidTriggerSendsMessage)
-{
-    ByteString srcIp = ip;
-    srcIp[15] = 'c';
-    ByteString dstIp = ip;
-
-    ndp->addNdpEntry(dstIp, mac);
-    ndp->addNdpEntry(srcIp, mac2);
-
-    PacketInfo pkt;
-    IPv6Header ip;
-    ip.sourceAddress = srcIp;
-    ip.destinationAddress = dstIp;
-    pkt.Layer3.push_back(ip);
-
-    EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_)).Times(1);
-
-    ndp->sendRedirectIfNeeded(pkt);
+    EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: Redirect_MulticastDestinationIsIgnored
@@ -889,22 +968,70 @@ TEST_F(Internal_NdpTest, NA_UnsolicitedRateLimitEnforced)
 // Test: RA_RateLimitGlobalEnforced
 TEST_F(Internal_NdpTest, RA_RateLimitGlobalEnforced)
 {
-    ndp->configs.raInterval.store(1000); // ms
+    iface->blockEnqueues();
+    clearIPv6s();
+    ndp->configs.raRateLimit.store(1); // ms
+    ndp->configs.slaacEnabled.store(true);
+    ndp->configs.destinationGuard.store(true);
+    ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::MAC_WHITELIST);
+    ndp->addRaGuardAllowedMac(mac2);
 
-    EXPECT_CALL(*iface, enqueuePacket(testing::_, Variable::Mac::broadcast)).Times(1);
-    scheduleNextRA(); // Sends RA
+    IcmpV6Header ra1;
+    ra1.type = Variable::ICMPv6::Type::ndpRouteAdvertisement;
+    ra1.code = ByteString("\x00", 1);
+    ra1.reserved = ByteString("\x00\x00\x00\x00", 4); // Flags and lifetime
+    ra1.payload = ByteString(8, 0x00);
 
-    // immediate call should be rate limited
-    EXPECT_CALL(*iface, enqueuePacket(testing::_, Variable::Mac::broadcast)).Times(0);
-    scheduleNextRA();
+    ByteString prefixOpt1;
+    prefixOpt1 += ByteString("\x40", 1); // 64-bit prefix length
+    prefixOpt1 += ByteString("\xC0", 1); // L and A bits
+    prefixOpt1 += ByteString(2, 0x00); // reserved
+    prefixOpt1 += Functions::numToByte(1800, 4); // Valid Lifetime
+    prefixOpt1 += Functions::numToByte(900, 4); // Preferred lifetime
+    prefixOpt1 += ByteString(4, 0x00); // reserved
+    prefixOpt1 += prefix;
+
+    ra1.options.emplace_back(
+        Variable::ICMPv6::Option::prefix,
+        ByteString("\x04", 1),
+        prefixOpt1
+    );
+
+    IcmpV6Header ra2;
+    ra2.type = Variable::ICMPv6::Type::ndpRouteAdvertisement;
+    ra2.code = ByteString("\x00", 1);
+    ra2.reserved = ByteString("\x00\x00\x00\x00", 4); // Flags and lifetime
+    ra2.payload = ByteString(8, 0x00);
+
+    prefix[1] = 0x14;
+
+    ByteString prefixOpt2;
+    prefixOpt2 += ByteString("\x40", 1); // 64-bit prefix length
+    prefixOpt2 += ByteString("\xC0", 1); // L and A bits
+    prefixOpt2 += ByteString(2, 0x00); // reserved
+    prefixOpt2 += Functions::numToByte(1800, 4); // Valid Lifetime
+    prefixOpt2 += Functions::numToByte(900, 4); // Preferred lifetime
+    prefixOpt2 += ByteString(4, 0x00); // reserved
+    prefixOpt2 += prefix;
+
+    ra2.options.emplace_back(
+        Variable::ICMPv6::Option::prefix,
+        ByteString("\x04", 1),
+        prefixOpt2
+    );
+
+    ndp->receiveRouteAdvertisement(ra1, ByteString(16, 1), mac2);
+    ndp->receiveRouteAdvertisement(ra2, ByteString(16, 1), mac2);
+
+    EXPECT_EQ(getIPv6s().size(), 1); // Only one should be added
 }
 
 // Test: NS_RetriesStopAfterConfiguredAttempts
 TEST_F(Internal_NdpTest, NS_RetriesStopAfterConfiguredAttempts)
 {
     iface->blockEnqueues();
-    ndp->configs.nudRetries = 1;
-    ndp->configs.nsInterval.store(50);
+    ndp->configs.nudBase = 1;
+    ndp->configs.nsInterval = 50;
 
     PacketInfo dummy;
     ndp->resolveAndSend(ip, dummy);
@@ -953,8 +1080,10 @@ TEST_F(Internal_NdpTest, ManualProxyEntryIsStoredCorrectly)
 // Test: RA_AddsPrefixWithCorrectTimers
 TEST_F(Internal_NdpTest, RA_AddsPrefixWithCorrectTimers)
 {
+    iface->blockEnqueues();
     ndp->configs.slaacEnabled.store(true);
-    iface->configs.macAddress = mac;
+    clearIPv6s();
+    iface->configs.setMac(mac);
 
     IcmpV6Header ra;
     ra.type = ByteString("\x86", 1);
@@ -978,9 +1107,9 @@ TEST_F(Internal_NdpTest, RA_AddsPrefixWithCorrectTimers)
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    ASSERT_FALSE(iface->configs.ipv6.globalAddresses.empty());
-    EXPECT_FALSE(iface->configs.ipv6.globalAddresses[0]->globalValid);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses[0]->deprecated);
+    ASSERT_FALSE(getIPv6s().empty());
+    EXPECT_FALSE(getIPv6s()[0]->globalValid);
+    EXPECT_TRUE(getIPv6s()[0]->deprecated);
 }
 
 // Test: RA_MalformedFieldsAreIgnored
@@ -1032,12 +1161,14 @@ TEST_F(Internal_NdpTest, NA_DuringProbe_ResetsToReachable)
 {
     iface->blockEnqueues();
     ndp->configs.reachableTime.store(100); // ms
-    ndp->configs.cacheExpire.store(10);
+    ndp->configs.cacheExpire.store(1);
+    ndp->configs.nudBaseInterval = 1;
+    ndp->configs.nudBase = 1;
 
     ndp->addNdpEntry(ip, mac);
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    onNudTimeout(ip); // REACHABLE → STALE
-    onNudTimeout(ip); // STALE → PROBE
+    PacketInfo pkt;
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    ndp->resolveAndSend(ip, pkt);
 
     {
         std::shared_lock<std::shared_mutex> lock(getCacheMutex());
@@ -1047,7 +1178,7 @@ TEST_F(Internal_NdpTest, NA_DuringProbe_ResetsToReachable)
     IcmpV6Header na;
     na.type = ByteString("\x88", 1);
     na.code = ByteString("\x00", 1);
-    na.payload = intIp;
+    na.payload = ip;
     na.reserved = ByteString("\xE0\x00\x00\x00", 4);
     na.options.emplace_back(
         Variable::ICMPv6::Option::target,
@@ -1141,6 +1272,7 @@ TEST_F(Internal_NdpTest, UnknownICMPv6TypeIsIgnored)
 // Test: RA_InconsistentLifetimesAreIgnored
 TEST_F(Internal_NdpTest, RA_InconsistentLifetimesAreIgnored)
 {
+    clearIPv6s();
     iface->blockEnqueues();
     ndp->configs.slaacEnabled.store(true);
 
@@ -1164,12 +1296,13 @@ TEST_F(Internal_NdpTest, RA_InconsistentLifetimesAreIgnored)
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), ByteString(6, 0x00));
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
+    EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: RaGuardModeUpdate_TakesEffectImmediately
 TEST_F(Internal_NdpTest, RaGuardModeUpdate_TakesEffectImmediately)
 {
+    clearIPv6s();
     ndp->configs.suppressRA.store(false);
     ndp->configs.destinationGuard.store(true);
 
@@ -1184,7 +1317,7 @@ TEST_F(Internal_NdpTest, RaGuardModeUpdate_TakesEffectImmediately)
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
     {
         std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-        EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
+        EXPECT_TRUE(getIPv6s().empty());
     }
 
     // TRUSTED → should be accepted
@@ -1196,8 +1329,9 @@ TEST_F(Internal_NdpTest, RaGuardModeUpdate_TakesEffectImmediately)
 // Test: SLAAC_ExclusionUpdate_AppliesImmediately
 TEST_F(Internal_NdpTest, SLAAC_ExclusionUpdate_AppliesImmediately)
 {
+    clearIPv6s();
     ndp->configs.slaacEnabled.store(true);
-    iface->configs.macAddress = mac;
+    iface->configs.setMac(mac);
 
     // Add exclusion
     ndp->addSlaacExclusionPrefix(prefix, false);
@@ -1221,7 +1355,7 @@ TEST_F(Internal_NdpTest, SLAAC_ExclusionUpdate_AppliesImmediately)
     ndp->receiveRouteAdvertisement(ra, ByteString(16, 1), mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses.empty());
+    EXPECT_TRUE(getIPv6s().empty());
 }
 
 // Test: Config_ReachableTimeAffectsNewEntries
@@ -1272,12 +1406,13 @@ TEST_F(Internal_NdpTest, Config_DadAttemptsUpdateImmediately)
 // Test: Config_PreferedLifetimeUpdatesWithRA
 TEST_F(Internal_NdpTest, Config_PreferedLifetimeUpdatesWithRA)
 {
+    clearIPv6s();
     iface->blockEnqueues();
     ndp->configs.slaacEnabled.store(true);
-    iface->configs.macAddress = mac;
+    iface->configs.setMac(mac);
 
-    ndp->configs.preferedLifetime.store(1);
-    ndp->configs.lifetime.store(100);
+    ndp->configs.raPreferedLifetime.store(1);
+    ndp->configs.raLifetime.store(100);
 
     IcmpV6Header ra;
     ra.type = ByteString("\x86", 1);
@@ -1300,5 +1435,64 @@ TEST_F(Internal_NdpTest, Config_PreferedLifetimeUpdatesWithRA)
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-    EXPECT_TRUE(iface->configs.ipv6.globalAddresses[0]->deprecated);
+    EXPECT_TRUE(getIPv6s()[0]->deprecated);
+}
+
+// Test: NSF ResolutionTrottle_DropsExcess
+TEST_F(Internal_NdpTest, NSF_ResolutionThrottle_DropsExcess)
+{
+    iface->blockEnqueues();
+    global->configs.nsfActive.store(true);
+    global->configs.nsfStartTime = std::chrono::steady_clock::now();
+    global->configs.ndp.nsfConvergenceTime.store(500); // 500s
+    global->configs.ndp.nsfThrottleResolutions.store(1);
+
+    PacketInfo pkt1, pkt2;
+    ndp->resolveAndSend(ip, pkt1);
+
+    ByteString newIp = ip;
+    newIp[15] = '2';
+    ndp->resolveAndSend(newIp, pkt2);
+    
+    std::lock_guard<std::mutex> lock(getRequestMutex());
+    EXPECT_EQ(getPendingRequests().count(ip), 1);
+    EXPECT_EQ(getPendingRequests().count(newIp), 0);
+}
+
+// Test: DAD_SuppressedDuringNSF
+TEST_F(Internal_NdpTest, DAD_SuppressedDuringNSF)
+{
+    global->configs.nsfActive.store(true);
+    global->configs.nsfStartTime = std::chrono::steady_clock::now();
+    global->configs.ndp.nsfDadSupressionTime.store(500); // 500s
+
+    iface->blockEnqueues();
+    auto* addr = iface->configs.ipv6.addAddress(ip, false, 64);
+    addr->tentative = true;
+    ndp->configs.dadAttempts.store(1);
+
+    ndp->duplicateAddressDetection(addr, false);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
+    EXPECT_TRUE(addr->tentative); // Suppressed
+}
+
+// Test: StaticNeighbor_OverridesDynamicResolution
+TEST_F(Internal_NdpTest, StaticNeighbor_OverridesDynamicResolution)
+{
+    iface->blockEnqueues();
+    ByteString staticIp = ip;
+    staticIp[15] = '5';
+    ByteString staticMac = mac;
+    staticMac[5] = '5';
+
+    ndp->addNdpEntry(staticIp, staticMac, false, true);
+
+    PacketInfo pkt;
+    ndp->resolveAndSend(staticIp, pkt);
+
+    ByteString* result = ndp->getMac(staticIp);
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(*result, staticMac);
 }

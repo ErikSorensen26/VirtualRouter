@@ -119,7 +119,7 @@ public:
     }
 
 private:
-    static void packetHandler(u_char* user, const struct pcap_pkthdr* header, const u_char* packet) {
+    static void packetHandler(u_char* user, const struct pcap_pkthdr* header, const uint8_t* packet) {
         auto* sniffer = reinterpret_cast<PacketSniffer*>(user);
         if (!sniffer || header->caplen == 0) return;
 

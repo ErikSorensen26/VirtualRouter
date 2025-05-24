@@ -35,6 +35,7 @@ target_include_directories(VirtualRouter PUBLIC ${HEADER_DIRS})
 target_include_directories(VirtualRouter PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/common
     ${CMAKE_CURRENT_SOURCE_DIR}/external
+    ${CMAKE_CURRENT_SOURCE_DIR}/types
 )
 
 # Add source files from common and external directories (if any)

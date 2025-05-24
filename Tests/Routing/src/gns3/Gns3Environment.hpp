@@ -4,13 +4,14 @@
 #include <CliEngine.h>
 #include <CliSession.h>
 #include <Gns3Harness.hpp>
+#include <Global.h>
 
 class Environment
 {
 public:
-    Environment()
+    Environment(Global& global)
     {
-        engine = new CliEngine();
+        engine = new CliEngine(global);
         gns3 = new Gns3Harness();
         session = engine->createSession();
     }

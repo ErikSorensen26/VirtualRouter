@@ -5,14 +5,15 @@ enable_testing()
 file(GLOB_RECURSE CONFIG_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
 # Find all mock headers
-file(GLOB_RECURSE UTIL_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.hpp ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.h ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.cpp)
+file(GLOB_RECURSE UTIL_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.hpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gns3/*.h ${CMAKE_CURRENT_SOURCE_DIR}/src/gns3/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/gns3/*.hpp)
 
 # This list will keep track of all of the test executable
 set(ALL_TEST_EXECUTABLES)
 
 foreach(test_file ${CONFIG_SOURCES})
     # Get a test name from the source file name (without extension)
-    get_filename_component(test_name ${test_file} NAME_WE)
+    get_filename_component(base_name ${test_file} NAME_WE)
+    set(test_name "Routing_${base_name}")
 
     # Create an executable for each test file
     add_executable(${test_name} ${test_file} ${UTIL_SOURCES})
