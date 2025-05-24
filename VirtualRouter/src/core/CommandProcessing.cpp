@@ -1,5 +1,6 @@
 #include <CliEngine.h>
 #include <CommandProcessor.h>
+#include "Mode.hpp"
 
 bool CliSession::executeCommand(std::string &command)
 {

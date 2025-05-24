@@ -1,10 +1,13 @@
 #include <vector>
 #include <string>
 #include <CliSession.h>
+#include <CliEngine.h>
+#include <Global.h>
 
 #ifndef COMMAND_PROCESSOR_H
 #define COMMAND_PROCESSOR_H
 
+class Global;
 class VirtualRouter;
 class Interface;
 namespace Protocol
@@ -26,7 +29,7 @@ namespace EigrpConfigs
 class CommandProcessor
 {
 public:
-    CommandProcessor(CliSession* term) : terminal(*term) {}
+    CommandProcessor(CliSession& term) : terminal(term), global(term.engine.global) {}
 
     bool handleUserExec(const std::vector<std::string>& command);
     bool handlePriviledgedExec(const std::vector<std::string>& command);
@@ -43,7 +46,7 @@ public:
 private:
 
     CliSession& terminal;
-    Global& global = Global::getInstance();
+    Global& global;
 
     Interface* currentInterface;
 

@@ -1,7 +1,9 @@
 #include "CommandProcessor.h"
+#include <VirtualRouter.h>
 #include <CliEngine.h>
 #include <Eigrp.h>
 #include <algorithm>
+#include <InterfaceConfigs.h>
 
 bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
 {
@@ -19,7 +21,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			{
 				vrf = commandStream[4];
 			}
-			auto vrfInstance = Global::getInstance().getRoutingInstance(vrf, AddressFamily::IPv4);
+			auto vrfInstance = global.getRoutingInstance(vrf, AddressFamily::IPv4);
 			if (!vrfInstance)
 			{
 				std::cout << "\n%" << "VRF " << vrf << " does not exist or is not enabled for IPv4";
@@ -43,7 +45,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				}
 				if (!as->ipv4)
 				{
-					as->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, AddressFamily::IPv4, Global::getInstance().getRoutingInstance("default"));
+					as->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, AddressFamily::IPv4, global.getRoutingInstance("default"));
 				}
 				currentEigrp = as->ipv4;
 				if (terminal.workingDirectory->size() > 0 && (*terminal.workingDirectory)[0].contains("eigrp_classic_vrf"))
@@ -163,7 +165,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			if (terminal.modeConfig.currentMode == Mode::routerAddressFamily)
 			{
 				terminal.exitMode(Mode::routing);
-				currentVrf = Global::getInstance().getRoutingInstance("default");
+				currentVrf = global.getRoutingInstance("default");
 			}
 			else
 			{
@@ -466,7 +468,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							}
 							else if (!eigrpAs->ipv4)
 							{
-								eigrpAs->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, af, Global::getInstance().getRoutingInstance("default"), true);
+								eigrpAs->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, af, global.getRoutingInstance("default"), true);
 								eigrpAs->ipv4Named = true;
 								currentEigrpNamed->ipv4 = eigrpAs->ipv4;
 								currentEigrp = eigrpAs->ipv4;
@@ -503,7 +505,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							}
 							else if (!eigrpAs->ipv6)
 							{
-								eigrpAs->ipv6 = new Protocol::Eigrp(terminal.routingProtocolID, af, Global::getInstance().getRoutingInstance("default"), true);
+								eigrpAs->ipv6 = new Protocol::Eigrp(terminal.routingProtocolID, af, global.getRoutingInstance("default"), true);
 								eigrpAs->ipv6Named = true;
 								currentEigrpNamed->ipv6 = eigrpAs->ipv6;
 								currentEigrp = eigrpAs->ipv6;
@@ -552,7 +554,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					vrf = commandStream[3];
 					as = static_cast<uint32_t>(std::stoi(commandStream[5]));
 				}
-				currentVrf = Global::getInstance().getRoutingInstance(vrf);
+				currentVrf = global.getRoutingInstance(vrf);
 				// TODO add service eigrp
 			}
 		}
@@ -702,7 +704,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				}
 				terminal.isExitCommand = true;
 
-				currentVrf = Global::getInstance().getRoutingInstance("default");
+				currentVrf = global.getRoutingInstance("default");
 			}
 			else if (commandStream[1] == "maximum-prefix")
 			{

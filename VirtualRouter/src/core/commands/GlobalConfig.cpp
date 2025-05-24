@@ -1,12 +1,59 @@
 #include "CommandProcessor.h"
+#include <VirtualRouter.h>
 #include <CliEngine.h>
 #include <DhcpServer.h>
 #include <Eigrp.h>
+#include <Arp.h>
 #include <Ospf.h>
 #include <Bgp.h>
+#include <Ndp.h>
 
 bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> commandStream)
 {
+	if (commandStream[0] == "arp")
+	{
+		int offset = 0;
+		std::string vrfName = "default";
+		if (commandStream[1] == "vrf")
+		{
+			vrfName = commandStream[2];
+			offset = 2;
+		}
+
+		std::shared_lock<std::shared_mutex> lock(global.configs.arp.neighborMutex);
+		if (negate && global.configs.arp.neighbors.contains(vrfName) && global.configs.arp.neighbors.contains(commandStream[offset + 1]))
+		{
+			GlobalConfigs::Arp::Neighbor entry = global.configs.arp.neighbors[vrfName][commandStream[offset + 1]];
+			auto* vrf = global.getRoutingInstance(vrfName, AddressFamily::IPv4);
+			if (auto iface = vrf ? vrf->getInterface(entry.interface.first, entry.interface.second) : nullptr)
+			{
+				if (iface->arp)
+				{
+					iface->arp->removeArpEntry(commandStream[offset + 1], true);
+				}
+			}
+			global.configs.arp.neighbors[vrfName].erase(commandStream[offset + 1]);
+		}
+		else
+		{
+			GlobalConfigs::Arp::Neighbor entry{
+				commandStream[offset + 2],
+				{terminal.engine.getInterfaceType(commandStream[offset + 3]), std::stoi(commandStream[offset + 4])},
+				commandStream.size() == 6
+			};
+			global.configs.arp.neighbors[vrfName].emplace(
+				commandStream[offset + 1], entry
+			);
+			auto* vrf = global.getRoutingInstance(vrfName, AddressFamily::IPv4);
+			if (auto iface = vrf ? vrf->getInterface(entry.interface.first, entry.interface.second) : nullptr)
+			{
+				if (iface->arp)
+				{
+					iface->arp->addArpEntry(commandStream[1], entry.mac, entry.proxy, true);
+				}
+			}
+		}
+	}
 	if (commandStream[0] == "exit")
 	{
 		terminal.exitMode(Mode::privilegedExec);
@@ -99,7 +146,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			{
 				if (commandStream[4] == "timeout")
 				{
-					std::unique_lock<std::shared_mutex> lock(Global::getInstance().dhcpServer->globalConfig.configMutex);
+					std::unique_lock<std::shared_mutex> lock(global.dhcpServer->globalConfig.configMutex);
 					global.dhcpServer->globalConfig.databaseSaveInterval[commandStream[3]] = std::stoi(commandStream[5]);
 				}
 				if (commandStream[4] == "write-delay")
@@ -134,8 +181,8 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 						return false;
 					}
 				}
-				std::unique_lock<std::shared_mutex> lock(Global::getInstance().dhcpServer->vrfConfigs.configMutex);
-				Global::getInstance().dhcpServer->vrfConfigs.excludedAddresses[currentVrf->instanceName][ipStart].insert(size);
+				std::unique_lock<std::shared_mutex> lock(global.dhcpServer->vrfConfigs.configMutex);
+				global.dhcpServer->vrfConfigs.excludedAddresses[currentVrf->instanceName][ipStart].insert(size);
 			}
 			else if (commandStream[2] == "global-options")
 			{
@@ -356,7 +403,150 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 	}
 	else if (commandStream[0] == "ipv6")
 	{
-		if (commandStream[1] == "router")
+		if (commandStream[1] == "nd")
+		{
+			if (commandStream[2] == "cache")
+			{
+				if (commandStream[3] == "expire")
+				{
+					uint16_t value = negate ? 600 : std::stoi(commandStream[4]);
+					global.configs.ndp.cacheExpire.store(value, std::memory_order_release);
+
+					bool setRefresh = (commandStream.size() > 5 && !negate) || negate;
+
+					for (const auto& [_, iface] : global.getInterfaceList())
+					{
+						if (!iface->ndp->configs.cacheExpireLocal)
+						{
+							iface->ndp->configs.cacheExpire.store(value, std::memory_order_release); 
+						}
+						if (setRefresh && !iface->ndp->configs.refreshLocal)
+						{
+							iface->ndp->configs.refresh.store(!negate, std::memory_order_relaxed);
+						}
+					}
+				}
+				else if (commandStream[3] == "interface-limit")
+				{
+					uint16_t value = negate ? 600 : std::stoi(commandStream[4]);
+					global.configs.ndp.interfaceLimit.store(value, std::memory_order_release);
+
+					bool setLog = false;
+					uint16_t log;
+					if ((commandStream.size() > 5 && !negate) || negate)
+					{
+						setLog = true;
+						log = negate ? 0 : std::stoi(commandStream[6]);
+						global.configs.ndp.loggingRate.store(log, std::memory_order_release);
+					}
+
+					for (const auto& [_, iface] : global.getInterfaceList())
+					{
+						if (!iface->ndp->configs.interfaceLimitLocal)
+						{
+							iface->ndp->configs.interfaceLimit.store(value, std::memory_order_release); 
+						}
+						if (setLog && !iface->ndp->configs.loggingRateLocal)
+						{
+							iface->ndp->configs.loggingRate.store(log, std::memory_order_release);
+						}
+					}
+				}
+			}
+			else if (commandStream[2] == "dad")
+			{
+				uint16_t time = negate ? 1000 : std::stoi(commandStream[4]);
+				for (const auto& [_, iface] : global.getInterfaceList())
+				{
+					if (!iface->ndp->configs.dadTimeLocal)
+					{
+						iface->ndp->configs.dadTime.store(time, std::memory_order_release);
+					}
+				}
+			}
+			else if (commandStream[2] == "host")
+			{
+				if (commandStream[3] == "mode")
+				{
+					global.configs.ndp.strictMode.store(!negate, std::memory_order_relaxed);
+				}
+			}
+			else if (commandStream[2] == "nsf")
+			{
+				if (commandStream[3] == "convergence")
+				{
+					global.configs.ndp.nsfConvergenceTime.store(negate ? 180 : std::stoi(commandStream[4]), std::memory_order_release);
+				}
+				else if (commandStream[3] == "dad")
+				{
+					if (commandStream[4] == "supress")
+					{
+						global.configs.ndp.nsfDadSupressionTime.store(negate ? 180 : std::stoi(commandStream[5]), std::memory_order_release);
+					}
+				}
+				else if (commandStream[3] == "throttle")
+				{
+					global.configs.ndp.nsfThrottleResolutions.store(negate ? 1000 : std::stoi(commandStream[4]), std::memory_order_release);
+				}
+			}
+			else if (commandStream[2] == "nud")
+			{
+				if (commandStream[3] == "limit")
+				{
+					global.configs.ndp.nudLimit.store(negate ? 5 : std::stoi(commandStream[4]), std::memory_order_release);
+					if (commandStream.size() > 5)
+					{
+						global.configs.ndp.nudRefreshPeriod.store(negate ? 5 : std::stoi(commandStream[6]), std::memory_order_release);
+					}
+				}
+			}
+			else if (commandStream[2] == "reachable-time")
+			{
+				uint16_t value = negate ? 30000 : std::stoi(commandStream[3]);
+				global.configs.ndp.reachableTime.store(value, std::memory_order_release);
+				for (const auto& [_, iface] : global.getInterfaceList())
+				{
+					if (!iface->ndp->configs.reachableTimeLocal)
+					{
+						iface->ndp->configs.reachableTime.store(value, std::memory_order_release);
+					}
+				}
+			}
+			else if (commandStream[2] == "resolution")
+			{
+				global.configs.ndp.resolutionLimit.store(negate ? 512 : std::stoi(commandStream[5]), std::memory_order_release);
+			}
+			else if (commandStream[2] == "route-owner")
+			{
+				global.configs.ndp.ndAsRouteOwner.store(!negate, std::memory_order_release);
+			}
+		}
+		else if (commandStream[1] == "neighbor")
+		{
+			ByteString address = commandStream[2];
+			if (!negate)
+			{
+				InterfaceType type = terminal.engine.getInterfaceType(commandStream[3]);
+				float id = std::stof(commandStream[4]);
+				
+				GlobalConfigs::Ndp::Neighbor entry{
+					{type, id},
+					commandStream[5]
+				};
+				global.configs.ndp.neighbors.emplace(
+					address,
+					entry
+				);
+				for (const auto& [pair, iface] : global.getInterfaceList())
+				{
+					if (pair.first == type && pair.second == id)
+					{
+						iface->ndp->addNdpEntry(address, entry.macAddress, false, true);
+					}
+				}
+			}
+		}
+		else if (commandStream[1] == "router")
 		{
 			terminal.isList = true;
 			if (commandStream[2] == "eigrp")
@@ -437,11 +627,11 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		InterfaceType interfaceType = terminal.engine.getInterfaceType(type);
 		std::string intType;
 		size_t id = static_cast<size_t>(std::floor(terminal.interfaceID));
-		if (!Global::getInstance().getInterface(terminal.engine.getInterfaceType(type), terminal.interfaceID))
+		if (!global.getInterface(terminal.engine.getInterfaceType(type), terminal.interfaceID))
 		{
 			if (negate)
 			{
-				Global::getInstance().removeInterface(interfaceType, terminal.interfaceID);
+				global.removeInterface(interfaceType, terminal.interfaceID);
 				currentVrf->removeInterface(interfaceType, terminal.interfaceID);
 			}
 			else
@@ -457,12 +647,12 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				InterfaceType interfaceTypeEnum = terminal.engine.getInterfaceType(type);
 				std::string mac = terminal.engine.getMac(interfaceTypeEnum, id);
 				if (mac.empty() || intType == "NO_INTERFACE") return false;
-				Global::getInstance().addInterface(interfaceType, intType, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
-				currentVrf->addInterface(Global::getInstance().getInterface(interfaceTypeEnum, terminal.interfaceID), interfaceType, terminal.interfaceID);
+				global.addInterface(interfaceType, intType, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
+				currentVrf->addInterface(global.getInterface(interfaceTypeEnum, terminal.interfaceID), interfaceType, terminal.interfaceID);
 			}
 		}
 		terminal.configureInterfaceMode(type);
-		currentInterface = Global::getInstance().getInterface(interfaceType, terminal.interfaceID);
+		currentInterface = global.getInterface(interfaceType, terminal.interfaceID);
 	}
 	else if (commandStream[0] == "router")
 	{
@@ -495,7 +685,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 					}
 					if (!as->ipv4)
 					{
-						as->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, AddressFamily::IPv4, Global::getInstance().getRoutingInstance("default"));
+						as->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, AddressFamily::IPv4, global.getRoutingInstance("default"));
 					}
 					currentEigrp = as->ipv4;
 					terminal.configureRoutingMode("eigrp_classic");
