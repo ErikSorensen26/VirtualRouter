@@ -1,26 +1,28 @@
 #include "CliEngine.h"
-
 #include <CommandProcessor.h>
 #include <CliSession.h>
 #include <SaxJson.hpp>
 #include "Mode.hpp"
+#include <InterfaceConfigs.h>
 
 std::string CliEngine::defaultMode = Mode::userExec;
 
-CliEngine::CliEngine() : Configs()
+CliEngine::CliEngine(Global& global, bool test) : Configs(), global(global)
 {
     // Set debug mode based on the input parameter
-    auto& global = Global::getInstance();
-    auto vrf = global.addRoutingInstance("default");
-    vrf->enabledAddressFamilies.insert(AddressFamily::IPv4); // IPv4 Enabled by default
-    initEngine();
+    global.addRoutingInstance("default");
+    if (!test) {
+        initEngine();
+    }
 }
 
-CliEngine::CliEngine(std::shared_ptr<IFileSystem> fs) : Configs(std::move(fs))
+CliEngine::CliEngine(Global& global, IFileSystem* fs, bool test) : Configs(fs), global(global)
 {
     // Set debug mode based on the input parameter
-    auto& global = Global::getInstance();
-    initEngine();
+    global.addRoutingInstance("default");
+    if (!test) {
+        initEngine();
+    }
 }
 
 CliEngine::~CliEngine() 
@@ -185,6 +187,5 @@ InterfaceType CliEngine::getInterfaceType(const std::string& type)
     else if (type == "Tunnel") {return InterfaceType::TUNNEL;}
     else if (type == "Virtual-Template") {return InterfaceType::VIRTUAL_TEMPLATE;}
     else if (type == "Vlan") {return InterfaceType::VLAN;}
-    Logger::getInstance().warn() << "Undefined Interface type detected: " << type << std::endl;
     return InterfaceType::UNDEFINED;
 }

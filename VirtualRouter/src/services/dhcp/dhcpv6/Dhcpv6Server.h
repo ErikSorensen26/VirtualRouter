@@ -160,7 +160,7 @@ namespace Protocol
         /**
          * @brief Constructs a DHCPv6 server.
          */
-        Dhcpv6Server();
+        Dhcpv6Server(Global& global);
 
         /**
          * @brief Destructor

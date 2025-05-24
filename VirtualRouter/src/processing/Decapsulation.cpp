@@ -247,7 +247,7 @@ bool Packet::decodeEthernet(ByteString &ethernetHeader)
     {
         if (currentInterface)
         {
-            currentMac = currentInterface->configs.macAddress;
+            currentMac = currentInterface->configs.getMac();
         }
     }
 

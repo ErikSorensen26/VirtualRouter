@@ -3,7 +3,13 @@
 #ifndef CONSOLE_H
 #define CONSOLE_H
 
-#include "Configs.h" // Include the Configs class header for configuration handling
+#include <string>
+#include <iostream>
+#include <termios.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <memory>
+#include <vector>
 
 class ConsoleTest; ///< Forward declaration of ConsoleTest
 
@@ -86,46 +92,38 @@ class RealConsole : public IConsole
 {
 public:
     virtual ~RealConsole() override = default;
-    bool testingMode = Global::getInstance().testingMode;
 
     void clearScreen() override 
     {
-        if (testingMode) return;
         std::cout << "\033[2J\033[H"; // ANSI escape to clear screen and move cursor to home
     }
 
     void enableLineWrapping() override 
     {
-        if (testingMode) return;
         std::cout << "\033[?7h"; // Enable line wrapping
     }
 
     void clearLineAfterCursor() override 
     {
-        if (testingMode) return;
         std::cout << "\033[K"; // Clear from cursor to end of line
     }
 
     void saveCursorPosition() override 
     {
-        if (testingMode) return;
         std::cout << "\033[s"; // Save cursor position
     }
 
     void restoreCursorPosition() override 
     {
-        if (testingMode) return;
         std::cout << "\033[u"; // Restore cursor position
     }
     void moveCursorToStart() override
     {
-        if (testingMode) return;
         std::cout << "\033[1G";
     }
 
     void moveCursorLeft(size_t count) override 
     {
-        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "D"; // Move cursor left
         }
@@ -133,7 +131,6 @@ public:
 
     void moveCursorRight(size_t count) override 
     {
-        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "C"; // Move cursor right
         }
@@ -141,7 +138,6 @@ public:
 
     void moveCursorUp(size_t count) override 
     {
-        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "A"; // Move cursor up
         }
@@ -149,7 +145,6 @@ public:
 
     void moveCursorDown(size_t count) override 
     {
-        if (testingMode) return;
         if (count > 0) {
             std::cout << "\033[" << count << "B"; // Move cursor down
         }
@@ -157,7 +152,6 @@ public:
 
     void print(std::string str, Color color = Color::WHITE) override 
     {
-        if (testingMode) return;
         switch (color)
         {
             case Color::BLACK:

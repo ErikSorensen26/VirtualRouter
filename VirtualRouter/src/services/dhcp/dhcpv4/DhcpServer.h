@@ -110,7 +110,7 @@ namespace Protocol
         /**
          * @brief COnstructs a new instance of the DhcpServer class and initialized internal structures for lease and network management.
          */
-        DhcpServer();
+        DhcpServer(Global& global);
 
         /**
          * @brief Destructor that cleans up resources, stops the server, and releases any threads or mutexes in use.

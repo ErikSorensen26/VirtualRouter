@@ -1,7 +1,17 @@
 #include <string>
+#include <json.hpp>
 
 #ifndef MODE
 #define MODE
+
+struct ModeConfig
+{
+    std::string currentMode;            ///< Indicates the current operational mode.
+    nlohmann::ordered_json* configNode = nullptr;       ///< Pointer to the current configuration node.
+    std::vector<nlohmann::ordered_json*> modeHistory;   ///< History of configuration nodes for mode management
+    nlohmann::ordered_json* modeSchema = nullptr;       ///< Pointer to the current mode's schema
+    nlohmann::ordered_json* tempModeSchema = nullptr;   ///< Temporary pointer for schema operations.
+};
 
 /**
  * @struct Mode

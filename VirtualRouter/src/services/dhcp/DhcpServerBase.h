@@ -21,6 +21,7 @@
 
 // Forward declarations
 class Interface;
+class Global;
 class Internal_DhcpServerTest;
 class Internal_Dhcpv6ServerTest;
 class Internal_IPPoolTest;
@@ -154,6 +155,8 @@ namespace Protocol
 
         friend struct Dhcp::DhcpNetworkConfig;
 
+        DhcpServerBase(Global& global);
+
         virtual ~DhcpServerBase() = default;
 
         /**
@@ -223,7 +226,7 @@ namespace Protocol
                 size_t end = name.find('.', start);
                 if (end == std::string::npos) end = name.size();
                 size_t len = end - start;
-                out.push_back(static_cast<ByteString::byte>(len));
+                out.push_back(static_cast<uint8_t>(len));
                 out.append(ByteString(name.substr(start, len)));
                 start = end + 1;
             }
@@ -256,6 +259,8 @@ namespace Protocol
          * @brief Abstract handler loop for DHCP processing.
          */
         virtual void dhcpHandler() = 0;
+
+        Global& global;
     };
 }
 

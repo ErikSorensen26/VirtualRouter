@@ -11,7 +11,7 @@ void Configs::printConfig()
     //std::cout << root.dump(4) << std::endl;
 }
 
-Configs::Configs(std::shared_ptr<IFileSystem> fs) : fileSystem(fs) {}
+Configs::Configs(IFileSystem* fs) : fileSystem(fs) {}
 
 void Configs::initConfigs(const std::string& filePath) 
 {

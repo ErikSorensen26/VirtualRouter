@@ -1,12 +1,13 @@
 #include "DhcpServer.h"
 #include <Interface.h>
+#include <Global.h>
 #include <Functions.h>
 #include <random>
 #include <chrono>
 #include <thread>
 #include <LeaseManager.h>
 
-Protocol::DhcpServer::DhcpServer() {}
+Protocol::DhcpServer::DhcpServer(Global& global) : DhcpServerBase(global) {}
 
 Protocol::DhcpServer::~DhcpServer()
 {
@@ -97,7 +98,7 @@ void Protocol::DhcpServer::handleDhcpPacket(const PacketInfo& packet, Interface*
             if (globalConfig.snooping.verifyGiaddr.load(std::memory_order_relaxed))
             {
                 if (!dhcpHeader->relayAgentIP.empty() &&
-                    dhcpHeader->relayAgentIP != iface->configs.getIPv4())
+                    dhcpHeader->relayAgentIP != iface->configs.ipv4.getAddress())
                 {
                     return; // Giaddr mismatch
                 }
@@ -156,13 +157,13 @@ void Protocol::DhcpServer::dhcpHandler()
             {
                 ByteString clientIP;
                 {
-                    clientIP = config->config->interface->configs.getIPv4();
+                    clientIP = config->config->interface->configs.ipv4.getAddress();
                 }
 
                 PacketInfo forceRenewPacket = dhcpBody(
                     clientIP,
                     Variable::IPv4::broadcast,
-                    config->config->interface->configs.macAddress
+                    config->config->interface->configs.getMac()
                 );
 
                 DhcpHeader header = buildDhcpHeader(
@@ -606,7 +607,7 @@ std::vector<DhcpHeader::Option> Protocol::DhcpServer::buildRequestedOptions(cons
         }
         if (!override && opt == Variable::Dhcp::Option::hostname)
         {
-            ByteString hostname = Global::getInstance().getHostname();
+            ByteString hostname = global.getHostname();
             options.emplace_back(
                 Variable::Dhcp::Option::hostname,
                 Functions::numToByte(hostname.size(), 1),
@@ -874,17 +875,13 @@ void Protocol::DhcpServer::processForceRenew(const DhcpHeader& dhcpHeader)
 
     Dhcp::DhcpNetwork* config = dhcpNetworks[matchingNetwork];
 
-    ByteString ipAddress;
-    {
-        std::shared_lock<std::shared_mutex> lock(config->config->interface->configs.ipMutex);
-        ipAddress = config->config->interface->configs.ipv4.ipAddress;
-    }
+    ByteString ipAddress = config->config->interface->configs.ipv4.getAddress();
     
     // Build and send FORCERENEW message
     PacketInfo forceRenewPacket = dhcpBody(
         ipAddress,
         dhcpHeader.clientIP,
-        config->config->interface->configs.macAddress
+        config->config->interface->configs.getMac()
     );
 
     DhcpHeader header = buildDhcpHeader(
@@ -943,7 +940,7 @@ std::vector<DhcpHeader::Option> Protocol::DhcpServer::buildDnsAndIdentityOptions
 
         if (override)
         {
-            hostname = Global::getInstance().getHostname();
+            hostname = global.getHostname();
             dnsList = config->dnsServer;
             domainList = config->domainName;
         }

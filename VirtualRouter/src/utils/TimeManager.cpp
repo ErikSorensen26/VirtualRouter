@@ -1,7 +1,8 @@
 // TimerManager.cpp
 #include <TimeManager.h>
 
-TimeManager::TimeManager() : currentTimerId(1), stop(false)
+TimeManager::TimeManager(ThreadPool& pool)
+    : nextTimerId(1), stop(false), threadPool(pool)
 {
     timerThread = std::thread(&TimeManager::Run, this);
 }
@@ -14,28 +15,87 @@ TimeManager::~TimeManager()
 uint32_t TimeManager::addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    uint32_t timerId = currentTimerId.fetch_add(1);
-    timers[timerId] = TimerEntry{ expirationTime, callback};
-    cv.notify_one(); // Wake up the timer thread
-    return timerId;
+    uint32_t id = nextTimerId++;
+    auto it = timers.emplace(expirationTime, TimerData{ id, std::move(callback), std::chrono::milliseconds(0) });
+    timerIndex[id] = it;
+    cv.notify_one();
+    return id;
 }
 
-bool TimeManager::cancelTimer(uint32_t timerId) 
+uint32_t TimeManager::addRecurringTimer(std::chrono::milliseconds interval, std::function<void()> callback)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    uint32_t id = nextTimerId++;
+    TimePoint now = std::chrono::steady_clock::now();
+    auto it = timers.emplace(now + interval, TimerData{ id, std::move(callback), interval });
+    timerIndex[id] = it;
+    cv.notify_one();
+    return id;
+}
+
+void TimeManager::updateInterval(uint32_t timerId, std::chrono::milliseconds newInterval)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    std::function<void()> callback;
+
+    // Remove current scheduled instance if exists
+    auto it = timerIndex.find(timerId);
+    if (it != timerIndex.end())
+    {
+        callback = it->second->second.callback;
+        timers.erase(it->second);
+        timerIndex.erase(it);
+    }
+
+    // Store new interval
+    dynamicIntervals[timerId] = newInterval;
+
+    // Reschedult immediatly
+    TimePoint nextTime = std::chrono::steady_clock::now();
+    TimerData updated = {
+        timerId,
+        std::move(callback),
+        newInterval
+    };
+    
+    // Insert new timer
+    auto newIt = timers.emplace(nextTime + newInterval, updated);
+    timerIndex[timerId] = newIt;
+    executing[timerId] = false;
+    cv.notify_one();
+}
+
+bool TimeManager::cancelTimer(uint32_t id)
 {
     std::unique_lock<std::mutex> lock(mutex);
     // Try to cancel a timer that is still waiting.
-    auto it = timers.find(timerId);
-    if (it != timers.end())
+    auto it = timerIndex.find(id);
+    if (it != timerIndex.end())
     {
-        timers.erase(it);
-        cv.notify_one();
+        cancelFlags[id].store(true, std::memory_order_relaxed);
+        timers.erase(it->second);
+        timerIndex.erase(it);
+        executing.erase(id);
+        executingThreads.erase(id);
         return true;
     }
     // Otherwise, check if the timer's callback is currently executing.
-    while (currentExecutingTimerId.load(std::memory_order_relaxed) == currentTimerId)
+    if (executing.count(id) && executing[id])
     {
-        cv.wait(lock);
+        if (executingThreads.count(id) && executingThreads[id] == std::this_thread::get_id())
+        {
+            return false;
+        }
+
+        // Wait for the other thread to finish
+        timerDoneCV.wait(lock, [&] { return !executing[id]; });
+        executing.erase(id);
+        executingThreads.erase(id);
+        return true;
     }
+
+    // Timer not found
     return false;
 }
 
@@ -46,9 +106,8 @@ void TimeManager::stopTimer()
         stop = true;
     }
     cv.notify_one();
-    if (timerThread.joinable()) {
+    if (timerThread.joinable())
         timerThread.join();
-    }
 }
 
 void TimeManager::Run() 
@@ -56,38 +115,66 @@ void TimeManager::Run()
     std::unique_lock<std::mutex> lock(mutex);
     while (!stop) 
     {
-        if (timers.empty()) 
+        if (timers.empty())
         {
-            // Wait indefinitely until a new timer is added or stop is called
-            cv.wait(lock, [this](){ return stop || !timers.empty(); });
-        } 
-        else 
-        {
-            auto nextTimerIt = std::min_element(timers.begin(), timers.end(),
-                [](const auto& a, const auto& b) {
-                    return a.second.expirationTime < b.second.expirationTime;
-                });
+            cv.wait(lock, [&] { return stop || !timers.empty(); });
+            continue;
+        }
 
-            auto now = std::chrono::steady_clock::now();
-            if (nextTimerIt->second.expirationTime <= now) 
+        auto now = std::chrono::steady_clock::now();
+        auto nextIt = timers.begin();
+        if (nextIt->first > now)
+        {
+            cv.wait_until(lock, nextIt->first);
+            continue;
+        }
+
+        std::vector<TimerData> toExecute;
+        TimePoint threshold = nextIt->first;
+        while (nextIt != timers.end() && nextIt->first <= threshold)
+        {
+            toExecute.push_back(nextIt->second);
+            executing[nextIt->second.id] = true;
+            timerIndex.erase(nextIt->second.id);
+            nextIt = timers.erase(nextIt);
+        }
+
+        for (const auto& timer : toExecute)
+        {
+            threadPool.enqueueDetached([this, timer]()
             {
-                uint32_t timerId = nextTimerIt->first;
-                TimerEntry timerEntry = nextTimerIt->second;
-                timers.erase(nextTimerIt);
-                // Mark this timer as currently executing
-                currentExecutingTimerId.store(timerId, std::memory_order_release);
-                // Unlock while executing the callback.
-                lock.unlock();
-                timerEntry.callback();
-                lock.lock();
-                // Reset curreentExecutingTimerId and notify waiting threads.
-                currentExecutingTimerId.store(0, std::memory_order_release);
-                cv.notify_all();
-            }
-            else
-            {
-                cv.wait_until(lock, nextTimerIt->second.expirationTime);
-            }
+                {
+                    std::unique_lock<std::mutex> lock(mutex);
+                    executing[timer.id] = true;
+                    executingThreads[timer.id] = std::this_thread::get_id();
+                }
+
+                // Run the callback
+                if (timer.callback)
+                    timer.callback();
+                
+                std::chrono::milliseconds rescheduleInterval;
+                {
+                    std::unique_lock<std::mutex> lock(mutex);
+                    executing[timer.id] = false;
+                    executingThreads.erase(timer.id);
+                    timerDoneCV.notify_all();
+
+                    auto intervalIt = dynamicIntervals.find(timer.id);
+                    rescheduleInterval = (intervalIt != dynamicIntervals.end()) ? intervalIt->second : timer.interval;
+                }
+
+                if (!stop && rescheduleInterval.count() > 0)
+                {
+                    std::unique_lock<std::mutex> lock(mutex);
+                    TimePoint nextTime = std::chrono::steady_clock::now() + rescheduleInterval;
+                    TimerData updated = timer;
+                    updated.interval = rescheduleInterval;
+                    auto it = timers.emplace(nextTime, updated);
+                    timerIndex[timer.id] = it;
+                    cv.notify_one();
+                }
+            });
         }
     }
 }

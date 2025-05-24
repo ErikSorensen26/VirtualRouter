@@ -122,7 +122,7 @@ struct DhcpHeader
         size_t dhcpLength = dhcpHeader.size();
         for (size_t i = dhcpLength - 1; i >= 0; --i)
         {
-            if (static_cast<unsigned char>(dhcpHeader[i]) == 0xff)
+            if (dhcpHeader[i] == 0xff)
             {
                 dhcpEnd = i;
                 break;

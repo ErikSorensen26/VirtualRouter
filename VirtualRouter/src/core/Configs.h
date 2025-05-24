@@ -18,7 +18,6 @@
 #include <pugixml.hpp>
 #include <json.hpp>
 #include <Functions.h>
-#include <Global.h>
 
 #define COMMAND_TREE "../VirtualRouter/configs/Commands.json"
 #define CONFIG_FILE "../VirtualRouter/configs/Configs.json"
@@ -28,14 +27,8 @@
 
 using json = nlohmann::json;
 
-struct ModeConfig
-{
-    std::string currentMode;            ///< Indicates the current operational mode.
-    nlohmann::ordered_json* configNode = nullptr;       ///< Pointer to the current configuration node.
-    std::vector<nlohmann::ordered_json*> modeHistory;   ///< History of configuration nodes for mode management
-    nlohmann::ordered_json* modeSchema = nullptr;       ///< Pointer to the current mode's schema
-    nlohmann::ordered_json* tempModeSchema = nullptr;   ///< Temporary pointer for schema operations.
-};
+class Global;
+struct ModeConfig;
 
 /**
  * @struct MacList
@@ -157,10 +150,10 @@ public: virtual ~IFileSystem() = default;
     virtual void removeFile(const std::string& path) = 0;
 };
 
-class RealFileSystem : public IFileSystem
+class FileSystem : public IFileSystem
 {
 public:
-    virtual ~RealFileSystem() override = default;
+    virtual ~FileSystem() override = default;
     bool readFile(const std::string& path, std::string& content) override
     {
         std::ifstream file(path, std::ios::in);
@@ -216,9 +209,10 @@ public:
      *
      * Initializes the Configs object without any parameters.
      *
+     * @param global Global router system.
      * @param fileSystem Smart pointer to the kind of file system being used.
      */
-    Configs(std::shared_ptr<IFileSystem> fileSystem = std::make_shared<RealFileSystem>()); 
+    Configs(IFileSystem* fileSystem = new FileSystem);
 
     /**
      * @brief Initializes configuration settings from a startup file.
@@ -385,7 +379,9 @@ public:
 
     std::vector<std::string> physicalInterfaces;        ///< List of physical interface names.
 
-    std::shared_ptr<IFileSystem> fileSystem; ///< File system interface.
+    IFileSystem* fileSystem; ///< File system interface.
+
+    Global* global = nullptr;
 	
 private:
 

@@ -145,10 +145,10 @@ std::optional<ByteString> encapsulate(PacketInfo &packet, ByteString encapsulate
             ByteString pseudoHeader = ipv6.substr(8, 32); // IPv6 Addresses
 
             // Upper-Layer Packet Length (4 bytes) in big-endian
-            pseudoHeader.push_back(static_cast<ByteString::byte>((icmpv6Length >> 24) & 0xFF));
-            pseudoHeader.push_back(static_cast<ByteString::byte>((icmpv6Length >> 16) & 0xFF));
-            pseudoHeader.push_back(static_cast<ByteString::byte>((icmpv6Length >> 8) & 0xFF));
-            pseudoHeader.push_back(static_cast<ByteString::byte>(icmpv6Length & 0xFF));
+            pseudoHeader.push_back(static_cast<uint8_t>((icmpv6Length >> 24) & 0xFF));
+            pseudoHeader.push_back(static_cast<uint8_t>((icmpv6Length >> 16) & 0xFF));
+            pseudoHeader.push_back(static_cast<uint8_t>((icmpv6Length >> 8) & 0xFF));
+            pseudoHeader.push_back(static_cast<uint8_t>(icmpv6Length & 0xFF));
             
             // Append Three Zero Bytes
             pseudoHeader.push_back('\x00');

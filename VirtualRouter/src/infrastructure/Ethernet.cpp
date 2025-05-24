@@ -47,7 +47,7 @@ namespace Protocol
             {
                 EthernetHeader eth;
                 eth.destinationMac = ByteString("");
-                eth.sourceMac = iface->configs.macAddress;
+                eth.sourceMac = iface->configs.getMac();
                 eth.type = type;
                 packet.Layer2.push_back(eth);
                 iface->arp->resolveAndSend(destIp, packet);
@@ -65,7 +65,7 @@ namespace Protocol
             {
                 EthernetHeader eth;
                 eth.destinationMac = ByteString("");
-                eth.sourceMac = iface->configs.macAddress;
+                eth.sourceMac = iface->configs.getMac();
                 eth.type = type;
                 packet.Layer2.push_back(std::move(eth));
                 iface->ndp->resolveAndSend(destIp, packet);
@@ -82,7 +82,7 @@ namespace Protocol
 
         // Set type and destination
         ethernetHeader.type = type;
-        ethernetHeader.sourceMac = iface->configs.macAddress;
+        ethernetHeader.sourceMac = iface->configs.getMac();
 
         ByteString destinationMac;
         if ((!destMac || destMac->size() != 6) && destIp)

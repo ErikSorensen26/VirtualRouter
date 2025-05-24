@@ -7,7 +7,7 @@
 #include <IPPacket.h>
 #include <Configs.h>
 
-Protocol::Dhcpv6Server::Dhcpv6Server()
+Protocol::Dhcpv6Server::Dhcpv6Server(Global& global) : DhcpServerBase(global)
 {
     dhcpUniqueIdentifier = generateUniqueIdentifier();
     startServer();
@@ -65,7 +65,7 @@ void Protocol::Dhcpv6Server::handleDhcpPacket(const PacketInfo& packet, Interfac
 
     processReconfigAccept(header, localAddress, iface);
 
-    switch (msgType[0])
+    switch (msgType[0].value)
     {
     case 0x01:
         processSolicit(header, iface, multicast, &localAddress);
@@ -1459,7 +1459,7 @@ void Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay,
     // Step 1: handle the message and get reply to send
     std::optional<ByteString> dhcpHeader;
     Dhcpv6RelayHeader relayHeader;
-    switch (clientMessage->type[0])
+    switch (clientMessage->type.data()[0])
     {
         case 0x01: dhcpHeader = processSolicit(*clientMessage, iface, false, nullptr); break;
         case 0x03: dhcpHeader = processRequest(*clientMessage, iface, false, nullptr); break;
@@ -2058,7 +2058,7 @@ bool Protocol::Dhcpv6Server::addAuthenticationOption(Dhcpv6Header& header, const
 
         // Determin Protocol
         uint8_t type = header.type[0];
-        if (type == Variable::Dhcpv6::Type::reconfigure[0])
+        if (Variable::Dhcpv6::Type::reconfigure[0] == type)
         {
             if (authConfig.rkapKeys.empty()) return false;
             secret = authConfig.rkapKeys.front().secret;
@@ -2124,9 +2124,9 @@ bool Protocol::Dhcpv6Server::validateAuthentication(const Dhcpv6Header& header, 
     {
         if (opt.option == Variable::Dhcpv6::Options::auth && opt.value.size() >= 13 + 16)
         {
-            Dhcpv6::AuthConfig::AuthProtocol protocol = static_cast<Protocol::Dhcpv6::AuthConfig::AuthProtocol>(opt.value[0]);
-            auto algorithm = static_cast<Protocol::Dhcpv6::AuthConfig::AuthAlgorithm>(opt.value[1]);
-            auto rdm = static_cast<Protocol::Dhcpv6::AuthConfig::AuthRDM>(opt.value[2]);
+            Dhcpv6::AuthConfig::AuthProtocol protocol = static_cast<Protocol::Dhcpv6::AuthConfig::AuthProtocol>(opt.value[0].value);
+            auto algorithm = static_cast<Protocol::Dhcpv6::AuthConfig::AuthAlgorithm>(opt.value[1].value);
+            auto rdm = static_cast<Protocol::Dhcpv6::AuthConfig::AuthRDM>(opt.value[2].value);
             uint64_t counter = Functions::byteToNum(opt.value.substr(3, 8));
             ByteString receivedMAC = opt.value.substr(11, 16);
 
@@ -2336,7 +2336,7 @@ ByteString Protocol::Dhcpv6Server::generateUniqueIdentifier()
     {
         if (net && net->config && net->config->interface)
         {
-            duid += net->config->interface->configs.macAddress;
+            duid += net->config->interface->configs.getMac();
             break;
         }
     }
@@ -2404,11 +2404,11 @@ void Protocol::Dhcpv6Server::addServerUnicast(Dhcpv6Header& header, const ByteSt
     ByteString ip;
     if (Functions::isGlobalUnicast(leaseIp))
     {
-        ip = iface->configs.getGlobalUnicast();
+        ip = iface->configs.ipv6.getGlobalUnicast();
     }
     else if (Functions::isLocalUnicast(leaseIp))
     {
-        ip = iface->configs.getLocalUnicast();
+        ip = iface->configs.ipv6.getLocalUnicast();
     }
     if (!ip.empty() && ip.size() == 16)
     {

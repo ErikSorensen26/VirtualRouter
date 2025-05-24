@@ -82,7 +82,7 @@ namespace Checksum
 
     ByteString calculateChecksum(const ByteString& data, size_t checksumSizeBytes)
     {
-        std::string checksumBytes;
+        ByteString checksumBytes;
         checksumBytes.reserve(checksumSizeBytes); // Reserve space to avoid reallocation
 
         switch (checksumSizeBytes)
@@ -98,7 +98,7 @@ namespace Checksum
                     sum += bytes[i];
                 }
 
-                checksumBytes += static_cast<char>(sum); // Append checksum byte
+                checksumBytes.push_back(sum);
                 break;
             }
             case 2: // 2-Byte Checksum (16-bit Internet Checksum)
@@ -132,8 +132,8 @@ namespace Checksum
                 uint16_t checksum = ~static_cast<uint16_t>(sum);
 
                 // Convert checksum to a string in big-endian order
-                checksumBytes += static_cast<char>((checksum >> 8) & 0xFF); // Hight byte
-                checksumBytes += static_cast<char>(checksum & 0xFF);        // Low byte
+                checksumBytes.push_back((checksum >> 8) & 0xFF); // High byte
+                checksumBytes.push_back(checksum & 0xFF);        // Low byte
                 break;
             }
             case 4: // 4-Byte Checksum (32-bit Sum)
@@ -176,15 +176,15 @@ namespace Checksum
                 uint32_t checksum = ~static_cast<uint32_t>(sum);
 
                 // Convert checksum to string in big-endian order
-                checksumBytes += static_cast<char>((checksum >> 24) & 0xFF); // Byte 3
-                checksumBytes += static_cast<char>((checksum >> 16) & 0xFF); // Byte 2
-                checksumBytes += static_cast<char>((checksum >> 8) & 0xFF);  // Byte 1
-                checksumBytes += static_cast<char>(checksum & 0xFF);         // Byte 0
+                checksumBytes.push_back(static_cast<uint8_t>((checksum >> 24) & 0xFF)); // Byte 3
+                checksumBytes.push_back(static_cast<uint8_t>((checksum >> 16) & 0xFF)); // Byte 2
+                checksumBytes.push_back(static_cast<uint8_t>((checksum >> 8) & 0xFF));  // Byte 1
+                checksumBytes.push_back(static_cast<uint8_t>(checksum & 0xFF));         // Byte 0
                 break;
             }
 
             default:
-                checksumBytes = std::string(checksumSizeBytes, '\x00');
+                checksumBytes = std::string(checksumSizeBytes, 0);
                 break;
         }
 
@@ -229,7 +229,9 @@ namespace Checksum
             // Preform byte swapping for the entire checksum if size permits
             for (size_t i = 0; i + 1 < checksumSize; i += 2)
             {
-                std::swap(checksumBytes[i], checksumBytes[i + 1]);
+                Byte temp = checksumBytes[i];
+                checksumBytes[i] = Byte(checksumBytes[i + 1]);
+                checksumBytes[i + 1] = temp;
             }
         }
 

@@ -1,11 +1,16 @@
 #include <Global.h>
 #include <Interface.h>
 #include <RoutingTable.h>
+#include <VirtualRouter.h>
 
 #include <string>
 #include <map>
 #include <mutex>
 
+Global::Global(bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, test)
+{
+}
+      
 // Interfaces
 Interface* Global::addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug)
 {
@@ -13,7 +18,7 @@ Interface* Global::addInterface(InterfaceType interfaceType, std::string outInte
     {
         return nullptr;
     }
-    interfaceList[{interfaceType, interfaceId}] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, getRoutingInstance("default"), debug);
+    interfaceList[{interfaceType, interfaceId}] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, *getRoutingInstance("default"), debug);
 
     return interfaceList[{interfaceType, interfaceId}];
 }
@@ -26,6 +31,12 @@ Interface* Global::getInterface(InterfaceType type, float interfaceID)
         return interfaceList[{type, interfaceID}];
     }
     return nullptr;
+}
+
+std::map<std::pair<InterfaceType, float>, Interface*> Global::getInterfaceList()
+{
+    std::lock_guard<std::mutex> lock(interfaceMutex);
+    return interfaceList;
 }
 
 bool Global::removeInterface(InterfaceType type, float interfaceId)
@@ -46,7 +57,7 @@ VirtualRouter* Global::addRoutingInstance(const std::string& name)
     {
         return nullptr;
     }
-    routingInstances[name] = new VirtualRouter(name);
+    routingInstances[name] = new VirtualRouter(*this, name);
     return routingInstances[name];
 }
 

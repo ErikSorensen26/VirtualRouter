@@ -9,49 +9,57 @@
 #include <thread>
 #include <chrono>
 #include <condition_variable>
+#include <atomic>
+#include <ThreadPool.hpp>
 
 class TimeManager 
 {
 public:
-    // Get the singleton instance
-    static TimeManager& getInstance() {
-        static TimeManager instance;
-        return instance;
-    }
+    TimeManager(ThreadPool& pool);
+    ~TimeManager();
 
     // Adds a timer task to the manager and returns a unique timer ID
     uint32_t addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback);
 
+    // Recurring timer
+    uint32_t addRecurringTimer(std::chrono::milliseconds interval, std::function<void()> callback);
+
     // Cancels a timer based on its ID
     bool cancelTimer(uint32_t timerId);
+
+    // Updates the interval time on a timer
+    void updateInterval(uint32_t timerId, std::chrono::milliseconds newInterval);
 
     // Stops the timer manager and its thread
     void stopTimer();
 
-    // Delete copy constructor and assignment operator to prevent multiple instances
-    TimeManager(const TimeManager&) = delete;
-    void operator=(const TimeManager&) = delete;
-
 private:
-    // Internal structure for timer tasks
-    struct TimerEntry {
-        std::chrono::steady_clock::time_point expirationTime;
+    using TimePoint = std::chrono::steady_clock::time_point;
+
+    struct TimerData
+    {
+        uint32_t id;
         std::function<void()> callback;
+        std::chrono::milliseconds interval; // 0 for one-shot
     };
 
-    // Private constructor and destructor for Singleton
-    TimeManager();
-    ~TimeManager();
-
     void Run(); // The worker function for the timer thread
+    void scheduleCallback(const TimerData& data);
 
-    std::atomic<uint32_t> currentTimerId;
+    std::atomic<uint32_t> nextTimerId;
     std::atomic<bool> stop;
     std::mutex mutex;
     std::condition_variable cv;
-    std::unordered_map<uint32_t, TimerEntry> timers;
-    std::atomic<uint32_t> currentExecutingTimerId;
+    
+    std::multimap<TimePoint, TimerData> timers;
+    std::unordered_map<uint32_t, std::multimap<TimePoint, TimerData>::iterator> timerIndex;
+    std::unordered_map<uint32_t, bool> executing; // For save cancel sync
+    std::unordered_map<uint32_t, std::chrono::milliseconds> dynamicIntervals;
+    std::unordered_map<uint32_t, std::thread::id> executingThreads;
+    std::unordered_map<uint32_t, std::atomic<bool>> cancelFlags;
+    std::condition_variable timerDoneCV;
     std::thread timerThread;
+    ThreadPool& threadPool;
 };
 
 #endif // TIMERMANAGER_H

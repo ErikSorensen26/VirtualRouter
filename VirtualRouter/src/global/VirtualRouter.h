@@ -8,6 +8,7 @@
 #include <RoutingTable.h>
 #include <InterfacePairHash.hpp>
 #include <shared_mutex>
+#include <AddressFamily.hpp>
 
 class Interface;
 namespace Protocol
@@ -17,13 +18,15 @@ namespace Protocol
 }
 
 enum class InterfaceType;
+class Global;
 
 class VirtualRouter
 {
 public:
+    using InterfaceKey = std::pair<InterfaceType, float>;
     friend class EigrpTest;
 
-    VirtualRouter(const std::string& name) : instanceName(name) {}
+    VirtualRouter(Global& global, const std::string& name) : instanceName(name), global(global) { enabledAddressFamilies.insert(AddressFamily::IPv4); }
     ~VirtualRouter();
 
     RoutingTable routingTable; ///< VRF RoutingTable
@@ -32,6 +35,7 @@ public:
     // Interface management
     Interface* addInterface(Interface* interface, InterfaceType type, float interfaceID);
     Interface* getInterface(InterfaceType type, float interfaceID);
+    std::unordered_map<InterfaceKey, Interface*, InterfacePairHash> getinterfaceList();
     bool removeInterface(InterfaceType type, float interfaceId);
 
     // Eigrp Autonomous Systems
@@ -46,7 +50,7 @@ public:
 
     // Interfaces
     std::shared_mutex interfaceMutex; ///< Interface list mutex.
-    std::unordered_map<std::pair<InterfaceType, float>, Interface*, InterfacePairHash> interfaceList; ///< Interface list.
+    std::unordered_map<InterfaceKey, Interface*, InterfacePairHash> interfaceList; ///< Interface list.
 
     // Eigrp
     std::shared_mutex eigrpAutonomousSystemMutex; ///< Eigrp list mutex.
@@ -55,6 +59,8 @@ public:
     std::map<std::string, Protocol::EigrpNamed*> namedEigrpList; ///< Eigrp Named groups.
 
     std::string instanceName;
+
+    Global& global;
 };
 
 #endif // VIRTUAL_ROUTER_H

@@ -56,7 +56,7 @@ struct IcmpV6Header
     bool decapsulate(const ByteString& icmpV6Header)
     {
         size_t payloadSize = 0;
-        switch(icmpV6Header[0])
+        switch(icmpV6Header[0].value)
         {
             case 0x82: payloadSize = 16;
                 break;

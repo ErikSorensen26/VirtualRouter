@@ -75,6 +75,12 @@ Interface* VirtualRouter::getInterface(InterfaceType type, float interfaceID)
     return nullptr;
 }
 
+std::unordered_map<std::pair<InterfaceType, float>, Interface*, InterfacePairHash> VirtualRouter::getinterfaceList()
+{
+    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+    return interfaceList;
+}
+
 bool VirtualRouter::removeInterface(InterfaceType type, float interfaceId)
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);

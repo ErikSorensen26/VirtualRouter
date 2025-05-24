@@ -1,4 +1,5 @@
 #include <RoutingTable.h>
+#include <AddressFamily.hpp>
 
 bool RoutingTable::addEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 {
@@ -118,6 +119,36 @@ void RoutingTable::removeEigrp(const ByteString& network, uint8_t mask, AddressF
     }
 }
 
+void RoutingTable::removeAllEigrp(AddressFamily af, uint32_t as)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+    auto& eigrpTable = (af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as]);
+    for (auto& [_, eigrp] : eigrpTable)
+    {
+        delete eigrp;
+    }
+    af == AddressFamily::IPv4 ? eigrp.erase(as) : eigrpIPv6.erase(as);
+}
+
+void RoutingTable::removeEigrpWithOutInterface(AddressFamily af, uint32_t as, const ByteString& out)
+{
+    std::lock_guard<std::mutex> lock(tableMutex);
+    auto& eigrpTable = (af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as]);
+    for (auto it = eigrpTable.begin(); it != eigrpTable.end();)
+    {
+        if (it->second->interface == out)
+        {
+            delete it->second;
+            it = eigrpTable.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    af == AddressFamily::IPv4 ? eigrp.erase(as) : eigrpIPv6.erase(as);
+}
+
 void RoutingTable::updateEigrpWithVariance(Eigrp* route, uint8_t variance, AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
@@ -161,7 +192,7 @@ std::vector<RoutingTable::Eigrp*> RoutingTable::getAllConnectedEigrpRoutes(Addre
     std::vector<Eigrp*> routes;
     for (const auto& [key, route] : af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as])
     {
-        if (route->routeType == "connected")
+        if (route->routeType == RoutingTable::Eigrp::RouteType::CONNECTED)
         {
             routes.push_back(route);
         }

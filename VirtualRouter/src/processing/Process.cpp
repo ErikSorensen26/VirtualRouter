@@ -1,6 +1,7 @@
 #include <Process.h>
 #include <Eigrp.h>
 #include <Interface.h>
+#include <VirtualRouter.h>
 #include <Dhcp.h>
 #include <Arp.h>
 #include <Ndp.h>
@@ -141,12 +142,11 @@ void ProcessPacket::processIcmpV6(const IcmpV6Header& icmp)
     }
     else
     {
-        std::shared_lock<std::shared_mutex> lock(interface->configs.ipMutex);
-        currentIp = interface->configs.ipv6.linkLocalAddress->ip;
+        currentIp = interface->configs.ipv6.getLocalAddress();
         if (currentIp.size() != 16) return; // Invalid IP
     }
 
-    switch (icmp.type[0]) 
+    switch (icmp.type[0].value)
     {
         case 0x85:
         {
@@ -252,7 +252,7 @@ void ProcessPacket::processEigrp(const EigrpHeader& eigrp)
 
 void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
 {
-    ByteString mac = interface->configs.macAddress;
+    ByteString mac = interface->configs.getMac();
 
     if (print) { Logger::getInstance().info() << "THIS IS DHCP" << std::endl; } 
     for (auto opt : dhcp.options) 
@@ -268,7 +268,7 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpOffer = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
+                interface->dhcp->processDhcpResponses(interface->routingInstance->global.getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::request)
             {
@@ -278,19 +278,19 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpAck = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
+                interface->dhcp->processDhcpResponses(interface->routingInstance->global.getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::nak)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpNak = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
+                interface->dhcp->processDhcpResponses(interface->routingInstance->global.getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::decline)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
                 interface->dhcp->dhcpDecline = currentPacket;
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
+                interface->dhcp->processDhcpResponses(interface->routingInstance->global.getHostname(), mac);
             }
             else if (opt.value == Variable::Dhcp::Type::release)
             {
@@ -299,7 +299,7 @@ void ProcessPacket::processDhcp(const DhcpHeader& dhcp)
             else if (opt.value == Variable::Dhcp::Type::inform)
             {
                 std::lock_guard<std::mutex> lock(interface->dhcp->dhcpMutex);
-                interface->dhcp->processDhcpResponses(Global::getInstance().getHostname(), mac);
+                interface->dhcp->processDhcpResponses(interface->routingInstance->global.getHostname(), mac);
             }
             else
             {

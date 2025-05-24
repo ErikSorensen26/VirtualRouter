@@ -1,5 +1,5 @@
 #include "DhcpServerBase.h"
-#include <TimeManager.h>
+#include <Global.h>
 
 bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(ByteString* newNetwork, uint8_t* newPrefix, ByteString* newGateway, DhcpServerBase* server)
 {
@@ -34,6 +34,8 @@ bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(ByteString* newNetwork, ui
     }
     return false;
 }
+
+Protocol::DhcpServerBase::DhcpServerBase(Global& global) : global(global) {}
 
 bool Protocol::DhcpServerBase::moveConfig(const ByteString& oldKey, const ByteString& newKey)
 {
@@ -88,7 +90,7 @@ void Protocol::DhcpServerBase::scheduleTimeout(Dhcp::TimerType type, const ByteS
     state.resource = offer;
     state.networkID = networkID;
 
-    state.timerID = TimeManager::getInstance().addTimer(
+    state.timerID = global.timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
         [this, id, offer, networkID, type]() {
             std::lock_guard<std::mutex> lock(timerMutex);
@@ -170,7 +172,7 @@ void Protocol::DhcpServerBase::cancelTimeout(Dhcp::TimerType type, const ByteStr
     {
         if (it->clientID == id && it->resource == offer)
         {
-            TimeManager::getInstance().cancelTimer(it->timerID);
+            global.timeManager.cancelTimer(it->timerID);
             activeTimers[type].erase(it);
             break;
         }
@@ -183,7 +185,7 @@ void Protocol::DhcpServerBase::clearOfferTimeouts()
 {
         for (const auto& timer : type.second)
         {
-            TimeManager::getInstance().cancelTimer(timer.timerID);
+            global.timeManager.cancelTimer(timer.timerID);
         }
     }
 }

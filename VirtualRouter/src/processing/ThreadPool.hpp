@@ -44,7 +44,7 @@ public:
      *
      * @throws std::invalid_argument If `numThreads` is zero.
      */
-    ThreadPool(size_t numThreads);
+    explicit ThreadPool(size_t numThreads = std::max(4u, std::thread::hardware_concurrency()));
 
     /**
      * @brief Destructor that stops the thread pool and joins all worker threads.
@@ -74,7 +74,13 @@ public:
      */
     template <class F, class... Args>
     auto enqueue(F&& f, Args&&... args)
-        -> std::future<typename std::result_of<F(Args...)>::type>;
+        -> std::future<std::invoke_result_t<F, Args...>>;
+
+    /**
+     * @brief Fire-and-forget enqueue
+     */
+    template<class F>
+    void enqueueDetached(F&& f);
 
     /**
      * @brief Stops the thread pool and joins all worker threads.
@@ -159,9 +165,9 @@ inline ThreadPool::~ThreadPool() {
 // Enqueue method
 template <class F, class... Args>
 auto ThreadPool::enqueue(F&& f, Args&&... args) 
-    -> std::future<typename std::result_of<F(Args...)>::type>
+    -> std::future<std::invoke_result_t<F, Args...>>
 {
-    using return_type = typename std::result_of<F(Args...)>::type;
+    using return_type = std::invoke_result_t<F, Args...>;
 
     auto task = std::make_shared< std::packaged_task<return_type()> >(
         std::bind(std::forward<F>(f), std::forward<Args>(args)...)
@@ -178,6 +184,18 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
     }
     condition.notify_one();
     return res;
+}
+
+template <class F>
+void ThreadPool::enqueueDetached(F&& f)
+{
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        if (stop.load())
+            return;
+        tasks.emplace(std::forward<F>(f));
+    }
+    condition.notify_one();
 }
 
 // Shutdown method

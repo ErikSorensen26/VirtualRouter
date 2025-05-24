@@ -2,8 +2,10 @@
 #include <CommandProcessor.h>
 #include <CliEngine.h>
 #include <regex>
+#include <Global.h>
+#include "Mode.hpp"
 
-CliSession::CliSession(CliEngine& eng, bool enableDebug) : Console(), engine(eng)
+CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), engine(engine)
 {
     // Set debug mode based on the input parameter
     modeConfig.configNode = &engine.root;
@@ -16,8 +18,8 @@ CliSession::CliSession(CliEngine& eng, bool enableDebug) : Console(), engine(eng
 
     // Initialize Console
     initConsole();
-    commandProcessor = new CommandProcessor(this);
-    commandProcessor->currentVrf = Global::getInstance().getRoutingInstance("default");
+    commandProcessor = new CommandProcessor(*this);
+    commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
     iConsole->print("Initializing Terminal...\n");
 }
 
@@ -36,8 +38,8 @@ CliSession::CliSession(CliEngine& engine, std::shared_ptr<IConsole> term) : Cons
 
     // Initialize Console
     initConsole();
-    commandProcessor = new CommandProcessor(this);
-    commandProcessor->currentVrf = Global::getInstance().getRoutingInstance("default");
+    commandProcessor = new CommandProcessor(*this);
+    commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
     iConsole->print("Initializing Terminal...\n");
 }
 
@@ -52,7 +54,7 @@ CliSession::~CliSession()
 bool CliSession::handleInput(std::string test)
 {
     // Retrieve the hostname from the global settings and reset cursor position
-    std::string hostname = Global::getInstance().getHostname();
+    std::string hostname = engine.global.getHostname();
     cursorPos = 0;
     setPrompt(hostname + currentPrompt);
 
@@ -377,7 +379,7 @@ void CliSession::handleInvalidInputMarker(const std::string& formattedOldCommand
     isRunning = false;
     std::string invalidInput = "\n";
 
-    std::string hostname = Global::getInstance().getHostname();
+    std::string hostname = engine.global.getHostname();
     // Print spaces for hostname, mode, old command
     invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\n% Invlid input detected at '^' marker.\n";
     iConsole->print(invalidInput);

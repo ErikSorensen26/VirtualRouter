@@ -1,6 +1,8 @@
 #include "DhcpClient.h"
 #include <shared_mutex>
 #include <Interface.h>
+#include <Global.h>
+#include <VirtualRouter.h>
 
 // Constructor for the DhcpClient class, initializes with a reference to an Interface object
 Protocol::DhcpClient::DhcpClient(Interface* iface, bool reduced) // Reduced is used for testing
@@ -47,17 +49,11 @@ void Protocol::DhcpClient::shutdown()
 // Initializes DHCP, sends discover requests, handles offers, and sends requests and acknowledgments
 void Protocol::DhcpClient::initializeDhcp() 
 {
-    {
-        std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
-        if (!stopFlag.load(std::memory_order_relaxed) || currentInterface->configs.ipv4.ipAddress.empty()) return;
-    }
+    if (!stopFlag.load(std::memory_order_relaxed) || currentInterface->configs.ipv4.getAddress().empty()) return;
     stopFlag.store(false, std::memory_order_release);
     ByteString mac;
-    {
-        std::shared_lock<std::shared_mutex> macMutex(currentInterface->configs.ipMutex);
-        mac = currentInterface->configs.macAddress;
-    }
-    std::string hostname = Global::getInstance().getHostname();
+    mac = currentInterface->configs.getMac();
+    std::string hostname = currentInterface->routingInstance->global.getHostname();
     // Start the DHCP handling thread
     dhcpThread = std::thread(&DhcpClient::dhcpHandler, this, hostname, mac);
 }
@@ -105,8 +101,7 @@ void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, ByteStr
 
     if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
-        std::lock_guard<std::shared_mutex> lock(currentInterface->configs.ipMutex);
-        if (!currentInterface->configs.ipv4.ipAddress.empty())
+        if (!currentInterface->configs.ipv4.getAddress().empty())
         {
             return; // No need for dhcp discover
         }
@@ -209,8 +204,7 @@ void Protocol::DhcpClient::handleLeaseRenewal(ByteString& hardwareAddress, const
         ByteString dhcpIP;
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
-            std::lock_guard<std::shared_mutex> ipLock(currentInterface->configs.ipMutex);
-            dhcpIP = currentInterface->configs.ipv4.ipAddress;
+            dhcpIP = currentInterface->configs.ipv4.getAddress();
         }
         DhcpHeader header;
         header.clientIP = dhcpIP;
@@ -244,7 +238,7 @@ void Protocol::DhcpClient::sendDhcpRelease()
     
     if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
-        ByteString mac = currentInterface->configs.macAddress;
+        ByteString mac = currentInterface->configs.getMac();
         PacketInfo releasePacket = dhcpRelease(dhcpBody(mac), mac);
 
         currentInterface->enqueuePacket(releasePacket);
@@ -453,7 +447,7 @@ PacketInfo Protocol::DhcpClient::dhcpRelease(PacketInfo packet, const ByteString
     dhcp.bootpFlags.broadcast = "0";
     dhcp.bootpFlags.reserved = "000000000000000"; 
     dhcp.clientIP = std::string("\x00\x00\x00\x00", 4);
-    dhcp.yourClientIP = currentInterface->configs.ipv4.ipAddress; 
+    dhcp.yourClientIP = currentInterface->configs.ipv4.getAddress();
     dhcp.nextServerIP = std::string("\x00\x00\x00\x00", 4);
     dhcp.relayAgentIP = Variable::IPv4::source; 
     dhcp.clientMacAddress = hardwareAddress; 
@@ -491,8 +485,7 @@ PacketInfo Protocol::DhcpClient::dhcpInform(PacketInfo packet, std::string& host
     ByteString ipAddr;
     if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
-        std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
-        ipAddr = currentInterface->configs.ipv4.ipAddress;
+        ipAddr = currentInterface->configs.ipv4.getAddress();
     }
     else
     {

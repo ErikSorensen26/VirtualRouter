@@ -13,16 +13,7 @@
 #include <Functions.h>
 #include <Logger.h>
 
-/**
- * @enum AddressFamily
- * @brief Enumerates the supported address families for routing.
- */
-enum class AddressFamily 
-{
-    NONE,   ///< NONE, optional default value.
-    IPv4,   ///< IPv4 address family.
-    IPv6    ///< IPv6 address family.
-};
+enum class AddressFamily;
 
 /**
  * @class RoutingTable
@@ -180,13 +171,20 @@ public:
      * @brief Represents an entry in the Enhanced Interior Gateway Routing Protocol (EIGRP) table.
      */
     struct Eigrp {
+        Eigrp(ByteString outInterface) 
+          : interface(outInterface),
+            age(std::chrono::steady_clock::now()) {}
+
+        enum class RouteType { INTERNAL, EXTERNAL, SUMMARY, CONNECTED, STATIC, WITHDRAW };
+
+        RouteType routeType{};             ///< Type of the route.
+
         ByteString network{};               ///< Network address.
         ByteString nextHop{};               ///< Next hop IP address.
-        ByteString interface{};             ///< Interface name.
+        ByteString interface{};             ///< Out interface.
         ByteString successor{};             ///< Successor route.
         ByteString feasibleSuccessor{};     ///< Feasible successor route.
         ByteString routeSource{};           ///< Source of the route.
-        ByteString routeType{};             ///< Type of the route.
         ByteString activeOrPassive{};       ///< Active or passive state.
         ByteString originRouter{};          ///< Originating router.
         ByteString flags{};                 ///< Flags associated with the route.
@@ -214,7 +212,7 @@ public:
         uint8_t mask{};                     ///< Subnet mask.
 
         bool stuckInActive{};               ///< Stuck in active state.
-        std::chrono::system_clock::time_point age; ///< Age of the EIGRP entry.
+        std::chrono::steady_clock::time_point age; ///< Age of the EIGRP entry.
         std::vector<ByteString> nextHopsVector{};       ///< List of next hop IP addresses.
         std::unordered_set<ByteString> nextHopsSet{};   ///< List of next hop IP addresses.
         bool isIPv6{false};                     ///< Flag indicating if the route is IPv6.
@@ -262,6 +260,18 @@ public:
      * @param as The Autonomous system
      */
     void removeEigrp(const ByteString& network, uint8_t mask, AddressFamily af, uint32_t as);
+
+    /**
+     * @brief Removes all EIGRP routes from the table
+     *
+     * Removes all EIGRP routes from the RIB and FIB
+     * for a specific autonomous system.
+     *
+     * @param af The address family (IPv4 or IPv6).
+     * @param as The Autonomous system
+     */
+    void removeAllEigrp(AddressFamily af, uint32_t as);
+    void removeEigrpWithOutInterface(AddressFamily af, uint32_t as, const ByteString& out);
 
     /**
      * @brief Retrieves all EIGRP routes for a specific address family.

@@ -7,11 +7,14 @@
 #include <vector>
 #include <json.hpp>
 #include <Time.h>
+#include <condition_variable>
 #include "Configs.h"
-#include "Interface.h"
 
+enum class InterfaceType;
+class Interface;
 class CliSession;
 class CommandProcessor;
+struct ModeConfig;
 
 /**
  * @enum RoutingMode
@@ -39,14 +42,20 @@ public:
 
     /**
      * @brief Constructor. Initializes the engine.
+     *
+     * @param global Global router manager.
+     * @param test Reducer if tests are running.
      */
-    CliEngine();
+    CliEngine(Global& global, bool test = false);
 
     /**
      * @brief Constructor. Initializes the engine.
+     *
+     * @param global Global router manager.
      * @param fileSystem Custom file system.
+     * @param test Reducer if tests are running.
      */
-    CliEngine(std::shared_ptr<IFileSystem> fs);
+    CliEngine(Global& global, IFileSystem* fs, bool test = false);
 
     /**
      * @brief Destructor.
@@ -136,6 +145,8 @@ public:
 
     std::vector<CliSession*> sessions;
 
+    Global& global;
+
 private:
 
     /**
@@ -157,7 +168,6 @@ private:
 
     nlohmann::json commandTree; ///< JSON structure holding the command hierarchy.
     std::condition_variable stateCondition; ///< Condition variabel for thread synchronization.
-
 };
 
 #endif // CLI_ENGINE_H

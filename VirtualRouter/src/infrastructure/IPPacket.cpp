@@ -21,7 +21,6 @@ namespace Protocol
                     else
                     {
                         // Pick best IP to use
-                        std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
                         ByteString prefix = Functions::byteToBin(destIp.substr(0, 2));
 
                         uint8_t firstByte = destIp[0];
@@ -34,18 +33,21 @@ namespace Protocol
                         
                             if (scope == 0x01 || scope == 0x02)
                             {
-                                if (iface->configs.ipv6.linkLocalAddress)
-                                    ip.sourceAddress = iface->configs.ipv6.linkLocalAddress->ip;
+                                ByteString localIp = iface->configs.ipv6.getLocalAddress();
+                                if (localIp.size() == 16)
+                                    ip.sourceAddress = std::move(localIp);
                             }
                             else if (scope == 0x05 || scope == 0x08) // Site/org-local
                             {
-                                if (!iface->configs.ipv6.uniqueLocalAddresses.empty())
-                                    ip.sourceAddress = iface->configs.ipv6.uniqueLocalAddresses.front()->ip;
+                                ByteString uniqueIp = iface->configs.ipv6.getLocalUnicast();
+                                if (uniqueIp.size() == 16)
+                                    ip.sourceAddress = std::move(uniqueIp);
                             }
                             else if (scope == 0x0E) // Global scope
                             {
-                                if (!iface->configs.ipv6.globalAddresses.empty())
-                                    ip.sourceAddress = iface->configs.ipv6.globalAddresses.front()->ip;
+                                ByteString globalIp = iface->configs.ipv6.getGlobalUnicast();
+                                if (globalIp.size() == 16)
+                                    ip.sourceAddress = std::move(globalIp);
                             }
                             else
                             {
@@ -55,20 +57,23 @@ namespace Protocol
                         // Global Unicast (2000::/3 = 001xxxxx)
                         else if ((firstByte & 0b11100000) == 0b00100000)
                         {
-                            if (!iface->configs.ipv6.globalAddresses.empty())
-                                ip.sourceAddress = iface->configs.ipv6.globalAddresses.front()->ip;
+                            ByteString globalIp = iface->configs.ipv6.getGlobalUnicast();
+                            if (globalIp.size() == 16)
+                                ip.sourceAddress = std::move(globalIp);
                         }
                         // Unique Local (FC00::/7 = 1111110x)
                         else if ((firstByte & 0b11111110) == 0b11111100)
                         {
-                            if (!iface->configs.ipv6.uniqueLocalAddresses.empty())
-                                ip.sourceAddress = iface->configs.ipv6.uniqueLocalAddresses.front()->ip;
+                            ByteString uniqueIp = iface->configs.ipv6.getLocalUnicast();
+                            if (uniqueIp.size() == 16)
+                                ip.sourceAddress = std::move(uniqueIp);
                         }
                         // Link-local (FE80::/10 = 1111111010xxxxxxx)
                         else if ((firstByte & 0b11111100) == 0b11111100 && (secondByte & 0b00001111) == 0x00)
                         {
-                            if (iface->configs.ipv6.linkLocalAddress)
-                                ip.sourceAddress = iface->configs.ipv6.linkLocalAddress->ip;
+                            ByteString localIp = iface->configs.ipv6.getLocalAddress();
+                            if (localIp.size() == 16)
+                                ip.sourceAddress = std::move(localIp);
                         }
                         // Loopback (::1)
                         else if (std::all_of(destIp.begin(), destIp.end() - 1, [](uint8_t b) { return b == 0; }) && destIp[15] == 1)
@@ -102,11 +107,8 @@ namespace Protocol
         {
             {
                 IPv4Header ip;
-                {
-                    std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
-                    ip.sourceAddress = (sourceIp && sourceIp->size() == 4) ? *sourceIp : iface->configs.ipv4.ipAddress;
-                }
 
+                ip.sourceAddress = (sourceIp && sourceIp->size() == 4) ? *sourceIp : iface->configs.ipv4.getAddress();
                 ip.version = ByteString("4", 1);
                 ip.headerLength = ByteString("5", 1);
                 ip.serviceField = Functions::numToByte(DSCP, 1);

@@ -8,14 +8,17 @@
 #include <vector>
 #include <json.hpp>
 #include <Time.h>
+#include <Mode.hpp>
 #include "Console.h"
-#include "Interface.h"
-#include "Mode.hpp"
 
+enum class AddressFamily;
 class CommandProcessor;
 class CliEngine;
 class VirtualRouter;
 class Interface;
+class Configs;
+struct Com;
+struct ModeConfig;
 namespace Protocol
 {
     class Eigrp;
@@ -441,8 +444,8 @@ private:
     const nlohmann::json* currentDirectory;	        ///< Current directory in the command tree.
     const nlohmann::json* workingDirectory = nullptr;   ///< Working directory in the JSON structure.
 
-    std::vector<const json*> tempDir;                 ///< Temporary directory for creating temporary directories.
-    std::vector<json*> loosePtrs;               ///< Temporary directory for removing loose pointers.
+    std::vector<const nlohmann::json*> tempDir;                 ///< Temporary directory for creating temporary directories.
+    std::vector<nlohmann::json*> loosePtrs;               ///< Temporary directory for removing loose pointers.
 
     std::vector<std::string> recursiveHistory;  ///< Recursive history for using a command once.
 
