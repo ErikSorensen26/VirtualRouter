@@ -6,7 +6,10 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <fstream>
 #include <map>
+
+const std::string defaultSuitePath = ".default_suite";
 
 struct Entry 
 {
@@ -111,6 +114,18 @@ void runWithFilter(const std::string& filter)
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
+    std::ifstream defaultFile(defaultSuitePath);
+    if (defaultFile)
+    {
+        std::string suiteFilter;
+        std::getline(defaultFile, suiteFilter);
+        defaultFile.close();
+
+        std::cout << "\033[2J\033[H\033[?25l";
+        runWithFilter(suiteFilter);
+        return 0;
+    }
+
     auto* unit = ::testing::UnitTest::GetInstance();
 
     TestMap grouped;
@@ -254,6 +269,35 @@ int main(int argc, char** argv)
             std::cout << "\033[?25h";
             setRawMode(false);
             break;
+        }
+        else if (key == 'd')
+        {
+            const auto& e = flatList[cursor];
+            std::string filter;
+
+            if (e.type == Entry::GROUP)
+            {
+                for (const auto& [suite, _] : grouped[e.group])
+                    filter += suite + ".*:";
+                if (!filter.empty()) filter.pop_back();
+            }
+            else if (e.type == Entry::SUITE)
+            {
+                filter = e.suite + ".*";
+            }
+            else if (e.type == Entry::TEST)
+            {
+                filter = e.suite + "." + e.test;
+            }
+
+            std::ofstream defaultOut(defaultSuitePath);
+            if (defaultOut)
+            {
+                defaultOut << filter << "\n";
+                defaultOut.close();
+            }
+
+            runWithFilter(filter);
         }
         else
         {

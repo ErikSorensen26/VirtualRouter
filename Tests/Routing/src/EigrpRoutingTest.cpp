@@ -5,6 +5,7 @@
 #include <ListenerManager.hpp>
 #include <PacketSniffer.hpp>
 #include <CommandProcessor.h>
+#include <VirtualRouter.h>
 #include <Logger.h>
 
 
@@ -14,18 +15,20 @@ protected:
 
     static Environment* gns3;
     static Topology::TopologyGenerator* gen;
+    static Global* global;
     ListenerManager listener = ListenerManager();
     CliSession* session;
 
     static void SetUpTestSuite()
     {
         Logger::getInstance().initialize(true);
-        Global::getInstance().routingEnabled = true;
-        Global::getInstance().testingMode = true;
+        global = new Global(true);
+        global->routingEnabled = true;
+        global->testingMode = true;
         ASSERT_TRUE(gns3->start());
         Topology::Settings::Ring eigrpTop;
         eigrpTop.nodeCount = 4;
-        gns3 = new Environment();
+        gns3 = new Environment(*global);
         gen = new Topology::TopologyGenerator(*gns3->gns3);
         gen->generate(eigrpTop);
         gen->configVirtualSession(gns3->session);
@@ -63,6 +66,7 @@ protected:
 };
 
 Environment* Routing_EigrpTest::gns3 = nullptr;
+Global* Routing_EigrpTest::global = nullptr;
 Topology::TopologyGenerator* Routing_EigrpTest::gen = nullptr;
 
 TEST_F(Routing_EigrpTest, TestingHellos)
