@@ -18,6 +18,7 @@
 
 // Forward declarations
 class Interface;
+class Global;
 class Internal_ArpTest;
 
 /**
@@ -28,12 +29,24 @@ namespace Protocol
 {
 
 /**
+ * @enum ArpCacheStatus
+ * Represents different ARP cache states 
+ */
+enum class ArpCacheStatus
+{
+    INCOMPLETE, COMPLETE, STALE
+};
+
+/**
  * @struct ArpCacheEntry
  * Represents a single ARP cache entry, including the MAC address and expiration time.
  */
 struct ArpCacheEntry 
 {
+    ArpCacheStatus status = ArpCacheStatus::COMPLETE;
+    uint32_t timerId = 0; ///< Timer id for the lifespan of the arp entry.
     ByteString macAddress; ///< MAC address associated with the IP.
+    int retries = 0;
     std::chrono::steady_clock::time_point expiryTime; ///< Expiration time for this cache entry.
 };
 
@@ -45,6 +58,23 @@ class Arp
 {
 public:
     friend class ::Internal_ArpTest;
+
+    /**
+     * @struct Configs.
+     * @brief holds configurations for ARP.
+     */
+    struct Configs
+    {
+        std::atomic<bool> authorized = false;
+        std::atomic<bool> packetPriority = false; //TODO
+
+        std::atomic<uint8_t> probeInterval = 5;
+        std::atomic<uint8_t> probeCount = 3;
+
+        std::atomic<uint32_t> loggingThreshold; //TODO
+        std::atomic<uint32_t> timeout = 14400;
+    } configs;
+
     /**
      * @brief Constructor for the ARP class.
      * @param CurrentInterface Reference to the network interface associated with this ARP instance.
@@ -65,7 +95,16 @@ public:
      * @parap targetIp The target IP of the resolved arp entry.
      * @param mac The MAC of the resolved arp entry.
      */
-    void addArpEntry(const ByteString& targetIp, const ByteString& targetMac);
+    void addArpEntry(const ByteString& targetIp, const ByteString& targetMac, bool proxy = false, bool isStatic = false);
+
+    void removeArpEntry(const ByteString& ip, bool isStatic = false);
+
+    /**
+     * @brief Expires an arp entry from the arp cache table
+     *
+     * @param targetIp The targetIp of the resolved arp entry.
+     */
+    void expireArpEntry(const ByteString& ip);
 
     /**
      * @brief Resolves an IP address and enqueues a packet to send once resolved.
@@ -95,6 +134,14 @@ public:
     void receiveReply(const ArpHeader& receivedReply);
 
     /**
+     * @brief Processes a received ARP request and updated the cache.
+     *
+     * @params request The arp header containing the request.
+     * @params sourceMac The source mac of the router.
+     */
+    void receiveRequest(const ArpHeader& request, const ByteString& sourceMac);
+
+    /**
      * @brief Retrieves the MAC address for a given IP address.
      * @param ip The IP address to query.
      * @return The associated MAC address if found, or an empty string otherwise.
@@ -106,28 +153,25 @@ public:
      */
     void shutdown();
 
-    long retryTime = 2000;
-    long replyTimeout = 60000;
-    long cleanTimeout = 30000;
-
 private:
     Interface* currentInterface; ///< Pointer to the associated network interface.
 
     std::unordered_map<ByteString, ArpCacheEntry> arpCache; ///< ARP cache mapping IPs to MAC addresses and expiration times.
+    std::unordered_map<ByteString, ArpCacheEntry> staticArpCache; ///< Static ARP entries (never expire).
+    std::unordered_map<ByteString, ByteString> proxyEntries; ///< Proxy ARP entries (IP -> MAC).
+    std::deque<ByteString> insertionOrder; ///< For tracking eviction order if interface cache limit is exceeded.
     std::unordered_set<ByteString> pendingRequests; ///< Tracks ongoing ARP requests.
-    std::unordered_map<ByteString, std::shared_ptr<std::atomic<bool>>> replyStatus; ///< Tracks ARP reply statuses.
+    std::unordered_map<ByteString, std::atomic<bool>> replyStatus; ///< Tracks ARP reply statuses.
     std::unordered_map<ByteString, std::queue<PacketInfo>> packetQueuePerIp; ///< Packets waiting for ARP resolution.
+    std::unordered_set<ByteString> pendingIncompletes;
+    std::atomic<uint32_t> incompletes = 0;
 
     mutable std::shared_mutex arpCacheMutex; ///< Mutex for thread-safe access to the ARP cache.
     std::mutex requestMutex; ///< Mutex for thread-safe access to `pendingRequests`.
     std::mutex replyStatusMutex; ///< Mutex for thread-safe access to `replyStatus`.
     std::mutex packetQueueMutex; ///< Mutex for thread-safe access to `packetQueuePerIp`.
 
-    std::vector<std::thread> threads; ///< Threads for handling ARP tasks.
     std::atomic<bool> running; ///< Indicates whether the ARP service is active.
-    std::mutex threadMutex; ///< Thread mutex for safe access.
-
-    std::condition_variable threadCV; ///< Condition variable for thread synchronization.
 
 protected:
     /**
@@ -137,7 +181,7 @@ protected:
      * @param targetIp The target IP address.
      * @return The constructed ARP request packet.
      */
-    PacketInfo arpRequest(ByteString& currentMac, ByteString& ip, ByteString targetIp);
+    PacketInfo arpRequest(const ByteString& currentMac, const ByteString& ip, const ByteString targetIp);
 
     /**
      * @brief Creates an ARP reply packet.
@@ -159,21 +203,10 @@ protected:
     /**
      * @brief Waits for an ARP reply for a given IP address within a timeout period.
      * @param targetIp The target IP address.
-     * @param timeout The maximum duration to wait for the reply.
-     * @return True if a reply was received within the timeout, false otherwise.
      */
-    bool waitForReply(const ByteString& targetIp, const std::chrono::milliseconds& timeout);
+    void scheduleRequest(const ByteString& targetIp, ArpCacheEntry& entry);
 
-    /**
-     * @brief Thread function that periodically cleans up expired ARP cache entries.
-     */
-    void arpCacheCleanupThread();
-
-    /**
-     * @brief Handles an ARP request for a given IP address.
-     * @param targetIp The IP address to resolve.
-     */
-    void handleArpRequest(const ByteString& targetIp);
+    Global& global;
 };
 
 } // namespace Protocol
