@@ -12,25 +12,22 @@
 #include <Ethernet.h>
 #include <IPPacket.h>
 #include <Decapsulation.h>
+#include <VirtualRouter.h>
+#include <InterfaceConfigs.h>
 
-Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, VirtualRouter* vrf, bool debug)
+Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, VirtualRouter& vrf, bool debug)
     : packetOutQueue(outQueSiz),
-      routingInstance(vrf),
-      debug(debug),
-      packetCapture(outInterface, "FF000000", inQueSiz),
-      packetSend(outInterface),
-      threadsRunning(false), 
-      threadPool(1/*std::thread::hardware_concurrency()*/)
+    routingInstance(&vrf),
+    configs(vrf.global.timeManager, interfaceType, interfaceId, Functions::hexToByte(mac)),
+    debug(debug),
+    packetCapture(outInterface, "FF000000", inQueSiz),
+    packetSend(outInterface),
+    threadsRunning(false)
 {
     // Set member variables
     outInt = outInterface;
     inQsiz = inQueSiz;
     outQsiz = outQueSiz;
-
-    // Configs
-    configs.macAddress = Functions::hexToByte(mac);
-    configs.interfaceType.store(interfaceType, std::memory_order_release);
-    configs.id.store(interfaceId, std::memory_order_release);
 
     startThreads(); // TEMPORARY: will be shutdown by default once shits working
 }
@@ -46,9 +43,9 @@ void Interface::cleanupInterface()
     shutdownFlag.store(true, std::memory_order_release);
     stateChange(StateChange::SHUTDOWN);
     stateChangeV6(StateChange::SHUTDOWN);
-    if (Global::getInstance().dhcpServer)
+    if (auto dhcpv6Server = routingInstance->global.dhcpv6Server)
     {
-        Global::getInstance().dhcpv6Server->removeInterface(this);
+        dhcpv6Server->removeInterface(this);
     }
     
     if (dhcp) delete dhcp;
@@ -58,7 +55,7 @@ void Interface::cleanupInterface()
     {
         routingInstance->removeInterface(configs.interfaceType, configs.id);
     }
-    Global::getInstance().removeInterface(configs.interfaceType, configs.id);
+    routingInstance->global.removeInterface(configs.interfaceType, configs.id);
 }
 
 void Interface::setIPv4(ByteString ip, uint8_t subnet)
@@ -73,15 +70,18 @@ void Interface::setIPv4(ByteString ip, uint8_t subnet)
             }
         }
         // Send gratuitous arps
-        arp->sendReply(Variable::Mac::broadcast, ip);
-        arp->sendReply(Variable::Mac::broadcast, ip);
+        if (arp)
+        {
+            arp->sendReply(Variable::Mac::broadcast, ip);
+            arp->sendReply(Variable::Mac::broadcast, ip);
+        }
         stateChange(StateChange::IPCHANGE);
     }
 }
 
 void Interface::setIPv6(ByteString ip, bool localLink, uint8_t prefix, bool eui64)
 {
-    IpInfo::IPv6::IPv6Address* ipv6 = nullptr;
+    InterfaceConfigs::IPv6State::IPv6Address* ipv6 = nullptr;
 
     {
         std::lock_guard<std::mutex> lock(threadsRunningMutex);
@@ -178,7 +178,7 @@ void Interface::markAddressDuplicate(const ByteString& addr, bool localLink)
     }
     else
     {
-        auto markInvalid = [&](std::vector<IpInfo::IPv6::IPv6Address*>& list) {
+        auto markInvalid = [&](std::vector<InterfaceConfigs::IPv6State::IPv6Address*>& list) {
             for (auto it = list.begin(); it != list.end(); ++it)
             {
                 if ((*it)->ip == addr)
@@ -207,15 +207,6 @@ void Interface::Shutdown(bool shut)
     stateChange(StateChange::SHUTDOWN);
     stateChangeV6(StateChange::SHUTDOWN);
 }
-
-// IpInfo* Interface::Get() 
-// {
-//     if (shutdownFlag)
-//     {
-//         return nullptr;
-//     }
-//     return &configs;
-// }
 
 void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
 {
@@ -276,7 +267,7 @@ void Interface::packetEgress()
         if (!packet.empty())
         {
             // Enqueue the send task to the thread pool
-            threadPool.enqueue([this, packet]() {
+            routingInstance->global.threadPool.enqueue([this, packet]() {
                 this->packetSend.sendPacket(packet);
             });
         }
@@ -295,7 +286,7 @@ void Interface::process()
         }
         if (!packet.empty() && packet.substr(0, 1) != "\xca") {
             // Enqueue the packet processing task to the thread pool
-            threadPool.enqueue([this, packet]() {
+            routingInstance->global.threadPool.enqueue([this, packet]() {
                 ByteString newPacket = packet;
                 Packet* p = new Packet(newPacket, debug, *this);
                 p->decapsulate();
@@ -308,7 +299,7 @@ void Interface::process()
 
 void Interface::startThreads() 
 {
-    if (Global::getInstance().routingEnabled)
+    if (routingInstance->global.routingEnabled)
     {
         // Initialize shared pointers for Protocol objects
         if (!arp)
@@ -347,9 +338,6 @@ void Interface::stopThreads()
     if (thread1.joinable()) thread1.detach(); 
     if (thread2.joinable()) thread2.join(); 
     if (thread3.joinable()) thread3.join(); 
-
-    // Shutdown the thread pool
-    threadPool.shutdown();
 }
 
 void Interface::stateChange(StateChange state)
@@ -450,44 +438,14 @@ void Interface::stateChangeV6(StateChange state)
     }
 }
 
-IpInfo::IPv6::IPv6Address* IpInfo::IPv6::addAddress(const ByteString& ip, bool local, uint8_t prefix)
+EigrpConfigs::InterfaceConfigs* Interface::getEigrpConfig(uint32_t as, AddressFamily af, bool negate)
 {
-    if (local)
+    std::pair<uint32_t, AddressFamily> key = {as, af};
+    if (!configs.eigrp.eigrpInterfaceConfigList.contains(key))
     {
-        // Only one local-address can exist
-        if (linkLocalAddress->ip.empty())
-        {
-            linkLocalAddress->ip = ip;
-            linkLocalAddress->prefix = prefix;
-            linkLocalAddress->tentative = true;
-            linkLocalAddress->valid = false;
-            return linkLocalAddress;
-        }
-        else
-        {
-            std::cerr << "Error: Link-Local address already assigned";
-        }
+        if (negate) return nullptr;
+        EigrpConfigs::InterfaceConfigs* config = new EigrpConfigs::InterfaceConfigs(configs.interfaceType, configs.id);
+        configs.eigrp.eigrpInterfaceConfigList[key] = config;
     }
-    else
-    {
-        IPv6Address* address = new IPv6Address();
-        address->ip = ip;
-        address->prefix = prefix;
-        address->tentative = true;
-        address->valid = false;
-        globalAddresses.push_back(address);
-        return globalAddresses.back();
-    }
-    return nullptr;
-}
-
-IpInfo::IPv6::IPv6Address* IpInfo::IPv6::addUniqueLocalAddress(const ByteString& ip, uint8_t prefixLen)
-{
-    IPv6Address* address = new IPv6Address();
-    address->ip = ip;
-    address->prefix = prefixLen;
-    address->tentative = true;
-    address->valid = false;
-    uniqueLocalAddresses.push_back(address);
-    return uniqueLocalAddresses.back();
+    return configs.eigrp.eigrpInterfaceConfigList[key];
 }

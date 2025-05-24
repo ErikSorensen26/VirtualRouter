@@ -9,8 +9,9 @@
 #include <Encapsulation.h>
 #include <Functions.h>
 #include <ThreadPool.hpp>
-#include <Global.h>
 #include <string>
+#include <TimeManager.h>
+#include <InterfaceConfigs.h>
 
 #include <map>
 #include <thread>
@@ -18,24 +19,8 @@
 
 class EigrpTest;
 class VirtualRouter;
-
-/**
- * @enum InterfaceType
- * @brief Enunerates the various types of network interfaces supported
- */
-enum class InterfaceType
-{
-    UNDEFINED,          ///< Undefined interface type.
-    DIALER,             ///< Dialer interface type.
-    ETHERNET,           ///< Ethernet interface type.
-    FAST_ETHERNET,      ///< Fast Ethernet type.
-    GIGABIT_ETHERNET,   ///< Gigabit Ethernet interface type.
-    LOOPBACK,           ///< Loopback interface type.
-    PORT_CHANNEL,       ///< Port-channel interface type.
-    TUNNEL,             ///< Tunnel interface type.
-    VIRTUAL_TEMPLATE,   ///< Virtual Template interface type.
-    VLAN                ///< VLAN interface type.
-};
+class MockInterface;
+enum class InterfaceType;
 
 /**
  * @enum StateChange
@@ -59,178 +44,11 @@ namespace Protocol
     struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
 }
 
-/**
- * @struct IpInfo
- * @brief Stored IP address and related configuration information.
- */
-struct IpInfo 
+namespace EigrpConfigs 
 {
-    std::shared_mutex ipMutex;      ///< Mutex for thread-safe access to IP information
+    struct InterfaceConfigs;
+}
 
-    std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
-    std::atomic<bool> trusted = false;           ///< Identifier for trusted interface.
-    std::atomic<float> id;                       ///< Identifier for the interface.
-    std::atomic<InterfaceType> interfaceType;    ///< Type of interface.
-    std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
-    std::atomic<uint32_t> delay{10};             ///< Delay of the interface in milliseconds.
-    std::atomic<uint16_t> mtu{1500};             ///< Maximum Transmission Unit size.
-    std::atomic<uint8_t> ttl{64};                 ///< Time To Live.
-    ByteString macAddress{};                     ///< MAC address addociated with the interface.
-
-    /**
-     * @struct IPv4
-     * @brief Stores IPv4 address and subnet mask information.
-     */
-    struct IPv4
-    {
-        ByteString ipAddress{};     ///< IPv4 address.
-        uint8_t mask{0};            ///< Subnet mask.
-    } ipv4;
-
-    ByteString getIPv4()
-    {
-        std::shared_lock<std::shared_mutex> lock(ipMutex);
-        return ipv4.ipAddress;
-    }
-
-    /**
-     * @struct IPv6
-     * @brief Stores IPv6 address, subnet mask, and flow label information.
-     */
-    struct IPv6
-    {
-        // TODO NEEDS MUTEX PROTECTION
-        struct IPv6Address
-        {
-            ByteString ip;
-            uint8_t prefix = 0;
-            
-            // Tentative/valid for link-local address
-            bool tentative = false;
-            bool valid = false;
-
-            // Tentative/valid for SLAAC global addresses
-            bool globalTentative = false;
-            bool globalValid = false;
-
-            // Timer ID for address expiration (valid lifetime)
-            uint32_t expirationId = 0;
-
-            // Preferred lifetime tracking
-            uint32_t preferredLifetime = 0;
-            bool deprecated = false;
-            uint32_t preferedExpirationId = 0;
-
-            void validateAddress(bool local = false)
-            {
-                if (local)
-                {
-                    tentative = false;
-                    valid = true;
-                }
-                else
-                {
-                    globalTentative = false;
-                    globalValid = true;
-                }
-            }
-        };
-
-        IPv6Address* linkLocalAddress = new IPv6Address(); ///< IPv6 address.
-        std::vector<IPv6Address*> globalAddresses; ///< Global IPv6 addresses.
-        std::vector<IPv6Address*> uniqueLocalAddresses{}; ///< Unique Local Addresses.
-
-        IPv6Address* addAddress(const ByteString& ip, bool local, uint8_t prefix);
-
-        IPv6Address* addUniqueLocalAddress(const ByteString& ip, uint8_t prefixLen);
-
-        void removeAddress(const ByteString& ip, bool local)
-        {
-            if (local)
-            {
-                auto ipv6 = linkLocalAddress;
-                linkLocalAddress = new IPv6Address();
-                delete ipv6;
-            }
-            else
-            {
-                auto& addressList = (ip.substr(0, 2) == "\xfc\x00") ? uniqueLocalAddresses : globalAddresses;
-                addressList.erase(std::remove_if(addressList.begin(), addressList.end(),
-                    [&](const IPv6Address* addr) { return addr->ip == ip; }), addressList.end());
-            }
-        }
-
-        void validateGlobalAddresses()
-        {
-            for (auto& address : globalAddresses)
-            {
-                address->validateAddress(false);
-            }
-        }
-
-        void validateLinkLocalAddress()
-        {
-            if (!linkLocalAddress->ip.empty())
-            {
-                linkLocalAddress->validateAddress(true);
-            }
-        }
-
-    }  ipv6;
-
-    ByteString getLocalAddress()
-    {
-        std::shared_lock<std::shared_mutex> lock(ipMutex);
-        return ipv6.linkLocalAddress->ip;
-    }
-
-    ByteString getGlobalUnicast()
-    {
-        std::shared_lock<std::shared_mutex> lock(ipMutex);
-        if (!ipv6.globalAddresses.empty())
-        {
-            return ipv6.globalAddresses.front()->ip;
-        }
-        return {};
-    }
-
-    ByteString getLocalUnicast()
-    {
-        std::shared_lock<std::shared_mutex> lock(ipMutex);
-        if (!ipv6.uniqueLocalAddresses.empty())
-        {
-            return ipv6.uniqueLocalAddresses.front()->ip;
-        }
-        return {};
-    }
-
-    bool hasAddress(const ByteString& address)
-    {
-        std::shared_lock<std::shared_mutex> lock(ipMutex);
-        if (ipv6.linkLocalAddress->ip == address)
-            return true;
-        for (auto* ip : ipv6.globalAddresses)
-        {
-            if (ip->ip == address)
-                return true;
-        }
-        for (auto* ip : ipv6.uniqueLocalAddresses)
-        {
-            if (ip->ip == address)
-                return true;
-        }
-        return false;
-    }
-
-    /**
-     * @struct Eigrp
-     * @brief Stores Eigrp Configs
-     */
-    struct Eigrp
-    {
-        std::map<std::string, std::unordered_set<uint32_t>> ipv6AutonomousSystems; ///< Vrf to enabled autonomous system list
-    } eigrp;
-};
 
 /**
  * @class Interface
@@ -242,7 +60,7 @@ struct IpInfo
 class Interface
 {
 public:
-
+    friend class ::MockInterface;
     friend class ::EigrpTest;
     RingBuffer<ByteString> packetOutQueue; ///< Queue for outgoing packets.
 
@@ -261,7 +79,16 @@ public:
      * @param interfaceId The Identifier for the interface
      * @param debug Flag to enable or disable debug mode.
      */
-    Interface(InterfaceType interfaceType = InterfaceType::UNDEFINED, std::string outInterface = "lo", const size_t inQueSiz = 100, const size_t outQueSiz = 100, std::string mac = "010203040506", float interfaceId = 0, VirtualRouter* vrf = Global::getInstance().getRoutingInstance("default"), bool debug = false);
+    Interface(
+        InterfaceType interfaceType,
+        std::string outInterface,
+        const size_t inQueSiz,
+        const size_t outQueSiz,
+        std::string mac,
+        float interfaceId,
+        VirtualRouter& vrf,
+        bool debug = false
+    );
 
     /**
      * @brief Destructs the Interface object.
@@ -325,15 +152,6 @@ public:
     void markAddressDuplicate(const ByteString& address, bool linkLocal = false);
 
     /**
-     * @brief Retrieves the current IP address information
-     *
-     * Provides access to the shared IP information structure.
-     *
-     * @return a pointer of the configs to reduce copies.
-     */
-    //virtual IpInfo* Get();
-
-    /**
      * @brief Shuts down or restarts the interface.
      * 
      * Toggles the running state of the interface and triggers state changes for protocols.
@@ -356,13 +174,14 @@ public:
     VirtualRouter* routingInstance = nullptr;
 
     // Member Variables
-    IpInfo configs;         ///< Pointer to IP configuration information.
+    InterfaceConfigs configs;         ///< Pointer to IP configuration information.
 
     Protocol::Arp* arp = nullptr;     ///< ARP protocol handler.
     Protocol::Ndp* ndp = nullptr;     ///< NDP protocol handler.
 
     // L4 Protocols
     std::map<uint32_t, Protocol::EigrpInterfaceInstance*> eigrpInterfaceList; ///< EIGRP interface instance.
+    EigrpConfigs::InterfaceConfigs* getEigrpConfig(uint32_t as, AddressFamily af, bool negate);
 
     // L5 Protocols
     Protocol::DhcpClient* dhcp = nullptr;     ///< DHCP Client protocol handler.
@@ -457,12 +276,10 @@ private:
     std::thread thread2;    ///< Thread for packet egress.
     std::thread thread3;    ///< Thread for packet processing.
 
-    ThreadPool threadPool;  ///< Thread pool for handling asynchronous tasks.
-
     std::condition_variable packetOutQueueCV; ///< Condition variable to notify packet egress thread.
 };
 
 // External declarations
-extern Interface* currentInterface; ///< Weak pointer to the current Interface object.
+extern Interface* currentInterface; ///< Pointer to the current Interface object.
 
 #endif // INTERFACE_H
