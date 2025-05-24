@@ -11,7 +11,7 @@ double secondsSinceEpoch()
 
 namespace Functions {
 
-    #pragma region TestIf
+#pragma region TestIf
 
     bool isBinary(const ByteString& str) 
     {
@@ -28,8 +28,8 @@ namespace Functions {
         return !str.empty() && std::all_of(str.begin(), str.end(), ::isdigit);
     }
 
-    #pragma endregion
-    #pragma region ByteConv
+#pragma endregion
+#pragma region ByteConv
 
     ByteString byteToHex(const ByteString& input) 
     {
@@ -82,8 +82,8 @@ namespace Functions {
         return num;
     }
 
-    #pragma endregion
-    #pragma region HexConv
+#pragma endregion
+#pragma region HexConv
 
     ByteString binToHex(const ByteString& binaryStr) 
     {
@@ -164,16 +164,16 @@ namespace Functions {
         return strtol(hexStr.toString().c_str(), &endptr, 16);
     }
 
-    #pragma endregion
-    #pragma region BoolConv
+#pragma endregion
+#pragma region BoolConv
 
     std::string boolToString(bool bol) 
     {
         return bol ? "1" : "0";
     }
 
-    #pragma endregion
-    #pragma region BinConv
+#pragma endregion
+#pragma region BinConv
 
     ByteString binToByte(const ByteString& binaryData, size_t size) 
     {
@@ -192,8 +192,8 @@ namespace Functions {
         return static_cast<unsigned int>(decimal);
     }
 
-    #pragma endregion
-    #pragma region StringConv
+#pragma endregion
+#pragma region StringConv
 
     std::string lowerCase(std::string str) 
     {
@@ -217,8 +217,8 @@ namespace Functions {
         return 0;
     }
 
-    #pragma endregion
-    #pragma region NumConv
+#pragma endregion
+#pragma region NumConv
 
     ByteString numToBin(size_t number, size_t length)
     {
@@ -228,8 +228,8 @@ namespace Functions {
         return binaryStr.substr(64 - length);
     }
 
-    #pragma endregion
-    #pragma region CharConv
+#pragma endregion
+#pragma region CharConv
 
     ByteString charToHex(uint8_t byte) 
     {
@@ -243,8 +243,8 @@ namespace Functions {
         return std::bitset<8>(byte).to_string();
     }
 
-    #pragma endregion
-    #pragma region NumChar
+#pragma endregion
+#pragma region NumChar
 
     ByteString numToHex(size_t num, size_t size) 
     {
@@ -320,8 +320,8 @@ namespace Functions {
          return bytes;
     }
 
-    #pragma endregion
-    #pragma region NetConv
+#pragma endregion
+#pragma region NetConv
 
     ByteString addressToByte(const ByteString& address)
     {
@@ -490,7 +490,7 @@ namespace Functions {
         // Compare full bytes
         for (size_t i = 0; i < byteCount; ++i)
         {
-            if (static_cast<uint8_t>(networkAddress[i]) != static_cast<uint8_t>(ipAddress[i]))
+            if (networkAddress[i] != ipAddress[i])
             {
                 return false;
             }
@@ -500,8 +500,8 @@ namespace Functions {
         if (remainingBits > 0 && byteCount < networkAddress.size())
         {
             uint8_t bitMask = 0xFF << (8 - remainingBits);
-            if ((static_cast<uint8_t>(networkAddress[byteCount]) & bitMask) !=
-                (static_cast<uint8_t>(ipAddress[byteCount]) & bitMask))
+            if ((networkAddress[byteCount] & bitMask) !=
+                (ipAddress[byteCount] & bitMask))
             {
                 return false;
             }
@@ -790,8 +790,8 @@ namespace Functions {
         return (input[0] & 0xE0) == 0x20;
     }
     
-    #pragma endregion
-    #pragma region Other
+#pragma endregion
+#pragma region Other
 
     size_t getRandomBetween(size_t min, size_t max) {
         if (min > max) std::swap(min, max);
@@ -852,5 +852,5 @@ namespace Functions {
         return result;
     }
 
-    #pragma endregion
+#pragma endregion
 }

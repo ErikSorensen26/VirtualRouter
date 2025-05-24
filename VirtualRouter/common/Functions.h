@@ -460,6 +460,8 @@ namespace Functions {
     std::string generateRandomString(size_t length);
 
     std::optional<std::pair<std::string, std::string>> splitMiddle(const std::string& full, char delimiter);
+
+    bool isBitSet(const uint8_t byte, uint8_t bitPosition);
 }
 
 #endif // FUNCTIONS_H
