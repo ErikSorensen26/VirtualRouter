@@ -8,47 +8,52 @@
 #include <Logger.h>
 
 class Interface;
+class PacketBuilder;
 
 namespace Protocol
 {
-    class IPPacket
+    namespace IPPacket
     {
-    public:
-        // Sets the IPv4 header in PacketInfo
-        static void buildIp(
-            Interface* iface,
-            PacketInfo& packetInfo, 
-            const ByteString& destIp, 
-            ByteString const* sourceIp, 
-            ByteString const* destMac, 
-            uint8_t DSCP, 
-            uint8_t hopLimit,
-            const ByteString& protocolType,
-            bool reserved = false,
-            bool dontFragment = true,
-            bool moreFragment = false,
-            uint16_t fragmentOffset = 0,
-            uint32_t v6FlowLabel = 0
+        inline static void reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo);
+        inline static void reserveIpv6(Interface* currentInterface, PacketBuilder& packetInfo);
+
+        struct BuildIP
+        {
+            Interface*& iface;
+            PacketBuilder& packetInfo;
+            const uint8_t* destIp;
+            const uint8_t* sourceIp = nullptr;
+            const uint8_t* destMac = nullptr;
+            uint8_t DSCP = 0;
+            uint8_t hopLimit = 255;
+            const uint8_t& protocolType;
+            bool reserved = false;
+            bool dontFragment = true;
+            bool moreFragment = false;
+            uint16_t fragmentOffset = 0;
+        };
+
+        inline static void buildIpv4(
+            BuildIP& ipv4Build
         );
 
-        // Sets the UPD header in PacketInfo
-        static void buildUdp(
-            Interface* iface,
-            PacketInfo& packetInfo, 
-            const ByteString& destIp, 
-            ByteString const* sourceIp, 
-            ByteString const* destMac, 
-            uint8_t DSCP, 
-            uint8_t hopLimit, 
-            const ByteString& type,
-            const ByteString& sourcePort,
-            const ByteString& destinationPort,
-            bool reserved = false,
-            bool dontFragment = true,
-            bool moreFragment = false,
-            uint16_t fragmentOffset = 0
+        inline static void buildIpv6(
+            BuildIP& ipv6Build,
+            uint32_t v6FlowLabel = 0
         );
-    };
+    }
+    namespace UDPPacket
+    {
+        inline static void reserveUDP(Interface* currentInterface, PacketBuilder& packetInfo, AddressFamily af);
+
+        // Sets the UPD header in PacketInfo
+        inline static void buildUdp(
+            AddressFamily af,
+            IPPacket::BuildIP& ipBuild,
+            uint16_t sourcePort,
+            uint16_t destinationPort,
+        );
+    }
 }
 
 #endif // IP_PACKET_H

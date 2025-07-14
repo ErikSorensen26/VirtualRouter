@@ -1,144 +1,233 @@
 #include "IPPacket.h"
 #include "Ethernet.h"
 #include <Interface.h>
+#include <PacketBuilder.hpp>
+#include <Arp.h>
+#include <Ndp.h>
 
 namespace Protocol
 {
-    void IPPacket::buildIp(Interface* iface, PacketInfo& packetInfo, const ByteString& destIp, ByteString const* sourceIp, ByteString const* destMac, uint8_t DSCP, uint8_t hopLimit, const ByteString& protocolType, bool reserved, bool dontFragment, bool moreFragment, uint16_t fragmentOffset, uint32_t v6FlowLabel)
+    void deriveMulticastMac(uint8_t* mac, const uint8_t* ip, AddressFamily af)
     {
-        if (!iface || iface->shutdownFlag.load(std::memory_order_relaxed)) return;
-
-        // IPv6 Header creation
-        if (destIp.size() == 16)
-        {        
-            {
-                IPv6Header ip;
-                {
-                    if (sourceIp && sourceIp->size() == 16)
-                    {
-                        ip.sourceAddress = *sourceIp;
-                    }
-                    else
-                    {
-                        // Pick best IP to use
-                        ByteString prefix = Functions::byteToBin(destIp.substr(0, 2));
-
-                        uint8_t firstByte = destIp[0];
-                        uint8_t secondByte = destIp[1];
-
-                        // Multicast (FF00::/8)
-                        if (firstByte == 0xFF)
-                        {
-                            uint8_t scope = secondByte & 0x0F; // Low nibble = bits 12-15
-                        
-                            if (scope == 0x01 || scope == 0x02)
-                            {
-                                ByteString localIp = iface->configs.ipv6.getLocalAddress();
-                                if (localIp.size() == 16)
-                                    ip.sourceAddress = std::move(localIp);
-                            }
-                            else if (scope == 0x05 || scope == 0x08) // Site/org-local
-                            {
-                                ByteString uniqueIp = iface->configs.ipv6.getLocalUnicast();
-                                if (uniqueIp.size() == 16)
-                                    ip.sourceAddress = std::move(uniqueIp);
-                            }
-                            else if (scope == 0x0E) // Global scope
-                            {
-                                ByteString globalIp = iface->configs.ipv6.getGlobalUnicast();
-                                if (globalIp.size() == 16)
-                                    ip.sourceAddress = std::move(globalIp);
-                            }
-                            else
-                            {
-                                return; // Return if no matching scope is found
-                            }
-                        }
-                        // Global Unicast (2000::/3 = 001xxxxx)
-                        else if ((firstByte & 0b11100000) == 0b00100000)
-                        {
-                            ByteString globalIp = iface->configs.ipv6.getGlobalUnicast();
-                            if (globalIp.size() == 16)
-                                ip.sourceAddress = std::move(globalIp);
-                        }
-                        // Unique Local (FC00::/7 = 1111110x)
-                        else if ((firstByte & 0b11111110) == 0b11111100)
-                        {
-                            ByteString uniqueIp = iface->configs.ipv6.getLocalUnicast();
-                            if (uniqueIp.size() == 16)
-                                ip.sourceAddress = std::move(uniqueIp);
-                        }
-                        // Link-local (FE80::/10 = 1111111010xxxxxxx)
-                        else if ((firstByte & 0b11111100) == 0b11111100 && (secondByte & 0b00001111) == 0x00)
-                        {
-                            ByteString localIp = iface->configs.ipv6.getLocalAddress();
-                            if (localIp.size() == 16)
-                                ip.sourceAddress = std::move(localIp);
-                        }
-                        // Loopback (::1)
-                        else if (std::all_of(destIp.begin(), destIp.end() - 1, [](uint8_t b) { return b == 0; }) && destIp[15] == 1)
-                        {
-                            ip.sourceAddress = ByteString(16, 0x00); // 16 bytes initialized to 0
-                            ip.sourceAddress[15] = 0x01;             // Set last byte to 1 using bitwise operator
-                        }
-                        else
-                        {
-                            return; // Unsuported or unconfigured destination
-                        }
-                    }
-                }
-                ip.flowLabel = Functions::numToHex(v6FlowLabel, 5);
-                ip.version = "6";
-                ip.trafficClass = Functions::numToHex(DSCP, 2);
-                ip.payloadLength = ByteString(2, 0x00); // Will be calculated later
-                ip.protocol = protocolType;
-                ip.hopLimit = Functions::numToByte(hopLimit, 1);
-                ip.destinationAddress = destIp;
-                packetInfo.Layer3.insert(packetInfo.Layer3.begin(), std::move(ip));
-            }
-            Ethernet::build(iface, packetInfo, &destIp, destMac, Variable::Ethernet::ipv6);
-
-            if (!dontFragment)
-            {
-                //TODO handle fragmentation
-            }
-        }
-        else if (destIp.size() == 4)
+        // IPv4 multicast MAC: 01:00:5E:xx:xx:xx (lower 23 bits of IP)
+        if (af == AddressFamily::IPv4)
         {
-            {
-                IPv4Header ip;
-
-                ip.sourceAddress = (sourceIp && sourceIp->size() == 4) ? *sourceIp : iface->configs.ipv4.getAddress();
-                ip.version = ByteString("4", 1);
-                ip.headerLength = ByteString("5", 1);
-                ip.serviceField = Functions::numToByte(DSCP, 1);
-                ip.totalLength = ByteString(2, 0x02);
-                ip.identification = ByteString(2, 0x00);
-
-                ip.fragmentFlag.reserved = ByteString(reserved ? "1" : "0", 1);
-                ip.fragmentFlag.fragment = ByteString(dontFragment ? "1" : "0", 1);
-                ip.fragmentFlag.moreFragment = ByteString(moreFragment ? "1" : "0", 1);
-                ip.fragmentFlag.fragmentOffset = Functions::numToBin(fragmentOffset, 13);
-
-                ip.TTL = Functions::numToByte(hopLimit, 1);
-                ip.protocol = protocolType;
-                ip.checksum = ByteString(2, 0x00);
-                ip.destinationAddress = destIp;
-                packetInfo.Layer3.insert(packetInfo.Layer3.begin(), std::move(ip));
-            }
-            Ethernet::build(iface, packetInfo, &destIp, destMac, Variable::Ethernet::ipv4);
+            uint8_t tempMac[6] = {0x01, 0x00, 0x5E, static_cast<unsigned char>(ip[1]), static_cast<unsigned char>(ip[2]), static_cast<unsigned char>(ip[3])};
+            std::memcpy(mac, tempMac, 6);
+        }
+        // IPv6 multicast MAC: 33:33:xx:xx:xx:xx (last 32 bits of IPv6 address)
+        else if (af == AddressFamily::IPv6)
+        {
+            uint8_t tempMac[6] = {0x33, 0x33, static_cast<unsigned char>(ip[12]), static_cast<unsigned char>(ip[13]), static_cast<unsigned char>(ip[14]), static_cast<unsigned char>(ip[15])};
+            std::memcpy(mac, tempMac, 6);
         }
     }
 
-    // Sets the UPD header in PacketInfo
-    void IPPacket::buildUdp(Interface* iface, PacketInfo& packetInfo, const ByteString& destIp, ByteString const* sourceIp, ByteString const* destMac, uint8_t DSCP, uint8_t hopLimit, const ByteString& type,const ByteString& sourcePort,const ByteString& destinationPort, bool reserved, bool dontFragment, bool moreFragment, uint16_t fragmentOffset)
+    uint8_t* getDestinationMac(uint8_t* mac, Interface* iface, AddressFamily af, const uint8_t* destIp, PacketBuilder& packet, uint16_t type)
     {
-        UdpHeader udp;
-        udp.checksum = ByteString("\x00\x00", 2);
-        udp.sourcePort = sourcePort;
-        udp.destinationPort = destinationPort;
-        packetInfo.Layer4.push_back(std::move(udp));
+        if (Functions::isMulticast(destIp, af))
+        {
+            deriveMulticastMac(mac, destIp, af);
+            return mac;
+        }
+        else if (af == AddressFamily::IPv4 && iface->arp)
+        {
+            uint8_t dest[4];
+            std::memcpy(dest, destIp, sizeof(uint32_t));
+            if (iface->arp->getMac(mac, dest))
+            {
+                return mac;
+            }
+            else
+            {
+                iface->arp->resolveAndSend(dest, packet);
+                return nullptr; // Empty MAC signifies that the packet will be sent after ARP resolution
+            }
+        }
+        else if (af == AddressFamily::IPv6 && iface->ndp)
+        {
+            if (iface->ndp->getMac(mac, destIp))
+            {
+                return mac;
+            }
+            else
+            {
+                iface->ndp->resolveAndSend(destIp, packet);
+                return nullptr;
+            }
+        }
+        else return nullptr; // Resolution is disabled.
+    }
 
-        buildIp(iface, packetInfo, destIp, sourceIp, destMac, DSCP, hopLimit, type, reserved, dontFragment, moreFragment, fragmentOffset);
+    static void reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo)
+    {
+        // Decide layer 2 encapsulation based on interface configs
+        // DEFAULT -> Ethernet
+        Ethernet::reserve(packetInfo);
+        
+        size_t ipSize = IPv4Header::fixedSize;
+        //TODO calcualte option lengths
+
+        packetInfo.reserveHeader(HeaderType::IPV4, ipSize);
+    }
+
+    void IPPacket::buildIpv4(
+        BuildIP& ipv4Build
+    )
+    {
+        if (!ipv4Build.iface || ipv4Build.iface->shutdownFlag.load(std::memory_order_relaxed)) return;
+        
+        BuildEntry* nextHeader = ipv4Build.packetInfo.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::IPV4)
+            return; // Drop Packet
+
+        IPv4Header ip;
+
+        ip.setBuffer(nextHeader->buffer); //TODO
+        if (ipv4Build.sourceIp)
+            ip.setSourceAddress(ipv4Build.sourceIp);
+        else
+            ipv4Build.iface->configs.ipv4.getAddress(ip.raw->sourceAddress);
+        ip.setVersion(4);
+        ip.setHeaderLength(4); //TODO
+        ip.setTypeOfService(ipv4Build.DSCP);
+        ip.setTotalLength(0);
+        ip.setIdentification(0);
+        ip.setFlags(ipv4Build.reserved, ipv4Build.dontFragment, ipv4Build.moreFragment);
+        ip.setFragmentOffset(ipv4Build.fragmentOffset);
+        ip.setTtl(ipv4Build.hopLimit);
+        ip.setProtocol(ipv4Build.protocolType);
+        ip.setDestinationAddress(ipv4Build.destIp);
+
+        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destIp, ipv4Build.destMac, Variable::Ethernet::ipv4);
+    }
+
+    void IPPacket::buildIpv6(
+        BuildIP& ipv6Build,
+        uint32_t v6FlowLabel
+    )
+    {
+        if (!ipv6Build.iface || ipv6Build.iface->shutdownFlag.load(std::memory_order_relaxed)) return;
+
+        BuildEntry* nextHeader = ipv6Build.packetInfo.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::IPV6)
+            return; // Drop Packet
+
+        // IPv6 Header creation
+        IPv6Header ip;
+        ip.setBuffer(nextHeader->buffer);
+        if (ipv6Build.sourceIp)
+        {
+            ip.setSourceAddress(ipv6Build.sourceIp);
+        }
+        else
+        {
+            // Pick best IP to use
+            std::span<const uint8_t> prefix(ipv6Build.destIp, 2);
+
+            uint8_t firstByte = ipv6Build.destIp[0];
+            uint8_t secondByte = ipv6Build.destIp[1];
+
+            // Multicast (FF00::/8)
+            if (firstByte == 0xFF)
+            {
+                uint8_t scope = secondByte & 0x0F; // Low nibble = bits 12-15
+            
+                if (scope == 0x01 || scope == 0x02)
+                {
+                    if (!ipv6Build.iface->configs.ipv6.getLocalAddress(ip.raw->sourceAddress)) return;
+                }
+                else if (scope == 0x05 || scope == 0x08) // Site/org-local
+                {
+                    if (!ipv6Build.iface->configs.ipv6.getLocalUnicast(ip.raw->sourceAddress)) return;
+                }
+                else if (scope == 0x0E) // Global scope
+                {
+                    if (!ipv6Build.iface->configs.ipv6.getGlobalUnicast(ip.raw->sourceAddress)) return;
+                }
+                else return; // Return if no matching scope is found
+            }
+            // Global Unicast (2000::/3 = 001xxxxx)
+            else if ((firstByte & 0b11100000) == 0b00100000)
+            {
+                if (!ipv6Build.iface->configs.ipv6.getGlobalUnicast(ip.raw->sourceAddress)) return;
+            }
+            // Unique Local (FC00::/7 = 1111110x)
+            else if ((firstByte & 0b11111110) == 0b11111100)
+            {
+                if (!ipv6Build.iface->configs.ipv6.getLocalUnicast(ip.raw->sourceAddress)) return;
+            }
+            // Link-local (FE80::/10 = 1111111010xxxxxxx)
+            else if ((firstByte & 0b11111100) == 0b11111100 && (secondByte & 0b00001111) == 0x00)
+            {
+                if (!ipv6Build.iface->configs.ipv6.getLocalAddress(ip.raw->sourceAddress)) return;
+            }
+            // Loopback (::1)
+            else if (std::all_of(ipv6Build.destIp, ipv6Build.destIp + 15, [](uint8_t b) { return b == 0; }) && ipv6Build.destIp[15] == 1)
+            {
+                std::memset(ip.raw->sourceAddress, 0, 16);
+                ip.raw->sourceAddress[15] = 0x01;             // Set last byte to 1 using bitwise operator
+            }
+            else
+            {
+                return; // Unsuported or unconfigured destination
+            }
+        }
+        ip.setVersionTrafficClassFlow(6, ipv6Build.DSCP, v6FlowLabel);
+        ip.setNextHeader(ipv6Build.protocolType);
+        ip.setHopLimit(ipv6Build.hopLimit);
+        ip.setDestinationAddress(ipv6Build.destIp);
+
+        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destIp, ipv6Build.destMac, Variable::Ethernet::ipv6);
+
+        if (!ipv6Build.dontFragment)
+        {
+            //TODO handle fragmentation
+        }
+    }
+
+    void IPPacket::reserveIpv6(Interface* currentInterface, PacketBuilder& packetInfo)
+    {
+        // Decide layer 2 encapsulation based on interface configs
+        // DEFAULT -> Ethernet
+        Ethernet::reserve(packetInfo);
+        
+        size_t ipSize = IPv6Header::fixedSize;
+        //TODO calcualte option lengths
+
+        packetInfo.reserveHeader(HeaderType::IPV6, ipSize);
+    }
+
+    void UDPPacket::reserveUDP(Interface* currentInterface, PacketBuilder& packetInfo, AddressFamily af)
+    {
+        af == AddressFamily::IPv4
+            ? IPPacket::reserveIpv4(currentInterface, packetInfo)
+            : IPPacket::reserveIpv6(currentInterface, packetInfo);
+
+        packetInfo.reserveHeader(HeaderType::UDP, sizeof(UdpHeader));
+    }
+
+    // Sets the UPD header in PacketInfo
+    void buildUdp(
+        AddressFamily af,
+        IPPacket::BuildIP& ipBuild,
+        uint16_t sourcePort,
+        uint16_t destinationPort
+    )
+    {
+        BuildEntry* nextHeader = ipBuild.packetInfo.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::IPV6)
+            return; // Drop Packet
+
+        UdpHeader udp;
+        udp.setBuffer(nextHeader->buffer);
+        udp.setChecksum(0);
+        udp.setSourcePort(sourcePort);
+        udp.setDestinationPort(destinationPort);
+
+        if (af == AddressFamily::IPv4)
+            IPPacket::buildIpv4(ipBuild);
+        else
+            IPPacket::buildIpv6(ipBuild);
     }
 }
