@@ -70,8 +70,8 @@ protected:
     // Helper function: returns the topology table.
     TopologyTable* getTopologyTable() { return eigrpInstance->topologyTable; }
     // Helper: returns the current interface list.
-    std::unordered_map<std::pair<InterfaceType, float>, EigrpInterface*, InterfacePairHash>& getInterfaceList() { return eigrpInstance->eigrpInterfaceList; }
-    std::unordered_map<std::pair<InterfaceType, float>, Interface*, InterfacePairHash>& getAllInterfaceList() { return eigrpInstance->routingInstance->interfaceList; }
+    std::unordered_map<uint32_t, EigrpInterface*>& getInterfaceList() { return eigrpInstance->eigrpInterfaceList; }
+    std::unordered_map<uint32_t, Interface*>& getAllInterfaceList() { return eigrpInstance->routingInstance->interfaceList; }
     
     // Helper: set IPv4 address on an interface.
     void setIPv4(const ByteString& ip, uint8_t mask, MockInterface* iface = nullptr) 

@@ -22,6 +22,60 @@ uint32_t TimeManager::addTimer(std::chrono::steady_clock::time_point expirationT
     return id;
 }
 
+uint32_t TimeManager::addLimitedRecurringTimer(std::chrono::milliseconds interval, size_t repeatCount, std::function<void()> repeated, std::function<void()> finalCallback)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    uint32_t id = nextTimerId++;
+
+    // Register repetition limit and initial counter.
+    repeatedCounters[id] = 0;
+    repeatLimits[id] = repeatCount;
+    if (finalCallback)
+        finalCallbacks[id] = std::move(finalCallback);
+
+    TimePoint now = std::chrono::steady_clock::now();
+    auto it = timers.emplace(now + interval, TimerData{
+        id,
+        [this, id, repeated = std::move(repeated)]() mutable {
+            size_t current = 0;
+            size_t limit = 0;
+            std::function<void()> final;
+
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                current = ++repeatedCounters[id];
+                limit = repeatLimits[id];
+                if (current == limit)
+                {
+                    auto finalIt = finalCallbacks.find(id);
+                    if (finalIt != finalCallbacks.end())
+                    {
+                        final = std::move(finalIt->second);
+                        finalCallbacks.erase(finalIt);
+                    }
+                }
+            }
+
+            if (current <= limit)
+                repeated();
+
+            if (current == limit)
+            {
+                cancelTimer(id);
+                if (final)
+                    final();
+            }
+        },
+        interval
+    });
+
+    timerIndex[id] = it;
+    dynamicIntervals[id] = interval;
+    executing[id] = false;
+    cv.notify_one();
+    return id;
+}
+
 uint32_t TimeManager::addRecurringTimer(std::chrono::milliseconds interval, std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
