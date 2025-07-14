@@ -3,8 +3,18 @@
 #ifndef ESP_HEADER_HPP
 #define ESP_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
+#include <HeaderHelpers.hpp>
+
+/**
+ * @struct EspHeaderRaw
+ */
+#pragma pack(push, 1)
+struct EspHeaderRaw
+{
+    uint32_t spi;
+    uint32_t sequence;
+};
+#pragma pack(pop)
 
 /**
  * @struct EspHeader
@@ -12,29 +22,10 @@
  */
 struct EspHeader
 {
-    ByteString spi{};       ///< Security Parameters Index (SPI).
-    ByteString sequence{};  ///< Sequence Number.
+    DEFINE_FIXED_HEADER(EspHeaderRaw);
 
-    const std::optional<ByteString> encapsulate() const
-    {
-        ByteString espString;
-        if (spi.size() != 4 || sequence.size() != 4) return std::nullopt;
-
-        espString.reserve(8);
-        espString += spi;
-        espString += sequence;
-
-        return espString;
-    }
-    bool decapsulate(const ByteString espHeader)
-    {
-        if (espHeader.size() != 8) return false;
-
-        spi = espHeader.substr(0, 4);
-        sequence = espHeader.substr(4, 4);
-
-        return true;
-    }
+    void setSpi() {}
+    void setSequence() {}
 };
 
 #endif // ESP_HEADER_HPP

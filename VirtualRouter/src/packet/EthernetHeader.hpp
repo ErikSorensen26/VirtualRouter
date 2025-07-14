@@ -3,8 +3,20 @@
 #ifndef ETHERNET_HEADER_HPP
 #define ETHERNET_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
+#include <HeaderHelpers.hpp>
+
+/**
+ * @struct EthernetHeaderRaw
+ * @brief Represents a raw Ethernet header.
+ */
+#pragma pack(push, 1)
+struct EthernetHeaderRaw
+{
+    uint8_t destinationMac[6];
+    uint8_t sourceMac[6];
+    uint8_t type[2];
+};
+#pragma pack(pop)
 
 /**
  * @struct EthernetHeader
@@ -12,35 +24,14 @@
  */
 struct EthernetHeader
 {
-    ByteString sourceMac{};         ///< Source MAC address
-    ByteString destinationMac{};    ///< Destination MAC address
-    ByteString type{};              ///< Next header type
+    DEFINE_FIXED_HEADER(EthernetHeaderRaw);
 
-    const std::optional<ByteString> encapsulate() const
-    {
-        //Profiler::getInstance().notify("ethernet encap start");
-        ByteString ethernetString;
-        ethernetString += destinationMac.size() == 6 ? destinationMac : ByteString(6, '\x00');
-        if (sourceMac.size() != 6 || type.size() != 2) return std::nullopt;
-
-        ethernetString.reserve(14);
-        ethernetString.append(sourceMac);
-        ethernetString.append(type);
-
-        return ethernetString;
-        //Profiler::getInstance().notify("ethernet encap end");
-    }
-    bool decapsulate(const ByteString ethernetHeader)
-    {
-        //Profiler::getInstance().notify("ethernet decap start");
-        if (ethernetHeader.size() != 14) 
-            return false;
-        destinationMac = ethernetHeader.substr(0, 6);
-        sourceMac = ethernetHeader.substr(6, 6);
-        type = ethernetHeader.substr(12, 2);
-        //Profiler::getInstance().notify("ethernet decap end");
-        return true;
-    }
+    void setSourceMac(const uint8_t* val) 
+        { std::memcpy(raw->sourceMac, val, 6); }
+    void setDestinationMac(const uint8_t* val)
+        { std::memcpy(raw->sourceMac, val, 6); }
+    void setType(const uint16_t val)
+        { writeU16(raw->type, val); }
 };
 
 #endif // ETHERNET_HEADER_HPP

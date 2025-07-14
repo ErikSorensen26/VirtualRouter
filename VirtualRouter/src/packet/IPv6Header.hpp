@@ -3,9 +3,23 @@
 #ifndef IPV6_HEADER_HPP
 #define IPV6_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
-#include <Functions.h>
+#include <HeaderHelpers.hpp>
+
+/**
+ * @struct IPv6HeaderRaw
+ * @brief Represents a raw IPv6 header.
+ */
+#pragma pack(push, 1)
+struct IPv6HeaderRaw
+{
+    uint8_t versionTrafficFlow[4];
+    uint8_t payloadLength[2];
+    uint8_t nextHeader;
+    uint8_t hopLimit;
+    uint8_t sourceAddress[16];
+    uint8_t destinationAddress[16];
+};
+#pragma pack(pop)
 
 /**
  * @struct IPv6Header
@@ -13,47 +27,42 @@
  */
 struct IPv6Header
 {
-    ByteString version{};           ///< Version field.
-    ByteString trafficClass{};      ///< Traffic Class field.
-    ByteString flowLabel{};         ///< Flow Label field.
-    ByteString payloadLength{};     ///< Payload Length field.
-    ByteString protocol{};          ///< Next Header field.
-    ByteString hopLimit{};          ///< Hop Limit field.
-    ByteString sourceAddress{};     ///< Source IPv6 address.
-    ByteString destinationAddress{};///< Destination IPv6 address.
+    DEFINE_FIXED_HEADER(IPv6HeaderRaw);
 
-    const std::optional<ByteString> encapsulate() const
-    {
-        ByteString ipv6String;
-        if (version.size() != 1 || trafficClass.size() != 2 || flowLabel.size() != 5 || payloadLength.size() != 2 ||
-            protocol.size() != 1 || hopLimit.size() != 1 || sourceAddress.size() != 16 || 
-            destinationAddress.size() != 16) return std::nullopt;
+    uint8_t getVersion() const 
+        { return (raw->versionTrafficFlow[0] >> 4) & 0x0F; }
+    uint8_t getTrafficClass() const 
+        { return ((raw->versionTrafficFlow[0] & 0x0F) << 4) | (raw->versionTrafficFlow[1] >> 4); }
+    uint32_t getFlowLabel() const 
+        { return ((static_cast<uint32_t>(raw->versionTrafficFlow[1] & 0x0F) << 16) |
+        (static_cast<uint32_t>(raw->versionTrafficFlow[2]) << 8) | raw->versionTrafficFlow[3]); }
+    uint16_t getPayloadLength() const
+        { return readU16(raw->payloadLength); }
+    uint8_t getNextHeader() const
+        { return raw->nextHeader; }
+    uint8_t getHopLimit() const
+        { return raw->hopLimit; }
+    uint8_t* getSourceAddress() const
+        { return raw->sourceAddress; }
+    uint8_t* getDestinationAddress() const
+        { return raw->destinationAddress; }
 
-        ipv6String.reserve(40);
-        ipv6String += Functions::hexToByte(version + trafficClass + flowLabel);
-        ipv6String += payloadLength;
-        ipv6String += protocol;
-        ipv6String += hopLimit;
-        ipv6String += sourceAddress;
-        ipv6String += destinationAddress;
-
-        return ipv6String;
-    }
-    bool decapsulate(const ByteString ipv6Header)
-    {
-        if (ipv6Header.size() != 40) return false;
-
-        ByteString ipv6Temp = Functions::byteToHex(ipv6Header.substr(0, 4));
-        version = ipv6Temp.substr(0, 1);
-        trafficClass = ipv6Temp.substr(1, 2);
-        flowLabel = ipv6Temp.substr(3, 5);
-        payloadLength = ipv6Header.substr(4, 2);
-        protocol = ipv6Header.substr(6, 1);
-        hopLimit = ipv6Header.substr(7, 1);
-        sourceAddress = ipv6Header.substr(8, 16);
-        destinationAddress = ipv6Header.substr(24, 16);
-        return true;
-    }
+    // Setters
+    void setVersionTrafficClassFlow(uint8_t version, uint8_t trafficClass, uint32_t flowLabel) 
+        { raw->versionTrafficFlow[0] = (version << 4) | (trafficClass >> 4);
+          raw->versionTrafficFlow[1] = ((trafficClass & 0x0F) << 4) | ((flowLabel >> 16) & 0x0F);
+          raw->versionTrafficFlow[2] = (flowLabel >> 8) & 0xFF;
+          raw->versionTrafficFlow[3] = flowLabel & 0xFF; }
+    void setPayloadLength(uint16_t len)
+        { writeU16(raw->payloadLength, len); }
+    void setNextHeader(uint8_t val)
+        { raw->nextHeader = val; }
+    void setHopLimit(uint8_t val) 
+        { raw->hopLimit = val; }
+    void setSourceAddress(const uint8_t* addr)
+        { std::memcpy(raw->sourceAddress, addr, 16); }
+    void setDestinationAddress(const uint8_t* addr) 
+        { std::memcpy(raw->destinationAddress, addr, 16); }
 };
 
 #endif // IPV6_HEADER_HPP

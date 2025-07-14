@@ -3,9 +3,28 @@
 #ifndef IPV4_HEADER_HPP
 #define IPV4_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
-#include <Functions.h>
+#include <HeaderHelpers.hpp>
+
+/**
+ * @struct IPv4HeaderRaw
+ * @brief Represents a raw IPv4 header
+ */
+#pragma pack(push, 1)
+struct IPv4HeaderRaw
+{
+    uint8_t versionAndLength;
+    uint8_t typeOfService;
+    uint8_t totalLength[2];
+    uint8_t identification[2];
+    uint8_t fragmentFlags[2];
+    uint8_t ttl;
+    uint8_t protocol;
+    uint8_t checksum[2];
+    uint8_t sourceAddress[4];
+    uint8_t destinationAddress[4];
+
+};
+#pragma pack(pop)
 
 /**
  * @struct IPv4Header
@@ -13,123 +32,51 @@
  */
 struct IPv4Header
 {
-    ByteString version{};        ///< Version field.
-    ByteString headerLength{};   ///< Header length field.
-    ByteString serviceField{};   ///< Type of Service (ToS) field.
-    ByteString totalLength{};    ///< Total length of the IP packet.
-    ByteString identification{}; ///< Identification field.
-    ByteString TTL{};            ///< Time-To-Live (TTL) field.
-    ByteString protocol{};       ///< Protocol field.
-    ByteString checksum{};       ///< Header checksum.
-    ByteString sourceAddress{};  ///< Source IP address.
-    ByteString destinationAddress{}; ///< Destination IP address.
+    DEFINE_PACKET_HEADER(IPv4HeaderRaw);
 
-    /**
-     * @struct FragmentFlag
-     * @brief Represents fragmentation flags and offset.
-     */
-    struct FragmentFlag
-    {
-        ByteString reserved{};        ///< Reserved flag.
-        ByteString fragment{};        ///< More fragments flag.
-        ByteString moreFragment{};    ///< Don't Fragment flag.
-        ByteString fragmentOffset{};  ///< Fragment offset.
-    } fragmentFlag;
+    uint8_t getVersion() const { return raw->versionAndLength >> 4; }
+    uint8_t getHeaderLength() const { return raw->versionAndLength & 0x0F; }
+    uint8_t getTypeOfService() const { return raw->typeOfService; }
+    uint16_t getTotalLength() { return readU16(raw->totalLength); }
+    uint16_t getIdentification() { return readU16(raw->identification); }
+    uint8_t getFlags() { return raw->fragmentFlags[0] >> 5; }
+    uint16_t getFragmentOffset() { return ((raw->fragmentFlags[0] & 0x1f) << 8) | raw->fragmentFlags[1]; }
+    uint8_t getTtl() const { return raw->ttl; }
+    uint8_t getProtocol() const { return raw->protocol; }
+    uint16_t getHeaderChecksum() { return readU16(raw->checksum); }
+    uint8_t* getSourceAddress() const { return raw->sourceAddress; }
+    uint8_t* getDestinationAddress() const { return raw->destinationAddress; }
 
-    /**
-     * @struct Options
-     * @brief Represents IPv4 header options.
-     */
-    struct Options
-    {
-        /**
-         * @struct Type
-         * @brief Represents the type of IPv4 options.
-         */
-        struct Type
-        {
-            ByteString copy{};               ///< Copy flag.
-            ByteString classControl{};       ///< Class-Control flag.
-            ByteString routerAlert{};        ///< Router Alert flag.
-        } type;
-
-        ByteString length{};           ///< Length of the options field.
-        ByteString routerAlert{};      ///< Router Alert option value.
-
-    } options;
-
-    const std::optional<ByteString> encapsulate() const
-    {
-        //Profiler::getInstance().notify("IPv4 encap start");
-        if (version.size() != 1 || headerLength.size() != 1 || serviceField.size() != 1 || totalLength.size() != 2 ||
-            identification.size() != 2 || TTL.size() != 1 || protocol.size() != 1 || checksum.size() != 2 || 
-            sourceAddress.size() != 4 || destinationAddress.size() != 4) return std::nullopt;
-
-        ByteString ipv4String;
-        ipv4String.reserve(20);
-
-        ipv4String.append(Functions::hexToByte(version + headerLength));
-        ipv4String.append(serviceField);
-        ipv4String.append(totalLength);
-        ipv4String.append(identification);
-        ipv4String.append(Functions::binToByte(fragmentFlag.reserved + fragmentFlag.fragment + fragmentFlag.moreFragment + fragmentFlag.fragmentOffset));
-        ipv4String.append(TTL);
-        ipv4String.append(protocol);
-        ipv4String.append(ByteString(2, 0x00));
-        ipv4String.append(sourceAddress);
-        ipv4String.append(destinationAddress);
-        ipv4String.append(Functions::binToByte(options.type.copy) + options.type.classControl + options.type.routerAlert);
-        ipv4String.append(options.length);
-        ipv4String.append(options.routerAlert);
-        
-        if (options.type.copy.size() == 1 && options.type.classControl.size() == 2 && 
-            options.type.routerAlert.size() == 5 && options.length.size() == 1)
-        {
-            ByteString typeString;
-            ipv4String.append(Functions::binToByte(options.type.copy + options.type.classControl + options.type.routerAlert));
-            ipv4String.append(options.length);
-            ipv4String.append(options.routerAlert);
-        }
-
-        //Profiler::getInstance().notify("IPv4 encap end");
-        return ipv4String;
-    }
-    bool decapsulate(const ByteString ipv4Header)
-    {
-        //Profiler::getInstance().notify("IPv4 decap start");
-        if (ipv4Header.size() < 20) return false;
-
-        ByteString ipHeader = ipv4Header.substr(0, 1).toHex();
-        version = ipHeader.substr(0, 1);
-        headerLength = ipHeader.substr(1, 1);
-        serviceField = ipv4Header.substr(1, 1);
-        totalLength = ipv4Header.substr(2, 2);
-        identification = ipv4Header.substr(4, 2);
-        TTL = ipv4Header.substr(8, 1);
-        protocol = ipv4Header.substr(9, 1);
-        checksum = ipv4Header.substr(10, 2);
-        sourceAddress = ipv4Header.substr(12, 4);
-        destinationAddress = ipv4Header.substr(16, 4);
-
-        ByteString fragmentFlags = Functions::byteToBin(ipv4Header.substr(6, 2));
-
-        fragmentFlag.reserved = fragmentFlags.substr(0, 1);
-        fragmentFlag.fragment = fragmentFlags.substr(1, 1);
-        fragmentFlag.moreFragment = fragmentFlags.substr(2, 1);
-        fragmentFlag.fragmentOffset = fragmentFlags.substr(3);
-
-        if (ipv4Header.size() == 23)
-        {
-            ByteString type = Functions::byteToBin(ipv4Header.substr(20, 1));
-            options.type.copy = type.substr(0, 1);
-            options.type.classControl = type.substr(1, 2);
-            options.type.routerAlert = type.substr(3, 5);
-            options.length = ipv4Header.substr(21, 1);
-            options.routerAlert = ipv4Header.substr(22, 1);
-        }
-        //Profiler::getInstance().notify("IPv4 decap end");
-        return true;
-    }
+    // Setters
+    void setVersion(uint8_t version) 
+        { raw->versionAndLength = (version << 4) | (raw->versionAndLength & 0x0F); }
+    void setHeaderLength(uint8_t ihl) 
+        { raw->versionAndLength = (raw->versionAndLength & 0xF0) | (ihl & 0x0F); }
+    void setTypeOfService(uint8_t val) 
+        { raw->typeOfService = val; }
+    void setTotalLength(uint16_t val) 
+        { writeU16(raw->totalLength, val); }
+    void setIdentification(uint16_t val)
+        { writeU16(raw->identification, val); }
+    void setFlags(bool rs, bool mf, bool df)
+        { uint8_t flags = 0; 
+          if (rs) { flags |= (1 << 7); }
+          if (mf) { flags |= (1 << 6); }
+          if (df) { flags |= (1 << 5); }
+          flags |= (raw->fragmentFlags[0] & 0x1F);
+          raw->fragmentFlags[0] = flags; }
+    void setFragmentOffset(uint16_t offset) 
+        { raw->fragmentFlags[0] = (raw->fragmentFlags[0] & 0xE0) | ((offset >> 8) & 0x1F);
+          raw->fragmentFlags[1] = offset & 0xFF; }
+    void setTtl(uint8_t val) 
+        { raw->ttl = val; }
+    void setProtocol(uint8_t val)
+        { raw->protocol = val; }
+    void setHeaderChecksum(uint16_t val)
+        { writeU16(raw->checksum, val); }
+    void setSourceAddress(const uint8_t* addr)
+        { std::memcpy(raw->sourceAddress, addr, 4); }
+    void setDestinationAddress(const uint8_t* addr) 
+        { std::memcpy(raw->destinationAddress, addr, 4); }
 };
-
 #endif // IPV4_HEADER_HPP

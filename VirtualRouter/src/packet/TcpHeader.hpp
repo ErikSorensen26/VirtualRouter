@@ -3,131 +3,98 @@
 #ifndef TCP_HEADER_HPP
 #define TCP_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
-#include <Functions.h>
+#include <HeaderHelpers.hpp>
+#include <TLVOptions.hpp>
+#include <vector>
+
+/**
+ * @struct TcpHeaderRaw
+ * @brief Represents the raw fixed part of a TCP header.
+ */
+#pragma pack(push, 1)
+struct TcpHeaderRaw
+{
+    uint8_t sourcePort[2];
+    uint8_t destinationPort[2];
+    uint8_t sequenceNumber[4];
+    uint8_t ackNumber[4];
+    uint8_t dataOffset;     // upper 4 bits are header length
+    uint8_t flags;          // TCP control flags
+    uint8_t windowSize[2];
+    uint8_t checksum[2];
+    uint8_t urgentPointer[2];
+};
+#pragma pack(pop)
 
 /**
  * @struct TcpHeader
- * @brief Represents a TCP (Transmission Control Protocol) header.
+ * @brief High-level TCP header parser/encoder.
  */
 struct TcpHeader
 {
-    ByteString sourcePort{};        ///< Source port number.
-    ByteString destinationPort{};   ///< Destination port number.
-    ByteString sequenceNumber{};    ///< Sequence number.
-    ByteString ackNumber{};         ///< Acknowledgment number.
-    ByteString headerLength{};      ///< Data offset (header length).
-    ByteString windowSize{};        ///< Window size.
-    ByteString checksum{};          ///< Checksum.
-    ByteString urgentPointer{};     ///< Urgent pointer.
+    DEFINE_PACKET_HEADER(TcpHeaderRaw);
 
-    /**
-     * @struct Flags
-     * @brief Represents TCP flags.
-     */
-    struct Flags
-    {
-        ByteString congestionWindowReduced{}; ///< Congestion Window Reduced (CWR) flag.
-        ByteString ecnEcho{};                  ///< ECN Echo flag.
-        ByteString urgent{};                   ///< Urgent flag.
-        ByteString acknowledgement{};          ///< Acknowledgment flag.
-        ByteString push{};                     ///< Push flag.
-        ByteString reset{};                    ///< Reset flag.
-        ByteString syn{};                      ///< SYN flag.
-        ByteString fin{};                      ///< FIN flag.
-    } flags;
+    // Accessors
+    uint16_t getSourcePort() const         { return readU16(raw->sourcePort); }
+    uint16_t getDestinationPort() const    { return readU16(raw->destinationPort); }
+    uint32_t getSequenceNumber() const     { return readU32(raw->sequenceNumber); }
+    uint32_t getAckNumber() const          { return readU32(raw->ackNumber); }
+    uint8_t  getHeaderLength() const       { return (raw->dataOffset >> 4) * 4; }
+    uint16_t getWindowSize() const         { return readU16(raw->windowSize); }
+    const uint8_t* getChecksum() const           { return raw->checksum; }
+    uint16_t getUrgentPointer() const      { return readU16(raw->urgentPointer); }
 
-    /**
-     * @struct Option
-     * @brief Represents a TCP option.
-     */
-    struct Option
-    {
-        ByteString type{};   ///< Option type.
-        ByteString length{}; ///< Option length.
-        ByteString value{};  ///< Option value.
-    };
+    bool getFlagURG() const                { return raw->flags & 0x20; }
+    bool getFlagACK() const                { return raw->flags & 0x10; }
+    bool getFlagPSH() const                { return raw->flags & 0x08; }
+    bool getFlagRST() const                { return raw->flags & 0x04; }
+    bool getFlagSYN() const                { return raw->flags & 0x02; }
+    bool getFlagFIN() const                { return raw->flags & 0x01; }
 
-    std::vector<Option> options{}; ///< Vector of TCP options
+    // Setters
+    void setSourcePort(uint16_t val)       { writeU16(raw->sourcePort, val); }
+    void setDestinationPort(uint16_t val)  { writeU16(raw->destinationPort, val); }
+    void setSequenceNumber(uint32_t val)   { writeU32(raw->sequenceNumber, val); }
+    void setAckNumber(uint32_t val)        { writeU32(raw->ackNumber, val); }
+    void setHeaderLengthBytes(uint8_t len) { raw->dataOffset = (len / 4) << 4; }
+    void setWindowSize(uint16_t val)       { writeU16(raw->windowSize, val); }
+    void setChecksum(const uint8_t* val)   { std::memcpy(raw->checksum, val, 2); }
+    void setUrgentPointer(uint16_t val)    { writeU16(raw->urgentPointer, val); }
 
-    const std::optional<ByteString> encapsulate() const
-    {
-        ByteString tcpString;
-        if (sourcePort.size() != 2 || destinationPort.size() != 2 || sequenceNumber.size() != 4 || ackNumber.size() != 4 ||
-            headerLength.size() != 1 || windowSize.size() != 2 || checksum.size() != 2 || urgentPointer.size() != 2 ||
-            flags.congestionWindowReduced.size() != 1 || flags.urgent.size() != 1 || flags.acknowledgement.size() != 1 || flags.ecnEcho.size() != 1 ||
-            flags.fin.size() != 1 || flags.push.size() != 1 || flags.reset.size() != 1 || flags.syn.size() != 1) return std::nullopt;
-        
-        tcpString.reserve(20);
-        tcpString += sourcePort;
-        tcpString += destinationPort;
-        tcpString += sequenceNumber;
-        tcpString += ackNumber;
-        tcpString += headerLength;
-        tcpString += Functions::binToByte(flags.congestionWindowReduced + flags.ecnEcho + flags.urgent + flags.acknowledgement + flags.push + flags.reset + flags.syn + flags.fin);
-        tcpString += windowSize;
-        tcpString += ByteString(2, 0x00);
-        tcpString += urgentPointer;
-        // Add TCP options.
-        for (auto opt : options)
-        {
-            tcpString += opt.type;
-            tcpString += opt.length;
-            tcpString += opt.value;
-        }
-
-        return tcpString;
-    }
-    bool decapsulate(const ByteString tcpHeader)
-    {
-        if (tcpHeader.size() < 20) return false;
-
-        sourcePort = tcpHeader.substr(0, 2);
-        destinationPort = tcpHeader.substr(2, 2);
-        sequenceNumber = tcpHeader.substr(4, 4);
-        ackNumber = tcpHeader.substr(8, 4);
-        headerLength = tcpHeader.substr(12, 1);
-        windowSize = tcpHeader.substr(14, 2);
-        checksum = tcpHeader.substr(16, 2);
-        urgentPointer = tcpHeader.substr(18, 2);
-
-        ByteString flagOpts = Functions::byteToBin(tcpHeader.substr(13, 1));
-
-        flags.congestionWindowReduced = flagOpts.substr(0, 1);
-        flags.ecnEcho = flagOpts.substr(1, 1);
-        flags.urgent = flagOpts.substr(2, 1);
-        flags.acknowledgement = flagOpts.substr(3, 1);
-        flags.push = flagOpts.substr(4, 1);
-        flags.reset = flagOpts.substr(5, 1);
-        flags.syn = flagOpts.substr(6, 1);
-        flags.fin = flagOpts.substr(7, 1);
-
-        if (tcpHeader.size() > 20)
-        {
-            ByteString tcpOptions = tcpHeader.substr(20);
-            size_t optionStart = 0;
-            while (optionStart != tcpHeader.size() - 20)
-            {
-                TcpHeader::Option option;
-                if (!validateSize(optionStart, 2, tcpOptions)) return false;
-
-                option.type = tcpOptions.substr(optionStart, 1);
-                optionStart += 1;
-                if (option.type != ByteString("\x01", 1))
-                {
-                    option.length = tcpOptions.substr(optionStart, 1);
-                    optionStart += 1;
-                    size_t valueLength = static_cast<size_t>(Functions::byteToNum(option.length) - 2);
-                    if (!validateSize(optionStart, valueLength, tcpOptions)) return false;
-                    option.value = tcpOptions.substr(optionStart, valueLength);
-                    optionStart += valueLength;
-                }
-                options.push_back(option);
-            }
-        }
-        return true;
-    }
+    void setFlagURG(bool val)              { setBit(&raw->flags, 5, val); }
+    void setFlagACK(bool val)              { setBit(&raw->flags, 4, val); }
+    void setFlagPSH(bool val)              { setBit(&raw->flags, 3, val); }
+    void setFlagRST(bool val)              { setBit(&raw->flags, 2, val); }
+    void setFlagSYN(bool val)              { setBit(&raw->flags, 1, val); }
+    void setFlagFIN(bool val)              { setBit(&raw->flags, 0, val); }
 };
+
+/**
+ * @brief Parses TCP options into TcpOption structures.
+ */
+inline bool parseTcpOptions(const uint8_t* data, size_t size, std::vector<TLV16Option>& outOptions)
+{
+    size_t offset = 0;
+    while (offset < size)
+    {
+        uint8_t type = data[offset];
+        if (type == 0) break; // End of options list
+        if (type == 1) {
+            outOptions.emplace_back(type, 1, nullptr, 0);
+            ++offset;
+            continue;
+        }
+
+        if (offset + 2 > size) return false;
+        uint8_t length = data[offset + 1];
+        if (length < 2 || offset + length > size) return false;
+
+        const uint8_t* value = data + offset + 2;
+        outOptions.emplace_back(type, length, value, static_cast<size_t>(length - 2));
+
+        offset += length;
+    }
+    return true;
+}
 
 #endif // TCP_HEADER_HPP

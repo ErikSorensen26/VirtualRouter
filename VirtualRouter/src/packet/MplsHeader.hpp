@@ -3,9 +3,18 @@
 #ifndef MPLS_HEADER_HPP
 #define MPLS_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
-#include <Functions.h>
+#include <HeaderHelpers.hpp>
+
+/**
+ * @struct MplsHeaderRaw
+ * @brief Represents a raw MPLS header
+ */
+#pragma pack(push, 0)
+struct MplsHeaderRaw
+{
+    uint8_t bytes[4];
+};
+#pragma pack(pop)
 
 /**
  * @struct MplsHeader
@@ -13,35 +22,29 @@
  */
 struct MplsHeader
 {
-    ByteString label{};           ///< MPLS label.
-    ByteString expBit{};          ///< Experimental bits (EXP).
-    ByteString bottomLabelStack{};///< Bottom of Stack bit.
-    ByteString TTL{};             ///< Time-To-Live (TTL).
+    DEFINE_FIXED_HEADER(MplsHeaderRaw);
 
-    const std::optional<ByteString> encapsulate() const
-    {
-        ByteString mplsString;
-        if (/*label.size() != 3 || TTL.size() != 1*/false) return std::nullopt;
+    uint32_t getLabel() const
+        { return (static_cast<uint32_t>(raw->bytes[0]) << 12) |
+        (static_cast<uint32_t>(raw->bytes[1]) << 4) |
+        (static_cast<uint32_t>(raw->bytes[2]) >> 4); }
+    uint8_t getExp() const
+         { return (raw->bytes[2] >> 1) & 0x07; }
+    bool getBottomOfStack() const
+        { return raw->bytes[2] & 0x01; }
+    uint8_t getTtl() const
+        { return raw->bytes[3]; }
 
-        mplsString.reserve(8);
-        mplsString += label;
-        //mplsString += Functions::binToHex(mpls.expBit + mpls.bottomLabelStack);
-        mplsString += TTL;
-        mplsString = Functions::hexToByte(mplsString);
-
-        return mplsString;
-    }
-    bool decapsulate(const ByteString mplsHeader)
-    {
-        if (mplsHeader.size() != 8) return false;
-            
-        label = mplsHeader.substr(0, 5);
-        expBit = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(0, 3);
-        bottomLabelStack = (Functions::hexToBin(mplsHeader.substr(5, 1))).substr(3, 1);
-        TTL = mplsHeader.substr(6, 2);
-
-        return true;
-    }
+    void setLabel(uint32_t label) 
+        { raw->bytes[0] = static_cast<uint8_t>((label >> 12) & 0xFF);
+          raw->bytes[1] = static_cast<uint8_t>((label >> 4) & 0xFF);
+          raw->bytes[2] = (raw->bytes[2] & 0x0F) | static_cast<uint8_t>((label & 0x0F) << 4); }
+    void setExp(uint8_t exp)
+        { raw->bytes[2] = (raw->bytes[2] & 0xF1) | ((exp & 0x07) << 1); }
+    void setBottomOfStack(bool bos)
+        { raw->bytes[2] = (raw->bytes[2] & 0xFE) | (bos ? 0x01 : 0x00); }
+    void setTtl(uint8_t ttl)
+        { raw->bytes[3] = ttl; }
 };
 
 #endif // MPLS_HEADER_HPP

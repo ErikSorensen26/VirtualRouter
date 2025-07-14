@@ -3,10 +3,26 @@
 #ifndef EIGRP_HEADER_HPP
 #define EIGRP_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
+#include <HeaderHelpers.hpp>
+#include <TLVOptions.hpp>
 #include <vector>
-#include <Functions.h>
+
+/**
+ * @struct EigrpHeaderRaw
+ */
+#pragma pack(push, 1) 
+struct EigrpHeaderRaw
+{
+    uint8_t version;
+    uint8_t opcode;
+    uint8_t checksum[2];
+    uint8_t flags[4];
+    uint8_t sequence[4];
+    uint8_t ack[4];
+    uint8_t virtualRouterId[2];
+    uint8_t autonomousSystem[2];
+};
+#pragma pack(pop)
 
 /**
  * @struct EigrpHeader
@@ -14,102 +30,57 @@
  */
 struct EigrpHeader
 {
-    ByteString version{};             ///< EIGRP version.
-    ByteString opcode{};              ///< EIGRP opcode.
-    ByteString checksum{};            ///< EIGRP checksum.
-    ByteString sequence{};            ///< Sequence number.
-    ByteString ack{};                 ///< Acknowledgment number.
-    ByteString virtualRouterID{};     ///< Virtual Router ID.
-    ByteString autonomousSystem{};    ///< Autonomous System number.
+    DEFINE_PACKET_HEADER(EigrpHeaderRaw);
 
-    /**
-     * @struct flags
-     * @brief Represents EIGRP flags.
-     */
-    struct flags
-    {
-        ByteString init{};                ///< INIT flag.
-        ByteString conditionalRecieve{};  ///< Conditional Receive flag.
-        ByteString restart{};             ///< Restart flag.
-        ByteString endOfTable{};          ///< End Of Table flag.
-    } flags;
+    uint8_t getOpcode() const              { return raw->opcode; }
+    uint32_t getSequence() const           { return readU32(raw->sequence); }
+    uint32_t getAck() const                { return readU32(raw->ack); }
+    uint16_t getVirtualRouterID() const    { return readU16(raw->virtualRouterId); }
+    uint16_t getAutonomousSystem() const   { return readU16(raw->autonomousSystem); }
 
-    /**
-     * @struct Option
-     * @brief Represents an EIGRP option.
-     */
-    struct Option
-    {
-        ByteString option{};   ///< Option code.
-        ByteString length{};   ///< Option length.
-        ByteString value{};    ///< Option value.
-    };
+    bool getFlagInit() const               { return raw->flags[3] & 0x01; }
+    bool getFlagCondRecv() const           { return raw->flags[3] & 0x02; }
+    bool getFlagRestart() const            { return raw->flags[3] & 0x04; }
+    bool getFlagEndOfTable() const         { return raw->flags[3] & 0x08; }
 
-    std::vector<Option> options{}; ///< Vector of EIGRP options.
+    void setOpcode(uint8_t val) 
+        { raw->opcode = val; }
+    void setSequence(uint32_t val) 
+        { writeU32(raw->sequence, val); }
+    void setAck(uint32_t val)
+        { writeU32(raw->ack, val); }
+    void setVirtualRouterId(uint32_t val)
+        { writeU32(raw->ack, val); }
+    void setAutonomousSystem(uint32_t val)
+        { writeU32(raw->autonomousSystem, val); }
 
-    const std::optional<ByteString> encapsulate() const
-    {
-        ByteString eigrpString;
-        if (version.size() != 1 || opcode.size() != 1 || checksum.size() != 2 || flags.endOfTable.size() != 1 || flags.conditionalRecieve.size() != 1 || flags.init.size() != 1 || flags.restart.size() != 1 ||
-            sequence.size() != 4 || ack.size() != 4 || virtualRouterID.size() != 2 || autonomousSystem.size() != 2) return std::nullopt;
-
-        eigrpString.reserve(20);
-        eigrpString += version;
-        eigrpString += opcode;
-        eigrpString += ByteString(2, 0x00);
-        eigrpString += Functions::binToByte(ByteString("0000000000000000000000000000") + flags.endOfTable + flags.restart + flags.conditionalRecieve + flags.init);
-        eigrpString += sequence;
-        eigrpString += ack;
-        eigrpString += virtualRouterID;
-        eigrpString += autonomousSystem;
-        for (auto opt : options)
-        {
-            eigrpString += opt.option;
-            eigrpString += opt.length;
-            eigrpString += opt.value;
-        }
-            
-        return eigrpString;
-    }
-    bool decapsulate(const ByteString eigrpHeader)
-    {
-        size_t eigrpStart;
-        size_t eigrpEnd;
-        if (eigrpHeader.size() < 20) return false;
-
-        version = eigrpHeader.substr(0, 1);
-        opcode = eigrpHeader.substr(1, 1);
-        checksum = eigrpHeader.substr(2, 2);
-        ByteString flag = Functions::byteToBin(eigrpHeader.substr(4, 4));
-        flags.endOfTable = flag.substr(28, 1);
-        flags.restart = flag.substr(29, 1);
-        flags.conditionalRecieve = flag.substr(30, 1);
-        flags.init = flag.substr(31, 1);
-        sequence = eigrpHeader.substr(8, 4);
-        ack = eigrpHeader.substr(12, 4);
-        virtualRouterID = eigrpHeader.substr(16, 2);
-        autonomousSystem = eigrpHeader.substr(18, 2);
-        eigrpStart = 20;
-        eigrpEnd = eigrpHeader.size();
-
-        while (eigrpStart != eigrpEnd)
-        {
-            EigrpHeader::Option option;
-            if (!validateSize(eigrpStart, 4, eigrpHeader)) return false;
-            option.option = eigrpHeader.substr(eigrpStart, 2);
-            eigrpStart += 2;
-            option.length = eigrpHeader.substr(eigrpStart, 2);
-            eigrpStart += 2;
-            size_t eigrpADD = static_cast<size_t>(Functions::byteToNum(option.length) - 4);
-            if (validateSize(eigrpStart, eigrpADD, eigrpHeader))
-            {
-                option.value = eigrpHeader.substr(eigrpStart, eigrpADD);
-                eigrpStart += eigrpADD;
-                options.push_back(option);
-            }
-        }
-        return true;
-    }
+    void setFlagInit(bool val)
+        { setBit(raw->flags, 31, val); }
+    void setFlagCondRecv(bool val)
+        { setBit(raw->flags, 30, val); }
+    void setFlagRestart(bool val)
+        { setBit(raw->flags, 29, val); }
+    void setFlagEndOfTable(bool val)
+        { setBit(raw->flags, 28, val); }
 };
+
+inline bool parseEigrpOptions(const uint8_t* data, size_t size, std::vector<TLV16Option>& outOptions)
+{
+    size_t offset = 0;
+    while (offset + 4 <= size)
+    {
+        const uint16_t type = readU16(data + offset);
+        const uint16_t length = readU16(data + offset + 2);
+        if (length < 4 || offset + length > size) return false;
+
+        const uint8_t* value = data + offset + 4;
+        size_t valueSize = length - 4;
+
+        outOptions.emplace_back(type, length, value, valueSize);
+        
+        offset += length;
+    }
+    return offset == size;
+}
 
 #endif // EIGRP_HEADER_HPP

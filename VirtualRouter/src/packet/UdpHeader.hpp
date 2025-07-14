@@ -3,8 +3,21 @@
 #ifndef UDP_HEADER_HPP
 #define UDP_HEADER_HPP
 
-#include <ByteString.hpp>
-#include <optional>
+#include <HeaderHelpers.hpp>
+
+/**
+ * @struct UdpHeaderRaw
+ * @brief Represents a raw UDP header.
+ */
+#pragma pack(push, 0)
+struct UdpHeaderRaw
+{
+    uint8_t sourcePort[2];
+    uint8_t destinationPort[2];
+    uint8_t length[2];
+    uint8_t checksum[2];
+};
+#pragma pack(pop)
 
 /**
  * @struct UdpHeader
@@ -12,35 +25,23 @@
  */
 struct UdpHeader
 {
-    ByteString sourcePort{};        ///< Source port number.
-    ByteString destinationPort{};   ///< Destination port number.
-    ByteString length{};            ///< Length of UDP header and payload.
-    ByteString checksum{};          ///< Checksum.
+    DEFINE_FIXED_HEADER(UdpHeaderRaw);
 
-    const std::optional<ByteString> encapsulate() const
-    {
-        ByteString udpString;
-        if (sourcePort.size() != 2 || destinationPort.size() != 2 || length.size() != 2 || checksum.size() != 2) return std::nullopt;
-
-        udpString.reserve(8);
-        udpString += sourcePort;
-        udpString += destinationPort;
-        udpString += length;
-        udpString += ByteString(2, 0x00);
-
-        return udpString;
-    }
-    bool decapsulate(const ByteString& udpHeader)
-    {
-        if (udpHeader.size() != 8) return false;
-
-        sourcePort = udpHeader.substr(0, 2);
-        destinationPort = udpHeader.substr(2, 2);
-        length = udpHeader.substr(4, 2);
-        checksum = udpHeader.substr(6, 2);
-
-        return true;
-    }
+    uint16_t getSourcePort() const
+        { return readU16(raw->sourcePort); }
+    uint16_t getDestinationPort() const
+        { return readU16(raw->destinationPort); }
+    uint16_t getLength() const
+        { return readU16(raw->length); }
+    const uint8_t* getChecksum() const
+        { return raw->checksum; }
+    
+    void setChecksum(uint8_t* val)
+        { std::memcpy(raw->checksum, val, 2); }
+    void setSourcePort(uint16_t val)
+        { writeU16(raw->sourcePort, val); }
+    void setDestinationPort(uint16_t val)
+        { writeU16(raw->destinationPort, val); }
 };
 
 #endif // UDP_HEADER_HPP
