@@ -2,6 +2,7 @@
 #include <Interface.h>
 #include <RoutingTable.h>
 #include <VirtualRouter.h>
+#include <InterfaceConfigs.h>
 
 #include <string>
 #include <map>
@@ -41,37 +42,38 @@ void Global::reset()
 // Interfaces
 Interface* Global::addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug)
 {
-    if (interfaceList.find({interfaceType, interfaceId}) != interfaceList.end())
+    uint32_t key = calculateInterfaceKey(interfaceType, interfaceId);
+    if (interfaceList.find(key) != interfaceList.end())
     {
         return nullptr;
     }
-    interfaceList[{interfaceType, interfaceId}] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, *getRoutingInstance("default"), debug);
+    interfaceList[key] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, *getRoutingInstance("default"), debug);
 
-    return interfaceList[{interfaceType, interfaceId}];
+    return interfaceList[key];
 }
 
-Interface* Global::getInterface(InterfaceType type, float interfaceID)
+Interface* Global::getInterface(uint32_t key)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (interfaceList.find({type, interfaceID}) != interfaceList.end())
+    if (interfaceList.find(key) != interfaceList.end())
     {
-        return interfaceList[{type, interfaceID}];
+        return interfaceList[key];
     }
     return nullptr;
 }
 
-std::map<std::pair<InterfaceType, float>, Interface*> Global::getInterfaceList()
+std::map<uint32_t, Interface*> Global::getInterfaceList()
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
     return interfaceList;
 }
 
-bool Global::removeInterface(InterfaceType type, float interfaceId)
+bool Global::removeInterface(uint32_t key)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (interfaceList.find({type, interfaceId}) != interfaceList.end())
+    if (interfaceList.find(key) != interfaceList.end())
     {
-        interfaceList.erase({type, interfaceId});
+        interfaceList.erase(key);
         return true;
     }
     return false;

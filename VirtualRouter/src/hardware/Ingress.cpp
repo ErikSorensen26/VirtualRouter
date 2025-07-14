@@ -17,9 +17,6 @@ Ingress::Ingress(const std::string& device, const std::string mask, const size_t
         std::cerr << "Error opening device " << device << ": " << errbuf << std::endl;
         exit(1);
     }
-    
-    // Convert the netmask from byte string to bpf_u_int32 format.
-    subnet = static_cast<bpf_u_int32>(Functions::byteMaskToNum(mask));
 }
 
 Ingress::~Ingress() 

@@ -1,4 +1,5 @@
 #include <Egress.h>
+#include <iostream>
 
 Egress::Egress(const std::string& interface) 
 {
@@ -18,20 +19,12 @@ Egress::~Egress()
     }
 }
 
-bool Egress::sendPacket(const ByteString& base256Str) 
+bool Egress::sendPacket(const uint8_t* base256Str, size_t size) 
 {
-  std::vector<unsigned char> packet_data = base256ToBytes(base256Str);
-  size_t packet_length = packet_data.size();
-  if (pcap_sendpacket(pcap_handle, packet_data.data(), static_cast<int>(packet_length)) != 0) 
+  if (pcap_sendpacket(pcap_handle, base256Str, size) != 0) 
   {
       std::cerr << "Error sending packet: " << pcap_geterr(pcap_handle) << std::endl;
       return false;
   }
   return true;
-}
-
-std::vector<unsigned char> Egress::base256ToBytes(const ByteString& base256Str) 
-{
-    std::vector<unsigned char> bytes(base256Str.begin(), base256Str.end());
-    return bytes;
 }

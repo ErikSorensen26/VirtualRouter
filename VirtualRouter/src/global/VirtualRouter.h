@@ -6,7 +6,6 @@
 #include <string>
 #include <map>
 #include <RoutingTable.h>
-#include <InterfacePairHash.hpp>
 #include <shared_mutex>
 #include <AddressFamily.hpp>
 
@@ -17,26 +16,25 @@ namespace Protocol
     struct EigrpNamed;
 }
 
-enum class InterfaceType;
+enum class InterfaceType: uint8_t;
 class Global;
 
 class VirtualRouter
 {
 public:
-    using InterfaceKey = std::pair<InterfaceType, float>;
     friend class EigrpTest;
 
     VirtualRouter(Global& global, const std::string& name) : instanceName(name), global(global) { enabledAddressFamilies.insert(AddressFamily::IPv4); }
     ~VirtualRouter();
 
     RoutingTable routingTable; ///< VRF RoutingTable
-    std::unordered_set<AddressFamily> enabledAddressFamilies;
+    std::set<AddressFamily> enabledAddressFamilies;
 
     // Interface management
-    Interface* addInterface(Interface* interface, InterfaceType type, float interfaceID);
-    Interface* getInterface(InterfaceType type, float interfaceID);
-    std::unordered_map<InterfaceKey, Interface*, InterfacePairHash> getinterfaceList();
-    bool removeInterface(InterfaceType type, float interfaceId);
+    Interface* addInterface(Interface* interface, uint32_t key);
+    Interface* getInterface(uint32_t key);
+    std::unordered_map<uint32_t, Interface*> getinterfaceList();
+    bool removeInterface(uint32_t key);
 
     // Eigrp Autonomous Systems
     Protocol::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
@@ -50,7 +48,7 @@ public:
 
     // Interfaces
     std::shared_mutex interfaceMutex; ///< Interface list mutex.
-    std::unordered_map<InterfaceKey, Interface*, InterfacePairHash> interfaceList; ///< Interface list.
+    std::unordered_map<uint32_t, Interface*> interfaceList; ///< Interface list.
 
     // Eigrp
     std::shared_mutex eigrpAutonomousSystemMutex; ///< Eigrp list mutex.

@@ -10,7 +10,7 @@
 VirtualRouter::~VirtualRouter()
 {
     {
-        std::unordered_map<std::pair<InterfaceType, float>, Interface*, InterfacePairHash> interfaceListCopy;
+        std::unordered_map<uint32_t, Interface*> interfaceListCopy;
         {
             std::unique_lock<std::shared_mutex> lock(interfaceMutex);
             interfaceListCopy = interfaceList;
@@ -54,39 +54,39 @@ VirtualRouter::~VirtualRouter()
 }
 
 // Interfaces
-Interface* VirtualRouter::addInterface(Interface* interface, InterfaceType type, float interfaceId)
+Interface* VirtualRouter::addInterface(Interface* interface, uint32_t key)
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
-    if (interfaceList.find({type, interfaceId}) != interfaceList.end())
+    if (interfaceList.find(key) != interfaceList.end())
     {
         return nullptr;
     }
-    interfaceList[{type, interfaceId}] = interface;
-    return interfaceList[{type, interfaceId}];
+    interfaceList[key] = interface;
+    return interfaceList[key];
 }
 
-Interface* VirtualRouter::getInterface(InterfaceType type, float interfaceID)
+Interface* VirtualRouter::getInterface(uint32_t key)
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
-    if (interfaceList.find({type, interfaceID}) != interfaceList.end())
+    if (interfaceList.find(key) != interfaceList.end())
     {
-        return interfaceList[{type, interfaceID}];
+        return interfaceList[key];
     }
     return nullptr;
 }
 
-std::unordered_map<std::pair<InterfaceType, float>, Interface*, InterfacePairHash> VirtualRouter::getinterfaceList()
+std::unordered_map<uint32_t, Interface*> VirtualRouter::getinterfaceList()
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     return interfaceList;
 }
 
-bool VirtualRouter::removeInterface(InterfaceType type, float interfaceId)
+bool VirtualRouter::removeInterface(uint32_t key)
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
-    if (interfaceList.find({type, interfaceId}) != interfaceList.end())
+    if (interfaceList.find(key) != interfaceList.end())
     {
-        interfaceList.erase({type, interfaceId});
+        interfaceList.erase(key);
         return true;
     }
     return false;

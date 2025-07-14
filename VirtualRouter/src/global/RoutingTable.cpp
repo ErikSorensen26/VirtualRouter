@@ -1,9 +1,10 @@
 #include <RoutingTable.h>
 #include <AddressFamily.hpp>
+#include <IPAddress.hpp>
 
 bool RoutingTable::addEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 {
-    ByteString key = route->network + ByteString("/") + ByteString(std::to_string(route->mask));
+    IpPrefixKey key(route->network.data, route->mask, af);
     std::lock_guard<std::mutex> lock(tableMutex);
 
     auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
@@ -44,7 +45,7 @@ bool RoutingTable::addEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 bool RoutingTable::updateEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 {
     // Create key in "network/mask" format
-    ByteString key = route->network + ByteString("/") + ByteString(std::to_string(route->mask));
+    IpPrefixKey key(route->network.data, route->mask, af);
     std::lock_guard<std::mutex> lock(tableMutex);
 
     auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
@@ -102,10 +103,10 @@ bool RoutingTable::updateEigrp(Eigrp *route, AddressFamily af, uint32_t as)
     return false;
 }
 
-void RoutingTable::removeEigrp(const ByteString& network, uint8_t mask, AddressFamily af, uint32_t as)
+void RoutingTable::removeEigrp(const uint8_t* network, uint8_t mask, AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    ByteString key = network + "/" + std::to_string(mask);
+    IpPrefixKey key(network, mask, af);
     auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
     auto it = eigrpTable.find(key);
     if (it != eigrpTable.end())
@@ -130,7 +131,7 @@ void RoutingTable::removeAllEigrp(AddressFamily af, uint32_t as)
     af == AddressFamily::IPv4 ? eigrp.erase(as) : eigrpIPv6.erase(as);
 }
 
-void RoutingTable::removeEigrpWithOutInterface(AddressFamily af, uint32_t as, const ByteString& out)
+void RoutingTable::removeEigrpWithOutInterface(AddressFamily af, uint32_t as, uint32_t out)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     auto& eigrpTable = (af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as]);
@@ -153,7 +154,7 @@ void RoutingTable::updateEigrpWithVariance(Eigrp* route, uint8_t variance, Addre
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
-    ByteString key = route->network + "/" + std::to_string(route->mask);
+    IpPrefixKey key(route->network.data, route->mask, af);
     RoutingTable::Eigrp* existingRoute = (af == AddressFamily::IPv4) ? eigrp[as][key] : eigrpIPv6[as][key];
     double minMetric = existingRoute->metric;
 
@@ -200,12 +201,12 @@ std::vector<RoutingTable::Eigrp*> RoutingTable::getAllConnectedEigrpRoutes(Addre
     return routes;
 }
 
-RoutingTable::Eigrp* RoutingTable::getEigrpRoute(const ByteString& destination, const uint8_t mask, AddressFamily af, uint32_t as)
+RoutingTable::Eigrp* RoutingTable::getEigrpRoute(const uint8_t* destination, const uint8_t mask, AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     for (const auto& [key, entry] : af == AddressFamily::IPv4 ? eigrp[as] : eigrpIPv6[as])
     {
-        if (entry && entry->network == destination && entry->mask == mask)
+        if (entry && std::memcmp(entry->network.raw, destination, af == AddressFamily::IPv4 ? 4 : 16) && entry->mask == mask)
         {
             return entry;
         }
@@ -213,145 +214,16 @@ RoutingTable::Eigrp* RoutingTable::getEigrpRoute(const ByteString& destination, 
     return nullptr;
 }
 
-ByteString RoutingTable::getNextHop(const ByteString& destination, uint8_t mask, uint32_t as)
+bool RoutingTable::getNextHop(uint8_t* out, const uint8_t* destination, uint8_t mask, uint32_t as, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    auto it = eigrp[as].find(destination + "/" + std::to_string(mask));
+    IpPrefixKey key(destination, mask, af);
+    auto it = eigrp[as].find(key);
     if (it != eigrp[as].end() && !it->second->nextHopsVector.empty())
     {
         static std::atomic<size_t> roundRobinIndex{0};
-        return it->second->nextHopsVector[roundRobinIndex++ % it->second->nextHopsVector.size()];
+        std::memcpy(out, it->second->nextHopsVector[roundRobinIndex++ % it->second->nextHopsVector.size()].data, af == AddressFamily::IPv4 ? 4 : 16);
+        return true;
     }
-    return {}; // No route found
+    return false;
 }
-
-void RoutingTable::printRoutingTable() {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    Logger::getInstance().debug() << "RoutingTable - RoutingEntry:\n";
-    for (const auto& entry : routingTable) {
-        Logger::getInstance().debug() << "Destination: " << entry.second.destination
-                  << ", Mask: " << entry.second.mask
-                  << ", NextHop: " << entry.second.nextHop
-                  << ", OutInterface: " << entry.second.outInterface
-                  << ", Source: " << entry.second.source
-                  << ", Metric: " << entry.second.metric
-                  << ", Age: " << Functions::timeToString(entry.second.age)
-                  << ", AdmDist: " << entry.second.admDist
-                  << "\n";
-    }
-}
-void RoutingTable::printFibTable() {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    Logger::getInstance().debug() << "RoutingTable - Fib:\n";
-    for (const auto& entry : fib) {
-        Logger::getInstance().debug() << "Destination: " << entry.second.destination
-                  << ", NextHop: " << entry.second.nextHop
-                  << ", OutInt: " << entry.second.outInt
-                  << ", MAC: " << entry.second.mac
-                  << ", Preference: " << entry.second.preference
-                  << "\n";
-    }
-}
-void RoutingTable::printRibTable() {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    Logger::getInstance().debug() << "RoutingTable - Rib:\n";
-    for (const auto& entry : rib) {
-        Logger::getInstance().debug() << "Destination: " << entry.second.destination
-                  << ", Mask: " << entry.second.mask
-                  << ", NextHop: " << entry.second.nextHop
-                  << ", OutInterface: " << entry.second.outInterface
-                  << ", Source: " << entry.second.source
-                  << ", Metric: " << entry.second.metric
-                  << ", Age: " << Functions::timeToString(entry.second.age)
-                  << ", AdmDist: " << entry.second.admDist
-                  << ", Tags: ";
-        for (const auto& tag : entry.second.tags) {
-            Logger::getInstance().debug() << tag << " ";
-        }
-        Logger::getInstance().debug() << "\n";
-    }
-}
-void RoutingTable::printPrbTable() {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    Logger::getInstance().debug() << "RoutingTable - Prb:\n";
-    for (const auto& entry : prb) {
-        Logger::getInstance().debug() << "Source IP: " << entry.second.sourceIp
-                  << ", Destination: " << entry.second.destination
-                  << ", Source Port: " << entry.second.sourcePort
-                  << ", Dest Port: " << entry.second.destPort
-                  << ", Protocol: " << entry.second.protocol
-                  << ", NextHop: " << entry.second.nextHop
-                  << ", OutInterface: " << entry.second.outInterface
-                  << ", Match Criteria: " << entry.second.matchCriteria
-                  << ", DSCP: " << entry.second.DSCP
-                  << "\n";
-    }
-}
-void RoutingTable::printMulticastTable() {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    Logger::getInstance().debug() << "RoutingTable - Multicast:\n";
-    for (const auto& entry : multicast) {
-        Logger::getInstance().debug() << "Group: " << entry.second.group
-                  << ", Source IP: " << entry.second.sourceIp
-                  << ", InInterface: " << entry.second.inInterface
-                  << ", RPF: " << entry.second.RPF
-                  << ", Protocol: " << entry.second.protocol
-                  << ", Age: " << Functions::timeToString(entry.second.age)
-                  << ", Route Metric: " << entry.second.routeMetric
-                  << ", OutInterfaces: ";
-        for (const auto& outInterface : entry.second.outInterface) {
-            Logger::getInstance().debug() << outInterface << " ";
-        }
-        Logger::getInstance().debug() << "\n";
-    }
-}
-void RoutingTable::printAclTable() {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    Logger::getInstance().debug() << "RoutingTable - ACL:\n";
-    for (const auto& entry : acl) {
-        Logger::getInstance().debug() << "Source IP: " << entry.second.sourceIp
-                  << ", Dest IP: " << entry.second.destIp
-                  << ", Protocol: " << entry.second.protocol
-                  << ", Source Port Range: " << entry.second.sourcePortRange
-                  << ", Dest Port Range: " << entry.second.destPortRange
-                  << ", Log String: " << entry.second.logString
-                  << ", Action: " << entry.second.action
-                  << ", Rule Number: " << entry.second.ruleNum
-                  << ", ICMP Code: " << entry.second.icmpCode
-                  << ", Age: " << Functions::timeToString(entry.second.age)
-                  << ", DSCP: " << entry.second.DSCP
-                  << "\n";
-    }
-}
-// void RoutingTable::printEigrpTable() {
-//     std::lock_guard<std::mutex> lock(tableMutex);
-//     Logger::getInstance().debug() << "RoutingTable - EIGRP:\n";
-//     for (const auto& entry : eigrp[]) {
-//         Logger::getInstance().debug() << "Network: " << entry.second.network
-//                   << ", Next Hop: " << entry.second.nextHop
-//                   << ", Out Interface: " << entry.second.interface
-//                   << ", Successor: " << entry.second.successor
-//                   << ", Feasible Successor: " << entry.second.feasibleSuccessor
-//                   << ", Route Source: " << entry.second.routeSource
-//                   << ", Route Type: " << entry.second.routeType
-//                   << ", Active or Passive: " << entry.second.activeOrPassive
-//                   << ", Metric: " << entry.second.metric
-//                   << ", Feasible Distance: " << entry.second.feasibleDistance
-//                   << ", Reported Distance: " << entry.second.reportedDistance
-//                   << ", Admin Distance: " << entry.second.adminDistance
-//                   << ", Hold Time: " << entry.second.holdTime
-//                   << ", Stuck in Active: " << entry.second.updateTimer
-//                   << ", Retransmission Interval: " << entry.second.retransmitInterval
-//                   << ", Sequence Number: " << entry.second.sequenceNumber
-//                   << ", Route Tag: " << entry.second.routeTag
-//                   << ", Hop Count: " << entry.second.hopCount
-//                   << ", Bandwidth: " << entry.second.bandwidth
-//                   << ", Load: " << entry.second.load
-//                   << ", Delay: " << entry.second.delay
-//                   << ", Reliability: " << entry.second.reliability
-//                   << ", MTU: " << entry.second.mtu
-//                   << ", Mask: " << entry.second.mask
-//                   << ", Age: " << Functions::timeToString(entry.second.age)
-//                   << "\n";
-//     }
-//}

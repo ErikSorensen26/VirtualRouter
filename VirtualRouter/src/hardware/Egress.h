@@ -6,7 +6,6 @@
 #include <pcap.h>
 #include <string>
 #include <vector>
-#include <ByteString.hpp>
 
 /**
  * @class Egress
@@ -56,7 +55,7 @@ public:
      *
      * @note Ensure that the packet data is correctly formatted to match the expected protocol.
      */
-    bool sendPacket(const ByteString& base256Str);
+    bool sendPacket(const uint8_t* base256Str, size_t size);
 
 private:
 
@@ -66,18 +65,6 @@ private:
      * The `pcap_handle` is used by libpcap functions to interact with the network interface.
      */
     pcap_t* pcap_handle;
-
-    /**
-     * @brief Converts a base256 string to a vector of unsigned char bytes.
-     *
-     * This helper method transforms the provided ByteString into a vector of bytes
-     * suitable for transmission. It assumes that the ByteString contains valid
-     * base256-encoded data.
-     *
-     * @param base256Str The ByteString containing the base256-encoded packet data.
-     * @return A vector of unsigned char bytes representing the raw packet data.
-     */
-    std::vector<unsigned char> base256ToBytes(const ByteString& base256Str);
 };
 
 #endif // EGRESS_H

@@ -8,15 +8,16 @@
 #include <mutex>
 #include <shared_mutex>
 #include <atomic>
-#include <InterfacePairHash.hpp>
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
 #include <CliEngine.h>
 #include <AddressFamily.hpp>
+#include <IPAddress.hpp>
+#include <map>
 
 class Interface;
 class VirtualRouter;
-enum class AddressFamily;
+enum class AddressFamily : uint8_t;
 class CliEngine;
 namespace Protocol
 {
@@ -24,7 +25,7 @@ namespace Protocol
     class Dhcpv6Server;
 }
 
-enum class InterfaceType;
+enum class InterfaceType : uint8_t;
 
 /**
  * @def DEFAULT_HOSTNAME
@@ -63,11 +64,11 @@ struct GlobalConfigs
 
         struct Neighbor
         {
-            ByteString mac;
-            std::pair<InterfaceType, float> interface;
+            uint8_t mac[6];
+            uint32_t interface;
             bool proxy = false;
         };
-        std::unordered_map<ByteString, std::unordered_map<ByteString, Neighbor>> neighbors;
+        std::map<std::string, std::map<uint32_t, Neighbor>> neighbors;
         std::shared_mutex neighborMutex;
     } arp;
 
@@ -94,10 +95,10 @@ struct GlobalConfigs
         // Static Neighbors
         struct Neighbor
         {
-            std::pair<InterfaceType, float> interface;
-            ByteString macAddress;
+            uint32_t interface;
+            uint8_t macAddress[6];
         };
-        std::unordered_map<ByteString, Neighbor> neighbors;
+        std::map<IPAddress, Neighbor> neighbors;
         std::shared_mutex neighborMutex;
     } ndp;
 };
@@ -114,8 +115,6 @@ struct GlobalConfigs
 class Global 
 {
 public:
-    using InterfaceKey = std::pair<InterfaceType, float>;
-
     /**
      * @brief Constructs the Global class.
      *
@@ -155,9 +154,9 @@ public:
 
     // Interfaces
     Interface* addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug);
-    Interface* getInterface(InterfaceType type, float interfaceID);
-    std::map<InterfaceKey, Interface*> getInterfaceList();
-    bool removeInterface(InterfaceType type, float interfaceId);
+    Interface* getInterface(uint32_t key);
+    std::map<uint32_t, Interface*> getInterfaceList();
+    bool removeInterface(uint32_t key);
 
     // Routing Instances
     VirtualRouter* addRoutingInstance(const std::string& name);
@@ -186,7 +185,7 @@ private:
 
     // Interfaces
     std::mutex interfaceMutex; ///< Interface list mutex.
-    std::map<InterfaceKey, Interface*> interfaceList; ///< Interface list.
+    std::map<uint32_t, Interface*> interfaceList; ///< Interface list.
 
     // Routing Instances
     std::mutex routingInstanceMutex; ///< Routing Instance mutex.
