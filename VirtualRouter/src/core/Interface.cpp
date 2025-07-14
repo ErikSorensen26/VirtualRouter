@@ -15,6 +15,7 @@
 #include <Encapsulation.h>
 #include <VirtualRouter.h>
 #include <InterfaceConfigs.h>
+#include <PacketBuilder.hpp>
 
 Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, VirtualRouter& vrf, bool debug)
     : packetOutQueue(outQueSiz),
@@ -54,19 +55,20 @@ void Interface::cleanupInterface()
     // Remove interface from list
     if (routingInstance)
     {
-        routingInstance->removeInterface(configs.interfaceType, configs.id);
+        routingInstance->removeInterface(configs.key);
     }
-    routingInstance->global.removeInterface(configs.interfaceType, configs.id);
+    routingInstance->global.removeInterface(configs.key);
 }
 
-void Interface::setIPv4(ByteString ip, uint8_t subnet)
+void Interface::setIPv4(const uint8_t* ip, uint8_t subnet)
 {
     {
         {
             std::lock_guard<std::mutex> lock(threadsRunningMutex);
             {
                 std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-                configs.ipv4.ipAddress = ip; 
+
+                std::memcpy(configs.ipv4.ipAddress, ip, 4);
                 configs.ipv4.mask = subnet;
             }
         }
@@ -80,7 +82,7 @@ void Interface::setIPv4(ByteString ip, uint8_t subnet)
     }
 }
 
-void Interface::setIPv6(ByteString ip, bool localLink, uint8_t prefix, bool eui64)
+void Interface::setIPv6(const uint8_t* ip, bool localLink, uint8_t prefix, bool eui64)
 {
     InterfaceConfigs::IPv6State::IPv6Address* ipv6 = nullptr;
 
@@ -92,7 +94,7 @@ void Interface::setIPv6(ByteString ip, bool localLink, uint8_t prefix, bool eui6
         {
             ipv6 = configs.ipv6.addAddress(ip, true, prefix);
         }
-        else if (ip.substr(0, 2) == "\xfc\x00")
+        else if (ip[0] == 0xFC && ip[1] == 0x00)
         {
             ipv6 = configs.ipv6.addUniqueLocalAddress(ip, prefix);
         }
@@ -120,14 +122,14 @@ void Interface::removeIPv4()
 {
     std::lock_guard<std::mutex> lock(threadsRunningMutex);
     {
-        std::unique_lock<std::shared_mutex> ipLock(configs.ipMutex);
-        configs.ipv4.ipAddress.clear();
-        configs.ipv4.mask = 0;
+        configs.ipv4.address.store(0, std::memory_order_release);
+        configs.ipv4.mask.store(0, std::memory_order_release);
+        stateChange(StateChange::IPREMOVAL);
     }
     
 }
 
-void Interface::removeIPv6(const ByteString& ip, bool linkLocal)
+void Interface::removeIPv6(const uint8_t* ip, bool linkLocal)
 {
     std::lock_guard<std::mutex> lock(threadsRunningMutex);
     {
@@ -137,15 +139,16 @@ void Interface::removeIPv6(const ByteString& ip, bool linkLocal)
     }
 }
 
-std::vector<ByteString> Interface::getTentativeAddress()
+std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
 {
-    std::vector<ByteString> tentative;
+    std::vector<std::array<uint8_t, 16>> tentative;
     std::lock_guard<std::shared_mutex> lock(configs.ipMutex);
 
     // Link-local (there can only be one)
-    if (!configs.ipv6.linkLocalAddress->ip.empty() && configs.ipv6.linkLocalAddress->tentative)
+    if (!configs.ipv6.linkLocalAddress->valid && configs.ipv6.linkLocalAddress->tentative)
     {
-        tentative.push_back(configs.ipv6.linkLocalAddress->ip);
+        tentative.emplace_back();
+        std::copy(configs.ipv6.linkLocalAddress->ip, configs.ipv6.linkLocalAddress->ip + 16, tentative.back().begin());
     }
 
     // Global unicast
@@ -153,7 +156,8 @@ std::vector<ByteString> Interface::getTentativeAddress()
     {
         if (addr->tentative)
         {
-            tentative.push_back(addr->ip);
+            tentative.emplace_back();
+            std::copy(addr->ip, addr->ip + 16, tentative.back().begin());
         }
     }
 
@@ -162,20 +166,22 @@ std::vector<ByteString> Interface::getTentativeAddress()
     {
         if (addr->tentative)
         {
-            tentative.push_back(addr->ip);
+            tentative.emplace_back();
+            std::copy(addr->ip, addr->ip + 16, tentative.back().begin());
         }
     }
 
     return tentative;
 }
 
-void Interface::markAddressDuplicate(const ByteString& addr, bool localLink)
+void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
 {
     std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
 
-    if (localLink && configs.ipv6.linkLocalAddress->ip == addr)
+    if (localLink && std::memcmp(configs.ipv6.linkLocalAddress->ip, addr, 16) == 0)
     {
-        configs.ipv6.linkLocalAddress->ip.clear();
+        std::fill(configs.ipv6.linkLocalAddress->ip, configs.ipv6.linkLocalAddress->ip + 16, 0);
+        configs.ipv6.linkLocalAddress->valid = false;
     }
     else
     {
@@ -209,26 +215,25 @@ void Interface::Shutdown(bool shut)
     stateChangeV6(StateChange::SHUTDOWN);
 }
 
-void Interface::enqueuePacket(PacketInfo& packetInfo, ByteString mac)
+void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
 {
     if (!threadsRunning.load(std::memory_order_relaxed)) return;
 
-    auto serializedPacket = encapsulate(packetInfo);
-    if (!serializedPacket.has_value() || serializedPacket.value().empty())
+    if (!encapsulate(packetInfo))
     {
         Logger::getInstance().error() << "Invalid Packet" << std::endl;
         return;
     }
 
-    if (!mac.empty())
+    if (mac)
     {
-        serializedPacket.value().replace(0, 6, mac);
+        std::memcpy(packetInfo.getBuffer(), mac, 6);
     }
 
     // Enqueue the serialized packet for sending
     {
         std::lock_guard<std::mutex> lock(packetOutQueueMutex);
-        packetOutQueue.enqueue(serializedPacket.value());
+        packetOutQueue.enqueue(packetInfo.getBuffer());
     }
 
     packetOutQueueCV.notify_one();

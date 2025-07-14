@@ -1,26 +1,33 @@
 #include "InterfaceConfigs.h"
 #include <Eigrp.h>
 
-ByteString InterfaceConfigs::getMac()
+uint8_t* InterfaceConfigs::getMac(uint8_t* mac)
 {
     std::shared_lock<std::shared_mutex> lock(ipMutex);
-    return macAddress;
+    std::memcpy(mac, macAddress, 6);
+    return mac;
 }
 
-void InterfaceConfigs::setMac(const ByteString& mac)
+uint64_t InterfaceConfigs::getMac()
+{
+    std::shared_lock<std::shared_mutex> lock(ipMutex);
+    return readU48(macAddress);
+}
+
+void InterfaceConfigs::setMac(const uint8_t* mac)
 {
     std::unique_lock<std::shared_mutex> lock(ipMutex);
-    macAddress = mac;
+    std::memcpy(macAddress, mac, 6);
 }
 
-InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addAddress(const ByteString& ip, bool local, uint8_t prefix)
+InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addAddress(const uint8_t* ip, bool local, uint8_t prefix)
 {
     if (local)
     {
         // Only one local-address can exist
-        if (linkLocalAddress->ip.empty())
+        if (!linkLocalAddress->valid)
         {
-            linkLocalAddress->ip = ip;
+            std::memcpy(linkLocalAddress->ip, ip, 16);
             linkLocalAddress->prefix = prefix;
             linkLocalAddress->tentative = true;
             linkLocalAddress->valid = false;
@@ -34,7 +41,7 @@ InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addAddres
     else
     {
         IPv6Address* address = new IPv6Address();
-        address->ip = ip;
+        std::memcpy(address->ip, ip, 16);
         address->prefix = prefix;
         address->tentative = true;
         address->valid = false;
@@ -53,10 +60,10 @@ InterfaceConfigs::~InterfaceConfigs()
     eigrp.eigrpInterfaceConfigList.clear();
 }
 
-InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addUniqueLocalAddress(const ByteString& ip, uint8_t prefixLen)
+InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addUniqueLocalAddress(const uint8_t* ip, uint8_t prefixLen)
 {
     IPv6Address* address = new IPv6Address();
-    address->ip = ip;
+    std::memcpy(address->ip, ip, 16);
     address->prefix = prefixLen;
     address->tentative = true;
     address->valid = false;
@@ -64,7 +71,7 @@ InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addUnique
     return uniqueLocalAddresses.back();
 }
 
-void InterfaceConfigs::IPv6State::removeAddress(const ByteString& ip, bool local)
+void InterfaceConfigs::IPv6State::removeAddress(const uint8_t* ip, bool local)
 {
     if (local)
     {
@@ -74,12 +81,12 @@ void InterfaceConfigs::IPv6State::removeAddress(const ByteString& ip, bool local
     }
     else
     {
-        auto& addressList = (ip.substr(0, 2) == "\xfc\x00")
+        auto& addressList = (ip[0] == 0xfc && ip[1] == 0x00)
             ? uniqueLocalAddresses
             : globalAddresses;
         
         std::erase_if(addressList, [&](const IPv6Address* addr) {
-            return addr->ip == ip;
+            return std::memcmp(addr->ip, ip, 16);
         });
     }
 }
@@ -108,37 +115,51 @@ void InterfaceConfigs::IPv6State::validateGlobalAddresses()
 
 void InterfaceConfigs::IPv6State::validateLinkLocalAddress()
 {
-    if (!linkLocalAddress->ip.empty())
-    {
-        linkLocalAddress->validateAddress(true);
-    }
+    linkLocalAddress->validateAddress(true);
 }
 
-ByteString InterfaceConfigs::IPv6State::getLocalAddress()
+uint8_t* InterfaceConfigs::IPv6State::getLocalAddress(uint8_t* out)
 {
     std::shared_lock lock(ipMutex);
-    return linkLocalAddress ? linkLocalAddress->ip : "";
+    if (linkLocalAddress)
+    {
+        std::memcpy(out, linkLocalAddress->ip, 16);
+        return out;
+    }
+    return nullptr;
 }
 
-std::pair<ByteString, uint8_t> InterfaceConfigs::IPv6State::getGlobalUnicastPair()
+__uint128_t InterfaceConfigs::IPv6State::getLocalAddress()
+{
+    std::shared_lock lock(ipMutex);
+    if (linkLocalAddress)
+    {
+        return readU128(linkLocalAddress->ip);
+    }
+    return 0;
+}
+
+uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastPair(uint8_t* out)
 {
     std::shared_lock<std::shared_mutex> lock(ipMutex);
     if (!globalAddresses.empty())
     {
         auto* address = globalAddresses.front();
-        return {address->ip, address->prefix};
+        std::memcpy(out, address->ip, 16);
+        return address->prefix;
     }
     return {};
 }
 
-ByteString InterfaceConfigs::IPv6State::getGlobalUnicast()
+uint8_t* InterfaceConfigs::IPv6State::getGlobalUnicast(uint8_t* out)
 {
     std::shared_lock lock(ipMutex);
     if (!globalAddresses.empty())
     {
-        return globalAddresses.front()->ip;
+        std::memcpy(out, globalAddresses.front()->ip, 16);
+        return out;
     }
-    return {};
+    return nullptr;
 }
 
 uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastMask()
@@ -151,25 +172,37 @@ uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastMask()
     return {};
 }
 
-std::pair<ByteString, uint8_t> InterfaceConfigs::IPv6State::getLocalUnicastPair()
+__uint128_t InterfaceConfigs::IPv6State::getGlobalUnicast()
+{
+    std::shared_lock lock(ipMutex);
+    if (!globalAddresses.empty())
+    {
+        return readU128(globalAddresses.front()->ip);
+    }
+    return 0;
+}
+
+uint8_t InterfaceConfigs::IPv6State::getLocalUnicastPair(uint8_t* out)
 {
     std::shared_lock<std::shared_mutex> lock(ipMutex);
     if (!globalAddresses.empty())
     {
         auto* address = uniqueLocalAddresses.front();
-        return {address->ip, address->prefix};
+        std::memcpy(out, address->ip, 16);
+        return address->prefix;
     }
     return {};
 }
 
-ByteString InterfaceConfigs::IPv6State::getLocalUnicast()
+uint8_t* InterfaceConfigs::IPv6State::getLocalUnicast(uint8_t* out)
 {
     std::shared_lock lock(ipMutex);
     if (!uniqueLocalAddresses.empty())
     {
-        return uniqueLocalAddresses.front()->ip;
+        std::memcpy(out, uniqueLocalAddresses.front()->ip, 16);
+        return out;
     }
-    return {};
+    return nullptr;
 }
 
 uint8_t InterfaceConfigs::IPv6State::getLocalUnicastMask()
@@ -182,24 +215,38 @@ uint8_t InterfaceConfigs::IPv6State::getLocalUnicastMask()
     return {};
 }
 
-std::vector<ByteString> InterfaceConfigs::IPv6State::getGlobalList() 
+__uint128_t InterfaceConfigs::IPv6State::getLocalUnicast()
 {
     std::shared_lock lock(ipMutex);
-    std::vector<ByteString> ips;
+    if (!uniqueLocalAddresses.empty())
+    {
+        return readU128(uniqueLocalAddresses.front()->ip);
+    }
+    return 0;
+}
+
+std::vector<IPAddress> InterfaceConfigs::IPv6State::getGlobalList()
+{
+    std::shared_lock lock(ipMutex);
+    std::vector<IPAddress> ips;
     for (const auto* ip : globalAddresses)
     {
-        ips.push_back(ip->ip);
+        ips.emplace_back();
+        std::copy(ip->ip, ip->ip + 16, ips.back().raw);
+        ips.back().isV6 = true;
     }
     return ips;
 }
 
-std::vector<ByteString> InterfaceConfigs::IPv6State::getLocalList()
+std::vector<IPAddress> InterfaceConfigs::IPv6State::getLocalList()
 {
     std::shared_lock lock(ipMutex);
-    std::vector<ByteString> ips;
+    std::vector<IPAddress> ips;
     for (const auto* ip : uniqueLocalAddresses)
     {
-        ips.push_back(ip->ip);
+        ips.emplace_back();
+        std::copy(ip->ip, ip->ip + 16, ips.back().raw);
+        ips.back().isV6 = true;
     }
     return ips;
 }
@@ -223,10 +270,10 @@ InterfaceConfigs::IPv6State::~IPv6State()
     if (linkLocalAddress->expirationId != 0) { timeManager.cancelTimer(linkLocalAddress->expirationId); } delete linkLocalAddress;
 }
 
-bool InterfaceConfigs::hasAddress(const ByteString& address)
+bool InterfaceConfigs::hasAddress(const uint8_t* address)
 {
     std::shared_lock<std::shared_mutex> lock(ipMutex);
-    if (ipv6.getLocalAddress() == address) return true;
+    if (std::memcmp(ipv6.getLocalAddress(), address, 16) == 0) return true;
     for (auto ip : ipv6.getGlobalList()) { if (ip == address) return true; }
     for (auto ip : ipv6.getLocalList()) { if (ip == address) return true; }
     return false;

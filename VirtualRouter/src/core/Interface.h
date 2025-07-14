@@ -16,7 +16,8 @@
 class EigrpTest;
 class VirtualRouter;
 class MockInterface;
-enum class InterfaceType;
+enum class InterfaceType : uint8_t;
+class PacketBuilder;
 
 /**
  * @enum StateChange
@@ -106,7 +107,7 @@ public:
      * @param ip The IPv4 address to assign to the interface.
      * @param subnet The subnet mask for the IPv4 address.
      */
-    virtual void setIPv4(ByteString, uint8_t subnet);
+    virtual void setIPv4(const uint8_t* ip, uint8_t subnet);
 
     /**
      * @brief Sets the IPv6 address, subnet mask, and EUI-64 flag for interface.
@@ -118,7 +119,7 @@ public:
      * @param subnet The subnet mask for the IPv6 address, Default to 64.
      * @param eui64 Flag indicating whether to use EUI-64 for IPv6 address generation.
      */
-    virtual void setIPv6(ByteString ip, bool linkLocal = false, uint8_t subnet = 64, bool eui64 = false);
+    virtual void setIPv6(const uint8_t* ip, bool linkLocal = false, uint8_t subnet = 64, bool eui64 = false);
 
     /**
      * @brief Removes the IPv4 address and subnet mask.
@@ -130,14 +131,14 @@ public:
      *
      * @param linkLocal Indicates if the address is link-local.
      */
-    void removeIPv6(const ByteString& ip, bool linkLocal = false);
+    void removeIPv6(const uint8_t* ip, bool linkLocal = false);
 
     /**
      * @brief Gathers and returns all tentative addresses on the interface.
      *
      * Helper address to return all pending IPv6 addresses.
      */
-    std::vector<ByteString> getTentativeAddress();
+    std::vector<std::array<uint8_t, 16>> getTentativeAddress();
 
     /**
      * @brief Marks a IPv6 address as a duplicate making it invalid.
@@ -145,7 +146,7 @@ public:
      * @param address IPv6 address being marked as a duplicate
      * @param optional param stating if its a link-local address or not.
      */
-    void markAddressDuplicate(const ByteString& address, bool linkLocal = false);
+    void markAddressDuplicate(const uint8_t* address, bool linkLocal = false);
 
     /**
      * @brief Shuts down or restarts the interface.
@@ -164,13 +165,13 @@ public:
      * @param packetInfo The packet information to be sent.
      * @param mac Optional MAC address to replace the packet's source MAC.
      */
-    virtual void enqueuePacket(PacketInfo& packetInfo, ByteString mac = "");
+    virtual void enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac = nullptr);
 
     std::atomic<bool> shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
     VirtualRouter* routingInstance = nullptr;
 
     // Member Variables
-    InterfaceConfigs configs;         ///< Pointer to IP configuration information.
+    InterfaceConfigs configs;         ///< IP configuration information.
 
     Protocol::Arp* arp = nullptr;     ///< ARP protocol handler.
     Protocol::Ndp* ndp = nullptr;     ///< NDP protocol handler.
@@ -250,7 +251,7 @@ private:
      * @param ip The IP address for which ARP resolution was preformed.
      * @param mac The MAC address resolved for the given IP address.
      */
-    void onArpResolved(const ByteString& ip, const ByteString& mac);
+    void onArpResolved(const uint8_t* ip, const uint8_t* mac);
 
     // Member variables
     std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
