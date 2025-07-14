@@ -1,10 +1,13 @@
 // TODO naglean
 // TODO nudigp
 #include <Ndp.h>
+#include <Functions.h>
 #include <IPPacket.h>
 #include <TimeManager.h>
 #include <VirtualRouter.h>
 #include <Global.h>
+#include <PacketBuilder.hpp>
+#include <Ethernet.h>
 
 namespace Protocol
 {
@@ -30,8 +33,7 @@ namespace Protocol
         std::shared_lock<std::shared_mutex> lock(global.configs.ndp.neighborMutex);
         for (const auto& [ip, neighbor] : global.configs.ndp.neighbors)
         {
-            if (neighbor.interface.first == currentInterface->configs.interfaceType &&
-                neighbor.interface.second == currentInterface->configs.id)
+            if (neighbor.interface == currentInterface->configs.key)
             {
                 addNdpEntry(ip, neighbor.macAddress, false, true);
             }
@@ -92,7 +94,7 @@ namespace Protocol
         }
     }
 
-    void Ndp::addNdpEntry(const ByteString& targetIp, const ByteString& targetMac, bool proxy, bool isStatic)
+    void Ndp::addNdpEntry(const IPAddress& targetIp, const uint8_t* targetMac, bool proxy, bool isStatic)
     {
         if (!isStatic)
         {
@@ -101,14 +103,14 @@ namespace Protocol
             if (limit != 0 && ndpCache.size() >= limit)
             {
                 // Remove an entry to enforce a limit.
-                ByteString evicted = insertionOrder.front();
-                insertionOrder.pop_front();
+                IPAddress evicted = insertionOrder.front();
+                insertionOrder.erase(insertionOrder.begin());
                 global.timeManager.cancelTimer(ndpCache[evicted].timerId);
                 ndpCache.erase(evicted);
             }
         }
         NdpCacheEntry entry;
-        entry.macAddress = targetMac;
+        std::memcpy(entry.macAddress, targetMac, 6);
         entry.state = NudState::REACHABLE;
         if (!isStatic)
         {
@@ -152,30 +154,35 @@ namespace Protocol
 
             if (proxy)
             {
-                proxyEntries[targetIp] = targetMac;
+                proxyEntries[targetIp] = readU48(targetMac);
             }
         }
         processQueuedPackets(targetIp, targetMac);
     }
 
     // Get MAC address for the given ip
-    ByteString* Ndp::getMac(const ByteString& ip)
+    bool Ndp::getMac(uint8_t* out, const uint8_t* ip)
     {
+        IPAddress address;
+        address.v6 = true;
+        std::memcpy(address.raw, ip, 16);
         std::shared_lock<std::shared_mutex> lock(ndpCacheMutex);
         {
+
             std::shared_lock<std::shared_mutex> neighborLock(global.configs.ndp.neighborMutex);
-            auto staticIt = staticNdpCache.find(ip);
+            auto staticIt = staticNdpCache.find(address);
             if (staticIt != staticNdpCache.end())
             {
-                return &staticIt->second.macAddress;
+                memcpy(out, staticIt->second.macAddress, 6);
+                return true;
             }
         }
-        auto it = ndpCache.find(ip);
+        auto it = ndpCache.find(address);
         if (it != ndpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime)
         {
-            return &it->second.macAddress;
+            memcpy(out, it->second.macAddress, 6);
         }
-        return nullptr;
+        return false;
     }
 
     void Ndp::initiateSlaac()
@@ -185,24 +192,30 @@ namespace Protocol
 
         // Send a Router Solicitation to get fresh RA with A-bit prefixes
         auto& iface = currentInterface->configs;
-        PacketInfo rs = routeSolicitation(iface.getMac());
+        uint8_t mac[6];
+        iface.getMac(mac);
+        PacketBuilder rs;
+        routeSolicitation(rs, mac);
 
-        IPPacket::buildIp(
-            currentInterface,
-            rs,
-            Variable::Multicast::ICMPv6::allRouters,
-            nullptr,
-            nullptr,
-            0, 255,
-            Variable::IP::icmpv6
-        );
+        IPPacket::BuildIP build = {
+            .iface = currentInterface,
+            .packetInfo = rs,
+            .destIp = Variable::Multicast::ICMPv6::allRouters,
+            .protocolType = Variable::IP::icmpv6
+        };
+
+        IPPacket::buildIpv6(build);
     }
 
-    void Ndp::resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend)
+    void Ndp::resolveAndSend(const uint8_t* targetIp, PacketBuilder& packetToSend)
     {
+        IPAddress ip;
+        ip.isV6 = true;
+        std::memcpy(ip.raw, targetIp, 16);
+
         {
             std::lock_guard<std::mutex> lock(packetQueueMutex);
-            packetQueuePerIp[targetIp].push(std::move(packetToSend));
+            packetQueuePerIp[ip].emplace(packetToSend);
         }
 
         if (global.configs.nsfActive.load(std::memory_order_relaxed))
@@ -225,21 +238,21 @@ namespace Protocol
         }
 
         std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
-        auto it = ndpCache.find(targetIp);
+        auto it = ndpCache.find(ip);
         if (it != ndpCache.end())
         {
             bool strict = global.configs.ndp.strictMode;
 
             if (it->second.state == NudState::STALE)
             {
-                startNud(targetIp, it->second, lock);
+                startNud(ip, it->second, lock);
             }
             else if (it->second.state == NudState::DELAY)
             {
                 if (strict)
                 {
                     // Delay isn't trusted in strict mode
-                    startNud(targetIp, it->second, lock);
+                    startNud(ip, it->second, lock);
                 }
                 {
                     return;
@@ -250,12 +263,12 @@ namespace Protocol
                 if (strict)
                 {
                     // Still probe it even if reachable, in strict mode
-                    startNud(targetIp, it->second, lock);
+                    startNud(ip, it->second, lock);
                 }
                 else
                 {
                     lock.unlock();
-                    processQueuedPackets(targetIp, it->second.macAddress);
+                    processQueuedPackets(ip, it->second.macAddress);
                 }
             }
         }
@@ -266,18 +279,18 @@ namespace Protocol
             if (maxResolution != 0 && currentResolvingNeighbors.load(std::memory_order_relaxed) >= maxResolution)
             {
                 // Drop resolution entirely
-                queuedResolution.insert(targetIp);
+                queuedResolution.insert(ip);
                 return;
             }
 
             currentResolvingNeighbors.fetch_add(1, std::memory_order_seq_cst);
 
             lock.unlock();
-            sendNeighborSolicitation(targetIp); // Initial Learning
+            sendNeighborSolicitation(ip); // Initial Learning
         }
     }
 
-    void Ndp::sendNeighborSolicitation(const ByteString& targetIp)
+    void Ndp::sendNeighborSolicitation(const IPAddress& targetIp)
     {
         {
             std::lock_guard<std::mutex> lock(requestMutex);
@@ -288,28 +301,36 @@ namespace Protocol
         scheduleNeighborSolicitation(targetIp);
     }
 
-    void Ndp::receiveNeighborAdvertisement(const IcmpV6Header& receivedNA, const ByteString& sourceIp)
+    void Ndp::receiveNeighborAdvertisement(const Icmpv6Header& receivedNA, const uint8_t* sourceIp)
     {
-        ByteString targetIp = receivedNA.payload;
-        ByteString mac;
+        auto trail = receivedNA.getTrail();
+        uint8_t mac[6];
+        bool macFound = false;
+        IPAddress targetIp;
+        targetIp.isV6 = true;
+        std::memcpy(targetIp.raw, trail.data(), 16);
 
-        for (const auto& opt : receivedNA.options)
+        std::vector<TLV8Option> options;
+        parseIcmpv6Options(trail.data() + 16, trail.size() - 16, options);
+
+        for (const auto& opt : options)
         {
             // Extract MAC from options
-            if (opt.option == Variable::ICMPv6::Option::target && opt.value.size() == 6)
+            if (opt.type == Variable::ICMPv6::Option::target && opt.valueSize == 6)
             {
-                mac = opt.value;
+                std::memcpy(mac, opt.value, 6);
+                macFound = true;
                 break;
             }
         }
-        if (mac.empty()) return;
+        if (!macFound) return;
 
         {
             {
                 std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
                 for (const auto& addr : currentInterface->configs.ipv6.globalAddresses)
                 {
-                    if (addr->ip == targetIp && addr->tentative && sourceIp == Variable::IPv6::source)
+                    if (std::memcmp(addr->ip, trail.data(), 16) == 0 && addr->tentative && std::memcmp(sourceIp, &Variable::IPv6::source, 16) == 0)
                     {
                         std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
                         neighborReplyStatus[targetIp] = true;
@@ -328,7 +349,7 @@ namespace Protocol
                     {
                         newResolution = true;
                     }
-                    it->second.macAddress = mac;
+                    std::memcpy(it->second.macAddress, mac, 6);
                     it->second.state = NudState::REACHABLE;
                     it->second.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.cacheExpire.load(std::memory_order_relaxed));
                     global.timeManager.cancelTimer(it->second.timerId);
@@ -354,7 +375,7 @@ namespace Protocol
                 else
                 {
                     NdpCacheEntry entry;
-                    entry.macAddress = mac;
+                    std::memcpy(entry.macAddress, mac, 6);
                     entry.state = NudState::REACHABLE;
                     entry.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.cacheExpire.load(std::memory_order_relaxed));
                     uint8_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
@@ -384,8 +405,7 @@ namespace Protocol
             }
             if (!queuedResolution.empty())
             {
-                ByteString resolveIp = *queuedResolution.begin();
-                sendNeighborSolicitation(resolveIp);
+                sendNeighborSolicitation(*queuedResolution.begin());
             }
         }
         {
@@ -398,23 +418,26 @@ namespace Protocol
         processQueuedPackets(targetIp, mac);
     }
 
-    void Ndp::receiveNeighborSolicitation(const IcmpV6Header& nsHeader, const ByteString& srcIp, const ByteString& srcMac)
+    void Ndp::receiveNeighborSolicitation(const Icmpv6Header& nsHeader, const uint8_t* srcIp, const uint8_t* srcMac)
     {
-        const ByteString& targetIp = nsHeader.payload;
+        auto trail = nsHeader.getTrail();
+        IPAddress targetIp;
+        targetIp.isV6 = true;
+        std::memcpy(targetIp.raw, trail.data(), 16);
+        uint8_t replyMac[6];
 
-        ByteString replyMac;
         bool isOwned = false;
         bool isProxy = false;
 
         {
-            if (currentInterface->configs.hasAddress(targetIp))
+            if (currentInterface->configs.hasAddress(trail.data()))
             {
-                replyMac = currentInterface->configs.getMac();
+                currentInterface->configs.getMac(replyMac);
                 isOwned = true;
             }
             else if (proxyEntries.count(targetIp))
             {
-                replyMac = proxyEntries[targetIp];
+                writeU48(replyMac, proxyEntries[targetIp]);
                 isProxy = true;
             }
         }
@@ -423,41 +446,70 @@ namespace Protocol
 
         // Always respond to DAD (unspecified source IP = DAD probe)
         //the S flag will be 0 in this case (unsolicited NA)
-        PacketInfo na = neighborAdvertisement(replyMac, isProxy ? &targetIp : &srcIp);
+        PacketBuilder na;
+        neighborAdvertisement(na, replyMac, isProxy ? trail.data() : srcIp);
 
-        if (srcMac.empty() || srcIp == Variable::IPv6::source)
+        if (srcMac && std::memcmp(srcIp, &Variable::IPv6::source, 16) == 0)
         {
             // Multicast NA for DAD response or missing MAC
-            IPPacket::buildIp(currentInterface, na, Variable::IPv6::multicast, &targetIp, nullptr, 0, 255, Variable::IP::icmpv6);
+            IPPacket::BuildIP build = {
+                .iface = currentInterface,
+                .packetInfo = na,
+                .destIp = Variable::IPv6::multicact,
+                .sourceIp = trail.data(),
+                .protocolType = Variable::IP::icmpv6
+            };
+
+            IPPacket::buildIpv6(build);
         }
         else
         {
             // Unicast NA back to sender
-            IPPacket::buildIp(currentInterface, na, srcIp, &targetIp, &srcMac, 0, 255, Variable::IP::icmpv6);
+            IPPacket::BuildIP build = {
+                .iface = currentInterface,
+                .packetInfo = na,
+                .destIp = srcIp,
+                .sourceIp = trail.data(),
+                .destMac = srcMac,
+                .protocolType = Variable::IP::icmpv6
+            };
+
+            IPPacket::buildIpv6(build);
         }
     }
 
-    void Ndp::processQueuedPackets(const ByteString& targetIp, const ByteString& macAddress)
+    void Ndp::processQueuedPackets(const IPAddress& targetIp, const uint8_t* macAddress)
     {
-        std::queue<PacketInfo> packets;
+        std::queue<PacketBuilder> packets;
         {
             std::lock_guard<std::mutex> lock(packetQueueMutex);
-            if (packetQueuePerIp.count(targetIp))
+            if (auto que = packetQueuePerIp.extract(targetIp))
             {
-                packets = std::move(packetQueuePerIp[targetIp]);
-                packetQueuePerIp.erase(targetIp);
+                packets = std::move(que.mapped());
             }
         }
 
         while (!packets.empty())
         {
-            PacketInfo pkt = packets.front();
+            PacketBuilder pkt = std::move(packets.front());
             packets.pop();
-            currentInterface->enqueuePacket(pkt, macAddress);
+            auto current = pkt.currentBuildHeader();
+            if (!current) continue;
+
+            // Continue building next header
+            switch (current->next)
+            {
+                //TODO add more headers
+                case HeaderType::ETHERNET:
+                    Protocol::Ethernet::build(currentInterface, pkt, targetIp.raw, macAddress, Variable::Ethernet::ipv6);
+                    break;
+                default:
+                    continue;
+            }
         }
     }
 
-    void Ndp::onReachableTimeout(const ByteString& targetIp)
+    void Ndp::onReachableTimeout(const IPAddress& targetIp)
     {
         std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
         auto it = ndpCache.find(targetIp);
@@ -479,7 +531,7 @@ namespace Protocol
         }
     }
     
-    void Ndp::startNud(const ByteString& targetIp, NdpCacheEntry& entry, std::unique_lock<std::shared_mutex>& cacheLock)
+    void Ndp::startNud(const IPAddress& targetIp, NdpCacheEntry& entry, std::unique_lock<std::shared_mutex>& cacheLock)
     {
         // Nud probe limit check
         uint32_t maxNud = global.configs.ndp.nudLimit.load(std::memory_order_relaxed);
@@ -506,7 +558,7 @@ namespace Protocol
         scheduleNeighborSolicitation(targetIp);
     }
 
-    void Ndp::refreshNeighborEntry(const ByteString& targetIp)
+    void Ndp::refreshNeighborEntry(const IPAddress& targetIp)
     {
         std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
         auto it = ndpCache.find(targetIp);
@@ -523,130 +575,154 @@ namespace Protocol
         }
     }
     
-    ByteString Ndp::generateMulticastSolicitationAddress(const ByteString& targetIp)
+    uint8_t* Ndp::generateMulticastSolicitationAddress(uint8_t* out, const uint8_t* targetIp)
     {
-        if (targetIp.size() != 16)
+        if (!out || !targetIp)
         {
-            return "";
+            return nullptr;
         }
-        return Variable::Multicast::ICMPv6::solicitationAddress + targetIp.substr(13).toString();
+        std::memcpy(out, Variable::Multicast::ICMPv6::solicitationAddress, 16);
+        out[13] = targetIp[13];
+        out[14] = targetIp[14];
+        out[15] = targetIp[15];
+        return out;
     }
 
-    PacketInfo Ndp::neighborSolicitation(const ByteString& targetIp, ByteString const* currentMac)
+    void Ndp::neighborSolicitation(PacketBuilder& packet, const IPAddress& targetIp, const uint8_t* currentMac)
     {
-        PacketInfo packet;
-        IcmpV6Header icmp;
+        IPPacket::reserveIpv4(currentInterface, packet);
+        packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
-        icmp.type = Variable::ICMPv6::Type::ndpNeighborSolicitation;
-        icmp.code = ByteString("\x00", 1);
-        icmp.reserved = ByteString("\x00\x00\x00\x00", 4);
-        icmp.payload = targetIp;
+        Icmpv6Header icmp;
+        
+        BuildEntry* nextHeader = packet.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::ICMPV6)
+            return;
 
-        if (currentMac)
+        icmp.setBuffer(nextHeader->buffer);
+
+        icmp.setType(Variable::ICMPv6::Type::ndpNeighborSolicitation);
+        icmp.setCode(0);
+        icmp.setReserved(0);
+
+        uint8_t* trail = icmp.getTrailData();
+        std::memcpy(trail, targetIp.raw, 16);
+
+        TLV8BufferManager options(trail + 16, 8);
+        options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
+
+        nextHeader->length = Icmpv6Header::fixedSize + options.size();
+        packet.bufferOffset += nextHeader->length;
+    }
+
+    void Ndp::neighborAdvertisement(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* targetIp)
+    {
+        IPPacket::reserveIpv4(currentInterface, packet);
+        packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
+
+        Icmpv6Header icmp;
+
+        BuildEntry* nextHeader = packet.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::ICMPV6)
+            return;
+
+        icmp.setBuffer(nextHeader->buffer);
+
+        icmp.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+        icmp.setCode(0);
+        
+        uint8_t reserved[4];
+        std::fill(reserved, reserved + 4, 0);
+        reserved[0] = 0x80 | (targetIp ? 0x40 : 0) | 0x20;
+        icmp.setReserved(reserved);
+
+        uint8_t* trail = icmp.getTrailData();
+        if (targetIp)
         {
-            icmp.options.emplace_back(
-                Variable::ICMPv6::Option::source,
-                ByteString("\x01", 1),
-                *currentMac
-            );
+            std::memcpy(trail, targetIp, 16);
+        }
+        else
+        {
+            currentInterface->configs.ipv6.getLocalAddress(trail);
         }
 
-        packet.Layer3.push_back(std::move(icmp));
-
-        return packet;
+        TLV8BufferManager options(trail + 16, 8);
+        options.append(Variable::ICMPv6::Option::target, 1, currentMac, 6);
     }
 
-    PacketInfo Ndp::neighborAdvertisement(const ByteString& currentMac, ByteString const* targetIp)
+    void Ndp::routeSolicitation(PacketBuilder& packet, const uint8_t* currentMac)
     {
-        PacketInfo packet;
-        IcmpV6Header icmp;
+        IPPacket::reserveIpv4(currentInterface, packet);
+        packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
-        icmp.type = Variable::ICMPv6::Type::ndpNeighborAdvertisement;
-        icmp.code = ByteString("\x00", 1);
+        Icmpv6Header icmp;
 
-        char flags = 0;
-        flags |= 0x80; // R = 1 (router)
-        if (targetIp) flags |= 0x40; // S = 1 if solicited
-        flags |= 0x20; // O = 1 (override)
-        icmp.reserved = ByteString({ flags, 0x00, 0x00, 0x00}, 4);
-        icmp.payload = targetIp ? *targetIp : currentInterface->configs.ipv6.getLocalAddress();
+        BuildEntry* nextHeader = packet.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::ICMPV6)
+            return;
 
-        IcmpV6Header::Option target;
-        target.option = Variable::ICMPv6::Option::target;
-        target.length = ByteString("\x01", 1); // 8 Bytes
-        target.value = currentMac;
+        icmp.setBuffer(nextHeader->buffer);
+
+        icmp.setType(Variable::ICMPv6::Type::ndpRouteSolicitation);
+        icmp.setCode(0);
+        icmp.setReserved(0);
         
-        icmp.options.push_back(std::move(target));
-
-        packet.Layer3.push_back(std::move(icmp));
-
-        return packet;
-    }
-
-    PacketInfo Ndp::routeSolicitation(const ByteString& currentMac)
-    {
-        PacketInfo packet;
-        IcmpV6Header icmp;
-
-        icmp.type = Variable::ICMPv6::Type::ndpRouteSolicitation;
-        icmp.code = ByteString("\x00", 1);
-        icmp.reserved = ByteString("\x00\x00\x00\x00", 4);
+        // Get trail pointer
+        uint8_t* trail = icmp.getTrailData();
         
-        IcmpV6Header::Option source;
-        source.option = Variable::ICMPv6::Option::source;
-        source.length = ByteString("\x01", 1);
-        source.value = currentMac;
+        TLV8BufferManager options(trail, 8);
+        options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
 
-        icmp.options.push_back(std::move(source));
-
-        packet.Layer3.push_back(std::move(icmp));
-
-        return packet;
+        nextHeader->length = Icmpv6Header::fixedSize + options.size();
+        packet.bufferOffset += nextHeader->length;
     }
 
-    PacketInfo Ndp::routeAdvertisement(const ByteString& currentMac)
+    void Ndp::routeAdvertisement(PacketBuilder& packet, const uint8_t* currentMac)
     {
-        PacketInfo packet;
-        IcmpV6Header icmp;
+        IPPacket::reserveIpv4(currentInterface, packet);
+        packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
-        icmp.type = Variable::ICMPv6::Type::ndpRouteAdvertisement;
-        icmp.code = ByteString("\x00", 1);
+        Icmpv6Header icmp;
 
-        uint8_t flags = 0;
-        if (configs.managedConfigFlag.load(std::memory_order_relaxed)) flags |= 0x80; // M-bit
-        if (configs.otherConfigFlag.load(std::memory_order_relaxed)) flags |= 0x40; // O-bit
+        BuildEntry* nextHeader = packet.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::ICMPV6)
+            return;
+
+        icmp.setBuffer(nextHeader->buffer);
+
+        icmp.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+        icmp.setCode(0);
+
+        uint8_t reserved[4];
+        std::fill(reserved, reserved + 4, 0);
+        if (configs.managedConfigFlag.load(std::memory_order_relaxed)) reserved[1] |= 0x80; // M-bit
+        if (configs.otherConfigFlag.load(std::memory_order_relaxed)) reserved[1] |= 0x40; // O-bit
 
         // Preference bit
         switch (configs.preference.load(std::memory_order_relaxed))
         {
-            case Configs::Preference::LOW: flags |= 0x18; break; // 01 << 3
-            case Configs::Preference::HIGH: flags |= 0x08; break; // 10 << 3
+            case Configs::Preference::LOW: reserved[1] |= 0x00180000; break; // 01 << 3
+            case Configs::Preference::HIGH: reserved[1] |= 0x00080000; break; // 10 << 3
             default: break; // MEDIUM is 00
         }
+        
+        reserved[0] |= configs.raHopLimitUnspecified.load(std::memory_order_relaxed) ? 0 : 64;
+        writeU32(reserved + 2, configs.routerLifetime.load(std::memory_order_relaxed));
+        icmp.setReserved(reserved);
 
-        // Build reserved field [1 byte TTL][1 byte Flags][2 byte router lifetime]
-        icmp.reserved = Functions::numToByte(configs.raHopLimitUnspecified.load(std::memory_order_relaxed) ? 0 : 64, 1) +
-            ByteString(1, flags) + 
-            Functions::numToByte(configs.routerLifetime.load(std::memory_order_relaxed), 2);
+        uint8_t* trail = icmp.getTrailData();
+        writeU32(trail, configs.reachableTime.load(std::memory_order_relaxed));
+        writeU32(trail + 4, 0); // 0 means use your own timer
 
-
-        icmp.payload = Functions::numToByte(configs.reachableTime.load(std::memory_order_relaxed), 4) +
-            Functions::numToByte(0, 4); // 0 means use your own timer
-
-        IcmpV6Header::Option source;
-        source.option = Variable::ICMPv6::Option::source;
-        source.length = ByteString("\x01", 1);
-        source.value = currentMac;
-        icmp.options.push_back(std::move(source));
+        TLV8BufferManager options(trail + 8);
+        options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
 
         if (!configs.mtuSuppress.load(std::memory_order_relaxed))
         {
-            IcmpV6Header::Option mtu;
-            mtu.option = Variable::ICMPv6::Option::mtu;
-            mtu.length = ByteString("\x01", 1);
-            mtu.value = ByteString("\x00\x00", 2) + // Reserved
-            Functions::numToByte(currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed)); //TODO fix
-            icmp.options.push_back(std::move(mtu));
+            uint8_t mtu[6];
+            writeU16(mtu, 0); // Reserved
+            writeU32(mtu + 2, currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed));
+            options.append(Variable::ICMPv6::Option::mtu, 1, mtu, 6);
         }
 
         if (configs.autoConfigPrefix.load(std::memory_order_relaxed))
@@ -672,37 +748,34 @@ namespace Protocol
                     }
                 }
 
-                ByteString value;
-                value += ByteString(1, prefixLen);
-                value += ByteString(1, flags);
-                value += ByteString("\x00\x00", 2);
-                value += Functions::numToByte(lifetime, 4);
-                value += Functions::numToByte(preferredLifetime, 4);
-                value += ByteString(4, 0x00);
-                value += Functions::computeNetworkAddress(addr->ip, prefixLen);
+                uint8_t value[30];
+                value[0] = prefixLen;
+                value[2] = flags;
+                writeU16(value + 2, 0);
+                writeU32(value + 4, lifetime);
+                writeU32(value + 8, preferredLifetime);
+                writeU32(value + 12, 0);
+                Functions::computeNetworkAddress(value + 16, addr->ip, prefixLen, AddressFamily::IPv6);
 
-                icmp.options.emplace_back(
-                    Variable::ICMPv6::Option::prefix,
-                    ByteString("\x04", 1),
-                    value
-                );
+                options.append(Variable::ICMPv6::Option::prefix, 4, value, 30);
             }
         }
-
-        packet.Layer3.push_back(std::move(icmp));
-        
-        return packet;
+        nextHeader->length = Icmpv6Header::fixedSize + options.size();
+        packet.bufferOffset += nextHeader->length;
     }
 
-    void Ndp::sendNeighborAdvertisement(const ByteString& destMac, ByteString const* targetIp)
+    void Ndp::sendNeighborAdvertisement(const uint8_t* destMac, const uint8_t* targetIp)
     {
         if (configs.suppressNA.load(std::memory_order_relaxed)) return;
 
-        if (!targetIp || targetIp->empty()) return;
+        if (!targetIp) return;
         auto now = std::chrono::steady_clock::now();
         {
+            IPAddress ip;
+            ip.isV6 = true;
+            std::memcpy(ip.raw, targetIp, 16);
             std::lock_guard<std::mutex> lock(requestMutex);
-            auto& lastTime = lastUnsolicitedNaTime[*targetIp];
+            auto& lastTime = lastUnsolicitedNaTime[ip];
             if (now - lastTime < std::chrono::seconds(1)) return;
             lastTime = now;
         }
@@ -710,83 +783,130 @@ namespace Protocol
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
             auto& iface = currentInterface->configs;
-            PacketInfo naPacket = neighborAdvertisement(iface.getMac(), targetIp);
-            IPPacket::buildIp(currentInterface, naPacket, targetIp ? *targetIp : Variable::IPv6::multicast, nullptr, &destMac, 0, 255, Variable::IP::icmpv6);
+            PacketBuilder naPacket;
+            uint8_t mac[6];
+            neighborAdvertisement(naPacket, iface.getMac(mac), targetIp);
+
+            IPPacket::BuildIP build = {
+                .iface = currentInterface,
+                .packetInfo = naPacket,
+                .destIp = targetIp ? targetIp : Variable::IPv6::multicact,
+                .destMac = destMac,
+                .protocolType = Variable::IP::icmpv6
+            };
+
+            IPPacket::buildIpv6(build);
         }
     }
     
-    void Ndp::sendRouteSolicitation(const ByteString& targetIp)
+    void Ndp::sendRouteSolicitation(const uint8_t* targetIp)
     {
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
             auto& iface = currentInterface->configs;
-            PacketInfo rsPacket = routeSolicitation(iface.getMac());
+            uint8_t mac[6];
+            PacketBuilder rsPacket;
+            routeSolicitation(rsPacket, iface.getMac(mac));
 
             // Set the IP header and send the packet.
-            IPPacket::buildIp(currentInterface, rsPacket, generateMulticastSolicitationAddress(targetIp), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
+            uint8_t multicastIp[16];
+
+            IPPacket::BuildIP build = {
+                .iface = currentInterface,
+                .packetInfo = rsPacket,
+                .destIp = generateMulticastSolicitationAddress(multicastIp, targetIp),
+                .protocolType = Variable::IP::icmpv6
+            };
+
+            IPPacket::buildIpv6(build);
         }
     }
 
-    void Ndp::sendRouteAdvertisement(const ByteString& targetMac, const ByteString& targetIp)
+    void Ndp::sendRouteAdvertisement(const uint8_t* targetMac, const uint8_t* targetIp)
     {
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
             auto& iface = currentInterface->configs;
             // Gather interface values.
-            PacketInfo raPacket = routeAdvertisement(iface.getMac());
+            PacketBuilder raPacket;
+            uint8_t mac[6];
+            routeAdvertisement(raPacket, iface.getMac(mac));
             
             // Set the IP header and send the packet.
-            IPPacket::buildIp(currentInterface, raPacket, targetIp, nullptr, &targetMac, 0, 255, Variable::IP::icmpv6);
+            IPPacket::BuildIP build = {
+                .iface = currentInterface,
+                .packetInfo = raPacket,
+                .destIp = targetIp,
+                .destMac = targetMac,
+                .protocolType = Variable::IP::icmpv6
+            };
+
+            IPPacket::buildIpv6(build);
         }
     }
 
-    void Ndp::sendRedirectMessage(const ByteString& targetIp, const ByteString& destinationIp)
+    void Ndp::sendRedirectMessage(const uint8_t* targetIp, const uint8_t* destinationIp)
     {
         if (!currentInterface || !currentInterface->routingInstance || !configs.redirects.load(std::memory_order_relaxed)) return;
 
-        PacketInfo packet;
-        IcmpV6Header icmp;
+        PacketBuilder packet;
 
-        icmp.type = Variable::ICMPv6::Type::ndpRedirectMessage;
-        icmp.code = ByteString("\x00", 1);
-        icmp.reserved = ByteString(4, 0x00);
-        icmp.payload = destinationIp + targetIp;
+        IPPacket::reserveIpv4(currentInterface, packet);
+        packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
-        // Target Link-Layer Address (MAC of better next-hop)
-        {
-            std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
-            icmp.options.emplace_back(
-                Variable::ICMPv6::Option::target,
-                ByteString("\x01", 1),
-                currentInterface->configs.getMac()
-            );
-        }
+        Icmpv6Header icmp;
 
-        packet.Layer3.push_back(std::move(icmp));
+        BuildEntry* nextHeader = packet.nextBuildHeader();
+        if (!nextHeader || nextHeader->type != HeaderType::ICMPV6)
+            return;
+        
+        icmp.setBuffer(nextHeader->buffer);
 
-        IPPacket::buildIp(
-            currentInterface,
-            packet,
-            destinationIp,
-            nullptr,
-            nullptr,
-            0, 255,
-            Variable::IP::icmpv6
-        );
+        icmp.setType(Variable::ICMPv6::Type::ndpRedirectMessage);
+        icmp.setCode(0);
+        icmp.setReserved(0);
+        
+        uint8_t* trail = icmp.getTrailData();
+        
+        std::memcpy(trail, destinationIp, 16);
+        std::memcpy(trail + 16, targetIp, 16);
+        
+        TLV8BufferManager options(trail + 32, 8);
+        options.append(Variable::ICMPv6::Option::target, 1, 0, 0);
+        currentInterface->configs.getMac(trail + 34);
+
+        nextHeader->length = Icmpv6Header::fixedSize + options.size();
+        packet.bufferOffset += nextHeader->length;
+
+        IPPacket::BuildIP build = {
+            .iface = currentInterface,
+            .packetInfo = packet,
+            .destIp = destinationIp,
+            .protocolType = Variable::IP::icmpv6
+        };
+
+        IPPacket::buildIpv6(build);
     }
 
-    void Ndp::sendRedirectIfNeeded(const PacketInfo& originalPacket)
+    void Ndp::sendRedirectIfNeeded(const PacketBuilder& originalPacket)
     {
         //TODO move to packet forwarder
         if (!currentInterface || currentInterface->shutdownFlag.load(std::memory_order_relaxed))
             return;
 
         // Ensure original packet is IPv6
-        if (originalPacket.Layer3.empty() || !std::holds_alternative<IPv6Header>(originalPacket.Layer3[0]))
-            return;
+        IPv6HeaderRaw* ipv6 = nullptr;
+        auto headers = originalPacket.getHeaders();
+        for (size_t i = 0; i < originalPacket.getHeaderCount(); ++i)
+        {
+            if (headers[i].type == HeaderType::IPV6)
+            {
+                ipv6 = reinterpret_cast<IPv6HeaderRaw*>(headers[i].buffer);
+            }
+        }
 
-        const IPv6Header& ipHeader = std::get<IPv6Header>(originalPacket.Layer3[0]);
-
+        if (!ipv6) return;
+/*
         // Destination must not be multicast
         if (Functions::isMulticast(ipHeader.destinationAddress) || Functions::isMulticast(ipHeader.sourceAddress))
             return;
@@ -805,11 +925,12 @@ namespace Protocol
 
         // Build the redirect message and send it back to the original sender
         sendRedirectMessage(ipHeader.destinationAddress, ipHeader.sourceAddress);
+*/
     }
 
-    void Ndp::receiveRouteAdvertisement(const IcmpV6Header& receivedRA, const ByteString& sourceIp, const ByteString& sourceMac)
+    void Ndp::receiveRouteAdvertisement(const Icmpv6Header& receivedRA, const uint8_t* sourceIp, const uint8_t* sourceMac)
     {
-        if (receivedRA.payload.size() < 8 || configs.suppressRA.load(std::memory_order_relaxed)) return;
+        if (configs.suppressRA.load(std::memory_order_relaxed)) return;
 
         if (configs.destinationGuard.load(std::memory_order_relaxed))
         {
@@ -818,14 +939,14 @@ namespace Protocol
             if (mode == Configs::RaGuardMode::BLOCK_ALL)
                 return;
 
-            if (mode == Configs::RaGuardMode::MAC_WHITELIST && !raGuardAllowedMacs.count(sourceMac))
+            if (mode == Configs::RaGuardMode::MAC_WHITELIST && !raGuardAllowedMacs.count(readU48(sourceMac)))
                 return;
             
             if (mode != Configs::RaGuardMode::TRUSTED)
             {
                 auto now = std::chrono::steady_clock::now();
 
-                auto& lastTime = raReceivedTimestamps[sourceMac];
+                auto& lastTime = raReceivedTimestamps[readU48(sourceMac)];
                 auto rateLimit = configs.raRateLimit.load(std::memory_order_relaxed);
                 auto interval = std::chrono::milliseconds(1000 / std::max(rateLimit, 1u));
 
@@ -841,24 +962,15 @@ namespace Protocol
         // Parse M/O flags and preference bits (do NOT overwrite config)
         uint16_t routerLifetime = 0;
         bool mFlag = false, oFlag = false;
-        if (receivedRA.reserved.size() >= 4)
-        {
-            uint8_t flags = receivedRA.reserved[1];
-            routerLifetime = Functions::byteToNum(receivedRA.reserved.substr(2, 2));
+        uint8_t flags = receivedRA.getReserved()[1];
+        routerLifetime = readU32(receivedRA.getReserved() + 2);
 
-            mFlag = flags & 0x80;
-            oFlag = flags & 0x40;
+        mFlag = flags & 0x80;
+        oFlag = flags & 0x40;
 
-            uint8_t prfBits = (flags >> 3) & 0b11;
-            switch (prfBits)
-            {
-                case 1: configs.preference.store(Configs::Preference::LOW, std::memory_order_relaxed); break;
-                case 2: configs.preference.store(Configs::Preference::HIGH, std::memory_order_relaxed); break;
-                default: break; // Leave as MEDIUM
-            }
-        }
+        uint8_t prfBits = (flags >> 3) & 0b11;
 
-        if (configs.autoConfigDefaultRoute.load(std::memory_order_relaxed) && routerLifetime > 0 && sourceIp.size() == 16)
+        if (configs.autoConfigDefaultRoute.load(std::memory_order_relaxed) && routerLifetime > 0 && sourceIp != 0)
         {
             if (global.configs.ndp.ndAsRouteOwner.load(std::memory_order_relaxed))
             {
@@ -867,26 +979,27 @@ namespace Protocol
             //TODO add default route
         }
 
+        std::vector<TLV8Option> options;
+        auto trail = receivedRA.getTrail();
+        parseIcmpv6Options(trail.data() + 8, trail.size() - 8, options);
+
         // Process each RA option (only prefix and mtu)
-        for (const auto& opt : receivedRA.options)
+        for (const auto& opt : options)
         {
-            if (opt.option == Variable::ICMPv6::Option::prefix && opt.value.size() >= 32)
+            if (opt.type == Variable::ICMPv6::Option::prefix && opt.valueSize >= 32)
             {
                 uint8_t prefixLen = opt.value[0];
                 uint8_t prefixFlags = opt.value[1];
                 bool A = prefixFlags & 0x40;
 
-                uint32_t validLifetime = Functions::byteToNum(opt.value.substr(4, 4));
-                uint32_t preferredLifetime = Functions::byteToNum(opt.value.substr(8, 4));
+                uint32_t validLifetime = readU32(opt.value + 4);
+                uint32_t preferredLifetime = readU32(opt.value + 8);
 
                 if (preferredLifetime > validLifetime) continue;
 
-                ByteString prefix = opt.value.substr(16, 16);
-
                 // Check exclusion
-                bool isExcluded = std::any_of(slaacExclusionPrefixes.begin(), slaacExclusionPrefixes.end(), [&](const ByteString& p) {
-                    return Functions::computeNetworkAddress(prefix, prefixLen) ==
-                           Functions::computeNetworkAddress(p, prefixLen);
+                bool isExcluded = std::any_of(slaacExclusionPrefixes.begin(), slaacExclusionPrefixes.end(), [&](IPAddress p) {
+                    return Functions::isSubnetOf(opt.value, prefixLen, p.raw, prefixLen, AddressFamily::IPv6);
                 });
                 if (isExcluded) continue;
 
@@ -902,7 +1015,8 @@ namespace Protocol
                     slaacAddr->deprecated = false;
                     slaacAddr->preferredLifetime = preferredLifetime;
 
-                    slaacAddr->ip = Functions::calculateEui64(prefix, currentInterface->configs.getMac(), prefixLen);
+                    uint8_t mac[6];
+                    Functions::calculateEui64(slaacAddr->ip, opt.value, currentInterface->configs.getMac(mac));
 
                     {
                         std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
@@ -935,24 +1049,32 @@ namespace Protocol
         }
     }
 
-    void Ndp::receiveRedirectMessage(const IcmpV6Header& redirect, const ByteString& sourceIp)
+    void Ndp::receiveRedirectMessage(const Icmpv6Header& redirect, const uint8_t* sourceIp)
     {
-        if (redirect.payload.size() < 32) return;
+        auto trail = redirect.getTrail();
+        IPAddress destinationIp;
+        IPAddress betterNextHop;
+        destinationIp.isV6 = true;
+        betterNextHop.isV6 = true;
+        std::memcpy(destinationIp.raw, trail.data(), 16);
+        std::memcpy(betterNextHop.raw, trail.data() + 16, 16);
+        uint8_t nextHopMac[6];
+        bool macFound = false;
 
-        ByteString destinationIp = redirect.payload.substr(0, 16);
-        ByteString betterNextHop = redirect.payload.substr(16, 16);
-        ByteString nextHopMac;
+        std::vector<TLV8Option> options;
+        parseIcmpv6Options(trail.data() + 32, trail.size() - 32, options);
 
-        for (const auto& opt : redirect.options)
+        for (const auto& opt : options)
         {
-            if (opt.option == Variable::ICMPv6::Option::target && opt.value.size() == 6)
+            if (opt.type == Variable::ICMPv6::Option::target && opt.valueSize == 6)
             {
-                nextHopMac = opt.value;
+                std::memcpy(nextHopMac, opt.value, 6);
+                macFound = true;
                 break;
             }
         }
 
-        if (!nextHopMac.empty())
+        if (macFound)
         {
             addNdpEntry(betterNextHop, nextHopMac);
         }
@@ -960,6 +1082,10 @@ namespace Protocol
 
     void Ndp::duplicateAddressDetection(InterfaceConfigs::IPv6State::IPv6Address* addr, bool isLinkLocal)
     {
+        IPAddress ipCopy;
+        ipCopy.isV6 = true;
+        std::memcpy(ipCopy.raw, addr->ip, 16);
+
         if (global.configs.nsfActive.load(std::memory_order_relaxed))
         {
             auto now = std::chrono::steady_clock::now();
@@ -973,7 +1099,6 @@ namespace Protocol
                 {
                     return; // Drop new resolution due to throttle limit
                 }
-                ByteString ipCopy = addr->ip;
                 std::lock_guard<std::mutex> lock(requestMutex);
                 if (!pendingDadReschedules.count(ipCopy))
                 {
@@ -981,8 +1106,8 @@ namespace Protocol
                         ipCopy,
                         global.timeManager.addTimer(
                             global.configs.nsfStartTime + suppressWindow,
-                            [this, addr, isLinkLocal]() {
-                                pendingDadReschedules.erase(addr->ip);
+                            [this, addr, ipCopy, isLinkLocal]() {
+                                pendingDadReschedules.erase(ipCopy);
                                 duplicateAddressDetection(addr, isLinkLocal);
                             }
                         )
@@ -1004,16 +1129,14 @@ namespace Protocol
 
         {
             std::lock_guard<std::mutex> lock(requestMutex);
-            nsRetryCount[addr->ip] = 0;
+            nsRetryCount[ipCopy] = 0;
         }
 
         // Clear existing entry in the cache (DAD must be clean)
         {
             std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
-            ndpCache.erase(addr->ip);
+            ndpCache.erase(ipCopy);
         }
-
-        const ByteString ipCopy = addr->ip;
 
         // Register traching for replies
         {
@@ -1029,7 +1152,9 @@ namespace Protocol
     {
         // Local capture values
         auto& iface = currentInterface->configs;
-        const ByteString ipCopy = addr->ip;
+        IPAddress ipCopy;
+        ipCopy.isV6 = true;
+        std::memcpy(ipCopy.raw, addr->ip, 16);
         const int maxAttempts = configs.dadAttempts.load(std::memory_order_relaxed);
         const auto delay = std::chrono::milliseconds(configs.dadTime.load(std::memory_order_relaxed));
 
@@ -1052,7 +1177,7 @@ namespace Protocol
                 addr->tentative = false;
                 addr->valid = false;
             }
-            currentInterface->markAddressDuplicate(ipCopy, isLinkLocal);
+            currentInterface->markAddressDuplicate(addr->ip, isLinkLocal);
             remove = true;
         }
         else if (attempt >= maxAttempts)
@@ -1065,16 +1190,24 @@ namespace Protocol
         else
         {
             // Send anonymous NS (source = ::, no MAC option)
-            PacketInfo ns = neighborSolicitation(ipCopy, nullptr);
-            IPPacket::buildIp(
-                currentInterface, ns,
-                generateMulticastSolicitationAddress(ipCopy),
-                &Variable::IPv6::source,
-                nullptr, 0, 255, Variable::IP::icmpv6
-            );
+            PacketBuilder ns;
+            neighborSolicitation(ns, ipCopy, nullptr);
+            uint8_t multicastSolicitation[16];
+
+            {
+                IPPacket::BuildIP build = {
+                    .iface = currentInterface,
+                    .packetInfo = ns,
+                    .destIp = generateMulticastSolicitationAddress(multicastSolicitation, addr->ip),
+                    .sourceIp = Variable::IPv6::source,
+                    .protocolType = Variable::IP::icmpv6
+                };
+
+                IPPacket::buildIpv6(build);
+            }
 
             pendingRequests.insert(ipCopy);
-            nsRetryCount[addr->ip]++;
+            nsRetryCount[ipCopy]++;
 
             uint32_t timerId = global.timeManager.addTimer(
                 std::chrono::steady_clock::now() + delay,
@@ -1145,9 +1278,9 @@ namespace Protocol
                     return;
                 
                 auto& iface = currentInterface->configs;
-                ByteString ip = iface.ipv6.getLocalAddress();
+                uint8_t localAddr[16];
 
-                sendRouteAdvertisement(Variable::Mac::broadcast, ip);
+                sendRouteAdvertisement(Variable::Mac::broadcast, iface.ipv6.getLocalAddress(localAddr));
 
                 // Reschedule next RA
                 raTimerIds.erase(*raTimerId);
@@ -1159,7 +1292,7 @@ namespace Protocol
         raTimerIds.insert(*raTimerId);
     }
 
-    void Ndp::scheduleNeighborSolicitation(const ByteString& targetIp)
+    void Ndp::scheduleNeighborSolicitation(const IPAddress& targetIp)
     {
         if (!running.load(std::memory_order_relaxed)) return;
 
@@ -1196,21 +1329,21 @@ namespace Protocol
                         uint32_t finalWait = configs.nudFinalWait;
                         entry->nudRetryTimerId = global.timeManager.addTimer(
                             std::chrono::steady_clock::now() + std::chrono::milliseconds(finalWait),
-                            [this, targetIp]() { retryNud(targetIp); }
+                            [this, ip = targetIp]() { retryNud(ip); }
                         );
 
                         currentNudProbes.fetch_sub(1, std::memory_order_seq_cst);
 
-                        ByteString retryIp;
+                        IPAddress retryIp;
                         {
                             std::lock_guard<std::mutex> requestLock(requestMutex);
                             if (!queuedNudProbes.empty())
                             {
-                                retryIp = *queuedNudProbes.begin();
-                                queuedNudProbes.erase(retryIp);
+                                retryIp = std::move(*queuedNudProbes.begin());
+                                queuedNudProbes.erase(queuedNudProbes.begin());
                             }
                         }
-                        if (!retryIp.empty())
+                        if (retryIp.v6 != 0)
                         {
                             auto it = ndpCache.find(retryIp);
                             if (it != ndpCache.end())
@@ -1246,9 +1379,20 @@ namespace Protocol
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
             auto& iface = currentInterface->configs;
-            ByteString mac = iface.getMac();
-            PacketInfo nsPacket = neighborSolicitation(targetIp, &mac);
-            IPPacket::buildIp(currentInterface, nsPacket, generateMulticastSolicitationAddress(targetIp), nullptr, nullptr, 0, 255, Variable::IP::icmpv6);
+            uint8_t mac[6];
+            iface.getMac(mac);
+            PacketBuilder nsPacket;
+            neighborSolicitation(nsPacket, targetIp, mac);
+            uint8_t multicastSolicitation[16];
+
+            IPPacket::BuildIP build = {
+                .iface = currentInterface,
+                .packetInfo = nsPacket,
+                .destIp = generateMulticastSolicitationAddress(multicastSolicitation, targetIp.raw),
+                .protocolType = Variable::IP::icmpv6
+            };
+
+            IPPacket::buildIpv6(build);
         }
 
         // Reschedule retry
@@ -1282,7 +1426,7 @@ namespace Protocol
         );
     }
 
-    void Ndp::retryNud(const ByteString& targetIp)
+    void Ndp::retryNud(const IPAddress& targetIp)
     {
         if (!running.load(std::memory_order_relaxed)) return;
 
@@ -1307,31 +1451,31 @@ namespace Protocol
         sendNeighborSolicitation(targetIp);
     }
     
-    void Ndp::addSlaacExclusionPrefix(const ByteString& prefix, bool remove)
+    void Ndp::addSlaacExclusionPrefix(const IPAddress& prefix, bool remove)
     {
         if (remove)
         {
-            std::erase_if(slaacExclusionPrefixes, [&](ByteString& pref) { return pref == prefix; });
+            std::erase_if(slaacExclusionPrefixes, [&](IPAddress pref) { return pref == prefix; });
         }
         else if (!std::any_of(
             slaacExclusionPrefixes.begin(),
             slaacExclusionPrefixes.end(),
-            [&](ByteString& pref) { return pref == prefix; })
+            [&](IPAddress pref) { return pref == prefix; })
         )
         {
             slaacExclusionPrefixes.push_back(prefix);
         }
     }
     
-    void Ndp::addRaGuardAllowedMac(const ByteString& mac, bool remove)
+    void Ndp::addRaGuardAllowedMac(const uint8_t* mac, bool remove)
     {
         if (remove)
         {
-            raGuardAllowedMacs.erase(mac);
+            raGuardAllowedMacs.erase(readU48(mac));
         }
         else
         {
-            raGuardAllowedMacs.insert(mac);
+            raGuardAllowedMacs.insert(readU48(mac));
         }
     }
 

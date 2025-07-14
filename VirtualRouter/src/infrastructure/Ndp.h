@@ -47,7 +47,7 @@ enum class NudState
  */
 struct NdpCacheEntry
 {
-    ByteString macAddress; ///< MAC address associated with the IP.
+    uint8_t macAddress[6]; ///< MAC address associated with the IP.
     std::chrono::steady_clock::time_point expiryTime; ///< Expiration time for this cache entry.
     NudState state = NudState::ACTIVE;
     uint32_t timerId = 0;
@@ -157,29 +157,29 @@ public:
      * @parap targetIp The target IP of the resolved arp entry.
      * @param mac The MAC of the resolved arp entry.
      */
-    void addNdpEntry(const ByteString& targetIp, const ByteString& targetMac, bool proxy = false, bool isStatic = false);
+    void addNdpEntry(const IPAddress& targetIp, const uint8_t* targetMac, bool proxy = false, bool isStatic = false);
 
-    void resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend);
+    void resolveAndSend(const uint8_t* targetIp, PacketBuilder& packetToSend);
 
-    void sendNeighborSolicitation(const ByteString& targetIp);
+    void sendNeighborSolicitation(const IPAddress& targetIp);
 
-    void sendNeighborAdvertisement(const ByteString& currentMac, ByteString const* targetIp);
+    void sendNeighborAdvertisement(const uint8_t* currentMac, const uint8_t* targetIp);
 
-    void sendRouteSolicitation(const ByteString& targetIp);
+    void sendRouteSolicitation(const uint8_t* targetIp);
 
-    void sendRouteAdvertisement(const ByteString& targetMac, const ByteString& targetIp);
+    void sendRouteAdvertisement(const uint8_t* targetMac, const uint8_t* targetIp);
 
-    void sendRedirectMessage(const ByteString& targetIp, const ByteString& destinationIp);
+    void sendRedirectMessage(const uint8_t* targetIp, const uint8_t* destinationIp);
     
-    void sendRedirectIfNeeded(const PacketInfo& originalPacket);
+    void sendRedirectIfNeeded(const PacketBuilder& originalPacket);
 
-    void receiveNeighborAdvertisement(const IcmpV6Header& receivedNA, const ByteString& sourceIp);
+    void receiveNeighborAdvertisement(const Icmpv6Header& receivedNA, const uint8_t* sourceIp);
     
-    void receiveNeighborSolicitation(const IcmpV6Header& nsHeader, const ByteString& srcIp, const ByteString& srcMac);
+    void receiveNeighborSolicitation(const Icmpv6Header& nsHeader, const uint8_t* srcIp, const uint8_t* srcMac);
     
-    void receiveRouteAdvertisement(const IcmpV6Header& receivedRA, const ByteString& sourceIp, const ByteString& srcMac);
+    void receiveRouteAdvertisement(const Icmpv6Header& receivedRA, const uint8_t* sourceIp, const uint8_t* srcMac);
 
-    void receiveRedirectMessage(const IcmpV6Header& redirect, const ByteString& sourceIp);
+    void receiveRedirectMessage(const Icmpv6Header& redirect, const uint8_t* sourceIp);
 
     void shutdown();
 
@@ -189,37 +189,37 @@ public:
 
     void initiateSlaac();
 
-    void addSlaacExclusionPrefix(const ByteString& prefix, bool remove = false);
+    void addSlaacExclusionPrefix(const IPAddress& prefix, bool remove = false);
 
-    void addRaGuardAllowedMac(const ByteString& mac, bool remove = false);
+    void addRaGuardAllowedMac(const uint8_t* mac, bool remove = false);
 
-    ByteString* getMac(const ByteString& ip);
+    bool getMac(uint8_t* out, const uint8_t* ip);
 
 private:
     Interface* currentInterface; ///< Pointer to the associated network interface.
 
-    std::deque<ByteString> insertionOrder;
-    std::unordered_map<ByteString, NdpCacheEntry> ndpCache; ///< NDP cache mapping IPs to MAC addresses and expiration times.
-    std::unordered_map<ByteString, NdpCacheEntry> staticNdpCache; ///< Static NDP cache mapping IPs to MAC addresses and expiration times.
-    std::unordered_map<ByteString, ByteString> proxyEntries; ///< NDP proxy cache mapping IPs to MAC addresses and expiration times.
-    std::unordered_set<ByteString> pendingRequests; ///< Tracks ongoing NDP requests.
-    std::unordered_map<ByteString, bool> neighborReplyStatus; ///< Tracks NDP neighbor reply statuses.
-    std::unordered_map<ByteString, bool> routeReplyStatus; ///< Tracks NDP route reply statuses.
-    std::unordered_map<ByteString, std::queue<PacketInfo>> packetQueuePerIp; ///< Packets waiting for NDP resolution.
-    std::unordered_set<ByteString> raGuardAllowedMacs; ///< Macs allowed to send RAs.
-    std::unordered_map<ByteString, std::chrono::steady_clock::time_point> lastUnsolicitedNaTime; ///< Timestamps for unsolicited NAs.
-    std::unordered_map<ByteString, std::chrono::steady_clock::time_point> raReceivedTimestamps; ///< Timestamps for received RAs.
-    std::unordered_map<ByteString, uint32_t> nudDelayTimers; ///< NUD delay timers.
-    std::unordered_map<ByteString, uint32_t> pendingDadReschedules;
+    std::vector<IPAddress> insertionOrder;
+    std::unordered_map<IPAddress, NdpCacheEntry> ndpCache; ///< NDP cache mapping IPs to MAC addresses and expiration times.
+    std::unordered_map<IPAddress, NdpCacheEntry> staticNdpCache; ///< Static NDP cache mapping IPs to MAC addresses and expiration times.
+    std::unordered_map<IPAddress, uint64_t> proxyEntries; ///< NDP proxy cache mapping IPs to MAC addresses and expiration times.
+    std::unordered_set<IPAddress> pendingRequests; ///< Tracks ongoing NDP requests.
+    std::unordered_map<IPAddress, bool> neighborReplyStatus; ///< Tracks NDP neighbor reply statuses.
+    std::unordered_map<IPAddress, bool> routeReplyStatus; ///< Tracks NDP route reply statuses.
+    std::unordered_map<IPAddress, std::queue<PacketBuilder>> packetQueuePerIp; ///< Packets waiting for NDP resolution.
+    std::unordered_set<uint64_t> raGuardAllowedMacs; ///< Macs allowed to send RAs.
+    std::unordered_map<IPAddress, std::chrono::steady_clock::time_point> lastUnsolicitedNaTime; ///< Timestamps for unsolicited NAs.
+    std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> raReceivedTimestamps; ///< Timestamps for received RAs.
+    std::unordered_map<IPAddress, uint32_t> nudDelayTimers; ///< NUD delay timers.
+    std::unordered_map<IPAddress, uint32_t> pendingDadReschedules;
     std::atomic<std::chrono::steady_clock::time_point> lastLogWindowStart;
     std::chrono::steady_clock::time_point lastRaReceiveTime;
     std::atomic<uint32_t> currentNudProbes = 0;
     std::atomic<uint32_t> currentResolvingNeighbors = 0;
     std::atomic<uint32_t> nfsResolutionCount = 0;
-    std::unordered_set<ByteString> queuedNudProbes;
-    std::unordered_set<ByteString> queuedResolution;
+    std::unordered_set<IPAddress> queuedNudProbes;
+    std::unordered_set<IPAddress> queuedResolution;
 
-    std::vector<ByteString> slaacExclusionPrefixes;
+    std::vector<IPAddress> slaacExclusionPrefixes;
 
     mutable std::shared_mutex ndpCacheMutex; ///< Mutex for thread-safe access to the ARP cache.
     std::mutex requestMutex; ///< Mutex for thread-safe access to `pendingRequests`.
@@ -227,9 +227,9 @@ private:
     std::mutex packetQueueMutex; ///< Mutex for thread-safe access to `packetQueuePerIp`.
 
     std::unordered_set<uint32_t> raTimerIds;
-    std::unordered_map<ByteString, uint32_t> nsRetryTimers; ///< Per-IP NS retry timers.
-    std::unordered_map<ByteString, uint8_t> nsRetryCount;
-    std::unordered_map<ByteString, uint32_t> dadTimers; ///< Per-IP DAD timers.
+    std::unordered_map<IPAddress, uint32_t> nsRetryTimers; ///< Per-IP NS retry timers.
+    std::unordered_map<IPAddress, uint8_t> nsRetryCount;
+    std::unordered_map<IPAddress, uint32_t> dadTimers; ///< Per-IP DAD timers.
 
     std::atomic<bool> running; ///< Indicates whether the NDP service is active.
 
@@ -240,48 +240,50 @@ protected:
      * @param targetIp The resolved IP address.
      * @param macAddress The associated MAC address.
      */
-    void processQueuedPackets(const ByteString& targetIp, const ByteString& macAddress);
+    void processQueuedPackets(const IPAddress& targetIp, const uint8_t* macAddress);
 
-    void onReachableTimeout(const ByteString& targetIp);
+    void onReachableTimeout(const IPAddress& targetIp);
 
     void scheduleNextRA();
     
-    void scheduleNeighborSolicitation(const ByteString& targetIp);
+    void scheduleNeighborSolicitation(const IPAddress& targetIp);
 
-    void startNud(const ByteString& targetIp, NdpCacheEntry& entry, std::unique_lock<std::shared_mutex>& cacheLock);
+    void startNud(const IPAddress& targetIp, NdpCacheEntry& entry, std::unique_lock<std::shared_mutex>& cacheLock);
 
-    void refreshNeighborEntry(const ByteString& targetIp);
+    void refreshNeighborEntry(const IPAddress& targetIp);
 
     bool shouldLog();
 
-    void retryNud(const ByteString& targetIp);
+    void retryNud(const IPAddress& targetIp);
 
-    void scheduleNeighborEntry(const ByteString& ip);
+    void scheduleNeighborEntry(const IPAddress ip);
 
-    ByteString generateMulticastSolicitationAddress(const ByteString& targetIp);
+    uint8_t* generateMulticastSolicitationAddress(uint8_t* out, const uint8_t* targetIp);
 
     /**
      * @brief Creates an Neighbor Solicitation packet.
+     * 
+     * @param packet Packet being built.
      * @param currentMac The sender's MAC address.
      * @param targetIp The target IP address.
-     * @return The constructed Neighbor Solicitation packet.
      */
-    PacketInfo neighborSolicitation(const ByteString& targetIp, ByteString const* currentMac);
+    void neighborSolicitation(PacketBuilder& packet, const IPAddress& targetIp, const uint8_t* currentMac);
 
     /**
      * @brief Creates an Neighbor Advertisment packet.
      * @param currentMac The sender's MAC address.
      * @param targetIp The recipient's IP address.
+     *
      * @return The constructed Neighor Advertisement packet.
      */
-    PacketInfo neighborAdvertisement(const ByteString& currentMac, ByteString const* targetIp);
+    void neighborAdvertisement(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* targetIp);
      
     /**
      * @brief Creates an Route Solicitation packet.
      * @param currentMac The sender's MAC address.
      * @return The constructed Route Solicitation packet.
      */
-    PacketInfo routeSolicitation(const ByteString& currentMac);
+    void routeSolicitation(PacketBuilder& packet, const uint8_t* currentMac);
 
     /**
      * @brief Creates an NDP advertisment packet.
@@ -289,7 +291,7 @@ protected:
      *
      * @return The constructed Route Advertisment packet.
      */
-    PacketInfo routeAdvertisement(const ByteString& currentMac);
+    void routeAdvertisement(PacketBuilder& packet, const uint8_t* currentMac);
 
     Global& global;
 };
