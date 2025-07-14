@@ -3,6 +3,8 @@
 #include <Ethernet.h>
 #include <VirtualRouter.h>
 #include <Global.h>
+#include <PacketBuilder.hpp>
+#include <HeaderHelpers.hpp>
 
 namespace Protocol 
 {
@@ -23,10 +25,10 @@ namespace Protocol
         {
             for (const auto& [ip, neighbor] : it->second)
             {
-                if (neighbor.interface.first == currentInterface->configs.interfaceType &&
-                    neighbor.interface.second == currentInterface->configs.id)
+                if (neighbor.interface == currentInterface->configs.key)
                 {
-                    addArpEntry(ip, neighbor.mac, neighbor.proxy, true);
+                    uint8_t address[4];
+                    addArpEntry(writeU32(address, ip), neighbor.mac, neighbor.proxy, true);
                 }
             }
         }
@@ -73,20 +75,21 @@ namespace Protocol
         pendingIncompletes.clear();
     }
 
-    void Arp::addArpEntry(const ByteString& targetIp, const ByteString& targetMac, bool proxy, bool isStatic)
+    void Arp::addArpEntry(const uint8_t* targetIp, const uint8_t* targetMac, bool proxy, bool isStatic)
     {
+        uint32_t targetIpInt = readU32(targetIp);
         auto now = std::chrono::steady_clock::now();
 
         if (isStatic)
         {
             ArpCacheEntry entry;
-            entry.macAddress = targetMac;
+            std::memcpy(entry.macAddress, targetMac, 6);
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
-            staticArpCache[targetIp] = entry;
+            staticArpCache[targetIpInt] = entry;
 
             if (proxy)
             {
-                proxyEntries[targetIp] = targetMac;
+                proxyEntries[targetIpInt] = readU48(targetMac);
             }
             return;
         }
@@ -95,7 +98,7 @@ namespace Protocol
         if (global.configs.arp.stickyArp.load(std::memory_order_relaxed))
         {
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
-            auto existing = arpCache.find(targetIp);
+            auto existing = arpCache.find(targetIpInt);
             if (existing != arpCache.end())
             {
                 return;
@@ -103,36 +106,36 @@ namespace Protocol
         }
 
         // Cancel old timer if already present
-        if (arpCache.count(targetIp))
+        if (arpCache.count(targetIpInt))
         {
-            global.timeManager.cancelTimer(arpCache[targetIp].timerId);
+            global.timeManager.cancelTimer(arpCache[targetIpInt].timerId);
         }
 
         // Build the entry
         ArpCacheEntry entry;
-        entry.macAddress = targetMac;
+        std::memcpy(entry.macAddress, targetMac, 6);
         entry.expiryTime = now + std::chrono::seconds(configs.timeout);
 
         // Refresh vs expire logic
         entry.timerId = global.timeManager.addTimer(
             entry.expiryTime,
-            [this, targetIp]() { expireArpEntry(targetIp); }
+            [this, targetIpInt]() { expireArpEntry(targetIpInt); }
         );
 
         // Insert into cache
         {
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
-            arpCache[targetIp] = entry;
-            insertionOrder.push_back(targetIp);
+            arpCache[targetIpInt] = entry;
+            insertionOrder.push_back(targetIpInt);
 
             if (proxy)
             {
-                proxyEntries[targetIp] = targetMac;
+                proxyEntries[targetIpInt] = readU48(targetMac);
             }
         }
     }
 
-    void Arp::removeArpEntry(const ByteString& ip, bool isStatic)
+    void Arp::removeArpEntry(uint32_t ip, bool isStatic)
     {
         {
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
@@ -178,64 +181,69 @@ namespace Protocol
     }
 
     // Get MAC address for the given ip
-    ByteString* Arp::getMac(const ByteString& ip)
+    bool Arp::getMac(uint8_t* out, const uint8_t* ip)
     {
+        uint32_t targetIp = readU32(ip);
         std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
         {
             std::shared_lock<std::shared_mutex> neighborLock(global.configs.arp.neighborMutex);
-            auto staticIt = staticArpCache.find(ip);
+            auto staticIt = staticArpCache.find(targetIp);
             if (staticIt != staticArpCache.end())
             {
-                return &staticIt->second.macAddress;
+                std::memcpy(out, staticIt->second.macAddress, 6);
+                return true;
             }
         }
-        auto it = arpCache.find(ip);
+        auto it = arpCache.find(targetIp);
         if (it != arpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime && it->second.status == ArpCacheStatus::COMPLETE)
         {
-            return &it->second.macAddress;
+            std::memcpy(out, it->second.macAddress, 16);
+            return true;
         }
-        return nullptr;
+        return false;
     }
 
     // Enqueue a packet for ARP resolution and send once resolved
-    void Arp::resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend)
+    void Arp::resolveAndSend(const uint8_t* targetIp, PacketBuilder& packetToSend)
     {
+        uint32_t targetIpInt = readU32(targetIp);
+
         if (!global.configs.arp.incompleteEnabled.load(std::memory_order_relaxed))
             return;
 
         {
             std::lock_guard<std::mutex> lock(packetQueueMutex);
-            auto& queue = packetQueuePerIp[targetIp];
+            auto& queue = packetQueuePerIp[targetIpInt];
 
             // Enforce queue size limit from global config
             if (queue.size() < global.configs.arp.queueSize.load(std::memory_order_relaxed))
             {
-                packetQueuePerIp[targetIp].push(std::move(packetToSend));
+                packetQueuePerIp[targetIpInt].push(std::move(packetToSend));
             }
         }
         {
             std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
-            auto it = arpCache.find(targetIp);
+            auto it = arpCache.find(targetIpInt);
             if (it != arpCache.end()) return;
 
             // Entry limit enforcement
             if (incompletes.load(std::memory_order_relaxed) >= global.configs.arp.incompleteResolveLimit.load(std::memory_order_relaxed))
             {
-                pendingIncompletes.insert(targetIp);
+                pendingIncompletes.insert(targetIpInt);
                 return; // Too many incomplete entries
             }
 
             // Add incomplete arp entry
             ArpCacheEntry entry;
             entry.status = ArpCacheStatus::INCOMPLETE;
-            arpCache[targetIp] = entry;
+            arpCache[targetIpInt] = entry;
             incompletes.fetch_add(1, std::memory_order_seq_cst);
         }
 
-        sendRequest(targetIp);
+        sendRequest(targetIpInt);
     }
 
-    void Arp::expireArpEntry(const ByteString& ip)
+    void Arp::expireArpEntry(uint32_t ip)
     {
         if (global.configs.arp.incompleteEnabled.load(std::memory_order_relaxed))
         {
@@ -262,6 +270,7 @@ namespace Protocol
                 }
 
                 it->second.status = ArpCacheStatus::STALE;
+
                 sendRequest(ip);
             }
         }
@@ -272,7 +281,7 @@ namespace Protocol
     }
 
     // Send an ARP request for the given IP
-    void Arp::sendRequest(const ByteString& targetIp)
+    void Arp::sendRequest(uint32_t targetIp)
     {
         {
             // Set request as pending
@@ -311,19 +320,22 @@ namespace Protocol
     // Method to receive ARP reply
     void Arp::receiveReply(const ArpHeader& receivedReply)
     {
-        ByteString ip = receivedReply.senderIpAddress;
-        ByteString mac = receivedReply.senderHardwareAddress;
+        const uint8_t* mac = receivedReply.getSenderHwAddr();
+        const uint8_t* ip = receivedReply.getSenderIpAddr();
+        const uint8_t* tip = receivedReply.getTargetIpAddr();
+
+        uint32_t targetIp = readU32(ip);
 
         // Ignore gratuitous ARP if disabled
-        bool garp = receivedReply.senderIpAddress == receivedReply.targetIpAddress;
+        bool garp = std::memcmp(ip, tip, 4) == 0;
         if (garp && (!global.configs.arp.acceptGratiutous.load(std::memory_order_relaxed) ||
             !running.load(std::memory_order_relaxed) ||
-            mac == Variable::Mac::broadcast || mac == Variable::Mac::source))
+            std::memcmp(mac, Variable::Mac::broadcast, 6) == 0))
             return;
 
-        if (arpCache.contains(ip))
+        if (arpCache.count(targetIp))
         {
-            if (arpCache[ip].status == ArpCacheStatus::COMPLETE && global.configs.arp.stickyArp.load(std::memory_order_relaxed))
+            if (arpCache[targetIp].status == ArpCacheStatus::COMPLETE && global.configs.arp.stickyArp.load(std::memory_order_relaxed))
             {
                 // Ignore if sticky ARP is enabled
                 return;
@@ -331,19 +343,19 @@ namespace Protocol
 
             {
                 std::lock_guard<std::mutex> lock(requestMutex);
-                pendingRequests.erase(ip);
+                pendingRequests.erase(targetIp);
             }
             {
                 std::lock_guard<std::mutex> lock(replyStatusMutex);
-                replyStatus.erase(ip);
+                replyStatus.erase(targetIp);
             }
 
             {
                 std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
 
-                ArpCacheEntry& entry = arpCache[ip];
+                ArpCacheEntry& entry = arpCache[targetIp];
                 entry.status = ArpCacheStatus::COMPLETE;
-                entry.macAddress = mac;
+                std::memcpy(entry.macAddress, mac, 6);
                 entry.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.timeout);
 
                 if (entry.timerId != 0)
@@ -356,9 +368,9 @@ namespace Protocol
                 // Expire time
                 entry.timerId = global.timeManager.addTimer(
                     entry.expiryTime,
-                    [this, ip]()
+                    [this, targetIp]()
                     {
-                        expireArpEntry(ip);
+                        expireArpEntry(targetIp);
                     }
                 );
             }
@@ -389,17 +401,17 @@ namespace Protocol
 
             ArpCacheEntry entry;
             entry.status = ArpCacheStatus::COMPLETE;
-            entry.macAddress = mac;
+            std::memcpy(entry.macAddress, mac, 6);
             entry.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.timeout);
-            arpCache[ip] = entry;
-            insertionOrder.push_back(ip);
+            arpCache[targetIp] = entry;
+            insertionOrder.push_back(targetIp);
 
             // Expire time
             entry.timerId = global.timeManager.addTimer(
                 entry.expiryTime,
-                [this, ip]()
+                [this, targetIp]()
                 {
-                    expireArpEntry(ip);
+                    expireArpEntry(targetIp);
                 }
             );
         }
@@ -407,19 +419,19 @@ namespace Protocol
 
         {
             std::lock_guard<std::mutex> lock(replyStatusMutex);
-            if (replyStatus.count(ip))
+            if (replyStatus.count(targetIp))
             {
-                replyStatus[ip].store(true, std::memory_order_release);
+                replyStatus[targetIp].store(true, std::memory_order_release);
             }
         }
 
-        processQueuedPackets(ip, mac);
+        processQueuedPackets(ip, targetIp, mac);
     }
 
-    void Arp::receiveRequest(const ArpHeader& request, const ByteString& sourceMac)
+    void Arp::receiveRequest(const ArpHeader& request, const uint8_t* sourceMac)
     {
-        const ByteString& targetIp = request.targetIpAddress;
-        const ByteString& senderIp = request.senderIpAddress;
+        uint32_t targetIp = readU32(request.raw->targetIpAddress);
+        uint32_t senderIp = readU32(request.raw->senderIpAddress);
 
         if (currentInterface->shutdownFlag.load(std::memory_order_relaxed)) return;
 
@@ -429,17 +441,17 @@ namespace Protocol
         }
 
         // Drop invalid request (e.g., 0.0.0.0 or identical source/target)
-        if (targetIp.empty() || targetIp == senderIp)
+        if (targetIp == 0 || targetIp == senderIp)
             return;
 
-        ByteString replyMac;
+        uint8_t replyMac[6];
         bool isLocal = false;
         bool isProxy = false;
 
         {
-            if (currentInterface->configs.ipv4.getAddress() == targetIp)
+            if (currentInterface->configs.ipv4.compareAddress(request.raw->targetIpAddress))
             {
-                replyMac = currentInterface->configs.getMac();
+                currentInterface->configs.getMac(replyMac);
                 isLocal = true;
             }
             else if (!global.configs.arp.disableProxy.load(std::memory_order_relaxed))
@@ -448,7 +460,7 @@ namespace Protocol
                 auto it = proxyEntries.find(targetIp);
                 if (it != proxyEntries.end())
                 {
-                    replyMac = it->second;
+                    writeU48(replyMac, it->second);
                     isProxy = true;
                 }
             }
@@ -457,31 +469,43 @@ namespace Protocol
         if (!isLocal && !isProxy)
             return; // Not for us
 
-        PacketInfo reply = arpReply(replyMac, sourceMac, targetIp, senderIp);
+        PacketBuilder reply;
+        arpReply(reply, replyMac, sourceMac, request.getTargetIpAddr(), request.getSenderIpAddr());
         currentInterface->enqueuePacket(reply, sourceMac);
     }
 
-    void Arp::processQueuedPackets(const ByteString& targetIp, const ByteString& macAddress)
+    void Arp::processQueuedPackets(const uint8_t* targetIp, uint32_t targetIpInt, const uint8_t* macAddress)
     {
-        std::queue<PacketInfo> packets;
+        std::queue<PacketBuilder> packets;
         {
             std::lock_guard<std::mutex> lock(packetQueueMutex);
-            if (packetQueuePerIp.count(targetIp))
+            if (auto que = packetQueuePerIp.extract(targetIpInt))
             {
-                packets = std::move(packetQueuePerIp[targetIp]);
-                packetQueuePerIp.erase(targetIp);
+                packets = std::move(que.mapped());
             }
         }
-        
+
         while (!packets.empty())
         {
-            PacketInfo pkt = packets.front();
+            PacketBuilder pkt = std::move(packets.front());
             packets.pop();
-            currentInterface->enqueuePacket(pkt, macAddress);
+            auto current = pkt.currentBuildHeader();
+            if (!current) continue;
+
+            // Continue building next header
+            switch (current->next)
+            {
+                //TODO add more headers
+                case HeaderType::ETHERNET:
+                    Protocol::Ethernet::build(currentInterface, pkt, targetIp, macAddress, Variable::Ethernet::ipv6);
+                    break;
+                default:
+                    continue;
+            }
         }
     }
 
-    void Arp::scheduleRequest(const ByteString& targetIp, ArpCacheEntry& entry)
+    void Arp::scheduleRequest(uint32_t targetIp, ArpCacheEntry& entry)
     {
         if (!running.load(std::memory_order_relaxed)) return;
 
@@ -530,9 +554,15 @@ namespace Protocol
         std::unique_lock<std::mutex> lock(replyStatusMutex);
 
         // Send the ARP request
-        PacketInfo arpReq;
+        PacketBuilder arpReq;
         auto& iface = currentInterface->configs;
-        arpReq = arpRequest(iface.getMac(), iface.ipv4.getAddress(), targetIp);
+
+        uint8_t mac[6], ip[4], tip[4];
+        iface.getMac(mac);
+        iface.ipv4.getAddress(ip);
+        writeU32(tip, targetIp);
+        arpRequest(arpReq, mac, ip, tip);
+
         //Ethernet::build(currentInterface, arpReq, nullptr, &Variable::Mac::broadcast, Variable::Ethernet::arp);
         currentInterface->enqueuePacket(arpReq, Variable::Mac::broadcast);
 
@@ -550,16 +580,17 @@ namespace Protocol
     }
 
     // Method to send an ARP reply
-    void Arp::sendReply(const ByteString& targetMac, const ByteString& targetIp) 
+    void Arp::sendReply(const uint8_t* targetMac, const uint8_t* targetIp) 
     {
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
             auto& interfaceInfo = currentInterface->configs;
-            PacketInfo replyPacket;
+            PacketBuilder replyPacket;
 
-            {
-                replyPacket = arpReply(interfaceInfo.getMac(), targetMac, interfaceInfo.ipv4.getAddress(), targetIp);
-            }
+            uint8_t ip[4], mac[6];
+            interfaceInfo.getMac(mac);
+            interfaceInfo.ipv4.getAddress(ip);
+            arpReply(replyPacket, mac, targetMac, ip, targetIp);
 
             //Ethernet::build(currentInterface, replyPacket, nullptr, &targetMac, Variable::Ethernet::arp);
             currentInterface->enqueuePacket(replyPacket, targetMac);
@@ -567,62 +598,59 @@ namespace Protocol
     }
 
     // Creates an ARP request packet
-    PacketInfo Arp::arpRequest(const ByteString& currentMac, const ByteString& ip, const ByteString targetIp) 
+    void Arp::arpRequest(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* ip, const uint8_t* targetIp) 
     {
-        PacketInfo packet;
         EthernetHeader eth;
         ArpHeader arp;
 
+        packet.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
+        packet.reserveHeader(HeaderType::ARP, ArpHeader::fixedSize);
+
+        eth.setBuffer(packet.getBuffer());
+        arp.setBuffer(packet.getBuffer() + EthernetHeader::fixedSize);
+
         // Set up the Ethernet header for the ARP request
-        eth.destinationMac = Variable::Mac::broadcast; 
-        eth.sourceMac = currentMac; 
-        eth.type = Variable::Ethernet::arp; 
+        eth.setDestinationMac(Variable::Mac::broadcast);
+        eth.setSourceMac(currentMac);
+        eth.setType(Variable::Ethernet::arp);
 
-        packet.Layer2.push_back(std::move(eth));
-
-        // Set up the ARP header for the request
-        arp.hardwareType = Variable::Arp::ethernet; 
-        arp.protocolType = Variable::Arp::ipv4; 
-        arp.hardwareSize = std::string("\x06", 1); 
-        arp.protocolSize = std::string("\x04", 1); 
-        arp.opcode = Variable::Arp::Opcode::request;
-        arp.senderHardwareAddress = currentMac; 
-        arp.senderIpAddress = ip; 
-        arp.targetHardwareAddress = Variable::Mac::source; 
-        arp.targetIpAddress = targetIp; 
-
-        packet.Layer2_5.push_back(std::move(arp));
-
-        return packet;
+        arp.setHardwareType(Variable::Arp::ethernet);
+        arp.setProtocolType(Variable::Arp::ipv4);
+        arp.setHardwareSize(0x06);
+        arp.setProtocolSize(0x04);
+        arp.setOpcode(Variable::Arp::Opcode::request);
+        arp.setSenderHwAddr(currentMac);
+        arp.setSenderIpAddr(ip);
+        arp.setTargetHwAddr(Variable::Mac::source);
+        arp.setTargetIpAddr(targetIp);
     }
 
     // Creates an ARP reply packet
-    PacketInfo Arp::arpReply(const ByteString& currentMac, const ByteString& targetMac, const ByteString& ip, const ByteString& targetIp) 
+    void Arp::arpReply(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* targetMac, const uint8_t* ip, const uint8_t* targetIp) 
     {
-        PacketInfo packet;
         EthernetHeader eth;
         ArpHeader arp;
 
-        // Set up the Ethernet header for the ARP reply
-        eth.destinationMac = targetMac; 
-        eth.sourceMac = currentMac;
-        eth.type = Variable::Ethernet::arp;
+        packet.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
+        packet.reserveHeader(HeaderType::ARP, ArpHeader::fixedSize);
 
-        packet.Layer2.push_back(std::move(eth));
+        eth.setBuffer(packet.getBuffer());
+        arp.setBuffer(packet.getBuffer() + EthernetHeader::fixedSize);
+
+        // Set up the Ethernet header for the ARP request
+        eth.setDestinationMac(Variable::Mac::broadcast);
+        eth.setSourceMac(currentMac);
+        eth.setType(Variable::Ethernet::arp);
 
         // Set up the ARP header for the reply
-        arp.hardwareType = Variable::Arp::ethernet; 
-        arp.protocolType = Variable::Arp::ipv4; 
-        arp.hardwareSize = std::string("\x06", 1); 
-        arp.protocolSize = std::string("\x04", 1); 
-        arp.opcode = Variable::Arp::Opcode::reply; 
-        arp.senderHardwareAddress = currentMac;
-        arp.senderIpAddress = ip;
-        arp.targetHardwareAddress = targetMac;
-        arp.targetIpAddress = targetIp; 
-
-        packet.Layer2_5.push_back(std::move(arp));
-
-        return packet;
+        arp.setHardwareType(Variable::Arp::ethernet);
+        arp.setProtocolType(Variable::Arp::ipv4);
+        arp.setHardwareSize(0x06);
+        arp.setProtocolSize(0x04);
+        arp.setOpcode(Variable::Arp::Opcode::reply);
+        arp.setSenderHwAddr(currentMac);
+        arp.setSenderIpAddr(ip);
+        arp.setTargetHwAddr(targetMac);
+        arp.setTargetIpAddr(targetIp);
     }
 }

@@ -5,6 +5,7 @@
 #ifndef ARP_H
 #define ARP_H
 
+#include <queue>
 #include <PacketStructure.h>
 #include <Functions.h>
 #include <Encapsulation.h>
@@ -14,9 +15,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <shared_mutex>
-#include <condition_variable>
 
 // Forward declarations
+class PacketBuilder;
 class Interface;
 class Global;
 class Internal_ArpTest;
@@ -45,7 +46,7 @@ struct ArpCacheEntry
 {
     ArpCacheStatus status = ArpCacheStatus::COMPLETE;
     uint32_t timerId = 0; ///< Timer id for the lifespan of the arp entry.
-    ByteString macAddress; ///< MAC address associated with the IP.
+    uint8_t macAddress[6]; ///< MAC address associated with the IP.
     int retries = 0;
     std::chrono::steady_clock::time_point expiryTime; ///< Expiration time for this cache entry.
 };
@@ -95,16 +96,16 @@ public:
      * @parap targetIp The target IP of the resolved arp entry.
      * @param mac The MAC of the resolved arp entry.
      */
-    void addArpEntry(const ByteString& targetIp, const ByteString& targetMac, bool proxy = false, bool isStatic = false);
+    void addArpEntry(const uint8_t* targetIp, const uint8_t* targetMac, bool proxy = false, bool isStatic = false);
 
-    void removeArpEntry(const ByteString& ip, bool isStatic = false);
+    void removeArpEntry(uint32_t ip, bool isStatic = false);
 
     /**
      * @brief Expires an arp entry from the arp cache table
      *
      * @param targetIp The targetIp of the resolved arp entry.
      */
-    void expireArpEntry(const ByteString& ip);
+    void expireArpEntry(uint32_t ip);
 
     /**
      * @brief Resolves an IP address and enqueues a packet to send once resolved.
@@ -112,20 +113,20 @@ public:
      * @param targetIp The target IP address to resolve.
      * @param packetToSend The packet to be sent once the IP is resolved.
      */
-    void resolveAndSend(const ByteString& targetIp, PacketInfo& packetToSend);
+    void resolveAndSend(const uint8_t* targetIp, PacketBuilder& packetToSend);
 
     /**
      * @brief Sends an ARP reply to a specified MAC and IP.
      * @param targetMac The recipient's MAC address.
      * @param targetIp The recipient's IP address.
      */
-    void sendReply(const ByteString& targetMac, const ByteString& targetIp);
+    void sendReply(const uint8_t* targetMac, const uint8_t* targetIp);
 
     /**
      * @brief Sends an ARP request for a given IP.
      * @param targetIp The target IP address to resolve.
      */
-    void sendRequest(const ByteString& targetIp);
+    void sendRequest(uint32_t targetIp);
 
     /**
      * @brief Processes a received ARP reply and updates the cache.
@@ -139,14 +140,15 @@ public:
      * @params request The arp header containing the request.
      * @params sourceMac The source mac of the router.
      */
-    void receiveRequest(const ArpHeader& request, const ByteString& sourceMac);
+    void receiveRequest(const ArpHeader& request, const uint8_t* sourceMac);
 
     /**
      * @brief Retrieves the MAC address for a given IP address.
+     * @param mac The MAC container pointer.
      * @param ip The IP address to query.
-     * @return The associated MAC address if found, or an empty string otherwise.
+     * @return True if mac was filled, otherwise false.
      */
-    ByteString* getMac(const ByteString& ip);
+     bool getMac(uint8_t* out, const uint8_t* ip);
 
     /**
      * @brief Shuts down the ARP service, terminating all threads and cleaning up resources.
@@ -156,14 +158,14 @@ public:
 private:
     Interface* currentInterface; ///< Pointer to the associated network interface.
 
-    std::unordered_map<ByteString, ArpCacheEntry> arpCache; ///< ARP cache mapping IPs to MAC addresses and expiration times.
-    std::unordered_map<ByteString, ArpCacheEntry> staticArpCache; ///< Static ARP entries (never expire).
-    std::unordered_map<ByteString, ByteString> proxyEntries; ///< Proxy ARP entries (IP -> MAC).
-    std::deque<ByteString> insertionOrder; ///< For tracking eviction order if interface cache limit is exceeded.
-    std::unordered_set<ByteString> pendingRequests; ///< Tracks ongoing ARP requests.
-    std::unordered_map<ByteString, std::atomic<bool>> replyStatus; ///< Tracks ARP reply statuses.
-    std::unordered_map<ByteString, std::queue<PacketInfo>> packetQueuePerIp; ///< Packets waiting for ARP resolution.
-    std::unordered_set<ByteString> pendingIncompletes;
+    std::unordered_map<uint32_t, ArpCacheEntry> arpCache; ///< ARP cache mapping IPs to MAC addresses and expiration times.
+    std::unordered_map<uint32_t, ArpCacheEntry> staticArpCache; ///< Static ARP entries (never expire).
+    std::unordered_map<uint32_t, uint64_t> proxyEntries; ///< Proxy ARP entries (IP -> MAC).
+    std::deque<uint32_t> insertionOrder; ///< For tracking eviction order if interface cache limit is exceeded.
+    std::unordered_set<uint32_t> pendingRequests; ///< Tracks ongoing ARP requests.
+    std::unordered_map<uint32_t, std::atomic<bool>> replyStatus; ///< Tracks ARP reply statuses.
+    std::unordered_map<uint32_t, std::queue<PacketBuilder>> packetQueuePerIp; ///< Packets waiting for ARP resolution.
+    std::unordered_set<uint32_t> pendingIncompletes;
     std::atomic<uint32_t> incompletes = 0;
 
     mutable std::shared_mutex arpCacheMutex; ///< Mutex for thread-safe access to the ARP cache.
@@ -176,35 +178,37 @@ private:
 protected:
     /**
      * @brief Creates an ARP request packet.
+     *
+     * @param packet The packet being built.
      * @param currentMac The sender's MAC address.
      * @param ip The sender's IP address.
      * @param targetIp The target IP address.
-     * @return The constructed ARP request packet.
      */
-    PacketInfo arpRequest(const ByteString& currentMac, const ByteString& ip, const ByteString targetIp);
+    void arpRequest(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* ip, const uint8_t* targetIp);
 
     /**
      * @brief Creates an ARP reply packet.
+     *
+     * @param packet The packet being built.
      * @param currentMac The sender's MAC address.
      * @param targetMac The recipient's MAC address.
      * @param ip The sender's IP address.
      * @param targetIp The recipient's IP address.
-     * @return The constructed ARP reply packet.
      */
-    PacketInfo arpReply(const ByteString& currentMac, const ByteString& targetMac, const ByteString& ip, const ByteString& targetIp);
+    void arpReply(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* targetMac, const uint8_t* ip, const uint8_t* targetIp);
 
     /**
      * @brief Processes queued packets for a resolved IP address and sends them to the resolved MAC address.
      * @param targetIp The resolved IP address.
      * @param macAddress The associated MAC address.
      */
-    void processQueuedPackets(const ByteString& targetIp, const ByteString& macAddress);
+    void processQueuedPackets(const uint8_t* targetIp, uint32_t targetIpInt, const uint8_t* mac);
 
     /**
      * @brief Waits for an ARP reply for a given IP address within a timeout period.
      * @param targetIp The target IP address.
      */
-    void scheduleRequest(const ByteString& targetIp, ArpCacheEntry& entry);
+    void scheduleRequest(uint32_t targetIp, ArpCacheEntry& entry);
 
     Global& global;
 };
