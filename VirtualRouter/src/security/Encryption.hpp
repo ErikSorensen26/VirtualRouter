@@ -10,144 +10,145 @@
 #include <openssl/des.h>      // DES/3DES
 #include <openssl/evp.h>      // Updated API for cryptographic operations
 #include <string>
-#include <stdexcept>
 #include <cstring>
 #include <ByteString.hpp>
 
+
 namespace Authentication 
 {
+    enum class SHA
+    {
+        SHA1,
+        SHA224,
+        SHA256,
+        SHA384,
+        SHA512
+    };
+
     static constexpr int AES_BLOCK_SIZE = 16;    // AES block size (128 bits)
     static constexpr int DES_BLOCK_SIZE = 8;     // DES block size (64 bits)
 
     // Generate HMAC with MD5
-    static ByteString generateMD5(const ByteString &data, const ByteString &key) {
-        unsigned char result[MD5_DIGEST_LENGTH];
-        HMAC(EVP_md5(), key.toString().c_str(), static_cast<int>(key.size()), reinterpret_cast<const unsigned char*>(data.toString().c_str()), data.size(), result, nullptr);
-        return std::string(reinterpret_cast<char*>(result), MD5_DIGEST_LENGTH);
-    }
-
-    // Verify MD5 Hash
-    static bool verifyMD5(const ByteString &data, const ByteString &key, const ByteString &receivedHash) {
-        ByteString calculatedHash = generateMD5(data, key);
-        return calculatedHash == receivedHash;
+    inline static uint8_t* generateMD5(uint8_t* out, const uint8_t* data, size_t dataSize, const uint8_t* key, size_t keySize)
+    {
+        unsigned int len = 0;
+        HMAC(EVP_md5(), key, keySize, data, dataSize, out, &len);
+        return out;
     }
 
     // Generate HMAC with SHA1/SHA256/SHA512
-    static ByteString generateHMAC(const ByteString &data, const ByteString &key, const ByteString &algorithm) {
+    inline static uint8_t* generateHMAC(uint8_t* out, const uint8_t* data, size_t dataSize, const uint8_t* key, size_t keySize, const SHA algorithm)
+    {
         const EVP_MD *md = nullptr;
 
-        if (algorithm == "MD5")
-            md = EVP_md5();
-        else if (algorithm == "SHA1") {
-            md = EVP_sha1();
-        } else if (algorithm == "SHA256") {
-            md = EVP_sha256();
-        } else if (algorithm == "SHA512") {
-            md = EVP_sha512();
-        } else {
-            throw std::invalid_argument("Unsupported algorithm: " + algorithm.toString());
+        switch (algorithm)
+        {
+            case SHA::SHA1: md = EVP_sha1(); break;
+            case SHA::SHA224: md = EVP_sha224(); break;
+            case SHA::SHA256: md = EVP_sha256(); break;
+            case SHA::SHA384: md = EVP_sha384(); break;
+            case SHA::SHA512: md = EVP_sha512(); break;
         }
 
-        unsigned char result[EVP_MAX_MD_SIZE];
-        unsigned int len;
-        HMAC(md, key.toString().c_str(), static_cast<int>(key.size()), reinterpret_cast<const unsigned char*>(data.toString().c_str()), data.size(), result, &len);
-        return std::string(reinterpret_cast<char*>(result), len);
-    }
-
-    // Verify HMAC (SHA1/SHA256/SHA512)
-    static bool verifyHMAC(const ByteString &data, const ByteString &key, const ByteString &algorithm, const ByteString &receivedHash) {
-        ByteString calculatedHash = generateHMAC(data, key, algorithm);
-        return calculatedHash == receivedHash;
+        unsigned int len = 0;
+        HMAC(md, key, keySize, data, dataSize, out, &len);
+        return out;
     }
 
     // AES Encryption (128-bit, CBC mode)
-    static ByteString encryptAES(const ByteString &plaintext, const ByteString &key, const ByteString &iv) {
+    inline static size_t encryptAES(uint8_t* out, const uint8_t* in, size_t inLen, const uint8_t* key, const uint8_t* iv)
+    {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        unsigned char ciphertext[plaintext.size() + AES_BLOCK_SIZE];
-        int len, ciphertext_len;
+        int len = 0, outLen = 0;
 
-        EVP_EncryptInit(ctx, EVP_aes_128_cbc(), reinterpret_cast<const unsigned char*>(key.toString().c_str()), reinterpret_cast<const unsigned char*>(iv.toString().c_str()));
-        EVP_EncryptUpdate(ctx, ciphertext, &len, reinterpret_cast<const unsigned char*>(plaintext.toString().c_str()), static_cast<int>(plaintext.size()));
-        ciphertext_len = len;
-
-        EVP_EncryptFinal(ctx, ciphertext + len, &len);
-        ciphertext_len += len;
+        EVP_EncryptInit(ctx, EVP_aes_128_cbc(), key, iv);
+        EVP_EncryptUpdate(ctx, out, &len, in, inLen);
+        outLen = len;
+        EVP_EncryptFinal(ctx, out + len, &len);
+        outLen += len;
 
         EVP_CIPHER_CTX_free(ctx);
-        return std::string(reinterpret_cast<char*>(ciphertext), static_cast<size_t>(ciphertext_len));
+        return outLen;
     }
 
     // AES Decryption (128-bit, CBC mode)
-    static ByteString decryptAES(const ByteString &ciphertext, const ByteString &key, const ByteString &iv) {
+    inline static size_t decryptAES(uint8_t* out, const uint8_t* in, size_t inLen, const uint8_t* key, const uint8_t* iv)
+    {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        unsigned char plaintext[ciphertext.size()];
-        int len, plaintext_len;
+        int len = 0, outLen = 0;
 
-        EVP_DecryptInit(ctx, EVP_aes_128_cbc(), reinterpret_cast<const unsigned char*>(key.toString().c_str()), reinterpret_cast<const unsigned char*>(iv.toString().c_str()));
-        EVP_DecryptUpdate(ctx, plaintext, &len, reinterpret_cast<const unsigned char*>(ciphertext.toString().c_str()), static_cast<int>(ciphertext.size()));
-        plaintext_len = len;
-
-        EVP_DecryptFinal(ctx, plaintext + len, &len);
-        plaintext_len += len;
+        EVP_DecryptInit(ctx, EVP_aes_128_cbc(), key, iv);
+        EVP_DecryptUpdate(ctx, out, &len, in, inLen);
+        outLen = len;
+        EVP_DecryptFinal(ctx, out + len, &len);
+        outLen += len;
 
         EVP_CIPHER_CTX_free(ctx);
-        return std::string(reinterpret_cast<char*>(plaintext), static_cast<size_t>(plaintext_len));
+        return outLen;
     }
 
     // DES Encryption (CBC mode)
-    static ByteString encryptDES(const ByteString &plaintext, const ByteString &key, const ByteString &iv) {
-        unsigned char ciphertext[plaintext.size() + DES_BLOCK_SIZE];
-        int len = static_cast<int>(plaintext.size());
+    inline static size_t encryptDES(uint8_t* out, const uint8_t* in, size_t inLen, const uint8_t* key, const uint8_t* iv)
+    {
+        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+        int len = 0, outLen = 0;
 
-        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        EVP_EncryptInit(ctx, EVP_des_cbc(), reinterpret_cast<const unsigned char*>(key.toString().c_str()), reinterpret_cast<const unsigned char*>(iv.toString().c_str()));
-        EVP_EncryptUpdate(ctx, ciphertext, &len, reinterpret_cast<const unsigned char*>(plaintext.toString().c_str()), static_cast<int>(plaintext.size()));
-        EVP_EncryptFinal(ctx, ciphertext + len, &len);
+        EVP_EncryptInit(ctx, EVP_des_cbc(), key, iv);
+        EVP_EncryptUpdate(ctx, out, &len, in, inLen);
+        outLen = len;
+        EVP_EncryptFinal(ctx, out + len, &len);
+        outLen += len;
 
         EVP_CIPHER_CTX_free(ctx);
-        return std::string(reinterpret_cast<char*>(ciphertext), static_cast<size_t>(len));
+        return outLen;
     }
 
     // DES Decryption (CBC mode)
-    static ByteString decryptDES(const ByteString &ciphertext, const ByteString &key, const ByteString &iv) {
-        unsigned char plaintext[ciphertext.size()];
-        int len = static_cast<int>(ciphertext.size());
-
+    inline static size_t decryptDES(uint8_t* out, const uint8_t* in, size_t inLen, const uint8_t* key, const uint8_t* iv)
+    {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        EVP_DecryptInit(ctx, EVP_des_cbc(), reinterpret_cast<const unsigned char*>(key.toString().c_str()), reinterpret_cast<const unsigned char*>(iv.toString().c_str()));
-        EVP_DecryptUpdate(ctx, plaintext, &len, reinterpret_cast<const unsigned char*>(ciphertext.toString().c_str()), static_cast<int>(ciphertext.size()));
-        EVP_DecryptFinal(ctx, plaintext + len, &len);
+        int len = 0, outLen = 0;
+
+        EVP_DecryptInit(ctx, EVP_des_cbc(), key, iv);
+        EVP_DecryptUpdate(ctx, out, &len, in, inLen);
+        outLen = len;
+        EVP_DecryptFinal(ctx, out + len, &len);
+        outLen += len;
 
         EVP_CIPHER_CTX_free(ctx);
-        return std::string(reinterpret_cast<char*>(plaintext), static_cast<size_t>(len));
+        return outLen;
     }
 
     // 3DES Encryption (CBC mode)
-    static ByteString encrypt3DES(const ByteString &plaintext, const ByteString &key, const ByteString &iv) {
-        unsigned char ciphertext[plaintext.size() + DES_BLOCK_SIZE];
-        int len = static_cast<int>(plaintext.size());
-
+    inline static size_t encrypt3DES(uint8_t* out, const uint8_t* in, size_t inLen, const uint8_t* key, const uint8_t* iv)
+    {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        EVP_EncryptInit(ctx, EVP_des_ede3_cbc(), reinterpret_cast<const unsigned char*>(key.toString().c_str()), reinterpret_cast<const unsigned char*>(iv.toString().c_str()));
-        EVP_EncryptUpdate(ctx, ciphertext, &len, reinterpret_cast<const unsigned char*>(plaintext.toString().c_str()), static_cast<int>(plaintext.size()));
-        EVP_EncryptFinal(ctx, ciphertext + len, &len);
+        int len = 0, outLen = 0;
+
+        EVP_EncryptInit(ctx, EVP_des_ede3_cbc(), key, iv);
+        EVP_EncryptUpdate(ctx, out, &len, in, inLen);
+        outLen = len;
+        EVP_EncryptFinal(ctx, out + len, &len);
+        outLen += len;
 
         EVP_CIPHER_CTX_free(ctx);
-        return std::string(reinterpret_cast<char*>(ciphertext), static_cast<size_t>(len));
+        return outLen;
     }
 
     // 3DES Decryption (CBC mode)
-    static ByteString decrypt3DES(const ByteString &ciphertext, const ByteString &key, const ByteString &iv) {
-        unsigned char plaintext[ciphertext.size()];
-        int len = static_cast<int>(ciphertext.size());
-
+    inline static size_t decrypt3DES(uint8_t* out, const uint8_t* in, size_t inLen, const uint8_t* key, const uint8_t* iv)
+    {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        EVP_DecryptInit(ctx, EVP_des_ede3_cbc(), reinterpret_cast<const unsigned char*>(key.toString().c_str()), reinterpret_cast<const unsigned char*>(iv.toString().c_str()));
-        EVP_DecryptUpdate(ctx, plaintext, &len, reinterpret_cast<const unsigned char*>(ciphertext.toString().c_str()), static_cast<int>(ciphertext.size()));
-        EVP_DecryptFinal(ctx, plaintext + len, &len);
+        int len = 0, outLen = 0;
+
+        EVP_DecryptInit(ctx, EVP_des_ede3_cbc(), key, iv);
+        EVP_DecryptUpdate(ctx, out, &len, in, inLen);
+        outLen = len;
+        EVP_DecryptFinal(ctx, out + len, &len);
+        outLen += len;
 
         EVP_CIPHER_CTX_free(ctx);
-        return std::string(reinterpret_cast<char*>(plaintext), static_cast<size_t>(len));
+        return outLen;
     }
 }
 
