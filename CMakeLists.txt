@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(VirtualRouter)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -11,7 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 enable_testing()
 
 # Compiler Warnings
-add_compile_options(-Wall -Wno-unused-parameter)
+add_compile_options(-Wall -Wno-unused-parameter -std=c++23)
 
 # External Dependencies
 find_package(PkgConfig REQUIRED)
