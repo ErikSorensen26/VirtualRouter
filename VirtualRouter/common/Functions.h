@@ -4,7 +4,6 @@
 #define FUNCTIONS_H
 
 #include <string>
-#include <ByteString.hpp>
 #include <vector>
 #include <cmath>
 #include <cstdint>
@@ -12,11 +11,12 @@
 #include <optional>
 #include <ctime>
 #include <chrono>
+#include <AddressFamily.hpp>
 
-static bool validateSize(size_t& beginning, size_t length, const ByteString& packet)
-{
-    return (beginning + length <= packet.size());
-}
+//static bool validateSize(size_t& beginning, size_t length, const ByteString& packet)
+//{
+    //return (beginning + length <= packet.size());
+//}
 
 double secondsSinceEpoch();
 
@@ -28,105 +28,105 @@ namespace Functions {
      * @param value The value to prepend (default is null byte).
      * @return A string adjusted to the target size.
      */
-    ByteString changeSize(ByteString str, size_t size, ByteString value = ByteString("\x00", 1));
+    //ByteString changeSize(ByteString str, size_t size, ByteString value = ByteString("\x00", 1));
 
     /**
      * @brief Converts a single byte to a hexadecimal string representation.
      * @param byte The input byte.
      * @return A two-character hexadecimal string.
      */
-    ByteString charToHex(uint8_t byte);
+    //ByteString charToHex(uint8_t byte);
 
     /**
      * @brief Converts a hexadecimal string to an unsigned integer.
      * @param hexStr The input hexadecimal string.
      * @return The resulting unsigned integer.
      */
-    uint32_t hexToNum(const ByteString& hexStr);
+    //uint32_t hexToNum(const ByteString& hexStr);
 
     /**
      * @brief Converts a single byte to a binary string representation (8 bits).
      * @param byte The input byte.
      * @return A binary string representation of the byte.
      */
-    ByteString charToBin(uint8_t byte);
+    //ByteString charToBin(uint8_t byte);
 
     /**
      * @brief Checks if a string contains only binary characters ('0' and '1').
      * @param str The input string.
      * @return True if the string is binary, false otherwise.
      */
-    bool isBinary(const ByteString& str);
+    //bool isBinary(const ByteString& str);
 
     /**
      * @brief Checks if a string contains only hexadecimal characters (0-9, A-F).
      * @param str The input string.
      * @return True if the string is hexadecimal, false otherwise.
      */
-    bool isHex(const ByteString& str);
+    //bool isHex(const ByteString& str);
 
     /**
      * @brief Checks if a string contains only decimal characters (0-9).
      * @param str The input string.
      * @return True if the string is decimal, false otherwise.
      */
-    bool isDecimal(const std::string& str);
+    //bool isDecimal(const std::string& str);
 
     /**
      * @brief Converts a string of bytes to a hexadecimal string representation.
      * @param input The input byte string.
      * @return A hexadecimal string representation.
      */
-    ByteString byteToHex(const ByteString& input);
+    //ByteString byteToHex(const ByteString& input);
 
     /**
      * @brief Converts a string of bytes to a binary string representation.
      * @param input The input byte string.
      * @return A binary string representation.
      */
-    ByteString byteToBin(const ByteString& input);
+    //ByteString byteToBin(const ByteString& input);
 
     /**
      * @brief Converts a vector of bytes to a hexadecimal string representation.
      * @param byte_array The input vector of bytes.
      * @return A hexadecimal string representation.
      */
-    ByteString byteArrayToHex(const std::vector<uint8_t>& byte_array);
+    //ByteString byteArrayToHex(const std::vector<uint8_t>& byte_array);
 
     /**
      * @brief Converts a string of bytes to an integer, treating the bytes as hexadecimal values.
      * @param str The input byte string.
      * @return The resulting integer.
      */
-    uint32_t byteToNum(ByteString str);
+    //uint32_t byteToNum(ByteString str);
 
     /**
      * @brief Converts a string of bytes to a 128bit integer.
      * @param str The input byte string.
      * @return The resulting integer.
      */
-    __uint128_t byteToNum128(const ByteString& str);
+    //__uint128_t byteToNum128(const ByteString& str);
 
     /**
      * @brief Converts a binary string to a hexadecimal string representation.
      * @param binaryStr The input binary string.
      * @return A hexadecimal string representation.
      */
-    ByteString binToHex(const ByteString& binaryStr);
+    //ByteString binToHex(const ByteString& binaryStr);
 
     /**
      * @brief Converts a single hexadecimal character to its 4-bit binary representation.
      * @param hexDigit The input hexadecimal character.
      * @return A binary string representation.
      */
-    ByteString hexDigitToBin(uint8_t hexDigit);
+    //ByteString hexDigitToBin(uint8_t hexDigit);
 
     /**
      * @brief Converts a hexadecimal string to a binary string representation.
      * @param hexStr The input hexadecimal string.
      * @return A binary string representation.
      */
-    ByteString hexToBin(const ByteString& hexStr);
+    //ByteString hexToBin(const ByteString& hexStr);
 
     /**
      * @brief Converts a hexadecimal string to a byte string. Adjusts to the given size if specified.
@@ -134,7 +134,7 @@ namespace Functions {
      * @param size The desired size of the output (default is 0, meaning no adjustment).
      * @return A byte string representation.
      */
-    ByteString hexToByte(const ByteString& hexBinaryData, size_t size = 0);
+    //ByteString hexToByte(const ByteString& hexBinaryData, size_t size = 0);
 
     /**
      * @brief Converts a boolean to a string representation ("1" for true, "0" for false).
@@ -149,14 +149,14 @@ namespace Functions {
      * @param size The desired size of the output (default is 0, meaning no adjustment).
      * @return A byte string representation.
      */
-    ByteString binToByte(const ByteString& binaryData, size_t size = 0);
+    //ByteString binToByte(const ByteString& binaryData, size_t size = 0);
 
     /**
      * @brief Converts a binary string to an integer.
      * @param binary The input binary string.
      * @return The resulting integer.
      */
-    uint32_t binToNum(const ByteString& binary);
+    //uint32_t binToNum(const ByteString& binary);
 
     /**
      * @brief Converts a string to lowercase.
@@ -170,14 +170,14 @@ namespace Functions {
      * @param str The input string.
      * @return The boolean value.
      */
-    bool stringToBool(const std::string& str);
+    //bool stringToBool(const std::string& str);
 
     /**
      * @brief Converts a string to an integer.
      * @param num The input string.
      * @return The resulting integer.
      */
-    uint32_t stringToNum(std::string num);
+    //uint32_t stringToNum(std::string num);
 
     /**
      * @brief Converts an integer to a hexadecimal string, ensuring at least two characters.
@@ -185,7 +185,7 @@ namespace Functions {
      * @param size The desired size of the output (default is 0, meaning no adjustment).
      * @return A hexadecimal string representation.
      */
-    ByteString numToHex(size_t num, size_t size = 0);
+    //ByteString numToHex(size_t num, size_t size = 0);
 
     /**
      * @brief Converts an integer to a binary string.
@@ -193,7 +193,7 @@ namespace Functions {
      * @param size The desired size of the output.
      * @return A binary string representation.
      */
-    ByteString numToBin(size_t number, size_t length);
+    //ByteString numToBin(size_t number, size_t length);
 
     /**
      * @brief Converts an integer to a hexadecimal string of a specific byte size.
@@ -201,7 +201,7 @@ namespace Functions {
      * @param byteSize The desired byte size of the output.
      * @return A hexadecimal string representation.
      */
-    ByteString numToHexWithByte(uint32_t num, size_t byteSize);
+    //ByteString numToHexWithByte(uint32_t num, size_t byteSize);
 
     /**
      * @brief Converts an integer to a byte string. Adjusts to the given size if specified.
@@ -209,41 +209,41 @@ namespace Functions {
      * @param size The desired size of the output (default is 0, meaning no adjustment).
      * @return A byte string representation.
      */
-    ByteString numToByte(size_t num, size_t size = 0);
+    //ByteString numToByte(size_t num, size_t size = 0);
 
     /**
      * @brief Converts an 128 integer to a byte string.
      * @param num The input integer.
      * @return A byte string representation.
      */
-    ByteString numToByte128(__uint128_t bytes);
+    //ByteString numToByte128(__uint128_t bytes);
 
     /**
      * @brief Converts an IPv4 address in dot-decimal notation to a byte string.
      * @param mask The input IPv4 address in dot-decimal notation.
      * @return A byte string representation of the address.
      */
-    ByteString addressToByte(const ByteString& mask);
+    uint8_t* addressToByte(uint8_t* data, const std::string address);
 
     /**
      * @brief Prints each element in a vector of strings.
      * @param vec The input vector of strings.
      */
-    void printVector(const std::vector<std::string>& vec);
+    //void printVector(const std::vector<std::string>& vec);
 
     /**
      * @brief Counts the number of '1' bits in a binary representation of a mask string.
      * @param mask The input binary mask string.
      * @return The number of '1' bits.
      */
-    uint8_t byteMaskToNum(const ByteString& mask);
+    //uint8_t byteMaskToNum(const ByteString& mask);
 
     /**
      * @brief Creates a binary string representation of a network mask with a specified number of bits.
      * @param mask The number of bits in the mask.
      * @return A binary string representation of the mask.
      */
-    ByteString numMaskToBin(uint8_t mask);
+    //ByteString numMaskToBin(uint8_t mask);
 
     /**
      * @brief Seperates the network address from the mask from a signle string.
@@ -251,7 +251,7 @@ namespace Functions {
      * @param address Address that the seperated address will be set to.
      * @param mask Prefix mask that the mask will be set to.
      */
-    bool splitSlashMiddle(const std::string& maskAddress, ByteString& address, uint8_t& mask);
+    uint8_t* splitSlashMiddle(const std::string& maskAddress, uint8_t* address, uint8_t& mask);
 
     /**
      * @brief Computes the network address from an IP address and a subnet mask.
@@ -259,14 +259,14 @@ namespace Functions {
      * @param mask The subnet mask in bits.
      * @return The computed network address.
      */
-    ByteString computeNetworkAddress(const ByteString& ipAddress, uint8_t mask);
+    uint8_t* computeNetworkAddress(uint8_t* out, const uint8_t* ipAddress, uint8_t mask, AddressFamily af);
 
     /**
      * @brief Converts a byte-based IP address to its dot-decimal notation.
      * @param ip The input byte-based IP address.
      * @return The dot-decimal representation of the IP address.
      */
-    ByteString byteAddressToNumAddress(const ByteString& ip);
+    std::string byteAddressToNumAddress(const uint8_t* ip);
 
     /**
      * @brief Compares a network address with an IP address to check if they match.
@@ -275,15 +275,14 @@ namespace Functions {
      * @param mask The subnet mask in bits.
      * @return True if they match, false otherwise.
      */
-    bool compareNetworkWithIp(ByteString networkAddress, ByteString ipAddress, uint8_t mask);
+    bool compareNetworkWithIp(const uint8_t* networkAddress, const uint8_t* ipAddress, uint8_t mask, AddressFamily af);
 
     /**
      * @brief Trims the network address based on the subnet mask, removing zeroed sections.
      * @param network The network address.
      * @param mask The subnet mask in bits.
-     * @return The compacted network address.
      */
-    ByteString compactNetworkAddress(ByteString network, uint8_t mask);
+    size_t compactNetworkAddress(uint8_t* out, const uint8_t* network, uint8_t mask, AddressFamily af);
 
     /**
      * @brief Generates a random integer between min and max (inclusive).
@@ -298,7 +297,7 @@ namespace Functions {
      * @param binary The input binary string.
      * @return The reversed binary string.
      */
-    ByteString reverseBinary(const ByteString& binary);
+    //ByteString reverseBinary(const ByteString& binary);
 
     /**
      * @brief Calculates an EUI-64 address.
@@ -308,7 +307,7 @@ namespace Functions {
      * @param prefixLen The prefix length of the network.
      * @return The calculated EUI-64 address, or nullopt if calculation fails.
      */
-    ByteString calculateEui64(const ByteString& prefix, const ByteString& mac, uint8_t prefixLen);
+    uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_t* mac);
 
     /**
      * @brief Converts a time point to a string.
@@ -323,7 +322,7 @@ namespace Functions {
      * @param mask The subnet mask in bits.
      * @return True if the address matches the mask, false otherwise.
      */
-    bool compareNetworkWithMask(const ByteString& network, uint8_t mask);
+    bool compareNetworkWithMask(const uint8_t* network, uint8_t mask, AddressFamily af);
 
     /**
      * @brief Checks if a subnet (network/mask) is within a summary (summaryNetwork/summaryMask).
@@ -333,21 +332,23 @@ namespace Functions {
      * @param summaryMask The summary mask in bits.
      * @return True if the subnet is within the summary, false otherwise.
      */
-    bool isSubnetOf(const ByteString& network, uint8_t mask, const ByteString& summaryNetwork, uint8_t summaryMask);
+    bool isSubnetOf(const uint8_t* network, uint8_t mask, const uint8_t* summaryNetwork, uint8_t summaryMask, AddressFamily af);
 
     /**
      * @brief Finds the classful network address for an IP address.
      * @param ip The input IP address.
      * @return The classful network address.
      */
-    ByteString findClassfullNetwork(const ByteString& ip);
+    uint32_t findClassfullNetwork(uint32_t ip);
+
+    uint8_t findClassfullNetworkAndMask(uint8_t* out, const uint8_t* ip);
 
     /**
      * @brief Gets the default subnet mask for a network.
      * @param network The input network address.
      * @return The default subnet mask in bits.
      */
-    uint8_t getDefaultMask(const ByteString& network);
+    uint8_t getDefaultMask(uint32_t network);
 
     /**
      * @brief Validates a MAC address.
@@ -355,14 +356,14 @@ namespace Functions {
      * @param currentMac The current MAC address to compare against.
      * @return True if the MAC address is valid, false otherwise.
      */
-    bool validateMacAddress(const ByteString& mac, const ByteString currentMac);
+    bool validateMacAddress(const uint8_t* mac, const uint8_t* currentMac);
 
     /**
      * @brief Determines if an IP address is multicast.
      * @param ip The input IP address.
      * @return True if the IP address is multicast, false otherwise.
      */
-    bool isMulticast(const ByteString& ip);
+    bool isMulticast(const uint8_t* ip, AddressFamily af);
 
     /**
      * @brief Expands an abbreviated IPv6 address to its full form.
@@ -414,7 +415,8 @@ namespace Functions {
      * @param input IPv6 local-link address.
      * @return bool Indicates if the ipv6 address is a valid local-link address.
      */
-    bool isLocalLink(const ByteString& input);
+    bool isLocalLink(const uint8_t* input);
+    bool isLocalLink(__uint128_t input);
 
     /**
      * @brief Validates if an IPv6 address is a global unicast address.
@@ -424,7 +426,8 @@ namespace Functions {
      * @param input IPv6 global unicast address.
      * @return bool Indicates if the ipv6 address is a valid global unicast address.
      */
-    bool isGlobalUnicast(const ByteString& input);
+    bool isGlobalUnicast(const uint8_t* input);
+    bool isGlobalUnicast(__uint128_t input);
 
     /**
      * @brief Validates if an IPv6 adderess is a unicast local address
@@ -434,7 +437,8 @@ namespace Functions {
      * @param input IPv6 unicast local address.
      * @return bool Indicates if the ipv6 address is a valid global unicast address.
      */
-    bool isLocalUnicast(const ByteString& input);
+    bool isLocalUnicast(const uint8_t* input);
+    bool isLocalUnicast(__uint128_t input);
 
     /**
      * @brief Splits a string into tokens based on a delimiter.
@@ -456,6 +460,8 @@ namespace Functions {
      * @return std::string The zero-padded string.
      */
     std::string padWithZeros(const std::string& input);
+
+    uint8_t* prefixToMask(uint8_t* out, uint8_t prefixLen, AddressFamily af);
 
     std::string generateRandomString(size_t length);
 
