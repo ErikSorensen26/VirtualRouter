@@ -5,6 +5,10 @@
 #include <Global.h>
 #include "Mode.hpp"
 
+// TODO Add new "subcommand_sequence" property, it should allow a recursive chain of commands
+// TODO add new "single_use" property that goes with subcommand_sequence
+// TODO add new "repeatable" property that goes with subcommand_sequence
+
 CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), engine(engine)
 {
     // Set debug mode based on the input parameter

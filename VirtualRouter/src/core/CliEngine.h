@@ -10,7 +10,7 @@
 #include <condition_variable>
 #include "Configs.h"
 
-enum class InterfaceType;
+enum class InterfaceType: uint8_t;
 class Interface;
 class CliSession;
 class CommandProcessor;

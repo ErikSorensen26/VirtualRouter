@@ -178,8 +178,7 @@ std::string CliEngine::getMac(InterfaceType type, size_t id)
 
 InterfaceType CliEngine::getInterfaceType(const std::string& type)
 {
-    if (type == "Dialer") {return InterfaceType::DIALER;}
-    else if (type == "Ethernet") {return InterfaceType::ETHERNET;}
+    if (type == "Ethernet") {return InterfaceType::ETHERNET;}
     else if (type == "FastEthernet") {return InterfaceType::FAST_ETHERNET;}
     else if (type == "GigabitEthernet") {return InterfaceType::GIGABIT_ETHERNET;}
     else if (type == "Loopback") {return InterfaceType::LOOPBACK;}
