@@ -1,29 +1,35 @@
-#include "DhcpClient.h"
-#include <shared_mutex>
+#include <DhcpClient.h>
 #include <Interface.h>
+#include <IPPacket.h>
+#include <PacketBuilder.hpp>
+#include <Interface.h>
+#include <InterfaceConfigs.h>
 #include <Global.h>
 #include <VirtualRouter.h>
+#include <DhcpTLVManager.hpp>
+#include <DhcpInfo.hpp>
+#include <Encryption.hpp>
 
-// Constructor for the DhcpClient class, initializes with a reference to an Interface object
 Protocol::DhcpClient::DhcpClient(Interface* iface, bool reduced) // Reduced is used for testing
-    : currentInterface(iface),
-      stopFlag(true),
-      offered(false),
-      acked(false),
-      naked(false),
-      leaseStart(0)
+    : currentInterface(iface), stopFlag(true)
 {
-    leaseStart = secondsSinceEpoch();
     if (!reduced)
     {
         if (!iface->shutdownFlag.load(std::memory_order_relaxed))
         {
-            initializeDhcp();
+            initiate();
         }
     }
 }
 
-// Destructor to clean up threads and resources
+void Protocol::DhcpClient::initiate()
+{
+    uint8_t mac[6];
+    currentInterface->configs.getMac(mac);
+
+    sendDhcpDiscover(currentInterface->routingInstance->global.getHostname(), mac);
+}
+
 Protocol::DhcpClient::~DhcpClient()
 {
     shutdown();
@@ -31,646 +37,953 @@ Protocol::DhcpClient::~DhcpClient()
 
 void Protocol::DhcpClient::shutdown()
 {
-    if (stopFlag.load(std::memory_order_relaxed)) return;
-    stopFlag.store(true);
-    cv.notify_all();
+    sendDhcpRelease();
 
-    if (acked)
-    {
-        sendDhcpRelease();
-    }
+    stopFlag.store(true, std::memory_order_release);
+    offered.store(false);
+    acked.store(false);
 
-    if (dhcpThread.joinable())
-    {
-        dhcpThread.join();
-    }
+    if (discoveryRetryTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(discoveryRetryTimerId);
+    if (requestRetryTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(requestRetryTimerId);
+
+    discoveryRetryTimerId = 0;
+    requestRetryTimerId = 0;
+
+    cancelLeaseTimers();
 }
 
-// Initializes DHCP, sends discover requests, handles offers, and sends requests and acknowledgments
-void Protocol::DhcpClient::initializeDhcp() 
+void Protocol::DhcpClient::handleDhcpPacket(const DhcpHeader& dhcp)
 {
-    if (!stopFlag.load(std::memory_order_relaxed) || currentInterface->configs.ipv4.getAddress().empty()) return;
-    stopFlag.store(false, std::memory_order_release);
-    ByteString mac;
-    mac = currentInterface->configs.getMac();
-    std::string hostname = currentInterface->routingInstance->global.getHostname();
-    // Start the DHCP handling thread
-    dhcpThread = std::thread(&DhcpClient::dhcpHandler, this, hostname, mac);
-}
-
-// Main DHCP handling loop running in a seperate thread
-void Protocol::DhcpClient::dhcpHandler(std::string hostname, ByteString hardwareAddress)
-{
-    sendDhcpDiscover(hostname, hardwareAddress);
-    processDhcpOffer(hostname, hardwareAddress);
-
-    while (!stopFlag.load())
-    {
-        if (offered)
-        {
-            processDhcpOffer(hostname, hardwareAddress);
-        }
-        
-        // Wait for ACK, NACK, DECLINE, or stop signal
-        {
-            std::unique_lock<std::mutex> lock(dhcpMutex);
-            cv.wait(lock, [this]() { return acked || naked || stopFlag.load(); });
-            if (stopFlag.load()) break;
-        }
-
-        if (acked)
-        {
-            handleLeaseRenewal(hardwareAddress, hostname);
-        }
-
-        if (naked)
-        {
-            std::lock_guard<std::mutex> lock(dhcpMutex);
-            resetDhcpState();
-        }
-    }
-}
-
-// Sends a DHCP Discover message
-void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, ByteString& hardwareAddress)
-{
-    if (!configs.dhcpServer.empty())
-    {
-        return; // No need for dhcp discover
-    }
-
-    if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
-    {
-        if (!currentInterface->configs.ipv4.getAddress().empty())
-        {
-            return; // No need for dhcp discover
-        }
-    }
-    else
-    {
+    const auto trail = dhcp.getTrail();
+    std::vector<TLV8Option> options;
+    if (!parseDhcpOptions(trail.data(), trail.size() - 1/*end option*/, options))
         return;
-    }
 
-    if (!configs.leaseTime.empty() && leaseStart + Functions::byteToNum(configs.leaseTime) < secondsSinceEpoch())
+    uint8_t op = getOpcode(options);
+    switch (op)
     {
-        return; // No need for dhcp discover
-    }
-
-    constexpr int maxRetries = 4; // Max number of retries
-    int retryCount = 0;
-    auto timeout = std::chrono::seconds(4); // Initial timneout duration
-
-    PacketInfo discoverPacket;
-    {
-        std::lock_guard<std::mutex> lock(dhcpMutex);
-        discoverPacket = dhcpDiscover(dhcpBody(hardwareAddress), hostname, hardwareAddress);
-    }
-
-    while (retryCount < maxRetries)
-    {
-        currentInterface->enqueuePacket(discoverPacket);
-
-        // Wait for the offer packet or timeout
-        std::unique_lock<std::mutex> lock(dhcpMutex);
-        if (cv.wait_for(lock, timeout, [&]() { return offered || stopFlag.load(); }))
-        {
-            return;
-        }
-        retryCount++;
-        timeout *= 2;
+        case Variable::Dhcp::Type::offer:
+            processDhcpOffer(dhcp, options);
+            break;
+        case Variable::Dhcp::Type::ack:
+            (!acked.load(std::memory_order_relaxed) && offered.load(std::memory_order_relaxed))
+                ? processDhcpAck(dhcp, options)
+                : processDhcpInformAck(dhcp, options);
+            break;
+        case Variable::Dhcp::Type::nak:
+            processDhcpNak(dhcp, options);
+            break;
+        case Variable::Dhcp::Type::decline:
+            processDhcpDecline(dhcp, options);
+            break;
+        default:
+            break;
     }
 }
 
-// Sends a DHCP request message
-void Protocol::DhcpClient::sendDhcpRequest(PacketInfo& requestPacket)
+bool Protocol::DhcpClient::buildDhcpDiscover(PacketBuilder& builder, const uint8_t* mac, const std::string& hostname)
 {
-    constexpr int maxRetries = 4; // Max number of retries
-    int retryCount = 0;
-    auto timeout = std::chrono::seconds(4);
+    // Reserve space (DHCP fixed header + rough TLV estimate)
+    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
-    while (retryCount < maxRetries)
+    auto* nextHeader = builder.nextBuildHeader();
+    if (!nextHeader) return false;
+
+    // Set Buffer and start constructing DHCP header
+    DhcpHeader dhcp;
+    dhcp.setBuffer(nextHeader->buffer);
+    dhcp.setOpcode(0x01);
+    dhcp.setHType(0x01); // Ethernet (only supported as of now)
+    dhcp.setHLen(6);
+    dhcp.setHops(0);
+
+    generateDhcpTransid(dhcp.raw->xId);
+    dhcp.setSecs(0);
+
+    // Set flags (broadcast bit set)
+    dhcp.raw->flags[0] = 0x80;
+    dhcp.raw->flags[1] = 0x00;
+
+    // Zero all addresses
+    std::memset(dhcp.raw->ciaddr, 0, 16);
+
+    dhcp.setClientMac(mac);
+    dhcp.setServerName(Variable::Dhcp::serverHostName);
+    dhcp.setBootFile(Variable::Dhcp::bootfile);
+    dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
+
+    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t maxClientSize = configs.maxSize.load(std::memory_order_relaxed);
+    size_t maxAllowed = maxClientSize == 0 ? mtuLimit : std::min(mtuLimit, maxClientSize);
+    size_t tlvLimit = maxAllowed - builder.bufferOffset;
+
+    // Add TLV options directly into trailing span
+    const std::string* authKey = configs.getAuthKey();
+    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::discover);
+    if (configs.clientID.size > 0)
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, configs.clientID.size, configs.clientID.data);
+    uint8_t msgSize[2];
+    writeU16(msgSize, configs.maxSize.load(std::memory_order_relaxed));
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::maxSize, 2, msgSize);
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::hostname, hostname.size(), reinterpret_cast<const uint8_t*>(hostname.data()));
+    const uint8_t requestList[] = {
+        Variable::Dhcp::Option::mask,
+        Variable::Dhcp::Option::router,
+        Variable::Dhcp::Option::domainServer,
+        Variable::Dhcp::Option::hostname
+    };
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestList, sizeof(requestList), requestList);
+
+    if (tlv.file)
     {
-        currentInterface->enqueuePacket(requestPacket);
-
-        // Wait for the offer packet or timeout
-        std::unique_lock<std::mutex> dhcpLock(dhcpMutex);
-        if (cv.wait_for(dhcpLock, timeout, [&]() { return acked || stopFlag.load(); }))
-        {
-            return;
-        }
-        retryCount++;
-        timeout *= 2;
+        uint8_t overload = tlv.sname ? 3 : 2;
+        tlv.tlv.append(Variable::Dhcp::Option::overload, 1, &overload, 1);
     }
+
+    if (authKey)
+        appendAuthOptions(tlv.tlv, dhcp);
+
+    tlv.tlv.append(Variable::Dhcp::end, 0, nullptr, 0);
+    builder.addTLVSize(tlv.tlv.size());
+    
+    return true;
 }
 
-// Processes a received DHCP offer message
-void Protocol::DhcpClient::processDhcpOffer(const std::string& hostname, ByteString& hardwareAddress)
+bool Protocol::DhcpClient::buildDhcpRequest(PacketBuilder& builder, uint32_t transID, const std::string& hostname,
+                                            uint32_t requestedIP, uint32_t serverID)
 {
-    std::unique_lock<std::mutex> lock(dhcpMutex);
-    if (!dhcpOffer.Layer2.empty() && !dhcpOffer.Layer5.empty())
+    // Reserve space (DHCP fixed header + rough TLV estimate)
+    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+
+    auto* nextHeader = builder.nextBuildHeader();
+    if (!nextHeader) return false;
+
+    // Set Buffer and start constructing DHCP header
+    DhcpHeader dhcp;
+    dhcp.setBuffer(nextHeader->buffer);
+    dhcp.setOpcode(0x01);
+    dhcp.setHType(1);
+    dhcp.setHLen(6);
+    dhcp.setHops(0);
+
+    dhcp.setXid(transID);
+    dhcp.setSecs(0);
+
+    // Set flags (broadcast bit set)
+    dhcp.raw->flags[0] = 0x80;
+    dhcp.raw->flags[1] = 0x00;
+
+    // Zero all addresses
+    std::memset(dhcp.raw->ciaddr, 0, 16);
+
+    currentInterface->configs.getMac(dhcp.raw->chaddr);
+    dhcp.setServerName(Variable::Dhcp::serverHostName);
+    dhcp.setBootFile(Variable::Dhcp::bootfile);
+    dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
+
+    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t maxClientSize = configs.maxSize.load(std::memory_order_relaxed);
+    size_t maxAllowed = maxClientSize == 0 ? mtuLimit : std::min(mtuLimit, maxClientSize);
+    size_t tlvLimit = maxAllowed - builder.bufferOffset;
+
+    // Add TLV options directly into trailing span
+    const std::string* authKey = configs.getAuthKey();
+    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::request);
+    if (configs.clientID.size > 0)
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, configs.clientID.size, configs.clientID.data);
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, serverID);
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestIP, requestedIP);
+
+    uint32_t leaseTime = configs.leaseTime.load(std::memory_order_relaxed);
+    if (configs.leaseTime.load(std::memory_order_relaxed) != 0)
     {
-        auto& header = dhcpOffer.Layer5[0];
-        if (std::holds_alternative<DhcpHeader>(header))
-        {
-            DhcpHeader* dhcpPtr = &(std::get<DhcpHeader>(header));
-            ExtractOptions(dhcpPtr->options);
-
-            PacketInfo requestPacket = dhcpRequest(
-                dhcpBody(hardwareAddress),
-                *dhcpPtr,
-                hostname,
-                hardwareAddress,
-                Variable::IPv4::source,
-                configs.dhcpServer
-            );
-
-            // Handle retries
-            lock.unlock();
-            sendDhcpRequest(requestPacket);
-            offered = false;
-        }
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::leaseTime, leaseTime);
+        uint32_t renewTime = configs.renewalTime.load(std::memory_order_relaxed);
+        uint32_t rebindTime = configs.rebindingTime.load(std::memory_order_relaxed);
+        if (renewTime != 0)
+            Dhcp::appendTLV(tlv, Variable::Dhcp::Option::renewalTime, renewTime);
+        if (rebindTime != 0)
+            Dhcp::appendTLV(tlv, Variable::Dhcp::Option::rebindingTime, rebindTime);
     }
+
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::hostname, hostname.size(), reinterpret_cast<const uint8_t*>(hostname.data()));
+
+    const uint8_t reqList[] = {
+        Variable::Dhcp::Option::mask,
+        Variable::Dhcp::Option::router,
+        Variable::Dhcp::Option::domainServer,
+        Variable::Dhcp::Option::domainSearch,
+        Variable::Dhcp::Option::hostname,
+        Variable::Dhcp::Option::netbiosNameServer,
+        Variable::Dhcp::Option::mtu,
+        Variable::Dhcp::Option::classlessStateRoute,
+        Variable::Dhcp::Option::ntp
+    };
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestList, sizeof(reqList), reqList);
+
+    if (tlv.file)
+    {
+        uint8_t overload = tlv.sname ? 3 : 2;
+        tlv.tlv.append(Variable::Dhcp::Option::overload, 1, &overload, 1);
+    }
+
+    if (authKey)
+        appendAuthOptions(tlv.tlv, dhcp);
+
+    tlv.tlv.append(Variable::Dhcp::end, 0, nullptr, 0);
+    builder.addTLVSize(tlv.tlv.size());
+    
+    return true;
 }
 
-// Handles DHCP Lease Renewal process
-void Protocol::DhcpClient::handleLeaseRenewal(ByteString& hardwareAddress, const std::string& hostname)
+bool Protocol::DhcpClient::buildDhcpRelease(PacketBuilder& builder)
 {
-    std::unique_lock<std::mutex> lock(dhcpMutex);
-    double currentTime = secondsSinceEpoch();
-    uint32_t renewalTime = Functions::byteToNum(configs.renewalTime);
+    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
-    if (leaseStart + renewalTime < currentTime)
+    auto* nextHeader = builder.nextBuildHeader();
+    if (!nextHeader) return false;
+
+    DhcpHeader dhcp;
+    dhcp.setBuffer(nextHeader->buffer);
+    dhcp.setOpcode(0x01);
+    dhcp.setHType(0x01);
+    dhcp.setHLen(6);
+    dhcp.setHops(0);
+
+    // New transaction ID or release
+    generateDhcpTransid(dhcp.raw->xId);
+    dhcp.setSecs(0);
+
+    // No flags
+    std::memset(dhcp.raw->flags, 0, 2);
+
+    // Set ciaddr to current leased IP
+    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    std::memset(dhcp.raw->yiaddr, 0, 12);
+
+    currentInterface->configs.getMac(dhcp.raw->chaddr);
+    dhcp.setServerName(Variable::Dhcp::serverHostName);
+    dhcp.setBootFile(Variable::Dhcp::bootfile);
+    dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
+
+    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t maxClientSize = configs.maxSize.load(std::memory_order_relaxed);
+    size_t maxAllowed = maxClientSize == 0 ? mtuLimit : std::min(mtuLimit, maxClientSize);
+    size_t tlvLimit = maxAllowed - builder.bufferOffset;
+
+    // Add TLV options directly into trailing span
+    const std::string* authKey = configs.getAuthKey();
+    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::release);
+    if (configs.clientID.size > 0)
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, configs.clientID.size, configs.clientID.data);
+    if (configs.serverID.v4 != 0) 
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, 4, configs.serverID.raw);
+
+    if (tlv.file)
     {
-        ByteString dhcpIP;
-        if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
-        {
-            dhcpIP = currentInterface->configs.ipv4.getAddress();
-        }
-        DhcpHeader header;
-        header.clientIP = dhcpIP;
-        header.yourClientIP = Variable::IPv4::source;
-        header.transID = generateDhcpTransid();
+        uint8_t overload = tlv.sname ? 3 : 2;
+        tlv.tlv.append(Variable::Dhcp::Option::overload, 1, &overload, 1);
+    }
 
-        PacketInfo requestPacket = dhcpRequest(
-            dhcpBody(hardwareAddress),
-            header,
-            hostname,
-            hardwareAddress,
-            dhcpIP,
-            configs.dhcpServer
+    if (authKey)
+        appendAuthOptions(tlv.tlv, dhcp);
+
+    tlv.tlv.append(Variable::Dhcp::end, 0, nullptr, 0);
+    builder.addTLVSize(tlv.tlv.size());
+    
+    return true;
+}
+
+bool Protocol::DhcpClient::buildDhcpInform(PacketBuilder& builder, const std::string& hostname, const uint8_t* mac)
+{
+    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+
+    auto* nextHeader = builder.nextBuildHeader();
+    if (!nextHeader) return false;
+
+    DhcpHeader dhcp;
+    dhcp.setBuffer(nextHeader->buffer);
+    dhcp.setOpcode(0x01);
+    dhcp.setHType(0x01);
+    dhcp.setHLen(6);
+    dhcp.setHops(0);
+
+    generateDhcpTransid(dhcp.raw->xId);
+    dhcp.setSecs(0);
+
+    // Flags: none
+    std::memset(dhcp.raw->flags, 0, 2);
+
+    // Set ciaddr to client IP
+    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    std::memset(dhcp.raw->yiaddr, 0, 12);
+
+    dhcp.setClientMac(mac);
+    dhcp.setServerName(Variable::Dhcp::serverHostName);
+    dhcp.setBootFile(Variable::Dhcp::bootfile);
+    dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
+
+    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t maxClientSize = configs.maxSize.load(std::memory_order_relaxed);
+    size_t maxAllowed = maxClientSize == 0 ? mtuLimit : std::min(mtuLimit, maxClientSize);
+    size_t tlvLimit = maxAllowed - builder.bufferOffset;
+
+    // Add TLV options directly into trailing span
+    const std::string* authKey = configs.getAuthKey();
+    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::inform);
+    if (configs.clientID.size > 0)
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, configs.clientID.size, configs.clientID.data);
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::hostname, hostname.size(), reinterpret_cast<const uint8_t*>(hostname.data()));
+    
+    const uint8_t reqList[] = {
+        Variable::Dhcp::Option::domainServer,
+        Variable::Dhcp::Option::domainSearch,
+        Variable::Dhcp::Option::ntp,
+        Variable::Dhcp::Option::router
+    };
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestList, sizeof(reqList), reqList);
+
+    if (tlv.file)
+    {
+        uint8_t overload = tlv.sname ? 3 : 2;
+        tlv.tlv.append(Variable::Dhcp::Option::overload, 1, &overload, 1);
+    }
+
+    if (authKey)
+        appendAuthOptions(tlv.tlv, dhcp);
+
+    tlv.tlv.append(Variable::Dhcp::end, 0, nullptr, 0);
+    builder.addTLVSize(tlv.tlv.size());
+
+    return true;
+}
+
+void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, const uint8_t* mac)
+{
+    PacketBuilder builder;
+    if (!buildDhcpDiscover(builder, mac, hostname))
+        return;
+
+    IPPacket::BuildIP ipBuild = {
+        .iface = currentInterface,
+        .packetInfo = builder,
+        .destIp = Variable::IPv4::broadcast,
+        .sourceIp = Variable::IPv4::source,
+        .hopLimit = 64,
+        .protocolType = Variable::IP::udp
+    };
+
+    UDPPacket::buildUdp(
+        AddressFamily::IPv4,
+        ipBuild,
+        Variable::Udp::dhcpClient,
+        Variable::Udp::dhcpServer
+    );
+
+    // Retry scheduling
+    uint32_t timerId = currentInterface->routingInstance->global.timeManager.addTimer(
+        std::chrono::steady_clock::now() + std::chrono::seconds(4),
+        [this, hostname]() {
+            if (!offered.load(std::memory_order_relaxed) && !stopFlag.load(std::memory_order_relaxed)) {
+                uint8_t mac[6];
+                currentInterface->configs.getMac(mac);
+                sendDhcpDiscover(hostname, mac);
+            }
+        }
+    );
+
+    discoveryRetryTimerId.store(timerId, std::memory_order_release);
+}
+
+void Protocol::DhcpClient::sendDhcpRequest(uint32_t transID, const std::string& hostname, uint32_t requestedIp, uint32_t serverId)
+{
+    PacketBuilder builder;
+    if (!buildDhcpRequest(builder, transID, hostname, requestedIp, serverId))
+        return;
+
+    {
+        IPPacket::BuildIP ipBuild = {
+            .iface = currentInterface,
+            .packetInfo = builder,
+            .destIp = Variable::IPv4::broadcast,
+            .sourceIp = Variable::IPv4::source,
+            .hopLimit = 64,
+            .protocolType = Variable::IP::udp
+        };
+
+        UDPPacket::buildUdp(
+            AddressFamily::IPv4,
+            ipBuild,
+            Variable::Udp::dhcpClient,
+            Variable::Udp::dhcpServer
         );
-        
-        lock.unlock();
-        sendDhcpRequest(requestPacket);
-        leaseStart = currentTime;
     }
+
+    // Retry
+    uint32_t timerId = currentInterface->routingInstance->global.timeManager.addTimer(
+        std::chrono::steady_clock::now() + std::chrono::seconds(4),
+        [this, transID, hostname, requestedIp, serverId]() {
+            if (!acked.load(std::memory_order_relaxed) && !stopFlag.load(std::memory_order_relaxed)) {
+                sendDhcpRequest(transID, hostname, requestedIp, serverId);
+            }
+        }
+    );
+
+    requestRetryTimerId.store(timerId, std::memory_order_relaxed);
 }
 
-// Send DHCP release
 void Protocol::DhcpClient::sendDhcpRelease()
 {
-    std::lock_guard<std::mutex> lock(dhcpMutex);
-    if (!acked)
+    if (!acked.load(std::memory_order_acquire)) return;
+
+    PacketBuilder builder;
+
+    if (!buildDhcpRelease(builder)) return;
+
+    uint8_t ip[4];
+    currentInterface->configs.ipv4.getAddress(ip);
+
+    IPPacket::BuildIP ipBuild = {
+        .iface = currentInterface,
+        .packetInfo = builder,
+        .destIp = configs.serverID.raw,
+        .sourceIp = ip,
+        .hopLimit = 64,
+        .protocolType = Variable::IP::udp
+    };
+
+    UDPPacket::buildUdp(
+        AddressFamily::IPv4,
+        ipBuild,
+        Variable::Udp::dhcpClient,
+        Variable::Udp::dhcpServer
+    );
+}
+
+bool Protocol::DhcpClient::processDhcpOffer(const DhcpHeader& dhcp, std::vector<TLV8Option>& options)
+{
+    if (dhcp.getMagicCookie() != Variable::Dhcp::magicCookie) return false;
+
+    uint8_t msgType = 0;
+    const uint8_t* serverIdPtr = nullptr;
+    uint8_t* auth = nullptr;
+
+    for (const auto& opt : options)
     {
-        // No active lease to release
-        return;
+        switch (opt.type)
+        {
+            case Variable::Dhcp::Option::type:
+                if (opt.length == 1)
+                    msgType = opt.value[0];
+                break;
+            case Variable::Dhcp::Option::serverIdentifier:
+                if (opt.length == 4)
+                    serverIdPtr = opt.value;
+                break;
+            case Variable::Dhcp::Option::authentication:
+                if (opt.length >= 20)
+                    auth = opt.value;
+                break;
+            default:
+                break;
+        }
     }
+
+    if (auth && !validateAuthentication(dhcp, auth))
+        return false;
+
+    if (msgType != Variable::Dhcp::Type::offer || !serverIdPtr)
+        return false;
+
+    uint32_t requestedAddress = readU32(dhcp.raw->yiaddr);
+    uint32_t dhcpServerId = readU32(serverIdPtr);
+    uint32_t transId = readU32(dhcp.raw->xId);
+
+    offered.store(true, std::memory_order_release);
+    currentInterface->routingInstance->global.timeManager.cancelTimer(discoveryRetryTimerId.load(std::memory_order_relaxed));
+
+    sendDhcpRequest(
+        transId,
+        currentInterface->routingInstance->global.getHostname(),
+        requestedAddress,
+        dhcpServerId
+    );
+
+    return true;
+}
+
+bool Protocol::DhcpClient::processDhcpAck(const DhcpHeader& dhcp, std::vector<TLV8Option>& options)
+{
+    if (dhcp.getMagicCookie() != Variable::Dhcp::magicCookie) return false;
+
+    bool type = false;
+    uint32_t serverId = 0, leaseTime = 0, subnetMask = 0, gateway = 0;
+    uint32_t t1 = 0, t2 = 0;
+    uint8_t* auth = nullptr;
+
+    for (const auto& opt : options)
+    {
+        switch(opt.type)
+        {
+            case Variable::Dhcp::Option::type:
+                if (opt.length == 1 && opt.value[0] == Variable::Dhcp::Type::ack)
+                    type = true;
+                break;
+            case Variable::Dhcp::Option::serverIdentifier:
+                if (opt.length == 4)
+                    serverId = readU32(opt.value);
+                break;
+            case Variable::Dhcp::Option::leaseTime:
+                if (opt.length == 4)
+                    leaseTime = readU32(opt.value);
+                break;
+            case Variable::Dhcp::Option::renewalTime:
+                if (opt.length == 4)
+                    t1 = readU32(opt.value);
+                break;
+            case Variable::Dhcp::Option::rebindingTime:
+                if (opt.length == 4)
+                    t2 = readU32(opt.value);
+                break;
+            case Variable::Dhcp::Option::mask:
+                if (opt.length == 4)
+                    subnetMask = readU32(opt.value);
+                break;
+            case Variable::Dhcp::Option::router:
+                if (opt.length >= 4)
+                    gateway = readU32(opt.value);
+                break;
+            case Variable::Dhcp::Option::authentication:
+                if (opt.length >= 20)
+                    auth = opt.value;
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Validate required options
+    if (!type || serverId == 0 || leaseTime == 0 || subnetMask == 0 || gateway == 0 || (auth && !validateAuthentication(dhcp, auth)))
+        return false;
     
-    if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
-    {
-        ByteString mac = currentInterface->configs.getMac();
-        PacketInfo releasePacket = dhcpRelease(dhcpBody(mac), mac);
+    // Apply configs
+    currentInterface->setIPv4(dhcp.raw->yiaddr, std::popcount(subnetMask));
+    configs.router.v4 = gateway;
+    configs.serverID.v4 = serverId;
+    configs.leaseTime.store(leaseTime);
+    configs.leaseStart.store(std::chrono::steady_clock::now());
 
-        currentInterface->enqueuePacket(releasePacket);
+    processOptionalOption(options);
 
-        resetDhcpState();
-    }
+    currentInterface->routingInstance->global.timeManager.cancelTimer(requestRetryTimerId.load(std::memory_order_relaxed));
+    requestRetryTimerId.store(0, std::memory_order_release);
+    acked.store(true, std::memory_order_release);
+
+    scheduleLeaseTimers(t1, t2, leaseTime);
+    return true;
 }
 
-// Resets the DHCP client state upon receiving a NAC or DECLINE
-void Protocol::DhcpClient::resetDhcpState()
+bool Protocol::DhcpClient::processDhcpNak(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, bool isDecline)
 {
-    acked = false;
-    naked = false;
-    leaseStart = 0;
-}
+    if (dhcp.getMagicCookie() != Variable::Dhcp::magicCookie) return false;
 
-// Creates a DHCP packet body with Ethernet, IP, and UDP headers
-PacketInfo Protocol::DhcpClient::dhcpBody(ByteString& hardwareAddress)
-{
-    PacketInfo dhcpPacket;
-
-    EthernetHeader eth;
-    eth.destinationMac = Variable::Mac::broadcast; 
-    eth.sourceMac = hardwareAddress; 
-    eth.type = Variable::Ethernet::ipv4;
-    dhcpPacket.Layer2.push_back(std::move(eth));
-
-    IPv4Header ip;
-    ip.version = "4";
-    ip.headerLength = "5";
-    ip.serviceField = std::string("\x00", 1);
-    ip.totalLength = std::string("\x00\x00", 2); 
-    ip.identification = std::string("\x00\x00", 2); 
-    ip.fragmentFlag.reserved = "0"; 
-    ip.fragmentFlag.fragment = "0";
-    ip.fragmentFlag.moreFragment = "0";
-    ip.fragmentFlag.fragment = "0000000000000";
-    ip.TTL = std::string("\x40", 1);
-    ip.protocol = Variable::IP::udp; 
-    ip.checksum = std::string("\x00\x00", 2);
-    ip.sourceAddress = Variable::IPv4::source;
-    ip.destinationAddress = Variable::IPv4::broadcast;
-    dhcpPacket.Layer3.push_back(std::move(ip));
-
-    UdpHeader udp;
-    udp.sourcePort = Variable::Udp::dhcpClient;
-    udp.destinationPort = Variable::Udp::dhcpServer;
-    udp.length = std::string("\x01\x00", 2);
-    udp.checksum = std::string("\x00\x00", 2); 
-    dhcpPacket.Layer4.push_back(std::move(udp)); 
-
-    return dhcpPacket; 
-}
-
-// Creates a DHCP discover packet
-PacketInfo Protocol::DhcpClient::dhcpDiscover(PacketInfo packet, const std::string& hostname, ByteString& hardwareAddress) 
-{
-    DhcpHeader dhcp;
-
-    dhcp.boot = Variable::Dhcp::Type::discover; 
-    dhcp.hardwareType = std::string("\x01", 1);
-    dhcp.hardwareAddressLength = std::string("\x06", 1);
-    dhcp.hops = std::string("\x00", 1);
-    dhcp.transID = generateDhcpTransid(); 
-    dhcp.secondsElapsed = std::string("\x00\x00", 2);
-    dhcp.bootpFlags.broadcast = "0";
-    dhcp.bootpFlags.reserved = "000000000000000";
-    dhcp.clientIP = Variable::IPv4::source; 
-    dhcp.yourClientIP = Variable::IPv4::source;
-    dhcp.nextServerIP = Variable::IPv4::source;
-    dhcp.relayAgentIP = Variable::IPv4::source;
-    dhcp.clientMacAddress = hardwareAddress;
-    dhcp.clientHardwareAddressPadding = Variable::Dhcp::clientHardwareAddressPadding;
-    dhcp.serverHostName = Variable::Dhcp::serverHostName;
-    dhcp.bootFile = Variable::Dhcp::bootfile;
-    dhcp.magicCookie = Variable::Dhcp::magicCookie; 
-
-    dhcp.options.reserve(4);
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::type,
-        std::string("\x01", 1),
-        Variable::Dhcp::Type::discover
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::clientID,
-        Functions::numToByte(hardwareAddress.size(), 1),
-        hardwareAddress
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::maxSize,
-        std::string("\x02", 1),
-        std::string("\x02\x04", 2)
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::hostname,
-        Functions::numToByte(static_cast<uint32_t>(hostname.length())),
-        hostname
-    );
-
-    dhcp.end = Variable::Dhcp::end; 
-
-    packet.Layer5.push_back(std::move(dhcp));
-
-    return packet; 
-}
-
-PacketInfo Protocol::DhcpClient::dhcpRequest(PacketInfo packet, DhcpHeader& header, const std::string& hostname, ByteString hardwareAddress, ByteString requestedIP, ByteString serverID) 
-{
-    DhcpHeader dhcp;
-
-    dhcp.boot = Variable::Dhcp::Type::discover; 
-    dhcp.hardwareType = std::string("\x01", 1); 
-    dhcp.hardwareAddressLength = std::string("\x06", 1); 
-    dhcp.hops = std::string("\x00", 1); 
-    dhcp.transID = header.transID; 
-    dhcp.secondsElapsed = std::string("\x00\x00", 2); 
-    dhcp.bootpFlags.broadcast = "0"; 
-    dhcp.bootpFlags.reserved = "000000000000000"; 
-    dhcp.clientIP = Variable::IPv4::source; 
-    dhcp.relayAgentIP = Variable::IPv4::source; 
-    dhcp.clientMacAddress = hardwareAddress; 
-    dhcp.clientHardwareAddressPadding = Variable::Dhcp::clientHardwareAddressPadding; 
-    dhcp.serverHostName = Variable::Dhcp::serverHostName; 
-    dhcp.bootFile = Variable::Dhcp::bootfile; 
-    dhcp.magicCookie = Variable::Dhcp::magicCookie; 
-
-    dhcp.options.reserve(7); 
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::type,
-        std::string("\x01", 1),
-        Variable::Dhcp::Type::request
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::clientID,
-        std::string(hardwareAddress.size(), 1),
-        hardwareAddress
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::serverIdentifier,
-        std::string(configs.dhcpServer.size(), 1),
-        configs.dhcpServer
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::requestIP,
-        std::string(header.yourClientIP.size(), 1),
-        header.yourClientIP
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::leaseTime,
-        Functions::numToByte(static_cast<uint32_t>(configs.leaseTime.size())),
-        configs.leaseTime
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::hostname,
-        Functions::numToByte(static_cast<uint32_t>(hostname.length())),
-        hostname
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::requestList,
-        std::string("\x0d", 1),
-        Variable::Dhcp::Option::mask +
-        Variable::Dhcp::Option::broadcast + 
-        Variable::Dhcp::Option::timeOffset + 
-        Variable::Dhcp::Option::router + 
-        Variable::Dhcp::Option::domainName + 
-        Variable::Dhcp::Option::domainServer +
-        Variable::Dhcp::Option::domainSearch +
-        Variable::Dhcp::Option::hostname +
-        Variable::Dhcp::Option::netbiosNameServer +
-        Variable::Dhcp::Option::mtu +
-        Variable::Dhcp::Option::classlessStateRoute + 
-        Variable::Dhcp::Option::ntp
-    );
-
-    dhcp.end = Variable::Dhcp::end; 
-
-    packet.Layer5.push_back(std::move(dhcp));
-
-    return packet; 
-}
-
-// Creates a DHCP Release packet to release the leased IP address
-PacketInfo Protocol::DhcpClient::dhcpRelease(PacketInfo packet, const ByteString& hardwareAddress)
-{
-    DhcpHeader dhcp;
-
-    if (currentInterface->shutdownFlag.load(std::memory_order_relaxed)) return packet;
-
-    dhcp.boot = Variable::Dhcp::Type::release;
-    dhcp.hardwareType = std::string("\x01", 1);
-    dhcp.hardwareAddressLength = std::string("\x06", 1);
-    dhcp.hops = std::string("\x00", 1);
-    dhcp.transID = generateDhcpTransid();
-    dhcp.secondsElapsed = std::string("\x00\x00", 2);
-    dhcp.bootpFlags.broadcast = "0";
-    dhcp.bootpFlags.reserved = "000000000000000"; 
-    dhcp.clientIP = std::string("\x00\x00\x00\x00", 4);
-    dhcp.yourClientIP = currentInterface->configs.ipv4.getAddress();
-    dhcp.nextServerIP = std::string("\x00\x00\x00\x00", 4);
-    dhcp.relayAgentIP = Variable::IPv4::source; 
-    dhcp.clientMacAddress = hardwareAddress; 
-    dhcp.clientHardwareAddressPadding = Variable::Dhcp::clientHardwareAddressPadding; 
-    dhcp.serverHostName = Variable::Dhcp::serverHostName; 
-    dhcp.bootFile = Variable::Dhcp::bootfile; 
-    dhcp.magicCookie = Variable::Dhcp::magicCookie; 
+    uint8_t msgType = 0;
+    uint8_t* auth = nullptr;
     
-    dhcp.options.reserve(2);
+    for (const auto& opt : options)
+    {
+        if (opt.type == Variable::Dhcp::Option::type)
+        {
+            msgType = opt.value[0];
+            break;
+        }
+        if (opt.type == Variable::Dhcp::Option::authentication)
+        {
+            auth = opt.value;
+        }
+    }
 
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::type,
-        std::string("\x01", 1),
-        Variable::Dhcp::Type::release
-    );
+    if ((msgType != (isDecline ? Variable::Dhcp::Type::decline : Variable::Dhcp::Type::nak)) || (auth && !validateAuthentication(dhcp, auth)))
+        return false;
 
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::clientID,
-        std::string(hardwareAddress.size(), 1),
-        hardwareAddress
-    );
+    // Reset state
+    currentInterface->removeIPv4();
+    configs.serverID.v4 = 0;
+    configs.router.v4 = 0;
+    configs.leaseTime.store(0, std::memory_order_release);
+    acked.store(false, std::memory_order_release);
+    offered.store(false, std::memory_order_release);
 
-    dhcp.end = Variable::Dhcp::end;
+    // Cancel timers
+    cancelLeaseTimers();
 
-    packet.Layer5.push_back(std::move(dhcp));
+    // Restart discovery
+    uint8_t mac[6];
+    currentInterface->configs.getMac(mac);
+    sendDhcpDiscover(currentInterface->routingInstance->global.getHostname(), mac);
 
-    return packet;
+    return true;
 }
 
-// Creates a DHCP Inform packet to request local configuration parameters
-PacketInfo Protocol::DhcpClient::dhcpInform(PacketInfo packet, std::string& hostname, ByteString& hardwareAddress) 
+bool Protocol::DhcpClient::processDhcpDecline(const DhcpHeader& dhcp, std::vector<TLV8Option>& options)
 {
+    return processDhcpNak(dhcp, options, true);
+}
+
+bool Protocol::DhcpClient::processDhcpInformAck(const DhcpHeader& dhcp, std::vector<TLV8Option>& options)
+{
+    if (dhcp.getMagicCookie() != Variable::Dhcp::magicCookie) return false;
+
+    uint8_t msgType = 0;
+    uint8_t* auth = nullptr;
+    
+    for (const auto& opt : options)
+    {
+        if (opt.type == Variable::Dhcp::Option::type)
+        {
+            msgType = opt.value[0];
+            break;
+        }
+        if (opt.type == Variable::Dhcp::Option::authentication)
+        {
+            auth = opt.value;
+        }
+    }
+
+    if (msgType != Variable::Dhcp::Type::ack || !(auth && validateAuthentication(dhcp, auth)))
+        return false;
+
+    processOptionalOption(options);
+    return true;
+}
+
+void Protocol::DhcpClient::processOptionalOption(const std::vector<TLV8Option>& opts)
+{
+    for (const auto& opt : opts)
+    {
+        switch (opt.type)
+        {
+            case Variable::Dhcp::Option::domainServer:
+                for (size_t i = 0; i + 4 <= opt.length; i += 4)
+                    configs.dnsServers.emplace_back(opt.value + i, AddressFamily::IPv4);
+                break;
+
+            case Variable::Dhcp::Option::domainName:
+                configs.domainName.assign(reinterpret_cast<const char*>(opt.value), opt.valueSize);
+                break;
+
+            case Variable::Dhcp::Option::domainSearch:
+                //TODO full domain parsing
+                //configs.domainSearch.assign(reinterpret_cast<const char*>(opt.value), opt.valueSize);
+                break;
+
+            case Variable::Dhcp::Option::ntp:
+                for (size_t i = 0; i + 4 <= opt.length; i += 4)
+                    configs.ntpServers.emplace_back(opt.value + 1, AddressFamily::IPv4);
+                break;
+
+            case Variable::Dhcp::Option::classlessStateRoute:
+            case 249:
+                //TODO decode classless static route
+                break;
+
+            case Variable::Dhcp::Option::netbiosNameServer:
+                for (size_t i = 0; i + 4 <= opt.length; i += 4)
+                    configs.winsServers.emplace_back(opt.value + i, AddressFamily::IPv4);
+                break;
+
+            case Variable::Dhcp::Option::mtu:
+                if (opt.length == 2)
+                    configs.mtu.store(readU16(opt.value), std::memory_order_release);
+                break;
+            
+            case Variable::Dhcp::Option::hostname:
+                configs.hostname.assign(reinterpret_cast<const char*>(opt.value), opt.valueSize);
+            default:
+                break;
+        }
+    }
+}
+
+void Protocol::DhcpClient::scheduleLeaseTimers(uint32_t t1, uint32_t t2, uint32_t lease)
+{
+    auto now = std::chrono::steady_clock::now();
+    auto renewTime = t1 ? t1 : lease / 2;
+    auto rebindTime = t2 ? t2 : (lease * 875) / 1000;
+
+    renewTimerId = currentInterface->routingInstance->global.timeManager.addTimer(
+        now + std::chrono::seconds(renewTime),
+        [this]() { sendRenew(); });
+
+    rebindTimerId = currentInterface->routingInstance->global.timeManager.addTimer(
+        now + std::chrono::seconds(rebindTime),
+        [this]() { sendRebind(); });
+
+    expireTimerId = currentInterface->routingInstance->global.timeManager.addTimer(
+        now + std::chrono::seconds(lease),
+        [this]() { expireLease(); });
+}
+
+void Protocol::DhcpClient::cancelLeaseTimers()
+{
+    if (renewTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(renewTimerId);
+    if (rebindTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(rebindTimerId);
+    if (expireTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(expireTimerId);
+    renewTimerId = 0;
+    rebindTimerId = 0;
+    expireTimerId = 0;
+}
+
+void Protocol::DhcpClient::sendRenew()
+{
+    PacketBuilder builder;
+    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    auto* next = builder.nextBuildHeader();
+    if (!next) return;
+
     DhcpHeader dhcp;
+    dhcp.setBuffer(next->buffer);
+    dhcp.setOpcode(Variable::Dhcp::Type::request);
+    dhcp.setHType(0x01);
+    dhcp.setHLen(6);
+    dhcp.setHops(0);
+    generateDhcpTransid(dhcp.raw->xId);
+    dhcp.setSecs(0);
+    std::memset(dhcp.raw->flags, 0, 2);
 
-    ByteString ipAddr;
-    if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
+    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    std::memset(dhcp.raw->yiaddr, 0, 12);
+
+    uint8_t mac[6];
+    currentInterface->configs.getMac(mac);
+    dhcp.setServerName(Variable::Dhcp::serverHostName);
+    dhcp.setBootFile(Variable::Dhcp::bootfile);
+    dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
+
+    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t maxClientSize = configs.maxSize.load(std::memory_order_relaxed);
+    size_t maxAllowed = maxClientSize == 0 ? mtuLimit : std::min(mtuLimit, maxClientSize);
+    size_t tlvLimit = maxAllowed - builder.bufferOffset;
+
+    // Add TLV options directly into trailing span
+    const std::string* authKey = configs.getAuthKey();
+    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::request);
+    if (configs.clientID.size > 0)
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, configs.clientID.size, configs.clientID.data);
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestIP, currentInterface->configs.ipv4.getAddress());
+
+    if (tlv.file)
     {
-        ipAddr = currentInterface->configs.ipv4.getAddress();
-    }
-    else
-    {
-        return packet;
+        uint8_t overload = tlv.sname ? 3 : 2;
+        tlv.tlv.append(Variable::Dhcp::Option::overload, 1, &overload, 1);
     }
 
-    dhcp.boot = Variable::Dhcp::Type::inform; 
-    dhcp.hardwareType = std::string("\x01", 1);
-    dhcp.hardwareAddressLength = std::string("\x06", 1);
-    dhcp.hops = std::string("\x00", 1);
-    dhcp.transID = generateDhcpTransid(); 
-    dhcp.secondsElapsed = std::string("\x00\x00", 2);
-    dhcp.bootpFlags.broadcast = "0";
-    dhcp.bootpFlags.reserved = std::string("000000000000000", 15);
-    dhcp.clientIP = ipAddr;
-    dhcp.yourClientIP = Variable::IPv4::source;
-    dhcp.nextServerIP = Variable::IPv4::source;
-    dhcp.relayAgentIP = Variable::IPv4::source;
-    dhcp.clientMacAddress = hardwareAddress;
-    dhcp.clientHardwareAddressPadding = Variable::Dhcp::clientHardwareAddressPadding;
-    dhcp.serverHostName = Variable::Dhcp::serverHostName;
-    dhcp.bootFile = Variable::Dhcp::bootfile;
-    dhcp.magicCookie = Variable::Dhcp::magicCookie; 
+    if (authKey)
+        appendAuthOptions(tlv.tlv, dhcp);
 
-    dhcp.options.reserve(3);
+    tlv.tlv.append(Variable::Dhcp::end, 0, nullptr, 0);
+    builder.addTLVSize(tlv.tlv.size());
 
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::type,
-        std::string("\x01", 1),
-        Variable::Dhcp::Type::inform
+    uint8_t ip[4];
+
+    IPPacket::BuildIP ipBuild = {
+        .iface = currentInterface,
+        .packetInfo = builder,
+        .destIp = configs.serverID.raw,
+        .sourceIp = currentInterface->configs.ipv4.getAddress(ip),
+        .hopLimit = 64,
+        .protocolType = Variable::IP::udp
+    };
+
+    UDPPacket::buildUdp(
+        AddressFamily::IPv4,
+        ipBuild,
+        Variable::Udp::dhcpClient,
+        Variable::Udp::dhcpServer
     );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::clientID,
-        std::string(hardwareAddress.size(), 1),
-        hardwareAddress
-    );
-
-    dhcp.options.emplace_back(
-        Variable::Dhcp::Option::hostname,
-        Functions::numToByte(static_cast<uint32_t>(hostname.length())),
-        hostname
-    );
-
-    dhcp.end = Variable::Dhcp::end; 
-
-    packet.Layer5.push_back(std::move(dhcp));
-
-    return packet; 
 }
 
-// Processes received DHCP responses including ACK, NAK, DECLINE, INFORM
-void Protocol::DhcpClient::processDhcpResponses(const std::string& hostname, ByteString& hardwareAddress)
+void Protocol::DhcpClient::sendRebind()
 {
-    std::lock_guard<std::mutex> lock(dhcpMutex);
+    PacketBuilder builder;
+    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    auto* next = builder.nextBuildHeader();
+    if (!next) return;
 
-    // Handle DHCP Offer
-    if (!dhcpOffer.Layer2.empty() && !dhcpOffer.Layer5.empty())
+    DhcpHeader dhcp;
+    dhcp.setBuffer(next->buffer);
+    dhcp.setOpcode(Variable::Dhcp::Type::request);
+    dhcp.setHType(0x01);
+    dhcp.setHLen(6);
+    dhcp.setHops(0);
+    generateDhcpTransid(dhcp.raw->xId);
+    dhcp.setSecs(0);
+    dhcp.raw->flags[0] = 0x80;
+    dhcp.raw->flags[1] = 0x00;
+
+    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    std::memset(dhcp.raw->yiaddr, 0, 12);
+
+    uint8_t mac[6];
+    currentInterface->configs.getMac(mac);
+    dhcp.setClientMac(mac);
+    dhcp.setServerName(Variable::Dhcp::serverHostName);
+    dhcp.setBootFile(Variable::Dhcp::bootfile);
+    dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
+
+    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t maxClientSize = configs.maxSize.load(std::memory_order_relaxed);
+    size_t maxAllowed = maxClientSize == 0 ? mtuLimit : std::min(mtuLimit, maxClientSize);
+    size_t tlvLimit = maxAllowed - builder.bufferOffset;
+
+    // Add TLV options directly into trailing span
+    const std::string* authKey = configs.getAuthKey();
+    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::request);
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, 6, mac);
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestIP, currentInterface->configs.ipv4.getAddress());
+
+    if (tlv.file)
     {
-        auto& header = dhcpOffer.Layer5[0];
-        if (std::holds_alternative<DhcpHeader>(header))
-        {
-            if (DhcpHeader* dhcpPtr = &(std::get<DhcpHeader>(header)))
-            {
-                ExtractOptions(dhcpPtr->options);
-                offered = true;
-                cv.notify_all();
-            } 
-        }
+        uint8_t overload = tlv.sname ? 3 : 2;
+        tlv.tlv.append(Variable::Dhcp::Option::overload, 1, &overload, 1);
     }
 
-    // Handle DHCP ACK
-    if (!dhcpAck.Layer2.empty() && !dhcpAck.Layer5.empty())
-    {
-        auto& header = dhcpAck.Layer5[0];
-        if (std::holds_alternative<DhcpHeader>(header))
-        {
-            if (DhcpHeader* dhcpPtr = &(std::get<DhcpHeader>(header)))
-            {
-                ExtractOptions(dhcpPtr->options);
-                currentInterface->setIPv4(dhcpPtr->yourClientIP, configs.subnetMask);
-                leaseStart = secondsSinceEpoch();
-                acked = true;
-                cv.notify_all();
-            }
-        }
-    }
+    if (authKey)
+        appendAuthOptions(tlv.tlv, dhcp);
 
-    // Handle DHCP NAK
-    if (!dhcpNak.Layer2.empty() && !dhcpNak.Layer5.empty())
-    {
-        auto& header = dhcpNak.Layer5[0];
-        if (std::holds_alternative<DhcpHeader>(header))
-        {
-            if (DhcpHeader* dhcpPtr = &(std::get<DhcpHeader>(header)))
-            {
-                // Reset DHCP state and notify handler to restart discovery
-                resetDhcpState();
-                cv.notify_all();
-            }
-        }
-    }
+    tlv.tlv.append(Variable::Dhcp::end, 0, nullptr, 0);
+    builder.addTLVSize(tlv.tlv.size());
 
-    // Handle DHCP DECLINE
-    if (!dhcpDecline.Layer2.empty() && !dhcpDecline.Layer5.empty())
-    {
-        auto& header = dhcpDecline.Layer5[0];
-        if (std::holds_alternative<DhcpHeader>(header))
-        {
-            if (DhcpHeader* dhcpPtr = &(std::get<DhcpHeader>(header)))
-            {
-                // Handle Decline by resetting state to and notifying neighbors
-                resetDhcpState();
-                cv.notify_all();
-            }
-        }
-    }
+    uint8_t ip[4];
 
-    // Handle dhcp inform
-    if (!dhcpInformPacket.Layer2.empty() && !dhcpInformPacket.Layer5.empty())
-    {
-        auto& header = dhcpInformPacket.Layer5[0];
-        if (std::holds_alternative<DhcpHeader>(header))
-        {
-            if (DhcpHeader* dhcpPtr = &(std::get<DhcpHeader>(header)))
-            {
-                ExtractOptions(dhcpPtr->options);
-                dhcpInformPacket = PacketInfo();
-            }
-        }
-    }
+    IPPacket::BuildIP ipBuild = {
+        .iface = currentInterface,
+        .packetInfo = builder,
+        .destIp = Variable::IPv4::broadcast,
+        .sourceIp = currentInterface->configs.ipv4.getAddress(ip),
+        .hopLimit = 64,
+        .protocolType = Variable::IP::udp
+    };
+
+    UDPPacket::buildUdp(
+        AddressFamily::IPv4,
+        ipBuild,
+        Variable::Udp::dhcpClient,
+        Variable::Udp::dhcpServer
+    );
 }
 
-// Method to extract DHCP options from a response
-void Protocol::DhcpClient::ExtractOptions(std::vector<DhcpHeader::Option> options) 
+void Protocol::DhcpClient::expireLease()
 {
-    for (auto opt : options) 
-    {
-        if (opt.option == Variable::Dhcp::Option::serverIdentifier) 
-        {
-            configs.dhcpServer = opt.value;
-        } 
-        else if (opt.option == Variable::Dhcp::Option::leaseTime) 
-        {
-            configs.leaseTime = opt.value;
-        } 
-        else if (opt.option == Variable::Dhcp::Option::renewalTime) 
-        {
-            configs.renewalTime = opt.value;
-        } 
-        else if (opt.option == Variable::Dhcp::Option::rebindingTime) 
-        {
-            configs.rebindingTime = opt.value;
-        } 
-        else if (opt.option == Variable::Dhcp::Option::mask) 
-        { 
-            configs.subnetMask = Functions::byteMaskToNum(opt.value);
-        } 
-        else if (opt.option == Variable::Dhcp::Option::broadcast) 
-        {
-            configs.broadcast = opt.value;
-        } 
-        else if (opt.option == Variable::Dhcp::Option::domainServer && opt.value.size() % 4 == 0)
-        {
-            uint64_t it = 0;
-            while (it <= opt.value.size())
-            {
-                configs.dnsServer.push_back(opt.value.substr(it, 4));
-                it += 4;
-            }
-        } 
-        else if (opt.option == Variable::Dhcp::Option::router) 
-        {
-            configs.router = opt.value;
-        }
-        else if (opt.value == Variable::Dhcp::Type::nak)
-        {
-            naked = true;
-            cv.notify_all();
-        }
-    }
+    currentInterface->removeIPv4();
+    configs.serverID.v4 = 0;
+    configs.router.v4 = 0;
+    configs.leaseTime.store(0);
+    configs.leaseStart.store({});
+
+    acked.store(false);
+    offered.store(false);
+
+    renewTimerId = 0;
+    rebindTimerId = 0;
+    expireTimerId = 0;
+
+    // Optionally restart discovery if auto-renew
+    uint8_t mac[6];
+    currentInterface->configs.getMac(mac);
+    sendDhcpDiscover(currentInterface->routingInstance->global.getHostname(), mac);
 }
 
-// Placeholder for a method to handle DHCP packets
-void Protocol::DhcpClient::DhcpPacket(const DhcpHeader* header, ByteString& type)
+void Protocol::DhcpClient::appendAuthOptions(TLV8BufferManager& tlv, const DhcpHeader& dhcp)
 {
-    //TODO Implementation needed
+    const std::string* key = configs.getAuthKey();
+    if (!key) return;
+
+    uint8_t* authOpt = tlv.getNextValBuf(27);
+    if (!authOpt) return;
+    tlv.append(Variable::Dhcp::Option::authentication, 27, nullptr, 27);
+
+    authOpt[0] = 1;
+    authOpt[1] = 1;
+    authOpt[2] = 0;
+
+    uint64_t counter = configs.lastReplayCounter.load(std::memory_order_relaxed);
+    writeU64(authOpt + 3, counter + 1);
+
+    // Zero the digest field
+    std::memset(authOpt + 11, 0, 16);
+
+    // Build HMAC input over full packet assuming end option is not yet added
+    Authentication::generateMD5(
+        authOpt + 11,
+        dhcp.buffer,
+        DhcpHeader::fixedSize + tlv.size(),
+        reinterpret_cast<const uint8_t*>(key->data()),
+        key->size()
+    );
+
+    configs.lastReplayCounter.store(counter + 1, std::memory_order_release);
+}
+
+bool Protocol::DhcpClient::validateAuthentication(const DhcpHeader& dhcp, const uint8_t* data)
+{
+    const std::string* key = configs.getAuthKey();
+    if (!key) return true;
+
+    // Check fields
+    if (data[0] != 1 || data[1] != 1 || data[2] != 0)
+        return false;
+
+    // Extract replay counter
+    uint64_t counter = readU64(data + 3);
+    if (counter <= configs.lastReplayCounter.load(std::memory_order_relaxed))
+        return false;
+
+    // Copy out hash
+    uint8_t receivedHash[16];
+    std::memcpy(receivedHash, data + 11, 16);
+    std::memset(const_cast<uint8_t*>(data + 11), 0, 16); // Set hash to 0s
+    
+    uint8_t computedHash[16];
+    Authentication::generateMD5(
+        computedHash,
+        dhcp.buffer,
+        DhcpHeader::fixedSize + dhcp.getTrail().size() - 2,
+        reinterpret_cast<const uint8_t*>(key->data()),
+        key->size()
+    );
+
+    if (std::memcmp(computedHash, receivedHash, 16) != 0)
+        return false;
+
+    configs.lastReplayCounter.store(counter, std::memory_order_relaxed);
+    return true;
+}
+
+uint8_t Protocol::DhcpClient::getOpcode(std::vector<TLV8Option>& options)
+{
+    for (const auto& opt : options)
+    {
+        if (opt.type == Variable::Dhcp::Option::type)
+            return *opt.value;
+    }
+    return 0;
 }

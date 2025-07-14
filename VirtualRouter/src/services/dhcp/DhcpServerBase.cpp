@@ -1,28 +1,29 @@
 #include "DhcpServerBase.h"
 #include <Global.h>
 
-bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(ByteString* newNetwork, uint8_t* newPrefix, ByteString* newGateway, DhcpServerBase* server)
+//bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(ByteString* newNetwork, uint8_t* newPrefix, ByteString* newGateway, DhcpServerBase* server)
+bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(IPPrefix& prefix, IPAddress& gateway, DhcpServerBase* server)
 {
-    ByteString networkID = getNetworkID();
+    IPPrefix networkID = getNetworkID(prefix.af);
     {
         std::unique_lock<std::shared_mutex> lock(configMutex);
-        if (newNetwork && (network.size() == newNetwork->size() || network.empty()))
+        if (prefix.af == networkID.af)
         {
-            network = *newNetwork;
+            std::memcpy(network.raw, prefix.addr, static_cast<uint8_t>(prefix.af));
         }
-        if (newGateway && network.size() == newGateway->size())
+        if (gateway.isV6 == defaultGateway.isV6)
         {
-            defaultGateway = *newGateway;
+            gateway = defaultGateway;
         }
-        if (newPrefix && *newPrefix <= network.size() * 8)
+        if (prefix.prefixLength <= static_cast<uint8_t>(prefix.af) * 8)
         {
-            subnetPrefix.store(*newPrefix, std::memory_order_release);
+            subnetPrefix.store(prefix.prefixLength, std::memory_order_release);
         }
     }
     
     if (server)
     {
-        ByteString newNetworkID = getNetworkID();
+        IPPrefix newNetworkID = getNetworkID(prefix.af);
         auto networkIt = server->dhcpNetworks.find(networkID);
         if (newNetworkID != networkID && networkIt != server->dhcpNetworks.end())
         {
@@ -37,7 +38,7 @@ bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(ByteString* newNetwork, ui
 
 Protocol::DhcpServerBase::DhcpServerBase(Global& global) : global(global) {}
 
-bool Protocol::DhcpServerBase::moveConfig(const ByteString& oldKey, const ByteString& newKey)
+bool Protocol::DhcpServerBase::moveConfig(const IPPrefix& oldKey, const IPPrefix& newKey)
 {
     if (dhcpNetworks.find(oldKey) != dhcpNetworks.end() && dhcpNetworks.find(newKey) == dhcpNetworks.end())
     {
@@ -48,9 +49,9 @@ bool Protocol::DhcpServerBase::moveConfig(const ByteString& oldKey, const ByteSt
     return false;
 }
 
-void Protocol::DhcpServerBase::addNetwork(Dhcp::DhcpNetworkConfig* config)
+void Protocol::DhcpServerBase::addNetwork(Dhcp::DhcpNetworkConfig* config, AddressFamily af)
 {
-    ByteString networkID = config->getNetwork() + "/" + std::to_string(config->getPrefixLen());
+    IPPrefix networkID = {config->getNetwork().raw, config->getPrefixLen(), af};
     {
         std::lock_guard<std::mutex> lock(configMutex);
         // Create a new pool and lease for the dhcp network.
@@ -60,7 +61,7 @@ void Protocol::DhcpServerBase::addNetwork(Dhcp::DhcpNetworkConfig* config)
         dhcpNetwork->config = config;
 
         // Check if Network is IPv6
-        if (config->getNetwork().size() == 16)
+        if (config->getNetwork().isV6)
         {
             dhcpNetwork->prefixPool = new PrefixPool(config->getNetwork(), config->getPrefixLen());
             dhcpNetwork->prefixLease = new PrefixLeaseManager(dhcpNetwork->prefixPool);
@@ -72,7 +73,7 @@ void Protocol::DhcpServerBase::addNetwork(Dhcp::DhcpNetworkConfig* config)
     }
 }
 
-void Protocol::DhcpServerBase::removeNetwork(const ByteString& networkID)
+void Protocol::DhcpServerBase::removeNetwork(const IPPrefix& networkID)
 {
     // Remove network config.
     auto it = dhcpNetworks.find(networkID);
@@ -83,22 +84,22 @@ void Protocol::DhcpServerBase::removeNetwork(const ByteString& networkID)
     }
 }
 
-void Protocol::DhcpServerBase::scheduleTimeout(Dhcp::TimerType type, const ByteString& id, const ByteString& offer, const ByteString& networkID, uint32_t timeout)
+void Protocol::DhcpServerBase::scheduleTimeout(Dhcp::TimerType type, const Dhcp::TrackedTimer::ClientID& clientID, const IPAddress& offer, const IPPrefix& networkID, uint32_t timeout)
 {
     Dhcp::TrackedTimer state;
-    state.clientID = id;
+    state.clientID = clientID;
     state.resource = offer;
     state.networkID = networkID;
 
     state.timerID = global.timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-        [this, id, offer, networkID, type]() {
+        [this, clientID, offer, networkID, type]() {
             std::lock_guard<std::mutex> lock(timerMutex);
             if (dhcpNetworks.find(networkID) == dhcpNetworks.end()) return;
 
             for (auto it = activeTimers[type].begin(); it != activeTimers[type].end(); ++it)
             {
-                if (it->clientID == id && it->resource == offer)
+                if (it->clientID == clientID && it->resource == offer)
                 {
                     auto netIt = dhcpNetworks.find(it->networkID);
                     if (netIt == dhcpNetworks.end()) continue;
@@ -107,16 +108,16 @@ void Protocol::DhcpServerBase::scheduleTimeout(Dhcp::TimerType type, const ByteS
                     switch (type)
                     {
                     case Dhcp::TimerType::IP_OFFER_TIMEOUT:
-                        if (netIt->second->pool->getTempIP(id) == offer)
+                        if (netIt->second->pool->getTempIP(clientID) == offer)
                         {
-                            netIt->second->pool->clearTempOffer(id);
+                            netIt->second->pool->clearTempOffer(clientID);
                             finished = true;
                         }
                         break;
                     case Dhcp::TimerType::PREFIX_OFFER_TIMEOUT:
-                        if (netIt->second->prefixPool->getTempPrefix(id).first == offer)
+                        if (netIt->second->prefixPool->getTempPrefix(clientID).first == offer)
                         {
-                            netIt->second->prefixPool->clearTempPrefix(id);
+                            netIt->second->prefixPool->clearTempPrefix(clientID);
                             finished = true;
                         }
                         break;
@@ -165,12 +166,12 @@ void Protocol::DhcpServerBase::scheduleTimeout(Dhcp::TimerType type, const ByteS
     activeTimers[type].push_back(state);
 }
 
-void Protocol::DhcpServerBase::cancelTimeout(Dhcp::TimerType type, const ByteString& id, const ByteString& offer)
+void Protocol::DhcpServerBase::cancelTimeout(Dhcp::TimerType type, const Dhcp::TrackedTimer::ClientID& clientID, const IPAddress& offer)
 {
     std::lock_guard<std::mutex> lock(timerMutex);
     for (auto it = activeTimers[type].begin(); it != activeTimers[type].end(); ++it)
     {
-        if (it->clientID == id && it->resource == offer)
+        if (it->clientID == clientID && it->resource == offer)
         {
             global.timeManager.cancelTimer(it->timerID);
             activeTimers[type].erase(it);

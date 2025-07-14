@@ -3,15 +3,16 @@
 #ifndef DHCP_CLIENT_H
 #define DHCP_CLIENT_H
 
-#include <ByteString.hpp>
-#include <PacketStructure.h>
 #include <DhcpInfo.hpp>
-#include <condition_variable>
 
 // Forward declarations
+struct TLV8Option;
+struct DhcpHeader;
+class TLV8BufferManager;
 class ProcessPacket;
 class DhcpClientTest;
 class Interface;
+class PacketBuilder;
 
 namespace Protocol
 {
@@ -32,7 +33,7 @@ namespace Protocol
          * @param CurrentInterface Reference ot the interface object
          * @param reduced Mode to reduce functions in the constructor for testing.
          */
-        DhcpClient(Interface* CurrentInterface, bool reduced = false);
+        DhcpClient(Interface* currentInterface, bool reduced = false);
 
         /**
          * @brief Destructor to clean up threads and resources.
@@ -41,152 +42,97 @@ namespace Protocol
 
         void initiate();
         void shutdown();
-    
-        /**
-         * @brief Creates a DHCP packet body with Ethernet, IP, and UDP headers.
-         *
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         * @return PacketInfo The constructued DHCP packet.
-         */
-        PacketInfo dhcpBody(ByteString& hardwareAddress);
 
         /**
-         * @brief Creates a DHCP Discover packet with the provided hostname and hardware address.
-         *
-         * @param packet The base packet structure.
-         * @param hostname The hostname of the cient.
-         * @param hardwareAddress The hardware (MAC) address of the cient.
-         * #preturn PacketInfo The DHCP Discover packet.
+         * @brief Build DHCPDISCOVER packet header + options.
+         * @param builder PacketBuilder to use.
+         * @param mac Hardware address of client.
+         * @param hostname Hostname of client.
+         * @return true if successful, false if reservation failed.
          */
-        PacketInfo dhcpDiscover(PacketInfo packet, const std::string& hostname, ByteString& hardwareAddress);
+        bool buildDhcpDiscover(PacketBuilder& builder, const uint8_t* mac, const std::string& hostname);
 
         /**
-         * @brief Creates a DHCP Request packet with the given header, hostname, hardware address, requested IP, and server ID.
-         * 
-         * @param packet The base packet structure.
-         * @param header The DHCP header containing transaction ID and client IP.
-         * @param hostname The hostname of the client.
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         * @param requestedIP The IP address being requested.
-         * @param serverID The DHCP server identifier.
-         * @return PacketInfo The DHCP Request packet.
+         * @brief Build DHCPREQUEST packet.
+         * @param builder PacketBuilder to use.
+         * @param transID Transaction ID (xid).
+         * @param hostname Hostname of client.
+         * @param mac Hardware address.
+         * @param requestedIP IP address being requested.
+         * @param serverID Server Identifier.
+         * @return true if successful, false otherwise.
          */
-        PacketInfo dhcpRequest(PacketInfo packet, DhcpHeader& header, const std::string& hostname, 
-                               ByteString hardwareAddress, ByteString requestedIP, ByteString serverID);
+        bool buildDhcpRequest(PacketBuilder& builder, uint32_t transID, const std::string& hostname,
+                              uint32_t requestedIP, uint32_t serverID);
 
         /**
-         * @brief Creates a DHCP Release packet to release the leased IP address.
-         * 
-         * @param packet The base packet structure.
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         * @return PacketInfo The DHCP Release packet.
+         * @brief Build DHCPRELEASE packet.
+         * @param builder PacketBuilder to write into.
+         * @param mac MAC address to identify client.
+         * @return true if successful, false otherwise.
          */
-        PacketInfo dhcpRelease(PacketInfo packet, const ByteString& hardwareAddress);
+        bool buildDhcpRelease(PacketBuilder& builder);
 
         /**
-         * @brief Creates a DHCP Inform packet to request local configuration parameters.
-         * 
-         * @param packet The base packet structure.
-         * @param hostname The hostname of the client.
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         * @return PacketInfo The DHCP Inform packet.
+         * @brief Build DHCPINFORM packet (requests DNS, etc.).
+         * @param builder PacketBuilder to write into.
+         * @param hostname Hostname.
+         * @param mac MAC address.
+         * @return true if successful, false otherwise.
          */
-        PacketInfo dhcpInform(PacketInfo packet, std::string& hostname, ByteString& hardwareAddress);
+        bool buildDhcpInform(PacketBuilder& builder, const std::string& hostname, const uint8_t* mac);
 
         /**
-         * @brief Initializes the DHCP client, handling discovery, offers, requests, acknowledgments, and lease renewals.
+         * @brief Called by external logic when a DHCP packet is received.
+         * @param header Pointer to parsed DHCPHeader object.
          */
-        void initializeDhcp();
+        void handleDhcpPacket(const DhcpHeader& dhcp);
 
         /**
-         * @brief Extracts DHCP options from the provided list of options and updates the interface's DHCP configuration accordingly.
-         * 
-         * @param options The list of DHCP options received from the server.
+         * @brief Called by external logic when a DHCP IP is to be released.
          */
-        void ExtractOptions(std::vector<DhcpHeader::Option> options);
-
-        /**
-         * @brief Processes a DHCP packet with the given header and type.
-         * 
-         * @param header Pointer to the DHCP header.
-         * @param type The type of DHCP message.
-         */
-        void DhcpPacket(const DhcpHeader* header, ByteString& type);
-
         void sendDhcpRelease();
 
-        DhcpInfo configs; ///< Dhcp Configurations.
+        DhcpInfo configs; ///< Parsed DHCP lease/config state
+        std::mutex dhcpMutex;
 
     private:
-        /**
-         * @brief Sends a DHCP Discover message.
-         * 
-         * @param hostname The hostname of the client.
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         */
-        void sendDhcpDiscover(const std::string& hostname, ByteString& hardwareAddress);
+        void sendDhcpDiscover(const std::string& hostname, const uint8_t* mac);
+        void sendDhcpRequest(uint32_t transID, const std::string& hostname, uint32_t requestedIp, uint32_t serverId);
+        void sendRenew();
+        void sendRebind();
+        
+        uint8_t getOpcode(std::vector<TLV8Option>& options);
 
-        /**
-         * @brief Sends a DHCP Request message.
-         * 
-         * @param requestPacket Request packet to be reliably transported.
-         */
-        void sendDhcpRequest(PacketInfo& requestPacket);
+        bool processDhcpOffer(const DhcpHeader& dhcp, std::vector<TLV8Option>& options);
+        bool processDhcpAck(const DhcpHeader& dhcp, std::vector<TLV8Option>& options);
+        bool processDhcpNak(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, bool isDecline = false);
+        bool processDhcpDecline(const DhcpHeader& dhcp, std::vector<TLV8Option>& option);
+        bool processDhcpInformAck(const DhcpHeader& dhcp, std::vector<TLV8Option>& option);
+        void processOptionalOption(const std::vector<TLV8Option>& opts);
 
-        /**
-         * @brief Processes received DHCP Offer, ACK, NAK, DECLINE, and INFORM messages.
-         * 
-         * @param hostname The hostname of the client.
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         */
-        void processDhcpResponses(const std::string& hostname, ByteString& hardwareAddress);
+        void scheduleLeaseTimers(uint32_t t1, uint32_t t2, uint32_t lease);
+        void cancelLeaseTimers();
 
+        void expireLease();
 
-        /**
-         * @brief Processes received DHCP Offer.
-         * 
-         * @param hostname The hostname of the client.
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         */
-        void processDhcpOffer(const std::string& hostname, ByteString& hardwareAddress);
+        void appendAuthOptions(TLV8BufferManager& tlv, const DhcpHeader& dhcp);
+        bool validateAuthentication(const DhcpHeader& dhcp, const uint8_t* value);
 
-        /**
-         * @brief Handles DHCP Lease Renewal.
-         * 
-         * @param hardwareAddress The hardware (MAC) address of the client.
-         * @param hostname The hostname of the client.
-         */
-        void handleLeaseRenewal(ByteString& hardwareAddress, const std::string& hostname);
+        Interface* currentInterface;
+        std::atomic<bool> stopFlag;
 
-        /**
-         * @brief Resets the DHCP client state upon receiving a NAK or DECLINE.
-         */
-        void resetDhcpState();
+        std::atomic<uint32_t> discoveryRetryTimerId = 0;
+        std::atomic<uint32_t> requestRetryTimerId = 0;
+        uint32_t renewTimerId = 0;
+        uint32_t rebindTimerId = 0;
+        uint32_t expireTimerId = 0;
 
-        /**
-         * @brief The main DHCP handling thread.
-         */
-        void dhcpHandler(std::string hostname, ByteString hardwareAddress);
-
-        Interface* currentInterface; ///< Pointer to the interface associated with this DHCP client
-
-        std::mutex dhcpMutex; ///< Mutex for syncronizing access to DHCP-related resources.
-        std::condition_variable cv; ///< Condition variable to syncronize DHCP state changes.
-        std::thread dhcpThread; ///< Thread handling DHCP operations.
-        std::atomic<bool> stopFlag; ///< Atomic flag to signal thread termination.
-
-        PacketInfo dhcpOffer{}; ///< Packet information for DHCP Offer.
-        PacketInfo dhcpAck{}; ///< Packet information for DHCP Acknowledgment.
-        PacketInfo dhcpNak{}; ///< Packet information for DHCP NAK;
-        PacketInfo dhcpDecline{}; ///< Packet information for DHCP Decline.
-        PacketInfo dhcpInformPacket{};
-
-        bool offered; ///< Flag indicating if a DHCP offer has been received.
-        bool acked; ///< Flag indicating if a DHCP acknowledgment has been received.
-        bool naked; ///< Flag indicating if a DHCP NAK has been received.
-        double leaseStart; ///< Time when the lease started, measured in seconds since epoch.
+        std::atomic<bool> offered = false;
+        std::atomic<bool> acked = false;
+        std::atomic<bool> naked = false;
+        double leaseStart = 0;
     };
-
 }
 
 #endif // DHCP_CLIENT_H

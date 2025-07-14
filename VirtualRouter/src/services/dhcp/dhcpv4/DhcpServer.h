@@ -3,39 +3,66 @@
 #ifndef DHCP_SERVER_H
 #define DHCP_SERVER_H
 
-#include <DhcpServerBase.h>
 #include <unordered_map>
+#include <atomic>
+#include <vector>
+#include <mutex>
+#include <IPv4LeaseManager.h>
+#include <IPv4Pool.h>
+#include <IPAddress.hpp>
+#include <DhcpServerBase.h>
+#include <shared_mutex>
+#include <DhcpTLVManager.hpp>
+#include <set>
 
 // Forward declarations
-class DhcpServerTest;
-class IPPoolTest;
+struct DhcpHeader;
+class Global;
+struct ClientID;
 class Interface;
-enum class InterfaceType;
+class TimeManager;
 
 namespace Protocol
 {
     namespace Dhcp
     {
+        enum class Overload : uint8_t
+        {
+            NONE = 0,
+            FILE = 128,
+            SNAME = 64
+        };
+
+        struct SnoopingEntry
+        {
+            uint8_t mac[6];
+            uint32_t ip;
+            uint32_t interface;
+            std::chrono::steady_clock::time_point expiration;
+        };
+
         struct Configs
         {
             //TODO implement all of this
             std::shared_mutex configMutex;
 
-            std::atomic<uint16_t> bindingCleanup = 3600;
             std::atomic<uint16_t> conflictResolution = 10; // minutes
+            std::atomic<uint16_t> declineQuarintine = 3600;
+            std::atomic<uint16_t> offerExpiration = 600;
+            std::atomic<uint8_t> leaseExpirationOffset = 0;
+
+            std::atomic<uint16_t> bindingCleanup = 3600;
             std::atomic<uint16_t> leasesPerInterface = 1;
             std::atomic<uint16_t> pingTimeout = 750; // milliseconds
+            std::atomic<size_t> clientMaxSize = 576;
 
             std::unordered_map<std::string, uint16_t> databaseSaveInterval;
             std::unordered_map<std::string, std::pair<uint32_t, uint16_t>> writeDelay;
-            std::vector<ByteString> globalDnsServers;
+            std::vector<uint32_t> globalDnsServers;
 
-            std::atomic<uint16_t> declineQuarintine = 3600;
             std::atomic<uint8_t> conflictInterval = 1;
             std::atomic<uint8_t> conflictRetry = 10;
             std::atomic<uint8_t> pingRetryCount = 2;
-            std::atomic<uint16_t> offerExpiration = 600;
-            std::atomic<uint8_t> leaseExpirationOffset = 0;
             std::atomic<uint8_t> hartbeatInterval = 10;
             std::atomic<uint8_t> forceRenewInterval = 0;
 
@@ -50,6 +77,9 @@ namespace Protocol
             std::atomic<bool> option55Override = false; //TODO
             std::atomic<bool> sipParameterNak = false; //TODO
             std::atomic<bool> tunnelUnicastParameter = false; //TODO
+            std::atomic<bool> checkForConflict = false;
+            std::atomic<bool> rapidCommit = false;
+            std::atomic<bool> offerSearchDomain = false;
 
             struct DNS
             {
@@ -61,11 +91,14 @@ namespace Protocol
             struct Snooping
             {
                 std::set<std::string> databases; // TODO later
-                std::map<uint16_t, std::set<uint16_t>> vlans;
+                std::set<std::string> trustedCircuiteIDs;
+                std::set<std::string> trustedRemoteIDs;
+                std::unordered_map<uint16_t, std::set<uint16_t>> vlans;
                 std::atomic<bool> informationOption = false; //TODO
                 std::atomic<bool> allowUntrusted = false;
                 std::atomic<bool> verifyMac = false;
                 std::atomic<bool> verifyGiaddr = false;
+                std::atomic<bool> verifyRelay = false;
             } snooping;
 
             struct BOOTP
@@ -87,233 +120,325 @@ namespace Protocol
             } bootp;
         };
 
-        struct SnoopingEntry
+        struct DhcpNetworkConfig
         {
-            ByteString mac;
-            ByteString ip;
-            std::pair<InterfaceType, float> interface;
-            std::chrono::steady_clock::time_point expiration;
+            std::atomic<uint8_t> defaultSubnetPrefix;       ///< The default subnet Prefix for the DHCP pool.
+            std::atomic<uint8_t> serverPreference = 255;    ///< Default server preference.
+            std::atomic<uint32_t> leaseTime = 0;            ///< The default duration of a lease in seconds.
+            std::atomic<double> t1Percentage = 0.5;         ///< Initial T1 percentage for calcualting renewal times.
+            std::atomic<double> t2Percentage = 0.87;        ///< Initial T2 percentage for calcualting rebinding times.
+
+            std::vector<uint32_t> dnsServers;           ///< A list of DNS servers provided with this network.
+            std::vector<std::string> searchDomains;     ///< The domain name associated with this network.
+            std::string domainName;
+
+            Interface* interface = nullptr;             ///< Pointer to the interface managing this network.
+            
+            // Vendor
+            std::string vendorClassID;
+            std::string vendorSpecificData;
+
+            // PXE
+            std::optional<uint8_t> pxeDiscoveryControl;
+            std::vector<uint32_t> pxeBootServers;
+
+            // Boot
+            std::string bootFileName;
+            std::string tftpServerName;
+
+            // Additional fields
+            std::vector<uint32_t> ntpServers;           ///< Network Time Protocol (NTP) server for this network.
+            std::vector<uint32_t> tftpServers;          ///< TFTP server address for PXE booting.
+            std::vector<uint32_t> winsServers;          ///< A list of WINS (Windows Internet Name Service) servers.
+            std::vector<uint32_t> staticRoutes;         ///< Static routes provided to the network clients.
+            std::vector<uint32_t> helperAddresses;      ///< List of DHCP relay (helper) addresses.
+            uint32_t broadcastAddress;                  ///< The broadcast address for this network.
+            uint32_t arpTimeout;                        ///< ARP timeout value for this network.
+            std::optional<bool> allowDynamicUpdates;    ///< Indicates whether dynamic updates (e.g., for DNS) are enabled.
+            std::vector<std::string> allowedHostnames;  ///< A list of hostnames allowed to operate on this network.
+            std::atomic<uint16_t> mtu;                  ///< Maximum Transmission Unit (MTU) for the network.
+
+            // Metadata
+            std::string description;                    ///< Description or label for this network configuration.
+            std::atomic<bool> isPrivate;                ///< Flag indicating whether this network is private or public.
+            std::atomic<bool> isEnabled;                ///< Flag indicating whether this network is currently active.
+            
+            mutable std::shared_mutex configMutex;
+            // Methods (optional, if you want to add functions)
+            bool updateNetwork(IPPrefix& prefix, uint32_t& gateway);
+            IPPrefix getNetworkID() const;
+            uint8_t* getNetwork(uint8_t* out) const;
+            uint32_t getNetwork() const;
+            uint8_t* getGateway(uint8_t* out) const;
+            uint32_t getGateway() const;
+            uint8_t getPrefixLen() const;
+            uint8_t* getSubnetMask(uint8_t* out);
+            uint32_t getSubnetMask();
+
+            std::string hostname;
+        private:
+            std::atomic<uint8_t> subnetPrefix;  ///< The subnet prefix for the DHCP pool.
+            uint32_t subnetMask;                ///< The subnet mask for the DHCP pool.
+            uint32_t network;                 ///< The base address of the network. (e.g., "192.168.1.0").
+            uint32_t defaultGateway;          ///< The default gateway address for clients in this network.
+
+        };
+
+        struct DhcpNetwork
+        {
+            DhcpNetwork(TimeManager& tmgr, Dhcp::Configs& configs)
+            {
+                pool = new IPv4Pool(tmgr);
+                leaseManager = new IPv4LeaseManager(*pool, configs);
+                pool->setLeaseManager(leaseManager);
+            }
+
+            ~DhcpNetwork()
+            {
+                delete pool;
+                delete leaseManager;
+            }
+
+            IPv4Pool* pool = nullptr;
+            IPv4LeaseManager* leaseManager = nullptr;
+            DhcpNetworkConfig configs;
+        };
+
+        struct DhcpAuthState
+        {
+            std::string sharedKey;
+            uint64_t lastReplayCounter = 0;
+            bool enforced = false;
+        };
+
+        class DhcpAuthManager
+        {
+        public:
+            void addClientKey(const ClientID& clientID, const std::string& key, bool enforced = true)
+            {
+                std::unique_lock<std::shared_mutex> lock(authMutex);
+                authTable[clientID] = DhcpAuthState{key, 0, enforced};
+            }
+
+            void setDefaultKey(const std::string& key)
+            {
+                std::unique_lock<std::shared_mutex> lock(authMutex);
+                defaultKey = key;
+            }
+
+            const DhcpAuthState* getClientState(const ClientID& clientID) const
+            {
+                std::shared_lock<std::shared_mutex> lock(authMutex);
+                auto it = authTable.find(clientID);
+                return it != authTable.end() ? &it->second : nullptr;
+            }
+
+            const std::string* getKeyForClient(const ClientID& clientID) const
+            {
+                std::shared_lock<std::shared_mutex> lock(authMutex);
+                auto it = authTable.find(clientID);
+                if (it != authTable.end())
+                    return &it->second.sharedKey;
+
+                return defaultKey.empty() ? nullptr : &defaultKey;
+            }
+
+            uint64_t& getReplayCounter(const ClientID& clientId)
+            {
+                std::unique_lock<std::shared_mutex> lock(authMutex);
+                return authTable[clientId].lastReplayCounter;
+            }
+
+            bool shouldEnforce(const ClientID& clientID) const
+            {
+                std::shared_lock<std::shared_mutex> lock(authMutex);
+                auto it = authTable.find(clientID);
+                return it != authTable.end() ? it->second.enforced : false;
+            }
+
+        private:
+            mutable std::shared_mutex authMutex;
+            std::unordered_map<ClientID, DhcpAuthState> authTable;
+            std::string defaultKey;
         };
     }
+
 
     /**
      * @brief Represents a fully functional DHCP server
      * Cabable of managing IP address leases, handling dhcp packets, and supporting relay agents.
      */
-    class DhcpServer : public DhcpServerBase
-    {
+    class DhcpServer {
     public:
-        friend class ::DhcpServerTest;
-        friend class ::IPPoolTest;
+        DhcpServer(Global& global, TimeManager& timeManager);
+        ~DhcpServer();
 
+        void start();
+        void stop();
 
-        /**
-         * @brief COnstructs a new instance of the DhcpServer class and initialized internal structures for lease and network management.
-         */
-        DhcpServer(Global& global);
-
-        /**
-         * @brief Destructor that cleans up resources, stops the server, and releases any threads or mutexes in use.
-         */
-        virtual ~DhcpServer();
-
-        /**
-         * @brief Starts the DHCP server, enabling it to proces DHCP packets and manage leases for confugured networks.
-         */
-        virtual void startServer() override;
-
-        /**
-         * @brief Stops the DHCP server and ensures that any ongoing operations or threads are safely terminalted.
-         */
-        virtual void stopServer() override;
-
-        /**
-         * @brief Processes an incoming DHCP packet.
-         *
-         * determines its type, and preforms the appropriate actions based on the DHCP message.
-         *
-         * @param packet The received PacketInfo object containing the header and payload.
-         * @param iface The interface the packet was received on.
-         */
-        void handleDhcpPacket(const PacketInfo& packet, Interface* iface);
-
-        Dhcp::Configs globalConfig;
+        void handlePacket(const DhcpHeader& dhcp, const uint8_t* sourceMac, Interface& iface);
 
     private:
-        
-        /**
-         * @brief The main handler thread for managing DHCP server.
-         */
-        virtual void dhcpHandler() override;
 
-        /**
-         * @brief Finds the matching network configuration for a DHCPv4 header.
-         *
-         * @param dhcpHeader The DHCP header.
-         * @return The matching network identifier if found; othersize, an empty ByteString.
-         */
-        ByteString findMatchingNetwork(const DhcpHeader& dhcpheader);
+        Global& global;
+        TimeManager& timeManager;
+        Dhcp::DhcpAuthManager authManager;
+        Dhcp::Configs configs;
 
-        /**
-         * @breif Processes a DHCPDISCOVER packet and generates a corrseponding DHCPOFFER if a suitable IP address can be allocated.
-         *
-         * @param dhcpHeader The DHCP header from the incoming packet.
-         */
-        void processDiscover(const DhcpHeader& dhcpHeader);
+        std::mutex serverMutex;
 
-        /**
-         * @brief Processes a DHCPREQUEST packet and either acknowledges the lease with a DHCPACK or rejects the request with a DHCPNAK.
-         * 
-         * @param dhcpHeader The DHCP header from the incoming packet.
-         */
-        void processRequest(const DhcpHeader& dhcpHeader);
+        std::unordered_map<std::string, Dhcp::DhcpNetwork*> networks;
 
-        /**
-         * @brief Processes a DHCPRELEASE packet to free up an IP address previously assigned to a client.
-         *
-         * @param dhcpHeader The DHCP header from the incoming packet
-         */
-        void processRelease(const DhcpHeader& dhcpHeader);
+        std::unordered_map<uint64_t, Dhcp::SnoopingEntry> snoopingTable;
 
-        /**
-         * @brief Process a DHCPDECLINE packet releasing the current queued IP address.
-         * 
-         * @param dhcpHeader The DHCP header from the incoming packet.
-         */
-        void processDecline(const DhcpHeader& dhcpHeader);
+        Dhcp::DhcpNetwork* addPool(std::string& poolName);
+        void removePool(std::string& poolName);
+        bool removeConfig(IPPrefix& prefix);
 
-        /**
-         * @brief Process a DHCPINFORM packet sending requested information to the client.
-         *
-         * @param dhcpHeader The DHCP header from the incoming packet.
-         */
-        void processInform(const DhcpHeader& dhcpHeader);
 
-        /**
-         * @brief Gathers all of the requested options to reply to an inform message with.
-         *
-         * @param optons Vector containing all options received
-         */
-        std::vector<ByteString> getRequestedOptions(const std::vector<DhcpHeader::Option>& options);
-        
-        std::vector<DhcpHeader::Option> buildDnsAndIdentityOptions(const std::vector<DhcpHeader::Option>& options, const Dhcp::DhcpNetworkConfig* config, bool isAck);
+        // === PACKET LOGIC ===
+        void processDiscover(
+            const DhcpHeader& dhcp,
+            std::vector<TLV8Option>& options,
+            ClientID& client,
+            Interface& iface,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void processRequest(
+            const DhcpHeader& dhcp,
+            std::vector<TLV8Option>& options,
+            ClientID& client,
+            Interface& iface,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void processDecline(
+            const DhcpHeader& dhcp,
+            std::vector<TLV8Option>& options,
+            ClientID& client,
+            Interface& iface
+        );
+        void processRelease(
+            const DhcpHeader& dhcp,
+            std::vector<TLV8Option>& options,
+            ClientID& client,
+            Interface& iface
+        );
+        void processInform(
+            const DhcpHeader& dhcp,
+            std::vector<TLV8Option>& options,
+            ClientID& client,
+            Interface& iface,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void processLeaseQuery(
+            const DhcpHeader& dhcp,
+            std::vector<TLV8Option>& options,
+            ClientID& client,
+            Interface& iface,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
 
-        /**
-         * @brief Builds a dhcp body with common fields.
-         *
-         * @param sourceIP The source or gateway of the packet.
-         * @param destinationIP The destination IP address.
-         * @param sourceMac The MAC address of the gateway.
-         * @return PacketInfo configured DHCP body packet.
-         */
-        PacketInfo dhcpBody(const ByteString& sourceIP, const ByteString& destinationIP, const ByteString& sourceMac);
+        // === PACKET SENDING ===
+        void sendOffer(
+            Interface& iface,
+            const uint8_t* transID,
+            const ClientID& client,
+            const uint8_t* chaddr,
+            const uint8_t* giaddr,
+            uint32_t ip,
+            const uint8_t* destination,
+            uint8_t* requests,
+            size_t reqiestsSize,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void sendAck(
+            Interface& iface,
+            const uint8_t* transID,
+            const ClientID& client,
+            const uint8_t* chaddr,
+            const uint8_t* giaddr,
+            uint32_t ip,
+            const uint8_t* destination,
+            uint8_t* requests,
+            size_t requestsSize,
+            bool isRC,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void sendNak(
+            Interface& iface,
+            const uint8_t* transID,
+            const ClientID& client,
+            const uint8_t* chaddr,
+            const uint8_t* giaddr,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void sendInformReply(
+            Interface& iface,
+            const uint8_t* transID,
+            const ClientID& client,
+            const uint8_t* chaddr, 
+            const uint8_t* giaddr,
+            const uint8_t* destination,
+            uint8_t* requests,
+            size_t requestsSize,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void sendForceRenew(
+            Interface& iface,
+            const ClientID& client,
+            const uint8_t* chaddr,
+            uint32_t ciaddr,
+            const uint8_t* destination,
+            size_t clientMaxSize,
+            const TLV8Option* relayInfo
+        );
+        void sendLeaseQueryReply(
+            Interface& iface,
+            const uint8_t* transID,
+            const ClientID& client,
+            uint32_t clientIP,
+            const uint8_t* chaddr,
+            const uint8_t* giaddr,
+            const TLV8Option* relayInfo,
+            const IPv4LeaseManager::Lease* lease,
+            uint8_t prefixLen,
+            uint8_t responseType,
+            size_t clientMaxSize
+        );
 
-        /**
-         * @brief Builds a DHCP header with common fields.
-         *
-         * @param messageType The DHCP message type.
-         * @param clientIP The assigned client IP.
-         * @param relayAgentIP The relay agent's IP, if applicable.
-         * @param transID The Transit ID used by the client.
-         * @return the constructed DHCP header.
-         */
-        DhcpHeader buildDhcpHeader(const ByteString& messageType, const ByteString& clientIP, const ByteString& relayAgentIP, const ByteString& transID);
+        void addRequestedOptions(Dhcp::DhcpTLVManager& tlv, Dhcp::DhcpNetwork& network, const uint8_t* requests, size_t requestsSize);
+        void appendDnsServers(Dhcp::DhcpTLVManager& tlv, const Dhcp::DhcpNetworkConfig& network);
+        void appendNtpServers(Dhcp::DhcpTLVManager& tlv, const Dhcp::DhcpNetworkConfig& network);
+        void appendDomainSearchList(Dhcp::DhcpTLVManager& tlv, const std::vector<std::string>& domains);
+        void appendVendorOptions(Dhcp::DhcpTLVManager& tlv, const ClientID& client, const Interface& iface, const Dhcp::DhcpNetworkConfig& configs);
+        void appendBootOptions(Dhcp::DhcpTLVManager& tlv, const Dhcp::DhcpNetworkConfig& configs);
+        void appendAuthOptions(TLV8BufferManager& tlv, const DhcpHeader& dhcp, const ClientID& clientID);
 
-        PacketInfo buildDhcpOffer(const DhcpHeader& dhcpHeader, const Dhcp::DhcpNetworkConfig* config, const ByteString& ipAddress);
+        bool validateAuthentication(const DhcpHeader& dhcp, const ClientID& clientID, const uint8_t* value);
 
-        PacketInfo buildDhcpAck(const DhcpHeader& dhcpHeader, const Dhcp::DhcpNetworkConfig* config, const ByteString& ipAddress);
+        void snoopingAllowed(const DhcpHeader& dhcp, Interface& iface);
 
-        /**
-         * @brief Builds a DHCPACK packet to send back data requested by a clinet from a inform message.
-         *
-         * @param dhcpHeader The DHCP header of the request.
-         * @param config The network configuration for the acknowledgment.
-         * @param requestedOptions A vector of Options requested in ByteStrings.
-         * @return A PacketInfo object representing the constructed DHCPACK.
-         */
-        PacketInfo buildDhcpAckForInform(const DhcpHeader& dhcpHeader, const Dhcp::DhcpNetworkConfig* config, const std::vector<ByteString>& requestedOptions);
+        // === TIMER-BASED TASKS ===
+        void expireOffer(uint32_t ip);
+        void cleanupBinding(uint32_t ip);
+        void clearDecline(uint32_t ip);
+        void clearForceRenew(uint32_t ip);
 
-        /**
-         * @brief Builds all requested options from an inform request
-         *
-         * @param requestedOptions Vector holding all requested options.
-         * @param config NetworkConfig object holding the information to fill in.
-         * @return A vector of fully made and ready options.
-         */
-        std::vector<DhcpHeader::Option> buildRequestedOptions(const std::vector<ByteString>& requestedOptions, const Dhcp::DhcpNetworkConfig* config);
+        // === ENFORCEMENT ===
+        bool enforceTrust(const Interface& iface, const ClientID& client, const Dhcp::Configs& config);
+        bool verifySnooping(const Interface& iface, const ClientID& client, const Dhcp::Configs& config);
+        void applyDNSRules(std::vector<IPAddress>& dnsOut, const Dhcp::Configs::DNS& dnsCfg);
+        void applyOptionRules(std::vector<uint8_t>& optOut, const Dhcp::Configs& config);
 
-        /**
-         * @brief Sends a DHCPNAK packet to the client to indicate that its lease request
-         *        has been rejected.
-         * 
-         * @param dhcpHeader The DHCP header of the rejected request.
-         * @param interface The interface to send the packet out of.
-         */
-        void sendNak(const DhcpHeader& dhcpHeader, Interface* interface);
-
-        /**
-         * @brief Extracts the value of a specific DHCP option from the provided list of options.
-         * 
-         * @param options The list of DHCP options in the header.
-         * @param optionType The type of the option to retrieve.
-         * @return The value of the option as a ByteString, or an empty string if not found.
-         */
-        ByteString getOption(const std::vector<DhcpHeader::Option>& options, const ByteString& optionType);
-
-        /**
-         * @brief Sends a constructed packet to the network interface for delivery to the client.
-         * 
-         * @param packet The PacketInfo object containing the data to be sent.
-         */
-        void sendPacket(PacketInfo& packet, Interface* interface);
-
-        /**
-         * @brief Generates a random transaction ID.
-         *
-         * @return A ByteString representing the transaction ID.
-         */
-        ByteString generateTransactionID();
-
-        // RFC 2131 required timers
-
-        /**
-         * @brief Validates mandatory options in DHCPREQUEST messages
-         * 
-         * @param options Vector of DHCP options
-         * @return true if all mandatory options are present and valid
-         */
-        bool validateMandatoryOptions(const std::vector<DhcpHeader::Option>& options);
-
-        /**
-         * @brief Handles BOOTP client requests for backward compatibility
-         * 
-         * @param packet The received PacketInfo object
-         */
-        void handleBootpRequest(const PacketInfo& packet);
-
-        /**
-         * @brief Implements authentication as per RFC 3118
-         *
-         * @param dhcpHeader The DHCP header to authenticate
-         * @return true if authentication succeeds
-         */
-        bool authenticateMessage(const DhcpHeader& dhcpHeader);
-
-        /**
-         * @brief Processes DHCPFORCERENEW messages (RFC 3203)
-         * @param dhcpHeader The DHCP header from the incoming packet
-         */
-        void processForceRenew(const DhcpHeader& dhcpHeader);
-
-        // Authentication related members (RFC 3118)
-        std::unordered_map<ByteString, uint32_t> replayCache;  // MAC -> last timestamp
-        ByteString authenticationSecret;
-        ByteString allocateWithValidation(const ByteString& networkID, IPPool* pool, const DhcpHeader& dhcpHeader);
-        bool isTrustedInterface(Interface* iface);
-        void addSnoopingEntry(const DhcpHeader& header, const ByteString& ip, Interface* iface, uint32_t leaseTime);
-        
-        std::unordered_map<ByteString, Dhcp::SnoopingEntry> snoopingTable;
-        std::mutex snoopingMutex;
+        Dhcp::DhcpNetwork* matchingNetwork(const Interface& iface, const DhcpHeader& dhcp) const;
     };
 }
 
