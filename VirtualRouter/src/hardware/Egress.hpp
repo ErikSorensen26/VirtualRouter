@@ -15,23 +15,7 @@
 #include <string>
 #include <errno.h>
 #include <stdexcept>
-
-struct PacketSlot
-{
-    const uint32_t index;
-    uint8_t dscp;
-    uint8_t ecn;
-    uint8_t cos;
-    uint32_t flowHash;
-    uint32_t classId;
-    uint64_t timestampNanos;
-};
-
-struct FrameHandle
-{
-    PacketSlot* slot;
-    uint8_t* payload;
-};
+#include <PacketSlot.hpp>
 
 class Egress
 {
