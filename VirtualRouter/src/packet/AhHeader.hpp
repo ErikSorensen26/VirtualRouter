@@ -2,10 +2,9 @@
 
 #ifndef AH_HEADER_HPP
 #define AH_HEADER_HPP
+
 #include <span>
 #include <HeaderHelpers.hpp>
-#include <ByteString.hpp>
-#include <optional>
 
 /**
  * @struct AhHeader

@@ -16,7 +16,6 @@
 #include <RoutingTable.h>
 #include <TimeManager.h>
 #include <unordered_map>
-#include <ByteString.hpp>
 #include <unordered_set>
 #include <PacketBuilder.hpp>
 #include <tuple>

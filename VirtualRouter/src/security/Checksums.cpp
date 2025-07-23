@@ -1,6 +1,5 @@
 #include <Checksums.h>
 #include <Functions.h>
-#include <iostream>
 #include <Encapsulation.h>
 #include <Profiler.hpp>
 #include <HeaderHelpers.hpp>

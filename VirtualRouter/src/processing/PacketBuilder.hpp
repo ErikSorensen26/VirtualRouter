@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <PacketStructure.h>
+#include <PacketSlot.hpp>
 
 constexpr size_t MaxPacketSize = 2048;
 

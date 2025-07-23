@@ -3,7 +3,6 @@
 #ifndef ETHERNET_H
 #define ETHERNET_H
 
-#include <ByteString.hpp>
 #include <PacketStructure.h>
 #include <Logger.h>
 

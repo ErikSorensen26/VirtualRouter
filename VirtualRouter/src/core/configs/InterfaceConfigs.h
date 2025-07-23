@@ -1,5 +1,8 @@
 // InterfaceConfigs.h
 
+#ifndef INTERFACE_CONFIGS_H
+#define INTERFACE_CONFIGS_H
+
 #include <shared_mutex>
 #include <atomic>
 #include <vector>
@@ -8,16 +11,19 @@
 #include <cstring>
 #include <map>
 
+// Forward declarations
 class Global;
 class TimeManager;
-enum class AddressFamily: uint8_t;
 class MockInterface;
 class Internal_NdpTest;
 class IPAddress;
+enum class AddressFamily: uint8_t;
+
 namespace EigrpConfigs
 {
     struct InterfaceConfigs;
 }
+
 namespace Protocol
 {
     namespace Dhcpv6
@@ -27,9 +33,6 @@ namespace Protocol
     }
     class Ndp;
 }
-
-#ifndef INTERFACE_CONFIGS_H
-#define INTERFACE_CONFIGS_H
 
 /**
  * @enum InterfaceType
@@ -63,31 +66,54 @@ inline uint32_t calculateInterfaceKey(InterfaceType type, float id) {
 class InterfaceConfigs
 {
 public:
-    InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const uint8_t* mac) : ipv6(timeManager), id(id), interfaceType(type), key(calculateInterfaceKey(type, id)) {
-        std::memcpy(macAddress, mac, 6);
-    }
+    InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const uint8_t* mac);
 
-    /**
-     * @struct IPv4State
-     * @brief Stores IPv4 address and subnet mask information.
-     */
+    ~InterfaceConfigs();
+
+    bool hasAddress(const uint8_t* address);
+    bool hasAddress(__uint128_t address);
+
+    uint8_t* getMac(uint8_t* mac);
+    uint64_t getMac();
+    void setMac(const uint8_t* mac);
+
+    float id;                       ///< Identifier for the interface.
+    InterfaceType interfaceType;    ///< Type of interface.
+    uint32_t key;                   ///< Interface ID for global identification.
+
+    std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
+    std::atomic<bool> trusted = false;           ///< Identifier for trusted interface.
+    std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
+    std::atomic<uint32_t> delay{10};             ///< Delay of the interface in milliseconds.
+    std::atomic<uint8_t> ttl{64};                ///< Time To Live.
+    std::atomic<uint16_t> globalMtu{1500};
+
+    std::shared_mutex ipMutex;
+
+    // Sub-configuration structs
     struct IPv4State
     {
         IPv4State() : mask(0), address(0) {}
-        friend class MockInterface;
-        friend class Interface;
-        std::atomic<uint16_t> mtu{1500}; ///< Maximum Transmission Unit size.
+        std::atomic<uint16_t> mtu{1500};
         bool mtuLocal = false;
-        uint8_t* getAddress(uint8_t* out) { writeU32(out, address.load(std::memory_order_relaxed)); return out; }
-        uint32_t getAddress() { return address.load(std::memory_order_relaxed); }
-        void setAddress(const uint8_t* newAddress, uint8_t newMask) { address.store(readU32(newAddress), std::memory_order_release); mask.store(newMask, std::memory_order_relaxed); }
-        bool compareAddress(const uint8_t* ip) { return address.load(std::memory_order_relaxed) == readU32(ip); }
-        bool compareAddress(uint32_t ip) { return address.load(std::memory_order_release) == ip; }
-        uint8_t getMask() { return mask.load(std::memory_order_relaxed); }
+
+        uint8_t* getAddress(uint8_t* out);
+        uint32_t getAddress();
+
+        void setAddress(const uint8_t* newAddress, uint8_t newMask);
+
+        bool compareAddress(const uint8_t* ip);
+        bool compareAddress(uint32_t ip);
+
+        uint8_t getMask();
+
     private:
         std::shared_mutex ipMutex;
         std::atomic<uint8_t> mask{0};            ///< Subnet mask.
         std::atomic<uint32_t> address;
+
+        friend class MockInterface;
+        friend class Interface;
     } ipv4;
 
     /**
@@ -96,67 +122,83 @@ public:
      */
     struct IPv6State
     {
-        IPv6State(TimeManager& time);
-        TimeManager& timeManager;
-        friend class MockInterface;
-        friend class Interface;
-        friend class Protocol::Ndp;
-        friend class ::Internal_NdpTest;
-        std::shared_mutex ipMutex;
+        explicit IPv6State(TimeManager& time);
+        ~IPv6State();
+
         struct IPv6Address
         {
-            friend class MockInterface;
-            friend class ::Internal_NdpTest;
             uint8_t ip[16];
+            __uint128_t ipInt;
             uint8_t prefix = 0;
-            bool tentative{false}, valid{false}, globalTentative{false}, globalValid{false}, deprecated{false};
-            uint32_t expirationId = 0, preferredLifetime = 0, preferedExpirationId = 0;
+
+            bool tentative{false};
+            bool valid{false};
+            bool globalTentative{false};
+            bool globalValid{false};
+            bool deprecated{false};
+            uint32_t expirationId = 0;
+            uint32_t preferredLifetime = 0;
+            uint32_t preferedExpirationId = 0;
 
             void validateAddress(bool local = false);
+
+            friend class MockInterface;
+            friend class ::Internal_NdpTest;
         };
 
         // Add/Remove functions
         IPv6Address* addAddress(const uint8_t* ip, bool local, uint8_t prefix);
-
         IPv6Address* addUniqueLocalAddress(const uint8_t* ip, uint8_t prefixLen);
+        IPv6Address* addGlobalAddress(const uint8_t* ip, uint8_t prefixLen);
+        void removeLocalAddress();
+        void removeAddress(const uint8_t* ip);
+        void removeAddress(__uint128_t ip);
 
-        void removeAddress(const uint8_t* ip, bool local);
-
-        // Validation
         void validateGlobalAddresses();
-
         void validateLinkLocalAddress();
 
-        // Get IP functions
         uint8_t* getLocalAddress(uint8_t* out);
-        __uint128_t getLocalAddress();
-
-        uint8_t getGlobalUnicastPair(uint8_t* out);
         uint8_t* getGlobalUnicast(uint8_t* out);
-        uint8_t getGlobalUnicastMask();
-        __uint128_t getGlobalUnicast();
-
-        uint8_t getLocalUnicastPair(uint8_t* out);
         uint8_t* getLocalUnicast(uint8_t* out);
-        uint8_t getLocalUnicastMask();
+
+        __uint128_t getLocalAddress();
+        __uint128_t getGlobalUnicast();
         __uint128_t getLocalUnicast();
 
-        std::vector<IPAddress> getGlobalList();
+        bool hasLocalAddress(const uint8_t* addr);
+        bool hasGlobalUnicast(const uint8_t* addr);
+        bool hasLocalUnicast(const uint8_t* addr);
 
+        bool hasLocalAddress(__uint128_t addr);
+        bool hasGlobalUnicast(__uint128_t addr);
+        bool hasLocalUnicast(__uint128_t addr);
+
+        uint8_t getGlobalUnicastPair(uint8_t* out);
+        uint8_t getLocalUnicastPair(uint8_t* out);
+
+        uint8_t getGlobalUnicastMask();
+        uint8_t getLocalUnicastMask();
+
+        std::vector<IPAddress> getGlobalList();
         std::vector<IPAddress> getLocalList();
 
-        ~IPv6State();
 
         // Other IPv6 configurations
         std::atomic<uint16_t> mtu{1500}; ///< Maximum Transmission Unit size.
 
     private:
-        IPv6Address* linkLocalAddress = new IPv6Address(); ///< IPv6 address.
+        TimeManager& timeManager;
+        std::shared_mutex ipMutex;
+        IPv6Address* linkLocalAddress = nullptr;
         std::vector<IPv6Address*> globalAddresses; ///< Global IPv6 addresses.
         std::vector<IPv6Address*> uniqueLocalAddresses{}; ///< Unique Local Addresses.
-    }  ipv6;
+        void cancelTimers(IPv6Address& addr);
 
-    bool hasAddress(const uint8_t* address);
+        friend class MockInterface;
+        friend class Interface;
+        friend class Protocol::Ndp;
+        friend class ::Internal_NdpTest;
+    }  ipv6;
 
     /**
      * @struct Eigrp
@@ -178,25 +220,8 @@ public:
         std::vector<Protocol::Dhcpv6::DhcpNetwork*> dhcpNetworks;
     } dhcpv6;
 
-    ~InterfaceConfigs();
-    std::shared_mutex ipMutex;      ///< Mutex for thread-safe access to IP information
-
-    float id;                       ///< Identifier for the interface.
-    InterfaceType interfaceType;    ///< Type of interface.
-    uint32_t key;                   ///< Interface ID for global identification.
-    std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
-    std::atomic<bool> trusted = false;           ///< Identifier for trusted interface.
-    std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
-    std::atomic<uint32_t> delay{10};             ///< Delay of the interface in milliseconds.
-    std::atomic<uint8_t> ttl{64};                ///< Time To Live.
-    std::atomic<uint16_t> globalMtu{1500};
-
-    uint8_t* getMac(uint8_t* mac);
-    uint64_t getMac();
-    void setMac(const uint8_t* mac);
-
 private:
-    uint8_t macAddress[6];                     ///< MAC address addociated with the interface.
+    std::atomic<uint64_t> macAddress;  ///< MAC address associated with the interface.
 };
 
 #endif // INTERFACE_CONFIGS_H

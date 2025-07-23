@@ -219,8 +219,8 @@ public:
 
 private:
 
-    std::map<uint32_t, std::map<IPPrefix, Eigrp*>> eigrp;      ///< EIGRP routing table for IPv4.
-    std::map<uint32_t, std::map<IPPrefix, Eigrp*>> eigrpIPv6;  ///< EIGRP routing table for IPv6.
+    std::unordered_map<uint32_t, std::unordered_map<IPPrefix, Eigrp*>> eigrp;      ///< EIGRP routing table for IPv4.
+    std::unordered_map<uint32_t, std::unordered_map<IPPrefix, Eigrp*>> eigrpIPv6;  ///< EIGRP routing table for IPv6.
 };
 
 #endif // ROUTING_TABLE_H

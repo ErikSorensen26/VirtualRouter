@@ -3,11 +3,13 @@
 #ifndef INTERFACE_H
 #define INTERFACE_H
 
-#include <Ingress.h>
-#include <Egress.h>
+#include <Ingress.hpp>
+#include <Egress.hpp>
 #include <string>
 #include <InterfaceConfigs.h>
 #include <PacketStructure.h>
+#include <FIFOQueue.hpp>
+#include <condition_variable>
 
 #include <map>
 #include <thread>
@@ -18,6 +20,16 @@ class VirtualRouter;
 class MockInterface;
 enum class InterfaceType : uint8_t;
 class PacketBuilder;
+
+struct InterfaceCreation
+{
+    InterfaceType interfaceType;
+    float interfaceId;
+    VirtualRouter& vrf;
+    const char* outInterface;
+    const uint8_t* mac;
+    bool debug;
+};
 
 /**
  * @enum StateChange
@@ -59,7 +71,6 @@ class Interface
 public:
     friend class ::MockInterface;
     friend class ::EigrpTest;
-    RingBuffer<ByteString> packetOutQueue; ///< Queue for outgoing packets.
 
 
     /**
@@ -77,14 +88,7 @@ public:
      * @param debug Flag to enable or disable debug mode.
      */
     Interface(
-        InterfaceType interfaceType,
-        std::string outInterface,
-        const size_t inQueSiz,
-        const size_t outQueSiz,
-        std::string mac,
-        float interfaceId,
-        VirtualRouter& vrf,
-        bool debug = false
+        InterfaceCreation& cfgs
     );
 
     /**
@@ -256,13 +260,11 @@ private:
     // Member variables
     std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
 
-    std::string outInt;     ///< Outgoing interface name.
-    size_t inQsiz;          ///< Size of the incoming packet queue.
-    size_t outQsiz;         ///< Size of the outgoing packet queue.
     bool debug;             ///< Flag indicating if debug mode is enabled.
 
-    Ingress packetCapture;  ///< Ingress object for packet capturing.
-    Egress packetSend;      ///< Egress object for packet sending.
+    Ingress ingress;  ///< Ingress object for packet capturing.
+    Egress egress;      ///< Egress object for packet sending.
+    FIFOQueue packetOutQueue;
 
     std::mutex threadsRunningMutex;     ///< Mutex for protecting the threadsRunning flag.
     std::mutex packetInQueueMutex;      ///< Mutex for protecting the incoming packet queue.

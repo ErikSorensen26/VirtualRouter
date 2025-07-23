@@ -3,7 +3,6 @@
 #ifndef IP_PACKET_H
 #define IP_PACKET_H
 
-#include <ByteString.hpp>
 #include <PacketStructure.h>
 #include <Logger.h>
 
@@ -52,6 +51,7 @@ namespace Protocol
             IPPacket::BuildIP& ipBuild,
             uint16_t sourcePort,
             uint16_t destinationPort,
+            uint16_t fragmentOffset = 0
         );
     }
 }

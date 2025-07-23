@@ -4,8 +4,8 @@
 #include <chrono>
 #include <mutex>
 #include <string>
-#include <Dhcp.h>
-#include <Dhcpv6.h>
+#include <DhcpClient.h>
+//#include <Dhcpv6.h>
 #include <Arp.h>
 #include <Ndp.h>
 #include <Eigrp.h>
@@ -16,21 +16,18 @@
 #include <VirtualRouter.h>
 #include <InterfaceConfigs.h>
 #include <PacketBuilder.hpp>
+#include <Global.h>
 
-Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, VirtualRouter& vrf, bool debug)
-    : packetOutQueue(outQueSiz),
-    routingInstance(&vrf),
-    configs(vrf.global.timeManager, interfaceType, interfaceId, Functions::hexToByte(mac)),
-    debug(debug),
-    packetCapture(outInterface, "FF000000", inQueSiz),
-    packetSend(outInterface),
+Interface::Interface(InterfaceCreation& cfgs)
+  : routingInstance(&cfgs.vrf),
+    configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.mac),
+    debug(cfgs.debug),
+    ingress(cfgs.outInterface),
+    egress(cfgs.outInterface),
+    packetOutQueue(4096, egress),
     threadsRunning(false)
 {
     // Set member variables
-    outInt = outInterface;
-    inQsiz = inQueSiz;
-    outQsiz = outQueSiz;
-
     startThreads(); // TEMPORARY: will be shutdown by default once shits working
 }
 
@@ -47,7 +44,7 @@ void Interface::cleanupInterface()
     stateChangeV6(StateChange::SHUTDOWN);
     if (auto dhcpv6Server = routingInstance->global.dhcpv6Server)
     {
-        dhcpv6Server->removeInterface(this);
+        //dhcpv6Server->removeInterface(this);
     }
     
     if (dhcp) delete dhcp;
@@ -68,7 +65,7 @@ void Interface::setIPv4(const uint8_t* ip, uint8_t subnet)
             {
                 std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
 
-                std::memcpy(configs.ipv4.ipAddress, ip, 4);
+                configs.ipv4.setAddress(ip, subnet);
                 configs.ipv4.mask = subnet;
             }
         }
