@@ -1,5 +1,4 @@
 #include <Encapsulation.h>
-#include <ByteString.hpp>
 #include <Profiler.hpp>
 #include <PacketStructure.h>
 #include <HeaderHelpers.hpp>
