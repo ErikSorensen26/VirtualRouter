@@ -22,13 +22,13 @@ struct BuildEntry
 class PacketBuilder
 {
 public:
-    PacketBuilder() : bufferOffset(0), buildIndex(0), headerCount(0) {}
+    PacketBuilder(FrameHandle& slot) : bufferOffset(0), slot(slot.slot), buffer(slot.payload), buildIndex(0), headerCount(0), local(false) {}
 
     PacketBuilder(const PacketBuilder& other)
-        : bufferOffset(other.bufferOffset),
-          buildIndex(other.buildIndex),
-          headerCount(other.headerCount)
     {
+        buffer = static_cast<uint8_t*>(std::malloc(MaxPacketSize));
+        if (!buffer) throw std::bad_alloc();
+
         std::memcpy(buffer, other.buffer, MaxPacketSize);
         std::memcpy(headers, other.headers, sizeof(headers));
 
@@ -43,6 +43,14 @@ public:
     {
         if (this != &other)
         {
+            if (local && buffer)
+                std::free(buffer);
+
+            buffer = static_cast<uint8_t*>(std::malloc(MaxPacketSize));
+            if (!buffer) throw std::bad_alloc();
+
+            local = true;
+            slot = nullptr;
             bufferOffset = other.bufferOffset;
             buildIndex = other.buildIndex;
             headerCount = other.headerCount;
@@ -56,6 +64,12 @@ public:
             }
         }
         return *this;
+    }
+
+    ~PacketBuilder()
+    {
+        if (local && buffer)
+            std::free(buffer);
     }
 
     // Reserve space for a new header from the start of the buffer
@@ -77,16 +91,17 @@ public:
         return &entry;
     }
 
-    void addTLVSize(size_t tlvSize) {
+    void addTLVSize(size_t tlvSize)
+    {
         bufferOffset += tlvSize;
         currentBuildHeader()->length += tlvSize;
     }
 
-    size_t getMaxHeaderSize(size_t mtu) {
+    size_t getMaxHeaderSize(size_t mtu)
+    {
         if (auto next = nextBuildHeader())
-        {
             return mtu - bufferOffset - getHeaderSize(next->type);
-        }
+        return mtu;
     }
 
     // Get the next header in the build order (top-down)
@@ -114,13 +129,16 @@ public:
     const BuildEntry* getHeaders() const { return headers; }
     size_t getHeaderCount() const { return headerCount; }
     uint8_t* getBuffer() { return buffer; }
+
     size_t bufferOffset;
+    PacketSlot* slot = nullptr;
 
 private:
-    alignas(8) uint8_t buffer[MaxPacketSize];
+    uint8_t* buffer = nullptr;
     BuildEntry headers[MaxHeaders];
     size_t buildIndex;
     size_t headerCount;
+    bool local = false;
 };
 
 #endif // PACKET_BUILDER_HPP

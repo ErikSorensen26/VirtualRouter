@@ -3,38 +3,23 @@
 #ifndef INTERFACE_H
 #define INTERFACE_H
 
-#include <Ingress.hpp>
+// Standard includes
+#include <mutex>
+#include <map>
+#include <atomic>
+
+#include <Ingress.h>
 #include <Egress.hpp>
-#include <string>
 #include <InterfaceConfigs.h>
 #include <PacketStructure.h>
 #include <FIFOQueue.hpp>
-#include <condition_variable>
-
-#include <map>
-#include <thread>
-#include <mutex>
 
 class EigrpTest;
 class VirtualRouter;
 class MockInterface;
-enum class InterfaceType : uint8_t;
 class PacketBuilder;
 
-struct InterfaceCreation
-{
-    InterfaceType interfaceType;
-    float interfaceId;
-    VirtualRouter& vrf;
-    const char* outInterface;
-    const uint8_t* mac;
-    bool debug;
-};
-
-/**
- * @enum StateChange
- * @brief Indicates the type of state change.
- */
+enum class InterfaceType : uint8_t;
 enum class StateChange
 {
     SHUTDOWN,
@@ -58,6 +43,16 @@ namespace EigrpConfigs
     struct InterfaceConfigs;
 }
 
+struct InterfaceCreation
+{
+    InterfaceType interfaceType;
+    float interfaceId;
+    VirtualRouter& vrf;
+    const char* outInterface;
+    const uint8_t* mac;
+    bool debug;
+};
+
 
 /**
  * @class Interface
@@ -73,102 +68,20 @@ public:
     friend class ::EigrpTest;
 
 
-    /**
-     * @brief Constructs an Interface object.
-     *
-     * Initializes packet capture and sending mechanisms, sets up IP information,
-     * initializes protocol objects, and starts background threads for packet handling.
-     *
-     * @param interfaceType The type of interface (e.g., ETHERNET, VLAN).
-     * @param outInterface The name of the outgoing interface (e.g., WLAN0, ETH1).
-     * @param inQeuSiz The size of the incoming packet queue.
-     * @param outQueSiz Thye size of the outgoing packet queue.
-     * @param mac The MAC address associated with the interface.
-     * @param interfaceId The Identifier for the interface
-     * @param debug Flag to enable or disable debug mode.
-     */
-    Interface(
-        InterfaceCreation& cfgs
-    );
-
-    /**
-     * @brief Destructs the Interface object.
-     *
-     * Stops background threads and performs necessary cleanup.
-     */
+    Interface(InterfaceCreation& cfgs);
     virtual ~Interface();
 
-    /**
-     * @brief Cleans up all of the interface objects.
-     */
     void cleanupInterface();
 
-    /**
-     * @brief Sets the IPv4 address and subnet mask for the interface.
-     *
-     * Updates the IPv4 configuration and sends gratuitous ARP packets to update the network.
-     *
-     * @param ip The IPv4 address to assign to the interface.
-     * @param subnet The subnet mask for the IPv4 address.
-     */
     virtual void setIPv4(const uint8_t* ip, uint8_t subnet);
-
-    /**
-     * @brief Sets the IPv6 address, subnet mask, and EUI-64 flag for interface.
-     *
-     * Updates the IPv6 configuration and triggers Neighbor Discovery Protocol (NDP) updates.
-     *
-     * @param ip The IPv6 address to assign to the interface.
-     * @param linkLocal Indicates if the address is linkLocal
-     * @param subnet The subnet mask for the IPv6 address, Default to 64.
-     * @param eui64 Flag indicating whether to use EUI-64 for IPv6 address generation.
-     */
     virtual void setIPv6(const uint8_t* ip, bool linkLocal = false, uint8_t subnet = 64, bool eui64 = false);
-
-    /**
-     * @brief Removes the IPv4 address and subnet mask.
-     */
     void removeIPv4();
+    void removeIPv6(const uint8_t* ip = nullptr);
 
-    /**
-     * @brief Removes the IPv6 address and subnet mask.
-     *
-     * @param linkLocal Indicates if the address is link-local.
-     */
-    void removeIPv6(const uint8_t* ip, bool linkLocal = false);
-
-    /**
-     * @brief Gathers and returns all tentative addresses on the interface.
-     *
-     * Helper address to return all pending IPv6 addresses.
-     */
     std::vector<std::array<uint8_t, 16>> getTentativeAddress();
-
-    /**
-     * @brief Marks a IPv6 address as a duplicate making it invalid.
-     *
-     * @param address IPv6 address being marked as a duplicate
-     * @param optional param stating if its a link-local address or not.
-     */
     void markAddressDuplicate(const uint8_t* address, bool linkLocal = false);
 
-    /**
-     * @brief Shuts down or restarts the interface.
-     * 
-     * Toggles the running state of the interface and triggers state changes for protocols.
-     *
-     * @param shut Boolean flag indicating whether to shut down ('true') or restart ('false').
-     */
     virtual void Shutdown(bool shut);
-
-    /**
-     * @brief Enqueues a packet for sending through the interface.
-     *
-     * Serializes and enqueues the packet, replacing the MAC address if provided.
-     *
-     * @param packetInfo The packet information to be sent.
-     * @param mac Optional MAC address to replace the packet's source MAC.
-     */
     virtual void enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac = nullptr);
 
     std::atomic<bool> shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
@@ -204,30 +117,7 @@ public:
 
 private:
 
-    /**
-     * @brief Handles packet ingress by capturing incoming packets.
-     *
-     * Continuously captures packets using the Ingress object.
-     *
-     * @param packetCapture Reference to the Ingress object for packet capturing.
-     */
-    void packetIngress();
-
-    /**
-     * @brief Handles packet egress by sending outgoing packets.
-     *
-     * Continuously sends packets from the outgoing queue using the Egress object.
-     *
-     * @param packetSend Reference to the Egress object for packet sending.
-     */
-    void packetEgress();
-    
-    /**
-     * @brief Starts the background threads for packet handling.
-     *
-     * Launches threads for packet ingress, egress, and processing.
-     */
-    void process(); // Method for processing packets
+    void processIngress(uint8_t* packet, size_t size); // Method for processing packets
 
     /**
      * @brief Handles state changes relates to IPv4 configuration.
@@ -266,16 +156,7 @@ private:
     Egress egress;      ///< Egress object for packet sending.
     FIFOQueue packetOutQueue;
 
-    std::mutex threadsRunningMutex;     ///< Mutex for protecting the threadsRunning flag.
-    std::mutex packetInQueueMutex;      ///< Mutex for protecting the incoming packet queue.
-    std::mutex packetOutQueueMutex;     ///< Mutex for protecting the outgoing packet queue.
     std::atomic<bool> threadsRunning;   ///< Atomic flag indicating if threads are running.
-
-    std::thread thread1;    ///< Thread for packet ingress.
-    std::thread thread2;    ///< Thread for packet egress.
-    std::thread thread3;    ///< Thread for packet processing.
-
-    std::condition_variable packetOutQueueCV; ///< Condition variable to notify packet egress thread.
 };
 
 // External declarations

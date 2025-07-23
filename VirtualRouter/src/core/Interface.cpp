@@ -17,12 +17,13 @@
 #include <InterfaceConfigs.h>
 #include <PacketBuilder.hpp>
 #include <Global.h>
+#include <Process.h>
 
 Interface::Interface(InterfaceCreation& cfgs)
   : routingInstance(&cfgs.vrf),
     configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.mac),
     debug(cfgs.debug),
-    ingress(cfgs.outInterface),
+    ingress(cfgs.outInterface, *this),
     egress(cfgs.outInterface),
     packetOutQueue(4096, egress),
     threadsRunning(false)
@@ -57,18 +58,19 @@ void Interface::cleanupInterface()
     routingInstance->global.removeInterface(configs.key);
 }
 
+/**
+ * @brief Sets the IPv4 address and subnet mask for the interface.
+ *
+ * Updates the IPv4 configuration and sends gratuitous ARP packets to update the network.
+ *
+ * @param ip The IPv4 address to assign to the interface.
+ * @param subnet The subnet mask for the IPv4 address.
+ */
 void Interface::setIPv4(const uint8_t* ip, uint8_t subnet)
 {
     {
-        {
-            std::lock_guard<std::mutex> lock(threadsRunningMutex);
-            {
-                std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-
-                configs.ipv4.setAddress(ip, subnet);
-                configs.ipv4.mask = subnet;
-            }
-        }
+        configs.ipv4.setAddress(ip, subnet);
+        configs.ipv4.mask = subnet;
         // Send gratuitous arps
         if (arp)
         {
@@ -79,14 +81,21 @@ void Interface::setIPv4(const uint8_t* ip, uint8_t subnet)
     }
 }
 
+/**
+ * @brief Sets the IPv6 address, subnet mask, and EUI-64 flag for interface.
+ *
+ * Updates the IPv6 configuration and triggers Neighbor Discovery Protocol (NDP) updates.
+ *
+ * @param ip The IPv6 address to assign to the interface.
+ * @param linkLocal Indicates if the address is linkLocal
+ * @param subnet The subnet mask for the IPv6 address, Default to 64.
+ * @param eui64 Flag indicating whether to use EUI-64 for IPv6 address generation.
+ */
 void Interface::setIPv6(const uint8_t* ip, bool localLink, uint8_t prefix, bool eui64)
 {
     InterfaceConfigs::IPv6State::IPv6Address* ipv6 = nullptr;
 
     {
-        std::lock_guard<std::mutex> lock(threadsRunningMutex);
-        std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-
         if (localLink)
         {
             ipv6 = configs.ipv6.addAddress(ip, true, prefix);
@@ -117,25 +126,22 @@ void Interface::setIPv6(const uint8_t* ip, bool localLink, uint8_t prefix, bool 
 
 void Interface::removeIPv4()
 {
-    std::lock_guard<std::mutex> lock(threadsRunningMutex);
-    {
-        configs.ipv4.address.store(0, std::memory_order_release);
-        configs.ipv4.mask.store(0, std::memory_order_release);
-        stateChange(StateChange::IPREMOVAL);
-    }
-    
+    configs.ipv4.address.store(0, std::memory_order_release);
+    configs.ipv4.mask.store(0, std::memory_order_release);
+    stateChange(StateChange::IPREMOVAL);
 }
 
-void Interface::removeIPv6(const uint8_t* ip, bool linkLocal)
+void Interface::removeIPv6(const uint8_t* ip)
 {
-    std::lock_guard<std::mutex> lock(threadsRunningMutex);
-    {
-        std::unique_lock<std::shared_mutex> ipLock(configs.ipMutex);
-        configs.ipv6.removeAddress(ip, linkLocal);
-        stateChangeV6(StateChange::IPREMOVAL);
-    }
+    ip ? configs.ipv6.removeAddress(ip) : configs.ipv6.removeLocalAddress();
+    stateChangeV6(StateChange::IPREMOVAL);
 }
 
+/**
+ * @brief Gathers and returns all tentative addresses on the interface.
+ *
+ * Helper address to return all pending IPv6 addresses.
+ */
 std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
 {
     std::vector<std::array<uint8_t, 16>> tentative;
@@ -171,6 +177,12 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
     return tentative;
 }
 
+/**
+ * @brief Marks a IPv6 address as a duplicate making it invalid.
+ *
+ * @param address IPv6 address being marked as a duplicate
+ * @param optional param stating if its a link-local address or not.
+ */
 void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
 {
     std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
@@ -197,6 +209,13 @@ void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
     }
 }
 
+/**
+ * @brief Shuts down or restarts the interface.
+ * 
+ * Toggles the running state of the interface and triggers state changes for protocols.
+ *
+ * @param shut Boolean flag indicating whether to shut down ('true') or restart ('false').
+ */
 void Interface::Shutdown(bool shut) 
 {
     shutdownFlag = shut;
@@ -212,6 +231,14 @@ void Interface::Shutdown(bool shut)
     stateChangeV6(StateChange::SHUTDOWN);
 }
 
+/**
+ * @brief Enqueues a packet for sending through the interface.
+ *
+ * Serializes and enqueues the packet, replacing the MAC address if provided.
+ *
+ * @param packetInfo The packet information to be sent.
+ * @param mac Optional MAC address to replace the packet's source MAC.
+ */
 void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
 {
     if (!threadsRunning.load(std::memory_order_relaxed)) return;
@@ -228,76 +255,20 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
     }
 
     // Enqueue the serialized packet for sending
+    if (packetInfo.slot)
     {
-        std::lock_guard<std::mutex> lock(packetOutQueueMutex);
-        packetOutQueue.enqueue(packetInfo.getBuffer());
-    }
-
-    packetOutQueueCV.notify_one();
-}
-
-void Interface::packetIngress() 
-{
-    while (threadsRunning) {
-        if (packetCapture.startCapture(NULL) != 0) {
-            std::cerr << "Error starting packet capture." << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100)); 
-        }
+        packetOutQueue.enqueue(packetInfo.slot);
     }
 }
 
-void Interface::packetEgress() 
+void Interface::processIngress(uint8_t* packet, size_t size) 
 {
-    while (threadsRunning) { 
-        ByteString packet;
-        {
-            std::unique_lock<std::mutex> lock(packetOutQueueMutex);
-            packetOutQueueCV.wait(lock, [this]() {return !packetOutQueue.isEmpty() || !threadsRunning; });
-
-            if (!threadsRunning && packetOutQueue.isEmpty())
-            {
-                break;
-            }
-
-            if (!packetOutQueue.isEmpty())
-            {
-                packet = packetOutQueue.dequeue();
-            }
-        }
-
-        if (!packet.empty())
-        {
-            // Enqueue the send task to the thread pool
-            routingInstance->global.threadPool.enqueue([this, packet]() {
-                this->packetSend.sendPacket(packet);
-            });
-        }
-    }
-}
-
-void Interface::process() 
-{
-    while (threadsRunning) {
-        ByteString packet;
-        {
-            std::lock_guard<std::mutex> lock(packetInQueueMutex);
-            if (!packetCapture.packetQueue.isEmpty()) {
-                packet = packetCapture.packetQueue.dequeue().toString();
-            }
-        }
-        if (!packet.empty() && packet.substr(0, 1) != "\xca") {
-            // Enqueue the packet processing task to the thread pool
-            routingInstance->global.threadPool.enqueue([this, packet]() {
-                ByteString newPacket = packet;
-                Packet* p = new Packet(newPacket, debug, *this);
-                p->decapsulate();
-                ProcessPacket process(p->packetInfo, routingInstance, this);
-            });
-        }
-        std::this_thread::sleep_for(std::chrono::microseconds(10));
-    }
+    routingInstance->global.threadPool.enqueue([this, packet, size]() {
+        PacketInfo packetInfo;
+        inspect(packetInfo, packet, size);
+        decapsulate(packetInfo, packet, size);
+        processPacket(packet, size, packetInfo, routingInstance, this);
+    });
 }
 
 void Interface::startThreads() 
@@ -312,11 +283,8 @@ void Interface::startThreads()
 
         threadsRunning = true;
 
-        std::lock_guard<std::mutex> lock(threadsRunningMutex); 
-        // Start threads for packet ingress, egress, and processing
-        thread1 = std::thread(&Interface::packetIngress, this);
-        thread2 = std::thread(&Interface::packetEgress, this);
-        thread3 = std::thread(&Interface::process, this);
+        ingress.start();
+        //TODO
     }
 }
 
@@ -333,14 +301,10 @@ void Interface::stopThreads()
         ndp = nullptr;
     }
         
-    {
-        std::lock_guard<std::mutex> lock(threadsRunningMutex); 
-        threadsRunning.store(false, std::memory_order_release); 
-    }
-    packetOutQueueCV.notify_one();
-    if (thread1.joinable()) thread1.detach(); 
-    if (thread2.joinable()) thread2.join(); 
-    if (thread3.joinable()) thread3.join(); 
+    threadsRunning.store(false, std::memory_order_release); 
+
+    ingress.stop();
+    //TODO
 }
 
 void Interface::stateChange(StateChange state)
@@ -363,7 +327,7 @@ void Interface::stateChange(StateChange state)
     {
         case StateChange::INITIATE:
         {
-            if (dhcp) dhcp->initializeDhcp();
+            if (dhcp) dhcp->initiate();
             break;
         }
         case StateChange::SHUTDOWN:
@@ -447,7 +411,7 @@ EigrpConfigs::InterfaceConfigs* Interface::getEigrpConfig(uint32_t as, AddressFa
     if (!configs.eigrp.eigrpInterfaceConfigList.contains(key))
     {
         if (negate) return nullptr;
-        EigrpConfigs::InterfaceConfigs* config = new EigrpConfigs::InterfaceConfigs(configs.interfaceType, configs.id);
+        EigrpConfigs::InterfaceConfigs* config = new EigrpConfigs::InterfaceConfigs(configs.key);
         configs.eigrp.eigrpInterfaceConfigList[key] = config;
     }
     return configs.eigrp.eigrpInterfaceConfigList[key];
