@@ -47,7 +47,9 @@ Interface* Global::addInterface(InterfaceType interfaceType, std::string outInte
     {
         return nullptr;
     }
-    interfaceList[key] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, *getRoutingInstance("default"), debug);
+
+    InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), outInterface.c_str(), reinterpret_cast<const uint8_t*>(mac.data()), debug};
+    interfaceList[key] = new Interface(iface);
 
     return interfaceList[key];
 }

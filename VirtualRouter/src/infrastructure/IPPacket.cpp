@@ -59,7 +59,7 @@ namespace Protocol
         else return nullptr; // Resolution is disabled.
     }
 
-    static void reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo)
+    void reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo)
     {
         // Decide layer 2 encapsulation based on interface configs
         // DEFAULT -> Ethernet

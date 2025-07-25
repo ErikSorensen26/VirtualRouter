@@ -1,9 +1,6 @@
 #include <Interface.h>
 #include <iostream>
-#include <thread>
-#include <chrono>
 #include <mutex>
-#include <string>
 #include <DhcpClient.h>
 //#include <Dhcpv6.h>
 #include <Arp.h>
@@ -66,7 +63,7 @@ void Interface::cleanupInterface()
  * @param ip The IPv4 address to assign to the interface.
  * @param subnet The subnet mask for the IPv4 address.
  */
-void Interface::setIPv4(const uint8_t* ip, uint8_t subnet)
+void Interface::setIPv4(uint32_t ip, uint8_t subnet)
 {
     {
         configs.ipv4.setAddress(ip, subnet);
@@ -74,8 +71,10 @@ void Interface::setIPv4(const uint8_t* ip, uint8_t subnet)
         // Send gratuitous arps
         if (arp)
         {
-            arp->sendReply(Variable::Mac::broadcast, ip);
-            arp->sendReply(Variable::Mac::broadcast, ip);
+            uint8_t addr[4];
+            writeU32(addr, ip);
+            arp->sendReply(Variable::Mac::broadcast, addr);
+            arp->sendReply(Variable::Mac::broadcast, addr);
         }
         stateChange(StateChange::IPCHANGE);
     }

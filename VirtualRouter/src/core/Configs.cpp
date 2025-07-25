@@ -668,44 +668,15 @@ std::string Configs::getVolatileValueHelper(std::string& command, std::string& c
     // Parse IP address in "A.B.C.D" format
     if (command == "A.B.C.D") 
     {
-        std::vector<int> ip{0, 0, 0, 0};
+        uint32_t ip = Functions::addressToIntv4(com);
 
-        ByteString binaryIp = Functions::byteToBin(Functions::addressToByte(com));
-        bool isMask = true;
-        bool reversed = false;
-        bool endOfOnes = false;
+        auto isContiguous = [](uint32_t x) {
+            return x != 0 && (x & (x + 1)) == 0;
+        };
 
-        sscanf(com.c_str(), "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
-        
-        // Calculate if it's a subnet or wildcard mask
-        if (binaryIp[binaryIp.size() - 1] == '1' && binaryIp[0] == '0')
-        {
-            // Reversing for validation
-            binaryIp = Functions::reverseBinary(binaryIp);
-            reversed = true;
-        }
-
-        for (auto& ch : binaryIp) 
-        {
-            if (ch == '0')
-            {
-                endOfOnes = true;
-            }
-            else if (ch == '1' && endOfOnes)
-            {
-                isMask = false;
-                break;
-            }
-        }
-
-        if (isMask)
-        {
-            return reversed ? "wildcard" : "subnet";
-        }
-        else
-        {
-            return "ip"; 
-        }
+        if (isContiguous(ip)) return "mask";
+        if (isContiguous(~ip)) return "wildcard";
+        return "ip";
     }
     
     // Return "ipv6" for IPv6 address formats

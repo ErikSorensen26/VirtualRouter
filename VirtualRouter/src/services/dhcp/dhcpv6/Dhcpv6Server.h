@@ -9,16 +9,16 @@
 #include <PrefixPool.h>
 #include <IPv6LeaseManager.h>
 #include <IPv6Pool.h>
-#include <DhcpServerBase.h>
 #include <atomic>
 #include <unordered_map>
 #include <Dhcpv6AuthManager.h>
 #include <PacketBuilder.hpp>
+#include <set>
 
 // Forward declarations
 class NetworkConfigs;
 class Dhcpv6ServerTest;
-enum class InterfaceType;
+enum class InterfaceType : uint8_t;
 
 using Duid = ClientID;
 
@@ -527,7 +527,7 @@ namespace Protocol
 
 
 
-
+#if 0
         /**
          * @brief Constructs DHCPv6 options to send in response.
          *
@@ -552,13 +552,6 @@ namespace Protocol
          */
         Duid generateUniqueIdentifier();
 
-        /**
-         * @brief Sends a DHCPv6 packet through the specified interface.
-         * 
-         * @param header The dhcpv6 header to send.
-         * @param iface The interface to send it through.
-         */
-        void sendPacket(Dhcpv6Header& header, Interface* iface, const ByteString& destination);
         
         void sendRelayPacket(Dhcpv6RelayHeader& header, Interface* iface);
 
@@ -647,6 +640,7 @@ namespace Protocol
 
         std::optional<Dhcpv6::AuthConfig::Key> getKey(uint64_t keyID);
         // Status code tracking
+#endif
     };
 }
 

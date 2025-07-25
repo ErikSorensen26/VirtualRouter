@@ -35,7 +35,7 @@
 
 void Protocol::Dhcpv6Server::handlePacket(Dhcpv6Header& dhcp, Interface& iface, bool multicast, const uint8_t* clientIp)
 {
-    Dhcpv6::Dhcpv6PacketBuild build;
+    Dhcpv6::Dhcpv6PacketBuild build(&iface);
     Dhcpv6::Dhcpv6PacketSend send = {
         .iface = iface,
         .multicast = multicast,
@@ -211,9 +211,9 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
 
         if (hasLease)
         {
-            if (((configs.requireReconfigureAccept.load(std::memory_order_relaxed) || iface.configs.dhcpv6.automatic.load(std::memory_order_relaxed)) && 
+            if (((configs.requireReconfigureAccept.load(std::memory_order_relaxed) || iface.configs.dhcpv6.configs->automatic.load(std::memory_order_relaxed)) && 
                 reconfigAccept && clientID.data && send.value().type != Variable::Dhcpv6::Type::advertise) ||
-                configs.reconfigureAll.load(std::memory_order_relaxed) || iface.configs.dhcpv6.reconfigureAll.load(std::memory_order_relaxed))
+                configs.reconfigureAll.load(std::memory_order_relaxed) || iface.configs.dhcpv6.configs->reconfigureAll.load(std::memory_order_relaxed))
             {
                 reconfigAccepts[clientID] = {
                     .clientAddress = networkAddress ? 0 : readU128(packet.send.clientAddress),
@@ -590,7 +590,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processS
     for (const auto& opt : packet.options)
     {
         if (opt.type == Variable::Dhcpv6::Options::rapidCommit &&
-            opt.valueSize == 0 && (ifaceConf.dhcpv6->rapidCommit.load(std::memory_order_relaxed) || configs.rapidCommit.load(std::memory_order_relaxed)))
+            opt.valueSize == 0 && (ifaceConf.dhcpv6.configs->rapidCommit.load(std::memory_order_relaxed) || configs.rapidCommit.load(std::memory_order_relaxed)))
         {
             rapidCommit = true;
         }
@@ -1292,7 +1292,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processI
 
 bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay, Interface& iface, const uint8_t* clientAddress, const uint8_t* relayIp)
 {
-    Dhcpv6::Dhcpv6PacketBuild build;
+    Dhcpv6::Dhcpv6PacketBuild build(&iface);
 
     // Reserve below headers
     UDPPacket::reserveUDP(&iface, build.builder, AddressFamily::IPv6);
@@ -1576,7 +1576,7 @@ bool Protocol::Dhcpv6Server::buildAdvertise(Dhcpv6::Dhcpv6PacketBuild& build, Dh
     ADD_DELAYED_AUTH
 
     // Add server preference
-    uint8_t preference = send.iface.configs.dhcpv6.configs.preferenceValue.load(std::memory_order_relaxed);
+    uint8_t preference = send.iface.configs.dhcpv6.configs->preferenceValue.load(std::memory_order_relaxed);
     if (preference != 0)
         tlv.append(Variable::Dhcpv6::Options::preference, 1, &preference, 1);
 
@@ -1709,16 +1709,16 @@ bool Protocol::Dhcpv6Server::buildReconfigure(Dhcpv6::Dhcpv6PacketBuild& build, 
     builder.addTLVSize(tlv.size());
 
     activeReconfigs[send.clientID] = Dhcpv6::ReconfigureState {
-        .interfaceKey = send.iface.configs.key,
         .reason = reason,
         .secret = key.value(),
-        .transactionID = readU24(dhcp.getTransId()),
+        .interfaceKey = send.iface.configs.key,
         .timerID = timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(configs.reconfigureTimeout.load(std::memory_order_relaxed)),
             [this, clientID = send.clientID]() {
                 activeReconfigs.erase(clientID);
             }
-        )
+        ),
+        .transactionID = readU24(dhcp.getTransId())
     };
 
     return true;

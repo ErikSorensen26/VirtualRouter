@@ -1,5 +1,5 @@
 #include <IPv6LeaseManager.h>
-#include "Dhcpv6Server2.h"
+#include "Dhcpv6Server.h"
 
 IPv6LeaseManager::IPv6LeaseManager(IPv6Pool& pool, Protocol::Dhcpv6::Configs& cgs)
     : pool(pool), timeManager(pool.timeManager), configs(cgs) {}

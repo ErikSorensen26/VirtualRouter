@@ -14,7 +14,7 @@ class Egress;
 class BaseQueue
 {
 public:
-    inline void enqueue(PacketSlot* pkt);
+    void enqueue(PacketSlot* pkt);
 
     void start();
     void stop();

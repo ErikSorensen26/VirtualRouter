@@ -4,6 +4,7 @@
 #define SYSLOG_HEADER_HPP
 
 #include <HeaderHelpers.hpp>
+#include <span>
 
 /**
  * @struct SyslogHeaderRaw

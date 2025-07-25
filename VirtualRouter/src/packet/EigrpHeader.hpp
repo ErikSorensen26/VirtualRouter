@@ -6,6 +6,7 @@
 #include <HeaderHelpers.hpp>
 #include <TLVOptions.hpp>
 #include <vector>
+#include <span>
 
 /**
  * @struct EigrpHeaderRaw

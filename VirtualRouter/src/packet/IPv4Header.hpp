@@ -4,6 +4,7 @@
 #define IPV4_HEADER_HPP
 
 #include <HeaderHelpers.hpp>
+#include <span>
 
 /**
  * @struct IPv4HeaderRaw

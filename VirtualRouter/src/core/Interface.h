@@ -73,7 +73,7 @@ public:
 
     void cleanupInterface();
 
-    virtual void setIPv4(const uint8_t* ip, uint8_t subnet);
+    virtual void setIPv4(uint32_t ip, uint8_t subnet);
     virtual void setIPv6(const uint8_t* ip, bool linkLocal = false, uint8_t subnet = 64, bool eui64 = false);
     void removeIPv4();
     void removeIPv6(const uint8_t* ip = nullptr);
@@ -115,6 +115,8 @@ public:
      */
     virtual void startThreads();
 
+    Egress egress;      ///< Egress object for packet sending.
+
 private:
 
     void processIngress(uint8_t* packet, size_t size); // Method for processing packets
@@ -153,7 +155,6 @@ private:
     bool debug;             ///< Flag indicating if debug mode is enabled.
 
     Ingress ingress;  ///< Ingress object for packet capturing.
-    Egress egress;      ///< Egress object for packet sending.
     FIFOQueue packetOutQueue;
 
     std::atomic<bool> threadsRunning;   ///< Atomic flag indicating if threads are running.

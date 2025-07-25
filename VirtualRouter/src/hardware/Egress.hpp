@@ -79,7 +79,7 @@ public:
         if (nodePool) std::free(nodePool);
     }
 
-    inline FrameHandle getFrame()
+    FrameHandle getFrame()
     {
         FreeNode* current;
         do

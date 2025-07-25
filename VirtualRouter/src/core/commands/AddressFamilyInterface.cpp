@@ -78,11 +78,11 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 			terminal.isList = true;
 			if (!negate)
 			{
-				currentEigrp->addPassiveInterface(currentEigrpInterface->type, currentEigrpInterface->id);
+				currentEigrp->addPassiveInterface(currentEigrpInterface->key);
 			}
 			else
 			{
-				currentEigrp->addPassiveInterface(currentEigrpInterface->type, currentEigrpInterface->id, false);
+				currentEigrp->addPassiveInterface(currentEigrpInterface->key);
 			}
 		}
 		else if (commandStream[0] == "shutdown")
@@ -97,12 +97,12 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 		else if (commandStream[0] == "summary-address")
 		{
 			uint8_t size = 0;
-			ByteString network;
+			IPAddress network;
 			uint8_t mask;
 			Protocol::EigrpInterface* iface = nullptr;
 			{
 				std::shared_lock<std::shared_mutex> lock(currentEigrp->interfaceMutex);
-				auto intIt = currentEigrp->eigrpInterfaceList.find({currentEigrpInterface->type, currentEigrpInterface->id});
+				auto intIt = currentEigrp->eigrpInterfaceList.find(currentEigrpInterface->key);
 				if (intIt != currentEigrp->eigrpInterfaceList.end())
 				{
 					iface = intIt->second;
@@ -111,15 +111,15 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 
 			if (!Functions::splitSlashMiddle(commandStream[1], network, mask))
 			{
-				network = Functions::addressToByte(commandStream[1]);
+				network = Functions::getAddress(commandStream[1]);
 				mask = static_cast<uint8_t>(std::stoi(commandStream[2]));
 				size = 3;
 			}
 			else
 			{
-				network = Functions::addressToByte(network);
 				size = 2;
 			}
+
 			if (commandStream.size() != size && commandStream[size] == "leak-map")
 			{
 				// XXX
@@ -129,7 +129,7 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 			{
 				negate
 				  ? iface->removeSummaryRoute(network, mask)
-				  : iface->addSummaryRoute(network, mask);
+				  : iface->addSummaryRoute(network.raw, mask);
 			}
 			else
 			{
@@ -151,7 +151,7 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 					std::erase_if(currentEigrpInterface->summaryRoutes, [&](EigrpConfigs::SummaryRoute& summary) {
 						return summary.summary->network == network && summary.summary->mask == mask;
 					});
-					std::erase_if(currentEigrpInterface->pendingSummaryRoutes, [&](std::pair<ByteString, uint8_t>& summary) {
+					std::erase_if(currentEigrpInterface->pendingSummaryRoutes, [&](std::pair<IPAddress, uint8_t>& summary) {
 						return summary.first == network && summary.second == mask;
 					});
 				}

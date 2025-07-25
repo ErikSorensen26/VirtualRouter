@@ -11,7 +11,7 @@
 #include <Mode.hpp>
 #include "Console.h"
 
-enum class AddressFamily;
+enum class AddressFamily : uint8_t;
 class CommandProcessor;
 class CliEngine;
 class VirtualRouter;

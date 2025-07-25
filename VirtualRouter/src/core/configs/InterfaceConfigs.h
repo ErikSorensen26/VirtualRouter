@@ -100,7 +100,7 @@ public:
         uint8_t* getAddress(uint8_t* out);
         uint32_t getAddress();
 
-        void setAddress(const uint8_t* newAddress, uint8_t newMask);
+        void setAddress(uint32_t newAddress, uint8_t newMask);
 
         bool compareAddress(const uint8_t* ip);
         bool compareAddress(uint32_t ip);

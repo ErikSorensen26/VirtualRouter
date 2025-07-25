@@ -27,8 +27,7 @@ namespace Protocol
             {
                 if (neighbor.interface == currentInterface->configs.key)
                 {
-                    uint8_t address[4];
-                    addArpEntry(writeU32(address, ip), neighbor.mac, neighbor.proxy, true);
+                    addArpEntry(ip, neighbor.mac, neighbor.proxy, true);
                 }
             }
         }
@@ -75,21 +74,20 @@ namespace Protocol
         pendingIncompletes.clear();
     }
 
-    void Arp::addArpEntry(const uint8_t* targetIp, const uint8_t* targetMac, bool proxy, bool isStatic)
+    void Arp::addArpEntry(uint32_t targetIp, uint64_t targetMac, bool proxy, bool isStatic)
     {
-        uint32_t targetIpInt = readU32(targetIp);
         auto now = std::chrono::steady_clock::now();
 
         if (isStatic)
         {
             ArpCacheEntry entry;
-            std::memcpy(entry.macAddress, targetMac, 6);
+            writeU48(entry.macAddress, targetMac);
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
-            staticArpCache[targetIpInt] = entry;
+            staticArpCache[targetIp] = entry;
 
             if (proxy)
             {
-                proxyEntries[targetIpInt] = readU48(targetMac);
+                proxyEntries[targetIp] = targetMac;
             }
             return;
         }
@@ -98,7 +96,7 @@ namespace Protocol
         if (global.configs.arp.stickyArp.load(std::memory_order_relaxed))
         {
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
-            auto existing = arpCache.find(targetIpInt);
+            auto existing = arpCache.find(targetIp);
             if (existing != arpCache.end())
             {
                 return;
@@ -106,31 +104,31 @@ namespace Protocol
         }
 
         // Cancel old timer if already present
-        if (arpCache.count(targetIpInt))
+        if (arpCache.count(targetIp))
         {
-            global.timeManager.cancelTimer(arpCache[targetIpInt].timerId);
+            global.timeManager.cancelTimer(arpCache[targetIp].timerId);
         }
 
         // Build the entry
         ArpCacheEntry entry;
-        std::memcpy(entry.macAddress, targetMac, 6);
+        writeU48(entry.macAddress, targetMac);
         entry.expiryTime = now + std::chrono::seconds(configs.timeout);
 
         // Refresh vs expire logic
         entry.timerId = global.timeManager.addTimer(
             entry.expiryTime,
-            [this, targetIpInt]() { expireArpEntry(targetIpInt); }
+            [this, targetIp]() { expireArpEntry(targetIp); }
         );
 
         // Insert into cache
         {
             std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
-            arpCache[targetIpInt] = entry;
-            insertionOrder.push_back(targetIpInt);
+            arpCache[targetIp] = entry;
+            insertionOrder.push_back(targetIp);
 
             if (proxy)
             {
-                proxyEntries[targetIpInt] = readU48(targetMac);
+                proxyEntries[targetIp] = targetMac;
             }
         }
     }
@@ -469,7 +467,7 @@ namespace Protocol
         if (!isLocal && !isProxy)
             return; // Not for us
 
-        PacketBuilder reply;
+        PacketBuilder reply(currentInterface);
         arpReply(reply, replyMac, sourceMac, request.getTargetIpAddr(), request.getSenderIpAddr());
         currentInterface->enqueuePacket(reply, sourceMac);
     }
@@ -554,7 +552,7 @@ namespace Protocol
         std::unique_lock<std::mutex> lock(replyStatusMutex);
 
         // Send the ARP request
-        PacketBuilder arpReq;
+        PacketBuilder arpReq(currentInterface);
         auto& iface = currentInterface->configs;
 
         uint8_t mac[6], ip[4], tip[4];
@@ -585,7 +583,7 @@ namespace Protocol
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
             auto& interfaceInfo = currentInterface->configs;
-            PacketBuilder replyPacket;
+            PacketBuilder replyPacket(currentInterface);
 
             uint8_t ip[4], mac[6];
             interfaceInfo.getMac(mac);

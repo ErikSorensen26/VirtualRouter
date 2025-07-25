@@ -12,7 +12,7 @@
  * @struct OspfPacket::ospfHeader
  * @brief Represents an OSPF (Open Shortest Path First) packet header.
  */
-namespace OspfPacket
+/*namespace OspfPacket
 {
     struct ospfHeader
     {
@@ -45,10 +45,10 @@ namespace OspfPacket
         ByteString backupDesignatedRouter{}; ///< OSPF Backup Designated Router.
         ByteString activeNeighbor{};    ///< OSPF Active Neighbor.
 
-        /**
+        *//**
          * @struct options
          * @brief Represents OSPF Hello options.
-         */
+         *//*
         struct options
         {
             ByteString notSet{};           ///< Not Set option.
@@ -76,10 +76,10 @@ namespace OspfPacket
         ByteString interfaceMtu{};      ///< OSPF Interface MTU.
         ByteString sequence{};          ///< OSPF Sequence number.
 
-        /**
+        *//**
          * @struct options
          * @brief Represents OSPF Description options.
-         */
+         *//*
         struct options
         {
             ByteString notSet{};           ///< Not Set option.
@@ -92,10 +92,10 @@ namespace OspfPacket
             ByteString multiTopology{};     ///< Multi-Topology Routing option.
         } options;
 
-        /**
+        *//**
          * @struct description
          * @brief Represents OSPF Description flags.
-         */
+         *//*
         struct description
         {
             ByteString OOBResync{};      ///< Out-of-Band Resynchronization flag.
@@ -157,10 +157,10 @@ namespace OspfPacket
         ByteString checksum{};       ///< Link State Advertisement checksum.
         ByteString length{};         ///< Link State Advertisement length.
 
-        /**
+        *//**
          * @struct options
          * @brief Represents LSA options.
-         */
+         *//*
         struct options
         {
             ByteString notSet{};           ///< Not Set option.
@@ -197,6 +197,6 @@ namespace OspfPacket
             return false;
         }
     };
-}
+}*/
 
 #endif // OSPF_HEADER_HPP

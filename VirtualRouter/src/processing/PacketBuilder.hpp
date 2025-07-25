@@ -8,6 +8,7 @@
 #include <cstring>
 #include <PacketStructure.h>
 #include <PacketSlot.hpp>
+#include <Interface.h>
 
 constexpr size_t MaxPacketSize = 2048;
 
@@ -22,7 +23,12 @@ struct BuildEntry
 class PacketBuilder
 {
 public:
-    PacketBuilder(FrameHandle& slot) : bufferOffset(0), slot(slot.slot), buffer(slot.payload), buildIndex(0), headerCount(0), local(false) {}
+    PacketBuilder(Interface* iface) : bufferOffset(0), buildIndex(0), headerCount(0), local(false)
+    {
+        auto frame = iface->egress.getFrame();
+        slot = frame.slot;
+        buffer = frame.payload;
+    }
 
     PacketBuilder(const PacketBuilder& other)
     {

@@ -64,7 +64,7 @@ struct GlobalConfigs
 
         struct Neighbor
         {
-            uint8_t mac[6];
+            uint64_t mac;
             uint32_t interface;
             bool proxy = false;
         };
@@ -96,7 +96,7 @@ struct GlobalConfigs
         struct Neighbor
         {
             uint32_t interface;
-            uint8_t macAddress[6];
+            uint64_t macAddress;
         };
         std::map<IPAddress, Neighbor> neighbors;
         std::shared_mutex neighborMutex;

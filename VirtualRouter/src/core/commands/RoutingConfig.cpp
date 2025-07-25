@@ -104,7 +104,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		}
 		else if (commandStream[0] == "distance")
 		{
-			if (Functions::isDecimal(commandStream[1]))
+			if (Functions::isNumber(commandStream[1]))
 			{
 				// XXX
 			}
@@ -127,10 +127,10 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		else if (commandStream[0] == "eigrp")
 		{
 			std::unique_lock<std::shared_mutex> lock(currentEigrp->configs.configsMutex);
-			if (commandStream[1] == "event-log-size" && Functions::isDecimal(commandStream[2])) { currentEigrp->configs.eventLogSize = static_cast<uint32_t>(std::stoi(commandStream[2])); }
+			if (commandStream[1] == "event-log-size" && Functions::isNumber(commandStream[2])) { currentEigrp->configs.eventLogSize = static_cast<uint32_t>(std::stoi(commandStream[2])); }
 			else if (commandStream[1] == "logNeighborChanges") { currentEigrp->configs.logNeighborChanges = !negate; }
 			else if (commandStream[1] == "logNeighborWarnings") { currentEigrp->configs.logNeighborWarnings = !negate; }
-			else if (commandStream[1] == "router-id") { if (!negate) currentEigrp->setRouterID(Functions::addressToByte(commandStream[2])); else currentEigrp->clearRouterID(); }
+			else if (commandStream[1] == "router-id") { if (!negate) currentEigrp->setRouterID(Functions::getAddress(commandStream[2]).raw); else currentEigrp->clearRouterID(); }
 			else if (commandStream[1] == "stub")
 			{
 				if (!negate)
@@ -190,7 +190,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		}
 		else if (commandStream[0] == "metric")
 		{
-			if (commandStream[1] == "maximum-paths" && Functions::isDecimal(commandStream[2]))
+			if (commandStream[1] == "maximum-paths" && Functions::isNumber(commandStream[2]))
 			{
 				currentEigrp->configs.maxHops.store(static_cast<uint8_t>(
 					negate ? 100 : std::stoi(commandStream[2])), 
@@ -225,7 +225,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		else if (commandStream[0] == "neighbor")
 		{
 			terminal.isList = true;
-			ByteString neighborIp = Functions::addressToByte(commandStream[1]);
+			IPAddress neighborIp = Functions::getAddress(commandStream[1]);
 			InterfaceType type = terminal.engine.getInterfaceType(commandStream[2]);
 			if (type != InterfaceType::UNDEFINED)
 			{
@@ -233,26 +233,26 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 
 				if (!negate)
 				{
-					currentEigrp->enableUnicastNeighbor(neighborIp, type, interfaceId);
+					currentEigrp->enableUnicastNeighbor(neighborIp, calculateInterfaceKey(type, interfaceId));
 				}
 				else
 				{
-					currentEigrp->disableUnicastNeighbor(neighborIp, type, interfaceId);
+					currentEigrp->disableUnicastNeighbor(neighborIp, calculateInterfaceKey(type, interfaceId));
 				}
 			}
 		}
 		else if (commandStream[0] == "network")
 		{
 			terminal.isList = true;
-			EigrpConfigs::Network network;
-			network.ip = Functions::addressToByte(commandStream[1]);
+			EigrpConfigs::Network network(AddressFamily::IPv4);
+			network.ip = Functions::getAddress(commandStream[1]);
 			if (commandStream.size() == 3)
 			{
-				network.mask = Functions::addressToByte(commandStream[2]);
+				network.mask = 32 - Functions::prefixToPrefixLength(Functions::addressToIntv4(commandStream[2]));
 			}
 			else
 			{
-				network.mask = Variable::IPv4::broadcast;
+				network.mask = 32 - Functions::getDefaultMask(readU32(network.ip.raw));
 			}
 
 			if (!negate)
@@ -279,11 +279,11 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			terminal.isList = true;
 			if (!negate)
 			{
-				currentEigrp->addPassiveInterface(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2]));
+				currentEigrp->addPassiveInterface(calculateInterfaceKey(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2])));
 			}
 			else
 			{
-				currentEigrp->addPassiveInterface(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2]), false);
+				currentEigrp->addPassiveInterface(calculateInterfaceKey(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2])), false);
 			}
 		}
 		else if (commandStream[0] == "redistribute")
@@ -300,7 +300,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			{
 				if (!negate)
 				{
-					if (Functions::isDecimal(commandStream[2]))
+					if (Functions::isNumber(commandStream[2]))
 					{
 						currentEigrp->configs.activeTime.store(static_cast<uint16_t>(std::stoi(commandStream[2])), std::memory_order_release);
 						currentEigrp->configs.stuckInActiveTime.store(static_cast<uint16_t>(std::stoi(commandStream[2]) / 2), std::memory_order_release);
@@ -343,7 +343,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				currentEigrp->configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Balanced, std::memory_order_release);
 			}
 		}
-		else if (commandStream[0] == "variance" && Functions::isDecimal(commandStream[1]))
+		else if (commandStream[0] == "variance" && Functions::isNumber(commandStream[1]))
 		{
 			negate
 			  ? currentEigrp->setVariance(1)
@@ -402,13 +402,13 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				}
 				else if (commandStream[2] == "unicast")
 				{
-					terminal.routingProtocolID = Functions::stringToNum(commandStream[4]);
+					terminal.routingProtocolID = std::stoi(commandStream[4]);
 				}
 				else if (commandStream[2] == "multicast")
 				{
 					if (/*multicast enabled*/false)
 					{
-						terminal.routingProtocolID = Functions::stringToNum(commandStream[4]);
+						terminal.routingProtocolID = std::stoi(commandStream[4]);
 						comString = "multicast";
 					}
 					else
@@ -419,7 +419,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				}
 				else
 				{
-					terminal.routingProtocolID = Functions::stringToNum(commandStream[3]);
+					terminal.routingProtocolID = std::stoi(commandStream[3]);
 				}
 
 				if (commandStream[2] == "autonomous-system" || commandStream[3] == "autonomous-system" || commandStream[4] == "autonomous-system" || commandStream[5] == "autonomous-system")
@@ -566,10 +566,11 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 
 				InterfaceType type = terminal.engine.getInterfaceType(commandStream[1]);
 				float interfaceId = std::stof(commandStream[2]);
+				uint32_t key = calculateInterfaceKey(type, interfaceId);
 				
 				{
 					std::unique_lock<std::shared_mutex> lock(currentEigrp->interfaceMutex);
-					auto intIt = currentEigrp->eigrpInterfaceConfigList.find({type, interfaceId});
+					auto intIt = currentEigrp->eigrpInterfaceConfigList.find(key);
 
 					if (!negate)
 					{
@@ -580,9 +581,9 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 						}
 						else
 						{
-							EigrpConfigs::InterfaceConfigs* newConfigs = new EigrpConfigs::InterfaceConfigs(type, interfaceId);
+							EigrpConfigs::InterfaceConfigs* newConfigs = new EigrpConfigs::InterfaceConfigs(key);
 							newConfigs->userMade = true;
-							currentEigrp->eigrpInterfaceConfigList[{type, interfaceId}] = newConfigs;
+							currentEigrp->eigrpInterfaceConfigList[key] = newConfigs;
 						}
 						terminal.changeMode(Mode::routerAddressFamilyInterface);
 						terminal.configureAddressFamily(currentEigrp->addressFamily);
@@ -594,8 +595,8 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							currentEigrpInterface = intIt->second;
 							if (currentEigrpInterface->userMade)
 							{
-								delete currentEigrp->eigrpInterfaceConfigList[{type, interfaceId}];
-								currentEigrp->eigrpInterfaceConfigList.erase({type, interfaceId});
+								delete currentEigrp->eigrpInterfaceConfigList[key];
+								currentEigrp->eigrpInterfaceConfigList.erase(key);
 							}
 							else return true;
 						}
@@ -616,13 +617,13 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					uint32_t routeTag;
 					if (!negate)
 					{
-						if (Functions::isDecimal(commandStream[2]))
+						if (Functions::isNumber(commandStream[2]))
 						{
 							routeTag = static_cast<uint32_t>(std::stoi(commandStream[2]));
 						}
 						else
 						{
-							routeTag = Functions::byteToNum(Functions::addressToByte(commandStream[2]));
+							routeTag = Functions::addressToIntv4(commandStream[2]);
 						}
 					}
 					else
@@ -631,11 +632,11 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					}
 					// TODO set the route tag
 				}
-				else if (commandStream[1] == "event-log-size" && Functions::isDecimal(commandStream[2])) 
+				else if (commandStream[1] == "event-log-size" && Functions::isNumber(commandStream[2])) 
 				{
 					if (!negate)
 					{
-						if (Functions::isDecimal(commandStream[2]))
+						if (Functions::isNumber(commandStream[2]))
 							currentEigrp->configs.eventLogSize.store(static_cast<uint32_t>(std::stoi(commandStream[2])), std::memory_order_release);
 					}
 					else
@@ -655,7 +656,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				{
 					if (!negate)
 					{
-						currentEigrp->setRouterID(Functions::addressToByte(commandStream[2]));
+						currentEigrp->setRouterID(Functions::getAddress(commandStream[2]).raw);
 					}
 					else
 					{
@@ -715,7 +716,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					{
 						for (size_t i = 2; i < commandStream.size(); i++)
 						{
-							if (Functions::isDecimal(commandStream[i]))
+							if (Functions::isNumber(commandStream[i]))
 							{
 								currentEigrp->configs.dampeningInterval.store(std::stoi(commandStream[i]));
 							}
@@ -762,7 +763,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				{
 					if (!negate)
 					{
-						if (Functions::isDecimal(commandStream[2]))
+						if (Functions::isNumber(commandStream[2]))
 							currentEigrp->configs.ribScale.store(std::stoi(commandStream[2]), std::memory_order_release);
 					}
 					else
@@ -798,26 +799,27 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			else if (commandStream[0] == "neighbor")
 			{
 				terminal.isList = true;
-				ByteString neighborIp = Functions::addressToByte(commandStream[1]);
+				IPAddress neighborIp = Functions::getAddress(commandStream[1]);
 				InterfaceType type = terminal.engine.getInterfaceType(commandStream[2]);
 				float interfaceId = std::stof(commandStream[3]);
+				uint32_t key = calculateInterfaceKey(type, interfaceId);
 
 				negate
-				  ? currentEigrp->disableUnicastNeighbor(neighborIp, type, interfaceId)
-				  : currentEigrp->enableUnicastNeighbor(neighborIp, type, interfaceId);
+				  ? currentEigrp->disableUnicastNeighbor(neighborIp, key)
+				  : currentEigrp->enableUnicastNeighbor(neighborIp, key);
 			}
 			else if (commandStream[0] == "network")
 			{
 				terminal.isList = true;
-				EigrpConfigs::Network network;
-				network.ip = Functions::addressToByte(commandStream[1]);
+				EigrpConfigs::Network network(AddressFamily::IPv4);
+				network.ip = Functions::getAddress(commandStream[1]);
 				if (commandStream.size() == 3)
 				{
-					network.mask = Functions::addressToByte(commandStream[2]);
+					network.mask = Functions::prefixToPrefixLength(Functions::addressToIntv4(commandStream[2]));
 				}
 				else
 				{
-					network.mask = Variable::IPv4::broadcast;
+					network.mask = Functions::getDefaultMask(readU32(network.ip.raw));
 				}
 
 				if (!negate)

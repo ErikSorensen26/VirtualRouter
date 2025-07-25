@@ -29,7 +29,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[2] != "dhcp")
 				{
-					currentInterface->setIPv4(Functions::addressToByte(ByteString(commandStream[2])), Functions::byteMaskToNum(Functions::addressToByte(ByteString(commandStream[3]))));
+					currentInterface->setIPv4(Functions::addressToIntv4(commandStream[2]), __builtin_popcount(Functions::addressToIntv4(commandStream[3])));
 				}
 				else
 				{
@@ -243,8 +243,8 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				auto as = std::stoi(commandStream[3]);
 				auto ifaceIt = currentInterface->eigrpInterfaceList.find(as);
-				ByteString network = commandStream[4];
-				uint8_t mask = Functions::byteMaskToNum(commandStream[5]);
+				IPAddress network = Functions::getAddress(commandStream[4]);
+				uint8_t mask = Functions::prefixToPrefixLength(Functions::addressToIntv4(commandStream[5]));
 				if (ifaceIt != currentInterface->eigrpInterfaceList.end() && ifaceIt->second->IPv4)
 				{
 					if (negate)
@@ -253,7 +253,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						ifaceIt->second->IPv4->addSummaryRoute(network, mask);
+						ifaceIt->second->IPv4->addSummaryRoute(network.raw, mask);
 					}
 				}
 				else
@@ -265,7 +265,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 						{
 							std::erase_if(
 								eigrpConfig->pendingSummaryRoutes,
-								[&](std::pair<ByteString, uint8_t> net) -> bool { return net == std::make_pair(network, mask);
+								[&](std::pair<IPAddress, uint8_t> net) -> bool { return net == std::make_pair(network, mask);
 							});
 							refreshEigrpConfig(as, AddressFamily::IPv4, eigrpConfig);
 						}
@@ -286,16 +286,16 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (Functions::isIPv6Address(commandStream[2]))
 				{
-					ByteString ipv6Address = Functions::addressToByte(commandStream[2]);
-					if (Functions::isLocalLink(ipv6Address))
+					IPAddress ipv6Address = Functions::getAddress(commandStream[2]);
+					if (Functions::isLocalLink(ipv6Address.raw))
 					{
 						if (!negate)
 						{
-							currentInterface->setIPv6(ipv6Address, true);
+							currentInterface->setIPv6(ipv6Address.raw, true);
 						}
 						else
 						{
-							currentInterface->removeIPv6(ipv6Address, true);
+							currentInterface->removeIPv6();
 						}
 					}
 					else if (!negate)
@@ -306,17 +306,17 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 				else if (Functions::isIPv6AddressWithMask(commandStream[2]))
 				{
 					{
-						ByteString ipv6Address;
+						IPAddress ipv6Address;
 						uint8_t mask;
 						if (Functions::splitSlashMiddle(commandStream[2], ipv6Address, mask))
 						{
 							if (!negate)
 							{
-								currentInterface->setIPv6(Functions::addressToByte(ipv6Address), false, mask);
+								currentInterface->setIPv6(ipv6Address.raw, false, mask);
 							}
 							else
 							{
-								currentInterface->removeIPv6(ipv6Address, false);
+								currentInterface->removeIPv6(ipv6Address.raw);
 							}
 						}
 					}
@@ -623,7 +623,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 						currentInterface->ndp->configs.raInterval = 600000;
 						currentInterface->ndp->configs.raIntervalMin = 3000;
 					}
-					else if (Functions::isDecimal(commandStream[4]))
+					else if (Functions::isNumber(commandStream[4]))
 					{
 						std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
 						currentInterface->ndp->configs.raIntervalMS = false;
@@ -730,7 +730,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			if (commandStream[2] == "eigrp")
 			{
 				auto as = std::stoi(commandStream[3]);
-				ByteString network;
+				IPAddress network;
 				uint8_t mask;
 				Functions::splitSlashMiddle(commandStream[4], network, mask);
 				auto ifaceIt = currentInterface->eigrpInterfaceList.find(as);
@@ -742,7 +742,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						ifaceIt->second->IPv4->addSummaryRoute(network, mask);
+						ifaceIt->second->IPv4->addSummaryRoute(network.raw, mask);
 					}
 				}
 				else
@@ -754,7 +754,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 						{
 							std::erase_if(
 								eigrpConfig->pendingSummaryRoutes,
-								[&](std::pair<ByteString, uint8_t> net) -> bool { return net == std::make_pair(network, mask);
+								[&](std::pair<IPAddress, uint8_t> net) -> bool { return net == std::make_pair(network, mask);
 							});
 							refreshEigrpConfig(as, AddressFamily::IPv6, eigrpConfig);
 						}

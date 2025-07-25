@@ -372,7 +372,7 @@ bool Protocol::DhcpClient::buildDhcpInform(PacketBuilder& builder, const std::st
 
 void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, const uint8_t* mac)
 {
-    PacketBuilder builder;
+    PacketBuilder builder(currentInterface);
     if (!buildDhcpDiscover(builder, mac, hostname))
         return;
 
@@ -409,7 +409,7 @@ void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, const u
 
 void Protocol::DhcpClient::sendDhcpRequest(uint32_t transID, const std::string& hostname, uint32_t requestedIp, uint32_t serverId)
 {
-    PacketBuilder builder;
+    PacketBuilder builder(currentInterface);
     if (!buildDhcpRequest(builder, transID, hostname, requestedIp, serverId))
         return;
 
@@ -448,7 +448,7 @@ void Protocol::DhcpClient::sendDhcpRelease()
 {
     if (!acked.load(std::memory_order_acquire)) return;
 
-    PacketBuilder builder;
+    PacketBuilder builder(currentInterface);
 
     if (!buildDhcpRelease(builder)) return;
 
@@ -579,7 +579,7 @@ bool Protocol::DhcpClient::processDhcpAck(const DhcpHeader& dhcp, std::vector<TL
         return false;
     
     // Apply configs
-    currentInterface->setIPv4(dhcp.raw->yiaddr, std::popcount(subnetMask));
+    currentInterface->setIPv4(readU32(dhcp.raw->yiaddr), std::popcount(subnetMask));
     configs.router.v4 = gateway;
     configs.serverID.v4 = serverId;
     configs.leaseTime.store(leaseTime);
@@ -748,7 +748,7 @@ void Protocol::DhcpClient::cancelLeaseTimers()
 
 void Protocol::DhcpClient::sendRenew()
 {
-    PacketBuilder builder;
+    PacketBuilder builder(currentInterface);
     UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
     auto* next = builder.nextBuildHeader();
@@ -820,7 +820,7 @@ void Protocol::DhcpClient::sendRenew()
 
 void Protocol::DhcpClient::sendRebind()
 {
-    PacketBuilder builder;
+    PacketBuilder builder(currentInterface);
     UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
     auto* next = builder.nextBuildHeader();

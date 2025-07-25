@@ -1,0 +1,244 @@
+// DhcpServer.h
+
+#ifndef DHCP_SERVER_H
+#define DHCP_SERVER_H
+
+#include <unordered_map>
+#include <ClientID.hpp>
+#include <atomic>
+#include <vector>
+#include <RoutingTable.h>
+#include <mutex>
+#include <shared_mutex>
+#include <IPv4LeaseManager.h>
+#include <DhcpServerBase.h>
+#include <IPv4Pool.h>
+
+// Forward declarations
+class Global;
+struct ClientID;
+class Interface;
+class TimeManager;
+
+namespace Protocol
+{
+    namespace Dhcp
+    {
+        struct SnoopingEntry
+        {
+            uint8_t mac[6];
+            IPAddress ip;
+            uint32_t interface;
+            std::chrono::steady_clock::time_point expiration;
+        };
+
+        struct Configs
+        {
+            //TODO implement all of this
+            std::shared_mutex configMutex;
+
+            std::atomic<uint16_t> bindingCleanup = 3600;
+            std::atomic<uint16_t> conflictResolution = 10; // minutes
+            std::atomic<uint16_t> leasesPerInterface = 1;
+            std::atomic<uint16_t> pingTimeout = 750; // milliseconds
+
+            std::unordered_map<std::string, uint16_t> databaseSaveInterval;
+            std::unordered_map<std::string, std::pair<uint32_t, uint16_t>> writeDelay;
+            std::vector<IPAddress> globalDnsServers;
+
+            std::atomic<uint16_t> declineQuarintine = 3600;
+            std::atomic<uint8_t> conflictInterval = 1;
+            std::atomic<uint8_t> conflictRetry = 10;
+            std::atomic<uint8_t> pingRetryCount = 2;
+            std::atomic<uint16_t> offerExpiration = 600;
+            std::atomic<uint8_t> leaseExpirationOffset = 0;
+            std::atomic<uint8_t> hartbeatInterval = 10;
+            std::atomic<uint8_t> forceRenewInterval = 0;
+
+            std::atomic<bool> logConflicts = false;
+            std::atomic<bool> logAsciiClientID = false; //TODO
+            std::atomic<bool> limitLeases = false;
+            std::atomic<bool> limitBroadcastAddress = false; //TODO
+            std::atomic<bool> remember = false; //TODO
+            std::atomic<bool> addConnected = false; //TODO
+            std::atomic<bool> addStatic = false; //TODO
+            std::atomic<bool> smartRelay = false; //TODO
+            std::atomic<bool> option55Override = false; //TODO
+            std::atomic<bool> sipParameterNak = false; //TODO
+            std::atomic<bool> tunnelUnicastParameter = false; //TODO
+
+            struct DNS
+            {
+                std::atomic<bool> before = false;
+                std::atomic<bool> both = false;
+                std::atomic<bool> override = false;
+            } updateDNS;
+
+            struct Snooping
+            {
+                std::set<std::string> databases; // TODO later
+                std::unordered_map<uint16_t, std::set<uint16_t>> vlans;
+                std::atomic<bool> informationOption = false; //TODO
+                std::atomic<bool> allowUntrusted = false;
+                std::atomic<bool> verifyMac = false;
+                std::atomic<bool> verifyGiaddr = false;
+            } snooping;
+
+            struct BOOTP
+            {
+                //TODO later
+                std::atomic<bool> ignore = false;
+                std::atomic<bool> relayIgnore = false;
+                std::atomic<bool> validateRelay = false;
+                std::atomic<bool> includeRelayInfo = false;
+                std::atomic<bool> includeVPNrelayInfo = false;
+
+                std::atomic<bool> drop = false;
+                std::atomic<bool> encapsulate = false;
+                std::atomic<bool> keep = false;
+                std::atomic<bool> replace = false;
+
+                std::atomic<bool> trustAll = false;
+                std::atomic<bool> linkSelectOverride = false;
+            } bootp;
+        };
+
+        struct DhcpNetworkConfig
+        {
+            std::atomic<uint8_t> defaultSubnetPrefix;        ///< The default subnet Prefix for the DHCP pool.
+            std::atomic<uint8_t> serverPreference = 255;     ///< Default server preference.
+            std::atomic<uint32_t> leaseTime = 0;             ///< The default duration of a lease in seconds.
+            std::atomic<double> t1Percentage = 0.5;          ///< Initial T1 percentage for calcualting renewal times.
+            std::atomic<double> t2Percentage = 0.87;          ///< Initial T2 percentage for calcualting rebinding times.
+
+            uint32_t renewalTime;             ///< Renewal time in bytes for easy access.
+            uint32_t rebindingTime;           ///< Rebinding time in bytes for easy access.
+            std::vector<uint32_t> dnsServer;  ///< A list of DNS servers provided with this network.
+            std::vector<std::string> domainName;///< The domain name associated with this network.
+            std::vector<uint32_t> netbiosName;///< The name of the NetBIOS server.
+
+            Interface* interface = nullptr;     ///< Pointer to the interface managing this network.
+
+            // Additional fields
+            std::vector<uint32_t> ntpServer;      ///< Network Time Protocol (NTP) server for this network.
+            std::vector<uint32_t> tftpServer;     ///< TFTP server address for PXE booting.
+            std::vector<uint32_t> winsServer;     ///< A list of WINS (Windows Internet Name Service) servers.
+            std::vector<uint32_t> staticRoutes;   ///< Static routes provided to the network clients.
+            std::vector<uint32_t> helperAddresses;///< List of DHCP relay (helper) addresses.
+            uint32_t broadcastAddress;            ///< The broadcast address for this network.
+            uint32_t arpTimeout;                  ///< ARP timeout value for this network.
+            std::optional<bool> allowDynamicUpdates; ///< Indicates whether dynamic updates (e.g., for DNS) are enabled.
+            std::vector<std::string> allowedHostnames; ///< A list of hostnames allowed to operate on this network.
+            std::atomic<uint16_t> mtu;                           ///< Maximum Transmission Unit (MTU) for the network.
+            std::string bootfile;                   ///< Bootfile for pool.
+
+            // Metadata
+            std::string description;               ///< Description or label for this network configuration.
+            std::atomic<bool> isPrivate;                        ///< Flag indicating whether this network is private or public.
+            std::atomic<bool> isEnabled;                        ///< Flag indicating whether this network is currently active.
+            
+            mutable std::shared_mutex configMutex;
+            // Methods (optional, if you want to add functions)
+            bool updateNetwork(IPPrefix& prefix, uint32_t& gateway);
+            IPPrefix getNetworkID() const;
+            uint8_t* getNetwork(uint8_t* out) const;
+            IPAddress getNetwork() const;
+            uint8_t* getGateway(uint8_t* out) const;
+            IPAddress getGateway() const;
+            uint8_t getPrefixLen() const;
+            uint8_t* getSubnetMask(uint8_t* out)
+
+            std::string hostname;
+        private:
+            std::atomic<uint8_t> subnetPrefix;  ///< The subnet prefix for the DHCP pool.
+            uint32_t subnetMask;                ///< The subnet mask for the DHCP pool.
+            uint32_t network;                 ///< The base address of the network. (e.g., "192.168.1.0").
+            uint32_t defaultGateway;          ///< The default gateway address for clients in this network.
+
+        };
+
+        struct DhcpNetwork
+        {
+            IPv4Pool pool;
+            IPv4LeaseManager leaseManager;
+            DhcpNetworkConfig configs;
+        };
+    }
+
+    /**
+     * @brief Represents a fully functional DHCP server
+     * Cabable of managing IP address leases, handling dhcp packets, and supporting relay agents.
+     */
+    class DhcpServer {
+    public:
+        DhcpServer(Global& global, TimeManager& timeManager);
+        ~DhcpServer();
+
+        void start();
+        void stop();
+
+        void handlePacket(const DhcpHeader& dhcp, const uint8_t* sourceMac, Interface& iface);
+
+        std::optional<Dhcp::DhcpNetwork*> getNetwork(IPPrefix& config);
+
+        void scheduleTimeout(Dhcp::TimerType type, const ClientID, uint32_t timeout);
+        void cancelTimeout(Dhcp::TimerType type, const ClientID& clientID, const IPAddress& offer);
+        void clearOfferTimeouts();
+
+    private:
+        Global& global;
+        TimeManager& timeManager;
+        Dhcp::Configs config;
+
+        std::mutex serverMutex;
+
+        std::unordered_map<IPPrefix, Dhcp::DhcpNetwork> networks;
+        std::unordered_map<uint32_t, ClientID> ipToClient;
+        std::unordered_map<ClientID, std::chrono::steady_clock::time_point> declined;
+        std::unordered_map<ClientID, std::chrono::steady_clock::time_point> forceRenew;
+
+        std::unordered_map<ClientID, uint32_t> offeredIPs;
+        std::unordered_map<uint32_t, Dhcp::SnoopingEntry> snoopingTable;
+
+        // Timed event tracking
+        std::unordered_map<uint32_t, uint32_t> offerTimeouts;
+        std::unordered_map<uint32_t, uint32_t> declineTimers;
+        std::unordered_map<uint32_t, uint32_t> forceRenewTimers;
+        std::unordered_map<uint32_t, uint32_t> cleanupTimers;
+
+        void addNetwork(IPPrefix& prefix);
+        void removeNetwork(IPPrefix& prefix);
+        bool removeConfig(IPPrefix& prefix);
+
+        // === PACKET LOGIC ===
+        void processDiscover(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, Interface& iface);
+        void processRequest(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, Interface& iface);
+        void processDecline(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, Interface& iface);
+        void processRelease(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, Interface& iface);
+        void processInform(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, Interface& iface);
+        void processForceRenew(const DhcpHeader& dhcp, std::vector<TLV8Option>& options, Interface& iface);
+
+        // === PACKET SENDING ===
+        void sendOffer(Interface& iface, uint32_t transID, const ClientID& client, const uint8_t* chaddr, uint32_t ip);
+        void sendAck(Interface& iface, uint32_t transID, const ClientID& client, const uint8_t* chaddr, uint32_t ip);
+        void sendNak(Interface& iface, uint32_t transID, const ClientID& client, const uint8_t* chaddr);
+        void sendInformReply(Interface& iface, uint32_t transID, const ClientID& client, const uint8_t* chaddr);
+        void sendForceRenew(Interface& iface, uint32_t transID, const ClientID& client, const uint8_t* chaddr);
+
+        // === TIMER-BASED TASKS ===
+        void expireOffer(uint32_t ip);
+        void cleanupBinding(uint32_t ip);
+        void clearDecline(uint32_t ip);
+        void clearForceRenew(uint32_t ip);
+
+        // === ENFORCEMENT ===
+        bool enforceTrust(const Interface& iface, const ClientID& client, const Dhcp::Configs& config);
+        bool verifySnooping(const Interface& iface, const ClientID& client, const Dhcp::Configs& config);
+        void applyDNSRules(std::vector<IPAddress>& dnsOut, const Dhcp::Configs::DNS& dnsCfg);
+        void applyOptionRules(std::vector<uint8_t>& optOut, const Dhcp::Configs& config);
+
+        Dhcp::DhcpNetwork* matchingNetwork(const Interface& iface, const DhcpHeader& dhcp);
+    };
+}
+
+#endif // DHCP_SERVER_H

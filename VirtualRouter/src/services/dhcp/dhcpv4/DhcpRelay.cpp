@@ -1,4 +1,4 @@
-#include "DhcpRelay.h"
+/*#include "DhcpRelay.h"
 #include <Interface.h>
 
 Protocol::DhcpRelay::DhcpRelay(Interface* interface)
@@ -77,4 +77,4 @@ ByteString Protocol::DhcpRelay::extractAddress(PacketInfo& packet) const
 
     // Prefer 'yourClientIP' if available, otherwise fall back to 'clientIP'
     return !dhcpHeader.yourClientIP.empty() ? dhcpHeader.yourClientIP : dhcpHeader.clientIP;
-}
+}*/

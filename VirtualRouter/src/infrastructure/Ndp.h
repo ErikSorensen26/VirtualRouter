@@ -157,7 +157,7 @@ public:
      * @parap targetIp The target IP of the resolved arp entry.
      * @param mac The MAC of the resolved arp entry.
      */
-    void addNdpEntry(const IPAddress& targetIp, const uint8_t* targetMac, bool proxy = false, bool isStatic = false);
+    void addNdpEntry(const IPAddress& targetIp, uint64_t targetMac, bool proxy = false, bool isStatic = false);
 
     void resolveAndSend(const uint8_t* targetIp, PacketBuilder& packetToSend);
 

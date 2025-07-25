@@ -96,7 +96,7 @@ public:
      * @parap targetIp The target IP of the resolved arp entry.
      * @param mac The MAC of the resolved arp entry.
      */
-    void addArpEntry(const uint8_t* targetIp, const uint8_t* targetMac, bool proxy = false, bool isStatic = false);
+    void addArpEntry(uint32_t targetIp, uint64_t targetMac, bool proxy = false, bool isStatic = false);
 
     void removeArpEntry(uint32_t ip, bool isStatic = false);
 

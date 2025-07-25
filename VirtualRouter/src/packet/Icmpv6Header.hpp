@@ -51,7 +51,7 @@ inline bool parseIcmpv6Options(const uint8_t* data, size_t size, std::vector<TLV
         size_t fullLen = lenUnits * 8;
         if (lenUnits == 0 || offset + fullLen > size) return false;
 
-        const uint8_t* value = data + offset + 2;
+        uint8_t* value = const_cast<uint8_t*>(data) + offset + 2;
         size_t valueSize = fullLen - 2;
 
         outOptions.emplace_back( type, lenUnits, value, valueSize );

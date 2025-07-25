@@ -4,6 +4,7 @@
 #include <random>
 #include <regex>
 #include <cstring>
+#include <HeaderHelpers.hpp>
 
 double secondsSinceEpoch()
 {
@@ -23,57 +24,98 @@ std::string Functions::lowerCase(std::string str)
     return str;
 }
 
-uint8_t* Functions::addressToByte(uint8_t* data, const std::string address)
+uint8_t Functions::prefixToPrefixLength(uint32_t mask)
 {
-    // Check for ipv4
-    std::regex ipv4Range("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
-    if (std::regex_match(address, ipv4Range))
+    return __builtin_popcount(mask);
+}
+
+IPAddress Functions::getAddress(const std::string& address)
+{
+    IPAddress result;
+
+    if (inet_pton(AF_INET, address.c_str(), result.raw) == 1)
     {
-        if (sscanf(address.c_str(), "%u.%u.%u.%u", &data[0], &data[1], &data[2], &data[3]) != 4)
-        {
-            Logger::getInstance().error() << "Invalid IP address format: " << address << std::endl;
-            return nullptr;
-        }
-        return data;
+        return result;
+    }
+
+    if (inet_pton(AF_INET6, address.c_str(), result.raw) == 1)
+    {
+        result.isV6 = true;
+        return result;
+    }
+
+    return result;
+}
+
+uint32_t Functions::addressToIntv4(const std::string& address)
+{
+    return readU32(getAddress(address).raw);
+}
+
+__uint128_t Functions::addressToIntv6(const std::string& address)
+{
+    return readU128(getAddress(address).raw);
+}
+
+uint64_t Functions::macToInt(const std::string& mac)
+{
+    uint8_t buf[6];
+    std::string hex;
+
+    if (mac.find('.') != std::string::npos)
+    {
+        if (mac.length() != 14 || mac[4] != '.' || mac[9] != '.')
+            return 0;
+        hex = mac.substr(0, 4) + mac.substr(5, 4) + mac.substr(10, 4);
     }
     else
     {
-        // Check if address is IPv6
-        std::string expandedAddress = expandIPv6Address(address);
-        std::regex ipv6Range("^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$");
-        if (std::regex_match(expandedAddress, ipv6Range))
+        if (mac.length() != 17)
+            return 0;
+        for (size_t i = 0; i < mac.length(); i += 3)
         {
-            // IPv6: parse the address
-            std::stringstream ss(expandedAddress);
-            std::string group;
-            uint8_t count = 0;
-            while (std::getline(ss, group, ':'))
-            {
-                unsigned short value = static_cast<unsigned short>(std::stoi(group, nullptr, 16)); // Convert from hex
-                data[count++] = static_cast<unsigned char>(value >> 8);
-                data[count++] = static_cast<unsigned char>(value & 0xFF);
-            }
-            return data;
-        }
-        else
-        {
-            return nullptr;
+            if (i + 1 >= mac.length())
+                return 0;
+            hex += mac[i];
+            hex += mac[i + 1];
         }
     }
+
+    for (size_t i = 0; i < 6; ++i)
+    {
+        int byte;
+        std::istringstream iss(hex.substr(i * 2, 2));
+        iss >> std::hex >> byte;
+        if (iss.fail())
+            return 0;
+        buf[i] = static_cast<uint8_t>(byte);
+    }
+
+    return readU48(buf);
 }
 
-uint8_t* Functions::splitSlashMiddle(const std::string& maskAddress, uint8_t* address, uint8_t& mask)
+bool Functions::isNumber(const std::string& s)
+{
+    return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit);
+}
+
+bool isHex(const std::string& s)
+{
+    return !s.empty() && std::all_of(s.begin(), s.end(), ::isxdigit);
+}
+
+bool Functions::splitSlashMiddle(const std::string& maskAddress, IPAddress& address, uint8_t& mask)
 {
     size_t pos = maskAddress.find('/');
     // Check if the slash exists and is not at the start or end.
     if (pos != std::string::npos && pos != 0 && pos != maskAddress.size() - 1)
     {
-        std::memcpy(address, maskAddress.data(), pos);
+        address = Functions::getAddress(maskAddress.substr(0, pos));
         std::string maskString = maskAddress.substr(pos + 1);
         mask = static_cast<uint8_t>(std::stoi(maskString));
-        return address;
+        return true;
     }
-    return nullptr;
+    return false;
 }
 
 std::optional<std::pair<std::string, std::string>> Functions::splitMiddle(const std::string& full, char delimiter)
@@ -410,7 +452,7 @@ bool Functions::isIPv6AddressWithMask(const std::string& addressWithMask)
 
 bool Functions::isMACAddress(const std::string& macAddress) 
 {
-    std::regex macRegex("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$");
+    std::regex macRegex(R"(^([0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4})$)");
     return std::regex_match(macAddress, macRegex);
 }
 

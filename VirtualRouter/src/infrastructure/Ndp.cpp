@@ -94,7 +94,7 @@ namespace Protocol
         }
     }
 
-    void Ndp::addNdpEntry(const IPAddress& targetIp, const uint8_t* targetMac, bool proxy, bool isStatic)
+    void Ndp::addNdpEntry(const IPAddress& targetIp, uint64_t targetMac, bool proxy, bool isStatic)
     {
         if (!isStatic)
         {
@@ -110,7 +110,7 @@ namespace Protocol
             }
         }
         NdpCacheEntry entry;
-        std::memcpy(entry.macAddress, targetMac, 6);
+        writeU48(entry.macAddress, targetMac);
         entry.state = NudState::REACHABLE;
         if (!isStatic)
         {
@@ -154,10 +154,12 @@ namespace Protocol
 
             if (proxy)
             {
-                proxyEntries[targetIp] = readU48(targetMac);
+                proxyEntries[targetIp] = targetMac;
             }
         }
-        processQueuedPackets(targetIp, targetMac);
+        uint8_t mac[6];
+        writeU48(mac, targetMac);
+        processQueuedPackets(targetIp, mac);
     }
 
     // Get MAC address for the given ip
@@ -194,7 +196,7 @@ namespace Protocol
         auto& iface = currentInterface->configs;
         uint8_t mac[6];
         iface.getMac(mac);
-        PacketBuilder rs;
+        PacketBuilder rs(currentInterface);
         routeSolicitation(rs, mac);
 
         IPPacket::BuildIP build = {
@@ -446,7 +448,7 @@ namespace Protocol
 
         // Always respond to DAD (unspecified source IP = DAD probe)
         //the S flag will be 0 in this case (unsolicited NA)
-        PacketBuilder na;
+        PacketBuilder na(currentInterface);
         neighborAdvertisement(na, replyMac, isProxy ? trail.data() : srcIp);
 
         if (srcMac && std::memcmp(srcIp, &Variable::IPv6::source, 16) == 0)
@@ -783,7 +785,7 @@ namespace Protocol
         if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         {
             auto& iface = currentInterface->configs;
-            PacketBuilder naPacket;
+            PacketBuilder naPacket(currentInterface);
             uint8_t mac[6];
             neighborAdvertisement(naPacket, iface.getMac(mac), targetIp);
 
@@ -805,7 +807,7 @@ namespace Protocol
         {
             auto& iface = currentInterface->configs;
             uint8_t mac[6];
-            PacketBuilder rsPacket;
+            PacketBuilder rsPacket(currentInterface);
             routeSolicitation(rsPacket, iface.getMac(mac));
 
             // Set the IP header and send the packet.
@@ -828,7 +830,7 @@ namespace Protocol
         {
             auto& iface = currentInterface->configs;
             // Gather interface values.
-            PacketBuilder raPacket;
+            PacketBuilder raPacket(currentInterface);
             uint8_t mac[6];
             routeAdvertisement(raPacket, iface.getMac(mac));
             
@@ -849,7 +851,7 @@ namespace Protocol
     {
         if (!currentInterface || !currentInterface->routingInstance || !configs.redirects.load(std::memory_order_relaxed)) return;
 
-        PacketBuilder packet;
+        PacketBuilder packet(currentInterface);
 
         IPPacket::reserveIpv4(currentInterface, packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
@@ -1058,7 +1060,7 @@ namespace Protocol
         betterNextHop.isV6 = true;
         std::memcpy(destinationIp.raw, trail.data(), 16);
         std::memcpy(betterNextHop.raw, trail.data() + 16, 16);
-        uint8_t nextHopMac[6];
+        uint64_t nextHopMac;
         bool macFound = false;
 
         std::vector<TLV8Option> options;
@@ -1068,7 +1070,7 @@ namespace Protocol
         {
             if (opt.type == Variable::ICMPv6::Option::target && opt.valueSize == 6)
             {
-                std::memcpy(nextHopMac, opt.value, 6);
+                nextHopMac = readU48(opt.value);
                 macFound = true;
                 break;
             }
@@ -1190,7 +1192,7 @@ namespace Protocol
         else
         {
             // Send anonymous NS (source = ::, no MAC option)
-            PacketBuilder ns;
+            PacketBuilder ns(currentInterface);
             neighborSolicitation(ns, ipCopy, nullptr);
             uint8_t multicastSolicitation[16];
 
@@ -1381,7 +1383,7 @@ namespace Protocol
             auto& iface = currentInterface->configs;
             uint8_t mac[6];
             iface.getMac(mac);
-            PacketBuilder nsPacket;
+            PacketBuilder nsPacket(currentInterface);
             neighborSolicitation(nsPacket, targetIp, mac);
             uint8_t multicastSolicitation[16];
 

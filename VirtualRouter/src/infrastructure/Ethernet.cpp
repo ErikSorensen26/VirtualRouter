@@ -30,6 +30,6 @@ namespace Protocol
     
     bool Ethernet::reserve(PacketBuilder& packetInfo)
     {
-        packetInfo.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
+        return (packetInfo.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize));
     }
 }

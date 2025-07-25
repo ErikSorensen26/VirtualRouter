@@ -17,7 +17,7 @@ struct alignas(16) IPAddress
     };
     bool isV6;
 
-    constexpr IPAddress() { v6 = 0; }
+    IPAddress() { v6 = 0; }
 
     IPAddress(const IPAddress& other)
     {
@@ -32,6 +32,14 @@ struct alignas(16) IPAddress
             isV6 = other.isV6;
         }
         return *this;
+    }
+
+    bool operator<(const IPAddress& other) const
+    {
+        if (isV6 != other.isV6)
+            return isV6 < other.isV6;
+
+        return isV6 ? (v6 < other.v6) : (v4 < other.v4);
     }
 
     IPAddress(const uint8_t* bytes, AddressFamily fam) {
@@ -53,7 +61,7 @@ struct IPPrefix
     uint8_t prefixLength{};
     AddressFamily af{};
     
-    constexpr IPPrefix() = default;
+    IPPrefix() = default;
 
     IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family)
         : prefixLength(prefix), af(family) {
@@ -66,6 +74,13 @@ struct IPPrefix
         size_t len = (af == AddressFamily::IPv4) ? 4 : 16;
         return std::memcmp(addr, other.addr, len) == 0;
     }
+
+    bool operator<(const IPPrefix& other) const {
+        if (af != other.af) return af < other.af;
+        if (prefixLength != other.prefixLength) return prefixLength < other.prefixLength;
+        size_t len = (af == AddressFamily::IPv4) ? 4 : 16;
+        return std::memcmp(addr, other.addr, len) < 0;
+    }
 };
 
 struct IPv6Prefix
@@ -73,7 +88,7 @@ struct IPv6Prefix
     __uint128_t addr;
     uint8_t prefixLength{};
     
-    constexpr IPv6Prefix() = default;
+    IPv6Prefix() = default;
 
     IPv6Prefix(__uint128_t ip, uint8_t prefix)
         : addr(ip), prefixLength(prefix) {
@@ -81,6 +96,11 @@ struct IPv6Prefix
 
     bool operator==(const IPv6Prefix& other) const {
         return other.prefixLength == prefixLength && other.addr == addr;
+    }
+
+    bool operator<(const IPv6Prefix& other) const {
+        if (prefixLength != other.prefixLength) return prefixLength < other.prefixLength;
+        return addr < other.addr;
     }
 };
 

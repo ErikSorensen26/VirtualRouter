@@ -1,5 +1,6 @@
 // DhcpRelay.h
 
+#if 0
 #ifndef DHCP_RELAY_H
 #define DHCP_RELAY_H
 
@@ -96,3 +97,4 @@ namespace Protocol
 }
 
 #endif // DHCP_RELAY_H
+#endif

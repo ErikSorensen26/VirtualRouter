@@ -4,7 +4,7 @@
 
 void Protocol::Dhcpv6Client::initiate()
 {
-    sendSolicit();
+
 }
 
 void Protocol::Dhcpv6Client::shutdown()

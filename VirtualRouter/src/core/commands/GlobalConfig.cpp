@@ -21,35 +21,37 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		}
 
 		std::shared_lock<std::shared_mutex> lock(global.configs.arp.neighborMutex);
-		if (negate && global.configs.arp.neighbors.contains(vrfName) && global.configs.arp.neighbors.contains(commandStream[offset + 1]))
+		if (negate && global.configs.arp.neighbors.count(vrfName) && global.configs.arp.neighbors[vrfName].count(Functions::addressToIntv4(commandStream[offset + 1])))
 		{
-			GlobalConfigs::Arp::Neighbor entry = global.configs.arp.neighbors[vrfName][commandStream[offset + 1]];
+			GlobalConfigs::Arp::Neighbor entry = global.configs.arp.neighbors[vrfName][Functions::addressToIntv4(commandStream[offset + 1])];
 			auto* vrf = global.getRoutingInstance(vrfName, AddressFamily::IPv4);
-			if (auto iface = vrf ? vrf->getInterface(entry.interface.first, entry.interface.second) : nullptr)
+			uint32_t addr = Functions::addressToIntv4(commandStream[offset + 1]);
+			if (auto iface = vrf ? vrf->getInterface(entry.interface) : nullptr)
 			{
 				if (iface->arp)
 				{
-					iface->arp->removeArpEntry(commandStream[offset + 1], true);
+					iface->arp->removeArpEntry(addr);
 				}
 			}
-			global.configs.arp.neighbors[vrfName].erase(commandStream[offset + 1]);
+			global.configs.arp.neighbors[vrfName].erase(addr);
 		}
 		else
 		{
-			GlobalConfigs::Arp::Neighbor entry{
-				commandStream[offset + 2],
-				{terminal.engine.getInterfaceType(commandStream[offset + 3]), std::stoi(commandStream[offset + 4])},
-				commandStream.size() == 6
-			};
+			uint32_t ifaceKey = calculateInterfaceKey(terminal.engine.getInterfaceType(commandStream[offset + 3]), std::stof(commandStream[offset + 4]));
+			GlobalConfigs::Arp::Neighbor entry;
+			Functions::macToInt(commandStream[offset + 2]);
+			entry.interface = ifaceKey;
+			entry.proxy = commandStream.size() == 6;
+
 			global.configs.arp.neighbors[vrfName].emplace(
-				commandStream[offset + 1], entry
+				Functions::addressToIntv4(commandStream[offset + 1]), entry
 			);
 			auto* vrf = global.getRoutingInstance(vrfName, AddressFamily::IPv4);
-			if (auto iface = vrf ? vrf->getInterface(entry.interface.first, entry.interface.second) : nullptr)
+			if (auto iface = vrf ? vrf->getInterface(ifaceKey) : nullptr)
 			{
 				if (iface->arp)
 				{
-					iface->arp->addArpEntry(commandStream[1], entry.mac, entry.proxy, true);
+					iface->arp->addArpEntry(Functions::addressToIntv4(commandStream[1]), entry.mac, entry.proxy, true);
 				}
 			}
 		}
@@ -85,13 +87,13 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			else if (commandStream[2] == "binding")
 			{
 				uint16_t cleanupTime = std::stoi(commandStream[5]);
-				global.dhcpServer->globalConfig.bindingCleanup.store(cleanupTime, std::memory_order_release);
+				global.dhcpServer->configs.bindingCleanup.store(cleanupTime, std::memory_order_release);
 			}
 			else if (commandStream[2] == "bootp")
 			{
 				if (currentVrf)
 				{
-					global.dhcpServer->globalConfig.bootp.ignore.store(true, std::memory_order_release);
+					global.dhcpServer->configs.bootp.ignore.store(true, std::memory_order_release);
 				}
 			}
 			else if (commandStream[2] == "class")
@@ -128,7 +130,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			{
 				if (commandStream[3] == "logging")
 				{
-					global.dhcpServer->globalConfig.logConflicts.store(true, std::memory_order_release);
+					global.dhcpServer->configs.logConflicts.store(true, std::memory_order_release);
 				}
 				if (commandStream[3] == "resolution")
 				{
@@ -138,7 +140,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 					}
 					else
 					{
-						global.dhcpServer->globalConfig.conflictInterval.store(std::stoi(commandStream[5]));
+						global.dhcpServer->configs.conflictInterval.store(std::stoi(commandStream[5]));
 					}
 				}
 			}
@@ -146,18 +148,18 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			{
 				if (commandStream[4] == "timeout")
 				{
-					std::unique_lock<std::shared_mutex> lock(global.dhcpServer->globalConfig.configMutex);
-					global.dhcpServer->globalConfig.databaseSaveInterval[commandStream[3]] = std::stoi(commandStream[5]);
+					std::unique_lock<std::shared_mutex> lock(global.dhcpServer->configs.configMutex);
+					global.dhcpServer->configs.databaseSaveInterval[commandStream[3]] = std::stoi(commandStream[5]);
 				}
 				if (commandStream[4] == "write-delay")
 				{
-					std::unique_lock<std::shared_mutex> lock(global.dhcpServer->globalConfig.configMutex);
-					global.dhcpServer->globalConfig.writeDelay[commandStream[3]] = {std::stoi(commandStream[5]), commandStream.size() >= 8 ? std::stoi(commandStream[7]) : 0};
+					std::unique_lock<std::shared_mutex> lock(global.dhcpServer->configs.configMutex);
+					global.dhcpServer->configs.writeDelay[commandStream[3]] = {std::stoi(commandStream[5]), commandStream.size() >= 8 ? std::stoi(commandStream[7]) : 0};
 				}
 			}
 			else if (commandStream[2] == "debug")
 			{
-				global.dhcpServer->globalConfig.logAsciiClientID.store(false, std::memory_order_relaxed);
+				global.dhcpServer->configs.logAsciiClientID.store(false, std::memory_order_relaxed);
 			}
 			else if (commandStream[2] == "excluded-address")
 			{
@@ -167,11 +169,11 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				{
 					hasVrf = true;
 				}
-				uint32_t ipStart = Functions::byteToNum(Functions::addressToByte(commandStream[hasVrf ? 5 : 3]));
+				uint32_t ipStart = Functions::addressToIntv4(commandStream[hasVrf ? 5 : 3]);
 				uint32_t size = 1;
 				if (commandStream.size() > (hasVrf ? 6 : 4))
 				{
-					uint32_t ipEnd = Functions::byteToNum(Functions::addressToByte(commandStream[hasVrf ? 6 : 4]));
+					uint32_t ipEnd = Functions::addressToIntv4(commandStream[hasVrf ? 6 : 4]);
 					if (ipEnd >= ipStart)
 					{
 						size = (ipEnd - ipStart) + 1;
@@ -181,8 +183,9 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 						return false;
 					}
 				}
-				std::unique_lock<std::shared_mutex> lock(global.dhcpServer->vrfConfigs.configMutex);
-				global.dhcpServer->vrfConfigs.excludedAddresses[currentVrf->instanceName][ipStart].insert(size);
+				//TODO
+				//std::unique_lock<std::shared_mutex> lock(global.dhcpServer->vrfConfigs.configMutex);
+				//global.dhcpServer->vrfConfigs.excludedAddresses[currentVrf->instanceName][ipStart].insert(size);
 			}
 			else if (commandStream[2] == "global-options")
 			{
@@ -193,16 +196,16 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				if (commandStream[4] == "log")
 				{
 					//TODO limit dhcp lease
-					global.dhcpServer->globalConfig.limitLeases.store(true, std::memory_order_release);
+					global.dhcpServer->configs.limitLeases.store(true, std::memory_order_release);
 				}
 				else if (commandStream[4] == "per")
 				{
-					global.dhcpServer->globalConfig.leasesPerInterface.store(std::stoi(commandStream[6]), std::memory_order_release);
+					global.dhcpServer->configs.leasesPerInterface.store(std::stoi(commandStream[6]), std::memory_order_release);
 				}
 			}
 			else if (commandStream[2] == "limited-broadcast-address")
 			{
-				global.dhcpServer->globalConfig.limitBroadcastAddress.store(true, std::memory_order_release);
+				global.dhcpServer->configs.limitBroadcastAddress.store(true, std::memory_order_release);
 			}
 			else if (commandStream[2] == "ping")
 			{
@@ -212,20 +215,19 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				}
 				else if (commandStream[3] == "timeout")
 				{
-					global.dhcpServer->globalConfig.pingTimeout.store(std::stoi(commandStream[4]));
+					global.dhcpServer->configs.pingTimeout.store(std::stoi(commandStream[4]));
 				}
 			}
 			else if (commandStream[2] == "pool")
 			{
-				auto poolIt = global.dhcpServer->poolConfigs.find(commandStream[3]);
-				if (poolIt != global.dhcpServer->poolConfigs.end())
+				auto poolIt = global.dhcpServer->networks.find(commandStream[3]);
+				if (poolIt != global.dhcpServer->networks.end())
 				{
 					currentDhcpPool = poolIt->second;
 				}
 				else
 				{
-					currentDhcpPool = new Protocol::Dhcp::DhcpNetworkConfig();
-					global.dhcpServer->poolConfigs[commandStream[3]] = currentDhcpPool;
+					currentDhcpPool = global.dhcpServer->addPool(commandStream[3]);
 				}
 				terminal.changeMode(Mode::dhcpConfig);
 			}
@@ -234,23 +236,23 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				//TODO DO ALL OF THIS
 				if (commandStream[3] == "bootp")
 				{
-					global.dhcpServer->globalConfig.bootp.relayIgnore.store(true, std::memory_order_release);
+					global.dhcpServer->configs.bootp.relayIgnore.store(true, std::memory_order_release);
 				}
 				else if (commandStream[3] == "information")
 				{
 					if (commandStream[4] == "check")
 					{
-						global.dhcpServer->globalConfig.bootp.validateRelay.store(true, std::memory_order_release);
+						global.dhcpServer->configs.bootp.validateRelay.store(true, std::memory_order_release);
 					}
 					else if (commandStream[4] == "option")
 					{
 						if (commandStream.size() == 6)
 						{
-							global.dhcpServer->globalConfig.bootp.includeVPNrelayInfo.store(true);
+							global.dhcpServer->configs.bootp.includeVPNrelayInfo.store(true);
 						}
 						else
 						{
-							global.dhcpServer->globalConfig.bootp.includeRelayInfo.store(true, std::memory_order_release);
+							global.dhcpServer->configs.bootp.includeRelayInfo.store(true, std::memory_order_release);
 						}
 					}
 					else if (commandStream[4] == "policy")
@@ -258,76 +260,76 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 						std::string com = commandStream[5];
 						if (com == "drop")
 						{
-							global.dhcpServer->globalConfig.bootp.drop.store(true, std::memory_order_release);
+							global.dhcpServer->configs.bootp.drop.store(true, std::memory_order_release);
 						}
 						else if (com == "encapsulate")
 						{
-							global.dhcpServer->globalConfig.bootp.encapsulate.store(true, std::memory_order_release);
+							global.dhcpServer->configs.bootp.encapsulate.store(true, std::memory_order_release);
 						}
 						else if (com == "keep")
 						{
-							global.dhcpServer->globalConfig.bootp.keep.store(true, std::memory_order_release);
+							global.dhcpServer->configs.bootp.keep.store(true, std::memory_order_release);
 						}
 						else if (com == "replace")
 						{
-							global.dhcpServer->globalConfig.bootp.replace.store(true, std::memory_order_release);
+							global.dhcpServer->configs.bootp.replace.store(true, std::memory_order_release);
 						}
 					}
 					else if (commandStream[4] == "trust-all")
 					{
-						global.dhcpServer->globalConfig.bootp.trustAll.store(true, std::memory_order_release);
+						global.dhcpServer->configs.bootp.trustAll.store(true, std::memory_order_release);
 					}
 				}
 				else if (commandStream[3] == "override")
 				{
-					global.dhcpServer->globalConfig.bootp.linkSelectOverride.store(true, std::memory_order_release);
+					global.dhcpServer->configs.bootp.linkSelectOverride.store(true, std::memory_order_release);
 				}
 			}
 			else if (commandStream[2] == "remember")
 			{
-				global.dhcpServer->globalConfig.remember.store(true, std::memory_order_release);
+				global.dhcpServer->configs.remember.store(true, std::memory_order_release);
 			}
 			else if (commandStream[2] == "route")
 			{
 				if (commandStream[3] == "connected")
 				{
-					global.dhcpServer->globalConfig.addConnected.store(true, std::memory_order_release);
+					global.dhcpServer->configs.addConnected.store(true, std::memory_order_release);
 				}
 				else if (commandStream[3] == "static")
 				{
-					global.dhcpServer->globalConfig.addStatic.store(true, std::memory_order_release);
+					global.dhcpServer->configs.addStatic.store(true, std::memory_order_release);
 				}
 			}
 			else if (commandStream[2] == "smart-relay")
 			{
-				global.dhcpServer->globalConfig.smartRelay.store(true, std::memory_order_release);
+				global.dhcpServer->configs.smartRelay.store(true, std::memory_order_release);
 			}
 			else if (commandStream[2] == "snooping")
 			{
 				if (commandStream[3] == "database")
 				{
-					global.dhcpServer->globalConfig.snooping.databases.insert(commandStream[4]);
+					global.dhcpServer->configs.snooping.databases.insert(commandStream[4]);
 				}
 				else if (commandStream[3] == "information")
 				{
 					if (commandStream.size() == 5)
 					{
-						global.dhcpServer->globalConfig.snooping.informationOption.store(true, std::memory_order_release);
+						global.dhcpServer->configs.snooping.informationOption.store(true, std::memory_order_release);
 					}
 					else
 					{
-						global.dhcpServer->globalConfig.snooping.allowUntrusted.store(true, std::memory_order_release);
+						global.dhcpServer->configs.snooping.allowUntrusted.store(true, std::memory_order_release);
 					}
 				}
 				else if (commandStream[3] == "verify")
 				{
 					if (commandStream[4] == "mac-address")
 					{
-						global.dhcpServer->globalConfig.snooping.verifyMac.store(true, std::memory_order_release);
+						global.dhcpServer->configs.snooping.verifyMac.store(true, std::memory_order_release);
 					}
 					else if (commandStream[4] == "no-relay-agent-address")
 					{
-						global.dhcpServer->globalConfig.snooping.verifyGiaddr.store(true, std::memory_order_release);
+						global.dhcpServer->configs.snooping.verifyGiaddr.store(true, std::memory_order_release);
 					}
 				}
 				else if (commandStream[3] == "vlan")
@@ -338,14 +340,14 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 					{
 						auto pair = Functions::splitMiddle(commandStream[4], '-');
 						if (pair->first > pair->second) return false;
-						global.dhcpServer->globalConfig.snooping.vlans[std::stoi(pair->first)].insert(std::stoi(pair->second) - std::stoi(pair->first) + 1);
+						global.dhcpServer->configs.snooping.vlans[std::stoi(pair->first)].insert(std::stoi(pair->second) - std::stoi(pair->first) + 1);
 					}
 					else
 					{
-						vlanStart = Functions::byteToNum(Functions::addressToByte(commandStream[4]));
+						vlanStart = Functions::addressToIntv4(commandStream[4]);
 						if (commandStream.size() > 5)
 						{
-							uint32_t vlanEnd = Functions::byteToNum(Functions::addressToByte(commandStream[5]));
+							uint32_t vlanEnd = Functions::addressToIntv4(commandStream[5]);
 							if (vlanEnd >= vlanStart)
 							{
 								size = (vlanEnd - vlanStart) + 1;
@@ -355,7 +357,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 								return false;
 							}
 						}
-						global.dhcpServer->globalConfig.snooping.vlans[vlanStart].insert(size);
+						global.dhcpServer->configs.snooping.vlans[vlanStart].insert(size);
 					}
 				}
 			}
@@ -363,15 +365,15 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			{
 				if (commandStream[3] == "option55-override")
 				{
-					global.dhcpServer->globalConfig.option55Override.store(true, std::memory_order_release);
+					global.dhcpServer->configs.option55Override.store(true, std::memory_order_release);
 				}
 				else if (commandStream[3] == "sip")
 				{
-					global.dhcpServer->globalConfig.sipParameterNak.store(true, std::memory_order_release);
+					global.dhcpServer->configs.sipParameterNak.store(true, std::memory_order_release);
 				}
 				else if (commandStream[3] == "tunnel")
 				{
-					global.dhcpServer->globalConfig.tunnelUnicastParameter.store(true, std::memory_order_release);
+					global.dhcpServer->configs.tunnelUnicastParameter.store(true, std::memory_order_release);
 				}
 			}
 			else if (commandStream[2] == "update")
@@ -382,15 +384,15 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 					{
 						if (dns == "both")
 						{
-							global.dhcpServer->globalConfig.updateDNS.both.store(true, std::memory_order_release);
+							global.dhcpServer->configs.updateDNS.both.store(true, std::memory_order_release);
 						}
 						else if (dns == "before")
 						{
-							global.dhcpServer->globalConfig.updateDNS.before.store(true, std::memory_order_release);
+							global.dhcpServer->configs.updateDNS.before.store(true, std::memory_order_release);
 						}
 						else if (dns == "override")
 						{
-							global.dhcpServer->globalConfig.updateDNS.override.store(true, std::memory_order_release);
+							global.dhcpServer->configs.updateDNS.override.store(true, std::memory_order_release);
 						}
 					}
 				}
@@ -523,23 +525,24 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		}
 		else if (commandStream[1] == "neighbor")
 		{
-			ByteString address = commandStream[2];
+			IPAddress address = Functions::getAddress(commandStream[2]);
 			if (!negate)
 			{
 				InterfaceType type = terminal.engine.getInterfaceType(commandStream[3]);
 				float id = std::stof(commandStream[4]);
+				uint32_t intID = calculateInterfaceKey(type, id);
 				
 				GlobalConfigs::Ndp::Neighbor entry{
-					{type, id},
-					commandStream[5]
+					intID,
+					Functions::macToInt(commandStream[5])
 				};
 				global.configs.ndp.neighbors.emplace(
 					address,
 					entry
 				);
-				for (const auto& [pair, iface] : global.getInterfaceList())
+				for (const auto& [key, iface] : global.getInterfaceList())
 				{
-					if (pair.first == type && pair.second == id)
+					if (key == entry.interface)
 					{
 						iface->ndp->addNdpEntry(address, entry.macAddress, false, true);
 					}
@@ -556,7 +559,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				if (commandStream.size() > 3)
 				{
 					ID = commandStream[3];
-					terminal.routingProtocolID = Functions::stringToNum(commandStream[3]);
+					terminal.routingProtocolID = std::stoi(commandStream[3]);
 				}
 				if (type == "eigrp")
 				{
@@ -623,16 +626,17 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		terminal.isList = true;
 		std::string type = commandStream[1];
 		std::string interfaceID_temp = commandStream[2];
-		terminal.interfaceID = static_cast<uint8_t>(Functions::stringToNum(commandStream[2]));
+		terminal.interfaceID = std::stof(commandStream[2]);
 		InterfaceType interfaceType = terminal.engine.getInterfaceType(type);
 		std::string intType;
 		size_t id = static_cast<size_t>(std::floor(terminal.interfaceID));
-		if (!global.getInterface(terminal.engine.getInterfaceType(type), terminal.interfaceID))
+		uint32_t key = calculateInterfaceKey(interfaceType, terminal.interfaceID);
+		if (!global.getInterface(key))
 		{
 			if (negate)
 			{
-				global.removeInterface(interfaceType, terminal.interfaceID);
-				currentVrf->removeInterface(interfaceType, terminal.interfaceID);
+				global.removeInterface(key);
+				currentVrf->removeInterface(key);
 			}
 			else
 			{
@@ -648,11 +652,11 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				std::string mac = terminal.engine.getMac(interfaceTypeEnum, id);
 				if (mac.empty() || intType == "NO_INTERFACE") return false;
 				global.addInterface(interfaceType, intType, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
-				currentVrf->addInterface(global.getInterface(interfaceTypeEnum, terminal.interfaceID), interfaceType, terminal.interfaceID);
+				currentVrf->addInterface(global.getInterface(key), key);
 			}
 		}
 		terminal.configureInterfaceMode(type);
-		currentInterface = global.getInterface(interfaceType, terminal.interfaceID);
+		currentInterface = global.getInterface(key);
 	}
 	else if (commandStream[0] == "router")
 	{
@@ -662,11 +666,11 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		if (commandStream.size() > 2)
 		{
 			ID = commandStream[2];
-			terminal.routingProtocolID = Functions::stringToNum(commandStream[2]);
+			terminal.routingProtocolID = std::stoi(commandStream[2]);
 		}
 		if (type == "eigrp")
 		{
-			if (Functions::isDecimal(ID))
+			if (Functions::isNumber(ID))
 			{
 				Protocol::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
 				if (!negate)

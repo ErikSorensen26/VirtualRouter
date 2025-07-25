@@ -5,9 +5,9 @@
 
 InterfaceConfigs::InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const uint8_t* mac)
   : id(id),
-    ipv6(timeManager),
     interfaceType(type),
-    key(calculateInterfaceKey(type, id))
+    key(calculateInterfaceKey(type, id)),
+    ipv6(timeManager)
 {
     macAddress.store(readU48(mac), std::memory_order_relaxed);
 }
@@ -47,9 +47,9 @@ uint32_t InterfaceConfigs::IPv4State::getAddress()
     return address.load(std::memory_order_relaxed);
 }
 
-void InterfaceConfigs::IPv4State::setAddress(const uint8_t* newAddress, uint8_t newMask)
+void InterfaceConfigs::IPv4State::setAddress(uint32_t newAddress, uint8_t newMask)
 {
-    address.store(readU32(newAddress), std::memory_order_release);
+    address.store(newAddress, std::memory_order_release);
     mask.store(newMask, std::memory_order_relaxed);
 }
 

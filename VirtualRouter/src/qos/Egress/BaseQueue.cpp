@@ -18,7 +18,7 @@ void BaseQueue::stop()
         runThread.join();
 }
 
-inline void BaseQueue::enqueue(PacketSlot* pkt)
+void BaseQueue::enqueue(PacketSlot* pkt)
 {
     while (true)
     {

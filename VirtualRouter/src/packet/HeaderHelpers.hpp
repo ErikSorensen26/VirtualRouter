@@ -45,10 +45,11 @@ inline __uint128_t ntohdll(__uint128_t val) {
 }
 
 #define DEFINE_PACKET_HEADER(RAWTYPE)                                                               \
-    static constexpr size_t fixedSize = sizeof(RAWTYPE);                                            \
-    RAWTYPE* raw = nullptr;                                                                         \
+    using RawType = RAWTYPE;                                                                        \
+    inline static constexpr size_t fixedSize = sizeof(RawType);                                     \
+    RawType* raw = nullptr;                                                                         \
     uint8_t* buffer = nullptr;                                                                      \
-    std::span<uint8_t> trailing{};                                                                  \
+    std::span<uint8_t> trailing;                                                                    \
                                                                                                     \
     void setBuffer(uint8_t* buf)                                                                    \
     {                                                                                               \

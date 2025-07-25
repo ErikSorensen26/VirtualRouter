@@ -981,7 +981,7 @@ Eigrp::~Eigrp()
         // Add unicast neighbor to the unicast neighbor list
         {
             std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
-            configs.unicastNeighbors[key].emplace(neighborIp, addressFamily);
+            configs.unicastNeighbors[key].emplace(neighborIp);
         }
 
         // Find the interface to add the neighbor
@@ -1685,8 +1685,8 @@ Eigrp::~Eigrp()
         {
             if (!authOpt.has_value()) return;
             EigrpHeader tempHeader = receivedHello;
-            auto authTLV = generateAuthenticatedTLV(tempHeader);
-            if (authTLV.value != authOpt->value) return;
+            //auto authTLV = generateAuthenticatedTLV(tempHeader); //TODO
+            //if (authTLV.value != authOpt->value) return;
         }
 
         // Update neighbor fields and start/renew hold timers
@@ -2356,7 +2356,7 @@ Eigrp::~Eigrp()
             // Process pending ACKs
             for (auto seq : neighbor->pendingAcks)
             {
-                PacketBuilder eigrpAckPacketStructure;
+                PacketBuilder eigrpAckPacketStructure(currentInterface);
 
                 eigrpProcess.eigrpHello(eigrpAckPacketStructure, *this, neighborIp.raw, seq, /*ack=*/true);
 
@@ -2487,7 +2487,7 @@ Eigrp::~Eigrp()
         bool authentication = configs->authKey.fullyEnabled.load(std::memory_order_relaxed);
         bool stub = eigrpProcess.isStub();
 
-        PacketBuilder eigrpPacket;
+        PacketBuilder eigrpPacket(currentInterface);
 
         do
         {
@@ -2688,7 +2688,7 @@ Eigrp::~Eigrp()
 
         bool authentication = configs->authKey.fullyEnabled.load(std::memory_order_relaxed);
 
-        PacketBuilder eigrpQueryPacketStructure;
+        PacketBuilder eigrpQueryPacketStructure(currentInterface);
 
         // Calculate remaining space available for routes
         uint16_t mtuSize = eigrpProcess.addressFamily == AddressFamily::IPv4
@@ -2872,7 +2872,7 @@ Eigrp::~Eigrp()
 
         bool authentication = configs->authKey.fullyEnabled.load(std::memory_order_relaxed);
 
-        PacketBuilder eigrpQueryPacketStructure;
+        PacketBuilder eigrpQueryPacketStructure(currentInterface);
             
         // Calculate remaining space available for routes
         uint16_t mtuSize = eigrpProcess.addressFamily == AddressFamily::IPv4
@@ -3014,7 +3014,7 @@ Eigrp::~Eigrp()
         // Validate neighbor
         if (!neighbor) return;
         
-        PacketBuilder eigrpPacket;
+        PacketBuilder eigrpPacket(currentInterface);
 
         // Reserve header space.
         eigrpProcess.addressFamily == AddressFamily::IPv4
@@ -3646,7 +3646,7 @@ Eigrp::~Eigrp()
             }
         }
 
-        PacketBuilder eigrpHello;
+        PacketBuilder eigrpHello(currentInterface);
 
         eigrpProcess.eigrpHello(eigrpHello, *this, targetIp, sequenceNumber, false, update);
 
@@ -3929,7 +3929,7 @@ Eigrp::~Eigrp()
         }
 
         // Resend the packet
-        PacketBuilder retransmissionPacket;
+        PacketBuilder retransmissionPacket(currentInterface);
         {
             // Construct and send the retransmission packet
             eigrpProcess.addressFamily == AddressFamily::IPv4

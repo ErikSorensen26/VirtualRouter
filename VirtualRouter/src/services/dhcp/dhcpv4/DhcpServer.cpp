@@ -198,7 +198,7 @@ void Protocol::DhcpServer::sendOffer(
     const TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder;
+    PacketBuilder builder(&iface);
     UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
@@ -329,7 +329,7 @@ void Protocol::DhcpServer::sendAck(
     const TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder;
+    PacketBuilder builder(&iface);
     UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
@@ -466,7 +466,7 @@ void Protocol::DhcpServer::sendNak(
     const TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder;
+    PacketBuilder builder(&iface);
     UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
@@ -552,7 +552,7 @@ void Protocol::DhcpServer::sendInformReply(
     const TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder;
+    PacketBuilder builder(&iface);
     UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
@@ -657,7 +657,7 @@ void Protocol::DhcpServer::sendForceRenew(
     const TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder;
+    PacketBuilder builder(&iface);
     UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
@@ -742,7 +742,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
     size_t clientMaxSize
 )
 {
-    PacketBuilder builder;
+    PacketBuilder builder(&iface);
     
     UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
@@ -1593,7 +1593,7 @@ Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::matchingNetwork(const Interfa
     return nullptr; // No match found
 }
 
-Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::addPool(std::string& poolName)
+Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::addPool(const std::string& poolName)
 {
     std::lock_guard<std::mutex> lock(serverMutex);
     // Create a new pool and lease for the dhcp network.

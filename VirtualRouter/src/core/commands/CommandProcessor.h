@@ -1,11 +1,12 @@
+
+#ifndef COMMAND_PROCESSOR_H
+#define COMMAND_PROCESSOR_H
+
 #include <vector>
 #include <string>
 #include <CliSession.h>
 #include <CliEngine.h>
 #include <Global.h>
-
-#ifndef COMMAND_PROCESSOR_H
-#define COMMAND_PROCESSOR_H
 
 class Global;
 class VirtualRouter;
@@ -15,10 +16,9 @@ namespace Protocol
     class Eigrp;
     struct EigrpNamed;
 
-
     namespace Dhcp
     {
-        struct DhcpNetworkConfig;
+        struct DhcpNetwork;
     }
 }
 namespace EigrpConfigs 
@@ -54,7 +54,7 @@ private:
     Protocol::EigrpNamed* currentEigrpNamed;
     EigrpConfigs::InterfaceConfigs* currentEigrpInterface;
 
-    Protocol::Dhcp::DhcpNetworkConfig* currentDhcpPool;
+    Protocol::Dhcp::DhcpNetwork* currentDhcpPool;
 };
 
 #endif //COMMAND_PROCESSOR_H

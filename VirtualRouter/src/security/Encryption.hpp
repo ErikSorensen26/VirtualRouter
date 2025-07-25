@@ -9,9 +9,7 @@
 #include <openssl/evp.h>      // AES
 #include <openssl/des.h>      // DES/3DES
 #include <openssl/evp.h>      // Updated API for cryptographic operations
-#include <string>
 #include <cstring>
-#include <ByteString.hpp>
 
 
 namespace Authentication 

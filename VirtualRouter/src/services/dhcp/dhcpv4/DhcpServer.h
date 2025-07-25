@@ -10,7 +10,6 @@
 #include <IPv4LeaseManager.h>
 #include <IPv4Pool.h>
 #include <IPAddress.hpp>
-#include <DhcpServerBase.h>
 #include <shared_mutex>
 #include <DhcpTLVManager.hpp>
 #include <set>
@@ -278,20 +277,21 @@ namespace Protocol
 
         void handlePacket(const DhcpHeader& dhcp, const uint8_t* sourceMac, Interface& iface);
 
-    private:
-
-        Global& global;
-        TimeManager& timeManager;
-        Dhcp::DhcpAuthManager authManager;
         Dhcp::Configs configs;
 
         std::mutex serverMutex;
 
         std::unordered_map<std::string, Dhcp::DhcpNetwork*> networks;
+        Dhcp::DhcpNetwork* addPool(const std::string& poolName);
+
+    private:
+
+        Global& global;
+        TimeManager& timeManager;
+        Dhcp::DhcpAuthManager authManager;
 
         std::unordered_map<uint64_t, Dhcp::SnoopingEntry> snoopingTable;
 
-        Dhcp::DhcpNetwork* addPool(std::string& poolName);
         void removePool(std::string& poolName);
         bool removeConfig(IPPrefix& prefix);
 

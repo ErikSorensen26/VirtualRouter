@@ -84,9 +84,9 @@ bool CliSession::executeCommand(std::string &command)
 
 	if (preProcessMode != Mode::userExec && preProcessMode != Mode::privilegedExec && command != "error")
 	{
-		Functions::printVector(commandHistory);
+		//Functions::printVector(commandHistory);
 		// cout << "\n" << endl;
-		Functions::printVector(commandStream);
+		//Functions::printVector(commandStream);
 
 		// TODO add "exit" to end of the config
 		// Need to put it in command json

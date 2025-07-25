@@ -4,7 +4,7 @@
 
 bool RoutingTable::addEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 {
-    IpPrefixKey key(route->network.data, route->mask, af);
+    IPPrefix key(route->network.raw, route->mask, af);
     std::lock_guard<std::mutex> lock(tableMutex);
 
     auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
@@ -45,7 +45,7 @@ bool RoutingTable::addEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 bool RoutingTable::updateEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 {
     // Create key in "network/mask" format
-    IpPrefixKey key(route->network.data, route->mask, af);
+    IPPrefix key(route->network.raw, route->mask, af);
     std::lock_guard<std::mutex> lock(tableMutex);
 
     auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
@@ -106,7 +106,7 @@ bool RoutingTable::updateEigrp(Eigrp *route, AddressFamily af, uint32_t as)
 void RoutingTable::removeEigrp(const uint8_t* network, uint8_t mask, AddressFamily af, uint32_t as)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    IpPrefixKey key(network, mask, af);
+    IPPrefix key(network, mask, af);
     auto& eigrpTable = (af == AddressFamily::IPv4) ? eigrp[as] : eigrpIPv6[as];
     auto it = eigrpTable.find(key);
     if (it != eigrpTable.end())
@@ -154,7 +154,7 @@ void RoutingTable::updateEigrpWithVariance(Eigrp* route, uint8_t variance, Addre
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
-    IpPrefixKey key(route->network.data, route->mask, af);
+    IPPrefix key(route->network.raw, route->mask, af);
     RoutingTable::Eigrp* existingRoute = (af == AddressFamily::IPv4) ? eigrp[as][key] : eigrpIPv6[as][key];
     double minMetric = existingRoute->metric;
 
@@ -217,12 +217,12 @@ RoutingTable::Eigrp* RoutingTable::getEigrpRoute(const uint8_t* destination, con
 bool RoutingTable::getNextHop(uint8_t* out, const uint8_t* destination, uint8_t mask, uint32_t as, AddressFamily af)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
-    IpPrefixKey key(destination, mask, af);
+    IPPrefix key(destination, mask, af);
     auto it = eigrp[as].find(key);
     if (it != eigrp[as].end() && !it->second->nextHopsVector.empty())
     {
         static std::atomic<size_t> roundRobinIndex{0};
-        std::memcpy(out, it->second->nextHopsVector[roundRobinIndex++ % it->second->nextHopsVector.size()].data, af == AddressFamily::IPv4 ? 4 : 16);
+        std::memcpy(out, it->second->nextHopsVector[roundRobinIndex++ % it->second->nextHopsVector.size()].raw, af == AddressFamily::IPv4 ? 4 : 16);
         return true;
     }
     return false;
