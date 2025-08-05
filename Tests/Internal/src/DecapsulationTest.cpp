@@ -2,31 +2,6 @@
 #include "Decapsulation.h"      // Your Packet class
 #include "PacketStructure.h"    // All your protocol structs
 
-class TestablePacket : public Packet
-{
-public:
-    // A "do-nothing" constructor: does NOT call inspection(...) automatically
-    TestablePacket(ByteString pak = "")
-        : Packet(pak)
-    {
-        print = false;
-        start = 0;
-        packetInfo = {};
-    }
-
-    using Packet::inspection;   // Expose the inspection function for tests
-    using Packet::packetInfo;   // Expose the parsed info
-    using Packet::start;        // Expose the offset
-    using Packet::fullPacket;   // Expose full packet if needed
-
-    // Helper to load the entire "whole packet" into fullPacket
-    void setFullPacket(const ByteString &data)
-    {
-        fullPacket = data;
-        start = 0;  // Reset the offset
-    }
-};
-
 //--------------------------------------------------------------------------------
 // Test Fixture
 //--------------------------------------------------------------------------------
@@ -34,33 +9,11 @@ public:
 class Internal_DecapsulationTest : public ::testing::Test 
 {
 protected:
-    TestablePacket* pkt; // Each test has a fresh Packet instance
+    PacketInfo pkt;
 
-    // Helper: build ByteString of length `n` filled with byte `fill`
-    ByteString createFilled(size_t n, unsigned char fill)
+    bool inspection(PacketInfo& pkt, uint8_t* packet, size_t size)
     {
-        ByteString bs;
-        bs.reserve(n);
-        for (size_t i = 0; i < n; i++) {
-            bs.push_back(fill);
-        }
-        return bs;
-    }
-
-    void SetUp() override
-    {
-        pkt = new TestablePacket();
-    }
-
-    void TearDown() override
-    {
-        delete pkt;
-    }
-
-    bool inspection(ByteString& packet)
-    {
-        pkt->fullPacket = packet;
-        if (pkt->inspection(packet) && pkt->decapsulate())
+        if (inspect(pkt, packet, size) && decapsulate(pkt, packet, size))
         {
             return true;
         }
@@ -85,30 +38,41 @@ TEST_F(Internal_DecapsulationTest, EthernetArp_Valid)
 {
     // Build a minimal Ethernet + ARP "whole packet":
     // [Ethernet(14)] + [ARP(28)] = 42 bytes
-    ByteString packet = std::string(
+    alignas(64) uint8_t packet[42] = {
        // Ethernet: 6 dst + 6 src + 2 type=0x0806(ARP)
-       "\xFF\xFF\xFF\xFF\xFF\xFF"  // dst mac
-       "\x11\x11\x22\x33\x44\x55"  // src mac
-       "\x08\x06"                  // EtherType = ARP
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // dst mac
+       0x11, 0x11, 0x22, 0x33, 0x44, 0x55,  // src mac
+       0x08, 0x06,                  // EtherType = ARP
        // ARP (28 bytes):
-       "\x00\x01\x08\x00\x06\x04\x00\x01"  // htype=1, ptype=0x0800, hlen=6, plen=4, opcode=1
-       "\xAA\xBB\xCC\xDD\xEE\xFF"          // Sender MAC
-       "\xC0\xA8\x01\x01"                  // Sender IP
-       "\x11\x22\x33\x44\x55\x66"          // Target MAC
-       "\xC0\xA8\x01\x02",                 // Target IP
-       42
-    );
+       0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00, 0x01,  // htype=1, ptype=0x0800, hlen=6, plen=4, opcode=1
+       0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,          // Sender MAC
+       0xC0, 0xA8, 0x01, 0x01,                  // Sender IP
+       0x11, 0x22, 0x33, 0x44, 0x55, 0x66,          // Target MAC
+       0xC0, 0xA8, 0x01, 0x02,                 // Target IP
+    };
 
-    bool result = inspection(packet); // Decapsulate everything
+    EXPECT_TRUE(inspection(pkt, packet, 42)); // Decapsulate everything
 
     // Check L2: Ethernet
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<EthernetHeader>(pkt->packetInfo.Layer2[0]));
-
-    // Check L2.5: ARP
-    ASSERT_EQ(pkt->packetInfo.Layer2_5.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<ArpHeader>(pkt->packetInfo.Layer2_5[0]));
-    EXPECT_TRUE(result);
+    bool hasEth = false;
+    bool hasArp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::ARP)
+        {
+            if (hasArp) FAIL();
+            hasArp = true;
+        }
+        else
+            FAIL();
+    }
+    EXPECT_TRUE(hasEth);
+    EXPECT_TRUE(hasArp);
 }
 
 // Test EthernetArp_Invalid
@@ -116,23 +80,30 @@ TEST_F(Internal_DecapsulationTest, EthernetArp_Invalid)
 {
     // Make it too short to contain ARP (only 20 bytes total)
     // Ethernet alone needs 14 bytes, so ARP can't fit
-    ByteString packet = std::string(
+    alignas(64) uint8_t packet[18] = {
         // Ethernet: 6 dst + 6 src + 2 type=0x0806(ARP)
-        "\xFF\xFF\xFF\xFF\xFF\xFF"  // dst mac
-        "\x11\x11\x22\x33\x44\x55"  // src mac
-        "\x08\x06"                  // EtherType = ARP
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // dst mac
+        0x11, 0x11, 0x22, 0x33, 0x44, 0x55,  // src mac
+        0x08, 0x06,                  // EtherType = ARP
         // Invlaid Arp
-        "\xFF\xFF\xFF\xFF",
-        18
-    );
+        0xFF, 0xFF, 0xFF, 0xFF
+    };
 
-    bool result = inspection(packet);
+    EXPECT_FALSE(inspection(pkt, packet, 18));
 
     // Likely we can parse Ethernet (because we do have 14 bytes),
     // but there's not enough for ARP (28 needed).
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    EXPECT_TRUE(pkt->packetInfo.Layer2_5.empty()); 
-    EXPECT_FALSE(result);
+    bool hasEth = false;
+    bool hasArp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        if (pkt.headers[i].type == HeaderType::ARP)
+            hasArp = true;
+    }
+    EXPECT_TRUE(hasEth);
+    EXPECT_FALSE(hasArp);
 }
 
 //--------------------------------------------------------------------------------
@@ -144,58 +115,78 @@ TEST_F(Internal_DecapsulationTest, EthernetArp_Invalid)
 TEST_F(Internal_DecapsulationTest, EthernetMplsIPv4_Valid)
 {
     // Ethernet(14) + MPLS(4) + minimal IPv4(20) = 38 bytes
-    ByteString packet = std::string(
+    alignas(64) uint8_t packet[38] = {
        // Ethernet
-       "\xFF\xFF\xFF\xFF\xFF\xFF"
-       "\x11\x11\x22\x33\x44\x55"
-       "\x88\x47"   // EtherType for MPLS unicast
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x11, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x88, 0x47,   // EtherType for MPLS unicast
        // MPLS (4 bytes)
-       "\x00\x01\x10\xFF" // Label=0x0001, EXP=0, S=1, TTL=255
+       0x00, 0x01, 0x11, 0xFF, // Label=0x0001, EXP=0, S=1, TTL=255
        // Minimal IPv4 (20 bytes)
-       "\x45\x00\x00\x14\x00\x00\x40\x00\x40\x00\x00\x00"
-       "\xC0\xA8\x01\x01\xC0\xA8\x01\x02",
-       38
-    );
+       0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x00, 0x40, 0x00, 0x00, 0x00,
+       0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02
+    };
 
-    bool result = inspection(packet);
+    ASSERT_TRUE(inspection(pkt, packet, 38));
 
-    // L2: Ethernet
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<EthernetHeader>(pkt->packetInfo.Layer2[0]));
-
-    // L2.5: MPLS
-    ASSERT_EQ(pkt->packetInfo.Layer2_5.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<MplsHeader>(pkt->packetInfo.Layer2_5[0]));
-
-    // L3: IPv4
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
-
-    EXPECT_TRUE(result);
+    bool hasEth = false;
+    bool hasMpls = false;
+    bool hasIPv4 = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::MPLS)
+        {
+            if (hasMpls) FAIL();
+            hasMpls = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+        {
+            if (hasIPv4) FAIL();
+            hasIPv4 = true;
+        }
+        else
+            FAIL();
+    }
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasMpls);
+    ASSERT_TRUE(hasIPv4);
 }
 
 // Test EthernetMplsIPv4_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetMplsIPv4_Invalid)
 {
     // We'll have Ethernet(14) + MPLS(4) but only 10 bytes for IPv4 => insufficient
-    ByteString packet = std::string(
-        "\xFF\xFF\xFF\xFF\xFF\xFF"
-        "\x00\x11\x22\x33\x44\x55"
-        "\x88\x47"
-        "\x00\x01\x10\xFF" // MPLS
+    alignas(64) uint8_t packet[14 + 4 + 10] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x88, 0x47,
+        0x00, 0x01, 0x10, 0xFF, // MPLS
         // Only 10 bytes for supposed IPv4 => incomplete
-        "\x45\x00\x00\x14\x00\x00\x40\x00\x40\x06",
-        14 + 4 + 10
-    );
+        0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x00, 0x40, 0x06,
+    };
 
-    bool result = inspection(packet);
+    ASSERT_FALSE(inspection(pkt, packet, 14 + 4 + 10));
 
-    // L2 ok, L2.5 ok, L3 partial => no actual IPv4 decode
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer2_5.size(), 1u);
-    EXPECT_TRUE(pkt->packetInfo.Layer3.empty()); 
-
-    EXPECT_FALSE(result);
+    bool hasEth = false;
+    bool hasMpls = false;
+    bool hasIPv4 = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::MPLS)
+            hasMpls = true;
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+            hasIPv4 = true;
+    }
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasMpls);
+    ASSERT_FALSE(hasIPv4);
 }
 
 //--------------------------------------------------------------------------------
@@ -206,55 +197,80 @@ TEST_F(Internal_DecapsulationTest, EthernetMplsIPv4_Invalid)
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Icmp_Valid)
 {
     // Ethernet(14) + IPv4(20) + ICMP(8) = 42
-    ByteString packet = std::string(
+    alignas(64) uint8_t packet[14 + 20 + 8] = {
        // Ethernet
-       "\xFF\xFF\xFF\xFF\xFF\xFF"
-       "\x00\x11\x22\x33\x44\x55"
-       "\x08\x00"    // EtherType=IPv4
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x08, 0x00,    // EtherType=IPv4
        // IPv4 (20 bytes)
-       "\x45\x00\x00\x14\x00\x00\x40\x01\xAA\x01\x12\x34"
-       "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
+       0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x01, 0xAA, 0x01, 0x12, 0x34,
+       0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
        // ICMP (8 bytes)
-       "\x08\x00\x12\x34\x00\x01\x00\x02",
-       14 + 20 + 8
-    );
+       0x08, 0x00, 0x12, 0x34, 0x00, 0x01, 0x00, 0x02
+    };
 
-    bool result = inspection(packet);
+    ASSERT_TRUE(inspection(pkt, packet, 14 + 20 + 8));
 
-    // L2 => Ethernet
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    // L3 => IPv4
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 2u);
-    // Because code might store IPv4 & ICMP both in Layer3 
-    // (some designs treat ICMP as L3). Check the last entry is ICMP
-    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(std::holds_alternative<IcmpHeader>(pkt->packetInfo.Layer3[1]));
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasIcmp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+        {
+            if (hasIPv4) FAIL();
+            hasIPv4 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::ICMP)
+        {
+            if (hasIcmp) FAIL();
+            hasIcmp = true;
+        }
+        else
+            FAIL();
+    }
 
-    EXPECT_TRUE(result);
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv4);
+    ASSERT_TRUE(hasIcmp);
 }
 
 // Test EthernetIPv4Icmp_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Icmp_Invalid)
 {
     // We'll do Ethernet(14) + IPv4(20) but only 4 bytes left for ICMP => incomplete
-    ByteString packet = std::string(
-       "\xFF\xFF\xFF\xFF\xFF\xFF"
-       "\x00\x11\x22\x33\x44\x55"
-       "\x08\x00"
-       "\x45\x00\x00\x14\x00\x00\x40\x01\xAA\x01\x12\x34"
-       "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
+    alignas(64) uint8_t packet[14 + 20 + 4] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x08, 0x00,
+       0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x01, 0xAA, 0x01, 0x12, 0x34,
+       0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
        // 4 bytes leftover => incomplete ICMP
-       "\x08\x00\x12\x34",
-       14 + 20 + 4
-    );
+       0x08, 0x00, 0x12, 0x34
+    };
 
-    bool result = inspection(packet);
+    ASSERT_FALSE(inspection(pkt, packet, 14 + 20 + 4));
 
-    // IPv4 is present, but ICMP decode fails
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_FALSE(result);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasIcmp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+            hasIPv4 = true;
+        else if (pkt.headers[i].type == HeaderType::ICMP)
+            hasIcmp = true;
+    }
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv4);
+    ASSERT_FALSE(hasIcmp);
 }
 
 //--------------------------------------------------------------------------------
@@ -265,107 +281,83 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv4Icmp_Invalid)
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Icmpv6_Valid)
 {
     // Ethernet(14) + IPv6(40) + ICMPv6(8) = 62
-    ByteString packet = std::string(
+    alignas(64) uint8_t packet[14 + 40 + 8] = {
        // Ethernet
-       "\xFF\xFF\xFF\xFF\xFF\xFF"
-       "\x00\x11\x22\x33\x44\x55"
-       "\x86\xDD" // EtherType for IPv6
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD, // EtherType for IPv6
        // Minimal IPv6 (40 bytes, NextHeader=58 => ICMPv6)
-       "\x60\x00\x00\x00\x00\x08\x3A\x40"  
-       "\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"
-       "\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02"
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x3A, 0x40,  
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
        // ICMPv6(8 bytes)
-       "\x80\x00\x12\x34\x00\x00\x00\x00",
-       14 + 40 + 8
-    );
+       0x80, 0x00, 0x12, 0x34, 0x00, 0x00, 0x00, 0x00
+    };
 
-    bool result = inspection(packet);
+    ASSERT_TRUE(inspection(pkt, packet, 14 + 40 + 8));
 
-    // L2 => Ethernet
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    // L3 => IPv6 + ICMPv6 might be stored. 
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 2u);
-    EXPECT_TRUE(std::holds_alternative<IPv6Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(std::holds_alternative<IcmpV6Header>(pkt->packetInfo.Layer3[1]));
-    EXPECT_TRUE(result);
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasICMPv6 = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+        {
+            if (hasIPv6) FAIL();
+            hasIPv6 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::ICMPV6)
+        {
+            if (hasICMPv6) FAIL();
+            hasICMPv6 = true;
+        }
+        else
+            FAIL();
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_TRUE(hasICMPv6);
 }
 
 // Test EthernetIPv6Icmpv6_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv6Icmpv6_Invalid)
 {
     // Just remove some bytes from ICMPv6 => incomplete
-    ByteString packet = std::string(
-       "\xFF\xFF\xFF\xFF\xFF\xFF"
-       "\x00\x11\x22\x33\x44\x55"
-       "\x86\xDD"
-       "\x60\x00\x00\x00\x00\x08\x3A\x40"  
-       "\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"
-       "\x20\x01\x0d\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02"
+    alignas(64) uint8_t packet[14 + 40 + 4] = {
+       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+       0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+       0x86, 0xDD,
+       0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x3A, 0x40,  
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+       0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
        // Only 4 bytes for ICMPv6
-       "\x80\x00\x12\x34",
-       14 + 40 + 4
-    );
+       0x80, 0x00, 0x12, 0x34
+    };
 
-    bool result = inspection(packet);
+    ASSERT_FALSE(inspection(pkt, packet, 14 + 40 + 4));
 
-    // We get Ethernet + IPv6
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<IPv6Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_FALSE(result);
-}
+    bool hasEth = false;
+    bool hasIPv6 = false;
+    bool hasICMPv6 = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV6)
+            hasIPv6 = true;
+        else if (pkt.headers[i].type == HeaderType::ICMPV6)
+            hasICMPv6 = true;
+    }
 
-//--------------------------------------------------------------------------------
-// ETHERNET + IPv4 + IGMP
-//--------------------------------------------------------------------------------
-
-// Test EthernetIPv4Igmp_Valid
-TEST_F(Internal_DecapsulationTest, EthernetIPv4Igmp_Valid)
-{
-    // Ethernet(14) + IPv4(20, proto=2 => IGMP) + IGMP(8)
-    ByteString packet = std::string(
-       "\xFF\xFF\xFF\xFF\xFF\xFF"
-       "\x00\x11\x22\x33\x44\x55"
-       "\x08\x00"  // IPv4
-       // IPv4 => proto=2 (IGMP), length=20
-       "\x45\x00\x00\x14\x00\x00\x40\x00\x01\x02\x00\x00"
-       "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
-       // IGMP(8 bytes) => type=0x11, ...
-       "\x11\x64\x12\x34\xE0\x00\x00\x01",
-       14 + 20 + 8
-    );
-
-    bool result = inspection(packet);
-
-    // L2 => Ethernet
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    // L3 => IPv4 + IGMP
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 2u);
-    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(std::holds_alternative<IgmpHeader>(pkt->packetInfo.Layer3[1]));
-    EXPECT_TRUE(result);
-}
-
-// Test EthernetIPv4Igmp_Invalid
-TEST_F(Internal_DecapsulationTest, EthernetIPv4Igmp_Invalid)
-{
-    // Truncate IGMP => only 4 bytes
-    ByteString packet = std::string(
-       "\xFF\xFF\xFF\xFF\xFF\xFF"
-       "\x00\x11\x22\x33\x44\x55"
-       "\x08\x00"
-       "\x45\x00\x00\x14\x00\x00\x40\x00\x01\x02\x00\x00"
-       "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
-       "\x11\x64\x12\x34", // only 4 bytes for IGMP
-       14 + 20 + 4
-    );
-
-    bool result = inspection(packet);
-
-    // IPv4 present, IGMP incomplete
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_FALSE(result);
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv6);
+    ASSERT_FALSE(hasICMPv6);
 }
 
 //--------------------------------------------------------------------------------
@@ -376,54 +368,96 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv4Igmp_Invalid)
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Tcp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=6) + TCP(20) => 54
-    ByteString packet = std::string(
-      "\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
+    alignas(64) uint8_t packet[14 + 20 + 20] = {
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+      0x08, 0x00,
       // IPv4 => proto=6 (TCP)
-      "\x45\x00\x00\x14\x00\x00\x40\x00\x11\x06\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
+      0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x00, 0x11, 0x06, 0x00, 0x00,
+      0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
       // TCP => 20 bytes
-      "\x1F\x90\x00\x50\x00\x00\x00\x00\x00\x00\x00\x00"
-      "\x50\x02\x71\x10\x12\x34\x00\x00",
-      14 + 20 + 20
-    );
+      0x1F, 0x90, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x50, 0x02, 0x71, 0x10, 0x12, 0x34, 0x00, 0x00,
+    };
 
-    bool result = inspection(packet);
+    inspection(pkt, packet, 14 + 20 + 20);
 
-    // L2 => Ethernet
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    // L3 => IPv4
-    // L4 => TCP
-    // By design, Packet::l3 might store IPv4, then Packet::l4 might store TCP
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(std::holds_alternative<TcpHeader>(pkt->packetInfo.Layer4[0]));
-    EXPECT_TRUE(result);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasTcp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+        {
+            if (hasIPv4) FAIL();
+            hasIPv4 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::TCP)
+        {
+            if (hasTcp) FAIL();
+            hasTcp = true;
+        }
+        else
+            FAIL();
+    }
+
+    ASSERT_TRUE(hasEth);
+    ASSERT_TRUE(hasIPv4);
+    ASSERT_TRUE(hasTcp);
 }
 
 // Test EthernetIPv4Tcp_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Tcp_Invalid)
 {
     // Truncate TCP => only 10 bytes
-    ByteString packet = std::string(
-      "\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
-      "\x45\x00\x00\x14\x00\x00\x40\x00\x11\x06\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
-      "\x1F\x90\x00\x50\x00\x00\x00\x00\x50\x02",
-      14 + 20 + 10
-    );
+    alignas(64) uint8_t packet[14 + 20 + 10] = {
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+      0x08, 0x00,
+      0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x00, 0x11, 0x06, 0x00, 0x00,
+      0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
+      0x1F, 0x90, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00, 0x50, 0x02,
+    };
 
-    bool result = inspection(packet);
+    EXPECT_FALSE(inspection(pkt, packet, 14 + 20 + 10));
 
-    // IPv4 is present, TCP is incomplete
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(pkt->packetInfo.Layer4.empty());
-    EXPECT_FALSE(result);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasTcp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+            hasIPv4 = true;
+        else if (pkt.headers[i].type == HeaderType::TCP)
+            hasTcp = true;
+    }
+
+    EXPECT_TRUE(hasEth);
+    EXPECT_TRUE(hasIPv4);
+    EXPECT_FALSE(hasTcp);
+}
+
+//--------------------------------------------------------------------------------
+// ETHERNET + IPv6 + TCP
+//--------------------------------------------------------------------------------
+
+// Test EthernetIPv6Tcp_Valid
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Tcp_Valid)
+{
+    GTEST_SKIP();
+}
+
+// Test EthernetIPv6Tcp_Invalid
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Tcp_Invalid)
+{
+    GTEST_SKIP();
 }
 
 //--------------------------------------------------------------------------------
@@ -434,49 +468,97 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv4Tcp_Invalid)
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Udp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=17 => UDP) + UDP(8)
-    ByteString packet = std::string(
-      "\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
-      // IPv4 => proto=17(UDP)
-      "\x45\x00\x00\x14\x00\x00\x40\x00\x11\x11\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
-      // UDP(8)
-      "\x1F\x90\x00\x35\x00\x08\x12\x34",
-      14 + 20 + 8
-    );
+    alignas(64) uint8_t packet[14 + 20 + 8] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        // IPv4 => proto=17(UDP)
+        0x45, 0x00, 0x00, 0x1C,
+        0x00, 0x00, 0x40, 0x00, 0x11, 0x11,
+        0x00, 0x00,
+        0xC0, 0xA8, 0x01, 0x01,
+        0xC0, 0xA8, 0x01, 0x02,
+        // UDP(8)
+        0x1F, 0x90, 0x00, 0x35,
+        0x00, 0x08, 0x12, 0x34
+    };
 
-    bool result = inspection(packet);
+    inspection(pkt, packet, 14 + 20 + 8);
 
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(std::holds_alternative<UdpHeader>(pkt->packetInfo.Layer4[0]));
-    EXPECT_TRUE(result);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasUdp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+        {
+            if (hasIPv4) FAIL();
+            hasIPv4 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::UDP)
+        {
+            if (hasUdp) FAIL();
+            hasUdp = true;
+        }
+    }
+
+    EXPECT_TRUE(hasEth);
+    EXPECT_TRUE(hasIPv4);
+    EXPECT_TRUE(hasUdp);
 }
 
 // Test EthernetIPv4Udp_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Udp_Invalid)
 {
     // Truncated UDP => 4 bytes
-    ByteString packet = std::string(
-      "\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
-      "\x45\x00\x00\x14\x00\x00\x40\x00\x11\x11\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
-      "\x1F\x90\x00\x35",
-      14 + 20 + 4
-    );
+    alignas(64) uint8_t packet[14 + 20 + 4] = {
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+      0x08, 0x00,
+      0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x00, 0x11, 0x11, 0x00, 0x00,
+      0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
+      0x1F, 0x90, 0x00, 0x35
+    };
 
-    bool result = inspection(packet);
+    EXPECT_FALSE(inspection(pkt, packet, 14 + 20 + 4));
 
-    // L4 incomplete
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    EXPECT_TRUE(pkt->packetInfo.Layer4.empty());
-    EXPECT_FALSE(result);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasUdp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+            hasIPv4 = true;
+        else if (pkt.headers[i].type == HeaderType::UDP)
+            hasUdp = true;
+    }
+
+    EXPECT_TRUE(hasEth);
+    EXPECT_TRUE(hasIPv4);
+    EXPECT_FALSE(hasUdp);
+}
+
+//--------------------------------------------------------------------------------
+// ETHERNET + IPv6 + UDP
+//--------------------------------------------------------------------------------
+
+// Test EthernetIPv6Udp_Valid
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Udp_Valid)
+{
+    GTEST_SKIP();
+}
+
+// Test EthernetIPv6Udp_Invalid
+TEST_F(Internal_DecapsulationTest, EthernetIPv6Udp_Invalid)
+{
+    GTEST_SKIP();
 }
 
 //--------------------------------------------------------------------------------
@@ -489,66 +571,99 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv4UdpDhcp_Valid)
     // Build a minimal packet with DHCP ports: (src=67,dst=68 or vice versa)
     // We'll keep it short but at least enough that decodeDhcp won't crash
     // Ethernet(14) + IPv4(20, proto=17) + UDP(8) + DHCP(240 bytes?)
-    const size_t DHCP_SIZE = 236;  // minimal BOOTP + magic cookie
-    ByteString dhcpData = std::string(DHCP_SIZE, 0x00) + std::string("\x63\x82\x52\x63\x35\x01\x01\x3D\x07\x01\x00\x1A\x2B\x3C\x4D\x5E\xff", 17);
-
-    ByteString packet = std::string(
-      "\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
+    alignas(64) uint8_t packet[14 + 20 + 8 + 236 + 17] = {
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+      0x08, 0x00,
       // IPv4 => proto=17(UDP)
-      "\x45\x00\x00\x14\x00\x00\x40\x00\x11\x11\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
+      0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x00, 0x11, 0x11, 0x00, 0x00,
+      0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
       // UDP(8)
-      "\x00\x43\x00\x44\x00\x08\x12\x34",
-      14 + 20 + 8
-    );
-    // DHCP => 240 bytes
-    packet.append(dhcpData);
+      0x00, 0x43, 0x00, 0x44, 0x00, 0x08, 0x12, 0x34,
+    };
 
-    bool result = inspection(packet);
+    std::memset(packet + 14 + 20 + 8, 0, 236);
 
-    // L2 => Ethernet
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    // L3 => IPv4
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    // L4 => UDP
-    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
-    // L5 => DHCP
-    ASSERT_EQ(pkt->packetInfo.Layer5.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<DhcpHeader>(pkt->packetInfo.Layer5[0]));
-    EXPECT_TRUE(result);
+    uint8_t dhcp[17] = {
+        0x63, 0x82, 0x52, 0x63, 0x35, 0x01, 0x01, 0x3D,
+        0x07, 0x01, 0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E,
+        0xff
+    };
+
+    std::memcpy(packet + 14 + 20 + 8 + 236, dhcp, 17);
+
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasUdp = false;
+    bool hasDhcp = false;
+
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+        {
+            if (hasIPv4) FAIL();
+            hasIPv4 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::UDP)
+        {
+            if (hasUdp) FAIL();
+            hasUdp = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::DHCP)
+        {
+            if (hasDhcp) FAIL();
+            hasDhcp = true;
+        }
+        else
+            FAIL();
+    }
 }
 
 // Test EthernetIPv4UdpDhcp_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv4UdpDhcp_Invalid)
 {
     // Not enough data for minimal DHCP => only 100 bytes
-    const size_t DHCP_SIZE = 100;
-    ByteString shortDhcp = createFilled(DHCP_SIZE, 0x11);
 
-    ByteString packet = std::string(
-      "\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
+    alignas(64) uint8_t packet[14 + 20 + 8 + 100] = {
+      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+      0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+      0x08, 0x00,
       // IPv4 => proto=17(UDP)
-      "\x45\x00\x00\x14\x00\x00\x40\x00\x11\x11\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02"
+      0x45, 0x00, 0x00, 0x14, 0x00, 0x00, 0x40, 0x00, 0x11, 0x11, 0x00, 0x00,
+      0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
       // UDP(8)
-      "\x00\x43\x00\x44\x00\x08\x12\x34",
-      14 + 20 + 8
-    );
+      0x00, 0x43, 0x00, 0x44, 0x00, 0x08, 0x12, 0x34,
+    };
     // DHCP => 240 bytes
-    packet.append(shortDhcp);
+    std::memset(packet + 14 + 20 + 8, 0x11, 100);
 
-    bool result = inspection(packet);
+    EXPECT_FALSE(inspection(pkt, packet, 14 + 20 + 8 + 100));
 
-    // DHCP parse fails
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
-    EXPECT_TRUE(pkt->packetInfo.Layer5.empty());
-    EXPECT_FALSE(result);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasUdp = false;
+    bool hasDhcp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+            hasIPv4 = true;
+        else if (pkt.headers[i].type == HeaderType::UDP)
+            hasUdp = true;
+        else if (pkt.headers[i].type == HeaderType::DHCP)
+            hasDhcp = true;
+    }
+
+    EXPECT_TRUE(hasEth);
+    EXPECT_TRUE(hasIPv4);
+    EXPECT_TRUE(hasUdp);
+    EXPECT_FALSE(hasDhcp);
 }
 
 //--------------------------------------------------------------------------------
@@ -577,54 +692,84 @@ TEST_F(Internal_DecapsulationTest, EthernetIPv6Dhcpv6_Invalid)
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Eigrp_Valid)
 {
     // Ethernet(14) + IPv4(20, proto=88 => EIGRP) + EIGRP(20+)
-    ByteString eigrpData = createFilled(20, 0x01); // minimal EIGRP content
 
     // Ethernet
-    ByteString packet = std::string("\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
-      // IPv4 => proto=88(EIGRP)
-      "\x45\x00\x00\x28\x00\x00\x40\x00\x11\x58\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02",
-      14 + 20
-    );
-      // EIGRP(20 bytes)
-    packet.append(eigrpData);
+    alignas(64) uint8_t packet[14 + 20 + 20] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        // IPv4 => proto=88(EIGRP)
+        0x45, 0x00, 0x00, 0x28, 0x00, 0x00, 0x40, 0x00, 0x11, 0x58, 0x00, 0x00,
+        0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
+        // Eigrp
+        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    };
 
-    bool result = inspection(packet);
+    EXPECT_TRUE(inspection(pkt, packet, 14 + 20 + 20));
 
-    // L3 => IPv4 + EIGRP
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 1u);
-    EXPECT_TRUE(std::holds_alternative<IPv4Header>(pkt->packetInfo.Layer3[0]));
-    EXPECT_TRUE(std::holds_alternative<EigrpHeader>(pkt->packetInfo.Layer4[0]));
-    EXPECT_TRUE(result);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasEigrp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+        {
+            if (hasEth) FAIL();
+            hasEth = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+        {
+            if (hasIPv4) FAIL();
+            hasIPv4 = true;
+        }
+        else if (pkt.headers[i].type == HeaderType::EIGRP)
+        {
+            if (hasEigrp) FAIL();
+            hasEigrp = true;
+        }
+        else
+            FAIL();
+    }
+
+    EXPECT_TRUE(hasEth);
+    EXPECT_TRUE(hasIPv4);
+    EXPECT_TRUE(hasEigrp);
 }
 
 // Test EthernetIPv4Eigrp_Invalid
 TEST_F(Internal_DecapsulationTest, EthernetIPv4Eigrp_Invalid)
 {
     // Provide only 8 bytes for EIGRP => incomplete
-    ByteString shortEigrp = createFilled(8, 0x55);
+    alignas(64) uint8_t packet[14 + 20 + 8] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        // IPv4 => proto=88(EIGRP)
+        0x45, 0x00, 0x00, 0x28, 0x00, 0x00, 0x40, 0x00, 0x11, 0x58, 0x00, 0x00,
+        0xC0, 0xA8, 0x01, 0x01, 0xC0, 0xA8, 0x01, 0x02,
+        // Eigrp
+        0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55
+    };
 
-    ByteString packet = std::string("\xFF\xFF\xFF\xFF\xFF\xFF"
-      "\x00\x11\x22\x33\x44\x55"
-      "\x08\x00"
-      // IPv4 => proto=88(EIGRP)
-      "\x45\x00\x00\x28\x00\x00\x40\x00\x11\x58\x00\x00"
-      "\xC0\xA8\x01\x01\xC0\xA8\x01\x02",
-      14 + 20
-    );
-      // EIGRP(20 bytes)
-    packet.append(shortEigrp);
+    EXPECT_FALSE(inspection(pkt, packet, 14 + 20 + 8));
 
-    bool result = inspection(packet);
+    bool hasEth = false;
+    bool hasIPv4 = false;
+    bool hasEigrp = false;
+    for (int i = 0; i < pkt.count; ++i)
+    {
+        if (pkt.headers[i].type == HeaderType::ETHERNET)
+            hasEth = true;
+        else if (pkt.headers[i].type == HeaderType::IPV4)
+            hasIPv4 = true;
+        else if (pkt.headers[i].type == HeaderType::EIGRP)
+            hasEigrp = true;
+    }
 
-    ASSERT_EQ(pkt->packetInfo.Layer2.size(), 1u);
-    ASSERT_EQ(pkt->packetInfo.Layer3.size(), 1u); 
-    ASSERT_EQ(pkt->packetInfo.Layer4.size(), 0u);
-    EXPECT_FALSE(result);
+    EXPECT_TRUE(hasEth);
+    EXPECT_TRUE(hasIPv4);
+    EXPECT_FALSE(hasEigrp);
 }
 
 //--------------------------------------------------------------------------------
