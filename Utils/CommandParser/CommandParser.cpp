@@ -99,7 +99,7 @@ void writeJSONToFile(const std::string& filename, const json& jsonData) {
 }
 
 int main() {
-    std::ifstream infile("../Utils/Dir/input.txt");
+    std::ifstream infile("./input.txt");
     if (!infile) 
     {
         std::cerr << "Error: Unable to open input file." << std::endl;
@@ -110,7 +110,7 @@ int main() {
     std::string line;
 
     json existingData;
-    std::ifstream existingFile("../Utils/Dir/output.json");
+    std::ifstream existingFile("./output.json");
     if (existingFile)
     {
         existingFile >> existingData;
@@ -133,7 +133,7 @@ int main() {
 
     existingData[getMode()] = output;
     
-    std::ofstream outfile("../Utils/Dir/output.json");
+    std::ofstream outfile("./output.json");
     outfile << existingData.dump(4);
     outfile.close();
     

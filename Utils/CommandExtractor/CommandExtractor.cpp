@@ -557,7 +557,7 @@ int main() {
     std::string line;
 
     json existingData;
-    std::ifstream existingFile("../Utils/Dir/temp.json");
+    std::ifstream existingFile("./output.json");
     if (existingFile)
     {
         existingFile >> existingData;
@@ -616,7 +616,7 @@ int main() {
         }
     }
 
-    std::ofstream outfile("../Utils/Dir/temp.json");
+    std::ofstream outfile("./output.json");
     outfile << existingData.dump(4);
     outfile.close();
     
