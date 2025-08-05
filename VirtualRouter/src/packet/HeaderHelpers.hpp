@@ -83,7 +83,12 @@ inline __uint128_t ntohdll(__uint128_t val) {
     std::span<uint8_t> getTrail() const { return trailing; }                                        \
     uint8_t* getTrailData() { return trailing.data(); }                                             \
     void setTrail(uint8_t* data, size_t len)                                                        \
-        { trailing = std::span<uint8_t>(data, len); }
+    {                                                                                               \
+        std::memcpy(buffer + fixedSize, data, len);                                                 \
+        trailing = std::span<uint8_t>(buffer + fixedSize, len);                                     \
+    }                                                                                               \
+                                                                                                    \
+    size_t size() const { return trailing.size() + fixedSize; }
 
 
 #define DEFINE_FIXED_HEADER(RAWTYPE)                                                                \

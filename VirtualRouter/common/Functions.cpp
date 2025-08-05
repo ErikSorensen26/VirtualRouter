@@ -99,7 +99,7 @@ bool Functions::isNumber(const std::string& s)
     return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit);
 }
 
-bool isHex(const std::string& s)
+bool Functions::isHex(const std::string& s)
 {
     return !s.empty() && std::all_of(s.begin(), s.end(), ::isxdigit);
 }

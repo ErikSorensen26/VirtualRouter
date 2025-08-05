@@ -12,7 +12,7 @@
 class FIFOQueue : public BaseQueue
 {
 public:
-    explicit FIFOQueue(uint32_t capacity, Egress& egress)
+    FIFOQueue(uint32_t capacity, Egress& egress)
       : BaseQueue(egress),
         capacity(capacity),
         mask(capacity - 1),

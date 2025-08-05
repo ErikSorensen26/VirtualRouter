@@ -59,7 +59,7 @@ namespace Protocol
         else return nullptr; // Resolution is disabled.
     }
 
-    void reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo)
+    void IPPacket::reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo)
     {
         // Decide layer 2 encapsulation based on interface configs
         // DEFAULT -> Ethernet
@@ -208,11 +208,12 @@ namespace Protocol
     }
 
     // Sets the UPD header in PacketInfo
-    void buildUdp(
+    void UDPPacket::buildUdp(
         AddressFamily af,
         IPPacket::BuildIP& ipBuild,
         uint16_t sourcePort,
-        uint16_t destinationPort
+        uint16_t destinationPort,
+        uint16_t fragmentOffset
     )
     {
         BuildEntry* nextHeader = ipBuild.packetInfo.nextBuildHeader();

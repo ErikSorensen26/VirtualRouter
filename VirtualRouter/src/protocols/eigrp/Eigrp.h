@@ -638,7 +638,7 @@ namespace EigrpConfigs
     };
 }
 
-struct InterfaceConfigs;
+class InterfaceConfigs;
 
 namespace Protocol 
 {

@@ -877,7 +877,7 @@ namespace Protocol
         options.append(Variable::ICMPv6::Option::target, 1, 0, 0);
         currentInterface->configs.getMac(trail + 34);
 
-        nextHeader->length = Icmpv6Header::fixedSize + options.size();
+        nextHeader->length = Icmpv6Header::fixedSize + 32 + options.size();
         packet.bufferOffset += nextHeader->length;
 
         IPPacket::BuildIP build = {
@@ -890,7 +890,7 @@ namespace Protocol
         IPPacket::buildIpv6(build);
     }
 
-    void Ndp::sendRedirectIfNeeded(const PacketBuilder& originalPacket)
+    void Ndp::sendRedirectIfNeeded(const PacketInfo& originalPacket, const uint8_t* pkt)
     {
         //TODO move to packet forwarder
         if (!currentInterface || currentInterface->shutdownFlag.load(std::memory_order_relaxed))
@@ -898,12 +898,13 @@ namespace Protocol
 
         // Ensure original packet is IPv6
         IPv6HeaderRaw* ipv6 = nullptr;
-        auto headers = originalPacket.getHeaders();
-        for (size_t i = 0; i < originalPacket.getHeaderCount(); ++i)
+        auto headers = originalPacket.headers;
+        for (size_t i = 0; i < originalPacket.count; ++i)
         {
-            if (headers[i].type == HeaderType::IPV6)
+            auto header = headers[i];
+            if (header.type == HeaderType::IPV6)
             {
-                ipv6 = reinterpret_cast<IPv6HeaderRaw*>(headers[i].buffer);
+                ipv6 = reinterpret_cast<IPv6HeaderRaw*>(const_cast<uint8_t*>(pkt) + header.offset);
             }
         }
 
@@ -972,7 +973,7 @@ namespace Protocol
 
         uint8_t prfBits = (flags >> 3) & 0b11;
 
-        if (configs.autoConfigDefaultRoute.load(std::memory_order_relaxed) && routerLifetime > 0 && sourceIp != 0)
+        if (configs.autoConfigDefaultRoute.load(std::memory_order_relaxed) && routerLifetime > 0 && memcmp(sourceIp, Variable::IPv6::source, 16) != 0)
         {
             if (global.configs.ndp.ndAsRouteOwner.load(std::memory_order_relaxed))
             {

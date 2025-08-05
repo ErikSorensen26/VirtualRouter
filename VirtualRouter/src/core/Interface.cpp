@@ -16,7 +16,7 @@
 #include <Global.h>
 #include <Process.h>
 
-Interface::Interface(InterfaceCreation& cfgs)
+Interface::Interface(const InterfaceCreation& cfgs)
   : routingInstance(&cfgs.vrf),
     configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.mac),
     debug(cfgs.debug),

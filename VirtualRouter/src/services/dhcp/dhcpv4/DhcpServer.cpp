@@ -220,7 +220,7 @@ void Protocol::DhcpServer::sendOffer(
     dhcp.setClientMac(chaddr);
     dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
 
-    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t mtuLimit = iface.configs.ipv4.mtu.load(std::memory_order_relaxed);
     size_t maxAllowed = clientMaxSize == 0 ? mtuLimit : std::min(mtuLimit, clientMaxSize);
     size_t tlvLimit = maxAllowed - builder.bufferOffset;
 
@@ -232,7 +232,7 @@ void Protocol::DhcpServer::sendOffer(
     tlv.tlv.append(Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::offer, 1);
 
     // Server Identifier
-    if (!Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, currentInterface->configs.ipv4.getAddress()))
+    if (!Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddress()))
         return;
 
     // Lease Config
@@ -772,7 +772,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
         writeU32(dhcp.raw->ciaddr, clientIP);
     }
 
-    size_t mtuLimit = currentInterface->configs.ipv4.mtu.load(std::memory_order_relaxed);
+    size_t mtuLimit = iface.configs.ipv4.mtu.load(std::memory_order_relaxed);
     size_t maxAllowed = clientMaxSize == 0 ? mtuLimit : std::min(mtuLimit, clientMaxSize);
     size_t tlvLimit = maxAllowed - builder.bufferOffset;
 
@@ -1668,4 +1668,54 @@ void Protocol::DhcpServer::addRequestedOptions(Dhcp::DhcpTLVManager& tlv, Dhcp::
                 break;
         }
     }
+}
+
+void Protocol::DhcpServer::appendDomainSearchList(Dhcp::DhcpTLVManager& tlv, const std::vector<std::string>& domains)
+{
+    
+}
+
+bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(IPPrefix& prefix, uint32_t& gateway)
+{
+    return true;
+}
+
+IPPrefix Protocol::Dhcp::DhcpNetworkConfig::getNetworkID() const
+{
+    return IPPrefix();
+}
+
+uint8_t* Protocol::Dhcp::DhcpNetworkConfig::getNetwork(uint8_t* out) const
+{
+    return nullptr;
+}
+
+uint32_t Protocol::Dhcp::DhcpNetworkConfig::getNetwork() const
+{
+    return 0;
+}
+
+uint8_t* Protocol::Dhcp::DhcpNetworkConfig::getGateway(uint8_t* out) const
+{
+    return nullptr;
+}
+
+uint32_t Protocol::Dhcp::DhcpNetworkConfig::getGateway() const
+{
+    return 0;
+}
+
+uint8_t Protocol::Dhcp::DhcpNetworkConfig::getPrefixLen() const
+{
+    return 0;
+}
+
+uint8_t* Protocol::Dhcp::DhcpNetworkConfig::getSubnetMask(uint8_t* out)
+{
+    return nullptr;
+}
+
+uint32_t Protocol::Dhcp::DhcpNetworkConfig::getSubnetMask()
+{
+    return 0;
 }

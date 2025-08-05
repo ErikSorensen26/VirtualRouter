@@ -47,6 +47,7 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
             ArpHeader arp;
             if (unlikely(!arp.parse(data, len, packet.offset))) return false;
             packet.headers[packet.count++] = { HeaderType::ARP, packet.offset, ArpHeader::fixedSize };
+            packet.offset += ArpHeader::fixedSize;
             return true;
         }
         else break;
@@ -68,7 +69,7 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
     {
         IPv6Header ipv6;
         if (unlikely(!ipv6.parse(data, len, packet.offset))) return false;
-        packet.headers[packet.count++] = { HeaderType::IPV4, packet.offset, IPv6Header::fixedSize };
+        packet.headers[packet.count++] = { HeaderType::IPV6, packet.offset, IPv6Header::fixedSize };
         packet.offset += IPv6Header::fixedSize;
         prefetch_header(data + packet.offset);
         return true;
@@ -79,6 +80,8 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
 
 bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
 {
+    if (packet.offset == len) return true;
+
     while (likely(packet.offset < len))
     {
         HeaderType lastType = packet.headers[packet.count - 1].type;
@@ -87,13 +90,13 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
         // Layer 3 again for robust decapsulation
         if (lastType == HeaderType::IPV4)
         {
-            auto* ip = reinterpret_cast<const IPv4Header*>(data + packet.headers[packet.count - 1].offset);
-            proto = ip->getProtocol();
+            auto* ip = reinterpret_cast<const IPv4HeaderRaw*>(data + packet.headers[packet.count - 1].offset);
+            proto = ip->protocol;
         }
         else if (lastType == HeaderType::IPV6)
         {
-            auto* ip = reinterpret_cast<const IPv6Header*>(data + packet.headers[packet.count - 1].offset);
-            proto = ip->getNextHeader();
+            auto* ip = reinterpret_cast<const IPv6HeaderRaw*>(data + packet.headers[packet.count - 1].offset);
+            proto = ip->nextHeader;
         }
         else return false;
 

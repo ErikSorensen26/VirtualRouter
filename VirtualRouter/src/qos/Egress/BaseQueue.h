@@ -29,7 +29,7 @@ protected:
     void dequeue(uint32_t frame, uint32_t length);
     void drop(uint32_t frame);
 
-    virtual ~BaseQueue();
+    virtual ~BaseQueue(){}
 
 private:
     Egress& out;
@@ -40,8 +40,8 @@ private:
 
     void runLoop();
 
-    static void futex_wait(std::atomic<uint32_t>* addr, uint32_t expected);
-    static void futex_wake(std::atomic<uint32_t>* addr, int count);
+    void futex_wait(std::atomic<uint32_t>* addr, uint32_t expected);
+    void futex_wake(std::atomic<uint32_t>* addr, int count);
 };
 
 #endif // BASE_QUEUE_H

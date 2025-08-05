@@ -68,7 +68,7 @@ public:
     friend class ::EigrpTest;
 
 
-    Interface(InterfaceCreation& cfgs);
+    Interface(const InterfaceCreation& cfgs);
     virtual ~Interface();
 
     void cleanupInterface();

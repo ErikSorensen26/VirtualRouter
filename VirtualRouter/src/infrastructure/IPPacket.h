@@ -32,11 +32,11 @@ namespace Protocol
             uint16_t fragmentOffset = 0;
         };
 
-        inline static void buildIpv4(
+        void buildIpv4(
             BuildIP& ipv4Build
         );
 
-        inline static void buildIpv6(
+        void buildIpv6(
             BuildIP& ipv6Build,
             uint32_t v6FlowLabel = 0
         );

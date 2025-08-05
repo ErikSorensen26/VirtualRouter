@@ -16,12 +16,11 @@
 #include <errno.h>
 #include <stdexcept>
 #include <PacketSlot.hpp>
-
 class Egress
 {
 public:
     Egress(const char* ifname, uint32_t qid = 0,
-           uint32_t frameCount = 4096, uint32_t frameSize = 2048)
+           uint32_t frameCount = 1024, uint32_t frameSize = 2048)
       : frameCount(frameCount),
         frameMask(frameCount - 1),
         frameSize(frameSize),
@@ -35,7 +34,7 @@ public:
         txInFlightHead = 0;
         txInFlightTail = 0;
 
-        if (frameSize % 4096 != 0)
+        if ((frameSize * frameCount) % 4096 != 0)
             throw std::runtime_error("frameSize must be page-aligned");
 
         if ((frameCount & (frameCount - 1)) != 0)
@@ -188,6 +187,12 @@ private:
     uint32_t* txRingProducer = nullptr;
     uint32_t* txRingConsumer = nullptr;
 
+    size_t roundUpToPageSize(size_t size)
+    {
+        size_t pageSize = sysconf(_SC_PAGESIZE);
+        return (size + pageSize - 1) & ~(pageSize - 1);
+    }
+
     void setupSocket()
     {
         xskFd = socket(AF_XDP, SOCK_RAW, 0);
@@ -208,6 +213,10 @@ private:
         if (setsockopt(xskFd, SOL_XDP, XDP_UMEM_REG, &umr, sizeof(umr)) != 0)
             throw std::runtime_error("setsockopt(XDP_UMEM_REG): " + std::string(strerror(errno)));
 
+        uint32_t ringSize = frameCount;
+        if (setsockopt(xskFd, SOL_XDP, XDP_TX_RING, &ringSize, sizeof(ringSize)) != 0)
+            throw std::runtime_error("setsockopt(XDP_TX_RING): " + std::string(strerror(errno)));
+
         socklen_t len = sizeof(off);
         if (getsockopt(xskFd, SOL_XDP, XDP_MMAP_OFFSETS, &off, &len) != 0)
             throw std::runtime_error("getsockopt(XDP_MMAP_OFFSETS): " + std::string(strerror(errno)));
@@ -215,7 +224,7 @@ private:
 
     void mapTxRing()
     {
-        txRingMapSize = off.tx.desc + frameCount * sizeof(struct xdp_desc);
+        txRingMapSize = roundUpToPageSize(off.tx.desc) + roundUpToPageSize(frameCount * sizeof(struct xdp_desc));
         txRingArea = mmap(nullptr, txRingMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, xskFd, XDP_PGOFF_TX_RING);
         if (txRingArea == MAP_FAILED)
             throw std::runtime_error("mmap(TX_RING): " + std::string(strerror(errno)));
@@ -230,10 +239,13 @@ private:
         struct sockaddr_xdp sxdp = {};
         sxdp.sxdp_family = AF_XDP;
         sxdp.sxdp_ifindex = if_nametoindex(ifname);
+        if (sxdp.sxdp_ifindex == 0)
+            throw std::runtime_error("Invalid interface: " + std::string(ifname));
+
         sxdp.sxdp_queue_id = qid;
+        sxdp.sxdp_flags = XDP_USE_NEED_WAKEUP | XDP_ZEROCOPY;
 
         // Try ZEROCOPY first
-        sxdp.sxdp_flags = XDP_USE_NEED_WAKEUP | XDP_ZEROCOPY;
         if (bind(xskFd, reinterpret_cast<struct sockaddr*>(&sxdp), sizeof(sxdp)) == 0)
         {
             zeroCopy = true;

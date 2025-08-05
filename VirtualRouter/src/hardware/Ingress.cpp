@@ -26,7 +26,7 @@ Ingress::Ingress(const char* ifname, Interface& iface, uint32_t qid,
     qid(qid),
     umemSize(uint64_t(frameCount) * frameSize)
 {
-    if (frameSize % 4096 != 0)
+    if ((frameSize * frameCount) % 4096 != 0)
         throw std::runtime_error("frameSize must be page-aligned");
 
     if ((frameCount & (frameCount - 1)) != 0)

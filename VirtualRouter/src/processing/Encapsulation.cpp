@@ -5,7 +5,7 @@
 #include <PacketBuilder.hpp>
 
 // Encapsulates packet information into a formatted string.
-bool encapsulate(PacketBuilder& packet, uint8_t* encapsulatedPacket)
+bool encapsulate(PacketBuilder& packet)
 {
     auto packetBuffer = packet.getBuffer();
     // Process IPv4 headers, TCP/UDP checksums

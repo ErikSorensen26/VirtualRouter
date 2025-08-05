@@ -171,7 +171,7 @@ public:
 
     void sendRedirectMessage(const uint8_t* targetIp, const uint8_t* destinationIp);
     
-    void sendRedirectIfNeeded(const PacketBuilder& originalPacket);
+    void sendRedirectIfNeeded(const PacketInfo& originalPacket, const uint8_t* pkt);
 
     void receiveNeighborAdvertisement(const Icmpv6Header& receivedNA, const uint8_t* sourceIp);
     

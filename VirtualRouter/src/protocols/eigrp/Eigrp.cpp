@@ -100,8 +100,8 @@ Eigrp::~Eigrp()
     void Eigrp::eigrpHello(PacketBuilder& packet, EigrpInterface& eigrpInt, const uint8_t* neighborIp, uint32_t sequenceNumber,  bool ack, bool update)
     {
         addressFamily == AddressFamily::IPv4
-            ? IPPacket::reserveIpv4(currentInterface, packet)
-            : IPPacket::reserveIpv6(currentInterface, packet);
+            ? IPPacket::reserveIpv4(eigrpInt.currentInterface, packet)
+            : IPPacket::reserveIpv6(eigrpInt.currentInterface, packet);
 
         packet.reserveHeader(HeaderType::EIGRP, EigrpHeader::fixedSize);
         auto nextHeader = packet.nextBuildHeader();

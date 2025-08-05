@@ -19,7 +19,7 @@ struct ArpHeaderRaw
     uint8_t opcode[2];
     uint8_t senderHardwareAddress[6];
     uint8_t senderIpAddress[4];
-    uint8_t targetHardwareAddress[4];
+    uint8_t targetHardwareAddress[6];
     uint8_t targetIpAddress[4];
 };
 #pragma pack(pop)
@@ -56,10 +56,14 @@ struct ArpHeader
         { std::memcpy(raw->senderHardwareAddress, val, 6); }
     void setSenderIpAddr(const uint8_t* val)
         { std::memcpy(raw->senderIpAddress, val, 4); }
+    void setSenderIpAddr(uint32_t val)
+        { writeU32(raw->senderIpAddress, val); }
     void setTargetHwAddr(const uint8_t* val)
         { std::memcpy(raw->targetHardwareAddress, val, 6); }
     void setTargetIpAddr(const uint8_t* val)
         { std::memcpy(raw->targetIpAddress, val, 4); }
+    void setTargetIpAddr(uint32_t val)
+        { writeU32(raw->targetIpAddress, val); }
 };
 
 #endif // ARP_HEADER_HPP
