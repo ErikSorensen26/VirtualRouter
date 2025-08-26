@@ -5,7 +5,6 @@
 #include <VirtualRouter.h>
 #include <MockInterface.hpp>
 #include <PacketStructure.h>
-#include <ByteString.hpp>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -30,6 +29,10 @@ protected:
     InterfaceType type = InterfaceType::GIGABIT_ETHERNET;
     VirtualRouter* vrf = nullptr;
     Global* global = nullptr;
+    uint32_t mKey = mockInterface->configs.key;
+
+    uint8_t ipIntv4[4] = { 0xC0, 0xA8, 0x01, 0x01 };
+    uint8_t ipIntv6[16] = { 0xC0, 0xA8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01 };
 
     // Setup creates an Eigrp instance and one interface for testing.
     void SetUp() override 
@@ -49,15 +52,16 @@ protected:
         mockInterface->enableIPs();
         mockInterface->enableShutdown();
         // Set initial IPv4 and IPv6 addresses on the mock interface.
-        setIPv4(ByteString("\xc0\xa8\x01\x01", 4), 24);
-        setIPv6(ByteString("\xc0\xa8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x01", 16), 64);
+
+        setIPv4(readU32(ipIntv4), 24);
+        setIPv6(ipIntv6, 64);
         // Assume interfaceList is a global map keyed by InterfaceType and interface id.
-        vrf->interfaceList[{InterfaceType::GIGABIT_ETHERNET, 0}] = mockInterface;
+        vrf->interfaceList[mKey] = mockInterface;
         // Create the real EigrpInterface using the mock interface.
         EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(::testing::AtLeast(1));
-        configs = new EigrpConfigs::InterfaceConfigs(InterfaceType::GIGABIT_ETHERNET, 0);
+        configs = new EigrpConfigs::InterfaceConfigs(mKey);
         eigrpInterface = new EigrpInterface(*eigrpInstance, configs, mockInterface);
-        eigrpInstance->eigrpInterfaceList[{type, 0}] = eigrpInterface;
+        eigrpInstance->eigrpInterfaceList[mKey] = eigrpInterface;
     }
 
     // TearDown cleans up the EIGRP instance, interface, and global objects.
@@ -74,7 +78,7 @@ protected:
     std::unordered_map<uint32_t, Interface*>& getAllInterfaceList() { return eigrpInstance->routingInstance->interfaceList; }
     
     // Helper: set IPv4 address on an interface.
-    void setIPv4(const ByteString& ip, uint8_t mask, MockInterface* iface = nullptr) 
+    void setIPv4(const uint32_t ip, uint8_t mask, MockInterface* iface = nullptr) 
     {
         if (iface)
             iface->setIPv4(ip, mask);
@@ -83,7 +87,7 @@ protected:
     }
     
     // Helper: set IPv6 address on an interface.
-    void setIPv6(const ByteString& ip, uint8_t mask, Interface* iface = nullptr) 
+    void setIPv6(const uint8_t* ip, uint8_t mask, Interface* iface = nullptr) 
     {
         if (iface)
             iface->setIPv6(ip, mask, false);
@@ -101,16 +105,17 @@ protected:
     void clearNetworks() { eigrpInstance->configs.networks.clear(); }
     
     // Helper: add a neighbor via the real EigrpInterface.
-    void addNeighbor(const ByteString& ip, EigrpInterface* intf = nullptr) 
+    void addNeighbor(const IPAddress& ip, EigrpInterface* intf = nullptr) 
     {
+        uint8_t neighborMac[6] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 };
         if (intf)
-            intf->addNeighbor(ip, ByteString("\x11\x22\x33\x44\x55\x66", 6));
+            intf->addNeighbor(ip, neighborMac);
         else
-            eigrpInterface->addNeighbor(ip, ByteString("\x11\x22\x33\x44\x55\x66", 6));
+            eigrpInterface->addNeighbor(ip, neighborMac);
     }
     
     // Helper: retrieve a neighbor from an interface.
-    EigrpConfigs::NeighborInfo* getNeighbor(const ByteString& ip, EigrpInterface* intf = nullptr) 
+    EigrpConfigs::NeighborInfo* getNeighbor(const IPAddress& ip, EigrpInterface* intf = nullptr) 
     {
         return (intf ? intf->getNeighborInfo(ip) : eigrpInterface->getNeighborInfo(ip));
     }
@@ -135,7 +140,7 @@ protected:
         RoutingTable::Eigrp* r = new RoutingTable::Eigrp(eigrpInterface->interfaceKey);
         r->feasibleDistance = 100;
         r->metric = 2816;
-        r->nextHop = ByteString("\x00\x00\x00\x00", 4);
+        r->nextHop = {0, AddressFamily::IPv4};
         r->bandwidth = 2560;
         r->delay = 256;
         r->hopCount = 0;
@@ -148,7 +153,7 @@ protected:
     }
 
     bool getHelloTimerActive(Protocol::EigrpInterface* eigrpInt = nullptr) { if (eigrpInt) return eigrpInt->helloTimerActive.load(); else return eigrpInterface->helloTimerActive.load();}
-    ByteString& getRouterID(Protocol::Eigrp* eigrp = nullptr) { if (eigrp) return eigrp->routerID.ID; else return eigrpInstance->routerID.ID; }
+    uint32_t getRouterID(Protocol::Eigrp* eigrp = nullptr) { if (eigrp) return readU32(eigrp->routerID.ID); else return readU32(eigrpInstance->routerID.ID); }
 };
 
 #pragma region Authentication
@@ -158,12 +163,12 @@ TEST_F(Internal_EigrpTest, AuthTLV_MD5_Correct)
 {
     // Verify that MD5 authentication TLV is built correctly.
     // (Neighbor IP: 192.168.1.2, key "secretkey")
-    ByteString neighborIp("\xC0\xA8\x01\x02", 4);
-    addNeighbor(neighborIp);
-    auto optNeighbor = getNeighbor(neighborIp);
+    uint8_t neighborIp[4] = { 0xC0, 0xA8, 0x01, 0x02 };
+    addNeighbor({neighborIp, AddressFamily::IPv6});
+    auto optNeighbor = getNeighbor({neighborIp, AddressFamily::IPv6});
     ASSERT_TRUE(optNeighbor);
     uint8_t keyId = 1;
-    ByteString key = ByteString("secretKey", 9);
+    std::string key = "secretKey";
     EigrpConfigs::AuthType type = EigrpConfigs::AuthType::MD5;
     eigrpInterface->configureAuthentication(&keyId, &key, &type, true);
 

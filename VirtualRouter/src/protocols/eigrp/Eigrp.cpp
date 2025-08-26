@@ -2592,11 +2592,9 @@ Eigrp::~Eigrp()
                 // Add authentication TLV if enabled
                 if (configs->authKey.fullyEnabled.load(std::memory_order_relaxed))
                 {
-                    //EigrpHeader::Option authTLV = generateAuthenticatedTLV(eigrp);
-                    //if (authTLV.option != ByteString(1, 0x00))
-                    //{
-                        //eigrp.options.push_back(std::move(authTLV));
-                    //}
+                    auto opt = options.getNextValBuf(0);
+                    uint8_t authSize = generateAuthenticatedTLV(opt);
+                    options.append(Variable::Eigrp::Option::authentication, authSize, nullptr, authSize);
                 }
             }
 
@@ -2782,9 +2780,9 @@ Eigrp::~Eigrp()
             // Generate and append Authentication TLV if enabled for this neighbor
             if (configs->authKey.fullyEnabled.load(std::memory_order_relaxed))
             {
-                //EigrpHeader::Option authTLV = generateAuthenticatedTLV(eigrp);
-                //if (authTLV.option != ByteString(1, 0x00))
-                    //eigrp.options.push_back(std::move(authTLV));
+                auto opt = options.getNextValBuf(0);
+                uint8_t authSize = generateAuthenticatedTLV(opt);
+                options.append(Variable::Eigrp::Option::authentication, authSize, nullptr, authSize);
             }
 
             eigrpQueryPacketStructure.addTLVSize(options.size());
@@ -2967,11 +2965,9 @@ Eigrp::~Eigrp()
             // Generate and append Authentication TLV if enabled for this neighbor
             if (configs->authKey.fullyEnabled.load(std::memory_order_relaxed))
             {
-                //EigrpHeader::Option authTLV = generateAuthenticatedTLV(eigrp);
-                //if (authTLV.option != ByteString(1, 0x00))
-                //{
-                    //eigrp.options.push_back(std::move(authTLV));
-                //}
+                auto opt = options.getNextValBuf(0);
+                uint8_t authSize = generateAuthenticatedTLV(opt);
+                options.append(Variable::Eigrp::Option::authentication, authSize, nullptr, authSize);
             }
 
             eigrpQueryPacketStructure.addTLVSize(options.size());
@@ -3051,11 +3047,9 @@ Eigrp::~Eigrp()
         // Generate and append Authentication TLV if enabled for this neighbor
         if (configs->authKey.fullyEnabled.load(std::memory_order_relaxed))
         {
-            //EigrpHeader::Option authTLV = generateAuthenticatedTLV(eigrp);
-            //if (authTLV.option != ByteString(1, 0x00))
-            //{
-                //eigrp.options.push_back(std::move(authTLV));
-            //}
+            auto opt = options.getNextValBuf(0);
+            uint8_t authSize = generateAuthenticatedTLV(opt);
+            options.append(Variable::Eigrp::Option::authentication, authSize, nullptr, authSize);
         }
 
         eigrpPacket.addTLVSize(options.size());
