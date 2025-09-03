@@ -24,7 +24,12 @@ class VirtualRouter
 public:
     friend class EigrpTest;
 
-    VirtualRouter(Global& global, const std::string& name) : instanceName(name), global(global) { enabledAddressFamilies.insert(AddressFamily::IPv4); }
+    VirtualRouter(Global& global, const std::string& name)
+        : global(global)
+    {
+        instanceName = name;
+        enabledAddressFamilies.insert(AddressFamily::IPv4);
+    }
     ~VirtualRouter();
 
     RoutingTable routingTable; ///< VRF RoutingTable

@@ -19,9 +19,8 @@
 Interface::Interface(const InterfaceCreation& cfgs)
   : routingInstance(&cfgs.vrf),
     configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.mac),
-    debug(cfgs.debug),
-    ingress(cfgs.outInterface, *this),
     egress(cfgs.outInterface),
+    debug(cfgs.debug),
     packetOutQueue(4096, egress),
     threadsRunning(false)
 {
@@ -282,7 +281,7 @@ void Interface::startThreads()
 
         threadsRunning = true;
 
-        ingress.start();
+        //ingress->start();
         //TODO
     }
 }
@@ -302,7 +301,7 @@ void Interface::stopThreads()
         
     threadsRunning.store(false, std::memory_order_release); 
 
-    ingress.stop();
+    //ingress->stop();
     //TODO
 }
 

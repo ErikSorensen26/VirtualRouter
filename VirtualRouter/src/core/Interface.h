@@ -154,7 +154,6 @@ private:
 
     bool debug;             ///< Flag indicating if debug mode is enabled.
 
-    Ingress ingress;  ///< Ingress object for packet capturing.
     FIFOQueue packetOutQueue;
 
     std::atomic<bool> threadsRunning;   ///< Atomic flag indicating if threads are running.

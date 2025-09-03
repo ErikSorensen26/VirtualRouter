@@ -10,7 +10,8 @@ std::string CliEngine::defaultMode = Mode::userExec;
 CliEngine::CliEngine(Global& global, bool test) : Configs(), global(global)
 {
     // Set debug mode based on the input parameter
-    global.addRoutingInstance("default");
+    std::string name = "default";
+    global.addRoutingInstance(name);
     if (!test) {
         initEngine();
     }

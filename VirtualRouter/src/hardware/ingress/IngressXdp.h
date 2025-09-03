@@ -1,6 +1,6 @@
 // IngressXdp.h
 
-#ifndef INGRESS_XDP_H
+/*#ifndef INGRESS_XDP_H
 #define INGRESS_XDP_H
 
 #include "IngressBase.h"
@@ -15,10 +15,12 @@ public:
 
 protected:
     bool pollFrame(FrameView& out) override;
-    void releaseFrame(uint32_t index) override;
-    void waitForData() override;
     void stopRx() override;
     void waitUntilAllFramesReleased() override;
+    void waitEvent() override;
+    void signalStop() override;
+    void returnToDevice(uint32_t index) override;
+    void onReturnNudge() override;
 
 private:
     void setupSocket();
@@ -28,12 +30,13 @@ private:
     void bindSocket();
     void prefillFillRing();
     void checkWakeSupport();
+    void setupEvents();
+    void teardownEvents();
 
-    inline uint64_t frameAddr(uint32_t idx) const
-    {
-        return uint64_t(idx) * uint64_t(frameSize);
-    }
+    inline uint64_t frameAddr(uint32_t idx) const { return uint64_t(idx) * uint64_t(frameSize); }
     inline void kickIfNeeded();
+
+    inline uint32_t refillRxCache();
 
 private:
     // config
@@ -47,6 +50,9 @@ private:
     bool zeroCopy = false;
     bool needWakeup = false;
 
+    int epfd = -1;
+    int evtfd = -1;
+
     // UMEM
     void* umemArea = nullptr;
 
@@ -55,21 +61,40 @@ private:
 
     // RX ring
     uint32_t rxEntries = 0;
+    uint32_t rxMask = 0;
     void* rxRingArea = nullptr;
     size_t rxRingMapSize = 0;
-    uint32_t* rxRingProducer = nullptr;
-    uint32_t* rxRingConsumer = nullptr;
-    struct xdp_desc* rxRingDesc = nullptr;
+    uint32_t* rxProducer = nullptr;
+    uint32_t* rxConsumer = nullptr;
+    struct xdp_desc* rxDesc = nullptr;
+
+    // Local shadows
+    uint32_t rxProdCached = 0;
+    uint32_t rxConsShadow = 0;
 
     // Fill ring
     uint32_t fqEntries = 0;
+    uint32_t fqMask = 0;
     void* fqArea = nullptr;
     size_t fqMapSize = 0;
     uint32_t* fqProducer = nullptr;
     uint32_t* fqConsumer = nullptr;
-    uint64_t* fqDesc = nullptr;
+    uint64_t* fqAddr = nullptr;
 
-    std::atomic_bool* frameInUse = nullptr;
+    // Local producer shadow for batching
+    uint32_t fqProdShadow = 0;
+
+    static constexpr uint32_t RX_CACHE_CAP = 512;
+    struct RxItem { uint32_t idx; uint32_t len; };
+    RxItem rxCache[RX_CACHE_CAP];
+    uint32_t rxHead = 0;
+    uint32_t rxTail = 0;
+
+    static constexpr uint32_t FQ_COMMIT_EVERY = 64;
+    uint32_t fqSinceCommit = 0;
+
+    std::atomic<uint32_t> outstanding = 0;
+    std::atomic<bool> stopping = false;
 };
 
-#endif
+#endif // INGRESS_XDP_H*/

@@ -8,7 +8,7 @@
 #include <map>
 #include <mutex>
 
-Global::Global(bool enableRouting, bool test) : routingEnabled(enableRouting), threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, test) {}
+Global::Global(bool enableRouting, bool test) : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), engine(*this, test) {}
 Global::Global(IFileSystem* fs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, fs, test) {}
 
 Global::~Global()
