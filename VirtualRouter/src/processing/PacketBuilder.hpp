@@ -9,6 +9,7 @@
 #include <PacketStructure.h>
 #include <PacketSlot.hpp>
 #include <Interface.h>
+#include <TxDistributor.h>
 
 constexpr size_t MaxPacketSize = 2048;
 
@@ -25,7 +26,9 @@ class PacketBuilder
 public:
     PacketBuilder(Interface* iface) : bufferOffset(0), buildIndex(0), headerCount(0), local(false)
     {
-        auto frame = iface->egress.getFrame();
+        FrameHandle frame;
+        if (!iface->tx->getFrame(frame)) std::runtime_error("Full queue unhandled");
+        // TODO handle full queues
         slot = frame.slot;
         buffer = frame.payload;
     }

@@ -5,22 +5,25 @@
 
 #include <cstdint>
 
+#pragma pack(push, 1)
 struct PacketSlot
 {
-    const uint32_t index;
+    uint32_t index;
     uint8_t dscp;
     uint8_t ecn;
     uint8_t cos;
-    uint32_t lengthBytes;
+    uint32_t len;
     uint32_t flowHash;
     uint32_t classId;
     uint64_t timestampNanos;
 };
+#pragma pack(pop)
 
 struct FrameHandle
 {
     PacketSlot* slot;
     uint8_t* payload;
+    uint32_t qid;
 };
 
-#endif // PACKET_SLOT_HPP
+#endif

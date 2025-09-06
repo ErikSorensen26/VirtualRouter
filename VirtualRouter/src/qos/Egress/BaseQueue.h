@@ -9,18 +9,20 @@
 #include <linux/futex.h>
 #include <sys/syscall.h>
 
-class Egress;
+class EgressBase;
 
 class BaseQueue
 {
 public:
-    void enqueue(PacketSlot* pkt);
+    BaseQueue(EgressBase& egress) : out(egress), lock(0), wakeSignal(0), running(true) {}
+    virtual ~BaseQueue(){ stop(); }
 
+    void enqueue(PacketSlot* pkt);
     void start();
     void stop();
+    EgressBase& out;
 
 protected:
-    BaseQueue(Egress& egress) : out(egress), lock(0), wakeSignal(0), running(true) {}
 
     virtual void atomicEnqueue(PacketSlot* pkt) = 0;
     virtual bool isEmpty() const = 0;
@@ -29,10 +31,7 @@ protected:
     void dequeue(uint32_t frame, uint32_t length);
     void drop(uint32_t frame);
 
-    virtual ~BaseQueue(){}
-
 private:
-    Egress& out;
     std::atomic<uint32_t> lock;
     std::atomic<uint32_t> wakeSignal;
     std::atomic<bool> running;

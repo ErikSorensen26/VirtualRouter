@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <stdexcept>
 #include <PacketSlot.hpp>
+
 class Egress
 {
 public:
@@ -28,6 +29,7 @@ public:
         qid(qid),
         umemSize(uint64_t(frameCount) * frameSize)
     {
+        return;
         static_assert(sizeof(uint32_t) == 4, "Expected 32-bit integers");
 
         txInFlight.resize(frameCount);
@@ -46,8 +48,7 @@ public:
 
         uint8_t* buf = reinterpret_cast<uint8_t*>(umemArea);
         for (uint32_t i = 0; i < frameCount; ++i, buf += frameSize)
-        {
-            auto* slot = reinterpret_cast<PacketSlot*>(buf + packetSize);
+        { auto* slot = reinterpret_cast<PacketSlot*>(buf + packetSize);
             std::memset(slot, 0, sizeof(PacketSlot));
             *const_cast<uint32_t*>(&slot->index) = i;
         }
@@ -113,6 +114,7 @@ public:
 
     inline bool send(uint32_t index, uint32_t length) noexcept
     {
+        return true;
         if (index >= frameCount)
             return false;
 

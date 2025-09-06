@@ -29,7 +29,7 @@ struct EthernetHeader
     void setSourceMac(const uint8_t* val) 
         { std::memcpy(raw->sourceMac, val, 6); }
     void setDestinationMac(const uint8_t* val)
-        { std::memcpy(raw->sourceMac, val, 6); }
+        { std::memcpy(raw->destinationMac, val, 6); }
     void setType(const uint16_t val)
         { writeU16(raw->type, val); }
 };

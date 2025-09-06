@@ -1,4 +1,4 @@
-// FIFOQueue.hpp
+// FIFOQueEgressBase
 
 #ifndef FIFO_QUEUE_HPP
 #define FIFO_QUEUE_HPP
@@ -12,7 +12,7 @@
 class FIFOQueue : public BaseQueue
 {
 public:
-    FIFOQueue(uint32_t capacity, Egress& egress)
+    FIFOQueue(uint32_t capacity, EgressBase& egress)
       : BaseQueue(egress),
         capacity(capacity),
         mask(capacity - 1),
@@ -55,15 +55,12 @@ protected:
 
     void dequeueOne() override
     {
-        if (size.load(std::memory_order_acquire) == 0)
-            return;
-
         uint32_t t = tail.load(std::memory_order_relaxed);
         PacketSlot* pkt = buffer[t & mask];
         if (!pkt)
             return;
 
-        dequeue(pkt->index, pkt->lengthBytes);
+        dequeue(pkt->index, pkt->len);
         buffer[t & mask] = nullptr;
 
         tail.store(t + 1, std::memory_order_release);

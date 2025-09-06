@@ -17,9 +17,6 @@
 #ifndef ALWAYS_INLINE
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
-#ifndef TPACKET_ALIGN
-#define TPACKET_ALIGN(x) (((x) + TPACKET_ALIGNMENT - 1) & ~(TPACKET_ALIGNMENT - 1))
-#endif
 
 static int ifindex_or_throw(const char* ifname)
 {

@@ -1,10 +1,14 @@
 // BaseQueue.cpp
 
 #include <BaseQueue.h>
-#include <Egress.hpp>
+#include <EgressBase.h>
 
 void BaseQueue::start()
 {
+    running.store(true, std::memory_order_release);
+    wakeSignal.store(1, std::memory_order_relaxed);
+    futex_wake(&wakeSignal, 1);
+
     runThread = std::thread([this] { this->runLoop(); });
 }
 
@@ -52,19 +56,35 @@ void BaseQueue::runLoop()
         if (!running.load(std::memory_order_acquire))
             break;
 
-        wakeSignal.store(0, std::memory_order_relaxed);
+        uint32_t expected = 1;
+        (void)wakeSignal.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
+
+        if (!isEmpty()) continue;
+
         futex_wait(&wakeSignal, 0);
     }
 }
 
 void BaseQueue::dequeue(uint32_t frame, uint32_t length)
 {
-    out.send(frame, length);
+    static thread_local uint32_t flushCount = 0;
+    if (out.send(frame, length))
+    {
+        if (++flushCount >= 512 || isEmpty())
+        {
+            out.flush();
+            flushCount = 0;
+        }
+    }
+    else
+    {
+        out.cancel(frame);
+    }
 }
 
 void BaseQueue::drop(uint32_t frame)
 {
-    out.releaseFrame(frame);
+    out.cancel(frame);
 }
 
 void BaseQueue::futex_wait(std::atomic<uint32_t>* addr, uint32_t expected)
