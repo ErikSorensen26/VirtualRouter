@@ -1,50 +1,88 @@
-class ByteString 
+class Dhcpv6ServerTest : public ::testing::Test
 {
-class ByteSpan 
-{
-class ByteStringSpan 
-{
-class Profiler
-{
-class TerminalTest : public ::testing::Test
-{
-class RouterSetup
-{
-class TelnetManager
-{
-class MockLogger : public ILogger
+class Internal_DecapsulationTest : public ::testing::Test 
 {
 class MockInterface : public Interface
-{
-class MockRoutingTable : public RoutingTable
 {
 class MockConsole : public IConsole
 {
 class ReducedMockConsole : public IConsole
 {
-class TestablePacket : public Packet
+class Internal_ArpTest : public ::testing::Test
 {
-class DecapsulationTest : public ::testing::Test 
+class Internal_NdpTest : public ::testing::Test
 {
-class IPPoolTest : public ::testing::Test
+class Internal_IPPoolTest : public ::testing::Test
 {
-class ConsoleTest : public ::testing::Test
+class Internal_ConsoleTest : public ::testing::Test
 {
-class ConfigsTest : public ::testing::Test 
+class Internal_ConfigTest : public ::testing::Test 
+{
+class Internal_EigrpTest : public ::testing::Test 
+{
+class Internal_CliTest : public ::testing::Test
 {
 class DhcpRelayTest : public ::testing::Test
 {
-class ArpTest : public ::testing::Test
-{
-class EncapsulationTest : public ::testing::Test 
+class Internal_EncapsulationTest : public ::testing::Test 
 {
 class DhcpClientTest : public ::testing::Test
 {
 class DhcpServerTest : public ::testing::Test
 {
-class Interface
+class Gns3Harness 
 {
-class Terminal : public Console 
+    class SubnetAllocator
+    {
+    class TopologyGenerator
+    {
+class Environment
+{
+class ListenerManager
+{
+class Routing_EigrpTest : public ::testing::Test
+{
+class EgressPacket : public EgressBase
+{
+class EgressBase
+{
+class EgressFactory
+{
+class IngressBase
+{
+class IngressFactory
+{
+class IngressXdp : public IngressBase
+{
+class IngressPacket : public IngressBase
+{
+class Egress
+{
+class Global 
+{
+class VirtualRouter
+{
+class RoutingTable 
+{
+    class Ospf 
+    {
+    class Bgp 
+    {
+    class EigrpInterface
+    {
+    class Eigrp 
+    {
+    class ClassicEigrp : public Eigrp
+    {
+    class NamedEigrp : public Eigrp
+    {
+    class Rip 
+    {
+class PacketBuilder
+{
+class ThreadPool
+{
+class TimeManager 
 {
 class ILogger
 {
@@ -52,11 +90,63 @@ class Logger : public ILogger
 {
 class LogStream 
 {
+class DoTime 
+{
+class Arp 
+{
+    class Ethernet
+    {
+class Ndp
+{
+class TxQueueManager
+{
+class TxDistributor
+{
+class BaseQueue
+{
+class FIFOQueue : public BaseQueue
+{
+class RxQueueManager
+{
+class IPv4Pool
+{
+    class DhcpRelay
+    {
+    class DhcpClient 
+    {
+        class DhcpAuthManager
+        {
+class IPv4LeaseManager
+{
+        class AuthManager
+        {
+        class ClientAuthManager
+        {
+    class Dhcpv6Server
+    {
+class PrefixPool
+{
+    class DhcpRelayV6
+    {
+class IPv6Pool
+{
+class IPv6LeaseManager
+{
+    class Dhcpv6Client 
+    {
+class CliEngine : public Configs
+{
+class Interface
+{
+class InterfaceConfigs
+{
+class CliSession : public Console
+{
 class volatileValueUsage 
 {
 class IFileSystem
 {
-class RealFileSystem : public IFileSystem
+class FileSystem : public IFileSystem
 {
 class Configs 
 {
@@ -64,51 +154,135 @@ class IConsole
 {
 class RealConsole : public IConsole
 {
-class Console : public Configs 
+class Console
 {
-class TimeManager 
+class CommandProcessor
 {
-class DoTime 
+class TLV8BufferManager
 {
-class Arp 
+class TLV16BufferManager
 {
-    class IPPacket
-    {
-    class DhcpRelay
-    {
-    class IPPool
-    {
-    class DhcpServer
-    {
-    class DhcpClient 
-    {
-    class Rip 
-    {
-    class Ospf 
-    {
-    class Bgp 
-    {
-    class EigrpInterface : public std::enable_shared_from_this<Protocol::EigrpInterface> 
-    {
-    class ClassicEigrp : public Eigrp
-    {
-    class NamedEigrp : public Eigrp
-    {
-class RingBuffer 
+class Profiler
 {
-class ThreadSafeQueue 
+class ExPtr
 {
-class Ingress 
+class RestClient
 {
-class ProcessPacket 
+	class PUGIXML_CLASS xml_writer
+	{
+	class PUGIXML_CLASS xml_writer_file: public xml_writer
+	{
+	class PUGIXML_CLASS xml_writer_stream: public xml_writer
+	{
+	class PUGIXML_CLASS xml_attribute
+	{
+	class PUGIXML_CLASS xml_node
+	{
+	class PUGIXML_CLASS xml_text
+	{
+	class PUGIXML_CLASS xml_node_iterator
+	{
+	class PUGIXML_CLASS xml_attribute_iterator
+	{
+	class PUGIXML_CLASS xml_named_node_iterator
+	{
+	class PUGIXML_CLASS xml_tree_walker
+	{
+	class PUGIXML_CLASS xml_document: public xml_node
+	{
+	class PUGIXML_CLASS xpath_variable
+	{
+	class PUGIXML_CLASS xpath_variable_set
+	{
+	class PUGIXML_CLASS xpath_query
+	{
+	class PUGIXML_CLASS xpath_exception: public std::exception
+	{
+	class PUGIXML_CLASS xpath_node
+	{
+	class PUGIXML_CLASS xpath_node_set
+	{
+	class compact_hash_table
+	{
+	class compact_header
+	{
+	class xml_buffered_writer
+	{
+	class xpath_string
+	{
+	class xpath_node_set_raw
+	{
+	class xpath_lexer
+	{
+	class xpath_ast_node
+	{
+class exception : public std::exception
 {
-class Packet
+class parse_error : public exception
 {
-class ThreadPool 
+class invalid_iterator : public exception
 {
-class Egress 
+class type_error : public exception
 {
-class Global 
+class out_of_range : public exception
 {
-class RoutingTable 
+class other_error : public exception
+{
+class tuple_element<N, ::nlohmann::detail::iteration_proxy_value<IteratorType >> // NOLINT(cert-dcl58-cpp)
+{
+class byte_container_with_subtype : public BinaryType
+{
+class file_input_adapter
+{
+class input_stream_adapter
+{
+class iterator_input_adapter
+{
+class wide_string_input_adapter
+{
+class span_input_adapter
+{
+class json_sax_dom_parser
+{
+class json_sax_dom_callback_parser
+{
+class json_sax_acceptor
+{
+class lexer_base
+{
+class lexer : public lexer_base<BasicJsonType>
+{
+class binary_reader
+{
+class parser
+{
+class primitive_iterator_t
+{
+class iter_impl // NOLINT(cppcoreguidelines-special-member-functions,hicpp-special-member-functions)
+{
+class json_reverse_iterator : public std::reverse_iterator<Base>
+{
+class json_pointer
+{
+class json_ref
+{
+class output_vector_adapter : public output_adapter_protocol<CharType>
+{
+class output_stream_adapter : public output_adapter_protocol<CharType>
+{
+class output_string_adapter : public output_adapter_protocol<CharType>
+{
+class output_adapter
+{
+class binary_writer
+{
+class serializer
+{
+class TargetProcess
+{
+class FilterEngine
+{
+class Debugger
+{
+class ExecutionManager
 {
