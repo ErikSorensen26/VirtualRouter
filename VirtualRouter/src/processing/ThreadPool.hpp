@@ -1,213 +1,219 @@
-// ThreadPool.h
-
 #ifndef THREADPOOL_HPP
 #define THREADPOOL_HPP
 
 #include <vector>
 #include <thread>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <functional>
-#include <future>
 #include <atomic>
+#include <cstdint>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <algorithm>    // std::max
+#include <immintrin.h>  // _mm_pause
 
-/**
- * @file ThreadPool.h
- * @brief Defines the ThreadPool class for managing a pool of worker threads to execute tasks asynchronously.
- */
-
-/**
- * @class ThreadPool
- * @brief Manages a pool of worker threads to execute tasks asynchronously.
- *
- * The `ThreadPool` class provides a convenient way to manage multiple threads that can execute
- * tasks concurrently. It maintains a fixed number of worker threads that continuously fetch
- * and execute tasks from a task queue. Tasks can be enqueued with any callable object, and
- * the thread pool ensures their execution in a thread-safe manner.
- *
- * @note The number of threads should be chosen based on the application's concurrency requirements
- *       and the system's hardware capabilities.
- */
-class ThreadPool 
+class ThreadPool
 {
 public:
+    // Small-inline functor storage: no std::function, no allocations per task.
+    struct Task
+    {
+        using InvokeFn  = void(*)(void*);
+        using DestroyFn = void(*)(void*);
 
-    /**
-     * @brief Constructs a ThreadPool with a specified number of worker threads.
-     *
-     * This constructor initializes the thread pool by launching the specified number of worker threads.
-     * Each worker thread continuously retrieves and executes tasks from the task queue until the pool is
-     * stopped.
-     *
-     * @param numThreads The number of worker threads to create in the thread pool.
-     *
-     * @throws std::invalid_argument If `numThreads` is zero.
-     */
-    explicit ThreadPool(size_t numThreads = std::max(4u, std::thread::hardware_concurrency()));
+        alignas(64) unsigned char storage[64];
+        InvokeFn  invoke  = nullptr;
+        DestroyFn destroy = nullptr;
 
-    /**
-     * @brief Destructor that stops the thread pool and joins all worker threads.
-     *
-     * Ensures that all worker threads are properly terminated and joined before the ThreadPool object is destroyed.
-     */
-    ~ThreadPool();
+        Task() = default;
 
-    /**
-     * @brief Enqueues a task for execution and returns a future to retrieve the result.
-     *
-     * This method allows clients to submit tasks to the thread pool. It accepts any callable object
-     * with arguments, wraps it into a packaged task, and enqueues it for execution by the worker threads.
-     * The method returns a `std::future` that can be used to obtain the result of the task.
-     *
-     * @tparam F The type of the callable object.
-     * @tparam Args The types of the arguments to pass to the callable object.
-     * @param f The callable object to execute.
-     * @param args The arguments to pass to the callable object.
-     *
-     * @return A `std::future` representing the result of the task.
-     *
-     * @throws std::runtime_error If the thread pool has been stopped and cannot accept new tasks.
-     *
-     * @note The use of `std::result_of` is deprecated in C++17 and removed in C++20.
-     *       It is recommended to use `std::invoke_result` instead.
-     */
-    template <class F, class... Args>
-    auto enqueue(F&& f, Args&&... args)
-        -> std::future<std::invoke_result_t<F, Args...>>;
+        template<typename F>
+        void set(F&& f)
+        {
+            using Fn = typename std::decay<F>::type;
+            static_assert(sizeof(Fn) <= sizeof(storage), "Lambda too large for inline storage");
+            new (storage) Fn(std::forward<F>(f));
+            invoke  = [](void* p){ (*reinterpret_cast<Fn*>(p))(); };
+            destroy = [](void* p){ reinterpret_cast<Fn*>(p)->~Fn(); };
+        }
 
-    /**
-     * @brief Fire-and-forget enqueue
-     */
-    template<class F>
-    void enqueueDetached(F&& f);
+        // Run lambda if present
+        void run() noexcept
+        {
+            if (invoke) invoke(storage);
+        }
+        // Destroy lambda if present
+        void cleanup() noexcept
+        {
+            if (destroy) destroy(storage);
+            invoke = nullptr;
+            destroy = nullptr;
+        }
 
-    /**
-     * @brief Stops the thread pool and joins all worker threads.
-     *
-     * This method gracefully shuts down the thread pool by signaling all worker threads to stop processing tasks.
-     * It then joins each worker thread to ensure proper termination. After calling this method, the thread pool
-     * cannot accept new tasks.
-     */
-    void shutdown();
+        Task(const Task&)            = delete;
+        Task& operator=(const Task&) = delete;
+        ~Task()                      = default; // never auto-destroy per-slot; we manage it explicitly
+    };
+
+    // numThreads: worker count
+    // capacity:   queue capacity (must be power of two)
+    explicit ThreadPool(size_t numThreads = std::max(4u, std::thread::hardware_concurrency()),
+                        size_t capacity   = (1u << 16))
+        : capacity_(capacity),
+          mask_(capacity - 1),
+          head_(0),
+          tail_(0),
+          stop_(false)
+    {
+        if (capacity_ < 2 || (capacity_ & mask_) != 0)
+            throw std::runtime_error("ThreadPool capacity must be a power of 2 and >= 2");
+
+        slots_ = new Slot[capacity_];
+        // Initialize per-slot sequence numbers
+        for (size_t i = 0; i < capacity_; ++i)
+            slots_[i].seq.store(static_cast<uint64_t>(i), std::memory_order_relaxed);
+
+        // Launch workers
+        workers_.reserve(numThreads);
+        for (size_t i = 0; i < numThreads; ++i)
+            workers_.emplace_back([this]{ workerLoop(); });
+    }
+
+    ~ThreadPool()
+    {
+        shutdown();
+        delete[] slots_;
+    }
+
+    // Enqueue a lambda (no args; captures only). Returns false if queue is full.
+    template<typename F>
+    bool enqueue(F&& f)
+    {
+        uint64_t pos = head_.load(std::memory_order_relaxed);
+        for (;;)
+        {
+            Slot* s = &slots_[pos & mask_];
+            uint64_t seq = s->seq.load(std::memory_order_acquire);
+            intptr_t dif = static_cast<intptr_t>(seq) - static_cast<intptr_t>(pos);
+            if (dif == 0)
+            {
+                // try to claim this sequence number
+                if (head_.compare_exchange_weak(pos, pos + 1,
+                                                std::memory_order_acquire,
+                                                std::memory_order_relaxed))
+                {
+                    s->task.set(std::forward<F>(f));           // construct lambda
+                    s->seq.store(pos + 1, std::memory_order_release); // publish
+                    return true;
+                }
+                // CAS failed, pos updated by other producer; retry
+            }
+            else if (dif < 0)
+            {
+                // seq < pos -> slot not yet recycled => queue full
+                return false;
+            }
+            else
+            {
+                // Another producer advanced this slot; reload head and retry
+                pos = head_.load(std::memory_order_relaxed);
+            }
+            _mm_pause();
+        }
+    }
+
+    void shutdown()
+    {
+        bool expected = false;
+        if (stop_.compare_exchange_strong(expected, true, std::memory_order_release))
+        {
+            // join once
+            for (auto& t : workers_)
+                if (t.joinable()) t.join();
+        }
+    }
 
 private:
+    struct Slot
+    {
+        // Sequence number protocol:
+        //  producer owns slot when seq == index
+        //  consumer owns slot when seq == index + 1
+        std::atomic<uint64_t> seq;
+        Task task;
+    };
 
-    /**
-     * @brief Worker threads that execute tasks from the task queue.
-     *
-     * Each worker thread runs a loop that continuously retrieves and executes tasks from the task queue.
-     * The loop exits when the thread pool is stopped and there are no remaining tasks.
-     */
-    std::vector<std::thread> workers;
+    void workerLoop()
+    {
+        while (!stop_.load(std::memory_order_acquire))
+        {
+            if (consumeOne())
+                continue;
 
-    /**
-     * @brief Queue that holds tasks to be executed by the worker threads.
-     *
-     * The task queue stores tasks as `std::function<void()>`, allowing any callable object to be enqueued.
-     */
-    std::queue<std::function<void()>> tasks;
+            // light backoff when empty
+            for (int i = 0; i < 64 && !stop_.load(std::memory_order_relaxed); ++i)
+                _mm_pause();
+        }
 
-    /**
-     * @brief Mutex for synchronizing access to the task queue.
-     *
-     * Ensures that multiple threads can safely enqueue and dequeue tasks without causing data races.
-     */
-    std::mutex queueMutex;
+        // Drain remaining tasks
+        while (consumeOne()) {}
+    }
 
-    /**
-     * @brief Condition variable to notify worker threads of new tasks or shutdown signals.
-     *
-     * Worker threads wait on this condition variable when the task queue is empty. They are notified
-     * when new tasks are enqueued or when the thread pool is stopped.
-     */
-    std::condition_variable condition;
+    bool consumeOne()
+    {
+        uint64_t pos = tail_.load(std::memory_order_relaxed);
+        for (;;)
+        {
+            Slot* s = &slots_[pos & mask_];
+            uint64_t seq = s->seq.load(std::memory_order_acquire);
+            intptr_t dif = static_cast<intptr_t>(seq) - static_cast<intptr_t>(pos + 1);
+            if (dif == 0)
+            {
+                // try to claim this item
+                if (tail_.compare_exchange_weak(pos, pos + 1,
+                                                std::memory_order_acquire,
+                                                std::memory_order_relaxed))
+                {
+                    // We own the slot now
+                    s->task.run();      // execute
+                    s->task.cleanup();  // destroy captures + reset
+                    // recycle slot for producers: set seq = pos + capacity
+                    s->seq.store(pos + capacity_, std::memory_order_release);
+                    return true;
+                }
+                // CAS failed, pos updated by other consumer; retry with new pos
+            }
+            else if (dif < 0)
+            {
+                // Empty at this pos
+                return false;
+            }
+            else
+            {
+                // Another consumer advanced; reload tail and retry
+                pos = tail_.load(std::memory_order_relaxed);
+            }
+            _mm_pause();
+        }
+    }
 
-    /**
-     * @brief Atomic flag indicating whether the thread pool is stopping.
-     *
-     * When set to `true`, worker threads will stop processing tasks and exit their execution loops.
-     */
-    std::atomic<bool> stop;
+    // queue
+    const size_t capacity_;
+    const size_t mask_;
+    Slot* slots_;
+
+    // indices
+    alignas(64) std::atomic<uint64_t> head_; // producer index
+    alignas(64) std::atomic<uint64_t> tail_; // consumer index
+
+    // control
+    std::atomic<bool> stop_;
+
+    // workers
+    std::vector<std::thread> workers_;
+
+    ThreadPool(const ThreadPool&)            = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
 };
 
-// Constructor: Launch worker threads
-inline ThreadPool::ThreadPool(size_t numThreads) : stop(false) {
-    for (size_t i = 0; i < numThreads; ++i) {
-        workers.emplace_back(
-            [this] {
-                while (true) {
-                    std::function<void()> task;
-
-                    {   // Acquire lock
-                        std::unique_lock<std::mutex> lock(queueMutex);
-                        condition.wait(lock, 
-                            [this]{ return stop.load() || !tasks.empty(); });
-                        if (stop.load() && tasks.empty())
-                            return;
-                        task = std::move(tasks.front());
-                        tasks.pop();
-                    }
-
-                    // Execute the task
-                    task();
-                }
-            }
-        );
-    }
-}
-
-// Destructor: Join all threads
-inline ThreadPool::~ThreadPool() {
-    shutdown();
-}
-
-// Enqueue method
-template <class F, class... Args>
-auto ThreadPool::enqueue(F&& f, Args&&... args) 
-    -> std::future<std::invoke_result_t<F, Args...>>
-{
-    using return_type = std::invoke_result_t<F, Args...>;
-
-    auto task = std::make_shared< std::packaged_task<return_type()> >(
-        std::bind(std::forward<F>(f), std::forward<Args>(args)...)
-    );
-
-    std::future<return_type> res = task->get_future();
-    {
-        std::lock_guard<std::mutex> lock(queueMutex);
-
-        if (stop.load())
-            throw std::runtime_error("enqueue on stopped ThreadPool");
-
-        tasks.emplace([task](){ (*task)(); });
-    }
-    condition.notify_one();
-    return res;
-}
-
-template <class F>
-void ThreadPool::enqueueDetached(F&& f)
-{
-    {
-        std::lock_guard<std::mutex> lock(queueMutex);
-        if (stop.load())
-            return;
-        tasks.emplace(std::forward<F>(f));
-    }
-    condition.notify_one();
-}
-
-// Shutdown method
-inline void ThreadPool::shutdown() {
-    {
-        std::lock_guard<std::mutex> lock(queueMutex);
-        stop.store(true);
-    }
-    condition.notify_all();
-    for (std::thread &worker: workers)
-        if (worker.joinable())
-            worker.join();
-}
-
 #endif // THREADPOOL_HPP
+
