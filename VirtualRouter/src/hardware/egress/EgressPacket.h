@@ -13,7 +13,7 @@
 class EgressPacket : public EgressBase
 {
     std::atomic<uint32_t> pendingKicks = 0;
-    uint32_t kickBatch = 512;
+    uint32_t kickBatch = 16;
 
 public:
 

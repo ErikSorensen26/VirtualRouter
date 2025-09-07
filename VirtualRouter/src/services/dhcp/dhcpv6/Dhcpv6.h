@@ -75,16 +75,6 @@ struct IAPrefixKey
 namespace std
 {
     template<>
-    struct hash<__uint128_t> {
-        size_t operator()(const __uint128_t& k) const {
-            uint64_t high = static_cast<uint64_t>(k >> 64);
-            uint64_t low = static_cast<uint64_t>(k);
-            size_t seed = std::hash<uint64_t>{}(low);
-            seed ^= std::hash<uint64_t>{}(high) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            return seed;
-        }
-    };
-    template<>
     struct hash<IAKey> {
         size_t operator()(const IAKey& k) const {
             size_t h1 = std::hash<ClientID>{}(k.duid);

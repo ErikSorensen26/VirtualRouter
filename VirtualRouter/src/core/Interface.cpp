@@ -13,15 +13,14 @@
 #include <VirtualRouter.h>
 #include <InterfaceConfigs.h>
 #include <PacketBuilder.hpp>
+#include <TxDistributor.h>
 #include <Global.h>
 #include <Process.h>
 
 Interface::Interface(const InterfaceCreation& cfgs)
   : routingInstance(&cfgs.vrf),
     configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.mac),
-    egress(cfgs.outInterface),
     debug(cfgs.debug),
-    packetOutQueue(4096, egress),
     threadsRunning(false)
 {
     // Set member variables
@@ -255,7 +254,7 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
     // Enqueue the serialized packet for sending
     if (packetInfo.slot)
     {
-        packetOutQueue.enqueue(packetInfo.slot);
+        //packetOutQueue.enqueue(packetInfo.slot);
     }
 }
 

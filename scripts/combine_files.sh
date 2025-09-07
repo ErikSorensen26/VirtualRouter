@@ -13,7 +13,7 @@ SPECIAL_FILES=(
     "$SPECIAL_DIR/ByteString.hpp"
     "$SPECIAL_DIR/Functions.h"
     "$SPECIAL_DIR/Functions.cpp"
-    "$SPECIAL_DIR/Profiler.hpp"
+    "$SPECIAL_DIR/Profiler.h"
 )
 
 # Ensure the specified directory exists

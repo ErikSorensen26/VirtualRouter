@@ -3,7 +3,6 @@
 #ifndef PACKET_STRUCTURE_H
 #define PACKET_STRUCTURE_H
 
-#include <Profiler.hpp>
 #include <cstdint>
 #include <cstddef>
 

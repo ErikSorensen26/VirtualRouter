@@ -106,7 +106,7 @@ void Logger::initialize(bool start, bool isolateMode)
             }
             else if (levelStr == "DEBUG")
             {
-                minLogLevel_ = LogLevel::DEBUG;
+                minLogLevel_ = LogLevel::DEBUG_LEVEL;
             }
             else if(levelStr == "WARN")
             {
@@ -232,7 +232,7 @@ std::string Logger::getLogLevelString(LogLevel level)
     switch (level)
     {
         case LogLevel::INFO: return "INFO";
-        case LogLevel::DEBUG: return "DEBUG";
+        case LogLevel::DEBUG_LEVEL: return "DEBUG";
         case LogLevel::WARN: return "WARN";
         case LogLevel::ERROR: return "ERROR";
         default:              return "UNKNOWN";
@@ -300,9 +300,9 @@ LogStream Logger::debug(bool isolate)
 {
     if (isolatedMode)
     {
-        return LogStream(*this, LogLevel::DEBUG, !isolate);
+        return LogStream(*this, LogLevel::DEBUG_LEVEL, !isolate);
     }
-    return LogStream(*this, LogLevel::DEBUG);
+    return LogStream(*this, LogLevel::DEBUG_LEVEL);
 }
 
 LogStream Logger::warn(bool isolate)

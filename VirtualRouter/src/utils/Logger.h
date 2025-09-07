@@ -21,7 +21,7 @@ class LogStream;
 enum class LogLevel 
 {
     INFO,   ///< Informationsl messages.
-    DEBUG,  ///< Debugging messages.
+    DEBUG_LEVEL,  ///< Debugging messages.
     WARN,   ///< Warning messages.
     ERROR   ///< Error messages.
 };
@@ -90,7 +90,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream info(bool isolate = false) override;
+    LogStream info(bool isolate = false) override;
 
     /**
      * @brief Logs a debug message.
@@ -98,7 +98,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream debug(bool isolate = false) override;
+    LogStream debug(bool isolate = false) override;
 
     /**
      * @brief Logs a warning message.
@@ -106,7 +106,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream warn(bool isolate = false) override;
+    LogStream warn(bool isolate = false) override;
 
     /**
      * @brief Logs an error message.
@@ -114,7 +114,7 @@ public:
      * @param isolate Boolean flag indicating if the message should be isolated.
      * @return LogStream Object to handle the message stream.
      */
-    class LogStream error(bool isolate = false) override;
+    LogStream error(bool isolate = false) override;
 
     /**
      * @brief Converts a LogLevel enum to its string representation.

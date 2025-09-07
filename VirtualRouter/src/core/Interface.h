@@ -18,6 +18,7 @@ class EigrpTest;
 class VirtualRouter;
 class MockInterface;
 class PacketBuilder;
+class TxDistributor;
 
 enum class InterfaceType : uint8_t;
 enum class StateChange
@@ -115,7 +116,7 @@ public:
      */
     virtual void startThreads();
 
-    Egress egress;      ///< Egress object for packet sending.
+    TxDistributor* tx;      ///< Egress object for packet sending.
 
 private:
 
@@ -153,8 +154,6 @@ private:
     std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.
 
     bool debug;             ///< Flag indicating if debug mode is enabled.
-
-    FIFOQueue packetOutQueue;
 
     std::atomic<bool> threadsRunning;   ///< Atomic flag indicating if threads are running.
 };

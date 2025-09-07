@@ -1,0 +1,12 @@
+------------------------------
+------ Profiling Report ------
+[77 ns] buh 0
+[5349 ns] buh 1
+[5959 ns] buh 2
+[6339 ns] buh 3
+[6694 ns] buh 4
+[7157 ns] buh 5
+[7504 ns] buh 6
+[7847 ns] buh 7
+[8179 ns] buh 8
+[8509 ns] buh 9

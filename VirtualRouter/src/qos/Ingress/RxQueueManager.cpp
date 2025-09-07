@@ -139,8 +139,6 @@ void RxQueueManager::reoptimize()
         if (setHwRxQueues(st.ifname, desired))
             applied = desired;
 
-        std::cout << kv.second.ifname << " got " << applied << " queues\n";
-
         st.hwRxQueues = applied;
         ensureQueueCount(st, applied, order);
     }

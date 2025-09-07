@@ -37,7 +37,7 @@ static void set_nonblock(int fd) {
 }
 
 EgressPacket::EgressPacket(Interface& iface, const TxQueueOpts& opts)
-    : EgressBase(iface, opts)
+    : EgressBase(iface, opts), kickBatch(16)
 {
     setupSocket();
     bindIface();
@@ -272,19 +272,8 @@ void EgressPacket::flush()
 
 void EgressPacket::waitWritable()
 {
-    if (epfd < 0) return;
-    constexpr int MAXE = 4;
-    epoll_event ev[MAXE];
-    while (true)
-    {
-        int n = ::epoll_wait(epfd, ev, MAXE, -1);
-        if (n < 0)
-        {
-            if (errno == EINTR) continue;
-            return;
-        }
-        return;
-    }
+    kickKernelCached();
+    usleep(100);
 }
 
 void EgressPacket::reclaim()
@@ -292,7 +281,7 @@ void EgressPacket::reclaim()
     constexpr uint32_t BUDGET = 4096;
     uint32_t reclaimed = 0, scanned = 0;
 
-    while (scanned < BUDGET && reclaimed < 32)
+    while (scanned < BUDGET)
     {
         uint32_t idx = reclaimCursor;
         reclaimCursor = (reclaimCursor + 1) % frameCount;
@@ -301,9 +290,9 @@ void EgressPacket::reclaim()
         auto* h = reinterpret_cast<tpacket2_hdr*>(
             reinterpret_cast<uint8_t*>(ring) + size_t(idx) * req.tp_frame_size);
 
-        uint8_t current_status = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
+        uint8_t status = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
 
-        if (current_status == TP_STATUS_AVAILABLE)
+        if (status == TP_STATUS_AVAILABLE)
         {
             uint8_t expected_state = 2;
             if (state[idx].compare_exchange_strong(expected_state, 0, std::memory_order_acq_rel))
@@ -317,8 +306,7 @@ void EgressPacket::reclaim()
     if (reclaimed > 0) return;
 
     kickKernelCached();
-    struct timespec ts = {0, 10000};
-    nanosleep(&ts, nullptr);
+    usleep(100);
 
     for (uint32_t i = 0; i < frameCount; ++i)
     {

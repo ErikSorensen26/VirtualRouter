@@ -195,7 +195,7 @@ void TimeManager::Run()
 
         for (const auto& timer : toExecute)
         {
-            threadPool.enqueueDetached([this, timer]()
+            threadPool.enqueue([this, timer]
             {
                 {
                     std::unique_lock<std::mutex> lock(mutex);
