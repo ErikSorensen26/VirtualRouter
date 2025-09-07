@@ -44,6 +44,7 @@ protected:
 
         uint32_t h = head.load(std::memory_order_relaxed);
         buffer[h & mask] = pkt;
+        std::atomic_thread_fence(std::memory_order_release);
         head.store(h + 1, std::memory_order_release);
         size.fetch_add(1, std::memory_order_release);
     }
@@ -57,8 +58,7 @@ protected:
     {
         uint32_t t = tail.load(std::memory_order_relaxed);
         PacketSlot* pkt = buffer[t & mask];
-        if (!pkt)
-            return;
+        if (!pkt) return;
 
         dequeue(pkt->index, pkt->len);
         buffer[t & mask] = nullptr;

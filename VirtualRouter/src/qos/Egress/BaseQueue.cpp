@@ -3,6 +3,8 @@
 #include <BaseQueue.h>
 #include <EgressBase.h>
 
+static inline void cpuRelax() { asm volatile("pause" ::: "memory"); }
+
 void BaseQueue::start()
 {
     running.store(true, std::memory_order_release);
@@ -24,11 +26,16 @@ void BaseQueue::stop()
 
 void BaseQueue::enqueue(PacketSlot* pkt)
 {
+    uint32_t backoff = 1;
     while (true)
     {
         uint32_t expected = 0;
-        if (lock.compare_exchange_weak(expected, 1, std::memory_order_acq_rel))
+        if (lock.compare_exchange_weak(expected, 1, std::memory_order_acquire, std::memory_order_relaxed))
             break;
+
+        for (uint32_t i = 0; i < backoff; i++)
+            cpuRelax();
+        backoff = std::min(backoff * 2, 256u);
     }
 
     // Critical section
@@ -48,20 +55,16 @@ void BaseQueue::enqueue(PacketSlot* pkt)
 
 void BaseQueue::runLoop()
 {
-    while(true)
+    while(running.load(std::memory_order_acquire))
     {
         while(!isEmpty())
             dequeueOne();
 
-        if (!running.load(std::memory_order_acquire))
-            break;
+        uint32_t expected = 0;
+        if (wakeSignal.compare_exchange_strong(expected, 0, std::memory_order_acq_rel))
+            futex_wait(&wakeSignal, 0);
 
-        uint32_t expected = 1;
-        (void)wakeSignal.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
-
-        if (!isEmpty()) continue;
-
-        futex_wait(&wakeSignal, 0);
+        while (!isEmpty()) dequeueOne();
     }
 }
 
@@ -89,7 +92,10 @@ void BaseQueue::drop(uint32_t frame)
 
 void BaseQueue::futex_wait(std::atomic<uint32_t>* addr, uint32_t expected)
 {
-    syscall(SYS_futex, addr, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, expected, nullptr, nullptr, 0);
+    int rc;
+    do {
+        rc = syscall(SYS_futex, addr, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, expected, nullptr, nullptr, 0);
+    } while (rc == -1 && errno == EINTR);
 }
 
 void BaseQueue::futex_wake(std::atomic<uint32_t>* addr, int count)

@@ -63,6 +63,7 @@ EgressPacket::EgressPacket(Interface& iface, const TxQueueOpts& opts)
         writeU32(base + TPACKET2_HDRLEN + packetSize + MTU_PADDING, i);
     }
 
+    reclaimCursor = 0;
     initFreeRing(frameCount);
 }
 
@@ -71,7 +72,7 @@ EgressPacket::~EgressPacket()
     teardownEvents();
     if (ring && ring != MAP_FAILED) ::munmap(ring, ringLen);
     if (fd >= 0) ::close(fd);
-    delete[] state;
+    delete[] state; state = nullptr;
 }
 
 void EgressPacket::setupSocket()
@@ -169,6 +170,7 @@ void EgressPacket::bindIface()
     kickAddr.sll_family = AF_PACKET;
     kickAddr.sll_protocol = htons(ETH_P_ALL);
     kickAddr.sll_ifindex = ifidxCached;
+    kickAddr.sll_halen = ETH_ALEN;
     std::memset(kickAddr.sll_addr, 0xff, ETH_ALEN);
 }
 
@@ -216,25 +218,34 @@ ALWAYS_INLINE HOT void EgressPacket::mapFrame(uint32_t index, FrameHandle& out)
 ALWAYS_INLINE HOT bool EgressPacket::send(uint32_t index, uint32_t length) noexcept
 {
     if (index >= req.tp_frame_nr) return false;
-    if (length > packetSize) return false;
+
+    const uint32_t max_payload =
+        req.tp_frame_size - TPACKET2_HDRLEN - MTU_PADDING - static_cast<uint32_t>(sizeof(PacketSlot));
+
+    if (length == 0 || length > max_payload) {
+        // Length is invalid for this ring; recycle immediately if we still “own” it.
+        auto* h = reinterpret_cast<tpacket2_hdr*>(
+            reinterpret_cast<uint8_t*>(ring) + size_t(index) * req.tp_frame_size);
+        if (h->tp_status == TP_STATUS_AVAILABLE) {
+            state[index].store(0, std::memory_order_relaxed);
+            pushFree(index);
+        }
+        return false;
+    }
 
     auto* h = reinterpret_cast<tpacket2_hdr*>(
             reinterpret_cast<uint8_t*>(ring) + size_t(index) * req.tp_frame_size);
 
-    if (unlikely(h->tp_status != TP_STATUS_AVAILABLE)) return false;
+    __u32 expected_status = TP_STATUS_AVAILABLE;
+    if (!__atomic_compare_exchange_n(&h->tp_status, &expected_status, TP_STATUS_SEND_REQUEST, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+        return false;
 
     h->tp_len = h->tp_snaplen = length;
-
     std::atomic_thread_fence(std::memory_order_release);
-    h->tp_status = TP_STATUS_SEND_REQUEST;
-
-    pushBusy(index);
     state[index].store(2, std::memory_order_relaxed);
 
-    uint32_t pk = pendingKicks.fetch_add(1, std::memory_order_relaxed) + 1;
-    if (unlikely(pk >= kickBatch))
-        kickKernelCached();
-
+    const uint32_t pk = pendingKicks.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (pk >= kickBatch) kickKernelCached();
     return true;
 }
 
@@ -245,8 +256,13 @@ void EgressPacket::onAllocNudge()
 
 void EgressPacket::kickKernelCached()
 {
-    pendingKicks.store(0, std::memory_order_relaxed);
-    (void)::sendto(fd, nullptr, 0, MSG_DONTWAIT, reinterpret_cast<sockaddr*>(&kickAddr), sizeof(kickAddr));
+    uint32_t current = pendingKicks.exchange(0, std::memory_order_relaxed);
+    if (current == 0) return;
+    if(::sendto(fd, nullptr, 0, MSG_DONTWAIT, reinterpret_cast<sockaddr*>(&kickAddr), sizeof(kickAddr)) < 0)
+    {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+            fprintf(stderr, "kick failed: $s\n", strerror(errno));
+    }
 }
 
 void EgressPacket::flush()
@@ -274,23 +290,56 @@ void EgressPacket::waitWritable()
 void EgressPacket::reclaim()
 {
     constexpr uint32_t BUDGET = 4096;
-    uint32_t iter = BUDGET, idx;
+    uint32_t reclaimed = 0, scanned = 0;
 
-    while (iter-- && tryPopBusy(idx))
+    while (scanned < BUDGET && reclaimed < 32)
     {
+        uint32_t idx = reclaimCursor;
+        reclaimCursor = (reclaimCursor + 1) % frameCount;
+        ++scanned;
+
         auto* h = reinterpret_cast<tpacket2_hdr*>(
             reinterpret_cast<uint8_t*>(ring) + size_t(idx) * req.tp_frame_size);
 
-        if (likely(h->tp_status == TP_STATUS_AVAILABLE))
+        uint8_t current_status = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
+
+        if (current_status == TP_STATUS_AVAILABLE)
         {
-            state[idx].store(0, std::memory_order_relaxed);
-            pushFree(idx);
-        }
-        else
-        {
-            pushBusy(idx);
+            uint8_t expected_state = 2;
+            if (state[idx].compare_exchange_strong(expected_state, 0, std::memory_order_acq_rel))
+            {
+                pushFree(idx);
+                ++reclaimed;
+            }
         }
     }
+
+    if (reclaimed > 0) return;
+
+    kickKernelCached();
+    struct timespec ts = {0, 10000};
+    nanosleep(&ts, nullptr);
+
+    for (uint32_t i = 0; i < frameCount; ++i)
+    {
+        uint32_t idx = (reclaimCursor + 1) % frameCount;
+
+        auto* h = reinterpret_cast<tpacket2_hdr*>(reinterpret_cast<uint8_t*>(ring) + size_t(idx) * req.tp_frame_size);
+
+        __u32 current_status = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
+
+        if (current_status == TP_STATUS_AVAILABLE)
+        {
+            uint8_t expected_state = 2;
+            if (state[idx].compare_exchange_strong(expected_state, 0, std::memory_order_acq_rel))
+            {
+                pushFree(idx);
+                reclaimed++;
+            }
+        }
+    }
+
+    reclaimCursor = (reclaimCursor + frameCount) % frameCount;
 }
 
 ALWAYS_INLINE HOT void EgressPacket::cancel(uint32_t index)
@@ -304,8 +353,5 @@ ALWAYS_INLINE HOT void EgressPacket::cancel(uint32_t index)
     {
         state[index].store(0, std::memory_order_relaxed);
         pushFree(index);
-        return;
     }
-
-    state[index].store(2, std::memory_order_release);
 }

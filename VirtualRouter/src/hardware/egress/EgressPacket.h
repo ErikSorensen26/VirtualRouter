@@ -13,7 +13,7 @@
 class EgressPacket : public EgressBase
 {
     std::atomic<uint32_t> pendingKicks = 0;
-    uint32_t kickBatch = 1024;
+    uint32_t kickBatch = 512;
 
 public:
 
@@ -29,6 +29,7 @@ public:
 private:
     void mapFrame(uint32_t index, FrameHandle& out) override;
     void onAllocNudge() override;
+    std::atomic<uint8_t>* state = nullptr;
 
 private:
     int fd = -1;
@@ -40,10 +41,10 @@ private:
     uint32_t frameCount = 0;
     uint32_t frameSize = 0;
 
-    std::atomic<uint8_t>* state = nullptr;
-
     int ifidxCached = -1;
     sockaddr_ll kickAddr{};
+
+    uint32_t reclaimCursor = 0;
 
 private:
     void setupSocket();
