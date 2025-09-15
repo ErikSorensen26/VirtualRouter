@@ -8,7 +8,6 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
-#include <memory>
 #include <vector>
 
 class ConsoleTest; ///< Forward declaration of ConsoleTest
@@ -26,7 +25,11 @@ enum class Color
     BLUE,
     MAGENTA,
     CYAN,
-    WHITE
+    WHITE,
+    NONE,
+
+    // Secret prompt option
+    PROMPT
 };
 
 /**
@@ -76,7 +79,7 @@ public:
     virtual void moveCursorDown(size_t count = 1) = 0;
 
     // Prints a string to the terminal
-    virtual void print(std::string str, Color color = Color::WHITE) = 0;
+    virtual void print(const std::string& str, Color color = Color::NONE) = 0;
 
     // Gets the current cursor position
     virtual CursorPosition getCursorPosition() = 0;
@@ -95,62 +98,62 @@ public:
 
     void clearScreen() override 
     {
-        std::cout << "\033[2J\033[H"; // ANSI escape to clear screen and move cursor to home
+        print("\033[2J\033[H"); // ANSI escape to clear screen and move cursor to home
     }
 
     void enableLineWrapping() override 
     {
-        std::cout << "\033[?7h"; // Enable line wrapping
+        print("\033[?7h"); // Enable line wrapping
     }
 
     void clearLineAfterCursor() override 
     {
-        std::cout << "\033[K"; // Clear from cursor to end of line
+        print("\033[K"); // Clear from cursor to end of line
     }
 
     void saveCursorPosition() override 
     {
-        std::cout << "\033[s"; // Save cursor position
+        print("\033[s"); // Save cursor position
     }
 
     void restoreCursorPosition() override 
     {
-        std::cout << "\033[u"; // Restore cursor position
+        print("\033[u"); // Restore cursor position
     }
     void moveCursorToStart() override
     {
-        std::cout << "\033[1G";
+        print("\033[1G");
     }
 
     void moveCursorLeft(size_t count) override 
     {
         if (count > 0) {
-            std::cout << "\033[" << count << "D"; // Move cursor left
+            print("\033[" + std::to_string(count) + "D"); // Move cursor left
         }
     }
 
     void moveCursorRight(size_t count) override 
     {
         if (count > 0) {
-            std::cout << "\033[" << count << "C"; // Move cursor right
+            print("\033[" + std::to_string(count) + "C"); // Move cursor right
         }
     }
 
     void moveCursorUp(size_t count) override 
     {
         if (count > 0) {
-            std::cout << "\033[" << count << "A"; // Move cursor up
+            print("\033[" + std::to_string(count) + "A"); // Move cursor up
         }
     }
 
     void moveCursorDown(size_t count) override 
     {
         if (count > 0) {
-            std::cout << "\033[" << count << "B"; // Move cursor down
+            print("\033[" + std::to_string(count) + "B"); // Move cursor down
         }
     }
 
-    void print(std::string str, Color color = Color::WHITE) override 
+    void print(const std::string& str, Color color = Color::NONE) override 
     {
         switch (color)
         {
@@ -177,6 +180,9 @@ public:
                 break;
             case Color::WHITE:
                 std::cout << "\033[1;37m" << str << "\033[0m";
+                break;
+            case Color::NONE:
+                std::cout << str;
                 break;
             default:
                 std::cout << str;
@@ -265,7 +271,7 @@ public:
      *
      * @param term Terminal deciding whether it's simulated or not
      */
-    explicit Console(std::shared_ptr<IConsole> term);
+    explicit Console(IConsole* term);
 
     /**
      * @brief Destructor for the Console class
@@ -290,7 +296,7 @@ public:
      *
      * @return std::string The processed input command entered by the user.
      */
-    std::string input(std::string input = "");
+    std::string input(std::string input = "", bool pagination = false);
     
     /**
      * @brief Retrieves a command from the history based on navigation direction.
@@ -333,14 +339,23 @@ public:
     void setPrompt(const std::string& newPrompt);
 
     /**
-     * @brief Edit the cursor positions while testing.
-     *
-     * Get the cursor prompt to reset for testing purposes.
+     * @brief Get the cursor positions
      *
      * @return int Reference to cursor position
      * @note This returns a reference, be carefull.
      */
-    size_t& getInputCursorPosition() {return cursorPos;}
+    size_t& getInputCursorPosition() { return cursorPos; }
+
+    /**
+     * @brief Get the initial command length
+     *
+     * @return int Reference to cursor position
+     * @note This returns a reference, be carefull.
+     */
+    size_t& getInitialLineLength() { return initialLineLength; }
+
+    // Member variables for line wrapping and display.
+    IConsole* iConsole;  ///< Terminal deciding whether its using a simulated terminal.
 
 protected:
 
@@ -516,9 +531,6 @@ protected:
      *               - 'false': Move down in history.
      */
     void navigateHistory(std::string& input, bool moveUp);
-
-    // Member variables for line wrapping and display.
-    std::shared_ptr<IConsole> iConsole;  ///< Terminal deciding whether its using a simulated terminal.
 
     CursorPosition startPos;       ///< Starting cursor position.
     size_t cursorPos = 0;          ///< Logical cursor position within inputBuffer.

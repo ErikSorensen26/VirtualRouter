@@ -18,7 +18,7 @@ protected:
 
     void SetUp() override
     {
-        global = new Global(false, true);
+        global = new Global({}, false, true);
         iface = new MockInterface(*global);
         iface->enableShutdown();
         iface->configs.ipv6.addAddress(intIp, false, 64);

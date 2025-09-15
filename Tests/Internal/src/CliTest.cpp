@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include <CliEngine.h>
 #include <MockConsole.hpp>
 #include <MockFileSystem.hpp>
 #include <CommandProcessor.h>
+#include <Global.h>
 
 using json = nlohmann::json;
 
@@ -11,7 +11,7 @@ class Internal_CliTest : public ::testing::Test
 {
 public:
     // Mock objects
-    std::shared_ptr<testing::NiceMock<ReducedMockConsole>> mockConsole;
+    testing::NiceMock<ReducedMockConsole>* mockConsole;
     static MockFileSystem* mockFileSystem;
     static FileSystem* realFileSystem;
     static CliEngine* engine;
@@ -51,30 +51,30 @@ protected:
             FAIL() << "Failed to open the config schema file: " << CONFIG_SCHEMA;
         }
 
-        if (realFileSystem->fileExists("./" + std::string(CONFIG_FILE)))
+        if (realFileSystem->fileExists("./" + std::string(HW_CONFIG_FILE)))
         {
-            realFileSystem->readFile("./" + std::string(CONFIG_FILE), configFileString);
+            realFileSystem->readFile("./" + std::string(HW_CONFIG_FILE), configFileString);
         }
         else
         {
-            FAIL() << "Failed to open the config schem file: " << CONFIG_FILE;
+            FAIL() << "Failed to open the hardware config file: " << HW_CONFIG_FILE;
         }
 
         mockFileSystem->setupMockFile(COMMAND_TREE, commandTreeString);
         mockFileSystem->setupMockFile(CONFIG_SCHEMA, configSchemaString);
-        mockFileSystem->setupMockFile(CONFIG_FILE, configFileString);
-        mockFileSystem->setupMockFile(STARTUP_FILE, "{}");
+        mockFileSystem->setupMockFile(HW_CONFIG_FILE, configFileString);
+        mockFileSystem->setupMockFile(ROUTER_CONFIG_FILE, "{}");
 
         global = new Global(mockFileSystem);
         engine = &global->engine;
-        engine->initEngine();
+        engine->initEngine({});
         engine->paginationCount = 0;
     }
 
     void SetUp() override 
     {
         global->reset();
-        mockConsole = std::make_shared<testing::NiceMock<ReducedMockConsole>>();
+        mockConsole = new testing::NiceMock<ReducedMockConsole>();
 
         terminal = new CliSession(*engine, mockConsole);
         engine->sessions.push_back(terminal);
@@ -86,6 +86,7 @@ protected:
         global->removeRoutingInstance("default");
         engine->sessions.clear();
         delete terminal;
+        mockConsole = nullptr;
         terminal = nullptr;
     }
 
@@ -879,7 +880,7 @@ bool Internal_CliTest::batchProcessAndRecover(const std::vector<std::string>& co
     }
 
     // Mock reading the saved configuration
-    EXPECT_CALL(*mockFileSystem, writeFile(STARTUP_FILE, ::testing::_))
+    EXPECT_CALL(*mockFileSystem, writeFile(ROUTER_CONFIG_FILE, ::testing::_))
         .Times(1)
         .WillOnce(::testing::Return(true));
     save();

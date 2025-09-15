@@ -20,10 +20,20 @@
 #include <Functions.h>
 
 #define COMMAND_TREE "../VirtualRouter/configs/Commands.json"
-#define CONFIG_FILE "../VirtualRouter/configs/Configs.json"
 #define CONFIG_SCHEMA "../VirtualRouter/configs/ConfigSchema.json"
-#define STARTUP_FILE "../configs.json"
+#define HW_CONFIG_FILE "../VirtualRouter/configs/Configs.json"
+#define ROUTER_CONFIG_FILE "../configs.json"
 #define MODE_KEY "commands"
+
+/**
+ * @struct StartupFiles
+ */
+struct StartupFiles
+{
+    std::string startupFile = ROUTER_CONFIG_FILE;
+    std::string routerConfigFile = ROUTER_CONFIG_FILE;
+    std::string hwConfigFile = HW_CONFIG_FILE;
+};
 
 using json = nlohmann::json;
 
@@ -220,9 +230,9 @@ public:
      * Loads JSON configuration data from the specified startup file, processes interface configurations,
      * and sets up MAC address lists. If the startup file is empty or cannot be opened, initializes with default settings.
      *
-     * @param startupFilename The path to the startup JSON configuration file. Defaults to STARTUP_FILE.
+     * @param stfs Struct holding all startup config file information.
      */
-    void initConfigs(const std::string& startupFilename = STARTUP_FILE);
+    void initConfigs(const StartupFiles& stfs);
 
     /**
      * @brief Recovers configuration commands from the loaded JSON data.
@@ -367,9 +377,9 @@ public:
 
     // Public member variables
     
-    static MacList macAddressList;             ///< Categorized list of MAC addresses by interface type.
-    std::string OUI;                    ///< Organizationally Unique Identifier for MAC addresses.
-    std::string startupFileName{};      ///< Path to the startup configuration file
+    static MacList macAddressList;          ///< Categorized list of MAC addresses by interface type.
+    std::string OUI;                        ///< Organizationally Unique Identifier for MAC addresses.
+    std::string routerConfigFilename{};     ///< Path to the startup configuration file
 
     nlohmann::ordered_json root;                        ///< Root of the JSON configuration tree.
 

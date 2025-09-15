@@ -23,7 +23,7 @@ CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), engine(
     iConsole->print("Initializing Terminal...\n");
 }
 
-CliSession::CliSession(CliEngine& engine, std::shared_ptr<IConsole> term) : Console(std::move(term)), engine(engine)
+CliSession::CliSession(CliEngine& engine, IConsole* term) : Console(term), engine(engine)
 {
     // Set debug mode based on the input parameter
     isDebugModeEnabled = false;
@@ -51,15 +51,44 @@ CliSession::~CliSession()
     }
 }
 
-bool CliSession::handleInput(std::string test)
+void CliSession::handlePrompt()
 {
     // Retrieve the hostname from the global settings and reset cursor position
     std::string hostname = engine.global.getHostname();
     cursorPos = 0;
     setPrompt(hostname + currentPrompt);
 
+    // Reset insert mode
+    insert = false;
+    insertString.clear();
+
+    // Save starting cursor position
+    cursorPos = 0;
+
+    // Startup Variables
+    std::string input;
+
+    // Print the nextLine if something is queued
+    if (!nextLine.empty())
+    {
+        if (nextLine[nextLine.length() - 1] == ' ')
+        {
+            nextLine.pop_back();
+        }
+        input = nextLine;
+        cursorPos = input.size();
+        oldInputLength = input.size();
+        iConsole->print(nextLine);
+        nextLine.clear();
+    }
+
+    inputCache = input;
+}
+
+bool CliSession::handleInput(std::string test)
+{
     // Read the user's input from the terminal
-    std::string userCommand = input(test);
+    std::string userCommand = input(test, paginationList.size() > 0);
 
     // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
     if (userCommand == "CRT-Z" && modeConfig.currentMode != Mode::userExec) {
@@ -70,17 +99,32 @@ bool CliSession::handleInput(std::string test)
         }
     }
 
-    // Execute commands
     initializeProcessingState();
+
+    if (paginationList.size() > 0)
+    {
+        handlePagination(userCommand.empty() ? '\x20' : userCommand[0]);
+        return true;
+    }
+
+    // Execute commands
     if (!executeCommand(userCommand))
     {
-
+        if (paginationList.size() > 0) return false;
         iConsole->print("\n");
+        handlePrompt();
         return false;
     }
 
     // Move to the next line after command execution
+    if (paginationList.size() > 0)
+    {
+        handlePagination();
+        return false;
+    }
+
     iConsole->print("\n");
+    handlePrompt();
     return true;
 }
 
@@ -250,7 +294,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
         else if (!isMatchSuccessful && (word == "?") && ((previousCommandList.size() == 1 && previousCommandList[0].name == "<error>")))
         {
             nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
-            std::cout << "\n%" << " Unrecognized command";
+            iConsole->print(std::string("\n%") + " Unrecognized command");
             return word == "?";
         }
 
@@ -264,7 +308,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
     if (previousCommandList[0].name == "<error>")
     {
         nextLine = inputCommand.substr(0, inputCommand.size() - 1);
-        std::cout << "\n%" << " Unrecognized command";
+        iConsole->print(std::string("\n%") + " Unrecognized command");
     }
     else if (previousCommandList[0].name != "<cr>")
     {
@@ -918,59 +962,8 @@ bool CliSession::isGlobalCommand(std::string &commandName)
 
 void CliSession::displayAvailableCommands(std::vector<Com> commandList)
 {
-    size_t maxNameLength = 0;
-    size_t lineCount = 0;
-
-    // Find the longest command name for formatting
-    for (const Com &command : commandList)
-    {
-        if (command.name.size() > maxNameLength)
-        {
-            maxNameLength = command.name.size();
-        }
-    }
-
     // Print each command with aligned descriptions
-    for (const Com &command : commandList)
-    {
-        if (command.name != engine.errorCommand.name)
-        {
-            if (handlePagination(lineCount))
-            {
-                std::string display;
-                display += "\n  " + command.name;
-                size_t nameLength = command.name.size();
-                for (size_t i = 0; i <= (maxNameLength - nameLength + 5); i++)
-                {
-                    display +=" ";
-                }
-                // Uncomment if you want to display descriptions
-                display += command.description;
-                Color color;
-                switch (command.support)
-                {
-                    case Com::Support::SUPPORTED:
-                        color = Color::WHITE;
-                        break;
-                    case Com::Support::PARTIAL:
-                        color = Color::YELLOW;
-                        break;
-                    case Com::Support::NO_SUPPORT:
-                        color = Color::RED;
-                }
-                iConsole->print(display, color);
-                lineCount++;
-            }
-            else
-            {
-                return;
-            }
-        }
-        else
-        {
-            return;
-        }
-    }
+    paginationList = commandList;
 }
 
 std::string CliSession::getLastWord(const std::string &input)
@@ -1235,40 +1228,84 @@ bool CliSession::isValidCommandDirectory(const nlohmann::json *directory)
     return false;
 }
 
-bool CliSession::handlePagination(size_t &lineNum)
+bool CliSession::handlePagination(char nextch)
 {
-    if (engine.paginationCount > 0 && lineNum % engine.paginationCount == 0 && lineNum != 0)
+    size_t maxNameLength = 0;
+    size_t lineCount = 0;
+
+    // Find the longest command name for formatting
+    for (const Com &command : paginationList)
     {
-        std::cout << "\n  --More--";
-        while (true)
+        if (command.name.size() > maxNameLength)
         {
-
-            maxCommandLength = getTerminalWidth() - initialLineLength;
-
-            if (kbhit())
-            {
-                char nextch = static_cast<char>(getchar());
-                if (nextch == '\x20')
-                {
-                    std::cout << "\033[2k\033[1G";
-                    moveCursorUp(1);
-                    return true;
-                }
-                else if (nextch == 'q')
-                {
-                    std::cout << "\033[2k\033[1G";
-                    std::cout << std::string(10, ' ');
-                    std::cout << "\033[2k\033[1G";
-                    moveCursorUp(1);
-                    return false;
-                }
-            }
+            maxNameLength = command.name.size();
         }
+    }
+
+    if (nextch != '\0')
+    {
+        maxCommandLength = getTerminalWidth() - initialLineLength;
+
+        if (nextch == '\x20')
+        {
+            iConsole->print("\033[2k\033[1G");
+            moveCursorUp(1);
+        }
+        else if (nextch == 'q')
+        {
+            iConsole->print("\033[2k\033[1G");
+            iConsole->print(std::string(10, ' '));
+            iConsole->print("\033[2k\033[1G");
+            moveCursorUp(1);
+            paginationList.clear();
+            return false;
+        }
+    }
+
+    for (int i = 0; i < paginationList.size() && i < engine.paginationCount; i++)
+    {
+        const Com &command = paginationList[i];
+        if (command.name != engine.errorCommand.name)
+        {
+            std::string display;
+            display += "\n  " + command.name;
+            size_t nameLength = command.name.size();
+            for (size_t i = 0; i <= (maxNameLength - nameLength + 5); i++)
+            {
+                display +=" ";
+            }
+            // Uncomment if you want to display descriptions
+            display += command.description;
+            Color color;
+            switch (command.support)
+            {
+                case Com::Support::SUPPORTED:
+                    color = Color::WHITE;
+                    break;
+                case Com::Support::PARTIAL:
+                    color = Color::YELLOW;
+                    break;
+                case Com::Support::NO_SUPPORT:
+                    color = Color::RED;
+            }
+            iConsole->print(display, color);
+            lineCount++;
+        }
+    }
+
+    if (paginationList.size() > engine.paginationCount)
+    {
+        paginationList.erase(paginationList.begin(), paginationList.begin() + engine.paginationCount);
+        paginationList.shrink_to_fit();
+        iConsole->print("\n  --More--");
     }
     else
     {
-        return true;
+        paginationList.clear();
+        iConsole->print("\n");
+        handlePrompt();
     }
+    return true;
 }
 
 bool CliSession::changeMode(std::string &newMode, bool processing)
@@ -1365,6 +1402,8 @@ void CliSession::configureAddressFamily(AddressFamily af)
             break;
         case AddressFamily::IPv6:
             addressFamily = "ipv6";
+            break;
+        case AddressFamily::NONE:
             break;
     }
 

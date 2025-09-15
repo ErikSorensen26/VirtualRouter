@@ -25,7 +25,7 @@ protected:
 
     void SetUp() override
     {
-        global = new Global(false, true);
+        global = new Global({}, false, true);
 
         mockInterface = new MockInterface(*global);
         mockInterface->enableShutdown();

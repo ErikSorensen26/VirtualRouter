@@ -7,21 +7,21 @@
 
 std::string CliEngine::defaultMode = Mode::userExec;
 
-CliEngine::CliEngine(Global& global, bool test) : Configs(), global(global)
+CliEngine::CliEngine(Global& global, const StartupFiles& stfs, bool test) : Configs(), global(global)
 {
     // Set debug mode based on the input parameter
     global.addRoutingInstance("default");
     if (!test) {
-        initEngine();
+        initEngine(stfs);
     }
 }
 
-CliEngine::CliEngine(Global& global, IFileSystem* fs, bool test) : Configs(fs), global(global)
+CliEngine::CliEngine(Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test) : Configs(fs), global(global)
 {
     // Set debug mode based on the input parameter
     global.addRoutingInstance("default");
     if (!test) {
-        initEngine();
+        initEngine(stfs);
     }
 }
 
@@ -34,10 +34,10 @@ CliEngine::~CliEngine()
     sessions.clear();
 }
 
-void CliEngine::initEngine()
+void CliEngine::initEngine(const StartupFiles& stfs)
 {
     // Initialize the base console
-    initConfigs();
+    initConfigs(stfs);
 
     // Initialize default error and carriage return commands
     errorCommand.name = "<error>";
@@ -95,6 +95,12 @@ void CliEngine::initEngine()
 CliSession* CliEngine::createSession(bool debug)
 {
     sessions.push_back(new CliSession(*this, debug));
+    return sessions.back();
+}
+
+CliSession* CliEngine::createSession(IConsole* console)
+{
+    sessions.push_back(new CliSession(*this, console));
     return sessions.back();
 }
 

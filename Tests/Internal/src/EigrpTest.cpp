@@ -34,7 +34,7 @@ protected:
     // Setup creates an Eigrp instance and one interface for testing.
     void SetUp() override 
     {
-        global = new Global(false, true);
+        global = new Global({}, false, true);
         vrf = new VirtualRouter(*global, "default");
         vrf->eigrpList[1] = new EigrpAutonomousSystem();
         eigrpInstance = new Eigrp(asNumber, addressFamily, vrf);

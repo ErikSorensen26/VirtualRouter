@@ -14,6 +14,7 @@ enum class InterfaceType;
 class Interface;
 class CliSession;
 class CommandProcessor;
+class IConsole;
 struct ModeConfig;
 
 /**
@@ -46,7 +47,7 @@ public:
      * @param global Global router manager.
      * @param test Reducer if tests are running.
      */
-    CliEngine(Global& global, bool test = false);
+    CliEngine(Global& global, const StartupFiles& stfs, bool test = false);
 
     /**
      * @brief Constructor. Initializes the engine.
@@ -55,7 +56,7 @@ public:
      * @param fileSystem Custom file system.
      * @param test Reducer if tests are running.
      */
-    CliEngine(Global& global, IFileSystem* fs, bool test = false);
+    CliEngine(Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test = false);
 
     /**
      * @brief Destructor.
@@ -67,7 +68,7 @@ public:
      *
      * This function fully initialized this class by setting the configuration files
      */
-    void initEngine();
+    void initEngine(const StartupFiles& stfs);
 
     /**
      * @brief Creates a new CLI session.
@@ -75,6 +76,13 @@ public:
      * @return Shared pointer to the created session.
      */
     CliSession* createSession(bool debug = false);
+
+    /**
+     * @brief Creates a new CLI session with custom console interpreter.
+     * @param console Custom console class object
+     * @return Pointer to the created session.
+     */
+    CliSession* createSession(IConsole* console);
 
     /**
      * @brief Gets the loaded command tree.

@@ -7,11 +7,11 @@
 #include <fcntl.h>
 #include <vector>
 
-Console::Console() : iConsole(std::make_shared<RealConsole>()) {}
+Console::Console() : iConsole(new RealConsole()) {}
 
-Console::Console(std::shared_ptr<IConsole> term) : iConsole(std::move(term)) {}
+Console::Console(IConsole* term) : iConsole(std::move(term)) {}
 
-Console::~Console() {}
+Console::~Console() { delete iConsole; }
 
 void Console::setPrompt(const std::string& newPrompt)
 {
@@ -20,7 +20,7 @@ void Console::setPrompt(const std::string& newPrompt)
     initialLineLength = prompt.length();
 
     // Clear current input on the screen and pring new prompt
-    iConsole->print(prompt);
+    iConsole->print(prompt, Color::PROMPT);
     std::cout.flush();
 }
 
@@ -40,7 +40,7 @@ void Console::initConsole()
     cursorPos = 0;
 
     // Print the prompt
-    iConsole->print(prompt);
+    iConsole->print(prompt, Color::PROMPT);
     std::cout.flush();
 }
 
@@ -256,31 +256,9 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
     iConsole->restoreCursorPosition();
 }
 
-std::string Console::input(std::string testInput)
+std::string Console::input(std::string testInput, bool pagination)
 {
-    // Reset insert mode
-    insert = false;
-    insertString.clear();
-
-    // Save starting cursor position
-    cursorPos = 0;
-
-    // Startup Variables
-    std::string input;
-
-    // Print the nextLine if something is queued
-    if (!nextLine.empty())
-    {
-        if (nextLine[nextLine.length() - 1] == ' ')
-        {
-            nextLine.pop_back();
-        }
-        input = nextLine;
-        cursorPos = input.size();
-        oldInputLength = input.size();
-        iConsole->print(nextLine);
-        nextLine.clear();
-    }
+    std::string input = inputCache;
 
     // For loop and while loop, if testInput is empty it will act as a true while loop
     for (size_t i = 0; (testInput.empty()) || (i < testInput.length()); (testInput.empty()) ? (i) : (++i))
@@ -291,6 +269,12 @@ std::string Console::input(std::string testInput)
         if (kbhit() || !(testInput.empty()))
         {
             char hInput = testInput.empty() ? static_cast<char>(getchar()) : testInput[i];
+
+            if (pagination)
+            {
+                if (hInput == '\x20' || hInput == 'q') return std::string(1, hInput);
+                else return "";
+            }
 
             // 1. Handle single-char special keys (Enter, Tab, '?', Backspace, Delete)
             std::string result = handleSpecialKey(hInput, input);

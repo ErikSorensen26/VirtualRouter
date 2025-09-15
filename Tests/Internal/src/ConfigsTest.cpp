@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <json.hpp>
-#include <memory>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -64,8 +63,8 @@ protected:
     ModeConfig* modeConfig = nullptr;
 
     // Paths to configuration files
-    std::string startupFilePath = STARTUP_FILE;
-    std::string additionalConfigPath = CONFIG_FILE;
+    std::string startupFilePath = ROUTER_CONFIG_FILE;
+    std::string additionalConfigPath = HW_CONFIG_FILE;
 
     // SetUp runs before each test
     void SetUp() override 
@@ -114,7 +113,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyStartupFile)
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that root is empty
     EXPECT_TRUE(configs->root.empty());
@@ -194,7 +193,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify root configuration
     EXPECT_EQ(configs->root["hostname"]["word"], "TestRouter");
@@ -299,7 +298,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldIn
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that configurations are loaded correctly
     // Verify hostname
@@ -345,7 +344,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyStartupAndAdditionalConfig_ShouldIn
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that configurations are loaded correctly
     // Verify hostname is not set
@@ -367,7 +366,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_MissingStartupFile_ShouldFailInitializat
     // Mock fileExists to return false for startup file
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that configurations are empty
     EXPECT_TRUE(configs->root.empty());
@@ -402,7 +401,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_MalformedStartupJSON_ShouldInitializeWit
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that root is empty due to parse error
     EXPECT_TRUE(configs->root.empty());
@@ -461,7 +460,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_MissingRequiredFields_ShouldInitializeWi
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that 'hostname' is not set
     EXPECT_FALSE(configs->root.contains("hostname"));
@@ -509,7 +508,7 @@ TEST_F(Internal_ConfigTest, ParseHostname_ShouldSetHostnameCorrectly) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify hostname
     EXPECT_EQ(configs->root["hostname"]["word"], "MyRouter");
@@ -585,7 +584,7 @@ TEST_F(Internal_ConfigTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify interface configurations
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
@@ -654,7 +653,7 @@ TEST_F(Internal_ConfigTest, ParseCommands_ShouldSetCommandsCorrectly) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify command configurations
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "172.16.0.1");
@@ -744,7 +743,7 @@ TEST_F(Internal_ConfigTest, ParseRouterProtocols_ShouldSetRouterProtocolsCorrect
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify EIGRP Configurations
     EXPECT_EQ(configs->root["router"]["eigrp"].size(), 1);
@@ -829,7 +828,7 @@ TEST_F(Internal_ConfigTest, ParsePolicyMap_ShouldSetPolicyMapCorrectly) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify Policy Map
     EXPECT_EQ(configs->root["policy-map"]["name"], "QoS_Policy");
@@ -914,7 +913,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -995,7 +994,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_NestedCommands_ShouldHandleNestedComm
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -1087,7 +1086,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCo
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -1318,7 +1317,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracef
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that both interfaces with duplicate IDs are loaded
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 2);
@@ -1394,7 +1393,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_InvalidInterfaceTypes_ShouldHandleGracef
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that unsupported interface types are ignored or handled
     // Assuming that 'Ethernet' is not a supported interface type, expect it to be loaded or not
@@ -1441,7 +1440,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyInterfaceList_ShouldHandleGracefull
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that interface lists are empty
     EXPECT_TRUE(configs->root["interface"]["GigabitEthernet"].empty());
@@ -1491,7 +1490,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_InterfaceMissingCommands_ShouldHandleGra
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that interface exists without commands
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
@@ -1610,7 +1609,7 @@ TEST_F(Internal_ConfigTest, LoadAllConfigurations_ShouldLoadCorrectly)
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify hostname
     EXPECT_EQ(configs->root["hostname"]["word"], "CompleteRouter");
@@ -1704,7 +1703,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_InvalidMacAddressFormats_ShouldHandleGra
     // Otherwise, expect initialization to fail or skip invalid entries
 
     // For this example, assuming it skips invalid MAC entries
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that invalid MAC addresses are skipped
     EXPECT_EQ(configs->macAddressList.Ethernet.size(), 0);
@@ -1727,7 +1726,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_EmptyConfig_ShouldReturnEmptyList) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -1764,7 +1763,7 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetAndLoadNewConfigurations) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig1);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify initial configurations
     EXPECT_EQ(configs->root["hostname"]["word"], "InitialRouter");
@@ -1792,7 +1791,7 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetAndLoadNewConfigurations) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig2);
 
     // Re-initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that old configurations are reset and new configurations are loaded
     EXPECT_EQ(configs->root["hostname"]["word"], "UpdatedRouter");
@@ -1815,7 +1814,7 @@ TEST_F(Internal_ConfigTest, Test_NoStateLeakage_BetweenTests_ShouldBeIsolated) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that all configurations are empty
     EXPECT_TRUE(configs->root.empty());
@@ -1851,7 +1850,7 @@ TEST_F(Internal_ConfigTest, SaveConfig_ShouldWriteCorrectJSONToFile) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Modify some configuration
     configs->root["hostname"]["word"] = "ModifiedRouter";
@@ -1882,7 +1881,7 @@ TEST_F(Internal_ConfigTest, SaveConfig_EmptyRoot_ShouldWriteEmptyJSON) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Mock writeFile behavior
     EXPECT_CALL(*mockFileSystem, writeFile(startupFilePath, _))
@@ -1947,7 +1946,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLongInterfaceIDs_ShouldHandleGr
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that the extremely long interface ID is handled correctly
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
@@ -2004,7 +2003,7 @@ TEST_F(Internal_ConfigTest, ParseNestedCommands_ShouldLoadNestedCommandsCorrectl
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify nested commands
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["routing"]["protocol"], "OSPF");
@@ -2074,7 +2073,7 @@ TEST_F(Internal_ConfigTest, ParsePolicyMapMultipleClasses_ShouldLoadAllClassesCo
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify Policy Map
     EXPECT_EQ(configs->root["policy-map"]["name"], "QoS_Policy1");
@@ -2140,7 +2139,7 @@ TEST_F(Internal_ConfigTest, ParseRouterProtocolNeighbors_ShouldLoadAllNeighborsC
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify BGP Neighbors
     EXPECT_EQ(configs->root["router"]["bgp"].size(), 1);
@@ -2201,7 +2200,7 @@ TEST_F(Internal_ConfigTest, ParseNestedSecurityCommands_ShouldLoadCorrectly)
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify nested security commands
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["advanced"]["security"]["firewall"], "enabled");
@@ -2248,7 +2247,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithModeAndExits_ShouldRecoverCommand
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -2320,7 +2319,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_WithRecoveryCommands_ShouldLoadRecoveryC
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify recovery data
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -2359,7 +2358,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithSpecialCharacters_ShouldHandleCor
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -2410,7 +2409,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithEmptyCommands_ShouldHandleCorrect
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -2528,7 +2527,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleLinesAndVTY_ShouldRecoverCorr
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -2577,7 +2576,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_CompletelyEmptyJSON_ShouldInitializeWith
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that root is empty
     EXPECT_TRUE(configs->root.empty());
@@ -2636,7 +2635,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithVLANAndSecurity_ShouldRecoverCorr
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -2680,7 +2679,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_PartialAdditionalConfig_ShouldInitialize
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify hostname
     EXPECT_EQ(configs->root["hostname"]["word"], "PartialConfigRouter");
@@ -2753,7 +2752,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_DifferentInterfaceTypes_ShouldInitialize
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify Loopback Interface
     EXPECT_EQ(configs->root["interface"]["Loopback"].size(), 1);
@@ -2824,7 +2823,7 @@ TEST_F(Internal_ConfigTest, ParseMultipleVLANs_ShouldLoadAllVLANsCorrectly)
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify VLAN configurations
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
@@ -2858,7 +2857,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_NoRecoverySection_ShouldReturnEmptyLi
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
 
@@ -2889,7 +2888,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_PartialRecoveryCommands_ShouldHandleG
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
 
@@ -2971,7 +2970,7 @@ TEST_F(Internal_ConfigTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrect
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Modify nested commands
     configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"] = "10.0.0.2";
@@ -3020,7 +3019,7 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetInternalState)
     mockFileSystem->setupMockFile(startupFilePath, startupConfig1);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig1);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify initial state
     EXPECT_EQ(configs->root["hostname"]["value"], "FirstRouter");
@@ -3050,7 +3049,7 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetInternalState)
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig2);
 
     // Re-initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that old configurations are reset
     EXPECT_EQ(configs->root["hostname"]["value"], "SecondRouter");
@@ -3099,7 +3098,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_CommandOrder_ShouldRespectDependencie
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -3180,7 +3179,7 @@ TEST_F(Internal_ConfigTest, ParsePolicyMapMultipleClassesNestedCommands_ShouldLo
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify Policy Map
     EXPECT_EQ(configs->root["policy-map"]["name"], "Advanced_QoS");
@@ -3257,7 +3256,7 @@ TEST_F(Internal_ConfigTest, ParseMultiplePolicyMaps_ShouldLoadAllPolicyMapsCorre
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify both Policy Maps
     EXPECT_EQ(configs->root["policy-map"].size(), 2);
@@ -3328,7 +3327,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoa
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify hostname
     EXPECT_EQ(configs->root["hostname"]["word"], "DualIPRouter");
@@ -3417,7 +3416,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleSubCommands_SameParent_Should
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -3487,7 +3486,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrect
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with the initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Create new commands to overwrite with
     std::vector<std::vector<std::string>> duplicatePathVectors = 
@@ -3614,7 +3613,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandle
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Create new commands to overwrite with
     std::vector<std::vector<std::string>> duplicatePathVectors = 
@@ -3741,7 +3740,7 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveAfterModification_ShouldPersistCh
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Modify the configuration: Update IP address and MTU
     configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"] = "10.3.3.2";
@@ -3832,7 +3831,7 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveMultipleModifications_ShouldPersi
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Modify the configuration: Update IP address, MTU, and console password
     configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"] = "10.4.4.2";
@@ -3918,7 +3917,7 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveFailure_ShouldReturnFalse)
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Modify the configuration: Update IP address
     configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"] = "10.5.5.2";
@@ -3985,7 +3984,7 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_Idempotent_WhenNoChanges_ShouldSaveCo
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Mock the writeFile function to verify it's called correctly each time
     EXPECT_CALL(*mockFileSystem, writeFile(startupFilePath, _))
@@ -4027,7 +4026,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyConfiguration_ShouldInitializeWithD
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify that root is empty or contains default values
     EXPECT_TRUE(configs->root.empty());
@@ -4199,7 +4198,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNewGigabitEthernetInterface_ShouldCre
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with the initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Define the path and command to add a new GigabitEthernet interface with ID 1
     std::vector<std::vector<std::string>> path = {
@@ -4296,7 +4295,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAd
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with the initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Define the path and command to update the IP address of GigabitEthernet interface 1
     std::vector<std::vector<std::string>> path = {
@@ -4389,7 +4388,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with the initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Define the path and command to add DHCP under the existing IP configuration
     std::vector<std::vector<std::string>> path = {
@@ -4453,7 +4452,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_HandleVolatileCommands_ShouldAddMultiple
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with the initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Define the paths and commands to add VLANs 10 and 20
     std::vector<std::vector<std::string>> path = {
@@ -4510,7 +4509,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddMultipleCommandsInSingleCall_ShouldPr
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with the initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Define the paths and commands to set hostname and add a new interface
     std::vector<std::vector<std::string>> path = {
@@ -4599,7 +4598,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHa
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations with the initial setup
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Define the paths and commands for both interfaces
     std::vector<std::vector<std::string>> path = {
@@ -4686,7 +4685,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsWithSpecialCharsAndSpaces_Sho
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Define the path and commands with special characters and spaces
     std::vector<std::vector<std::string>> path = {
@@ -4766,7 +4765,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfInterfaces_ShouldL
     mockFileSystem->setupMockFile(startupFilePath, startupConfig.dump(4));
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify interface counts
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), numGigabitInterfaces);
@@ -4812,7 +4811,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargeNumberOfInterfaces_Shou
     mockFileSystem->setupMockFile(additionalConfigPath, {});
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -4876,7 +4875,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargePolicyMap_ShouldLoadAllCla
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify the number of classes loaded
     EXPECT_EQ(configs->root["policy-map"].size(), 1);
@@ -4923,7 +4922,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargePolicyMap_ShouldRecover
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -4998,7 +4997,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_DeeplyNestedCommands_ShouldParseCorrectl
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify nested commands
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
@@ -5060,7 +5059,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCor
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Recover commands
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
@@ -5119,7 +5118,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNested_ShouldLoad
     mockFileSystem->setupMockFile(startupFilePath, startupConfig.dump());
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify total number of interfaces
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), numInterfaces);
@@ -5172,7 +5171,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargeAndDeeplyNested_ShouldR
     mockFileSystem->setupMockFile(startupFilePath, startupConfig.dump());
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     std::vector<std::string> recoveryCommands = configs->recoverConfigs();
 
@@ -5225,7 +5224,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfVLANs_ShouldLoadAl
     mockFileSystem->setupMockFile(startupFilePath, startupConfig.dump());
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify VLANs loaded correctly
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["vlan"].size(), numVLANs);
@@ -5286,7 +5285,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNestedCombined_Sh
     mockFileSystem->setupMockFile(startupFilePath, startupConfig.dump());
     mockFileSystem->setupMockFile(additionalConfigPath, "{}");
 
-    configs->initConfigs(startupFilePath);
+    configs->initConfigs({});
 
     // Verify interface count
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), numInterfaces);

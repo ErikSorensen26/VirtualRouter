@@ -13,7 +13,7 @@ void Configs::printConfig()
 
 Configs::Configs(IFileSystem* fs) : fileSystem(fs) {}
 
-void Configs::initConfigs(const std::string& filePath) 
+void Configs::initConfigs(const StartupFiles& stfs)
 {
     // Reset all variables before
     root.clear();
@@ -25,13 +25,13 @@ void Configs::initConfigs(const std::string& filePath)
         configSchema = nlohmann::ordered_json::object();
     }
 
-    startupFileName = filePath;
+    routerConfigFilename = stfs.routerConfigFile;
 
     // Load JSON configuration file into doc
-    if (fileSystem->fileExists(filePath))
+    if (fileSystem->fileExists(stfs.startupFile))
     {
         std::string content;
-        if (fileSystem->readFile(filePath, content))
+        if (fileSystem->readFile(stfs.startupFile, content))
         {
             try
             {
@@ -49,10 +49,10 @@ void Configs::initConfigs(const std::string& filePath)
     }
     
     // Load JSON data for interface configurations
-    if (fileSystem->fileExists(CONFIG_FILE))
+    if (fileSystem->fileExists(stfs.hwConfigFile))
     {
         std::string content;
-        if (fileSystem->readFile(CONFIG_FILE, content))
+        if (fileSystem->readFile(stfs.hwConfigFile, content))
         {
             try
             {
@@ -258,7 +258,7 @@ std::vector<std::string> Configs::recoverConfigs(nlohmann::ordered_json* json)
 bool Configs::saveConfig()
 {
     std::string serialized = root.dump(4);
-    if (fileSystem->writeFile(startupFileName, serialized))
+    if (fileSystem->writeFile(routerConfigFilename, serialized))
     {
         return true;
     }
