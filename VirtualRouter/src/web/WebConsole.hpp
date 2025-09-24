@@ -41,12 +41,23 @@ public:
         return true;
     }
 
+    bool getPreBuffer(std::string& p)
+    {
+        p = preBuffer;
+        if (preBuffer.empty()) return false;
+        preBuffer.clear();
+        return true;
+    }
+
     void print(const std::string& str, Color color) override
     {
+        if (color == Color::TERMINAL) return;
         if (color == Color::PROMPT) // Secret prompt option
         {
             prompt = str;
-            std::cout << str;
+            preBuffer = buffer.str();
+            buffer.str("");
+            buffer.clear();
             return;
         }
 
@@ -55,8 +66,6 @@ public:
             std::lock_guard<std::mutex> lock(mu);
             buffer << colored;
         }
-
-        std::cout << colored;
     }
 
     void beginSession()
@@ -71,7 +80,7 @@ public:
         std::string output;
         {
             std::lock_guard<std::mutex> lock(mu);
-            if (buffer.str().empty()) return;
+            if (buffer.str().empty() && preBuffer.empty() && prompt.empty()) return;
             output = buffer.str();
             buffer.str("");
             buffer.clear();
@@ -85,9 +94,11 @@ public:
                 {"initial_length", endSequence.getInitialLineLength() }
             };
             
-            std::string prompt;
-            if (getPrompt(prompt))
-                j["prompt"] = prompt;
+            std::string str;
+            if (getPreBuffer(str))
+                j["pre_data"] = str;
+            if (getPrompt(str))
+                j["prompt"] = str;
             if (scroll)
                 j["scroll"] = scroll;
             
@@ -100,9 +111,10 @@ private:
     UnixApi& api;
     int clientFd;
     std::mutex mu;
-    std::stringstream buffer;
 
+    std::string preBuffer;
     std::string prompt;
+    std::stringstream buffer;
 
     static std::string applyColor(const std::string& s, Color c) {
         switch (c) {

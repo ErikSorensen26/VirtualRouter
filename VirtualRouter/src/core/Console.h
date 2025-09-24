@@ -29,6 +29,7 @@ enum class Color
     NONE,
 
     // Secret prompt option
+    TERMINAL,
     PROMPT
 };
 
@@ -552,6 +553,7 @@ protected:
     std::vector<std::string> history{}; ///< Vector to store command history
     bool browsingHistory = false;       ///< Indicates whether history is being accessed
     std::string inputCache;             ///< Current command being edited while browsing history
+    std::string inputCacheBuffer;       ///< Buffer to store the input cache for general use
 
     // Options for autocompletion
     std::vector<std::string> autocompleteOptions {"end", "exit"}; ///< List of options for autocompletion

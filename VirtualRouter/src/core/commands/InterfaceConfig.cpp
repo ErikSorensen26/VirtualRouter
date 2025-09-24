@@ -300,7 +300,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else if (!negate)
 					{
-						terminal.iConsole->print(std::string("\n%") + std::string("Invalid local-link address"));
+						terminal.iConsole->print(std::string("\r\n%") + std::string("Invalid local-link address"));
 					}
 				}
 				else if (Functions::isIPv6AddressWithMask(commandStream[2]))

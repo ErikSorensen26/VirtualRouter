@@ -567,7 +567,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 						{
 							if (as->ipv6Named)
 							{
-								terminal.iConsole->print(std::string("\n%") + std::string(" ERROR: AS(" + ID + ") used by named mode"));
+								terminal.iConsole->print(std::string("\r\n%") + std::string(" ERROR: AS(" + ID + ") used by named mode"));
 								return false; // AS used in named mode.
 							}
 						}
@@ -675,7 +675,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 					{
 						if (as->ipv4Named)
 						{
-							terminal.iConsole->print(std::string("\n%" + std::string(" ERROR: AS(" + ID + ") used by named mode")));
+							terminal.iConsole->print(std::string("\r\n%" + std::string(" ERROR: AS(" + ID + ") used by named mode")));
 							return false; // AS used in named mode.
 						}
 					}

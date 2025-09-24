@@ -258,7 +258,15 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
 
 std::string Console::input(std::string testInput, bool pagination)
 {
-    std::string input = inputCache;
+    std::string input;
+    if (testInput.empty())
+    {
+        input = inputCacheBuffer;
+    }
+    else
+    {
+        cursorPos = 0;
+    }
 
     // For loop and while loop, if testInput is empty it will act as a true while loop
     for (size_t i = 0; (testInput.empty()) || (i < testInput.length()); (testInput.empty()) ? (i) : (++i))
@@ -611,7 +619,7 @@ void Console::handlePrintableChar(char hInput, std::string& input)
             cursorPos++;
             input[cursorPos - 1] = hInput;
         }
-        iConsole->print(std::string(1, hInput));
+        iConsole->print(std::string(1, hInput), Color::TERMINAL);
         rewriteTail(input, cursorPos);
     }
     else
@@ -619,7 +627,7 @@ void Console::handlePrintableChar(char hInput, std::string& input)
         // Append or insert at the cursor
         input.insert(cursorPos, 1, hInput);
         cursorPos++;
-        iConsole->print(std::string(1, hInput));
+        iConsole->print(std::string(1, hInput), Color::TERMINAL);
         rewriteTail(input, cursorPos);
     }
 }

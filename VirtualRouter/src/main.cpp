@@ -101,8 +101,6 @@ int main(int argc, char* argv[])
     Global* global = new Global(opts.fs, true);
     CliEngine& engine = global->engine;
 
-    opts.unixPath = "@router1";
-
     if (!opts.unixPath.empty())
     {
         WebSessionManager* webMgr = new WebSessionManager(*global, opts.unixPath);

@@ -191,6 +191,7 @@ void UnixApi::handleRead(int cfd)
                 std::cout << "\n";
                 try
                 {
+                    std::cout << "LINE: " << line << std::endl;
                     nlohmann::json msg = nlohmann::json::parse(line);
                     handler(cfd, msg, *this);
                 }

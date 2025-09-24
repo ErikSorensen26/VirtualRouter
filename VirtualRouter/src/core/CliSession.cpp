@@ -20,7 +20,7 @@ CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), engine(
     initConsole();
     commandProcessor = new CommandProcessor(*this);
     commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
-    iConsole->print("Initializing Terminal...\n");
+    iConsole->print("Initializing Terminal...\r\n");
 }
 
 CliSession::CliSession(CliEngine& engine, IConsole* term) : Console(term), engine(engine)
@@ -40,7 +40,7 @@ CliSession::CliSession(CliEngine& engine, IConsole* term) : Console(term), engin
     initConsole();
     commandProcessor = new CommandProcessor(*this);
     commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
-    iConsole->print("Initializing Terminal...\n");
+    iConsole->print("Initializing Terminal...\r\n");
 }
 
 CliSession::~CliSession()
@@ -82,7 +82,7 @@ void CliSession::handlePrompt()
         nextLine.clear();
     }
 
-    inputCache = input;
+    inputCacheBuffer = input;
 }
 
 bool CliSession::handleInput(std::string test)
@@ -94,7 +94,7 @@ bool CliSession::handleInput(std::string test)
     if (userCommand == "CRT-Z" && modeConfig.currentMode != Mode::userExec) {
         if (!changeMode(Mode::privilegedExec, true))
         {
-            iConsole->print("\n");
+            iConsole->print("\r\n");
             return false;
         }
     }
@@ -111,7 +111,7 @@ bool CliSession::handleInput(std::string test)
     if (!executeCommand(userCommand))
     {
         if (paginationList.size() > 0) return false;
-        iConsole->print("\n");
+        iConsole->print("\r\n");
         handlePrompt();
         return false;
     }
@@ -123,7 +123,7 @@ bool CliSession::handleInput(std::string test)
         return false;
     }
 
-    iConsole->print("\n");
+    iConsole->print("\r\n");
     handlePrompt();
     return true;
 }
@@ -294,7 +294,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
         else if (!isMatchSuccessful && (word == "?") && ((previousCommandList.size() == 1 && previousCommandList[0].name == "<error>")))
         {
             nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
-            iConsole->print(std::string("\n%") + " Unrecognized command");
+            iConsole->print(std::string("\r\n%") + " Unrecognized command");
             return word == "?";
         }
 
@@ -308,7 +308,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
     if (previousCommandList[0].name == "<error>")
     {
         nextLine = inputCommand.substr(0, inputCommand.size() - 1);
-        iConsole->print(std::string("\n%") + " Unrecognized command");
+        iConsole->print(std::string("\r\n%") + " Unrecognized command");
     }
     else if (previousCommandList[0].name != "<cr>")
     {
@@ -421,11 +421,11 @@ void CliSession::handleInvalidInputMarker(const std::string& formattedOldCommand
 {
     isCommandInvalid = true;
     isRunning = false;
-    std::string invalidInput = "\n";
+    std::string invalidInput = "\r\n";
 
     std::string hostname = engine.global.getHostname();
     // Print spaces for hostname, mode, old command
-    invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\n% Invlid input detected at '^' marker.\n";
+    invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\r\n% Invlid input detected at '^' marker.\r\n";
     iConsole->print(invalidInput);
 }
 
@@ -435,7 +435,7 @@ void CliSession::handleAmbiguousInputMarker(const std::string& ambiguousCommand)
     isCommandValid = false;
     isRunning = false;
     std::string invalidInput = R"(% Ambiguous command: ")" + ambiguousCommand + "\"";
-    iConsole->print("\n" + invalidInput);
+    iConsole->print("\r\n" + invalidInput);
 }
 
 void CliSession::matchCommand(const std::string& inputCommand, const std::string& uWord, 
@@ -664,7 +664,7 @@ std::string CliSession::normalizeCommand(const std::string& inputCommand)
         else
         {
             isRunning = false;
-            iConsole->print("\n% Incomplete Command");
+            iConsole->print("\r\n% Incomplete Command");
             return "";
         }
     }
@@ -1249,14 +1249,14 @@ bool CliSession::handlePagination(char nextch)
         if (nextch == '\x20')
         {
             iConsole->print("\033[2k\033[1G");
-            moveCursorUp(1);
+            iConsole->print("\033[1A");
         }
         else if (nextch == 'q')
         {
             iConsole->print("\033[2k\033[1G");
             iConsole->print(std::string(10, ' '));
             iConsole->print("\033[2k\033[1G");
-            moveCursorUp(1);
+            iConsole->print("\033[1A");
             paginationList.clear();
             return false;
         }
@@ -1268,7 +1268,7 @@ bool CliSession::handlePagination(char nextch)
         if (command.name != engine.errorCommand.name)
         {
             std::string display;
-            display += "\n  " + command.name;
+            display += "\r\n  " + command.name;
             size_t nameLength = command.name.size();
             for (size_t i = 0; i <= (maxNameLength - nameLength + 5); i++)
             {
@@ -1297,12 +1297,12 @@ bool CliSession::handlePagination(char nextch)
     {
         paginationList.erase(paginationList.begin(), paginationList.begin() + engine.paginationCount);
         paginationList.shrink_to_fit();
-        iConsole->print("\n  --More--");
+        iConsole->print("\r\n  --More--");
     }
     else
     {
         paginationList.clear();
-        iConsole->print("\n");
+        iConsole->print("\r\n");
         handlePrompt();
     }
     return true;
@@ -1336,7 +1336,7 @@ bool CliSession::changeMode(std::string &newMode, bool processing)
     }
     else
     {
-        //std::cout << "\nMode: \"" << newMode << "\" not found in schema";
+        //std::cout << "\r\nMode: \"" << newMode << "\" not found in schema";
     }
 
 
