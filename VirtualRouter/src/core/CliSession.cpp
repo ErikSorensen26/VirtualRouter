@@ -703,14 +703,14 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
 
     // Helper lamda to travel to the end of the command
     std::function<void(nlohmann::json*, const nlohmann::json*)> navigateToLastCommand = [&](nlohmann::json* command, const nlohmann::json* nextCommand) {
-        if (command->contains("subcommands") && (*command)["subcommands"].size() > 0)
+        if (command->contains(SUBCOMMAND_ARRAY) && (*command)[SUBCOMMAND_ARRAY].size() > 0)
         {
-            command = &(*command)["subcommands"][0];
+            command = &(*command)[SUBCOMMAND_ARRAY][0];
             navigateToLastCommand(command, nextCommand);
         }
-        else if ((*command)["name"] != engine.carriageReturnCommand.name)
+        else if ((*command)[COMMAND_NAME] != engine.carriageReturnCommand.name)
         {
-            (*command)["subcommands"] = *nextCommand;
+            (*command)[SUBCOMMAND_ARRAY] = *nextCommand;
         }
     };
 
@@ -751,12 +751,12 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     // Creates next commands directory
     for (const json& command : *currentCommandDirectory)
     {
-        std::string commandName = command["name"];
+        std::string commandName = command[COMMAND_NAME];
 
-        if (command.contains("properties") && command["properties"].is_array())
+        if (command.contains(COMMAND_PROPERTIES) && command[COMMAND_PROPERTIES].is_array())
         {
             // Process properties
-            for (auto prop : command["properties"])
+            for (auto prop : command[COMMAND_PROPERTIES])
             {
                 // Handle recursive property
                 if (prop == "recursive") {
@@ -766,7 +766,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
 
                     for (json commmand : *currentCommandDirectory)
                     {
-                        if (command["name"] != commandName)
+                        if (command[COMMAND_NAME] != commandName)
                         {
                             tempRecursiveDir.push_back(command);
                         }
@@ -783,14 +783,14 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
         {
             // Next command
             const nlohmann::json* nextCommand = nullptr;
-            if (command.contains("subcommands"))
+            if (command.contains(SUBCOMMAND_ARRAY))
             {
-                nextCommand = &command["subcommands"];
+                nextCommand = &command[SUBCOMMAND_ARRAY];
             }
             std::string newName = commandName.substr(1, commandName.size() - 2);
-            if (engine.getCommandTree().contains(newName))
+            if (engine.getCommandTree()[VARIABLE_OBJ].contains(newName))
             {
-                for (const json& newCommand : engine.getCommandTree()[newName]) 
+                for (const json& newCommand : engine.getCommandTree()[VARIABLE_OBJ][newName]) 
                 {
                     // Craft new command
                     if (nextCommand)
@@ -811,20 +811,20 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
 
     for (const json* command : tempDir)
     {
-        if (command->contains("name") && command->contains("description"))
+        if (command->contains(COMMAND_NAME) && command->contains(DESCRIPTION))
         {
             // Handle Command Support
-            Com::Support support = (command->contains("support") && (*command)["support"].is_boolean())
-                ? ((*command)["support"] == true
+            Com::Support support = (command->contains(SUPPORT_STATUS) && (*command)[SUPPORT_STATUS].is_boolean())
+                ? ((*command)[SUPPORT_STATUS] == true
                     ? Com::Support::SUPPORTED
                     : Com::Support::PARTIAL)
                 : Com::Support::NO_SUPPORT;
 
             // Handle command properties
-            if (command->contains("properties"))
+            if (command->contains(COMMAND_PROPERTIES))
             {
                 bool hide = false;
-                for (const auto& prop : (*command)["properties"])
+                for (const auto& prop : (*command)[COMMAND_PROPERTIES])
                 {
                     if (commandProcessor->negate && prop.get<std::string>() == "negate_hide")
                         hide = true;
@@ -834,12 +834,12 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                 if (hide) continue;
             }
             Com commandData;
-            commandData.name = (*command)["name"];
-            commandData.description = (*command)["description"];
+            commandData.name = (*command)[COMMAND_NAME];
+            commandData.description = (*command)[DESCRIPTION];
             commandData.support = support;
-            if (command->contains("properties"))
+            if (command->contains(COMMAND_PROPERTIES))
             {
-                for (const auto& prop : (*command)["properties"])
+                for (const auto& prop : (*command)[COMMAND_PROPERTIES])
                 {
                     commandData.properties.push_back(prop.get<std::string>());
                 }
@@ -847,7 +847,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
             availableCommands.push_back(commandData);
 
             // Check if the user input matches a pattern or specific command
-            std::string commandName = (*command)["name"];
+            std::string commandName = (*command)[COMMAND_NAME];
             if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
             {
                 commandNode = command;
@@ -868,11 +868,11 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                 if (commandName == lowerUserInput) 
                 {
                     isExactMatch = true;
-                    exactMatchCommand.name = Functions::lowerCase((*command)["name"]);
-                    exactMatchCommand.description = (*command)["description"];
-                    if (command->contains("properties"))
+                    exactMatchCommand.name = Functions::lowerCase((*command)[COMMAND_NAME]);
+                    exactMatchCommand.description = (*command)[DESCRIPTION];
+                    if (command->contains(COMMAND_PROPERTIES))
                     {
-                        for (const auto& prop : (*command)["properties"])
+                        for (const auto& prop : (*command)[COMMAND_PROPERTIES])
                         {
                             exactMatchCommand.properties.push_back(prop.get<std::string>());
                         }
@@ -896,11 +896,11 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     }
     if (matchCount == 1 && isValidCommandDirectory(commandNode)) 
     {
-        currentDirectory = &((*commandNode)["subcommands"]);
+        currentDirectory = &((*commandNode)[SUBCOMMAND_ARRAY]);
         
         for (const auto& subCommand : *currentDirectory) 
         {
-            if (subCommand["name"] == engine.carriageReturnCommand.name) 
+            if (subCommand[COMMAND_NAME] == engine.carriageReturnCommand.name) 
             {
                 isCommandValid = true;
                 isValidCommand = true;
@@ -922,7 +922,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     } 
     else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(commandProcessor->negate && userInput == "no"))
     {
-        endCommandString = Functions::lowerCase((*commandNode)["name"]);
+        endCommandString = Functions::lowerCase((*commandNode)[COMMAND_NAME]);
         endOfCommand = true;
         return noSubCommands;
     }
@@ -964,6 +964,16 @@ void CliSession::displayAvailableCommands(std::vector<Com> commandList)
 {
     // Print each command with aligned descriptions
     paginationList = commandList;
+    maxNameLength = 0;
+
+    // Find the longest command name for formatting
+    for (const Com &command : paginationList)
+    {
+        if (command.name.size() > maxNameLength)
+        {
+            maxNameLength = command.name.size();
+        }
+    }
 }
 
 std::string CliSession::getLastWord(const std::string &input)
@@ -1223,24 +1233,14 @@ bool CliSession::isValidCommandDirectory(const nlohmann::json *directory)
 {
     if (directory && directory->is_object())
     {
-        return directory->contains("subcommands");
+        return directory->contains(SUBCOMMAND_ARRAY);
     }
     return false;
 }
 
 bool CliSession::handlePagination(char nextch)
 {
-    size_t maxNameLength = 0;
     size_t lineCount = 0;
-
-    // Find the longest command name for formatting
-    for (const Com &command : paginationList)
-    {
-        if (command.name.size() > maxNameLength)
-        {
-            maxNameLength = command.name.size();
-        }
-    }
 
     if (nextch != '\0')
     {
@@ -1256,8 +1256,8 @@ bool CliSession::handlePagination(char nextch)
             iConsole->print("\033[2k\033[1G");
             iConsole->print(std::string(10, ' '));
             iConsole->print("\033[2k\033[1G");
-            iConsole->print("\033[1A");
             paginationList.clear();
+            handlePrompt();
             return false;
         }
     }

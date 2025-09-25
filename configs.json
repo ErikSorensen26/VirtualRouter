@@ -1,49 +1,43 @@
 {
-    "interface": {
-        "GigabitEthernet": [
+    "router": {
+        "eigrp": [
             {
-                "id": "3",
+                "id": "1",
                 "commands": {
-                    "ip": {
-                        "address": {
-                            "ip": "192.168.1.2",
-                            "subnet": "255.255.255.0"
+                    "network": [
+                        {
+                            "subnet": "0.0.0.0",
+                            "subnet_2": "255.255.255.255"
                         }
-                    },
-                    "ipv6": {
-                        "address": {
-                            "ipv6": "2001:1::2/64"
-                        },
-                        "eigrp": [
-                            {
-                                "id": "1"
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                "id": "2",
-                "commands": {
-                    "ip": {
-                        "address": {
-                            "ip": "192.168.4.1",
-                            "subnet": "255.255.255.0"
-                        }
-                    },
-                    "ipv6": {
-                        "address": {
-                            "ipv6": "2001:4::1/64"
-                        },
-                        "eigrp": [
-                            {
-                                "id": "1"
-                            }
-                        ]
-                    }
+                    ]
                 }
             }
         ]
     },
-    "exit": {}
+    "interface": {
+        "GigabitEthernet": [
+            {
+                "id": "0",
+                "commands": {
+                    "ip": {
+                        "address": {
+                            "ip": "10.0.0.1",
+                            "subnet": "255.255.255.0"
+                        }
+                    }
+                }
+            },
+            {
+                "id": "1",
+                "commands": {
+                    "ip": {
+                        "address": {
+                            "ip": "10.1.0.1",
+                            "subnet": "255.255.255.0"
+                        }
+                    }
+                }
+            }
+        ]
+    }
 }

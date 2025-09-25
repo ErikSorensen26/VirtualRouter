@@ -71,6 +71,13 @@ public:
     void initEngine(const StartupFiles& stfs);
 
     /**
+     * @brief Initializes the tree by adding config variables
+     *
+     * This function fully initializes the command tree by setting certain command fields.
+     */
+    void initTree();
+
+    /**
      * @brief Creates a new CLI session.
      * @param debug Whether to enable debug mode for the session.
      * @return Shared pointer to the created session.
@@ -126,19 +133,6 @@ public:
      * @return std::string The masked string.
      */
     std::string maskInput(const std::string& prefix, std::string original);
-
-    /**
-     * @brief Determines the interface type based on a string identifier.
-     *
-     * Maps a string representing an interface type to its corresponding enum value.
-     * Logs a warning if the interface type is undefined.
-     *
-     * @param type The string identifier of the interface type.
-     * @return InterfaceType The corresponding enum value of the interface type.
-     */
-    InterfaceType getInterfaceType(const std::string& type);
-
-    std::string getMac(InterfaceType type, size_t id);
 
     /**
      * @brief Retrieves the command tree;

@@ -1,13 +1,15 @@
 #include <Global.h>
 #include <Interface.h>
+#include <InterfaceConfigs.h>
 #include <RoutingTable.h>
 #include <VirtualRouter.h>
+#include <HardwareManager.h>
 
 #include <string>
 #include <map>
 #include <mutex>
 
-Global::Global(const StartupFiles& stfs, bool enableRouting, bool test) : routingEnabled(enableRouting), threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, stfs, test) {}
+Global::Global(const StartupFiles& stfs, bool enableRouting, bool test) : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), engine(*this, stfs, test) {}
 Global::Global(IFileSystem* fs, const StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, stfs, fs, test) {}
 
 Global::~Global()
@@ -45,6 +47,7 @@ Interface* Global::addInterface(InterfaceType interfaceType, std::string outInte
     {
         return nullptr;
     }
+    engine.hwManager->bringUp(outInterface);
     interfaceList[{interfaceType, interfaceId}] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, *getRoutingInstance("default"), debug);
 
     return interfaceList[{interfaceType, interfaceId}];
@@ -69,8 +72,11 @@ std::map<std::pair<InterfaceType, float>, Interface*> Global::getInterfaceList()
 bool Global::removeInterface(InterfaceType type, float interfaceId)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (interfaceList.find({type, interfaceId}) != interfaceList.end())
+    if (auto it = interfaceList.find({type, interfaceId}); it != interfaceList.end())
     {
+        std::string hwIface = it->second->configs.physicalInterface;
+        delete interfaceList[{type, interfaceId}];
+        engine.hwManager->bringDown(hwIface);
         interfaceList.erase({type, interfaceId});
         return true;
     }

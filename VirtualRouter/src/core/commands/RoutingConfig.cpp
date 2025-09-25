@@ -4,6 +4,7 @@
 #include <Eigrp.h>
 #include <algorithm>
 #include <InterfaceConfigs.h>
+#include <InterfaceType.hpp>
 
 bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
 {
@@ -226,7 +227,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		{
 			terminal.isList = true;
 			ByteString neighborIp = Functions::addressToByte(commandStream[1]);
-			InterfaceType type = terminal.engine.getInterfaceType(commandStream[2]);
+			InterfaceType type = getInterfaceType(commandStream[2]);
 			if (type != InterfaceType::UNDEFINED)
 			{
 				float interfaceId = std::stof(commandStream[3]);
@@ -279,11 +280,11 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			terminal.isList = true;
 			if (!negate)
 			{
-				currentEigrp->addPassiveInterface(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2]));
+				currentEigrp->addPassiveInterface(getInterfaceType(commandStream[1]), std::stof(commandStream[2]));
 			}
 			else
 			{
-				currentEigrp->addPassiveInterface(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2]), false);
+				currentEigrp->addPassiveInterface(getInterfaceType(commandStream[1]), std::stof(commandStream[2]), false);
 			}
 		}
 		else if (commandStream[0] == "redistribute")
@@ -564,7 +565,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			{
 				terminal.isList = true;
 
-				InterfaceType type = terminal.engine.getInterfaceType(commandStream[1]);
+				InterfaceType type = getInterfaceType(commandStream[1]);
 				float interfaceId = std::stof(commandStream[2]);
 				
 				{
@@ -799,7 +800,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			{
 				terminal.isList = true;
 				ByteString neighborIp = Functions::addressToByte(commandStream[1]);
-				InterfaceType type = terminal.engine.getInterfaceType(commandStream[2]);
+				InterfaceType type = getInterfaceType(commandStream[2]);
 				float interfaceId = std::stof(commandStream[3]);
 
 				negate

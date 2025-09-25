@@ -11,18 +11,16 @@
 #include <curses.h> 
 #include <unistd.h>   
 #include <termios.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
 #include <fstream>
 
 #include <pugixml.hpp>
 #include <json.hpp>
 #include <Functions.h>
 
-#define COMMAND_TREE "../VirtualRouter/configs/Commands.json"
-#define CONFIG_SCHEMA "../VirtualRouter/configs/ConfigSchema.json"
-#define HW_CONFIG_FILE "../VirtualRouter/configs/Configs.json"
-#define ROUTER_CONFIG_FILE "../configs.json"
+#define COMMAND_TREE "/home/erik/VirtualRouter/build/configs/Commands.json"
+#define CONFIG_SCHEMA "/home/erik/VirtualRouter/build/configs/ConfigSchema.json"
+#define HW_CONFIG_FILE "/home/erik/VirtualRouter/build/configs/Configs.json"
+#define ROUTER_CONFIG_FILE "/home/VirtualRouter/build/dir/configs.json"
 #define MODE_KEY "commands"
 
 /**
@@ -39,31 +37,7 @@ using json = nlohmann::json;
 
 class Global;
 struct ModeConfig;
-
-/**
- * @struct MacList
- * @brief Holds lists of MAC addresses categorized by interface type.
- */
-struct MacList 
-{
-    /**
-     * @brief method to clear all MAC addresses.
-     *
-     * Clears all MAC addresses held for each interface type.
-     */
-    void clear() {
-        Ethernet.clear();
-        FastEthernet.clear();
-        GigabitEthernet.clear();
-        Loopback.clear();
-    }
-
-    std::vector<std::string> Ethernet{};          ///< List of Ethernet MAC addresses.
-    std::vector<std::string> FastEthernet{};      ///< List of Fast Ethernet MAC Addresses.
-    std::vector<std::string> GigabitEthernet{};   ///< List of Gigabit Ethernet MAC Addresses.
-    std::vector<std::string> PortChannel{};       ///< List of PortChannel MAC Addresses.
-    std::vector<std::string> Loopback{};          ///< List of Loopback MAC Addresses.
-};
+class HardwareManager;
 
 /**
  * @struct Com
@@ -153,7 +127,8 @@ private:
 
 class IFileSystem
 {
-public: virtual ~IFileSystem() = default; 
+public:
+    virtual ~IFileSystem() = default; 
     virtual bool readFile(const std::string& path, std::string& content) = 0; 
     virtual bool writeFile(const std::string& path, const std::string& content) = 0;
     virtual bool fileExists(const std::string& path) = 0;
@@ -376,22 +351,16 @@ public:
     void printConfig();
 
     // Public member variables
-    
-    static MacList macAddressList;          ///< Categorized list of MAC addresses by interface type.
-    std::string OUI;                        ///< Organizationally Unique Identifier for MAC addresses.
+
     std::string routerConfigFilename{};     ///< Path to the startup configuration file
-
+    
     nlohmann::ordered_json root;                        ///< Root of the JSON configuration tree.
-
     nlohmann::ordered_json configSchema;                ///< Schema defining the configuration structure
-
-    nlohmann::json configJson;
-
-    std::vector<std::string> physicalInterfaces;        ///< List of physical interface names.
 
     IFileSystem* fileSystem; ///< File system interface.
 
     Global* global = nullptr;
+    HardwareManager* hwManager;
 	
 private:
 

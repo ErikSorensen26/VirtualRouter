@@ -1,4 +1,5 @@
 #include "CommandProcessor.h"
+
 #include <CliEngine.h>
 
 bool CommandProcessor::handlePriviledgedExec(const std::vector<std::string>& commandStream)

@@ -6,6 +6,10 @@
 #include <TimeManager.h>
 #include <IPPacket.h>
 #include <Configs.h>
+#include <Global.h>
+#include <CliEngine.h>
+#include <HardwareManager.h>
+#include <InterfaceType.hpp>
 
 Protocol::Dhcpv6Server::Dhcpv6Server(Global& global) : DhcpServerBase(global)
 {
@@ -2340,12 +2344,12 @@ ByteString Protocol::Dhcpv6Server::generateUniqueIdentifier()
             break;
         }
     }
-    if (Configs::macAddressList.GigabitEthernet.size() == 0)
+    if (global.engine.hwManager->getMacs(InterfaceType::GIGABIT_ETHERNET).size() == 0)
     {
         throw std::runtime_error("No MAC address available for DUID");
     }
 
-    duid += ByteString(Configs::macAddressList.GigabitEthernet.front());
+    duid += ByteString(global.engine.hwManager->getMacs(InterfaceType::GIGABIT_ETHERNET).front());
 
     return duid;
 }

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <Global.h>
 #include <IPPacket.h>
+#include <InterfaceType.hpp>
 
 #pragma region Eigrp
 

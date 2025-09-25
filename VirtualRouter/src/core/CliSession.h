@@ -11,6 +11,14 @@
 #include <Mode.hpp>
 #include "Console.h"
 
+#define VARIABLE_OBJ "VARIABLES"
+
+#define SUBCOMMAND_ARRAY "subcommands"
+#define DESCRIPTION "description"
+#define SUPPORT_STATUS "support"
+#define COMMAND_NAME "name"
+#define COMMAND_PROPERTIES "properties"
+
 enum class AddressFamily;
 class CommandProcessor;
 class CliEngine;
@@ -471,6 +479,7 @@ private:
     bool attemptingGlobalCommand = false;       ///< Indicates if a global command is being attempted.
 
     std::vector<Com> paginationList;            ///< List of commands for pagination.
+    size_t maxNameLength = 0;                   ///< Max command size for pagination.
 
     std::string currentPrompt;          ///< Indicates the current prompt.
     std::string prevMode;               ///< Stores the previous operational mode

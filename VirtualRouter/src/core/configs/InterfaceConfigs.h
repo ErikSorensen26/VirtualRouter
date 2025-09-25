@@ -1,5 +1,8 @@
 // InterfaceConfigs.h
 
+#ifndef INTERFACE_CONFIGS_H
+#define INTERFACE_CONFIGS_H
+
 #include <shared_mutex>
 #include <ByteString.hpp>
 #include <atomic>
@@ -10,6 +13,7 @@
 class Global;
 class TimeManager;
 enum class AddressFamily;
+enum class InterfaceType;
 class MockInterface;
 class Internal_NdpTest;
 namespace EigrpConfigs
@@ -20,27 +24,6 @@ namespace Protocol
 {
     class Ndp;
 }
-
-#ifndef INTERFACE_CONFIGS_H
-#define INTERFACE_CONFIGS_H
-
-/**
- * @enum InterfaceType
- * @brief Enunerates the various types of network interfaces supported
- */
-enum class InterfaceType
-{
-    UNDEFINED,          ///< Undefined interface type.
-    DIALER,             ///< Dialer interface type.
-    ETHERNET,           ///< Ethernet interface type.
-    FAST_ETHERNET,      ///< Fast Ethernet type.
-    GIGABIT_ETHERNET,   ///< Gigabit Ethernet interface type.
-    LOOPBACK,           ///< Loopback interface type.
-    PORT_CHANNEL,       ///< Port-channel interface type.
-    TUNNEL,             ///< Tunnel interface type.
-    VIRTUAL_TEMPLATE,   ///< Virtual Template interface type.
-    VLAN                ///< VLAN interface type.
-};
 
 /**
  * @class IpInfo
@@ -149,6 +132,7 @@ public:
 
     float id;                       ///< Identifier for the interface.
     InterfaceType interfaceType;    ///< Type of interface.
+    std::string physicalInterface;
     std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
     std::atomic<bool> trusted = false;           ///< Identifier for trusted interface.
     std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.

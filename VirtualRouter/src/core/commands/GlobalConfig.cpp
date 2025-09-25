@@ -7,6 +7,8 @@
 #include <Ospf.h>
 #include <Bgp.h>
 #include <Ndp.h>
+#include <InterfaceType.hpp>
+#include <HardwareManager.h>
 
 bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> commandStream)
 {
@@ -38,7 +40,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		{
 			GlobalConfigs::Arp::Neighbor entry{
 				commandStream[offset + 2],
-				{terminal.engine.getInterfaceType(commandStream[offset + 3]), std::stoi(commandStream[offset + 4])},
+				{getInterfaceType(commandStream[offset + 3]), std::stoi(commandStream[offset + 4])},
 				commandStream.size() == 6
 			};
 			global.configs.arp.neighbors[vrfName].emplace(
@@ -526,7 +528,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			ByteString address = commandStream[2];
 			if (!negate)
 			{
-				InterfaceType type = terminal.engine.getInterfaceType(commandStream[3]);
+				InterfaceType type = getInterfaceType(commandStream[3]);
 				float id = std::stof(commandStream[4]);
 				
 				GlobalConfigs::Ndp::Neighbor entry{
@@ -622,12 +624,11 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 	{
 		terminal.isList = true;
 		std::string type = commandStream[1];
-		std::string interfaceID_temp = commandStream[2];
 		terminal.interfaceID = static_cast<uint8_t>(Functions::stringToNum(commandStream[2]));
-		InterfaceType interfaceType = terminal.engine.getInterfaceType(type);
-		std::string intType;
+		InterfaceType interfaceType = getInterfaceType(type);
+		std::string hwIface;
 		size_t id = static_cast<size_t>(std::floor(terminal.interfaceID));
-		if (!global.getInterface(terminal.engine.getInterfaceType(type), terminal.interfaceID))
+		if (!global.getInterface(getInterfaceType(type), terminal.interfaceID))
 		{
 			if (negate)
 			{
@@ -636,19 +637,11 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			}
 			else
 			{
-				if ((type == "Ethernet" || type == "GigabitEthernet" || type == "FastEthernet") && terminal.engine.physicalInterfaces.size() >= id)
-				{
-						intType = terminal.engine.physicalInterfaces[id];
-				}
-				else
-				{
-						intType = "NO_INTERFACE";
-				}
-				InterfaceType interfaceTypeEnum = terminal.engine.getInterfaceType(type);
-				std::string mac = terminal.engine.getMac(interfaceTypeEnum, id);
-				if (mac.empty() || intType == "NO_INTERFACE") return false;
-				global.addInterface(interfaceType, intType, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
-				currentVrf->addInterface(global.getInterface(interfaceTypeEnum, terminal.interfaceID), interfaceType, terminal.interfaceID);
+				hwIface = terminal.engine.hwManager->getInterface(interfaceType, id);
+				std::string mac = terminal.engine.hwManager->getMac(hwIface);
+				if (mac.empty() || hwIface.empty()) return false;
+				global.addInterface(interfaceType, hwIface, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
+				currentVrf->addInterface(global.getInterface(interfaceType, terminal.interfaceID), interfaceType, terminal.interfaceID);
 			}
 		}
 		terminal.configureInterfaceMode(type);

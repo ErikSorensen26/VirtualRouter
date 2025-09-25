@@ -19,13 +19,14 @@
 Interface::Interface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, VirtualRouter& vrf, bool debug)
     : packetOutQueue(outQueSiz),
     routingInstance(&vrf),
-    configs(vrf.global.timeManager, interfaceType, interfaceId, Functions::hexToByte(mac)),
+    configs(vrf.global.timeManager, interfaceType, interfaceId, mac),
     debug(debug),
     packetCapture(outInterface, "FF000000", inQueSiz),
     packetSend(outInterface),
     threadsRunning(false)
 {
     // Set member variables
+    configs.physicalInterface = outInterface;
     outInt = outInterface;
     inQsiz = inQueSiz;
     outQsiz = outQueSiz;
