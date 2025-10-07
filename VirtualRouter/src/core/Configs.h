@@ -17,10 +17,10 @@
 #include <json.hpp>
 #include <Functions.h>
 
-#define COMMAND_TREE "/home/erik/VirtualRouter/build/configs/Commands.json"
-#define CONFIG_SCHEMA "/home/erik/VirtualRouter/build/configs/ConfigSchema.json"
-#define HW_CONFIG_FILE "/home/erik/VirtualRouter/build/configs/Configs.json"
-#define ROUTER_CONFIG_FILE "/home/VirtualRouter/build/dir/configs.json"
+#define COMMAND_TREE "./configs/Commands.json"
+#define CONFIG_SCHEMA "./configs/ConfigSchema.json"
+#define HW_CONFIG_FILE "./configs/Configs.json"
+#define ROUTER_CONFIG_FILE "./dir/configs.json"
 #define MODE_KEY "commands"
 
 /**

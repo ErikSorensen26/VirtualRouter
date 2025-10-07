@@ -1,7 +1,7 @@
 {
     "Interface": {
         "GigabitEthernet": [
-            "test0",
+            "link0",
             "test1",
             "test2",
             "test3",
@@ -36,47 +36,6 @@
             "test28",
             "test29"
         ]
-    },
-
-    "Mac": {
-        "OUI": "045a7d",
-
-        "Ethernet": {
-            "Eth_1": "0e0001",
-            "Eth_2": "0e0002",
-            "Eth_3": "0e0003",
-            "Eth_4": "0e0004",
-            "Eth_5": "0e0005",
-            "Eth_6": "0e0006",
-            "Eth_7": "0e0007",
-            "Eth_8": "0e0008",
-            "Eth_9": "0e0009",
-            "Eth_0": "0e0010"
-        },
-        "FastEthernet": {
-            "Fast_1": "fe0001",
-            "Fast_2": "fe0002",
-            "Fast_3": "fe0003",
-            "Fast_4": "fe0004",
-            "Fast_5": "fe0005",
-            "Fast_6": "fe0006",
-            "Fast_7": "fe0007",
-            "Fast_8": "fe0008",
-            "Fast_9": "fe0009",
-            "Fast_0": "fe0010"
-        },
-        "GigabitEthernet": {
-            "Gig_1": "ff0001",
-            "Gig_2": "ff0002",
-            "Gig_3": "ff0003",
-            "Gig_4": "ff0004",
-            "Gig_5": "ff0005",
-            "Gig_6": "ff0006",
-            "Gig_7": "ff0007",
-            "Gig_8": "ff0008",
-            "Gig_9": "ff0009",
-            "Gig_0": "ff0010"
-        }
     },
 
     "Logger": {

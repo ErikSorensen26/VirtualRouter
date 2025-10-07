@@ -7,6 +7,7 @@
 #include <CliSession.h>
 #include "UnixApi.h"
 #include <json.hpp>
+#include <Global.h>
 
 #include <unordered_map>
 #include <sstream>
@@ -16,8 +17,8 @@
 class WebConsole : public IConsole
 {
 public:
-    WebConsole(UnixApi& api, int clientFd)
-        : api(api), clientFd(clientFd) {}
+    WebConsole(UnixApi& api, int clientFd, Global& global)
+        : api(api), global(global), clientFd(clientFd) {}
 
     void clearScreen() override {}
     void enableLineWrapping() override {}
@@ -91,7 +92,8 @@ public:
                 {"type", "router"},
                 {"data", output},
                 {"cursor_pos", endSequence.getInputCursorPosition() },
-                {"initial_length", endSequence.getInitialLineLength() }
+                {"initial_length", endSequence.getInitialLineLength() },
+                {"hostname", global.getHostname() }
             };
             
             std::string str;
@@ -109,6 +111,7 @@ public:
 
 private:
     UnixApi& api;
+    Global& global;
     int clientFd;
     std::mutex mu;
 

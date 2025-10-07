@@ -129,7 +129,7 @@ private:
             auto it = cid2ses.find(cid);
             if (it == cid2ses.end())
             {
-                auto* wc = new WebConsole(api, fd);
+                auto* wc = new WebConsole(api, fd, global);
                 auto* ses = global.engine.createSession(wc);
                 wc->beginSession();
                 cid2ses[cid] = ses;
