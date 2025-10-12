@@ -87,6 +87,7 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 		}
 		else if (commandStream[0] == "shutdown")
 		{
+			std::cout << negate << std::endl;
 			currentEigrpInterface->shutdown = negate;
 			currentEigrp->updateInterfaceList();
 		}

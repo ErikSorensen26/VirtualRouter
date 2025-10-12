@@ -24,6 +24,11 @@ Interface::Interface(const InterfaceCreation& cfgs)
     threadsRunning(false)
 {
     // Set member variables
+    configs.physicalInterface = outInterface;
+    outInt = outInterface;
+    inQsiz = inQueSiz;
+    outQsiz = outQueSiz;
+
     startThreads(); // TEMPORARY: will be shutdown by default once shits working
 }
 

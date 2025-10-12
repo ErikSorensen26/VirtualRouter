@@ -11,6 +11,14 @@
 #include <Mode.hpp>
 #include "Console.h"
 
+#define VARIABLE_OBJ "VARIABLES"
+
+#define SUBCOMMAND_ARRAY "subcommands"
+#define DESCRIPTION "description"
+#define SUPPORT_STATUS "support"
+#define COMMAND_NAME "name"
+#define COMMAND_PROPERTIES "properties"
+
 enum class AddressFamily : uint8_t;
 class CommandProcessor;
 class CliEngine;
@@ -69,7 +77,7 @@ public:
      * @param term IConsole shared pointer for testing
      * @param fs IFileSystem shared pointer for testing
      */
-    CliSession(CliEngine& engine, std::shared_ptr<IConsole> term);
+    CliSession(CliEngine& engine, IConsole* term);
 
     /**
      * @brief Captures and processes user input in the terminal.
@@ -79,6 +87,7 @@ public:
      *
      * @param input String for giving manual input
      */
+    void handlePrompt();
     bool handleInput(std::string input = "");
 	
 private:
@@ -363,10 +372,10 @@ private:
      * If the number of lines exceeds a certain threshold (e.g., 10 lines), prompts the user to continue
      * or quit viewing additional commands.
      *
-     * @param lineCount A reference to the current line number being displayed.
+     * @param ch A character input from the user to control pagination.
      * @return true If pagination continues; otherwise, false to stop displaying more lines.
      */
-    bool handlePagination(size_t& lineCount);
+    bool handlePagination(char ch = '\0');
 
     /**
      * @brief Changes the terminal's operational mode.
@@ -468,6 +477,9 @@ private:
     bool isGlobalCommandExecution = false;      ///< Indicates if a global command is being executed.
     bool isDebugModeEnabled = false;            ///< Indicates if in Debug mode.
     bool attemptingGlobalCommand = false;       ///< Indicates if a global command is being attempted.
+
+    std::vector<Com> paginationList;            ///< List of commands for pagination.
+    size_t maxNameLength = 0;                   ///< Max command size for pagination.
 
     std::string currentPrompt;          ///< Indicates the current prompt.
     std::string prevMode;               ///< Stores the previous operational mode

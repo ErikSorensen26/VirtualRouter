@@ -24,10 +24,10 @@ CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), engine(
     initConsole();
     commandProcessor = new CommandProcessor(*this);
     commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
-    iConsole->print("Initializing Terminal...\n");
+    iConsole->print("Initializing Terminal...\r\n");
 }
 
-CliSession::CliSession(CliEngine& engine, std::shared_ptr<IConsole> term) : Console(std::move(term)), engine(engine)
+CliSession::CliSession(CliEngine& engine, IConsole* term) : Console(term), engine(engine)
 {
     // Set debug mode based on the input parameter
     isDebugModeEnabled = false;
@@ -44,7 +44,7 @@ CliSession::CliSession(CliEngine& engine, std::shared_ptr<IConsole> term) : Cons
     initConsole();
     commandProcessor = new CommandProcessor(*this);
     commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
-    iConsole->print("Initializing Terminal...\n");
+    iConsole->print("Initializing Terminal...\r\n");
 }
 
 CliSession::~CliSession()
@@ -55,36 +55,80 @@ CliSession::~CliSession()
     }
 }
 
-bool CliSession::handleInput(std::string test)
+void CliSession::handlePrompt()
 {
     // Retrieve the hostname from the global settings and reset cursor position
     std::string hostname = engine.global.getHostname();
     cursorPos = 0;
     setPrompt(hostname + currentPrompt);
 
+    // Reset insert mode
+    insert = false;
+    insertString.clear();
+
+    // Save starting cursor position
+    cursorPos = 0;
+
+    // Startup Variables
+    std::string input;
+
+    // Print the nextLine if something is queued
+    if (!nextLine.empty())
+    {
+        if (nextLine[nextLine.length() - 1] == ' ')
+        {
+            nextLine.pop_back();
+        }
+        input = nextLine;
+        cursorPos = input.size();
+        oldInputLength = input.size();
+        iConsole->print(nextLine);
+        nextLine.clear();
+    }
+
+    inputCacheBuffer = input;
+}
+
+bool CliSession::handleInput(std::string test)
+{
     // Read the user's input from the terminal
-    std::string userCommand = input(test);
+    std::string userCommand = input(test, paginationList.size() > 0);
 
     // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
     if (userCommand == "CRT-Z" && modeConfig.currentMode != Mode::userExec) {
         if (!changeMode(Mode::privilegedExec, true))
         {
-            iConsole->print("\n");
+            iConsole->print("\r\n");
             return false;
         }
     }
 
-    // Execute commands
     initializeProcessingState();
+
+    if (paginationList.size() > 0)
+    {
+        handlePagination(userCommand.empty() ? '\x20' : userCommand[0]);
+        return true;
+    }
+
+    // Execute commands
     if (!executeCommand(userCommand))
     {
-
-        iConsole->print("\n");
+        if (paginationList.size() > 0) return false;
+        iConsole->print("\r\n");
+        handlePrompt();
         return false;
     }
 
     // Move to the next line after command execution
-    iConsole->print("\n");
+    if (paginationList.size() > 0)
+    {
+        handlePagination();
+        return false;
+    }
+
+    iConsole->print("\r\n");
+    handlePrompt();
     return true;
 }
 
@@ -254,7 +298,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
         else if (!isMatchSuccessful && (word == "?") && ((previousCommandList.size() == 1 && previousCommandList[0].name == "<error>")))
         {
             nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
-            std::cout << "\n%" << " Unrecognized command";
+            iConsole->print(std::string("\r\n%") + " Unrecognized command");
             return word == "?";
         }
 
@@ -268,7 +312,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
     if (previousCommandList[0].name == "<error>")
     {
         nextLine = inputCommand.substr(0, inputCommand.size() - 1);
-        std::cout << "\n%" << " Unrecognized command";
+        iConsole->print(std::string("\r\n%") + " Unrecognized command");
     }
     else if (previousCommandList[0].name != "<cr>")
     {
@@ -381,11 +425,11 @@ void CliSession::handleInvalidInputMarker(const std::string& formattedOldCommand
 {
     isCommandInvalid = true;
     isRunning = false;
-    std::string invalidInput = "\n";
+    std::string invalidInput = "\r\n";
 
     std::string hostname = engine.global.getHostname();
     // Print spaces for hostname, mode, old command
-    invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\n% Invlid input detected at '^' marker.\n";
+    invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\r\n% Invlid input detected at '^' marker.\r\n";
     iConsole->print(invalidInput);
 }
 
@@ -395,7 +439,7 @@ void CliSession::handleAmbiguousInputMarker(const std::string& ambiguousCommand)
     isCommandValid = false;
     isRunning = false;
     std::string invalidInput = R"(% Ambiguous command: ")" + ambiguousCommand + "\"";
-    iConsole->print("\n" + invalidInput);
+    iConsole->print("\r\n" + invalidInput);
 }
 
 void CliSession::matchCommand(const std::string& inputCommand, const std::string& uWord, 
@@ -624,7 +668,7 @@ std::string CliSession::normalizeCommand(const std::string& inputCommand)
         else
         {
             isRunning = false;
-            iConsole->print("\n% Incomplete Command");
+            iConsole->print("\r\n% Incomplete Command");
             return "";
         }
     }
@@ -663,14 +707,14 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
 
     // Helper lamda to travel to the end of the command
     std::function<void(nlohmann::json*, const nlohmann::json*)> navigateToLastCommand = [&](nlohmann::json* command, const nlohmann::json* nextCommand) {
-        if (command->contains("subcommands") && (*command)["subcommands"].size() > 0)
+        if (command->contains(SUBCOMMAND_ARRAY) && (*command)[SUBCOMMAND_ARRAY].size() > 0)
         {
-            command = &(*command)["subcommands"][0];
+            command = &(*command)[SUBCOMMAND_ARRAY][0];
             navigateToLastCommand(command, nextCommand);
         }
-        else if ((*command)["name"] != engine.carriageReturnCommand.name)
+        else if ((*command)[COMMAND_NAME] != engine.carriageReturnCommand.name)
         {
-            (*command)["subcommands"] = *nextCommand;
+            (*command)[SUBCOMMAND_ARRAY] = *nextCommand;
         }
     };
 
@@ -711,12 +755,12 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     // Creates next commands directory
     for (const json& command : *currentCommandDirectory)
     {
-        std::string commandName = command["name"];
+        std::string commandName = command[COMMAND_NAME];
 
-        if (command.contains("properties") && command["properties"].is_array())
+        if (command.contains(COMMAND_PROPERTIES) && command[COMMAND_PROPERTIES].is_array())
         {
             // Process properties
-            for (auto prop : command["properties"])
+            for (auto prop : command[COMMAND_PROPERTIES])
             {
                 // Handle recursive property
                 if (prop == "recursive") {
@@ -726,7 +770,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
 
                     for (json commmand : *currentCommandDirectory)
                     {
-                        if (command["name"] != commandName)
+                        if (command[COMMAND_NAME] != commandName)
                         {
                             tempRecursiveDir.push_back(command);
                         }
@@ -743,14 +787,14 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
         {
             // Next command
             const nlohmann::json* nextCommand = nullptr;
-            if (command.contains("subcommands"))
+            if (command.contains(SUBCOMMAND_ARRAY))
             {
-                nextCommand = &command["subcommands"];
+                nextCommand = &command[SUBCOMMAND_ARRAY];
             }
             std::string newName = commandName.substr(1, commandName.size() - 2);
-            if (engine.getCommandTree().contains(newName))
+            if (engine.getCommandTree()[VARIABLE_OBJ].contains(newName))
             {
-                for (const json& newCommand : engine.getCommandTree()[newName]) 
+                for (const json& newCommand : engine.getCommandTree()[VARIABLE_OBJ][newName]) 
                 {
                     // Craft new command
                     if (nextCommand)
@@ -771,20 +815,20 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
 
     for (const json* command : tempDir)
     {
-        if (command->contains("name") && command->contains("description"))
+        if (command->contains(COMMAND_NAME) && command->contains(DESCRIPTION))
         {
             // Handle Command Support
-            Com::Support support = (command->contains("support") && (*command)["support"].is_boolean())
-                ? ((*command)["support"] == true
+            Com::Support support = (command->contains(SUPPORT_STATUS) && (*command)[SUPPORT_STATUS].is_boolean())
+                ? ((*command)[SUPPORT_STATUS] == true
                     ? Com::Support::SUPPORTED
                     : Com::Support::PARTIAL)
                 : Com::Support::NO_SUPPORT;
 
             // Handle command properties
-            if (command->contains("properties"))
+            if (command->contains(COMMAND_PROPERTIES))
             {
                 bool hide = false;
-                for (const auto& prop : (*command)["properties"])
+                for (const auto& prop : (*command)[COMMAND_PROPERTIES])
                 {
                     if (commandProcessor->negate && prop.get<std::string>() == "negate_hide")
                         hide = true;
@@ -794,12 +838,12 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                 if (hide) continue;
             }
             Com commandData;
-            commandData.name = (*command)["name"];
-            commandData.description = (*command)["description"];
+            commandData.name = (*command)[COMMAND_NAME];
+            commandData.description = (*command)[DESCRIPTION];
             commandData.support = support;
-            if (command->contains("properties"))
+            if (command->contains(COMMAND_PROPERTIES))
             {
-                for (const auto& prop : (*command)["properties"])
+                for (const auto& prop : (*command)[COMMAND_PROPERTIES])
                 {
                     commandData.properties.push_back(prop.get<std::string>());
                 }
@@ -807,7 +851,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
             availableCommands.push_back(commandData);
 
             // Check if the user input matches a pattern or specific command
-            std::string commandName = (*command)["name"];
+            std::string commandName = (*command)[COMMAND_NAME];
             if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
             {
                 commandNode = command;
@@ -828,11 +872,11 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                 if (commandName == lowerUserInput) 
                 {
                     isExactMatch = true;
-                    exactMatchCommand.name = Functions::lowerCase((*command)["name"]);
-                    exactMatchCommand.description = (*command)["description"];
-                    if (command->contains("properties"))
+                    exactMatchCommand.name = Functions::lowerCase((*command)[COMMAND_NAME]);
+                    exactMatchCommand.description = (*command)[DESCRIPTION];
+                    if (command->contains(COMMAND_PROPERTIES))
                     {
-                        for (const auto& prop : (*command)["properties"])
+                        for (const auto& prop : (*command)[COMMAND_PROPERTIES])
                         {
                             exactMatchCommand.properties.push_back(prop.get<std::string>());
                         }
@@ -856,11 +900,11 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     }
     if (matchCount == 1 && isValidCommandDirectory(commandNode)) 
     {
-        currentDirectory = &((*commandNode)["subcommands"]);
+        currentDirectory = &((*commandNode)[SUBCOMMAND_ARRAY]);
         
         for (const auto& subCommand : *currentDirectory) 
         {
-            if (subCommand["name"] == engine.carriageReturnCommand.name) 
+            if (subCommand[COMMAND_NAME] == engine.carriageReturnCommand.name) 
             {
                 isCommandValid = true;
                 isValidCommand = true;
@@ -882,7 +926,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     } 
     else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(commandProcessor->negate && userInput == "no"))
     {
-        endCommandString = Functions::lowerCase((*commandNode)["name"]);
+        endCommandString = Functions::lowerCase((*commandNode)[COMMAND_NAME]);
         endOfCommand = true;
         return noSubCommands;
     }
@@ -922,57 +966,16 @@ bool CliSession::isGlobalCommand(std::string &commandName)
 
 void CliSession::displayAvailableCommands(std::vector<Com> commandList)
 {
-    size_t maxNameLength = 0;
-    size_t lineCount = 0;
+    // Print each command with aligned descriptions
+    paginationList = commandList;
+    maxNameLength = 0;
 
     // Find the longest command name for formatting
-    for (const Com &command : commandList)
+    for (const Com &command : paginationList)
     {
         if (command.name.size() > maxNameLength)
         {
             maxNameLength = command.name.size();
-        }
-    }
-
-    // Print each command with aligned descriptions
-    for (const Com &command : commandList)
-    {
-        if (command.name != engine.errorCommand.name)
-        {
-            if (handlePagination(lineCount))
-            {
-                std::string display;
-                display += "\n  " + command.name;
-                size_t nameLength = command.name.size();
-                for (size_t i = 0; i <= (maxNameLength - nameLength + 5); i++)
-                {
-                    display +=" ";
-                }
-                // Uncomment if you want to display descriptions
-                display += command.description;
-                Color color;
-                switch (command.support)
-                {
-                    case Com::Support::SUPPORTED:
-                        color = Color::WHITE;
-                        break;
-                    case Com::Support::PARTIAL:
-                        color = Color::YELLOW;
-                        break;
-                    case Com::Support::NO_SUPPORT:
-                        color = Color::RED;
-                }
-                iConsole->print(display, color);
-                lineCount++;
-            }
-            else
-            {
-                return;
-            }
-        }
-        else
-        {
-            return;
         }
     }
 }
@@ -1234,45 +1237,79 @@ bool CliSession::isValidCommandDirectory(const nlohmann::json *directory)
 {
     if (directory && directory->is_object())
     {
-        return directory->contains("subcommands");
+        return directory->contains(SUBCOMMAND_ARRAY);
     }
     return false;
 }
 
-bool CliSession::handlePagination(size_t &lineNum)
+bool CliSession::handlePagination(char nextch)
 {
-    if (engine.paginationCount > 0 && lineNum % engine.paginationCount == 0 && lineNum != 0)
+    size_t lineCount = 0;
+
+    if (nextch != '\0')
     {
-        std::cout << "\n  --More--";
-        while (true)
+        maxCommandLength = getTerminalWidth() - initialLineLength;
+
+        if (nextch == '\x20')
         {
-
-            maxCommandLength = getTerminalWidth() - initialLineLength;
-
-            if (kbhit())
-            {
-                char nextch = static_cast<char>(getchar());
-                if (nextch == '\x20')
-                {
-                    std::cout << "\033[2k\033[1G";
-                    moveCursorUp(1);
-                    return true;
-                }
-                else if (nextch == 'q')
-                {
-                    std::cout << "\033[2k\033[1G";
-                    std::cout << std::string(10, ' ');
-                    std::cout << "\033[2k\033[1G";
-                    moveCursorUp(1);
-                    return false;
-                }
-            }
+            iConsole->print("\033[2k\033[1G");
+            iConsole->print("\033[1A");
         }
+        else if (nextch == 'q')
+        {
+            iConsole->print("\033[2k\033[1G");
+            iConsole->print(std::string(10, ' '));
+            iConsole->print("\033[2k\033[1G");
+            paginationList.clear();
+            handlePrompt();
+            return false;
+        }
+    }
+
+    for (int i = 0; i < paginationList.size() && i < engine.paginationCount; i++)
+    {
+        const Com &command = paginationList[i];
+        if (command.name != engine.errorCommand.name)
+        {
+            std::string display;
+            display += "\r\n  " + command.name;
+            size_t nameLength = command.name.size();
+            for (size_t i = 0; i <= (maxNameLength - nameLength + 5); i++)
+            {
+                display +=" ";
+            }
+            // Uncomment if you want to display descriptions
+            display += command.description;
+            Color color;
+            switch (command.support)
+            {
+                case Com::Support::SUPPORTED:
+                    color = Color::WHITE;
+                    break;
+                case Com::Support::PARTIAL:
+                    color = Color::YELLOW;
+                    break;
+                case Com::Support::NO_SUPPORT:
+                    color = Color::RED;
+            }
+            iConsole->print(display, color);
+            lineCount++;
+        }
+    }
+
+    if (paginationList.size() > engine.paginationCount)
+    {
+        paginationList.erase(paginationList.begin(), paginationList.begin() + engine.paginationCount);
+        paginationList.shrink_to_fit();
+        iConsole->print("\r\n  --More--");
     }
     else
     {
-        return true;
+        paginationList.clear();
+        iConsole->print("\r\n");
+        handlePrompt();
     }
+    return true;
 }
 
 bool CliSession::changeMode(std::string &newMode, bool processing)
@@ -1303,7 +1340,7 @@ bool CliSession::changeMode(std::string &newMode, bool processing)
     }
     else
     {
-        //std::cout << "\nMode: \"" << newMode << "\" not found in schema";
+        //std::cout << "\r\nMode: \"" << newMode << "\" not found in schema";
     }
 
 
@@ -1369,6 +1406,8 @@ void CliSession::configureAddressFamily(AddressFamily af)
             break;
         case AddressFamily::IPv6:
             addressFamily = "ipv6";
+            break;
+        case AddressFamily::NONE:
             break;
     }
 

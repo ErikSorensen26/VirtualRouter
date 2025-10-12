@@ -4,25 +4,27 @@
 #include <SaxJson.hpp>
 #include "Mode.hpp"
 #include <InterfaceConfigs.h>
+#include <InterfaceType.hpp>
+#include <HardwareManager.h>
 
 std::string CliEngine::defaultMode = Mode::userExec;
 
-CliEngine::CliEngine(Global& global, bool test) : Configs(), global(global)
+CliEngine::CliEngine(Global& global, const StartupFiles& stfs, bool test) : Configs(), global(global)
 {
     // Set debug mode based on the input parameter
     std::string name = "default";
     global.addRoutingInstance(name);
     if (!test) {
-        initEngine();
+        initEngine(stfs);
     }
 }
 
-CliEngine::CliEngine(Global& global, IFileSystem* fs, bool test) : Configs(fs), global(global)
+CliEngine::CliEngine(Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test) : Configs(fs), global(global)
 {
     // Set debug mode based on the input parameter
     global.addRoutingInstance("default");
     if (!test) {
-        initEngine();
+        initEngine(stfs);
     }
 }
 
@@ -35,10 +37,10 @@ CliEngine::~CliEngine()
     sessions.clear();
 }
 
-void CliEngine::initEngine()
+void CliEngine::initEngine(const StartupFiles& stfs)
 {
     // Initialize the base console
-    initConfigs();
+    initConfigs(stfs);
 
     // Initialize default error and carriage return commands
     errorCommand.name = "<error>";
@@ -55,6 +57,7 @@ void CliEngine::initEngine()
         if (json::sax_parse(fileStream, &saxHandler))
         {
             commandTree = saxHandler.result;
+            initTree();
         }
         else
         {
@@ -93,9 +96,33 @@ void CliEngine::initEngine()
     recoverState();
 }
 
+void CliEngine::initTree()
+{
+
+    if (commandTree.contains(VARIABLE_OBJ) && commandTree[VARIABLE_OBJ].contains("interface") && commandTree[VARIABLE_OBJ]["interface"].is_array())
+    {
+        nlohmann::json& vars = commandTree[VARIABLE_OBJ];
+
+        for (const auto& [type, ifaces] : hwManager->getPhysicalInterfaces())
+        {
+            std::string typeStr = getInterfaceType(type);
+            if (vars.contains(typeStr) && vars[typeStr].is_array())
+            {
+                vars[typeStr][0][COMMAND_NAME] = "<0-" + std::to_string(ifaces.size() - 1) + ">";
+            }
+        }
+    }
+}
+
 CliSession* CliEngine::createSession(bool debug)
 {
     sessions.push_back(new CliSession(*this, debug));
+    return sessions.back();
+}
+
+CliSession* CliEngine::createSession(IConsole* console)
+{
+    sessions.push_back(new CliSession(*this, console));
     return sessions.back();
 }
 
@@ -158,34 +185,4 @@ std::string CliEngine::maskInput(const std::string& prefix, std::string original
     std::copy(prefix.begin(), prefix.end(), original.begin());
 
     return original;
-}
-std::string CliEngine::getMac(InterfaceType type, size_t id)
-{
-    std::string mac;
-    if (type == InterfaceType::ETHERNET && macAddressList.Ethernet.size() >= id)
-    {
-            mac = OUI + macAddressList.Ethernet[id];
-    }
-    else if (type == InterfaceType::FAST_ETHERNET && macAddressList.FastEthernet.size() >= id)
-    {
-            mac = OUI + macAddressList.FastEthernet[id];
-    }
-    else if (type == InterfaceType::GIGABIT_ETHERNET && macAddressList.GigabitEthernet.size() >= id)
-    {
-            mac = OUI + macAddressList.GigabitEthernet[id];
-    }
-    return mac;
-}
-
-InterfaceType CliEngine::getInterfaceType(const std::string& type)
-{
-    if (type == "Ethernet") {return InterfaceType::ETHERNET;}
-    else if (type == "FastEthernet") {return InterfaceType::FAST_ETHERNET;}
-    else if (type == "GigabitEthernet") {return InterfaceType::GIGABIT_ETHERNET;}
-    else if (type == "Loopback") {return InterfaceType::LOOPBACK;}
-    else if (type == "Portchannel") {return InterfaceType::PORT_CHANNEL;}
-    else if (type == "Tunnel") {return InterfaceType::TUNNEL;}
-    else if (type == "Virtual-Template") {return InterfaceType::VIRTUAL_TEMPLATE;}
-    else if (type == "Vlan") {return InterfaceType::VLAN;}
-    return InterfaceType::UNDEFINED;
 }

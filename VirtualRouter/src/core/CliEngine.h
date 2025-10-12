@@ -14,6 +14,7 @@ enum class InterfaceType: uint8_t;
 class Interface;
 class CliSession;
 class CommandProcessor;
+class IConsole;
 struct ModeConfig;
 
 /**
@@ -46,7 +47,7 @@ public:
      * @param global Global router manager.
      * @param test Reducer if tests are running.
      */
-    CliEngine(Global& global, bool test = false);
+    CliEngine(Global& global, const StartupFiles& stfs, bool test = false);
 
     /**
      * @brief Constructor. Initializes the engine.
@@ -55,7 +56,7 @@ public:
      * @param fileSystem Custom file system.
      * @param test Reducer if tests are running.
      */
-    CliEngine(Global& global, IFileSystem* fs, bool test = false);
+    CliEngine(Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test = false);
 
     /**
      * @brief Destructor.
@@ -67,7 +68,14 @@ public:
      *
      * This function fully initialized this class by setting the configuration files
      */
-    void initEngine();
+    void initEngine(const StartupFiles& stfs);
+
+    /**
+     * @brief Initializes the tree by adding config variables
+     *
+     * This function fully initializes the command tree by setting certain command fields.
+     */
+    void initTree();
 
     /**
      * @brief Creates a new CLI session.
@@ -75,6 +83,13 @@ public:
      * @return Shared pointer to the created session.
      */
     CliSession* createSession(bool debug = false);
+
+    /**
+     * @brief Creates a new CLI session with custom console interpreter.
+     * @param console Custom console class object
+     * @return Pointer to the created session.
+     */
+    CliSession* createSession(IConsole* console);
 
     /**
      * @brief Gets the loaded command tree.
@@ -118,19 +133,6 @@ public:
      * @return std::string The masked string.
      */
     std::string maskInput(const std::string& prefix, std::string original);
-
-    /**
-     * @brief Determines the interface type based on a string identifier.
-     *
-     * Maps a string representing an interface type to its corresponding enum value.
-     * Logs a warning if the interface type is undefined.
-     *
-     * @param type The string identifier of the interface type.
-     * @return InterfaceType The corresponding enum value of the interface type.
-     */
-    InterfaceType getInterfaceType(const std::string& type);
-
-    std::string getMac(InterfaceType type, size_t id);
 
     /**
      * @brief Retrieves the command tree;

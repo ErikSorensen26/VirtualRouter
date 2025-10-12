@@ -8,46 +8,12 @@
 #include <PacketBuilder.hpp>
 #include <InterfaceConfigs.h>
 #include <IPPacket.h>
+#include <Configs.h>
 
-/*
- * oro cannot have:
- * clientid
- * serverid
- * iana
- * iata
- * iapd
- * iaaddr
- * iaprefix
- */
-
-#define ADD_DELAYED_AUTH                                                \
-    auto auth = authManager.addDelayedAuthOption(tlv, send.clientID);   \
-    bool validAuth;                                                     \
-    if (auth.has_value())                                               \
-    {                                                                   \
-        if (!auth.value().digest) return false;                         \
-        validAuth = true;                                               \
-    }
-
-#define ADD_DELAYED_DIGEST                                              \
-    if (validAuth)                                                      \
-        authManager.addDelayedAuthDigest(dhcp, tlv, auth.value());
-
-void Protocol::Dhcpv6Server::handlePacket(Dhcpv6Header& dhcp, Interface& iface, bool multicast, const uint8_t* clientIp)
+Protocol::Dhcpv6Server::Dhcpv6Server(Global& global) : DhcpServerBase(global)
 {
-    Dhcpv6::Dhcpv6PacketBuild build(&iface);
-    Dhcpv6::Dhcpv6PacketSend send = {
-        .iface = iface,
-        .multicast = multicast,
-        .clientAddress = clientIp,
-        .build = build
-    };
-    Dhcpv6::Dhcpv6PacketReceive receive = {
-        .dhcpHeader = dhcp,
-        .send = send
-    };
-    __uint128_t networkAddress = currentInterface->configs.ipv6.getLocalAddress();
-    handleDhcpPacket(receive, networkAddress);
+    dhcpUniqueIdentifier = generateUniqueIdentifier();
+    startServer();
 }
 
 bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packet, __uint128_t networkAddress)
@@ -1996,16 +1962,38 @@ bool Protocol::Dhcpv6Server::addStaticLease(Dhcpv6::IANABlock& block, const IAKe
 {
     if (auto lit = configs.staticNAs.find(key); lit != configs.staticNAs.end() && lit->second.second)
     {
-        auto& network = lit->second.second;
-        if (auto it = network->leaseManager->staticNAs.find(key); it != network->leaseManager->staticNAs.end())
+        if (net && net->config && net->config->interface)
         {
-            block.addresses.push_back({ it->second.address, { Dhcpv6StatusCode::Success }, it->second.preferred, it->second.valid });
-            if (auto tit = network->leaseManager->leaseTimerIDs.find(it->second.address); tit != network->leaseManager->leaseTimerIDs.end()) timeManager.cancelTimer(tit->second);
-            auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(it->second.valid);
-            network->leaseManager->leaseTimerIDs[it->second.address] = timeManager.addTimer(expiry, [lmgr = network->leaseManager, addr = it->second.address, key]() {
-                lmgr->expireLease(addr, key);
-            });
-            network->leaseManager->leaseKeys[it->second.address] = key;
+            duid += net->config->interface->configs.getMac();
+            break;
+        }
+    }
+    if (Configs::macAddressList.GigabitEthernet.size() == 0)
+    {
+        throw std::runtime_error("No MAC address available for DUID");
+    }
+
+    duid += ByteString(Configs::macAddressList.GigabitEthernet.front());
+
+    return duid;
+}
+
+Dhcpv6Header::Option Protocol::Dhcpv6Server::buildStatusOption(const ByteString& code, const std::string& message)
+{
+    Dhcpv6Header::Option statusOpt;
+    statusOpt.option = Variable::Dhcpv6::Options::statusCode;
+    statusOpt.length = Functions::numToByte(2 + message.size(), 2);
+    statusOpt.value = code + message;
+    return statusOpt;
+}
+
+bool Protocol::Dhcpv6Server::validateServerID(const Dhcpv6Header& header)
+{
+    for (const auto& opt : header.options)
+    {
+        if (opt.option == Variable::Dhcpv6::Options::serverID && 
+            opt.value == dhcpUniqueIdentifier)
+        {
             return true;
         }
     }

@@ -7,6 +7,8 @@
 #include <Ospf.h>
 #include <Bgp.h>
 #include <Ndp.h>
+#include <InterfaceType.hpp>
+#include <HardwareManager.h>
 
 bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> commandStream)
 {
@@ -528,7 +530,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			IPAddress address = Functions::getAddress(commandStream[2]);
 			if (!negate)
 			{
-				InterfaceType type = terminal.engine.getInterfaceType(commandStream[3]);
+				InterfaceType type = getInterfaceType(commandStream[3]);
 				float id = std::stof(commandStream[4]);
 				uint32_t intID = calculateInterfaceKey(type, id);
 				
@@ -570,7 +572,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 						{
 							if (as->ipv6Named)
 							{
-								std::cout << "\n%" << " ERROR: AS(" + ID + ") used by named mode";
+								terminal.iConsole->print(std::string("\r\n%") + std::string(" ERROR: AS(" + ID + ") used by named mode"));
 								return false; // AS used in named mode.
 							}
 						}
@@ -640,19 +642,11 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			}
 			else
 			{
-				if ((type == "Ethernet" || type == "GigabitEthernet" || type == "FastEthernet") && terminal.engine.physicalInterfaces.size() >= id)
-				{
-						intType = terminal.engine.physicalInterfaces[id];
-				}
-				else
-				{
-						intType = "NO_INTERFACE";
-				}
-				InterfaceType interfaceTypeEnum = terminal.engine.getInterfaceType(type);
-				std::string mac = terminal.engine.getMac(interfaceTypeEnum, id);
-				if (mac.empty() || intType == "NO_INTERFACE") return false;
-				global.addInterface(interfaceType, intType, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
-				currentVrf->addInterface(global.getInterface(key), key);
+				hwIface = terminal.engine.hwManager->getInterface(interfaceType, id);
+				std::string mac = terminal.engine.hwManager->getMac(hwIface);
+				if (mac.empty() || hwIface.empty()) return false;
+				global.addInterface(interfaceType, hwIface, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
+				currentVrf->addInterface(global.getInterface(interfaceType, terminal.interfaceID), interfaceType, terminal.interfaceID);
 			}
 		}
 		terminal.configureInterfaceMode(type);
@@ -679,7 +673,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 					{
 						if (as->ipv4Named)
 						{
-							std::cout << "\n%" << " ERROR: AS(" + ID + ") used by named mode";
+							terminal.iConsole->print(std::string("\r\n%" + std::string(" ERROR: AS(" + ID + ") used by named mode")));
 							return false; // AS used in named mode.
 						}
 					}

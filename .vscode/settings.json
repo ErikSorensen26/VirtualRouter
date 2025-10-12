@@ -94,7 +94,9 @@
         "typeindex": "cpp",
         "temp": "cpp",
         "__nullptr": "cpp",
-        "__config": "cpp"
+        "__config": "cpp",
+        "__debug": "cpp",
+        "locale": "cpp"
     },
     "cmake.sourceDirectory": "/home/erik/VirtualRouter"
 }

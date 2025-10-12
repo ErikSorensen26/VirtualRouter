@@ -2,9 +2,11 @@
 #include <iostream>
 #include <Logger.h>
 #include "Mode.hpp"
+#include <HardwareManager.h>
 
-MacList Configs::macAddressList = MacList();
-
+#include <unistd.h>
+#include <net/if.h>
+#include <linux/if_tun.h>
 
 void Configs::printConfig() 
 {
@@ -13,25 +15,25 @@ void Configs::printConfig()
 
 Configs::Configs(IFileSystem* fs) : fileSystem(fs) {}
 
-void Configs::initConfigs(const std::string& filePath) 
+void Configs::initConfigs(const StartupFiles& stfs)
 {
     // Reset all variables before
     root.clear();
-    physicalInterfaces.clear();
-    macAddressList.clear();
+
+    hwManager = new HardwareManager(stfs.hwConfigFile, *fileSystem, true);
 
     if (configSchema.is_null() || !configSchema.is_object())
     {
         configSchema = nlohmann::ordered_json::object();
     }
 
-    startupFileName = filePath;
+    routerConfigFilename = stfs.routerConfigFile;
 
     // Load JSON configuration file into doc
-    if (fileSystem->fileExists(filePath))
+    if (fileSystem->fileExists(stfs.startupFile))
     {
         std::string content;
-        if (fileSystem->readFile(filePath, content))
+        if (fileSystem->readFile(stfs.startupFile, content))
         {
             try
             {
@@ -46,110 +48,6 @@ void Configs::initConfigs(const std::string& filePath)
     else 
     {
         root = nlohmann::ordered_json::object();
-    }
-    
-    // Load JSON data for interface configurations
-    if (fileSystem->fileExists(CONFIG_FILE))
-    {
-        std::string content;
-        if (fileSystem->readFile(CONFIG_FILE, content))
-        {
-            try
-            {
-                configJson = json::parse(content);
-            }
-            catch (json::parse_error& e)
-            {
-                configJson = json::object();
-            }
-        }
-    }
-    else 
-    {
-        configJson = json::object();
-    }
-
-
-    if (configJson.is_object())
-    {
-        if (configJson.contains("Interface") && configJson["Interface"].is_object())
-        {
-            // Add interface configurations to physicalInterfaces vector
-            for (auto obj : configJson["Interface"])
-            {
-                std::string type = std::string(obj);
-                physicalInterfaces.push_back(obj);
-            }
-        }
-
-        if (configJson.contains("Mac") && configJson["Mac"].is_object())
-        {
-            // Set OUI from JSON data
-            if (configJson["Mac"].contains("OUI"))
-            {
-                OUI = configJson["Mac"]["OUI"];
-            }
-
-            if (configJson["Mac"].contains("Ethernet"))
-            {
-                // Add Ethernet MAC addresses to macAddressList
-                for (std::string obj : configJson["Mac"]["Ethernet"]) 
-                {
-                    if (obj.size() == 6 && Functions::isHex(obj))
-                    {
-                        macAddressList.Ethernet.push_back(obj);
-                    }
-                }
-            }
-
-            if (configJson["Mac"].contains("FastEthernet"))
-            {
-                // Add FastEthernet MAC addresses to macAddressList
-                for (std::string obj : configJson["Mac"]["FastEthernet"]) 
-                {
-                    if (obj.size() == 6 && Functions::isHex(obj))
-                    {
-                        macAddressList.FastEthernet.push_back(obj);
-                    }
-                }
-            }
-
-            if (configJson["Mac"].contains("GigabitEthernet"))
-            {
-                // Add GigabitEthernet MAC addresses to macAddressList
-                for (std::string obj : configJson["Mac"]["GigabitEthernet"]) 
-                {
-                    if (obj.size() == 6 && Functions::isHex(obj))
-                    {
-                        macAddressList.GigabitEthernet.push_back(obj);
-                    }
-                }
-            }
-
-            if (configJson["Mac"].contains("Loopback"))
-            {
-                // Add GigabitEthernet MAC addresses to macAddressList
-                for (std::string obj : configJson["Mac"]["Loopback"]) 
-                {
-                    if (obj.size() == 6 && Functions::isHex(obj))
-                    {
-                        macAddressList.Loopback.push_back(obj);
-                    }
-                }
-            }
-
-            if (configJson["Mac"].contains("PortChannel"))
-            {
-                // Add GigabitEthernet MAC addresses to macAddressList
-                for (std::string obj : configJson["Mac"]["PortChannel"]) 
-                {
-                    if (obj.size() == 6 && Functions::isHex(obj))
-                    {
-                        macAddressList.PortChannel.push_back(obj);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -258,7 +156,7 @@ std::vector<std::string> Configs::recoverConfigs(nlohmann::ordered_json* json)
 bool Configs::saveConfig()
 {
     std::string serialized = root.dump(4);
-    if (fileSystem->writeFile(startupFileName, serialized))
+    if (fileSystem->writeFile(routerConfigFilename, serialized))
     {
         return true;
     }
@@ -639,11 +537,11 @@ std::string Configs::getVolatileValue(std::string& type, std::string value, std:
                 }
                 catch (const std::invalid_argument&) 
                 {
-                    std::cerr << "Error: Invalid number format in '" << str << "'\n";
+                    std::cerr << "Error: Invalid number format in '" << str << "'\r\n";
                 } 
                 catch (const std::out_of_range&) 
                 {
-                    std::cerr << "Error: Number out of range in '" << str << "'\n";
+                    std::cerr << "Error: Number out of range in '" << str << "'\r\n";
                 }
             }
         }

@@ -10,14 +10,14 @@ class Internal_ConsoleTest : public ::testing::Test
 {
 protected:
     // Create the MockTerminal instance
-    std::shared_ptr<MockConsole> mockConsole;
+    MockConsole* mockConsole;
 
     // Create a console instance with the MockTerminal
     Console* console;
 
     void SetUp() override
     {
-        mockConsole = std::make_shared<MockConsole>();
+        mockConsole = new MockConsole;
         console = new Console(mockConsole); // Share ownership
     }
 

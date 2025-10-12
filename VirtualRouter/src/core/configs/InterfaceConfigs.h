@@ -14,6 +14,8 @@
 // Forward declarations
 class Global;
 class TimeManager;
+enum class AddressFamily;
+enum class InterfaceType;
 class MockInterface;
 class Internal_NdpTest;
 class IPAddress;

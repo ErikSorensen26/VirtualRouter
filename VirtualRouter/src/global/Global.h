@@ -15,6 +15,8 @@
 #include <IPAddress.hpp>
 #include <map>
 
+#define DEFAULT_HOSTNAME "router"
+
 class Interface;
 class VirtualRouter;
 enum class AddressFamily : uint8_t;
@@ -26,12 +28,6 @@ namespace Protocol
 }
 
 enum class InterfaceType : uint8_t;
-
-/**
- * @def DEFAULT_HOSTNAME
- * @brief Defines the default hostname for the router.
- */
-#define DEFAULT_HOSTNAME "router"
 
 /**
  * @struct GlobalConfigs
@@ -121,8 +117,8 @@ public:
      * Initializes the hostname to the default value and sets IPv6 as disabled.
      * The constructor is private to enforce the Singleton pattern.
      */
-    Global(bool enableRouting = false, bool test = false);
-    Global(IFileSystem* fs, bool test = false);
+    Global(const StartupFiles& stfs = {}, bool enableRouting = false, bool test = false);
+    Global(IFileSystem* fs, const StartupFiles& stfs = {}, bool test = false);
 
     /**
      * @brief Destructs the Global class.

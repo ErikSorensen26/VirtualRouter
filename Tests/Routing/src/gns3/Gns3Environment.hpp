@@ -11,7 +11,7 @@ class Environment
 public:
     Environment(Global& global)
     {
-        engine = new CliEngine(global);
+        engine = new CliEngine(global, {});
         gns3 = new Gns3Harness();
         session = engine->createSession();
     }

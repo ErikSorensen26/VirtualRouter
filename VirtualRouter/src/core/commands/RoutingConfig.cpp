@@ -4,6 +4,7 @@
 #include <Eigrp.h>
 #include <algorithm>
 #include <InterfaceConfigs.h>
+#include <InterfaceType.hpp>
 
 bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
 {
@@ -24,7 +25,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			auto vrfInstance = global.getRoutingInstance(vrf, AddressFamily::IPv4);
 			if (!vrfInstance)
 			{
-				std::cout << "\n%" << "VRF " << vrf << " does not exist or is not enabled for IPv4";
+				terminal.iConsole->print(std::string("\r\n%") + vrf + " does not exist or is not enabled for IPv4");
 				return false;
 			}
 			Protocol::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
@@ -35,7 +36,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				{
 					if (as->ipv4Named)
 					{
-						std::cout << "\n%" << " ERROR: AS(" + std::to_string(terminal.routingProtocolID) + ") used by named mode";
+						terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(terminal.routingProtocolID) + ") used by name mode");
 						return false; // AS used in named mode.
 					}
 				}
@@ -387,7 +388,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					vrf = global.getRoutingInstance(vrfName, af);
 					if (!vrf) 
 					{
-						std::cout << "\n%" << "VRF " << commandStream[3] << " does not exist or is not enabled for IPv4";
+						terminal.iConsole->print(std::string("\r\n%") + commandStream[3] + " does not exist or is not enabled for IPv4");
 					}
 
 					if (/*multicast enabled*/false)
@@ -396,7 +397,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					}
 					else
 					{
-						std::cout << "\n%" << "ERROR multicast not enabled";
+						terminal.iConsole->print(std::string("\r\n%") + "ERROR multicast not enabled");
 						return false;
 					}
 				}
@@ -413,7 +414,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					}
 					else
 					{
-						std::cout << "\n%" << "ERROR multicast not enabled";
+						terminal.iConsole->print(std::string("\r\n%") + "ERROR multicast not enabled");
 						return false;
 					}
 				}
@@ -428,7 +429,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					{
 						if (currentEigrpNamed->ipv4->asNumber != terminal.routingProtocolID && !negate)
 						{
-							std::cout << "\nChanging from AS(" << currentEigrpNamed->ipv4->asNumber << ") to AS(" << terminal.routingProtocolID << ") is not allowed";
+							terminal.iConsole->print("\r\nChanging from AS(" + std::to_string(currentEigrpNamed->ipv4->asNumber) + ") to AS(" + std::to_string(terminal.routingProtocolID) + ") is not allowed");
 							return false;
 						}
 						currentEigrp = currentEigrpNamed->ipv4;
@@ -437,7 +438,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 					{
 						if (currentEigrpNamed->ipv6->asNumber != terminal.routingProtocolID && !negate)
 						{
-							std::cout << "\nChanging from AS(" << currentEigrpNamed->ipv6->asNumber << ") to AS(" << terminal.routingProtocolID << ") is not allowed";
+							terminal.iConsole->print("\r\nChanging from AS(" + std::to_string(currentEigrpNamed->ipv6->asNumber) + ") to AS(" + std::to_string(terminal.routingProtocolID) + ") is not allowed");
 							return false;
 						}
 						currentEigrp = currentEigrpNamed->ipv6;
@@ -483,7 +484,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							}
 							else
 							{
-								std::cout << "\n%" << " ERROR: AS(" << terminal.routingProtocolID << ") in use by classic router";
+								terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(terminal.routingProtocolID) + ") in use by classic router");
 								return false;
 							}
 						}
@@ -520,7 +521,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 							}
 							else
 							{
-								std::cout << "\n%" << " ERROR: AS(" << terminal.routingProtocolID << ") in use by classic router";
+								terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(terminal.routingProtocolID) + ") in use by classic router");
 								return false;
 							}
 						}
@@ -564,7 +565,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			{
 				terminal.isList = true;
 
-				InterfaceType type = terminal.engine.getInterfaceType(commandStream[1]);
+				InterfaceType type = getInterfaceType(commandStream[1]);
 				float interfaceId = std::stof(commandStream[2]);
 				uint32_t key = calculateInterfaceKey(type, interfaceId);
 				

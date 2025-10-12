@@ -22,7 +22,7 @@ protected:
     static void SetUpTestSuite()
     {
         Logger::getInstance().initialize(true);
-        global = new Global(true);
+        global = new Global({}, true);
         global->routingEnabled = true;
         global->testingMode = true;
         ASSERT_TRUE(gns3->start());

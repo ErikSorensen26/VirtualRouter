@@ -16,7 +16,7 @@ protected:
     
     void SetUp() override
     {
-        global = new Global(false, true);
+        global = new Global({}, false, true);
         mockInterface = new ::testing::NiceMock<MockInterface>(*global);
         global->dhcpServer = new DhcpServer(*global);
         dhcpServer = global->dhcpServer;
