@@ -6,11 +6,13 @@
 
 #include <WebConsole.hpp>
 #include <WebSessionManager.hpp>
+#include <CrashHandler.hpp>
 
 struct StartupArgs
 {
     std::string unixPath;
     int tcpPort = -1;
+    bool debug = false;
     bool noDefault = false;
     bool startupFile = false;
     bool routerConfigFile = false;
@@ -25,10 +27,11 @@ void printHelp(const char* prog)
               << "    -h, --help                Show this help message and exit\n"
               << "    -u, --unix [PATH]         Enable UNIX socket API, bind to [PATH]\n"
               << "    -t, --tcp [PORT]          Enable TCP socket API, listen on [PORT]\n"
-              << "    -d, --no-default          Disable startup session (no auto CLI session)\n"
+              << "    -D, --no-default          Disable startup session (no auto CLI session)\n"
               << "    -c, --config <FILE>       Active writable config file (running config)\n"
               << "    -s, --startup-config <F>  Read-only startup config file (bootstrap only)\n"
               << "    -H, --hw-config <FILE>    Hardware config file (interfaces, bindings)\n"
+              <<"     -d, --debug               Enabled debug mode (crash logging)\n"
               << std::endl;
 }
 
@@ -43,6 +46,7 @@ bool handleArgs(int& argc, char* argv[], StartupArgs& opts)
         {"config", required_argument, nullptr, 'c'},
         {"startup-config", required_argument, nullptr, 's'},
         {"hw-config", required_argument, nullptr, 'H'},
+        {"debug", no_argument, nullptr, 'D'},
         {nullptr, 0, nullptr, 0}
     };
 
@@ -60,7 +64,7 @@ bool handleArgs(int& argc, char* argv[], StartupArgs& opts)
             case 't':
                 opts.tcpPort = std::stoi(optarg);
                 break;
-            case 'd':
+            case 'D':
                 opts.noDefault = true;
                 break;
             case 'c':
@@ -74,6 +78,9 @@ bool handleArgs(int& argc, char* argv[], StartupArgs& opts)
             case 'H':
                 opts.fs.hwConfigFile = optarg;
                 opts.hwConfigFile = true;
+                break;
+            case 'd':
+                opts.debug = true;
                 break;
             default:
                 printHelp(argv[0]);
@@ -96,6 +103,10 @@ int main(int argc, char* argv[])
 {
     StartupArgs opts;
     if (!handleArgs(argc, argv, opts)) return 0;
+
+    if (opts.debug) {
+        setupCrashLogging();
+    }
 
     Logger::getInstance().initialize(true, /*isolateMode*/false);
     Global* global = new Global(opts.fs, true);

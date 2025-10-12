@@ -76,7 +76,7 @@ public:
         buffer.clear();
     }
 
-    void flushCommands(CliSession& endSequence, bool scroll = false)
+    void flushCommands(CliSession& endSequence, const std::string& id, bool scroll = false)
     {
         std::string output;
         {
@@ -90,6 +90,7 @@ public:
             nlohmann::json j = {
                 {"action", "cmd"},
                 {"type", "router"},
+                {"client_id", id},
                 {"data", output},
                 {"cursor_pos", endSequence.getInputCursorPosition() },
                 {"initial_length", endSequence.getInitialLineLength() },

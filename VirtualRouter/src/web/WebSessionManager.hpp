@@ -65,7 +65,7 @@ public:
 
                 if (WebConsole* wc = getWebConsole(ses))
                 {
-                    wc->flushCommands(*ses, false);
+                    wc->flushCommands(*ses, cid, false);
                 }
             }
         }
@@ -186,7 +186,7 @@ private:
 
             if (WebConsole* wc = getWebConsole(ses))
             {
-                wc->flushCommands(*ses, false);
+                wc->flushCommands(*ses, cid, false);
             }
             return;
         }

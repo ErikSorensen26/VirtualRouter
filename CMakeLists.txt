@@ -13,6 +13,9 @@ add_compile_options(-Wall -Wno-unused-parameter)
 # Option to control static build
 option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" ON)
 
+# Option to include debug symbols and backtrace info
+option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" ON)
+
 add_custom_target(copy_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/VirtualRouter/configs
@@ -82,6 +85,14 @@ if (BUILD_STATIC_ROUTER)
         list(APPEND VR_INCLUDE_DIRS ${HEADER_DIR})
     endforeach()
     list(REMOVE_DUPLICATES VR_INCLUDE_DIRS)
+
+    # Debug / symbol flags
+    if (ENABLE_DEBUG_SYMBOLS)
+        message(STATUS "Including debug symbols (-g -rdynamic)")
+        add_compile_options(-g -rdynamic)
+    else()
+        message(STATUS "Debug symbols disabled (release / stripped build)")
+    endif()
 
     add_executable(VirtualRouterExec ${VR_SOURCES})
     target_link_options(VirtualRouterExec PRIVATE -static)
