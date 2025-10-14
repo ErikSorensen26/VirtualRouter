@@ -39,7 +39,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		}
 		else
 		{
-			uint32_t ifaceKey = calculateInterfaceKey(terminal.engine.getInterfaceType(commandStream[offset + 3]), std::stof(commandStream[offset + 4]));
+			uint32_t ifaceKey = calculateInterfaceKey(getInterfaceType(commandStream[offset + 3]), std::stof(commandStream[offset + 4]));
 			GlobalConfigs::Arp::Neighbor entry;
 			Functions::macToInt(commandStream[offset + 2]);
 			entry.interface = ifaceKey;
@@ -627,10 +627,9 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 	{
 		terminal.isList = true;
 		std::string type = commandStream[1];
-		std::string interfaceID_temp = commandStream[2];
 		terminal.interfaceID = std::stof(commandStream[2]);
-		InterfaceType interfaceType = terminal.engine.getInterfaceType(type);
-		std::string intType;
+		InterfaceType interfaceType = getInterfaceType(type);
+		std::string hwIface;
 		size_t id = static_cast<size_t>(std::floor(terminal.interfaceID));
 		uint32_t key = calculateInterfaceKey(interfaceType, terminal.interfaceID);
 		if (!global.getInterface(key))
@@ -646,7 +645,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				std::string mac = terminal.engine.hwManager->getMac(hwIface);
 				if (mac.empty() || hwIface.empty()) return false;
 				global.addInterface(interfaceType, hwIface, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
-				currentVrf->addInterface(global.getInterface(interfaceType, terminal.interfaceID), interfaceType, terminal.interfaceID);
+				currentVrf->addInterface(global.getInterface(key), key);
 			}
 		}
 		terminal.configureInterfaceMode(type);

@@ -1,4 +1,4 @@
-// Problem where enqueue is dequeueing and then eventually it stopes anqueueing and then the queue gets full
+// Problem where enqueue is dequeueing and then eventually it stopes anqueueing and then the queue gets fu
 
 #include <CliEngine.h>
 #include <CliSession.h>
@@ -133,4 +133,4 @@ int main(int argc, char* argv[])
         while (true) {}
     }
     return 0;
-}*/
+}

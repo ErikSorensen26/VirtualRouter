@@ -65,6 +65,3 @@ target_link_libraries(VirtualRouterExec PRIVATE VirtualRouter OpenSSL::SSL OpenS
 
 # Add the include directories for the executable (VirtualRouter already has them)
 target_include_directories(VirtualRouterExec PRIVATE ${HEADER_DIRS})
-
-# Force static linking for VirtualRouterExec only
-target_link_options(VirtualRouterExec PRIVATE -static)

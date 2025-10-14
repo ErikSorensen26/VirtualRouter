@@ -5,6 +5,7 @@
 #include <Encapsulation.h>
 #include <VirtualRouter.h>
 #include <Interface.h>
+#include <InterfaceType.hpp>
 #include <algorithm>
 #include <Global.h>
 #include <IPPacket.h>

@@ -8,14 +8,15 @@
 #include <vector>
 #include <unordered_set>
 #include <HeaderHelpers.hpp>
+#include <string>
 #include <cstring>
 #include <map>
 
 // Forward declarations
 class Global;
 class TimeManager;
-enum class AddressFamily;
-enum class InterfaceType;
+enum class AddressFamily : uint8_t;
+enum class InterfaceType : uint8_t;
 class MockInterface;
 class Internal_NdpTest;
 class IPAddress;
@@ -35,23 +36,6 @@ namespace Protocol
     }
     class Ndp;
 }
-
-/**
- * @enum InterfaceType
- * @brief Enunerates the various types of network interfaces supported
- */
-enum class InterfaceType : uint8_t
-{
-    UNDEFINED = 0,          ///< Undefined interface type.
-    ETHERNET = 1,           ///< Ethernet interface type.
-    FAST_ETHERNET = 2,      ///< Fast Ethernet type.
-    GIGABIT_ETHERNET = 3,   ///< Gigabit Ethernet interface type.
-    LOOPBACK = 4,           ///< Loopback interface type.
-    PORT_CHANNEL = 5,       ///< Port-channel interface type.
-    TUNNEL = 6,             ///< Tunnel interface type.
-    VIRTUAL_TEMPLATE = 7,   ///< Virtual Template interface type.
-    VLAN = 8                ///< VLAN interface type.
-};
 
 inline uint32_t calculateInterfaceKey(InterfaceType type, float id) {
     uint8_t typeEncoded = static_cast<uint8_t>(type);
@@ -81,6 +65,7 @@ public:
 
     float id;                       ///< Identifier for the interface.
     InterfaceType interfaceType;    ///< Type of interface.
+    std::string physicalInterface;  ///< Name of physical interface that is attached.
     uint32_t key;                   ///< Interface ID for global identification.
 
     std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)

@@ -9,7 +9,7 @@
 #include <map>
 
 class IFileSystem;
-enum class InterfaceType;
+enum class InterfaceType : uint8_t;
 
 class HardwareManager
 {

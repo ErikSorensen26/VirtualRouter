@@ -227,7 +227,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 		{
 			terminal.isList = true;
 			IPAddress neighborIp = Functions::getAddress(commandStream[1]);
-			InterfaceType type = terminal.engine.getInterfaceType(commandStream[2]);
+			InterfaceType type = getInterfaceType(commandStream[2]);
 			if (type != InterfaceType::UNDEFINED)
 			{
 				float interfaceId = std::stof(commandStream[3]);
@@ -280,11 +280,11 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			terminal.isList = true;
 			if (!negate)
 			{
-				currentEigrp->addPassiveInterface(calculateInterfaceKey(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2])));
+				currentEigrp->addPassiveInterface(calculateInterfaceKey(getInterfaceType(commandStream[1]), std::stof(commandStream[2])));
 			}
 			else
 			{
-				currentEigrp->addPassiveInterface(calculateInterfaceKey(terminal.engine.getInterfaceType(commandStream[1]), std::stof(commandStream[2])), false);
+				currentEigrp->addPassiveInterface(calculateInterfaceKey(getInterfaceType(commandStream[1]), std::stof(commandStream[2])), false);
 			}
 		}
 		else if (commandStream[0] == "redistribute")
@@ -801,7 +801,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			{
 				terminal.isList = true;
 				IPAddress neighborIp = Functions::getAddress(commandStream[1]);
-				InterfaceType type = terminal.engine.getInterfaceType(commandStream[2]);
+				InterfaceType type = getInterfaceType(commandStream[2]);
 				float interfaceId = std::stof(commandStream[3]);
 				uint32_t key = calculateInterfaceKey(type, interfaceId);
 

@@ -10,10 +10,45 @@
 #include <IPPacket.h>
 #include <Configs.h>
 
-Protocol::Dhcpv6Server::Dhcpv6Server(Global& global) : DhcpServerBase(global)
+/*
+ * oro cannot have:
+ * clientid
+ * serverid
+ * iana
+ * iata
+ * iapd
+ * iaaddr
+ * iaprefix
+ */
+
+#define ADD_DELAYED_AUTH                                            \
+    auto auth = authManager.addDelayedAuthOption(tlv, send.clientID);  \
+    bool validAuth;                                                 \
+    if (auth.has_value())                                           \
+    {                                                               \
+        if (!auth.value().digest) return false;                     \
+        validAuth = true;                                           \
+    }
+
+#define ADD_DELAYED_DIGEST                                          \
+    if (validAuth)                                                  \
+        authManager.addDelayedAuthDigest(dhcp, tlv, auth.value());
+
+void Protocol::Dhcpv6Server::handlePacket(Dhcpv6Header& dhcp, Interface& iface, bool multicast, const uint8_t* clientIp)
 {
-    dhcpUniqueIdentifier = generateUniqueIdentifier();
-    startServer();
+    Dhcpv6::Dhcpv6PacketBuild build(&iface);
+    Dhcpv6::Dhcpv6PacketSend send = {
+        .iface = iface,
+        .multicast = multicast,
+        .clientAddress = clientIp,
+        .build = build
+    };
+    Dhcpv6::Dhcpv6PacketReceive receive = {
+        .dhcpHeader = dhcp,
+        .send = send
+    };
+    __uint128_t networkAddress = iface.configs.ipv6.getLocalAddress();
+    handleDhcpPacket(receive, networkAddress);
 }
 
 bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packet, __uint128_t networkAddress)
@@ -183,7 +218,7 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
             {
                 reconfigAccepts[clientID] = {
                     .clientAddress = networkAddress ? 0 : readU128(packet.send.clientAddress),
-                    .interfaceKey = currentInterface->configs.key
+                    .interfaceKey = iface.configs.key
                 };
             }
         }
@@ -1334,6 +1369,7 @@ bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay,
     };
 
     UDPPacket::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    return true;
 }
 
 size_t Protocol::Dhcpv6Server::processRelayChain(const Dhcpv6RelayHeader& relay, Dhcpv6Header& dhcp, std::vector<Dhcpv6::RelayLink>& chain)
@@ -1415,12 +1451,11 @@ bool Protocol::Dhcpv6Server::sendAdvertise(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 
-    send.build.maxSize = currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
-
+    Interface* interface = &send.iface;
+    send.build.maxSize = interface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
     if (send.relay) return true;
 
     // build udp
-    Interface* interface = &send.iface;
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
@@ -1430,6 +1465,7 @@ bool Protocol::Dhcpv6Server::sendAdvertise(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv
     };
 
     UDPPacket::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    return true;
 }
 
 bool Protocol::Dhcpv6Server::sendReply(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::Dhcpv6IAOptions* ia, const uint8_t* transId, bool rapidCommit)
@@ -1441,14 +1477,12 @@ bool Protocol::Dhcpv6Server::sendReply(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::D
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 
-    send.build.maxSize = currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
-
+    Interface* interface = &send.iface;
+    send.build.maxSize = interface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
     buildReply(send.build, send, ia, transId, rapidCommit);
-
     if (send.relay) return true;
 
     // build udp
-    Interface* interface = &send.iface;
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
@@ -1458,6 +1492,7 @@ bool Protocol::Dhcpv6Server::sendReply(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::D
     };
 
     UDPPacket::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    return true;
 }
 
 bool Protocol::Dhcpv6Server::sendConfirmReply(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::Dhcpv6IAOptions& ia, const uint8_t* transId, bool success)
@@ -1469,14 +1504,12 @@ bool Protocol::Dhcpv6Server::sendConfirmReply(Dhcpv6::Dhcpv6PacketSend& send, Dh
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 
-    send.build.maxSize = currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
-
+    Interface* interface = &send.iface;
+    send.build.maxSize = interface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
     buildConfirmReply(send.build, send, ia, transId, success);
-
     if (send.relay) return true;
 
     // build udp
-    Interface* interface = &send.iface;
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
@@ -1486,6 +1519,7 @@ bool Protocol::Dhcpv6Server::sendConfirmReply(Dhcpv6::Dhcpv6PacketSend& send, Dh
     };
 
     UDPPacket::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    return true;
 }
 
 bool Protocol::Dhcpv6Server::sendReconfigure(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::ReconfigReason reason)
@@ -1503,12 +1537,11 @@ bool Protocol::Dhcpv6Server::sendReconfigure(Dhcpv6::Dhcpv6PacketSend& send, Dhc
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 
-    send.build.maxSize = currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
-
+    Interface* interface = &send.iface;
+    send.build.maxSize = interface->configs.ipv6.mtu.load(std::memory_order_relaxed) - builder.bufferOffset;
     buildReconfigure(send.build, send, reason);
 
     // build udp
-    Interface* interface = &send.iface;
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
@@ -1518,6 +1551,7 @@ bool Protocol::Dhcpv6Server::sendReconfigure(Dhcpv6::Dhcpv6PacketSend& send, Dhc
     };
 
     UDPPacket::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    return true;
 }
 
 // Packet Builders
@@ -1562,6 +1596,7 @@ bool Protocol::Dhcpv6Server::buildAdvertise(Dhcpv6::Dhcpv6PacketBuild& build, Dh
     builder.addTLVSize(tlv.size());
 
     ADD_DELAYED_DIGEST
+    return true;
 }
 
 bool Protocol::Dhcpv6Server::buildReply(Dhcpv6::Dhcpv6PacketBuild& build, Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::Dhcpv6IAOptions* ia, const uint8_t* transId, bool rapidCommit)
@@ -1603,6 +1638,7 @@ bool Protocol::Dhcpv6Server::buildReply(Dhcpv6::Dhcpv6PacketBuild& build, Dhcpv6
 
     ADD_DELAYED_DIGEST
 
+    return true;
 }
 
 bool Protocol::Dhcpv6Server::buildConfirmReply(Dhcpv6::Dhcpv6PacketBuild& build, Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::Dhcpv6IAOptions& ia, const uint8_t* transId, bool allOnLink)
@@ -1644,6 +1680,7 @@ bool Protocol::Dhcpv6Server::buildConfirmReply(Dhcpv6::Dhcpv6PacketBuild& build,
     builder.addTLVSize(tlv.size());
 
     ADD_DELAYED_DIGEST
+    return true;
 }
 
 bool Protocol::Dhcpv6Server::buildReconfigure(Dhcpv6::Dhcpv6PacketBuild& build, Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::ReconfigReason reason)
@@ -1962,38 +1999,16 @@ bool Protocol::Dhcpv6Server::addStaticLease(Dhcpv6::IANABlock& block, const IAKe
 {
     if (auto lit = configs.staticNAs.find(key); lit != configs.staticNAs.end() && lit->second.second)
     {
-        if (net && net->config && net->config->interface)
+        auto& network = lit->second.second;
+        if (auto it = network->leaseManager->staticNAs.find(key); it != network->leaseManager->staticNAs.end())
         {
-            duid += net->config->interface->configs.getMac();
-            break;
-        }
-    }
-    if (Configs::macAddressList.GigabitEthernet.size() == 0)
-    {
-        throw std::runtime_error("No MAC address available for DUID");
-    }
-
-    duid += ByteString(Configs::macAddressList.GigabitEthernet.front());
-
-    return duid;
-}
-
-Dhcpv6Header::Option Protocol::Dhcpv6Server::buildStatusOption(const ByteString& code, const std::string& message)
-{
-    Dhcpv6Header::Option statusOpt;
-    statusOpt.option = Variable::Dhcpv6::Options::statusCode;
-    statusOpt.length = Functions::numToByte(2 + message.size(), 2);
-    statusOpt.value = code + message;
-    return statusOpt;
-}
-
-bool Protocol::Dhcpv6Server::validateServerID(const Dhcpv6Header& header)
-{
-    for (const auto& opt : header.options)
-    {
-        if (opt.option == Variable::Dhcpv6::Options::serverID && 
-            opt.value == dhcpUniqueIdentifier)
-        {
+            block.addresses.push_back({ it->second.address, { Dhcpv6StatusCode::Success }, it->second.preferred, it->second.valid });
+            if (auto tit = network->leaseManager->leaseTimerIDs.find(it->second.address); tit != network->leaseManager->leaseTimerIDs.end()) timeManager.cancelTimer(tit->second);
+            auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(it->second.valid);
+            network->leaseManager->leaseTimerIDs[it->second.address] = timeManager.addTimer(expiry, [lmgr = network->leaseManager, addr = it->second.address, key]() {
+                lmgr->expireLease(addr, key);
+            });
+            network->leaseManager->leaseKeys[it->second.address] = key;
             return true;
         }
     }

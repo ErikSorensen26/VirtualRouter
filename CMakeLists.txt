@@ -10,10 +10,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 add_compile_options(-Wall -Wno-unused-parameter)
 
 # Option to control static build
-option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" ON)
+option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" OFF)
 
 # Option to include debug symbols and backtrace info
-option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" ON)
+option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" OFF)
 
 add_custom_target(copy_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -110,6 +110,17 @@ if (BUILD_STATIC_ROUTER)
         pthread
     )
 else()
+    set(cmake_interprocedural_optimization false)
+    add_compile_options(
+        -O0
+        -g3
+        -fno-omit-frame-pointer
+        -Wall -Wextra -Wpedantic -Wshadow -Wcast-align -Wconversion -Wsign-conversion
+    )
+    add_link_options(-fsanitize=address)
+    add_compile_options(-fsanitize=address)
+    add_compile_definitions(DEBUG)
+
     # External Dependencies
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(PCAP REQUIRED libpcap)
@@ -122,4 +133,4 @@ else()
     add_subdirectory(VirtualRouter)
     add_subdirectory(Utils)
     add_subdirectory(Tests)
-endif()
+#endif()
