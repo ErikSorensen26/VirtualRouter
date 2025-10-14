@@ -195,7 +195,7 @@ namespace Protocol
         auto it = arpCache.find(targetIp);
         if (it != arpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime && it->second.status == ArpCacheStatus::COMPLETE)
         {
-            std::memcpy(out, it->second.macAddress, 16);
+            std::memcpy(out, it->second.macAddress, 6);
             return true;
         }
         return false;
@@ -601,11 +601,11 @@ namespace Protocol
         EthernetHeader eth;
         ArpHeader arp;
 
-        packet.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
-        packet.reserveHeader(HeaderType::ARP, ArpHeader::fixedSize);
+        auto* ethEntry = packet.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
+        auto* arpEntry = packet.reserveHeader(HeaderType::ARP, ArpHeader::fixedSize);
 
-        eth.setBuffer(packet.getBuffer());
-        arp.setBuffer(packet.getBuffer() + EthernetHeader::fixedSize);
+        eth.setBuffer(ethEntry->buffer);
+        arp.setBuffer(arpEntry->buffer);
 
         // Set up the Ethernet header for the ARP request
         eth.setDestinationMac(Variable::Mac::broadcast);
@@ -629,14 +629,14 @@ namespace Protocol
         EthernetHeader eth;
         ArpHeader arp;
 
-        packet.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
-        packet.reserveHeader(HeaderType::ARP, ArpHeader::fixedSize);
+        auto* ethEntry = packet.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
+        auto* arpEntry = packet.reserveHeader(HeaderType::ARP, ArpHeader::fixedSize);
 
-        eth.setBuffer(packet.getBuffer());
-        arp.setBuffer(packet.getBuffer() + EthernetHeader::fixedSize);
+        eth.setBuffer(ethEntry->buffer);
+        arp.setBuffer(arpEntry->buffer);
 
         // Set up the Ethernet header for the ARP request
-        eth.setDestinationMac(Variable::Mac::broadcast);
+        eth.setDestinationMac(targetMac);
         eth.setSourceMac(currentMac);
         eth.setType(Variable::Ethernet::arp);
 

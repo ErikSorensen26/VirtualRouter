@@ -128,7 +128,8 @@ bool encapsulate(PacketBuilder& packet)
             case HeaderType::DHCPV6: break;
             case HeaderType::DHCPV6_RELAY: break;
             case HeaderType::ENCAPSULATE: break;
+            default: return false;
         }
     }
-    return false;
+    return true;
 }

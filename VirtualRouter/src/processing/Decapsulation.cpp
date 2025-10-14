@@ -118,8 +118,12 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
             }
             case Variable::IP::tcp:
             {
+                if (len < packet.offset + 13)
+                    return false;
                 TcpHeader tcp;
                 size_t tcpLen = ((data[packet.offset + 12] & 0xF0) >> 4) * 4;
+                if (tcpLen < 20 || len < packet.offset + tcpLen)
+                    return false;
                 if (unlikely(!tcp.parse(data, len, tcpLen, packet.offset))) return false;
                 packet.headers[packet.count++] = { HeaderType::TCP, packet.offset };
                 packet.offset += tcpLen;

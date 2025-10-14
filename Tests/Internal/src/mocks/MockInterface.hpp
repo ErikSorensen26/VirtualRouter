@@ -5,6 +5,7 @@
 
 #include <gmock/gmock.h>
 #include <Interface.h>
+#include <InterfaceType.hpp>
 #include <PacketStructure.h>
 #include <Global.h>
 
@@ -14,7 +15,7 @@ public:
     // Constructor forwarding to base class constructor
     MockInterface(Global& global,
                   InterfaceType interfaceType = InterfaceType::GIGABIT_ETHERNET,
-                  std::string outInterface = "enx5c857e3fcefa",
+                  std::string outInterface = "lo",
                   size_t inQueSiz = 100,
                   size_t outQueSiz = 100,
                   std::string mac = "010203040506",
@@ -38,7 +39,7 @@ public:
     MOCK_METHOD(void, startThreads, (), (override));
 
     void enableIPs() {
-        EXPECT_CALL(*this, setIPv4).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([this](uint8_t ip, uint8_t subnet) {
+        EXPECT_CALL(*this, setIPv4).Times(::testing::AnyNumber()).WillRepeatedly(::testing::Invoke([this](uint32_t ip, uint8_t subnet) {
             if (shutdownFlag.load(std::memory_order_relaxed)) return;
             std::lock_guard<std::shared_mutex> lock(configs.ipMutex);
             configs.ipv4.setAddress(ip, subnet);

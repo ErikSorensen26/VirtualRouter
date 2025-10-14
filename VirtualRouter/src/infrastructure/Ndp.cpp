@@ -709,7 +709,7 @@ namespace Protocol
         }
         
         reserved[0] |= configs.raHopLimitUnspecified.load(std::memory_order_relaxed) ? 0 : 64;
-        writeU32(reserved + 2, configs.routerLifetime.load(std::memory_order_relaxed));
+        writeU16(reserved + 2, configs.routerLifetime.load(std::memory_order_relaxed));
         icmp.setReserved(reserved);
 
         uint8_t* trail = icmp.getTrailData();
