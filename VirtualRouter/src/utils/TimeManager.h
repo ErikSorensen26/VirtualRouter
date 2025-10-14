@@ -47,6 +47,7 @@ private:
     };
 
     void Run(); // The worker function for the timer thread
+    void runSingleTimer(const TimerData& timer);
     void scheduleCallback(const TimerData& data);
 
     std::atomic<uint32_t> nextTimerId;

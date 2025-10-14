@@ -109,7 +109,7 @@ bool EgressBase::getFrame(FrameHandle& out)
         return false;
     }
 
-    out.slot = reinterpret_cast<PacketSlot*>(out.payload + MTU_PADDING + packetSize);
+    out.slot = reinterpret_cast<PacketSlot*>(out.payload + packetSize + MTU_PADDING);
     out.slot->index = idx;
     return true;
 }

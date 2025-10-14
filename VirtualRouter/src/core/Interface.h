@@ -14,6 +14,8 @@
 #include <PacketStructure.h>
 #include <FIFOQueue.hpp>
 
+#include <Ingress.h>
+
 class EigrpTest;
 class VirtualRouter;
 class MockInterface;

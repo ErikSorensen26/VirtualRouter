@@ -10,6 +10,8 @@
 #include <atomic>
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
+#include <TxQueueManager.h>
+#include <RxQueueManager.h>
 #include <CliEngine.h>
 #include <AddressFamily.hpp>
 #include <IPAddress.hpp>
@@ -196,6 +198,9 @@ public:
     ThreadPool threadPool;  ///< Global thread pool for off-loading.
     TimeManager timeManager; ///< Global time manager for time keeping.
     CliEngine engine; ///< Global CLI engine for user interface.
+
+    TxQueueManager txMgr; ///< TX Queue Manager
+    RxQueueManager rxMgr; ///< RX Queue Manager
 };
 
 #endif // GLOBAL_H

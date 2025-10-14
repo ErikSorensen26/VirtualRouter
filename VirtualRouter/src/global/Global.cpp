@@ -9,7 +9,14 @@
 #include <map>
 #include <mutex>
 
-Global::Global(const StartupFiles& stfs, bool enableRouting, bool test) : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), engine(*this, stfs, test) {}
+Global::Global(const StartupFiles& stfs, bool enableRouting, bool test)
+    : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), engine(*this, stfs, test)
+{
+    txMgr.setCorePool({0, 1, 2, 3});
+    txMgr.setCpuPolicy(CpuPolicy::EqualShare);
+    txMgr.setTxCoreBias(1.0);
+}
+
 Global::Global(IFileSystem* fs, const StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, stfs, fs, test) {}
 
 Global::~Global()
@@ -49,7 +56,8 @@ Interface* Global::addInterface(InterfaceType interfaceType, std::string outInte
         return nullptr;
     }
     engine.hwManager->bringUp(outInterface);
-    interfaceList[{interfaceType, interfaceId}] = new Interface(interfaceType, outInterface, inQueSiz, outQueSiz, mac, interfaceId, *getRoutingInstance("default"), debug);
+    InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), outInterface.c_str(), reinterpret_cast<const uint8_t*>(mac.data()), debug};
+    interfaceList[key] = new Interface(iface);
 
     return interfaceList[key];
 }
@@ -73,12 +81,12 @@ std::map<uint32_t, Interface*> Global::getInterfaceList()
 bool Global::removeInterface(uint32_t key)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
-    if (auto it = interfaceList.find({type, interfaceId}); it != interfaceList.end())
+    if (auto it = interfaceList.find(key); it != interfaceList.end())
     {
         std::string hwIface = it->second->configs.physicalInterface;
-        delete interfaceList[{type, interfaceId}];
+        delete interfaceList[key];
         engine.hwManager->bringDown(hwIface);
-        interfaceList.erase({type, interfaceId});
+        interfaceList.erase(key);
         return true;
     }
     return false;

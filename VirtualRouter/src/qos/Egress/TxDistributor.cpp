@@ -20,6 +20,18 @@ void TxDistributor::pushTo(uint32_t qid, PacketSlot* pkt)
     s->queue->enqueue(pkt);
 }
 
+void TxDistributor::push(PacketSlot* pkt, TxDistPolicy policy)
+{
+    uint32_t n = N.load(std::memory_order_relaxed);
+    if (n == 0 || !qs || !pkt)
+        return;
+
+    uint32_t flowHash = pkt->flowHash;
+    uint32_t qid = pickQueue(policy, flowHash);
+
+    pushTo(qid, pkt);
+}
+
 uint32_t TxDistributor::pickQueue(TxDistPolicy policy, uint32_t flowHash)
 {
     switch (policy)

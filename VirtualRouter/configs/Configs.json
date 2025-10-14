@@ -1,7 +1,7 @@
 {
     "Interface": {
         "GigabitEthernet": [
-            "link0",
+            "veth0",
             "test1",
             "test2",
             "test3",

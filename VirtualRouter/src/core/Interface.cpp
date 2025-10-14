@@ -13,7 +13,8 @@
 #include <VirtualRouter.h>
 #include <InterfaceConfigs.h>
 #include <PacketBuilder.hpp>
-#include <TxDistributor.h>
+#include <TxQueueManager.h>
+#include <RxQueueManager.h>
 #include <Global.h>
 #include <Process.h>
 
@@ -24,10 +25,7 @@ Interface::Interface(const InterfaceCreation& cfgs)
     threadsRunning(false)
 {
     // Set member variables
-    configs.physicalInterface = outInterface;
-    outInt = outInterface;
-    inQsiz = inQueSiz;
-    outQsiz = outQueSiz;
+    configs.physicalInterface = cfgs.outInterface;
 
     startThreads(); // TEMPORARY: will be shutdown by default once shits working
 }
@@ -259,6 +257,7 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
     // Enqueue the serialized packet for sending
     if (packetInfo.slot)
     {
+        tx->push(packetInfo.slot);
         //packetOutQueue.enqueue(packetInfo.slot);
     }
 }
@@ -275,6 +274,10 @@ void Interface::processIngress(uint8_t* packet, size_t size)
 
 void Interface::startThreads() 
 {
+    // Add the interface to the TX Queue manager
+    routingInstance->global.txMgr.addInterface(*this, configs.physicalInterface, { .maxQueues = 1 });
+    routingInstance->global.rxMgr.addInterface(*this, configs.physicalInterface, { .maxQueues = 1 });
+
     if (routingInstance->global.routingEnabled)
     {
         // Initialize shared pointers for Protocol objects
@@ -292,6 +295,10 @@ void Interface::startThreads()
 
 void Interface::stopThreads() 
 {
+    // Add the interface to the TX Queue manager
+    routingInstance->global.txMgr.removeInterface(*this);
+    routingInstance->global.rxMgr.removeInterface(*this);
+
     if (arp)
     {
         delete arp;

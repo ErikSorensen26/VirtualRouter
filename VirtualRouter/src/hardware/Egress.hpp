@@ -114,7 +114,6 @@ public:
 
     inline bool send(uint32_t index, uint32_t length) noexcept
     {
-        return true;
         if (index >= frameCount)
             return false;
 

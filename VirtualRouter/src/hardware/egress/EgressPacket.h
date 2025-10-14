@@ -13,7 +13,9 @@
 class EgressPacket : public EgressBase
 {
     std::atomic<uint32_t> pendingKicks = 0;
-    uint32_t kickBatch = 16;
+    std::atomic<uint64_t> lastKick = 0;
+    uint32_t kickBatch = 64;
+    uint64_t maxKickDelayNs = 10000;
 
 public:
 
@@ -45,6 +47,10 @@ private:
     sockaddr_ll kickAddr{};
 
     uint32_t reclaimCursor = 0;
+    uint32_t maxPayload;
+    uint8_t* frameBase;
+    uint32_t frameCountCached = 0;
+    uint32_t frameSizeCached = 0;
 
 private:
     void setupSocket();

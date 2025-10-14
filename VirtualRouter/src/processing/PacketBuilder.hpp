@@ -38,13 +38,27 @@ public:
         buffer = static_cast<uint8_t*>(std::malloc(MaxPacketSize));
         if (!buffer) throw std::bad_alloc();
 
-        std::memcpy(buffer, other.buffer, MaxPacketSize);
-        std::memcpy(headers, other.headers, sizeof(headers));
+        size_t usedBytes = other.bufferOffset;
+        if (usedBytes > MaxPacketSize) usedBytes = MaxPacketSize;
+
+        std::memcpy(buffer, other.buffer, usedBytes);
+
+        headerCount = other.headerCount;
+        buildIndex = other.buildIndex;
+        bufferOffset = other.bufferOffset;
+        local = true;
+        slot = nullptr;
+
+        std::memcpy(headers, other.headers, headerCount * sizeof(BuildEntry));
 
         // Rebase each header pointer into the new buffer
-        for (size_t i = 0; i < headerCount; ++i) {
+        for (size_t i = 0; i < headerCount; ++i)
+        {
             ptrdiff_t offset = other.headers[i].buffer - other.buffer;
-            headers[i].buffer = buffer + offset;
+            if (offset < 0 || static_cast<size_t>(offset) >= usedBytes)
+                headers[i].buffer = nullptr;
+            else
+                headers[i].buffer = buffer + offset;
         }
     }
 
@@ -64,7 +78,7 @@ public:
             buildIndex = other.buildIndex;
             headerCount = other.headerCount;
             
-            std::memcpy(buffer, other.buffer, MaxHeaders);
+            std::memcpy(buffer, other.buffer, other.bufferOffset);
             std::memcpy(headers, other.headers, sizeof(headers));
 
             for (size_t i = 0; i < headerCount; ++i) {
@@ -95,6 +109,7 @@ public:
         entry.type = type;
         entry.buffer = buffer + bufferOffset;
         entry.length = size;
+        slot->len += size;
 
         bufferOffset += size;
         return &entry;
@@ -103,6 +118,7 @@ public:
     void addTLVSize(size_t tlvSize)
     {
         bufferOffset += tlvSize;
+        slot->len += tlvSize;
         currentBuildHeader()->length += tlvSize;
     }
 
