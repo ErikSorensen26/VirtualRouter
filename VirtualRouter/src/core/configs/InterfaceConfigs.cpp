@@ -248,7 +248,7 @@ __uint128_t InterfaceConfigs::IPv6State::getLocalUnicast()
 
 bool InterfaceConfigs::IPv6State::hasLocalAddress(const uint8_t* addr)
 {
-    return linkLocalAddress && std::memcmp(linkLocalAddress->ip, addr, 16);
+    return linkLocalAddress && std::memcmp(linkLocalAddress->ip, addr, 16) == 0;
 }
 
 bool InterfaceConfigs::IPv6State::hasLocalUnicast(const uint8_t* addr)

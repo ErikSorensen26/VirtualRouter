@@ -100,7 +100,7 @@ public:
 
         std::atomic<uint16_t> dadAttempts = 1;
         std::atomic<uint16_t> raLifetime = 1800;
-        std::atomic<uint16_t> raPreferedLifetime = 900;
+        std::atomic<uint16_t> raPreferredLifetime = 900;
         std::atomic<uint16_t> routerLifetime = 1800;
 
         std::atomic<uint32_t> nsInterval = 1000;
@@ -193,7 +193,7 @@ public:
 
     void addRaGuardAllowedMac(const uint8_t* mac, bool remove = false);
 
-    bool getMac(uint8_t* out, const uint8_t* ip);
+    uint8_t* getMac(uint8_t* out, const uint8_t* ip);
 
 private:
     Interface* currentInterface; ///< Pointer to the associated network interface.

@@ -137,6 +137,13 @@ public:
         return &headers[headerCount - (++buildIndex)];
     }
 
+    BuildEntry* previewNextBuildHeader()
+    {
+        if (buildIndex >= headerCount)
+            return nullptr;
+        return &headers[headerCount - (buildIndex + 1)];
+    }
+
     BuildEntry* currentBuildHeader()
     {
         return &headers[headerCount - buildIndex];

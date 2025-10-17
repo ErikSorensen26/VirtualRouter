@@ -163,10 +163,10 @@ namespace Protocol
     }
 
     // Get MAC address for the given ip
-    bool Ndp::getMac(uint8_t* out, const uint8_t* ip)
+    uint8_t* Ndp::getMac(uint8_t* out, const uint8_t* ip)
     {
         IPAddress address;
-        address.v6 = true;
+        address.isV6 = true;
         std::memcpy(address.raw, ip, 16);
         std::shared_lock<std::shared_mutex> lock(ndpCacheMutex);
         {
@@ -176,15 +176,16 @@ namespace Protocol
             if (staticIt != staticNdpCache.end())
             {
                 memcpy(out, staticIt->second.macAddress, 6);
-                return true;
+                return out;
             }
         }
         auto it = ndpCache.find(address);
         if (it != ndpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime)
         {
             memcpy(out, it->second.macAddress, 6);
+            return out;
         }
-        return false;
+        return nullptr;
     }
 
     void Ndp::initiateSlaac()
@@ -495,11 +496,11 @@ namespace Protocol
         {
             PacketBuilder pkt = std::move(packets.front());
             packets.pop();
-            auto current = pkt.currentBuildHeader();
+            auto current = pkt.previewNextBuildHeader();
             if (!current) continue;
 
             // Continue building next header
-            switch (current->next)
+            switch (current->type)
             {
                 //TODO add more headers
                 case HeaderType::ETHERNET:
@@ -592,7 +593,7 @@ namespace Protocol
 
     void Ndp::neighborSolicitation(PacketBuilder& packet, const IPAddress& targetIp, const uint8_t* currentMac)
     {
-        IPPacket::reserveIpv4(currentInterface, packet);
+        IPPacket::reserveIpv6(currentInterface, packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -605,21 +606,24 @@ namespace Protocol
 
         icmp.setType(Variable::ICMPv6::Type::ndpNeighborSolicitation);
         icmp.setCode(0);
-        icmp.setReserved(0);
+        icmp.setReservedInt(0);
 
         uint8_t* trail = icmp.getTrailData();
         std::memcpy(trail, targetIp.raw, 16);
 
-        TLV8BufferManager options(trail + 16, 8);
-        options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
+        if (currentMac)
+        {
+            TLV8BufferManager options(trail + 16, 8);
+            options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
+            nextHeader->length = Icmpv6Header::fixedSize + options.size();
+        }
 
-        nextHeader->length = Icmpv6Header::fixedSize + options.size();
         packet.bufferOffset += nextHeader->length;
     }
 
     void Ndp::neighborAdvertisement(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* targetIp)
     {
-        IPPacket::reserveIpv4(currentInterface, packet);
+        IPPacket::reserveIpv6(currentInterface, packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -654,7 +658,7 @@ namespace Protocol
 
     void Ndp::routeSolicitation(PacketBuilder& packet, const uint8_t* currentMac)
     {
-        IPPacket::reserveIpv4(currentInterface, packet);
+        IPPacket::reserveIpv6(currentInterface, packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -667,7 +671,7 @@ namespace Protocol
 
         icmp.setType(Variable::ICMPv6::Type::ndpRouteSolicitation);
         icmp.setCode(0);
-        icmp.setReserved(0);
+        icmp.setReservedInt(0);
         
         // Get trail pointer
         uint8_t* trail = icmp.getTrailData();
@@ -681,7 +685,7 @@ namespace Protocol
 
     void Ndp::routeAdvertisement(PacketBuilder& packet, const uint8_t* currentMac)
     {
-        IPPacket::reserveIpv4(currentInterface, packet);
+        IPPacket::reserveIpv6(currentInterface, packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -740,7 +744,7 @@ namespace Protocol
                 flags |= 0x40; // A = autonomous
 
                 uint32_t lifetime = configs.raLifetime.load(std::memory_order_relaxed);
-                uint32_t preferredLifetime = configs.raPreferedLifetime.load(std::memory_order_relaxed);
+                uint32_t preferredLifetime = configs.raPreferredLifetime.load(std::memory_order_relaxed);
                 {
                     std::shared_lock<std::shared_mutex> lock(configs.configMutex);
                     if (configs.raIntervalMS)
@@ -853,7 +857,7 @@ namespace Protocol
 
         PacketBuilder packet(currentInterface);
 
-        IPPacket::reserveIpv4(currentInterface, packet);
+        IPPacket::reserveIpv6(currentInterface, packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -989,20 +993,20 @@ namespace Protocol
         // Process each RA option (only prefix and mtu)
         for (const auto& opt : options)
         {
-            if (opt.type == Variable::ICMPv6::Option::prefix && opt.valueSize >= 32)
+            if (opt.type == Variable::ICMPv6::Option::prefix && opt.valueSize >= 30)
             {
                 uint8_t prefixLen = opt.value[0];
                 uint8_t prefixFlags = opt.value[1];
                 bool A = prefixFlags & 0x40;
 
-                uint32_t validLifetime = readU32(opt.value + 4);
-                uint32_t preferredLifetime = readU32(opt.value + 8);
+                uint32_t validLifetime = readU32(opt.value + 2);
+                uint32_t preferredLifetime = readU32(opt.value + 6);
 
                 if (preferredLifetime > validLifetime) continue;
 
                 // Check exclusion
                 bool isExcluded = std::any_of(slaacExclusionPrefixes.begin(), slaacExclusionPrefixes.end(), [&](IPAddress p) {
-                    return Functions::isSubnetOf(opt.value, prefixLen, p.raw, prefixLen, AddressFamily::IPv6);
+                    return Functions::isSubnetOf(opt.value + 14, prefixLen, p.raw, prefixLen, AddressFamily::IPv6);
                 });
                 if (isExcluded) continue;
 
@@ -1019,7 +1023,7 @@ namespace Protocol
                     slaacAddr->preferredLifetime = preferredLifetime;
 
                     uint8_t mac[6];
-                    Functions::calculateEui64(slaacAddr->ip, opt.value, currentInterface->configs.getMac(mac));
+                    Functions::calculateEui64(slaacAddr->ip, opt.value + 14, currentInterface->configs.getMac(mac));
 
                     {
                         std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
@@ -1059,8 +1063,8 @@ namespace Protocol
         IPAddress betterNextHop;
         destinationIp.isV6 = true;
         betterNextHop.isV6 = true;
-        std::memcpy(destinationIp.raw, trail.data(), 16);
-        std::memcpy(betterNextHop.raw, trail.data() + 16, 16);
+        std::memcpy(betterNextHop.raw, trail.data(), 16);
+        std::memcpy(destinationIp.raw, trail.data() + 16, 16);
         uint64_t nextHopMac;
         bool macFound = false;
 

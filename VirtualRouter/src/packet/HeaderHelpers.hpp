@@ -301,7 +301,7 @@ inline static uint8_t* writeU128(uint8_t* dest, __uint128_t val)
 {
     if constexpr (is_little_endian)
     {
-        for (size_t i = 15; i >= 0; --i)
+        for (int i = 15; i >= 0; --i)
         {
             dest[i] = static_cast<uint8_t>(val & 0xFF);
             val >>= 8;

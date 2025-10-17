@@ -37,6 +37,8 @@ struct Icmpv6Header
         { memcpy(raw->checksum, val, 2); }
     void setReserved(uint8_t* val)
         { memcpy(raw->reserved, val, 4); }
+    void setReservedInt(uint32_t val)
+        { writeU32(raw->reserved, val); }
 };
 
 // Parses trailing data into ICMPv6 options

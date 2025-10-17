@@ -23,7 +23,7 @@ namespace Protocol
         }
     }
 
-    uint8_t* getDestinationMac(uint8_t* mac, Interface* iface, AddressFamily af, const uint8_t* destIp, PacketBuilder& packet, uint16_t type)
+    uint8_t* getDestinationMac(uint8_t* mac, Interface* iface, AddressFamily af, const uint8_t* destIp, PacketBuilder& packet)
     {
         if (Functions::isMulticast(destIp, af))
         {
@@ -99,7 +99,17 @@ namespace Protocol
         ip.setProtocol(ipv4Build.protocolType);
         ip.setDestinationAddress(ipv4Build.destIp);
 
-        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destIp, ipv4Build.destMac, Variable::Ethernet::ipv4);
+        if (!ipv4Build.destMac)
+        {
+            uint8_t mac[6];
+            if (!getDestinationMac(mac, ipv4Build.iface, AddressFamily::IPv4, ipv4Build.destIp, ipv4Build.packetInfo))
+                return; // ARP resolution in progress or failed
+            Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destIp, mac, Variable::Ethernet::ipv4);
+        }
+        else
+        {
+            Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destIp, ipv4Build.destMac, Variable::Ethernet::ipv4);
+        }
     }
 
     void IPPacket::buildIpv6(
@@ -178,7 +188,17 @@ namespace Protocol
         ip.setHopLimit(ipv6Build.hopLimit);
         ip.setDestinationAddress(ipv6Build.destIp);
 
-        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destIp, ipv6Build.destMac, Variable::Ethernet::ipv6);
+        if (!ipv6Build.destMac)
+        {
+            uint8_t mac[6];
+            if (!getDestinationMac(mac, ipv6Build.iface, AddressFamily::IPv6, ipv6Build.destIp, ipv6Build.packetInfo))
+                return; // NDP resolution in progress or failed
+            Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destIp, mac, Variable::Ethernet::ipv6);
+        }
+        else
+        {
+            Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destIp, ipv6Build.destMac, Variable::Ethernet::ipv6);
+        }
 
         if (!ipv6Build.dontFragment)
         {
