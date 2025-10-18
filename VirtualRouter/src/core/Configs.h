@@ -207,7 +207,7 @@ public:
      *
      * @param stfs Struct holding all startup config file information.
      */
-    void initConfigs(const StartupFiles& stfs);
+    void initConfigs(const StartupFiles& stfs, bool enableDummies = true);
 
     /**
      * @brief Recovers configuration commands from the loaded JSON data.

@@ -28,7 +28,12 @@ public:
     {
         FrameHandle frame;
         if (!iface->tx->getFrame(frame)) std::runtime_error("Full queue unhandled");
-        // TODO handle full queues
+        slot = frame.slot;
+        buffer = frame.payload;
+    }
+
+    PacketBuilder(FrameHandle& frame)
+    {
         slot = frame.slot;
         buffer = frame.payload;
     }

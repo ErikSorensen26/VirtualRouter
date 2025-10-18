@@ -2,26 +2,40 @@
 // Internal_EncapsulationTest.cpp
 
 #include <gtest/gtest.h>
-#include "Encapsulation.h"         // Your encapsulate function
-#include "PacketStructure.h"      // All your protocol structs
-#include <vector>
-#include <string>
-#include <Decapsulation.h>
+#include <Encapsulation.h>         // Your encapsulate function
+#include <PacketStructure.h>      // All your protocol structs
+#include <PacketBuilder.hpp>
 
 //--------------------------------------------------------------------------------
 // Test Fixture
 //--------------------------------------------------------------------------------
 class Internal_EncapsulationTest : public ::testing::Test 
 {
+private:
+    uint8_t buffer[2048] = {0};
+    PacketSlot* pktslot = nullptr;
+    FrameHandle* fhdlr = nullptr;
+
 protected:
+    PacketBuilder* pkt = nullptr;
+    BuildEntry* h;
+
     void SetUp() override
     {
-        // Initialize resources before each test if necessary
+        pktslot = new PacketSlot();
+        fhdlr = new FrameHandle();
+        fhdlr->slot = pktslot;
+        fhdlr->payload = buffer;
+        fhdlr->qid = 0;
+
+        pkt = new PacketBuilder(*fhdlr);
     }
 
     void TearDown() override
     {
-        // Clean up resources after each test if necessary
+        std::memset(buffer, 0, 2048);
+        delete pktslot;
+        delete fhdlr;
     }
 };
 
@@ -39,37 +53,34 @@ TEST_F(Internal_EncapsulationTest, EthernetOnly_Valid)
 {
     // Build a minimal Ethernet "whole packet":
     // [Ethernet(14)] + [Payload]
-    ByteString ethernetHeader = std::string(
-        "\xFF\xFF\xFF\xFF\xFF\xFF"  // Destination MAC (Broadcast)
-        "\x11\x22\x33\x44\x55\x66"  // Source MAC
-        "\x08\x00",                 // EtherType = IPv4 (0x0800)
-        14
-    );
 
-    // No Layer2.5 or higher headers
-    PacketInfo packetInfo;
+    uint8_t ethernetHeader[14] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination Mac (Broadcast)
+        0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+        0x08, 0x00
+    };
+    
+    pkt->reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize);
+    h = pkt->nextBuildHeader();
     EthernetHeader eth;
-    eth.destinationMac = std::string("\xFF\xFF\xFF\xFF\xFF\xFF", 6);
-    eth.sourceMac = std::string("\x11\x22\x33\x44\x55\x66", 6);
-    eth.type = std::string("\x08\x00", 2);
-    packetInfo.Layer2.push_back(eth);
+    eth.setBuffer(h->buffer);
 
-    auto result = encapsulate(packetInfo);
+    // No layer 2.5 or higher headers
+    eth.setDestinationMac(ethernetHeader);
+    eth.setSourceMac(ethernetHeader + 6);
+    eth.setType(Variable::Ethernet::ipv4);
 
-    // Expected Ethernet string
-    ByteString expectedEth = ethernetHeader;
-
-    // Expected result
-    ByteString expected = expectedEth;
-
-    EXPECT_TRUE(result.has_value());
-    EXPECT_EQ(result.value().toHex(), expected.toHex());
+    EXPECT_TRUE(encapsulate);
+    EXPECT_EQ(std::memcmp(pkt->getBuffer(), ethernetHeader, 14), 0);
 }
 
 // Test EthernetOnly_Invalid
 TEST_F(Internal_EncapsulationTest, EthernetOnly_Invalid)
 {
     // No Layer2.5 or higher headers
+    pkt->reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize - 2);
+    h = pkt->nextBuildHeader();
+
     PacketInfo packetInfo;
     EthernetHeader eth;
     eth.destinationMac = std::string("\xFF\xFF\xFF\xFF\xFF\xFF", 6);

@@ -56,8 +56,6 @@ HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& f
                     else if (obj.contains("nic") && obj["nic"].is_string())
                         nic = obj["nic"].get<std::string>();
 
-                    std::cout << nic << std::endl;
-
                     if (!nic.empty())
                     {
                         physicalInterfaces[type].push_back(nic);

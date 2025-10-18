@@ -23,6 +23,7 @@ public:
     std::string getMac(const std::string& ifname);
     const std::vector<std::string> getMacs(InterfaceType type);
     const std::map<InterfaceType, std::vector<std::string>>& getPhysicalInterfaces() { return physicalInterfaces; }
+    const std::vector<std::string>& getPhysicalInterfaces(InterfaceType type) { return physicalInterfaces[type]; }
 
 private:
     bool ensureInterface(const std::string& ifname, InterfaceType type);

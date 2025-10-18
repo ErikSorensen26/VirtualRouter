@@ -7,6 +7,8 @@
 #include <vector>
 #include <sstream>
 #include <CliEngine.h>
+#include <HardwareManager.h>
+#include <InterfaceType.hpp>
 #include <Mode.hpp>
 #include <Configs.h>           // Your Configs class header
 #include "MockFileSystem.hpp" // Mocked file system interface
@@ -119,11 +121,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyStartupFile)
     EXPECT_TRUE(configs->root.empty());
 
     // Verify that additional configurations are loaded as empty
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test Initialization with a valid startup file and additional Configs.json.
@@ -137,12 +135,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig) {
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "192.168.1.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": "100000"
@@ -151,12 +149,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig) {
             ],
             "FastEthernet": [
                 {
-                    "id": "2",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.0.0.1",
-                                "subnet": "255.255.255.252"
+                                "mask": "255.255.255.252"
                             }
                         }
                     }
@@ -170,20 +168,15 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig) {
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "test0",
-            "PORT_1": "test1"
-        },
-        "Mac": {
-            "OUI": "001A2B",
-            "Ethernet": {
-                "1": "3C4D5E"
-            },
-            "FastEthernet": {
-                "1": "3C4D5F"
-            },
-            "GigabitEthernet": {
-                "1": "3C4D60"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ],
+            "FastEthernet": [
+                "fe-0"
+            ],
+            "Ethernet": [
+                "e-0"
+            ]
         }
     }
     )";
@@ -193,31 +186,29 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs({});
+    configs->initConfigs({}, false);
 
     // Verify root configuration
     EXPECT_EQ(configs->root["hostname"]["word"], "TestRouter");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
 
     // Verify interface configurations
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0][MODE_KEY]["ip"]["address"]["ip"], "192.168.1.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0][MODE_KEY]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0][MODE_KEY]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0][MODE_KEY]["bandwidth"], "100000");
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0][MODE_KEY]["ip"]["address"]["ip"], "10.0.0.1");
-    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0][MODE_KEY]["ip"]["address"]["subnet"], "255.255.255.252");
+    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0][MODE_KEY]["ip"]["address"]["mask"], "255.255.255.252");
 
     // Verify additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 2);
-    EXPECT_EQ(configs->physicalInterfaces[0], "test0");
-    EXPECT_EQ(configs->physicalInterfaces[1], "test1");
-
-    EXPECT_EQ(configs->OUI, "001A2B");
-
-    EXPECT_EQ(configs->macAddressList.Ethernet[0], "3C4D5E");
-
-    EXPECT_EQ(configs->macAddressList.FastEthernet[0], "3C4D5F");
-
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "3C4D60");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    const auto& fasts = configs->hwManager->getPhysicalInterfaces(InterfaceType::FAST_ETHERNET);
+    const auto& eths = configs->hwManager->getPhysicalInterfaces(InterfaceType::ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(fasts.size(), 1);
+    EXPECT_EQ(eths.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
+    EXPECT_EQ(fasts[0], "fe-0");
+    EXPECT_EQ(eths[0], "e-0");
 }
 
 // Test Initialization with Valid Startup and Additional Configs
@@ -231,12 +222,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldIn
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "192.168.1.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -247,7 +238,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldIn
             ],
             "FastEthernet": [
                 {
-                    "id": "2",
+                    "id": "1",
                     "commands": {
                         "ip": {
                             "address": {
@@ -275,20 +266,13 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldIn
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "fe-0/0/2"
-        },
-        "Mac": {
-            "OUI": "001A2B",
-            "Ethernet": {
-                "1": "A1B2C3"
-            },
-            "FastEthernet": {
-                "2": "D4E5F6"
-            },
-            "GigabitEthernet": {
-                "1": "789ABC"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ],
+            "FastEthernet": [
+                "fe-0",
+                "fe-1"
+            ]
         }
     }
     )";
@@ -305,30 +289,23 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig_ShouldIn
     EXPECT_EQ(configs->root["hostname"]["word"], "TestRouter");
 
     // Verify interface configurations
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "192.168.1.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "100000");
 
-    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["id"], "2");
+    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["id"], "1");
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["ip"]["address"]["dhcp"], json::object());
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["bandwidth"]["id"], "1000");
 
     // Verify additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 2);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-    EXPECT_EQ(configs->physicalInterfaces[1], "fe-0/0/2");
-
-    EXPECT_EQ(configs->OUI, "001A2B");
-
-    EXPECT_EQ(configs->macAddressList.Ethernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.Ethernet[0], "A1B2C3");
-
-    EXPECT_EQ(configs->macAddressList.FastEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.FastEthernet[0], "D4E5F6");
-
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "789ABC");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    const auto& fasts = configs->hwManager->getPhysicalInterfaces(InterfaceType::FAST_ETHERNET);
+    const auto& eths = configs->hwManager->getPhysicalInterfaces(InterfaceType::ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(fasts.size(), 2);
+    EXPECT_EQ(gigs[0], "ge-0");
+    EXPECT_EQ(fasts[0], "fe-0");
 }
 
 // Test Initialization with Empty Startup and Additional Configs
@@ -354,11 +331,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyStartupAndAdditionalConfig_ShouldIn
     EXPECT_TRUE(configs->root["interface"].empty());
 
     // Verify additional configurations are loaded as empty
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test Initialization with Missing Startup File
@@ -370,29 +343,25 @@ TEST_F(Internal_ConfigTest, InitConfigs_MissingStartupFile_ShouldFailInitializat
 
     // Verify that configurations are empty
     EXPECT_TRUE(configs->root.empty());
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test Initialization with Malformed JSON in Startup File
 TEST_F(Internal_ConfigTest, InitConfigs_MalformedStartupJSON_ShouldInitializeWithEmptyRoot) {
     // Define malformed startup configuration JSON
+    // Trailing comma makes it invalid
     std::string malformedStartupConfig = R"(
     {
         "hostname": {
             "word": "MalformedRouter",
-        } // Trailing comma makes it invalid
+        }
     }
     )";
 
     // Define valid additional Configs.json
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -407,11 +376,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_MalformedStartupJSON_ShouldInitializeWit
     EXPECT_TRUE(configs->root.empty());
 
     // Verify that additional configurations are loaded correctly
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test Initialization with Missing Required Fields in Startup Config
@@ -422,12 +387,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_MissingRequiredFields_ShouldInitializeWi
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.0.0.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -444,13 +409,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_MissingRequiredFields_ShouldInitializeWi
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "001A2B",
-            "Ethernet": {
-                "1": "A1B2C3"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -467,22 +428,15 @@ TEST_F(Internal_ConfigTest, InitConfigs_MissingRequiredFields_ShouldInitializeWi
 
     // Verify interface configurations
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.0.0.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "100000");
 
     // Verify additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-
-    EXPECT_EQ(configs->OUI, "001A2B");
-    EXPECT_EQ(configs->macAddressList.Ethernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.Ethernet[0], "A1B2C3");
-
-    // FastEthernet and GigabitEthernet MACs should be empty
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
 }
 
 // Test Hostname Parsing
@@ -498,8 +452,7 @@ TEST_F(Internal_ConfigTest, ParseHostname_ShouldSetHostnameCorrectly) {
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -524,12 +477,12 @@ TEST_F(Internal_ConfigTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.0.0.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -540,12 +493,12 @@ TEST_F(Internal_ConfigTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
             ],
             "FastEthernet": [
                 {
-                    "id": "2",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "192.168.1.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -561,20 +514,12 @@ TEST_F(Internal_ConfigTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "fe-0/0/2"
-        },
-        "Mac": {
-            "OUI": "AABBCC",
-            "Ethernet": {
-                "1": "112233"
-            },
-            "FastEthernet": {
-                "2": "445566"
-            },
-            "GigabitEthernet": {
-                "1": "778899"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ],
+            "FastEthernet": [
+                "fe-0"
+            ]
         }
     }
     )";
@@ -588,19 +533,19 @@ TEST_F(Internal_ConfigTest, ParseInterfaces_ShouldSetInterfacesCorrectly) {
 
     // Verify interface configurations
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.0.0.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "1000000");
 
     EXPECT_EQ(configs->root["interface"]["FastEthernet"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["id"], "2");
+    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["ip"]["address"]["ip"], "192.168.1.1");
-    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["bandwidth"]["id"], "1000");
 }
 
-// Test Command Parsing for IP, Subnet, and Bandwidth
+// Test Command Parsing for IP, Mask, and Bandwidth
 TEST_F(Internal_ConfigTest, ParseCommands_ShouldSetCommandsCorrectly) {
     std::string startupConfig = R"(
     {
@@ -610,12 +555,12 @@ TEST_F(Internal_ConfigTest, ParseCommands_ShouldSetCommandsCorrectly) {
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "172.16.0.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "id": "1500"
@@ -634,16 +579,9 @@ TEST_F(Internal_ConfigTest, ParseCommands_ShouldSetCommandsCorrectly) {
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "FFEEDD",
-            "Ethernet": {
-                "1": "ABCDEF"
-            },
-            "GigabitEthernet": {
-                "1": "789ABC"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -657,7 +595,7 @@ TEST_F(Internal_ConfigTest, ParseCommands_ShouldSetCommandsCorrectly) {
 
     // Verify command configurations
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "172.16.0.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["id"], "1500");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "1000000");
 }
@@ -732,7 +670,6 @@ TEST_F(Internal_ConfigTest, ParseRouterProtocols_ShouldSetRouterProtocolsCorrect
     std::string additionalConfig = R"(
     {
         "Interface": {},
-        "Mac": {},
         "line": {},
         "policy-map": {}
     }
@@ -818,8 +755,7 @@ TEST_F(Internal_ConfigTest, ParsePolicyMap_ShouldSetPolicyMapCorrectly) {
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -855,12 +791,12 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.0.0.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -869,7 +805,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
                     }
                 },
                 {
-                    "id": "2",
+                    "id": "1",
                     "commands": {
                         "ip": {
                             "address": {
@@ -889,21 +825,10 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "ge-0/0/2"
-        },
-        "Mac": {
-            "OUI": "001A2B",
-            "Ethernet": {
-                "1": "A1B2C3"
-            },
-            "FastEthernet": {
-                "2": "D4E5F6"
-            },
-            "GigabitEthernet": {
-                "1": "789ABC",
-                "2": "DEF123"
-            }
+            "GigabitEthernet": [
+                "ge-0",
+                "ge-1"
+            ]
         }
     }
     )";
@@ -921,10 +846,10 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ShouldReturnCorrectCommandsList) {
     // Define expected commands
     std::vector<std::string> expectedCommands = {
         "hostname RecoverRouter",
-        "interface GigabitEthernet 1",
+        "interface GigabitEthernet 0",
         "ip address 10.0.0.1 255.255.255.0",
         "bandwidth 1000000",
-        "interface GigabitEthernet 2",
+        "interface GigabitEthernet 1",
         "ip address dhcp",
         "bandwidth 1000"
     };
@@ -947,12 +872,12 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_NestedCommands_ShouldHandleNestedComm
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.1.1.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         }
                     }
@@ -983,9 +908,10 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_NestedCommands_ShouldHandleNestedComm
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -1002,7 +928,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_NestedCommands_ShouldHandleNestedComm
     // Define expected commands
     std::vector<std::string> expectedCommands = {
         "hostname NestedRecoverRouter",
-        "interface GigabitEthernet 1",
+        "interface GigabitEthernet 0",
         "ip address 10.1.1.1 255.255.255.0",
         "router ospf 1",
         "network 10.0.0.0 0.255.255.255 area 0"
@@ -1025,12 +951,12 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCo
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.2.2.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -1042,7 +968,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCo
                     }
                 },
                 {
-                    "id": "2",
+                    "id": "1",
                     "commands": {
                         "ip": {
                             "address": {
@@ -1062,21 +988,10 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCo
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "ge-0/0/2"
-        },
-        "Mac": {
-            "OUI": "ABCDEF",
-            "Ethernet": {
-                "1": "A1B2C3"
-            },
-            "FastEthernet": {
-                "2": "D4E5F6"
-            },
-            "GigabitEthernet": {
-                "1": "789ABC",
-                "2": "DEF123"
-            }
+            "GigabitEthernet": [
+                "ge-0",
+                "ge-1"
+            ]
         }
     }
     )";
@@ -1094,11 +1009,11 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_VolatileAndNonVolatile_ShouldHandleCo
     // Define expected commands, assuming "helper-address" is a volatile command
     std::vector<std::string> expectedCommands = {
         "hostname VolatileNonVolatileRouter",
-        "interface GigabitEthernet 1",
+        "interface GigabitEthernet 0",
         "ip address 10.2.2.1 255.255.255.0",
         "bandwidth 1000000",
         "helper-address 10.2.3.1",
-        "interface GigabitEthernet 2",
+        "interface GigabitEthernet 1",
         "ip address dhcp",
         "bandwidth 1000"
     };
@@ -1140,18 +1055,18 @@ TEST_F(Internal_ConfigTest, GetVolatileValue_WithJson_ShouldReturnCorrectValue) 
     // Example command and com
     std::string type = "A.B.C.D";
     std::string value = "10.0.0.1";
-    nlohmann::ordered_json currentJson = R"({"ip": "10.0.0.1", "subnet": "255.255.255.0"})"_json;
+    nlohmann::ordered_json currentJson = R"({"ip": "10.0.0.1", "mask": "255.255.255.0"})"_json;
 
     std::string expectedValue = "ip_2";
     std::string actualValue = getVolatileValue(type, value, currentJson);
     EXPECT_EQ(actualValue, expectedValue);
 
-    // Another example with subnet
+    // Another example with mask
     type = "A.B.C.D";
     value = "255.255.255.255";
-    currentJson = R"({"ip": "10.0.0.1", "subnet": "255.255.255.255"})"_json;
+    currentJson = R"({"ip": "10.0.0.1", "mask": "255.255.255.255"})"_json;
 
-    expectedValue = "subnet_2";
+    expectedValue = "mask_2";
     actualValue = getVolatileValue(type, value, currentJson);
     EXPECT_EQ(actualValue, expectedValue);
 
@@ -1206,17 +1121,17 @@ TEST_F(Internal_ConfigTest, GetVolatileValue_WithVector_ShouldReturnCorrectValue
     actualValue = getVolatileValue(command, com, volatileValues);
     EXPECT_EQ(actualValue, expectedValue);
 
-    // Subnet example
+    // Mask example
     command = "A.B.C.D";
     com = "255.255.255.255";
     volatileValues.clear();
-    expectedValue = "subnet";
+    expectedValue = "mask";
     actualValue = getVolatileValue(command, com, volatileValues);
     EXPECT_EQ(actualValue, expectedValue);
 
-    // Another subnet duplicate
-    volatileValues.push_back("subnet");
-    expectedValue = "subnet_2";
+    // Another mask duplicate
+    volatileValues.push_back("mask");
+    expectedValue = "mask_2";
     actualValue = getVolatileValue(command, com, volatileValues);
     EXPECT_EQ(actualValue, expectedValue);
 
@@ -1266,7 +1181,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracef
                         "ip": {
                             "address": {
                                 "ip": "10.3.3.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -1280,7 +1195,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracef
                         "ip": {
                             "address": {
                                 "ip": "10.3.3.2",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -1297,17 +1212,10 @@ TEST_F(Internal_ConfigTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracef
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "ge-0/0/2"
-        },
-        "Mac": {
-            "OUI": "001A2B",
-            "Ethernet": {
-                "1": "A1B2C3"
-            },
-            "GigabitEthernet": {
-                "1": "789ABC"
-            }
+            "GigabitEthernet": [
+                "ge-0",
+                "ge-1"
+            ]
         }
     }
     )";
@@ -1330,17 +1238,10 @@ TEST_F(Internal_ConfigTest, InitConfigs_DuplicateInterfaceIDs_ShouldHandleGracef
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["bandwidth"]["id"], "2000000");
 
     // Verify additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 2);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-    EXPECT_EQ(configs->physicalInterfaces[1], "ge-0/0/2");
-
-    EXPECT_EQ(configs->OUI, "001A2B");
-
-    EXPECT_EQ(configs->macAddressList.Ethernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.Ethernet[0], "A1B2C3");
-
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "789ABC");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 2);
+    EXPECT_EQ(gigs[0], "ge-0");
+    EXPECT_EQ(gigs[1], "ge-1");
 }
 
 // Test Initialization with Invalid Interface Types
@@ -1355,12 +1256,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_InvalidInterfaceTypes_ShouldHandleGracef
         "interface": {
             "Ethernet": [ // Unsupported interface type
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.4.4.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -1377,13 +1278,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_InvalidInterfaceTypes_ShouldHandleGracef
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "eth-0/0/1"
-        },
-        "Mac": {
-            "OUI": "123ABC",
-            "Ethernet": {
-                "1": "A1B2C3"
-            }
+            "Ethernet": [
+                "e-0"
+            ]
         }
     }
     )";
@@ -1403,12 +1300,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_InvalidInterfaceTypes_ShouldHandleGracef
     EXPECT_FALSE(configs->root["interface"].contains("Ethernet"));
 
     // Verify other configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "eth-0/0/1");
-
-    EXPECT_EQ(configs->OUI, "123ABC");
-    EXPECT_EQ(configs->macAddressList.Ethernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.Ethernet[0], "A1B2C3");
+    const auto& eths = configs->hwManager->getPhysicalInterfaces(InterfaceType::ETHERNET);
+    EXPECT_EQ(eths.size(), 1);
+    EXPECT_EQ(eths[0], "e-0");
 }
 
 // Test Initialization with Empty Interface Lists
@@ -1430,8 +1324,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyInterfaceList_ShouldHandleGracefull
     // Define additional Configs.json with empty interface mappings
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -1447,15 +1340,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyInterfaceList_ShouldHandleGracefull
     EXPECT_TRUE(configs->root["interface"]["FastEthernet"].empty());
 
     // Verify that physicalInterfaces is empty
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-
-    // Verify that MAC lists are empty
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-
-    // Verify OUI is empty
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test Initialization with Interface Missing Commands
@@ -1470,7 +1355,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_InterfaceMissingCommands_ShouldHandleGra
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1"
+                    "id": "0"
                 }
             ]
         }
@@ -1480,8 +1365,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_InterfaceMissingCommands_ShouldHandleGra
     // Define additional Configs.json
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -1503,7 +1387,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_InterfaceMissingCommands_ShouldHandleGra
     // Define expected commands (assuming commands are skipped)
     std::vector<std::string> expectedCommands = {
         "hostname NoCommandsRouter",
-        "interface GigabitEthernet 1"
+        "interface GigabitEthernet 0"
     };
 
     // Verify recovery commands match
@@ -1527,7 +1411,7 @@ TEST_F(Internal_ConfigTest, LoadAllConfigurations_ShouldLoadCorrectly)
                         "ip": {
                             "address": {
                                 "ip": "10.4.4.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -1536,12 +1420,12 @@ TEST_F(Internal_ConfigTest, LoadAllConfigurations_ShouldLoadCorrectly)
                     }
                 },
                 {
-                    "id": "2",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.4.4.2",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -1552,12 +1436,12 @@ TEST_F(Internal_ConfigTest, LoadAllConfigurations_ShouldLoadCorrectly)
             ],
             "FastEthernet": [
                 {
-                    "id": "3",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "192.168.4.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "speed": {
@@ -1579,27 +1463,13 @@ TEST_F(Internal_ConfigTest, LoadAllConfigurations_ShouldLoadCorrectly)
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "ge-0/0/2",
-            "PORT_2": "fe-0/0/3",
-            "PORT_3": "fe-0/0/4"
-        },
-        "Mac": {
-            "OUI": "FFEEDD",
-            "Ethernet": {
-                "1": "ABCDEF",
-                "2": "123456",
-                "3": "789ABC",
-                "4": "DEF123"
-            },
-            "FastEthernet": {
-                "3": "789ABC",
-                "4": "DEF123"
-            },
-            "GigabitEthernet": {
-                "1": "123456",
-                "2": "789ABC"
-            }
+            "FastEthernet": [
+                "fe-0"
+            ],
+            "GigabitEthernet": [
+                "ge-0",
+                "ge-1"
+            ]
         }
     }
     )";
@@ -1620,97 +1490,24 @@ TEST_F(Internal_ConfigTest, LoadAllConfigurations_ShouldLoadCorrectly)
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.4.4.1");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "1000000");
 
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["id"], "2");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["ip"], "10.4.4.2");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["bandwidth"]["id"], "2000000");
 
     // Verify FastEthernet Interfaces
     EXPECT_EQ(configs->root["interface"]["FastEthernet"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["id"], "3");
+    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["ip"]["address"]["ip"], "192.168.4.1");
-    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["speed"]["value"], "100");
     EXPECT_EQ(configs->root["interface"]["FastEthernet"][0]["commands"]["duplex"]["value"], "full");
 
     // Verify additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 4);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-    EXPECT_EQ(configs->physicalInterfaces[1], "ge-0/0/2");
-    EXPECT_EQ(configs->physicalInterfaces[2], "fe-0/0/3");
-    EXPECT_EQ(configs->physicalInterfaces[3], "fe-0/0/4");
-
-    EXPECT_EQ(configs->OUI, "FFEEDD");
-
-    // Verify Ethernet MAC Addresses
-    EXPECT_EQ(configs->macAddressList.Ethernet.size(), 4);
-    EXPECT_EQ(configs->macAddressList.Ethernet[0], "ABCDEF");
-    EXPECT_EQ(configs->macAddressList.Ethernet[1], "123456");
-    EXPECT_EQ(configs->macAddressList.Ethernet[2], "789ABC");
-    EXPECT_EQ(configs->macAddressList.Ethernet[3], "DEF123");
-
-    // Verify FastEthernet MAC Addresses
-    EXPECT_EQ(configs->macAddressList.FastEthernet.size(), 2);
-    EXPECT_EQ(configs->macAddressList.FastEthernet[0], "789ABC");
-    EXPECT_EQ(configs->macAddressList.FastEthernet[1], "DEF123");
-
-    // Verify GigabitEthernet MAC Addresses
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 2);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "123456");
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[1], "789ABC");
-}
-
-// Test Initialization with Invalid MAC Address Formats
-TEST_F(Internal_ConfigTest, InitConfigs_InvalidMacAddressFormats_ShouldHandleGracefully) 
-{
-    // Define startup configuration
-    std::string startupConfig = R"(
-    {
-        "hostname": {
-            "word": "InvalidMacRouter"
-        },
-        "interface": {}
-    }
-    )";
-
-    // Define additional Configs.json with invalid MAC addresses
-    std::string additionalConfig = R"(
-    {
-        "Interface": {},
-        "Mac": {
-            "OUI": "INVALIDOUI",
-            "Ethernet": {
-                "1": "ZZZZZZ"
-            },
-            "GigabitEthernet": {
-                "1": "12345G"
-            },
-            "FastEthernet": {
-                "1": "1234567"
-            }
-        }
-    }
-    )";
-
-    // Set up mock files
-    mockFileSystem->setupMockFile(startupFilePath, startupConfig);
-    mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
-
-    // Initialize configurations
-    // Assuming that invalid MAC formats are handled by the Configs class
-    // For example, they might be skipped or cause initialization to fail
-
-    // If Configs class does not validate MAC formats, then they are loaded as-is
-    // Otherwise, expect initialization to fail or skip invalid entries
-
-    // For this example, assuming it skips invalid MAC entries
-    configs->initConfigs({});
-
-    // Verify that invalid MAC addresses are skipped
-    EXPECT_EQ(configs->macAddressList.Ethernet.size(), 0);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 0);
-
-    // Verify that OUI is set even if invalid
-    EXPECT_EQ(configs->OUI, "INVALIDOUI");
+    const auto& fasts = configs->hwManager->getPhysicalInterfaces(InterfaceType::FAST_ETHERNET);
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(configs->hwManager->getPhysicalInterfaces().size(), 2);
+    EXPECT_EQ(fasts.size(), 1);
+    EXPECT_EQ(gigs.size(), 2);
 }
 
 // Test RecoverConfigs with Empty Configurations
@@ -1753,8 +1550,7 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetAndLoadNewConfigurations) {
     // Define initial additional Configs.json
     std::string additionalConfig1 = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -1781,8 +1577,7 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetAndLoadNewConfigurations) {
     // Define new additional Configs.json
     std::string additionalConfig2 = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -1818,11 +1613,7 @@ TEST_F(Internal_ConfigTest, Test_NoStateLeakage_BetweenTests_ShouldBeIsolated) {
 
     // Verify that all configurations are empty
     EXPECT_TRUE(configs->root.empty());
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test saveConfig writes the correct JSON to file
@@ -1840,8 +1631,7 @@ TEST_F(Internal_ConfigTest, SaveConfig_ShouldWriteCorrectJSONToFile) {
     // Define additional Configs.json
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -1858,7 +1648,7 @@ TEST_F(Internal_ConfigTest, SaveConfig_ShouldWriteCorrectJSONToFile) {
     // Mock writeFile behavior
     EXPECT_CALL(*mockFileSystem, writeFile(startupFilePath, _))
         .Times(1)
-        .WillOnce(Invoke([](const std::string& /*path*/, const std::string& content) -> bool {
+        .WillOnce(Invoke([](const std::string&, const std::string& content) -> bool {
             // For testing, we can check if content contains "ModifiedRouter"
             return content.find("ModifiedRouter") != std::string::npos;
         }));
@@ -1886,7 +1676,7 @@ TEST_F(Internal_ConfigTest, SaveConfig_EmptyRoot_ShouldWriteEmptyJSON) {
     // Mock writeFile behavior
     EXPECT_CALL(*mockFileSystem, writeFile(startupFilePath, _))
         .Times(1)
-        .WillOnce(Invoke([](const std::string& /*path*/, const std::string& content) -> bool {
+        .WillOnce(Invoke([](const std::string&, const std::string& content) -> bool {
             return content == "{}";
         }));
 
@@ -1894,71 +1684,6 @@ TEST_F(Internal_ConfigTest, SaveConfig_EmptyRoot_ShouldWriteEmptyJSON) {
     configs->saveConfig();
 }
 
-// Test Initialization with Extremely Long Interface IDs
-TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLongInterfaceIDs_ShouldHandleGracefully) {
-    // Define startup configuration with extremely long interface IDs
-    std::string startupConfig = R"(
-    {
-        "hostname": {
-            "word": "LongIDRouter"
-        },
-        "interface": {
-            "GigabitEthernet": [
-                {
-                    "id": "12345678901234567890",
-                    "commands": {
-                        "ip": {
-                            "address": {
-                                "ip": "10.6.6.1",
-                                "subnet": "255.255.255.0"
-                            }
-                        },
-                        "bandwidth": {
-                            "id": "1000000"
-                        }
-                    }
-                }
-            ]
-        }
-    }
-    )";
-
-    // Define additional Configs.json with corresponding MAC
-    std::string additionalConfig = R"(
-    {
-        "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "ABCDE1",
-            "Ethernet": {
-                "1": "123456"
-            },
-            "GigabitEthernet": {
-                "12345678901234567890": "789ABC"
-            }
-        }
-    }
-    )";
-
-    // Set up mock files
-    mockFileSystem->setupMockFile(startupFilePath, startupConfig);
-    mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
-
-    // Initialize configurations
-    configs->initConfigs({});
-
-    // Verify that the extremely long interface ID is handled correctly
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "12345678901234567890");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.6.6.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "1000000");
-
-    // Verify MAC Address
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "789ABC");
-}
 
 // Test Parsing Nested Commands within Interfaces
 TEST_F(Internal_ConfigTest, ParseNestedCommands_ShouldLoadNestedCommandsCorrectly) {
@@ -1970,12 +1695,12 @@ TEST_F(Internal_ConfigTest, ParseNestedCommands_ShouldLoadNestedCommandsCorrectl
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.10.10.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "routing": {
@@ -1992,9 +1717,10 @@ TEST_F(Internal_ConfigTest, ParseNestedCommands_ShouldLoadNestedCommandsCorrectl
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -2063,8 +1789,7 @@ TEST_F(Internal_ConfigTest, ParsePolicyMapMultipleClasses_ShouldLoadAllClassesCo
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2129,8 +1854,7 @@ TEST_F(Internal_ConfigTest, ParseRouterProtocolNeighbors_ShouldLoadAllNeighborsC
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2162,12 +1886,12 @@ TEST_F(Internal_ConfigTest, ParseNestedSecurityCommands_ShouldLoadCorrectly)
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.16.16.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -2189,9 +1913,10 @@ TEST_F(Internal_ConfigTest, ParseNestedSecurityCommands_ShouldLoadCorrectly)
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -2218,7 +1943,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithModeAndExits_ShouldRecoverCommand
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "configure": {
                             "commands": {
@@ -2237,8 +1962,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithModeAndExits_ShouldRecoverCommand
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2255,7 +1979,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithModeAndExits_ShouldRecoverCommand
     // Define expected commands
     std::vector<std::string> expectedCommands = {
         "hostname ModeExitRouter",
-        "interface GigabitEthernet 1",
+        "interface GigabitEthernet 0",
         "configure",
         "hostname ModeExitRouter",
         "exit"
@@ -2279,12 +2003,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_WithRecoveryCommands_ShouldLoadRecoveryC
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.8.8.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -2300,16 +2024,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_WithRecoveryCommands_ShouldLoadRecoveryC
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "ABCDE1",
-            "Ethernet": {
-                "1": "ABCDEF"
-            },
-            "GigabitEthernet": {
-                "1": "789ABC"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -2326,7 +2043,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_WithRecoveryCommands_ShouldLoadRecoveryC
 
     EXPECT_EQ(recoveryCommands.size(), 4);
     EXPECT_EQ(recoveryCommands[0], "hostname RecoveryCommandsRouter");
-    EXPECT_EQ(recoveryCommands[1], "interface GigabitEthernet 1");
+    EXPECT_EQ(recoveryCommands[1], "interface GigabitEthernet 0");
     EXPECT_EQ(recoveryCommands[2], "ip address 10.8.8.1 255.255.255.0");
     EXPECT_EQ(recoveryCommands[3], "bandwidth 100000");
 }
@@ -2347,9 +2064,10 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithSpecialCharacters_ShouldHandleCor
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -2389,7 +2107,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithEmptyCommands_ShouldHandleCorrect
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {}
                 }
             ]
@@ -2399,8 +2117,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithEmptyCommands_ShouldHandleCorrect
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2417,7 +2134,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithEmptyCommands_ShouldHandleCorrect
     // Define expected commands
     std::vector<std::string> expectedCommands = {
         "hostname EmptyCommandsRouter",
-        "interface GigabitEthernet 1"
+        "interface GigabitEthernet 0"
         // No commands inside
     };
 
@@ -2517,8 +2234,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleLinesAndVTY_ShouldRecoverCorr
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2582,11 +2298,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_CompletelyEmptyJSON_ShouldInitializeWith
     EXPECT_TRUE(configs->root.empty());
 
     // Verify additional configurations are loaded as empty
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test Parsing Configurations with VLAN and Security Commands
@@ -2625,8 +2337,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_WithVLANAndSecurity_ShouldRecoverCorr
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2668,10 +2379,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_PartialAdditionalConfig_ShouldInitialize
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "123ABC"
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -2685,100 +2395,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_PartialAdditionalConfig_ShouldInitialize
     EXPECT_EQ(configs->root["hostname"]["word"], "PartialConfigRouter");
 
     // Verify partial additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-
-    EXPECT_EQ(configs->OUI, "123ABC");
-
-    // Ethernet and other MAC lists should be empty
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-}
-
-TEST_F(Internal_ConfigTest, InitConfigs_DifferentInterfaceTypes_ShouldInitializeCorrectly) 
-{
-    std::string startupConfig = R"(
-    {
-        "hostname": {
-            "word": "VariousInterfacesRouter"
-        },
-        "interface": {
-            "Loopback": [
-                {
-                    "id": "0",
-                    "commands": {
-                        "ip": {
-                            "address": {
-                                "ip": "127.0.0.1",
-                                "subnet": "255.0.0.0"
-                            }
-                        }
-                    }
-                }
-            ],
-            "PortChannel": [
-                {
-                    "id": "1",
-                    "commands": {
-                        "members": {
-                            "interfaces": ["ge-0/0/1", "ge-0/0/2"]
-                        }
-                    }
-                }
-            ]
-        }
-    }
-    )";
-
-    std::string additionalConfig = R"(
-    {
-        "Interface": {
-            "PORT_0": "lo-0",
-            "PORT_1": "po-1"
-        },
-        "Mac": {
-            "OUI": "112233",
-            "Loopback": {
-                "0": "AABBCC"
-            },
-            "PortChannel": {
-                "1": "DDEEFF"
-            }
-        }
-    }
-    )";
-
-    mockFileSystem->setupMockFile(startupFilePath, startupConfig);
-    mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
-
-    configs->initConfigs({});
-
-    // Verify Loopback Interface
-    EXPECT_EQ(configs->root["interface"]["Loopback"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["Loopback"][0]["id"], "0");
-    EXPECT_EQ(configs->root["interface"]["Loopback"][0]["commands"]["ip"]["address"]["ip"], "127.0.0.1");
-    EXPECT_EQ(configs->root["interface"]["Loopback"][0]["commands"]["ip"]["address"]["subnet"], "255.0.0.0");
-
-    // Verify PortChannel Interface
-    EXPECT_EQ(configs->root["interface"]["PortChannel"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["PortChannel"][0]["id"], "1");
-    EXPECT_EQ(configs->root["interface"]["PortChannel"][0]["commands"]["members"]["interfaces"].size(), 2);
-    EXPECT_EQ(configs->root["interface"]["PortChannel"][0]["commands"]["members"]["interfaces"][0], "ge-0/0/1");
-    EXPECT_EQ(configs->root["interface"]["PortChannel"][0]["commands"]["members"]["interfaces"][1], "ge-0/0/2");
-
-    // Verify additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 2);
-    EXPECT_EQ(configs->physicalInterfaces[0], "lo-0");
-    EXPECT_EQ(configs->physicalInterfaces[1], "po-1");
-
-    EXPECT_EQ(configs->OUI, "112233");
-
-    EXPECT_EQ(configs->macAddressList.Loopback.size(), 1);
-    EXPECT_EQ(configs->macAddressList.Loopback[0], "AABBCC");
-
-    EXPECT_EQ(configs->macAddressList.PortChannel.size(), 1);
-    EXPECT_EQ(configs->macAddressList.PortChannel[0], "DDEEFF");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
 }
 
 // Parsing multiple objects at once
@@ -2792,7 +2411,7 @@ TEST_F(Internal_ConfigTest, ParseMultipleVLANs_ShouldLoadAllVLANsCorrectly)
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "vlan": [
                             {
@@ -2814,9 +2433,10 @@ TEST_F(Internal_ConfigTest, ParseMultipleVLANs_ShouldLoadAllVLANsCorrectly)
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -2849,8 +2469,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_NoRecoverySection_ShouldReturnEmptyLi
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2880,8 +2499,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_PartialRecoveryCommands_ShouldHandleG
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -2912,7 +2530,7 @@ TEST_F(Internal_ConfigTest, GetVolatileValue_ComplexJSON_ShouldReturnCorrectValu
     std::string com = "10.0.0.1";
     nlohmann::ordered_json currentJson = R"({
         "ip": "10.0.0.1",
-        "subnet": "255.255.255.0",
+        "mask": "255.255.255.0",
         "additional": {
             "details": "value"
         }
@@ -2924,7 +2542,7 @@ TEST_F(Internal_ConfigTest, GetVolatileValue_ComplexJSON_ShouldReturnCorrectValu
 
     // Another example with different value
     com = "255.255.255.0";
-    expectedValue = "subnet_2";
+    expectedValue = "mask_2";
     actualValue = getVolatileValue(command, com, currentJson);
     EXPECT_EQ(actualValue, expectedValue);
 }
@@ -2940,12 +2558,12 @@ TEST_F(Internal_ConfigTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrect
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.0.0.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -2961,9 +2579,10 @@ TEST_F(Internal_ConfigTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrect
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -2974,12 +2593,12 @@ TEST_F(Internal_ConfigTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrect
 
     // Modify nested commands
     configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"] = "10.0.0.2";
-    configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"] = "255.255.254.0";
+    configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"] = "255.255.254.0";
 
     // Mock writeFile behavior
     EXPECT_CALL(*mockFileSystem, writeFile(startupFilePath, _))
         .Times(1)
-        .WillOnce(Invoke([&](const std::string& /*path*/, const std::string& content) -> bool {
+        .WillOnce(Invoke([&](const std::string&, const std::string& content) -> bool {
             // Parse the content to verify the changes
             json savedJson;
             try {
@@ -2988,7 +2607,7 @@ TEST_F(Internal_ConfigTest, SaveConfig_ModifiedNestedCommands_ShouldWriteCorrect
                 return false;
             }
             return savedJson["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"] == "10.0.0.2" &&
-                   savedJson["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"] == "255.255.254.0";
+                   savedJson["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"] == "255.255.254.0";
         }));
 
     // Save configuration
@@ -3010,9 +2629,10 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetInternalState)
     std::string additionalConfig1 = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -3023,8 +2643,9 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetInternalState)
 
     // Verify initial state
     EXPECT_EQ(configs->root["hostname"]["value"], "FirstRouter");
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
 
     // Define new startup configuration
     std::string startupConfig2 = R"(
@@ -3039,9 +2660,10 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetInternalState)
     std::string additionalConfig2 = R"(
     {
         "Interface": {
-            "PORT_1": "ge-0/0/2"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-1"
+            ]
+        }
     }
     )";
 
@@ -3053,8 +2675,9 @@ TEST_F(Internal_ConfigTest, ReInitConfigs_ShouldResetInternalState)
 
     // Verify that old configurations are reset
     EXPECT_EQ(configs->root["hostname"]["value"], "SecondRouter");
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/2");
+    const auto& gigs2 = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs2.size(), 1);
+    EXPECT_EQ(gigs2[0], "ge-1");
 }
 
 // Test command order, make sure order is correct
@@ -3068,12 +2691,12 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_CommandOrder_ShouldRespectDependencie
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.10.10.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "description": {
@@ -3089,9 +2712,10 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_CommandOrder_ShouldRespectDependencie
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -3106,7 +2730,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_CommandOrder_ShouldRespectDependencie
     // Expected order: hostname, interface, ip address, description
     std::vector<std::string> expectedCommands = {
         "hostname OrderRouter",
-        "interface GigabitEthernet 1",
+        "interface GigabitEthernet 0",
         "ip address 10.10.10.1 255.255.255.0",
         "description Uplink Interface"
     };
@@ -3171,9 +2795,7 @@ TEST_F(Internal_ConfigTest, ParsePolicyMapMultipleClassesNestedCommands_ShouldLo
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
-    }
+        "Interface": {}
     )";
 
     mockFileSystem->setupMockFile(startupFilePath, startupConfig);
@@ -3248,8 +2870,7 @@ TEST_F(Internal_ConfigTest, ParseMultiplePolicyMaps_ShouldLoadAllPolicyMapsCorre
 
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -3286,12 +2907,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoa
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.10.10.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "value": "1400"
@@ -3311,13 +2932,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoa
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "ABCDEF",
-            "GigabitEthernet": {
-                "1": "A1B2C3"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -3334,11 +2951,11 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoa
 
     // Verify GigabitEthernet Interface
     ASSERT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
 
     // Verify IP Address
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.10.10.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
 
     // Verify MTU
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["value"], "1400");
@@ -3347,13 +2964,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleSubCommands_SameParent_ShouldLoa
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "1000000");
 
     // Verify additional configurations
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-
-    EXPECT_EQ(configs->OUI, "ABCDEF");
-
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "A1B2C3");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
 }
 
 // Test Recovery with Multiple Sub-Commands Sharing the Same Parent Key
@@ -3368,12 +2981,12 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleSubCommands_SameParent_Should
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.10.10.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "value": "1400"
@@ -3400,13 +3013,9 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleSubCommands_SameParent_Should
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "ABCDEF",
-            "GigabitEthernet": {
-                "1": "A1B2C3"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -3424,7 +3033,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_MultipleSubCommands_SameParent_Should
     // Define expected recovery commands
     std::vector<std::string> expectedCommands = {
         "hostname DualIPRouter",
-        "interface GigabitEthernet 1",
+        "interface GigabitEthernet 0",
         "ip address 10.10.10.1 255.255.255.0",
         "ip mtu 1400",
         "bandwidth 1000000"
@@ -3448,12 +3057,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrect
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.0.0.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "id": "1500"
@@ -3470,13 +3079,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrect
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "ABCDEF",
-            "GigabitEthernet": {
-                "1": "A1B2C3"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -3500,7 +3105,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrect
     std::vector<std::vector<std::string>> duplicateCommandVectors =
     {
         {"hostname", "DuplicateInterfaceRouterTest"},
-        {"interface", "GigabitEthernet", "1"},
+        {"interface", "GigabitEthernet", "0"},
         {"ip", "address", "10.0.0.2", "255.255.254.0"},
         {"ip", "mtu", "1400"}
     };
@@ -3527,19 +3132,15 @@ TEST_F(Internal_ConfigTest, InitConfigs_AddDuplicateInterfaces_ShouldNestCorrect
     EXPECT_EQ(configs->root["hostname"]["value"], "DuplicateInterfaceRouterTest");
 
     // Verify that the existing interface has been updated (nested) correctly
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.0.0.2");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.254.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.254.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["id"], "1400");
 
     // Verify that additional configurations are intact
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-
-    EXPECT_EQ(configs->OUI, "ABCDEF");
-
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "A1B2C3");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
 }
 
 // Test adding multiple duplicates across different interfaces
@@ -3554,12 +3155,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandle
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.1.1.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "id": "1500"
@@ -3571,12 +3172,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandle
                     }
                 },
                 {
-                    "id": "2",
+                    "id": "1",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.1.2.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "id": "1500"
@@ -3593,17 +3194,10 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandle
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "ge-0/0/2",
-            "PORT_2": "ge-0/0/3"
-        },
-        "Mac": {
-            "OUI": "123456",
-            "GigabitEthernet": {
-                "1": "ABCDEF",
-                "2": "123ABC",
-                "3": "FEDCBA"
-            }
+            "GigabitEthernet": [
+                "ge-0",
+                "ge-1"
+            ]
         }
     }
     )";
@@ -3632,12 +3226,12 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandle
     std::vector<std::vector<std::string>> duplicateCommandVectors =
     {
         {"hostname", "MultiDuplicateRouter"},
-        {"interface", "GigabitEthernet", "1"},
+        {"interface", "GigabitEthernet", "0"},
         {"ip", "address", "10.1.1.2", "255.255.254.0"},
         {"ip", "mtu", "1400"},
         {"bandwidth", "100000"},
         {"exit"},
-        {"interface", "GigabitEthernet", "3"},
+        {"interface", "GigabitEthernet", "1"},
         {"ip", "address", "10.1.3.1", "255.255.255.0"},
         {"ip", "mtu", "1500"}
     };
@@ -3668,26 +3262,20 @@ TEST_F(Internal_ConfigTest, InitConfigs_MultipleDuplicateInterfaces_ShouldHandle
     EXPECT_EQ(configs->root["hostname"]["value"], "MultiDuplicateRouter");
 
     // Verify three GigabitEthernet interfaces exist
-    ASSERT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 3);
+    ASSERT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 2);
 
     // Verify interface 1 has been updated
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.1.1.2");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.254.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.254.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["id"], "1400");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["bandwidth"]["id"], "100000");
 
     // Verify interface 2 remains unchanged
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["id"], "2");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["ip"], "10.1.2.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["id"], "1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["ip"], "10.1.3.1");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["mtu"]["id"], "1500");
-
-    // Verify interface 3 has been created correctly
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][2]["id"], "3");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][2]["commands"]["ip"]["address"]["ip"], "10.1.3.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][2]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][2]["commands"]["ip"]["mtu"]["id"], "1500");
 }
 
 // Test saving configuration after modifications using processConfigs
@@ -3702,12 +3290,12 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveAfterModification_ShouldPersistCh
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.3.3.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -3724,13 +3312,9 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveAfterModification_ShouldPersistCh
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "112233",
-            "GigabitEthernet": {
-                "1": "XYZ123"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -3782,12 +3366,12 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveMultipleModifications_ShouldPersi
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.4.4.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         },
                         "bandwidth": {
@@ -3815,13 +3399,9 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveMultipleModifications_ShouldPersi
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "445566",
-            "GigabitEthernet": {
-                "1": "LMN456"
-            }
+            "GigabitEthernet": [
+                "ge-0
+            ]
         }
     }
     )";
@@ -3879,12 +3459,12 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveFailure_ShouldReturnFalse)
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.5.5.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                             "mtu": {
                                 "value": "1500"
@@ -3901,13 +3481,9 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_SaveFailure_ShouldReturnFalse)
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "778899",
-            "GigabitEthernet": {
-                "1": "GHI789"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -3946,12 +3522,12 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_Idempotent_WhenNoChanges_ShouldSaveCo
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.6.6.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "id": "1500"
@@ -3968,13 +3544,9 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_Idempotent_WhenNoChanges_ShouldSaveCo
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "99AABB",
-            "GigabitEthernet": {
-                "1": "JKL012"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -4032,11 +3604,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_EmptyConfiguration_ShouldInitializeWithD
     EXPECT_TRUE(configs->root.empty());
 
     // Verify that additional configurations are empty
-    EXPECT_TRUE(configs->physicalInterfaces.empty());
-    EXPECT_TRUE(configs->macAddressList.GigabitEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.FastEthernet.empty());
-    EXPECT_TRUE(configs->macAddressList.Ethernet.empty());
-    EXPECT_TRUE(configs->OUI.empty());
+    EXPECT_TRUE(configs->hwManager->getPhysicalInterfaces().empty());
 }
 
 // Test deleting an interface and saving the configuration
@@ -4056,7 +3624,7 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_DeleteInterface_ShouldRemoveInterface
 //                         "ip": {
 //                             "address": {
 //                                 "ip": "10.8.8.1",
-//                                 "subnet": "255.255.255.0"
+//                                 "mask": "255.255.255.0"
 //                             }
 //                         },
 //                         "mtu": {
@@ -4070,7 +3638,7 @@ TEST_F(Internal_ConfigTest, ProcessConfigs_DeleteInterface_ShouldRemoveInterface
 //                         "ip": {
 //                             "address": {
 //                                 "ip": "10.8.8.2",
-//                                 "subnet": "255.255.255.0"
+//                                 "mask": "255.255.255.0"
 //                             }
 //                         },
 //                         "mtu": {
@@ -4182,13 +3750,9 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNewGigabitEthernetInterface_ShouldCre
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "DEF123",
-            "GigabitEthernet": {
-                "1": "FED321"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -4233,17 +3797,13 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNewGigabitEthernetInterface_ShouldCre
     ASSERT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.0.0.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["id"], "1500");
 
     // Verify that additional configurations are intact
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-
-    EXPECT_EQ(configs->OUI, "DEF123");
-
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "FED321"); // Assuming MAC is set elsewhere
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
 }
 
 // Test updating an existing GigabitEthernet interface's IP address
@@ -4257,12 +3817,12 @@ TEST_F(Internal_ConfigTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAd
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "10.0.0.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             },
                             "mtu": {
                                 "id": "1500"
@@ -4279,13 +3839,9 @@ TEST_F(Internal_ConfigTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAd
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "ABCDEF",
-            "GigabitEthernet": {
-                "1": "A1B2C3"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -4305,7 +3861,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAd
     };
 
     std::vector<std::vector<std::string>> command = {
-        {"interface", "GigabitEthernet", "1"},
+        {"interface", "GigabitEthernet", "0"},
         {"ip", "address", "10.0.0.2", "255.255.254.0"}, // Updated IP
         {"ip", "mtu", "1400"} // Updated MTU
     };
@@ -4328,18 +3884,16 @@ TEST_F(Internal_ConfigTest, SaveCommand_UpdateGigabitEthernetIP_ShouldModifyIPAd
 
     // Verify that the IP address has been updated correctly
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.0.0.2");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.254.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.254.0");
 
     // Verify that the MTU has been updated correctly
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["id"], "1400");
 
     // Verify that other configurations remain intact
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "1");
-    EXPECT_EQ(configs->physicalInterfaces.size(), 1);
-    EXPECT_EQ(configs->physicalInterfaces[0], "ge-0/0/1");
-    EXPECT_EQ(configs->OUI, "ABCDEF");
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet.size(), 1);
-    EXPECT_EQ(configs->macAddressList.GigabitEthernet[0], "A1B2C3");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "0");
+    const auto& gigs = configs->hwManager->getPhysicalInterfaces(InterfaceType::GIGABIT_ETHERNET);
+    EXPECT_EQ(gigs.size(), 1);
+    EXPECT_EQ(gigs[0], "ge-0");
 }
 
 // Test adding a nested command (e.g., enabling DHCP) under an existing parent
@@ -4353,12 +3907,12 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "ip": {
                             "address": {
                                 "ip": "192.168.1.1",
-                                "subnet": "255.255.255.0"
+                                "mask": "255.255.255.0"
                             }
                         }
                     }
@@ -4372,13 +3926,9 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {
-            "OUI": "654321",
-            "GigabitEthernet": {
-                "1": "XYZ789"
-            }
+            "GigabitEthernet": [
+                "ge-0"
+            ]
         }
     }
     )";
@@ -4397,7 +3947,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
     };
 
     std::vector<std::vector<std::string>> command = {
-        {"interface", "GigabitEthernet", "1"},
+        {"interface", "GigabitEthernet", "0"},
         {"ip", "address", "dhcp"} // Enable DHCP
     };
 
@@ -4422,7 +3972,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddNestedCommand_ShouldAddDHCPUnderIP) {
 
     // Verify that existing IP address remains unchanged
     EXPECT_FALSE(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"].contains("ip"));
-    EXPECT_FALSE(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"].contains("subnet"));
+    EXPECT_FALSE(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"].contains("mask"));
 }
 
 // Test handling of volatile commands (e.g., adding multiple VLANs)
@@ -4442,8 +3992,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_HandleVolatileCommands_ShouldAddMultiple
     // Define additional Configs.json
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -4499,8 +4048,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddMultipleCommandsInSingleCall_ShouldPr
     // Define additional Configs.json
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -4549,7 +4097,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddMultipleCommandsInSingleCall_ShouldPr
     ASSERT_EQ(configs->root["interface"]["GigabitEthernet"].size(), 1);
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["id"], "2");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "192.168.2.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["id"], "1400");
 }
 
@@ -4564,11 +4112,11 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHa
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {}
                 },
                 {
-                    "id": "2",
+                    "id": "1",
                     "commands": {}
                 }
             ]
@@ -4580,15 +4128,10 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHa
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1",
-            "PORT_1": "ge-0/0/2"
-        },
-        "Mac": {
-            "OUI": "AA1122",
-            "GigabitEthernet": {
-                "1": "MAC001",
-                "2": "MAC002"
-            }
+            "GigabitEthernet": [
+                "ge-0",
+                "ge-1"
+            ]
         }
     }
     )";
@@ -4612,11 +4155,11 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHa
     };
 
     std::vector<std::vector<std::string>> command = {
-        {"interface", "GigabitEthernet", "1"},
+        {"interface", "GigabitEthernet", "0"},
         {"ip", "address", "10.0.1.1", "255.255.255.0"},
         {"ip", "mtu", "1400"},
         {"exit"},
-        {"interface", "GigabitEthernet", "2"},
+        {"interface", "GigabitEthernet", "1"},
         {"ip", "address", "10.0.2.1", "255.255.255.0"},
         {"ip", "mtu", "1500"}
     };
@@ -4643,12 +4186,12 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsToMultipleInterfaces_ShouldHa
 
     // Verify interface 1 updates
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["ip"], "10.0.1.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][0]["commands"]["ip"]["mtu"]["id"], "1400");
 
     // Verify interface 2 updates
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["ip"], "10.0.2.1");
-    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["subnet"], "255.255.255.0");
+    EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["address"]["mask"], "255.255.255.0");
     EXPECT_EQ(configs->root["interface"]["GigabitEthernet"][1]["commands"]["ip"]["mtu"]["id"], "1500");
 }
 
@@ -4675,8 +4218,7 @@ TEST_F(Internal_ConfigTest, SaveCommand_AddCommandsWithSpecialCharsAndSpaces_Sho
     // Define additional Configs.json
     std::string additionalConfig = R"(
     {
-        "Interface": {},
-        "Mac": {}
+        "Interface": {}
     }
     )";
 
@@ -4744,7 +4286,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfInterfaces_ShouldL
         startupConfig["interface"]["GigabitEthernet"].push_back({
             {"id", std::to_string(i)},
             {"commands", {
-                {"ip", {{"address", {{"ip", "10.0." + std::to_string(i) + ".1"}, {"subnet", "255.255.255.0"}}}}},
+                {"ip", {{"address", {{"ip", "10.0." + std::to_string(i) + ".1"}, {"mask", "255.255.255.0"}}}}},
                 {"bandwidth", {{"id", std::to_string(100000 + i)}}}
             }}
         });
@@ -4756,7 +4298,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfInterfaces_ShouldL
         startupConfig["interface"]["FastEthernet"].push_back({
             {"id", std::to_string(i)},
             {"commands", {
-                {"ip", {{"address", {{"ip", "192.168." + std::to_string(i) + ".1"}, {"subnet", "255.255.255.0"}}}}},
+                {"ip", {{"address", {{"ip", "192.168." + std::to_string(i) + ".1"}, {"mask", "255.255.255.0"}}}}},
                 {"bandwidth", {{"id", std::to_string(1000 + i)}}}
             }}
         });
@@ -4800,7 +4342,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargeNumberOfInterfaces_Shou
         startupConfig["interface"]["GigabitEthernet"].push_back({
             {"id", std::to_string(i)},
             {"commands", {
-                {"ip", {{"address", {{"ip", "10.0." + std::to_string(i) + ".1"}, {"subnet", "255.255.255.0"}}}}},
+                {"ip", {{"address", {{"ip", "10.0." + std::to_string(i) + ".1"}, {"mask", "255.255.255.0"}}}}},
                 {"bandwidth", {{"id", std::to_string(100000 + i)}}}
             }}
         });
@@ -4955,7 +4497,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_DeeplyNestedCommands_ShouldParseCorrectl
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "level1": {
                             "level2": {
@@ -4965,7 +4507,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_DeeplyNestedCommands_ShouldParseCorrectl
                                             "ip": {
                                                 "address": {
                                                     "ip": "10.20.30.40",
-                                                    "subnet": "255.255.0.0"
+                                                    "mask": "255.255.0.0"
                                                 }
                                             },
                                             "bandwidth": {
@@ -4987,9 +4529,10 @@ TEST_F(Internal_ConfigTest, InitConfigs_DeeplyNestedCommands_ShouldParseCorrectl
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -5017,7 +4560,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCor
         "interface": {
             "GigabitEthernet": [
                 {
-                    "id": "1",
+                    "id": "0",
                     "commands": {
                         "level1": {
                             "level2": {
@@ -5027,7 +4570,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCor
                                             "ip": {
                                                 "address": {
                                                     "ip": "10.20.30.40",
-                                                    "subnet": "255.255.0.0"
+                                                    "mask": "255.255.0.0"
                                                 }
                                             },
                                             "bandwidth": {
@@ -5049,9 +4592,10 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCor
     std::string additionalConfig = R"(
     {
         "Interface": {
-            "PORT_0": "ge-0/0/1"
-        },
-        "Mac": {}
+            "GigabitEthernet": [
+                "ge-0"
+            ]
+        }
     }
     )";
 
@@ -5067,7 +4611,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_DeeplyNestedCommands_ShouldRecoverCor
     // Define expected commands
     std::vector<std::string> expectedCommands = {
         "hostname DeepNestedRecoverRouter",
-        "interface GigabitEthernet 1",
+        "interface GigabitEthernet 0",
         "level1 level2 level3 level4 level5 ip address 10.20.30.40 255.255.0.0",
         "level1 level2 level3 level4 level5 bandwidth 5000000"
     };
@@ -5102,7 +4646,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNested_ShouldLoad
                                     {"ip", {
                                         {"address", {
                                             {"ip", "10." + std::to_string(i) + "." + std::to_string(i % 256) + ".1"},
-                                            {"subnet", "255.255.255.0"}
+                                            {"mask", "255.255.255.0"}
                                         }}
                                     }},
                                     {"bandwidth", {{"id", std::to_string(100000 + i)}}}
@@ -5155,7 +4699,7 @@ TEST_F(Internal_ConfigTest, RecoverConfigs_ExtremelyLargeAndDeeplyNested_ShouldR
                                     {"ip", {
                                         {"address", {
                                             {"ip", "10." + std::to_string(i) + "." + std::to_string(i % 256) + ".1"},
-                                            {"subnet", "255.255.255.0"}
+                                            {"mask", "255.255.255.0"}
                                         }}
                                     }},
                                     {"bandwidth", {{"id", std::to_string(100000 + i)}}}
@@ -5258,7 +4802,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNestedCombined_Sh
                                     {"ip", {
                                         {"address", {
                                             {"ip", "10." + std::to_string(i) + "." + std::to_string(i % 256) + ".1"},
-                                            {"subnet", "255.255.255.0"}
+                                            {"mask", "255.255.255.0"}
                                         }}
                                     }},
                                     {"bandwidth", {{"id", std::to_string(100000 + i)}}},

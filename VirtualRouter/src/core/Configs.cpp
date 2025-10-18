@@ -15,12 +15,12 @@ void Configs::printConfig()
 
 Configs::Configs(IFileSystem* fs) : fileSystem(fs) {}
 
-void Configs::initConfigs(const StartupFiles& stfs)
+void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
 {
     // Reset all variables before
     root.clear();
 
-    hwManager = new HardwareManager(stfs.hwConfigFile, *fileSystem, true);
+    hwManager = new HardwareManager(stfs.hwConfigFile, *fileSystem, enableDummies);
 
     if (configSchema.is_null() || !configSchema.is_object())
     {
@@ -569,11 +569,18 @@ std::string Configs::getVolatileValueHelper(std::string& command, std::string& c
         uint32_t ip = Functions::addressToIntv4(com);
 
         auto isContiguous = [](uint32_t x) {
-            return x != 0 && (x & (x + 1)) == 0;
+            return ((x | (x - 1)) == 0xFFFFFFFF);
         };
 
-        if (isContiguous(ip)) return "mask";
-        if (isContiguous(~ip)) return "wildcard";
+        if (ip == 0xFFFFFFFF)
+        {
+            return "mask";
+        }
+        else if (ip != 0)
+        {
+            if (isContiguous(ip)) return "mask";
+            if (isContiguous(~ip)) return "wildcard";
+        }
         return "ip";
     }
     
