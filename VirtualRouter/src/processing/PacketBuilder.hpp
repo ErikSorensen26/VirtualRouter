@@ -167,14 +167,14 @@ public:
     size_t getHeaderCount() const { return headerCount; }
     uint8_t* getBuffer() { return buffer; }
 
-    size_t bufferOffset;
+    size_t bufferOffset = 0;
     PacketSlot* slot = nullptr;
 
 private:
     uint8_t* buffer = nullptr;
     BuildEntry headers[MaxHeaders];
-    size_t buildIndex;
-    size_t headerCount;
+    size_t buildIndex = 0;
+    size_t headerCount = 0;
     bool local = false;
 };
 

@@ -33,6 +33,7 @@ struct EigrpHeader
 {
     DEFINE_PACKET_HEADER(EigrpHeaderRaw);
 
+    uint8_t getVersion() const             { return raw->version; }
     uint8_t getOpcode() const              { return raw->opcode; }
     uint32_t getSequence() const           { return readU32(raw->sequence); }
     uint32_t getAck() const                { return readU32(raw->ack); }
@@ -44,16 +45,18 @@ struct EigrpHeader
     bool getFlagRestart() const            { return raw->flags[3] & 0x04; }
     bool getFlagEndOfTable() const         { return raw->flags[3] & 0x08; }
 
+    void setVersion(uint8_t val)
+        { raw->version = val; }
     void setOpcode(uint8_t val) 
         { raw->opcode = val; }
     void setSequence(uint32_t val) 
         { writeU32(raw->sequence, val); }
     void setAck(uint32_t val)
         { writeU32(raw->ack, val); }
-    void setVirtualRouterId(uint32_t val)
-        { writeU32(raw->ack, val); }
-    void setAutonomousSystem(uint32_t val)
-        { writeU32(raw->autonomousSystem, val); }
+    void setVirtualRouterId(uint16_t val)
+        { writeU16(raw->virtualRouterId, val); }
+    void setAutonomousSystem(uint16_t val)
+        { writeU16(raw->autonomousSystem, val); }
 
     void setFlagInit(bool val)
         { setBit(raw->flags, 31, val); }

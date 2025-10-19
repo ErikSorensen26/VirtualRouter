@@ -62,8 +62,8 @@ struct IPv4Header
     void setFlags(bool rs, bool mf, bool df)
         { uint8_t flags = 0; 
           if (rs) { flags |= (1 << 7); }
-          if (mf) { flags |= (1 << 6); }
-          if (df) { flags |= (1 << 5); }
+          if (df) { flags |= (1 << 6); }
+          if (mf) { flags |= (1 << 5); }
           flags |= (raw->fragmentFlags[0] & 0x1F);
           raw->fragmentFlags[0] = flags; }
     void setFragmentOffset(uint16_t offset) 

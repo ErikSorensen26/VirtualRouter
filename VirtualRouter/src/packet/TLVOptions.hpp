@@ -70,6 +70,14 @@ public:
         return true;
     }
 
+    bool addTermination(uint8_t term)
+    {
+        if (offset + 1 > len) return false;
+
+        buffer[offset++] = term;
+        return true;
+    }
+
     std::span<const uint8_t> getSpan() const { return { buffer, offset }; }
     size_t size() const { return offset; }
 };

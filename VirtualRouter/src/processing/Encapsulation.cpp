@@ -27,7 +27,8 @@ bool encapsulate(PacketBuilder& packet)
             case HeaderType::IPV6:
             {
                 size_t totalSize = packet.bufferOffset - (header.buffer - packetBuffer);
-                writeU16(header.buffer + 4, totalSize);
+                uint16_t payloadLen = static_cast<uint16_t>(totalSize - IPv6Header::fixedSize);
+                writeU16(header.buffer + 4, payloadLen);
                 break;
             }
             case HeaderType::AH: break;
@@ -104,7 +105,7 @@ bool encapsulate(PacketBuilder& packet)
                     std::memcpy(pseudoHeader, ip.buffer + 12, 8);
                     pseudoHeader[8] = 0x00;
                     pseudoHeader[9] = Variable::IP::udp;
-                    writeU32(pseudoHeader + 10, size);
+                    writeU16(pseudoHeader + 10, size);
                     Checksum::calculateChecksum(header.buffer, size, 6, 2, pseudoHeader, 12);
                 }
                 else if (ip.type == HeaderType::IPV6)
