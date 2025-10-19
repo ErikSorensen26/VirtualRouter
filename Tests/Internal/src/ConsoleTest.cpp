@@ -257,7 +257,7 @@ TEST_F(Internal_ConsoleTest, MoveCursorRight_AcrossLineBoundaries_ShouldHandleLi
 {
     setCursorPos(79); // Last comumn of first line
     size_t moveCount = 2;
-    std::string input = std::string(" ", 85);
+    std::string input = std::string(85, ' ');
 
     // Expect the consol's moveCursorRight to be called twice, moving the cursor to the next line
     EXPECT_CALL(*mockConsole, moveCursorDown(1)).Times(1);
