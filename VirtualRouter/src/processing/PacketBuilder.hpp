@@ -120,6 +120,16 @@ public:
         return &entry;
     }
 
+    BuildEntry* getHeader(HeaderType type)
+    {
+        for (auto& header : headers)
+        {
+            if (header.type == type)
+                return &header;
+        }
+        return nullptr;
+    }
+
     void addTLVSize(size_t tlvSize)
     {
         bufferOffset += tlvSize;

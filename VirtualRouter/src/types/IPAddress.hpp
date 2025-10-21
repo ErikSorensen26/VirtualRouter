@@ -66,7 +66,12 @@ struct IPPrefix
     IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family)
         : prefixLength(prefix), af(family) {
         std::memset(addr, 0, 16);
-        std::memcpy(addr, ip, (af == AddressFamily::IPv4) ? 4 : 16);
+        std::memcpy(addr, ip, static_cast<size_t>(af));
+    }
+
+    IPPrefix(const IPAddress& ip, uint8_t prefix)
+        : prefixLength(prefix), af(ip.isV6 ? AddressFamily::IPv6 : AddressFamily::IPv4) {
+        std::memcpy(addr, ip.raw, 16);
     }
 
     bool operator==(const IPPrefix& other) const {

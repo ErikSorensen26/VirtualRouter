@@ -1461,7 +1461,6 @@ namespace Protocol
 
         // Authentication
         void configureAuthentication(uint8_t* keyId = nullptr, const std::string* key = nullptr, EigrpConfigs::AuthType* type = nullptr, bool enable = false);
-        uint8_t* serializeEigrpHeader(uint8_t* out, const EigrpHeader& eigrp, bool exclusiveAuthTLV);
         virtual uint8_t generateAuthenticatedTLV(uint8_t* out);
         static void appendAuthHMAC(uint8_t* packetStart);
         

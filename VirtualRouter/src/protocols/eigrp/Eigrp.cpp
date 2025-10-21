@@ -5,7 +5,6 @@
 #include <Encapsulation.h>
 #include <VirtualRouter.h>
 #include <Interface.h>
-#include <InterfaceType.hpp>
 #include <algorithm>
 #include <Global.h>
 #include <IPPacket.h>
@@ -4577,31 +4576,6 @@ Eigrp::~Eigrp()
             }
         }
     }
-
-    /*ByteString EigrpInterface::serializeEigrpHeader(const EigrpHeader& eigrp, bool exclusiveAuthTLV)
-    {
-        ByteString serialized;
-        serialized += eigrp.version;
-        serialized += eigrp.opcode;
-        serialized += eigrp.checksum;
-        serialized += Functions::binToByte(ByteString("0000000000000000000000000000") + eigrp.flags.endOfTable + eigrp.flags.restart + eigrp.flags.conditionalRecieve + eigrp.flags.init);
-        serialized += eigrp.sequence;
-        serialized += eigrp.ack;
-        serialized += eigrp.virtualRouterID;
-        serialized += eigrp.autonomousSystem;
-
-        for (const auto& option : eigrp.options)
-        {
-            if (exclusiveAuthTLV && option.option == Variable::Eigrp::Option::authentication)
-            {
-                continue;
-            }
-            serialized += option.option;
-            serialized += option.length;
-            serialized += option.value;
-        }
-        return serialized;
-    }*/
 
     uint8_t EigrpInterface::generateAuthenticatedTLV(uint8_t* out)
     {
