@@ -22,10 +22,10 @@ namespace Protocol
         initializeEigrp();
     }
 
-Eigrp::~Eigrp()
-{
-    shutdown();
-}
+    Eigrp::~Eigrp()
+    {
+        shutdown();
+    }
 
     void Eigrp::initializeEigrp()
     {
