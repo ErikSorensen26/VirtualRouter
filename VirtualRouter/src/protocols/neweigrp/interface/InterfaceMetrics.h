@@ -1,22 +1,28 @@
-// EigrpInterfaceMetrics.h
+// InterfaceMetrics.h
 
 #ifndef EIGRP_INTERFACE_METRICS_H
 #define EIGRP_INTERFACE_METRICS_H
 
 #include <cstdint>
 #include <cstddef>
+#include <chrono>
 
 enum class AddressFamily : uint8_t;
-namespace EigrpConfigs
-{
-struct NeighborInfo;
-}
 
-namespace Protocol
+namespace Eigrp
 {
-class EigrpInterfaceMetrics
+class Neighbor;
+class EigrpInterface;
+struct ReceivedRoute;
+
+class InterfaceMetrics
 {
 public:
+    InterfaceMetrics(EigrpInterface& iface);
+
+    void addRouteMetrics(std::vector<ReceivedRoute>& routes);
+    uint64_t calculateCompositeMetric(uint8_t load, uint8_t reliability, uint64_t delay, uint64_t bandwidth);
+    uint64_t getLocalMetric();
 
     /**
      * @brief Calculates the Round-Trip Time (RTT) for a packet.
@@ -28,7 +34,7 @@ public:
      * @param sequenceNumber Sequence number of the packet.
      * @return Calculated RTT in seconds.
      */
-    double calculateRTT(EigrpConfigs::NeighborInfo* neighbor, uint32_t sequenceNumber);
+    double calculateRTT(Neighbor& neighbor, std::chrono::steady_clock::time_point& sendTime, uint32_t sequenceNumber);
 
     /**
      * @brief Updates RTT estimates based on received ACKs.
@@ -39,34 +45,11 @@ public:
      * @param neighbor Neighbor.
      * @param sequenceNumber Sequence number of the acknowledged packet.
      */
-    void updateRTTEstimate(EigrpConfigs::NeighborInfo* neighbor, uint32_t sequenceNumber);
+    void updateRTTEstimate(Neighbor& neighbor, std::chrono::steady_clock::time_point& sendTime, uint32_t sequenceNumber);
 
-    /**
-     * @brief Checks if a timeout has occurred for missing packets.
-     *
-     * Determines whether a retransmission timeout has been reached for a specific packet.
-     * If a timeout is detected, appropriate actions such as retransmission or neighbor
-     * down status updates are triggered.
-     *
-     * @param neighbor Pointer to the neighbor's information.
-     * @param sequenceNumber Sequence number of the packet.
-     * @return True if a timeout has occurred, false otherwise.
-     */
-    bool isTimeoutForMissing(EigrpConfigs::NeighborInfo* neighbor, uint32_t sequenceNumber);
-
-    /**
-     * @brief Calculates the maximum number of routes to be sent in a single Update packet.
-     *
-     * Determines the upper limit on the number of routing entries that can be included
-     * in a single Update packet based on the address family and whether the routes are
-     * external.
-     *
-     * @param af Address family (IPv4/IPv6).
-     * @param isExternal Indicates if the route is external.
-     * @return Maximum number of routes per packet.
-     */
-    size_t calculateMaxRoutesPerPacket(size_t baseSize, AddressFamily af, bool isExernal);
+private:
+    EigrpInterface& iface;
 };
 }
 
-#endif // EIGRP_INTERFACE_MANAGER_H
+#endif // EIGRP_INTERFACE_METRICS_H

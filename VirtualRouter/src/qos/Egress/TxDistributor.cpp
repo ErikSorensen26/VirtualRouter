@@ -51,6 +51,11 @@ uint32_t TxDistributor::pickQueue(TxDistPolicy policy, uint32_t flowHash)
     return 0;
 }
 
+void TxDistributor::release(FrameHandle& frame)
+{
+    qs[frame.qid]->egress->cancel(frame.slot->index);
+}
+
 uint32_t TxDistributor::pickWeighted()
 {
     uint32_t n = N.load(std::memory_order_relaxed);

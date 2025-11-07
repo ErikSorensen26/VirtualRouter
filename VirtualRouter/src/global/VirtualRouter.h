@@ -10,7 +10,7 @@
 #include <AddressFamily.hpp>
 
 class Interface;
-namespace Protocol
+namespace Eigrp
 {
     class EigrpAutonomousSystem;
     struct EigrpNamed;

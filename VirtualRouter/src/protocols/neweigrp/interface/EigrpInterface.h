@@ -4,17 +4,25 @@
 #define EIGRP_INTERFACE_H
 
 #include <IPAddress.hpp>
-#include <atomic>
+#include "AuthHandler.h"
+#include "InterfaceMetrics.h"
+#include "ReliableTransport.h"
+#include "RouteAggregator.h"
+#include "NeighborTable.h"
+#include "InterfaceTimers.h"
+#include "TopologyController.h"
+#include "AuthHandler.h"
+#include <unordered_map>
 
 class Internal_EigrpTest;
 class Interface;
 class InterfaceConfigs;
 namespace EigrpConfigs
 {
-class InterfaceConfigs;
+struct InterfaceConfigs;
 }
 
-namespace Protocol
+namespace Eigrp
 {
 class Eigrp;
 
@@ -30,62 +38,59 @@ class EigrpInterface
 {
 public:
     friend class ::Internal_EigrpTest;
-
-    /**
-     * @brief Constructs an EigrpInterface instance.
-     *
-     * Initializes the EigrpInterface with the provided EIGRP process and network interface.
-     * Sets up necessary configurations and starts the Hello timer.
-     * 
-     * @param eigrpSystem Reference to the EIGRP process.
-     * @param interface Shared pointer to the network interface.
-     */
-    EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfigs* intConfigs, Interface* interface);
-
-    /**
-     * @brief Destructor for EigrpInterface.
-     *
-     * Cancels all active timers, stops the worker thread, and performs necessary cleanup
-     * to gracefully terminate the EIGRP interface operations.
-     */
+    EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfigs& intConfigs, Interface& interface);
     virtual ~EigrpInterface();
-
-    /**
-     * @brief Sets the interface to passive or active mode.
-     *
-     * Configures the interface's operational mode, determining whether it actively
-     * sends and receives EIGRP packets or remains passive, only responding to received packets.
-     *
-     * @param passive True to set the interface to passive, false to make it active.
-     */
     void setPassiveMode(bool passive);
-
-    /**
-     * @brief enables/disables multicast on the interface.
-     */
     void setMulticast(bool state);
-
-    /**
-     * @brief Retrieves the multicast address based on the address family.
-     *
-     * Determines and returns the appropriate multicast address for EIGRP packet
-     * transmission based on whether IPv4 or IPv6 is being used.
-     *
-     * @return ByteString representing the multicast address.
-     */
     const uint8_t* multicastEnabled();
 
+    void notifyRoutingChange(const std::vector<const RouteInfo*>& changedRoutes);
+
     // Get the ip address of the interaface
-    inline IPAddress localAddress();
+    void startDampening();
+    void triggerDampeningOnRouteChange();
+    void checkDampeningStatus();
+    bool recordDampeningEvent();
+    void onDampeningResetExpire();
+    void onDampeningRestartExpire();
+    void onDampeningIntervalExpire();
 
     EigrpConfigs::InterfaceConfigs* configs; ///< Configuration settings for the interface.
 
+    ReliableTransport& getRtp() { return rtp; }
+    InterfaceMetrics& getMetrics() { return metrics; }
+    InterfaceTimers& getTimers() { return tmgr; }
+    TopologyController& getTopController() { return topology; }
+    NeighborTable& getNTable() { return ntable; }
+    RouteAggregator& getAggregator() { return aggregator; }
+    Eigrp& getBase() { return base; }
+    AuthHandler& getAuth() { return auth; }
+    Interface* getIface() { return currentInterface; }
+    InterfaceConfigs& getIfaceCfg() { return *currentInterfaceInfo; }
+
+    double penalty = 0;
+    std::atomic<uint32_t> prefixCount = 0;
+    uint8_t restartCounter = 0;
+    std::atomic<bool> isSupressed = false;
+    std::deque<std::chrono::steady_clock::time_point> routeChangeTimes;
+
+    std::unordered_map<TLVType, std::unordered_set<IPAddress>> tlvTypes;
+
+    uint32_t interfaceKey;
+
+private:
+    Eigrp& base;
+
     Interface* currentInterface; ///< Pointer to the current network interface.
     InterfaceConfigs* currentInterfaceInfo; ///< Pointer to the current interface's IP information.
-    uint32_t interfaceKey;
-    std::atomic<bool> destroy{false}; ///< Destroy boolean for destruction of eigrp class.
 
-    std::atomic<uint32_t> nextSequenceNumber = 1; ///< Next sequence number for packets.
+    AuthHandler auth;
+    InterfaceMetrics metrics;
+    ReliableTransport rtp;
+    RouteAggregator aggregator;
+    InterfaceTimers tmgr;
+    NeighborTable ntable;
+    TopologyController topology;
 };
 }
 

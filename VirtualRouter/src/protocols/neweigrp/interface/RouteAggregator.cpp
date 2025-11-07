@@ -1,263 +1,198 @@
 // EigrpInterfaceSummary.cpp
 
-#include "EigrpInterfaceSummary.h"
+#include "RouteAggregator.h"
+#include <mutex>
+#include "EigrpInterface.h"
+#include <EigrpCore.h>
+#include <InterfaceConfigs.h>
 
-namespace Protocol
+namespace Eigrp
 {
-void EigrpInterface::announceSummary(RoutingTable::Eigrp* summaryRoute)
+RouteAggregator::RouteAggregator(EigrpInterface& iface)
+    : iface(iface) {}
+
+RouteAggregator::~RouteAggregator()
 {
-    // Construct the route to advertise
-    if (!summaryRoute) return;
+    std::shared_lock<std::shared_mutex> lock(iface.configs->configsMutex);
+    for (const auto& [prefix, sr] : summaryRoutes)
+    {
+        if (!sr.isAuto)
+            iface.configs->pendingSummaryRoutes.emplace_back(prefix);
+    }
+    clearAutoSummaries();
+    summaryRoutes.clear();
+}
+
+void RouteAggregator::clearAutoSummaries()
+{
+    std::lock_guard<std::mutex> lock(mtx);
     
-    std::vector<EigrpConfigs::NeighborInfo*> neighborsToNotify;
-    bool hasMulticast = false;
-
-    // Collect neigbors
-    {
-        std::shared_lock<std::shared_mutex> lock(neighborMutex);
-        for (const auto& [address, neighbor] : neighbors)
-        {
-            if (neighbor->unicast)
-            {
-                neighborsToNotify.push_back(neighbor);
-            }
-            else
-            {
-                hasMulticast = true;
-            }
-        }
-    }
-
-    // Send unicast updates
-    for (const auto& neighbor : neighborsToNotify)
-    {
-        sendUpdateToNeighbor(neighbor, {{summaryRoute, false}}, EigrpConfigs::UpdateType::PARTIAL);
-    }
-
-    // Send multicast update if enabled
-    if (hasMulticast && configs->multicastEnabled.load(std::memory_order_relaxed))
-    {
-        sendUpdateToNeighbor(nullptr, {{summaryRoute, false}}, EigrpConfigs::UpdateType::PARTIAL);
-    }
+    std::vector<IPPrefix> withdraws;
+    for (auto route : summaryRoutes)
+        if (route.second.isAuto)
+            withdraws.push_back(route.second.summaryRoute.routeInfo.prefix);
+    for (auto pref : withdraws)
+        withdrawSummary(pref);
 }
 
-void EigrpInterface::withdrawSummary(RoutingTable::Eigrp* route)
+SummaryRoute* RouteAggregator::isSummarized(const IPPrefix& prefix)
 {
-    if (!route) return;
-
-    std::vector<EigrpConfigs::NeighborInfo*> unicastNeighbors;
-    bool hasMulticast = false;
-
-    // Iterate through neighbors
+    for (auto& sum : summaryRoutes)
     {
-        IPPrefix key(route->network.raw, route->mask, eigrpProcess.addressFamily);
-
-        std::shared_lock<std::shared_mutex> lock(neighborMutex);
-        for (const auto& [_, neighbor] : neighbors) 
+        if (sum.first.prefixLength > prefix.prefixLength &&
+            Functions::compareNetworkWithIp(sum.first.addr, prefix.addr, sum.first.prefixLength, iface.getBase().getAF()))
         {
-            // Mark for removal in neighbor state
-            {
-                std::unique_lock<std::shared_mutex> neighborInfoLock(neighbor->neighborDataMutex);
-                auto it = neighbor->advertisedRoutes.find(key);
-                if (it != neighbor->advertisedRoutes.end())
-                {
-                    it->second.removePending = true;
-                }
-            }
-
-            if (neighbor->unicast)
-                unicastNeighbors.push_back(neighbor);
-            else
-                hasMulticast = true;
-        }
-    }
-
-    // Build withdrawal route (infinite metric)
-    RoutingTable::Eigrp withdrawl(interfaceKey);
-    withdrawl.network = route->network;
-    withdrawl.mask = route->mask;
-    withdrawl.routeType = RoutingTable::Eigrp::RouteType::SUMMARY;
-    withdrawl.metric = std::numeric_limits<uint32_t>::max();
-
-    // Send withdraw update to the neighbor
-    for (const auto& neighbor : unicastNeighbors)
-    {
-        sendUpdateToNeighbor(neighbor, {{&withdrawl, true}}, EigrpConfigs::UpdateType::PARTIAL);
-    }
-    if (hasMulticast && configs->multicastEnabled.load(std::memory_order_relaxed))
-    {
-        sendUpdateToNeighbor(nullptr, {{&withdrawl, true}}, EigrpConfigs::UpdateType::PARTIAL);
-    }
-}
-
-void EigrpInterface::clearAutoSummaries()
-{
-    std::unique_lock<std::shared_mutex> lock(configs->configsMutex);
-
-    for (auto it = configs->summaryRoutes.begin(); it != configs->summaryRoutes.end();)
-    {
-        if (it->isAuto)
-        {
-            // Withdraw form neighbors
-            withdrawSummaryRoute(it->summary);
-            
-            // Remove from global routing table
-            eigrpProcess.routingInstance->routingTable.removeEigrp(
-                it->summary->network.raw,
-                it->summary->mask,
-                eigrpProcess.addressFamily,
-                eigrpProcess.asNumber
-            );
-
-            //TODO remove null0 discard route
-
-            // Free route
-            delete it->summary;
-
-            // Erase entry
-            it = configs->summaryRoutes.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-}
-
-void EigrpInterface::addManualSummary(const uint8_t* network, uint8_t mask, bool isAuto)
-{
-    if (Functions::compareNetworkWithMask(network, mask, eigrpProcess.addressFamily))
-        return; // Mask invalid
-
-    // Don't add if already summarized
-    if (isRouteSummarized(network, mask)) 
-        return;
-
-    uint32_t minBandwidth = std::numeric_limits<uint32_t>::max();
-    uint32_t minDelay = std::numeric_limits<uint32_t>::max();
-
-    const auto& allRoutes = eigrpProcess.routingInstance->routingTable.getAllEigrpRoutes(
-        eigrpProcess.addressFamily, eigrpProcess.asNumber
-    );
-
-    for (const auto* route : allRoutes)
-    {
-        if (route->delay == 0xFFFFFFFF || route->routeType == RoutingTable::Eigrp::RouteType::SUMMARY)
-            continue;
-        if (isRouteSummarized(route->network.raw, route->mask))
-        {
-            if (route->bandwidth < minBandwidth)
-                minBandwidth = route->bandwidth;
-
-            if (route->delay < minDelay)
-                minDelay = route->delay;
-        }
-    }
-
-    // Create summary route
-    RoutingTable::Eigrp* route = new RoutingTable::Eigrp(interfaceKey);
-    std::memcpy(route->network.raw, network, static_cast<uint8_t>(eigrpProcess.addressFamily));
-    route->network.isV6 = eigrpProcess.addressFamily == AddressFamily::IPv6;
-    route->mask = mask;
-    route->routeType = RoutingTable::Eigrp::RouteType::SUMMARY;
-    route->hopCount = 0;
-    route->delay = 0;
-    route->bandwidth = ( 10000000 / currentInterfaceInfo->bandwidth.load(std::memory_order_relaxed)) * 256;
-    route->mtu = eigrpProcess.addressFamily == AddressFamily::IPv4
-        ? currentInterfaceInfo->ipv4.mtu.load(std::memory_order_relaxed)
-        : currentInterfaceInfo->ipv6.mtu.load(std::memory_order_relaxed);
-    route->reliability = 255;
-    route->load = eigrpProcess.configs.variance.load(std::memory_order_relaxed);
-    route->adminDistance = eigrpProcess.configs.adminDistance.load(std::memory_order_relaxed);
-    if (configs->nextHopSelf.load(std::memory_order_relaxed))
-        route->nextHop = getInterfaceIp();
-
-    eigrpProcess.routingInstance->routingTable.addEigrp(route, eigrpProcess.addressFamily, eigrpProcess.asNumber);
-
-    // Add new summary route
-    {
-        EigrpConfigs::SummaryRoute entry;
-        std::unique_lock<std::shared_mutex> configsLock(configs->configsMutex);
-        entry.summary = route;
-        entry.isAuto = isAuto;
-        configs->summaryRoutes.push_back(std::move(entry));
-    }
-
-    // Update interface to advertise the new summary route
-    advertiseSummaryRoute(route);
-}
-
-void EigrpInterface::removeManuelSummary(const IPAddress& network, uint8_t mask)
-{
-    std::unique_lock<std::shared_mutex> lock(configs->configsMutex);
-
-    auto list = configs->summaryRoutes;
-    for (auto it = list.begin(); it != list.end();)
-    {
-        RoutingTable::Eigrp* route = it->summary;
-        if (route->network == network && route->mask == mask)
-        {
-            // Withdraw from neighbors
-            withdrawSummaryRoute(route);
-
-            // Remove from global routing table
-            eigrpProcess.routingInstance->routingTable.removeEigrp(
-                route->network.raw,
-                route->mask,
-                eigrpProcess.addressFamily,
-                eigrpProcess.asNumber
-            );
-
-            // TODO remove discard route
-
-            // Free route object
-            delete route;
-
-            // Remove from list
-            it = list.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-}
-
-void EigrpInterface::restoreSummaryRoutes(const IPAddress& summaryNetwork, uint8_t summaryMask)
-{
-    std::shared_lock<std::shared_mutex> lock(configs->configsMutex);
-
-    for (const auto& sr : configs->summaryRoutes)
-    {
-        if (sr.summary->network == summaryNetwork && sr.summary->mask == summaryMask)
-        {
-            advertiseSummaryRoute(sr.summary);
-
-            // Reinstall discard route //TODO
-//                 RoutingTable::Discard;
-//                 discard.network == summaryRoute;
-//                 discard.mask == summaryMask;
-//                 discard.interfaceId = currentInterface->id;
-//                 discard.protocol = "eigrp";
-//                 discard.name = "summary-discard";
-
-            //TODO remove discard route
-            break;
-        }
-    }
-}
-
-EigrpConfigs::SummaryRoute* EigrpInterface::isSummarized(const uint8_t* network, uint8_t mask)
-{
-    std::shared_lock<std::shared_mutex> configsLock(configs->configsMutex);
-
-    for (auto& sr : configs->summaryRoutes)
-    {
-        if (Functions::isSubnetOf(network, mask, sr.summary->network.raw, sr.summary->mask, eigrpProcess.addressFamily))
-        {
-            return &sr;
+            return &sum.second;
         }
     }
     return nullptr;
+}
+
+void RouteAggregator::updateSummaryRoute(SummaryRoute& r, ReceivedRoute& route)
+{
+    if (route.feasibleDistance < r.summaryRoute.routeInfo.feasibleDistance)
+    {
+        
+    }
+}
+
+bool RouteAggregator::calculateSummary(SummaryRoute& s)
+{
+    ReceivedRoute& r = s.summaryRoute.routeInfo;
+    auto& base = iface.getBase();
+    auto& topology = iface.getTopController();
+    auto& entries = topology.getTopologies();
+
+    const ReceivedRoute* bestRoute = nullptr;
+
+    for (auto& [_, entry] : entries)
+    {
+        if (s.summarizedRoutes.contains(entry->prefix))
+        {
+            auto it = entry->routesByNeighbor.find(entry->bestNeighbor);
+            if (it != entry->routesByNeighbor.end())
+            {
+                const auto& rt = it->second.routeInfo;
+                if (!bestRoute || (bestRoute && bestRoute->feasibleDistance > rt.feasibleDistance))
+                    bestRoute = &rt;
+            }
+        }
+    }
+
+    AddressFamily af = iface.getBase().getAF();
+
+    auto& ifCfg = iface.getIfaceCfg();
+    if (af == AddressFamily::IPv4)
+    {
+        ifCfg.ipv4.getAddress(r.nextHop.raw);
+    }
+    else
+    {
+        ifCfg.ipv6.getLocalAddress(r.nextHop.raw);
+        r.nextHop.isV6 = true;
+    }
+
+    r.originInterface = iface.interfaceKey;
+    r.reportedDistance = 0;
+    r.hopCount = 0;
+    r.tag = 0;
+    r.adminDistance = base.getGlobalConfigMgr().getAD();
+    r.routeType = RoutingTable::Eigrp::RouteType::SUMMARY;
+    
+    r.wide.isWide = true;
+    r.wide.topology = 0;
+    r.wide.afi = (base.getAF() == AddressFamily::IPv6) ? 2 : 1;
+    r.wide.rid = base.routerID();
+    r.wide.priority = 0;
+    r.wide.wideFlags = 0;
+
+    if (bestRoute)
+    {
+        r.bandwidth = bestRoute->bandwidth;
+        r.delay = bestRoute->delay;
+        r.mtu = bestRoute->mtu;
+        r.reliability = bestRoute->reliability;
+        r.load = bestRoute->load;
+        r.feasibleDistance = bestRoute->feasibleDistance;
+        r.reportedDistance = bestRoute->reportedDistance;
+        return true;
+    }
+    else
+    {
+        r.feasibleDistance = std::numeric_limits<uint64_t>::max();
+        return false;
+    }
+}
+
+void RouteAggregator::updateAllSummaryRoutes()
+{
+    for (auto& [_, s] : summaryRoutes)
+    {
+        updateSummaryRoute(s);
+    }
+}
+
+void RouteAggregator::installSummary(const IPPrefix& prefix, bool isAuto)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+    ReceivedRoute r{};
+    auto it = summaryRoutes.emplace(prefix, RouteInfo{r}, isAuto, false, std::set<IPPrefix>{});
+    auto& s = it.first->second;
+
+    for (auto& entry : iface.getTopController().getTopologies())
+    {
+        if (entry.second->prefix.prefixLength >= prefix.prefixLength &&
+            Functions::compareNetworkWithIp(prefix.addr, entry.second->prefix.addr, prefix.prefixLength, iface.getBase().getAF()))
+        {
+            entry.second->summaries[iface.interfaceKey] = &s;
+            s.summarizedRoutes.insert(entry.second->prefix);
+        }
+    }
+    for (auto& sum : summaryRoutes)
+    {
+        if (sum.first.prefixLength >= prefix.prefixLength &&
+            Functions::compareNetworkWithIp(prefix.addr, sum.first.addr, prefix.prefixLength, iface.getBase().getAF()))
+        {
+            sum.second.supressed = true;
+            s.summarizedRoutes.insert(sum.first);
+        }
+        else if (sum.first.prefixLength < prefix.prefixLength &&
+            Functions::compareNetworkWithIp(sum.first.addr, prefix.addr, sum.first.prefixLength, iface.getBase().getAF()))
+        {
+            s.supressed = true;
+            sum.second.summarizedRoutes.insert(prefix);
+        }
+    }
+
+    // Add summary info
+    updateSummaryRoute(s);
+}
+
+void RouteAggregator::withdrawSummary(const IPPrefix& prefix)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+    
+    auto it = summaryRoutes.find(prefix);
+    if (it == summaryRoutes.end()) return;
+
+    std::vector<TopologyEntry*> supressedRoutes;
+    std::vector<const RouteInfo*> supressedSummaries;
+
+    auto& entries = iface.getTopController().getTopologies();
+    for (auto r : it->second.summarizedRoutes)
+    {
+        if (auto sit = summaryRoutes.find(r); sit != summaryRoutes.end())
+        {
+            sit->second.supressed = false;
+            supressedSummaries.push_back(&sit->second.summaryRoute);
+        }
+        else if (auto eit = entries.find(r); eit != entries.end())
+        {
+            eit->second->summaries.erase(iface.interfaceKey);
+            supressedRoutes.push_back(eit->second);
+        }
+    }
+
+    iface.getBase().routeManager.synchronizeRoutes(supressedRoutes, {prefix}, supressedSummaries);
 }
 }

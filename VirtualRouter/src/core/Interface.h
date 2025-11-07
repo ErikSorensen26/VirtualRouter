@@ -21,6 +21,7 @@ class VirtualRouter;
 class MockInterface;
 class PacketBuilder;
 class TxDistributor;
+struct HwIfaceInfo;
 
 enum class InterfaceType : uint8_t;
 enum class StateChange
@@ -31,6 +32,11 @@ enum class StateChange
     IPREMOVAL
 };
 
+namespace Eigrp
+{
+    struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
+}
+
 namespace Protocol 
 {
     class Ethernet;                 ///< Forward declaration of Ethernet protocol class.
@@ -38,7 +44,6 @@ namespace Protocol
     class Dhcpv6Client;             ///< Forward declaration of Dhcpv6Client protocol class.``
     class Arp;                      ///< Forward declaration of Arp protocol class.
     class Ndp;                      ///< Forward declaration of Arp protocol class.
-    struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
 }
 
 namespace EigrpConfigs 
@@ -51,8 +56,7 @@ struct InterfaceCreation
     InterfaceType interfaceType;
     float interfaceId;
     VirtualRouter& vrf;
-    const char* outInterface;
-    const uint8_t* mac;
+    const HwIfaceInfo& info;
     bool debug;
 };
 
@@ -97,7 +101,7 @@ public:
     Protocol::Ndp* ndp = nullptr;     ///< NDP protocol handler.
 
     // L4 Protocols
-    std::map<uint32_t, Protocol::EigrpInterfaceInstance*> eigrpInterfaceList; ///< EIGRP interface instance.
+    std::map<uint32_t, Eigrp::EigrpInterfaceInstance*> eigrpInterfaceList; ///< EIGRP interface instance.
     EigrpConfigs::InterfaceConfigs* getEigrpConfig(uint32_t as, AddressFamily af, bool negate);
 
     // L5 Protocols
@@ -159,8 +163,5 @@ private:
 
     std::atomic<bool> threadsRunning;   ///< Atomic flag indicating if threads are running.
 };
-
-// External declarations
-extern Interface* currentInterface; ///< Pointer to the current Interface object.
 
 #endif // INTERFACE_H

@@ -8,6 +8,9 @@
 #include <linux/if.h>
 #include <unistd.h>
 #include <cstring>
+#include <linux/ethtool.h>
+#include <linux/sockios.h>
+#include <HeaderHelpers.hpp>
 #include <iostream>
 
 HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& fileSystem, bool enableDummies)
@@ -86,20 +89,36 @@ std::string HardwareManager::getInterface(InterfaceType type, int index)
     return it->second[index];
 }
 
-std::string HardwareManager::getMac(const std::string& ifname)
+const HwIfaceInfo* HardwareManager::getHwInfo(const std::string& iface) const
 {
-    auto it = macs.find(ifname);
-    if (it != macs.end())
-        return it->second;
-    return {};
+    if (auto it = hwInfo.find(iface); it != hwInfo.end())
+        return &it->second;
+    return nullptr;
 }
 
-const std::vector<std::string> HardwareManager::getMacs(InterfaceType type)
+std::optional<HwIfaceInfo> HardwareManager::extractHwInfo(int sock, struct ifreq& ifr)
 {
-    auto it = ifaceToMac.find(type);
-    if (it != ifaceToMac.end())
-        return it->second;
-    return {};
+    HwIfaceInfo info;
+
+    if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0)
+    {
+        info.mac = readU48(reinterpret_cast<uint8_t*>(ifr.ifr_hwaddr.sa_data));
+    }
+    else return std::nullopt;
+
+    struct ethtool_cmd edata {};
+    edata.cmd = ETHTOOL_GSET;
+    ifr.ifr_data = reinterpret_cast<char*>(&edata);
+
+    if (ioctl(sock, SIOCETHTOOL, &ifr) == 0)
+    {
+        unsigned int mbps = ethtool_cmd_speed(&edata);
+        unsigned int kbps = mbps * 1000;
+        info.bandwidth = kbps;
+    }
+    else return std::nullopt;
+
+    return info;
 }
 
 bool HardwareManager::ensureInterface(const std::string& ifname, InterfaceType type)
@@ -116,13 +135,11 @@ bool HardwareManager::ensureInterface(const std::string& ifname, InterfaceType t
     bool exists = false; 
     if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0)
     {
-        exists = true;
-
-        if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0)
+        auto info = extractHwInfo(sock, ifr);
+        if (info.has_value())
         {
-            std::string mac(reinterpret_cast<const char*>(ifr.ifr_hwaddr.sa_data), 6);
-            macs[ifname] = mac;
-            ifaceToMac[type].push_back(mac);
+            exists = true;
+            hwInfo[ifname] = *info;
         }
     }
     else

@@ -11,6 +11,13 @@
 class IFileSystem;
 enum class InterfaceType : uint8_t;
 
+struct HwIfaceInfo
+{
+    std::string iface;
+    uint64_t mac;
+    uint64_t bandwidth;
+};
+
 class HardwareManager
 {
 public:
@@ -20,18 +27,17 @@ public:
     bool bringUp(const std::string& ifname);
     bool bringDown(const std::string& ifname);
 
-    std::string getMac(const std::string& ifname);
-    const std::vector<std::string> getMacs(InterfaceType type);
+    const HwIfaceInfo* getHwInfo(const std::string& iface) const;
     const std::map<InterfaceType, std::vector<std::string>>& getPhysicalInterfaces() { return physicalInterfaces; }
     const std::vector<std::string>& getPhysicalInterfaces(InterfaceType type) { return physicalInterfaces[type]; }
 
 private:
+    std::optional<HwIfaceInfo> extractHwInfo(int sock, struct ifreq& ifr);
     bool ensureInterface(const std::string& ifname, InterfaceType type);
     bool createDummy(const std::string& ifname);
 
     std::map<InterfaceType, std::vector<std::string>> physicalInterfaces;
-    std::map<std::string, std::string> macs;
-    std::map<InterfaceType, std::vector<std::string>> ifaceToMac;
+    std::map<std::string, HwIfaceInfo> hwInfo;
 
     nlohmann::json configJson;
     bool allowDummies;

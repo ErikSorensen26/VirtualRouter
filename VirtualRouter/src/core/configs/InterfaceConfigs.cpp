@@ -1,15 +1,18 @@
 #include "InterfaceConfigs.h"
+#include <IPAddress.hpp>
+#include <HardwareManager.h>
 #include <Eigrp.h>
 
 //ADD LOCK FREE VECTOR
 
-InterfaceConfigs::InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const uint8_t* mac)
+InterfaceConfigs::InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const HwIfaceInfo& info)
   : id(id),
     interfaceType(type),
     key(calculateInterfaceKey(type, id)),
+    hwInfo(info),
     ipv6(timeManager)
 {
-    macAddress.store(readU48(mac), std::memory_order_relaxed);
+    macAddress.store(hwInfo.mac, std::memory_order_relaxed);
 }
 
 InterfaceConfigs::~InterfaceConfigs()

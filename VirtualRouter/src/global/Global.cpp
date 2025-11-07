@@ -48,15 +48,15 @@ void Global::reset()
 }
       
 // Interfaces
-Interface* Global::addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug)
+Interface* Global::addInterface(InterfaceType interfaceType, const size_t inQueSiz, const size_t outQueSiz, const HwIfaceInfo& hwInfo, float interfaceId, bool debug)
 {
     uint32_t key = calculateInterfaceKey(interfaceType, interfaceId);
     if (interfaceList.find(key) != interfaceList.end())
     {
         return nullptr;
     }
-    engine.hwManager->bringUp(outInterface);
-    InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), outInterface.c_str(), reinterpret_cast<const uint8_t*>(mac.data()), debug};
+    engine.hwManager->bringUp(hwInfo.iface);
+    InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), hwInfo, debug};
     interfaceList[key] = new Interface(iface);
 
     return interfaceList[key];

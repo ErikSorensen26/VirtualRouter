@@ -23,6 +23,7 @@ class Interface;
 class VirtualRouter;
 enum class AddressFamily : uint8_t;
 class CliEngine;
+struct HwIfaceInfo;
 namespace Protocol
 {
     class DhcpServer;
@@ -151,7 +152,7 @@ public:
     bool isAAA() {return aaaEnabled.load(std::memory_order_relaxed); }
 
     // Interfaces
-    Interface* addInterface(InterfaceType interfaceType, std::string outInterface, const size_t inQueSiz, const size_t outQueSiz, std::string mac, float interfaceId, bool debug);
+    Interface* addInterface(InterfaceType interfaceType, const size_t inQueSiz, const size_t outQueSiz, const HwIfaceInfo& hwInfo, float interfaceId, bool debug);
     Interface* getInterface(uint32_t key);
     std::map<uint32_t, Interface*> getInterfaceList();
     bool removeInterface(uint32_t key);

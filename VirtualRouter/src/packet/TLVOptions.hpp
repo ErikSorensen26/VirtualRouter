@@ -50,6 +50,11 @@ public:
         else return buffer + offset + 2;
     }
 
+    void addLen(size_t length)
+    {
+        len += length;
+    }
+
     bool hasRoom(size_t size)
     {
         return (offset + 2 + size <= len);
@@ -80,6 +85,7 @@ public:
 
     std::span<const uint8_t> getSpan() const { return { buffer, offset }; }
     size_t size() const { return offset; }
+    size_t maxSize() const { return len; }
 };
 
 class TLV16BufferManager
@@ -97,6 +103,11 @@ public:
         if (offset + 4 + size > len)
             return nullptr;
         else return buffer + offset + 4;
+    }
+
+    void addLen(size_t length)
+    {
+        len += length;
     }
 
     bool hasRoom(size_t size)
@@ -126,6 +137,7 @@ public:
 
     std::span<const uint8_t> getSpan() const { return { buffer, offset }; }
     size_t size() const { return offset; }
+    size_t maxSize() const { return len; }
 };
 
 #endif // TLV_OPTIONS_HPP

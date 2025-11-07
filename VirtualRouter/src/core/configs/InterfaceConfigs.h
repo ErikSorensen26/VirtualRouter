@@ -15,12 +15,12 @@
 // Forward declarations
 class Global;
 class TimeManager;
-enum class AddressFamily : uint8_t;
-enum class InterfaceType : uint8_t;
 class MockInterface;
 class Internal_NdpTest;
 class IPAddress;
-enum class AddressFamily: uint8_t;
+struct HwIfaceInfo;
+enum class AddressFamily : uint8_t;
+enum class InterfaceType : uint8_t;
 
 namespace EigrpConfigs
 {
@@ -37,7 +37,8 @@ namespace Protocol
     class Ndp;
 }
 
-inline uint32_t calculateInterfaceKey(InterfaceType type, float id) {
+inline uint32_t calculateInterfaceKey(InterfaceType type, float id)
+{
     uint8_t typeEncoded = static_cast<uint8_t>(type);
     uint32_t idEncoded;
     static_assert(sizeof(float) == sizeof(uint32_t), "Unexpected float size");
@@ -52,7 +53,7 @@ inline uint32_t calculateInterfaceKey(InterfaceType type, float id) {
 class InterfaceConfigs
 {
 public:
-    InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const uint8_t* mac);
+    InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const HwIfaceInfo& info);
 
     ~InterfaceConfigs();
 
@@ -65,13 +66,16 @@ public:
 
     float id;                       ///< Identifier for the interface.
     InterfaceType interfaceType;    ///< Type of interface.
-    std::string physicalInterface;  ///< Name of physical interface that is attached.
     uint32_t key;                   ///< Interface ID for global identification.
+
+    const HwIfaceInfo& hwInfo;
 
     std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
     std::atomic<bool> trusted = false;           ///< Identifier for trusted interface.
     std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
     std::atomic<uint32_t> delay{10};             ///< Delay of the interface in milliseconds.
+    std::atomic<uint8_t> load{1};                ///< Load value of the interface.
+    std::atomic<uint8_t> reliability{255};       ///< Reliability of the interface.
     std::atomic<uint8_t> ttl{64};                ///< Time To Live.
     std::atomic<uint16_t> globalMtu{1500};
 

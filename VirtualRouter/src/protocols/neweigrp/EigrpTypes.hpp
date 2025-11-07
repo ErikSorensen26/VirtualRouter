@@ -7,6 +7,12 @@
 #include <shared_mutex>
 #include <unordered_set>
 #include <TimeManager.h>
+#include <TopologyTable.h>
+
+namespace Eigrp
+{
+struct RouteInfo;
+}
 
 /**
  * @namespace EigrpConfigs
@@ -14,57 +20,7 @@
  */
 namespace EigrpConfigs
 {
-    struct NeighborInfo;
-    
-    /**
-     * @struct RouterID
-     * @brief Represents the Router ID configuration.
-     */
-    struct RouterID
-    {
-        uint8_t ID[4] = { 0x00, 0x00, 0x00, 0x00 }; ///< Router ID.
-        bool isStatic = false;                 ///< Indicates if the Router ID is static.
-    };
-
-    /**
-     * @struct RoutingUpdate
-     * @brief Represents a routing update.
-     */
-    struct RoutingUpdate
-    {
-        RoutingTable::Eigrp* route;
-        bool withdraw;
-    };
-
-    /**
-     * @struct OutgoingQuery
-     * @brief holds information on an active query.
-     */ 
-    struct OutgoingQuery
-    {
-        uint32_t sequenceNumber; ///< Sequence assigned for outgoing query.
-        uint32_t siaTimerId = 0; ///< ID of the SIA timer for this neighbor.
-        uint32_t retries = 0; ///< Number of SIA-Query retries if needed.
-        std::chrono::steady_clock::time_point lastSIARefreshTime; ///< Time of last SIA activity.
-    };
-
-    /**
-     * @struct ActiveRoute
-     * @brief holds information on an active route.
-     */
-    struct ActiveRoute
-    {
-        RoutingTable::Eigrp* route; ///< The actual route.
-        IPAddress originNeighbor; ///< Who started this query.
-        uint32_t sequenceNumber; /// < Sequence assigned when you flooded query.
-        std::unordered_map<IPAddress, OutgoingQuery> pendingQueries; ///< Per-neighbor tracking
-        std::vector<std::tuple<NeighborInfo*, IPAddress, RoutingTable::Eigrp*, bool>> feasibleRoutes;
-    };
-
-    /**
-     * @struct KValue
-     * @brief Represents the K-values used in EIGRP metric calculation.
-     */
+    struct Neighbor;
     struct KValue 
     {
         KValue(uint8_t k1 = 1, uint8_t k2 = 0, uint32_t k3 = 1, uint8_t k4 = 0, uint16_t k5 = 0, uint8_t k6 = 0)
@@ -77,11 +33,6 @@ namespace EigrpConfigs
         uint16_t k5_MTU;        ///< Weight for MTU.
         uint8_t k6_Power;       ///< Weight for power.
     };
-
-    /**
-     * @brief Metric
-     * @brief Represents the local metric along with all of the metric values.
-     */
     struct Metric
     {
         Metric(uint32_t lm, uint32_t bw, uint8_t ld, uint32_t dl, uint8_t ry)
@@ -95,33 +46,6 @@ namespace EigrpConfigs
 
         Metric() {}
     };
-
-    /**
-     * @struct SummaryRoute
-     * @brief Represents a summary route configuration.
-     */
-    struct SummaryRoute 
-    {
-        RoutingTable::Eigrp* summary;
-        bool isAuto = false;///< Indicates if the summary route is automatically generated.
-    };
-
-    /**
-     * @struct SummaryMetric
-     * @brief manual summary metrics for a route
-     */
-    struct SummaryMetric
-    {
-        uint8_t network[16];
-        uint8_t mask;
-        KValue kvalue;
-        uint8_t adminDistance = 0;
-    };
-
-    /**
-     * @struct StubConfig
-     * @brief Configuration for Stub routing in EIGRP.
-     */
     struct StubConfig
     {
         bool isStub = false;                ///< Indicates if Stub routing is enabled.
@@ -175,6 +99,7 @@ namespace EigrpConfigs
         std::string key;             ///< The authentication key.
         AuthType authType = AuthType::NONE; ///< Type of authentication.
         std::atomic<uint32_t> replay;
+        std::atomic<uint32_t> lastReplay;
     };
 
     /**
@@ -221,31 +146,6 @@ namespace EigrpConfigs
     };
 
     /**
-     * @enum NeighborState
-     * @brief Represents the state of an EIGRP neighbor.
-     */
-    enum class NeighborState
-    {
-        DOWN,       ///< Neighbor is down.
-        INIT,       ///< Initialization state.
-        TWOWAY,     ///< Two-Way communication established.
-        EXSTART,    ///< Exchange start state.
-        EXCHANGE,   ///< Exchange routing state.
-        LOADING,    ///< Loading routing state.
-        ESTABLISHED ///< Adjacency fully formed.
-    };
-
-    /**
-     * @enum InitRole
-     * @brief Represents the role (MASTER/SLAVE) during neighbor initialization.
-     */
-    enum class InitRole
-    {
-        MASTER, ///< Master role.
-        SLAVE   ///< Slave role.
-    };
-
-    /**
      * @struct Network
      * @brief Represents a network with its IP address and subnet mask.
      */
@@ -263,239 +163,6 @@ namespace EigrpConfigs
     };
 
     /**
-     * @struct NeighborInfo
-     * @brief Contains comprehensive information and state management for an EIGRP neighbor.
-     *
-     * This structure manages neighbor initialization, communication state, packet handling,
-     * timers, acknowledgements, authentication, and thread operations required to maintain
-     * EIGRP neighbor relationships.
-     */
-    struct NeighborInfo 
-    {
-        ~NeighborInfo()
-        {
-            clearTimers();
-        }
-
-        TimeManager& timeManager;
-
-        void clearTimers()
-        {
-            // Cancel timers
-            if (stuckInInitCheckActive)
-            {
-                timeManager.cancelTimer(stuckInInitTimerId);
-            }
-
-            if (twoWayThreadID != 0)
-            {
-                timeManager.cancelTimer(twoWayThreadID.load(std::memory_order_relaxed));
-            }
-
-            if (holdTimerId != 0)
-            {
-                timeManager.cancelTimer(holdTimerId);
-            }
-
-            if (gracefulRestartTimerId != 0)
-            {
-                timeManager.cancelTimer(gracefulRestartTimerId);
-            }
-
-            for (auto& relPkt : reliablePackets)
-            {
-                if (relPkt.second.timerId != 0)
-                {
-                    timeManager.cancelTimer(relPkt.second.timerId);
-                }
-            }
-        }
-
-        void restart()
-        {
-            {
-                std::lock_guard<std::mutex> lock(initFlagMutex);
-                initFlags.initUpdateReceived = false;
-                initFlags.nullSent = false;
-                initFlags.slaveInit = false;
-                initFlags.masterInit = false;
-                initFlags.initRole = InitRole::MASTER;
-            }
-            neighborState.store(NeighborState::DOWN);
-            initComplete.store(false, std::memory_order_release);
-            initSequence.store(0, std::memory_order_release);
-            nullUpdateSequence.store(0, std::memory_order_release);
-            stuckInInitCheckActive.store(false, std::memory_order_release);
-            secondHelloReceived.store(false, std::memory_order_release);
-        }
-
-        // Basic Neighbor Information
-        IPAddress ipAddress; ///< Neighbor's IP address.
-        uint8_t macAddress[6]; ///< Neighbor's MAC address.
-        uint32_t routerID; ///< Neighbor's RouterID.
-
-        // Initialization
-        std::atomic<NeighborState> neighborState = NeighborState::DOWN; ///< Current state of the neighbor.
-
-        std::mutex initFlagMutex;
-        struct InitFlags {
-            InitRole initRole = InitRole::MASTER; ///< Initialization role (MASTER/SLAVE).
-            bool initUpdateReceived =   false; ///< Inidcates if an initialization update has been received
-            bool nullSent =             false; ///< Indicates if a null update has been sent.
-            bool slaveInit =            false; ///< Indicates if the neighbor is in slave initialization.
-            bool masterInit =           false; ///< Indicates if the nieghbor is in master initialization.
-        } initFlags;
-
-        std::atomic<bool> initComplete = false; ///< Indicates if neighbor initialization is complete.
-        std::atomic<bool> processAcks = false; ///< Indicates if ACKs should be processed.
-
-        std::atomic<uint32_t> initSequence{0}; ///< Initialization sequence number.
-        std::atomic<uint32_t> nullUpdateSequence{0}; ///< Last sequence number for received for null update.
-
-
-        std::chrono::steady_clock::time_point initStartTime; ///< Init start time.
-        std::atomic<bool> stuckInInitCheckActive = false; ///< Indicating if neighbor is stuck initializing.
-        std::atomic<uint32_t> stuckInInitTimerId;
-
-        std::condition_variable twoWayCV; ///< TWOWAY conditional variable for managing state transition.
-        std::atomic<uint32_t> twoWayThreadID; ///< Thread used for TWOWAY state transition.
-        std::atomic<bool> secondHelloReceived = false; ///< Indicates when a second hello is received.
-
-        // Packet Handling
-        /**
-         * @struct PacketBuffer
-         * @brief Represents a buffer for packets received from the neighbor.
-         */
-        struct PacketBuffer 
-        {
-            IPAddress neighborIp;  ///< IP address of the neighbor.
-            EigrpHeader eigrp;      ///< EIGRP packet header. //TODO handle packet buffer
-        };
-        std::unordered_map<uint32_t, PacketBuffer> packetBuffer; ///< Buffer for packets from neighbors.
-        std::mutex bufferMutex;
-
-        // Acknowledgements
-        std::unordered_set<uint32_t> pendingAcks; ///< List of pending ACKs.
-
-        // RTT (Route-Trip Time) Estimation
-        double srtt = 1.0; ///< Smoothed RTT
-        double rttvar = 0.5; //< RTT variance
-        double rto = 1.5; ///< Retransmission timeout
-
-        std::atomic<uint64_t> siaFailures = 0; ///< Amount of stuck-in-active failures.
-
-        // Timers
-        std::atomic<uint32_t> holdTimerId = 0; ///< Hold timer ID.
-        std::atomic<uint16_t> holdTime; ///< Hold time in seconds.
-        std::chrono::steady_clock::time_point lastHeard; ///< Last heard time point.
-        std::unordered_map<uint32_t, uint32_t> retransmissionTimers; ///< Map of sequence numbers to retransmission timer IDs.
-
-        // Synchronization
-        std::shared_mutex neighborDataMutex; ///< Protects neighbor-specific data.
-        std::condition_variable cv; ///< Condition variable for synchronization
-
-        /**
-         * @struct ReliablePacketInfo
-         * @brief Information about reliable packets sent to the neighbor.
-         */
-        struct ReliablePacketInfo 
-        {
-            /**
-             * @struct Packet
-             * @brief Represents a reliable packet.
-             */
-            struct Packet {
-                /**
-                 * @brief Constructs a Packet with specified parameters.
-                 * @param eigrp EIGRP packet header.
-                 * @param destination Destination IP address.
-                 * @param routes Updated routes included in the packet.
-                 * @param isRemove Indicates if the packet is for route removal.
-                 */
-                Packet(AddressFamily af, const uint8_t* eigrp, size_t eigrpSize, const IPAddress dest, std::vector<RoutingUpdate> routes = {}, bool isRemove = false)
-                    : updatedRoutes(routes) 
-                {
-                    destination = dest;
-                }
-                Packet() = default;
-
-                uint8_t headerBuffer[1540];
-                size_t headerSize;
-                IPAddress destination; ///< Destination IP address.
-                std::vector<RoutingUpdate> updatedRoutes{}; ///< Updated routes in the packet.
-            };
-
-            Packet packet; ///< Reliable packet information.
-            std::chrono::steady_clock::time_point sendTime; ///< Time the packet was sent.
-            uint8_t retransmissionCount = 0; ///< Number of retransmissions.
-            uint32_t timerId; ///< Timer ID for retransmission.
-
-            /**
-             * @brief Default constructor.
-             */
-            ReliablePacketInfo() = default;
-
-            /**
-             * @brief Constructs a ReliablePacketInfo with a specified packet.
-             * @param packet Reliable packet information.
-             */
-            ReliablePacketInfo(Packet packet) : packet(packet) {}
-
-            // Default copy constructor and copy assignment operator
-            ReliablePacketInfo(const ReliablePacketInfo&) = default;
-            ReliablePacketInfo& operator=(const ReliablePacketInfo&) = default;
-
-            // Default move constructor and move assignment operator
-            ReliablePacketInfo(ReliablePacketInfo&&) = default;
-            ReliablePacketInfo& operator=(ReliablePacketInfo&&) = default;
-        };
-        std::unordered_map<uint32_t, ReliablePacketInfo> reliablePackets; ///< Map of sequence numbers to reliable packets.
-        std::mutex reliableMutex;
-
-        /**
-         * @struct AdvertisedRoute
-         * @brief Tracks advertised routes and their states.
-         */
-        struct AdvertisedRoute
-        {
-            RoutingTable::Eigrp* route;///< Advertised route information.
-            bool active;               ///< Indicates if the route is currently active.
-            bool pendingUpdate;        ///< Indicates if there is a pending update for the route.
-            bool removePending;        ///< Indicates if the route is pending removal (Withdraw).
-        };
-
-        // Routing Updates
-        std::unordered_map<IPPrefix, AdvertisedRoute> advertisedRoutes; ///< Map of advertised routes.
-
-        // Neighbor Flags
-        bool unicast = false; ///< Indicates if the neighbor is unicast.
-        std::atomic<bool> hasMac = false; ///< Indicates if MAC address is known.
-        std::atomic<bool> isInit = false; ///< Initialization flag.
-        std::atomic<bool> isGracfullyRestarting = false; ///< Gracefully restarting.
-        std::atomic<uint32_t> gracefulRestartTimerId = 0; ///< Graceful restart timer ID.
-        std::atomic<uint32_t> lastReceivedSequenceNumber = 0; ///< Last received sequence number.
-        std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> missingPacketTimestamps; ///< Timestamps for missing packets.
-    
-        /**
-         * @brief Default constructor.
-         * 
-         * @param unicast 
-         */
-        NeighborInfo(AddressFamily af, TimeManager& manager, const IPAddress& neighborIp, bool unicast = false) : timeManager(manager), unicast(unicast)
-        {
-            ipAddress = neighborIp;
-        }
-
-        // Delete copy constructor and copy assignment operator
-        NeighborInfo(const NeighborInfo&) = delete;
-        NeighborInfo& operator=(const NeighborInfo&) = delete;
-    
-        // Delete move constructor and move assignment operator
-        NeighborInfo(NeighborInfo&&) = delete;
-        NeighborInfo& operator=(NeighborInfo&&) = delete;
-    };
-
-    /**
      * @struct NetworksDistributed
      * @brief Represents distributed networks in EIGRP.
      */
@@ -510,28 +177,28 @@ namespace EigrpConfigs
      * @struct EigrpConfigs
      * @brief Configuration settings for the EIGRP process.
      */
-    struct nextHopSelf
+    struct EigrpConfigs
     {
         std::shared_mutex configsMutex;
         std::atomic<uint8_t> maxPaths = 4; ///< Maximum number of equal-cost paths.
-        std::atomic<uint8_t> maxHops = 100; ///< Maximum hops for path. // TODO
+        std::atomic<uint8_t> maxHops = 100; ///< Maximum hops for path.
         std::atomic<uint8_t> TOS = 0; ///< Type of service, should remain 0.
         std::atomic<uint8_t> adminDistance = 90; ///< Administrative distance for internal routes.
         std::atomic<uint8_t> externalAdminDistance = 170; ///< Administrative distance for external routes.
         std::atomic<uint8_t> variance = 1; ///< Variance for unequal-cost load balancing.
         std::atomic<uint8_t> trafficShare = 0; ///< Traffic sharing mode.
-        std::atomic<uint8_t> dampeningInterval = 75; ///< Dampening interval for route dampening.
         std::atomic<uint8_t> ribScale = 128; ///< Rib scale for metric when adding to RIB. //TODO
+        std::atomic<uint8_t> dampeningInterval = 75; ///< Dampening interval for route dampening.
         std::atomic<uint16_t> dampeningResetTime = 0; ///< Reset time for dampening.
         std::atomic<uint16_t> dampeningRestart = 0; ///< Restart time for dampening.
         std::atomic<uint16_t> dampeningRestartCount = 1; ///< Restart count for dampening.
+        std::atomic<uint16_t> routeDelTimer = 120; ///< Route unreachable hold timer before deletion.
         std::atomic<uint16_t> activeTime = 180; ///< Active time in seconds.
         std::atomic<uint16_t> stuckInActiveTime = 90; ///< Stuck-in-active time in seconds.
         std::atomic<uint16_t> purgeTime = 240; ///< Purge time for nsf mode with graceful restarts.
         std::atomic<uint32_t> redistributionMetricOffset = 0; ///< Metric offset for redistribution. //TODO
         std::atomic<uint32_t> wideMetric = 10000000; ///< Wide metric setting.
         std::atomic<uint32_t> eventLogSize = 500; //< Event log size for eigrp.
-        std::atomic<uint32_t> lowestBandwidth = std::numeric_limits<uint32_t>::max(); ///< Holds the lowest bandwidth on all interfaces.
         std::atomic<uint32_t> maximumPrefix = 0; ///< Max number of prefixes that will be accepted.
         std::atomic<bool> logNeighborChanges = true; ///< Enable logging of neighbor changes.
         std::atomic<bool> logNeighborWarnings = false; ///< Enable logging of neighbor warnings.
@@ -568,11 +235,10 @@ namespace EigrpConfigs
         bool shutdown = false;
         bool userMade = false;
         mutable std::shared_mutex configsMutex;
-        std::vector<std::pair<IPAddress, uint8_t>> pendingSummaryRoutes;
-        std::vector<SummaryRoute> summaryRoutes; ///< List of summary routes.
+        std::vector<IPPrefix> pendingSummaryRoutes;
         std::atomic<uint8_t> DSCP = 0; ///< Differentiated Services Code Point.
         std::atomic<uint8_t> interfaceMask; ///< Interface subnet mask.
-        std::atomic<uint8_t> dampeningChange = 1; ///< Number of prefix changes that triggers dampening. //TODO
+        std::atomic<uint8_t> dampeningChange = 1; ///< Number of prefix changes that triggers dampening.
         std::atomic<uint16_t> dampeningInterval = 5; /// Interval the interface will check for changed routes.
         std::atomic<uint16_t> helloTime = 5; ///< Hello interval in seconds.
         std::atomic<uint16_t> holdTime = 15; ///< Hold time in seconds.
@@ -581,9 +247,9 @@ namespace EigrpConfigs
         std::atomic<bool> nextHopSelf = false; ///< Enable next hop self.
         std::atomic<bool> isPassive = false; ///< Enable passive mode.
         std::atomic<bool> multicastEnabled = true; ///< Indicates if multicast is enabled on this interface.
-        std::unordered_map<uint32_t, uint32_t> retransmissionTimers; ///< Retransmission timers.
         std::atomic<Mode> interfaceMode = Mode::MULTIPOINT; ///< Interface mode.
-        std::atomic<uint32_t> localMetric; ///< Local metric of the interface.
+        std::atomic<bool> dampeningIntervalConfigured = false; ///< Indicates whether dampening interval is configured on the interface.
+        std::atomic<uint64_t> localMetric; ///< Local metric of the interface.
         std::atomic<bool> noEcmpMode = false; ///< No ECMP mode used for VPNs. //TODO
         AuthKey authKey; ///< Authentication key.
 

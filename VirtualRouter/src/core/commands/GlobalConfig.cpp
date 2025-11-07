@@ -642,9 +642,10 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 			else
 			{
 				hwIface = terminal.engine.hwManager->getInterface(interfaceType, id);
-				std::string mac = terminal.engine.hwManager->getMac(hwIface);
-				if (mac.empty() || hwIface.empty()) return false;
-				global.addInterface(interfaceType, hwIface, 1024, 1024, mac, terminal.interfaceID, terminal.isDebugModeEnabled);
+				const HwIfaceInfo* info = terminal.engine.hwManager->getHwInfo(hwIface);
+				if (!info) return false;
+				const HwIfaceInfo& hwInfo = *info;
+				global.addInterface(interfaceType, 1024, 1024, hwInfo, terminal.interfaceID, terminal.isDebugModeEnabled);
 				currentVrf->addInterface(global.getInterface(key), key);
 			}
 		}

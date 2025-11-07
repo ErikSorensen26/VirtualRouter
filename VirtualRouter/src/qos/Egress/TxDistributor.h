@@ -29,6 +29,7 @@ public:
     void setWeights(const uint16_t* w) { weights = w; }
     void push(PacketSlot* pkt, TxDistPolicy policy = TxDistPolicy::FLOW_HASH);
     void pushTo(uint32_t qid, PacketSlot* pkt);
+    void release(FrameHandle& frame);
 
     void appendQueue();
     void popQueue();

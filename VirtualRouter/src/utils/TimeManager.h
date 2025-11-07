@@ -69,4 +69,4 @@ private:
     ThreadPool& threadPool;
 };
 
-#endif // TIMERMANAGER_H
+#endif // TIME_MANAGER_H

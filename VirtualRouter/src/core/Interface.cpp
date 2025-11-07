@@ -5,7 +5,6 @@
 //#include <Dhcpv6.h>
 #include <Arp.h>
 #include <Ndp.h>
-#include <Eigrp.h>
 #include <Ethernet.h>
 #include <IPPacket.h>
 #include <Decapsulation.h>
@@ -17,16 +16,18 @@
 #include <RxQueueManager.h>
 #include <Global.h>
 #include <Process.h>
+#include <HardwareManager.h>
+
+#include <PacketBuilder.hpp>
+#include <StaticHeader.hpp>
 
 Interface::Interface(const InterfaceCreation& cfgs)
   : routingInstance(&cfgs.vrf),
-    configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.mac),
+    configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
     debug(cfgs.debug),
     threadsRunning(false)
 {
     // Set member variables
-    configs.physicalInterface = cfgs.outInterface;
-
     startThreads(); // TEMPORARY: will be shutdown by default once shits working
 }
 
@@ -255,9 +256,9 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
     }
 
     // Enqueue the serialized packet for sending
-    if (packetInfo.slot)
+    if (packetInfo.frame.slot)
     {
-        tx->push(packetInfo.slot);
+        tx->push(packetInfo.frame.slot);
         //packetOutQueue.enqueue(packetInfo.slot);
     }
 }

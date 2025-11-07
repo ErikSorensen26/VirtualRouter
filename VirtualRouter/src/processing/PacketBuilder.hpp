@@ -21,84 +21,24 @@ struct BuildEntry
     HeaderType next = HeaderType::NONE;
 };
 
+class StaticPacket;
+
 class PacketBuilder
 {
 public:
-    PacketBuilder(Interface* iface) : bufferOffset(0), buildIndex(0), headerCount(0), local(false)
+    PacketBuilder() = default;
+
+    PacketBuilder(Interface* iface) : bufferOffset(0), buildIndex(0), headerCount(0)
     {
-        FrameHandle frame;
-        if (!iface->tx->getFrame(frame)) std::runtime_error("Full queue unhandled");
-        slot = frame.slot;
-        buffer = frame.payload;
+        if (!iface->tx->getFrame(frame)) throw std::runtime_error("Full queue unhandled");
     }
 
     PacketBuilder(FrameHandle& frame)
-    {
-        slot = frame.slot;
-        buffer = frame.payload;
-    }
+        : frame(frame) {}
 
-    PacketBuilder(const PacketBuilder& other)
-    {
-        buffer = static_cast<uint8_t*>(std::malloc(MaxPacketSize));
-        if (!buffer) throw std::bad_alloc();
+    PacketBuilder(Interface* iface, const StaticPacket& saved);
 
-        size_t usedBytes = other.bufferOffset;
-        if (usedBytes > MaxPacketSize) usedBytes = MaxPacketSize;
-
-        std::memcpy(buffer, other.buffer, usedBytes);
-
-        headerCount = other.headerCount;
-        buildIndex = other.buildIndex;
-        bufferOffset = other.bufferOffset;
-        local = true;
-        slot = nullptr;
-
-        std::memcpy(headers, other.headers, headerCount * sizeof(BuildEntry));
-
-        // Rebase each header pointer into the new buffer
-        for (size_t i = 0; i < headerCount; ++i)
-        {
-            ptrdiff_t offset = other.headers[i].buffer - other.buffer;
-            if (offset < 0 || static_cast<size_t>(offset) >= usedBytes)
-                headers[i].buffer = nullptr;
-            else
-                headers[i].buffer = buffer + offset;
-        }
-    }
-
-    PacketBuilder& operator=(const PacketBuilder& other)
-    {
-        if (this != &other)
-        {
-            if (local && buffer)
-                std::free(buffer);
-
-            buffer = static_cast<uint8_t*>(std::malloc(MaxPacketSize));
-            if (!buffer) throw std::bad_alloc();
-
-            local = true;
-            slot = nullptr;
-            bufferOffset = other.bufferOffset;
-            buildIndex = other.buildIndex;
-            headerCount = other.headerCount;
-            
-            std::memcpy(buffer, other.buffer, other.bufferOffset);
-            std::memcpy(headers, other.headers, sizeof(headers));
-
-            for (size_t i = 0; i < headerCount; ++i) {
-                ptrdiff_t offset = other.headers[i].buffer - other.buffer;
-                headers[i].buffer = buffer + offset;
-            }
-        }
-        return *this;
-    }
-
-    ~PacketBuilder()
-    {
-        if (local && buffer)
-            std::free(buffer);
-    }
+    ~PacketBuilder() = default;
 
     // Reserve space for a new header from the start of the buffer
     BuildEntry* reserveHeader(HeaderType type, size_t size)
@@ -112,9 +52,9 @@ public:
 
         BuildEntry& entry = headers[headerCount++];
         entry.type = type;
-        entry.buffer = buffer + bufferOffset;
+        entry.buffer = frame.payload + bufferOffset;
         entry.length = size;
-        slot->len += size;
+        frame.slot->len += size;
 
         bufferOffset += size;
         return &entry;
@@ -133,7 +73,7 @@ public:
     void addTLVSize(size_t tlvSize)
     {
         bufferOffset += tlvSize;
-        slot->len += tlvSize;
+        frame.slot->len += tlvSize;
         currentBuildHeader()->length += tlvSize;
     }
 
@@ -175,18 +115,118 @@ public:
     // Direct access to all headers
     const BuildEntry* getHeaders() const { return headers; }
     size_t getHeaderCount() const { return headerCount; }
-    uint8_t* getBuffer() { return buffer; }
+    uint8_t* getBuffer() const { return frame.payload; }
 
+    FrameHandle frame;
     size_t bufferOffset = 0;
-    PacketSlot* slot = nullptr;
 
 private:
-    uint8_t* buffer = nullptr;
     BuildEntry headers[MaxHeaders];
     size_t buildIndex = 0;
     size_t headerCount = 0;
-    bool local = false;
 };
+
+class StaticPacket
+{
+public:
+    StaticPacket() = default;
+
+    explicit StaticPacket(const PacketBuilder& builder)
+    {
+        bufferOffset = builder.bufferOffset;
+        headerCount = builder.getHeaderCount();
+        buildIndex = 0;
+
+        size_t usedBytes = bufferOffset;
+        if (usedBytes == 0) usedBytes = 1;
+
+        buffer = static_cast<uint8_t*>(std::malloc(usedBytes));
+        if (!buffer) throw std::bad_alloc();
+        
+        std::memcpy(buffer, builder.getBuffer(), usedBytes);
+
+        const BuildEntry* src = builder.getHeaders();
+
+        for (size_t i = 0; i < headerCount; ++i)
+        {
+            headers[i].type = src[i].type;
+            headers[i].length = src[i].length;
+            headers[i].next = src[i].next;
+
+            ptrdiff_t offset = src[i].buffer - builder.getBuffer();
+            headers[i].buffer = reinterpret_cast<uint8_t*>(offset);
+        }
+    }
+
+    StaticPacket(const StaticPacket& other)
+    {
+        copyFrom(other);
+    }
+
+    StaticPacket& operator=(const StaticPacket& other)
+    {
+        if (this != &other)
+            copyFrom(other);
+        return *this;
+    }
+
+    ~StaticPacket()
+    {
+        if (buffer)
+            std::free(buffer);
+    }
+
+    const uint8_t* getBuffer() const noexcept { return buffer; }
+    size_t getBufferOffset() const noexcept { return bufferOffset; }
+    size_t getHeaderCount() const noexcept { return headerCount; }
+    const BuildEntry* getHeaders() const noexcept { return headers; }
+
+private:
+    void copyFrom(const StaticPacket& other)
+    {
+        if (buffer)
+            std::free(buffer);
+
+        bufferOffset = other.bufferOffset;
+        headerCount = other.headerCount;
+        buildIndex = other.buildIndex;
+
+        buffer = static_cast<uint8_t*>(std::malloc(bufferOffset));
+        if (!buffer)
+            throw std::bad_alloc();
+        std::memcpy(buffer, other.buffer, bufferOffset);
+        std::memcpy(headers, other.headers, sizeof(headers));
+    }
+
+    uint8_t* buffer = nullptr;
+    size_t bufferOffset = 0;
+    size_t headerCount = 0;
+    size_t buildIndex = 0;
+
+    BuildEntry headers[MaxHeaders];
+};
+
+inline PacketBuilder::PacketBuilder(Interface* iface, const StaticPacket& saved)
+{
+    if (!iface->tx->getFrame(frame)) throw std::runtime_error("Full TX queue when rebuilding from StaticPacket");
+
+    bufferOffset = saved.getBufferOffset();
+    buildIndex = 0;
+    headerCount = saved.getHeaderCount();
+
+    std::memcpy(frame.payload, saved.getBuffer(), bufferOffset);
+
+    const BuildEntry* src = saved.getHeaders();
+    for (size_t i = 0; i < headerCount; ++i)
+    {
+        headers[i].type = src[i].type;
+        headers[i].length = src[i].length;
+        headers[i].next = src[i].next;
+
+        ptrdiff_t offset = reinterpret_cast<ptrdiff_t>(src[i].buffer);
+        headers[i].buffer = frame.payload + offset;
+    }
+}
 
 #endif // PACKET_BUILDER_HPP
 
