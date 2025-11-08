@@ -88,6 +88,29 @@ struct IPPrefix
     }
 };
 
+struct IPv4Prefix
+{
+    uint32_t addr{};
+    uint8_t prefixLength{};
+    
+    IPv4Prefix() = default;
+
+    IPv4Prefix(uint32_t ip, uint8_t prefix, AddressFamily family)
+        : addr(ip), prefixLength(prefix) {}
+
+    IPv4Prefix(const IPAddress& ip, uint8_t prefix)
+        : addr(ip.v4), prefixLength(prefix) {}
+
+    bool operator==(const IPv4Prefix& other) const {
+        if (addr != other.addr || prefixLength != other.prefixLength) return false;
+    }
+
+    bool operator<(const IPv4Prefix& other) const {
+        if (prefixLength != other.prefixLength) return prefixLength < other.prefixLength;
+        return addr < other.addr;
+    }
+};
+
 struct IPv6Prefix
 {
     __uint128_t addr;
@@ -148,6 +171,15 @@ struct hash<IPPrefix> {
             h ^= std::hash<uint8_t>{}(key.addr[i]) + 0x9e3779b9 + (h << 6) + (h >> 2);
         }
         return h;
+    }
+};
+
+template <>
+struct hash<IPv4Prefix> {
+    size_t operator()(const IPv4Prefix& pfx) const noexcept {
+        uint64_t h = std::hash<uint32_t>{}(pfx.addr);
+        h ^= static_cast<uint64_t>(pfx.prefixLength) + 0x9e3779b7f4a7c15ull + (h << 6) + (h >> 2);
+        return static_cast<size_t>(h);
     }
 };
 
