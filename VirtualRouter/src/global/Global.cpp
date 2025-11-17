@@ -1,7 +1,7 @@
 #include <Global.h>
 #include <Interface.h>
 #include <InterfaceConfigs.h>
-#include <RoutingTable.h>
+#include <RoutingTable.hpp>
 #include <VirtualRouter.h>
 #include <HardwareManager.h>
 
@@ -48,7 +48,7 @@ void Global::reset()
 }
       
 // Interfaces
-Interface* Global::addInterface(InterfaceType interfaceType, const size_t inQueSiz, const size_t outQueSiz, const HwIfaceInfo& hwInfo, float interfaceId, bool debug)
+Interface* Global::addInterface(InterfaceType interfaceType, const HwIfaceInfo& hwInfo, float interfaceId, bool debug)
 {
     uint32_t key = calculateInterfaceKey(interfaceType, interfaceId);
     if (interfaceList.find(key) != interfaceList.end())
@@ -83,7 +83,7 @@ bool Global::removeInterface(uint32_t key)
     std::lock_guard<std::mutex> lock(interfaceMutex);
     if (auto it = interfaceList.find(key); it != interfaceList.end())
     {
-        std::string hwIface = it->second->configs.physicalInterface;
+        std::string hwIface = it->second->configs.hwInfo.iface;
         delete interfaceList[key];
         engine.hwManager->bringDown(hwIface);
         interfaceList.erase(key);
