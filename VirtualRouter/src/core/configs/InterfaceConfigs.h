@@ -8,7 +8,6 @@
 #include <vector>
 #include <unordered_set>
 #include <HeaderHelpers.hpp>
-#include <string>
 #include <cstring>
 #include <map>
 
@@ -18,6 +17,7 @@ class TimeManager;
 class MockInterface;
 class Internal_NdpTest;
 class IPAddress;
+class IPPrefix;
 struct HwIfaceInfo;
 enum class AddressFamily : uint8_t;
 enum class InterfaceType : uint8_t;
@@ -86,17 +86,17 @@ public:
     {
         IPv4State() : mask(0), address(0) {}
         std::atomic<uint16_t> mtu{1500};
-        bool mtuLocal = false;
+        std::atomic<bool> mtuLocal{false};
 
-        uint8_t* getAddress(uint8_t* out);
-        uint32_t getAddress();
+        uint8_t* getAddress(uint8_t* out) const;
+        uint32_t getAddress() const;
 
         void setAddress(uint32_t newAddress, uint8_t newMask);
 
         bool compareAddress(const uint8_t* ip);
         bool compareAddress(uint32_t ip);
 
-        uint8_t getMask();
+        uint8_t getMask() const;
 
     private:
         std::shared_mutex ipMutex;
@@ -148,34 +148,38 @@ public:
         void validateGlobalAddresses();
         void validateLinkLocalAddress();
 
-        uint8_t* getLocalAddress(uint8_t* out);
-        uint8_t* getGlobalUnicast(uint8_t* out);
-        uint8_t* getLocalUnicast(uint8_t* out);
+        uint8_t* getLocalAddress(uint8_t* out) const;
+        uint8_t* getGlobalUnicast(uint8_t* out) const;
+        uint8_t* getLocalUnicast(uint8_t* out) const;
 
-        __uint128_t getLocalAddress();
-        __uint128_t getGlobalUnicast();
-        __uint128_t getLocalUnicast();
+        __uint128_t getLocalAddress() const;
+        __uint128_t getGlobalUnicast() const;
+        __uint128_t getLocalUnicast() const;
 
-        bool hasLocalAddress(const uint8_t* addr);
-        bool hasGlobalUnicast(const uint8_t* addr);
-        bool hasLocalUnicast(const uint8_t* addr);
+        bool hasLocalAddress(const uint8_t* addr) const;
+        bool hasGlobalUnicast(const uint8_t* addr) const;
+        bool hasLocalUnicast(const uint8_t* addr) const;
 
-        bool hasLocalAddress(__uint128_t addr);
-        bool hasGlobalUnicast(__uint128_t addr);
-        bool hasLocalUnicast(__uint128_t addr);
+        bool hasLocalAddress(__uint128_t addr) const;
+        bool hasGlobalUnicast(__uint128_t addr) const;
+        bool hasLocalUnicast(__uint128_t addr) const;
 
-        uint8_t getGlobalUnicastPair(uint8_t* out);
-        uint8_t getLocalUnicastPair(uint8_t* out);
+        uint8_t getGlobalUnicastPair(uint8_t* out) const;
+        uint8_t getLocalUnicastPair(uint8_t* out) const;
 
-        uint8_t getGlobalUnicastMask();
-        uint8_t getLocalUnicastMask();
+        uint8_t getGlobalUnicastMask() const;
+        uint8_t getLocalUnicastMask() const;
 
-        std::vector<IPAddress> getGlobalList();
-        std::vector<IPAddress> getLocalList();
+        std::vector<IPAddress> getGlobalList() const;
+        std::vector<IPAddress> getLocalList() const;
+
+        std::vector<IPPrefix> getGlobalPrefixList() const;
+        std::vector<IPPrefix> getLocalPrefixList() const;
 
 
         // Other IPv6 configurations
         std::atomic<uint16_t> mtu{1500}; ///< Maximum Transmission Unit size.
+        std::atomic<bool> mtuLocal{false};
 
     private:
         TimeManager& timeManager;

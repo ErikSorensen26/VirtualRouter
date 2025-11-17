@@ -3,7 +3,7 @@
 #ifndef PROCESS_H
 #define PROCESS_H
 
-#include <RoutingTable.h>
+#include <PacketBuilder.hpp>
 
 /**
  * @file Process.h

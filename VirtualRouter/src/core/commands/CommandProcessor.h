@@ -11,11 +11,13 @@
 class Global;
 class VirtualRouter;
 class Interface;
-namespace Protocol
+namespace Eigrp
 {
     class Eigrp;
     struct EigrpNamed;
-
+}
+namespace Protocol
+{
     namespace Dhcp
     {
         struct DhcpNetwork;
@@ -50,8 +52,8 @@ private:
 
     Interface* currentInterface;
 
-    Protocol::Eigrp* currentEigrp;
-    Protocol::EigrpNamed* currentEigrpNamed;
+    Eigrp::Eigrp* currentEigrp;
+    Eigrp::EigrpNamed* currentEigrpNamed;
     EigrpConfigs::InterfaceConfigs* currentEigrpInterface;
 
     Protocol::Dhcp::DhcpNetwork* currentDhcpPool;

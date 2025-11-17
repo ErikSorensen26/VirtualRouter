@@ -68,16 +68,16 @@ namespace std {
             const uint8_t* data = id.data;
             size_t size = id.size;
 
-            size_t hash = 14695981039346656037ull; // FNV offset basis
+            size_t h = 14695981039346656037ull; // FNV offset basis
             for (size_t i = 0; i < size; ++i) {
-                hash ^= static_cast<size_t>(data[i]);
-                hash *= 1099511628211ull; // FNV prime
+                h ^= static_cast<size_t>(data[i]);
+                h *= 1099511628211ull; // FNV prime
             }
 
-            hash ^= size;
-            hash *= 1099511628211ull;
+            h ^= size;
+            h *= 1099511628211ull;
 
-            return hash;
+            return h;
         }
     };
 }

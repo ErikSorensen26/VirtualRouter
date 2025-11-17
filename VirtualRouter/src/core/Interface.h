@@ -101,7 +101,7 @@ public:
     Protocol::Ndp* ndp = nullptr;     ///< NDP protocol handler.
 
     // L4 Protocols
-    std::map<uint32_t, Eigrp::EigrpInterfaceInstance*> eigrpInterfaceList; ///< EIGRP interface instance.
+    std::map<uint32_t, Eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface instance.
     EigrpConfigs::InterfaceConfigs* getEigrpConfig(uint32_t as, AddressFamily af, bool negate);
 
     // L5 Protocols

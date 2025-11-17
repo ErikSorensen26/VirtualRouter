@@ -9,7 +9,7 @@
 #include <PacketStructure.h>
 #include <Functions.h>
 #include <Encapsulation.h>
-#include <RoutingTable.h>
+#include <atomic>
 #include <mutex>
 #include <chrono>
 #include <unordered_map>

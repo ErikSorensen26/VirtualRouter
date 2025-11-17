@@ -1,5 +1,6 @@
 #include "CommandProcessor.h"
 #include <Eigrp.h>
+#include <EigrpInterface.h>
 #include <AddressFamily.hpp>
 #include <Mode.hpp>
 
@@ -76,20 +77,13 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 		else if (commandStream[0] == "passive-interface")
 		{
 			terminal.isList = true;
-			if (!negate)
-			{
-				currentEigrp->addPassiveInterface(currentEigrpInterface->key);
-			}
-			else
-			{
-				currentEigrp->addPassiveInterface(currentEigrpInterface->key);
-			}
+			currentEigrp->getGlobalConfigMgr().setPassiveInterface(currentInterface->configs.key, !negate);
 		}
 		else if (commandStream[0] == "shutdown")
 		{
 			std::cout << negate << std::endl;
 			currentEigrpInterface->shutdown = negate;
-			currentEigrp->updateInterfaceList();
+			currentEigrp->refreshInterfaceList();
 		}
 		else if (commandStream[0] == "split-horizon")
 		{
@@ -100,15 +94,8 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 			uint8_t size = 0;
 			IPAddress network;
 			uint8_t mask;
-			Protocol::EigrpInterface* iface = nullptr;
-			{
-				std::shared_lock<std::shared_mutex> lock(currentEigrp->interfaceMutex);
-				auto intIt = currentEigrp->eigrpInterfaceList.find(currentEigrpInterface->key);
-				if (intIt != currentEigrp->eigrpInterfaceList.end())
-				{
-					iface = intIt->second;
-				}
-			}
+			Eigrp::EigrpInterface* iface = nullptr;
+			iface = currentEigrp->getIfaceMgr().getInterface(currentInterface->configs.key);
 
 			if (!Functions::splitSlashMiddle(commandStream[1], network, mask))
 			{
@@ -126,35 +113,30 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 				// XXX
 			}
 
+			IPPrefix prefix = { network.raw, mask, currentEigrp->getAF() };
+
 			if (iface)
 			{
 				negate
-				  ? iface->removeSummaryRoute(network, mask)
-				  : iface->addSummaryRoute(network.raw, mask);
+				  ? iface->getAggregator().installSummary(prefix, false)
+				  : iface->getAggregator().withdrawSummary(prefix);
 			}
 			else
 			{
 				if (!negate)
 				{
 					std::shared_lock<std::shared_mutex> lock(currentEigrpInterface->configsMutex);
-					if (!std::any_of(currentEigrpInterface->summaryRoutes.begin(), currentEigrpInterface->summaryRoutes.end(),
-						[&](EigrpConfigs::SummaryRoute& summary) {
-							return summary.summary->network == network && summary.summary->mask == mask;
-						})
-					)
+					if (!std::any_of(currentEigrpInterface->pendingSummaryRoutes.begin(), currentEigrpInterface->pendingSummaryRoutes.end(),
+						[&](IPPrefix& pfx) { return pfx == prefix; }))
 					{
-						currentEigrpInterface->pendingSummaryRoutes.push_back({network, mask});
+						currentEigrpInterface->pendingSummaryRoutes.push_back(prefix);
 					}
 				}
 				else
 				{
 					std::shared_lock<std::shared_mutex> lock(currentEigrpInterface->configsMutex);
-					std::erase_if(currentEigrpInterface->summaryRoutes, [&](EigrpConfigs::SummaryRoute& summary) {
-						return summary.summary->network == network && summary.summary->mask == mask;
-					});
-					std::erase_if(currentEigrpInterface->pendingSummaryRoutes, [&](std::pair<IPAddress, uint8_t>& summary) {
-						return summary.first == network && summary.second == mask;
-					});
+					currentEigrpInterface->pendingSummaryRoutes.erase(std::remove(currentEigrpInterface->pendingSummaryRoutes.begin(),
+						currentEigrpInterface->pendingSummaryRoutes.end(), prefix), currentEigrpInterface->pendingSummaryRoutes.end());
 				}
 			}
 		}

@@ -6,7 +6,7 @@
 #include <PacketStructure.h>
 #include <Functions.h>
 #include <Encapsulation.h>
-#include <RoutingTable.h>
+#include <queue>
 #include <mutex>
 #include <chrono>
 #include <unordered_map>

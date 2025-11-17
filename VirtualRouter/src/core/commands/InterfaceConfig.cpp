@@ -1,5 +1,6 @@
 #include "CommandProcessor.h"
 #include <DhcpClient.h>
+#include <EigrpInterface.h>
 #include <Eigrp.h>
 #include <Ndp.h>
 #include <VirtualRouter.h>
@@ -29,7 +30,8 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[2] != "dhcp")
 				{
-					currentInterface->setIPv4(Functions::addressToIntv4(commandStream[2]), __builtin_popcount(Functions::addressToIntv4(commandStream[3])));
+					currentInterface->setIPv4(Functions::addressToIntv4(commandStream[2]),
+						static_cast<uint8_t>(__builtin_popcount(Functions::addressToIntv4(commandStream[3]))));
 				}
 				else
 				{
@@ -50,7 +52,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[3] == "eigrp")
 				{
-					auto as = std::stoi(commandStream[4]);
+					uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[4]));
 					auto* eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 					if (eigrpConfig)
 					{
@@ -69,7 +71,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[3] == "eigrp")
 				{
-					auto as = std::stoi(commandStream[4]);
+					uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[4]));
 					auto* eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 					if (eigrpConfig)
 					{
@@ -97,7 +99,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 				if (eigrpConfig)
 				{
@@ -108,7 +110,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->bandwidthPercentage.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->bandwidthPercentage.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
@@ -117,7 +119,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stol(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 				if (eigrpConfig)
 				{
@@ -128,7 +130,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->dampeningChange.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->dampeningChange.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
@@ -137,7 +139,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 				if (eigrpConfig)
 				{
@@ -148,7 +150,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->dampeningInterval.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->dampeningInterval.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
@@ -161,7 +163,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 				if (eigrpConfig)
 				{
@@ -172,7 +174,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->helloTime.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->helloTime.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
@@ -185,7 +187,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 				if (eigrpConfig)
 				{
@@ -196,20 +198,20 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->helloTime.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->helloTime.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
 		}
 		else if (commandStream[1] == "mtu")
 		{
-			currentInterface->configs.ipv4.mtu.store(negate ? 1500 : std::stoi(commandStream[2]), std::memory_order_release);
+			currentInterface->configs.ipv4.mtu.store(negate ? 1500 : static_cast<uint16_t>(std::stoul(commandStream[2])), std::memory_order_release);
 		}
 		else if (commandStream[1] == "next-hop-self")
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv4, negate);
 				if (eigrpConfig)
 				{
@@ -241,20 +243,17 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto ifaceIt = currentInterface->eigrpInterfaceList.find(as);
 				IPAddress network = Functions::getAddress(commandStream[4]);
 				uint8_t mask = Functions::prefixToPrefixLength(Functions::addressToIntv4(commandStream[5]));
-				if (ifaceIt != currentInterface->eigrpInterfaceList.end() && ifaceIt->second->IPv4)
+				IPPrefix prefix = { network.raw, mask, AddressFamily::IPv4 };
+				if (ifaceIt != currentInterface->eigrpInterfaceList.end() && ifaceIt->second.IPv4)
 				{
 					if (negate)
-					{
-						ifaceIt->second->IPv4->removeSummaryRoute(network, mask);
-					}
+						ifaceIt->second.IPv4->getAggregator().withdrawSummary(prefix);
 					else
-					{
-						ifaceIt->second->IPv4->addSummaryRoute(network.raw, mask);
-					}
+						ifaceIt->second.IPv4->getAggregator().installSummary(prefix);
 				}
 				else
 				{
@@ -265,13 +264,12 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 						{
 							std::erase_if(
 								eigrpConfig->pendingSummaryRoutes,
-								[&](std::pair<IPAddress, uint8_t> net) -> bool { return net == std::make_pair(network, mask);
-							});
+								[&](const IPPrefix& net) -> bool { return net == prefix; });
 							refreshEigrpConfig(as, AddressFamily::IPv4, eigrpConfig);
 						}
 						else
 						{
-							eigrpConfig->pendingSummaryRoutes.push_back({network, mask});
+							eigrpConfig->pendingSummaryRoutes.push_back(prefix);
 						}
 					}
 				}
@@ -336,7 +334,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[3] == "eigrp")
 				{
-					auto as = std::stoi(commandStream[4]);
+					uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[4]));
 					auto* eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv6, negate);
 					if (eigrpConfig)
 					{
@@ -355,7 +353,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[3] == "eigrp")
 				{
-					auto as = std::stoi(commandStream[4]);
+					uint32_t as = static_cast<uint32_t>(std::stoi(commandStream[4]));
 					auto* eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv6, negate);
 					if (eigrpConfig)
 					{
@@ -383,7 +381,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto* eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv6, negate);
 				if (negate)
 				{
@@ -392,7 +390,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 				}
 				else
 				{
-					eigrpConfig->bandwidthPercentage.store(std::stoi(commandStream[4]), std::memory_order_release);
+					eigrpConfig->bandwidthPercentage.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_release));
 				}
 			}
 		}
@@ -400,7 +398,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv6, negate);
 				if (eigrpConfig)
 				{
@@ -411,7 +409,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->dampeningChange.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->dampeningChange.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
@@ -420,7 +418,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv6, negate);
 				if (eigrpConfig)
 				{
@@ -431,7 +429,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->dampeningInterval.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->dampeningInterval.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
@@ -445,7 +443,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (eigrpAs && eigrpAs->ipv6)
 				{
-					eigrpAs->ipv6->addEigrpInterface(currentInterface);
+					eigrpAs->ipv6->getIfaceMgr().createInterface(currentInterface);
 				}
 				{
 					std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
@@ -454,19 +452,19 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			}
 			else
 			{
-				currentInterface->configs.eigrp.ipv6AutonomousSystems.erase(std::stoi(commandStream[2]));
+				currentInterface->configs.eigrp.ipv6AutonomousSystems.erase(static_cast<uint32_t>(std::stoul(commandStream[2])));
 			}
 
 			if (eigrpAs && eigrpAs->ipv6)
 			{
-				eigrpAs->ipv6->updateInterfaceList();
+				eigrpAs->ipv6->refreshInterfaceList();
 			}
 		}
 		else if (commandStream[1] == "hello-interval")
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv6, negate);
 				if (eigrpConfig)
 				{
@@ -477,7 +475,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->helloTime.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->helloTime.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
@@ -486,7 +484,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				auto eigrpConfig = currentInterface->getEigrpConfig(as, AddressFamily::IPv6, negate);
 				if (eigrpConfig)
 				{
@@ -497,14 +495,14 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					}
 					else
 					{
-						eigrpConfig->holdTime.store(std::stoi(commandStream[4]), std::memory_order_relaxed);
+						eigrpConfig->holdTime.store(static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_relaxed));
 					}
 				}
 			}
 		}
 		else if (commandStream[1] == "mtu")
 		{
-			currentInterface->configs.ipv6.mtu.store(negate ? 1500 : std::stoi(commandStream[2]), std::memory_order_release);
+			currentInterface->configs.ipv6.mtu.store(negate ? 1500 : static_cast<uint16_t>(std::stoul(commandStream[2]), std::memory_order_release));
 		}
 		else if (commandStream[1] == "nd")
 		{
@@ -527,7 +525,10 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[3] == "expire")
 				{
-					currentInterface->ndp->configs.cacheExpire.store(negate ? global.configs.ndp.refresh.load(std::memory_order_relaxed) : std::stoi(commandStream[4]), std::memory_order_release);
+					currentInterface->ndp->configs.cacheExpire.store(negate
+						? global.configs.ndp.cacheExpire.load(std::memory_order_relaxed)
+						: static_cast<uint16_t>(std::stoul(commandStream[4]), std::memory_order_release));
+					currentInterface->ndp->configs.cacheExpireLocal = !negate;
 					if ((commandStream.size() > 5 && commandStream[5] == "refresh" && !negate) || negate)
 					{
 						currentInterface->ndp->configs.refreshLocal = !negate;
@@ -536,10 +537,15 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 				}
 				else if (commandStream[3] == "interface-limit")
 				{
-					currentInterface->ndp->configs.interfaceLimit.store(negate ? global.configs.ndp.interfaceLimit.load(std::memory_order_relaxed) : std::stoi(commandStream[4]), std::memory_order_release);
+					currentInterface->ndp->configs.interfaceLimit.store(negate
+						? global.configs.ndp.interfaceLimit.load(std::memory_order_relaxed)
+						: static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_release));
+					currentInterface->ndp->configs.interfaceLimitLocal = !negate;
 					if ((commandStream.size() > 5 && commandStream[5] == "log") || negate)
 					{
-						currentInterface->ndp->configs.loggingRate.store(negate ? global.configs.ndp.loggingRate.load(std::memory_order_relaxed) : std::stoi(commandStream[6]), std::memory_order_release);
+						currentInterface->ndp->configs.loggingRate.store(negate
+							? global.configs.ndp.loggingRate.load(std::memory_order_relaxed)
+							: static_cast<uint16_t>(std::stoul(commandStream[6]), std::memory_order_release));
 						currentInterface->ndp->configs.loggingRateLocal = !negate;
 					}
 				}
@@ -548,11 +554,14 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[3] == "attempts")
 				{
-					currentInterface->ndp->configs.dadAttempts.store(negate ? 1 : std::stoi(commandStream[4]), std::memory_order_release);
+					currentInterface->ndp->configs.dadAttempts.store(negate ? 1 : static_cast<uint16_t>(std::stoul(commandStream[4])), std::memory_order_release);
 				}
 				else if (commandStream[3] == "time")
 				{
-					currentInterface->ndp->configs.dadTime.store(negate ? global.configs.ndp.dadTime.load(std::memory_order_relaxed) : std::stoi(commandStream[4]), std::memory_order_release);
+					currentInterface->ndp->configs.dadTime.store(negate
+						? global.configs.ndp.dadTime.load(std::memory_order_relaxed)
+						: static_cast<uint16_t>(std::stoul(commandStream[4]), std::memory_order_release));
+					currentInterface->ndp->configs.dadTimeLocal = !negate;
 				}
 			}
 			else if (commandStream[2] == "destination-guard")
@@ -569,7 +578,8 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			}
 			else if (commandStream[2] == "ns-interval")
 			{
-				currentInterface->ndp->configs.nsInterval.store(negate ? 1000 : std::stoi(commandStream[3]), std::memory_order_release);
+				currentInterface->ndp->configs.nsInterval.store(negate ? 1000
+					: static_cast<uint32_t>(std::stoul(commandStream[3])), std::memory_order_release);
 			}
 			else if (commandStream[2] == "nud")
 			{
@@ -590,12 +600,12 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					else
 					{
 						std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
-						currentInterface->ndp->configs.nudBase = std::stoi(commandStream[4]);
-						currentInterface->ndp->configs.nudBaseInterval = std::stoi(commandStream[5]);
-						currentInterface->ndp->configs.nudBaseAttempts = std::stoi(commandStream[6]);
+						currentInterface->ndp->configs.nudBase = static_cast<uint8_t>(std::stoul(commandStream[4]));
+						currentInterface->ndp->configs.nudBaseInterval = static_cast<uint16_t>(std::stoul(commandStream[5]));
+						currentInterface->ndp->configs.nudBaseAttempts = static_cast<uint16_t>(std::stoul(commandStream[6]));
 						if (commandStream.size() > 7)
 						{
-							currentInterface->ndp->configs.nudFinalWait = std::stoi(commandStream[7]);
+							currentInterface->ndp->configs.nudFinalWait = static_cast<uint16_t>(std::stoul(commandStream[7]));
 						}
 					}
 				}
@@ -627,20 +637,20 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					{
 						std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
 						currentInterface->ndp->configs.raIntervalMS = false;
-						currentInterface->ndp->configs.raInterval = std::stoi(commandStream[4]);
-						currentInterface->ndp->configs.raIntervalMin = std::stoi(commandStream[5]);
+						currentInterface->ndp->configs.raInterval = static_cast<uint32_t>(std::stoul(commandStream[4]));
+						currentInterface->ndp->configs.raIntervalMin = static_cast<uint32_t>(std::stoul(commandStream[5]));
 					}
 					else if (commandStream[4] == "msec")
 					{
 						std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
 						currentInterface->ndp->configs.raIntervalMS = true;
-						currentInterface->ndp->configs.raInterval = std::stoi(commandStream[5]);
-						currentInterface->ndp->configs.raIntervalMin = std::stoi(commandStream[6]);
+						currentInterface->ndp->configs.raInterval = static_cast<uint32_t>(std::stoul(commandStream[5]));
+						currentInterface->ndp->configs.raIntervalMin = static_cast<uint32_t>(std::stoul(commandStream[6]));
 					}
 				}
 				else if (commandStream[3] == "lifetime")
 				{
-					currentInterface->ndp->configs.routerLifetime.store(negate ? 1800 : std::stoi(commandStream[4]));
+					currentInterface->ndp->configs.routerLifetime.store(negate ? 1800 : static_cast<uint16_t>(std::stoul(commandStream[4])));
 				}
 				else if (commandStream[3] == "mtu")
 				{
@@ -660,7 +670,10 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			}
 			else if (commandStream[2] == "reachable-time")
 			{
-				currentInterface->ndp->configs.reachableTime.store(negate ? global.configs.ndp.reachableTime.load(std::memory_order_relaxed) : std::stoi(commandStream[3]));
+				currentInterface->ndp->configs.reachableTime.store(negate
+					? global.configs.ndp.reachableTime.load(std::memory_order_relaxed)
+					: static_cast<uint32_t>(std::stoul(commandStream[3])));
+				currentInterface->ndp->configs.reachableTimeLocal = !negate;
 			}
 			else if (commandStream[2] == "router-preference")
 			{
@@ -729,21 +742,18 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 		{
 			if (commandStream[2] == "eigrp")
 			{
-				auto as = std::stoi(commandStream[3]);
+				uint32_t as = static_cast<uint32_t>(std::stoul(commandStream[3]));
 				IPAddress network;
 				uint8_t mask;
 				Functions::splitSlashMiddle(commandStream[4], network, mask);
+				IPPrefix prefix = { network.raw, mask, AddressFamily::IPv6 };
 				auto ifaceIt = currentInterface->eigrpInterfaceList.find(as);
-				if (ifaceIt != currentInterface->eigrpInterfaceList.end() && ifaceIt->second->IPv4)
+				if (ifaceIt != currentInterface->eigrpInterfaceList.end() && ifaceIt->second.IPv4)
 				{
 					if (negate)
-					{
-						ifaceIt->second->IPv4->removeSummaryRoute(network, mask);
-					}
+						ifaceIt->second.IPv4->getAggregator().withdrawSummary(prefix);
 					else
-					{
-						ifaceIt->second->IPv4->addSummaryRoute(network.raw, mask);
-					}
+						ifaceIt->second.IPv4->getAggregator().installSummary(prefix);
 				}
 				else
 				{
@@ -754,8 +764,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 						{
 							std::erase_if(
 								eigrpConfig->pendingSummaryRoutes,
-								[&](std::pair<IPAddress, uint8_t> net) -> bool { return net == std::make_pair(network, mask);
-							});
+								[&](const IPPrefix& net) -> bool { return net == prefix; });
 							refreshEigrpConfig(as, AddressFamily::IPv6, eigrpConfig);
 						}
 						else

@@ -77,7 +77,7 @@ struct GlobalConfigs
         std::atomic<bool> ndAsRouteOwner = false;
         std::atomic<bool> strictMode = false;
 
-        std::atomic<uint8_t> nudRefreshPeriod = 0;
+        std::atomic<uint16_t> nudRefreshPeriod = 0;
 
         std::atomic<uint16_t> cacheExpire = 600;
         std::atomic<uint16_t> loggingRate = 0;
@@ -152,7 +152,7 @@ public:
     bool isAAA() {return aaaEnabled.load(std::memory_order_relaxed); }
 
     // Interfaces
-    Interface* addInterface(InterfaceType interfaceType, const size_t inQueSiz, const size_t outQueSiz, const HwIfaceInfo& hwInfo, float interfaceId, bool debug);
+    Interface* addInterface(InterfaceType interfaceType, const HwIfaceInfo& hwInfo, float interfaceId, bool debug);
     Interface* getInterface(uint32_t key);
     std::map<uint32_t, Interface*> getInterfaceList();
     bool removeInterface(uint32_t key);

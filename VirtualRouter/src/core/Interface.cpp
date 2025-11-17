@@ -276,8 +276,8 @@ void Interface::processIngress(uint8_t* packet, size_t size)
 void Interface::startThreads() 
 {
     // Add the interface to the TX Queue manager
-    routingInstance->global.txMgr.addInterface(*this, configs.physicalInterface, { .maxQueues = 1 });
-    routingInstance->global.rxMgr.addInterface(*this, configs.physicalInterface, { .maxQueues = 1 });
+    routingInstance->global.txMgr.addInterface(*this, configs.hwInfo.iface, { .maxQueues = 1 });
+    routingInstance->global.rxMgr.addInterface(*this, configs.hwInfo.iface, { .maxQueues = 1 });
 
     if (routingInstance->global.routingEnabled)
     {
@@ -327,7 +327,7 @@ void Interface::stateChange(StateChange state)
         {
             if (eigrpPtr->ipv4)
             {
-                eigrpPtr->ipv4->updateInterfaceList();
+                eigrpPtr->ipv4->refreshInterfaceList();
             }
         };
     }
@@ -372,7 +372,7 @@ void Interface::stateChangeV6(StateChange state)
         {
             if (eigrpPtr->ipv6)
             {
-                eigrpPtr->ipv6->updateInterfaceList();
+                eigrpPtr->ipv6->refreshInterfaceList();
             }
         };
     }

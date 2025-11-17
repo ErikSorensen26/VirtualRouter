@@ -55,12 +55,16 @@ struct alignas(16) IPAddress
     }
 };
 
-struct IPPrefix
+struct alignas(16) IPPrefix
 {
-    uint8_t addr[16];
+    union {
+        uint8_t addr[16];
+        uint32_t v4;
+        __uint128_t v6;
+    };
     uint8_t prefixLength{};
     AddressFamily af{};
-    
+
     IPPrefix() = default;
 
     IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family)

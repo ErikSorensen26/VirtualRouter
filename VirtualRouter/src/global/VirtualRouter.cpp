@@ -2,7 +2,6 @@
 
 #include <VirtualRouter.h>
 #include <Eigrp.h>
-#include <RoutingTable.h>
 #include <Interface.h>
 #include <Global.h>
 
@@ -93,18 +92,18 @@ bool VirtualRouter::removeInterface(uint32_t key)
 }
 
 // Eigrp Autonomous Systems
-Protocol::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
+Eigrp::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
 {
     std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
     if (eigrpList.find(id) != eigrpList.end())
     {
         return nullptr;
     }
-    eigrpList[id] = new Protocol::EigrpAutonomousSystem();
+    eigrpList[id] = new Eigrp::EigrpAutonomousSystem();
     return eigrpList[id];
 }
 
-Protocol::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
+Eigrp::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
 {
     std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
     if (eigrpList.find(id) != eigrpList.end())
@@ -127,18 +126,18 @@ bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
 }
 
 // Eigrp Named Systems
-Protocol::EigrpNamed* VirtualRouter::addEigrpNamed(const std::string& name)
+Eigrp::EigrpNamed* VirtualRouter::addEigrpNamed(const std::string& name)
 {
     std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
     if (namedEigrpList.find(name) != namedEigrpList.end())
     {
         return nullptr;
     }
-    namedEigrpList[name] = new Protocol::EigrpNamed();
+    namedEigrpList[name] = new Eigrp::EigrpNamed();
     return namedEigrpList[name];
 }
 
-Protocol::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
+Eigrp::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
 {
     std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
     if (namedEigrpList.find(name) != namedEigrpList.end())
@@ -156,7 +155,7 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
         auto eigrp = namedEigrpList[name];
         if (eigrp->ipv4)
         {
-            uint32_t as = eigrp->ipv4->asNumber;
+            uint32_t as = eigrp->ipv4->getAS();
             if (eigrpList.find(as) != eigrpList.end())
             {
                 delete eigrpList[as]->ipv4;
@@ -170,7 +169,7 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
         }
         if (eigrp->ipv6)
         {
-            uint32_t as = eigrp->ipv6->asNumber;
+            uint32_t as = eigrp->ipv6->getAS();
             if (eigrpList.find(as) != eigrpList.end())
             {
                 delete eigrpList[as]->ipv6;

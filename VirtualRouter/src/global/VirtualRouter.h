@@ -4,15 +4,16 @@
 #define VIRTUAL_ROUTER_H
 
 #include <string>
-#include <map>
-#include <RoutingTable.h>
+#include <RoutingTable.hpp>
+#include <set>
 #include <shared_mutex>
 #include <AddressFamily.hpp>
+#include <Eigrp.h>
 
 class Interface;
 namespace Eigrp
 {
-    class EigrpAutonomousSystem;
+    struct EigrpAutonomousSystem;
     struct EigrpNamed;
 }
 
@@ -42,13 +43,13 @@ public:
     bool removeInterface(uint32_t key);
 
     // Eigrp Autonomous Systems
-    Protocol::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
-    Protocol::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
+    Eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
+    Eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
     bool removeEigrpAutonomousSystem(uint32_t id);
 
     // Eigrp Named Systems
-    Protocol::EigrpNamed* addEigrpNamed(const std::string& name);
-    Protocol::EigrpNamed* getEigrpNamed(const std::string& name);
+    Eigrp::EigrpNamed* addEigrpNamed(const std::string& name);
+    Eigrp::EigrpNamed* getEigrpNamed(const std::string& name);
     bool removeEigrpNamed(const std::string& name);
 
     // Interfaces
@@ -57,9 +58,9 @@ public:
 
     // Eigrp
     std::shared_mutex eigrpAutonomousSystemMutex; ///< Eigrp list mutex.
-    std::map<uint32_t, Protocol::EigrpAutonomousSystem*> eigrpList; ///< Eigrp Autonomous System list.
+    std::map<uint32_t, Eigrp::EigrpAutonomousSystem*> eigrpList; ///< Eigrp Autonomous System list.
     std::shared_mutex eigrpNamedMutex; ///< Named eigrp mutex.
-    std::map<std::string, Protocol::EigrpNamed*> namedEigrpList; ///< Eigrp Named groups.
+    std::map<std::string, Eigrp::EigrpNamed*> namedEigrpList; ///< Eigrp Named groups.
 
     std::string instanceName;
 

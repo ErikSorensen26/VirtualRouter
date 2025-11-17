@@ -567,7 +567,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				{
 					if (!negate)
 					{
-						Protocol::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
+						Eigrp::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
 						if (as)
 						{
 							if (as->ipv6Named)
@@ -582,14 +582,14 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 						}
 						if (!as->ipv6)
 						{
-							as->ipv6 = new Protocol::Eigrp(terminal.routingProtocolID, AddressFamily::IPv6, currentVrf);
+							as->ipv6 = new Eigrp::Eigrp(terminal.routingProtocolID, AddressFamily::IPv6, currentVrf);
 						}
 						currentEigrp = as->ipv6;
 						terminal.configureRoutingMode("eigrp_classic", true);
 					}
 					else
 					{
-						Protocol::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
+						Eigrp::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
 						if (as)
 						{
 							if (!as->ipv6Named && as->ipv6)
@@ -630,7 +630,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		terminal.interfaceID = std::stof(commandStream[2]);
 		InterfaceType interfaceType = getInterfaceType(type);
 		std::string hwIface;
-		size_t id = static_cast<size_t>(std::floor(terminal.interfaceID));
+		int id = static_cast<int>(std::floor(terminal.interfaceID));
 		uint32_t key = calculateInterfaceKey(interfaceType, terminal.interfaceID);
 		if (!global.getInterface(key))
 		{
@@ -645,7 +645,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 				const HwIfaceInfo* info = terminal.engine.hwManager->getHwInfo(hwIface);
 				if (!info) return false;
 				const HwIfaceInfo& hwInfo = *info;
-				global.addInterface(interfaceType, 1024, 1024, hwInfo, terminal.interfaceID, terminal.isDebugModeEnabled);
+				global.addInterface(interfaceType, hwInfo, terminal.interfaceID, terminal.isDebugModeEnabled);
 				currentVrf->addInterface(global.getInterface(key), key);
 			}
 		}
@@ -666,7 +666,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		{
 			if (Functions::isNumber(ID))
 			{
-				Protocol::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
+				Eigrp::EigrpAutonomousSystem* as = currentVrf->getEigrpAutonomousSystem(terminal.routingProtocolID);
 				if (!negate)
 				{
 					if (as)
@@ -683,7 +683,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 					}
 					if (!as->ipv4)
 					{
-						as->ipv4 = new Protocol::Eigrp(terminal.routingProtocolID, AddressFamily::IPv4, global.getRoutingInstance("default"));
+						as->ipv4 = new Eigrp::Eigrp(terminal.routingProtocolID, AddressFamily::IPv4, global.getRoutingInstance("default"));
 					}
 					currentEigrp = as->ipv4;
 					terminal.configureRoutingMode("eigrp_classic");

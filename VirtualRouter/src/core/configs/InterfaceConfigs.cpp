@@ -39,13 +39,13 @@ void InterfaceConfigs::setMac(const uint8_t* mac)
 }
 
 //IPV4
-uint8_t* InterfaceConfigs::IPv4State::getAddress(uint8_t* out)
+uint8_t* InterfaceConfigs::IPv4State::getAddress(uint8_t* out) const
 {
     writeU32(out, address.load(std::memory_order_relaxed));
     return out;
 }
 
-uint32_t InterfaceConfigs::IPv4State::getAddress()
+uint32_t InterfaceConfigs::IPv4State::getAddress() const
 {
     return address.load(std::memory_order_relaxed);
 }
@@ -66,7 +66,7 @@ bool InterfaceConfigs::IPv4State::compareAddress(uint32_t ip)
     return address.load(std::memory_order_release) == ip;
 }
 
-uint8_t InterfaceConfigs::IPv4State::getMask()
+uint8_t InterfaceConfigs::IPv4State::getMask() const
 {
     return mask.load(std::memory_order_relaxed);
 }
@@ -200,7 +200,7 @@ void InterfaceConfigs::IPv6State::validateLinkLocalAddress()
     linkLocalAddress->validateAddress(true);
 }
 
-uint8_t* InterfaceConfigs::IPv6State::getLocalAddress(uint8_t* out)
+uint8_t* InterfaceConfigs::IPv6State::getLocalAddress(uint8_t* out) const
 {
     if (linkLocalAddress)
     {
@@ -210,7 +210,7 @@ uint8_t* InterfaceConfigs::IPv6State::getLocalAddress(uint8_t* out)
     return nullptr;
 }
 
-uint8_t* InterfaceConfigs::IPv6State::getGlobalUnicast(uint8_t* out)
+uint8_t* InterfaceConfigs::IPv6State::getGlobalUnicast(uint8_t* out) const
 {
     if (!globalAddresses.empty())
     {
@@ -220,7 +220,7 @@ uint8_t* InterfaceConfigs::IPv6State::getGlobalUnicast(uint8_t* out)
     return nullptr;
 }
 
-uint8_t* InterfaceConfigs::IPv6State::getLocalUnicast(uint8_t* out)
+uint8_t* InterfaceConfigs::IPv6State::getLocalUnicast(uint8_t* out) const
 {
     if (!uniqueLocalAddresses.empty())
     {
@@ -230,7 +230,7 @@ uint8_t* InterfaceConfigs::IPv6State::getLocalUnicast(uint8_t* out)
     return nullptr;
 }
 
-__uint128_t InterfaceConfigs::IPv6State::getLocalAddress()
+__uint128_t InterfaceConfigs::IPv6State::getLocalAddress() const
 {
     if (linkLocalAddress)
     {
@@ -239,22 +239,22 @@ __uint128_t InterfaceConfigs::IPv6State::getLocalAddress()
     return 0;
 }
 
-__uint128_t InterfaceConfigs::IPv6State::getGlobalUnicast()
+__uint128_t InterfaceConfigs::IPv6State::getGlobalUnicast() const
 {
     return globalAddresses.empty() ? 0 : readU128(globalAddresses.front()->ip);
 }
 
-__uint128_t InterfaceConfigs::IPv6State::getLocalUnicast()
+__uint128_t InterfaceConfigs::IPv6State::getLocalUnicast() const
 {
     return uniqueLocalAddresses.empty() ? 0 : readU128(uniqueLocalAddresses.front()->ip);
 }
 
-bool InterfaceConfigs::IPv6State::hasLocalAddress(const uint8_t* addr)
+bool InterfaceConfigs::IPv6State::hasLocalAddress(const uint8_t* addr) const
 {
     return linkLocalAddress && std::memcmp(linkLocalAddress->ip, addr, 16) == 0;
 }
 
-bool InterfaceConfigs::IPv6State::hasLocalUnicast(const uint8_t* addr)
+bool InterfaceConfigs::IPv6State::hasLocalUnicast(const uint8_t* addr) const
 {
     for (auto* ip : uniqueLocalAddresses)
         if (std::memcmp(ip->ip, addr, 16) == 0)
@@ -262,7 +262,7 @@ bool InterfaceConfigs::IPv6State::hasLocalUnicast(const uint8_t* addr)
     return false;
 }
 
-bool InterfaceConfigs::IPv6State::hasGlobalUnicast(const uint8_t* addr)
+bool InterfaceConfigs::IPv6State::hasGlobalUnicast(const uint8_t* addr) const
 {
     for (auto* ip : globalAddresses)
         if (std::memcmp(ip->ip, addr, 16) == 0)
@@ -270,12 +270,12 @@ bool InterfaceConfigs::IPv6State::hasGlobalUnicast(const uint8_t* addr)
     return false;
 }
 
-bool InterfaceConfigs::IPv6State::hasLocalAddress(__uint128_t addr)
+bool InterfaceConfigs::IPv6State::hasLocalAddress(__uint128_t addr) const
 {
     return linkLocalAddress && linkLocalAddress->ipInt == addr;
 }
 
-bool InterfaceConfigs::IPv6State::hasLocalUnicast(__uint128_t addr)
+bool InterfaceConfigs::IPv6State::hasLocalUnicast(__uint128_t addr) const
 {
     for (auto* ip : uniqueLocalAddresses)
         if (ip->ipInt == addr)
@@ -283,7 +283,7 @@ bool InterfaceConfigs::IPv6State::hasLocalUnicast(__uint128_t addr)
     return false;
 }
 
-bool InterfaceConfigs::IPv6State::hasGlobalUnicast(__uint128_t addr)
+bool InterfaceConfigs::IPv6State::hasGlobalUnicast(__uint128_t addr) const
 {
     for (auto* ip : globalAddresses)
         if (ip->ipInt == addr)
@@ -291,31 +291,31 @@ bool InterfaceConfigs::IPv6State::hasGlobalUnicast(__uint128_t addr)
     return false;
 }
 
-uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastPair(uint8_t* out)
+uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastPair(uint8_t* out) const
 {
     if (globalAddresses.empty()) return 0;
     writeU128(out, globalAddresses.front()->ipInt);
     return globalAddresses.front()->prefix;
 }
 
-uint8_t InterfaceConfigs::IPv6State::getLocalUnicastPair(uint8_t* out)
+uint8_t InterfaceConfigs::IPv6State::getLocalUnicastPair(uint8_t* out) const
 {
     if (uniqueLocalAddresses.empty()) return 0;
     writeU128(out, uniqueLocalAddresses.front()->ipInt);
     return uniqueLocalAddresses.front()->prefix;
 }
 
-uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastMask()
+uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastMask() const
 {
     return globalAddresses.empty() ? 0 : globalAddresses.front()->prefix;
 }
 
-uint8_t InterfaceConfigs::IPv6State::getLocalUnicastMask()
+uint8_t InterfaceConfigs::IPv6State::getLocalUnicastMask() const
 {
     return uniqueLocalAddresses.empty() ? 0 : uniqueLocalAddresses.front()->prefix;
 }
 
-std::vector<IPAddress> InterfaceConfigs::IPv6State::getGlobalList()
+std::vector<IPAddress> InterfaceConfigs::IPv6State::getGlobalList() const
 {
     std::vector<IPAddress> out;
     for (const auto* ip : globalAddresses)
@@ -327,7 +327,7 @@ std::vector<IPAddress> InterfaceConfigs::IPv6State::getGlobalList()
     return out;
 }
 
-std::vector<IPAddress> InterfaceConfigs::IPv6State::getLocalList()
+std::vector<IPAddress> InterfaceConfigs::IPv6State::getLocalList() const
 {
     std::vector<IPAddress> out;
     for (const auto* ip : uniqueLocalAddresses)
@@ -335,6 +335,26 @@ std::vector<IPAddress> InterfaceConfigs::IPv6State::getLocalList()
         out.emplace_back();
         std::copy(ip->ip, ip->ip + 16, out.back().raw);
         out.back().isV6 = true;
+    }
+    return out;
+}
+
+std::vector<IPPrefix> InterfaceConfigs::IPv6State::getGlobalPrefixList() const
+{
+    std::vector<IPPrefix> out;
+    for (const auto* ip : globalAddresses)
+    {
+        out.push_back({ip->ip, ip->prefix, AddressFamily::IPv6});
+    }
+    return out;
+}
+
+std::vector<IPPrefix> InterfaceConfigs::IPv6State::getLocalPrefixList() const
+{
+    std::vector<IPPrefix> out;
+    for (const auto& ip : uniqueLocalAddresses)
+    {
+        out.push_back({ ip->ip, ip->prefix, AddressFamily::IPv6});
     }
     return out;
 }

@@ -27,12 +27,15 @@ class Interface;
 class Configs;
 struct Com;
 struct ModeConfig;
-namespace Protocol
+namespace Eigrp
 {
     class Eigrp;
     struct EigrpNamed;
     class EigrpInterface;
+}
 
+namespace Protocol
+{
     namespace Dhcp
     {
         struct DhcpNetworkConfig;
@@ -487,14 +490,6 @@ private:
 
     bool isList = false;
     bool textLine = false;
-
-    Interface* currentInterface;
-
-    Protocol::Eigrp* currentEigrp;
-    Protocol::EigrpNamed* currentEigrpNamed;
-    Protocol::EigrpInterface* currentEigrpInterface;
-
-    Protocol::Dhcp::DhcpNetworkConfig* currentDhcpPool;
 
     nlohmann::ordered_json *prevConfig;     ///< Pointer to the previous configuration node
 
