@@ -33,8 +33,8 @@ Interface::Interface(const InterfaceCreation& cfgs)
 
 Interface::~Interface()
 {
-    stopThreads();
     cleanupInterface();
+    stopThreads();
 }
 
 void Interface::cleanupInterface()
@@ -296,10 +296,6 @@ void Interface::startThreads()
 
 void Interface::stopThreads() 
 {
-    // Add the interface to the TX Queue manager
-    routingInstance->global.txMgr.removeInterface(*this);
-    routingInstance->global.rxMgr.removeInterface(*this);
-
     if (arp)
     {
         delete arp;
@@ -311,6 +307,10 @@ void Interface::stopThreads()
         ndp = nullptr;
     }
         
+    // Add the interface to the TX Queue manager
+    routingInstance->global.txMgr.removeInterface(*this);
+    routingInstance->global.rxMgr.removeInterface(*this);
+
     threadsRunning.store(false, std::memory_order_release); 
 
     //ingress->stop();

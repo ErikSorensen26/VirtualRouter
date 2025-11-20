@@ -7,7 +7,10 @@
 #include <Interface.h>
 #include <InterfaceType.hpp>
 #include <PacketStructure.h>
+#include <HardwareManager.h>
 #include <Global.h>
+
+static HwIfaceInfo defaultHwInfo = { "lo", 0x010203040506, 1000000000 };
 
 class MockInterface : public Interface
 {
@@ -15,14 +18,11 @@ public:
     // Constructor forwarding to base class constructor
     MockInterface(Global& global,
                   InterfaceType interfaceType = InterfaceType::GIGABIT_ETHERNET,
-                  std::string outInterface = "lo",
-                  size_t inQueSiz = 100,
-                  size_t outQueSiz = 100,
-                  std::string mac = "010203040506",
+                  const HwIfaceInfo& hwInfo = defaultHwInfo,
                   float interfaceId = 0,
                   VirtualRouter* vrf = nullptr,
                   bool debug = false)
-        : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance("default"), outInterface.c_str(), reinterpret_cast<const uint8_t*>(mac.data()), debug}) {}
+        : Interface({interfaceType, interfaceId, vrf ? *vrf : *global.getRoutingInstance("default"), hwInfo, debug}) {}
 
     // Destructor
     ~MockInterface() override 

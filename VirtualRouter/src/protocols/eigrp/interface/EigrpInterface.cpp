@@ -88,6 +88,8 @@ EigrpInterface::~EigrpInterface()
             currentInterface->eigrpInterfaceList.erase(id);
         }
     }
+
+    ntable.clear();
 }
 
 void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& changedRoutes)
@@ -116,7 +118,7 @@ void EigrpInterface::setPassiveMode(bool passive)
     {
         ntable.cancelAllHoldTimers();
         for (auto& [ip, nbr] : ntable.neighbors)
-            ntable.onDown(*nbr);
+            ntable.onDown(nbr);
         tmgr.stopHello();
     }
     else

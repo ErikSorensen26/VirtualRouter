@@ -11,9 +11,9 @@ class Internal_DecapsulationTest : public ::testing::Test
 protected:
     PacketInfo pkt;
 
-    bool inspection(PacketInfo& pkt, uint8_t* packet, size_t size)
+    bool inspection(PacketInfo& pktinfo, uint8_t* packet, size_t size)
     {
-        if (inspect(pkt, packet, size) && decapsulate(pkt, packet, size))
+        if (inspect(pktinfo, packet, size) && decapsulate(pktinfo, packet, size))
         {
             return true;
         }
