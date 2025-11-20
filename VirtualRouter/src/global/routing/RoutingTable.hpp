@@ -13,19 +13,12 @@ class RoutingTable
     Rib<uint32_t> rib4;
     Rib<__uint128_t> rib6;
 
-    thread_local static inline RCU::ThreadEpoch* threadEpoch = nullptr;
-
 public:
-    RoutingTable()
-    {
-        if (!threadEpoch)
-            threadEpoch = RCU::registerThread();
-    }
+    RoutingTable() = default;
 
     ~RoutingTable()
     {
-        if (threadEpoch)
-            RCU::unregisterThread(threadEpoch);
+        clearAll();
     }
 
     template <typename AddrType>
@@ -67,11 +60,11 @@ public:
     template <typename AddrType>
     RibEntry<AddrType>* lookup(AddrType addr)
     {
-        RCU::Guard g(threadEpoch);
+        RCU::Guard g;
         if constexpr (std::is_same_v<AddrType, uint32_t>)
-            return rib4.lookupFib(addr, threadEpoch);
+            return rib4.lookup(addr);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
-            return rib6.lookupFib(addr, threadEpoch);
+            return rib6.lookup(addr);
         else
             static_assert(always_false<AddrType>, "Unsupported Address Type");
     }

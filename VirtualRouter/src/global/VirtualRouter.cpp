@@ -11,8 +11,10 @@ VirtualRouter::~VirtualRouter()
     {
         std::unordered_map<uint32_t, Interface*> interfaceListCopy;
         {
+            // Move out interfaces so any callbacks during destruction
+            // do not see stale pointers in the shared map.
             std::unique_lock<std::shared_mutex> lock(interfaceMutex);
-            interfaceListCopy = interfaceList;
+            interfaceListCopy.swap(interfaceList);
         }
         // Interfaces
         for (auto [_, interface] : interfaceListCopy)

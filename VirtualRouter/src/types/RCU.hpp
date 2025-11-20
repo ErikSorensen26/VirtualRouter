@@ -15,8 +15,15 @@ public:
     struct ThreadEpoch
     {
         std::atomic<uint64_t> epoch{0};
+        std::atomic<bool> active{false};
         ThreadEpoch* next{nullptr};
     };
+
+    static ThreadEpoch& tlsEpoch()
+    {
+        thread_local ThreadEpoch* te = new ThreadEpoch();
+        return *te;
+    }
 
 private:
     static inline std::atomic<uint64_t> globalEpoch{1};
@@ -34,52 +41,41 @@ private:
     static inline RetireEntry retireRight[RETIRE_Q_SIZE];
 
 public:
-    static ThreadEpoch* registerThread()
+    static void registerThread()
     {
-        auto* te = new ThreadEpoch();
-        ThreadEpoch* oldHead = head.load(std::memory_order_relaxed);
-        do
+        ThreadEpoch* te = &tlsEpoch();
+        te->active.store(true, std::memory_order_release);
+
+        static thread_local bool inserted = false;
+        if (!inserted)
         {
-            te->next = oldHead;
+            ThreadEpoch* old = head.load(std::memory_order_acquire);
+            do {
+                te->next = old;
+            } while (!head.compare_exchange_weak(old, te, std::memory_order_release, std::memory_order_acquire));
+            inserted = true;
         }
-        while (!head.compare_exchange_weak(oldHead, te, std::memory_order_release, std::memory_order_relaxed));
-        return te;
     }
 
-    static void unregisterThread(ThreadEpoch* te)
+    static void unregisterThread()
     {
-        ThreadEpoch* prev = nullptr;
-        ThreadEpoch* cur = head.load(std::memory_order_acquire);
-
-        while (cur)
-        {
-            if (cur == te)
-            {
-                ThreadEpoch* next = cur->next;
-                if (prev)
-                    prev->next = next;
-                else
-                    head.store(next, std::memory_order_release);
-                delete te;
-                return;
-            }
-            prev = cur;
-            cur = cur->next;
-        }
+        ThreadEpoch& te = tlsEpoch();
+        te.active.store(false, std::memory_order_release);
+        synchronize();
+        te.epoch.store(UINT64_MAX, std::memory_order_release);
     }
 
     class Guard
     {
-        ThreadEpoch* local;
     public:
-        explicit Guard(ThreadEpoch* t) noexcept : local(t)
+        explicit Guard() noexcept
         {
-            local->epoch.store(globalEpoch.load(std::memory_order_acquire), std::memory_order_release);
+            tlsEpoch().epoch.store(globalEpoch.load(std::memory_order_acquire), std::memory_order_release);
         }
 
         ~Guard() noexcept
         {
-            local->epoch.store(0, std::memory_order_release);
+            tlsEpoch().epoch.store(0, std::memory_order_release);
         }
     };
 
@@ -94,11 +90,14 @@ public:
 
             while (cur)
             {
-                const uint64_t e = cur->epoch.load(std::memory_order_acquire);
-                if (e != 0 && e < target)
+                if (cur->active.load(std::memory_order_acquire))
                 {
-                    allSafe = false;
-                    break;
+                    uint64_t e = cur->epoch.load(std::memory_order_acquire);
+                    if (e != 0 && e < target)
+                    {
+                        allSafe = false;
+                        break;
+                    }
                 }
                 cur = cur->next;
             }

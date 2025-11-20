@@ -33,7 +33,6 @@ public:
     }
     ~VirtualRouter();
 
-    RoutingTable routingTable; ///< VRF RoutingTable
     std::set<AddressFamily> enabledAddressFamilies;
 
     // Interface management
@@ -63,6 +62,8 @@ public:
     std::map<std::string, Eigrp::EigrpNamed*> namedEigrpList; ///< Eigrp Named groups.
 
     std::string instanceName;
+
+    RoutingTable routingTable; ///< VRF RoutingTable
 
     Global& global;
 };

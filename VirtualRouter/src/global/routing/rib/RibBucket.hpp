@@ -14,15 +14,16 @@ class RibBucket
 {
 public:
     std::vector<RibEntry<AddrType>> routes;
-    std::atomic<RibEntry<AddrType>*>* fibEntry;
+    std::atomic<RibEntry<AddrType>*>* fibEntry = nullptr;
 
-    RibBucket() = default;
-    explicit RibBucket(std::atomic<RibEntry<AddrType>*>* fe) noexcept
-        : fibEntry(fe) {}
+    RibBucket() noexcept
+        : fibEntry(new std::atomic<RibEntry<AddrType>*>) {}
+    RibBucket(std::atomic<RibEntry<AddrType>*>* ribEntry) noexcept
+        : fibEntry(ribEntry) {}
 
     RibBucket* clone() const noexcept
     {
-        auto* b = new RibBucket(fibEntry);
+        auto* b = new RibBucket<AddrType>(fibEntry);
         b->routes = routes;
         return b;
     }
