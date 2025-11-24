@@ -10,6 +10,7 @@
 #include <utility>
 #include <algorithm>    // std::max
 #include <immintrin.h>  // _mm_pause
+#include <RCU.hpp>
 
 class ThreadPool
 {
@@ -144,6 +145,7 @@ private:
 
     void workerLoop()
     {
+        RCU::registerThread();
         while (!stop_.load(std::memory_order_acquire))
         {
             if (consumeOne())
@@ -156,6 +158,7 @@ private:
 
         // Drain remaining tasks
         while (consumeOne()) {}
+        RCU::unregisterThread();
     }
 
     bool consumeOne()

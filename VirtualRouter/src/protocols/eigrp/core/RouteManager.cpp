@@ -9,6 +9,8 @@
 #include <InterfaceConfigs.h>
 #include <HardwareManager.h>
 
+#include <iostream>
+
 namespace Eigrp
 {
 
@@ -22,9 +24,9 @@ RouteManager::RouteManager(Eigrp& process)
 void RouteManager::withdrawRoute(const IPPrefix withdraw)
 {
     if (af == AddressFamily::IPv4)
-        rib.removeEntry<uint32_t>(withdraw.v4, withdraw.prefixLength, RouteSource::EIGRP, as);
+        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP, as);
     else
-        rib.removeEntry<__uint128_t>(withdraw.v6, withdraw.prefixLength, RouteSource::EIGRP, as);
+        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP, as);
 }
 
 void RouteManager::withdrawRoutes(const std::vector<IPPrefix>& withdraws)
@@ -47,20 +49,20 @@ void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries,
         RibEntry<AddrType> ribEntry;
 
         ribEntry.addNextHop(
-            af == AddressFamily::IPv4 ? entry->routeInfo.nextHop.v4 : entry->routeInfo.nextHop.v6,
+            af == AddressFamily::IPv4 ? readU32(entry->routeInfo.nextHop.raw) : readU128(entry->routeInfo.nextHop.raw),
             entry->routeInfo.originInterface,
             1
         );
         ribEntry.prefix = af == AddressFamily::IPv4
-            ? entry->routeInfo.prefix.v4
-            : entry->routeInfo.prefix.v6;
+            ? readU32(entry->routeInfo.prefix.addr)
+            : readU128(entry->routeInfo.prefix.addr);
         ribEntry.length = entry->routeInfo.prefix.prefixLength;
         ribEntry.source = RouteSource::EIGRP;
         ribEntry.processId = as;
         ribEntry.adminDistance = entry->routeInfo.adminDistance;
         ribEntry.metric = entry->routeInfo.feasibleDistance * scale;
 
-        if (rib.addRoute<AddrType>(ribEntry))
+        if (rib.addRoute<AddrType>(ribEntry));
             changedRoutes.push_back(entry);
     };
 
@@ -81,7 +83,8 @@ void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries,
             individual.operator()<__uint128_t>(entry);
     }
 
-    base.broadcastRouteChanges(changedRoutes);
+    if (!changedRoutes.empty())
+        base.broadcastRouteChanges(changedRoutes);
 }
 
 void RouteManager::synchronizeRoute(const TopologyEntry& entry)

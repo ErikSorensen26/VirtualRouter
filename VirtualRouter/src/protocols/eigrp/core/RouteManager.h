@@ -10,6 +10,7 @@
 #include <EigrpConfig.h>
 #include <EigrpTypes.hpp>
 #include <TopologyTable.h>
+#include <HeaderHelpers.hpp>
 
 namespace Eigrp
 {
@@ -61,8 +62,8 @@ private:
         }
 
         ribEntry.prefix = af == AddressFamily::IPv4
-            ? bestIt->second.routeInfo.prefix.v4
-            : bestIt->second.routeInfo.prefix.v6;
+            ? readU32(bestIt->second.routeInfo.prefix.addr)
+            : readU128(bestIt->second.routeInfo.prefix.addr);
         ribEntry.length = bestIt->second.routeInfo.prefix.prefixLength;
         ribEntry.source = RouteSource::EIGRP;
         ribEntry.processId = as;

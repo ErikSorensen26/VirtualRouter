@@ -66,12 +66,10 @@ void TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* n
     auto& routeEntry = entry.routesByNeighbor.at(neighborIp);
     routeEntry.routeInfo = std::move(route);
     routeEntry.lastUpdate = std::chrono::steady_clock::now();
-
-    eigrpProcess.getAggregator().updateSummary(entry);
+    routeEntry.topology = &entry;
 
     if (route.delay == std::numeric_limits<uint64_t>::max())
     {
-        routeEntry.valid = std::chrono::steady_clock::now() + std::chrono::seconds(eigrpProcess.getGlobalConfigMgr().getDelTimer());
         routeEntry.isFeasibleSuccessor = false;
         routeEntry.isSuccessor = false;
         routeEntry.notFeasible = true;
@@ -148,15 +146,7 @@ void TopologyTable::pruneExpired()
     auto now = std::chrono::steady_clock::now();
     for (auto it = topologyEntries.begin(); it != topologyEntries.end();)
     {
-        for (auto rit = it->second->routesByNeighbor.begin(); rit != it->second->routesByNeighbor.end();)
-        {
-            if (rit->second.valid.has_value() && rit->second.valid < now)
-                rit = it->second->routesByNeighbor.erase(rit);
-            else
-                ++rit;
-        }
-
-        if (it->second->routesByNeighbor.empty())
+        if (it->second->valid && it->second->valid < now)
             it = topologyEntries.erase(it);
         else
             it++;
@@ -171,7 +161,6 @@ void TopologyTable::pruneNeighbor(const IPAddress& neighborIp)
         for (auto& [_, entry] : topologyEntries)
         {
             if (auto it = entry->routesByNeighbor.find(neighborIp); it != entry->routesByNeighbor.end())
-                markRouteUnreachable(it->second, neighborIp, *entry);
             entry->feasibleSuccessors.erase(
                 std::remove(entry->feasibleSuccessors.begin(), entry->feasibleSuccessors.end(), neighborIp),
                 entry->feasibleSuccessors.end());

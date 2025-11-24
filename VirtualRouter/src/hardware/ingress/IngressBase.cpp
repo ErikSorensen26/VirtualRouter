@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <likely.hpp>
 #include <chrono>
-
+#include <RCU.hpp>
 
 thread_local std::array<uint32_t, 64> localBatch;
 thread_local size_t batchCount = 0;
@@ -28,12 +28,14 @@ void IngressBase::start()
 {
     running.store(true, std::memory_order_release);
     ingressThread = std::thread([this]{
+        RCU::registerThread();
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(qid, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 
         runLoop();
+        RCU::unregisterThread();
     });
 }
 

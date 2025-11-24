@@ -12,14 +12,14 @@ namespace Eigrp
 {
 Eigrp::Eigrp(uint32_t as, AddressFamily af, VirtualRouter* vrf, bool named)
   : routingInstance(vrf),
-    routeManager(*this),
+    asNumber(as),
+    addressFamily(af),
     configMgr(*this),
     ifaceMgr(*this),
     aggregator(*this),
     topology(*this),
     namedMode(named),
-    asNumber(as),
-    addressFamily(af)
+    routeManager(*this)
 {
     start();
 }

@@ -36,7 +36,10 @@ std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const
         if (!route)
             continue;
 
-        if (splitHorizon && route->routeInfo.originInterface == iface.interfaceKey)
+        if (route->topology && route->topology->summaries.count(iface.interfaceKey) > 0)
+            continue;
+
+        if (splitHorizon && route->routeInfo.originInterface == iface.interfaceKey && route->routeInfo.routeType != RouteType::SUMMARY)
             continue;
 
         if (stubCfg.isStub)
@@ -81,9 +84,6 @@ void TopologyController::onNeighborDown(const IPAddress& neighborIp)
         }
     }
 
-    // Remove the neighbor rotues from topology
-    duel.topologyTable.pruneNeighbor(neighborIp);
-
     // Trigger Active for routes with no feasible successor
     std::vector<TopologyEntry*> affectedTopologies;
     for (const auto& [top, route] : affectedRoutes)
@@ -94,6 +94,9 @@ void TopologyController::onNeighborDown(const IPAddress& neighborIp)
             affectedTopologies.push_back(top);
         }
     }
+
+    // Remove the neighbor routes from topology
+    duel.topologyTable.pruneNeighbor(neighborIp);
 
     duel.updateSuccessors(affectedTopologies, neighborIp);
 }

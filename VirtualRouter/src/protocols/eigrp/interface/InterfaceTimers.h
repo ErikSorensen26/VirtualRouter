@@ -47,6 +47,7 @@ public:
     void startRetransmissionTimer(Neighbor* neighbor, UnicastReliablePacket& unicast, uint32_t seq);
     void cancelRetransmissionTimer(ReliableInfo& pkt);
     void scheduleConditionalReceive(Neighbor& neighbor, uint32_t seq);
+    void sendHello();
 
     void cancelNeighborTimers(Neighbor&);
     void startInitTimer(Neighbor& neighbor);

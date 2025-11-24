@@ -814,7 +814,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				if (iface)
 				{
 					if (negate)
-						iface->getNTable().deleteNeighbor(neighborIp);
+						iface->getNTable().deleteNeighbor(neighborIp, true);
 					else
 						iface->getNTable().createNeighbor(neighborIp);
 				}

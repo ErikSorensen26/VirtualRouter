@@ -40,10 +40,10 @@ namespace Protocol
 inline uint32_t calculateInterfaceKey(InterfaceType type, float id)
 {
     uint8_t typeEncoded = static_cast<uint8_t>(type);
-    uint32_t idEncoded;
-    static_assert(sizeof(float) == sizeof(uint32_t), "Unexpected float size");
-    std::memcpy(&idEncoded, &id, sizeof(float));
-    return (static_cast<uint32_t>(typeEncoded) << 24) | (idEncoded & 0x00FFFFFF);
+    float clamped = std::max(0.0f, std::min(id, 65535.256f));
+    uint32_t fixed = static_cast<uint32_t>(clamped * 256.0f);
+    fixed &= 0x00FFFFFF;
+    return (static_cast<uint32_t>(typeEncoded) << 24) | fixed;
 }
 
 /**

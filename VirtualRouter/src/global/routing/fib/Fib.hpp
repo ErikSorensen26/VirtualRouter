@@ -72,7 +72,8 @@ public:
         {
             RibEntry<Addr>* e = n->entry->load(std::memory_order_acquire);
 
-            if (e && mask(a, n->length) == n->prefix)
+            Addr pfx = mask(a, n->length);
+            if (e && pfx == n->prefix)
                 best = e;
             
             bool dir = bitAt(a, n->bit);

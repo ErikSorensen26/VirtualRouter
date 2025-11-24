@@ -79,7 +79,7 @@ public:
 
     size_t getMaxHeaderSize(size_t mtu)
     {
-        if (auto next = nextBuildHeader())
+        if (auto next = previewNextBuildHeader())
             return mtu - bufferOffset - getHeaderSize(next->type);
         return mtu;
     }

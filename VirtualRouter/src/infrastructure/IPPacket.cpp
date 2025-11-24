@@ -12,13 +12,21 @@ namespace Protocol
         // IPv4 multicast MAC: 01:00:5E:xx:xx:xx (lower 23 bits of IP)
         if (af == AddressFamily::IPv4)
         {
-            uint8_t tempMac[6] = {0x01, 0x00, 0x5E, static_cast<unsigned char>(ip[1]), static_cast<unsigned char>(ip[2]), static_cast<unsigned char>(ip[3])};
+            uint8_t tempMac[6] = {
+                0x01, 0x00, 0x5E,
+                static_cast<unsigned char>(ip[1] & 0x7F),
+                static_cast<unsigned char>(ip[2]),
+                static_cast<unsigned char>(ip[3])
+            };
             std::memcpy(mac, tempMac, 6);
         }
         // IPv6 multicast MAC: 33:33:xx:xx:xx:xx (last 32 bits of IPv6 address)
         else if (af == AddressFamily::IPv6)
         {
-            uint8_t tempMac[6] = {0x33, 0x33, static_cast<unsigned char>(ip[12]), static_cast<unsigned char>(ip[13]), static_cast<unsigned char>(ip[14]), static_cast<unsigned char>(ip[15])};
+            uint8_t tempMac[6] = {
+                0x33, 0x33,
+                ip[12], ip[13], ip[14], ip[15]
+            };
             std::memcpy(mac, tempMac, 6);
         }
     }
@@ -59,7 +67,7 @@ namespace Protocol
         else return nullptr; // Resolution is disabled.
     }
 
-    void IPPacket::reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo)
+    void IPPacket::reserveIpv4(PacketBuilder& packetInfo)
     {
         // Decide layer 2 encapsulation based on interface configs
         // DEFAULT -> Ethernet
@@ -89,7 +97,7 @@ namespace Protocol
         else
             ipv4Build.iface->configs.ipv4.getAddress(ip.raw->sourceAddress);
         ip.setVersion(4);
-        ip.setHeaderLength(4); //TODO
+        ip.setHeaderLength(5); //TODO
         ip.setTypeOfService(ipv4Build.DSCP);
         ip.setTotalLength(0);
         ip.setIdentification(0);
@@ -206,7 +214,7 @@ namespace Protocol
         }
     }
 
-    void IPPacket::reserveIpv6(Interface* currentInterface, PacketBuilder& packetInfo)
+    void IPPacket::reserveIpv6(PacketBuilder& packetInfo)
     {
         // Decide layer 2 encapsulation based on interface configs
         // DEFAULT -> Ethernet
@@ -218,11 +226,11 @@ namespace Protocol
         packetInfo.reserveHeader(HeaderType::IPV6, ipSize);
     }
 
-    void UDPPacket::reserveUDP(Interface* currentInterface, PacketBuilder& packetInfo, AddressFamily af)
+    void UDPPacket::reserveUDP(PacketBuilder& packetInfo, AddressFamily af)
     {
         af == AddressFamily::IPv4
-            ? IPPacket::reserveIpv4(currentInterface, packetInfo)
-            : IPPacket::reserveIpv6(currentInterface, packetInfo);
+            ? IPPacket::reserveIpv4(packetInfo)
+            : IPPacket::reserveIpv6(packetInfo);
 
         packetInfo.reserveHeader(HeaderType::UDP, sizeof(UdpHeader));
     }

@@ -34,6 +34,7 @@ void EigrpTopology::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 {
     const auto* interface = iface.getIface();
+    IPAddress connected = IPAddress(base.getAF());
 
     ReceivedRoute r;
     r.originInterface = iface.interfaceKey;
@@ -49,7 +50,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
         : interface->configs.ipv6.mtu.load(std::memory_order_relaxed);
     r.routeType = RouteType::CONNECTED;
     r.adminDistance = base.getGlobalConfigMgr().getAD();
-    r.nextHop = {}; // Self originated
+    r.nextHop = connected; // Self originated
 
     std::set<IPPrefix> withdraws = iface.connectedRoutes;
     std::vector<TopologyEntry*> updates;
@@ -89,32 +90,35 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     {
         iface.connectedRoutes.erase(route);
         if (auto* entry = duel.topologyTable.find(route); entry)
-            if (auto rit = entry->routesByNeighbor.find(IPAddress{}); rit != entry->routesByNeighbor.end())
+            if (auto rit = entry->routesByNeighbor.find(connected); rit != entry->routesByNeighbor.end())
             {
-                duel.topologyTable.markRouteUnreachable(rit->second, IPAddress{}, *entry);
+                duel.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
                 updates.push_back(entry);
             }
     }
 
-    duel.updateSuccessors(updates, {});
-    base.routeManager.synchronizeRoutes(updates);
+    duel.updateSuccessors(updates, connected);
 }
 
 void EigrpTopology::clearConnected(EigrpInterface& iface)
 {
     std::vector<TopologyEntry*> updates;
-    for (const auto& route : iface.connectedRoutes)
+    IPAddress connected = IPAddress(base.getAF());
+    for (auto it = iface.connectedRoutes.begin(); it != iface.connectedRoutes.end();)
     {
-        iface.connectedRoutes.erase(route);
-        if (auto* entry = duel.topologyTable.find(route); entry)
-            if (auto rit = entry->routesByNeighbor.find(IPAddress{}); rit != entry->routesByNeighbor.end())
+        if (auto* entry = duel.topologyTable.find(*it); entry)
+        {
+            if (auto rit = entry->routesByNeighbor.find(connected); rit != entry->routesByNeighbor.end())
             {
-                duel.topologyTable.markRouteUnreachable(rit->second, IPAddress{}, *entry);
+                duel.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
                 updates.push_back(entry);
             }
+        }
+        it = iface.connectedRoutes.erase(it);
     }
 
-    duel.updateSuccessors(updates, {});
+    for (auto& entry : updates)
+        duel.recalculateSuccessors(entry);
     base.routeManager.synchronizeRoutes(updates);
 }
 }

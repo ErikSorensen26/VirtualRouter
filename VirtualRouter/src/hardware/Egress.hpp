@@ -5,7 +5,6 @@
 
 #include <linux/if_xdp.h>
 #include <linux/if_link.h>
-#include <net/if.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -16,6 +15,7 @@
 #include <errno.h>
 #include <stdexcept>
 #include <PacketSlot.hpp>
+#include <Ifname.h>
 
 class Egress
 {
@@ -239,7 +239,7 @@ private:
     {
         struct sockaddr_xdp sxdp = {};
         sxdp.sxdp_family = AF_XDP;
-        sxdp.sxdp_ifindex = if_nametoindex(ifname);
+        sxdp.sxdp_ifindex = ifnametoindex(ifname);
         if (sxdp.sxdp_ifindex == 0)
             throw std::runtime_error("Invalid interface: " + std::string(ifname));
 

@@ -18,30 +18,21 @@ public:
 
     RibBucket() noexcept
         : fibEntry(new std::atomic<RibEntry<AddrType>*>) {}
-    RibBucket(std::atomic<RibEntry<AddrType>*>* ribEntry) noexcept
-        : fibEntry(ribEntry) {}
-
-    RibBucket* clone() const noexcept
+    ~RibBucket()
     {
-        auto* b = new RibBucket<AddrType>(fibEntry);
-        b->routes = routes;
-        return b;
+        delete fibEntry;
     }
 
-    RibBucket<AddrType>* addRoute(const RibEntry<AddrType>& e) const noexcept
+    bool addRoute(const RibEntry<AddrType>& e) noexcept
     {
-        RibBucket* nb = clone();
         bool replaced = false;
 
-        for (auto& r : nb->routes)
+        for (RibEntry<AddrType>& r : routes)
         {
             if (r.source == e.source && r.processId == e.processId)
             {
-                if (r.metric == e.metric)
-                {
-                    delete nb;
-                    return nullptr;
-                }
+                if (r.metric == e.metric && r.nextHopCount == e.nextHopCount && r.adminDistance == e.adminDistance)
+                    return false;
                 r = e;
                 replaced = true;
                 break;
@@ -49,22 +40,20 @@ public:
         }
 
         if (!replaced)
-            nb->routes.push_back(e);
+            routes.push_back(e);
 
-        nb->selectBest();
-        return nb;
+        selectBest();
+        return true;
     }
 
-    RibBucket* removeRoute(RouteSource src, uint32_t pid = 0) const noexcept
+    void removeRoute(RouteSource src, uint32_t pid = 0) noexcept
     {
-        RibBucket* nb = clone();
-
-        nb->routes.erase(
-            std::remove_if(nb->routes.begin(), nb->routes.end(),
+        routes.erase(
+            std::remove_if(routes.begin(), routes.end(),
                 [src, pid](const RibEntry<AddrType>& r){ return r.source == src && r.processId == pid; }),
-            nb->routes.end());
-        nb->selectBest();
-        return nb;
+            routes.end());
+        selectBest();
+        return;
     }
 
     void selectBest() noexcept

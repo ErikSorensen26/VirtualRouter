@@ -27,6 +27,7 @@ void GlobalAggregator::addSummary(TopologyEntry& top)
 
 void GlobalAggregator::updateSummary(TopologyEntry& top)
 {
+    if (top.summaries.empty()) return;
     std::shared_lock<std::shared_mutex> lock(base.getIfaceMgr().interfaceMutex);
     auto& interfaces = base.getIfaceMgr().eigrpInterfaceList;
     auto bestRt = top.successors.begin();

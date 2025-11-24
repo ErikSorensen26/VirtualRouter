@@ -27,7 +27,7 @@ public:
     void clearAutoSummaries();
     void updateSummaryRoute(SummaryRoute& r);
     void updateSummaryRoutes(std::vector<SummaryRoute*>& r);
-    bool calculateSummary(SummaryRoute& r);
+    std::pair<bool, bool> calculateSummary(SummaryRoute& r);
     void updateAllSummaryRoutes(bool isAuto = false);
     void installSummary(const IPPrefix& prefix, bool isAuto = false);
     void installSummaries(const std::set<IPPrefix>& prefixes, bool isAuto = false);

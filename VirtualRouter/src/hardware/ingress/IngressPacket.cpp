@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <chrono>
+#include <Ifname.h>
 
 #ifndef HOT
 #define HOT __attribute__((hot))
@@ -17,13 +18,6 @@
 #ifndef ALWAYS_INLINE
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
-
-static int ifindex_or_throw(const char* ifname)
-{
-    int idx = if_nametoindex(ifname);
-    if (idx == 0) throw std::runtime_error(std::string("if_nametoindex failed for: " + std::string(ifname)));
-    return idx;
-}
 
 static inline void set_nonblock(int fd)
 {
@@ -67,12 +61,12 @@ void IngressPacket::setupSocket()
 
 void IngressPacket::bindIface()
 {
-    const int idx = ifindex_or_throw(opts.ifname.c_str());
+    const unsigned int idx = ifnametoindex(opts.ifname.c_str());
 
     sockaddr_ll sll{};
     sll.sll_family = AF_PACKET;
     sll.sll_protocol = htons(ETH_P_ALL);
-    sll.sll_ifindex = idx;
+    sll.sll_ifindex = static_cast<int>(idx);
 
     if (bind(fd, reinterpret_cast<sockaddr*>(&sll), sizeof(sll)) != 0)
         throw std::runtime_error("bind iface failed");

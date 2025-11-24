@@ -5,11 +5,11 @@
 #include <stdexcept>
 #include <linux/ethtool.h>
 #include <linux/sockios.h>
-#include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cstring>
+#include <net/if.h>
 #include <stdexcept>
 
 RxQueueManager::RxQueueManager() {}

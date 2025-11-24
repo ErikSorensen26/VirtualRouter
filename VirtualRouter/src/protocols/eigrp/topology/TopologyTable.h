@@ -105,6 +105,7 @@ struct ReceivedRoute
     ReceivedRoute& operator=(ReceivedRoute&&) noexcept = default;
 };
 
+struct TopologyEntry;
 struct RouteInfo
 {
     RouteInfo(ReceivedRoute& rt) : routeInfo(std::move(rt)) {}
@@ -112,8 +113,8 @@ struct RouteInfo
     bool isSuccessor = false;
     bool isFeasibleSuccessor = false;
     bool notFeasible = false;
+    const TopologyEntry* topology = nullptr;
     std::chrono::steady_clock::time_point lastUpdate;
-    std::optional<std::chrono::steady_clock::time_point> valid = std::nullopt;
 };
 
 struct TopologyEntry
@@ -134,6 +135,7 @@ struct TopologyEntry
     std::vector<IPAddress> pendingWithdraws;
 
     State state = State::PASSIVE;
+    std::optional<std::chrono::steady_clock::time_point> valid = std::nullopt;
 };
 
 class TopologyTable

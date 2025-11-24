@@ -199,7 +199,7 @@ void Protocol::DhcpServer::sendOffer(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -330,7 +330,7 @@ void Protocol::DhcpServer::sendAck(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -467,7 +467,7 @@ void Protocol::DhcpServer::sendNak(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -553,7 +553,7 @@ void Protocol::DhcpServer::sendInformReply(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -658,7 +658,7 @@ void Protocol::DhcpServer::sendForceRenew(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -744,7 +744,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
 {
     PacketBuilder builder(&iface);
     
-    UDPPacket::reserveUDP(&iface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();

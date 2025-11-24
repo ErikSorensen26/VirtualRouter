@@ -9,6 +9,7 @@
 #include <WebConsole.hpp>
 #include <WebSessionManager.hpp>
 #include <CrashHandler.hpp>
+#include <RCU.hpp>
 
 struct StartupArgs
 {
@@ -121,12 +122,14 @@ int main(int argc, char* argv[])
     }
     else if (!opts.noDefault)
     {
+        RCU::registerThread();
         auto session = engine.createSession(false);
         session->handlePrompt();
         while (true)
         {
             session->handleInput();
         }
+        RCU::unregisterThread();
     }
     else
     {

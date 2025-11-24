@@ -65,6 +65,7 @@ void InterfaceTimers::startHelloHelper()
     }
     helloTimerActive.store(true, std::memory_order_release);
 
+    sendHello();
     startHello();
 }
 
@@ -93,18 +94,7 @@ void InterfaceTimers::handleHelloReschedule()
     helloDone.store(false, std::memory_order_release);
     try
     {
-        {
-            auto& rtp = iface.getRtp();
-            auto unicastNeighbors = iface.getNTable().lookupUnicast();
-            for (const auto& neighbor : unicastNeighbors)
-            {
-                rtp.sendUnicastHello(neighbor->ipAddress);
-            }
-            if (iface.configs->multicastEnabled.load(std::memory_order_relaxed))
-            {
-                rtp.sendHello();
-            }
-        }
+        sendHello();
     }
     catch (...)
 
@@ -118,6 +108,20 @@ void InterfaceTimers::handleHelloReschedule()
     // Mark hello as done
     helloDone.store(true, std::memory_order_release);
     startHello(); // Reschedule
+}
+
+void InterfaceTimers::sendHello()
+{
+    auto& rtp = iface.getRtp();
+    auto unicastNeighbors = iface.getNTable().lookupUnicast();
+    for (const auto& neighbor : unicastNeighbors)
+    {
+        rtp.sendUnicastHello(neighbor->ipAddress);
+    }
+    if (iface.configs->multicastEnabled.load(std::memory_order_relaxed))
+    {
+        rtp.sendHello();
+    }
 }
 
 void InterfaceTimers::startHoldTimer(Neighbor& neighbor)

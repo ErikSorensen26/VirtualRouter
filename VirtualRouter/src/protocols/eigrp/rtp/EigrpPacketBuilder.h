@@ -32,8 +32,6 @@ public:
     static void appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& iface);
     static bool appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg);
     static size_t appendRoutes(TLV16BufferManager& tlv, const std::vector<const RouteInfo*>& routes, uint64_t bw, uint64_t delay, TLVType tlvVersion);
-    static size_t appendQueries(TLV16BufferManager& tlv, const std::vector<OutgoingQuery*>& queries, uint32_t seq, uint64_t bw, uint64_t delay, TLVType tlvVersion);
-    static size_t appendSIAQueries(TLV16BufferManager& tlv, const std::vector<OutgoingQuery*>& queries, uint32_t seq, uint64_t bw, uint64_t delay, TLVType tlvVersion);
 };
 }
 

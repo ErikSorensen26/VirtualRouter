@@ -114,11 +114,14 @@ else()
     add_compile_options(
         -O0
         -g3
+        -gdwarf-4
         -fno-omit-frame-pointer
+        -fno-inline
+        -fno-optimize-sibling-calls
         -Wall -Wextra -Wpedantic -Wshadow -Wcast-align -Wconversion -Wsign-conversion
     )
-    add_link_options(-fsanitize=address)
-    add_compile_options(-fsanitize=address)
+    add_link_options(-fsanitize=address,undefined)
+    add_compile_options(-fsanitize=address,undefined)
     add_compile_definitions(DEBUG)
 
     # External Dependencies

@@ -6,7 +6,6 @@
 #include "IngressBase.h"
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
-#include <net/if.h>
 #include <sys/epoll.h>
 #include <atomic>
 

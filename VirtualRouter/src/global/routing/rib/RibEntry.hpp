@@ -32,6 +32,8 @@ struct RibEntry
     NextHopPath<AddrType> nextHops[MAX_NEXTHOP];
     uint8_t nextHopCount = 0;
 
+    RibEntry() = default;
+
     void clear() noexcept { nextHopCount = 0; }
 
     bool empty() const noexcept { return nextHopCount == 0; }
@@ -46,6 +48,40 @@ struct RibEntry
                 return false;
         nextHops[nextHopCount++] = { nhAddr, iface, weight };
         return true;
+    }
+
+    RibEntry(const RibEntry<AddrType>& other) noexcept
+        : prefix(other.prefix),
+          length(other.length),
+          source(other.source),
+          processId(other.processId),
+          adminDistance(other.adminDistance),
+          metric(other.metric),
+          topInfo(other.topInfo),
+          nextHopCount(other.nextHopCount)
+    {
+        for (uint8_t i = 0; i < other.nextHopCount; ++i)
+            nextHops[i] = other.nextHops[i];
+    }
+
+    RibEntry& operator=(const RibEntry<AddrType>& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+
+        prefix = other.prefix;
+        length = other.length;
+        source = other.source;
+        processId = other.processId;
+        adminDistance = other.adminDistance;
+        metric = other.metric;
+        topInfo = other.topInfo;
+
+        nextHopCount = other.nextHopCount;
+        for (uint8_t i = 0; i < other.nextHopCount; ++i)
+            nextHops[i] = other.nextHops[i];
+
+        return *this;
     }
 };
 

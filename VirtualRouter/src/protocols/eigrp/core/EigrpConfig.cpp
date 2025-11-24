@@ -30,6 +30,28 @@ void EigrpConfig::addNetworkRange(const EigrpConfigs::Network& newNetwork)
     base.getIfaceMgr().refreshInterfaceList();
 }
 
+void EigrpConfig::delNetworkRange(const EigrpConfigs::Network& newNetwork)
+{
+    if (base.getAF() != AddressFamily::IPv4) return;
+
+    // Check for duplicate
+    {
+        std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
+        std::vector<EigrpConfigs::Network>::iterator it = std::find(configs.networks.begin(), configs.networks.end(), newNetwork);
+        if (it != configs.networks.end())
+        {
+            configs.networks.erase(it);
+        }
+        else
+        {
+            return; // Network does not exist
+        }
+    }
+
+    // Update interfaces and routing table after adding the network
+    base.getIfaceMgr().refreshInterfaceList();
+}
+
 bool EigrpConfig::isInNetworkRange(const uint8_t* testIp)
 {
     {
@@ -44,6 +66,17 @@ bool EigrpConfig::isInNetworkRange(const uint8_t* testIp)
     }
 
     return false; // No matches found
+}
+
+void EigrpConfig::clearNetworks()
+{
+    {
+        std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
+        configs.networks.clear();
+    }
+
+    // Update interfaces and routing table after clearing networks
+    base.getIfaceMgr().refreshInterfaceList();
 }
 
 void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertiseLeakMap, bool advertiseStatic, bool advertiseSummary, bool advertiseRedistributed)

@@ -17,51 +17,40 @@ NeighborTable::NeighborTable(EigrpInterface& iface) : iface(iface)
             createNeighbor(ip);
 }
 
-NeighborTable::~NeighborTable()
-{
-    std::unique_lock<std::shared_mutex> intLock(neighborMutex);
-    for (auto& [ip, neighbor] : neighbors)
-    {
-        deleteNeighbor(ip);
-    }
-}
-
 Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::Version v, const uint8_t* macAddress)
 {
     // Add neighbor only if it doesn't already exist
     std::unique_lock<std::shared_mutex> intLock(neighborMutex);
 
-    bool unicast = macAddress == nullptr;
+    bool isUnicast = macAddress == nullptr;
 
     auto& base = iface.getBase();
 
-    if (unicast)
+    if (isUnicast)
     {
         std::unique_lock<std::shared_mutex> lock(base.getConfigs().configsMutex);
         base.getConfigs().unicastNeighbors[iface.interfaceKey].insert(neighborIp);
+        unicast.insert(neighborIp);
     }
 
     auto it = neighbors.find(neighborIp);
     bool exists = it != neighbors.end();
-    bool modeSwap = (unicast && exists && !it->second->unicast);
+    bool modeSwap = (exists && isUnicast != it->second.unicast);
     if (!exists || modeSwap)
     {
         if (modeSwap)
         {
+            if (!isUnicast) unicast.erase(neighborIp);
             base.delGlobalNeighbor(neighborIp);
-            delete it->second;
-            it->second = nullptr;
         }
 
-        auto* neighbor = new Neighbor(
-            iface, iface.getTimers(), neighborIp, v, unicast
-        );
-
-        if (!unicast) std::memcpy(neighbor->macAddress, macAddress, 6);
-        neighbors[neighborIp] = neighbor;
+        auto neighborIt = neighbors.try_emplace(neighborIp, iface, iface.getTimers(), neighborIp, v, isUnicast);
+        if (!neighborIt.second) return nullptr;
+        auto* neighbor = &neighborIt.first->second;
+        if (!isUnicast) std::memcpy(neighbor->macAddress, macAddress, 6);
         base.addGlobalNeighbor(neighborIp, neighbor);
 
-        if (unicast && iface.configs->multicastEnabled.load(std::memory_order_relaxed))
+        if (isUnicast && iface.configs->multicastEnabled.load(std::memory_order_relaxed))
         {
             disableMulticast();
         }
@@ -93,9 +82,9 @@ void NeighborTable::removeAllMulticast()
 {
     for (auto it = neighbors.begin(); it != neighbors.end();)
     {
-        if (!it->second->unicast)
+        if (!it->second.unicast)
         {
-            onDown(*it->second);
+            onDown(it->second);
         }
         else
         {
@@ -104,54 +93,36 @@ void NeighborTable::removeAllMulticast()
     }
 }
 
-void NeighborTable::deleteNeighbor(const IPAddress& neighborIp, bool unicast)
+void NeighborTable::deleteNeighbor(const IPAddress& neighborIp, bool isUnicast)
 {
     // Find the neighbor and remove it if present
-    Neighbor* neighbor = nullptr;
+    std::unique_lock<std::shared_mutex> lock(neighborMutex);
+    auto neighborIt = neighbors.find(neighborIp);
+    if (neighborIt != neighbors.end())
     {
-        std::unique_lock<std::shared_mutex> lock(neighborMutex);
-        auto neighborIt = neighbors.find(neighborIp);
-        if (neighborIt != neighbors.end() && neighborIt->second->unicast)
+        if (isUnicast != neighborIt->second.unicast) return;
+        neighbors.erase(neighborIt->second.ipAddress);
+        if (isUnicast)
         {
-            neighbor = neighborIt->second;
+            unicast.erase(neighborIp);
+            if (unicast.empty() || neighbors.empty())
+            {
+                enableMulticast();
+            }
         }
     }
-
-    // Remove the neighbor if found and is in unciast
-    if (neighbor && neighbor->unicast == unicast)
-    {
-        onDown(*neighbor);
-        // Cancel timers
-        iface.getTimers().cancelNeighborTimers(*neighbor);
-        iface.getBase().delGlobalNeighbor(neighborIp);
-        iface.getTopController().onNeighborDown(neighborIp);
-
-        if (unicast)
-        {
-            auto& base = iface.getBase();
-            std::unique_lock<std::shared_mutex> lock(base.getConfigs().configsMutex);
-            base.getConfigs().unicastNeighbors[iface.interfaceKey].insert(neighborIp);
-        }
-        
-        {
-            std::unique_lock<std::shared_mutex> lock(neighborMutex);
-            neighbors.erase(neighborIp);
-            delete &neighbor;
-        }
-    }
-    else return;
 }
 
 std::vector<Neighbor*> NeighborTable::lookupUnicast()
 {
-    std::vector<Neighbor*> unicast;
+    std::vector<Neighbor*> unicastNeighbors;
     std::shared_lock<std::shared_mutex> lock(neighborMutex);
     for (auto& [_, neighbor] : neighbors)
     {
-        if (neighbor->unicast)
-            unicast.push_back(neighbor);
+        if (neighbor.unicast)
+            unicastNeighbors.push_back(&neighbor);
     }
-    return unicast;
+    return unicastNeighbors;
 }
 
 size_t NeighborTable::size()
@@ -166,7 +137,7 @@ Neighbor* NeighborTable::lookup(const IPAddress& neighborIp)
     auto it = neighbors.find(neighborIp);
     if (it != neighbors.end())
     {
-        return it->second;
+        return &it->second;
     }
     return nullptr;
 }
@@ -177,25 +148,17 @@ void NeighborTable::cancelAllHoldTimers()
     std::shared_lock<std::shared_mutex> lock(neighborMutex);
     for (auto& [_, neighbor] : neighbors)
     {
-        timeMgr.cancelHoldTimer(*neighbor);
+        timeMgr.cancelHoldTimer(neighbor);
     }
 }
 
 void NeighborTable::onDown(Neighbor& neighbor)
 {
-    // Cancel timers
-    iface.getTimers().cancelNeighborTimers(neighbor);
-    iface.getBase().delGlobalNeighbor(neighbor.ipAddress);
-    iface.getTopController().onNeighborDown(neighbor.ipAddress);
-    
+    std::unique_lock<std::shared_mutex> lock(neighborMutex);
+    neighbors.erase(neighbor.ipAddress);
+    if (neighbors.empty())
     {
-        std::unique_lock<std::shared_mutex> lock(neighborMutex);
-        neighbors.erase(neighbor.ipAddress);
-        delete &neighbor;
-        if (neighbors.empty())
-        {
-            enableMulticast();
-        }
+        enableMulticast();
     }
 }
 

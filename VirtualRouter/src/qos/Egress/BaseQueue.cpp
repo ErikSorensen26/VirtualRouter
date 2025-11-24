@@ -2,6 +2,7 @@
 
 #include <BaseQueue.h>
 #include <EgressBase.h>
+#include <RCU.hpp>
 
 static inline void cpuRelax() { asm volatile("pause" ::: "memory"); }
 
@@ -55,6 +56,7 @@ void BaseQueue::enqueue(PacketSlot* pkt)
 
 void BaseQueue::runLoop()
 {
+    RCU::registerThread();
     while(running.load(std::memory_order_acquire))
     {
         while(!isEmpty())
@@ -66,6 +68,7 @@ void BaseQueue::runLoop()
 
         while (!isEmpty()) dequeueOne();
     }
+    RCU::unregisterThread();
 }
 
 void BaseQueue::dequeue(uint32_t frame, uint32_t length)

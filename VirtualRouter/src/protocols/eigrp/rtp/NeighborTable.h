@@ -15,11 +15,10 @@ class NeighborTable
 {
 public:
     NeighborTable(EigrpInterface& iface);
-    ~NeighborTable();
 
     void setState(Neighbor& neighbor, Neighbor::State newState);
     Neighbor* createNeighbor(const IPAddress& ipAddress, Neighbor::Version v = Neighbor::Version::UNKNOWN, const uint8_t* macAddress = nullptr);
-    void deleteNeighbor(const IPAddress& neighborIp, bool unicast = false);
+    void deleteNeighbor(const IPAddress& neighborIp, bool unicast);
     Neighbor* lookup(const IPAddress& neighborIp);
     std::vector<Neighbor*> lookupUnicast();
     size_t size();
@@ -33,7 +32,8 @@ public:
     
     // Neighbor management
     std::shared_mutex neighborMutex; ///< Shared mutex for neighbor operations.
-    std::unordered_map<IPAddress, Neighbor*> neighbors; ///< Map of neighbor IPs to their information.
+    std::map<IPAddress, Neighbor> neighbors; ///< Map of neighbor IPs to their information.
+    std::unordered_set<IPAddress> unicast;
 
     EigrpInterface& iface;
 };

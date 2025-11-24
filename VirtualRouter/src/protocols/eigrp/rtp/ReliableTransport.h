@@ -18,6 +18,7 @@ class EigrpInterface;
 class NeighborTable;
 struct ReceivedRoute;
 struct OutgoingQuery;
+struct ActiveRoute;
 
 class ReliableTransport
 {
@@ -34,6 +35,7 @@ public:
     };
 
     ReliableTransport(EigrpInterface& iface);
+    ~ReliableTransport();
 
     void handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const uint8_t* neighborIp, bool multicast);
 
@@ -45,7 +47,8 @@ public:
     void sendNullUpdate(Neighbor& neighbor);
     void sendFullTopology(Neighbor& neighbor);
     void sendUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& routes);
-    void sendQuery(Neighbor* neighbor, const std::vector<OutgoingQuery*>& routes);
+    void sendQuery(const std::vector<ActiveRoute*>& routes);
+    void sendUnicastQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& routes);
     void sendReply(Neighbor& neighbor, const std::vector<const RouteInfo*>& routes, uint32_t seq);
     void sendSIAQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& routes);
     void sendSIAReply(Neighbor& neighbor, uint32_t seq);
@@ -84,7 +87,7 @@ private:
     void trackReliable(Neighbor* nbr, const IPAddress& ip, const PacketBuilder& pkt, uint32_t seq);
 
     void releaseFailedPacket(PacketBuilder& builder);
-    PacketBuilder createPacket(Interface* ifc = nullptr);
+    void createPacket(PacketBuilder& builder);
 
     std::optional<EigrpHeader> createHello(PacketBuilder& builder);
     std::optional<EigrpHeader> createUnicastHello(PacketBuilder& builder, const IPAddress& neighborIp);
@@ -92,7 +95,8 @@ private:
     std::optional<EigrpHeader> createAck(PacketBuilder& builder, Neighbor& neighbor, uint32_t seq);
     std::optional<EigrpHeader> createNullUpdate(PacketBuilder& builder, Neighbor& neighbor);
     std::optional<EigrpHeader> createUpdate(PacketBuilder& builder, PktInfo& info, Neighbor* neighbor, const std::vector<const RouteInfo*>& routes);
-    std::optional<EigrpHeader> createQuery(PacketBuilder& builder, PktInfo& info, Neighbor* neighbor, const std::vector<OutgoingQuery*>& queries);
+    std::optional<EigrpHeader> createQuery(PacketBuilder& builder, PktInfo& info, const std::vector<ActiveRoute*>& queries);
+    std::optional<EigrpHeader> createUnicastQuery(PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries);
     std::optional<EigrpHeader> createReply(PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<const RouteInfo*>& replies, uint32_t seq);
     std::optional<EigrpHeader> createSIAQuery(PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries);
     std::optional<EigrpHeader> createSIAReply(PacketBuilder& builder, Neighbor& neighbor, uint32_t seq);

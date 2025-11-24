@@ -74,7 +74,6 @@ public:
     friend class ::MockInterface;
     friend class ::EigrpTest;
 
-
     Interface(const InterfaceCreation& cfgs);
     virtual ~Interface();
 
@@ -88,10 +87,12 @@ public:
     std::vector<std::array<uint8_t, 16>> getTentativeAddress();
     void markAddressDuplicate(const uint8_t* address, bool linkLocal = false);
 
-    virtual void Shutdown(bool shut);
+    virtual void shutdown(bool shut);
+    void physicalShutdown(bool carrier);
     virtual void enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac = nullptr);
 
     std::atomic<bool> shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
+    std::atomic<bool> carrierFlag = true; ///< Flag indicating if carrier is enabled.
     VirtualRouter* routingInstance = nullptr;
 
     // Member Variables

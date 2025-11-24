@@ -20,8 +20,6 @@ std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet
                                uint16_t virId,
                                uint16_t asn)
 {
-    std::memset(&packet, 0, sizeof(packet));
-
     packet.reserveHeader(HeaderType::EIGRP, EigrpHeader::fixedSize);
     auto* hdr = packet.nextBuildHeader();
     if (!hdr) return std::nullopt;
@@ -64,57 +62,13 @@ size_t EigrpPacketBuilder::appendRoutes(TLV16BufferManager& tlv, const std::vect
     {
         auto* buf = tlv.getNextValBuf();
         TLVBuilder::RouteType type = r->routeInfo.routeType == RouteType::EXTERNAL
-            ? static_cast<TLVBuilder::RouteType>(static_cast<uint8_t>(tlvVersion) ^ 1)
-            : static_cast<TLVBuilder::RouteType>(tlvVersion);
+            ? static_cast<TLVBuilder::RouteType>(static_cast<uint16_t>(tlvVersion) | 3)
+            : static_cast<TLVBuilder::RouteType>(static_cast<uint16_t>(tlvVersion) | 2);
         uint16_t len = TLVBuilder::encodeRouteOption(buf, tlv.maxSize(), r, bw, delay, type);
         if (len == 0) break;
 
         if (tlv.append(static_cast<uint16_t>(type), len + 4, nullptr, len))
             appended++;
-        else break;
-    }
-    return appended;
-}
-
-size_t EigrpPacketBuilder::appendQueries(TLV16BufferManager& tlv, const std::vector<OutgoingQuery*>& queries, uint32_t seq, uint64_t bw, uint64_t delay, TLVType tlvVersion)
-{
-    size_t appended = 0;
-    for (auto* q : queries)
-    {
-        auto* buf = tlv.getNextValBuf();
-        TLVBuilder::RouteType type = q->route->originRoute->routeInfo.routeType == RouteType::EXTERNAL
-            ? static_cast<TLVBuilder::RouteType>(static_cast<uint8_t>(tlvVersion) ^ 1)
-            : static_cast<TLVBuilder::RouteType>(tlvVersion);
-        uint16_t len = TLVBuilder::encodeRouteOption(buf, tlv.maxSize(), q->route->originRoute, bw, delay, type);
-        if (len == 0) break;
-
-        if (tlv.append(static_cast<uint8_t>(type), len + 4, nullptr, len))
-        {
-            appended++;
-            q->querySequence = seq;
-        }
-        else break;
-    }
-    return appended;
-}
-
-size_t EigrpPacketBuilder::appendSIAQueries(TLV16BufferManager& tlv, const std::vector<OutgoingQuery*>& queries, uint32_t seq, uint64_t bw, uint64_t delay, TLVType tlvVersion)
-{
-    size_t appended = 0;
-    for (auto* q : queries)
-    {
-        auto* buf = tlv.getNextValBuf();
-        TLVBuilder::RouteType type = q->route->originRoute->routeInfo.routeType == RouteType::EXTERNAL
-            ? static_cast<TLVBuilder::RouteType>(static_cast<uint8_t>(tlvVersion) ^ 1)
-            : static_cast<TLVBuilder::RouteType>(tlvVersion);
-        uint16_t len = TLVBuilder::encodeRouteOption(buf, tlv.maxSize(), q->route->originRoute, bw, delay, type);
-        if (len == 0) break;
-
-        if (tlv.append(static_cast<uint8_t>(type), len + 4, nullptr, len))
-        {
-            appended++;
-            q->siaSequence = seq;
-        }
         else break;
     }
     return appended;

@@ -28,6 +28,8 @@ Interface::Interface(const InterfaceCreation& cfgs)
     threadsRunning(false)
 {
     // Set member variables
+    if (cfgs.vrf.global.engine.hwManager)
+        cfgs.vrf.global.engine.hwManager->registerInterface(&configs.hwInfo, this);
     startThreads(); // TEMPORARY: will be shutdown by default once shits working
 }
 
@@ -35,6 +37,8 @@ Interface::~Interface()
 {
     cleanupInterface();
     stopThreads();
+    if (routingInstance->global.engine.hwManager)
+        routingInstance->global.engine.hwManager->unregisterInterface(&configs.hwInfo, this);
 }
 
 void Interface::cleanupInterface()
@@ -217,19 +221,31 @@ void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
  *
  * @param shut Boolean flag indicating whether to shut down ('true') or restart ('false').
  */
-void Interface::Shutdown(bool shut) 
+void Interface::shutdown(bool shut) 
 {
-    shutdownFlag = shut;
+    if (shutdownFlag.load(std::memory_order_relaxed) == shut ||
+        !carrierFlag.load(std::memory_order_relaxed))
+        return;
+    shutdownFlag.store(shut, std::memory_order_release);
     if (shut) 
     {
+        stateChange(StateChange::SHUTDOWN);
+        stateChangeV6(StateChange::SHUTDOWN);
         stopThreads();
     }
     else if (!shut) 
     {
         startThreads();
+        stateChange(StateChange::INITIATE);
+        stateChangeV6(StateChange::INITIATE);
     }
-    stateChange(StateChange::SHUTDOWN);
-    stateChangeV6(StateChange::SHUTDOWN);
+}
+
+void Interface::physicalShutdown(bool shut)
+{
+    if (carrierFlag.load(std::memory_order_relaxed) == !shut) return;
+    carrierFlag.store(!shut, std::memory_order_release);
+    shutdown(shut);
 }
 
 /**
@@ -276,22 +292,19 @@ void Interface::processIngress(uint8_t* packet, size_t size)
 void Interface::startThreads() 
 {
     // Add the interface to the TX Queue manager
-    routingInstance->global.txMgr.addInterface(*this, configs.hwInfo.iface, { .maxQueues = 1 });
-    routingInstance->global.rxMgr.addInterface(*this, configs.hwInfo.iface, { .maxQueues = 1 });
+    routingInstance->global.txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    routingInstance->global.rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
 
-    if (routingInstance->global.routingEnabled)
-    {
-        // Initialize shared pointers for Protocol objects
-        if (!arp)
-            arp = new Protocol::Arp(*this);
-        if (!ndp)
-            ndp = new Protocol::Ndp(*this);
+    // Initialize shared pointers for Protocol objects
+    if (!arp)
+        arp = new Protocol::Arp(*this);
+    if (!ndp)
+        ndp = new Protocol::Ndp(*this);
 
-        threadsRunning = true;
+    threadsRunning = true;
 
-        //ingress->start();
-        //TODO
-    }
+    //ingress->start();
+    //TODO
 }
 
 void Interface::stopThreads() 
@@ -333,6 +346,9 @@ void Interface::stateChange(StateChange state)
     }
     // Other updates...
 
+    if (!routingInstance->global.routingEnabled)
+        return;
+
     switch (state)
     {
         case StateChange::INITIATE:
@@ -347,10 +363,11 @@ void Interface::stateChange(StateChange state)
         }
         case StateChange::IPCHANGE:
         {
-            if (arp) 
+            if (arp)
             {
                 arp->shutdown();
-                arp->initiateArp();
+                if (routingInstance->global.routingEnabled)
+                    arp->initiateArp();
             }
             break;
         }
@@ -377,6 +394,9 @@ void Interface::stateChangeV6(StateChange state)
         };
     }
     // Other updates...
+
+    if (!routingInstance->global.routingEnabled)
+        return;
     
     switch (state)
     {
@@ -403,7 +423,8 @@ void Interface::stateChangeV6(StateChange state)
             if (ndp)
             {
                 ndp->shutdown();
-                ndp->initializeNdp();
+                if (routingInstance->global.routingEnabled)
+                    ndp->initializeNdp();
             }
             break;
         }

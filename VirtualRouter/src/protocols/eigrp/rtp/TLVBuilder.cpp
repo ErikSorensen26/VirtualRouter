@@ -8,12 +8,12 @@ namespace Eigrp
 uint8_t TLVBuilder::encodeRouteOption(uint8_t* out, size_t maxSize, const RouteInfo* route, uint64_t currentBandwidth, uint64_t currentDelay, RouteType type)
 {
     RouteData data(const_cast<RouteInfo*>(route)->routeInfo);
+    const bool wide = isWide(type);
+    const bool external = isExternal(type);
     data.offset = 0;
-    data.v6 = isV6(type);
+    data.v6 = route->routeInfo.prefix.af == AddressFamily::IPv6;
     data.value = out;
     data.valueSize = maxSize;
-    const bool wide = data.v6 ? isWideV6(type) : isWideV4(type);
-    const bool external = isExternal(type);
     const uint8_t ipSize = data.v6 ? 16 : 4;
 
     bool max = route->routeInfo.delay == std::numeric_limits<uint64_t>::max();
@@ -65,9 +65,10 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt
     const uint8_t* value = routeOpt.value;
 
     // Deduce wide/classic, internal/external, and v6
-    const bool wide = (tlvType == 0x0002 || tlvType == 0x0003);
-    const bool external = (tlvType == 0x0003 || tlvType == 0x0103);
-    data.v6 = (tlvType == 0x0002 | tlvType == 0x0003);
+    const bool wide = (tlvType == 0x0602 || tlvType == 0x0603);
+    const bool external = (tlvType == 0x0603 || tlvType == 0x0403 || tlvType == 0x0103);
+    data.v6 = (tlvType == 0x0402 | tlvType == 0x0403 || readU16(routeOpt.value) == 2);
+    r.prefix.af = data.v6 ? AddressFamily::IPv6 : AddressFamily::IPv4;
 
     const uint8_t ipSize = data.v6 ? 16 : 4;
 
@@ -209,20 +210,24 @@ bool TLVBuilder::encodeExternal(RouteData& data)
 bool TLVBuilder::decodeDestination(RouteData& data)
 {
     uint8_t plen = data.value[data.offset++];
-    if (data.offset + plen > data.valueSize) return false;
-    std::memcpy(data.r.prefix.addr, data.value + data.offset, plen);
-    data.offset += plen;
+    uint8_t prefSize = data.v6
+        ? (plen == 128) ? 16 : ((plen / 8) + 1)
+        : ((plen - 1) / 8) + 1;
+    if (data.offset + prefSize > data.valueSize) return false;
+    std::memcpy(data.r.prefix.addr, data.value + data.offset, prefSize);
+    data.r.prefix.prefixLength = plen;
+    data.offset += prefSize;
     return true;
 }
 
 bool TLVBuilder::encodeDestination(RouteData& data)
 {
     uint8_t plen = data.r.prefix.prefixLength;
-    if (data.offset + plen > data.valueSize) return false;
-    data.value[data.offset] = plen; data.offset += 1;
     uint8_t prefSize = data.v6
         ? (plen == 128) ? 16 : ((plen / 8) + 1)
         : ((plen - 1) / 8) + 1;
+    if (data.offset + prefSize > data.valueSize) return false;
+    data.value[data.offset] = plen; data.offset += 1;
     std::memcpy(data.value + data.offset, data.r.prefix.addr, prefSize);
     data.offset += prefSize;
     return true;

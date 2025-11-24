@@ -1296,7 +1296,7 @@ bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay,
     Dhcpv6::Dhcpv6PacketBuild build(&iface);
 
     // Reserve below headers
-    UDPPacket::reserveUDP(&iface, build.builder, AddressFamily::IPv6);
+    UDPPacket::reserveUDP(build.builder, AddressFamily::IPv6);
     build.builder.reserveHeader(HeaderType::DHCPV6_RELAY, Dhcpv6RelayHeader::fixedSize);
 
     // Process and add relay chain
@@ -1447,7 +1447,7 @@ bool Protocol::Dhcpv6Server::sendAdvertise(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv
     PacketBuilder& builder = send.build.builder;
     if (!send.relay)
     {
-        UDPPacket::reserveUDP(&send.iface, builder, AddressFamily::IPv6);
+        UDPPacket::reserveUDP(builder, AddressFamily::IPv6);
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 
@@ -1473,7 +1473,7 @@ bool Protocol::Dhcpv6Server::sendReply(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::D
     PacketBuilder& builder = send.build.builder;
     if (!send.relay)
     {
-        UDPPacket::reserveUDP(&send.iface, builder, AddressFamily::IPv6);
+        UDPPacket::reserveUDP(builder, AddressFamily::IPv6);
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 
@@ -1500,7 +1500,7 @@ bool Protocol::Dhcpv6Server::sendConfirmReply(Dhcpv6::Dhcpv6PacketSend& send, Dh
     PacketBuilder& builder = send.build.builder;
     if (!send.relay)
     {
-        UDPPacket::reserveUDP(&send.iface, builder, AddressFamily::IPv6);
+        UDPPacket::reserveUDP(builder, AddressFamily::IPv6);
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 
@@ -1533,7 +1533,7 @@ bool Protocol::Dhcpv6Server::sendReconfigure(Dhcpv6::Dhcpv6PacketSend& send, Dhc
     PacketBuilder& builder = send.build.builder;
     if (!send.relay)
     {
-        UDPPacket::reserveUDP(&send.iface, builder, AddressFamily::IPv6);
+        UDPPacket::reserveUDP(builder, AddressFamily::IPv6);
         builder.reserveHeader(HeaderType::DHCPV6, Dhcpv6Header::fixedSize);
     }
 

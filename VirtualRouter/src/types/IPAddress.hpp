@@ -15,9 +15,10 @@ struct alignas(16) IPAddress
         uint32_t v4;
         __uint128_t v6;
     };
-    bool isV6;
+    bool isV6 = false;
 
     IPAddress() { v6 = 0; }
+    IPAddress(AddressFamily af) : isV6(af == AddressFamily::IPv6) { v6 = 0; }
 
     IPAddress(const IPAddress& other)
     {

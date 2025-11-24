@@ -16,8 +16,7 @@ class EigrpInterface;
 struct ReceivedRoute;
 
 constexpr uint16_t ROUTE_EXTERNAL = 0b0000000000000001;
-constexpr uint16_t ROUTE_WIDE_V4  = 0b0000000100000000;
-constexpr uint16_t ROUTE_WIDE_V6  = 0b0000001000000000;
+constexpr uint16_t ROUTE_WIDE     = 0b0000001000000000;
 constexpr uint16_t ROUTE_V6       = 0b0000010000000000;
 
 class TLVBuilder
@@ -31,22 +30,18 @@ public:
 
     enum class RouteType : uint16_t
     {
-        LEGACY_INTERNAL     = 0x0002,
-        LEGACY_EXTERNAL     = 0x0003,
-        WIDE_INTERNAL       = 0x0102,
-        WIDE_EXTERNAL       = 0x0103,
+        LEGACY_INTERNAL     = 0x0102,
+        LEGACY_EXTERNAL     = 0x0103,
         LEGACY_INTERNAL_V6  = 0x0402,
         LEGACY_EXTERNAL_V6  = 0x0403,
-        WIDE_INTERNAL_V6    = 0x0602,
-        WIDE_EXTERNAL_V6    = 0x0603
+        WIDE_INTERNAL    = 0x0602,
+        WIDE_EXTERNAL    = 0x0603
     };
 
     [[nodiscard]] inline static bool isExternal(TLVBuilder::RouteType t) noexcept
         { return (static_cast<uint8_t>(t) & ROUTE_EXTERNAL) != 0; }
-    [[nodiscard]] inline static bool isWideV4(TLVBuilder::RouteType t) noexcept
-        { return (static_cast<uint8_t>(t) & ROUTE_WIDE_V4) != 0; }
-    [[nodiscard]] inline static bool isWideV6(TLVBuilder::RouteType t) noexcept
-        { return (static_cast<uint8_t>(t) & ROUTE_WIDE_V6) != 0; }
+    [[nodiscard]] inline static bool isWide(TLVBuilder::RouteType t) noexcept
+        { return (static_cast<uint8_t>(t) & ROUTE_WIDE) != 0; }
     [[nodiscard]] inline static bool isV6(TLVBuilder::RouteType t) noexcept
         { return (static_cast<uint8_t>(t) & ROUTE_V6) != 0; }
 

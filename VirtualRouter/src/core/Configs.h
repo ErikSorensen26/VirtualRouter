@@ -360,7 +360,7 @@ public:
     IFileSystem* fileSystem; ///< File system interface.
 
     Global* global = nullptr;
-    HardwareManager* hwManager;
+    HardwareManager* hwManager = nullptr;
 	
 private:
 

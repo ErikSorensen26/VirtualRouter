@@ -525,14 +525,12 @@ namespace Variable
             inline constexpr uint16_t version = uint16_t{0x0004U};               ///< EIGRP Option for Version.
             inline constexpr uint16_t sequence = uint16_t{0x0003U};              ///< EIGRP Option for Sequence Number.
             inline constexpr uint16_t multicastSequence = uint16_t{0x0005U};     ///< EIGRP Option for Multicast Sequence.
-            inline constexpr uint16_t legacyInternalRoute = uint16_t{0x0002U};   ///< EIGRP Option for Legacy Internal Route.
-            inline constexpr uint16_t legacyExternalRoute = uint16_t{0x0003U};   ///< EIGRP Option for Legacy External Route.
-            inline constexpr uint16_t internalRoute = uint16_t{0x0102U};         ///< EIGRP Option for Internal Route.
-            inline constexpr uint16_t externalRoute = uint16_t{0x0103U};         ///< EIGRP Option for External Route.
-            inline constexpr uint16_t legacyInternalRouteV6 = uint16_t{0x0402U};       ///< EIGRP Option for Legacy Internal Route IPv6.
-            inline constexpr uint16_t legacyExternalRouteV6 = uint16_t{0x0403U};       ///< EIGRP Option for Legacy External Route IPv6.
-            inline constexpr uint16_t internalRouteV6 = uint16_t{0x0602U};       ///< EIGRP Option for Legacy Internal Route IPv6.
-            inline constexpr uint16_t externalRouteV6 = uint16_t{0x0603U};       ///< EIGRP Option for Legacy External Route IPv6.
+            inline constexpr uint16_t legacyInternalRoute = uint16_t{0x0102U};   ///< EIGRP Option for Internal Route.
+            inline constexpr uint16_t legacyExternalRoute = uint16_t{0x0103U};   ///< EIGRP Option for External Route.
+            inline constexpr uint16_t legacyInternalRouteV6 = uint16_t{0x0402U}; ///< EIGRP Option for Legacy Internal Route IPv6.
+            inline constexpr uint16_t legacyExternalRouteV6 = uint16_t{0x0403U}; ///< EIGRP Option for Legacy External Route IPv6.
+            inline constexpr uint16_t internalRoute = uint16_t{0x0602U};         ///< EIGRP Option for Legacy Internal Route IPv6.
+            inline constexpr uint16_t externalRoute = uint16_t{0x0603U};         ///< EIGRP Option for Legacy External Route IPv6.
             inline constexpr uint16_t stub = uint16_t{0x0006U};                  ///< EIGRP Option for Stub.
             inline constexpr uint16_t authentication = uint16_t{0x0002U};        ///< EIGRP Option for Authentication.
         }

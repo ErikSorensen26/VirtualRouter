@@ -12,7 +12,8 @@ do {                                                                            
     BuildEntry* entry = (builder).reserveHeader(type, staticHeader.totalLen);               \
     std::memcpy(entry->buffer, staticHeader.buffer, (staticHeader).totalLen);               \
     (headerObj).setBuffer(entry->buffer);                                                   \
-    (headerObj).setTrail(entry->buffer, (staticHeader).totalLen - headerObj.fixedSize);     \
+    if ((staticHeader).totalLen > (headerObj).fixedSize)                                    \
+        (headerObj).setTrail(entry->buffer, (staticHeader).totalLen - headerObj.fixedSize); \
 } while (0)
 
 #define RESTORE_FIXED_HEADER(builder, staticHeader, headerObj, type)                        \
@@ -41,6 +42,7 @@ struct StaticHeader
     StaticHeader(const StaticHeader& other)
         : totalLen(other.totalLen)
     {
+        if (!other.buffer) return;
         buffer = static_cast<uint8_t*>(std::malloc(totalLen));
         if (buffer) std::memcpy(buffer, other.buffer, totalLen);
     }

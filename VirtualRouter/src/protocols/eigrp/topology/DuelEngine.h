@@ -30,9 +30,9 @@ struct OutgoingQuery
 
 struct ActiveRoute
 {
-    std::unordered_map<IPAddress, OutgoingQuery> pendingQueries;
-    std::vector<std::pair<IPAddress, const ReceivedRoute&>> possibleRoutes;
     IPPrefix activePrefix;
+    std::map<IPAddress, OutgoingQuery> pendingQueries;
+    std::vector<std::pair<IPAddress, const ReceivedRoute&>> possibleRoutes;
     std::set<std::pair<IPAddress, uint32_t>> remoteSources;
     RouteInfo* originRoute = nullptr;
     IPAddress originNeighbor;
@@ -63,6 +63,7 @@ public:
     void processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedRoutes, Neighbor& nbr, uint32_t recvSeq);
 
     void updateSuccessors(std::vector<TopologyEntry*>& entry, const IPAddress& neighborIp);
+    bool recalculateSuccessors(TopologyEntry* entry);
 
     void recalculateAllRoutes();
 
@@ -75,7 +76,6 @@ private:
 
     void processReceivedRoute(const ReceivedRoute& newRoute, const Neighbor& neighbor);
     void processReceivedActiveRoute(const ReceivedRoute& newRoute, const Neighbor& neighbor);
-    bool recalculateSuccessors(TopologyEntry* entry);
     bool recalculateDistances(TopologyEntry* entry, uint64_t localMetric);
 
     // Lists

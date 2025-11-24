@@ -55,7 +55,6 @@ Interface* Global::addInterface(InterfaceType interfaceType, const HwIfaceInfo& 
     {
         return nullptr;
     }
-    engine.hwManager->bringUp(hwInfo.iface);
     InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), hwInfo, debug};
     interfaceList[key] = new Interface(iface);
 
@@ -83,9 +82,8 @@ bool Global::removeInterface(uint32_t key)
     std::lock_guard<std::mutex> lock(interfaceMutex);
     if (auto it = interfaceList.find(key); it != interfaceList.end())
     {
-        std::string hwIface = it->second->configs.hwInfo.iface;
+        std::string hwIface = it->second->configs.hwInfo.ifname;
         delete interfaceList[key];
-        engine.hwManager->bringDown(hwIface);
         interfaceList.erase(key);
         return true;
     }

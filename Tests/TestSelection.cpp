@@ -114,6 +114,8 @@ void runWithFilter(const std::string& filter)
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
+    ::testing::GTEST_FLAG(catch_exceptions) = false;
+    ::testing::GTEST_FLAG(install_failure_signal_handler) = false;
     std::ifstream defaultFile(defaultSuitePath);
     if (defaultFile)
     {

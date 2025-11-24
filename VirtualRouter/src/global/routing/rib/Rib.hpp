@@ -71,18 +71,14 @@ public:
         if (it == table.end())
         {
             b = new RibBucket<AddrType>();
-            if (!fib.insert(e.prefix, e.length, b->fibEntry)) throw std::runtime_error("Fib insert failed");
             b->addRoute(e);
+            fib.insert(e.prefix, e.length, b->fibEntry);
             table[key] = b;
         }
         else
         {
-            b = it->second;
-            b->addRoute(e);
+            return it->second->addRoute(e);
         }
-
-        b->selectBest();
-
         return true;
     }
 
@@ -93,6 +89,7 @@ public:
 
         auto it = table.find(key);
         if (it == table.end()) return false;
+        
 
         RibBucket<AddrType>* b = it->second;
         b->removeRoute(src, pid);
@@ -101,13 +98,9 @@ public:
         {
             table.erase(it);
             fib.erase(prefix, length);
-            std::atomic<RibEntry<AddrType>*>* oldFibEntry = b->fibEntry;
-            RCU::retire([oldFibEntry]{ delete oldFibEntry; });
-            delete b;
+            RCU::retire([b]{ delete b; });
             return true;
         }
-
-        b->selectBest();
 
         return true;
     }
@@ -119,11 +112,18 @@ public:
         std::lock_guard<std::mutex> lock(ribMtx);
         for (auto& kv : table)
         {
-            delete kv.second->fibEntry;
             delete kv.second;
         }
 
         table.clear();
+    }
+
+    RibEntry<AddrType>* lookup(const uint8_t* addr)
+    {
+        AddrType out = 0;
+        for (size_t i = 0; i < sizeof(AddrType); i++)
+            out = (out << 8) | addr[i];
+        return lookup(out);
     }
 
     RibEntry<AddrType>* lookup(AddrType addr)

@@ -14,7 +14,8 @@ namespace Protocol
         : currentInterface(&CurrentInterface),
         global(CurrentInterface.routingInstance->global)
     {
-        initiateArp();
+        if (global.routingEnabled)
+            initiateArp();
     }
 
     void Arp::initiateArp()
@@ -327,7 +328,7 @@ namespace Protocol
         // Ignore gratuitous ARP if disabled
         bool garp = std::memcmp(ip, tip, 4) == 0;
         if (garp && (!global.configs.arp.acceptGratiutous.load(std::memory_order_relaxed) ||
-            !running.load(std::memory_order_relaxed) ||
+            !running.load(std::memory_order_relaxed) || !global.routingEnabled ||
             std::memcmp(mac, Variable::Mac::broadcast, 6) == 0))
             return;
 
@@ -505,7 +506,7 @@ namespace Protocol
 
     void Arp::scheduleRequest(uint32_t targetIp, ArpCacheEntry& entry)
     {
-        if (!running.load(std::memory_order_relaxed)) return;
+        if (!running.load(std::memory_order_relaxed) || !global.routingEnabled) return;
 
         uint32_t interval;
         uint32_t retries;

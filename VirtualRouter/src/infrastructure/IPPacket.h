@@ -13,8 +13,8 @@ namespace Protocol
 {
     namespace IPPacket
     {
-        void reserveIpv4(Interface* currentInterface, PacketBuilder& packetInfo);
-        void reserveIpv6(Interface* currentInterface, PacketBuilder& packetInfo);
+        void reserveIpv4(PacketBuilder& packetInfo);
+        void reserveIpv6(PacketBuilder& packetInfo);
 
         struct BuildIP
         {
@@ -43,7 +43,7 @@ namespace Protocol
     }
     namespace UDPPacket
     {
-        void reserveUDP(Interface* currentInterface, PacketBuilder& packetInfo, AddressFamily af);
+        void reserveUDP(PacketBuilder& packetInfo, AddressFamily af);
 
         // Sets the UPD header in PacketInfo
         void buildUdp(

@@ -50,7 +50,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     }
 
     startDampening();
-    tmgr.startHello();
+    tmgr.startHelloHelper();
 }
 
 EigrpInterface::~EigrpInterface()
@@ -88,8 +88,6 @@ EigrpInterface::~EigrpInterface()
             currentInterface->eigrpInterfaceList.erase(id);
         }
     }
-
-    ntable.clear();
 }
 
 void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& changedRoutes)

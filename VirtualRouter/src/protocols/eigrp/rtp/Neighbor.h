@@ -18,8 +18,8 @@ class EigrpInterface;
 
 enum class TLVType : uint16_t
 {
-    LEGACY_V4 = 0x0000,
-    WIDE_V4 = 0x0100,
+    LEGACY_V4 = 0x0100,
+    WIDE_V4 = 0x0600,
     LEGACY_V6 = 0x0400,
     WIDE_V6 = 0x0600
 };
@@ -69,12 +69,12 @@ public:
 
     const Version version;
     const TLVType tlvType;
-    uint8_t macAddress[6];
+    uint8_t macAddress[6] = {0};
     uint32_t routerID;
 
     bool pushAck(uint32_t ack);
     bool popAck(uint32_t& ack);
-    bool removeAck(uint32_t ack);
+    void removeAck(uint32_t ack);
     bool hasAck(uint32_t ack);
 
     // Timers

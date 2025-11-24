@@ -629,7 +629,7 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 		std::string type = commandStream[1];
 		terminal.interfaceID = std::stof(commandStream[2]);
 		InterfaceType interfaceType = getInterfaceType(type);
-		std::string hwIface;
+		uint32_t hwIface;
 		int id = static_cast<int>(std::floor(terminal.interfaceID));
 		uint32_t key = calculateInterfaceKey(interfaceType, terminal.interfaceID);
 		if (!global.getInterface(key))

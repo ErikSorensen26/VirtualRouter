@@ -50,7 +50,7 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
 
         if (af == AddressFamily::IPv4)
         {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(interface->configs.key, base, *pairIt->second, *interface);
+            auto ifaceIt = eigrpInterfaceList.try_emplace(interface->configs.key, base, *intConfig, *interface);
             EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
             base.getTopology().synchronizeConnected(*eigrpIfacePtr);
             interface->eigrpInterfaceList[as].IPv4 = eigrpIfacePtr;
@@ -58,7 +58,7 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
         }
         else if (af == AddressFamily::IPv6)
         {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(interface->configs.key, base, *pairIt->second, *interface);
+            auto ifaceIt = eigrpInterfaceList.try_emplace(interface->configs.key, base, *intConfig, *interface);
             EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
             base.getTopology().synchronizeConnected(*eigrpIfacePtr);
             interface->eigrpInterfaceList[as].IPv6 = eigrpIfacePtr;
@@ -70,57 +70,76 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
 
 void InterfaceManager::refreshInterfaceList()
 {
-    // Lock global interface state
-    std::shared_lock<std::shared_mutex> sysLock(base.routingInstance->interfaceMutex);
-    std::unique_lock<std::shared_mutex> lock(interfaceMutex);
+    std::vector<std::pair<bool, void*>> interfacesToProcess;
+    std::vector<std::map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
 
-    // Remove shutdown interfaces
-    for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)
+    if (base.routerID() == 0)
+        base.calculateRID();
+
     {
-        auto& iface = it->second;
-        if (!iface.getIface() || iface.getIface()->shutdownFlag.load(std::memory_order_relaxed))
+        // Lock global interface state
+        std::shared_lock<std::shared_mutex> sysLock(base.routingInstance->interfaceMutex);
+        std::unique_lock<std::shared_mutex> lock(interfaceMutex);
+
+        // Remove shutdown interfaces
+        for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)
         {
-            it = eigrpInterfaceList.erase(it);
+            if (!it->second.getIface() || it->second.getIface()->shutdownFlag.load(std::memory_order_relaxed))
+            {
+                interfacesToRemove.push_back(eigrpInterfaceList.extract(it++));
+            }
+            else
+            {
+                ++it;
+            }
         }
-        else ++it;
+
+        auto& config = base.getGlobalConfigMgr();
+        bool isNamed = base.isNamed();
+        uint32_t as = base.getAS();
+
+        for (const auto& [id, interface] : base.routingInstance->interfaceList)
+        {
+            if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
+                continue;
+
+            uint8_t ipAddress[4];
+            bool ipv6Contained = false;
+            auto& ipInfo = interface->configs;
+
+            if (isNamed)
+                ipv6Contained = eigrpInterfaceConfigList.contains(ipInfo.key) &&
+                                !eigrpInterfaceConfigList[ipInfo.key]->shutdown;
+
+            ipInfo.ipv4.getAddress(ipAddress);
+            if (!ipv6Contained)
+                ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&
+                                interface->routingInstance == base.routingInstance;
+
+            bool inRange = config.isInNetworkRange(ipAddress) || ipv6Contained;
+            auto it = eigrpInterfaceList.find(id);
+
+            if (inRange)
+            {
+                bool exists = it != eigrpInterfaceList.end();
+                if (exists)
+                    interfacesToProcess.push_back({exists, &it->second});
+                else
+                    interfacesToProcess.push_back({exists, interface});
+            }
+            else if (it != eigrpInterfaceList.end())
+            {
+                interfacesToRemove.push_back(eigrpInterfaceList.extract(it));
+            }
+        }
     }
 
-    auto& config = base.getGlobalConfigMgr();
-    bool isNamed = base.isNamed();
-    uint32_t as = base.getAS();
-
-    for (const auto& [id, interface] : base.routingInstance->interfaceList)
+    for (auto& [exists, interface] : interfacesToProcess)
     {
-        if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
-            continue;
-
-        uint8_t ipAddress[4];
-        bool ipv6Contained = false;
-        auto& ipInfo = interface->configs;
-
-        if (isNamed)
-            ipv6Contained = eigrpInterfaceConfigList.contains(ipInfo.key) &&
-                            !eigrpInterfaceConfigList[ipInfo.key]->shutdown;
-
-        ipInfo.ipv4.getAddress(ipAddress);
-        if (!ipv6Contained)
-            ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&
-                            interface->routingInstance == base.routingInstance;
-
-        bool inRange = config.isInNetworkRange(ipAddress) || ipv6Contained;
-        auto it = eigrpInterfaceList.find(id);
-
-        if (inRange)
-        {
-            if (it == eigrpInterfaceList.end())
-                createInterface(interface);
-            else
-                base.getTopology().synchronizeConnected(it->second);
-        }
-        else if (it != eigrpInterfaceList.end())
-        {
-            eigrpInterfaceList.erase(it);
-        }
+        if (exists)
+            base.getTopology().synchronizeConnected(*(reinterpret_cast<EigrpInterface*>(interface)));
+        else
+            createInterface(reinterpret_cast<Interface*>(interface));
     }
 }
 

@@ -12,6 +12,7 @@
 #include <PacketSlot.hpp>
 #include <HeaderHelpers.hpp>
 #include <iostream>
+#include <Ifname.h>
 
 #ifndef HOT
 #define HOT __attribute__((hot))
@@ -21,13 +22,6 @@
 #endif
 
 static inline size_t roundUp(size_t v, size_t a) { return (v + a - 1) & ~(a - 1); }
-
-static inline int ifindex_or_throw(const char* ifname)
-{
-    int idx = if_nametoindex(ifname);
-    if (idx == 0) throw std::runtime_error(std::string("if_nametoindex failed: ") + ifname);
-    return idx;
-}
 
 static void set_nonblock(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -161,7 +155,7 @@ void EgressPacket::setupRing()
 
 void EgressPacket::bindIface()
 {
-    const int ifidx = ifindex_or_throw(opts.ifname.c_str());
+    const int ifidx = ifnametoindex(opts.ifname.c_str());
 
     sockaddr_ll sll{};
     sll.sll_family = AF_PACKET;

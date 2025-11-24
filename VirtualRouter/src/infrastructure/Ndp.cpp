@@ -24,7 +24,8 @@ namespace Protocol
         configs.reachableTime = global.configs.ndp.reachableTime.load(std::memory_order_relaxed);
         configs.interfaceLimit = global.configs.ndp.interfaceLimit.load(std::memory_order_relaxed);
 
-        initializeNdp();
+        if (global.routingEnabled)
+            initializeNdp();
     }
 
     void Ndp::initializeNdp()
@@ -593,7 +594,7 @@ namespace Protocol
 
     void Ndp::neighborSolicitation(PacketBuilder& packet, const IPAddress& targetIp, const uint8_t* currentMac)
     {
-        IPPacket::reserveIpv6(currentInterface, packet);
+        IPPacket::reserveIpv6(packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -623,7 +624,7 @@ namespace Protocol
 
     void Ndp::neighborAdvertisement(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* targetIp)
     {
-        IPPacket::reserveIpv6(currentInterface, packet);
+        IPPacket::reserveIpv6(packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -658,7 +659,7 @@ namespace Protocol
 
     void Ndp::routeSolicitation(PacketBuilder& packet, const uint8_t* currentMac)
     {
-        IPPacket::reserveIpv6(currentInterface, packet);
+        IPPacket::reserveIpv6(packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -685,7 +686,7 @@ namespace Protocol
 
     void Ndp::routeAdvertisement(PacketBuilder& packet, const uint8_t* currentMac)
     {
-        IPPacket::reserveIpv6(currentInterface, packet);
+        IPPacket::reserveIpv6(packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;
@@ -857,7 +858,7 @@ namespace Protocol
 
         PacketBuilder packet(currentInterface);
 
-        IPPacket::reserveIpv6(currentInterface, packet);
+        IPPacket::reserveIpv6(packet);
         packet.reserveHeader(HeaderType::ICMPV6, 0); // Will set size later
 
         Icmpv6Header icmp;

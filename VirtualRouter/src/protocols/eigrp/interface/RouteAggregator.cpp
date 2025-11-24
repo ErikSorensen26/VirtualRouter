@@ -40,7 +40,7 @@ SummaryRoute* RouteAggregator::isSummarized(const IPPrefix& prefix)
 {
     for (auto& sum : summaryRoutes)
     {
-        if (sum.first.prefixLength > prefix.prefixLength &&
+        if (sum.first.prefixLength < prefix.prefixLength &&
             Functions::compareNetworkWithIp(sum.first.addr, prefix.addr, sum.first.prefixLength, iface.getBase().getAF()))
         {
             return &sum.second;
@@ -51,12 +51,13 @@ SummaryRoute* RouteAggregator::isSummarized(const IPPrefix& prefix)
 
 void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
 {
-    std::vector<TopologyEntry*> supressedRoutes;
-    std::vector<const RouteInfo*> supressedSummaries;
+    std::vector<IPPrefix> withdraws;
+    std::vector<TopologyEntry*> suppressedRoutes;
+    std::vector<const RouteInfo*> changedSummaries;
 
     for (auto& s : ss)
     {
-        bool valid = calculateSummary(*s);
+        auto [valid, changed] = calculateSummary(*s);
 
         if (!valid || s->summaryRoute.routeInfo.feasibleDistance == std::numeric_limits<uint64_t>::max())
         {
@@ -68,29 +69,35 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
                     if (auto sit = summaryRoutes.find(r); sit != summaryRoutes.end())
                     {
                         sit->second.suppressed = false;
-                        supressedSummaries.push_back(&sit->second.summaryRoute);
+                        changedSummaries.push_back(&sit->second.summaryRoute);
                     }
                     else if (auto eit = entries.find(r); eit != entries.end())
                     {
                         eit->second->summaries.erase(iface.interfaceKey);
-                        supressedRoutes.push_back(eit->second);
+                        suppressedRoutes.push_back(eit->second);
                     }
                 }
 
+                withdraws.push_back(s->summaryRoute.routeInfo.prefix);
+            }
+            else if (changed)
+            {
+                changedSummaries.push_back(&s->summaryRoute);
             }
 
             s->summarizedRoutes.clear();
         }
     }
-    iface.getBase().routeManager.synchronizeRoutes(supressedRoutes, {}, supressedSummaries);
+    if (!suppressedRoutes.empty() || !withdraws.empty() || !changedSummaries.empty())
+        iface.getBase().routeManager.synchronizeRoutes(suppressedRoutes, withdraws, changedSummaries);
 }
 
 void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
 {
-    bool valid = calculateSummary(s);
+    auto [valid, changed] = calculateSummary(s);
     std::vector<IPPrefix> withdraws;
     std::vector<TopologyEntry*> suppressedRoutes;
-    std::vector<const RouteInfo*> suppressedSummaries;
+    std::vector<const RouteInfo*> changedRoutes;
 
     if (!valid || s.summaryRoute.routeInfo.feasibleDistance == std::numeric_limits<uint64_t>::max())
     {
@@ -102,7 +109,7 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
                 if (auto sit = summaryRoutes.find(r); sit != summaryRoutes.end())
                 {
                     sit->second.suppressed = false;
-                    suppressedSummaries.push_back(&sit->second.summaryRoute);
+                    changedRoutes.push_back(&sit->second.summaryRoute);
                 }
                 else if (auto eit = entries.find(r); eit != entries.end())
                 {
@@ -116,14 +123,19 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
 
         s.summarizedRoutes.clear();
     }
+    else if (changed)
+    {
+        changedRoutes.push_back(&s.summaryRoute);
+    }
 
-    if (!withdraws.empty() || !suppressedRoutes.empty() || !suppressedSummaries.empty())
-        iface.getBase().routeManager.synchronizeRoutes(suppressedRoutes, {withdraws}, suppressedSummaries);
+    if (!withdraws.empty() || !suppressedRoutes.empty() || !changedRoutes.empty())
+        iface.getBase().routeManager.synchronizeRoutes(suppressedRoutes, {withdraws}, changedRoutes);
 }
 
-bool RouteAggregator::calculateSummary(SummaryRoute& s)
+std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
 {
     ReceivedRoute& r = s.summaryRoute.routeInfo;
+    uint64_t oldFD = r.feasibleDistance;
     auto& base = iface.getBase();
     auto& topology = iface.getTopController();
     auto& entries = topology.getTopologies();
@@ -180,12 +192,12 @@ bool RouteAggregator::calculateSummary(SummaryRoute& s)
         r.load = bestRoute->load;
         r.feasibleDistance = bestRoute->feasibleDistance;
         r.reportedDistance = bestRoute->reportedDistance;
-        return true;
+        return {true, r.feasibleDistance != oldFD };
     }
     else
     {
         r.feasibleDistance = std::numeric_limits<uint64_t>::max();
-        return false;
+        return {false, false};
     }
 }
 
@@ -247,6 +259,7 @@ void RouteAggregator::installSummary(const IPPrefix& prefix, bool isAuto)
 {
     std::lock_guard<std::mutex> lock(mtx);
     ReceivedRoute r{};
+    r.prefix = prefix;
     auto it = summaryRoutes.emplace(prefix, SummaryRoute{RouteInfo{r}, isAuto, false, std::set<IPPrefix>{}});
     auto& s = it.first->second;
 
@@ -286,8 +299,8 @@ void RouteAggregator::withdrawSummary(const IPPrefix& prefix)
     auto it = summaryRoutes.find(prefix);
     if (it == summaryRoutes.end()) return;
 
-    std::vector<TopologyEntry*> supressedRoutes;
-    std::vector<const RouteInfo*> supressedSummaries;
+    std::vector<TopologyEntry*> suppressedRoutes;
+    std::vector<const RouteInfo*> suppressedSummaries;
 
     auto& entries = iface.getTopController().getTopologies();
     for (auto r : it->second.summarizedRoutes)
@@ -295,16 +308,16 @@ void RouteAggregator::withdrawSummary(const IPPrefix& prefix)
         if (auto sit = summaryRoutes.find(r); sit != summaryRoutes.end())
         {
             sit->second.suppressed = false;
-            supressedSummaries.push_back(&sit->second.summaryRoute);
+            suppressedSummaries.push_back(&sit->second.summaryRoute);
         }
         else if (auto eit = entries.find(r); eit != entries.end())
         {
             eit->second->summaries.erase(iface.interfaceKey);
-            supressedRoutes.push_back(eit->second);
+            suppressedRoutes.push_back(eit->second);
         }
     }
 
-    iface.getBase().routeManager.synchronizeRoutes(supressedRoutes, {prefix}, supressedSummaries);
+    iface.getBase().routeManager.synchronizeRoutes(suppressedRoutes, {prefix}, suppressedSummaries);
     summaryRoutes.erase(it);
 }
 }

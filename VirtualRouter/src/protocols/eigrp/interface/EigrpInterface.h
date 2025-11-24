@@ -94,12 +94,12 @@ private:
     Interface* currentInterface; ///< Pointer to the current network interface.
     InterfaceConfigs* currentInterfaceInfo; ///< Pointer to the current interface's IP information.
 
+    NeighborTable ntable;
     AuthHandler auth;
     InterfaceMetrics metrics;
     ReliableTransport rtp;
     RouteAggregator aggregator;
     InterfaceTimers tmgr;
-    NeighborTable ntable;
     TopologyController topology;
 };
 }

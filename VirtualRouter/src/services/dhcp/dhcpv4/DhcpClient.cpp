@@ -84,7 +84,7 @@ void Protocol::DhcpClient::handleDhcpPacket(const DhcpHeader& dhcp)
 bool Protocol::DhcpClient::buildDhcpDiscover(PacketBuilder& builder, const uint8_t* mac, const std::string& hostname)
 {
     // Reserve space (DHCP fixed header + rough TLV estimate)
-    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -156,7 +156,7 @@ bool Protocol::DhcpClient::buildDhcpRequest(PacketBuilder& builder, uint32_t tra
                                             uint32_t requestedIP, uint32_t serverID)
 {
     // Reserve space (DHCP fixed header + rough TLV estimate)
-    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -244,7 +244,7 @@ bool Protocol::DhcpClient::buildDhcpRequest(PacketBuilder& builder, uint32_t tra
 
 bool Protocol::DhcpClient::buildDhcpRelease(PacketBuilder& builder)
 {
-    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -305,7 +305,7 @@ bool Protocol::DhcpClient::buildDhcpRelease(PacketBuilder& builder)
 
 bool Protocol::DhcpClient::buildDhcpInform(PacketBuilder& builder, const std::string& hostname, const uint8_t* mac)
 {
-    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -749,7 +749,7 @@ void Protocol::DhcpClient::cancelLeaseTimers()
 void Protocol::DhcpClient::sendRenew()
 {
     PacketBuilder builder(currentInterface);
-    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
     auto* next = builder.nextBuildHeader();
     if (!next) return;
@@ -821,7 +821,7 @@ void Protocol::DhcpClient::sendRenew()
 void Protocol::DhcpClient::sendRebind()
 {
     PacketBuilder builder(currentInterface);
-    UDPPacket::reserveUDP(currentInterface, builder, AddressFamily::IPv4);
+    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
     auto* next = builder.nextBuildHeader();
     if (!next) return;

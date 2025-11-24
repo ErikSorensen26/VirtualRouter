@@ -99,22 +99,24 @@ public:
 
     VirtualRouter* routingInstance; ///< Routing instance coorsponding with the current process.
 
-    RouteManager routeManager;
-    std::unordered_map<IPAddress, Neighbor*> allNeighbors;
-    std::mutex neighborMutex;
-
 private:
+    const uint32_t asNumber; ///< Autonomous System number.
+    const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
 
-    EigrpConfig configMgr;
     InterfaceManager ifaceMgr;
+    EigrpConfig configMgr;
     GlobalAggregator aggregator;
     EigrpTopology topology;
 
     bool namedMode = false; ///< Indicates if running named mode.
-    const uint32_t asNumber; ///< Autonomous System number.
-    const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
     RouterID rid; ///< Router ID configuration.
     uint16_t virtualRouterID = 0x0000; ///< Virtual Router ID.
+
+public:
+    RouteManager routeManager;
+    std::unordered_map<IPAddress, Neighbor*> allNeighbors;
+    std::mutex neighborMutex;
+
 };
 
 class ClassicEigrp : public Eigrp

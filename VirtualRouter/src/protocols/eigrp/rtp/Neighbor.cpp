@@ -45,6 +45,18 @@ Neighbor::~Neighbor()
         iface.tlvTypes[tlvType].erase(ipAddress);
     if (iface.tlvTypes[tlvType].empty())
         iface.tlvTypes.erase(tlvType);
+
+    auto& table = iface.getNTable();
+    iface.getTimers().cancelNeighborTimers(*this);
+    iface.getBase().delGlobalNeighbor(ipAddress);
+    iface.getTopController().onNeighborDown(ipAddress);
+    
+    if (unicast)
+    {
+        auto& base = iface.getBase();
+        std::unique_lock<std::shared_mutex> lock(base.getConfigs().configsMutex);
+        base.getConfigs().unicastNeighbors[iface.interfaceKey].insert(ipAddress);
+    }
 }
 
 void Neighbor::clear()
@@ -90,7 +102,7 @@ bool Neighbor::popAck(uint32_t& ack)
     return true;
 }
 
-bool Neighbor::removeAck(uint32_t ack)
+void Neighbor::removeAck(uint32_t ack)
 {
     std::lock_guard<std::mutex> lock(ackMtx);
     std::erase(ackQueue, ack);
@@ -116,8 +128,8 @@ bool Neighbor::isActive() const noexcept
 void Neighbor::clearReliable()
 {
     {
-        currentReliable.store(0, std::memory_order_release);
         uint32_t current = currentReliable.load(std::memory_order_relaxed);
+        currentReliable.store(0, std::memory_order_release);
         if (current != 0)
             iface.getTimers().cancelRetransmissionTimer(reliableQueue[current].info);
         std::lock_guard<std::mutex> lock(reliableMtx);

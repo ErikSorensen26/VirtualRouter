@@ -204,11 +204,6 @@ void ReliableTransport::processUpdate(RTPInfo& info)
         sendAck(nbr, recvSeq);
     }
 
-    if (update.getFlagRestart())
-    {
-        ntable->onDown(*info.neighbor);
-    }
-
     if (update.getFlagEndOfTable())
     {
         nbr.eotRecv.store(true, std::memory_order_release);
@@ -237,6 +232,11 @@ void ReliableTransport::processUpdate(RTPInfo& info)
 
             // TODO implicit if no eot?
         }
+    }
+
+    if (update.getFlagRestart())
+    {
+        ntable->onDown(*info.neighbor);
     }
 }
 
