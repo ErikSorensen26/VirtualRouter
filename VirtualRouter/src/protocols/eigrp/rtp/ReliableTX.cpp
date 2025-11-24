@@ -117,8 +117,7 @@ void ReliableTransport::sendAck(Neighbor& neighbor, uint32_t seq)
 
 void ReliableTransport::sendCondAck(Neighbor& neighbor, uint32_t seq)
 {
-    iface.getIface();
-    //TODO
+    iface.getTimers().scheduleConditionalReceive(neighbor, seq);
 }
 
 void ReliableTransport::sendNullUpdate(Neighbor& neighbor)

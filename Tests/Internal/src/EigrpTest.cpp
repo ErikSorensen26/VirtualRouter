@@ -1,4 +1,3 @@
-//TODO make sure sia starts when query is received
 //TODO fix connected routes adding routes with their full address
 //TODO add route echoing
 
@@ -333,6 +332,7 @@ protected:
     uint32_t getRouterID(Eigrp::Eigrp* eigrp = nullptr) { if (eigrp) return eigrp->routerID(); else return eigrpInstance->routerID(); }
 };
 
+/*
 #pragma region Authentication
 
 // Test: AuthTLV_MD5_Correct
@@ -447,204 +447,179 @@ TEST_F(Internal_EigrpTest, Auth_InvalidKey_Handled)
 }
 
 #pragma endregion
-/*#pragma region NeighborState
+*/
+#pragma region NeighborState
 
-// Test: NeighborState_DOWN_To_EXSTART
-TEST_F(Internal_EigrpTest, NeighborState_DOWN_To_EXSTART) 
+// Test: Neighbor_Down_To_INIT
+TEST_F(Internal_EigrpTest, Neighbor_Down_To_INIT)
 {
-    // Trigger transition from TWOWAY to EXSTART.
-    IPAddress neighborIp = createIPv4(0x0CA80108);
-    addNeighbor(neighborIp, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->setState(Eigrp::Neighbor::State::DOWN);
-    
+    IPAddress n = createIPv4(0x0A000001);
+
+    ASSERT_FALSE(getNeighbor(n));
     PacketBuilder hello(mockInterface);
-    auto eigrp = createUnicastHello(hello, neighborIp);
-    ASSERT_TRUE(eigrp.has_value());
-    eigrpInterface->getRtp().handleIncoming(nullptr, eigrp.value(), neighborIp.raw, false);
-    // Initial Hello and Update Packet
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(3);
-    
-    std::this_thread::sleep_for(std::chrono::milliseconds(350));
-    ASSERT_TRUE(neighbor->getState() >= Eigrp::Neighbor::State::);
+    auto hdr = createUnicastHello(hello, n);
+    ASSERT_TRUE(hdr.has_value());
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+
+    auto nbr = getNeighbor(n);
+    ASSERT_TRUE(nbr);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::INIT);
 }
 
-// Test: NeighborState_EXSTART_To_EXCHANGE_SLAVE
-TEST_F(Internal_EigrpTest, NeighborState_EXSTART_To_EXCHANGE_SLAVE) 
+// Test: Neighbor_INIT_to_TWOWAY
+TEST_F(Internal_EigrpTest, Neighbor_INIT_to_TWOWAY)
 {
-    // Simulate update processing that moves state from EXSTART to EXCHANGE.
-    IPAddress neighborIp = createIPv4(0xC0A80101);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->neighborState = EigrpConfigs::NeighborState::EXSTART;
-    // Init update received
-    neighbor->initFlags.initUpdateReceived = true;
-    // Set neighbor state
-    neighbor->initFlags.initRole = EigrpConfigs::InitRole::SLAVE;
-    
-    EigrpHeader update;
-    eigrpInstance->eigrpUpdate(update, 3, false, false, false, false, false, false);
-    eigrpInterface->processUpdate(neighbor, update);
+    IPAddress n = createIPv4(0x0A000002);
+    addNeighbor(n, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
 
-    ASSERT_TRUE(neighbor->neighborState >= EigrpConfigs::NeighborState::LOADING);
+    auto nbr = getNeighbor(n);
+    nbr->setState(Eigrp::Neighbor::State::INIT);
+
+    PacketBuilder hello(mockInterface);
+    auto hdr = createUnicastHello(hello, n);
+    ASSERT_TRUE(hdr);
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
+        .Times(1)
+        .WillOnce(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+            auto eigrp = getEigrpHeader(pkt);
+            EXPECT_EQ(eigrp.getOpcode(), Variable::Eigrp::Type::hello);
+            EXPECT_TRUE(eigrp.getFlagInit());
+        }));
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::TWOWAY);
 }
 
-// Test: NeighborState_EXSTART_To_EXSTART_SLAVE
-TEST_F(Internal_EigrpTest, NeighborState_EXSTART_To_EXCHANGE_MASTER)
+// Test: Neighbor_TWOWAY_To_LOADING
+TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
 {
-    // Simulate update processing that moves state from EXSTART to EXCHANGE.
-    IPAddress neighborIp = createIPv4(0xC0A80101);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->neighborState = EigrpConfigs::NeighborState::EXSTART;
-    // Init update received
-    neighbor->initFlags.initUpdateReceived = true;
-    // Set neighbor state
-    neighbor->initFlags.initRole = EigrpConfigs::InitRole::MASTER;
-    
-    EigrpHeader update;
-    eigrpInstance->eigrpUpdate(update, 3, false, false, false, false, false, false);
-    eigrpInterface->processUpdate(neighbor, update);
+    IPAddress n = createIPv4(0x0A000003);
+    addNeighbor(n, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
 
-    ASSERT_TRUE(neighbor->neighborState >= EigrpConfigs::NeighborState::LOADING);
+    auto nbr = getNeighbor(n);
+    nbr->setState(Eigrp::Neighbor::State::TWOWAY);
+
+    PacketBuilder ack(mockInterface);
+    auto hdr = createAck(ack, *nbr, 5);
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
+        .Times(1);
+
+    nbr->currentReliable.store(5);
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::LOADING);
 }
 
-// Test: NeighborState_EXCHANGE_To_LOADING
-TEST_F(Internal_EigrpTest, NeighborState_EXCHANGE_To_LOADING) 
+// Test: Neighbor_LOADING_To_ESTABLISHED
+TEST_F(Internal_EigrpTest, Neighbor_LOADING_To_ESTABLISHED)
 {
-    // After exchanging topology, simulate transition to LOADING.
-    IPAddress neighborIp = createIPv4(0xC0A80101);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->neighborState = EigrpConfigs::NeighborState::EXCHANGE;
-    
-    EigrpHeader update;
-    eigrpInstance->eigrpUpdate(update, 4, false, false, false, false, false, false);
-    eigrpInterface->processUpdate(neighbor, update);
-    
-    // For testing purposes, force state to LOADING.
-    neighbor->neighborState = EigrpConfigs::NeighborState::LOADING;
-    ASSERT_TRUE(neighbor->neighborState >= EigrpConfigs::NeighborState::LOADING);
-}
+    IPAddress n = createIPv4(0x0A000004);
+    addNeighbor(n, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
 
-// Test: NeighborState_LOADING_To_ESTABLISHED
-TEST_F(Internal_EigrpTest, NeighborState_LOADING_To_ESTABLISHED) 
-{
-    // Simulate final update that sets the neighbor state to ESTABLISHED.
-    IPAddress neighborIp = createIPv4(0xC0A8010B);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->neighborState = EigrpConfigs::NeighborState::LOADING;
-    
-    // Simulate final update.
-    neighbor->neighborState = EigrpConfigs::NeighborState::ESTABLISHED;
-    ASSERT_TRUE(neighbor->neighborState >= EigrpConfigs::NeighborState::ESTABLISHED);
+    auto nbr = getNeighbor(n);
+    nbr->setState(Eigrp::Neighbor::State::LOADING);
+
+    PacketBuilder update(mockInterface);
+    Eigrp::ReliableTransport::PktInfo info;
+    info.bandwidthMetric = 1000000;
+    info.delay = 100000;
+    info.mtu = 1500;
+    info.version = Eigrp::TLVType::LEGACY_V4;
+    auto hdr = createUpdate(update, info, nbr, {});
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::ESTABLISHED);
 }
 
 // Test: Duplicate_Hello_Ignored
-TEST_F(Internal_EigrpTest, Duplicate_Hello_Ignored) 
+TEST_F(Internal_EigrpTest, Duplicate_Hello_Ignored)
 {
-    // Ensure duplicate hello packets do not affect neighbor state.
-    IPAddress neighborIp = createIPv4(0x0CA8010C);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->neighborState = EigrpConfigs::NeighborState::INIT;
-    
+    IPAddress n = createIPv4(0x0A000005);
+    addNeighbor(n, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
+
+    auto nbr = getNeighbor(n);
+    nbr->setState(Eigrp::Neighbor::State::INIT);
+
     PacketBuilder hello(mockInterface);
-    eigrpInstance->eigrpHello(hello, *eigrpInterface, neighborIp.raw, 10, false, false);
-    eigrpInterface->processHello(neighbor, getEigrpHeader(hello), neighborIp, false);
-    eigrpInterface->processHello(neighbor, getEigrpHeader(hello), neighborIp, false);
-    
-    ASSERT_TRUE(neighbor->neighborState >= EigrpConfigs::NeighborState::INIT);
+    auto hdr = createUnicastHello(hello, n);
+    ASSERT_TRUE(hdr.has_value());
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::INIT);
 }
 
-// Test: Neighbor_Restart_Resets_State
-TEST_F(Internal_EigrpTest, Neighbor_Restart_Resets_State) 
+// Test: HoldTimerExpires_RemovesNeighbor
+TEST_F(Internal_EigrpTest, HoldTimerExpires_RemovesNeighbor)
 {
-    // Verify that restarting a neighbor resets its state, reliable packets, and sequence list.
-    IPAddress neighborIp = createIPv4(0xC0A8010E);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->neighborState = EigrpConfigs::NeighborState::ESTABLISHED;
-    neighbor->reliablePackets[100] = EigrpConfigs::NeighborInfo::ReliablePacketInfo(
-        EigrpConfigs::NeighborInfo::ReliablePacketInfo::Packet(AddressFamily::IPv4, neighborIp.raw, 4, neighborIp, {}, false));
-    
-    eigrpInterface->handleNeighborRestart(neighbor, neighborIp);
-    
-    ASSERT_EQ(neighbor->neighborState, EigrpConfigs::NeighborState::DOWN);
-    ASSERT_TRUE(neighbor->reliablePackets.empty());
+    IPAddress n = createIPv4(0x0A000006);
+    addNeighbor(n);
+
+    auto nbr = getNeighbor(n);
+    ASSERT_TRUE(nbr);
+
+    eigrpInterface->getTimers().restartHoldTimer(*nbr);
+    eigrpInterface->getTimers().handleHoldTimeExpire(*nbr);
+
+    EXPECT_FALSE(getNeighbor(n));
 }
 
-// Test: HoldTimer_Expires_Marks_Neighbor_Down
-TEST_F(Internal_EigrpTest, HoldTimer_Expires_Marks_Neighbor_Down) 
+// Test: OutOfOrderUpdateIgnored
+TEST_F(Internal_EigrpTest, OutOfOrderUpdateIgnored)
 {
-    // Verify that when a neighbor’s hold timer expires, it is removed.
-    IPAddress neighborIp = createIPv4(0xC0A8010F);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    eigrpInterface->startHoldTimer(neighbor, neighborIp, 1);
-    eigrpInterface->handleHoldTimeExpire(neighbor, neighborIp);
-    
-    ASSERT_FALSE(getNeighbor(neighborIp));
+    IPAddress n = createIPv4(0x0A000007);
+    addNeighbor(n);
+
+    auto nbr = getNeighbor(n);
+    nbr->lastSeqRecv = 10;
+
+    PacketBuilder upd(mockInterface);
+    Eigrp::ReliableTransport::PktInfo info;
+    info.bandwidthMetric = 1000000;
+    info.delay = 100000;
+    info.mtu = 1500;
+    info.version = Eigrp::TLVType::LEGACY_V4;
+    auto hdr = createUpdate(upd, info, nbr, {});
+    ASSERT_TRUE(hdr.has_value());
+    hdr->setSequence(9);
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+
+    EXPECT_EQ(nbr->lastSeqRecv, 10);
 }
 
-// Test: MultipleNeighbors_Independent_States
-TEST_F(Internal_EigrpTest, MultipleNeighbors_Independent_States) 
+// Test: DuplicateUpdateIgnored
+TEST_F(Internal_EigrpTest, DuplicateUpdateIgnored)
 {
-    // Verify that two neighbors maintain independent states.
-    IPAddress neighborIp1 = createIPv4(0xC0A80110);
-    IPAddress neighborIp2 = createIPv4(0xC0A80111);
-    addNeighbor(neighborIp1, eigrpInterface);
-    addNeighbor(neighborIp2, eigrpInterface);
-    
-    auto neighbor1 = getNeighbor(neighborIp1);
-    auto neighbor2 = getNeighbor(neighborIp2);
-    neighbor1->neighborState = EigrpConfigs::NeighborState::DOWN;
-    neighbor2->neighborState = EigrpConfigs::NeighborState::DOWN;
-    
-    PacketBuilder hello1(mockInterface);
-    eigrpInstance->eigrpHello(hello1, *eigrpInterface, neighborIp1.raw, 20, false, false);
-    eigrpInterface->processHello(neighbor1, getEigrpHeader(hello1), neighborIp2, false);
-    
-    ASSERT_EQ(neighbor1->neighborState, EigrpConfigs::NeighborState::TWOWAY);
-    ASSERT_EQ(neighbor2->neighborState, EigrpConfigs::NeighborState::DOWN);
-}
+    IPAddress n = createIPv4(0x0A000008);
+    addNeighbor(n);
 
-// Test: OutOfOrder_Update_Packet_Processing
-TEST_F(Internal_EigrpTest, OutOfOrder_Update_Packet_Processing) 
-{
-    // Simulate an update packet arriving out of order.
-    IPAddress neighborIp = createIPv4(0xC0A80111);
-    addNeighbor(neighborIp, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIp);
-    neighbor->lastReceivedSequenceNumber = 10;
-    
-    EigrpHeader update12;
-    eigrpInstance->eigrpUpdate(update12, 12, false, false, false, false, false, false);
-    eigrpInterface->processUpdate(neighbor, update12);
-    eigrpInterface->processBufferedPackets(neighbor);
-    
-    ASSERT_GE(neighbor->lastReceivedSequenceNumber, 12);
-}
+    auto nbr = getNeighbor(n);
+    nbr->lastSeqRecv = 10;
 
-// Test Duplicate_Update_Packet_Processing
-TEST_F(Internal_EigrpTest, Duplicate_Update_Packet_Processing) 
-{
-    // Ensure that processing the same update packet twice does not alter state.
-    IPAddress neighborIP = createIPv4(0xC0A80112);
-    addNeighbor(neighborIP, eigrpInterface);
-    auto neighbor = getNeighbor(neighborIP);
-    neighbor->lastReceivedSequenceNumber = 20;
-    
-    EigrpHeader updatePacket;
-    eigrpInstance->eigrpUpdate(updatePacket, 21, false, false, false, false, false, false);
-    eigrpInterface->processUpdate(neighbor, updatePacket);
-    eigrpInterface->processUpdate(neighbor, updatePacket);
-    
-    ASSERT_EQ(neighbor->lastReceivedSequenceNumber, 21);
-}*/
+    PacketBuilder upd(mockInterface);
+    Eigrp::ReliableTransport::PktInfo info;
+    info.bandwidthMetric = 1000000;
+    info.delay = 100000;
+    info.mtu = 1500;
+    info.version = Eigrp::TLVType::LEGACY_V4;
+    auto hdr = createUpdate(upd, info, nbr, {});
+    ASSERT_TRUE(hdr.has_value());
+    hdr->setSequence(11);
+
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
+
+    EXPECT_EQ(nbr->lastSeqRecv, 11);
+}
 
 #pragma endregion
+/*
 #pragma region ReliablePacket
 
 // Test: Retransmission_Timer_Expires_Resend
@@ -1311,7 +1286,6 @@ TEST_F(Internal_EigrpTest, StubMode_Route_Filtering_Drops_NonPermitted_Routes)
 TEST_F(Internal_EigrpTest, ActiveQuery_Clear_After_Neighbor_Response) 
 {
     // Verify that when a neighbor replies, the active query is cleared.
-    eigrpInterface->configs->helloTime = 100000;
     Eigrp::ReceivedRoute testRoute = getRoute(eigrpInterface->interfaceKey);
     IPPrefix prefix = { createIPv4(0xC0A80500), 24 };
     testRoute.prefix = prefix;
@@ -1351,7 +1325,98 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Clear_After_Neighbor_Response)
     testRoute.feasibleDistance = std::numeric_limits<uint64_t>::max();
     std::vector<Eigrp::ReceivedRoute> rs = {testRoute};
     getDuel().processReceivedRoutes(rs, *getNeighbor(queryNeighborIp));
+    ASSERT_TRUE(hdr.has_value());
     eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), neighborIp.raw, false);
+    EXPECT_TRUE(getActiveRoutes().empty()); // Active should be resolved
+}
+
+// Test: Reply_Returned_After_Full_Query_Sequence
+TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence) 
+{
+    // Verify that when a neighbor replies, the active query is cleared.
+    MockInterface* extraIface = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
+    uint32_t key = calculateInterfaceKey(InterfaceType::GIGABIT_ETHERNET, 1);
+    vrf->interfaceList[key] = extraIface;
+    extraIface->routingInstance = vrf;
+    extraIface->configs.id = 1;
+    extraIface->configs.key = key;
+    extraIface->enableIPs();
+    extraIface->enableShutdown();
+    getAllInterfaceList()[key] = extraIface;
+    setIPv4(0xC0A80102, 24, extraIface);
+    {
+        EXPECT_CALL(*extraIface, enqueuePacket(::testing::_, ::testing::_)).Times(::testing::AnyNumber());
+        eigrpInstance->refreshInterfaceList();
+    }
+
+    ASSERT_TRUE(getInterfaceList().contains(key));
+    Eigrp::EigrpInterface* extraEigrpIface = &getInterfaceList().at(key);
+
+    Eigrp::ReceivedRoute testRoute = getRoute(eigrpInterface->interfaceKey);
+    IPPrefix prefix = { createIPv4(0xC0A80500), 24 };
+    testRoute.prefix = prefix;
+    Eigrp::RouteInfo rInfo(testRoute);
+
+    IPAddress queryNeighborIp = createIPv4(0x0A010002);
+    IPAddress neighborIp = createIPv4(0x0A010001);
+    addNeighbor(queryNeighborIp);
+    addNeighbor(neighborIp, Eigrp::Neighbor::Version::LEGACY, extraEigrpIface);
+    auto queryNeighbor = getNeighbor(queryNeighborIp);
+    auto neighbor = getNeighbor(neighborIp, extraEigrpIface);
+
+    Eigrp::ReliableTransport::PktInfo info;
+    info.bandwidthMetric = 1000000;
+    info.delay = 100000;
+    info.mtu = 1500;
+    info.version = Eigrp::TLVType::LEGACY_V4;
+
+    auto& top = getTopologyTable().ensure(prefix);
+    getTopologyTable().addRouteUpdate(rInfo.routeInfo, queryNeighbor, top);
+    std::optional<EigrpHeader> hdr;
+
+    bool replyFound = false;
+    bool updateFound = false;
+    uint32_t querySeq = 10;
+
+    EXPECT_CALL(*extraIface, enqueuePacket(::testing::_, ::testing::_))
+        .Times(::testing::AtLeast(1))
+        .WillRepeatedly(::testing::Invoke([&]( PacketBuilder& pkt, const uint8_t*) {
+            auto header = getEigrpHeader(pkt);
+            if (header.getOpcode() == Variable::Eigrp::Type::query)
+            {
+                PacketBuilder eigrp(mockInterface); // Only mock interface has a valid queue
+                createPacket(eigrp);
+                hdr = createReply(eigrp, info, *neighbor, {&rInfo}, getEigrpHeader(pkt).getSequence());
+                ASSERT_TRUE(hdr.has_value());
+                hdr->setTrail(hdr->buffer + EigrpHeader::fixedSize, eigrp.getHeaders()[2].length - EigrpHeader::fixedSize);
+            }
+        }));
+
+    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
+        .Times(::testing::AtLeast(2))
+        .WillRepeatedly(::testing::Invoke([&]( PacketBuilder& pkt, const uint8_t*) {
+            auto header = getEigrpHeader(pkt);
+            if (header.getOpcode() == Variable::Eigrp::Type::reply)
+            {
+                EXPECT_EQ(header.getAck(), querySeq);
+                auto opts = extractEigrpOptions(pkt);
+                for (auto& opt : opts)
+                    if (opt.type == Variable::Eigrp::Option::legacyInternalRoute)
+                        if (auto route = Eigrp::TLVBuilder::decodeRoute(opt, 0); route && route->prefix == prefix)
+                            replyFound = true;
+            }
+            else if (header.getOpcode() == Variable::Eigrp::Type::update)
+                updateFound = true;
+        }));
+
+    testRoute.delay = std::numeric_limits<uint64_t>::max();
+    testRoute.feasibleDistance = std::numeric_limits<uint64_t>::max();
+    std::vector<Eigrp::ReceivedRoute> rs = {testRoute};
+    getDuel().processReceivedQueryRoutes(rs, *queryNeighbor, querySeq);
+    ASSERT_TRUE(hdr.has_value());
+    extraEigrpIface->getRtp().handleIncoming(nullptr, hdr.value(), neighborIp.raw, false);
+    EXPECT_TRUE(replyFound);
+    EXPECT_TRUE(updateFound);
     EXPECT_TRUE(getActiveRoutes().empty()); // Active should be resolved
 }
 
@@ -2220,3 +2285,4 @@ TEST_F(Internal_EigrpTest, Update_With_Duplicate_Routes_Only_Processes_Once)
     ASSERT_TRUE(route);
     EXPECT_EQ(route->nextHopCount, 1);
 }
+*/

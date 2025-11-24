@@ -36,7 +36,7 @@ std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const
         if (!route)
             continue;
 
-        if (route->topology && route->topology->summaries.count(iface.interfaceKey) > 0)
+        if (route->topology && (route->topology->summaries.count(iface.interfaceKey) > 0 || route->topology->state == TopologyEntry::State::ACTIVE))
             continue;
 
         if (splitHorizon && route->routeInfo.originInterface == iface.interfaceKey && route->routeInfo.routeType != RouteType::SUMMARY)

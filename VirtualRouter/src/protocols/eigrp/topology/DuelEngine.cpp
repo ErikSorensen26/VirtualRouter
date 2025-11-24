@@ -280,7 +280,7 @@ void DuelEngine::setActive(const std::vector<IPPrefix>& prefixes, const IPAddres
         }
     }
 
-    if (seq || activeRoutes.empty())
+    if (activeRoutes.empty())
         return;
 
     std::unordered_set<EigrpInterface*> multicastQueryInterfaces;
@@ -407,8 +407,6 @@ void DuelEngine::concludeActive(ActiveRoute& activeRoute)
     else
         entry->state = TopologyEntry::State::PASSIVE;
 
-    base.routeManager.synchronizeRoute(*entry);
-
     for (const auto& src : activeRoute.remoteSources)
     {
         auto it = base.allNeighbors.find(src.first);
@@ -418,5 +416,6 @@ void DuelEngine::concludeActive(ActiveRoute& activeRoute)
     }
 
     activeRoutes.erase(activeRoute.activePrefix);
+    base.routeManager.synchronizeRoute(*entry);
 }
 }
