@@ -36,7 +36,7 @@ std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const
         if (!route)
             continue;
 
-        if (route->topology && (route->topology->summaries.count(iface.interfaceKey) > 0 || route->topology->state == TopologyEntry::State::ACTIVE))
+        if (route->topology && (route->topology->isSuppressed(iface.interfaceKey) || route->topology->state == TopologyEntry::State::ACTIVE))
             continue;
 
         if (splitHorizon && route->routeInfo.originInterface == iface.interfaceKey && route->routeInfo.routeType != RouteType::SUMMARY)
@@ -78,7 +78,7 @@ void TopologyController::onNeighborDown(const IPAddress& neighborIp)
     for (auto& [destination, entry] : duel.topologyTable.entries())
     {
         // If this neighbor was advertising the route
-        if (auto it = entry->routesByNeighbor.find(neighborIp); it != entry->routesByNeighbor.end())
+        if (auto it = entry->routesBySource.find(neighborIp); it != entry->routesBySource.end())
         {
             affectedRoutes.push_back({entry, &it->second});
         }
@@ -97,8 +97,12 @@ void TopologyController::onNeighborDown(const IPAddress& neighborIp)
 
     // Remove the neighbor routes from topology
     duel.topologyTable.pruneNeighbor(neighborIp);
+    duel.updateSuccessors(affectedTopologies);
+}
 
-    duel.updateSuccessors(affectedTopologies, neighborIp);
+void TopologyController::refreshSuppression(std::vector<TopologyEntry*>& entries)
+{
+    duel.refreshSuppression(entries, &iface);
 }
 
 void TopologyController::processReceivedRoutes(std::vector<ReceivedRoute>& routes, Neighbor& neighbor)
@@ -121,8 +125,18 @@ void TopologyController::processSIAReply(Neighbor& neighbor, uint32_t seq)
     duel.processSIAReply(neighbor, seq);
 }
 
+void TopologyController::markRouteUnreachable(RouteInfo& route, const IPAddress& neighborIp, TopologyEntry& entry)
+{
+    duel.topologyTable.markRouteUnreachable(route, neighborIp, entry);
+}
+
 TopologyEntry* TopologyController::findEntry(const IPPrefix& prefix)
 {
     return duel.topologyTable.find(prefix);
+}
+
+TopologyEntry& TopologyController::ensure(const IPPrefix& prefix)
+{
+    return duel.topologyTable.ensure(prefix);
 }
 }

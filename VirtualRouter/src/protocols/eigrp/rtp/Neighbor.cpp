@@ -41,12 +41,12 @@ Neighbor::Neighbor(EigrpInterface& iface, InterfaceTimers& tmgr, const IPAddress
 
 Neighbor::~Neighbor()
 {
+    setState(State::DOWN);
     if (!unicast)
         iface.tlvTypes[tlvType].erase(ipAddress);
     if (iface.tlvTypes[tlvType].empty())
         iface.tlvTypes.erase(tlvType);
 
-    auto& table = iface.getNTable();
     iface.getTimers().cancelNeighborTimers(*this);
     iface.getBase().delGlobalNeighbor(ipAddress);
     iface.getTopController().onNeighborDown(ipAddress);

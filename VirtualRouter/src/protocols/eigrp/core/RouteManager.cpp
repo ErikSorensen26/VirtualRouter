@@ -9,8 +9,6 @@
 #include <InterfaceConfigs.h>
 #include <HardwareManager.h>
 
-#include <iostream>
-
 namespace Eigrp
 {
 
@@ -35,52 +33,23 @@ void RouteManager::withdrawRoutes(const std::vector<IPPrefix>& withdraws)
         withdrawRoute(prefix);
 }
 
-void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries, const std::vector<IPPrefix>& withdraws, const std::vector<const RouteInfo*>& individuals)
+void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)
 {
-    for (const auto& pfx : withdraws)
-        withdrawRoute(pfx);
-
     uint8_t scale = base.getGlobalConfigMgr().getRibScale();
 
     std::vector<const RouteInfo*> changedRoutes;
-
-    auto individual = [&]<typename AddrType>(const RouteInfo* entry)
-    {
-        RibEntry<AddrType> ribEntry;
-
-        ribEntry.addNextHop(
-            af == AddressFamily::IPv4 ? readU32(entry->routeInfo.nextHop.raw) : readU128(entry->routeInfo.nextHop.raw),
-            entry->routeInfo.originInterface,
-            1
-        );
-        ribEntry.prefix = af == AddressFamily::IPv4
-            ? readU32(entry->routeInfo.prefix.addr)
-            : readU128(entry->routeInfo.prefix.addr);
-        ribEntry.length = entry->routeInfo.prefix.prefixLength;
-        ribEntry.source = RouteSource::EIGRP;
-        ribEntry.processId = as;
-        ribEntry.adminDistance = entry->routeInfo.adminDistance;
-        ribEntry.metric = entry->routeInfo.feasibleDistance * scale;
-
-        if (rib.addRoute<AddrType>(ribEntry));
-            changedRoutes.push_back(entry);
-    };
 
     if (af == AddressFamily::IPv4)
     {
         for (const auto& entry : entries)
             if (auto r = syncRoute<uint32_t>(entry, scale); r)
                 changedRoutes.push_back(r);
-        for (const auto& entry : individuals)
-            individual.operator()<uint32_t>(entry);
     }
     else
     {
         for (const auto& entry : entries)
             if (auto r = syncRoute<__uint128_t>(entry, scale); r)
                 changedRoutes.push_back(r);
-        for (const auto& entry : individuals)
-            individual.operator()<__uint128_t>(entry);
     }
 
     if (!changedRoutes.empty())

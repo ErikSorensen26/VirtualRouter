@@ -23,6 +23,7 @@ public:
     std::vector<Neighbor*> lookupUnicast();
     size_t size();
     void onDown(Neighbor& neighbor);
+    void resync();
     void startGracefulRestart(Neighbor& neighbor);
     void cancelAllHoldTimers();
     bool validatePTP(const IPAddress& neighborIp);

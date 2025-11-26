@@ -37,7 +37,11 @@ public:
     ReliableTransport(EigrpInterface& iface);
     ~ReliableTransport();
 
+    enum class Resync { NONE, INIT, REPLY };
+
     void handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const uint8_t* neighborIp, bool multicast);
+
+    std::atomic<bool> pendingPeerTermination{false};
 
     void sendHello();
     void sendUnicastHello(const IPAddress& neighborIp);
@@ -45,8 +49,9 @@ public:
     void sendAck(Neighbor& neighbor, uint32_t seqNum);
     void sendCondAck(Neighbor& neighbor, uint32_t seqNum);
     void sendNullUpdate(Neighbor& neighbor);
-    void sendFullTopology(Neighbor& neighbor);
+    void sendFullTopology(Neighbor& neighbor, Resync resync = Resync::NONE);
     void sendUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& routes);
+    void sendPoisenedUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& routes);
     void sendQuery(const std::vector<ActiveRoute*>& routes);
     void sendUnicastQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& routes);
     void sendReply(Neighbor& neighbor, const std::vector<const RouteInfo*>& routes, uint32_t seq);

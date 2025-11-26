@@ -12,10 +12,11 @@ namespace Eigrp
 {
 struct SummaryRoute
 {
-    RouteInfo summaryRoute;
+    TopologyEntry* summaryEntry = nullptr;
+    RouteInfo* summaryRoute = nullptr;
     bool isAuto = false;
-    bool suppressed = false;
-    std::set<IPPrefix> summarizedRoutes;
+    std::set<IPPrefix> summarizedRoutes = {};
+    uint64_t bestFD = std::numeric_limits<uint64_t>::max();
 };
 
 class RouteAggregator

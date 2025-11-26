@@ -39,8 +39,8 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     ReceivedRoute r;
     r.originInterface = iface.interfaceKey;
     r.bandwidth = base.isNamed()
-      ? interface->configs.hwInfo.bandwidth
-      : interface->configs.bandwidth.load(std::memory_order_relaxed);
+        ? interface->configs.hwInfo.bandwidth
+        : interface->configs.bandwidth.load(std::memory_order_relaxed);
     r.delay = interface->configs.delay.load(std::memory_order_relaxed) * 10'000'000;
     r.load = interface->configs.load.load(std::memory_order_relaxed);
     r.load = interface->configs.reliability.load(std::memory_order_relaxed);
@@ -90,14 +90,14 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     {
         iface.connectedRoutes.erase(route);
         if (auto* entry = duel.topologyTable.find(route); entry)
-            if (auto rit = entry->routesByNeighbor.find(connected); rit != entry->routesByNeighbor.end())
+            if (auto rit = entry->routesBySource.find(connected); rit != entry->routesBySource.end())
             {
                 duel.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
                 updates.push_back(entry);
             }
     }
 
-    duel.updateSuccessors(updates, connected);
+    duel.updateSuccessors(updates);
 }
 
 void EigrpTopology::clearConnected(EigrpInterface& iface)
@@ -108,7 +108,7 @@ void EigrpTopology::clearConnected(EigrpInterface& iface)
     {
         if (auto* entry = duel.topologyTable.find(*it); entry)
         {
-            if (auto rit = entry->routesByNeighbor.find(connected); rit != entry->routesByNeighbor.end())
+            if (auto rit = entry->routesBySource.find(connected); rit != entry->routesBySource.end())
             {
                 duel.topologyTable.markRouteUnreachable(rit->second, connected, *entry);
                 updates.push_back(entry);
@@ -117,8 +117,7 @@ void EigrpTopology::clearConnected(EigrpInterface& iface)
         it = iface.connectedRoutes.erase(it);
     }
 
-    for (auto& entry : updates)
-        duel.recalculateSuccessors(entry);
+    duel.updateSuccessors(updates);
     base.routeManager.synchronizeRoutes(updates);
 }
 }

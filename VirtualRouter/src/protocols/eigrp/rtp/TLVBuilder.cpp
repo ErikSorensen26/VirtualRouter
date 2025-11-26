@@ -52,7 +52,7 @@ uint8_t TLVBuilder::encodeRouteOption(uint8_t* out, size_t maxSize, const RouteI
     return static_cast<uint8_t>(data.offset);
 }
 
-std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt, uint32_t originIface)
+std::pair<std::optional<ReceivedRoute>, bool> TLVBuilder::decodeRoute(const TLV16Option& routeOpt, uint32_t originIface, TLVType type)
 {
     ReceivedRoute r{};
     r.originInterface = originIface;
@@ -70,6 +70,10 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt
     data.v6 = (tlvType == 0x0402 | tlvType == 0x0403 || readU16(routeOpt.value) == 2);
     r.prefix.af = data.v6 ? AddressFamily::IPv6 : AddressFamily::IPv4;
 
+    // Validate type
+    if ((tlvType & 0xFF00) != static_cast<uint16_t>(type))
+        return { std::nullopt, false };
+
     const uint8_t ipSize = data.v6 ? 16 : 4;
 
     if (!wide)
@@ -77,23 +81,23 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt
         std::memcpy(r.nextHop.raw, value + data.offset, ipSize);
         data.offset += ipSize;
         if (external)
-            if (!decodeExternal(data)) return std::nullopt;
-        if (!decodeClassicMetric(data)) return std::nullopt;
-        if (!decodeDestination(data)) return std::nullopt;
+            if (!decodeExternal(data)) return { std::nullopt, true };
+        if (!decodeClassicMetric(data)) return { std::nullopt, true };
+        if (!decodeDestination(data)) return { std::nullopt, true };
     }
     else
     {
         r.wide.topology = readU16(value + data.offset); data.offset += 2;
         r.wide.afi = readU16(value + data.offset); data.offset += 2;
         r.wide.rid = readU32(value + data.offset); data.offset += 4;
-        if (!decodeWideMetric(data)) return std::nullopt;
+        if (!decodeWideMetric(data)) return { std::nullopt, true };
         std::memcpy(r.nextHop.raw, value + data.offset, ipSize);
         if (external)
-            if (!decodeExternal(data)) return std::nullopt;
-        if (!decodeDestination(data)) return std::nullopt;
+            if (!decodeExternal(data)) return { std::nullopt, true };
+        if (!decodeDestination(data)) return { std::nullopt, true };
     }
 
-    return r;
+    return { r, true };
 }
 
 bool TLVBuilder::decodeClassicMetric(RouteData& data)

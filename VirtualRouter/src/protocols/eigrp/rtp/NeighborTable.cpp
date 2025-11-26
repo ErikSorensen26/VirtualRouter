@@ -162,6 +162,24 @@ void NeighborTable::onDown(Neighbor& neighbor)
     }
 }
 
+void NeighborTable::resync()
+{
+    std::unique_lock<std::shared_mutex> lock(neighborMutex);
+    for (auto it = neighbors.begin(); it != neighbors.end();)
+    {
+        if ((static_cast<uint16_t>(it->second.tlvType) & 0xFF00) == 0x0600)
+        {
+            iface.getTopController().onNeighborDown(it->second.ipAddress);
+            iface.getRtp().sendFullTopology(it->second, ReliableTransport::Resync::INIT);
+            it++;
+        }
+        else
+        {
+            it = neighbors.erase(it);
+        }
+    }
+}
+
 void NeighborTable::startGracefulRestart(Neighbor& neighbor)
 {
     iface.getTimers().startGracefulTimer(neighbor);

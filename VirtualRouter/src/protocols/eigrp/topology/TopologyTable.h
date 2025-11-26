@@ -8,6 +8,8 @@
 #include <chrono>
 #include <mutex>
 #include <map>
+#include <atomic>
+#include <unordered_set>
 
 namespace Eigrp
 {
@@ -117,12 +119,21 @@ struct RouteInfo
     std::chrono::steady_clock::time_point lastUpdate;
 };
 
+struct SuppressionInfo
+{
+    std::unordered_set<SummaryRoute*> summaries;
+    bool isSuppressed()
+    {
+        return !summaries.empty();
+    }
+};
+
 struct TopologyEntry
 {
     std::mutex entryMutex;
     enum class State { ACTIVE, PASSIVE, POISENED };
     IPPrefix prefix;
-    std::map<IPAddress, RouteInfo> routesByNeighbor; ///< Routes learned from each neighbor.
+    std::map<IPAddress, RouteInfo> routesBySource; ///< Routes learned from each neighbor.
 
     std::vector<IPAddress> feasibleSuccessors; ///< List of feasible successor neighbors.
     std::vector<IPAddress> successors; ///< List of successor neighbors.
@@ -131,8 +142,9 @@ struct TopologyEntry
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
     IPAddress bestNeighbor;
 
-    std::unordered_map<uint32_t, SummaryRoute*> summaries;
-    std::vector<IPAddress> pendingWithdraws;
+    std::map<uint32_t, SuppressionInfo> suppression;
+    bool isSuppressed(uint32_t key) const
+        { return suppression.count(key) > 0; }
 
     State state = State::PASSIVE;
     std::optional<std::chrono::steady_clock::time_point> valid = std::nullopt;

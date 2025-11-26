@@ -62,6 +62,7 @@ public:
     std::atomic<bool> eotRecv = false;
     std::atomic<bool> initComplete{false};
     std::atomic<bool> initInProgress{false};
+    std::atomic<bool> resyncInProgress{false};
     std::atomic<bool> isStub{false};
     std::atomic<uint32_t> lastSeqRecv = 0;
     std::atomic<uint32_t> lastSeqAck = 0;

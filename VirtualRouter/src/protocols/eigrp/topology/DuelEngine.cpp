@@ -14,15 +14,46 @@ DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), 
 
 DuelEngine::~DuelEngine() {}
 
+bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
+{
+    auto it = entry->suppression.find(key);
+    if (it == entry->suppression.end())
+        return false;
+    else if (!it->second.isSuppressed())
+    {
+        entry->suppression.erase(key);
+        return false;
+    }
+    else return true;
+}
+
+void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpInterface* iface)
+{
+    updateSuccessors(entries);
+    bool resync;
+
+    // Check for restart (Non active routes need to be withdrawn)
+    for (auto& entry : entries)
+    {
+        if (setSuppression(entry, iface->interfaceKey))
+            resync = true;
+    }
+
+    if (resync)
+    {
+        iface->getNTable().resync();
+    }
+}
+
 std::vector<const RouteInfo*> DuelEngine::findBestRoutes(const IPPrefix& prefix)
 {
     auto* entry = topologyTable.find(prefix);
     std::lock_guard<std::mutex> lock(topologyTable.tableMutex);
-    if (!entry || entry->routesByNeighbor.empty()) return {};
+    if (!entry || entry->routesBySource.empty()) return {};
 
     std::vector<const RouteInfo*> routes;
     for (const auto& neighbor : entry->successors)
-        routes.push_back(&entry->routesByNeighbor.at(neighbor));
+        routes.push_back(&entry->routesBySource.at(neighbor));
     return routes;
 }
 
@@ -30,10 +61,10 @@ const RouteInfo* DuelEngine::findBestRoute(const IPPrefix& prefix)
 {
     auto* entry = topologyTable.find(prefix);
     std::lock_guard<std::mutex> lock(topologyTable.tableMutex);
-    if (!entry || entry->routesByNeighbor.empty() || entry->successors.empty()) return nullptr;
+    if (!entry || entry->routesBySource.empty() || entry->successors.empty()) return nullptr;
 
-    auto it = entry->routesByNeighbor.find(entry->successors[0]);
-    if (it == entry->routesByNeighbor.end()) return nullptr;
+    auto it = entry->routesBySource.find(entry->successors[0]);
+    if (it == entry->routesBySource.end()) return nullptr;
     return &it->second;
 }
 
@@ -47,39 +78,16 @@ void DuelEngine::recalculateAllRoutes()
     }
 }
 
-void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries, const IPAddress& updatedNeighbor)
+void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
 {
-    std::vector<IPPrefix> activeEntries;
+    std::vector<TopologyEntry*> activeEntries;
 
     for (auto& entry : entries)
     {
         std::lock_guard<std::mutex> lock(entry->entryMutex);
-
-        if (!entry->routesByNeighbor.count(updatedNeighbor))
-            continue;
-        auto& route = entry->routesByNeighbor.at(updatedNeighbor);
-        auto& bestFD = entry->bestFD;
-        auto& bestAD = entry->bestAD;
-        auto& bestNeighbor = entry->bestNeighbor;
-
-        bool recalcAll = (route.routeInfo.reportedDistance < bestFD);
-
-        if (entry->successors.empty() || !entry->routesByNeighbor.count(bestNeighbor))
-            recalcAll = true;
-        else if (route.routeInfo.reportedDistance < bestFD)
-            recalcAll = true;
-        else if (route.routeInfo.feasibleDistance == bestFD && route.routeInfo.adminDistance < bestAD)
-            recalcAll = true;
-        else if (route.notFeasible && bestNeighbor == updatedNeighbor)
-            recalcAll = true;
-
-        if (recalcAll) 
+        if (!recalculateSuccessors(entry))
         {
-            if (!recalculateSuccessors(entry))
-            {
-                activeEntries.push_back(entry->prefix);
-                continue;
-            }
+            activeEntries.push_back(entry);
         }
     }
 
@@ -89,19 +97,21 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries, const IP
     base.routeManager.synchronizeRoutes(entries);
 
     if (!activeEntries.empty())
-        setActive(activeEntries, updatedNeighbor);
+        setActive(activeEntries);
 }
 
 bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
 {
+    if (entry->routesBySource.empty()) return false;
     EigrpConfigs::TrafficShareMode trafMode = base.getGlobalConfigMgr().getTrafficMode();
     uint8_t variance = base.getGlobalConfigMgr().getVariance();
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
-    IPAddress bestNeighbor = IPAddress(base.getAF());
 
-    for (auto& route : entry->routesByNeighbor)
+    IPAddress bestNeighbor = entry->bestNeighbor;
+
+    for (auto& route : entry->routesBySource)
     {
         route.second.isFeasibleSuccessor = false;
         route.second.isSuccessor = false;
@@ -110,7 +120,7 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
     entry->successors.clear();
     entry->feasibleSuccessors.clear();
 
-    for (const auto& [nbr, route] : entry->routesByNeighbor)
+    for (const auto& [nbr, route] : entry->routesBySource)
     {
         if (route.routeInfo.feasibleDistance == std::numeric_limits<uint64_t>::max())
             continue;
@@ -127,7 +137,7 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
     entry->bestAD = bestAD;
     entry->bestNeighbor = bestNeighbor;
 
-    for (auto& [nbr, route] : entry->routesByNeighbor)
+    for (auto& [nbr, route] : entry->routesBySource)
     {
         if (route.routeInfo.feasibleDistance == std::numeric_limits<uint64_t>::max())
             continue;
@@ -143,13 +153,22 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
     }
 
     if (base.isNamed())
-        for (auto route : entry->routesByNeighbor)
+        for (auto route : entry->routesBySource)
             route.second.routeInfo.wide.clearFlag(ReceivedRoute::Wide::WideFlags::ACTIVE);
 
     if (entry->successors.empty())
     {
-        entry->state = TopologyEntry::State::POISENED;
         entry->bestFD = std::numeric_limits<uint64_t>::max();
+        if (entry->routesBySource.count(entry->bestNeighbor) == 0)
+        {
+            // Best neighbor is most recent neighbor
+            std::map<IPAddress, RouteInfo>::iterator bestIt = entry->routesBySource.end();
+            for (auto it = entry->routesBySource.begin(); it != entry->routesBySource.end(); it++)
+                if (bestIt == entry->routesBySource.end() || bestIt->second.lastUpdate < it->second.lastUpdate)
+                    bestIt = it;
+            if (bestIt != entry->routesBySource.end())
+                entry->bestNeighbor = bestIt->first;
+        }
         return false;
     }
 
@@ -172,7 +191,7 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
     IPAddress bestNeighbor = IPAddress(base.getAF());
 
-    for (auto& [nbr, route] : entry->routesByNeighbor)
+    for (auto& [nbr, route] : entry->routesBySource)
     {
         route.routeInfo.feasibleDistance = route.routeInfo.reportedDistance + localMetric;
 
@@ -201,10 +220,12 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
 void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, const Neighbor& neighbor)
 {
     std::vector<TopologyEntry*> updates;
+    std::vector<const RouteInfo*> reversePoisens;
     uint8_t maxHops = base.getGlobalConfigMgr().getMaxHops();
     for (auto& newRoute : newRoutes)
     {
         if (newRoute.hopCount >= maxHops || newRoute.reportedDistance > newRoute.feasibleDistance) continue;
+        newRoute.nextHop = neighbor.ipAddress;
         auto& entry = topologyTable.ensure(newRoute.prefix);
         topologyTable.addRouteUpdate(newRoute, &neighbor, entry);
 
@@ -212,9 +233,15 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
             processReceivedActiveRoute(newRoute, neighbor);
         else
             updates.push_back(&entry);
+
+        if (entry.routesBySource.size() >= 1 && entry.routesBySource.contains(neighbor.ipAddress))
+            reversePoisens.push_back(&entry.routesBySource.at(neighbor.ipAddress));
     }
 
-    updateSuccessors(updates, neighbor.ipAddress);
+    if (!reversePoisens.empty())
+        neighbor.getIface().getRtp().sendPoisenedUpdate(nullptr, reversePoisens); //TODO
+
+    updateSuccessors(updates);
 }
 
 void DuelEngine::processReceivedActiveRoutes(std::vector<ReceivedRoute>& routes, const Neighbor& nbr)
@@ -225,107 +252,127 @@ void DuelEngine::processReceivedActiveRoutes(std::vector<ReceivedRoute>& routes,
 
 void DuelEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedRoutes, Neighbor& nbr, uint32_t recvSeq)
 {
-    std::vector<IPPrefix> toActivate;
+    std::vector<TopologyEntry*> toActivate;
+    std::vector<const RouteInfo*> replies;
 
     for (auto& route : queriedRoutes)
     {
         auto* entry = topologyTable.find(route.prefix);
         if (!entry)
             continue;
+        topologyTable.addRouteUpdate(route, &nbr, *entry);
 
-        if (!entry->feasibleSuccessors.empty())
+        if (recalculateSuccessors(entry))
         {
-            auto feasible = findBestRoutes(route.prefix);
-            nbr.getIface().getRtp().sendReply(nbr, feasible, recvSeq);
+            auto feasible = findBestRoute(route.prefix);
+            if (feasible)
+            {
+                replies.push_back(feasible);
+                continue;
+            }
         }
-        else
-        {
-            toActivate.push_back(route.prefix);
-        }
+
+        toActivate.push_back(entry);
     }
 
+    if (!replies.empty())
+        nbr.getIface().getRtp().sendReply(nbr, replies, recvSeq);
+
     if (!toActivate.empty())
-        setActive(toActivate, nbr.ipAddress, &recvSeq);
+        setActive(toActivate, &recvSeq);
 }
 
-void DuelEngine::setActive(const std::vector<IPPrefix>& prefixes, const IPAddress& failedNeighbor, const uint32_t* seq)
+void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t* seq)
 {
     std::vector<ActiveRoute*> routes = {};
-    base.routeManager.withdrawRoutes(prefixes);
     {
         std::lock_guard<std::mutex> lock(activeMutex);
-        for (const auto& prefix : prefixes)
+        for (auto& entry : entries)
         {
-            if (auto entry = topologyTable.findPair(prefix, failedNeighbor); entry.first && entry.second)
+            if (entry->routesBySource.count(entry->bestNeighbor) == 0 ||
+                entry->state == TopologyEntry::State::ACTIVE)
+                continue;
+
+            base.routeManager.withdrawRoute(entry->prefix);
+
+            IPAddress failedNeighbor = entry->bestNeighbor;
+
+            // Create new active route
+            ActiveRoute& ar = activeRoutes[entry->prefix];
+            ar.originNeighbor = failedNeighbor;
+            ar.activePrefix = entry->prefix;
+
+            if (entry->routesBySource.count(failedNeighbor))
             {
-                if (entry.first->state == TopologyEntry::State::ACTIVE)
-                    continue;
-
-                // Create new active route
-                ActiveRoute& ar = activeRoutes[prefix];
-                ar.originNeighbor = failedNeighbor;
-                ar.activePrefix = prefix;
-                ar.originRoute = entry.second;
-
-                topologyTable.markRouteUnreachable(*entry.second, failedNeighbor, *entry.first);
-                entry.first->state = TopologyEntry::State::ACTIVE;
-                if (base.isNamed())
-                    for (auto& route : entry.first->routesByNeighbor)
-                        route.second.routeInfo.wide.setFlag(ReceivedRoute::Wide::WideFlags::ACTIVE);
-                routes.push_back(&ar);
-
-                if (seq)
-                    ar.remoteSources.insert({failedNeighbor, *seq});
+                ar.originRoute = &entry->routesBySource.at(failedNeighbor);
+                topologyTable.markRouteUnreachable(*ar.originRoute, failedNeighbor, *entry);
             }
+            else
+            {
+                ar.originRoute = nullptr;
+            }
+
+            entry->state = TopologyEntry::State::ACTIVE;
+
+            if (base.isNamed())
+                for (auto& route : entry->routesBySource)
+                    route.second.routeInfo.wide.setFlag(ReceivedRoute::Wide::WideFlags::ACTIVE);
+
+            routes.push_back(&ar);
+
+            if (seq)
+                ar.remoteSources.insert({failedNeighbor, *seq});
         }
     }
 
     if (activeRoutes.empty())
         return;
 
-    std::unordered_set<EigrpInterface*> multicastQueryInterfaces;
+    std::unordered_map<EigrpInterface*, std::vector<ActiveRoute*>> multicastBuckets;
     auto& allNeighbors = base.allNeighbors;
-    for (const auto& [ip, neighbor] : allNeighbors)
+    for (auto& ar : routes)
     {
-        if (ip != failedNeighbor && !neighbor->isStub.load(std::memory_order_relaxed))
+        IPAddress& origin = ar->originNeighbor;
+
+        for (auto& [nbrIp, neighbor] : allNeighbors)
         {
+            if (nbrIp == origin) continue;
+
+            if (neighbor->isStub.load(std::memory_order_relaxed))
+                continue;
+
             if (neighbor->unicast)
             {
-                std::vector<OutgoingQuery*> queries;
-                queries.reserve(routes.size());
-                for (const auto& ar : routes)
-                {
-                    auto& query = ar->pendingQueries[neighbor->ipAddress];
-                    query.route = ar;
-                    tmgr.startSIATimer(query, *neighbor);
-                    queries.push_back(&query);
-                }
-                neighbor->getIface().getRtp().sendUnicastQuery(*neighbor, queries);
+                auto& query = ar->pendingQueries[nbrIp];
+                query.route = ar;
+                tmgr.startSIATimer(query, *neighbor);
+
+                // Send unicast query
+                std::vector<OutgoingQuery*> qs = { &query };
+                neighbor->getIface().getRtp().sendUnicastQuery(*neighbor, qs);
             }
             else
             {
-                // Add query info and start SIA timer
-                EigrpInterface* neighborIface = &neighbor->getIface();
-                multicastQueryInterfaces.insert(neighborIface);
+                EigrpInterface* iface = &neighbor->getIface();
+                multicastBuckets[iface].push_back(ar);
 
-                for (const auto& ar : routes)
-                {
-                    auto& query = ar->pendingQueries[ip];
-                    query.route = ar;
-                    tmgr.startSIATimer(query, *neighbor);
-                }
+                auto& query = ar->pendingQueries[nbrIp];
+                query.route = ar;
+                tmgr.startSIATimer(query, *neighbor);
             }
         }
     }
 
-    for (auto& mult : multicastQueryInterfaces)
+    for (auto& [iface, rts] : multicastBuckets)
     {
-        mult->getRtp().sendQuery(routes);
+        iface->getRtp().sendQuery(rts);
     }
 
-    for (auto& route : routes)
-        if (route->pendingQueries.empty())
-            concludeActive(*route);
+    for (auto& ar : routes)
+    {
+        if (ar->pendingQueries.empty())
+            concludeActive(*ar);
+    }
 }
 
 void DuelEngine::processReceivedActiveRoute(const ReceivedRoute& recvRoute, const Neighbor& neighbor)
@@ -370,21 +417,26 @@ void DuelEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
 
 void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 {
-    std::lock_guard<std::mutex> lock(activeMutex);
-    if (query.siaAttempts < 4)
+    ActiveRoute* route = nullptr;
+    bool empty = false;
     {
-        neighbor.getIface().getRtp().sendSIAQuery(neighbor, {&query});
-        query.siaAttempts++;
-        query.lastHeard = std::chrono::steady_clock::now();
-        tmgr.startSIATimer(query, neighbor);
-        return;
+        std::lock_guard<std::mutex> lock(activeMutex);
+        if (query.siaAttempts < 4)
+        {
+            neighbor.getIface().getRtp().sendSIAQuery(neighbor, {&query});
+            query.siaAttempts++;
+            query.lastHeard = std::chrono::steady_clock::now();
+            tmgr.startSIATimer(query, neighbor);
+            return;
+        }
+        route = query.route;
+        route->pendingQueries.erase(neighbor.ipAddress);
+        empty = route->pendingQueries.empty();
     }
 
-    auto& route = *query.route;
-    route.pendingQueries.erase(neighbor.ipAddress);
     neighbor.getIface().getNTable().onDown(neighbor);
-    if (route.pendingQueries.empty())
-        concludeActive(route);
+    if (empty)
+        concludeActive(*route);
 }
 
 void DuelEngine::concludeActive(ActiveRoute& activeRoute)

@@ -25,7 +25,7 @@ public:
 
     void withdrawRoute(const IPPrefix withdraws);
     void withdrawRoutes(const std::vector<IPPrefix>& withdraws); // no update sent
-    void synchronizeRoutes(const std::vector<TopologyEntry*>& entry, const std::vector<IPPrefix>& withdraws = {}, const std::vector<const RouteInfo*>& individuals = {});
+    void synchronizeRoutes(const std::vector<TopologyEntry*>& entry);
     void synchronizeRoute(const TopologyEntry& entry);
 
 
@@ -41,8 +41,8 @@ private:
     {
         if (!entryPtr) return nullptr;
         auto& entry = *entryPtr;
-        auto bestIt = entry.routesByNeighbor.find(entry.bestNeighbor);
-        if (entry.successors.empty() || bestIt == entry.routesByNeighbor.end())
+        auto bestIt = entry.routesBySource.find(entry.bestNeighbor);
+        if (entry.successors.empty() || bestIt == entry.routesBySource.end())
         {
             withdrawRoute(entry.prefix);
             return nullptr;
@@ -51,8 +51,8 @@ private:
 
         for (const auto& neighbor : entry.successors)
         {
-            auto it = entry.routesByNeighbor.find(neighbor);
-            if (it == entry.routesByNeighbor.end()) continue;
+            auto it = entry.routesBySource.find(neighbor);
+            if (it == entry.routesBySource.end()) continue;
 
             ribEntry.addNextHop(
                 af == AddressFamily::IPv4 ? neighbor.v4 : neighbor.v6,

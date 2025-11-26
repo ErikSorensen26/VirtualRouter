@@ -22,6 +22,17 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     ntable(*this),
     topology(ntable, eigrpSystem.getTopology().duel, *this)
 {
+    // Set local ip
+    if (base.getAF() == AddressFamily::IPv4)
+    {
+        ifaceAddress.v4 = interface.configs.ipv4.getAddress();
+    }
+    else
+    {
+        ifaceAddress.v6 = interface.configs.ipv6.getLocalAddress();
+        ifaceAddress.isV6 = true;
+    }
+
     // Add pending summary routes if needed
     for (const auto& prefix : configs->pendingSummaryRoutes)
         aggregator.installSummary(prefix);

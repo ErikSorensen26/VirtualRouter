@@ -22,7 +22,7 @@ std::vector<const RouteInfo*> TopologyTable::getSuccessors(const IPPrefix& prefi
     if (!entry) return {};
 
     std::vector<const RouteInfo*> successors;
-    for (const auto& [_, route] : entry->routesByNeighbor)
+    for (const auto& [_, route] : entry->routesBySource)
         if (route.isSuccessor)
             successors.push_back(&route);
     return successors;
@@ -40,8 +40,8 @@ std::vector<const RouteInfo*> TopologyTable::getAllRoutes()
         std::lock_guard<std::mutex> entryLock(entryPtr->entryMutex);
 
         const IPAddress& bestNeighbor = entryPtr->bestNeighbor;
-        auto it = entryPtr->routesByNeighbor.find(bestNeighbor);
-        if (it == entryPtr->routesByNeighbor.end())
+        auto it = entryPtr->routesBySource.find(bestNeighbor);
+        if (it == entryPtr->routesBySource.end())
             continue;
 
         const RouteInfo& route = it->second;
@@ -55,15 +55,15 @@ void TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* n
     std::lock_guard<std::mutex> lock(tableMutex);
 
     // Create or update the topology table entry
-    IPAddress neighborIp = neighbor ? neighbor->ipAddress : IPAddress{};
-    auto it = entry.routesByNeighbor.find(neighborIp);
-    if (it == entry.routesByNeighbor.end())
+    IPAddress neighborIp = neighbor ? neighbor->ipAddress : route.nextHop;
+    auto it = entry.routesBySource.find(neighborIp);
+    if (it == entry.routesBySource.end())
     {
         ReceivedRoute cp = route;
-        entry.routesByNeighbor.emplace(neighborIp, RouteInfo{cp});
+        entry.routesBySource.emplace(neighborIp, RouteInfo{cp});
     }
 
-    auto& routeEntry = entry.routesByNeighbor.at(neighborIp);
+    auto& routeEntry = entry.routesBySource.at(neighborIp);
     routeEntry.routeInfo = std::move(route);
     routeEntry.lastUpdate = std::chrono::steady_clock::now();
     routeEntry.topology = &entry;
@@ -77,19 +77,13 @@ void TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* n
         if (routeEntry.routeInfo.wide.isWide)
             routeEntry.routeInfo.wide.setFlag(ReceivedRoute::Wide::WideFlags::WITHDRAWL);
     }
-
-    if (neighbor)
-    {
-        bool nextHopSelf = neighbor->getIface().configs->nextHopSelf.load(std::memory_order_relaxed);
-        if (!nextHopSelf) routeEntry.routeInfo.nextHop = neighbor->ipAddress;
-    }
 }
 
 std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const IPPrefix& prefix, const IPAddress& neighbor)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
-        if (auto rit = it->second->routesByNeighbor.find(neighbor); rit != it->second->routesByNeighbor.end())
+        if (auto rit = it->second->routesBySource.find(neighbor); rit != it->second->routesBySource.end())
             return {it->second, &rit->second};
     return {nullptr, nullptr};
 }
@@ -160,13 +154,15 @@ void TopologyTable::pruneNeighbor(const IPAddress& neighborIp)
 
         for (auto& [_, entry] : topologyEntries)
         {
-            if (auto it = entry->routesByNeighbor.find(neighborIp); it != entry->routesByNeighbor.end())
-            entry->feasibleSuccessors.erase(
-                std::remove(entry->feasibleSuccessors.begin(), entry->feasibleSuccessors.end(), neighborIp),
-                entry->feasibleSuccessors.end());
-            entry->successors.erase(
-                std::remove(entry->successors.begin(), entry->successors.end(), neighborIp),
-                entry->successors.end());
+            if (auto it = entry->routesBySource.find(neighborIp); it != entry->routesBySource.end())
+            {
+                entry->feasibleSuccessors.erase(
+                    std::remove(entry->feasibleSuccessors.begin(), entry->feasibleSuccessors.end(), neighborIp),
+                    entry->feasibleSuccessors.end());
+                entry->successors.erase(
+                    std::remove(entry->successors.begin(), entry->successors.end(), neighborIp),
+                    entry->successors.end());
+            }
         }
     }
 

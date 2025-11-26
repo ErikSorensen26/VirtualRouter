@@ -19,7 +19,7 @@ void GlobalAggregator::addSummary(TopologyEntry& top)
     {
         if (auto* sum = iface.getAggregator().isSummarized(top.prefix); sum)
         {
-            top.summaries[id] = sum;
+            top.suppression[id].summaries.insert(sum);
             sum->summarizedRoutes.insert(top.prefix);
         }
     }
@@ -27,15 +27,16 @@ void GlobalAggregator::addSummary(TopologyEntry& top)
 
 void GlobalAggregator::updateSummary(TopologyEntry& top)
 {
-    if (top.summaries.empty()) return;
+    if (top.suppression.empty()) return;
     std::shared_lock<std::shared_mutex> lock(base.getIfaceMgr().interfaceMutex);
     auto& interfaces = base.getIfaceMgr().eigrpInterfaceList;
     auto bestRt = top.successors.begin();
     if (bestRt == top.successors.end()) return;
-    for (auto& [id, sum] : top.summaries)
+    for (auto& [id, info] : top.suppression)
     {
         if (auto ifaceIt = interfaces.find(id); ifaceIt != interfaces.end())
-            ifaceIt->second.getAggregator().updateSummaryRoute(*sum);
+            for (auto sum : info.summaries)
+                ifaceIt->second.getAggregator().updateSummaryRoute(*sum);
     }
 }
 
@@ -58,7 +59,7 @@ void GlobalAggregator::enableAutoSummary(bool enable)
 
         for (auto entry : base.getTopology().entries())
         {
-            if (entry.second->successors.empty() || !entry.second->summaries.empty())
+            if (entry.second->successors.empty())
                 continue;
             IPAddress major;
             uint8_t mask = Functions::findClassfullNetworkAndMask(major.raw, entry.first.addr);

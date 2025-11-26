@@ -132,7 +132,7 @@ void ReliableTransport::sendNullUpdate(Neighbor& neighbor)
     transmitReliable(pkt, &neighbor, header.value());
 }
 
-void ReliableTransport::sendFullTopology(Neighbor& neighbor)
+void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
 {
     if (iface.configs->isPassive.load(std::memory_order_relaxed)) return;
 
@@ -159,7 +159,10 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor)
             createPacket(eigrpPacket);
             if (auto eigrp = createUpdate(eigrpPacket, info, &neighbor, allRoutes); eigrp.has_value())
             {
-                eigrp->setFlagInit(first);
+                if (resync != Resync::REPLY)
+                    eigrp->setFlagInit(first);
+                if (resync != Resync::NONE)
+                    eigrp->setFlagRestart(first);
                 if (info.sent >= allRoutes.size() && allRoutes.size() > 0)
                     eigrp->setFlagEndOfTable(true);
 
@@ -201,12 +204,53 @@ void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const R
         {
             PacketBuilder eigrpPacket(interface);
             createPacket(eigrpPacket);
-            if (auto eigrp = createUpdate(eigrpPacket, info, neighbor, inputRoutes); eigrp.has_value())
+            if (auto eigrp = createUpdate(eigrpPacket, info, neighbor, routes); eigrp.has_value())
                 transmitReliable(eigrpPacket, neighbor, *eigrp);
             else
                 releaseFailedPacket(eigrpPacket);
         }
         while (info.sent < routes.size());
+    };
+
+    if (neighbor)
+    {
+        versionedUpdate(neighbor->tlvType);
+    }
+    else
+    {
+        for (auto& v : iface.tlvTypes)
+        {
+            versionedUpdate(v.first);
+        }
+    }
+}
+
+void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& inputRoutes)
+{
+    if (iface.configs->isPassive.load(std::memory_order_relaxed) || iface.getNTable().size() == 0) return;
+
+    auto* interface = iface.getIface();
+
+    PktInfo info;
+    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.delay = std::numeric_limits<uint64_t>::max();
+    info.authentication = iface.configs->authKey.fullyEnabled.load(std::memory_order_relaxed);
+    info.mtu = getMtu();
+
+    auto versionedUpdate = [&](const TLVType& version)
+    {
+        info.version = version;
+
+        do
+        {
+            PacketBuilder eigrpPacket(interface);
+            createPacket(eigrpPacket);
+            if (auto eigrp = createUpdate(eigrpPacket, info, neighbor, inputRoutes); eigrp.has_value())
+                transmitReliable(eigrpPacket, neighbor, *eigrp);
+            else
+                releaseFailedPacket(eigrpPacket);
+        }
+        while (info.sent < inputRoutes.size());
     };
 
     if (neighbor)

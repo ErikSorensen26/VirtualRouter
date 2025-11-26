@@ -150,6 +150,7 @@ void InterfaceTimers::restartHoldTimer(Neighbor& neighbor)
 
 void InterfaceTimers::handleHoldTimeExpire(Neighbor& neighbor)
 {
+    iface.getRtp().pendingPeerTermination.store(true, std::memory_order_release);
     if (base->getGlobalConfigMgr().isNonStopForwarding())
         iface.getNTable().startGracefulRestart(neighbor);
     else

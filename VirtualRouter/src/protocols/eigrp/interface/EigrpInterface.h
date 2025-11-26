@@ -87,6 +87,8 @@ public:
     std::set<IPPrefix> connectedRoutes;
 
     uint32_t interfaceKey;
+    
+    IPAddress ifaceAddress;
 
 private:
     Eigrp& base;

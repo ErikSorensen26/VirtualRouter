@@ -74,7 +74,11 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
 {
     auto receivedHello = info.eigrp;
 
-    if (!ntable->validatePTP(info.neighborIp) || !verifyNeighborAS(receivedHello)) return;
+    if (!ntable->validatePTP(info.neighborIp) || !verifyNeighborAS(receivedHello))
+    {
+        pendingPeerTermination.store(true, std::memory_order_release);
+        return;
+    }
 
     // Safely access or create the neighbor
     if (!info.neighbor && !unicast)
@@ -103,7 +107,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         if (opt.type == Variable::Eigrp::Option::parameter)
         {
             // Check for Peer Termination
-            if (std::memcmp(opt.value, Variable::Mac::broadcast, 5) == 0)
+            if (std::memcmp(opt.value, Variable::Mac::broadcast, 6) == 0)
             {
                 ntable->onDown(*info.neighbor);
                 return;
@@ -112,7 +116,11 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             uint8_t parameters[6];
             TLVBuilder::calculateParameters(parameters, iface.getBase().getGlobalConfigMgr().getKValues());
 
-            if (std::memcmp(parameters, opt.value, 6) != 0) continue;
+            if (std::memcmp(parameters, opt.value, 6) != 0)
+            {
+                pendingPeerTermination.store(true, std::memory_order_release);
+                return;
+            }
 
             if (opt.length >= 8)
                 info.neighbor->holdTime.store(readU16(opt.value + 6), std::memory_order_relaxed);
@@ -195,6 +203,15 @@ void ReliableTransport::processUpdate(RTPInfo& info)
         }
     }
 
+    bool resync = update.getFlagRestart() && update.getFlagInit() &&
+        info.neighbor && info.neighbor->getState() == Neighbor::State::ESTABLISHED;
+    if (resync)
+    {
+        // Only remove routes
+        nbr.resyncInProgress.store(true, std::memory_order_release);
+        iface.getTopController().onNeighborDown(info.neighbor->ipAddress);
+    }
+
     if (update.getFlagCondRecv())
     {
         sendCondAck(nbr, recvSeq);
@@ -219,8 +236,18 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     routeBuffer.reserve(routeOpts.size());
     for (const auto& opt : routeOpts)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
-            routeBuffer.emplace_back(std::move(*route));
+        if (auto [route, valid] = TLVBuilder::decodeRoute(opt, iface.interfaceKey, info.neighbor->tlvType); route)
+        {
+            if (valid)
+            {
+                routeBuffer.emplace_back(std::move(*route));
+            }
+            else
+            {
+                pendingPeerTermination.store(true, std::memory_order_release);
+                return;
+            }
+        }
     }
 
     if (!routeBuffer.empty())
@@ -229,14 +256,17 @@ void ReliableTransport::processUpdate(RTPInfo& info)
         {
             iface.getMetrics().addRouteMetrics(routeBuffer);
             iface.getTopController().processReceivedRoutes(routeBuffer, nbr);
-
-            // TODO implicit if no eot?
         }
     }
 
-    if (update.getFlagRestart())
+    // Continue resync if needed
+    if (resync)
     {
-        ntable->onDown(*info.neighbor);
+        sendFullTopology(*info.neighbor, Resync::REPLY);
+    }
+    if (nbr.resyncInProgress.load(std::memory_order_relaxed) && nbr.eotRecv.load(std::memory_order_relaxed))
+    {
+        nbr.resyncInProgress.store(false, std::memory_order_release);
     }
 }
 
@@ -315,8 +345,18 @@ void ReliableTransport::processQuery(RTPInfo& info)
     std::vector<ReceivedRoute> queriedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey))
-            queriedRoutes.emplace_back(std::move(*route));
+        if (auto [route, valid] = TLVBuilder::decodeRoute(opt, iface.interfaceKey, info.neighbor->tlvType); route)
+        {
+            if (valid)
+            {
+                queriedRoutes.emplace_back(std::move(*route));
+            }
+            else
+            {
+                pendingPeerTermination.store(true, std::memory_order_release);
+                return;
+            }
+        }
     }
 
     iface.getMetrics().addRouteMetrics(queriedRoutes);
@@ -354,8 +394,18 @@ void ReliableTransport::processReply(RTPInfo& info)
     std::vector<ReceivedRoute> receivedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
-            receivedRoutes.emplace_back(std::move(*route));
+        if (auto [route, valid] = TLVBuilder::decodeRoute(opt, iface.interfaceKey, info.neighbor->tlvType); route)
+        {
+            if (valid)
+            {
+                receivedRoutes.emplace_back(std::move(*route));
+            }
+            else
+            {
+                pendingPeerTermination.store(true, std::memory_order_release);
+                return;
+            }
+        }
     }
 
     if (!receivedRoutes.empty())

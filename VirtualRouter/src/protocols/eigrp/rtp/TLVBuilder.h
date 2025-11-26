@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <EigrpTypes.hpp>
+#include <Neighbor.h>
 #include <TLVOptions.hpp>
 
 struct IPAddress;
@@ -47,7 +48,7 @@ public:
 
     static uint8_t encodeRouteOption(uint8_t* out, size_t maxSize, const RouteInfo* route, uint64_t currentBandwidth, uint64_t currentDelay, RouteType type);
     static uint8_t* encodeStubOption(uint8_t* out, const EigrpConfigs::StubConfig& stub);
-    static std::optional<ReceivedRoute> decodeRoute(const TLV16Option& routeOpt, uint32_t ifaceLearned);
+    static std::pair<std::optional<ReceivedRoute>, bool> decodeRoute(const TLV16Option& routeOpt, uint32_t ifaceLearned, TLVType type);
     static uint8_t* calculateParameters(uint8_t* out, const EigrpConfigs::KValue& kvalue, uint16_t holdTime = 0);
 
 private:

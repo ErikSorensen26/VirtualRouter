@@ -47,11 +47,12 @@ public:
     ~DuelEngine();
     bool isRouteAdvertised(const uint8_t* network, uint8_t mask);
     std::vector<const RouteInfo*> findBestRoutes(const IPPrefix& prefix);
+    bool setSuppression(TopologyEntry* entry, uint32_t intKey);
     const RouteInfo* findBestRoute(const IPPrefix& prefix);
 
     void handleReceivedQuery(const std::vector<ReceivedRoute>& routes, Neighbor& neighbor);
 
-    void setActive(const std::vector<IPPrefix>& prefixes, const IPAddress& ipAddress, const uint32_t* seq = nullptr);
+    void setActive(std::vector<TopologyEntry*>& entries, const uint32_t* seq = nullptr);
     void concludeActive(ActiveRoute& route);
     void setPassive(const IPPrefix& prefix);
     void setPoisened(const IPPrefix& prefix);
@@ -62,8 +63,8 @@ public:
     void processReceivedActiveRoutes(std::vector<ReceivedRoute>& newRoute, const Neighbor& neighbor);
     void processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedRoutes, Neighbor& nbr, uint32_t recvSeq);
 
-    void updateSuccessors(std::vector<TopologyEntry*>& entry, const IPAddress& neighborIp);
-    bool recalculateSuccessors(TopologyEntry* entry);
+    void updateSuccessors(std::vector<TopologyEntry*>& entry);
+    void refreshSuppression(std::vector<TopologyEntry*>& entry, EigrpInterface* iface);
 
     void recalculateAllRoutes();
 
@@ -77,6 +78,7 @@ private:
     void processReceivedRoute(const ReceivedRoute& newRoute, const Neighbor& neighbor);
     void processReceivedActiveRoute(const ReceivedRoute& newRoute, const Neighbor& neighbor);
     bool recalculateDistances(TopologyEntry* entry, uint64_t localMetric);
+    bool recalculateSuccessors(TopologyEntry* entry);
 
     // Lists
     std::set<std::pair<IPAddress, TopologyEntry*>> pendingUpdates;
