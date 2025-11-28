@@ -367,7 +367,7 @@ private:
      * @param directory The JSON object representing a command directory.
      * @return true If the directory contains subcommands; otherwise, false.
      */ 
-    bool isValidCommandDirectory(const nlohmann::json* directory);
+    bool isValidCommandDirectory(const nlohmann::ordered_json* directory);
 
     /**
      * @brief Handles pagination for displaying large lists of commands.
@@ -453,11 +453,11 @@ private:
     std::string currentCommand;		        ///< Current command being processed
     std::string currentSubMode;		        ///< Current sub-mode (e.g., specific interface or protocol)
 
-    const nlohmann::json* currentDirectory;	        ///< Current directory in the command tree.
-    const nlohmann::json* workingDirectory = nullptr;   ///< Working directory in the JSON structure.
+    const nlohmann::ordered_json* currentDirectory;	        ///< Current directory in the command tree.
+    const nlohmann::ordered_json* workingDirectory = nullptr;   ///< Working directory in the JSON structure.
 
-    std::vector<const nlohmann::json*> tempDir;                 ///< Temporary directory for creating temporary directories.
-    std::vector<nlohmann::json*> loosePtrs;               ///< Temporary directory for removing loose pointers.
+    std::vector<const nlohmann::ordered_json*> tempDir;                 ///< Temporary directory for creating temporary directories.
+    std::vector<nlohmann::ordered_json*> loosePtrs;               ///< Temporary directory for removing loose pointers.
 
     std::vector<std::string> recursiveHistory;  ///< Recursive history for using a command once.
 

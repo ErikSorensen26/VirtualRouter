@@ -95,13 +95,13 @@ public:
      * @brief Gets the loaded command tree.
      * @return JSON object representing the command tree.
      */
-    const nlohmann::json& getCommandTree() const;
+    const nlohmann::ordered_json& getCommandTree() const;
 
     /**
      * @brief Gets the loaded configuration schema.
      * @return JSON object representing the config schema.
      */
-    const nlohmann::json& getConfigSchema() const;
+    const nlohmann::ordered_json& getConfigSchema() const;
 
     /**
      * @brief Determines if a given string represents a numeric value.
@@ -121,7 +121,7 @@ public:
      * @param directory The JSON object representing a command directory.
      * @return true If the directory contains subcommands; otherwise, false.
      */ 
-    bool isValidCommandDirectory(nlohmann::json* directory);
+    bool isValidCommandDirectory(nlohmann::ordered_json* directory);
 
     /**
      * @brief Masks the prefix over the original.
@@ -137,7 +137,7 @@ public:
     /**
      * @brief Retrieves the command tree;
      */
-    const nlohmann::json& getCommandTree() { return commandTree; }
+    const nlohmann::ordered_json& getCommandTree() { return commandTree; }
 
     const std::vector<std::string> globalCommandList{"?", "vk_tab"}; ///< List of global commands
     size_t paginationCount = 10; ///< Pagination count for command help
@@ -168,7 +168,7 @@ private:
      */
     void recoverState();
 
-    nlohmann::json commandTree; ///< JSON structure holding the command hierarchy.
+    nlohmann::ordered_json commandTree; ///< JSON structure holding the command hierarchy.
     std::condition_variable stateCondition; ///< Condition variabel for thread synchronization.
 };
 

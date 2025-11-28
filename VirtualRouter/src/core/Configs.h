@@ -12,11 +12,15 @@
 #include <unistd.h>   
 #include <termios.h>
 #include <fstream>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <pugixml.hpp>
 #include <json.hpp>
 #include <Functions.h>
 
+#define COMMAND_TREE_BIN "./configs/Commands.bin"
 #define COMMAND_TREE "./configs/Commands.json"
 #define CONFIG_SCHEMA "./configs/ConfigSchema.json"
 #define HW_CONFIG_FILE "./configs/Configs.json"
@@ -33,7 +37,7 @@ struct StartupFiles
     std::string hwConfigFile = HW_CONFIG_FILE;
 };
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 class Global;
 struct ModeConfig;
@@ -141,15 +145,18 @@ public:
     virtual ~FileSystem() override = default;
     bool readFile(const std::string& path, std::string& content) override
     {
-        std::ifstream file(path, std::ios::in);
-        if (!file.is_open())
-        {
-            return false; // File not found or cannot be opened
-        }
+        int fd = open(path.c_str(), O_RDONLY);
+        if (fd < 0) return false;
 
-        // Read file content
-        content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        file.close();
+        struct stat st;
+        fstat(fd, &st);
+
+        void* data = mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (data == MAP_FAILED) return false;
+
+        content.assign((char*)data, st.st_size);
+        munmap(data, st.st_size);
+        close(fd);
         return true;
     }
 

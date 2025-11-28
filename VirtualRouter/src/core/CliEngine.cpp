@@ -1,11 +1,11 @@
 #include "CliEngine.h"
 #include <CommandProcessor.h>
 #include <CliSession.h>
-#include <SaxJson.hpp>
 #include "Mode.hpp"
 #include <InterfaceConfigs.h>
 #include <InterfaceType.hpp>
 #include <HardwareManager.h>
+#include <sys/resource.h>
 
 std::string CliEngine::defaultMode = Mode::userExec;
 
@@ -51,19 +51,27 @@ void CliEngine::initEngine(const StartupFiles& stfs)
 
     // ----- Load Command Tree JSON via SAX Parsing -----
     std::string fileStream;
-    if (fileSystem->fileExists(COMMAND_TREE) && fileSystem->readFile(COMMAND_TREE, fileStream))
+    if (fileSystem->fileExists(COMMAND_TREE_BIN) && fileSystem->readFile(COMMAND_TREE_BIN, fileStream))
     {
-        TerminalSaxHandler saxHandler;
-        if (json::sax_parse(fileStream, &saxHandler))
-        {
-            commandTree = saxHandler.result;
-            initTree();
-        }
-        else
-        {
-            std::cerr << "Failed to parse command tree JSON file: " << COMMAND_TREE << std::endl;
-            commandTree = json::object();
-        }
+        commandTree = nlohmann::ordered_json::from_cbor(
+            reinterpret_cast<const uint8_t*>(fileStream.data()),
+            reinterpret_cast<const uint8_t*>(fileStream.data()) + fileStream.size()
+        );
+    }
+    else if (fileSystem->fileExists(COMMAND_TREE) && fileSystem->readFile(COMMAND_TREE, fileStream))
+    {
+        commandTree = nlohmann::ordered_json::parse(
+            fileStream.data(),
+            fileStream.data() + fileStream.size(),
+            nullptr,
+            false,
+            true
+        );
+
+        std::vector<uint8_t> treeBin = nlohmann::ordered_json::to_cbor(commandTree);
+        std::string binString(reinterpret_cast<const char*>(treeBin.data()), treeBin.size());
+        fileSystem->writeFile(COMMAND_TREE_BIN, binString);
+        initTree();
     }
     else
     {
@@ -76,16 +84,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
     std::string schemaStream;
     if (fileSystem->fileExists(CONFIG_SCHEMA) && fileSystem->readFile(CONFIG_SCHEMA, schemaStream))
     {
-        TerminalSaxHandler schemaSaxHandler;
-        if (json::sax_parse(schemaStream, &schemaSaxHandler))
-        {
-            configSchema = schemaSaxHandler.result;
-        }
-        else
-        {
-            std::cerr << "Failed to parse configuration schema file: " << CONFIG_SCHEMA << std::endl;
-            configSchema = json::object();
-        }
+        configSchema = nlohmann::ordered_json::parse(schemaStream);
     }
     else
     {
@@ -101,7 +100,7 @@ void CliEngine::initTree()
 
     if (commandTree.contains(VARIABLE_OBJ) && commandTree[VARIABLE_OBJ].contains("interface") && commandTree[VARIABLE_OBJ]["interface"].is_array())
     {
-        nlohmann::json& vars = commandTree[VARIABLE_OBJ];
+        nlohmann::ordered_json& vars = commandTree[VARIABLE_OBJ];
 
         for (const auto& [type, ifaces] : hwManager->getPhysicalInterfaces())
         {
@@ -165,7 +164,7 @@ bool CliEngine::isNumeric(const std::string &input)
     return (*endPtr == '\0');
 }
 
-bool CliEngine::isValidCommandDirectory(nlohmann::json *directory)
+bool CliEngine::isValidCommandDirectory(nlohmann::ordered_json *directory)
 {
     if (directory && directory->is_object())
     {

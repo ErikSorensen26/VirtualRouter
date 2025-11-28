@@ -697,7 +697,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     std::vector<Com> availableCommands;
 
     // Clone the current command directory
-    const nlohmann::json* currentCommandDirectory = currentDirectory;
+    const nlohmann::ordered_json* currentCommandDirectory = currentDirectory;
 
     // Default response for invalid or unavailable commands
     std::vector<Com> noSubCommands = {engine.errorCommand};
@@ -706,7 +706,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     tempDir.clear();
 
     // Helper lamda to travel to the end of the command
-    std::function<void(nlohmann::json*, const nlohmann::json*)> navigateToLastCommand = [&](nlohmann::json* command, const nlohmann::json* nextCommand) {
+    std::function<void(nlohmann::ordered_json*, const nlohmann::ordered_json*)> navigateToLastCommand = [&](nlohmann::ordered_json* command, const nlohmann::ordered_json* nextCommand) {
         if (command->contains(SUBCOMMAND_ARRAY) && (*command)[SUBCOMMAND_ARRAY].size() > 0)
         {
             command = &(*command)[SUBCOMMAND_ARRAY][0];
@@ -730,7 +730,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     }
 
     // Iterate over all commands in the current directory
-    const nlohmann::json* commandNode = nullptr;
+    const nlohmann::ordered_json* commandNode = nullptr;
     int matchCount = 0;
     bool patternMatched = false;
 
@@ -786,7 +786,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
         if (commandName != engine.carriageReturnCommand.name && !engine.isVolatile(commandName) && commandName[0] == '<' && commandName.back() == '>')
         {
             // Next command
-            const nlohmann::json* nextCommand = nullptr;
+            const nlohmann::ordered_json* nextCommand = nullptr;
             if (command.contains(SUBCOMMAND_ARRAY))
             {
                 nextCommand = &command[SUBCOMMAND_ARRAY];
@@ -799,7 +799,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                     // Craft new command
                     if (nextCommand)
                     {
-                        nlohmann::json* commandPtr = new nlohmann::json(std::move(newCommand));
+                        nlohmann::ordered_json* commandPtr = new nlohmann::ordered_json(std::move(newCommand));
                         loosePtrs.push_back(commandPtr);
                         navigateToLastCommand(commandPtr, nextCommand);
                         tempDir.push_back(commandPtr);
@@ -1233,7 +1233,7 @@ bool CliSession::isNumeric(const std::string &input)
     return (*endPtr == '\0');
 }
 
-bool CliSession::isValidCommandDirectory(const nlohmann::json *directory)
+bool CliSession::isValidCommandDirectory(const nlohmann::ordered_json *directory)
 {
     if (directory && directory->is_object())
     {
