@@ -4,7 +4,7 @@
 #include <CommandProcessor.h>
 #include <Global.h>
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 
 // Declare the test class as a friend to access private members
 class Internal_CliTest : public ::testing::Test
@@ -65,7 +65,8 @@ protected:
         mockFileSystem->setupMockFile(HW_CONFIG_FILE, configFileString);
         mockFileSystem->setupMockFile(ROUTER_CONFIG_FILE, "{}");
 
-        global = new Global(mockFileSystem);
+        global = new Global(mockFileSystem, {}, true);
+        global->txMgr.setCorePool({1, 2, 3, 4});
         engine = &global->engine;
         engine->initEngine({});
         engine->paginationCount = 0;
@@ -82,7 +83,8 @@ protected:
         mockConsole->resetCapturedOutput();
     }
 
-    void TearDown() override {
+    void TearDown() override
+    {
         global->removeRoutingInstance("default");
         engine->sessions.clear();
         delete terminal;
@@ -196,7 +198,7 @@ TEST_F(Internal_CliTest, InputHandling_EmptyInput_ShouldRejectCommand)
     // Assert
     EXPECT_FALSE(result);
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "\r\nrouter(config)#");
 }
 
 // Test 3.2: Handling input with only spaces should reject command
@@ -214,7 +216,7 @@ TEST_F(Internal_CliTest, InputHandling_SpacesOnly_ShouldRejectCommand)
     // Assert
     EXPECT_FALSE(result);
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#   \n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "   \r\nrouter(config)#");
 }
 
 // Test 3.3: Handling valid input with leading and trailing spaces
@@ -234,7 +236,7 @@ TEST_F(Internal_CliTest, InputHandling_ValidInputWithSpaces_ShouldProcessCommand
     EXPECT_TRUE(result);
     EXPECT_EQ(getHostname(), "Router1");
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#  hostname Router1  \n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "  hostname Router1  \r\nRouter1(config)#");
 }
 
 #pragma endregion
@@ -256,7 +258,7 @@ TEST_F(Internal_CliTest, DoCommand_FromConfigurationMode_ShouldExecutePrivileged
     // Assert
     EXPECT_TRUE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#do show running-config\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "do show running-config\r\nrouter(config)#");
 }
 
 // Test Executing an invalid "do" command
@@ -274,7 +276,7 @@ TEST_F(Internal_CliTest, DoCommand_InvalidCommand_ShouldRejectCommand) {
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#do invalidcmd\n               ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "do invalidcmd\r\n^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 // Test Executing a "do" command with missing parameters
@@ -292,7 +294,7 @@ TEST_F(Internal_CliTest, DoCommand_MissingParameters_ShouldRejectCommand) {
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#do ping\n% Incomplete Command\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "do ping\r\n% Incomplete Command\r\nrouter(config)#");
 }
 
 // Test Executing a "do" command from sub-mode
@@ -316,7 +318,7 @@ TEST_F(Internal_CliTest, DoCommand_FromSubMode_ShouldExecuteCommandWithinSubMode
     bool result2 = handleInput(doCommand);
     EXPECT_TRUE(result2);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#interface GigabitEthernet 1\nrouter(config-if)#do show interface GigabitEthernet 1\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "interface GigabitEthernet 1\r\nrouter(config-if)#do show interface GigabitEthernet 1\r\nrouter(config-if)#");
 }
 
 #pragma endregion
@@ -337,9 +339,9 @@ TEST_F(Internal_CliTest, HelpRequest_WithQuestionMark_ShouldDisplayAvailableComm
     bool result = handleInput(helpCommand);
 
     // Assert
-    EXPECT_TRUE(result);
+    EXPECT_FALSE(result);
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router>?\n  <1-99>          Session number to resume\n  connect         Open a terminal connection\n  disable         Turn off privileged commands\n  disconnect      Disconnect an existing network connection\n  enable          Turn on privileged commands\n  logout          Exit from the EXEC\n  ping            Send echo messages\n  resume          Resume an active network connection\n  show            Show running system information\n  ssh             Open a secure shell client connection\n  telnet          Open a telnet connection\n  terminal        Set terminal line parameters\n  traceroute      Trace route to destination\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "?\r\n  <1-99>          Session number to resume\r\n  connect         Open a terminal connection\r\n  disable         Turn off privileged commands\r\n  disconnect      Disconnect an existing network connection\r\n  enable          Turn on privileged commands\r\n  logout          Exit from the EXEC\r\n  ping            Send echo messages\r\n  resume          Resume an active network connection\r\n  show            Show running system information\r\n  ssh             Open a secure shell client connection\r\n  telnet          Open a telnet connection\r\n  terminal        Set terminal line parameters\r\n  traceroute      Trace route to destination\r\nrouter>");
 }
 
 // Test Auto-completing a unique partial command using Tab
@@ -361,7 +363,7 @@ TEST_F(Internal_CliTest, AutoComplete_UniquePartialCommand_ShouldCompleteCommand
     EXPECT_TRUE(result);
     EXPECT_TRUE(result2);
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#host\nrouter(config)#hostname  Router1\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "host\r\nrouter(config)#hostname  Router1\r\nRouter1(config)#");
 }
 
 // Test Auto-completing an ambiguous partial command using Tab
@@ -372,15 +374,14 @@ TEST_F(Internal_CliTest, AutoComplete_AmbiguousPartialCommand_ShouldListSuggesti
     std::string partialInput = "a\t";
 
     // Expectation: Terminal lists available suggestions
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(3);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(4);
 
     // Act
     bool result = handleInput(partialInput);
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#a\n");
-    EXPECT_EQ(getNextLine(), "a ");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "a\r\nrouter(config)#a");
 }
 
 // Test Auto-completing an exact command should do nothing
@@ -391,14 +392,14 @@ TEST_F(Internal_CliTest, AutoComplete_ExactCommand_ShouldNotChangeInput)
     std::string exactCommand = "exit\t";
 
     // Expectation: Terminal does not attempt to auto-complete
-    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(6);
+    EXPECT_CALL(*mockConsole, print(::testing::_, ::testing::_)).Times(7);
 
     // Act
     bool result = handleInput(exactCommand);
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(getNextLine(), "exit  ");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "exit\r\nrouter(config)#exit ");
 }
 
 // Test Displaying help within sub-mode using '?'
@@ -418,8 +419,8 @@ TEST_F(Internal_CliTest, HelpRequest_InSubMode_ShouldDisplayAvailableSubCommands
 
     // Act: Invoke help in sub-mode
     bool result2 = handleInput(helpCommand);
-    EXPECT_TRUE(result2);
-    std::string help = "router(config)#interface GigabitEthernet 1\nrouter(config-if)#?\n  arp                    Set arp type (arpa, probe, snap) or timeout\n  bandwidth              Set bandwidth informational parameter\n  cdp                    CDP interface subcommands\n  channel-group          Add this interface to an Etherchannel group\n  crypto                 Encryption/Decryption commands\n  custom-queue-list      Assign a custom queue list to an interface\n  delay                  Specify interface throughput delay\n  description            Interface specific description\n  duplex                 Configure duplex operation.\n  fair-queue             Enable Fair Queuing on an Interface\n  hold-queue             Set hold queue depth\n  ip                     Interface Internet Protocol config \n  ipv6                   IPv6 interface subcommands\n  lldp                   LLDP interface subcommands\n  mac-address            Manually set interface MAC address\n  mtu                    Set the interface Maximum Transmission Unit (MTU)\n  no                     Negate a command or set its defaults\n  pppoe                  pppoe interface subcommands\n  pppoe-client           pppoe client\n  priority-group         Assign a priority group to an interface\n  service-policy         Configure QoS Service Policy\n  shutdown               Shutdown the selected interface\n  speed                  Configure speed operation.\n  standby                HSRP interface configuration commands\n  tx-ring-limit          Configure PA level transmit ring limit\n";
+    EXPECT_FALSE(result2);
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "interface GigabitEthernet 1\r\nrouter(config-if)#?\r\n  aaa                 Authentication, Authorization and Accounting.\r\n  arp                 Set arp type (arpa, probe, snap), timeout, log options or packet priority\r\n  bandwidth           Set bandwidth informational parameter\r\n  bfd                 BFD interface configuration commands\r\n  cdp                 CDP interface subcommands\r\n  channel-group       Add this interface to an Etherchannel group\r\n  crypto              Encryption/Decryption commands\r\n  dampening           Enable event dampening\r\n  delay               Specify interface throughput delay\r\n  description         Interface specific description\r\n  dot1q               dot1q interface configuration commands\r\n  duplex              Configure duplex operation.\r\n  exit                Exit from interface configuration mode\r\n  flow-sampler        Attach flow sampler to the interface\r\n  glbp                Gateway Load Balancing Protocol interface commands\r\n  help                Description of the interactive help system\r\n  history             Interface history histograms - 60 second, 60 minute and 72 hour\r\n  hold-queue          Set hold queue depth\r\n  ip                  Interface Internet Protocol config commands\r\n  ipv6                IPv6 interface subcommands\r\n  keepalive           Enable keepalive\r\n  lan-name            LAN Name command\r\n  load-interval       Specify interval for load calculation for an interface\r\n  loopback            Configure internal loopback on an interface\r\n  mac-address         Manually set interface MAC address\r\n  mpls                Configure MPLS interface parameters\r\n  mtu                 Set the interface Maximum Transmission Unit (MTU)\r\n  negotiation         Select autonegotiation mode\r\n  no                  Negate a command or set its defaults\r\n  ntp                 Configure NTP\r\n  ospfv3              OSPFv3 interface commands\r\n  pppoe               pppoe interface subcommands\r\n  pppoe-client        pppoe client\r\n  rate-limit          Rate Limit\r\n  rmon                Configure Remote Monitoring on an interface\r\n  service-policy      Configure CPL Service Policy\r\n  shutdown            Shutdown the selected interface\r\n  snmp                Modify SNMP interface parameters\r\n  speed               Configure speed operation.\r\n  standby             HSRP interface configuration commands\r\n  timeout             Define timeout values for this interface\r\n  vlan-id             Process VLAN-encapsulated packets with a specific VLAN ID\r\n  vlan-range          Process VLAN-encapsulated packets with a range of VLAN IDs\r\n  vrf                 VPN Routing/Forwarding parameters on the interface\r\n  vrrp                VRRP Interface configuration commands\r\nrouter(config-if)#");
 }
 
 #pragma endregion
@@ -442,7 +443,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ValidGlobalCommand_ShouldProcessSucce
     EXPECT_TRUE(result);
     EXPECT_EQ(global->getHostname(), "Router1");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname Router1\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname Router1\r\nRouter1(config)#");
 }
 
 // Test Processing an invalid global command
@@ -461,7 +462,7 @@ TEST_F(Internal_CliTest, CommandProcessing_InvalidGlobalCommand_ShouldRejectComm
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#invalidcmd\n               ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "invalidcmd\r\n^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 // Test Processing a command with missing required arguments
@@ -481,7 +482,7 @@ TEST_F(Internal_CliTest, CommandProcessing_MissingArguments_ShouldRejectCommand)
     EXPECT_FALSE(result);
     EXPECT_EQ(global->getHostname(), "router"); // Hostname should remain default
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname\n% Incomplete Command\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname\r\n% Incomplete Command\r\nrouter(config)#");
 }
 
 // Test Processing a command with excessive arguments
@@ -501,7 +502,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ExcessiveArguments_ShouldRejectComman
     EXPECT_FALSE(result);
     EXPECT_EQ(global->getHostname(), "router"); // Hostname should remain default
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname Router1 ExtraArg\n                                ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname Router1 ExtraArg\r\n                 ^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 // Test Processing a volatile command with pattern matching
@@ -520,7 +521,7 @@ TEST_F(Internal_CliTest, CommandProcessing_VolatileCommand_ShouldValidatePattern
     // Assert
     EXPECT_TRUE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#do ping 192.168.1.1\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "do ping 192.168.1.1\r\nrouter(config)#");
 }
 
 // Test Processing a volatile command with invalid pattern
@@ -538,7 +539,7 @@ TEST_F(Internal_CliTest, CommandProcessing_VolatileCommand_InvalidPattern_Should
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#do ping #@*\n                    ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "do ping #@*\r\n     ^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 // Test Processing a command with special characters
@@ -557,7 +558,7 @@ TEST_F(Internal_CliTest, CommandProcessing_SpecialCharacters_ShouldRejectCommand
     EXPECT_FALSE(result);
     EXPECT_EQ(global->getHostname(), "router"); // Hostname should remain default
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname Router@123\n                        ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname Router@123\r\n         ^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 #pragma endregion
@@ -579,7 +580,7 @@ TEST_F(Internal_CliTest, MatchingCommands_ExactCase_ShouldMatchSuccessfully)
     EXPECT_TRUE(result);
     EXPECT_EQ(global->getHostname(), "RouterExact");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname RouterExact\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname RouterExact\r\nRouterExact(config)#");
 }
 
 // Test Matching command with different casing (assuming case-insensitive)
@@ -598,7 +599,7 @@ TEST_F(Internal_CliTest, MatchingCommands_DifferentCasing_ShouldMatchSuccessfull
     EXPECT_TRUE(result);
     EXPECT_EQ(global->getHostname(), "RouterCase");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#HoStNaMe RouterCase\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "HoStNaMe RouterCase\r\nRouterCase(config)#");
 }
 
 // Test Matching partial command to full command
@@ -617,7 +618,7 @@ TEST_F(Internal_CliTest, MatchingCommands_PartialToFull_ShouldMatchSuccessfully)
     EXPECT_TRUE(result);
     EXPECT_EQ(global->getHostname(), "RouterPartial");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#host RouterPartial\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(),"host RouterPartial\r\nRouterPartial(config)#");
 }
 
 // Test Matching command with invalid hierarchy
@@ -635,7 +636,7 @@ TEST_F(Internal_CliTest, MatchingCommands_InvalidHierarchy_ShouldRejectCommand)
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#interface GigabitEthernet 1 ip address 10.0.0.1 255.255.255.0 extraArg\n                                           ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(),"interface GigabitEthernet 1 ip address 10.0.0.1 255.255.255.0 extraArg\r\n                            ^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 #pragma endregion
@@ -723,7 +724,7 @@ TEST_F(Internal_CliTest, GlobalCommand_ExitConfigurationMode_ShouldChangeMode)
     EXPECT_TRUE(result);
     EXPECT_EQ(getCurrentMode(), "#");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#exit\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "exit\r\nrouter#");
 }
 
 // Test Executing global command 'end' to exit to privileged EXEC mode
@@ -742,7 +743,7 @@ TEST_F(Internal_CliTest, GlobalCommand_EndConfigurationMode_ShouldChangeMode)
     EXPECT_TRUE(result);
     EXPECT_EQ(getCurrentMode(), "#");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#end\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "end\r\nrouter#");
 }
 
 #pragma endregion
@@ -763,7 +764,7 @@ TEST_F(Internal_CliTest, InvalidInput_UnknownCommand_ShouldRejectCommand)
     // Assert
     EXPECT_FALSE(result);
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#foobar\n               ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "foobar\r\n^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 // Test Processing a command with invalid syntax
@@ -781,7 +782,7 @@ TEST_F(Internal_CliTest, InvalidInput_InvalidSyntax_ShouldRejectCommand)
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#interface GigabitEthernet 1 ip address\n                                           ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "interface GigabitEthernet 1 ip address\r\n                            ^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 // Test Processing a command with invalid characters
@@ -799,7 +800,7 @@ TEST_F(Internal_CliTest, InvalidInput_InvalidCharacters_ShouldRejectCommand)
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname Router!@#\n                        ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(),"hostname Router!@#\r\n         ^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 // Test Processing a command with invalid mode in hierarchy
@@ -817,7 +818,7 @@ TEST_F(Internal_CliTest, InvalidInput_InvalidModeHierarchy_ShouldRejectCommand)
     // Assert
     EXPECT_FALSE(result);
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#router ospf 1 area 0\n                             ^\n% Invlid input detected at '^' marker.\n\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "router ospf 1 area 0\r\n              ^\r\n% Invlid input detected at '^' marker.\r\n\r\nrouter(config)#");
 }
 
 #pragma endregion
@@ -929,7 +930,7 @@ TEST_F(Internal_CliTest, BatchProcessing_MultipleCommands_ShouldProcessAndRecove
     // Additional assertions based on internal state
     EXPECT_EQ(global->getHostname(), "BatchRouter");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname BatchRouter\nBatchRouter(config)#interface GigabitEthernet 1\nBatchRouter(config-if)#ip address 172.16.0.1 255.255.255.0\nBatchRouter(config-if)#exit\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(),"hostname BatchRouter\r\nBatchRouter(config)#interface GigabitEthernet 1\r\nBatchRouter(config-if)#ip address 172.16.0.1 255.255.255.0\r\nBatchRouter(config-if)#exit\r\nBatchRouter(config)#");
 }
 
 // Test Batch processing with invalid commands should handle errors and continue
@@ -959,7 +960,7 @@ TEST_F(Internal_CliTest, BatchProcessing_InvalidCommands_ShouldHandleErrorsAndCo
     EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
     EXPECT_EQ(global->getHostname(), "BatchRouter");
 
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname BatchRouter\nBatchRouter(config)#invalidcmd\n                    ^\n% Invlid input detected at '^' marker.\n\nBatchRouter(config)#interface GigabitEthernet 1\nBatchRouter(config-if)#ip address 10.0.0.1 255.255.255.0\nBatchRouter(config-if)#exit\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname BatchRouter\r\nBatchRouter(config)#invalidcmd\r\n                    ^\r\n% Invlid input detected at '^' marker.\r\n\r\nBatchRouter(config)#interface GigabitEthernet 1\r\nBatchRouter(config-if)#ip address 10.0.0.1 255.255.255.0\r\nBatchRouter(config-if)#exit\r\nBatchRouter(config)#");
 }
 
 // Test Executing a comprehensive list of valid commands and verifying state
@@ -995,7 +996,7 @@ TEST_F(Internal_CliTest, ComprehensiveConfiguration_ValidCommands_ShouldUpdateSt
     EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
     EXPECT_EQ(global->getHostname(), "ComprehensiveRouter");
     
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname ComprehensiveRouter\nComprehensiveRouter(config)#interface GigabitEthernet 1\nComprehensiveRouter(config-if)#ip address 192.168.1.1 255.255.255.0\nComprehensiveRouter(config-if)#no shutdown\nComprehensiveRouter(config-if)#exit\nComprehensiveRouter(config)#router ospf 1\nComprehensiveRouter(config-router)#network 192.168.1.0 0.0.0.255 area 0\nComprehensiveRouter(config-router)#exit\n");
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname ComprehensiveRouter\r\nComprehensiveRouter(config)#interface GigabitEthernet 1\r\nComprehensiveRouter(config-if)#ip address 192.168.1.1 255.255.255.0\r\nComprehensiveRouter(config-if)#no shutdown\r\nComprehensiveRouter(config-if)#exit\r\nComprehensiveRouter(config)#router ospf 1\r\nComprehensiveRouter(config-router)#network 192.168.1.0 0.0.0.255 area 0\r\nComprehensiveRouter(config-router)#exit\r\nComprehensiveRouter(config)#");
 }
 
 // Test Recovering state after a series of commands
@@ -1030,8 +1031,8 @@ TEST_F(Internal_CliTest, StateRecovery_AfterSeriesOfCommands_ShouldRestoreCorrec
     // Additional assertions based on internal state
     EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
     EXPECT_EQ(global->getHostname(), "RecoverRouter");
-    
-    EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#hostname RecoverRouter\nRecoverRouter(config)#interface GigabitEthernet 1\nRecoverRouter(config-if)#ip address 10.0.0.1 255.255.255.0\nRecoverRouter(config-if)#invalidcmd\n                         ^\n% Invlid input detected at '^' marker.\n\nRecoverRouter(config-if)#exit\nRecoverRouter(config)#router ospf 1\nRecoverRouter(config-router)#network 10.0.0.0 0.0.0.255 area 0\nRecoverRouter(config-router)#exit\n");
+
+    EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname RecoverRouter\r\nRecoverRouter(config)#interface GigabitEthernet 1\r\nRecoverRouter(config-if)#ip address 10.0.0.1 255.255.255.0\r\nRecoverRouter(config-if)#invalidcmd\r\n                         ^\r\n% Invlid input detected at '^' marker.\r\n\r\nRecoverRouter(config-if)#exit\r\nRecoverRouter(config)#router ospf 1\r\nRecoverRouter(config-router)#network 10.0.0.0 0.0.0.255 area 0\r\nRecoverRouter(config-router)#exit\r\nRecoverRouter(config)#");
 }
 
 // Test Batch processing with abbreviated and invalid commands
@@ -1090,8 +1091,8 @@ TEST_F(Internal_CliTest, Utility_IsNumeric_ShouldIdentifyNumericStrings) {
 TEST_F(Internal_CliTest, Utility_IsMACAddress_ShouldValidateCorrectly) {
     // Arrange & Act & Assert
     EXPECT_TRUE(isMACAddress("00:1A:2B:3C:4D:5E"));
-    EXPECT_TRUE(isMACAddress("00-1A-2B-3C-4D-5E"));
-    EXPECT_FALSE(isMACAddress("001A.2B3C.4D5E"));
+    EXPECT_TRUE(isMACAddress("001A.2B3C.4D5E"));
+    EXPECT_FALSE(isMACAddress("00-1A-2B-3C-4D-5E"));
     EXPECT_FALSE(isMACAddress("00:1A:2B:3C:4D"));
     EXPECT_FALSE(isMACAddress("GG:HH:II:JJ:KK:LL"));
     

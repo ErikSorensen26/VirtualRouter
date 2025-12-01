@@ -47,7 +47,9 @@ struct StaticHeader
         if (buffer) std::memcpy(buffer, other.buffer, totalLen);
     }
 
-    ~StaticHeader() { std::free(buffer); }
+    ~StaticHeader() {
+        std::free(buffer);
+    }
 };
 
 #endif

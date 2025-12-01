@@ -15,6 +15,10 @@ Global::Global(const StartupFiles& stfs, bool enableRouting, bool test)
     txMgr.setCorePool({0, 1, 2, 3});
     txMgr.setCpuPolicy(CpuPolicy::EqualShare);
     txMgr.setTxCoreBias(1.0);
+
+    if (!test) {
+        engine.initEngine(stfs);
+    }
 }
 
 Global::Global(IFileSystem* fs, const StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, stfs, fs, test) {}
@@ -26,9 +30,17 @@ Global::~Global()
     if (dhcpv6Server)
         delete dhcpv6Server;
 
-    std::lock_guard<std::mutex> lock(routingInstanceMutex);
-    for (auto& [_, instance] : routingInstances)
-        delete instance;
+    {
+        std::lock_guard<std::mutex> lock(routingInstanceMutex);
+        for (auto& [_, instance] : routingInstances)
+            delete instance;
+    }
+    {
+        std::lock_guard<std::mutex> lock(interfaceMutex);
+        for (auto& [_, interface] : interfaceList)
+            delete interface;
+        interfaceList.clear();
+    }
 }
 
 void Global::reset()
@@ -42,6 +54,12 @@ void Global::reset()
         for (auto& [_, instance] : routingInstances)
             delete instance;
         routingInstances.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(interfaceMutex);
+        for (auto& [_, interface] : interfaceList)
+            delete interface;
+        interfaceList.clear();
     }
     
     addRoutingInstance("default");
@@ -71,7 +89,7 @@ Interface* Global::getInterface(uint32_t key)
     return nullptr;
 }
 
-std::map<uint32_t, Interface*> Global::getInterfaceList()
+std::map<uint32_t, Interface*>& Global::getInterfaceList()
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
     return interfaceList;

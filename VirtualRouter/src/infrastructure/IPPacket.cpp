@@ -101,7 +101,7 @@ namespace Protocol
         ip.setTypeOfService(ipv4Build.DSCP);
         ip.setTotalLength(0);
         ip.setIdentification(0);
-        ip.setFlags(ipv4Build.reserved, ipv4Build.dontFragment, ipv4Build.moreFragment);
+        ip.setFlags(ipv4Build.reserved, ipv4Build.moreFragment, ipv4Build.dontFragment);
         ip.setFragmentOffset(ipv4Build.fragmentOffset);
         ip.setTtl(ipv4Build.hopLimit);
         ip.setProtocol(ipv4Build.protocolType);

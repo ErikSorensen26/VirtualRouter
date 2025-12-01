@@ -154,7 +154,7 @@ public:
     // Interfaces
     Interface* addInterface(InterfaceType interfaceType, const HwIfaceInfo& hwInfo, float interfaceId, bool debug);
     Interface* getInterface(uint32_t key);
-    std::map<uint32_t, Interface*> getInterfaceList();
+    std::map<uint32_t, Interface*>& getInterfaceList();
     bool removeInterface(uint32_t key);
 
     // Routing Instances

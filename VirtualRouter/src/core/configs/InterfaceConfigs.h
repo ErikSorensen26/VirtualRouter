@@ -46,10 +46,6 @@ inline uint32_t calculateInterfaceKey(InterfaceType type, float id)
     return (static_cast<uint32_t>(typeEncoded) << 24) | fixed;
 }
 
-/**
- * @class IpInfo
- * @brief Stored IP address and related configuration information.
- */
 class InterfaceConfigs
 {
 public:
@@ -144,6 +140,7 @@ public:
         void removeLocalAddress();
         void removeAddress(const uint8_t* ip);
         void removeAddress(__uint128_t ip);
+        void removeAllAddresses();
 
         void validateGlobalAddresses();
         void validateLinkLocalAddress();
@@ -183,7 +180,7 @@ public:
 
     private:
         TimeManager& timeManager;
-        std::shared_mutex ipMutex;
+        mutable std::shared_mutex ipMutex;
         IPv6Address* linkLocalAddress = nullptr;
         std::vector<IPv6Address*> globalAddresses; ///< Global IPv6 addresses.
         std::vector<IPv6Address*> uniqueLocalAddresses{}; ///< Unique Local Addresses.

@@ -29,7 +29,7 @@ protected:
 
     void SetUp() override
     {
-        global = new Global({}, false, true);
+        global = new Global({}, true, true);
         std::memset(buf, 0, 128);
 
         mockInterface = new MockInterface(*global);

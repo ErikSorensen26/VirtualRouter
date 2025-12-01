@@ -151,7 +151,7 @@ bool TimeManager::cancelTimer(uint32_t id)
         if (executingThreads.count(id) && executingThreads[id] == std::this_thread::get_id())
             return false;
 
-        timerDoneCV.wait(lock, [&] { return !executing[id]; });
+        //timerDoneCV.wait(lock, [&] { return !executing[id]; });
         executing.erase(id);
         executingThreads.erase(id);
         return true;
@@ -173,6 +173,7 @@ void TimeManager::stopTimer()
 
 void TimeManager::Run() 
 {
+    RCU::registerThread();
     std::unique_lock<std::mutex> lock(mutex);
     while (!stop) 
     {
@@ -207,6 +208,7 @@ void TimeManager::Run()
         }
         lock.lock();
     }
+    RCU::unregisterThread();
 }
 
 void TimeManager::runSingleTimer(const TimerData& timer)

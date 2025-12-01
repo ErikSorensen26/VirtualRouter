@@ -43,7 +43,7 @@ HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& f
     if (!configJson.is_object() || !configJson.contains("Interface") || !configJson["Interface"].is_object())
         return;
 
-    nlohmann::json& interfaces = configJson["Interface"];
+    nlohmann::ordered_json& interfaces = configJson["Interface"];
 
     for (auto& [key, value] : interfaces.items())
     {
@@ -53,7 +53,7 @@ HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& f
         if (!value.is_array()) continue;
         for (const auto& obj : value)
         {
-            std::string nic{0};
+            std::string nic{};
             if (obj.is_string())
                 nic = obj.get<std::string>();
             else if (obj.contains("nic") && obj["nic"].is_string())
@@ -61,15 +61,19 @@ HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& f
             else
                 continue;
 
-            uint32_t index = ifnametoindex(nic.c_str());
+            auto addInterface = [&](const char* iface) -> bool {
+                if (!ensureInterface(iface)) return false;
+                uint32_t index = ifnametoindex(iface);
+                physicalInterfaces[type].push_back(index);
+                return true;
+            };
 
-            physicalInterfaces[type].push_back(index);
-            if (ensureInterface(nic.c_str()))
+            if (addInterface(nic.c_str()))
                 continue;
 
             if (allowDummies && createDummy(nic.c_str()))
             {
-                if (!ensureInterface(nic.c_str()))
+                if (!addInterface(nic.c_str()))
                     throw std::runtime_error("Failed to create dummy interface " + nic);
             }
             else
@@ -136,11 +140,15 @@ std::optional<HwIfaceInfo> HardwareManager::extractHwInfo(int sock, struct ifreq
 {
     HwIfaceInfo info;
 
-    if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0)
-    {
-        info.mac = readU48(reinterpret_cast<uint8_t*>(ifr.ifr_hwaddr.sa_data));
-    }
-    else return std::nullopt;
+    info.ifname = ifr.ifr_name;
+    uint32_t idx = ifnametoindex(ifr.ifr_name);
+    if (idx == 0)
+        return std::nullopt;
+    info.index = idx;
+
+    if (ioctl(sock, SIOCGIFHWADDR, &ifr) != 0)
+        return std::nullopt;
+    info.mac = readU48(reinterpret_cast<uint8_t*>(ifr.ifr_hwaddr.sa_data));
 
     struct ethtool_cmd edata {};
     edata.cmd = ETHTOOL_GSET;
@@ -149,52 +157,69 @@ std::optional<HwIfaceInfo> HardwareManager::extractHwInfo(int sock, struct ifreq
     if (ioctl(sock, SIOCETHTOOL, &ifr) == 0)
     {
         unsigned int mbps = ethtool_cmd_speed(&edata);
-        unsigned int kbps = mbps * 1000;
-        info.bandwidth = kbps;
+        if (mbps != (unsigned int)-1)
+            info.bandwidth = mbps * 1000;
+        else
+            return std::nullopt;
     }
-    else return std::nullopt;
+    else
+        return std::nullopt;
 
     return info;
 }
 
 bool HardwareManager::ensureInterface(const char* ifname)
 {
-    if (strlen(ifname) >= IFNAMSIZ) return false;
+    if (strlen(ifname) >= IFNAMSIZ)
+        return false;
 
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) return false;
+    if (sock < 0)
+        return false;
 
     struct ifreq ifr;
     memset(&ifr, 0, sizeof(ifr));
-    std::snprintf(ifr.ifr_name, IFNAMSIZ, "%s", ifname);
+    strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
+    ifr.ifr_name[IFNAMSIZ - 1] = '\0';
 
-    bool exists = false; 
+    bool success = false; 
     if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0)
     {
-        auto info = extractHwInfo(sock, ifr);
-        if (info.has_value())
+        struct ifreq ifr_hw;
+        memset(&ifr_hw, 0, sizeof(ifr_hw));
+        strncpy(ifr_hw.ifr_name, ifname, IFNAMSIZ - 1);
+        ifr_hw.ifr_name[IFNAMSIZ - 1] = '\0';
+
+        auto info = extractHwInfo(sock, ifr_hw);
+
+        HwIfaceInfo hw{};
+        hw.ifname = ifname;
+        uint32_t idx = ifnametoindex(ifname);
+        if (idx != 0)
         {
-            exists = true;
-            info->index = ifnametoindex(ifname);
-            info->ifname = ifname;
-            hwInfo[info->index] = *info;
+            hw.index = idx;
+            if (info.has_value())
+                hw = *info;
+
+            hwInfo[hw.index] = hw;
+            success = true;
         }
     }
-    else
-    {
-        if (errno == ENODEV)
-            exists = false;
-    }
-
     ::close(sock);
-    return exists;
+    return success;
 }
 
 bool HardwareManager::createDummy(const char* ifname)
 {
+    if (strlen(ifname) >= IFNAMSIZ)
+        return false;
+
     std::string cmd = "ip link add " + std::string(ifname) + " type dummy";
     int ret = system(cmd.c_str());
-    return (ret == 0);
+    if (ret != 0)
+        return false;
+    
+    return ifnametoindex(ifname) != 0;
 }
 
 bool HardwareManager::bringUp(const std::string& ifname)

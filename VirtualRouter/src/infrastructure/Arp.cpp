@@ -12,7 +12,7 @@ namespace Protocol
     // Constructor: Initiates the ARP object with the given interface
     Arp::Arp(Interface& CurrentInterface) 
         : currentInterface(&CurrentInterface),
-        global(CurrentInterface.routingInstance->global)
+        global(CurrentInterface.getVRF()->global)
     {
         if (global.routingEnabled)
             initiateArp();
@@ -21,7 +21,7 @@ namespace Protocol
     void Arp::initiateArp()
     {
         std::shared_lock<std::shared_mutex> lock(global.configs.arp.neighborMutex);
-        auto it = global.configs.arp.neighbors.find(currentInterface->routingInstance->instanceName);
+        auto it = global.configs.arp.neighbors.find(currentInterface->getVRF()->instanceName);
         if (it != global.configs.arp.neighbors.end())
         {
             for (const auto& [ip, neighbor] : it->second)

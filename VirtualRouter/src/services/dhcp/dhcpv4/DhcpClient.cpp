@@ -27,7 +27,7 @@ void Protocol::DhcpClient::initiate()
     uint8_t mac[6];
     currentInterface->configs.getMac(mac);
 
-    sendDhcpDiscover(currentInterface->routingInstance->global.getHostname(), mac);
+    sendDhcpDiscover(currentInterface->getVRF()->global.getHostname(), mac);
 }
 
 Protocol::DhcpClient::~DhcpClient()
@@ -43,8 +43,9 @@ void Protocol::DhcpClient::shutdown()
     offered.store(false);
     acked.store(false);
 
-    if (discoveryRetryTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(discoveryRetryTimerId);
-    if (requestRetryTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(requestRetryTimerId);
+    Global& global = currentInterface->getVRF()->global;
+    if (discoveryRetryTimerId) global.timeManager.cancelTimer(discoveryRetryTimerId);
+    if (requestRetryTimerId) global.timeManager.cancelTimer(requestRetryTimerId);
 
     discoveryRetryTimerId = 0;
     requestRetryTimerId = 0;
@@ -393,7 +394,7 @@ void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, const u
     );
 
     // Retry scheduling
-    uint32_t timerId = currentInterface->routingInstance->global.timeManager.addTimer(
+    uint32_t timerId = currentInterface->getVRF()->global.timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(4),
         [this, hostname]() {
             if (!offered.load(std::memory_order_relaxed) && !stopFlag.load(std::memory_order_relaxed)) {
@@ -432,7 +433,7 @@ void Protocol::DhcpClient::sendDhcpRequest(uint32_t transID, const std::string& 
     }
 
     // Retry
-    uint32_t timerId = currentInterface->routingInstance->global.timeManager.addTimer(
+    uint32_t timerId = currentInterface->getVRF()->global.timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(4),
         [this, transID, hostname, requestedIp, serverId]() {
             if (!acked.load(std::memory_order_relaxed) && !stopFlag.load(std::memory_order_relaxed)) {
@@ -512,11 +513,12 @@ bool Protocol::DhcpClient::processDhcpOffer(const DhcpHeader& dhcp, std::vector<
     uint32_t transId = readU32(dhcp.raw->xId);
 
     offered.store(true, std::memory_order_release);
-    currentInterface->routingInstance->global.timeManager.cancelTimer(discoveryRetryTimerId.load(std::memory_order_relaxed));
+    Global& global = currentInterface->getVRF()->global;
+    global.timeManager.cancelTimer(discoveryRetryTimerId.load(std::memory_order_relaxed));
 
     sendDhcpRequest(
         transId,
-        currentInterface->routingInstance->global.getHostname(),
+        global.getHostname(),
         requestedAddress,
         dhcpServerId
     );
@@ -587,7 +589,7 @@ bool Protocol::DhcpClient::processDhcpAck(const DhcpHeader& dhcp, std::vector<TL
 
     processOptionalOption(options);
 
-    currentInterface->routingInstance->global.timeManager.cancelTimer(requestRetryTimerId.load(std::memory_order_relaxed));
+    currentInterface->getVRF()->global.timeManager.cancelTimer(requestRetryTimerId.load(std::memory_order_relaxed));
     requestRetryTimerId.store(0, std::memory_order_release);
     acked.store(true, std::memory_order_release);
 
@@ -632,7 +634,7 @@ bool Protocol::DhcpClient::processDhcpNak(const DhcpHeader& dhcp, std::vector<TL
     // Restart discovery
     uint8_t mac[6];
     currentInterface->configs.getMac(mac);
-    sendDhcpDiscover(currentInterface->routingInstance->global.getHostname(), mac);
+    sendDhcpDiscover(currentInterface->getVRF()->global.getHostname(), mac);
 
     return true;
 }
@@ -723,24 +725,27 @@ void Protocol::DhcpClient::scheduleLeaseTimers(uint32_t t1, uint32_t t2, uint32_
     auto renewTime = t1 ? t1 : lease / 2;
     auto rebindTime = t2 ? t2 : (lease * 875) / 1000;
 
-    renewTimerId = currentInterface->routingInstance->global.timeManager.addTimer(
+    Global& global = currentInterface->getVRF()->global;
+
+    renewTimerId = global.timeManager.addTimer(
         now + std::chrono::seconds(renewTime),
         [this]() { sendRenew(); });
 
-    rebindTimerId = currentInterface->routingInstance->global.timeManager.addTimer(
+    rebindTimerId = global.timeManager.addTimer(
         now + std::chrono::seconds(rebindTime),
         [this]() { sendRebind(); });
 
-    expireTimerId = currentInterface->routingInstance->global.timeManager.addTimer(
+    expireTimerId = global.timeManager.addTimer(
         now + std::chrono::seconds(lease),
         [this]() { expireLease(); });
 }
 
 void Protocol::DhcpClient::cancelLeaseTimers()
 {
-    if (renewTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(renewTimerId);
-    if (rebindTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(rebindTimerId);
-    if (expireTimerId) currentInterface->routingInstance->global.timeManager.cancelTimer(expireTimerId);
+    Global& global = currentInterface->getVRF()->global;
+    if (renewTimerId) global.timeManager.cancelTimer(renewTimerId);
+    if (rebindTimerId) global.timeManager.cancelTimer(rebindTimerId);
+    if (expireTimerId) global.timeManager.cancelTimer(expireTimerId);
     renewTimerId = 0;
     rebindTimerId = 0;
     expireTimerId = 0;
@@ -909,7 +914,7 @@ void Protocol::DhcpClient::expireLease()
     // Optionally restart discovery if auto-renew
     uint8_t mac[6];
     currentInterface->configs.getMac(mac);
-    sendDhcpDiscover(currentInterface->routingInstance->global.getHostname(), mac);
+    sendDhcpDiscover(currentInterface->getVRF()->global.getHostname(), mac);
 }
 
 void Protocol::DhcpClient::appendAuthOptions(TLV8BufferManager& tlv, const DhcpHeader& dhcp)

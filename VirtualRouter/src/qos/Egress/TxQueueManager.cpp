@@ -69,13 +69,24 @@ void TxQueueManager::addInterface(Interface& iface, const std::string& ifname, c
 void TxQueueManager::removeInterface(Interface& iface)
 {
     std::lock_guard<std::mutex> lk(mu);
+
     auto it = ifs.find(&iface);
     if (it == ifs.end()) return;
-    for (int i = 0; i < it->second.queueAmount; ++i) stopAndDelete(it->second.queues[i]);
+
+    auto& st = it->second;
+
+    setHwTxQueues(st.ifname, 1);
+
+    for (int i = 0; i < st.queueAmount; ++i)
+        stopAndDelete(st.queues[i]);
+
     delete[] it->second.queues;
-    ifs.erase(it);
+
     delete iface.tx;
     iface.tx = nullptr;
+
+    ifs.erase(it);
+
     reoptimize();
 }
 

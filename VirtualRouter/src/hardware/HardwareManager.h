@@ -54,7 +54,7 @@ private:
     std::map<InterfaceType, std::vector<uint32_t>> physicalInterfaces;
     std::map<uint32_t, HwIfaceInfo> hwInfo;
 
-    nlohmann::json configJson;
+    nlohmann::ordered_json configJson;
     bool allowDummies;
 
     int nlSock = -1;

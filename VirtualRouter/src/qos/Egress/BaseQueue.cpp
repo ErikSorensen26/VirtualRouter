@@ -78,9 +78,9 @@ void BaseQueue::dequeue(uint32_t frame, uint32_t length)
     {
         if (++flushCount >= 512 || isEmpty())
         {
-            out.flush();
-            flushCount = 0;
         }
+        out.flush();
+        flushCount = 0;
     }
     else
     {

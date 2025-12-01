@@ -158,7 +158,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 }
                 else if (sourcePort == Variable::Udp::dhcpClient && destinationPort == Variable::Udp::dhcpClient)
                 {
-                    interface->routingInstance->global.dhcpServer->handlePacket(*dhcp, mac, *interface);
+                    interface->getVRF()->global.dhcpServer->handlePacket(*dhcp, mac, *interface);
                 }
                 break;
             }

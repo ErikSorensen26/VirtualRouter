@@ -24,7 +24,8 @@ public:
             throw std::runtime_error("FIFOQueue capacity must be a power of 2");
 
         buffer = new PacketSlot*[capacity];
-        std::memset(buffer, 0, sizeof(PacketSlot*) * capacity);
+        size_t size = sizeof(PacketSlot*) * capacity;
+        std::memset(buffer, 0, size);
     }
 
     ~FIFOQueue() override

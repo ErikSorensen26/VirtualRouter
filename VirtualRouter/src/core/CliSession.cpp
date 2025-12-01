@@ -1266,7 +1266,9 @@ bool CliSession::handlePagination(char nextch)
         }
     }
 
-    for (int i = 0; i < paginationList.size() && i < engine.paginationCount; i++)
+    size_t paginationSize = engine.paginationCount == 0 ? paginationList.size() : engine.paginationCount;
+
+    for (int i = 0; i < paginationList.size() && i < paginationSize; i++)
     {
         const Com &command = paginationList[i];
         if (command.name != engine.errorCommand.name)
@@ -1297,7 +1299,7 @@ bool CliSession::handlePagination(char nextch)
         }
     }
 
-    if (paginationList.size() > engine.paginationCount)
+    if (paginationList.size() > paginationSize)
     {
         paginationList.erase(paginationList.begin(), paginationList.begin() + engine.paginationCount);
         paginationList.shrink_to_fit();

@@ -26,7 +26,7 @@ protected:
     void SetUp() override
     {
         std::memset(buf, 0, 128);
-        global = new Global({}, false, true);
+        global = new Global({}, true, true);
         iface = new MockInterface(*global);
         iface->enableShutdown();
         iface->configs.ipv6.addAddress(localLinkIp, true, 64);

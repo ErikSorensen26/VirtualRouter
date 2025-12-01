@@ -22,8 +22,8 @@
 #include <StaticHeader.hpp>
 
 Interface::Interface(const InterfaceCreation& cfgs)
-  : routingInstance(&cfgs.vrf),
-    configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
+  : configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
+    routingInstance(&cfgs.vrf),
     debug(cfgs.debug),
     threadsRunning(false)
 {
@@ -37,8 +37,9 @@ Interface::~Interface()
 {
     cleanupInterface();
     stopThreads();
-    if (routingInstance->global.engine.hwManager)
-        routingInstance->global.engine.hwManager->unregisterInterface(&configs.hwInfo, this);
+    VirtualRouter* vrf = getVRF();
+    if (vrf->global.engine.hwManager)
+        vrf->global.engine.hwManager->unregisterInterface(&configs.hwInfo, this);
 }
 
 void Interface::cleanupInterface()
@@ -46,7 +47,8 @@ void Interface::cleanupInterface()
     shutdownFlag.store(true, std::memory_order_release);
     stateChange(StateChange::SHUTDOWN);
     stateChangeV6(StateChange::SHUTDOWN);
-    if (auto dhcpv6Server = routingInstance->global.dhcpv6Server)
+    VirtualRouter* vrf = getVRF();
+    if (auto dhcpv6Server = vrf->global.dhcpv6Server)
     {
         //dhcpv6Server->removeInterface(this);
     }
@@ -56,19 +58,10 @@ void Interface::cleanupInterface()
     // Remove interface from list
     if (routingInstance)
     {
-        routingInstance->removeInterface(configs.key);
+        vrf->removeInterface(configs.key);
     }
-    routingInstance->global.removeInterface(configs.key);
 }
 
-/**
- * @brief Sets the IPv4 address and subnet mask for the interface.
- *
- * Updates the IPv4 configuration and sends gratuitous ARP packets to update the network.
- *
- * @param ip The IPv4 address to assign to the interface.
- * @param subnet The subnet mask for the IPv4 address.
- */
 void Interface::setIPv4(uint32_t ip, uint8_t subnet)
 {
     {
@@ -86,16 +79,6 @@ void Interface::setIPv4(uint32_t ip, uint8_t subnet)
     }
 }
 
-/**
- * @brief Sets the IPv6 address, subnet mask, and EUI-64 flag for interface.
- *
- * Updates the IPv6 configuration and triggers Neighbor Discovery Protocol (NDP) updates.
- *
- * @param ip The IPv6 address to assign to the interface.
- * @param linkLocal Indicates if the address is linkLocal
- * @param subnet The subnet mask for the IPv6 address, Default to 64.
- * @param eui64 Flag indicating whether to use EUI-64 for IPv6 address generation.
- */
 void Interface::setIPv6(const uint8_t* ip, bool localLink, uint8_t prefix, bool eui64)
 {
     InterfaceConfigs::IPv6State::IPv6Address* ipv6 = nullptr;
@@ -142,11 +125,12 @@ void Interface::removeIPv6(const uint8_t* ip)
     stateChangeV6(StateChange::IPREMOVAL);
 }
 
-/**
- * @brief Gathers and returns all tentative addresses on the interface.
- *
- * Helper address to return all pending IPv6 addresses.
- */
+void Interface::removeAllIPv6()
+{
+    configs.ipv6.removeAllAddresses();
+    stateChangeV6(StateChange::IPREMOVAL);
+}
+
 std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
 {
     std::vector<std::array<uint8_t, 16>> tentative;
@@ -182,12 +166,6 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
     return tentative;
 }
 
-/**
- * @brief Marks a IPv6 address as a duplicate making it invalid.
- *
- * @param address IPv6 address being marked as a duplicate
- * @param optional param stating if its a link-local address or not.
- */
 void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
 {
     std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
@@ -214,13 +192,6 @@ void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
     }
 }
 
-/**
- * @brief Shuts down or restarts the interface.
- * 
- * Toggles the running state of the interface and triggers state changes for protocols.
- *
- * @param shut Boolean flag indicating whether to shut down ('true') or restart ('false').
- */
 void Interface::shutdown(bool shut) 
 {
     if (shutdownFlag.load(std::memory_order_relaxed) == shut ||
@@ -231,11 +202,9 @@ void Interface::shutdown(bool shut)
     {
         stateChange(StateChange::SHUTDOWN);
         stateChangeV6(StateChange::SHUTDOWN);
-        stopThreads();
     }
     else if (!shut) 
     {
-        startThreads();
         stateChange(StateChange::INITIATE);
         stateChangeV6(StateChange::INITIATE);
     }
@@ -248,14 +217,6 @@ void Interface::physicalShutdown(bool shut)
     shutdown(shut);
 }
 
-/**
- * @brief Enqueues a packet for sending through the interface.
- *
- * Serializes and enqueues the packet, replacing the MAC address if provided.
- *
- * @param packetInfo The packet information to be sent.
- * @param mac Optional MAC address to replace the packet's source MAC.
- */
 void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
 {
     if (!threadsRunning.load(std::memory_order_relaxed)) return;
@@ -281,7 +242,7 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
 
 void Interface::processIngress(uint8_t* packet, size_t size) 
 {
-    routingInstance->global.threadPool.enqueue([this, packet, size]() {
+    getVRF()->global.threadPool.enqueue([this, packet, size]() {
         PacketInfo packetInfo;
         inspect(packetInfo, packet, size);
         decapsulate(packetInfo, packet, size);
@@ -292,8 +253,9 @@ void Interface::processIngress(uint8_t* packet, size_t size)
 void Interface::startThreads() 
 {
     // Add the interface to the TX Queue manager
-    routingInstance->global.txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-    routingInstance->global.rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    VirtualRouter* vrf = getVRF();
+    vrf->global.txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    vrf->global.rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
 
     // Initialize shared pointers for Protocol objects
     if (!arp)
@@ -321,8 +283,9 @@ void Interface::stopThreads()
     }
         
     // Add the interface to the TX Queue manager
-    routingInstance->global.txMgr.removeInterface(*this);
-    routingInstance->global.rxMgr.removeInterface(*this);
+    VirtualRouter* vrf = getVRF();
+    vrf->global.txMgr.removeInterface(*this);
+    vrf->global.rxMgr.removeInterface(*this);
 
     threadsRunning.store(false, std::memory_order_release); 
 
@@ -333,10 +296,11 @@ void Interface::stopThreads()
 void Interface::stateChange(StateChange state)
 {
     // Eigrp Updates
-    if (routingInstance)
+    VirtualRouter* vrf = getVRF();
+    if (vrf)
     {
-        std::shared_lock<std::shared_mutex> lock(routingInstance->eigrpAutonomousSystemMutex);
-        for (const auto& [_, eigrpPtr] : routingInstance->eigrpList)
+        std::shared_lock<std::shared_mutex> lock(vrf->eigrpAutonomousSystemMutex);
+        for (const auto& [_, eigrpPtr] : vrf->eigrpList)
         {
             if (eigrpPtr->ipv4)
             {
@@ -346,7 +310,7 @@ void Interface::stateChange(StateChange state)
     }
     // Other updates...
 
-    if (!routingInstance->global.routingEnabled)
+    if (!vrf->global.routingEnabled)
         return;
 
     switch (state)
@@ -354,11 +318,13 @@ void Interface::stateChange(StateChange state)
         case StateChange::INITIATE:
         {
             if (dhcp) dhcp->initiate();
+            if (arp) arp->initiateArp();
             break;
         }
         case StateChange::SHUTDOWN:
         {
             if (dhcp) dhcp->shutdown();
+            if (arp) arp->shutdown();
             break;
         }
         case StateChange::IPCHANGE:
@@ -366,8 +332,7 @@ void Interface::stateChange(StateChange state)
             if (arp)
             {
                 arp->shutdown();
-                if (routingInstance->global.routingEnabled)
-                    arp->initiateArp();
+                arp->initiateArp();
             }
             break;
         }
@@ -382,10 +347,11 @@ void Interface::stateChange(StateChange state)
 void Interface::stateChangeV6(StateChange state)
 {
     // Eigrp Updates
+    VirtualRouter* vrf = getVRF();
     if (routingInstance)
     {
-        std::shared_lock<std::shared_mutex> lock(routingInstance->eigrpAutonomousSystemMutex);
-        for (const auto& [_, eigrpPtr] : routingInstance->eigrpList)
+        std::shared_lock<std::shared_mutex> lock(vrf->eigrpAutonomousSystemMutex);
+        for (const auto& [_, eigrpPtr] : vrf->eigrpList)
         {
             if (eigrpPtr->ipv6)
             {
@@ -395,7 +361,7 @@ void Interface::stateChangeV6(StateChange state)
     }
     // Other updates...
 
-    if (!routingInstance->global.routingEnabled)
+    if (!vrf->global.routingEnabled)
         return;
     
     switch (state)
@@ -423,7 +389,7 @@ void Interface::stateChangeV6(StateChange state)
             if (ndp)
             {
                 ndp->shutdown();
-                if (routingInstance->global.routingEnabled)
+                if (vrf->global.routingEnabled)
                     ndp->initializeNdp();
             }
             break;
@@ -434,6 +400,35 @@ void Interface::stateChangeV6(StateChange state)
             break;
         }
     }
+}
+
+VirtualRouter* Interface::getVRF()
+{
+    return routingInstance.load(std::memory_order_relaxed);
+}
+
+bool Interface::setVRF(VirtualRouter* vrf)
+{
+    VirtualRouter* oldVrf = getVRF();
+    if (oldVrf == vrf)
+        return false;
+
+    stateChange(StateChange::SHUTDOWN);
+    stateChangeV6(StateChange::SHUTDOWN);
+
+    //TODO remove ipaddress configs
+
+    removeIPv4();
+    removeAllIPv6();
+
+    getVRF()->removeInterface(configs.key);
+    routingInstance.store(vrf, std::memory_order_release);
+    vrf->addInterface(this, configs.key);
+
+    stateChange(StateChange::INITIATE);
+    stateChangeV6(StateChange::INITIATE);
+
+    return true;
 }
 
 EigrpConfigs::InterfaceConfigs* Interface::getEigrpConfig(uint32_t as, AddressFamily af, bool negate)

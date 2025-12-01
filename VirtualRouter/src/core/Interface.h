@@ -60,14 +60,6 @@ struct InterfaceCreation
     bool debug;
 };
 
-
-/**
- * @class Interface
- * @brief Represents a network interface handling packet ingress, egress, and processing.
- *
- * The interface class manages packet capture, sending, and processing for a specific network interface.
- * It handles IP configuration, MAC address management, and interacts with various network protocols.
- */
 class Interface
 {
 public:
@@ -82,6 +74,7 @@ public:
     virtual void setIPv4(uint32_t ip, uint8_t subnet);
     virtual void setIPv6(const uint8_t* ip, bool linkLocal = false, uint8_t subnet = 64, bool eui64 = false);
     void removeIPv4();
+    void removeAllIPv6();
     void removeIPv6(const uint8_t* ip = nullptr);
 
     std::vector<std::array<uint8_t, 16>> getTentativeAddress();
@@ -91,9 +84,11 @@ public:
     void physicalShutdown(bool carrier);
     virtual void enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac = nullptr);
 
+    VirtualRouter* getVRF();
+    bool setVRF(VirtualRouter* vrf);
+
     std::atomic<bool> shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
     std::atomic<bool> carrierFlag = true; ///< Flag indicating if carrier is enabled.
-    VirtualRouter* routingInstance = nullptr;
 
     // Member Variables
     InterfaceConfigs configs;         ///< IP configuration information.
@@ -109,53 +104,17 @@ public:
     Protocol::DhcpClient* dhcp = nullptr;     ///< DHCP Client protocol handler.
     //Protocol::Dhcpv6Client* dhcpv6 = nullptr; ///< Dhcpv6 client protocol handler.
 
-    /**
-     * @brief Stops the background threads for packet handling.
-     *
-     * Signals threads to stop and joins them to ensure proper shutdown.
-     */
     void stopThreads();
-
-    /**
-     * @brief Starts the background threads for packet handling.
-     *
-     * Launches threads for packet ingress, egress, and processing.
-     */
     virtual void startThreads();
-
     TxDistributor* tx;      ///< Egress object for packet sending.
 
 private:
 
+    std::atomic<VirtualRouter*> routingInstance = nullptr;
+
     void processIngress(uint8_t* packet, size_t size); // Method for processing packets
-
-    /**
-     * @brief Handles state changes relates to IPv4 configuration.
-     *
-     * Updates several protocols and the routing table based on the new IPv4 configuration.
-     *
-     * @param shut Indicates if the interface is shutting down or starting.
-     */
     void stateChange(StateChange state);
-
-    /**
-     * @brief Handles state changes related to IPv6 configuration.
-     *
-     * Updates several protocols and the routing table based on the new IPv6 configuration.
-     *
-     * @param shut Indicates if the interface is shutting down or starting.
-     */
     void stateChangeV6(StateChange state);
-
-    /**
-     * @brief Handles ARP resolution events.
-     *
-     * Updates ARP tables or triggers necessary actions when an ARP resolution is completed.
-     *
-     * @param ip The IP address for which ARP resolution was preformed.
-     * @param mac The MAC address resolved for the given IP address.
-     */
-    void onArpResolved(const uint8_t* ip, const uint8_t* mac);
 
     // Member variables
     std::mutex ipInfoMutex;             ///< Mutex for thread-safe access to IP information.

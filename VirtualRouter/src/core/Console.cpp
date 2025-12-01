@@ -258,15 +258,7 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
 
 std::string Console::input(std::string testInput, bool pagination)
 {
-    std::string input;
-    if (testInput.empty())
-    {
-        input = inputCacheBuffer;
-    }
-    else
-    {
-        cursorPos = 0;
-    }
+    std::string input = inputCacheBuffer;
 
     // For loop and while loop, if testInput is empty it will act as a true while loop
     for (size_t i = 0; (testInput.empty()) || (i < testInput.length()); (testInput.empty()) ? (i) : (++i))

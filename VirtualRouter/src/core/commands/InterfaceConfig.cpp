@@ -30,8 +30,9 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			{
 				if (commandStream[2] != "dhcp")
 				{
-					currentInterface->setIPv4(Functions::addressToIntv4(commandStream[2]),
-						static_cast<uint8_t>(__builtin_popcount(Functions::addressToIntv4(commandStream[3]))));
+					uint32_t ipAddress = Functions::addressToIntv4(commandStream[2]);
+					uint8_t subnet = __builtin_popcount(Functions::addressToIntv4(commandStream[3]));
+					currentInterface->setIPv4(ipAddress, subnet);
 				}
 				else
 				{
@@ -776,7 +777,7 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			}
 		}
 	}
-	else if (commandStream[1] == "mtu")
+	else if (commandStream.size() >= 2 && commandStream[1] == "mtu")
 	{
 		
 	}

@@ -14,9 +14,6 @@ CliEngine::CliEngine(Global& global, const StartupFiles& stfs, bool test) : Conf
     // Set debug mode based on the input parameter
     std::string name = "default";
     global.addRoutingInstance(name);
-    if (!test) {
-        initEngine(stfs);
-    }
 }
 
 CliEngine::CliEngine(Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test) : Configs(fs), global(global)
@@ -57,6 +54,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
             reinterpret_cast<const uint8_t*>(fileStream.data()),
             reinterpret_cast<const uint8_t*>(fileStream.data()) + fileStream.size()
         );
+        initTree();
     }
     else if (fileSystem->fileExists(COMMAND_TREE) && fileSystem->readFile(COMMAND_TREE, fileStream))
     {
@@ -97,7 +95,6 @@ void CliEngine::initEngine(const StartupFiles& stfs)
 
 void CliEngine::initTree()
 {
-
     if (commandTree.contains(VARIABLE_OBJ) && commandTree[VARIABLE_OBJ].contains("interface") && commandTree[VARIABLE_OBJ]["interface"].is_array())
     {
         nlohmann::ordered_json& vars = commandTree[VARIABLE_OBJ];
@@ -107,7 +104,11 @@ void CliEngine::initTree()
             std::string typeStr = getInterfaceType(type);
             if (vars.contains(typeStr) && vars[typeStr].is_array())
             {
-                vars[typeStr][0][COMMAND_NAME] = "<0-" + std::to_string(ifaces.size() - 1) + ">";
+                size_t size = ifaces.size();
+                if (size != 0)
+                    vars[typeStr][0][COMMAND_NAME] = "<0-" + std::to_string(size - 1) + ">";
+                else
+                    vars.erase(typeStr);
             }
         }
     }

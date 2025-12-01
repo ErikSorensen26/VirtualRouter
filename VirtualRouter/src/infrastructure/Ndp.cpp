@@ -14,7 +14,7 @@ namespace Protocol
     // Constructor: Initiates the NDP object with the given interface
     Ndp::Ndp(Interface& iface)
         : currentInterface(&iface),
-        global(iface.routingInstance->global)
+        global(iface.getVRF()->global)
     {
         // Initialize global configs
         configs.refresh = global.configs.ndp.refresh.load(std::memory_order_relaxed);
@@ -854,7 +854,7 @@ namespace Protocol
 
     void Ndp::sendRedirectMessage(const uint8_t* targetIp, const uint8_t* destinationIp)
     {
-        if (!currentInterface || !currentInterface->routingInstance || !configs.redirects.load(std::memory_order_relaxed)) return;
+        if (!currentInterface || !currentInterface->getVRF() || !configs.redirects.load(std::memory_order_relaxed)) return;
 
         PacketBuilder packet(currentInterface);
 

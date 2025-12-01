@@ -25,7 +25,7 @@ bool CommandProcessor::handlePriviledgedExec(const std::vector<std::string>& com
 				}
 			}
 		}
-		else if (commandStream[2] == "clock")
+		else if (commandStream[1] == "clock")
 		{
 			terminal.iConsole->print("\r\n" + terminal.engine.timeManager.getTime());
 		}

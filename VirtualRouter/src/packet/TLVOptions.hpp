@@ -98,7 +98,7 @@ private:
 public:
     TLV16BufferManager(uint8_t* buf, size_t len) : buffer(buf), offset(0), len(len) {}
 
-    uint8_t* getNextValBuf(uint8_t size = 0)
+    uint8_t* getNextValBuf(uint16_t size = 0)
     {
         if (offset + 4 + size > len)
             return nullptr;

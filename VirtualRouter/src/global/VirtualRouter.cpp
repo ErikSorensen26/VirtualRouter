@@ -17,9 +17,9 @@ VirtualRouter::~VirtualRouter()
             interfaceListCopy.swap(interfaceList);
         }
         // Interfaces
-        for (auto [_, interface] : interfaceListCopy)
+        for (auto [key, interface] : interfaceListCopy)
         {
-            delete interface;
+            global.removeInterface(key);
         }
     }
 

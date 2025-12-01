@@ -13,7 +13,7 @@
 #include <Configs.h>           // Your Configs class header
 #include "MockFileSystem.hpp" // Mocked file system interface
 
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::Invoke;
@@ -22,9 +22,9 @@ void validateJson(const std::string& json)
 {
     try
     {
-        auto parsedJson = nlohmann::json::parse(json);
+        auto parsedJson = nlohmann::ordered_json::parse(json);
     }
-    catch (const nlohmann::json::parse_error& e)
+    catch (const nlohmann::ordered_json::parse_error& e)
     {
         // Catch and display parsing errors
         std::cerr << "JSON parsing error: " << e.what() << std::endl;
@@ -186,7 +186,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ValidStartupAndAdditionalConfig) {
     mockFileSystem->setupMockFile(additionalConfigPath, additionalConfig);
 
     // Initialize configurations
-    configs->initConfigs({}, false);
+    configs->initConfigs({});
 
     // Verify root configuration
     EXPECT_EQ(configs->root["hostname"]["word"], "TestRouter");
@@ -4259,8 +4259,8 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfInterfaces_ShouldL
     nlohmann::ordered_json startupConfig = {
         {"hostname", {{"value", "LargeInterfaceRouter"}}},
         {"interface", {
-            {"GigabitEthernet", nlohmann::json::array()},
-            {"FastEthernet", nlohmann::json::array()}
+            {"GigabitEthernet", nlohmann::ordered_json::array()},
+            {"FastEthernet", nlohmann::ordered_json::array()}
         }}
     };
 
@@ -4613,9 +4613,9 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNested_ShouldLoad
     const int numInterfaces = 1000; // Adjust as needed
 
     // Generate a large number of GigabitEthernet interfaces with deeply nested commands
-    nlohmann::json startupConfig = {
+    nlohmann::ordered_json startupConfig = {
         {"hostname", {{"word", "ComplexLargeRouter"}}},
-        {"interface", {{"GigabitEthernet", nlohmann::json::array()}}}
+        {"interface", {{"GigabitEthernet", nlohmann::ordered_json::array()}}}
     };
 
     for (int i = 1; i <= numInterfaces; ++i) {
@@ -4728,14 +4728,14 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeNumberOfVLANs_ShouldLoadAl
     const int numVLANs = 1000; // Adjust as needed
 
     // Generate VLAN configurations
-    nlohmann::json startupConfig = {
+    nlohmann::ordered_json startupConfig = {
         {"hostname", {{"word", "VLANLargeRouter"}}},
         {"interface", {
             {"GigabitEthernet", {
                 {
                     {"id", "1"},
                     {"commands", {
-                        {"vlan", nlohmann::json::array()}
+                        {"vlan", nlohmann::ordered_json::array()}
                     }}
                 }
             }}
@@ -4769,13 +4769,13 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNestedCombined_Sh
     const int vlansPerInterface = 10;
 
     // Generate startup configuration with deeply nested commands and VLANs
-    nlohmann::json startupConfig = {
+    nlohmann::ordered_json startupConfig = {
         {"hostname", {{"word", "ComplexDeepLargeRouter"}}},
-        {"interface", {{"GigabitEthernet", nlohmann::json::array()}}}
+        {"interface", {{"GigabitEthernet", nlohmann::ordered_json::array()}}}
     };
 
     for (int i = 1; i <= numInterfaces; ++i) {
-        nlohmann::json interfaceEntry = {
+        nlohmann::ordered_json interfaceEntry = {
             {"id", std::to_string(i)},
             {"commands", {
                 {"level1", {
@@ -4790,7 +4790,7 @@ TEST_F(Internal_ConfigTest, InitConfigs_ExtremelyLargeAndDeeplyNestedCombined_Sh
                                         }}
                                     }},
                                     {"bandwidth", {{"id", std::to_string(100000 + i)}}},
-                                    {"vlan", nlohmann::json::array()}
+                                    {"vlan", nlohmann::ordered_json::array()}
                                 }}
                             }}
                         }}
