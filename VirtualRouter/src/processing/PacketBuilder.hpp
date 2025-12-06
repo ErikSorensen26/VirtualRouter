@@ -10,6 +10,7 @@
 #include <PacketSlot.hpp>
 #include <Interface.h>
 #include <TxDistributor.h>
+#include <StaticHeader.hpp>
 
 constexpr size_t MaxPacketSize = 2048;
 
@@ -60,6 +61,20 @@ public:
         return &entry;
     }
 
+    template <typename T>
+    T reserveAndBuildHeader(HeaderType type)
+    {
+        constexpr size_t size = T::fixedSize;
+
+        BuildEntry* entry = reserveHeader(type, size);
+        if (!entry) return T{};
+        buildIndex++;
+
+        T hdr;
+        hdr.setBuffer(entry->buffer);
+        return hdr;
+    }
+
     BuildEntry* getHeader(HeaderType type)
     {
         for (auto& header : headers)
@@ -68,6 +83,27 @@ public:
                 return &header;
         }
         return nullptr;
+    }
+
+    template <typename T>
+    T getHeader(HeaderType type)
+    {
+        BuildEntry* entry = getHeader(type);
+        return extractHeader<T>(entry);
+    }
+
+    BuildEntry* addHeader(const StaticHeader& saved, HeaderType type)
+    {
+        if (!saved.buffer || saved.totalLen == 0)
+            return nullptr;
+
+        BuildEntry* entry = reserveHeader(type, saved.totalLen);
+        if (!entry)
+            return nullptr;
+
+        std::memcpy(entry->buffer, saved.buffer, saved.totalLen);
+
+        return entry;
     }
 
     void addTLVSize(size_t tlvSize)
@@ -92,6 +128,13 @@ public:
         return &headers[headerCount - (++buildIndex)];
     }
 
+    template <typename T>
+    T nextBuildHeader()
+    {
+        BuildEntry* entry = nextBuildHeader();
+        return extractHeader<T>(entry);
+    }
+
     BuildEntry* previewNextBuildHeader()
     {
         if (buildIndex >= headerCount)
@@ -99,9 +142,23 @@ public:
         return &headers[headerCount - (buildIndex + 1)];
     }
 
+    template <typename T>
+    T previewNextBuildHeader()
+    {
+        BuildEntry* entry = previewNextBuildHeader();
+        return extractHeader<T>(entry);
+    }
+
     BuildEntry* currentBuildHeader()
     {
         return &headers[headerCount - buildIndex];
+    }
+
+    template <typename T>
+    T currentBuildHeader()
+    {
+        BuildEntry* entry = previewNextBuildHeader();
+        return extractHeader<T>(entry);
     }
 
     // Reset for reuse
@@ -121,6 +178,25 @@ public:
     size_t bufferOffset = 0;
 
 private:
+    template <typename T>
+    T extractHeader(BuildEntry* entry)
+    {
+        if (!entry) return T{};
+
+        T hdr;
+        hdr.setBuffer(entry->buffer);
+
+        if constexpr (requires(T x) { x.getTrail(); })
+        {
+            size_t trail = (entry->length > T::fixedSize)
+                ? entry->length - T::fixedSize
+                : 0;
+            hdr.setTrail(entry->buffer + T::fixedSize, trail);
+        }
+
+        return hdr;
+    }
+
     BuildEntry headers[MaxHeaders];
     size_t buildIndex = 0;
     size_t headerCount = 0;

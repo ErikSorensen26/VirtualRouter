@@ -20,12 +20,9 @@ std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet
                                uint16_t virId,
                                uint16_t asn)
 {
-    packet.reserveHeader(HeaderType::EIGRP, EigrpHeader::fixedSize);
-    auto* hdr = packet.nextBuildHeader();
-    if (!hdr) return std::nullopt;
+    EigrpHeader e = packet.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
+    if (!e.buffer) return std::nullopt;
 
-    EigrpHeader e;
-    e.setBuffer(hdr->buffer);
     e.setVersion(2);
     e.setOpcode(opcode);
     e.setSequence(seq);

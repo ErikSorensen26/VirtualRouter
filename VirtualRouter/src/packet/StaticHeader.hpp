@@ -7,30 +7,42 @@
 #include <cstring>
 #include <cstdlib>
 
-#define RESTORE_FULL_HEADER(builder, staticHeader, headerObj, type)                         \
-do {                                                                                        \
-    BuildEntry* entry = (builder).reserveHeader(type, staticHeader.totalLen);               \
-    std::memcpy(entry->buffer, staticHeader.buffer, (staticHeader).totalLen);               \
-    (headerObj).setBuffer(entry->buffer);                                                   \
-    if ((staticHeader).totalLen > (headerObj).fixedSize)                                    \
-        (headerObj).setTrail(entry->buffer, (staticHeader).totalLen - headerObj.fixedSize); \
-} while (0)
-
-#define RESTORE_FIXED_HEADER(builder, staticHeader, headerObj, type)                        \
-do {                                                                                        \
-    BuildEntry* entry = builder.reserveHeader(type, staticHeader.totalLen);                 \
-    std::memcpy(entry->buffer, staticHeader.buffer, staticHeader.totalLen);                 \
-    (headerObj).setBuffer(entry->buffer);                                                   \
-} while (0)
-
-#define RESTORE
-
 struct StaticHeader
 {
     uint8_t* buffer = nullptr;
     size_t totalLen = 0;
 
     StaticHeader() = default;
+
+    template <typename T>
+    T get()
+    {
+        T hdr;
+        if (!buffer || totalLen < T::fixedSize)
+            return hdr;
+        hdr.setBuffer(buffer);
+        if constexpr (requires(T h) { h.getTrail(); })
+        {
+            size_t trailLen = (totalLen > T::fixedSize)
+                ? totalLen - T::fixedSize
+                : 0;
+            hdr.setTrail(buffer + T::fixedSize, trailLen);
+        }
+        return hdr;
+    }
+
+    size_t copy(uint8_t* out, size_t maxSize) const
+    {
+        if (!buffer || totalLen == 0 || !out)
+            return 0;
+
+        size_t n = (totalLen <= maxSize) ? totalLen : 0;
+        if (n == 0)
+            return 0;
+
+        std::memcpy(out, buffer, totalLen);
+        return totalLen;
+    }
 
     StaticHeader(const uint8_t* src, size_t len)
         : totalLen(len)
