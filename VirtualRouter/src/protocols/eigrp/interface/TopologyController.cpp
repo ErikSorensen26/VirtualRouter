@@ -71,8 +71,10 @@ std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const
     return filtered;
 }
 
-void TopologyController::onNeighborDown(const IPAddress& neighborIp)
+void TopologyController::onNeighborDown(Neighbor& neighbor)
 {
+    const IPAddress& neighborIp = neighbor.ipAddress;
+
     // Collect affected routes
     std::vector<std::pair<TopologyEntry*, RouteInfo*>> affectedRoutes;
     for (auto& [destination, entry] : duel.topologyTable.entries())
@@ -95,7 +97,14 @@ void TopologyController::onNeighborDown(const IPAddress& neighborIp)
         }
     }
 
+    neighbor.recvInitSeq.store(0, std::memory_order_release);
+    neighbor.srtt.store(1.0, std::memory_order_release);
+    neighbor.rttvar.store(0.5, std::memory_order_release);
+    neighbor.rto.store(1.5, std::memory_order_release);
+    neighbor.clearReliable();
+
     // Remove the neighbor routes from topology
+    duel.removeActiveNeighbor(neighborIp);
     duel.topologyTable.pruneNeighbor(neighborIp);
     duel.updateSuccessors(affectedTopologies);
 }

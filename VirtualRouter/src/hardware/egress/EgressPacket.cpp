@@ -69,9 +69,23 @@ EgressPacket::EgressPacket(Interface& iface, const TxQueueOpts& opts)
 EgressPacket::~EgressPacket()
 {
     teardownEvents();
-    if (ring && ring != MAP_FAILED) ::munmap(ring, ringLen);
-    if (fd >= 0) ::close(fd);
-    delete[] state; state = nullptr;
+    if (fd >= 0)
+    {
+        tpacket_req zero{};
+        ::setsockopt(fd, SOL_PACKET, PACKET_TX_RING, &zero, sizeof(zero));
+    }
+    if (ring && ring != MAP_FAILED)
+    {
+        ::munmap(ring, ringLen);
+    }
+    if (fd >= 0) 
+    {
+        ::close(fd);
+        fd = -1;
+    }
+
+    delete[] state;
+    state = nullptr;
 }
 
 void EgressPacket::setupSocket()
@@ -122,35 +136,6 @@ void EgressPacket::setupRing()
     ringLen = size_t(req.tp_block_size) * req.tp_block_nr;
 
     return;
-
-    /*uint32_t fs = static_cast<uint32_t>(TPACKET2_HDRLEN + opts.snapLen);
-    if (TPACKET2_HDRLEN + packetSize + MTU_PADDING + sizeof(PacketSlot) > req.tp_frame_size);
-        throw std::runtime_error("packet size too small");
-    if (fs < 2048u) fs = 2048u;
-
-    tpacket_req r{};
-    r.tp_frame_size = fs;
-    r.tp_frame_nr = (opts.frameCount ? opts.frameCount : 1024);
-
-    const size_t page = static_cast<size_t>(::sysconf(_SC_PAGESIZE));
-    size_t blk = opts.blockSize.value_or(1u << 20);
-    if (blk % page) blk = (1u << 20);
-    if (blk < r.tp_frame_size) blk = roundUp(blk, page);
-    if (blk % r.tp_frame_size) blk = roundUp(blk, r.tp_frame_size);
-    if (blk % page) blk = roundUp(blk, page);
-
-    uint32_t framesPerBlock = static_cast<uint32_t>(blk / r.tp_frame_size);
-    if (framesPerBlock == 0) throw std::runtime_error("Invalid blockSize/frameSize combination");
-
-    uint32_t blocksNeeded = (r.tp_frame_nr + framesPerBlock - 1) / framesPerBlock;
-    r.tp_block_size = static_cast<unsigned>(blk);
-    r.tp_block_nr = blocksNeeded;
-
-    if (::setsockopt(fd, SOL_PACKET, PACKET_TX_RING, &r, sizeof(r)) != 0)
-        throw std::runtime_error("setsockopt(PACKET_TX_RING) failed");
-
-    req = r;
-    ringLen = static_cast<size_t>(req.tp_block_size) * req.tp_block_nr;*/
 }
 
 void EgressPacket::bindIface()
@@ -197,8 +182,13 @@ void EgressPacket::setupEvents()
 
 void EgressPacket::teardownEvents()
 {
-    if (epfd >= 0 && fd >= 0) ::epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
-    if (epfd >= 0) { ::close(epfd); epfd = -1; }
+    if (epfd >= 0)
+    {
+        if (fd >= 0)
+            ::epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
+        ::close(epfd);
+        epfd = -1;
+    }
 }
 
 ALWAYS_INLINE HOT void EgressPacket::mapFrame(uint32_t index, FrameHandle& out)

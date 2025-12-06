@@ -114,7 +114,7 @@ void InterfaceManager::refreshInterfaceList()
             ipInfo.ipv4.getAddress(ipAddress);
             if (!ipv6Contained)
                 ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&
-                                interface->routingInstance == base.routingInstance;
+                                interface->getVRF() == base.routingInstance;
 
             bool inRange = config.isInNetworkRange(ipAddress) || ipv6Contained;
             auto it = eigrpInterfaceList.find(id);

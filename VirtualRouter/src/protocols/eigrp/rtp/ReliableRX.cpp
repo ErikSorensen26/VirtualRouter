@@ -23,9 +23,18 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     RTPInfo hdrInfo(eigrpPacket, neigIp);
     parseEigrpOptions(eigrpPacket.getTrail().data(), eigrpPacket.getTrail().size(), hdrInfo.opts);
 
-    if (hdrInfo.opts.size() > 0 && hdrInfo.opts.back().type == Variable::Eigrp::Option::authentication)
-        if (!iface.getAuth().validateAuth(ipStart, hdrInfo.opts.back()))
-            return;
+    const TLV16Option* authOpt = nullptr;
+    for (const auto& opt : hdrInfo.opts)
+    {
+        if (opt.type == Variable::Eigrp::Option::authentication)
+        {
+            authOpt = &opt;
+            break;
+        }
+    }
+
+    size_t size = (eigrpPacket.buffer + EigrpHeader::fixedSize + eigrpPacket.getTrail().size()) - ipStart;
+    if (!iface.getAuth().validateAuth(ipStart, size, authOpt));
 
     // Check for valid neighbor 
     Neighbor* neighbor = ntable->lookup(neigIp);
@@ -45,7 +54,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     else if (neighbor)
     {
         if (auto ack = eigrpPacket.getAck(); ack != 0)
-            processAck(*neighbor, ack); // Implicit ack
+            processAck(*neighbor, ack); // Piggyback ack
 
         switch (eigrpPacket.getOpcode())
         {
@@ -83,23 +92,38 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
     // Safely access or create the neighbor
     if (!info.neighbor && !unicast)
     {
-        uint16_t version;
-        for (const auto& v : info.opts)
-            if (v.type == Variable::Eigrp::Option::version)
-                version = readU16(v.value + 2);
-        if (version != static_cast<uint8_t>(Neighbor::Version::LEGACY) || version != static_cast<uint8_t>(Neighbor::Version::WIDE)) return;
+        bool sawVersion = false;
+        uint16_t version = 0;
 
-        info.neighbor = ntable->createNeighbor(info.neighborIp, static_cast<Neighbor::Version>(version));
+        for (const auto& v : info.opts)
+        {
+            if (v.type == Variable::Eigrp::Option::version && v.valueSize >= 4)
+            {
+                version = readU16(v.value + 2);
+                sawVersion = true;
+                break;
+            }
+        }
+
+        Neighbor::Version nver = Neighbor::Version::LEGACY;
+        if (sawVersion && version >= static_cast<uint16_t>(Neighbor::Version::WIDE))
+            nver = Neighbor::Version::WIDE;
+
+        info.neighbor = ntable->createNeighbor(info.neighborIp, nver);
         if (!info.neighbor) return;
+
         info.neighbor->srtt = 1.0;
         info.neighbor->rttvar = 0.5;
         info.neighbor->rto = 1.5;
-        info.neighbor->setState(Neighbor::State::INIT);
+        info.neighbor->setState(Neighbor::State::HELLO_RECEIVED);
     }
     else if (!info.neighbor && unicast) return;
 
     auto* nbr = info.neighbor;
+
     bool parametersFound = false;
+    uint32_t conditionalSeq = 0;
+    bool conditionExemption = false;
 
     // Process TLVs
     for (const auto& opt : info.opts)
@@ -107,7 +131,8 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         if (opt.type == Variable::Eigrp::Option::parameter)
         {
             // Check for Peer Termination
-            if (std::memcmp(opt.value, Variable::Mac::broadcast, 6) == 0)
+            static const uint8_t legacyPeerTerm[6] = {0};
+            if (std::memcmp(opt.value, legacyPeerTerm, 6) == 0)
             {
                 ntable->onDown(*info.neighbor);
                 return;
@@ -127,27 +152,54 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
 
             parametersFound = true;
         }
-        else
+        else if (opt.type == Variable::Eigrp::Option::multicastSequence && opt.valueSize == 4)
         {
-            // TODO handle peer termination opt
+            conditionalSeq = readU32(opt.value);
+        }
+        else if (opt.type == Variable::Eigrp::Option::sequence && opt.valueSize > 1)
+        {
+            const uint8_t addrLen = opt.value[0];
+            if (addrLen != 4 && addrLen != 16)
+                continue;
+            
+            const uint8_t* list = opt.value + 1;
+            const size_t listLen = opt.valueSize - 1;
+
+            uint8_t ourAddr[16];
+            if (iface.getBase().getAF() == AddressFamily::IPv4)
+                iface.getIface()->configs.ipv4.getAddress(ourAddr);
+            else
+                writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress());
+
+            for (size_t off = 0; off + addrLen <= listLen; off += addrLen)
+            {
+                if (std::memcmp(ourAddr, list + off, addrLen) == 0)
+                {
+                    conditionExemption = true;
+                    break;
+                }
+            }
         }
     }
 
-    info.neighbor->markHeard();
+    if (conditionalSeq != 0)
+        info.neighbor->receivedConditions[conditionalSeq] = conditionExemption;
 
+    info.neighbor->markHeard();
     iface.getTimers().restartHoldTimer(*nbr);
 
     // Safely extract the neighbor state
-    const auto& state = nbr->getState();
-
-    if (state == Neighbor::State::INIT && parametersFound)
+    if (parametersFound)
     {
-        info.neighbor->setState(Neighbor::State::TWOWAY);
-        info.neighbor->eotRecv.store(false, std::memory_order_relaxed);
-        info.neighbor->initInProgress.store(true, std::memory_order_relaxed);
+        if (nbr->getState() == Neighbor::State::HELLO_RECEIVED)
+            nbr->setState(Neighbor::State::PARAMETERS_MATCH);
 
-        sendNullUpdate(*nbr);
-        iface.getTimers().startInitTimer(*info.neighbor);
+        if (!nbr->initInProgress.exchange(true, std::memory_order_acq_rel))
+        {
+            sendNullUpdate(*nbr);
+            iface.getTimers().startInitTimer(*nbr);
+            nbr->setState(Neighbor::State::INIT);
+        }
     }
 }
 
@@ -160,12 +212,46 @@ bool ReliableTransport::validateSeqNum(RTPInfo& info, uint32_t recvSeq)
 
     if (recvSeq <= lastSeqRecv)
     {
-        sendAck(*info.neighbor, lastSeqRecv);
+        sendAck(*info.neighbor, recvSeq);
         return false;
     }
 
     info.neighbor->lastSeqRecv.store(recvSeq, std::memory_order_relaxed);
     return true;
+}
+
+void ReliableTransport::checkInit(Neighbor& neighbor)
+{
+    if (neighbor.getState() != Neighbor::State::INIT)
+        return;
+
+    const uint32_t recvInit = neighbor.recvInitSeq.load(std::memory_order_relaxed);
+    const uint32_t sendInit = neighbor.sentInitSeq.load(std::memory_order_relaxed);
+
+    std::lock_guard<std::mutex> lock(reliableMtx);
+    const bool ourNullAcked = (sendInit != 0) && !reliablePackets.contains(sendInit);
+    const bool theirNullSeen = (recvInit != 0);
+
+    if (ourNullAcked && theirNullSeen && !neighbor.fullSent.load(std::memory_order_relaxed))
+    {
+        neighbor.setState(Neighbor::State::FULL);
+        iface.getTimers().cancelInitTimer(neighbor);
+    }
+}
+
+bool ReliableTransport::processConditionalReceive(uint32_t seq, Neighbor& neighbor)
+{
+    if (auto crit = neighbor.receivedConditions.find(seq); crit != neighbor.receivedConditions.end())
+    {
+        bool exempt = crit->second;
+        neighbor.receivedConditions.erase(seq);
+        return !exempt;
+    }
+    else
+    {
+        pendingPeerTermination.store(true, std::memory_order_release);
+        return false;
+    }
 }
 
 void ReliableTransport::processUpdate(RTPInfo& info)
@@ -178,6 +264,10 @@ void ReliableTransport::processUpdate(RTPInfo& info)
         return;
 
     const uint32_t recvSeq = update.getSequence();
+
+    if (info.eigrp.getFlagCondRecv() && !processConditionalReceive(recvSeq, *info.neighbor))
+        return;
+
     if (!validateSeqNum(info, recvSeq))
         return;
 
@@ -187,66 +277,31 @@ void ReliableTransport::processUpdate(RTPInfo& info)
         routeOpts.push_back(opt);
     }
 
-    if (update.getFlagInit())
-    {
-        if (routeOpts.empty())
-        {
-            nbr.initSeq.store(recvSeq, std::memory_order_relaxed);
-        }
-
-        iface.getTimers().cancelInitTimer(nbr);
-
-        if (routeOpts.empty())
-        {
-            nbr.eotRecv.store(true, std::memory_order_release);
-            nbr.setState(Neighbor::State::ESTABLISHED);
-        }
-    }
-
     bool resync = update.getFlagRestart() && update.getFlagInit() &&
-        info.neighbor && info.neighbor->getState() == Neighbor::State::ESTABLISHED;
+        info.neighbor && info.neighbor->getState() == Neighbor::State::FULL;
     if (resync)
     {
-        // Only remove routes
         nbr.resyncInProgress.store(true, std::memory_order_release);
-        iface.getTopController().onNeighborDown(info.neighbor->ipAddress);
+        iface.getTopController().onNeighborDown(*info.neighbor);
+        nbr.setState(Neighbor::State::INIT);
     }
 
-    if (update.getFlagCondRecv())
+    if (update.getFlagInit())
     {
-        sendCondAck(nbr, recvSeq);
-    }
-    else
-    {
-        sendAck(nbr, recvSeq);
+        nbr.recvInitSeq.store(recvSeq, std::memory_order_relaxed);
+        nbr.fullSent.store(false, std::memory_order_release);
+        checkInit(*info.neighbor);
     }
 
-    if (update.getFlagEndOfTable())
-    {
-        nbr.eotRecv.store(true, std::memory_order_release);
-        iface.getTimers().cancelInitTimer(nbr);
-        nbr.setState(Neighbor::State::ESTABLISHED);
-        nbr.initInProgress.store(false, std::memory_order_relaxed);
-    }
-
-    if (nbr.getState() < Neighbor::State::LOADING)
-        return;
+    trackAck(nbr, recvSeq);
 
     std::vector<ReceivedRoute> routeBuffer;
     routeBuffer.reserve(routeOpts.size());
     for (const auto& opt : routeOpts)
     {
-        if (auto [route, valid] = TLVBuilder::decodeRoute(opt, iface.interfaceKey, info.neighbor->tlvType); route)
+        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
         {
-            if (valid)
-            {
-                routeBuffer.emplace_back(std::move(*route));
-            }
-            else
-            {
-                pendingPeerTermination.store(true, std::memory_order_release);
-                return;
-            }
+            routeBuffer.emplace_back(std::move(*route));
         }
     }
 
@@ -264,103 +319,100 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     {
         sendFullTopology(*info.neighbor, Resync::REPLY);
     }
-    if (nbr.resyncInProgress.load(std::memory_order_relaxed) && nbr.eotRecv.load(std::memory_order_relaxed))
+    if (nbr.resyncInProgress.load(std::memory_order_relaxed))
     {
         nbr.resyncInProgress.store(false, std::memory_order_release);
     }
+
+    attemptSendAck(nbr, recvSeq);
 }
 
 void ReliableTransport::processAck(Neighbor& neighbor, const uint32_t seq)
 {
-    if (neighbor.getState() == Neighbor::State::TWOWAY)
-    {
-        neighbor.setState(Neighbor::State::LOADING);
-        sendFullTopology(neighbor);
-    }
-
     auto& timers = iface.getTimers();
 
-    if (currentReliable.load(std::memory_order_relaxed) == seq)
+    if (neighbor.currentReliable.load(std::memory_order_relaxed) == seq)
     {
-        auto rit = reliableQueue.find(seq);
-        if (rit == reliableQueue.end()) return;
-
-        auto it = rit->second.second.neighbors.find(&neighbor);
-        if (it == rit->second.second.neighbors.end()) return;
-
-        iface.getMetrics().updateRTTEstimate(neighbor, it->second.sendTime, seq);
-
-        timers.cancelRetransmissionTimer(it->second);
-        rit->second.second.neighbors.erase(it);
-
-        if (rit->second.second.neighbors.empty())
+        if (auto uit = neighbor.reliablePackets.find(seq); uit != neighbor.reliablePackets.end())
         {
-            reliableQueue.erase(rit);
-            currentReliable.store(0, std::memory_order_release);
-            if (!reliableQueue.empty())
-            {
-                auto nextIt = reliableQueue.begin();
-                currentReliable.store(nextIt->first, std::memory_order_release);
-                for (auto& nbr : nextIt->second.second.neighbors)
-                {
-                    timers.startRetransmissionTimer(nbr.first, nextIt->second.second, nbr.second, nextIt->first);
-                }
-            }
+            timers.cancelRetransmissionTimer(uit->second.info);
+            neighbor.reliablePackets.erase(uit);
+            neighbor.currentReliable.store(0, std::memory_order_relaxed);
         }
-    }
-    else if (neighbor.currentReliable.load(std::memory_order_relaxed) == seq)
-    {
-        auto it = neighbor.reliableQueue.find(seq);
-        if (it == neighbor.reliableQueue.end()) return;
+        else if (auto mit = reliablePackets.find(seq); mit != reliablePackets.end())
+        {
+            mit->second.neighbors.erase(&neighbor);
+            neighbor.activeConditions.erase(seq);
+            if (mit->second.neighbors.empty())
+                reliablePackets.erase(mit);
+        }
+        else return;
 
-        timers.cancelRetransmissionTimer(it->second.info);
-        neighbor.reliableQueue.erase(it);
         neighbor.currentReliable.store(0, std::memory_order_release);
 
         if (!neighbor.reliableQueue.empty())
         {
-            auto nextIt = neighbor.reliableQueue.begin();
-            neighbor.currentReliable.store(nextIt->first, std::memory_order_release);
-            timers.startRetransmissionTimer(&neighbor, nextIt->second, nextSeq);
+            auto [nseq, multicast] = neighbor.reliableQueue.front();
+            neighbor.reliableQueue.pop_front();
+
+            if (multicast)
+            {
+                auto it = reliablePackets.find(nseq);
+                if (it == reliablePackets.end()) return;
+                auto nit = it->second.neighbors.find(&neighbor);
+                if (nit == it->second.neighbors.end()) return;
+
+                auto& info = nit->second;
+                info.sendTime = std::chrono::steady_clock::now();
+                info.retransmissionCount = 0;
+                neighbor.currentReliable.store(nseq, std::memory_order_release);
+                sendRetransmission(neighbor, it->second.packet);
+                iface.getTimers().startRetransmissionTimer(&neighbor, it->second, info, seq);
+            }
+            else
+            {
+                auto it = neighbor.reliablePackets.find(nseq);
+                if (it == neighbor.reliablePackets.end()) return;
+
+                neighbor.currentReliable.store(nseq, std::memory_order_release);
+                startUnicastReliable(neighbor, it->second, nseq);
+            }
         }
     }
+
+    if (seq == neighbor.sentInitSeq.load(std::memory_order_release) && neighbor.initComplete)
+        sendFullTopology(neighbor);
+
+    checkInit(neighbor);
 }
 
 void ReliableTransport::processQuery(RTPInfo& info)
 {
     Neighbor* nbr = info.neighbor;
     if (!nbr) return;
+
     const uint32_t recvSeq = info.eigrp.getSequence();
 
-    const uint32_t lastSeq = nbr->lastSeqRecv.load(std::memory_order_relaxed);
-    if (recvSeq <= lastSeq)
-    {
-        sendAck(*nbr, lastSeq);
+    if (info.eigrp.getFlagCondRecv() && !processConditionalReceive(recvSeq, *info.neighbor))
         return;
-    }
 
-    nbr->lastSeqRecv.store(recvSeq, std::memory_order_relaxed);
-    sendAck(*nbr, recvSeq);
+    if (!validateSeqNum(info, recvSeq))
+        return;
+    trackAck(*nbr, recvSeq);
 
     std::vector<ReceivedRoute> queriedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto [route, valid] = TLVBuilder::decodeRoute(opt, iface.interfaceKey, info.neighbor->tlvType); route)
+        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
         {
-            if (valid)
-            {
-                queriedRoutes.emplace_back(std::move(*route));
-            }
-            else
-            {
-                pendingPeerTermination.store(true, std::memory_order_release);
-                return;
-            }
+            queriedRoutes.emplace_back(std::move(*route));
         }
     }
 
     iface.getMetrics().addRouteMetrics(queriedRoutes);
     iface.getTopController().processReceivedQueryRoutes(queriedRoutes, *info.neighbor, recvSeq);
+
+    attemptSendAck(*nbr, recvSeq);
 }
 
 void ReliableTransport::processSIAQuery(RTPInfo& info)
@@ -369,13 +421,11 @@ void ReliableTransport::processSIAQuery(RTPInfo& info)
     if (!nbr) return;
 
     const uint32_t seq = info.eigrp.getSequence();
-
-    if (seq < nbr->lastSeqRecv.load(std::memory_order_seq_cst))
+    if (!validateSeqNum(info, seq))
         return;
-
-    nbr->lastSeqRecv.store(seq, std::memory_order_release);
-    sendAck(*info.neighbor, seq);
-    sendSIAReply(*info.neighbor, seq);
+    trackAck(*info.neighbor, seq);
+    sendSIAReply(*info.neighbor);
+    attemptSendAck(*info.neighbor, seq);
 }
 
 void ReliableTransport::processReply(RTPInfo& info)
@@ -384,32 +434,24 @@ void ReliableTransport::processReply(RTPInfo& info)
     if (!nbr) return;
 
     const uint32_t seq = info.eigrp.getSequence();
-    if (seq < nbr->lastSeqRecv)
+    if (!validateSeqNum(info, seq))
         return;
 
-    nbr->lastSeqRecv.store(seq, std::memory_order_release);
-
-    sendAck(*nbr, seq);
+    trackAck(*nbr, seq);
 
     std::vector<ReceivedRoute> receivedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto [route, valid] = TLVBuilder::decodeRoute(opt, iface.interfaceKey, info.neighbor->tlvType); route)
+        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
         {
-            if (valid)
-            {
-                receivedRoutes.emplace_back(std::move(*route));
-            }
-            else
-            {
-                pendingPeerTermination.store(true, std::memory_order_release);
-                return;
-            }
+            receivedRoutes.emplace_back(std::move(*route));
         }
     }
 
     if (!receivedRoutes.empty())
         iface.getTopController().processReceivedActiveRoutes(receivedRoutes, *info.neighbor);
+
+    attemptSendAck(*nbr, seq);
 }
 
 void ReliableTransport::processSIAReply(RTPInfo& info)
@@ -417,12 +459,11 @@ void ReliableTransport::processSIAReply(RTPInfo& info)
     if (!info.neighbor) return;
 
     const uint32_t seq = info.eigrp.getSequence();
-    if (seq < info.neighbor->lastSeqRecv.load(std::memory_order_relaxed))
+    if (!validateSeqNum(info, seq))
         return;
 
-    info.neighbor->lastSeqRecv.store(seq, std::memory_order_release);
-    sendAck(*info.neighbor, seq);
-
+    trackAck(*info.neighbor, seq);
     iface.getTopController().processSIAReply(*info.neighbor, seq);
+    attemptSendAck(*info.neighbor, seq);
 }
 }

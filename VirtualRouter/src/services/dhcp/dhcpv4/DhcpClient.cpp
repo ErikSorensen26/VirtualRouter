@@ -937,12 +937,13 @@ void Protocol::DhcpClient::appendAuthOptions(TLV8BufferManager& tlv, const DhcpH
     std::memset(authOpt + 11, 0, 16);
 
     // Build HMAC input over full packet assuming end option is not yet added
-    Authentication::generateMD5(
+    Authentication::generateHMAC(
         authOpt + 11,
         dhcp.buffer,
         DhcpHeader::fixedSize + tlv.size(),
         reinterpret_cast<const uint8_t*>(key->data()),
-        key->size()
+        key->size(),
+        Authentication::HmacType::MD5
     );
 
     configs.lastReplayCounter.store(counter + 1, std::memory_order_release);
@@ -968,12 +969,13 @@ bool Protocol::DhcpClient::validateAuthentication(const DhcpHeader& dhcp, const 
     std::memset(const_cast<uint8_t*>(data + 11), 0, 16); // Set hash to 0s
     
     uint8_t computedHash[16];
-    Authentication::generateMD5(
+    Authentication::generateHMAC(
         computedHash,
         dhcp.buffer,
         DhcpHeader::fixedSize + dhcp.getTrail().size() - 2,
         reinterpret_cast<const uint8_t*>(key->data()),
-        key->size()
+        key->size(),
+        Authentication::HmacType::MD5
     );
 
     if (std::memcmp(computedHash, receivedHash, 16) != 0)

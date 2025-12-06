@@ -27,8 +27,8 @@ enum class TLVType : uint16_t
 class Neighbor
 {
 public:
-    enum class State { DOWN, INIT, TWOWAY, LOADING, ESTABLISHED };
-    enum class Version { LEGACY, WIDE, UNKNOWN };
+    enum class State { DOWN, HELLO_RECEIVED, PARAMETERS_MATCH, INIT, FULL };
+    enum class Version : uint16_t { LEGACY = 0x0102, WIDE = 0x0200, UNKNOWN = 0x0000 };
 
     explicit Neighbor(EigrpInterface& iface, InterfaceTimers& tmgr, const IPAddress& neighborIp, Version version, bool unicast = false);
     ~Neighbor();
@@ -58,8 +58,7 @@ public:
     const IPAddress ipAddress;
     const bool unicast{false};
     std::atomic<bool> hasMac = false;
-    std::atomic<bool> isInit = false;
-    std::atomic<bool> eotRecv = false;
+    std::atomic<bool> fullSent = false;
     std::atomic<bool> initComplete{false};
     std::atomic<bool> initInProgress{false};
     std::atomic<bool> resyncInProgress{false};
@@ -85,15 +84,18 @@ public:
     std::atomic<bool> isGraceful{false};
     std::atomic<bool> secondHello{false};
 
-    std::atomic<uint32_t> initSeq{0};
+    std::atomic<uint32_t> recvInitSeq{0};
+    std::atomic<uint32_t> sentInitSeq{0};
     std::atomic<double> srtt{1.0}, rttvar{0.5}, rto{1.5};
 
     std::atomic<uint32_t> currentReliable{0};
-    std::map<uint32_t, UnicastReliablePacket> reliableQueue;
+    std::deque<std::pair<uint32_t, bool>> reliableQueue;
+    std::map<uint32_t, UnicastReliablePacket> reliablePackets;
+    std::set<uint32_t> activeConditions;
+    std::unordered_map<uint32_t, bool> receivedConditions;
     mutable std::mutex reliableMtx;
 
     std::mutex ackMtx;
-    std::unordered_map<uint32_t, uint32_t> conditionalTimers;
 
 private:
     // Internal state

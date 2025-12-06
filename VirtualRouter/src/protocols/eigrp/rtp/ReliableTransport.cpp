@@ -37,54 +37,81 @@ ReliableTransport::ReliableTransport(EigrpInterface& iface) : iface(iface)
 ReliableTransport::~ReliableTransport()
 {
     auto& tmgr = iface.getTimers();
-    for (auto& [seq, pair] : reliableQueue)
+    for (auto& [seq, pkt] : reliablePackets)
     {
-        auto& [neighbors, pkt] = pair;
         for (auto& [nbr, info] : pkt.neighbors)
             tmgr.cancelRetransmissionTimer(info);
     }
 }
 
-bool ReliableTransport::setupReliablePacket(Neighbor* neighbor, EigrpHeader& builder)
+bool ReliableTransport::setupUnicastReliable(Neighbor& neighbor, EigrpHeader& builder)
 {
     uint32_t seqNum = builder.getSequence();
     if (seqNum == 0)
         return false;
 
-    // Create ReliablePacketInfo
-    if (neighbor)
+    uint32_t current = 0;
+    std::_Rb_tree_iterator<std::pair<const uint32_t, UnicastReliablePacket>> it;
     {
-        std::_Rb_tree_iterator<std::pair<const uint32_t, UnicastReliablePacket>> it;
+        std::lock_guard<std::mutex> lock(neighbor.reliableMtx);
+        it = neighbor.reliablePackets.emplace(seqNum, UnicastReliablePacket{builder, neighbor.ipAddress}).first;
+        it->second.info.sequence = seqNum;
+        current = neighbor.currentReliable.load(std::memory_order_relaxed);
+        if (current != 0)
         {
-            std::lock_guard<std::mutex> lock(neighbor->reliableMtx);
-            it = neighbor->reliableQueue.emplace(seqNum, UnicastReliablePacket{builder, neighbor->ipAddress}).first;
-            it->second.info.sequence = seqNum;
-        }
-
-        if (neighbor->currentReliable.load(std::memory_order_relaxed) == 0)
-        {
-            startUnicastReliable(*neighbor, it->second, seqNum);
-            return true;
+            neighbor.reliableQueue.push_back({seqNum, false});
+            return false;
         }
     }
-    else
+
+    neighbor.currentReliable.store(seqNum, std::memory_order_release);
+    startUnicastReliable(neighbor, it->second, seqNum);
+    return true;
+}
+
+bool ReliableTransport::setupMulticastReliable(EigrpHeader& builder)
+{
+    uint32_t seqNum = builder.getSequence();
+    if (seqNum == 0)
+        return false;
+
+    std::vector<IPAddress> conditions;
+    std::shared_lock<std::shared_mutex> lock(ntable->neighborMutex);
+    for (auto& [ip, nbr] : ntable->neighbors)
     {
-        std::unordered_map<Neighbor*, ReliableInfo> reliableMap;
-        std::unordered_set<IPAddress> neighbors;
-
-        std::shared_lock<std::shared_mutex> lock(ntable->neighborMutex);
-        std::lock_guard<std::mutex> relock(reliableMtx);
-
-        std::for_each(ntable->neighbors.begin(), ntable->neighbors.end(),
-                      [&](auto& n) { auto it = reliableMap.emplace(&n.second, ReliableInfo{}); neighbors.insert(n.first); it.first->second.sequence = seqNum; });
-        auto it = reliableQueue.emplace(seqNum, std::pair<std::unordered_set<IPAddress>, MulticastReliablePacket>{neighbors, {builder, reliableMap}});
-        if (currentReliable.load(std::memory_order_relaxed) == 0)
+        if (nbr.currentReliable.load(std::memory_order_relaxed) != 0)
         {
-            startMulticastReliable(it.first->second.second, seqNum);
-            return true;
+            conditions.push_back(nbr.ipAddress);
+            std::lock_guard<std::mutex> relock(nbr.reliableMtx);
+
+            nbr.activeConditions.insert(seqNum);
+            nbr.reliableQueue.push_back({seqNum, true});
+        }
+        else
+        {
+            nbr.currentReliable.store(seqNum, std::memory_order_release);
         }
     }
-    return false;
+
+    std::unordered_map<Neighbor*, ReliableInfo> reliableMap;
+    std::lock_guard<std::mutex> relock(reliableMtx);
+
+    for (auto& [ip, nbr] : ntable->neighbors)
+    {
+        auto it = reliableMap.emplace(&nbr, ReliableInfo{});
+        it.first->second.sequence = seqNum;
+    }
+
+    auto it = reliablePackets.emplace(seqNum, MulticastReliablePacket{builder, reliableMap});
+
+    if (!conditions.empty())
+    {
+        sendConditionalHello(conditions, seqNum);
+        builder.setFlagCondRecv(true);
+    }
+
+    startMulticastReliable(it.first->second, seqNum);
+    return true;
 }
 
 void ReliableTransport::startMulticastReliable(MulticastReliablePacket& pkt, uint32_t seq)
@@ -92,11 +119,13 @@ void ReliableTransport::startMulticastReliable(MulticastReliablePacket& pkt, uin
     auto& timer = iface.getTimers();
     for (auto& [nbr, info] : pkt.neighbors)
     {
-        info.sendTime = std::chrono::steady_clock::now();
-        info.retransmissionCount = 0;
-        timer.startRetransmissionTimer(nbr, pkt, info, seq);
+        if (nbr->currentReliable.load(std::memory_order_relaxed) == seq)
+        {
+            info.sendTime = std::chrono::steady_clock::now();
+            info.retransmissionCount = 0;
+            timer.startRetransmissionTimer(nbr, pkt, info, seq);
+        }
     }
-    currentReliable.store(seq, std::memory_order_release);
 }
 
 void ReliableTransport::startUnicastReliable(Neighbor& neighbor, UnicastReliablePacket& pkt, uint32_t seq)
@@ -104,7 +133,32 @@ void ReliableTransport::startUnicastReliable(Neighbor& neighbor, UnicastReliable
     pkt.info.sendTime = std::chrono::steady_clock::now();
     pkt.info.retransmissionCount = 0;
     iface.getTimers().startRetransmissionTimer(&neighbor, pkt, seq);
-    neighbor.currentReliable.store(seq, std::memory_order_release);
+}
+
+void ReliableTransport::sendRetransmission(Neighbor& neighbor, StaticHeader& header)
+{
+    // Construct and send the retransmission packet
+    PacketBuilder retransmissionPacket(iface.getIface());
+    af == AddressFamily::IPv4
+        ? Protocol::IPPacket::reserveIpv4(retransmissionPacket)
+        : Protocol::IPPacket::reserveIpv6(retransmissionPacket);
+    auto* hdr = retransmissionPacket.addHeader(header, HeaderType::EIGRP);
+    EigrpHeader eigrp;
+    eigrp.setBuffer(hdr->buffer);
+    eigrp.setFlagCondRecv(false);
+
+    auto* interface = iface.getIface();
+    Protocol::IPPacket::BuildIP build = {
+        .iface = interface,
+        .packetInfo = retransmissionPacket,
+        .destIp = neighbor.ipAddress.raw,
+        .DSCP = iface.configs->DSCP.load(std::memory_order_relaxed),
+        .protocolType = Variable::IP::eigrp
+    };
+
+    af == AddressFamily::IPv4
+        ? Protocol::IPPacket::buildIpv4(build)
+        : Protocol::IPPacket::buildIpv6(build);
 }
 
 void ReliableTransport::handleRetransmission(Neighbor* neighbor, MulticastReliablePacket& pkt, ReliableInfo& info, uint32_t seq)
@@ -129,29 +183,7 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, MulticastReliab
     }
 
     // Resend the packet
-    PacketBuilder retransmissionPacket(iface.getIface());
-    {
-        // Construct and send the retransmission packet
-        af == AddressFamily::IPv4
-            ? Protocol::IPPacket::reserveIpv4(retransmissionPacket)
-            : Protocol::IPPacket::reserveIpv6(retransmissionPacket);
-        EigrpHeader eigrp;
-        RESTORE_FULL_HEADER(retransmissionPacket, pkt.packet, eigrp, HeaderType::EIGRP);
-        eigrp.setFlagCondRecv(false);
-
-        auto* interface = iface.getIface();
-        Protocol::IPPacket::BuildIP build = {
-            .iface = interface,
-            .packetInfo = retransmissionPacket,
-            .destIp = neighbor->ipAddress.raw,
-            .DSCP = iface.configs->DSCP.load(std::memory_order_relaxed),
-            .protocolType = Variable::IP::eigrp
-        };
-
-        af == AddressFamily::IPv4
-            ? Protocol::IPPacket::buildIpv4(build)
-            : Protocol::IPPacket::buildIpv6(build);
-    }
+    sendRetransmission(*neighbor, pkt.packet);
 
     // Increment retransmission timer safely
     double newRto = neighbor->srtt.load(std::memory_order_relaxed) + std::max(0.1, 4.0 * neighbor->rttvar.load(std::memory_order_relaxed));
@@ -178,29 +210,7 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, UnicastReliable
     }
 
     // Resend the packet
-    PacketBuilder retransmissionPacket(iface.getIface());
-    {
-        // Construct and send the retransmission packet
-        af == AddressFamily::IPv4
-            ? Protocol::IPPacket::reserveIpv4(retransmissionPacket)
-            : Protocol::IPPacket::reserveIpv6(retransmissionPacket);
-        EigrpHeader eigrp;
-        RESTORE_FULL_HEADER(retransmissionPacket, pkt.packet, eigrp, HeaderType::EIGRP);
-        retransmissionPacket.nextBuildHeader();
-
-        auto* interface = iface.getIface();
-        Protocol::IPPacket::BuildIP build = {
-            .iface = interface,
-            .packetInfo = retransmissionPacket,
-            .destIp = pkt.destination.raw,
-            .DSCP = iface.configs->DSCP.load(std::memory_order_relaxed),
-            .protocolType = Variable::IP::eigrp
-        };
-
-        af == AddressFamily::IPv4
-            ? Protocol::IPPacket::buildIpv4(build)
-            : Protocol::IPPacket::buildIpv6(build);
-    }
+    sendRetransmission(*neighbor, pkt.packet);
 
     // Increment retransmission timer safely
     neighbor->rto = std::min(neighbor->rto * 2.0, 60.0);

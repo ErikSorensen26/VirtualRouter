@@ -110,7 +110,7 @@ bool EgressBase::getFrame(FrameHandle& out)
     }
 
     out.slot = reinterpret_cast<PacketSlot*>(out.payload + packetSize + MTU_PADDING);
-    out.slot->index = idx;
+    *out.slot = {};          // clear stale metadata from previous use
+    out.slot->index = idx;   // keep track of which frame to reclaim
     return true;
 }
-

@@ -43,14 +43,17 @@ void InterfaceTimers::startHello()
             helloStartTime = std::chrono::steady_clock::now();
         }
 
-        auto nextExpiration = helloStartTime + std::chrono::seconds(iface.configs->helloTime.load(std::memory_order_relaxed));
+        auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(iface.configs->helloTime.load(std::memory_order_relaxed));
 
         auto* vrf = base->routingInstance;
         uint32_t helloId = tmgr.addTimer(nextExpiration, [
             &, VALIDATION_CAPTURES
         ](){
             if (InterfaceTimers::validateProcess(vrf, as, af, global))
+            {
+                helloTimerId = 0;
                 handleHelloReschedule();
+            }
         });
         helloTimerId.store(helloId, std::memory_order_release);
     }
@@ -90,7 +93,8 @@ void InterfaceTimers::stopHello()
 
 void InterfaceTimers::handleHelloReschedule()
 {
-    if (!helloTimerActive.load(std::memory_order_relaxed)) return;
+    if (!helloTimerActive.load(std::memory_order_relaxed))
+        return;
     helloDone.store(false, std::memory_order_release);
     try
     {
@@ -191,7 +195,7 @@ void InterfaceTimers::startInitTimer(Neighbor& neighbor)
     neighbor.stuckInitTimerId = tmgr.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(neighbor.holdTime.load(std::memory_order_relaxed)), [this, nbr = &neighbor]()
     {
         // Check if the neighbor is still in Initializing
-        if (nbr->getState() < Neighbor::State::LOADING)
+        if (nbr->getState() < Neighbor::State::FULL)
         {
             iface.getNTable().onDown(*nbr);
         }
@@ -236,15 +240,8 @@ void InterfaceTimers::cancelNeighborTimers(Neighbor& neighbor)
     if (uint32_t tmrId = neighbor.stuckInitTimerId.load(std::memory_order_relaxed); tmrId != 0)
         tmgr.cancelTimer(tmrId);
 
-    {
-        std::lock_guard<std::mutex> lock(neighbor.ackMtx);
-        for (auto [_, tmrId] : neighbor.conditionalTimers)
-            tmgr.cancelTimer(tmrId);
-    }
-
     cancelGracefulTimer(neighbor);
     cancelHoldTimer(neighbor);
-    neighbor.clearReliable();
 }
 
 bool InterfaceTimers::validateProcess(const std::string& vrfname, uint32_t as, const AddressFamily& af, Global* global)
@@ -299,18 +296,5 @@ void InterfaceTimers::startDampeningIntervalTimer()
         std::chrono::steady_clock::now() + std::chrono::seconds(dampeningTime),
         [&]() { iface.onDampeningIntervalExpire(); }
     ), std::memory_order_release);
-}
-
-void InterfaceTimers::scheduleConditionalReceive(Neighbor& neighbor, uint32_t seq)
-{
-    uint32_t crrto = static_cast<uint32_t>((neighbor.rto.load(std::memory_order_relaxed) * 1000) / 2);
-    auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(crrto);
-
-    std::lock_guard<std::mutex> lock(neighbor.ackMtx);
-    auto [it, inserted] = neighbor.conditionalTimers.emplace(seq, 0);
-    if (!inserted) return;
-    it->second = tmgr.addTimer(expirationTime, [&neighbor, seq]() {
-        neighbor.getIface().getRtp().sendAck(neighbor, seq);
-    });
 }
 }

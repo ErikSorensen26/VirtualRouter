@@ -69,14 +69,16 @@ struct alignas(16) IPPrefix
     IPPrefix() = default;
 
     IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family)
-        : prefixLength(prefix), af(family) {
+        : af(family) {
         std::memset(addr, 0, 16);
         std::memcpy(addr, ip, static_cast<size_t>(af));
+        addPrefixLen(prefix);
     }
 
     IPPrefix(const IPAddress& ip, uint8_t prefix)
-        : prefixLength(prefix), af(ip.isV6 ? AddressFamily::IPv6 : AddressFamily::IPv4) {
+        : af(ip.isV6 ? AddressFamily::IPv6 : AddressFamily::IPv4) {
         std::memcpy(addr, ip.raw, 16);
+        addPrefixLen(prefix);
     }
 
     bool operator==(const IPPrefix& other) const {
@@ -90,6 +92,27 @@ struct alignas(16) IPPrefix
         if (prefixLength != other.prefixLength) return prefixLength < other.prefixLength;
         size_t len = (af == AddressFamily::IPv4) ? 4 : 16;
         return std::memcmp(addr, other.addr, len) < 0;
+    }
+
+    void addPrefixLen(uint8_t newPrefixLen)
+    {
+        prefixLength = newPrefixLen;
+
+        int totalBytes = (af == AddressFamily::IPv4) ? 4 : 16;
+        int fullBytes = prefixLength / 8;
+        int remainingBits = prefixLength % 8;
+
+        if (fullBytes < totalBytes && remainingBits > 0)
+        {
+            uint8_t mask = 0xFF << (8 - remainingBits);
+            addr[fullBytes] &= mask;
+        }
+
+        int startZero = (remainingBits > 0) ? fullBytes + 1 : fullBytes;
+        for (int i = startZero; i < totalBytes; i++)
+        {
+            addr[i] = 0;
+        }
     }
 };
 
@@ -108,6 +131,7 @@ struct IPv4Prefix
 
     bool operator==(const IPv4Prefix& other) const {
         if (addr != other.addr || prefixLength != other.prefixLength) return false;
+        return true;
     }
 
     bool operator<(const IPv4Prefix& other) const {

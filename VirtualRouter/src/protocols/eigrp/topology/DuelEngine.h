@@ -44,7 +44,6 @@ public:
     friend class ::Internal_EigrpTest;
     DuelEngine(Eigrp& process);
 
-    ~DuelEngine();
     bool isRouteAdvertised(const uint8_t* network, uint8_t mask);
     std::vector<const RouteInfo*> findBestRoutes(const IPPrefix& prefix);
     bool setSuppression(TopologyEntry* entry, uint32_t intKey);
@@ -57,6 +56,7 @@ public:
     void setPassive(const IPPrefix& prefix);
     void setPoisened(const IPPrefix& prefix);
 
+    void removeActiveNeighbor(const IPAddress& neighborIp);
     void handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor);
     void processSIAReply(Neighbor& neighbor, uint32_t seqNum);
     void processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, const Neighbor& neighbor);

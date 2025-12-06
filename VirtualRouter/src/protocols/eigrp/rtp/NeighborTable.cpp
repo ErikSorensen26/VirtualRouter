@@ -169,7 +169,7 @@ void NeighborTable::resync()
     {
         if ((static_cast<uint16_t>(it->second.tlvType) & 0xFF00) == 0x0600)
         {
-            iface.getTopController().onNeighborDown(it->second.ipAddress);
+            iface.getTopController().onNeighborDown(it->second);
             iface.getRtp().sendFullTopology(it->second, ReliableTransport::Resync::INIT);
             it++;
         }

@@ -6,160 +6,101 @@
 #include <EigrpTypes.hpp>
 #include <Encryption.hpp>
 #include <PacketStructure.h>
+#include <KeyChainManager.h>
+#include <KeyChain.h>
 
 namespace Eigrp
 {
-AuthHandler::AuthHandler(EigrpConfigs::InterfaceConfigs& configs) : configs(configs) {}
+AuthHandler::AuthHandler(EigrpConfigs::InterfaceConfigs& configs, Authentication::KeyChainManager& keyMgr) : configs(configs), keyMgr(keyMgr) {}
 
-void AuthHandler::setKeyChain(uint8_t* keyId, const std::string* key, EigrpConfigs::AuthType* type, bool enable)
+uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
 {
-    std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
+    if (!configs.auth.fullyEnabled.load(std::memory_order_release))
+        return 0;
 
-    if (!enable)
-    {
-        configs.authKey.authType = EigrpConfigs::AuthType::NONE;
-        configs.authKey.key = "";
-        configs.authKey.keyId = 0;
-    }
-
-    if (keyId) configs.authKey.keyId = *keyId;
-    if (key) configs.authKey.key = *key;
-    if (type) configs.authKey.authType = *type;
-
-    if (configs.authKey.authType != EigrpConfigs::AuthType::NONE &&
-        configs.authKey.key != "" && 
-        configs.authKey.keyId != 0)
-    {
-        configs.authKey.fullyEnabled.store(true, std::memory_order_release);
-    }
-}
-
-uint8_t AuthHandler::buildAuthTLV(uint8_t* out)
-{
-    uint8_t keyId;
     EigrpConfigs::AuthType authType;
-    std::string key;
-
-    {
-        if (!configs.authKey.fullyEnabled.load(std::memory_order_relaxed))
-            return 0;
-
-        std::shared_lock lock(configs.configsMutex);
-        keyId = configs.authKey.keyId;
-        authType = configs.authKey.authType;
-        key = configs.authKey.key;
-    }
-
-    uint16_t hmacLength = 0;
-    switch (authType)
-    {
-        case EigrpConfigs::AuthType::MD5: hmacLength = MD5_DIGEST_LENGTH; break;
-        case EigrpConfigs::AuthType::SHA1: hmacLength = SHA_DIGEST_LENGTH; break;
-        case EigrpConfigs::AuthType::SHA256: hmacLength = SHA256_DIGEST_LENGTH; break;
-        case EigrpConfigs::AuthType::SHA384: hmacLength = SHA384_DIGEST_LENGTH; break;
-        case EigrpConfigs::AuthType::SHA512: hmacLength = SHA512_DIGEST_LENGTH; break;
-        case EigrpConfigs::AuthType::NONE: break;
-    }
-
-    out[0] = static_cast<uint8_t>(authType);
-    out[1] = keyId;
-    writeU16(out + 2, hmacLength);
-    writeU32(out + 6, configs.authKey.replay.load(std::memory_order_relaxed));
-    configs.authKey.replay.fetch_add(1, std::memory_order_seq_cst);
-    std::memset(out + 8, 0, 8);
-
-    out[16 + hmacLength] = static_cast<uint8_t>(key.size());
-    std::memcpy(out + 17 + hmacLength, key.data(), key.size());
-
-    return static_cast<uint8_t>(16 + hmacLength);
-}
-
-bool AuthHandler::validateAuth(const uint8_t* packetStart, TLV16Option& authOpt)
-{
-    if (authOpt.length < 16)
-        return false;
-
-    uint8_t authType = authOpt.value[0];
-    uint8_t keyId = authOpt.value[1];
-    uint32_t digestLen = readU16(authOpt.value + 2);
-    uint32_t recvReplay = readU32(authOpt.value + 4);
-    uint8_t* digest = const_cast<uint8_t*>(authOpt.value + 12);
-
-    uint16_t hmacLength = 0;
-    switch((EigrpConfigs::AuthType)authType)
-    {
-        case EigrpConfigs::AuthType::MD5: hmacLength = MD5_DIGEST_LENGTH;
-        case EigrpConfigs::AuthType::SHA1: hmacLength = SHA_DIGEST_LENGTH;
-        case EigrpConfigs::AuthType::SHA256: hmacLength = SHA256_DIGEST_LENGTH;
-        case EigrpConfigs::AuthType::SHA384: hmacLength = SHA384_DIGEST_LENGTH;
-        case EigrpConfigs::AuthType::SHA512: hmacLength = SHA512_DIGEST_LENGTH;
-        default: return false;
-    }
-
-    if (digestLen != hmacLength)
-        return false;
-
-    std::string key;
+    std::string keyPayload;
     {
         std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
-        if (keyId != configs.authKey.keyId)
-            return false;
-        key = configs.authKey.key;
-        if (configs.authKey.authType != (EigrpConfigs::AuthType)authType)
-            return false;
+        authType = configs.auth.authType;
+        if (authType == EigrpConfigs::AuthType::MD5 && std::holds_alternative<uint32_t>(configs.auth.key))
+        {
+            uint8_t key[4];
+            writeU32(key, std::get<uint32_t>(configs.auth.key));
+            keyPayload = {reinterpret_cast<const char*>(key), 4};
+        }
+        else if (authType == EigrpConfigs::AuthType::SHA256 && std::holds_alternative<std::string>(configs.auth.key))
+        {
+            keyPayload = std::get<std::string>(configs.auth.key);
+            if (keyPayload.empty() || keyPayload.size() > 32)
+                return 0;
+        }
     }
 
-    // Replay Protection
-    if (recvReplay <= configs.authKey.lastReplay.load(std::memory_order_relaxed))
-        return false;
-    configs.authKey.lastReplay.store(recvReplay, std::memory_order_release);
-
-    // Save and clear digest field
-    uint8_t saved[SHA512_DIGEST_LENGTH];
-    std::memcpy(saved, digest, hmacLength);
-    std::memset(digest, 0, hmacLength);
-
-    size_t totalLen = static_cast<size_t>((digest + hmacLength) - packetStart);
-
-    switch ((EigrpConfigs::AuthType)authType)
+    uint16_t digestLen = 0;
+    switch (authType)
     {
-        case EigrpConfigs::AuthType::MD5:
-            Authentication::generateMD5(digest, packetStart, totalLen,
-                                        reinterpret_cast<const uint8_t*>(key.data()), key.size());
-            break;
-        case EigrpConfigs::AuthType::SHA1:
-            Authentication::generateHMAC(digest, packetStart, totalLen,
-                                         reinterpret_cast<const uint8_t*>(key.data()), key.size(),
-                                         Authentication::SHA::SHA1);
-            break;
-        case EigrpConfigs::AuthType::SHA256:
-            Authentication::generateHMAC(digest, packetStart, totalLen,
-                                         reinterpret_cast<const uint8_t*>(key.data()), key.size(),
-                                         Authentication::SHA::SHA256);
-            break;
-        case EigrpConfigs::AuthType::SHA384:
-            Authentication::generateHMAC(digest, packetStart, totalLen,
-                                         reinterpret_cast<const uint8_t*>(key.data()), key.size(),
-                                         Authentication::SHA::SHA384);
-            break;
-        case EigrpConfigs::AuthType::SHA512:
-            Authentication::generateHMAC(digest, packetStart, totalLen,
-                                         reinterpret_cast<const uint8_t*>(key.data()), key.size(),
-                                         Authentication::SHA::SHA512);
-            break;
-        default:
-            return false;
+        case EigrpConfigs::AuthType::MD5: digestLen = MD5_DIGEST_LENGTH; break;
+        case EigrpConfigs::AuthType::SHA256: digestLen = SHA256_DIGEST_LENGTH; break;
+        default: return 0;
     }
 
-    // Constant-time compare
-    uint8_t diff = 0;
-    for (size_t i = 0; i < hmacLength; ++i)
-        diff |= (digest[i] ^ saved[i]);
+    writeU16(out, static_cast<uint16_t>(authType));
+    writeU16(out + 2, digestLen);
+    std::memset(out + 4, 0, 16 + digestLen);
 
-    return diff == 0;
+    std::memcpy(out + 20, keyPayload.data(), keyPayload.size());
+
+    return 20 + digestLen;
 }
 
-void AuthHandler::appendAuthHMAC(uint8_t* packetStart)
+bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const TLV16Option* authOpt)
+{
+    if (!configs.auth.fullyEnabled.load(std::memory_order_relaxed))
+        return true;
+    if (!authOpt)
+        return false;
+
+    EigrpConfigs::AuthType authType = static_cast<EigrpConfigs::AuthType>(readU16(authOpt->value));
+    uint16_t digestLen = readU16(authOpt->value + 2);
+
+    if (authType != configs.auth.authType)
+        return false;
+    if (authType == EigrpConfigs::AuthType::MD5 && (authOpt->valueSize != 36 || digestLen != 16))
+        return false;
+    if (authType == EigrpConfigs::AuthType::SHA256 && (authOpt->valueSize != 52 || digestLen != 32))
+        return false;
+
+    uint8_t* digestIdx = const_cast<uint8_t*>(authOpt->value) + 20;
+    uint8_t digest[SHA256_DIGEST_LENGTH] = {0};
+    std::memcpy(digest, digestIdx, digestLen);
+    std::memset(digestIdx, 0, digestLen);
+
+    if (authType == EigrpConfigs::AuthType::MD5 && std::holds_alternative<uint32_t>(configs.auth.key))
+    {
+        const auto* key = keyMgr.lookup(std::get<uint32_t>(configs.auth.key));
+        uint8_t computed[MD5_DIGEST_LENGTH];
+        uint32_t keyId = readU32(authOpt->value + 4);
+        return key->validate(digest, computed, keyId, packetStart, size, Authentication::HmacType::MD5);
+    }
+    else if (authType == EigrpConfigs::AuthType::SHA256 && std::holds_alternative<std::string>(configs.auth.key))
+    {
+        uint8_t computed[SHA256_DIGEST_LENGTH];
+        std::string key = std::get<std::string>(configs.auth.key);
+        Authentication::generateHMAC(
+            computed,
+            packetStart,
+            size,
+            reinterpret_cast<const uint8_t*>(key.data()),
+            key.size(),
+            Authentication::HmacType::SHA256
+        );
+        return std::memcmp(digestIdx, computed, SHA256_DIGEST_LENGTH) == 0;
+    }
+    return false;
+}
+
+bool AuthHandler::appendAuthHMAC(Global& global, uint8_t* packetStart, size_t size)
 {
     const uint8_t* ipHeader = packetStart;
     uint8_t ipHeaderLen = (ipHeader[0] & 0x0F) * 4;
@@ -167,7 +108,6 @@ void AuthHandler::appendAuthHMAC(uint8_t* packetStart)
 
     uint8_t* cursor = eigrpStart + 20;
     uint8_t* authTLV = nullptr;
-    uint16_t hmacLength = 0;
 
     // Locate the last TLV
     while (true)
@@ -177,9 +117,53 @@ void AuthHandler::appendAuthHMAC(uint8_t* packetStart)
 
         if (type == Variable::Eigrp::Option::authentication)
         {
-            authTLV = cursor;
-            hmacLength = readU16(eigrpStart + 6);
-            break;
+            authTLV = cursor + 4;
+            EigrpConfigs::AuthType authType = static_cast<EigrpConfigs::AuthType>(readU16(authTLV));
+            uint16_t digestLen = readU16(authTLV + 2);
+
+            if (authType == EigrpConfigs::AuthType::MD5 && (length != 36 || digestLen != 16))
+                return false;
+            if (authType == EigrpConfigs::AuthType::SHA256 && (length != 52 || digestLen != 32))
+                return false;
+
+            if (authType == EigrpConfigs::AuthType::SHA256)
+            {
+                if (authTLV[20] == 0x00) return false;
+                uint8_t pass[32] = {0};
+                std::memcpy(pass, authTLV + 20, 32);
+                size_t len = 0;
+                while (len < 32 && pass[len] != 0) ++len;
+                std::memset(pass, 0, 32);
+
+                Authentication::generateHMAC(
+                    authTLV + 20,
+                    packetStart,
+                    size,
+                    pass,
+                    len,
+                    Authentication::HmacType::SHA256
+                );
+            }
+            else
+            {
+                uint16_t chainId = readU16(authTLV + 20);
+                std::memset(authTLV + 20, 0, 2);
+                Authentication::KeyChain chain(""); // TODO key chain manager get by id
+                auto key = chain.getCurrentSendKey();
+                if (!key.has_value()) return false;
+                writeU32(authTLV + 4, key.value().keyId);
+
+                Authentication::generateHMAC(
+                    authTLV + 20,
+                    packetStart,
+                    size,
+                    reinterpret_cast<const uint8_t*>(key.value().keyString.data()),
+                    key.value().keyString.size(),
+                    Authentication::HmacType::MD5
+                );
+            }
+
+            return true;
         }
 
         if (length == 0 || length > 2048)
@@ -187,37 +171,6 @@ void AuthHandler::appendAuthHMAC(uint8_t* packetStart)
 
         cursor += length;
     }
-
-    if (!authTLV) return;
-
-    // Zero out HMAC field temporarily
-    uint8_t* hmacField = authTLV + 16; // starts after fixed TLV body
-    std::memset(hmacField, 0x00, hmacLength);
-
-    // Find the hmac key
-    uint8_t keySize = hmacField[hmacLength];
-    uint8_t* key = hmacField + hmacLength + 1;
-
-    // Step 4: Compute HMAC over entire IP + EIGRP packet
-    size_t totalLen = static_cast<size_t>((hmacField + hmacLength) - packetStart);
-
-    switch (hmacLength)
-    {
-        case MD5_DIGEST_LENGTH:
-            Authentication::generateMD5(hmacField, packetStart, totalLen, key, keySize);
-            break;
-        case SHA_DIGEST_LENGTH:
-            Authentication::generateHMAC(hmacField, packetStart, totalLen, key, keySize, Authentication::SHA::SHA1);
-            break;
-        case SHA256_DIGEST_LENGTH:
-            Authentication::generateHMAC(hmacField, packetStart, totalLen, key, keySize, Authentication::SHA::SHA256);
-            break;
-        case SHA384_DIGEST_LENGTH:
-            Authentication::generateHMAC(hmacField, packetStart, totalLen, key, keySize, Authentication::SHA::SHA384);
-            break;
-        case SHA512_DIGEST_LENGTH:
-            Authentication::generateHMAC(hmacField, packetStart, totalLen, key, keySize, Authentication::SHA::SHA512);
-            break;
-    }
+    return true;
 }
 }

@@ -63,7 +63,7 @@ namespace Protocol
     private:
         Interface* associatedInterface; ///< Reference to the associated interface.
         std::vector<ByteString> helperAddresses; ///< List of helper addresses for this relay.
-        std::mutex relayMutex; ///< Mutex for syncronizing access to helper addresses.
+        std::mutex relayMutex; ///< Mutex for synchronizing access to helper addresses.
 
         /**
          * @brief Modifies the GIADDR field in the DHCP packet

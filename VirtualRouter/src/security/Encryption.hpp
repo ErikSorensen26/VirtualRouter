@@ -14,38 +14,32 @@
 
 namespace Authentication 
 {
-    enum class SHA
+    enum class HmacType : int
     {
-        SHA1,
-        SHA224,
-        SHA256,
-        SHA384,
-        SHA512
+        MD5 = MD5_DIGEST_LENGTH,
+        SHA1 = SHA_DIGEST_LENGTH,
+        SHA224 = SHA224_DIGEST_LENGTH,
+        SHA256 = SHA256_DIGEST_LENGTH,
+        SHA384 = SHA384_DIGEST_LENGTH,
+        SHA512 = SHA512_DIGEST_LENGTH
     };
 
     static constexpr int AES_BLOCK_SIZE = 16;    // AES block size (128 bits)
     static constexpr int DES_BLOCK_SIZE = 8;     // DES block size (64 bits)
 
-    // Generate HMAC with MD5
-    inline static uint8_t* generateMD5(uint8_t* out, const uint8_t* data, size_t dataSize, const uint8_t* key, size_t keySize)
-    {
-        unsigned int len = 0;
-        HMAC(EVP_md5(), key, keySize, data, dataSize, out, &len);
-        return out;
-    }
-
     // Generate HMAC with SHA1/SHA256/SHA512
-    inline static uint8_t* generateHMAC(uint8_t* out, const uint8_t* data, size_t dataSize, const uint8_t* key, size_t keySize, const SHA algorithm)
+    inline static uint8_t* generateHMAC(uint8_t* out, const uint8_t* data, size_t dataSize, const uint8_t* key, size_t keySize, const HmacType algorithm)
     {
         const EVP_MD *md = nullptr;
 
         switch (algorithm)
         {
-            case SHA::SHA1: md = EVP_sha1(); break;
-            case SHA::SHA224: md = EVP_sha224(); break;
-            case SHA::SHA256: md = EVP_sha256(); break;
-            case SHA::SHA384: md = EVP_sha384(); break;
-            case SHA::SHA512: md = EVP_sha512(); break;
+            case HmacType::MD5: md = EVP_md5(); break;
+            case HmacType::SHA1: md = EVP_sha1(); break;
+            case HmacType::SHA224: md = EVP_sha224(); break;
+            case HmacType::SHA256: md = EVP_sha256(); break;
+            case HmacType::SHA384: md = EVP_sha384(); break;
+            case HmacType::SHA512: md = EVP_sha512(); break;
         }
 
         unsigned int len = 0;

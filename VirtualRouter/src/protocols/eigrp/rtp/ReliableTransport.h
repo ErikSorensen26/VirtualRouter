@@ -45,25 +45,28 @@ public:
 
     void sendHello();
     void sendUnicastHello(const IPAddress& neighborIp);
-    void sendSequenceHello(const IPAddress& neighborIp, uint32_t seq);
+    void sendConditionalHello(const std::vector<IPAddress>& neighbors, uint32_t seq);
     void sendAck(Neighbor& neighbor, uint32_t seqNum);
-    void sendCondAck(Neighbor& neighbor, uint32_t seqNum);
+    void trackAck(Neighbor& neighbor, uint32_t);
+    void attemptSendAck(Neighbor& neighbor, uint32_t);
     void sendNullUpdate(Neighbor& neighbor);
     void sendFullTopology(Neighbor& neighbor, Resync resync = Resync::NONE);
     void sendUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& routes);
     void sendPoisenedUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& routes);
     void sendQuery(const std::vector<ActiveRoute*>& routes);
     void sendUnicastQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& routes);
-    void sendReply(Neighbor& neighbor, const std::vector<const RouteInfo*>& routes, uint32_t seq);
+    void sendReply(Neighbor& neighbor, const std::vector<const RouteInfo*>& routes);
     void sendSIAQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& routes);
-    void sendSIAReply(Neighbor& neighbor, uint32_t seq);
+    void sendSIAReply(Neighbor& neighbor);
     
     bool validateSeqNum(RTPInfo& info, uint32_t seq);
-    bool setupReliablePacket(Neighbor* neighbor, EigrpHeader& info);
+    bool setupUnicastReliable(Neighbor& neighbor, EigrpHeader& info);
+    bool setupMulticastReliable(EigrpHeader& info);
 
 
     void startMulticastReliable(MulticastReliablePacket& pkt, uint32_t seq);
     void startUnicastReliable(Neighbor& nbr, UnicastReliablePacket& pkt, uint32_t seq);
+    void sendRetransmission(Neighbor& neighbor, StaticHeader& header);
     void handleRetransmission(Neighbor* neighbor, MulticastReliablePacket& pkt, ReliableInfo& info, uint32_t seq);
     void handleRetransmission(Neighbor* neighbor, UnicastReliablePacket& pkt, uint32_t seq);
 
@@ -72,14 +75,12 @@ public:
 
     // Multicast Reliable
     std::mutex reliableMtx;
-    std::atomic<uint32_t> currentReliable{0};
-    std::map<uint32_t, std::pair<std::unordered_set<IPAddress>, MulticastReliablePacket>> reliableQueue;
+    std::map<uint32_t, MulticastReliablePacket> reliablePackets;
 
     struct PktInfo
     {
         uint64_t bandwidthMetric{0};
         uint64_t delay{0};
-        bool authentication{false};
         TLVType version;
         uint16_t mtu;
         size_t sent{0};
@@ -95,16 +96,18 @@ private:
     void createPacket(PacketBuilder& builder);
 
     std::optional<EigrpHeader> createHello(PacketBuilder& builder);
-    std::optional<EigrpHeader> createUnicastHello(PacketBuilder& builder, const IPAddress& neighborIp);
-    std::optional<EigrpHeader> createSequenceHello(PacketBuilder& builder, const IPAddress& neighborIp, uint32_t seq);
-    std::optional<EigrpHeader> createAck(PacketBuilder& builder, Neighbor& neighbor, uint32_t seq);
-    std::optional<EigrpHeader> createNullUpdate(PacketBuilder& builder, Neighbor& neighbor);
+    std::optional<EigrpHeader> createUnicastHello(PacketBuilder& builder);
+    std::optional<EigrpHeader> createConditionalHello(PacketBuilder& builder, PktInfo& info, const std::vector<IPAddress>& neighbors, uint32_t seq);
+    std::optional<EigrpHeader> createAck(PacketBuilder& builder, uint32_t seq);
+    std::optional<EigrpHeader> createNullUpdate(PacketBuilder& builder);
     std::optional<EigrpHeader> createUpdate(PacketBuilder& builder, PktInfo& info, Neighbor* neighbor, const std::vector<const RouteInfo*>& routes);
     std::optional<EigrpHeader> createQuery(PacketBuilder& builder, PktInfo& info, const std::vector<ActiveRoute*>& queries);
     std::optional<EigrpHeader> createUnicastQuery(PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries);
-    std::optional<EigrpHeader> createReply(PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<const RouteInfo*>& replies, uint32_t seq);
-    std::optional<EigrpHeader> createSIAQuery(PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries);
-    std::optional<EigrpHeader> createSIAReply(PacketBuilder& builder, Neighbor& neighbor, uint32_t seq);
+    std::optional<EigrpHeader> createReply(PacketBuilder& builder, PktInfo& info, Neighbor& neighbor, const std::vector<const RouteInfo*>& replies);
+    std::optional<EigrpHeader> createSIAQuery(PacketBuilder& builder, PktInfo& info, const std::vector<OutgoingQuery*>& queries);
+    std::optional<EigrpHeader> createSIAReply(PacketBuilder& builder);
+
+    bool processConditionalReceive(uint32_t seq, Neighbor& neighbor);
 
     void processAck(Neighbor& neighbor, const uint32_t seq);
     void processHello(RTPInfo& info, bool unicast);
@@ -114,9 +117,10 @@ private:
     void processReply(RTPInfo& info);
     void processSIAReply(RTPInfo& info);
 
+    void checkInit(Neighbor& neighbor);
+
     void parseEigrpOptionHelper(const EigrpHeader& hdr, std::vector<TLV16Option>& options);
     bool verifyNeighborAS(const EigrpHeader& header);
-    bool validateSequenceNumber(const EigrpHeader& eigrpHello);
     uint16_t getMtu();
 
     std::atomic<uint32_t> nextSeq = 1; ///< Next sequence number for packets.

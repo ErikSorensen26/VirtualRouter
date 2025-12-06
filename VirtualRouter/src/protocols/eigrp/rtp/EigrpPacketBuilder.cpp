@@ -41,10 +41,10 @@ std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet
 
 void EigrpPacketBuilder::appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& iface)
 {
-    if (!iface.configs->authKey.fullyEnabled.load(std::memory_order_relaxed)) return;
-    auto* buf = tlv.getNextValBuf(0);
-    uint8_t len = iface.getAuth().buildAuthTLV(buf);
-    tlv.append(Variable::Eigrp::Option::authentication, len, nullptr, len);
+    if (!iface.configs->auth.fullyEnabled.load(std::memory_order_relaxed)) return;
+    auto* buf = tlv.getNextValBuf(36);
+    iface.getAuth().buildAuthTLV(buf);
+    tlv.append(Variable::Eigrp::Option::authentication, 40, nullptr, 36);
 }
 
 bool EigrpPacketBuilder::appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg)
@@ -97,18 +97,37 @@ bool EigrpPacketBuilder::appendVersionTLV(TLV16BufferManager& tlv)
     uint8_t* val = tlv.getNextValBuf(4);
     if (!val) return false;
     writeU16(val, Variable::Eigrp::Version::release);
-    writeU16(val + 4, Variable::Eigrp::Version::tls);
+    writeU16(val + 2, Variable::Eigrp::Version::tls);
     return tlv.append(Variable::Eigrp::Option::version, 8, nullptr, 4);
 }
 
-bool EigrpPacketBuilder::appendSequenceTLV(TLV16BufferManager& tlv, const IPAddress& ip)
+size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std::vector<IPAddress>& neighbors)
 {
-    uint8_t ipSize = static_cast<uint8_t>(ip.isV6 ? 16 : 4);
-    uint8_t* val = tlv.getNextValBuf(1 + ipSize);
-    if (!val) return false;
-    val[4] = ipSize;
-    std::memcpy(val + 1, ip.raw, ipSize);
-    return tlv.append(Variable::Eigrp::Option::sequence, 5 + ipSize, nullptr, 1 + ipSize);
+    if (neighbors.empty()) return 0;
+
+    const uint8_t ipSize = static_cast<uint8_t>(neighbors.front().isV6 ? 16 : 4);
+    size_t maxFit = (tlv.maxSize() - tlv.size() - 13) / ipSize;
+    size_t amount = std::min(maxFit, neighbors.size());
+    if (amount == 0) return 0;
+
+    uint16_t payloadLength = static_cast<uint16_t>((amount * ipSize) + 1);
+    uint16_t tlvLength = payloadLength + 4;
+
+    auto* buf = tlv.getNextValBuf(payloadLength);
+    if (!buf) return 0;
+
+    buf[0] = ipSize;
+
+    size_t offset = 1;
+    for (int i = 0; i < amount; i++)
+    {
+        const auto& ip = neighbors[i];
+        std::memcpy(buf + offset, ip.raw, ipSize);
+        offset += ipSize;
+    }
+    
+    tlv.append(Variable::Eigrp::Option::sequence, tlvLength, nullptr, payloadLength);
+    return amount;
 }
 
 bool EigrpPacketBuilder::appendMulticastSeqTLV(TLV16BufferManager& tlv, uint32_t seq)

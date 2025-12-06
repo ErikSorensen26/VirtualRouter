@@ -7,10 +7,15 @@
 #include <cstdint>
 
 class PacketBuilder;
+class Global;
 struct TLV16Option;
+namespace Authentication
+{
+class KeyChainManager;
+}
 namespace EigrpConfigs
 {
-enum class AuthType : uint8_t;
+enum class AuthType : uint16_t;
 struct InterfaceConfigs;
 }
 
@@ -22,18 +27,17 @@ class AuthHandler
 {
 public:
 
-    AuthHandler(EigrpConfigs::InterfaceConfigs& iface);
+    AuthHandler(EigrpConfigs::InterfaceConfigs& iface, Authentication::KeyChainManager& keyMgr);
 
-    void setKeyChain(uint8_t* keyId = nullptr, const std::string* key = nullptr, EigrpConfigs::AuthType* type = nullptr, bool enable = false);
+    uint16_t buildAuthTLV(uint8_t* out);
 
-    virtual uint8_t buildAuthTLV(uint8_t* out);
+    bool validateAuth(const uint8_t* packetStart, size_t size, const TLV16Option* authOpt);
 
-    bool validateAuth(const uint8_t* packetStart, TLV16Option& authOpt);
-
-    static void appendAuthHMAC(uint8_t* packetStart);
+    static bool appendAuthHMAC(Global& global, uint8_t* packetStart, size_t size);
 
 private:
     EigrpConfigs::InterfaceConfigs& configs;
+    Authentication::KeyChainManager& keyMgr;
 };
 }
 

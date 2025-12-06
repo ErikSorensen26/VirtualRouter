@@ -16,6 +16,7 @@
 #include <AddressFamily.hpp>
 #include <IPAddress.hpp>
 #include <map>
+#include <KeyChainManager.h>
 
 #define DEFAULT_HOSTNAME "router"
 
@@ -165,6 +166,8 @@ public:
     // DHCP
     Protocol::DhcpServer* dhcpServer = nullptr;
     Protocol::Dhcpv6Server* dhcpv6Server = nullptr;
+
+    Authentication::KeyChainManager keyChainManager;
 
     /**
      * @brief Resets the global state of the router.

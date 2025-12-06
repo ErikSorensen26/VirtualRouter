@@ -4,9 +4,15 @@
 #define EIGRP_TYPES_HPP
 
 #include <shared_mutex>
+#include <memory>
 #include <unordered_set>
 #include <TimeManager.h>
 #include <TopologyTable.h>
+
+namespace Authentication
+{
+class KeyChain;
+}
 
 namespace Eigrp
 {
@@ -65,28 +71,22 @@ namespace EigrpConfigs
      * @enum AuthType
      * @brief Represents the type of authentication used.
      */
-    enum class AuthType : uint8_t
+    enum class AuthType : uint16_t
     {
-        NONE = 0x00,
-        MD5 = 0x02,
-        SHA1 = 0x03,
-        SHA256 = 0x04,
-        SHA384 = 0x05,
-        SHA512 = 0x06
+        NONE = 0x0000,
+        MD5 = 0x0002,
+        SHA256 = 0x0003,
     };
 
     /**
      * @struct AuthKey
      * @brief Represents an authentication key.
      */
-    struct AuthKey
+    struct AuthConfigs
     {
         std::atomic<bool> fullyEnabled = false; ///< Indicates if authentication is enabled.
-        uint8_t keyId;              ///< Identifier for the authentication key.
-        std::string key;             ///< The authentication key.
         AuthType authType = AuthType::NONE; ///< Type of authentication.
-        std::atomic<uint32_t> replay;
-        std::atomic<uint32_t> lastReplay;
+        std::variant<uint32_t, std::string> key = uint32_t{};
     };
 
     /**
@@ -226,7 +226,7 @@ namespace EigrpConfigs
         std::atomic<bool> dampeningIntervalConfigured = false; ///< Indicates whether dampening interval is configured on the interface.
         std::atomic<uint64_t> localMetric; ///< Local metric of the interface.
         std::atomic<bool> noEcmpMode = false; ///< No ECMP mode used for VPNs. //TODO
-        AuthKey authKey; ///< Authentication key.
+        AuthConfigs auth; ///< Authentication key.
 
         /**
          * @brief used to see if configs are defaulted
@@ -246,10 +246,8 @@ namespace EigrpConfigs
                 nextHopSelf.load() == other.nextHopSelf.load() &&
                 dampeningChange.load() == other.dampeningChange.load() &&
                 dampeningInterval.load() == other.dampeningInterval.load() &&
-                authKey.authType == other.authKey.authType && 
-                authKey.fullyEnabled.load() == other.authKey.fullyEnabled.load() &&
-                authKey.key == other.authKey.key &&
-                authKey.keyId == other.authKey.keyId;
+                auth.authType == other.auth.authType && 
+                auth.fullyEnabled.load() == other.auth.fullyEnabled.load();
         }
     };
 }

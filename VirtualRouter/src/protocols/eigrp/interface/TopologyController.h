@@ -7,6 +7,7 @@
 #include <TopologyTable.h>
 #include <Neighbor.h>
 
+#include <iostream>
 namespace Eigrp
 {
 class DuelEngine;
@@ -20,7 +21,7 @@ public:
 
     uint64_t getLocalMetric();
     std::vector<const RouteInfo*> filterAdvertisableRoutes(const std::vector<const RouteInfo*> routes);
-    void onNeighborDown(const IPAddress& neighborIp);
+    void onNeighborDown(Neighbor& neighbor);
 
     std::vector<const RouteInfo*> getAllRoutes();
     std::unordered_map<IPPrefix, TopologyEntry*>& getTopologies();

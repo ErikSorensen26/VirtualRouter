@@ -49,7 +49,7 @@ Neighbor::~Neighbor()
 
     iface.getTimers().cancelNeighborTimers(*this);
     iface.getBase().delGlobalNeighbor(ipAddress);
-    iface.getTopController().onNeighborDown(ipAddress);
+    iface.getTopController().onNeighborDown(*this);
     
     if (unicast)
     {
@@ -63,7 +63,8 @@ void Neighbor::clear()
 {
     state.store(State::DOWN);
 
-    initSeq.store(0);
+    recvInitSeq.store(0);
+    sentInitSeq.store(0);
 
     holdTimerId.store(0);
     stuckInitTimerId.store(0);
@@ -122,35 +123,42 @@ void Neighbor::markHeard()
 
 bool Neighbor::isActive() const noexcept
 {
-    return state.load() >= State::TWOWAY;
+    return state.load() >= State::PARAMETERS_MATCH;
 }
 
 void Neighbor::clearReliable()
 {
+    auto& rtp = iface.getRtp();
+    std::lock_guard<std::mutex> relock(rtp.reliableMtx);
+    uint32_t current = currentReliable.load(std::memory_order_relaxed);
+    currentReliable.store(0, std::memory_order_release);
+    if (current != 0)
     {
-        uint32_t current = currentReliable.load(std::memory_order_relaxed);
-        currentReliable.store(0, std::memory_order_release);
-        if (current != 0)
-            iface.getTimers().cancelRetransmissionTimer(reliableQueue[current].info);
-        std::lock_guard<std::mutex> lock(reliableMtx);
-        reliableQueue.clear();
-    }
-    {
-        auto& rtp = iface.getRtp();
-        uint32_t current = rtp.currentReliable.load(std::memory_order_relaxed);
-        if (current != 0)
+        if (reliablePackets.count(current))
         {
-            auto& rel = rtp.reliableQueue[current];
-            if (auto it = rel.second.neighbors.find(this); it != rel.second.neighbors.end())
-            {
-                iface.getTimers().cancelRetransmissionTimer(it->second);
-            }
+            iface.getTimers().cancelRetransmissionTimer(reliablePackets[current].info);
         }
-        for (auto& reliable : rtp.reliableQueue)
+        else if (auto it = rtp.reliablePackets.find(current); it != rtp.reliablePackets.end())
         {
-            if (auto it = reliable.second.second.neighbors.find(this); it != reliable.second.second.neighbors.end())
-                reliable.second.second.neighbors.erase(it);
+            it->second.neighbors.erase(this);
+            if (it->second.neighbors.empty())
+                rtp.reliablePackets.erase(current);
         }
     }
+    std::lock_guard<std::mutex> lock(reliableMtx);
+    if (!activeConditions.empty())
+    {
+        for (const auto& condition : activeConditions)
+        {
+            auto it = rtp.reliablePackets.find(condition);
+            if (it == rtp.reliablePackets.end()) continue;
+            it->second.neighbors.erase(this);
+            if (it->second.neighbors.empty())
+                rtp.reliablePackets.erase(it);
+        }
+    }
+    reliableQueue.clear();
+    activeConditions.clear();
+    receivedConditions.clear();
 }
 }

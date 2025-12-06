@@ -59,11 +59,15 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					{
 						if (negate)
 						{
-							//TODO
+							eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_release);
+							eigrpConfig->auth.key = uint32_t{};
+							refreshEigrpConfig(as, AddressFamily::IPv4, eigrpConfig);
 						}
 						else
 						{
-							//TODO
+							eigrpConfig->auth.key = commandStream[5];
+							if (eigrpConfig->auth.authType != EigrpConfigs::AuthType::NONE)
+								eigrpConfig->auth.fullyEnabled.store(true, std::memory_order_release);
 						}
 					}
 				}
@@ -78,18 +82,17 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					{
 						if (negate)
 						{
-							eigrpConfig->authKey.fullyEnabled.store(false, std::memory_order_relaxed);
-							eigrpConfig->authKey.authType = EigrpConfigs::AuthType::NONE;
+							eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_relaxed);
+							eigrpConfig->auth.authType = EigrpConfigs::AuthType::NONE;
 							refreshEigrpConfig(as, AddressFamily::IPv4, eigrpConfig);
 						}
 						else
 						{
-							eigrpConfig->authKey.fullyEnabled.store(false, std::memory_order_relaxed);
-							eigrpConfig->authKey.authType = EigrpConfigs::AuthType::MD5;
-							if (eigrpConfig->authKey.keyId != 0)
+							eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_relaxed);
+							eigrpConfig->auth.authType = EigrpConfigs::AuthType::MD5;
+							if (std::holds_alternative<std::string>(eigrpConfig->auth.key) && !std::get<std::string>(eigrpConfig->auth.key).empty())
 							{
-								// Enable authentication.
-								eigrpConfig->authKey.fullyEnabled.store(true, std::memory_order_relaxed);
+								eigrpConfig->auth.fullyEnabled.store(true, std::memory_order_release);
 							}
 						}
 					}
@@ -341,11 +344,15 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					{
 						if (negate)
 						{
-							//TODO
+							eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_release);
+							eigrpConfig->auth.key = uint32_t{};
+							refreshEigrpConfig(as, AddressFamily::IPv4, eigrpConfig);
 						}
 						else
 						{
-							//TODO
+							eigrpConfig->auth.key = commandStream[5];
+							if (eigrpConfig->auth.authType != EigrpConfigs::AuthType::NONE)
+								eigrpConfig->auth.fullyEnabled.store(true, std::memory_order_release);
 						}
 					}
 				}
@@ -360,18 +367,17 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 					{
 						if (negate)
 						{
-							eigrpConfig->authKey.fullyEnabled.store(false, std::memory_order_relaxed);
-							eigrpConfig->authKey.authType = EigrpConfigs::AuthType::NONE;
+							eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_relaxed);
+							eigrpConfig->auth.authType = EigrpConfigs::AuthType::NONE;
 							refreshEigrpConfig(as, AddressFamily::IPv6, eigrpConfig);
 						}
 						else
 						{
-							eigrpConfig->authKey.fullyEnabled.store(false, std::memory_order_relaxed);
-							eigrpConfig->authKey.authType = EigrpConfigs::AuthType::MD5;
-							if (eigrpConfig->authKey.keyId != 0)
+							eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_relaxed);
+							eigrpConfig->auth.authType = EigrpConfigs::AuthType::MD5;
+							if (std::holds_alternative<std::string>(eigrpConfig->auth.key) && !std::get<std::string>(eigrpConfig->auth.key).empty())
 							{
-								// Enable authentication.
-								eigrpConfig->authKey.fullyEnabled.store(true, std::memory_order_relaxed);
+								eigrpConfig->auth.fullyEnabled.store(true, std::memory_order_release);
 							}
 						}
 					}

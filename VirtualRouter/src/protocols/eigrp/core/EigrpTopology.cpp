@@ -72,7 +72,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
         IPPrefix prefix;
         if (interface->configs.ipv4.getAddress(prefix.addr))
         {
-            prefix.prefixLength = interface->configs.ipv4.getMask();
+            prefix.addPrefixLen(interface->configs.ipv4.getMask());
             prefix.af = AddressFamily::IPv4;
             install(prefix);
         }

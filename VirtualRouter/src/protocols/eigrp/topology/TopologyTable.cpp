@@ -50,7 +50,7 @@ std::vector<const RouteInfo*> TopologyTable::getAllRoutes()
     return routesToSend;
 }
 
-void TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighbor, TopologyEntry& entry)
+RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighbor, TopologyEntry& entry)
 {
     std::lock_guard<std::mutex> lock(tableMutex);
 
@@ -77,6 +77,8 @@ void TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* n
         if (routeEntry.routeInfo.wide.isWide)
             routeEntry.routeInfo.wide.setFlag(ReceivedRoute::Wide::WideFlags::WITHDRAWL);
     }
+
+    return routeEntry;
 }
 
 std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const IPPrefix& prefix, const IPAddress& neighbor)

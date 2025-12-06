@@ -156,7 +156,7 @@ public:
 
     TopologyTable(Eigrp& process);
     ~TopologyTable();
-    void addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighborIp, TopologyEntry& entry);
+    RouteInfo& addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighborIp, TopologyEntry& entry);
     void markRouteUnreachable(RouteInfo& route, const IPAddress& neighborIp, TopologyEntry& entry);
     void pruneExpired();
     void pruneNeighbor(const IPAddress& neighborIp);

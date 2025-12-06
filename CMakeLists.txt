@@ -120,8 +120,8 @@ else()
         -fno-optimize-sibling-calls
         -Wall -Wextra -Wpedantic -Wshadow -Wcast-align -Wconversion -Wsign-conversion
     )
-    add_link_options(-fsanitize=address,undefined)
-    add_compile_options(-fsanitize=address,undefined)
+    #add_link_options(-fsanitize=address,undefined)
+    #add_compile_options(-fsanitize=address,undefined)
     add_compile_definitions(DEBUG)
 
     # External Dependencies

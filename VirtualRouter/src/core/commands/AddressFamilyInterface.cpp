@@ -14,16 +14,36 @@ bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::strin
 			{
 				std::string keychain = commandStream[2];
 				// TODO
+				if (negate)
+				{
+					currentEigrpInterface->auth.fullyEnabled.store(false, std::memory_order_relaxed);
+					currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::NONE;
+				}
+				else
+				{
+					currentEigrpInterface->auth.fullyEnabled.store(false, std::memory_order_relaxed);
+					currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::MD5;
+					if (std::holds_alternative<std::string>(currentEigrpInterface->auth.key) && !std::get<std::string>(currentEigrpInterface->auth.key).empty())
+					{
+						currentEigrpInterface->auth.fullyEnabled.store(true, std::memory_order_release);
+					}
+				}
 			}
 			else if (commandStream[1] == "mode")
 			{
 				if (commandStream[2] == "hmac-sha-256")
 				{
-					currentEigrpInterface->authKey.authType = EigrpConfigs::AuthType::SHA1;
+					currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::SHA256;
+					if (commandStream[3].size() > 32)
+					{
+						terminal.iConsole->print(std::string("\r\n%EIGRP: HMAC-SHA-256 password accepted but truncated, max length is 32 characters"));
+						currentEigrpInterface->auth.key = std::string(commandStream[3].substr(0, 32));
+					}
+					currentEigrpInterface->auth.key = std::string(commandStream[3]);
 				}
 				else if (commandStream[2] == "md5")
 				{
-					currentEigrpInterface->authKey.authType = EigrpConfigs::AuthType::MD5;
+					currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::MD5;
 				}
 			}
 		}

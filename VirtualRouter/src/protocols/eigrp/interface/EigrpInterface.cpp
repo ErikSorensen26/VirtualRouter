@@ -14,7 +14,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     base(eigrpSystem),
     currentInterface(&interface),
     currentInterfaceInfo(&interface.configs),
-    auth(intConfigs),
+    auth(intConfigs, eigrpSystem.routingInstance->global.keyChainManager),
     metrics(*this),
     rtp(*this),
     aggregator(*this),

@@ -12,8 +12,6 @@ namespace Eigrp
 {
 DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.routingInstance->global.timeManager) {}
 
-DuelEngine::~DuelEngine() {}
-
 bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
 {
     auto it = entry->suppression.find(key);
@@ -255,14 +253,14 @@ void DuelEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedR
     std::vector<TopologyEntry*> toActivate;
     std::vector<const RouteInfo*> replies;
 
+    bool isStub = base.getGlobalConfigMgr().stubEnabled();
+
     for (auto& route : queriedRoutes)
     {
-        auto* entry = topologyTable.find(route.prefix);
-        if (!entry)
-            continue;
-        topologyTable.addRouteUpdate(route, &nbr, *entry);
+        auto& entry = topologyTable.ensure(route.prefix);
+        auto& updatedRoute = topologyTable.addRouteUpdate(route, &nbr, entry);
 
-        if (recalculateSuccessors(entry))
+        if (recalculateSuccessors(&entry))
         {
             auto feasible = findBestRoute(route.prefix);
             if (feasible)
@@ -272,11 +270,14 @@ void DuelEngine::processReceivedQueryRoutes(std::vector<ReceivedRoute>& queriedR
             }
         }
 
-        toActivate.push_back(entry);
+        if (isStub)
+            replies.push_back(&updatedRoute);
+        else
+            toActivate.push_back(&entry);
     }
 
     if (!replies.empty())
-        nbr.getIface().getRtp().sendReply(nbr, replies, recvSeq);
+        nbr.getIface().getRtp().sendReply(nbr, replies);
 
     if (!toActivate.empty())
         setActive(toActivate, &recvSeq);
@@ -415,6 +416,21 @@ void DuelEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
     }
 }
 
+void DuelEngine::removeActiveNeighbor(const IPAddress& neighborIp)
+{
+    std::lock_guard<std::mutex> lock(activeMutex);
+    for (auto it = activeRoutes.begin(); it != activeRoutes.end();)
+    {
+        auto next = std::next(it);
+        ActiveRoute& route = it->second;
+
+        if (route.pendingQueries.erase(neighborIp) && route.pendingQueries.empty())
+            concludeActive(route);
+
+        it = next;
+    }
+}
+
 void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 {
     ActiveRoute* route = nullptr;
@@ -464,7 +480,7 @@ void DuelEngine::concludeActive(ActiveRoute& activeRoute)
         auto it = base.allNeighbors.find(src.first);
         if (it == base.allNeighbors.end()) continue;
         auto feasibleRoutes = findBestRoutes(activeRoute.activePrefix);
-        it->second->getIface().getRtp().sendReply(*it->second, feasibleRoutes, src.second);
+        it->second->getIface().getRtp().sendReply(*it->second, feasibleRoutes);
     }
 
     activeRoutes.erase(activeRoute.activePrefix);

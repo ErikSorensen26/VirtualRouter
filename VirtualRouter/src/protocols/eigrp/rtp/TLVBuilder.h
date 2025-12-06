@@ -16,10 +16,6 @@ namespace Eigrp
 class EigrpInterface;
 struct ReceivedRoute;
 
-constexpr uint16_t ROUTE_EXTERNAL = 0b0000000000000001;
-constexpr uint16_t ROUTE_WIDE     = 0b0000001000000000;
-constexpr uint16_t ROUTE_V6       = 0b0000010000000000;
-
 class TLVBuilder
 {
 public:
@@ -40,15 +36,15 @@ public:
     };
 
     [[nodiscard]] inline static bool isExternal(TLVBuilder::RouteType t) noexcept
-        { return (static_cast<uint8_t>(t) & ROUTE_EXTERNAL) != 0; }
+        { return (static_cast<uint16_t>(t) & 0x00FF) == 0x0003; }
     [[nodiscard]] inline static bool isWide(TLVBuilder::RouteType t) noexcept
-        { return (static_cast<uint8_t>(t) & ROUTE_WIDE) != 0; }
-    [[nodiscard]] inline static bool isV6(TLVBuilder::RouteType t) noexcept
-        { return (static_cast<uint8_t>(t) & ROUTE_V6) != 0; }
+        { return (static_cast<uint16_t>(t) & 0xFF00) != 0x0100; }
+    [[nodiscard]] inline static bool isNamed(TLVBuilder::RouteType t) noexcept
+        { return (static_cast<uint16_t>(t) & 0xFF00) == 0x0600; }
 
     static uint8_t encodeRouteOption(uint8_t* out, size_t maxSize, const RouteInfo* route, uint64_t currentBandwidth, uint64_t currentDelay, RouteType type);
     static uint8_t* encodeStubOption(uint8_t* out, const EigrpConfigs::StubConfig& stub);
-    static std::pair<std::optional<ReceivedRoute>, bool> decodeRoute(const TLV16Option& routeOpt, uint32_t ifaceLearned, TLVType type);
+    static std::optional<ReceivedRoute> decodeRoute(const TLV16Option& routeOpt, uint32_t ifaceLearned);
     static uint8_t* calculateParameters(uint8_t* out, const EigrpConfigs::KValue& kvalue, uint16_t holdTime = 0);
 
 private:

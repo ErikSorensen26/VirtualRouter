@@ -103,10 +103,10 @@ private:
     const uint32_t asNumber; ///< Autonomous System number.
     const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
 
+    EigrpTopology topology;
     InterfaceManager ifaceMgr;
     EigrpConfig configMgr;
     GlobalAggregator aggregator;
-    EigrpTopology topology;
 
     bool namedMode = false; ///< Indicates if running named mode.
     RouterID rid; ///< Router ID configuration.

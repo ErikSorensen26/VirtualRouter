@@ -10,8 +10,7 @@
 #include <StaticHeader.hpp>
 #include <unordered_map>
 
-namespace Eigrp
-{
+namespace Eigrp {
 class Neighbor;
 struct ReliableInfo
 {
