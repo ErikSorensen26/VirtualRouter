@@ -89,9 +89,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         return;
     }
 
-    // Safely access or create the neighbor
-    if (!info.neighbor && !unicast)
-    {
+    auto calcVersion = [&]() {
         bool sawVersion = false;
         uint16_t version = 0;
 
@@ -108,14 +106,25 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         Neighbor::Version nver = Neighbor::Version::LEGACY;
         if (sawVersion && version >= static_cast<uint16_t>(Neighbor::Version::WIDE))
             nver = Neighbor::Version::WIDE;
+        return nver;
+    };
 
+    // Safely access or create the neighbor
+    if (!info.neighbor && !unicast)
+    {
+        Neighbor::Version nver = calcVersion();
         info.neighbor = ntable->createNeighbor(info.neighborIp, nver);
         if (!info.neighbor) return;
 
         info.neighbor->srtt = 1.0;
         info.neighbor->rttvar = 0.5;
         info.neighbor->rto = 1.5;
-        info.neighbor->setState(Neighbor::State::HELLO_RECEIVED);
+        info.neighbor->setState(Neighbor::State::PENDING);
+    }
+    else if (unicast && info.neighbor && info.neighbor->version == Neighbor::Version::UNKNOWN)
+    {
+        Neighbor::Version nver = calcVersion();
+        info.neighbor->version = nver;
     }
     else if (!info.neighbor && unicast) return;
 
@@ -191,14 +200,9 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
     // Safely extract the neighbor state
     if (parametersFound)
     {
-        if (nbr->getState() == Neighbor::State::HELLO_RECEIVED)
-            nbr->setState(Neighbor::State::PARAMETERS_MATCH);
-
         if (!nbr->initInProgress.exchange(true, std::memory_order_acq_rel))
         {
             sendNullUpdate(*nbr);
-            iface.getTimers().startInitTimer(*nbr);
-            nbr->setState(Neighbor::State::INIT);
         }
     }
 }
@@ -222,7 +226,7 @@ bool ReliableTransport::validateSeqNum(RTPInfo& info, uint32_t recvSeq)
 
 void ReliableTransport::checkInit(Neighbor& neighbor)
 {
-    if (neighbor.getState() != Neighbor::State::INIT)
+    if (neighbor.getState() == Neighbor::State::UP)
         return;
 
     const uint32_t recvInit = neighbor.recvInitSeq.load(std::memory_order_relaxed);
@@ -234,8 +238,7 @@ void ReliableTransport::checkInit(Neighbor& neighbor)
 
     if (ourNullAcked && theirNullSeen && !neighbor.fullSent.load(std::memory_order_relaxed))
     {
-        neighbor.setState(Neighbor::State::FULL);
-        iface.getTimers().cancelInitTimer(neighbor);
+        neighbor.setState(Neighbor::State::UP);
     }
 }
 
@@ -258,6 +261,7 @@ void ReliableTransport::processUpdate(RTPInfo& info)
 {
     auto& update = info.eigrp;
     Neighbor& nbr = *info.neighbor;
+    Neighbor::State state = nbr.getState();
 
     // ignore self-originated or invalid AS packets
     if (!verifyNeighborAS(update))
@@ -278,12 +282,11 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     }
 
     bool resync = update.getFlagRestart() && update.getFlagInit() &&
-        info.neighbor && info.neighbor->getState() == Neighbor::State::FULL;
+        info.neighbor && state == Neighbor::State::UP;
     if (resync)
     {
         nbr.resyncInProgress.store(true, std::memory_order_release);
         iface.getTopController().onNeighborDown(*info.neighbor);
-        nbr.setState(Neighbor::State::INIT);
     }
 
     if (update.getFlagInit())
@@ -295,33 +298,36 @@ void ReliableTransport::processUpdate(RTPInfo& info)
 
     trackAck(nbr, recvSeq);
 
-    std::vector<ReceivedRoute> routeBuffer;
-    routeBuffer.reserve(routeOpts.size());
-    for (const auto& opt : routeOpts)
+    if (state == Neighbor::State::UP)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
+        std::vector<ReceivedRoute> routeBuffer;
+        routeBuffer.reserve(routeOpts.size());
+        for (const auto& opt : routeOpts)
         {
-            routeBuffer.emplace_back(std::move(*route));
+            if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)
+            {
+                routeBuffer.emplace_back(std::move(*route));
+            }
         }
-    }
 
-    if (!routeBuffer.empty())
-    {
-        if (iface.recordDampeningEvent())
+        if (!routeBuffer.empty())
         {
-            iface.getMetrics().addRouteMetrics(routeBuffer);
-            iface.getTopController().processReceivedRoutes(routeBuffer, nbr);
+            if (iface.recordDampeningEvent())
+            {
+                iface.getMetrics().addRouteMetrics(routeBuffer);
+                iface.getTopController().processReceivedRoutes(routeBuffer, nbr);
+            }
         }
-    }
 
-    // Continue resync if needed
-    if (resync)
-    {
-        sendFullTopology(*info.neighbor, Resync::REPLY);
-    }
-    if (nbr.resyncInProgress.load(std::memory_order_relaxed))
-    {
-        nbr.resyncInProgress.store(false, std::memory_order_release);
+        // Continue resync if needed
+        if (resync)
+        {
+            sendFullTopology(*info.neighbor, Resync::REPLY);
+        }
+        if (nbr.resyncInProgress.load(std::memory_order_relaxed))
+        {
+            nbr.resyncInProgress.store(false, std::memory_order_release);
+        }
     }
 
     attemptSendAck(nbr, recvSeq);
@@ -375,6 +381,7 @@ void ReliableTransport::processAck(Neighbor& neighbor, const uint32_t seq)
                 if (it == neighbor.reliablePackets.end()) return;
 
                 neighbor.currentReliable.store(nseq, std::memory_order_release);
+                sendRetransmission(neighbor, it->second.packet);
                 startUnicastReliable(neighbor, it->second, nseq);
             }
         }
@@ -389,7 +396,7 @@ void ReliableTransport::processAck(Neighbor& neighbor, const uint32_t seq)
 void ReliableTransport::processQuery(RTPInfo& info)
 {
     Neighbor* nbr = info.neighbor;
-    if (!nbr) return;
+    if (!nbr || nbr->getState() != Neighbor::State::UP) return;
 
     const uint32_t recvSeq = info.eigrp.getSequence();
 
@@ -403,7 +410,7 @@ void ReliableTransport::processQuery(RTPInfo& info)
     std::vector<ReceivedRoute> queriedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
+        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)
         {
             queriedRoutes.emplace_back(std::move(*route));
         }
@@ -418,7 +425,7 @@ void ReliableTransport::processQuery(RTPInfo& info)
 void ReliableTransport::processSIAQuery(RTPInfo& info)
 {
     Neighbor* nbr = info.neighbor;
-    if (!nbr) return;
+    if (!nbr || nbr->getState() == Neighbor::State::UP) return;
 
     const uint32_t seq = info.eigrp.getSequence();
     if (!validateSeqNum(info, seq))
@@ -431,7 +438,7 @@ void ReliableTransport::processSIAQuery(RTPInfo& info)
 void ReliableTransport::processReply(RTPInfo& info)
 {
     Neighbor* nbr = info.neighbor;
-    if (!nbr) return;
+    if (!nbr || nbr->getState() != Neighbor::State::UP) return;
 
     const uint32_t seq = info.eigrp.getSequence();
     if (!validateSeqNum(info, seq))
@@ -442,7 +449,7 @@ void ReliableTransport::processReply(RTPInfo& info)
     std::vector<ReceivedRoute> receivedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey); route)
+        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)
         {
             receivedRoutes.emplace_back(std::move(*route));
         }
@@ -456,7 +463,7 @@ void ReliableTransport::processReply(RTPInfo& info)
 
 void ReliableTransport::processSIAReply(RTPInfo& info)
 {
-    if (!info.neighbor) return;
+    if (!info.neighbor || info.neighbor->getState() != Neighbor::State::UP) return;
 
     const uint32_t seq = info.eigrp.getSequence();
     if (!validateSeqNum(info, seq))

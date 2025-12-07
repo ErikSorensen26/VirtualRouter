@@ -49,7 +49,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
         setPassiveMode(true);
 
     configs->localMetric = metrics.calculateCompositeMetric(
-        load, reliability, delay, bandwidth);
+        load, reliability, delay * 1'000'000, bandwidth);
 
     // Handle unciast neighbors
     std::unordered_set<IPAddress> unicastNeighbors = base.getGlobalConfigMgr().getUnicastNeighbors(interfaceKey);
@@ -57,7 +57,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     {
         configs->multicastEnabled.store(false, std::memory_order_release);
         for (auto neighbor : unicastNeighbors)
-            ntable.createNeighbor(neighbor);
+            ntable.createNeighbor(neighbor, Neighbor::Version::UNKNOWN, true);
     }
 
     startDampening();
@@ -126,8 +126,13 @@ void EigrpInterface::setPassiveMode(bool passive)
     if (passive)
     {
         ntable.cancelAllHoldTimers();
-        for (auto& [ip, nbr] : ntable.neighbors)
+        for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
+        {
+            auto next = std::next(it);
+            Neighbor& nbr = it->second;
             ntable.onDown(nbr);
+            it = next;
+        }
         tmgr.stopHello();
     }
     else

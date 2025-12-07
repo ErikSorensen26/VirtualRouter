@@ -131,7 +131,7 @@ void EigrpConfig::enableUnicastPeer(const IPAddress& neighborIp, uint32_t key)
         auto intIt = iface.eigrpInterfaceList.find(key);
         if (intIt != iface.eigrpInterfaceList.end())
         {
-            intIt->second.getNTable().createNeighbor(neighborIp);
+            intIt->second.getNTable().createNeighbor(neighborIp, Neighbor::Version::UNKNOWN, true);
         }
     }
 }

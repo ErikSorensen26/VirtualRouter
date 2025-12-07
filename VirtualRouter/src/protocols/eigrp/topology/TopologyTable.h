@@ -60,11 +60,11 @@ struct ReceivedRoute
     struct Wide
     {
         bool isWide = false;
-        uint16_t topology;
-        uint16_t afi;
-        uint32_t rid;
-        uint8_t priority;
-        uint16_t wideFlags;
+        uint16_t topology = 0;
+        uint16_t afi = 0;
+        uint32_t rid = 0;
+        uint8_t priority = 0;
+        uint16_t wideFlags = 0;
 
         enum class WideFlags : uint16_t
         {

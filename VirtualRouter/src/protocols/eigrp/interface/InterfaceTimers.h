@@ -49,8 +49,6 @@ public:
     void sendHello();
 
     void cancelNeighborTimers(Neighbor&);
-    void startInitTimer(Neighbor& neighbor);
-    void cancelInitTimer(Neighbor& neighbor);
     void startGracefulTimer(Neighbor& neighbor);
     void cancelGracefulTimer(Neighbor& neighbor);
 

@@ -124,6 +124,7 @@ private:
     uint16_t getMtu();
 
     std::atomic<uint32_t> nextSeq = 1; ///< Next sequence number for packets.
+    std::atomic<bool> firstFullSend = false;
 
     AddressFamily af;
     uint32_t as;

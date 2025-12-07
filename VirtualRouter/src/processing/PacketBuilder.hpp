@@ -102,6 +102,7 @@ public:
             return nullptr;
 
         std::memcpy(entry->buffer, saved.buffer, saved.totalLen);
+        ++buildIndex;
 
         return entry;
     }

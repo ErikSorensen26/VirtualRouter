@@ -103,10 +103,11 @@ InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addAddres
 {
     if (local)
     {
-        std::unique_lock<std::shared_mutex> lock(ipMutex);
         // Only one local-address can exist
         if (linkLocalAddress)
             removeLocalAddress();
+
+        std::unique_lock<std::shared_mutex> lock(ipMutex);
 
         linkLocalAddress = new IPv6Address();
         std::memcpy(linkLocalAddress->ip, ip, 16);
@@ -162,8 +163,11 @@ InterfaceConfigs::IPv6State::IPv6Address* InterfaceConfigs::IPv6State::addGlobal
 void InterfaceConfigs::IPv6State::removeLocalAddress()
 {
     std::unique_lock<std::shared_mutex> lock(ipMutex);
-    delete linkLocalAddress;
-    linkLocalAddress = nullptr;
+    if (linkLocalAddress)
+    {
+        delete linkLocalAddress;
+        linkLocalAddress = nullptr;
+    }
 }
 
 void InterfaceConfigs::IPv6State::removeAddress(const uint8_t* ip)

@@ -38,34 +38,47 @@ uint64_t InterfaceMetrics::getLocalMetric()
 
 uint64_t InterfaceMetrics::calculateCompositeMetric(uint8_t load, uint8_t reliability, uint64_t delay, uint64_t bandwidth)
 {
-    EigrpConfigs::KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
+    const auto k = iface.getBase().getGlobalConfigMgr().getKValues();
 
-    uint64_t scaledBW = (bandwidth > 0) ? (10'000'000ull * 65'536ull) / bandwidth : 0ull;
-    uint64_t scaledDelay = (delay * 65'536ull) / 1'000'000ull;
+    // Convert delay from picoseconds to microseconds
+    uint64_t delayMicroseconds = delay / 1'000'000ULL;
 
-    uint64_t loadMetric = 0ull;
-    if (k.k2_Load != 0)
+    // Scaled values
+    uint64_t scaledBW = (bandwidth > 0)
+        ? (10'000'000ULL * 65'536ULL) / bandwidth
+        : 0ULL;
+
+    uint64_t scaledDelay = delayMicroseconds * 65'536ULL;
+
+    // Load term
+    uint64_t loadTerm = 0;
+    if (k.k2_Load != 0 && load < 256)
+        loadTerm = (k.k2_Load * scaledBW) / (256ULL - load);
+
+    // Base metric (128-bit to avoid overflow)
+    unsigned __int128 base = 0;
+    base += static_cast<unsigned __int128>(k.k1_Bandwidth) * scaledBW;
+    base += loadTerm;
+    base += static_cast<unsigned __int128>(k.k3_Delay) * scaledDelay;
+
+    // Final metric
+    uint64_t finalMetric;
+    if (k.k5_MTU == 0)
     {
-        if (load < 255)
-            loadMetric = (k.k2_Load * scaledBW) / (256ull - load);
-        else if (k.k2_Load != 0 && load >= 255)
-            loadMetric = k.k2_Load * scaledBW;
+        finalMetric = static_cast<uint64_t>(base);
+    }
+    else
+    {
+        uint64_t denominator = k.k4_Reliability + reliability;
+        if (denominator == 0)
+            return std::numeric_limits<uint64_t>::max();
+
+        unsigned __int128 tmp = base * static_cast<unsigned __int128>(k.k5_MTU);
+        tmp /= denominator;
+        finalMetric = static_cast<uint64_t>(tmp);
     }
 
-    // Calculate link cost using K-values
-    uint64_t composite = (k.k1_Bandwidth * scaledBW) +
-                      loadMetric +
-                      (k.k3_Delay * scaledDelay);
-
-    // Apply scaling factor and reliability
-    if (k.k5_MTU != 0)
-    {
-        uint64_t denom = reliability + k.k4_Reliability;
-        if (denom > 0)
-            composite = (composite * k.k5_MTU) / denom;
-    }
-
-    return composite;
+    return finalMetric;
 }
 
 double InterfaceMetrics::calculateRTT(Neighbor& neighbor, std::chrono::steady_clock::time_point& sendTime, uint32_t seq)

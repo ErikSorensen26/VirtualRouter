@@ -17,7 +17,7 @@ public:
     NeighborTable(EigrpInterface& iface);
 
     void setState(Neighbor& neighbor, Neighbor::State newState);
-    Neighbor* createNeighbor(const IPAddress& ipAddress, Neighbor::Version v = Neighbor::Version::UNKNOWN, const uint8_t* macAddress = nullptr);
+    Neighbor* createNeighbor(const IPAddress& ipAddress, Neighbor::Version v = Neighbor::Version::UNKNOWN, bool unicast = false);
     void deleteNeighbor(const IPAddress& neighborIp, bool unicast);
     Neighbor* lookup(const IPAddress& neighborIp);
     std::vector<Neighbor*> lookupUnicast();

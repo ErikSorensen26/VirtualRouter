@@ -316,9 +316,15 @@ inline static uint8_t* writeU128(uint8_t* dest, __uint128_t val)
 
 inline static uint8_t* setBit(uint8_t* bytes, uint8_t bitIndex, bool value)
 {
-    size_t byteIndex = bitIndex / 8;
-    uint8_t bitOffset = bitIndex % 8;
-    bytes[byteIndex] ^= (1 << bitOffset);
+    const size_t byteIndex = bitIndex / 8;
+    const size_t bitInByte = 7 - (bitIndex % 8);
+    const uint8_t mask = uint8_t(1u << bitInByte);
+
+    if (value)
+        bytes[byteIndex] |= mask;             // set to 1
+    else
+        bytes[byteIndex] &= ~mask;            // set to 0
+
     return bytes;
 }
 

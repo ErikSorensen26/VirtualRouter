@@ -238,7 +238,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				if (!iface) return false;
 
 				if (!negate)
-					iface->getNTable().createNeighbor(neighborIp);
+					iface->getNTable().createNeighbor(neighborIp, Eigrp::Neighbor::Version::UNKNOWN, true);
 				else
 					iface->getNTable().deleteNeighbor(neighborIp, true);
 			}
@@ -813,10 +813,10 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 
 				if (iface)
 				{
-					if (negate)
-						iface->getNTable().deleteNeighbor(neighborIp, true);
+					if (!negate)
+						iface->getNTable().createNeighbor(neighborIp, Eigrp::Neighbor::Version::UNKNOWN, true);
 					else
-						iface->getNTable().createNeighbor(neighborIp);
+						iface->getNTable().deleteNeighbor(neighborIp, true);
 				}
 				else
 				{

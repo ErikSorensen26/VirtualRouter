@@ -67,16 +67,13 @@ void Neighbor::clear()
     sentInitSeq.store(0);
 
     holdTimerId.store(0);
-    stuckInitTimerId.store(0);
     gracefulTimerId.store(0);
 
     holdTime.store(0);
-    stuckInitActive.store(false);
     isGraceful.store(false);
     secondHello.store(false);
 
     initComplete.store(false);
-    hasMac.store(false);
 
     lastSeqRecv.store(0);
     lastHeard = std::chrono::steady_clock::time_point{};
@@ -123,7 +120,7 @@ void Neighbor::markHeard()
 
 bool Neighbor::isActive() const noexcept
 {
-    return state.load() >= State::PARAMETERS_MATCH;
+    return state.load() >= State::UP;
 }
 
 void Neighbor::clearReliable()

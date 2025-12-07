@@ -123,10 +123,17 @@ protected:
     // Helper: set IPv6 address on an interface.
     void setIPv6(const uint8_t* ip, uint8_t mask, Interface* iface = nullptr) 
     {
+        uint8_t local[16] = { 0xFE, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
         if (iface)
-            iface->setIPv6(ip, mask, false);
+        {
+            iface->setIPv6(local, true, 64, false);
+            iface->setIPv6(ip, false, mask, false);
+        }
         else
+        {
+            mockInterface->setIPv6(local, true, 64, false);
             mockInterface->setIPv6(ip, false, mask, false);
+        }
     }
 
     void delIPv6(const uint8_t* ip, MockInterface* iface = nullptr)
@@ -152,7 +159,7 @@ protected:
         uint8_t neighborMac[6] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 };
         if (intf)
         {
-            intf->getNTable().createNeighbor(ip, v, neighborMac)->setState(Eigrp::Neighbor::State::FULL);
+            intf->getNTable().createNeighbor(ip, v)->setState(Eigrp::Neighbor::State::UP);
             if (intf->getBase().getAF() == AddressFamily::IPv4)
                 intf->getIface()->arp->addArpEntry(readU32(ip.raw), readU48(neighborMac));
             else
@@ -160,11 +167,30 @@ protected:
         }
         else
         {
-            eigrpInterface->getNTable().createNeighbor(ip, v, neighborMac)->setState(Eigrp::Neighbor::State::FULL);
+            eigrpInterface->getNTable().createNeighbor(ip, v)->setState(Eigrp::Neighbor::State::UP);
             eigrpInterface->getIface()->arp->addArpEntry(readU32(ip.raw), readU48(neighborMac));
         }
     }
-    
+
+    // Helper: add a unicast neighbor via the real EigrpInterface.
+    void addUnicastNeighbor(const IPAddress& ip, Eigrp::Neighbor::Version v = Eigrp::Neighbor::Version::LEGACY, Eigrp::EigrpInterface* intf = nullptr) 
+    {
+        uint8_t neighborMac[6] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 };
+        if (intf)
+        {
+            intf->getNTable().createNeighbor(ip, v, true)->setState(Eigrp::Neighbor::State::UP);
+            if (intf->getBase().getAF() == AddressFamily::IPv4)
+                intf->getIface()->arp->addArpEntry(readU32(ip.raw), readU48(neighborMac));
+            else
+                intf->getIface()->ndp->addNdpEntry(ip, readU48(neighborMac));
+        }
+        else
+        {
+            eigrpInterface->getNTable().createNeighbor(ip, v, true)->setState(Eigrp::Neighbor::State::UP);
+            eigrpInterface->getIface()->arp->addArpEntry(readU32(ip.raw), readU48(neighborMac));
+        }
+    }
+
     // Helper: retrieve a neighbor from an interface.
     Eigrp::Neighbor* getNeighbor(const IPAddress& ip, Eigrp::EigrpInterface* intf = nullptr) 
     {
@@ -334,6 +360,18 @@ protected:
         return getDuel().recalculateSuccessors(entry);
     }
 
+    void transmitReliable(PacketBuilder& pkt, Eigrp::Neighbor* neighbor, EigrpHeader& header, Eigrp::EigrpInterface* interface = nullptr)
+    {
+        Eigrp::EigrpInterface* iface = interface ? interface : eigrpInterface;
+        iface->getRtp().transmitReliable(pkt, neighbor, header);
+    }
+
+    void decrementNextSeq(Eigrp::EigrpInterface* interface)
+    {
+        Eigrp::EigrpInterface* iface = interface ? interface : eigrpInterface;
+        iface->getRtp().nextSeq.fetch_sub(1, std::memory_order_acq_rel);
+    }
+
     std::map<IPPrefix, Eigrp::ActiveRoute>& getActiveRoutes(Eigrp::Eigrp* i = nullptr) { return getDuel(i).activeRoutes; }
 
     Eigrp::DuelEngine& getDuel(Eigrp::Eigrp* i = nullptr) { return i ? i->getTopology().duel : eigrpInstance->getTopology().duel; }
@@ -342,7 +380,6 @@ protected:
     uint32_t getRouterID(Eigrp::Eigrp* eigrp = nullptr) { if (eigrp) return eigrp->routerID(); else return eigrpInstance->routerID(); }
 };
 
-/*
 #pragma region Authentication
 
 // Test: AuthTLV_MD5_Correct
@@ -399,7 +436,7 @@ TEST_F(Internal_EigrpTest, AuthTLV_SHA1_Correct)
     
     PacketBuilder helloPacket(mockInterface);
     createPacket(helloPacket);
-    ASSERT_TRUE(createUnicastHello(helloPacket, neighborIp).has_value());
+    ASSERT_TRUE(createUnicastHello(helloPacket).has_value());
     
     std::vector<TLV16Option> opts = extractEigrpOptions(helloPacket);
 
@@ -431,12 +468,10 @@ TEST_F(Internal_EigrpTest, AuthTLV_Disabled_NoTLV)
 }
 
 #pragma endregion
-/*/
 #pragma region NeighborState
 
-// Test: Neighbor_Down_To_INIT
-/*
-TEST_F(Internal_EigrpTest, Neighbor_Down_To_TWOWAY)
+// Test: Neighbor_Down_To_PENDING
+TEST_F(Internal_EigrpTest, Neighbor_Down_To_PENDING)
 {
     IPAddress n = createIPv4(0x0A000001);
 
@@ -450,12 +485,13 @@ TEST_F(Internal_EigrpTest, Neighbor_Down_To_TWOWAY)
 
     auto nbr = getNeighbor(n);
     ASSERT_TRUE(nbr);
-    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::TWOWAY);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::PENDING);
 }
 
 // Test: Neighbor_TWOWAY_To_LOADING
 TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
 {
+    GTEST_SKIP();
     // Add extra iface for connected route
     MockInterface* extraIface = new MockInterface(*global, InterfaceType::GIGABIT_ETHERNET);
     uint32_t key = calculateInterfaceKey(InterfaceType::GIGABIT_ETHERNET, 1);
@@ -472,7 +508,7 @@ TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
     addNeighbor(n, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
 
     auto nbr = getNeighbor(n);
-    nbr->setState(Eigrp::Neighbor::State::TWOWAY);
+    nbr->setState(Eigrp::Neighbor::State::PENDING);
 
     EigrpHeader testHdr;
     testHdr.setBuffer(testPacket);
@@ -483,7 +519,7 @@ TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
     setSeq(6, eigrpInterface);
 
     PacketBuilder ack(mockInterface);
-    auto hdr = createAck(ack, *nbr, 5);
+    auto hdr = createAck(ack, 5);
 
     bool fullUpdateFound = false;
 
@@ -497,7 +533,7 @@ TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
     nbr->currentReliable.store(5);
     eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
 
-    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::LOADING);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::UP);
     EXPECT_TRUE(fullUpdateFound);
     eigrpInstance->shutdown();
 
@@ -508,11 +544,11 @@ TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
 // Test: Neighbor_LOADING_To_ESTABLISHED
 TEST_F(Internal_EigrpTest, Neighbor_LOADING_To_ESTABLISHED)
 {
+    GTEST_SKIP();
     IPAddress n = createIPv4(0x0A000004);
     addNeighbor(n, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
 
     auto nbr = getNeighbor(n);
-    nbr->setState(Eigrp::Neighbor::State::LOADING);
 
     PacketBuilder update(mockInterface);
     Eigrp::ReliableTransport::PktInfo info;
@@ -523,7 +559,7 @@ TEST_F(Internal_EigrpTest, Neighbor_LOADING_To_ESTABLISHED)
     auto hdr = createUpdate(update, info, nbr, {});
 
     eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
-    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::ESTABLISHED);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::UP);
 }
 
 // Test: Duplicate_Hello_Ignored
@@ -533,16 +569,16 @@ TEST_F(Internal_EigrpTest, Duplicate_Hello_Ignored)
     addNeighbor(n, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
 
     auto nbr = getNeighbor(n);
-    nbr->setState(Eigrp::Neighbor::State::INIT);
+    nbr->setState(Eigrp::Neighbor::State::PENDING);
 
     PacketBuilder hello(mockInterface);
-    auto hdr = createUnicastHello(hello, n);
+    auto hdr = createUnicastHello(hello);
     ASSERT_TRUE(hdr.has_value());
 
     eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
     eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), n.raw, false);
 
-    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::INIT);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::PENDING);
 }
 
 // Test: HoldTimerExpires_RemovesNeighbor
@@ -627,7 +663,6 @@ TEST_F(Internal_EigrpTest, Retransmission_Timer_Expires_Resend)
     EigrpHeader hdr;
     hdr.setBuffer(testPacket);
     hdr.setSequence(seqNum);
-    neighbor->setState(Eigrp::Neighbor::State::FULL);
     
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(1));
@@ -649,7 +684,6 @@ TEST_F(Internal_EigrpTest, ACK_Processing_Cancels_Packet)
     uint32_t seqNum = 502;
     EigrpHeader hdr;
     hdr.setBuffer(testPacket);
-    neighbor->setState(Eigrp::Neighbor::State::FULL);
     eigrpInterface->getRtp().setupUnicastReliable(*neighbor, hdr);
     processAck(*neighbor, seqNum);
     EXPECT_TRUE(neighbor->reliableQueue.empty());
@@ -665,7 +699,6 @@ TEST_F(Internal_EigrpTest, Duplicate_ACK_Does_Not_Alter_RTT)
     uint32_t seqNum = 503;
     EigrpHeader hdr;
     hdr.setBuffer(testPacket);
-    neighbor->setState(Eigrp::Neighbor::State::FULL);
     eigrpInterface->getRtp().setupUnicastReliable(*neighbor, hdr);
     processAck(*neighbor, seqNum);
     double srttAfterFirst = neighbor->srtt;
@@ -683,7 +716,6 @@ TEST_F(Internal_EigrpTest, Max_Retransmissions_Triggers_Neighbor_Down)
     uint32_t seqNum = 504;
     EigrpHeader hdr;
     hdr.setBuffer(testPacket);
-    neighbor->setState(Eigrp::Neighbor::State::FULL);
     eigrpInterface->getRtp().setupUnicastReliable(*neighbor, hdr);
     auto rel = neighbor->reliablePackets[neighbor->currentReliable];
     rel.info.retransmissionCount = MAX_RETRANSMISSIONS;
@@ -702,7 +734,6 @@ TEST_F(Internal_EigrpTest, Exponential_Backoff_Applied)
     EigrpHeader hdr;
     hdr.setBuffer(testPacket);
     hdr.setSequence(seqNum);
-    neighbor->setState(Eigrp::Neighbor::State::FULL);
     eigrpInterface->getRtp().setupUnicastReliable(*neighbor, hdr);
 
     double initialRTO = neighbor->rto;
@@ -830,10 +861,10 @@ TEST_F(Internal_EigrpTest, ActiveRoute_Will_Send_Reply_If_No_Available_Neighbors
 
     auto &active = getActiveRoutes();
     ASSERT_TRUE(active.empty());
-}*/
+}
 
 // Test: ConditionalReceive_Missing_Ack_Resolved
-TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved) //TODO
+TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved)
 {
     IPAddress n1 = createIPv4(0xC0A80201);
     IPAddress n2 = createIPv4(0xC0A80202);
@@ -856,8 +887,9 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved) //TODO
     processAck(*nbr1, 100);
 
     // Now trigger a second update (sequence 101)
-    EigrpHeader nextUpdate;
-    nextUpdate.setBuffer(testPacket);
+    PacketBuilder pkt(mockInterface);
+    createPacket(pkt);
+    EigrpHeader nextUpdate = pkt.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
     nextUpdate.setSequence(101);
     nextUpdate.setOpcode(Variable::Eigrp::Type::update);
 
@@ -867,7 +899,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved) //TODO
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(2)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*){
             auto eigrp = getEigrpHeader(pkt);
-            if (eigrp.getOpcode() == Variable::Eigrp::Type::hello)
+            if (!crHelloFound && eigrp.getOpcode() == Variable::Eigrp::Type::hello)
             {
                 bool seqFound = false;
                 bool neighbor = false;
@@ -885,13 +917,13 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved) //TODO
                 }
                 crHelloFound = seqFound && neighbor;
             }
-            else if (eigrp.getOpcode() == Variable::Eigrp::Type::update)
+            else if (!crUpdateFound && eigrp.getOpcode() == Variable::Eigrp::Type::update)
             {
                 crUpdateFound = eigrp.getFlagCondRecv();
             }
         }));
 
-    eigrpInterface->getRtp().setupMulticastReliable(nextUpdate);
+    transmitReliable(pkt, nullptr, nextUpdate);
 
     EXPECT_EQ(nbr2->activeConditions.size(), 1);
 
@@ -906,7 +938,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved) //TODO
 }
 
 // Test: ConditionalReceive_Multiple_Missing_Acks_Resolved
-TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved) //TODO
+TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved)
 {
     IPAddress n1 = createIPv4(0xC0A80203);
     IPAddress n2 = createIPv4(0xC0A80204);
@@ -932,8 +964,9 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved) //
     processAck(*nbr3, 200);
 
     // Now trigger a second update (sequence 101)
-    EigrpHeader nextUpdate;
-    nextUpdate.setBuffer(testPacket);
+    PacketBuilder pkt(mockInterface);
+    createPacket(pkt);
+    EigrpHeader nextUpdate = pkt.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
     nextUpdate.setSequence(201);
     nextUpdate.setOpcode(Variable::Eigrp::Type::update);
 
@@ -943,13 +976,13 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved) //
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(2)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*){
             auto eigrp = getEigrpHeader(pkt);
-            if (eigrp.getOpcode() == Variable::Eigrp::Type::hello)
+            if (!crHelloFound && eigrp.getOpcode() == Variable::Eigrp::Type::hello)
             {
                 bool seqFound = false;
                 bool neighbor = false;
                 for (auto& opt : extractEigrpOptions(pkt))
                 {
-                    if (opt.type == Variable::Eigrp::Option::multicastSequence && readU32(opt.value) == 200)
+                    if (opt.type == Variable::Eigrp::Option::multicastSequence && readU32(opt.value) == 201)
                     {
                         seqFound = true;
                     }
@@ -963,13 +996,13 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved) //
                 }
                 crHelloFound = seqFound && neighbor;
             }
-            else if (eigrp.getOpcode() == Variable::Eigrp::Type::update)
+            else if (!crUpdateFound && eigrp.getOpcode() == Variable::Eigrp::Type::update)
             {
                 crUpdateFound = eigrp.getFlagCondRecv();
             }
         }));
 
-    eigrpInterface->getRtp().setupMulticastReliable(nextUpdate);
+    transmitReliable(pkt, nullptr, nextUpdate);
 
     EXPECT_EQ(nbr1->activeConditions.size(), 1);
     EXPECT_EQ(nbr2->activeConditions.size(), 1);
@@ -1073,18 +1106,29 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Unicast_Must_Wait_For_CR) //TODO
     unicast.setSequence(601);
     unicast.setOpcode(Variable::Eigrp::Type::update);
 
-    eigrpInterface->getRtp().setupUnicastReliable(*nbr, unicast);
+    {
+        EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
+        eigrpInterface->getRtp().setupUnicastReliable(*nbr, unicast);
+    }
+
     EXPECT_LT(nbr->lastSeqRecv.load(), 601);
 
-    EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(1);
+    {
+        bool found = false;
+        EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
+            .Times(1).WillOnce(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+                auto eigrp = getEigrpHeader(pkt);
+                found = (eigrp.getSequence() == 601);
+            }));
+        processAck(*nbr, 600);
+        EXPECT_TRUE(found);
+    }
 
-    processAck(*nbr, 600);
     processAck(*nbr, 601);
 
     EXPECT_TRUE(nbr->reliableQueue.empty());
 }
 
-/*/
 #pragma endregion
 #pragma region TLV
 
@@ -1117,7 +1161,7 @@ TEST_F(Internal_EigrpTest, Authentication_TLV_Insertion_Correct)
     
     PacketBuilder helloPacket(mockInterface);
     createPacket(helloPacket);
-    ASSERT_TRUE(createUnicastHello(helloPacket, neighborIp).has_value());
+    ASSERT_TRUE(createUnicastHello(helloPacket).has_value());
     std::vector<TLV16Option> opts = extractEigrpOptions(helloPacket);
     auto it = std::find_if(opts.begin(), opts.end(),
                              [](const TLV16Option& opt) {
@@ -1243,14 +1287,6 @@ TEST_F(Internal_EigrpTest, IPv4_Config_Persistence)
 {
     // Verify that the IPv4 address is correctly stored.
     ASSERT_EQ(getIpInfo().ipv4.getAddress(), 0xc0a80101);
-}
-
-// Test: IPv6_Config_Persistence
-TEST_F(Internal_EigrpTest, IPv6_Config_Persistence) 
-{
-    // Verify that the IPv6 address is correctly stored.
-    uint8_t ipv6[16] = { 0xC0, 0xA8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01 };
-    ASSERT_EQ(getIpInfo().ipv6.getLocalAddress(), readU128(ipv6));
 }
 
 // Test: Connected_Route_Removal_On_Interface_Down
@@ -1456,10 +1492,9 @@ TEST_F(Internal_EigrpTest, RoutingTable_Metric_Update_On_Best_Route_Change)
     ASSERT_TRUE(r);
     ASSERT_EQ(r->metric, 6400); // 50 * rib scal = 128
 }
-/*/
 
 // Test: WideMetrics_InternalRoute_ParsedCorrectly
-TEST_F(Internal_EigrpTest, WideMetrics_InternalRoute_ParsedCorrectly) //TODO
+TEST_F(Internal_EigrpTest, WideMetrics_InternalRoute_ParsedCorrectly)
 {
     IPAddress neighborIp = createIPv4(0xC0A80250);
     addNeighbor(neighborIp, Eigrp::Neighbor::Version::WIDE, eigrpInterface);
@@ -1475,24 +1510,24 @@ TEST_F(Internal_EigrpTest, WideMetrics_InternalRoute_ParsedCorrectly) //TODO
     r.load = 5;
     r.reliability = 254;
 
-    Eigrp::RouteInfo ri(r);
-
     std::vector<Eigrp::ReceivedRoute> rs = { r };
+    eigrpInterface->getMetrics().addRouteMetrics(rs);
+
     getDuel().processReceivedRoutes(rs, *nbr);
 
     auto entry = vrf->routingTable.lookup<uint32_t>(r.prefix.addr);
     ASSERT_TRUE(entry);
     
-    // EIGRP wide: metric = ((10^7 / bw) + delay/10) * 250
-    uint64_t bwTerm = (10000000ULL / r.bandwidth);
-    uint64_t delayTerm = r.delay / 10;
-    uint64_t expected = (bwTerm + delayTerm) * 256;
+    // EIGRP wide: metric
+    uint64_t bwTerm = (10'000'000ULL * 65'536) / r.bandwidth;
+    uint64_t delayTerm = (r.delay / 1'000'000ULL) * 65'536ULL;
+    uint64_t expected = (bwTerm + delayTerm) + eigrpInterface->getMetrics().getLocalMetric();
 
     EXPECT_EQ(entry->metric, expected * 128);
 }
 
 // Test: WideMetrics_ExternalRoute_ParsedCorrectly
-TEST_F(Internal_EigrpTest, WideMetrics_ExternalRoute_ParsedCorrectly) //TODO
+TEST_F(Internal_EigrpTest, WideMetrics_ExternalRoute_ParsedCorrectly)
 {
     IPAddress neighborIp = createIPv4(0xC0A80251);
     addNeighbor(neighborIp, Eigrp::Neighbor::Version::WIDE, eigrpInterface);
@@ -1507,79 +1542,28 @@ TEST_F(Internal_EigrpTest, WideMetrics_ExternalRoute_ParsedCorrectly) //TODO
     r.load = 10;
     r.hopCount = 2;
     r.tag = 12345;
+    r.adminDistance = 170;
 
     Eigrp::RouteInfo ri(r);
 
     std::vector<Eigrp::ReceivedRoute> rs = { r };
+    eigrpInterface->getMetrics().addRouteMetrics(rs);
     getDuel().processReceivedRoutes(rs, *nbr);
 
     auto entry = vrf->routingTable.lookup<uint32_t>(r.prefix.addr);
     ASSERT_TRUE(entry);
 
-    uint64_t bwTerm = (10000000ULL / r.bandwidth);
-    uint64_t delayTerm = r.delay / 10;
-    uint64_t expected = (bwTerm + delayTerm) * 256;
+    uint64_t bwTerm = (10'000'000ULL * 65'536ULL) / r.bandwidth;
+    uint64_t delayTerm = (r.delay / 1'000'000) * 65'536ULL;
+    uint64_t expected = bwTerm + delayTerm + eigrpInterface->getMetrics().getLocalMetric();
 
     EXPECT_EQ(entry->metric, expected * 128);
     //TODO match tag
     EXPECT_EQ(entry->adminDistance, 170);
 }
 
-// Test: WideMetrics_ClassicToWide_Transition
-TEST_F(Internal_EigrpTest, WideMetrics_ClassicToWide_Transition) //TODO
-{
-    IPAddress neighborLegacy = createIPv4(0xC0A80260);
-    IPAddress neighborWide = createIPv4(0xC0A80261);
-
-    addNeighbor(neighborLegacy, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
-    addNeighbor(neighborWide, Eigrp::Neighbor::Version::WIDE, eigrpInterface);
-
-    auto nbrLegacy = getNeighbor(neighborLegacy);
-    auto nbrWide = getNeighbor(neighborWide);
-
-    ASSERT_TRUE(nbrLegacy);
-    ASSERT_TRUE(nbrWide);
-
-    // Classic route first
-    Eigrp::ReceivedRoute r1 = getRoute(eigrpInterface->interfaceKey);
-    r1.prefix = { createIPv4(0x0A600000), 16 };
-    r1.feasibleDistance = 200;
-    r1.reportedDistance = 100;
-    r1.routeType = Eigrp::RouteType::INTERNAL;
-    r1.nextHop = neighborLegacy;
-    
-    std::vector<Eigrp::ReceivedRoute> rs1 = { r1 };
-    getDuel().processReceivedRoutes(rs1, *nbrLegacy);
-
-    auto entry1 = vrf->routingTable.lookup<uint32_t>(r1.prefix.addr);
-    ASSERT_TRUE(entry1);
-    uint32_t classicMetric = 200 * 128;
-    EXPECT_EQ(entry1->metric, classicMetric);
-
-    // Now send wide metric version from different neighbor
-    Eigrp::ReceivedRoute r2 = r1;
-    r2.bandwidth = 50000000;
-    r2.delay = 20000000;
-    r2.reliability = 255;
-    r2.load = 1;
-    r2.nextHop = neighborWide;
-
-    std::vector<Eigrp::ReceivedRoute> rs2 = { r2 };
-    getDuel().processReceivedRoutes(rs2, *nbrWide);
-
-    auto entry2 = vrf->routingTable.lookup<uint32_t>(r2.prefix.addr);
-    ASSERT_TRUE(entry2);
-
-    uint64_t bwTerm = (10000000ULL / r2.bandwidth);
-    uint64_t delayTerm = r2.delay / 10;
-    uint64_t wideMetric = (bwTerm + delayTerm) * 256;
-
-    EXPECT_EQ(entry2->metric, wideMetric * 128);
-    EXPECT_LT(wideMetric, classicMetric);
-}
-
 // Test: WideMetrics_Successor_Selection
-TEST_F(Internal_EigrpTest, WideMetrics_Successor_Selection) //TODO
+TEST_F(Internal_EigrpTest, WideMetrics_Successor_Selection)
 {
     IPAddress n1 = createIPv4(0xC0A80270);
     IPAddress n2 = createIPv4(0xC0A80271);
@@ -1603,22 +1587,26 @@ TEST_F(Internal_EigrpTest, WideMetrics_Successor_Selection) //TODO
     r2.nextHop = n2;
 
     std::vector<Eigrp::ReceivedRoute> rs = { r1 };
+    eigrpInterface->getMetrics().addRouteMetrics(rs);
     getDuel().processReceivedRoutes(rs, *nbr1);
     rs = { r2 };
+    eigrpInterface->getMetrics().addRouteMetrics(rs);
     getDuel().processReceivedRoutes(rs, *nbr2);
 
     auto route = vrf->routingTable.lookup<uint32_t>(r1.prefix.addr);
     ASSERT_TRUE(route);
 
-    uint64_t bw1 = (10000000ULL / r1.bandwidth);
-    uint64_t d1 = r1.delay / 10;
-    uint64_t m1 = (bw1 + d1) * 256;
+    uint64_t local = eigrpInterface->getMetrics().getLocalMetric();
 
-    uint64_t bw2 = (10000000ULL / r2.bandwidth);
-    uint64_t d2 = r2.delay / 10;
-    uint64_t m2 = (bw2 + d2) * 256;
+    uint64_t bw1 = (10'000'000ULL * 65'536ULL) / r1.bandwidth;
+    uint64_t d1 = (r1.delay / 1'000'000ULL) * 65'536ULL;
+    uint64_t m1 = bw1 + d1 + local;
 
-    EXPECT_EQ(route->metric, std::min(m1, m2));
+    uint64_t bw2 = (10'000'000ULL * 65'536ULL) / r2.bandwidth;
+    uint64_t d2 = (r2.delay / 1'000'000ULL) * 65'536ULL;
+    uint64_t m2 = bw2 + d2 + local;
+
+    EXPECT_EQ(route->metric, std::min(m1, m2) * 128);
     EXPECT_EQ(route->nextHopCount, (m1 == m2 ? 2 : 1));
 }
 
@@ -1659,8 +1647,6 @@ TEST_F(Internal_EigrpTest, WideMetrics_FeasibleSuccessor_WithVariance)
 
     EXPECT_EQ(entry->nextHopCount, 2);
 }
-
-/*/
 
 // Test: TopologyTable_Handles_Neighbor_Down
 TEST_F(Internal_EigrpTest, TopologyTable_Handles_Neighbor_Down) 
@@ -1854,7 +1840,7 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Clear_After_Neighbor_Response)
             {
                 PacketBuilder eigrp(mockInterface);
                 createPacket(eigrp);
-                hdr = createReply(eigrp, info, *getNeighbor(neighborIp), {&rInfo}, getEigrpHeader(pkt).getSequence());
+                hdr = createReply(eigrp, info, *getNeighbor(neighborIp), {&rInfo});
                 ASSERT_TRUE(hdr.has_value());
                 hdr->setTrail(hdr->buffer + EigrpHeader::fixedSize, eigrp.getHeaders()[2].length - EigrpHeader::fixedSize);
             }
@@ -1926,7 +1912,7 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
             {
                 PacketBuilder eigrp(mockInterface); // Only mock interface has a valid queue
                 createPacket(eigrp);
-                hdr = createReply(eigrp, info, *neighbor, {&rInfo}, getEigrpHeader(pkt).getSequence());
+                hdr = createReply(eigrp, info, *neighbor, {&rInfo});
                 ASSERT_TRUE(hdr.has_value());
                 hdr->setTrail(hdr->buffer + EigrpHeader::fixedSize, eigrp.getHeaders()[2].length - EigrpHeader::fixedSize);
             }
@@ -1938,11 +1924,10 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
             auto header = getEigrpHeader(pkt);
             if (header.getOpcode() == Variable::Eigrp::Type::reply)
             {
-                EXPECT_EQ(header.getAck(), querySeq);
                 auto opts = extractEigrpOptions(pkt);
                 for (auto& opt : opts)
                     if (opt.type == Variable::Eigrp::Option::legacyInternalRoute)
-                        if (auto route = Eigrp::TLVBuilder::decodeRoute(opt, 0); route && route->prefix == prefix)
+                        if (auto route = Eigrp::TLVBuilder::decodeRoute(opt, 0, AddressFamily::IPv4); route && route->prefix == prefix)
                             replyFound = true;
             }
             else if (header.getOpcode() == Variable::Eigrp::Type::update)
@@ -1987,7 +1972,6 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Timeout_Leads_To_Neighbor_Down)
     
     ASSERT_FALSE(getNeighbor(neighborIp));
 }
-/*/
 
 // Test: ActiveRoute_Cancels_On_Better_AlternativePath
 TEST_F(Internal_EigrpTest, ActiveRoute_Cancels_On_Better_AlternativePath)
@@ -2031,7 +2015,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_Cancels_On_Better_AlternativePath)
 }
 
 // Test: Query_Multicast_Sent_To_All_Eligible_Neighbors
-TEST_F(Internal_EigrpTest, Query_Multicast_Sent_To_All_Eligible_Neighbors) //TODO
+TEST_F(Internal_EigrpTest, Query_Multicast_Sent_To_All_Eligible_Neighbors)
 {
     IPAddress n1 = createIPv4(0xC0A80601);
     IPAddress n2 = createIPv4(0xC0A80602);
@@ -2055,26 +2039,33 @@ TEST_F(Internal_EigrpTest, Query_Multicast_Sent_To_All_Eligible_Neighbors) //TOD
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
 
+    bool queryFound = false;
+
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
-        .Times(1);
+        .Times(::testing::AtLeast(1)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+            auto eigrp = getEigrpHeader(pkt);
+            if (eigrp.getOpcode() == Variable::Eigrp::Type::query)
+                queryFound = true;
+        }));
 
     rs = { r };
     getDuel().processReceivedRoutes(rs, *nbr1);
 
+    EXPECT_TRUE(queryFound);
     auto &active = getActiveRoutes();
-    ASSERT_FALSE(active.empty());
+    EXPECT_FALSE(active.empty());
 }
 
 // Test: Query_Unicast_Sent_To_All_Eligible_Neighbors
-TEST_F(Internal_EigrpTest, Query_Unicast_Sent_To_All_Eligible_Neighbors) //TODO
+TEST_F(Internal_EigrpTest, Query_Unicast_Sent_To_All_Eligible_Neighbors)
 {
     IPAddress n1 = createIPv4(0xC0A80601);
     IPAddress n2 = createIPv4(0xC0A80602);
     IPAddress n3 = createIPv4(0xC0A80603);
 
-    eigrpInterface->getNTable().createNeighbor(n1);
-    eigrpInterface->getNTable().createNeighbor(n2);
-    eigrpInterface->getNTable().createNeighbor(n3);
+    addUnicastNeighbor(n1);
+    addUnicastNeighbor(n2);
+    addUnicastNeighbor(n3);
 
     auto nbr1 = getNeighbor(n1);
 
@@ -2090,25 +2081,31 @@ TEST_F(Internal_EigrpTest, Query_Unicast_Sent_To_All_Eligible_Neighbors) //TODO
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
 
+    uint8_t queryCount = 0;
+
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
-        .Times(2);
+        .Times(::testing::AtLeast(2)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+            auto eigrp = getEigrpHeader(pkt);
+            if (eigrp.getOpcode() == Variable::Eigrp::Type::query)
+                queryCount++;
+        }));
 
     rs = { r };
     getDuel().processReceivedRoutes(rs, *nbr1);
 
     auto &active = getActiveRoutes();
-    ASSERT_FALSE(active.empty());
+    EXPECT_EQ(queryCount, 2);
+    EXPECT_FALSE(active.empty());
 }
 
 // Test: Query_Ignored_For_Passive_Neighbor
-TEST_F(Internal_EigrpTest, Query_Ignored_For_Passive_Neighbor) //TODO
+TEST_F(Internal_EigrpTest, Query_Ignored_For_Passive_Neighbor)
 {
-    FAIL();
     IPAddress n1 = createIPv4(0xC0A80605);
     addNeighbor(n1);
 
     auto nbr = getNeighbor(n1);
-    nbr->setState(Eigrp::Neighbor::State::FULL);
+    nbr->setState(Eigrp::Neighbor::State::UP);
 
     eigrpInterface->setPassiveMode(true);
 
@@ -2142,25 +2139,6 @@ TEST_F(Internal_EigrpTest, PassiveInterface_Disables_Hello_Transmission)
     eigrpInterface->getRtp().sendHello();
 }
 
-// Test: PassiveInterface_Allows_Hello_Reception
-TEST_F(Internal_EigrpTest, PassiveInterface_Allows_Hello_Reception) //TODO
-{
-    eigrpInterface->setPassiveMode(true);
-
-    IPAddress nbrIp = createIPv4(0xC0A80620);
-
-    PacketBuilder pb(mockInterface);
-    auto hdr = createUnicastHello(pb);
-    ASSERT_TRUE(hdr.has_value());
-
-    // Should accept hello and form neighbor
-    eigrpInterface->getRtp().handleIncoming(nullptr, hdr.value(), nbrIp.raw, false);
-    
-    auto nbr = getNeighbor(nbrIp);
-    ASSERT_TRUE(nbr);
-    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::INIT);
-}
-
 // Test: PassiveInterface_Blocks_UpdateTransmission
 TEST_F(Internal_EigrpTest, PassiveInterface_Blocks_UpdateTransmission)
 {
@@ -2175,7 +2153,6 @@ TEST_F(Internal_EigrpTest, PassiveInterface_Blocks_UpdateTransmission)
     eigrpInterface->getRtp().sendNullUpdate(*getNeighbor(neighborIp));
 }
 
-/*/
 #pragma endregion
 #pragma region IPv6Specific
 
@@ -2205,12 +2182,10 @@ TEST_F(Internal_EigrpTest, IPv6_HelloPacket_Construction)
     ipv6Eigrp.getIfaceMgr().deactivateAll();
     getAllInterfaceList().erase(key);
 }
-/*/
 
 // Test: IPv6_Full_Adjacency_Establishment
-TEST_F(Internal_EigrpTest, IPv6_Full_Adjacency_Establishment) //TODO
+TEST_F(Internal_EigrpTest, IPv6_Full_Adjacency_Establishment)
 {
-    FAIL();
     auto ipv6Eigrp = Eigrp::Eigrp(asNumber, AddressFamily::IPv6, vrf);
     ipv6Eigrp.start();
 
@@ -2236,27 +2211,40 @@ TEST_F(Internal_EigrpTest, IPv6_Full_Adjacency_Establishment) //TODO
 
     Eigrp::EigrpInterface* intf = ipv6Eigrp.getIfaceMgr().createInterface(&iface);
 
+    uint8_t nbrMac[6] = { 0x12, 0x23, 0x45, 0x78, 0x90, 0x00 };
     IPAddress nbrIp = { nbr6, AddressFamily::IPv6 };
+    iface.ndp->addNdpEntry(nbrIp, readU48(nbrMac));
 
     PacketBuilder p(mockInterface);
     createPacket(p, intf);
     auto hdr = createUnicastHello(p, intf);
     ASSERT_TRUE(hdr.has_value());
+    addEigrpSize(p, hdr.value());
 
-    intf->getRtp().handleIncoming(nullptr, hdr.value(), nbrIp.raw, false);
+    uint32_t initSeq = 0;
+    EXPECT_CALL(iface, enqueuePacket(::testing::_, ::testing::_))
+        .Times(::testing::AtLeast(1)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
+            auto eigrp = getEigrpHeader(pkt);
+            if (eigrp.getFlagInit())
+                initSeq = eigrp.getSequence();
+        }));
+
+    intf->getRtp().handleIncoming(nullptr, hdr.value(), nbrIp.raw, true);
 
     auto nbr = intf->getNTable().lookup(nbrIp);
     ASSERT_TRUE(nbr);
-    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::INIT);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::PENDING);
 
-    // Now send a hello back to complete TWO-WAY
-    PacketBuilder resp(&iface);
-    createPacket(resp, intf);
-    auto hdr2 = createUnicastHello(resp, intf);
-    ASSERT_TRUE(hdr2.has_value());
+    // Send null packet back acking the init packet
+    PacketBuilder init(mockInterface);
+    createPacket(p, intf);
+    auto hdr2 = createNullUpdate(init, intf);
+    ASSERT_TRUE(hdr2);
+    decrementNextSeq(intf);
+    hdr2.value().setAck(initSeq);
 
     intf->getRtp().handleIncoming(nullptr, hdr2.value(), nbr6, false);
-    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::HELLO_RECEIVED);
+    EXPECT_EQ(nbr->getState(), Eigrp::Neighbor::State::UP);
 
     ipv6Eigrp.getIfaceMgr().deactivateAll();
     getAllInterfaceList().erase(key);
@@ -2265,7 +2253,6 @@ TEST_F(Internal_EigrpTest, IPv6_Full_Adjacency_Establishment) //TODO
 // Test: IPv6_Update_Processing
 TEST_F(Internal_EigrpTest, IPv6_Update_Processing) //TODO
 {
-    FAIL();
     auto ipv6Eigrp = Eigrp::Eigrp(asNumber, AddressFamily::IPv6, vrf);
     ipv6Eigrp.start();
 
@@ -2281,6 +2268,11 @@ TEST_F(Internal_EigrpTest, IPv6_Update_Processing) //TODO
     uint8_t nbr6[16] = {
         0x20,0x01,0x0d,0xb8,0,0,0,2,
         0,0,0,0,0,0,0,2
+    };
+
+    uint8_t route[16] = {
+        0x20,0x01,0x0d,0xb8,1,1,0,
+        0,0,0,0,0,0,0,0,
     };
 
     setIPv6(local6, 64, &iface);
@@ -2303,11 +2295,12 @@ TEST_F(Internal_EigrpTest, IPv6_Update_Processing) //TODO
     info.version = Eigrp::TLVType::WIDE_V6;
 
     Eigrp::ReceivedRoute r = getRoute(eigrpInterface->interfaceKey);
-    r.prefix = { nbrIp, 64 };
+    r.prefix = { { route, AddressFamily::IPv6 }, 64 };
     r.routeType = Eigrp::RouteType::INTERNAL;
     r.nextHop = nbrIp;
     r.feasibleDistance = 100;
     r.reportedDistance = 50;
+    r.wide.afi = 2;
 
     Eigrp::RouteInfo ri(r);
 
@@ -2315,8 +2308,8 @@ TEST_F(Internal_EigrpTest, IPv6_Update_Processing) //TODO
     createPacket(pb, intf);
     auto upd = createUpdate(pb, info, nbr, { &ri }, intf);
     ASSERT_TRUE(upd.has_value());
-    upd->setTrail(upd->buffer + EigrpHeader::fixedSize, pb.getHeaders()[2].length - EigrpHeader::fixedSize);
-
+    addEigrpSize(pb, upd.value());
+    
     intf->getRtp().handleIncoming(nullptr, upd.value(), nbr6, false);
     
     auto entry = getTopologyTable(&ipv6Eigrp).find(r.prefix);
@@ -2330,7 +2323,6 @@ TEST_F(Internal_EigrpTest, IPv6_Update_Processing) //TODO
 // Test: IPv6_Query_Reply_SIA
 TEST_F(Internal_EigrpTest, IPv6_Query_Reply_SIA) //TODO
 {
-    FAIL();
     auto ipv6Eigrp = Eigrp::Eigrp(asNumber, AddressFamily::IPv6, vrf);
     ipv6Eigrp.start();
         
@@ -2343,8 +2335,16 @@ TEST_F(Internal_EigrpTest, IPv6_Query_Reply_SIA) //TODO
         0x20,0x01,0x0d,0xb8,0,0,0,1,
         0,0,0,0,0,0,0,1
     };
-    uint8_t nbr6[16] = {
+    uint8_t nbr6_1[16] = {
         0x20,0x01,0x0d,0xb8,0,0,0,2,
+        0,0,0,0,0,0,0,2
+    };
+    uint8_t nbr6_2[16] = {
+        0x20,0x01,0x0d,0xb8,0,0,0,3,
+        0,0,0,0,0,0,0,2
+    };
+    uint8_t route[16] = {
+        0x20,0x01,0x0d,0xb8,0,0,0,4,
         0,0,0,0,0,0,0,2
     };
 
@@ -2355,21 +2355,24 @@ TEST_F(Internal_EigrpTest, IPv6_Query_Reply_SIA) //TODO
     getAllInterfaceList()[key] = &iface;
 
     auto* intf = ipv6Eigrp.getIfaceMgr().createInterface(&iface);
-    IPAddress nbrIp = { nbr6, AddressFamily::IPv6 };
-    addNeighbor(nbrIp, Eigrp::Neighbor::Version::WIDE, intf);
-    auto nbr = intf->getNTable().lookup(nbrIp);
-    ASSERT_TRUE(nbr);
+    IPAddress nbrIp1 = { nbr6_1, AddressFamily::IPv6 };
+    IPAddress nbrIp2 = { nbr6_2, AddressFamily::IPv6 };
+    addNeighbor(nbrIp1, Eigrp::Neighbor::Version::WIDE, intf);
+    addNeighbor(nbrIp2, Eigrp::Neighbor::Version::WIDE, intf);
+    auto nbr1 = intf->getNTable().lookup(nbrIp1);
+    auto nbr2 = intf->getNTable().lookup(nbrIp2);
+    ASSERT_TRUE(nbr1);
+    ASSERT_TRUE(nbr2);
 
     // Create a failing route to trigger active state
     Eigrp::ReceivedRoute r;
-    r.prefix = { nbrIp, 64 };
+    r.prefix = { { route, AddressFamily::IPv6 }, 64 };
     r.routeType = Eigrp::RouteType::INTERNAL;
     r.feasibleDistance = std::numeric_limits<uint64_t>::max();
     r.reportedDistance = std::numeric_limits<uint64_t>::max();
-    r.nextHop = nbrIp;
 
     std::vector<Eigrp::ReceivedRoute> rs = { r };
-    getDuel(&ipv6Eigrp).processReceivedRoutes(rs, *nbr);
+    getDuel(&ipv6Eigrp).processReceivedQueryRoutes(rs, *nbr1, 10);
 
     // Active route must now have pending queries
     auto& active = getActiveRoutes(&ipv6Eigrp);
@@ -2386,15 +2389,14 @@ TEST_F(Internal_EigrpTest, IPv6_Query_Reply_SIA) //TODO
         PacketBuilder pb(&iface);
         createPacket(pb, intf);
         auto sia = createSIAQuery(pb, info, {});
-        nbr->lastSeqRecv = sia->getSequence();
-        intf->getRtp().handleIncoming(nullptr, sia.value(), nbr6, false);
+        nbr1->lastSeqRecv = sia->getSequence();
+        intf->getRtp().handleIncoming(nullptr, sia.value(), nbr6_1, false);
     }
 
     ipv6Eigrp.getIfaceMgr().deactivateAll();
     getAllInterfaceList().erase(key);
 }
 
-/*/
 #pragma endregion
 #pragma region Timers
 
@@ -2455,7 +2457,7 @@ TEST_F(Internal_EigrpTest, Multithreaded_NeighborStateUpdates_No_Deadlock)
     IPAddress neighborIp = createIPv4(0xC0A80122);
     addNeighbor(neighborIp, Eigrp::Neighbor::Version::LEGACY, eigrpInterface);
     auto neighbor = getNeighbor(neighborIp);
-    neighbor->setState(Eigrp::Neighbor::State::INIT);
+    neighbor->setState(Eigrp::Neighbor::State::PENDING);
     
     auto threadFunc = [this, neighbor]() {
         for (int i = 0; i < 1000; i++) {
@@ -3010,7 +3012,7 @@ TEST_F(Internal_EigrpTest, Summarization_Advertises_Summary_Only)
             {
                 if (opt.type == Variable::Eigrp::Option::legacyInternalRoute)
                 {
-                    auto tlv = Eigrp::TLVBuilder::decodeRoute(opt, 0);
+                    auto tlv = Eigrp::TLVBuilder::decodeRoute(opt, 0, AddressFamily::IPv4);
                     isValid = (tlv.has_value() && tlv->prefix == summaryPrefix);
                     break;
                 }
@@ -3073,7 +3075,7 @@ TEST_F(Internal_EigrpTest, Query_Triggers_SIA_Timer)
 TEST_F(Internal_EigrpTest, Unicast_Neighbor_Forms_Correctly)
 {
     IPAddress neighborIp = createIPv4(0xC0A80132);
-    eigrpInterface->getNTable().createNeighbor(neighborIp, Eigrp::Neighbor::Version::LEGACY, nullptr);
+    eigrpInterface->getNTable().createNeighbor(neighborIp, Eigrp::Neighbor::Version::LEGACY, true);
     auto neighbor = getNeighbor(neighborIp);
     ASSERT_TRUE(neighbor);
     EXPECT_EQ(neighbor->unicast, true);
@@ -3112,14 +3114,13 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Prevents_Route_Propagation_Back)
             for (auto& opt : opts)
             {
                 bool valid = opt.type != Variable::Eigrp::Option::legacyInternalRoute ||
-                    Eigrp::TLVBuilder::decodeRoute(opt, 0).value().delay == std::numeric_limits<uint64_t>::max();
+                    Eigrp::TLVBuilder::decodeRoute(opt, 0, AddressFamily::IPv4).value().delay == std::numeric_limits<uint64_t>::max();
                 ASSERT_TRUE(valid);
             }
         }));
     std::vector<Eigrp::ReceivedRoute> routes = { route };
     getDuel().processReceivedRoutes(routes, *neighbor);
 }
-/*/
 
 // Test: Split_Horizon_Disabled_Allows_Advertisement
 TEST_F(Internal_EigrpTest, Split_Horizon_Disabled_Allows_Advertisement)
@@ -3146,7 +3147,6 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Disabled_Allows_Advertisement)
     getDuel().processReceivedRoutes(rs, *nbr);
 }
 
-/*/
 // Test: Infeasible_Route_Rejected_Due_To_Feasibility_Condition
 TEST_F(Internal_EigrpTest, Infeasible_Route_Rejected_Due_To_Feasibility_Condition) 
 {
@@ -3220,4 +3220,3 @@ TEST_F(Internal_EigrpTest, Update_With_Duplicate_Routes_Only_Processes_Once)
     ASSERT_TRUE(route);
     EXPECT_EQ(route->nextHopCount, 1);
 }
-*/

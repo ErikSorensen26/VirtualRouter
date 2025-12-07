@@ -14,15 +14,13 @@ NeighborTable::NeighborTable(EigrpInterface& iface) : iface(iface)
     std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
     if (auto it = configs.unicastNeighbors.find(iface.interfaceKey); it != configs.unicastNeighbors.end())
         for (auto& ip : it->second)
-            createNeighbor(ip);
+            createNeighbor(ip, Neighbor::Version::UNKNOWN, true);
 }
 
-Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::Version v, const uint8_t* macAddress)
+Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::Version v, bool isUnicast)
 {
     // Add neighbor only if it doesn't already exist
     std::unique_lock<std::shared_mutex> intLock(neighborMutex);
-
-    bool isUnicast = macAddress == nullptr;
 
     auto& base = iface.getBase();
 
@@ -47,7 +45,6 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::V
         auto neighborIt = neighbors.try_emplace(neighborIp, iface, iface.getTimers(), neighborIp, v, isUnicast);
         if (!neighborIt.second) return nullptr;
         auto* neighbor = &neighborIt.first->second;
-        if (!isUnicast) std::memcpy(neighbor->macAddress, macAddress, 6);
         base.addGlobalNeighbor(neighborIp, neighbor);
 
         if (isUnicast && iface.configs->multicastEnabled.load(std::memory_order_relaxed))

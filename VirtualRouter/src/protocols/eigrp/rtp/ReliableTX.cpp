@@ -37,12 +37,22 @@ void ReliableTransport::transmitReliable(PacketBuilder& pkt, Neighbor* neighbor,
     if (!neighbor)
     {
         if (setupMulticastReliable(header))
+        {
             transmit(pkt);
+        }
     }
     else
     {
         if (setupUnicastReliable(*neighbor, header))
+        {
+            if (header.getSequence() == 0)
+            {
+                uint32_t ack = 0;
+                if (neighbor->popAck(ack) && ack != 0)
+                    header.setAck(ack);
+            }
             transmit(pkt, neighbor->ipAddress.raw);
+        }
     }
 }
 
@@ -139,13 +149,18 @@ void ReliableTransport::sendNullUpdate(Neighbor& neighbor)
     PacketBuilder pkt(iface.getIface());
     createPacket(pkt);
     auto header = createNullUpdate(pkt);
+    if (!header.has_value())
         return releaseFailedPacket(pkt);
+    
+    neighbor.sentInitSeq.store(header.value().getSequence());
 
     transmitReliable(pkt, &neighbor, header.value());
 }
 
 void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
 {
+    bool unicast = firstFullSend.exchange(true, std::memory_order_release);
+
     if (iface.configs->isPassive.load(std::memory_order_relaxed))
         return;
     if (neighbor.fullSent.exchange(true, std::memory_order_acq_rel))
@@ -182,7 +197,7 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
                 if (info.sent >= allRoutes.size() && allRoutes.size() > 0)
                     eigrp->setFlagEndOfTable(true);
 
-                transmitReliable(eigrpPacket, &neighbor, *eigrp);
+                transmitReliable(eigrpPacket, unicast ? &neighbor : nullptr, *eigrp);
                 first = false;
             }
             else
@@ -489,9 +504,7 @@ std::optional<EigrpHeader> ReliableTransport::createNullUpdate(PacketBuilder& bu
     uint16_t mtuSize = getMtu();
     TLV16BufferManager opts(eigrpHeader->getTrail().data(), builder.getMaxHeaderSize(mtuSize));
     EigrpPacketBuilder::appendAuthTLV(opts, iface);
-    EigrpPacketBuilder::appendParameterTLV(opts, iface);
     EigrpPacketBuilder::appendStubTLV(opts, iface.getBase().getGlobalConfigMgr());
-    EigrpPacketBuilder::appendVersionTLV(opts);
     // restart?
     builder.addTLVSize(opts.size());
     return eigrpHeader;

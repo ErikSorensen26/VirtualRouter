@@ -27,7 +27,7 @@ enum class TLVType : uint16_t
 class Neighbor
 {
 public:
-    enum class State { DOWN, HELLO_RECEIVED, PARAMETERS_MATCH, INIT, FULL };
+    enum class State { DOWN, PENDING, UP };
     enum class Version : uint16_t { LEGACY = 0x0102, WIDE = 0x0200, UNKNOWN = 0x0000 };
 
     explicit Neighbor(EigrpInterface& iface, InterfaceTimers& tmgr, const IPAddress& neighborIp, Version version, bool unicast = false);
@@ -57,7 +57,6 @@ public:
     // Public Fields
     const IPAddress ipAddress;
     const bool unicast{false};
-    std::atomic<bool> hasMac = false;
     std::atomic<bool> fullSent = false;
     std::atomic<bool> initComplete{false};
     std::atomic<bool> initInProgress{false};
@@ -67,9 +66,8 @@ public:
     std::atomic<uint32_t> lastSeqAck = 0;
     std::chrono::steady_clock::time_point lastHeard;
 
-    const Version version;
+    Version version;
     const TLVType tlvType;
-    uint8_t macAddress[6] = {0};
     uint32_t routerID;
 
     bool pushAck(uint32_t ack);
@@ -78,9 +76,8 @@ public:
     bool hasAck(uint32_t ack);
 
     // Timers
-    std::atomic<uint32_t> holdTimerId{0}, stuckInitTimerId{0}, gracefulTimerId{0};
+    std::atomic<uint32_t> holdTimerId{0}, gracefulTimerId{0};
     std::atomic<uint16_t> holdTime{0};
-    std::atomic<bool> stuckInitActive{false};
     std::atomic<bool> isGraceful{false};
     std::atomic<bool> secondHello{false};
 

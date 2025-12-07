@@ -190,31 +190,6 @@ void InterfaceTimers::cancelRetransmissionTimer(ReliableInfo& pkt)
     }
 }
 
-void InterfaceTimers::startInitTimer(Neighbor& neighbor)
-{
-    neighbor.stuckInitTimerId = tmgr.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(neighbor.holdTime.load(std::memory_order_relaxed)), [this, nbr = &neighbor]()
-    {
-        // Check if the neighbor is still in Initializing
-        if (nbr->getState() < Neighbor::State::FULL)
-        {
-            iface.getNTable().onDown(*nbr);
-        }
-        else
-        {
-            nbr->stuckInitActive.store(false, std::memory_order_relaxed);
-        }
-    });
-}
-
-void InterfaceTimers::cancelInitTimer(Neighbor& neighbor)
-{
-    if (neighbor.stuckInitTimerId)
-    {
-        tmgr.cancelTimer(neighbor.stuckInitTimerId);
-        neighbor.stuckInitTimerId = 0;
-    }
-}
-
 void InterfaceTimers::startGracefulTimer(Neighbor& neighbor)
 {
     auto expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getPurgeTime());
@@ -237,9 +212,6 @@ void InterfaceTimers::cancelGracefulTimer(Neighbor& neighbor)
 
 void InterfaceTimers::cancelNeighborTimers(Neighbor& neighbor)
 {
-    if (uint32_t tmrId = neighbor.stuckInitTimerId.load(std::memory_order_relaxed); tmrId != 0)
-        tmgr.cancelTimer(tmrId);
-
     cancelGracefulTimer(neighbor);
     cancelHoldTimer(neighbor);
 }
