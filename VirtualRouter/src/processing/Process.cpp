@@ -9,36 +9,45 @@
 #include <Ndp.h>
 #include <PacketStructure.h>
 
-#define getHeader(HeaderType) reinterpret_cast<const HeaderType*>(base); \
+#define GET_HEADER(HdrVar, HeaderType)                              \
+    uint8_t* base = const_cast<uint8_t*>(data) + entry.offset;      \
+    HeaderType HdrVar;                                              \
+    HdrVar.setBuffer(base);
+
+#define GET_HEADER_EXTENDED(HdrVar, HeaderType)                     \
+    GET_HEADER(HdrVar, HeaderType)                                  \
+    size_t trail = entry.size - HeaderType::fixedSize;              \
+    if (trail != 0)                                                 \
+        HdrVar.setTrail(base + HeaderType::fixedSize, trail);
 
 void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualRouter* vrf, Interface* interface)
 {
+    uint8_t* mac = nullptr;
+    uint8_t* address = nullptr;
+
+    const uint8_t* ipStart = nullptr;
+    AddressFamily addressFamily = AddressFamily::NONE;
+    
+    uint32_t destinationPort = 0;
+    uint32_t sourcePort = 0;
+
     for (uint8_t i = 0; i < packet.count; ++i)
     {
         const HeaderEntry& entry = packet.headers[i];
-        const uint8_t* base = data + entry.offset;
 
-        uint8_t* mac = nullptr;
-        uint8_t* address = nullptr;
-        AddressFamily addressFamily = AddressFamily::NONE;
-
-        const uint8_t* ipStart = nullptr;
-        uint32_t destinationPort = 0;
-        uint32_t sourcePort = 0;
-        
         switch (entry.type)
         {
             case HeaderType::ETHERNET:
             {
-                const auto* eth = getHeader(EthernetHeader);
-                mac = eth->raw->sourceMac;
+                GET_HEADER(eth, EthernetHeader)
+                mac = eth.raw->sourceMac;
                 break;
             }
             case HeaderType::ARP:
             {
-                const auto* arp = getHeader(ArpHeader);
-                if (arp->getOpcode() == Variable::Arp::Opcode::request) interface->arp->sendReply(arp->getSenderHwAddr(), arp->getSenderIpAddr());
-                if (arp->getOpcode() == Variable::Arp::Opcode::reply) interface->arp->receiveReply(*arp);
+                GET_HEADER(arp, ArpHeader)
+                if (arp.getOpcode() == Variable::Arp::Opcode::request) interface->arp->sendReply(arp.getSenderHwAddr(), arp.getSenderIpAddr());
+                if (arp.getOpcode() == Variable::Arp::Opcode::reply) interface->arp->receiveReply(arp);
                 break;
             }
             case HeaderType::MPLS:
@@ -48,16 +57,16 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
             case HeaderType::IPV4:
             {
                 ipStart = data + entry.offset;
-                const auto* ipv4 = getHeader(IPv4Header);
-                address = ipv4->getSourceAddress();
+                GET_HEADER_EXTENDED(ipv4, IPv4Header)
+                address = ipv4.getSourceAddress();
                 addressFamily = AddressFamily::IPv4;
                 break;
             }
             case HeaderType::IPV6:
             {
                 ipStart = data + entry.offset;
-                const auto* ipv6 = getHeader(IPv6Header);
-                address = ipv6->getSourceAddress();
+                GET_HEADER(ipv6, IPv6Header);
+                address = ipv6.getSourceAddress();
                 addressFamily = AddressFamily::IPv6;
                 break;
             }
@@ -78,27 +87,27 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 if (!interface || !interface->ndp) return;
                 uint8_t currentIp[16];
                 interface->configs.ipv6.getLocalAddress(currentIp);
-                const auto* icmp = getHeader(Icmpv6Header);
+                GET_HEADER_EXTENDED(icmp, Icmpv6Header)
 
-                switch (icmp->getType())
+                switch (icmp.getType())
                 {
                     case 0x85:
                     {
-                        if (std::memcmp(icmp->getTrail().data(), currentIp, 16) != 0) break;
-                        interface->ndp->sendRouteAdvertisement(mac, icmp->getTrail().data());
+                        if (std::memcmp(icmp.getTrail().data(), currentIp, 16) != 0) break;
+                        interface->ndp->sendRouteAdvertisement(mac, icmp.getTrail().data());
                         break;
                     }
                     case 0x86:
                     {
-                        interface->ndp->receiveRouteAdvertisement(*icmp, address, mac);
+                        interface->ndp->receiveRouteAdvertisement(icmp, address, mac);
                         break;
                     }
                     case 0x87:
                     {
-                        if (std::memcmp(icmp->getTrail().data(), currentIp, 16) != 0) break;
+                        if (std::memcmp(icmp.getTrail().data(), currentIp, 16) != 0) break;
                         uint8_t naMac[6];
                         std::vector<TLV8Option> options;
-                        parseIcmpv6Options(icmp->getTrail().data(), icmp->getTrail().size(), options);
+                        parseIcmpv6Options(icmp.getTrail().data(), icmp.getTrail().size(), options);
                         for (auto& opt : options)
                         {
                             if (opt.type == Variable::ICMPv6::Option::source && opt.valueSize == 6)
@@ -112,7 +121,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                     }
                     case 0x88:
                     {
-                        interface->ndp->receiveNeighborAdvertisement(*icmp, address);
+                        interface->ndp->receiveNeighborAdvertisement(icmp, address);
                         break;
                     }
                     default:
@@ -128,37 +137,37 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
             }
             case HeaderType::UDP:
             {
-                const auto* udp = getHeader(UdpHeader);
-                sourcePort = udp->getSourcePort();
-                destinationPort = udp->getDestinationPort();
+                GET_HEADER(udp, UdpHeader)
+                sourcePort = udp.getSourcePort();
+                destinationPort = udp.getDestinationPort();
                 break;
             }
             case HeaderType::EIGRP:
             {
                 if (!ipStart) break;
-                const auto* eigrp = getHeader(EigrpHeader);
-                uint32_t as = eigrp->getAutonomousSystem();
+                GET_HEADER_EXTENDED(eigrp, EigrpHeader)
+                uint32_t as = eigrp.getAutonomousSystem();
                 auto* it = vrf->getEigrpAutonomousSystem(as);
                 auto iface = interface->eigrpInterfaceList.find(as);
                 if (it && iface != interface->eigrpInterfaceList.end()) 
                 {
                     if (addressFamily == AddressFamily::IPv4 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv4)
-                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, *eigrp, address, Functions::isMulticast(address, AddressFamily::IPv4));
+                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, address, Functions::isMulticast(address, AddressFamily::IPv4));
                     else if (addressFamily == AddressFamily::IPv6 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv6)
-                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, *eigrp, address, Functions::isMulticast(address, AddressFamily::IPv6));
+                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, address, Functions::isMulticast(address, AddressFamily::IPv6));
                 }
                 break;
             }
             case HeaderType::DHCP:
             {
-                const auto* dhcp = getHeader(DhcpHeader);
+                GET_HEADER_EXTENDED(dhcp, DhcpHeader)
                 if (sourcePort == Variable::Udp::dhcpServer && destinationPort == Variable::Udp::dhcpServer)
                 {
-                    interface->dhcp->handleDhcpPacket(*dhcp);
+                    interface->dhcp->handleDhcpPacket(dhcp);
                 }
                 else if (sourcePort == Variable::Udp::dhcpClient && destinationPort == Variable::Udp::dhcpClient)
                 {
-                    interface->getVRF()->global.dhcpServer->handlePacket(*dhcp, mac, *interface);
+                    interface->getVRF()->global.dhcpServer->handlePacket(dhcp, mac, *interface);
                 }
                 break;
             }

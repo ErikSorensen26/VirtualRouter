@@ -41,9 +41,9 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     r.bandwidth = base.isNamed()
         ? interface->configs.hwInfo.bandwidth
         : interface->configs.bandwidth.load(std::memory_order_relaxed);
-    r.delay = interface->configs.delay.load(std::memory_order_relaxed) * 10'000'000;
+    r.delay = 0;
     r.load = interface->configs.load.load(std::memory_order_relaxed);
-    r.load = interface->configs.reliability.load(std::memory_order_relaxed);
+    r.reliability = interface->configs.reliability.load(std::memory_order_relaxed);
     r.hopCount = 0;
     r.mtu = base.getAF() == AddressFamily::IPv4
         ? interface->configs.ipv4.mtu.load(std::memory_order_relaxed)
@@ -53,6 +53,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     r.nextHop = connected; // Self originated
 
     std::set<IPPrefix> withdraws = iface.connectedRoutes;
+    iface.connectedRoutes.clear();
     std::vector<TopologyEntry*> updates;
 
     auto install = [&](IPPrefix prefix)
@@ -88,7 +89,6 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     // Remove left over routes
     for (const auto& route : withdraws)
     {
-        iface.connectedRoutes.erase(route);
         if (auto* entry = duel.topologyTable.find(route); entry)
             if (auto rit = entry->routesBySource.find(connected); rit != entry->routesBySource.end())
             {

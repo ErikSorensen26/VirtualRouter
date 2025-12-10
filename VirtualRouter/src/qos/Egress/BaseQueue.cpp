@@ -4,8 +4,6 @@
 #include <EgressBase.h>
 #include <RCU.hpp>
 
-static inline void cpuRelax() { asm volatile("pause" ::: "memory"); }
-
 void BaseQueue::start()
 {
     running.store(true, std::memory_order_release);

@@ -175,7 +175,7 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
         return;
     
     PktInfo info;
-    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
     info.delay = interface->configs.delay.load(std::memory_order_relaxed);
     info.mtu = getMtu();
 
@@ -222,7 +222,7 @@ void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const R
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
     info.delay = interface->configs.delay.load(std::memory_order_relaxed);
     info.mtu = getMtu();
 
@@ -262,7 +262,7 @@ void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
     info.delay = std::numeric_limits<uint64_t>::max();
     info.mtu = getMtu();
 
@@ -301,7 +301,7 @@ void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
     info.delay = interface->configs.delay.load(std::memory_order_relaxed);
     
     auto versionedQuery = [&](const TLVType& version)
@@ -332,7 +332,7 @@ void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<O
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
     info.delay = interface->configs.delay.load(std::memory_order_relaxed);
     
     auto versionedQuery = [&](const TLVType& version)
@@ -360,7 +360,7 @@ void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const Ro
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
     info.delay = interface->configs.delay.load(std::memory_order_relaxed);
     info.mtu = getMtu();
 
@@ -382,7 +382,7 @@ void ReliableTransport::sendSIAQuery(Neighbor& neighbor, const std::vector<Outgo
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = (10000000 / interface->configs.bandwidth.load(std::memory_order_relaxed));
+    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
     info.delay = interface->configs.delay.load(std::memory_order_relaxed);
     info.mtu = getMtu();
 
@@ -507,6 +507,7 @@ std::optional<EigrpHeader> ReliableTransport::createNullUpdate(PacketBuilder& bu
     EigrpPacketBuilder::appendStubTLV(opts, iface.getBase().getGlobalConfigMgr());
     // restart?
     builder.addTLVSize(opts.size());
+    eigrpHeader.value().setTrailSize(opts.size());
     return eigrpHeader;
 }
 
@@ -525,9 +526,10 @@ std::optional<EigrpHeader> ReliableTransport::createUpdate(PacketBuilder& builde
     EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
 
     const std::vector<const RouteInfo*> availableRoutes = std::vector<const RouteInfo*>(routes.begin() + static_cast<int>(info.sent), routes.end());
-    info.sent += EigrpPacketBuilder::appendRoutes(opts, availableRoutes, info.bandwidthMetric, info.delay, info.version);
+    info.sent += EigrpPacketBuilder::appendRoutes(iface, opts, availableRoutes, info.bandwidthMetric, info.delay, info.version);
 
     builder.addTLVSize(opts.size());
+    eigrp.value().setTrailSize(opts.size());
     return eigrp;
 }
 
@@ -551,7 +553,7 @@ std::optional<EigrpHeader> ReliableTransport::createQuery(PacketBuilder& builder
     availableQueries.reserve(queries.size() - info.sent);
     for (auto it = queries.begin() + initSize; it != queries.end(); it++)
         availableQueries.push_back((*it)->originRoute);
-    info.sent += EigrpPacketBuilder::appendRoutes(opts, availableQueries, info.bandwidthMetric, info.delay, info.version);
+    info.sent += EigrpPacketBuilder::appendRoutes(iface, opts, availableQueries, info.bandwidthMetric, std::numeric_limits<uint64_t>::max(), info.version);
 
     for (auto it = queries.begin() + initSize; it != queries.begin() + info.sent; it++)
         for (auto& n : (*it)->pendingQueries)
@@ -559,6 +561,7 @@ std::optional<EigrpHeader> ReliableTransport::createQuery(PacketBuilder& builder
                 n.second.querySequence = seqNum;
 
     builder.addTLVSize(opts.size());
+    eigrp.value().setTrailSize(opts.size());
     return eigrp;
 }
 
@@ -582,12 +585,13 @@ std::optional<EigrpHeader> ReliableTransport::createUnicastQuery(PacketBuilder& 
     availableQueries.reserve(queries.size() - info.sent);
     for (auto it = queries.begin() + initSize; it != queries.end(); it++)
         availableQueries.push_back((*it)->route->originRoute);
-    info.sent += EigrpPacketBuilder::appendRoutes(opts, availableQueries, info.bandwidthMetric, info.delay, info.version);
+    info.sent += EigrpPacketBuilder::appendRoutes(iface, opts, availableQueries, info.bandwidthMetric, info.delay, info.version);
 
     for (auto it = queries.begin() + initSize; it != queries.begin() + info.sent; it++)
         (*it)->querySequence = seqNum;
 
     builder.addTLVSize(opts.size());
+    eigrp.value().setTrailSize(opts.size());
     return eigrp;
 }
 
@@ -606,9 +610,10 @@ std::optional<EigrpHeader> ReliableTransport::createReply(PacketBuilder& builder
     EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
 
     const std::vector<const RouteInfo*> availableRoutes = std::vector<const RouteInfo*>(routes.begin() + static_cast<int>(info.sent), routes.end());
-    info.sent += EigrpPacketBuilder::appendRoutes(opts, availableRoutes, info.bandwidthMetric, info.delay, neighbor.tlvType);
+    info.sent += EigrpPacketBuilder::appendRoutes(iface, opts, availableRoutes, info.bandwidthMetric, info.delay, neighbor.tlvType);
 
     builder.addTLVSize(opts.size());
+    eigrp.value().setTrailSize(opts.size());
     return eigrp;
 }
 
@@ -632,12 +637,13 @@ std::optional<EigrpHeader> ReliableTransport::createSIAQuery(PacketBuilder& buil
     availableQueries.reserve(routes.size() - info.sent);
     for (auto it = routes.begin() + initSize; it != routes.end(); it++)
         availableQueries.push_back((*it)->route->originRoute);
-    info.sent += EigrpPacketBuilder::appendRoutes(opts, availableQueries, info.bandwidthMetric, info.delay, info.version);
+    info.sent += EigrpPacketBuilder::appendRoutes(iface, opts, availableQueries, info.bandwidthMetric, info.delay, info.version);
 
     for (auto it = routes.begin() + initSize; it != routes.begin() + info.sent; it++)
         (*it)->siaSequence = seqNum;
 
     builder.addTLVSize(opts.size());
+    eigrp.value().setTrailSize(opts.size());
     return eigrp;
 }
 
@@ -658,6 +664,7 @@ std::optional<EigrpHeader> ReliableTransport::createSIAReply(PacketBuilder& buil
     EigrpPacketBuilder::appendStubTLV(opts, base.getGlobalConfigMgr());
 
     builder.addTLVSize(opts.size());
+    eigrp.value().setTrailSize(opts.size());
     return eigrp;
 }
 }

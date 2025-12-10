@@ -30,13 +30,27 @@ static void set_nonblock(int fd) {
         throw std::runtime_error("fcntl(F_SETFL O_NONBLOCK): " + std::string(std::strerror(errno)));
 }
 
+void EgressPacket::dumpRing()
+{
+    for (uint32_t i = 0; i < frameCount; ++i)
+    {
+        auto* h = reinterpret_cast<tpacket2_hdr*>(frameBase + size_t(i) * req.tp_frame_size);
+        uint32_t st = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
+        uint8_t st_user = state[i].load(std::memory_order_relaxed);
+        if (st == TP_STATUS_SEND_REQUEST || st_user != 0)
+            std::fprintf(stderr,
+                 "TX slot %u: tp_status=%u state=%u len=%u mac=%u net=%u\n",
+                 i, st, st_user, h->tp_len, h->tp_mac, h->tp_net);
+    }
+}
+
 EgressPacket::EgressPacket(Interface& iface, const TxQueueOpts& opts)
     : EgressBase(iface, opts), fd(-1), epfd(-1), ring(nullptr), kickBatch(16)
 {
     setupSocket();
-    bindIface();
     setupRing();
     mmapRing();
+    bindIface();
     setupEvents();
 
     frameBase = reinterpret_cast<uint8_t*>(ring);
@@ -90,8 +104,9 @@ EgressPacket::~EgressPacket()
 
 void EgressPacket::setupSocket()
 {
-    fd = ::socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-    if (fd < 0) throw std::runtime_error("sock(AF_PACKET) failed");
+    fd = ::socket(AF_PACKET, SOCK_RAW, 0);
+    if (fd < 0)
+        throw std::runtime_error("sock(AF_PACKET) failed");
 
     int ver = TPACKET_V2;
     if (::setsockopt(fd, SOL_PACKET, PACKET_VERSION, &ver, sizeof(ver)) != 0)
@@ -102,6 +117,10 @@ void EgressPacket::setupSocket()
     (void)::setsockopt(fd, SOL_PACKET, PACKET_TX_HAS_OFF, &one, sizeof(one));
 
     set_nonblock(fd);
+
+    // Set close-on-exec so children don't inherit the TX ring FD
+    int fdfl = fcntl(fd, F_GETFD);
+    if (fdfl >= 0) fcntl(fd, F_SETFD, fdfl | FD_CLOEXEC);
 }
 
 void EgressPacket::setupRing()
@@ -141,6 +160,8 @@ void EgressPacket::setupRing()
 void EgressPacket::bindIface()
 {
     const int ifidx = ifnametoindex(opts.ifname.c_str());
+    if (ifidx <= 0)
+        throw std::runtime_error("ifnametoindex failed for " + opts.ifname);
 
     sockaddr_ll sll{};
     sll.sll_family = AF_PACKET;
@@ -151,6 +172,7 @@ void EgressPacket::bindIface()
         throw std::runtime_error("bind(AF_PACKET) failed: " + std::string(std::strerror(errno)));
 
     ifidxCached = ifidx;
+
     kickAddr = {};
     kickAddr.sll_family = AF_PACKET;
     kickAddr.sll_protocol = htons(ETH_P_ALL);
@@ -210,7 +232,8 @@ ALWAYS_INLINE HOT bool EgressPacket::send(uint32_t index, uint32_t length) noexc
 {
     if (index >= req.tp_frame_nr) return false;
 
-    if (length == 0 || length > maxPayload) {
+    if (length == 0 || length > maxPayload)
+    {
         auto* h = reinterpret_cast<tpacket2_hdr*>(reinterpret_cast<uint8_t*>(ring) + size_t(index) * req.tp_frame_size);
         uint8_t expected = state[index].load(std::memory_order_relaxed);
         if (expected != 0)
@@ -225,13 +248,15 @@ ALWAYS_INLINE HOT bool EgressPacket::send(uint32_t index, uint32_t length) noexc
     auto* h = reinterpret_cast<tpacket2_hdr*>(
             reinterpret_cast<uint8_t*>(ring) + size_t(index) * req.tp_frame_size);
 
-    __u32 expected_status = TP_STATUS_AVAILABLE;
-    if (!__atomic_compare_exchange_n(&h->tp_status, &expected_status, TP_STATUS_SEND_REQUEST, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+    if (__atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE) != TP_STATUS_AVAILABLE)
         return false;
 
-    h->tp_len = h->tp_snaplen = length;
+    h->tp_len = length;
+    h->tp_snaplen = length;
     h->tp_mac = TPACKET2_HDRLEN;
     __atomic_thread_fence(__ATOMIC_RELEASE);
+
+    __atomic_store_n(&h->tp_status, TP_STATUS_SEND_REQUEST, __ATOMIC_RELEASE);
 
     state[index].store(2, std::memory_order_relaxed);
 
@@ -257,7 +282,8 @@ void EgressPacket::kickKernelCached()
     uint32_t current = pendingKicks.exchange(0, std::memory_order_relaxed);
     if (__builtin_expect(current == 0, 1)) return;
 
-    ssize_t ret = ::sendto(fd, nullptr, 0, MSG_DONTWAIT, reinterpret_cast<sockaddr*>(&kickAddr), sizeof(kickAddr));
+    //dumpRing();
+    ssize_t ret = ::sendto(fd, nullptr, 0, MSG_DONTWAIT, nullptr, 0);
 
     if (ret < 0)
     {

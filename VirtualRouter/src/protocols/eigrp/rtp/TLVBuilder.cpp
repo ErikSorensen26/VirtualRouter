@@ -1,11 +1,12 @@
 // EigrpInterfacePacketEngine.cpp
 
 #include "TLVBuilder.h"
+#include <EigrpInterface.h>
 
 namespace Eigrp
 {
 
-uint8_t TLVBuilder::encodeRouteOption(uint8_t* out, size_t maxSize, const RouteInfo* route, uint64_t currentBandwidth, uint64_t currentDelay, RouteType type)
+uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_t maxSize, const RouteInfo* route, uint64_t currentBandwidth, uint64_t currentDelay, RouteType type)
 {
     RouteData data(const_cast<RouteInfo*>(route)->routeInfo);
     const bool wide = isWide(type);
@@ -20,14 +21,18 @@ uint8_t TLVBuilder::encodeRouteOption(uint8_t* out, size_t maxSize, const RouteI
     bool max = route->routeInfo.delay == std::numeric_limits<uint64_t>::max();
 
     const uint64_t delay = max
-        ? route->routeInfo.delay + ((currentDelay / 10) * 256ULL)
-        : route->routeInfo.delay;
+        ? route->routeInfo.delay
+        : route->routeInfo.delay + ((currentDelay / 10) * 10'000'000ULL);
 
-    const uint64_t bw = std::min(route->routeInfo.bandwidth, currentBandwidth * 256);
+    const uint64_t bw = std::min(route->routeInfo.bandwidth, currentBandwidth);
 
     if (!wide)
     {
-        std::memcpy(out, route->routeInfo.nextHop.raw, ipSize);
+        if (iface.configs->nextHopSelf.load(std::memory_order_relaxed))
+            std::memcpy(out, iface.ifaceAddress.raw, ipSize);
+        else
+            std::memcpy(out, route->routeInfo.nextHop.raw, ipSize);
+
         data.offset += ipSize;
         if (external)
             if (!encodeExternal(data)) return 0;
@@ -43,7 +48,12 @@ uint8_t TLVBuilder::encodeRouteOption(uint8_t* out, size_t maxSize, const RouteI
             writeU32(out + data.offset, route->routeInfo.wide.rid); data.offset += 4;
         }
         if (!encodeWideMetric(data, delay, bw)) return 0;
-        std::memcpy(out + data.offset, route->routeInfo.nextHop.raw, ipSize);
+
+        if (iface.configs->nextHopSelf.load(std::memory_order_relaxed))
+            std::memcpy(out, iface.ifaceAddress.raw, ipSize);
+        else
+            std::memcpy(out, route->routeInfo.nextHop.raw, ipSize);
+
         data.offset += ipSize;
         if (external)
             if (!encodeExternal(data)) return 0;
@@ -108,8 +118,10 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt
 bool TLVBuilder::decodeClassicMetric(RouteData& data)
 {
     if (data.offset + 16  > data.valueSize) return false;
-    data.r.delay = ((uint64_t)readU32(data.value + data.offset) * 10ULL * 1'000'000ULL) / 256ULL; data.offset += 4;
-    data.r.bandwidth = (10'000'000ULL * 256ULL) / readU32(data.value + data.offset); data.offset += 4;
+    uint32_t dl = readU32(data.value + data.offset); data.offset += 4;
+    uint32_t bw = readU32(data.value + data.offset); data.offset += 4;
+    data.r.delay = (dl != 0) ? (((uint64_t)dl * 10ULL * 1'000'000ULL) / 256ULL) : dl;
+    data.r.bandwidth = (bw != 0) ? ((10'000'000ULL * 256ULL) / bw) : bw;
     data.r.mtu = readU24(data.value + data.offset); data.offset += 3;
     data.r.hopCount = data.value[data.offset++];
     data.r.reliability = data.value[data.offset++];
@@ -126,9 +138,9 @@ bool TLVBuilder::decodeClassicMetric(RouteData& data)
 bool TLVBuilder::encodeClassicMetric(RouteData& data, const uint64_t& delay, const uint64_t& bw)
 {
     if (data.offset + 16 > data.valueSize) return false;
-    uint32_t scaledDelay = static_cast<uint32_t>((delay * 256ULL) / (10ULL * 1'000'000ULL));
-    uint32_t scaledBW = static_cast<uint32_t>((10'000'000 * 256ULL) / (bw > 10'000'000 ? 10'000'000 : bw));
-    writeU32(data.value + data.offset, scaledDelay >= 0xFFFFFF ? 0xFFFFFFFF : scaledDelay);
+    uint32_t scaledDelay = (delay != 0 && delay != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((delay * 256ULL) / (10ULL * 1'000'000ULL)) : delay;
+    uint32_t scaledBW = (bw != 0 && bw != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((10'000'000 * 256ULL) / (bw > 10'000'000 ? 10'000'000 : bw)) : bw;
+    writeU32(data.value + data.offset, scaledDelay >= 0xFFFFFFFF ? 0xFFFFFFFF : scaledDelay);
     data.offset += 4;
     writeU32(data.value + data.offset, scaledBW);
     data.offset += 4;

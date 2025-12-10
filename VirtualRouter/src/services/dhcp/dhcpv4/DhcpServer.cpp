@@ -232,7 +232,7 @@ void Protocol::DhcpServer::sendOffer(
     tlv.tlv.append(Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::offer, 1);
 
     // Server Identifier
-    if (!Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddress()))
+    if (!Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddressInt()))
         return;
 
     // Lease Config
@@ -362,7 +362,7 @@ void Protocol::DhcpServer::sendAck(
     Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::ack);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddress());
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddressInt());
 
     // Lease config
     Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
@@ -499,7 +499,7 @@ void Protocol::DhcpServer::sendNak(
     Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::nak);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddress());
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddressInt());
 
     // Echo relay option
     if (relayInfo)
@@ -584,7 +584,7 @@ void Protocol::DhcpServer::sendInformReply(
     Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::ack);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddress());
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddressInt());
 
     Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net) return;
@@ -692,7 +692,7 @@ void Protocol::DhcpServer::sendForceRenew(
     Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::forceRenew);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddress());
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::serverIdentifier, iface.configs.ipv4.getAddressInt());
 
     // Echo relay option
     if (relayInfo)
@@ -800,7 +800,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
         Dhcp::appendTLV(tlv, Variable::Dhcp::Option::mask, 4, Functions::prefixToMask(buf, prefixLen, AddressFamily::IPv4));
 
         // Router
-        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::router, iface.configs.ipv4.getAddress());
+        Dhcp::appendTLV(tlv, Variable::Dhcp::Option::router, iface.configs.ipv4.getAddressInt());
 
         // Timestamp
         Dhcp::appendTLV(tlv, Variable::Dhcp::Option::timestamp, secondsSinceEpoch());

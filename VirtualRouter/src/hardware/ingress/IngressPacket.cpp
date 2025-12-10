@@ -19,6 +19,16 @@
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
 
+static ALWAYS_INLINE bool blockReadyV3(tpacket_block_desc* bd)
+{
+    return (__atomic_load_n(&bd->hdr.bh1.block_status, __ATOMIC_ACQUIRE) & TP_STATUS_USER) != 0;
+}
+
+static ALWAYS_INLINE void blockReleaseV3(tpacket_block_desc* bd)
+{
+    __atomic_store_n(&bd->hdr.bh1.block_status, TP_STATUS_KERNEL, __ATOMIC_RELEASE);
+}
+
 static inline void set_nonblock(int fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -31,10 +41,11 @@ IngressPacket::IngressPacket(Interface& iface, const RxQueueOpts& opts)
     : IngressBase(iface, opts)
 {
     setupSocket();
-    bindIface();
     setupRing();
     mmapRing();
+    bindIface();
     setupEvents();
+    ready.store(true, std::memory_order_release);
 }
 
 IngressPacket::~IngressPacket()
@@ -51,7 +62,7 @@ IngressPacket::~IngressPacket()
 
 void IngressPacket::setupSocket()
 {
-    fd = ::socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    fd = ::socket(AF_PACKET, SOCK_RAW, 0);
     if (fd < 0) throw std::runtime_error("socket(AF_PACKET) failed");
     int ver = TPACKET_V3;
     if (setsockopt(fd, SOL_PACKET, PACKET_VERSION, &ver, sizeof(ver)) != 0)
@@ -62,6 +73,12 @@ void IngressPacket::setupSocket()
 void IngressPacket::bindIface()
 {
     const unsigned int idx = ifnametoindex(opts.ifname.c_str());
+    if (idx == 0)
+    {
+        throw std::runtime_error(
+            "ifnametoindex failed for interface '" + opts.ifname + "': " +
+            std::string(std::strerror(errno)));
+    }
 
     sockaddr_ll sll{};
     sll.sll_family = AF_PACKET;
@@ -69,7 +86,12 @@ void IngressPacket::bindIface()
     sll.sll_ifindex = static_cast<int>(idx);
 
     if (bind(fd, reinterpret_cast<sockaddr*>(&sll), sizeof(sll)) != 0)
-        throw std::runtime_error("bind iface failed");
+    {
+        throw std::runtime_error(
+            "bind() to interface '" + opts.ifname + "' failed: " +
+            std::string(std::strerror(errno)));
+    }
+
     int one = 1;
     (void)setsockopt(fd, SOL_PACKET, PACKET_IGNORE_OUTGOING, &one, sizeof(one));
 
@@ -178,53 +200,48 @@ void IngressPacket::waitEvent()
 
 ALWAYS_INLINE HOT bool IngressPacket::pollFrame(FrameView& out)
 {
-    if (!ring) return false;
+    if (!ring || blockNr == 0) return false;
+
     const uint32_t start = nextIdx;
+
     for (uint32_t i = 0; i < blockNr; ++i)
     {
         uint32_t b = (start + i) & blockMask;
-        uint8_t* blk = (uint8_t*)ring + (size_t)b * blockSize;
-        auto* bd = (tpacket_block_desc*)blk;
-        if (!(bd->hdr.bh1.block_status & TP_STATUS_USER)) continue;
 
-        auto& remain = blockRemain[b];
-        auto& off = blockNextOff[b];
+        uint8_t* blk = static_cast<uint8_t*>(ring) + static_cast<size_t>(b) * blockSize;
+        auto* bd = reinterpret_cast<tpacket_block_desc*>(blk);
 
-        const uint64_t seq = bd->hdr.bh1.seq_num;
-        if (seq != blkSeq[b])
-        {
-            blkSeq[b] = seq;
-            off = bd->hdr.bh1.offset_to_first_pkt;
-
-            if (remain == 0)
-            {
-                remain = bd->hdr.bh1.num_pkts;
-                blkInFlight[b].store(remain, std::memory_order_relaxed);
-            }
-        }
-        else if (remain == 0)
-        {
-            if (blkInFlight[b].load(std::memory_order_acquire) == 0)
-            {
-                std::atomic_thread_fence(std::memory_order_release);
-                bd->hdr.bh1.block_status = TP_STATUS_KERNEL;
-            }
-            nextIdx = (b + 1) &  blockMask;
+        if (!blockReadyV3(bd))
             continue;
+
+        uint16_t& remain = blockRemain[b];
+        uint32_t& off = blockNextOff[b];
+
+        if (remain == 0)
+        {
+            if (blkInFlight[b].load(std::memory_order_acquire) != 0)
+                continue;
+
+            blkSeq[b] = bd->hdr.bh1.seq_num;
+
+            remain = bd->hdr.bh1.num_pkts;
+            off = bd->hdr.bh1.offset_to_first_pkt;
+            blkInFlight[b].store(remain, std::memory_order_relaxed);
         }
 
-        auto* tph = (tpacket3_hdr*)(blk + off);
-        out.payload = (uint8_t*)tph + tph->tp_mac;
+        auto* tph = reinterpret_cast<tpacket3_hdr*>(blk + off);
+
+        out.payload = reinterpret_cast<uint8_t*>(tph) + tph->tp_mac;
         out.length = tph->tp_snaplen;
         out.index = (b << 16) | ((bd->hdr.bh1.num_pkts - remain) & 0xFFFFu);
+
         off += tph->tp_next_offset;
 
         if (--remain == 0)
         {
             if (blkInFlight[b].load(std::memory_order_acquire) == 0)
             {
-                std::atomic_thread_fence(std::memory_order_release);
-                bd->hdr.bh1.block_status = TP_STATUS_KERNEL;
+                blockReleaseV3(bd);
             }
             nextIdx = (b + 1) & blockMask;
         }
@@ -243,8 +260,7 @@ ALWAYS_INLINE HOT void IngressPacket::returnToDevice(uint32_t index)
     uint32_t prev = blkInFlight[b].fetch_sub(1, std::memory_order_acq_rel);
     if (prev == 1)
     {
-        std::atomic_thread_fence(std::memory_order_release);
-        bd->hdr.bh1.block_status = TP_STATUS_KERNEL;
+        blockReleaseV3(bd);
     }
 }
 
@@ -256,9 +272,13 @@ void IngressPacket::stopRx()
 void IngressPacket::waitUntilAllFramesReleased()
 {
     using namespace std::chrono_literals;
+
+    if (!ring || blockNr == 0)
+        return;
+
     const auto deadline = std::chrono::steady_clock::now() + 2s;
 
-    for (;;)
+    while (true)
     {
         bool all = true;
         for (uint32_t b = 0; b < blockNr; ++b)
@@ -271,8 +291,7 @@ void IngressPacket::waitUntilAllFramesReleased()
 
             if (user && empty)
             {
-                std::atomic_thread_fence(std::memory_order_release);
-                bd->hdr.bh1.block_status = TP_STATUS_KERNEL;
+                blockReleaseV3(bd);
             }
 
             if (bd->hdr.bh1.block_status & TP_STATUS_USER)

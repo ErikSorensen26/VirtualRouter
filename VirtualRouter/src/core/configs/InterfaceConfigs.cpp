@@ -45,7 +45,14 @@ uint8_t* InterfaceConfigs::IPv4State::getAddress(uint8_t* out) const
     return out;
 }
 
-uint32_t InterfaceConfigs::IPv4State::getAddress() const
+IPAddress InterfaceConfigs::IPv4State::getAddress() const
+{
+    IPAddress addr;
+    writeU32(addr.raw, address.load(std::memory_order_release));
+    return addr;
+}
+
+uint32_t InterfaceConfigs::IPv4State::getAddressInt() const
 {
     return address.load(std::memory_order_relaxed);
 }

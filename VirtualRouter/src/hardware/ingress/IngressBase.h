@@ -26,7 +26,6 @@ public:
 
     void start();
     void stop();
-    uint64_t totalSeen = 0;
 
     RxQueueOpts opts;
 

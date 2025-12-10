@@ -790,7 +790,7 @@ void Protocol::DhcpClient::sendRenew()
     Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::request);
     if (configs.clientID.size > 0)
         Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, configs.clientID.size, configs.clientID.data);
-    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestIP, currentInterface->configs.ipv4.getAddress());
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestIP, currentInterface->configs.ipv4.getAddressInt());
 
     if (tlv.file)
     {
@@ -863,7 +863,7 @@ void Protocol::DhcpClient::sendRebind()
 
     Dhcp::appendTLV(tlv, Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::request);
     Dhcp::appendTLV(tlv, Variable::Dhcp::Option::clientID, 6, mac);
-    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestIP, currentInterface->configs.ipv4.getAddress());
+    Dhcp::appendTLV(tlv, Variable::Dhcp::Option::requestIP, currentInterface->configs.ipv4.getAddressInt());
 
     if (tlv.file)
     {

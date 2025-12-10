@@ -52,7 +52,7 @@ bool EigrpPacketBuilder::appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg
     return true;
 }
 
-size_t EigrpPacketBuilder::appendRoutes(TLV16BufferManager& tlv, const std::vector<const RouteInfo*>& routes, uint64_t bw, uint64_t delay, TLVType tlvVersion)
+size_t EigrpPacketBuilder::appendRoutes(EigrpInterface& iface, TLV16BufferManager& tlv, const std::vector<const RouteInfo*>& routes, uint64_t bw, uint64_t delay, TLVType tlvVersion)
 {
     size_t appended = 0;
     for (auto* r : routes)
@@ -61,7 +61,7 @@ size_t EigrpPacketBuilder::appendRoutes(TLV16BufferManager& tlv, const std::vect
         TLVBuilder::RouteType type = r->routeInfo.routeType == RouteType::EXTERNAL
             ? static_cast<TLVBuilder::RouteType>(static_cast<uint16_t>(tlvVersion) | 3)
             : static_cast<TLVBuilder::RouteType>(static_cast<uint16_t>(tlvVersion) | 2);
-        uint16_t len = TLVBuilder::encodeRouteOption(buf, tlv.maxSize(), r, bw, delay, type);
+        uint16_t len = TLVBuilder::encodeRouteOption(iface, buf, tlv.maxSize(), r, bw, delay, type);
         if (len == 0) break;
 
         if (tlv.append(static_cast<uint16_t>(type), len + 4, nullptr, len))

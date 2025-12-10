@@ -23,6 +23,8 @@ protected:
     void waitUntilAllFramesReleased() override;
 
 private:
+    std::atomic<bool> ready{false};
+
     void setupEvents();
     void bindIface();
     void setupRing();

@@ -33,6 +33,8 @@ private:
     std::atomic<uint8_t>* state = nullptr;
 
 private:
+    std::atomic<bool> ready{false};
+
     int fd = -1;
     int epfd = -1;
     void* ring = nullptr;
@@ -52,6 +54,8 @@ private:
     uint32_t frameSizeCached = 0;
 
 private:
+    void dumpRing();
+
     void setupSocket();
     void bindIface();
     void setupRing();

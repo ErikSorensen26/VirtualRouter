@@ -31,7 +31,7 @@ public:
     static void appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& iface);
     static bool appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg);
     static size_t appendSequenceTLVs(TLV16BufferManager& tlv, const std::vector<IPAddress>& neighbors);
-    static size_t appendRoutes(TLV16BufferManager& tlv, const std::vector<const RouteInfo*>& routes, uint64_t bw, uint64_t delay, TLVType tlvVersion);
+    static size_t appendRoutes(EigrpInterface& iface, TLV16BufferManager& tlv, const std::vector<const RouteInfo*>& routes, uint64_t bw, uint64_t delay, TLVType tlvVersion);
 };
 }
 

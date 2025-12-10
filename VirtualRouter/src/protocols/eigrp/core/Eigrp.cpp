@@ -79,7 +79,7 @@ void Eigrp::calculateRID()
         {
             if (interface->shutdownFlag.load(std::memory_order_relaxed)) return;
             auto& interfaceInfo = interface->configs;
-            tempIp = interfaceInfo.ipv4.getAddress();
+            tempIp = interfaceInfo.ipv4.getAddressInt();
             if (tempIp == 0) return;
             if (tempIp < highestIP) return;
             highestIP = tempIp;

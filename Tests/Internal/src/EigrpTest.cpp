@@ -1,5 +1,6 @@
 //TODO fix leak in MultiInterface_Massive_Concurrent_Updates and IPv6_HelloPacket_Construction
 
+//TODO duplicate TLVs, malformed TLVs, and unknown TLVs
 
 //TODO tests for wide resync and legacy teardown
 //TODO tests for peer termination
@@ -1180,7 +1181,7 @@ TEST_F(Internal_EigrpTest, External_Route_TLV_Format)
     route.routeType = Eigrp::RouteType::EXTERNAL;
     Eigrp::RouteInfo routeInfo = {route};
     TLV16BufferManager opts(testPacket, sizeof(testPacket));
-    size_t tlvValueSize = Eigrp::TLVBuilder::encodeRouteOption(testPacket, sizeof(testPacket), &routeInfo, mockInterface->configs.bandwidth, mockInterface->configs.delay, Eigrp::TLVBuilder::RouteType::LEGACY_EXTERNAL);
+    size_t tlvValueSize = Eigrp::TLVBuilder::encodeRouteOption(*eigrpInterface, testPacket, sizeof(testPacket), &routeInfo, mockInterface->configs.bandwidth, mockInterface->configs.delay, Eigrp::TLVBuilder::RouteType::LEGACY_EXTERNAL);
     ASSERT_GT(tlvValueSize, 0);
 }
 
@@ -1194,7 +1195,7 @@ TEST_F(Internal_EigrpTest, Internal_Route_TLV_Format)
     route.routeType = Eigrp::RouteType::EXTERNAL;
     Eigrp::RouteInfo routeInfo = {route};
     TLV16BufferManager opts(testPacket, sizeof(testPacket));
-    size_t tlvValueSize = Eigrp::TLVBuilder::encodeRouteOption(testPacket, sizeof(testPacket), &routeInfo, mockInterface->configs.bandwidth, mockInterface->configs.delay, Eigrp::TLVBuilder::RouteType::LEGACY_INTERNAL);
+    size_t tlvValueSize = Eigrp::TLVBuilder::encodeRouteOption(*eigrpInterface, testPacket, sizeof(testPacket), &routeInfo, mockInterface->configs.bandwidth, mockInterface->configs.delay, Eigrp::TLVBuilder::RouteType::LEGACY_INTERNAL);
     ASSERT_GT(tlvValueSize, 0);
 }
 
@@ -1286,7 +1287,7 @@ TEST_F(Internal_EigrpTest, Interface_Initialization_Starts_Hello_Timer)
 TEST_F(Internal_EigrpTest, IPv4_Config_Persistence) 
 {
     // Verify that the IPv4 address is correctly stored.
-    ASSERT_EQ(getIpInfo().ipv4.getAddress(), 0xc0a80101);
+    ASSERT_EQ(getIpInfo().ipv4.getAddressInt(), 0xc0a80101);
 }
 
 // Test: Connected_Route_Removal_On_Interface_Down
@@ -1677,7 +1678,7 @@ TEST_F(Internal_EigrpTest, RoutingTable_All_Connected_Routes_Count)
     network.ip = createIPv4(0xC0A80000);
     network.mask = 16;
     eigrpInstance->getGlobalConfigMgr().addNetworkRange(network);
-    auto route = vrf->routingTable.lookup<uint32_t>(mockInterface->configs.ipv4.getAddress());
+    auto route = vrf->routingTable.lookup<uint32_t>(mockInterface->configs.ipv4.getAddressInt());
     ASSERT_TRUE(route);
     EXPECT_EQ(route->nextHops[0].nextHop, 0);
 }

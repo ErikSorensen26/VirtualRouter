@@ -157,16 +157,6 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
     if (entry->successors.empty())
     {
         entry->bestFD = std::numeric_limits<uint64_t>::max();
-        if (entry->routesBySource.count(entry->bestNeighbor) == 0)
-        {
-            // Best neighbor is most recent neighbor
-            std::map<IPAddress, RouteInfo>::iterator bestIt = entry->routesBySource.end();
-            for (auto it = entry->routesBySource.begin(); it != entry->routesBySource.end(); it++)
-                if (bestIt == entry->routesBySource.end() || bestIt->second.lastUpdate < it->second.lastUpdate)
-                    bestIt = it;
-            if (bestIt != entry->routesBySource.end())
-                entry->bestNeighbor = bestIt->first;
-        }
         return false;
     }
 
@@ -223,8 +213,8 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
     for (auto& newRoute : newRoutes)
     {
         if (newRoute.hopCount >= maxHops || newRoute.reportedDistance > newRoute.feasibleDistance) continue;
-        newRoute.nextHop = neighbor.ipAddress;
         auto& entry = topologyTable.ensure(newRoute.prefix);
+        bool reversePoisen = entry.routesBySource.empty();
         topologyTable.addRouteUpdate(newRoute, &neighbor, entry);
 
         if (entry.state == TopologyEntry::State::ACTIVE)
@@ -232,7 +222,7 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
         else
             updates.push_back(&entry);
 
-        if (entry.routesBySource.size() >= 1 && entry.routesBySource.contains(neighbor.ipAddress))
+        if (reversePoisen)
             reversePoisens.push_back(&entry.routesBySource.at(neighbor.ipAddress));
     }
 

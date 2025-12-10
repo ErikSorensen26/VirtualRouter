@@ -6,16 +6,6 @@
 #include <Interface.h>
 #include <TxQueueOpts.hpp>
 
-static inline uint32_t ceilPow2(uint32_t v)
-{
-    if (v <= 1) return 1;
-    v--;
-    v |=  v >> 1; v |= v >> 2; v |= v >> 4; v |= v >> 8; v |= v >> 16;
-    return v + 1;
-}
-
-static inline void cpuRelax() { asm volatile("pause" ::: "memory"); }
-
 EgressBase::EgressBase(Interface& iface, const TxQueueOpts& o)
     : iface(iface), opts(o), qid(static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)), packetSize(iface.configs.globalMtu.load(std::memory_order_relaxed))
 {

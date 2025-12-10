@@ -17,7 +17,6 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			currentInterface->configs.eigrp.eigrpInterfaceConfigList.erase({as, af});
 		}
 	};
-
 	if (commandStream[0] == "exit")
 	{
 		terminal.exitMode(Mode::globalConfiguration);
@@ -783,9 +782,9 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 			}
 		}
 	}
-	else if (commandStream.size() >= 2 && commandStream[1] == "mtu")
+	else if (commandStream[0] == "shutdown")
 	{
-		
+		currentInterface->shutdown(!negate);
 	}
 	else return false;
 	return true;

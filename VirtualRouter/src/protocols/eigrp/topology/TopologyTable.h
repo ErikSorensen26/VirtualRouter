@@ -140,7 +140,7 @@ struct TopologyEntry
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
-    IPAddress bestNeighbor;
+    IPAddress bestNeighbor = {};
 
     std::map<uint32_t, SuppressionInfo> suppression;
     bool isSuppressed(uint32_t key) const

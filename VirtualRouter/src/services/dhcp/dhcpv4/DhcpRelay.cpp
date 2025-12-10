@@ -63,7 +63,7 @@ void Protocol::DhcpRelay::modifyGiaddr(PacketInfo& packet)
     }
 
     auto& dhcpHeader = std::get<DhcpHeader>(packet.Layer5[0]);
-    dhcpHeader.relayAgentIP = associatedInterface->configs.ipv4.getAddress();
+    dhcpHeader.relayAgentIP = associatedInterface->configs.ipv4.getAddressInt();
 }
 
 ByteString Protocol::DhcpRelay::extractAddress(PacketInfo& packet) const

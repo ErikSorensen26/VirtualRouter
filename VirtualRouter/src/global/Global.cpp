@@ -16,6 +16,9 @@ Global::Global(const StartupFiles& stfs, bool enableRouting, bool test)
     txMgr.setCpuPolicy(CpuPolicy::EqualShare);
     txMgr.setTxCoreBias(1.0);
 
+    rxMgr.setCorePool({4, 5, 6, 7});
+    rxMgr.setCpuPolicy(RxQueueManager::CpuPolicy::EqualShare);
+
     if (!test) {
         engine.initEngine(stfs);
     }

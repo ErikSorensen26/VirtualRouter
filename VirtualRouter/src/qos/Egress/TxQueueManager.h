@@ -42,6 +42,9 @@ public:
 
     void setTxCoreBias(double bias);
 
+    void start(Interface* iface);
+    void stop(Interface* iface);
+
     void addInterface(Interface& iface, const std::string& ifname, const TxIfacePolicy& policy);
     void removeInterface(Interface& iface);
     void updateInterfacePolicy(Interface& iface, const TxIfacePolicy& policy);

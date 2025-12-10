@@ -208,7 +208,6 @@ void RxQueueManager::startOne(IfState& st, RxQueueOpts qopts)
     qs.opts = qopts;
     qs.ingress = IngressFactory::create(st.iface, qs.opts);
     if (!qs.ingress) throw std::runtime_error("ingress factory returned null");
-    qs.ingress->start();
     st.queues.push_back(qs);
 }
 
@@ -239,4 +238,26 @@ void RxQueueManager::shutdown()
         kv.second.queues.clear();
     }
     ifs.clear();
+}
+
+void RxQueueManager::start(Interface* iface)
+{
+    std::lock_guard<std::mutex> lk(mu);
+    auto it = ifs.find(iface);
+    if (it == ifs.end()) return;
+    for (auto& q : it->second.queues)
+    {
+        q.ingress->start();
+    }
+}
+
+void RxQueueManager::stop(Interface* iface)
+{
+    std::lock_guard<std::mutex> lk(mu);
+    auto it = ifs.find(iface);
+    if (it == ifs.end()) return;
+    for (auto& q : it->second.queues)
+    {
+        q.ingress->stop();
+    }
 }

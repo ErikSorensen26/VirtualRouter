@@ -27,26 +27,23 @@ Interface::Interface(const InterfaceCreation& cfgs)
     debug(cfgs.debug),
     threadsRunning(false)
 {
-    // Set member variables
-    if (cfgs.vrf.global.engine.hwManager)
-        cfgs.vrf.global.engine.hwManager->registerInterface(&configs.hwInfo, this);
-    startThreads(); // TEMPORARY: will be shutdown by default once shits working
+    cfgs.vrf.global.txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    cfgs.vrf.global.rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    cfgs.vrf.global.engine.hwManager->registerInterface(&configs.hwInfo, this);
 }
 
 Interface::~Interface()
 {
     cleanupInterface();
-    stopThreads();
     VirtualRouter* vrf = getVRF();
-    if (vrf->global.engine.hwManager)
-        vrf->global.engine.hwManager->unregisterInterface(&configs.hwInfo, this);
+    vrf->global.txMgr.removeInterface(*this);
+    vrf->global.rxMgr.removeInterface(*this);
+    vrf->global.engine.hwManager->registerInterface(&configs.hwInfo, this);
 }
 
 void Interface::cleanupInterface()
 {
-    shutdownFlag.store(true, std::memory_order_release);
-    stateChange(StateChange::SHUTDOWN);
-    stateChangeV6(StateChange::SHUTDOWN);
+    shutdown(true);
     VirtualRouter* vrf = getVRF();
     if (auto dhcpv6Server = vrf->global.dhcpv6Server)
     {
@@ -194,17 +191,18 @@ void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
 
 void Interface::shutdown(bool shut) 
 {
-    if (shutdownFlag.load(std::memory_order_relaxed) == shut ||
-        !carrierFlag.load(std::memory_order_relaxed))
+    if (shutdownFlag.load(std::memory_order_relaxed) == shut)
         return;
     shutdownFlag.store(shut, std::memory_order_release);
     if (shut) 
     {
         stateChange(StateChange::SHUTDOWN);
         stateChangeV6(StateChange::SHUTDOWN);
+        stopThreads();
     }
     else if (!shut) 
     {
+        startThreads();
         stateChange(StateChange::INITIATE);
         stateChangeV6(StateChange::INITIATE);
     }
@@ -242,20 +240,21 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
 
 void Interface::processIngress(uint8_t* packet, size_t size) 
 {
-    getVRF()->global.threadPool.enqueue([this, packet, size]() {
-        PacketInfo packetInfo;
-        inspect(packetInfo, packet, size);
-        decapsulate(packetInfo, packet, size);
-        processPacket(packet, size, packetInfo, routingInstance, this);
-    });
+    PacketInfo packetInfo;
+    inspect(packetInfo, packet, size);
+    decapsulate(packetInfo, packet, size);
+    processPacket(packet, size, packetInfo, routingInstance, this);
 }
 
 void Interface::startThreads() 
 {
     // Add the interface to the TX Queue manager
     VirtualRouter* vrf = getVRF();
-    vrf->global.txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-    vrf->global.rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    vrf->global.txMgr.start(this);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    vrf->global.rxMgr.start(this);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    vrf->global.engine.hwManager->bringUp(configs.hwInfo.ifname);
 
     // Initialize shared pointers for Protocol objects
     if (!arp)
@@ -284,13 +283,9 @@ void Interface::stopThreads()
         
     // Add the interface to the TX Queue manager
     VirtualRouter* vrf = getVRF();
-    vrf->global.txMgr.removeInterface(*this);
-    vrf->global.rxMgr.removeInterface(*this);
-
+    vrf->global.txMgr.stop(this);
+    vrf->global.rxMgr.stop(this);
     threadsRunning.store(false, std::memory_order_release); 
-
-    //ingress->stop();
-    //TODO
 }
 
 void Interface::stateChange(StateChange state)

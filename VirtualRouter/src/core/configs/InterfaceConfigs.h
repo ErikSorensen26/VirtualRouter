@@ -85,7 +85,8 @@ public:
         std::atomic<bool> mtuLocal{false};
 
         uint8_t* getAddress(uint8_t* out) const;
-        uint32_t getAddress() const;
+        IPAddress getAddress() const;
+        uint32_t getAddressInt() const;
 
         void setAddress(uint32_t newAddress, uint8_t newMask);
 

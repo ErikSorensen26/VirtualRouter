@@ -2,6 +2,7 @@
 
 #include "Egress.h"
 #include "EgressPacket.h"
+#include "EgressSend.h"
 #include <iostream>
 #include <exception>
 
@@ -19,5 +20,6 @@ EgressBase* EgressFactory::create(Interface* iface, const TxQueueOpts& opts)
             << " (" << e.what() << "). Falling back to PACKET.\n";
     }*/
 
-    return new EgressPacket(*iface, opts);
+    return new EgressSend(*iface, opts);
+    //return new EgressPacket(*iface, opts);
 }

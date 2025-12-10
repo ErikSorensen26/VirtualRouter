@@ -87,6 +87,10 @@ inline __uint128_t ntohdll(__uint128_t val) {
         std::memcpy(buffer + fixedSize, data, len);                                                 \
         trailing = std::span<uint8_t>(buffer + fixedSize, len);                                     \
     }                                                                                               \
+    void setTrailSize(size_t len)                                                                   \
+    {                                                                                               \
+        trailing = std::span(buffer + fixedSize, len);                                              \
+    }                                                                                               \
                                                                                                     \
     size_t size() const { return trailing.size() + fixedSize; }
 

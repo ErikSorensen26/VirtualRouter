@@ -31,13 +31,16 @@ public:
     void setCorePool(std::vector<int> cpuIds);
     void setCpuPolicy(CpuPolicy p);
 
+    void start(Interface* iface);
+    void stop(Interface* iface);
+
     void addInterface(Interface& iface, const std::string& ifname, const IfacePolicy& policy);
     void removeInterface(Interface& iface);
     void updateInterfacePolicy(Interface& iface, const IfacePolicy& policy);
 
     void shutdown();
 
-//private:
+private:
     struct QueueState
     {
         RxQueueOpts opts;

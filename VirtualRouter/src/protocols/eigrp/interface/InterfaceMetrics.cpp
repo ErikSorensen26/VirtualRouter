@@ -17,11 +17,18 @@ void InterfaceMetrics::addRouteMetrics(std::vector<ReceivedRoute>& routes)
     uint64_t local = getLocalMetric();
     for (auto& route : routes)
     {
-        route.reportedDistance = calculateCompositeMetric(route.load, route.reliability, route.delay, route.bandwidth);
-        if (local != 0)
-            route.feasibleDistance = route.reportedDistance + local;
+        if (route.delay == std::numeric_limits<uint64_t>::max())
+        {
+            route.feasibleDistance = route.reportedDistance = std::numeric_limits<uint64_t>::max();
+        }
         else
-            route.feasibleDistance = route.reportedDistance + getLocalMetric();
+        {
+            route.reportedDistance = calculateCompositeMetric(route.load, route.reliability, route.delay, route.bandwidth);
+            if (local != 0)
+                route.feasibleDistance = route.reportedDistance + local;
+            else
+                route.feasibleDistance = route.reportedDistance + getLocalMetric();
+        }
     }
 }
 

@@ -69,7 +69,10 @@ HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& f
             };
 
             if (addInterface(nic.c_str()))
+            {
+                //bringDown(nic.c_str());
                 continue;
+            }
 
             if (allowDummies && createDummy(nic.c_str()))
             {
@@ -273,7 +276,6 @@ bool HardwareManager::bringDown(const std::string& ifname)
 
 void HardwareManager::registerInterface(const HwIfaceInfo* info, Interface* iface)
 {
-    bringUp(info->ifname);
     registeredInterfaces[info->index].push_back(iface);
 }
 

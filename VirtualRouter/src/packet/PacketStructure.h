@@ -695,6 +695,7 @@ struct HeaderEntry
 {
     HeaderType type;
     size_t offset;
+    size_t size;
 };
 
 struct PacketInfo

@@ -1287,8 +1287,8 @@ namespace Protocol
                 
                 auto& iface = currentInterface->configs;
                 uint8_t localAddr[16];
-
-                sendRouteAdvertisement(Variable::Mac::broadcast, iface.ipv6.getLocalAddress(localAddr));
+                if (iface.ipv6.getLocalAddress(localAddr))
+                    sendRouteAdvertisement(Variable::Mac::broadcast, localAddr);
 
                 // Reschedule next RA
                 raTimerIds.erase(*raTimerId);

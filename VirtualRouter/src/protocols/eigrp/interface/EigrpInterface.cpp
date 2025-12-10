@@ -25,7 +25,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     // Set local ip
     if (base.getAF() == AddressFamily::IPv4)
     {
-        ifaceAddress.v4 = interface.configs.ipv4.getAddress();
+        ifaceAddress.v4 = interface.configs.ipv4.getAddressInt();
     }
     else
     {

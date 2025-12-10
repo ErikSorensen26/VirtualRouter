@@ -233,7 +233,6 @@ void TxQueueManager::startOne(IfState& st, TxQueueOpts qopts)
     if (!qs->queue) { delete qs->egress; delete qs; throw std::runtime_error("queue factory returned null"); }
 
     st.queues[idx] = qs;
-    qs->queue->start();
     ++st.queueAmount;
 
     if (st.iface && st.iface->tx)
@@ -289,4 +288,26 @@ void TxQueueManager::shutdown()
         kv.second.queueAmount = 0;
     }
     ifs.clear();
+}
+
+void TxQueueManager::start(Interface* iface)
+{
+    std::lock_guard<std::mutex> lk(mu);
+    auto it = ifs.find(iface);
+    if (it == ifs.end()) return;
+    for (int i = 0; i < it->second.queueAmount; ++i)
+    {
+        it->second.queues[i]->queue->start();
+    }
+}
+
+void TxQueueManager::stop(Interface* iface)
+{
+    std::lock_guard<std::mutex> lk(mu);
+    auto it = ifs.find(iface);
+    if (it == ifs.end()) return;
+    for (int i = 0; i < it->second.queueAmount; ++i)
+    {
+        it->second.queues[i]->queue->stop();
+    }
 }

@@ -110,7 +110,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
     };
 
     // Safely access or create the neighbor
-    if (!info.neighbor && !unicast)
+    if (!info.neighbor)
     {
         Neighbor::Version nver = calcVersion();
         info.neighbor = ntable->createNeighbor(info.neighborIp, nver);
@@ -125,6 +125,8 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
     {
         Neighbor::Version nver = calcVersion();
         info.neighbor->version = nver;
+        if (info.neighbor->getState() == Neighbor::State::DOWN)
+            info.neighbor->setState(Neighbor::State::PENDING);
     }
     else if (!info.neighbor && unicast) return;
 
@@ -302,6 +304,7 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     {
         std::vector<ReceivedRoute> routeBuffer;
         routeBuffer.reserve(routeOpts.size());
+        bool nextHopSelf = iface.configs->nextHopSelf.load(std::memory_order_relaxed);
         for (const auto& opt : routeOpts)
         {
             if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)

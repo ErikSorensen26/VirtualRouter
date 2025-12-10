@@ -87,7 +87,7 @@ public:
     VirtualRouter* getVRF();
     bool setVRF(VirtualRouter* vrf);
 
-    std::atomic<bool> shutdownFlag = false; ///< Flag indicating if the interface is in shutdown state.
+    std::atomic<bool> shutdownFlag = true; ///< Flag indicating if the interface is in shutdown state.
     std::atomic<bool> carrierFlag = true; ///< Flag indicating if carrier is enabled.
 
     // Member Variables
@@ -108,11 +108,12 @@ public:
     virtual void startThreads();
     TxDistributor* tx;      ///< Egress object for packet sending.
 
+    void processIngress(uint8_t* packet, size_t size); // Method for processing packets
+
 private:
 
     std::atomic<VirtualRouter*> routingInstance = nullptr;
 
-    void processIngress(uint8_t* packet, size_t size); // Method for processing packets
     void stateChange(StateChange state);
     void stateChangeV6(StateChange state);
 

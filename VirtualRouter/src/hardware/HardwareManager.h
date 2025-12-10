@@ -38,12 +38,12 @@ public:
     const std::map<InterfaceType, std::vector<uint32_t>>& getPhysicalInterfaces() { return physicalInterfaces; }
     const std::vector<uint32_t>& getPhysicalInterfaces(InterfaceType type) { return physicalInterfaces[type]; }
 
-private:
     std::optional<HwIfaceInfo> extractHwInfo(int sock, struct ifreq& ifr);
 
     bool bringUp(const std::string& ifname);
     bool bringDown(const std::string& ifname);
 
+private:
     void netlinkMonitorThread();
     void onLinkEvent(uint32_t index, bool carrierUp);
 

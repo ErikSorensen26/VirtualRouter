@@ -6,6 +6,7 @@
 #include <likely.hpp>
 #include <chrono>
 #include <RCU.hpp>
+#include <Interface.h>
 
 thread_local std::array<uint32_t, 64> localBatch;
 thread_local size_t batchCount = 0;
@@ -138,7 +139,7 @@ void IngressBase::runLoop()
         uint32_t budget = 256;
         while (budget-- && pollFrame(frame))
         {
-            totalSeen++;
+            iface.processIngress(frame.payload, frame.length);
             releaseFrame(frame.index);
             ++drained;
         }
