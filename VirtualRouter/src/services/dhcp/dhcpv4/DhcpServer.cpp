@@ -1,5 +1,6 @@
 #include <DhcpServer.h>
 #include <IPPacket.h>
+#include <Udp.h>
 #include <PacketBuilder.hpp>
 #include <Interface.h>
 #include <InterfaceConfigs.h>
@@ -199,7 +200,7 @@ void Protocol::DhcpServer::sendOffer(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -306,7 +307,7 @@ void Protocol::DhcpServer::sendOffer(
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpServer,
@@ -330,7 +331,7 @@ void Protocol::DhcpServer::sendAck(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -448,7 +449,7 @@ void Protocol::DhcpServer::sendAck(
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpServer,
@@ -467,7 +468,7 @@ void Protocol::DhcpServer::sendNak(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -531,7 +532,7 @@ void Protocol::DhcpServer::sendNak(
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpServer,
@@ -553,7 +554,7 @@ void Protocol::DhcpServer::sendInformReply(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -639,7 +640,7 @@ void Protocol::DhcpServer::sendInformReply(
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpServer,
@@ -658,7 +659,7 @@ void Protocol::DhcpServer::sendForceRenew(
 )
 {
     PacketBuilder builder(&iface);
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
@@ -720,7 +721,7 @@ void Protocol::DhcpServer::sendForceRenew(
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpServer,
@@ -744,7 +745,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
 {
     PacketBuilder builder(&iface);
     
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -829,7 +830,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpServer,

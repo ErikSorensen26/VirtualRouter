@@ -1,6 +1,7 @@
 #include <DhcpClient.h>
 #include <Interface.h>
 #include <IPPacket.h>
+#include <Udp.h>
 #include <PacketBuilder.hpp>
 #include <Interface.h>
 #include <InterfaceConfigs.h>
@@ -85,7 +86,7 @@ void Protocol::DhcpClient::handleDhcpPacket(const DhcpHeader& dhcp)
 bool Protocol::DhcpClient::buildDhcpDiscover(PacketBuilder& builder, const uint8_t* mac, const std::string& hostname)
 {
     // Reserve space (DHCP fixed header + rough TLV estimate)
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -157,7 +158,7 @@ bool Protocol::DhcpClient::buildDhcpRequest(PacketBuilder& builder, uint32_t tra
                                             uint32_t requestedIP, uint32_t serverID)
 {
     // Reserve space (DHCP fixed header + rough TLV estimate)
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -245,7 +246,7 @@ bool Protocol::DhcpClient::buildDhcpRequest(PacketBuilder& builder, uint32_t tra
 
 bool Protocol::DhcpClient::buildDhcpRelease(PacketBuilder& builder)
 {
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -306,7 +307,7 @@ bool Protocol::DhcpClient::buildDhcpRelease(PacketBuilder& builder)
 
 bool Protocol::DhcpClient::buildDhcpInform(PacketBuilder& builder, const std::string& hostname, const uint8_t* mac)
 {
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
@@ -386,7 +387,7 @@ void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, const u
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpClient,
@@ -424,7 +425,7 @@ void Protocol::DhcpClient::sendDhcpRequest(uint32_t transID, const std::string& 
             .protocolType = Variable::IP::udp
         };
 
-        UDPPacket::buildUdp(
+        UDP::buildUdp(
             AddressFamily::IPv4,
             ipBuild,
             Variable::Udp::dhcpClient,
@@ -465,7 +466,7 @@ void Protocol::DhcpClient::sendDhcpRelease()
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpClient,
@@ -754,7 +755,7 @@ void Protocol::DhcpClient::cancelLeaseTimers()
 void Protocol::DhcpClient::sendRenew()
 {
     PacketBuilder builder(currentInterface);
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
     auto* next = builder.nextBuildHeader();
     if (!next) return;
@@ -815,7 +816,7 @@ void Protocol::DhcpClient::sendRenew()
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpClient,
@@ -826,7 +827,7 @@ void Protocol::DhcpClient::sendRenew()
 void Protocol::DhcpClient::sendRebind()
 {
     PacketBuilder builder(currentInterface);
-    UDPPacket::reserveUDP(builder, AddressFamily::IPv4);
+    UDP::reserveUDP(builder, AddressFamily::IPv4);
     builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
     auto* next = builder.nextBuildHeader();
     if (!next) return;
@@ -888,7 +889,7 @@ void Protocol::DhcpClient::sendRebind()
         .protocolType = Variable::IP::udp
     };
 
-    UDPPacket::buildUdp(
+    UDP::buildUdp(
         AddressFamily::IPv4,
         ipBuild,
         Variable::Udp::dhcpClient,

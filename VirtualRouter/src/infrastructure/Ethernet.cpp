@@ -6,30 +6,30 @@
 #include <Ndp.h>
 #include <HeaderHelpers.hpp>
 
-namespace Protocol
+namespace Protocol::Ethernet
 {
-    bool Ethernet::build(Interface* iface, PacketBuilder& packetInfo, const uint8_t* destIp, const uint8_t* destMac, uint16_t type)
-    {
-        // Create Header
-        EthernetHeader ethernetHeader;
+bool build(Interface* iface, PacketBuilder& packetInfo, const uint8_t* destIp, const uint8_t* destMac, uint16_t type)
+{
+    // Create Header
+    EthernetHeader ethernetHeader;
 
-        auto* nextHeader = packetInfo.nextBuildHeader();
-        if (!nextHeader) return false;
+    auto* nextHeader = packetInfo.nextBuildHeader();
+    if (!nextHeader) return false;
 
-        ethernetHeader.setBuffer(nextHeader->buffer);
+    ethernetHeader.setBuffer(nextHeader->buffer);
 
-        // Set type and destination
-        ethernetHeader.setType(type);
-        iface->configs.getMac(ethernetHeader.raw->sourceMac);
-        ethernetHeader.setDestinationMac(destMac);
-        
-        iface->enqueuePacket(packetInfo);
-
-        return true;
-    }
+    // Set type and destination
+    ethernetHeader.setType(type);
+    iface->configs.getMac(ethernetHeader.raw->sourceMac);
+    ethernetHeader.setDestinationMac(destMac);
     
-    bool Ethernet::reserve(PacketBuilder& packetInfo)
-    {
-        return (packetInfo.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize));
-    }
+    iface->enqueuePacket(packetInfo);
+
+    return true;
 }
+
+bool reserve(PacketBuilder& packetInfo)
+{
+    return (packetInfo.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize));
+}
+} // Namespace Protocol::Ethernet

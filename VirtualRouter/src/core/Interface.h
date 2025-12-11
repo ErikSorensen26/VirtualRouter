@@ -39,7 +39,6 @@ namespace Eigrp
 
 namespace Protocol 
 {
-    class Ethernet;                 ///< Forward declaration of Ethernet protocol class.
     class DhcpClient;               ///< Forward declaration of DhcpClient protocol class.``
     class Dhcpv6Client;             ///< Forward declaration of Dhcpv6Client protocol class.``
     class Arp;                      ///< Forward declaration of Arp protocol class.
