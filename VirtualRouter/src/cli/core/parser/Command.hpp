@@ -115,8 +115,7 @@ struct Command
         if (!ok)
             return false;
 
-        Handler(ctx, args);
-        return true;
+        return Handler(ctx, args);
     }
 
     static bool tryExecute(Context& ctx, const std::vector<std::string>& tokens)

@@ -24,6 +24,7 @@ public:
     MOCK_METHOD(void, print, (const std::string& str, Color color), (override));
     MOCK_METHOD(CursorPosition, getCursorPosition, (), (override));
     MOCK_METHOD(void, beep, (), (override)); // Remove or comment out if not used
+    MOCK_METHOD(void, flush, (), (override));
 
     size_t getTerminalWidth() override
     {
@@ -84,6 +85,7 @@ public:
     void moveCursorDown(size_t count) override {}
     CursorPosition getCursorPosition() override {return CursorPosition{};}
     void beep() override {}
+    void flush() override {}
 
     size_t getTerminalWidth() override
     {

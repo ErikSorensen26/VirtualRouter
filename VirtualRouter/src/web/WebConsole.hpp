@@ -32,6 +32,7 @@ public:
     void moveCursorDown(size_t count) override {}
     size_t getTerminalWidth() override { return std::numeric_limits<size_t>::max(); }
     void beep() override {}
+    void flush() override {}
     CursorPosition getCursorPosition() override { return CursorPosition{}; }
 
     bool getPrompt(std::string& p)

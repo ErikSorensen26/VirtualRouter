@@ -1,19 +1,9 @@
 #include <CliEngine.h>
 #include <CommandProcessor.h>
 
-#include <UserExecCommands.hpp>
-#include <PriviledgedExecCommands.hpp>
-
-bool CliSession::preProcessCommand(std::string& command)
-{
-	command = normalizeCommand(command);
-	if (command.empty()) return false;
-	if (isGlobalCommandExecution) return false;
-	if (isHelpModeActive && isRunning) return false;
-	if (!isRunning || isCommandInvalid || !isCommandValid) return false;
-
-	return true;
-}
+#include <UserExecCommands.h>
+#include <PrivilegedExecCommands.h>
+#include <GlobalCommands.h>
 
 std::vector<std::string> CliSession::compileCommandStream(const std::string& command)
 {
@@ -24,7 +14,7 @@ std::vector<std::string> CliSession::compileCommandStream(const std::string& com
 
 	for (size_t i = 0; i < rawTokens.size(); i++)
 	{
-		if (commandProcessor->negate && i == 0)
+		if (modeConfig.modeConfig && modeConfig.modeConfig->negate && i == 0)
 			continue;
 
 		if (!textLine)
@@ -45,17 +35,22 @@ bool CliSession::executeModeParser(const std::vector<std::string>& tokens)
 	{
 		case CliMode::UserExec:
 		{
-			Cli::UserExecContext ctx = {*this};
-			return Cli::UserExecCommands::execute(ctx, tokens);
+			if (auto* ctx = dynamic_cast<Cli::UserExecContext*>(modeConfig.modeConfig))
+				return Cli::UserExecCommands::execute(*ctx, tokens);
 			break;
 		}
 		case CliMode::PrivilegedExec:
 		{
-			Cli::PrivilegedExecContext ctx = {*this};
-			return Cli::PrivilegedExecCommands::execute(ctx, tokens);
+			if (auto* ctx = dynamic_cast<Cli::PrivilegedExecContext*>(modeConfig.modeConfig))
+				return Cli::PrivilegedExecCommands::execute(*ctx, tokens);
 			break;
 		}
 		case CliMode::GlobalConfiguration:
+		{
+			if (auto* ctx = dynamic_cast<Cli::GlobalContext*>(modeConfig.modeConfig))
+				return Cli::GlobalCommands::execute(*ctx, tokens);
+			break;
+		}
 		case CliMode::Interface:
 		case CliMode::Routing:
 		case CliMode::RoutingV6:
@@ -93,7 +88,7 @@ bool CliSession::processConfigPersistence(const std::vector<std::string>& tokens
 	if (isExitCommand)
 		commandHistory = tokens;
 
-	bool ok = commandProcessor->negate
+	bool ok = modeConfig.modeConfig->negate
 		? engine.deleteConfig(modeConfig, commandHistory, tokens, isList)
 		: engine.saveCommand(commandHistory, tokens, modeConfig, isModeChanged, isExitCommand, isList);
 
@@ -115,14 +110,16 @@ bool CliSession::executeCommand(std::string &command)
 
 	CliMode preMode = modeConfig.currentMode;
 
-	if (!preProcessCommand(command))
-		return false;
+	command = normalizeCommand(command);
+	if (command.empty()) return false;
+	if (isGlobalCommandExecution) return true;
+	if (isHelpModeActive && isRunning) return true;
+	if (!isRunning || isCommandInvalid || !isCommandValid) return false;
 
 	auto tokens = compileCommandStream(command);
 	if (tokens.empty()) return false;
 
-	if (!executeModeParser(tokens))
-		return false;
+	isCommandExecutionSuccessful = executeModeParser(tokens);
 
 	if (tokens.size() >= 2 && tokens[0] == "ip" && tokens[1] == "route")
 	{

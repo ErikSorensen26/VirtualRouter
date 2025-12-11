@@ -83,6 +83,9 @@ public:
     // Prints a string to the terminal
     virtual void print(const std::string& str, Color color = Color::NONE) = 0;
 
+    // Flushes cout if able to
+    virtual void flush() = 0;
+
     // Gets the current cursor position
     virtual CursorPosition getCursorPosition() = 0;
 
@@ -189,6 +192,11 @@ public:
             default:
                 std::cout << str;
         }
+    }
+
+    void flush() override
+    {
+        std::cout.flush();
     }
 
     CursorPosition getCursorPosition() override 
@@ -355,6 +363,8 @@ public:
      * @note This returns a reference, be carefull.
      */
     size_t& getInitialLineLength() { return initialLineLength; }
+
+    std::vector<std::string> getHistory() { return history; }
 
     // Member variables for line wrapping and display.
     IConsole* iConsole;  ///< Terminal deciding whether its using a simulated terminal.

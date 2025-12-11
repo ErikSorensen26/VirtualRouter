@@ -4,6 +4,9 @@
 #include <regex>
 #include <Global.h>
 #include "Mode.hpp"
+#include "UserExecContext.hpp"
+#include "PrivilegedExecContext.hpp"
+#include "GlobalContext.hpp"
 
 // TODO Add new "subcommand_sequence" property, it should allow a recursive chain of commands
 // TODO add new "single_use" property that goes with subcommand_sequence
@@ -17,13 +20,13 @@ CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), engine(
     isDebugModeEnabled = enableDebug;
 
     // Set initial mode
+    Cli::ContextBase base(*this);
+    changeModeConfig(new Cli::UserExecContext(base));
     changeMode(engine.defaultMode, true);
     initializeProcessingState();
 
     // Initialize Console
     initConsole();
-    commandProcessor = new CommandProcessor(*this);
-    commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
     iConsole->print("Initializing Terminal...\r\n");
 }
 
@@ -37,21 +40,22 @@ CliSession::CliSession(CliEngine& engine, IConsole* term) : Console(term), engin
     modeConfig.modeHistory.push_back(modeConfig.configNode);
 
     // Set initial mode
+    Cli::ContextBase base(*this);
+    changeModeConfig(new Cli::UserExecContext(base));
     changeMode(engine.defaultMode, true);
     initializeProcessingState();
 
     // Initialize Console
     initConsole();
-    commandProcessor = new CommandProcessor(*this);
-    commandProcessor->currentVrf = engine.global.getRoutingInstance("default");
     iConsole->print("Initializing Terminal...\r\n");
 }
 
 CliSession::~CliSession()
 {
-    if (commandProcessor)
+    if (modeConfig.modeConfig)
     {
-        delete commandProcessor;
+        delete modeConfig.modeConfig;
+        modeConfig.modeConfig = nullptr;
     }
 }
 
@@ -101,6 +105,7 @@ bool CliSession::handleInput(std::string test)
             iConsole->print("\r\n");
             return false;
         }
+        changeModeConfig(new Cli::PrivilegedExecContext(*modeConfig.modeConfig));
     }
 
     initializeProcessingState();
@@ -148,8 +153,8 @@ void CliSession::initializeProcessingState()
     isCommandValid           = false;
     isCommandInvalid         = false;
     
-    if (commandProcessor)
-        commandProcessor->negate = false;
+    if (modeConfig.modeConfig)
+        modeConfig.modeConfig->negate = false;
 }
 
 bool CliSession::detectHelpTriggers(const std::vector<std::string>& parsedWords)
@@ -192,15 +197,19 @@ std::string CliSession::executeDoCommand(std::string remainingCommand)
     // Save current state
     std::string previousPrompt = currentPrompt;
     CliMode previousMode = modeConfig.currentMode;
+    Cli::ContextBase* previousModeConf = modeConfig.modeConfig;
     const json* previousCommandTree = &(*workingDirectory);
     nlohmann::ordered_json* prevModeSchema = &(*modeConfig.modeSchema);
     nlohmann::ordered_json* previousConfigNode = &(*modeConfig.configNode);
 
     // Switch to privileged mode and execute
+    changeModeConfig(new Cli::PrivilegedExecContext(*modeConfig.modeConfig), true);
     changeMode(CliMode::PrivilegedExec, true);
     isGlobalCommandExecution = executeCommand(remainingCommand);
 
     // Restore old mode / working directory
+
+    changeModeConfig(previousModeConf);
     changeMode(previousMode, true);
     currentPrompt         = previousPrompt;
     modeConfig.configNode = &(*previousConfigNode);
@@ -378,13 +387,19 @@ bool CliSession::attemptGlobalCommand(const std::string& inputCommand)
     {
         attemptingGlobalCommand = true;
         // Backup
-        std::string prevPrompt      = currentPrompt;
-        CliMode     preMode         = modeConfig.currentMode;
-        auto        prevDirectory   = workingDirectory;
-        auto        prevModeSchema  = modeConfig.modeSchema;
-        auto        preConfig      = modeConfig.configNode;
+        Cli::ContextBase* prevModeConfigs = modeConfig.modeConfig;
+        std::string       prevPrompt      = currentPrompt;
+        CliMode           preMode         = modeConfig.currentMode;
+        auto              prevDirectory   = workingDirectory;
+        auto              prevModeSchema  = modeConfig.modeSchema;
+        auto              preConfig      = modeConfig.configNode;
 
         // Attempt global execution
+        changeModeConfig(new Cli::GlobalContext(
+            *modeConfig.modeConfig,
+            engine.global,
+            *engine.global.getRoutingInstance("default")
+        ), true);
         changeMode(CliMode::GlobalConfiguration, true);
         historyToGlobal();
         std::string inputCommandCopy = inputCommand;
@@ -402,6 +417,7 @@ bool CliSession::attemptGlobalCommand(const std::string& inputCommand)
             else
             {
                 // Restore
+                changeModeConfig(prevModeConfigs);
                 changeMode(preMode, true);
                 currentPrompt         = prevPrompt;
                 modeConfig.configNode = preConfig;
@@ -606,9 +622,9 @@ std::string CliSession::normalizeCommand(const std::string& inputCommand)
     isHelpModeActive = detectHelpTriggers(parsedWords);
 
     // Handle negateCommand
-    if (isNoCommand(parsedWords))
+    if (isNoCommand(parsedWords) && modeConfig.modeConfig)
     {
-        commandProcessor->negate = true;
+        modeConfig.modeConfig->negate = true;
     }
 
     // Handle "do" command
@@ -642,7 +658,7 @@ std::string CliSession::normalizeCommand(const std::string& inputCommand)
             processNonLineBasedWord(word, previousCommandList, formattedOldCommand, fullyFormattedCommand, volatileCommand, inputCommand, isFirstIteration);
         }
         
-        if (word == "no" && commandProcessor->negate)
+        if (word == "no" && modeConfig.modeConfig && modeConfig.modeConfig->negate)
         {
             currentDirectory = workingDirectory;
         }
@@ -737,7 +753,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     bool addCarriage = false;
 
     // Handle negate property
-    if (commandProcessor->negate && previousCommand)
+    if (modeConfig.modeConfig && modeConfig.modeConfig->negate && previousCommand)
     {
         for (const auto& prop : previousCommand->properties)
         {
@@ -830,9 +846,12 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                 bool hide = false;
                 for (const auto& prop : (*command)[COMMAND_PROPERTIES])
                 {
-                    if (commandProcessor->negate && prop.get<std::string>() == "negate_hide")
+                    if (!modeConfig.modeConfig)
+                        continue;
+
+                    if (modeConfig.modeConfig->negate && prop.get<std::string>() == "negate_hide")
                         hide = true;
-                    else if (!commandProcessor->negate && prop.get<std::string>() == "negate_show")
+                    else if (!modeConfig.modeConfig->negate && prop.get<std::string>() == "negate_show")
                         hide = true;
                 }
                 if (hide) continue;
@@ -924,7 +943,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     {
         error = true;
     } 
-    else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(commandProcessor->negate && userInput == "no"))
+    else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(modeConfig.modeConfig && modeConfig.modeConfig->negate && userInput == "no"))
     {
         endCommandString = Functions::lowerCase((*commandNode)[COMMAND_NAME]);
         endOfCommand = true;
@@ -1301,6 +1320,7 @@ bool CliSession::handlePagination(char nextch)
         paginationList.erase(paginationList.begin(), paginationList.begin() + engine.paginationCount);
         paginationList.shrink_to_fit();
         iConsole->print("\r\n  --More--");
+        iConsole->flush();
     }
     else
     {
@@ -1354,6 +1374,13 @@ bool CliSession::changeMode(CliMode newMode, bool processing)
         modeConfig.modeHistory.push_back(&engine.root);
     }
     return true;
+}
+
+void CliSession::changeModeConfig(Cli::ContextBase* ctx, bool noDel)
+{
+    if (modeConfig.modeConfig && !noDel)
+        delete modeConfig.modeConfig;
+    modeConfig.modeConfig = ctx;
 }
 
 void CliSession::configureInterfaceMode(std::string& type) 

@@ -6,6 +6,8 @@
 #include <string_view>
 #include <array>
 #include <optional>
+#include <json.hpp>
+#include <ContextBase.hpp>
 
 class CliSession;
 
@@ -70,7 +72,7 @@ inline std::optional<CliMode> findMode(std::string_view s)
 struct ModeConfig
 {
     CliMode currentMode;            ///< Indicates the current operational mode.
-    void* modeConfig = nullptr;
+    Cli::ContextBase* modeConfig = nullptr;
     nlohmann::ordered_json* configNode = nullptr;       ///< Pointer to the current configuration node.
     std::vector<nlohmann::ordered_json*> modeHistory;   ///< History of configuration nodes for mode management
     nlohmann::ordered_json* modeSchema = nullptr;       ///< Pointer to the current mode's schema

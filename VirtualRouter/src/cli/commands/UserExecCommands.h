@@ -3,36 +3,24 @@
 #ifndef USER_EXEC_COMMANDS_HPP
 #define USER_EXEC_COMMANDS_HPP
 
-#include <CliSession.h>
 #include <CliModeParser.hpp>
+#include <UserExecContext.hpp>
 
 #define USER_EXEC_PARAMS UserExecContext& ctx, const std::vector<std::string>& args
 
 namespace Cli
 {
-struct UserExecContext
-{
-    CliSession& terminal;
-};
-
+bool UserExec_Enable_Handler(USER_EXEC_PARAMS);
 using UserExec_Enable = commandAdder<UserExecContext,
-    [](USER_EXEC_PARAMS) {
-        UNUSED(args);
-        ctx.terminal.changeMode(CliMode::PrivilegedExec);
-    },
+    UserExec_Enable_Handler,
     "enable"_tok
 >;
 
+bool UserExec_Exit_Handler(USER_EXEC_PARAMS);
 using UserExec_Exit = commandAdder<UserExecContext,
-    [](USER_EXEC_PARAMS) {
-        UNUSED(ctx);
-        UNUSED(args);
-        exit(1);
-    },
+    UserExec_Exit_Handler,
     "exit"_tok
 >;
-
-#undef USER_EXEC_PARAMS
 
 using UserExecCommands = CliModeParser<UserExecContext,
     UserExec_Enable,

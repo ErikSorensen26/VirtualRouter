@@ -6,6 +6,7 @@
 #include <InterfaceType.hpp>
 #include <HardwareManager.h>
 #include <sys/resource.h>
+#include <GlobalContext.hpp>
 
 CliMode CliEngine::defaultMode = CliMode::UserExec;
 
@@ -142,6 +143,7 @@ void CliEngine::recoverState()
 	CliSession recoverSession(*this);
 
     // Set initial mode for command recovery
+    recoverSession.changeModeConfig(new Cli::GlobalContext(*recoverSession.modeConfig.modeConfig, global, *global.getRoutingInstance("default")));
     recoverSession.changeMode(CliMode::GlobalConfiguration, true);
 
     // Execute each saved command to restore the terminal's state

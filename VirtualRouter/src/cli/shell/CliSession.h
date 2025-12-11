@@ -101,6 +101,7 @@ public:
      * @param processing A boolean flag indicating whether the mode change is part of command processing. Defaults to false.
      */
     bool changeMode(CliMode newMode, bool processing = false);
+    void changeModeConfig(Cli::ContextBase* ctx, bool noDel = false);
 
     /**
      * @brief Exits the current mode and switches to a new mode.
@@ -109,7 +110,7 @@ public:
      *
      * @param newMode The mode to switch to upon exiting the current mode.
      */
-    inline void exitMode(CliMode& newMode) { isExitCommand = true; changeMode(newMode);}
+    inline void exitMode(CliMode newMode) { isExitCommand = true; changeMode(newMode);}
 
     /**
      * @brief Configures the terminal's interface mode based on the specified type.
@@ -141,6 +142,14 @@ public:
      * @param addressFamily AddressFamily enum representing the wanted address family.
      */
     void configureAddressFamily(AddressFamily addressFamily);
+
+    // Member variables
+    float interfaceID;		///< Unique identifier for interfaces
+    uint32_t routingProtocolID;	        ///< ID of the current routing protocol
+
+    bool isList = false;
+    bool textLine = false;
+    bool isDebugModeEnabled = false;
 	
 private:
 
@@ -153,7 +162,6 @@ private:
      * @return boolean Indicates whether the execution was a success or not.
      */
     bool executeCommand(std::string& command);
-    bool preProcessCommand(std::string& command);
     std::vector<std::string> compileCommandStream(const std::string& command);
     bool executeModeParser(const std::vector<std::string>& tokens);
     bool processConfigPersistence(const std::vector<std::string>& tokens, CliMode preMode);
@@ -442,10 +450,6 @@ private:
 
     ModeConfig modeConfig;
 
-    // Member variables
-    float interfaceID;		///< Unique identifier for interfaces
-    uint32_t routingProtocolID;	        ///< ID of the current routing protocol
-
     std::vector<std::string> commandHistory;    ///< History of previous entered commands
 
     std::vector<std::string> currentPatterns;   ///< Current matching patterns
@@ -480,7 +484,6 @@ private:
     bool isCommandInvalid = false;              ///< Indicates if a command is invalid.
     bool isCommandExecutionSuccessful = false;  ///< Indicates if the command was successful.
     bool isGlobalCommandExecution = false;      ///< Indicates if a global command is being executed.
-    bool isDebugModeEnabled = false;            ///< Indicates if in Debug mode.
     bool attemptingGlobalCommand = false;       ///< Indicates if a global command is being attempted.
 
     std::vector<Com> paginationList;            ///< List of commands for pagination.
@@ -489,14 +492,9 @@ private:
     std::string currentPrompt;          ///< Indicates the current prompt.
     CliMode prevMode;               ///< Stores the previous operational mode
 
-
-    bool isList = false;
-    bool textLine = false;
-
     nlohmann::ordered_json *prevConfig;     ///< Pointer to the previous configuration node
 
 public:
-    CommandProcessor* commandProcessor = nullptr;
     CliEngine& engine;
 };
 
