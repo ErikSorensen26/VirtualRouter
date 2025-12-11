@@ -1,7 +1,7 @@
 #include <Configs.h>
 #include <iostream>
 #include <Logger.h>
-#include "Mode.hpp"
+#include <Mode.hpp>
 #include <HardwareManager.h>
 
 #include <unistd.h>
@@ -165,14 +165,14 @@ bool Configs::saveConfig()
 
 bool Configs::saveCommand(
     std::vector<std::string>& oldCommand,
-    std::vector<std::string>& command,
+    const std::vector<std::string>& command,
     ModeConfig& modeConfig,
     bool changeMode,
     bool exitMode,
     bool isListed
 )
 {
-    if (modeConfig.currentMode == Mode::userExec || modeConfig.currentMode == Mode::privilegedExec) return false;
+    if (modeConfig.currentMode == CliMode::UserExec || modeConfig.currentMode == CliMode::PrivilegedExec) return false;
     
     if (oldCommand.empty() || command.empty()) return false;
 
@@ -234,7 +234,7 @@ bool Configs::saveCommand(
     }
 
     // Step 2: Create or append the new configuration
-    nlohmann::ordered_json newConfig = json::object();
+    nlohmann::ordered_json newConfig = nlohmann::ordered_json::object();
     nlohmann::ordered_json* newConfigDir = &newConfig;
 
     if (command.size() > 1)
@@ -243,7 +243,10 @@ bool Configs::saveCommand(
         {
             if (isVolatile(oldCommand[i]))
             {
-                (*newConfigDir)[getVolatileValue(oldCommand[i], command[i], *newConfigDir)] = command[i];
+                std::cout << newConfigDir->dump(4) << std::endl;
+                nlohmann::ordered_json& cf = *newConfigDir;
+                std::string volVal = getVolatileValue(oldCommand[i], command[i], cf);
+                (*newConfigDir)[volVal] = nlohmann::json::string_t(command[i]);
             }
             else
             {
@@ -469,7 +472,7 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, ModeConfig& mode
     }
 }
 
-bool Configs::deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isListed)
+bool Configs::deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, const std::vector<std::string>& command, bool isListed)
 {
     return true;
 }
@@ -493,7 +496,7 @@ bool Configs::isVolatile(const std::string& command)
     return false; 
 }
 
-std::string Configs::getVolatileValue(std::string& type, std::string& value, nlohmann::ordered_json currentJson)
+std::string Configs::getVolatileValue(std::string& type, std::string& value, nlohmann::ordered_json& currentJson)
 {
     std::string volatileValue = getVolatileValueHelper(type, value);
 

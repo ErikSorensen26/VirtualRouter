@@ -2,7 +2,7 @@
 
 #include <CliEngine.h>
 
-bool CommandProcessor::handlePriviledgedExec(const std::vector<std::string>& commandStream)
+/*bool CommandProcessor::handlePriviledgedExec(const std::vector<std::string>& commandStream)
 {
 	if (commandStream[0] == "configure" && commandStream[1] == "terminal")
 	{
@@ -36,5 +36,5 @@ bool CommandProcessor::handlePriviledgedExec(const std::vector<std::string>& com
 	}
 	else return false;
 	return true;
-}
+}*/
 

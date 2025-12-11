@@ -3,7 +3,6 @@
 #ifndef CLI_SESSION_H
 #define CLI_SESSION_H
 
-#include <memory>
 #include <string>
 #include <vector>
 #include <json.hpp>
@@ -26,7 +25,6 @@ class VirtualRouter;
 class Interface;
 class Configs;
 struct Com;
-struct ModeConfig;
 namespace Eigrp
 {
     class Eigrp;
@@ -92,6 +90,57 @@ public:
      */
     void handlePrompt();
     bool handleInput(std::string input = "");
+
+    /**
+     * @brief Changes the terminal's operational mode.
+     *
+     * Updates the current mode of the terminal, adjusts the working directory based on the new mode,
+     * and manages mode history for potential state restoration.
+     *
+     * @param newMode A reference to the string representing the new mode to switch to.
+     * @param processing A boolean flag indicating whether the mode change is part of command processing. Defaults to false.
+     */
+    bool changeMode(CliMode newMode, bool processing = false);
+
+    /**
+     * @brief Exits the current mode and switches to a new mode.
+     *
+     * Marks the exit command and changes the mode accordingly.
+     *
+     * @param newMode The mode to switch to upon exiting the current mode.
+     */
+    inline void exitMode(CliMode& newMode) { isExitCommand = true; changeMode(newMode);}
+
+    /**
+     * @brief Configures the terminal's interface mode based on the specified type.
+     *
+     * Switches the terminal's operational mode to match the given interface type,
+     * updates the active interfaces list, and adjusts the working directory accordingly.
+     *
+     * @param type The string representing the interface type to configure (e.g., "Ethernet", "Loopback").
+     */
+    void configureInterfaceMode(std::string& type);
+
+    /**
+     * @brief Configures the terminal's routing mode based on the specified routing protocol.
+     *
+     * Switches the terminal's operational mode to match the given routing protocol (e.g., BGP, OSPF),
+     * updates the active routing configurations, and adjusts the working directory accordingly.
+     *
+     * @param type The string value representing the routing mode to configure.
+     * @param type Indicates whether your running classic v6 mode.
+     */
+    void configureRoutingMode(std::string type, bool classicV6 = false);
+
+    /**
+     * @brief Configures the terminal's mode based on a address family.
+     *
+     * Seitches the terminal's operational mode to match the given address family (e.g. IPv4, IPv6),
+     * updates the active address family, and adjusts the working directory accordingly.
+     *
+     * @param addressFamily AddressFamily enum representing the wanted address family.
+     */
+    void configureAddressFamily(AddressFamily addressFamily);
 	
 private:
 
@@ -104,6 +153,10 @@ private:
      * @return boolean Indicates whether the execution was a success or not.
      */
     bool executeCommand(std::string& command);
+    bool preProcessCommand(std::string& command);
+    std::vector<std::string> compileCommandStream(const std::string& command);
+    bool executeModeParser(const std::vector<std::string>& tokens);
+    bool processConfigPersistence(const std::vector<std::string>& tokens, CliMode preMode);
 
     /**
      * @brief Normalizes and fixes user-entered commands.
@@ -381,57 +434,6 @@ private:
     bool handlePagination(char ch = '\0');
 
     /**
-     * @brief Changes the terminal's operational mode.
-     *
-     * Updates the current mode of the terminal, adjusts the working directory based on the new mode,
-     * and manages mode history for potential state restoration.
-     *
-     * @param newMode A reference to the string representing the new mode to switch to.
-     * @param processing A boolean flag indicating whether the mode change is part of command processing. Defaults to false.
-     */
-    bool changeMode(std::string& newMode, bool processing = false);
-
-    /**
-     * @brief Exits the current mode and switches to a new mode.
-     *
-     * Marks the exit command and changes the mode accordingly.
-     *
-     * @param newMode The mode to switch to upon exiting the current mode.
-     */
-    inline void exitMode(std::string& newMode) { isExitCommand = true; changeMode(newMode);}
-
-    /**
-     * @brief Configures the terminal's interface mode based on the specified type.
-     *
-     * Switches the terminal's operational mode to match the given interface type,
-     * updates the active interfaces list, and adjusts the working directory accordingly.
-     *
-     * @param type The string representing the interface type to configure (e.g., "Ethernet", "Loopback").
-     */
-    void configureInterfaceMode(std::string& type);
-
-    /**
-     * @brief Configures the terminal's routing mode based on the specified routing protocol.
-     *
-     * Switches the terminal's operational mode to match the given routing protocol (e.g., BGP, OSPF),
-     * updates the active routing configurations, and adjusts the working directory accordingly.
-     *
-     * @param type The string value representing the routing mode to configure.
-     * @param type Indicates whether your running classic v6 mode.
-     */
-    void configureRoutingMode(std::string type, bool classicV6 = false);
-
-    /**
-     * @brief Configures the terminal's mode based on a address family.
-     *
-     * Seitches the terminal's operational mode to match the given address family (e.g. IPv4, IPv6),
-     * updates the active address family, and adjusts the working directory accordingly.
-     *
-     * @param addressFamily AddressFamily enum representing the wanted address family.
-     */
-    void configureAddressFamily(AddressFamily addressFamily);
-
-    /**
      * @brief Updates the global configuration history from the local history.
      *
      * Clears the previous global configuration and appends the current root node.
@@ -485,7 +487,7 @@ private:
     size_t maxNameLength = 0;                   ///< Max command size for pagination.
 
     std::string currentPrompt;          ///< Indicates the current prompt.
-    std::string prevMode;               ///< Stores the previous operational mode
+    CliMode prevMode;               ///< Stores the previous operational mode
 
 
     bool isList = false;

@@ -6,7 +6,7 @@
 #include <VirtualRouter.h>
 #include <CliEngine.h>
 
-bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::string>& commandStream)
+/*bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::string>& commandStream)
 {
 	// HELPER FUNCTIONS
 	auto refreshEigrpConfig = [&](uint32_t as, AddressFamily af, EigrpConfigs::InterfaceConfigs* config)
@@ -788,4 +788,4 @@ bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::strin
 	}
 	else return false;
 	return true;
-}
+}*/

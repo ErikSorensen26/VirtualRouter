@@ -95,8 +95,8 @@ bool CliSession::handleInput(std::string test)
     std::string userCommand = input(test, paginationList.size() > 0);
 
     // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
-    if (userCommand == "CRT-Z" && modeConfig.currentMode != Mode::userExec) {
-        if (!changeMode(Mode::privilegedExec, true))
+    if (userCommand == "CRT-Z" && modeConfig.currentMode != CliMode::UserExec) {
+        if (!changeMode(CliMode::PrivilegedExec, true))
         {
             iConsole->print("\r\n");
             return false;
@@ -171,7 +171,7 @@ bool CliSession::isNoCommand(const std::vector<std::string>& parsedWords)
     if (parsedWords[1] == "exit" || parsedWords[1].rfind("conf", 0) == 0) return false;
 
     // Must not be in userExec or privilegedExec
-    return modeConfig.currentMode != Mode::userExec && modeConfig.currentMode != Mode::privilegedExec;
+    return modeConfig.currentMode != CliMode::UserExec && modeConfig.currentMode != CliMode::PrivilegedExec;
 }
 
 bool CliSession::isDoCommand(const std::vector<std::string>& parsedWords)
@@ -183,7 +183,7 @@ bool CliSession::isDoCommand(const std::vector<std::string>& parsedWords)
     if (parsedWords[1] == "exit" || parsedWords[1].rfind("conf", 0) == 0) return false;
 
     // Must not already be in userExec or privilegedExec
-    return modeConfig.currentMode != Mode::userExec && modeConfig.currentMode != Mode::privilegedExec;
+    return modeConfig.currentMode != CliMode::UserExec && modeConfig.currentMode != CliMode::PrivilegedExec;
 }
 
 std::string CliSession::executeDoCommand(std::string remainingCommand)
@@ -191,13 +191,13 @@ std::string CliSession::executeDoCommand(std::string remainingCommand)
     attemptingGlobalCommand = true;
     // Save current state
     std::string previousPrompt = currentPrompt;
-    std::string previousMode = modeConfig.currentMode;
+    CliMode previousMode = modeConfig.currentMode;
     const json* previousCommandTree = &(*workingDirectory);
     nlohmann::ordered_json* prevModeSchema = &(*modeConfig.modeSchema);
     nlohmann::ordered_json* previousConfigNode = &(*modeConfig.configNode);
 
     // Switch to privileged mode and execute
-    changeMode(Mode::privilegedExec, true);
+    changeMode(CliMode::PrivilegedExec, true);
     isGlobalCommandExecution = executeCommand(remainingCommand);
 
     // Restore old mode / working directory
@@ -370,22 +370,22 @@ bool CliSession::handleTabCompletion(const std::string& word, std::vector<Com>& 
 bool CliSession::attemptGlobalCommand(const std::string& inputCommand)
 {
     if (error &&
-        modeConfig.currentMode != Mode::globalConfiguration &&
-        modeConfig.currentMode != Mode::userExec &&
-        modeConfig.currentMode != Mode::privilegedExec &&
+        modeConfig.currentMode != CliMode::GlobalConfiguration &&
+        modeConfig.currentMode != CliMode::UserExec &&
+        modeConfig.currentMode != CliMode::PrivilegedExec &&
         !isHelpModeActive && 
         Functions::lowerCase(inputCommand) != "exit")
     {
         attemptingGlobalCommand = true;
         // Backup
         std::string prevPrompt      = currentPrompt;
-        std::string prevMode        = modeConfig.currentMode;
+        CliMode     preMode         = modeConfig.currentMode;
         auto        prevDirectory   = workingDirectory;
         auto        prevModeSchema  = modeConfig.modeSchema;
-        auto        prevConfig      = modeConfig.configNode;
+        auto        preConfig      = modeConfig.configNode;
 
         // Attempt global execution
-        changeMode(Mode::globalConfiguration, true);
+        changeMode(CliMode::GlobalConfiguration, true);
         historyToGlobal();
         std::string inputCommandCopy = inputCommand;
         if (executeCommand(inputCommandCopy))
@@ -393,7 +393,7 @@ bool CliSession::attemptGlobalCommand(const std::string& inputCommand)
             isGlobalCommandExecution = true;
         }
 
-        if (modeConfig.currentMode == Mode::globalConfiguration)
+        if (modeConfig.currentMode == CliMode::GlobalConfiguration)
         {
             if (isCommandExecutionSuccessful)
             {
@@ -402,9 +402,9 @@ bool CliSession::attemptGlobalCommand(const std::string& inputCommand)
             else
             {
                 // Restore
-                changeMode(prevMode, true);
+                changeMode(preMode, true);
                 currentPrompt         = prevPrompt;
-                modeConfig.configNode = prevConfig;
+                modeConfig.configNode = preConfig;
                 modeConfig.modeSchema = prevModeSchema;
                 workingDirectory      = prevDirectory;
                 if (isCommandExecutionSuccessful)
@@ -1244,8 +1244,6 @@ bool CliSession::isValidCommandDirectory(const nlohmann::ordered_json *directory
 
 bool CliSession::handlePagination(char nextch)
 {
-    size_t lineCount = 0;
-
     if (nextch != '\0')
     {
         maxCommandLength = getTerminalWidth() - initialLineLength;
@@ -1295,7 +1293,6 @@ bool CliSession::handlePagination(char nextch)
                     color = Color::RED;
             }
             iConsole->print(display, color);
-            lineCount++;
         }
     }
 
@@ -1314,30 +1311,31 @@ bool CliSession::handlePagination(char nextch)
     return true;
 }
 
-bool CliSession::changeMode(std::string &newMode, bool processing)
+bool CliSession::changeMode(CliMode newMode, bool processing)
 {
     // Check if the mode exists and has valid commands
-    if (!engine.getCommandTree().contains(newMode) || !engine.getCommandTree()[newMode].is_array())
+    std::string_view newPrompt = getModePrompt(newMode);
+    if (!engine.getCommandTree().contains(newPrompt) || !engine.getCommandTree()[newPrompt].is_array())
     {
         return false;
     }
 
     prevMode = modeConfig.currentMode;
     modeConfig.currentMode = newMode;
-    currentPrompt = newMode;
-    workingDirectory = &engine.getCommandTree()[modeConfig.currentMode];
+    currentPrompt = newPrompt;
+    workingDirectory = &engine.getCommandTree()[newPrompt];
     currentDirectory = workingDirectory;
     isModeChanged = true;
 
-    if (engine.configSchema.contains(modeConfig.currentMode))
+    if (engine.configSchema.contains(currentPrompt))
     {
         if (processing)
         {
-            modeConfig.modeSchema = &(engine.configSchema[modeConfig.currentMode]);
+            modeConfig.modeSchema = &(engine.configSchema[currentPrompt]);
         }
         else
         {
-            modeConfig.tempModeSchema = &(engine.configSchema[modeConfig.currentMode]);
+            modeConfig.tempModeSchema = &(engine.configSchema[currentPrompt]);
         }
     }
     else
@@ -1365,7 +1363,7 @@ void CliSession::configureInterfaceMode(std::string& type)
     {
         type = "Ethernet";
     }
-    changeMode(Mode::interface);
+    changeMode(CliMode::Interface);
     if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(type))
     {
         workingDirectory = &(*workingDirectory)[0][type];
@@ -1380,11 +1378,11 @@ void CliSession::configureRoutingMode(std::string type, bool classicV6)
 {
     if (classicV6)
     {
-        changeMode(Mode::routingV6);
+        changeMode(CliMode::RoutingV6);
     }
     else
     {
-        changeMode(Mode::routing);
+        changeMode(CliMode::Routing);
     }
     currentSubMode = type;
     if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(currentSubMode))

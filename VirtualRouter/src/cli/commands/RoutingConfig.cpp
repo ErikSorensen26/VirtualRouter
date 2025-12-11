@@ -6,7 +6,7 @@
 #include <InterfaceConfigs.h>
 #include <InterfaceType.hpp>
 
-bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
+/*bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
 {
 	if (terminal.currentSubMode == "eigrp_classic" || terminal.currentSubMode == "eigrp_classic_vrf" || (terminal.currentSubMode == "eigrp_named" && terminal.modeConfig.currentMode == Mode::routerAddressFamilyTopology))
 	{
@@ -392,7 +392,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 						terminal.iConsole->print(std::string("\r\n%") + commandStream[3] + " does not exist or is not enabled for IPv4");
 					}
 
-					if (/*multicast enabled*/false)
+					if (*//*multicast enabled*//*false)
 					{
 						comString = "multicast";
 					}
@@ -408,7 +408,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				}
 				else if (commandStream[2] == "multicast")
 				{
-					if (/*multicast enabled*/false)
+					if (*//*multicast enabled*//*false)
 					{
 						terminal.routingProtocolID = static_cast<uint32_t>(std::stoul(commandStream[4]));
 						comString = "multicast";
@@ -928,7 +928,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 	}
 	else return false;
 	return true;
-}
+}*/
 
 
 

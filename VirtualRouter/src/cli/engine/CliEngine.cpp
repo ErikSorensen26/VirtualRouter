@@ -7,7 +7,7 @@
 #include <HardwareManager.h>
 #include <sys/resource.h>
 
-std::string CliEngine::defaultMode = Mode::userExec;
+CliMode CliEngine::defaultMode = CliMode::UserExec;
 
 CliEngine::CliEngine(Global& global, const StartupFiles& stfs, bool test) : Configs(), global(global)
 {
@@ -142,7 +142,7 @@ void CliEngine::recoverState()
 	CliSession recoverSession(*this);
 
     // Set initial mode for command recovery
-    recoverSession.changeMode(Mode::globalConfiguration, true);
+    recoverSession.changeMode(CliMode::GlobalConfiguration, true);
 
     // Execute each saved command to restore the terminal's state
     for (std::string& command : savedCommands) {

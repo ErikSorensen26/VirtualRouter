@@ -1,6 +1,6 @@
 #include "CommandProcessor.h"
 
-bool CommandProcessor::handleUserExec(const std::vector<std::string>& commandStream)
+/*bool CommandProcessor::handleUserExec(const std::vector<std::string>& commandStream)
 {
 	if (commandStream[0] == "enable")
 	{
@@ -12,4 +12,4 @@ bool CommandProcessor::handleUserExec(const std::vector<std::string>& commandStr
 	}
 	else return false;
 	return true;
-}
+}*/

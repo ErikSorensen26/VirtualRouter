@@ -79,7 +79,7 @@ protected:
 
         terminal = new CliSession(*engine, mockConsole);
         engine->sessions.push_back(terminal);
-        terminal->changeMode(Mode::globalConfiguration);
+        terminal->changeMode(CliMode::GlobalConfiguration);
         mockConsole->resetCapturedOutput();
     }
 
@@ -106,11 +106,11 @@ public:
     // Helper functions
     bool executeCommand(std::string& command) {return handleInput(command);}
     bool handleInput(const std::string& command) {return terminal->handleInput(command);}
-    void changeMode(std::string& newMode) {terminal->changeMode(newMode);}
+    void changeMode(CliMode newMode) {terminal->changeMode(newMode);}
     void configureRoutingMode(std::string& newMode) {terminal->configureRoutingMode(newMode);}
     void configureInterfaceMode(std::string& interface) {terminal->configureInterfaceMode(interface);}
     std::string getHostname() {return global->getHostname();}
-    std::string getCurrentMode() {return terminal->modeConfig.currentMode;}
+    CliMode getCurrentMode() {return terminal->modeConfig.currentMode;}
     std::string getCurrentSubMode() {return terminal->currentSubMode;}
     std::string getNextLine() {return terminal->nextLine;}
     const json& getCommandTree() const {return engine->commandTree;}
@@ -139,14 +139,15 @@ std::string Internal_CliTest::configFileString;
 TEST_F(Internal_CliTest, ModeChange_GlobalToUserExec_ShouldUpdateMode) 
 {
     // Arrange
-    std::string newMode = "#"; // User EXEC mode prompt
+    std::string newModeStr = "#"; // User EXEC mode prompt
+    CliMode newMode = findMode(newModeStr).value();
 
     // Act
     changeMode(newMode);
 
     // Assert
     EXPECT_EQ(getCurrentMode(), newMode);
-    EXPECT_EQ(getWorkingDirectory(), getCommandTree()[newMode]);
+    EXPECT_EQ(getWorkingDirectory(), getCommandTree()[newModeStr]);
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "");
 }
@@ -155,7 +156,7 @@ TEST_F(Internal_CliTest, ModeChange_GlobalToUserExec_ShouldUpdateMode)
 TEST_F(Internal_CliTest, ModeChange_InvalidMode_ShouldRejectModeChange) 
 {
     // Arrange
-    std::string invalidMode = "invalid_mode";
+    CliMode invalidMode = CliMode::Count;
 
     std::string expectedPrompt = "(config)#";
 
@@ -163,7 +164,7 @@ TEST_F(Internal_CliTest, ModeChange_InvalidMode_ShouldRejectModeChange)
     changeMode(invalidMode);
 
     // Assert
-    EXPECT_EQ(getCurrentMode(), expectedPrompt); // Assuming initial mode
+    EXPECT_EQ(getModePrompt(getCurrentMode()), expectedPrompt); // Assuming initial mode
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "");
 }
@@ -223,7 +224,7 @@ TEST_F(Internal_CliTest, InputHandling_SpacesOnly_ShouldRejectCommand)
 TEST_F(Internal_CliTest, InputHandling_ValidInputWithSpaces_ShouldProcessCommand) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string rawCommand = "  hostname Router1  \n";
 
     // Expectation: Terminal normalizes and executes the command
@@ -246,7 +247,7 @@ TEST_F(Internal_CliTest, InputHandling_ValidInputWithSpaces_ShouldProcessCommand
 TEST_F(Internal_CliTest, DoCommand_FromConfigurationMode_ShouldExecutePrivilegedCommand) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string doCommand = "do show running-config\n";
 
     // Expectation: Terminal executes the "do" command and prints output
@@ -264,7 +265,7 @@ TEST_F(Internal_CliTest, DoCommand_FromConfigurationMode_ShouldExecutePrivileged
 // Test Executing an invalid "do" command
 TEST_F(Internal_CliTest, DoCommand_InvalidCommand_ShouldRejectCommand) {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string doCommand = "do invalidcmd\n";
 
     // Expectation: Terminal rejects the "do" command and prints error
@@ -282,7 +283,7 @@ TEST_F(Internal_CliTest, DoCommand_InvalidCommand_ShouldRejectCommand) {
 // Test Executing a "do" command with missing parameters
 TEST_F(Internal_CliTest, DoCommand_MissingParameters_ShouldRejectCommand) {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string doCommand = "do ping\n";
 
     // Expectation: Terminal rejects the "do" command due to missing parameters
@@ -302,7 +303,7 @@ TEST_F(Internal_CliTest, DoCommand_FromSubMode_ShouldExecuteCommandWithinSubMode
 {
     // Arrange
     // First, enter sub-mode
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string enterSubModeCmd = "interface GigabitEthernet 1\n";
     std::string doCommand = "do show interface GigabitEthernet 1";
 
@@ -328,7 +329,7 @@ TEST_F(Internal_CliTest, DoCommand_FromSubMode_ShouldExecuteCommandWithinSubMode
 TEST_F(Internal_CliTest, HelpRequest_WithQuestionMark_ShouldDisplayAvailableCommands) 
 {
     // Arrange
-    changeMode(Mode::userExec);
+    changeMode(CliMode::UserExec);
     std::string helpCommand = "?";
     std::string expectedOutput;
 
@@ -348,7 +349,7 @@ TEST_F(Internal_CliTest, HelpRequest_WithQuestionMark_ShouldDisplayAvailableComm
 TEST_F(Internal_CliTest, AutoComplete_UniquePartialCommand_ShouldCompleteCommand) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string partialInput = "host\t";
     std::string finishInput = " Router1\n";
 
@@ -370,7 +371,7 @@ TEST_F(Internal_CliTest, AutoComplete_UniquePartialCommand_ShouldCompleteCommand
 TEST_F(Internal_CliTest, AutoComplete_AmbiguousPartialCommand_ShouldListSuggestions) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string partialInput = "a\t";
 
     // Expectation: Terminal lists available suggestions
@@ -388,7 +389,7 @@ TEST_F(Internal_CliTest, AutoComplete_AmbiguousPartialCommand_ShouldListSuggesti
 TEST_F(Internal_CliTest, AutoComplete_ExactCommand_ShouldNotChangeInput) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string exactCommand = "exit\t";
 
     // Expectation: Terminal does not attempt to auto-complete
@@ -406,7 +407,7 @@ TEST_F(Internal_CliTest, AutoComplete_ExactCommand_ShouldNotChangeInput)
 TEST_F(Internal_CliTest, HelpRequest_InSubMode_ShouldDisplayAvailableSubCommands) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     // First, enter sub-mode
     std::string enterSubModeCmd = "interface GigabitEthernet 1\n";
     std::string helpCommand = "?";
@@ -430,7 +431,7 @@ TEST_F(Internal_CliTest, HelpRequest_InSubMode_ShouldDisplayAvailableSubCommands
 TEST_F(Internal_CliTest, CommandProcessing_ValidGlobalCommand_ShouldProcessSuccessfully) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string command = "hostname Router1\n";
 
     // Expectation: Terminal prints the command and prompt
@@ -450,7 +451,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ValidGlobalCommand_ShouldProcessSucce
 TEST_F(Internal_CliTest, CommandProcessing_InvalidGlobalCommand_ShouldRejectCommand) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string command = "invalidcmd\n";
 
     // Expectation: Terminal prints an error and prompt
@@ -469,7 +470,7 @@ TEST_F(Internal_CliTest, CommandProcessing_InvalidGlobalCommand_ShouldRejectComm
 TEST_F(Internal_CliTest, CommandProcessing_MissingArguments_ShouldRejectCommand) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string command = "hostname\n"; // Missing hostname value
 
     // Expectation: Terminal prints an error and prompt
@@ -489,7 +490,7 @@ TEST_F(Internal_CliTest, CommandProcessing_MissingArguments_ShouldRejectCommand)
 TEST_F(Internal_CliTest, CommandProcessing_ExcessiveArguments_ShouldRejectCommand) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string command = "hostname Router1 ExtraArg\n";
 
     // Expectation: Terminal prints an error and prompt
@@ -509,7 +510,7 @@ TEST_F(Internal_CliTest, CommandProcessing_ExcessiveArguments_ShouldRejectComman
 TEST_F(Internal_CliTest, CommandProcessing_VolatileCommand_ShouldValidatePatterns) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string command = "do ping 192.168.1.1\n";
 
     // Expectation: Terminal processes the command and prints output
@@ -711,7 +712,7 @@ TEST_F(Internal_CliTest, Normalization_MixedCaseAndSpaces_ShouldNormalizeCommand
 TEST_F(Internal_CliTest, GlobalCommand_ExitConfigurationMode_ShouldChangeMode) 
 {
     // Arrange
-    changeMode(Mode::globalConfiguration);
+    changeMode(CliMode::GlobalConfiguration);
     std::string command = "exit";
 
     // Expectation: Terminal processes the 'exit' command and changes mode
@@ -722,7 +723,7 @@ TEST_F(Internal_CliTest, GlobalCommand_ExitConfigurationMode_ShouldChangeMode)
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(getCurrentMode(), "#");
+    EXPECT_EQ(getCurrentMode(), CliMode::UserExec);
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "exit\r\nrouter#");
 }
@@ -741,7 +742,7 @@ TEST_F(Internal_CliTest, GlobalCommand_EndConfigurationMode_ShouldChangeMode)
 
     // Assert
     EXPECT_TRUE(result);
-    EXPECT_EQ(getCurrentMode(), "#");
+    EXPECT_EQ(getCurrentMode(), CliMode::UserExec);
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "end\r\nrouter#");
 }
@@ -957,7 +958,7 @@ TEST_F(Internal_CliTest, BatchProcessing_InvalidCommands_ShouldHandleErrorsAndCo
     EXPECT_TRUE(recoveryResult);
 
     // Additional assertions based on internal state
-    EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
+    EXPECT_EQ(getCurrentMode(), CliMode::GlobalConfiguration);
     EXPECT_EQ(global->getHostname(), "BatchRouter");
 
     EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname BatchRouter\r\nBatchRouter(config)#invalidcmd\r\n                    ^\r\n% Invlid input detected at '^' marker.\r\n\r\nBatchRouter(config)#interface GigabitEthernet 1\r\nBatchRouter(config-if)#ip address 10.0.0.1 255.255.255.0\r\nBatchRouter(config-if)#exit\r\nBatchRouter(config)#");
@@ -993,7 +994,7 @@ TEST_F(Internal_CliTest, ComprehensiveConfiguration_ValidCommands_ShouldUpdateSt
     EXPECT_TRUE(recoveryResult);
 
     // Additional assertions based on internal state
-    EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
+    EXPECT_EQ(getCurrentMode(), CliMode::GlobalConfiguration);
     EXPECT_EQ(global->getHostname(), "ComprehensiveRouter");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname ComprehensiveRouter\r\nComprehensiveRouter(config)#interface GigabitEthernet 1\r\nComprehensiveRouter(config-if)#ip address 192.168.1.1 255.255.255.0\r\nComprehensiveRouter(config-if)#no shutdown\r\nComprehensiveRouter(config-if)#exit\r\nComprehensiveRouter(config)#router ospf 1\r\nComprehensiveRouter(config-router)#network 192.168.1.0 0.0.0.255 area 0\r\nComprehensiveRouter(config-router)#exit\r\nComprehensiveRouter(config)#");
@@ -1029,7 +1030,7 @@ TEST_F(Internal_CliTest, StateRecovery_AfterSeriesOfCommands_ShouldRestoreCorrec
     EXPECT_TRUE(recoveryResult);
 
     // Additional assertions based on internal state
-    EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
+    EXPECT_EQ(getCurrentMode(), CliMode::GlobalConfiguration);
     EXPECT_EQ(global->getHostname(), "RecoverRouter");
 
     EXPECT_EQ(mockConsole->getCapturedOutput(), "hostname RecoverRouter\r\nRecoverRouter(config)#interface GigabitEthernet 1\r\nRecoverRouter(config-if)#ip address 10.0.0.1 255.255.255.0\r\nRecoverRouter(config-if)#invalidcmd\r\n                         ^\r\n% Invlid input detected at '^' marker.\r\n\r\nRecoverRouter(config-if)#exit\r\nRecoverRouter(config)#router ospf 1\r\nRecoverRouter(config-router)#network 10.0.0.0 0.0.0.255 area 0\r\nRecoverRouter(config-router)#exit\r\nRecoverRouter(config)#");
@@ -1067,7 +1068,7 @@ TEST_F(Internal_CliTest, BatchProcessing_MixedValidAndInvalidCommands_ShouldHand
     EXPECT_TRUE(recoveryResult);
 
     // Additional assertions based on internal state
-    EXPECT_EQ(getCurrentMode(), Mode::globalConfiguration);
+    EXPECT_EQ(getCurrentMode(), CliMode::GlobalConfiguration);
     EXPECT_EQ(global->getHostname(), "RecoverRouter");
     
     EXPECT_EQ(mockConsole->getCapturedOutput(), "router(config)#host RecoverRouter\nRecoverRouter(config)#interf Gig 1\nRecoverRouter(config-if)#ip add 10.0.0.1 255.255.255.0\nRecoverRouter(config-if)#invalidcmd\n                         ^\n% Invlid input detected at '^' marker.\n\nRecoverRouter(config-if)#exit\nRecoverRouter(config)#router osp 1\nRecoverRouter(config-router)#netw 10.0.0.0 0.0.0.255 are 0\nRecoverRouter(config-router)#exit\n");

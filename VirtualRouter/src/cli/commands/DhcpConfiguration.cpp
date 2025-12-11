@@ -1,6 +1,6 @@
 #include "CommandProcessor.h"
 
-bool CommandProcessor::handleDhcpConfiguration(const std::vector<std::string>& commandStream)
+/*bool CommandProcessor::handleDhcpConfiguration(const std::vector<std::string>& commandStream)
 {
 	if (commandStream[0] == "accounting")
 	{
@@ -15,4 +15,4 @@ bool CommandProcessor::handleDhcpConfiguration(const std::vector<std::string>& c
 	}
 	else return false;
 	return true;
-}
+}*/

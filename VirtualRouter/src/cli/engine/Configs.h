@@ -250,7 +250,7 @@ public:
      * @param isList Boolean flag indicating if the command should be listed.
      * @return bool Indicating if the save was successful
      */
-    bool saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, ModeConfig& modeConfig, bool changeMode, bool exitMode, bool isList); 
+    bool saveCommand(std::vector<std::string>& oldCommand, const std::vector<std::string>& command, ModeConfig& modeConfig, bool changeMode, bool exitMode, bool isList); 
 
      /**
      * @brief Inserts commands into the configuration tree in the correct order.
@@ -284,7 +284,7 @@ public:
      * @param command A vector of strings representing the current command to delete.
      * @param isList Boolean flag indicating if the command is listed.
      */
-    bool deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isList);
+    bool deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, const std::vector<std::string>& command, bool isList);
 
     /**
      * @brief Determines if a given command string is volatile.
@@ -316,7 +316,7 @@ public:
      * @param currentJson The current JSON node being processed.
      * @return std::string The resolved key for the volatile parameter.
      */
-    std::string getVolatileValue(std::string& type, std::string& value, nlohmann::ordered_json currentJson);
+    std::string getVolatileValue(std::string& type, std::string& value, nlohmann::ordered_json& currentJson);
 
     /**
      * @brief Overloaded method to retrieve the value of a volatile parameter based on the command.

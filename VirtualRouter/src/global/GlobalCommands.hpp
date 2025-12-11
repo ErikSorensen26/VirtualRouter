@@ -1,16 +1,24 @@
-#include "CommandProcessor.h"
-#include <VirtualRouter.h>
-#include <CliEngine.h>
-#include <DhcpServer.h>
-#include <Eigrp.h>
-#include <Arp.h>
-#include <Ospf.h>
-#include <Bgp.h>
-#include <Ndp.h>
-#include <InterfaceType.hpp>
-#include <HardwareManager.h>
+// GlobalCommands.hpp
 
-bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> commandStream)
+#ifndef GLOBAL_COMMANDS_HPP
+#define GLOBAL_COMMANDS_HPP
+
+#include <CliHandler.hpp>
+#include <Global.h>
+
+namespace Cli
+{
+void setHostname(GlobalContext& ctx, const std::vector<std::string>& args)
+{
+    ctx.global.setHostname(args[0]);
+}
+
+using GlobalEngine = CliSubSystem<GlobalContext,
+    commandAdder<GlobalContext, &setHostname, "hostname"_tok, ARG>
+>;
+}
+
+/*bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> commandStream)
 {
 	if (commandStream[0] == "arp")
 	{
@@ -747,4 +755,6 @@ bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> 
 	}
 	else return false;
 	return true;
-}
+}*/
+
+#endif // GLOBAL_COMMANDS_HPP

@@ -11,6 +11,7 @@
 #include "Configs.h"
 
 enum class InterfaceType: uint8_t;
+enum class CliMode;
 class Interface;
 class CliSession;
 class CommandProcessor;
@@ -142,7 +143,7 @@ public:
     const std::vector<std::string> globalCommandList{"?", "vk_tab"}; ///< List of global commands
     size_t paginationCount = 10; ///< Pagination count for command help
     DoTime timeManager; ///< Manages time-related functionality
-    static std::string defaultMode;
+    static CliMode defaultMode;
     void clearSessions();
 
     std::vector<CliSession*> sessions;
