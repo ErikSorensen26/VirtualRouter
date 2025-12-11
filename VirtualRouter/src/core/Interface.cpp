@@ -69,8 +69,8 @@ void Interface::setIPv4(uint32_t ip, uint8_t subnet)
         {
             uint8_t addr[4];
             writeU32(addr, ip);
-            arp->sendReply(Variable::Mac::broadcast, addr);
-            arp->sendReply(Variable::Mac::broadcast, addr);
+            arp->sendReply(ETHERNET_MAC_BROADCAST, addr);
+            arp->sendReply(ETHERNET_MAC_BROADCAST, addr);
         }
         stateChange(StateChange::IPCHANGE);
     }

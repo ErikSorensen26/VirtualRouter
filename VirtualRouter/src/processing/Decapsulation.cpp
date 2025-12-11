@@ -21,12 +21,12 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
     // Layer 2.5
     while (true) 
     {
-        if (ethernetType == Variable::Ethernet::vlan)
+        if (ethernetType == ETHERNET_VLAN)
         {
             // skip
             break;
         }
-        else if (ethernetType == Variable::Ethernet::mpls)
+        else if (ethernetType == ETHERNET_MPLS)
         {
             MplsHeader mpls;
             if (unlikely(!mpls.parse(data, len, packet.offset))) return false;
@@ -37,11 +37,11 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
             {
                 prefetch_header(data + packet.offset);
                 uint8_t ipNib = (data[packet.offset] & 0xF0) >> 4;
-                ethernetType = (ipNib == 0x4) ? Variable::Ethernet::ipv4 : (ipNib == 0x6) ? Variable::Ethernet::ipv6 : 0;
+                ethernetType = (ipNib == 0x4) ? ETHERNET_IPV4 : (ipNib == 0x6) ? ETHERNET_IPV6 : 0;
                 if (unlikely(!ethernetType)) return false;
             }
         }
-        else if (ethernetType == Variable::Ethernet::arp)
+        else if (ethernetType == ETHERNET_ARP)
         {
             ArpHeader arp;
             if (unlikely(!arp.parse(data, len, packet.offset))) return false;
@@ -53,7 +53,7 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
     }
 
     // Layer 3
-    if (ethernetType == Variable::Ethernet::ipv4)
+    if (ethernetType == ETHERNET_IPV4)
     {
         size_t ipv4Size = (data[packet.offset] & 0x0F) * 4;
         IPv4Header ipv4;
@@ -64,7 +64,7 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
         return true;
     }
 
-    if (ethernetType == Variable::Ethernet::ipv6)
+    if (ethernetType == ETHERNET_IPV6)
     {
         IPv6Header ipv6;
         if (unlikely(!ipv6.parse(data, len, packet.offset))) return false;
@@ -102,14 +102,14 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
         // Layer 4-7
         switch (proto)
         {
-            case Variable::IP::icmpv4:
+            case IP_ICMPV4:
             {
                 IcmpHeader icmp;
                 if (unlikely(!icmp.parse(data, len, packet.offset))) return false;
                 packet.headers[packet.count++] = { HeaderType::ICMP, packet.offset, IcmpHeader::fixedSize };
                 return true;
             }
-            case Variable::IP::icmpv6:
+            case IP_ICMPV6:
             {
                 Icmpv6Header icmp;
                 size_t headerSize = len - packet.offset;
@@ -117,7 +117,7 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 packet.headers[packet.count++] = { HeaderType::ICMPV6, packet.offset, headerSize };
                 return true;
             }
-            case Variable::IP::tcp:
+            case IP_TCP:
             {
                 if (len < packet.offset + 13)
                     return false;
@@ -136,7 +136,7 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 //...
                 return true;
             }
-            case Variable::IP::udp:
+            case IP_UDP:
             {
                 UdpHeader udp;
                 if (unlikely(!udp.parse(data, len, packet.offset))) return false;
@@ -147,8 +147,8 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 uint16_t src = udp.getSourcePort();
                 uint16_t dst = udp.getDestinationPort();
 
-                if ((src == Variable::Udp::dhcpClient && dst == Variable::Udp::dhcpServer) ||
-                    (src == Variable::Udp::dhcpServer && dst == Variable::Udp::dhcpClient))
+                if ((src == UDP_DHCP_CLIENT && dst == UDP_DHCP_SERVER) ||
+                    (src == UDP_DHCP_SERVER && dst == UDP_DHCP_CLIENT))
                 {
                     DhcpHeader dhcp;
                     size_t dhcpSize = len - packet.offset;
@@ -156,8 +156,8 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                     packet.headers[packet.count++] = { HeaderType::DHCP, packet.offset, dhcpSize };
                     return true;
                 }
-                else if ((src == Variable::Udp::dhcpv6Client && dst == Variable::Udp::dhcpv6Server) ||
-                         (src == Variable::Udp::dhcpv6Server && dst == Variable::Udp::dhcpv6Client))
+                else if ((src == UDP_DHCPV6_CLIENT && dst == UDP_DHCPV6_SERVER) ||
+                         (src == UDP_DHCPV6_SERVER && dst == UDP_DHCPV6_CLIENT))
                 {
                     Dhcpv6Header dhcp6;
                     size_t dhcpSize = len - packet.offset;
@@ -167,7 +167,7 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 }
                 break;
             }
-            case Variable::IP::eigrp:
+            case IP_EIGRP:
             {
                 EigrpHeader eigrp;
                 size_t eigrpSize = len - packet.offset;
@@ -175,7 +175,7 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 packet.headers[packet.count++] = { HeaderType::EIGRP, packet.offset, eigrpSize };
                 return true;
             }
-            case Variable::IP::ipv4:
+            case IP_IPV4:
             {
                 IPv4Header ip;
                 size_t ipLen = (data[packet.offset] & 0x0F) * 4;
@@ -184,7 +184,7 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 packet.offset += ipLen;
                 break;
             }
-            case Variable::IP::ipv6:
+            case IP_IPV6:
             {
                 IPv6Header ip;
                 if (unlikely(!ip.parse(data, len, packet.offset))) return false;

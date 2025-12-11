@@ -72,7 +72,7 @@ TEST_F(Internal_EncapsulationTest, EthernetOnly)
     // No layer 2.5 or higher headers
     eth.setDestinationMac(ethernetHeader);
     eth.setSourceMac(ethernetHeader + 6);
-    eth.setType(Variable::Ethernet::ipv4);
+    eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
     EXPECT_EQ(std::memcmp(pkt->getBuffer(), ethernetHeader, 14), 0);
@@ -113,11 +113,11 @@ TEST_F(Internal_EncapsulationTest, EthernetArp)
     h = pkt->nextBuildHeader();
     ArpHeader arp;
     arp.setBuffer(h->buffer);
-    arp.setHardwareType(Variable::Arp::ethernet);
+    arp.setHardwareType(ARP_HARDWARE_ETHERNET);
     arp.setHardwareSize(6);
-    arp.setProtocolType(Variable::Arp::ipv4);
+    arp.setProtocolType(ETHERNET_IPV4);
     arp.setProtocolSize(4);
-    arp.setOpcode(Variable::Arp::Opcode::request);
+    arp.setOpcode(ARP_OPCODE_REQUEST);
     arp.setSenderHwAddr(expectedArp + 8);
     arp.setSenderIpAddr(expectedArp + 14);
     arp.setTargetHwAddr(expectedArp + 18);
@@ -128,7 +128,7 @@ TEST_F(Internal_EncapsulationTest, EthernetArp)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::arp);
+    eth.setType(ETHERNET_ARP);
 
     EXPECT_TRUE(encapsulateThis());
     EXPECT_EQ(std::memcmp(pkt->getBuffer(), expectedEthernet, 14), 0);
@@ -180,7 +180,7 @@ TEST_F(Internal_EncapsulationTest, EthernetMplsIPv4)
     ipv4.setIdentification(1);
     ipv4.setFlags(false, false, true); // Don't fragment
     ipv4.setTtl(64);
-    ipv4.setProtocol(Variable::IP::tcp);
+    ipv4.setProtocol(IP_TCP);
     ipv4.setHeaderChecksum(0x8795);
     ipv4.setSourceAddress(expectedIPv4 + 12);
     ipv4.setDestinationAddress(expectedIPv4 + 16);
@@ -198,7 +198,7 @@ TEST_F(Internal_EncapsulationTest, EthernetMplsIPv4)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::mpls);
+    eth.setType(ETHERNET_MPLS);
 
     EXPECT_TRUE(encapsulateThis());
 
@@ -263,7 +263,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Icmp)
     ipv4.setIdentification(0x0001);
     ipv4.setFlags(false, false, true);
     ipv4.setTtl(64);
-    ipv4.setProtocol(Variable::IP::icmpv4);
+    ipv4.setProtocol(IP_ICMPV4);
     ipv4.setHeaderChecksum(0);
     ipv4.setSourceAddress(expectedIPv4 + 12);
     ipv4.setDestinationAddress(expectedIPv4 + 16);
@@ -273,7 +273,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Icmp)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::ipv4);
+    eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
 
@@ -335,7 +335,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv6Icmpv6)
     ipv6.setBuffer(h->buffer);
     ipv6.setVersionTrafficClassFlow(6, 0, 0);
     ipv6.setPayloadLength(28);
-    ipv6.setNextHeader(Variable::IP::icmpv6);
+    ipv6.setNextHeader(IP_ICMPV6);
     ipv6.setHopLimit(64);
     ipv6.setSourceAddress(expectedIPv6 + 8);
     ipv6.setDestinationAddress(expectedIPv6 + 24);
@@ -345,7 +345,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv6Icmpv6)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::ipv6);
+    eth.setType(ETHERNET_IPV6);
 
     EXPECT_TRUE(encapsulateThis());
 
@@ -417,7 +417,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Tcp)
     ipv4.setIdentification(1);
     ipv4.setFlags(false, false, true);
     ipv4.setTtl(64);
-    ipv4.setProtocol(Variable::IP::tcp);
+    ipv4.setProtocol(IP_TCP);
     ipv4.setHeaderChecksum(0);
     ipv4.setSourceAddress(expectedIPv4 + 12);
     ipv4.setDestinationAddress(expectedIPv4 + 16);
@@ -427,7 +427,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Tcp)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::ipv4);
+    eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
 
@@ -489,7 +489,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Udp)
     ipv4.setIdentification(11);
     ipv4.setFlags(false, false, true);
     ipv4.setTtl(64);
-    ipv4.setProtocol(Variable::IP::udp);
+    ipv4.setProtocol(IP_UDP);
     ipv4.setSourceAddress(expectedIPv4 + 12);
     ipv4.setDestinationAddress(expectedIPv4 + 16);
 
@@ -498,7 +498,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Udp)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::ipv4);
+    eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
     
@@ -580,7 +580,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4UdpDhcp)
     h = pkt->nextBuildHeader();
     DhcpHeader dhcp;
     dhcp.setBuffer(h->buffer);
-    dhcp.setOpcode(Variable::Dhcp::Type::offer);
+    dhcp.setOpcode(DHCP_TYPE_OFFER);
     dhcp.setHType(0x01);
     dhcp.setHLen(6);
     dhcp.setHops(0);
@@ -592,12 +592,13 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4UdpDhcp)
     dhcp.setNextServerIP(expectedDhcp + 20);
     dhcp.setRelayAgentIp(expectedDhcp + 24);
     dhcp.setClientMac(expectedDhcp + 28);
-    dhcp.setMagicCookie(Variable::Dhcp::magicCookie);
+    dhcp.setMagicCookie(DHCP_MAGIC_COOKIE);
 
     auto trail = dhcp.getTrail();
     TLV8BufferManager opts(trail.data(), 4);
-    opts.append(Variable::Dhcp::Option::type, 1, &Variable::Dhcp::Type::offer, 1);
-    opts.addTermination(Variable::Dhcp::end);
+    uint8_t type = DHCP_TYPE_OFFER;
+    opts.append(DHCP_OPTION_TYPE, 1, &type, 1);
+    opts.addTermination(DHCP_OPTION_END);
 
     h = pkt->nextBuildHeader();
     UdpHeader udp;
@@ -614,7 +615,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4UdpDhcp)
     ipv4.setIdentification(13);
     ipv4.setFlags(false, false, true);
     ipv4.setTtl(64);
-    ipv4.setProtocol(Variable::IP::udp);
+    ipv4.setProtocol(IP_UDP);
     ipv4.setSourceAddress(expectedIPv4 + 12);
     ipv4.setDestinationAddress(expectedIPv4 + 16);
 
@@ -623,7 +624,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4UdpDhcp)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::ipv4);
+    eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
 
@@ -676,7 +677,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Eigrp)
     EigrpHeader eigrp;
     eigrp.setBuffer(h->buffer);
     eigrp.setVersion(1);
-    eigrp.setOpcode(Variable::Eigrp::Type::hello);
+    eigrp.setOpcode(EIGRP_TYPE_HELLO);
     eigrp.setSequence(1);
     eigrp.setAck(2);
     eigrp.setVirtualRouterId(1);
@@ -695,7 +696,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Eigrp)
     ipv4.setIdentification(13);
     ipv4.setFlags(false, false, true);
     ipv4.setTtl(64);
-    ipv4.setProtocol(Variable::IP::eigrp);
+    ipv4.setProtocol(IP_EIGRP);
     ipv4.setHeaderChecksum(0xB6D7);
     ipv4.setSourceAddress(expectedIPv4 + 12);
     ipv4.setDestinationAddress(expectedIPv4 + 16);
@@ -705,7 +706,7 @@ TEST_F(Internal_EncapsulationTest, EthernetIPv4Eigrp)
     eth.setBuffer(h->buffer);
     eth.setDestinationMac(expectedEthernet);
     eth.setSourceMac(expectedEthernet + 6);
-    eth.setType(Variable::Ethernet::ipv4);
+    eth.setType(ETHERNET_IPV4);
 
     EXPECT_TRUE(encapsulateThis());
     EXPECT_EQ(std::memcmp(pkt->getBuffer(), expectedEthernet, 14), 0);

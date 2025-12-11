@@ -156,7 +156,7 @@ void EigrpInterface::setMulticast(bool state)
 
 const uint8_t* EigrpInterface::multicastEnabled()
 {
-    return configs->multicastEnabled.load(std::memory_order_release) ? (base.getAF() == AddressFamily::IPv4) ? Variable::Multicast::Eigrp::address : Variable::Multicast::Eigrp::addressv6 : nullptr;
+    return configs->multicastEnabled.load(std::memory_order_release) ? (base.getAF() == AddressFamily::IPv4) ? EIGRP_MULTICAST_ADDRESS : EIGRP_MULTICAST_ADDRESS_V6 : nullptr;
 }
 
 void EigrpInterface::startDampening()

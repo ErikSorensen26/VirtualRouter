@@ -413,7 +413,7 @@ TEST_F(Internal_EigrpTest, AuthTLV_MD5_Correct)
     std::vector<TLV16Option> opts = extractEigrpOptions(helloPacket);
     
     auto it = std::find_if(opts.begin(), opts.end(), [](const TLV16Option& opt) {
-        return opt.type == Variable::Eigrp::Option::authentication;
+        return opt.type == EIGRP_OPTION_AUTHENTICATION;
     });
     ASSERT_NE(it, opts.end());
     ASSERT_FALSE(std::all_of(it->value + 1, it->value + it->valueSize - 1, [](uint8_t b){return b == 0;}));
@@ -442,7 +442,7 @@ TEST_F(Internal_EigrpTest, AuthTLV_SHA1_Correct)
     std::vector<TLV16Option> opts = extractEigrpOptions(helloPacket);
 
     auto it = std::find_if(opts.begin(), opts.end(), [](const TLV16Option& opt) {
-        return opt.type == Variable::Eigrp::Option::authentication;
+        return opt.type == EIGRP_OPTION_AUTHENTICATION;
     });
     ASSERT_NE(it, opts.end());
     ASSERT_FALSE(std::all_of(it->value + 1, it->value + it->valueSize - 1, [](uint8_t b){return b == 0;}));
@@ -463,7 +463,7 @@ TEST_F(Internal_EigrpTest, AuthTLV_Disabled_NoTLV)
     std::vector<TLV16Option> opts = extractEigrpOptions(helloPacket);
     
     auto it = std::find_if(opts.begin(), opts.end(), [](const TLV16Option& opt) {
-        return opt.type == Variable::Eigrp::Option::authentication;
+        return opt.type == EIGRP_OPTION_AUTHENTICATION;
     });
     ASSERT_EQ(it, opts.end());
 }
@@ -527,7 +527,7 @@ TEST_F(Internal_EigrpTest, Neighbor_TWOWAY_To_LOADING)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(1)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
             auto eigrp = getEigrpHeader(pkt);
-            if (eigrp.getOpcode() == Variable::Eigrp::Type::update)
+            if (eigrp.getOpcode() == EIGRP_TYPE_UPDATE)
                 fullUpdateFound = true;
         }));
 
@@ -822,7 +822,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_SIA_When_Stub_Enabled)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(1).WillOnce(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*){
             auto eigrp = getEigrpHeader(pkt);
-            EXPECT_EQ(eigrp.getOpcode(), Variable::Eigrp::Type::reply);
+            EXPECT_EQ(eigrp.getOpcode(), EIGRP_TYPE_REPLY);
         }));
 
     rs = { r };
@@ -854,7 +854,7 @@ TEST_F(Internal_EigrpTest, ActiveRoute_Will_Send_Reply_If_No_Available_Neighbors
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(1).WillOnce(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*){
-            EXPECT_EQ(getEigrpHeader(pkt).getOpcode(), Variable::Eigrp::Type::reply);
+            EXPECT_EQ(getEigrpHeader(pkt).getOpcode(), EIGRP_TYPE_REPLY);
         }));
 
     rs = { r };
@@ -880,7 +880,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved)
     EigrpHeader update;
     update.setBuffer(testPacket);
     update.setSequence(100);
-    update.setOpcode(Variable::Eigrp::Type::update);
+    update.setOpcode(EIGRP_TYPE_UPDATE);
 
     // Setup: simulate multicast to both neighbors, but only one ACKs
     eigrpInterface->getRtp().setupMulticastReliable(update);
@@ -892,7 +892,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved)
     createPacket(pkt);
     EigrpHeader nextUpdate = pkt.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
     nextUpdate.setSequence(101);
-    nextUpdate.setOpcode(Variable::Eigrp::Type::update);
+    nextUpdate.setOpcode(EIGRP_TYPE_UPDATE);
 
     bool crHelloFound = false;
     bool crUpdateFound = false;
@@ -900,25 +900,25 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Missing_Ack_Resolved)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(2)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*){
             auto eigrp = getEigrpHeader(pkt);
-            if (!crHelloFound && eigrp.getOpcode() == Variable::Eigrp::Type::hello)
+            if (!crHelloFound && eigrp.getOpcode() == EIGRP_TYPE_HELLO)
             {
                 bool seqFound = false;
                 bool neighbor = false;
                 auto opts = extractEigrpOptions(pkt);
                 for (auto& opt : opts)
                 {
-                    if (opt.type == Variable::Eigrp::Option::multicastSequence && readU32(opt.value) == 101)
+                    if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && readU32(opt.value) == 101)
                     {
                         seqFound = true;
                     }
-                    else if (opt.type == Variable::Eigrp::Option::sequence && readU32(opt.value + 1) == 0xC0A80202)
+                    else if (opt.type == EIGRP_OPTION_SEQUENCE && readU32(opt.value + 1) == 0xC0A80202)
                     {
                         neighbor = true;
                     }
                 }
                 crHelloFound = seqFound && neighbor;
             }
-            else if (!crUpdateFound && eigrp.getOpcode() == Variable::Eigrp::Type::update)
+            else if (!crUpdateFound && eigrp.getOpcode() == EIGRP_TYPE_UPDATE)
             {
                 crUpdateFound = eigrp.getFlagCondRecv();
             }
@@ -958,7 +958,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved)
     EigrpHeader update;
     update.setBuffer(testPacket);
     update.setSequence(200);
-    update.setOpcode(Variable::Eigrp::Type::update);
+    update.setOpcode(EIGRP_TYPE_UPDATE);
 
     // Setup: simulate multicast to both neighbors, but only one ACKs
     eigrpInterface->getRtp().setupMulticastReliable(update);
@@ -969,7 +969,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved)
     createPacket(pkt);
     EigrpHeader nextUpdate = pkt.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
     nextUpdate.setSequence(201);
-    nextUpdate.setOpcode(Variable::Eigrp::Type::update);
+    nextUpdate.setOpcode(EIGRP_TYPE_UPDATE);
 
     bool crHelloFound = false;
     bool crUpdateFound = false;
@@ -977,17 +977,17 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(2)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*){
             auto eigrp = getEigrpHeader(pkt);
-            if (!crHelloFound && eigrp.getOpcode() == Variable::Eigrp::Type::hello)
+            if (!crHelloFound && eigrp.getOpcode() == EIGRP_TYPE_HELLO)
             {
                 bool seqFound = false;
                 bool neighbor = false;
                 for (auto& opt : extractEigrpOptions(pkt))
                 {
-                    if (opt.type == Variable::Eigrp::Option::multicastSequence && readU32(opt.value) == 201)
+                    if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && readU32(opt.value) == 201)
                     {
                         seqFound = true;
                     }
-                    else if (opt.type == Variable::Eigrp::Option::sequence && opt.valueSize >= 9)
+                    else if (opt.type == EIGRP_OPTION_SEQUENCE && opt.valueSize >= 9)
                     {
                         uint32_t ip1 = readU32(opt.value + 1);
                         uint32_t ip2 = readU32(opt.value + 5);
@@ -997,7 +997,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Multiple_Missing_Acks_Resolved)
                 }
                 crHelloFound = seqFound && neighbor;
             }
-            else if (!crUpdateFound && eigrp.getOpcode() == Variable::Eigrp::Type::update)
+            else if (!crUpdateFound && eigrp.getOpcode() == EIGRP_TYPE_UPDATE)
             {
                 crUpdateFound = eigrp.getFlagCondRecv();
             }
@@ -1034,7 +1034,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Receive_CR) //TODO
     EigrpHeader update;
     update.setBuffer(testPacket);
     update.setSequence(300);
-    update.setOpcode(Variable::Eigrp::Type::update);
+    update.setOpcode(EIGRP_TYPE_UPDATE);
     update.setFlagCondRecv(true);
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
@@ -1053,7 +1053,7 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Lost_CR_Hello)
     EigrpHeader update;
     update.setBuffer(testPacket);
     update.setSequence(300);
-    update.setOpcode(Variable::Eigrp::Type::update);
+    update.setOpcode(EIGRP_TYPE_UPDATE);
     update.setFlagCondRecv(true);
 
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
@@ -1073,13 +1073,13 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Neighbor_Restarts_While_In_CR_Mode
     EigrpHeader update;
     update.setBuffer(testPacket);
     update.setSequence(400);
-    update.setOpcode(Variable::Eigrp::Type::update);
+    update.setOpcode(EIGRP_TYPE_UPDATE);
     eigrpInterface->getRtp().setupMulticastReliable(update);
 
     EigrpHeader nextUpdate;
     nextUpdate.setBuffer(testPacket);
     nextUpdate.setSequence(400);
-    nextUpdate.setOpcode(Variable::Eigrp::Type::update);
+    nextUpdate.setOpcode(EIGRP_TYPE_UPDATE);
     eigrpInterface->getRtp().setupMulticastReliable(nextUpdate);
 
     EXPECT_EQ(nbr->activeConditions.size(), 1);
@@ -1099,13 +1099,13 @@ TEST_F(Internal_EigrpTest, ConditionalReceive_Unicast_Must_Wait_For_CR) //TODO
     EigrpHeader mcast;
     mcast.setBuffer(testPacket);
     mcast.setSequence(600);
-    mcast.setOpcode(Variable::Eigrp::Type::update);
+    mcast.setOpcode(EIGRP_TYPE_UPDATE);
     eigrpInterface->getRtp().setupMulticastReliable(mcast);
 
     EigrpHeader unicast;
     unicast.setBuffer(testPacket);
     unicast.setSequence(601);
-    unicast.setOpcode(Variable::Eigrp::Type::update);
+    unicast.setOpcode(EIGRP_TYPE_UPDATE);
 
     {
         EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_)).Times(0);
@@ -1144,7 +1144,7 @@ TEST_F(Internal_EigrpTest, Stub_TLV_Present_When_Stub_Enabled)
     std::vector<TLV16Option> opts = extractEigrpOptions(helloPacket);
     auto it = std::find_if(opts.begin(), opts.end(),
         [](const TLV16Option& opt) {
-            return opt.type == Variable::Eigrp::Option::stub;
+            return opt.type == EIGRP_OPTION_STUB;
         });
     ASSERT_NE(it, opts.end());
 }
@@ -1166,7 +1166,7 @@ TEST_F(Internal_EigrpTest, Authentication_TLV_Insertion_Correct)
     std::vector<TLV16Option> opts = extractEigrpOptions(helloPacket);
     auto it = std::find_if(opts.begin(), opts.end(),
                              [](const TLV16Option& opt) {
-                                 return opt.type == Variable::Eigrp::Option::authentication;
+                                 return opt.type == EIGRP_OPTION_AUTHENTICATION;
                              });
     ASSERT_NE(it, opts.end());
     ASSERT_FALSE(std::all_of(it->value + 1, it->value + it->valueSize - 1, [](uint8_t b){return b == 0;}));
@@ -1837,7 +1837,7 @@ TEST_F(Internal_EigrpTest, ActiveQuery_Clear_After_Neighbor_Response)
         .Times(::testing::AtLeast(1))
         .WillRepeatedly(::testing::Invoke([&]( PacketBuilder& pkt, const uint8_t*) {
             auto header = getEigrpHeader(pkt);
-            if (header.getOpcode() == Variable::Eigrp::Type::query)
+            if (header.getOpcode() == EIGRP_TYPE_QUERY)
             {
                 PacketBuilder eigrp(mockInterface);
                 createPacket(eigrp);
@@ -1909,7 +1909,7 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
         .Times(::testing::AtLeast(1))
         .WillRepeatedly(::testing::Invoke([&]( PacketBuilder& pkt, const uint8_t*) {
             auto header = getEigrpHeader(pkt);
-            if (header.getOpcode() == Variable::Eigrp::Type::query)
+            if (header.getOpcode() == EIGRP_TYPE_QUERY)
             {
                 PacketBuilder eigrp(mockInterface); // Only mock interface has a valid queue
                 createPacket(eigrp);
@@ -1923,15 +1923,15 @@ TEST_F(Internal_EigrpTest, Reply_Returned_After_Full_Query_Sequence)
         .Times(::testing::AtLeast(2))
         .WillRepeatedly(::testing::Invoke([&]( PacketBuilder& pkt, const uint8_t*) {
             auto header = getEigrpHeader(pkt);
-            if (header.getOpcode() == Variable::Eigrp::Type::reply)
+            if (header.getOpcode() == EIGRP_TYPE_REPLY)
             {
                 auto opts = extractEigrpOptions(pkt);
                 for (auto& opt : opts)
-                    if (opt.type == Variable::Eigrp::Option::legacyInternalRoute)
+                    if (opt.type == EIGRP_OPTION_LEGACY_INTERNAL_ROUTE)
                         if (auto route = Eigrp::TLVBuilder::decodeRoute(opt, 0, AddressFamily::IPv4); route && route->prefix == prefix)
                             replyFound = true;
             }
-            else if (header.getOpcode() == Variable::Eigrp::Type::update)
+            else if (header.getOpcode() == EIGRP_TYPE_UPDATE)
                 updateFound = true;
         }));
 
@@ -2045,7 +2045,7 @@ TEST_F(Internal_EigrpTest, Query_Multicast_Sent_To_All_Eligible_Neighbors)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(1)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
             auto eigrp = getEigrpHeader(pkt);
-            if (eigrp.getOpcode() == Variable::Eigrp::Type::query)
+            if (eigrp.getOpcode() == EIGRP_TYPE_QUERY)
                 queryFound = true;
         }));
 
@@ -2087,7 +2087,7 @@ TEST_F(Internal_EigrpTest, Query_Unicast_Sent_To_All_Eligible_Neighbors)
     EXPECT_CALL(*mockInterface, enqueuePacket(::testing::_, ::testing::_))
         .Times(::testing::AtLeast(2)).WillRepeatedly(::testing::Invoke([&](PacketBuilder& pkt, const uint8_t*) {
             auto eigrp = getEigrpHeader(pkt);
-            if (eigrp.getOpcode() == Variable::Eigrp::Type::query)
+            if (eigrp.getOpcode() == EIGRP_TYPE_QUERY)
                 queryCount++;
         }));
 
@@ -3011,7 +3011,7 @@ TEST_F(Internal_EigrpTest, Summarization_Advertises_Summary_Only)
             bool isValid = true;
             for (auto opt : opts)
             {
-                if (opt.type == Variable::Eigrp::Option::legacyInternalRoute)
+                if (opt.type == EIGRP_OPTION_LEGACY_INTERNAL_ROUTE)
                 {
                     auto tlv = Eigrp::TLVBuilder::decodeRoute(opt, 0, AddressFamily::IPv4);
                     isValid = (tlv.has_value() && tlv->prefix == summaryPrefix);
@@ -3114,7 +3114,7 @@ TEST_F(Internal_EigrpTest, Split_Horizon_Prevents_Route_Propagation_Back)
             auto opts = extractEigrpOptions(pkt);
             for (auto& opt : opts)
             {
-                bool valid = opt.type != Variable::Eigrp::Option::legacyInternalRoute ||
+                bool valid = opt.type != EIGRP_OPTION_LEGACY_INTERNAL_ROUTE ||
                     Eigrp::TLVBuilder::decodeRoute(opt, 0, AddressFamily::IPv4).value().delay == std::numeric_limits<uint64_t>::max();
                 ASSERT_TRUE(valid);
             }

@@ -974,7 +974,7 @@ TEST_F(Internal_ArpTest, ReplyWithInvalidMac_Ignored)
     reply.setBuffer(buf);
     reply.setSenderIpAddr(ip);
     reply.setTargetIpAddr(ip);
-    reply.setSenderHwAddr(Variable::Mac::broadcast);
+    reply.setSenderHwAddr(ETHERNET_MAC_BROADCAST);
 
     // MAC is broadcast — invalid in reply
     // In your implementation, this might not yet block it unless logic is added to reject non-unicast MACs

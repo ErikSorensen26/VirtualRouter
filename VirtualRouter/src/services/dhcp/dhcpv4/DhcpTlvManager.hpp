@@ -3,7 +3,7 @@
 #ifndef DHCP_TLV_MANAGER_HPP
 #define DHCP_TLV_MANAGER_HPP
 
-#include <TLVOptions.hpp>
+#include <TlvOptions.hpp>
 #include <DhcpHeader.hpp>
 
 namespace Protocol

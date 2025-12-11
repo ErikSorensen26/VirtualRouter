@@ -65,10 +65,10 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
 
     uint8_t dhcpType = dhcp.getType();
 
-    bool isBinding = dhcpType == Variable::Dhcpv6::Type::renew
-                  || dhcpType == Variable::Dhcpv6::Type::rebind
-                  || dhcpType == Variable::Dhcpv6::Type::release
-                  || dhcpType == Variable::Dhcpv6::Type::decline;
+    bool isBinding = dhcpType == DHCPV6_TYPE_RENEW
+                  || dhcpType == DHCPV6_TYPE_REBIND
+                  || dhcpType == DHCPV6_TYPE_RELEASE
+                  || dhcpType == DHCPV6_TYPE_DECLINE;
 
     Duid serverID;
     Dhcpv6::Dhcpv6IAOptions ia;
@@ -78,7 +78,7 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
 
     for (auto& opt : options)
     {
-        if (opt.type == Variable::Dhcpv6::Options::clientID)
+        if (opt.type == DHCPV6_OPTION_CLIENT_ID)
         {
             packet.send.clientID = { opt.value, opt.valueSize };
             break;
@@ -92,37 +92,37 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
     {
         switch (opt.type)
         {
-            case Variable::Dhcpv6::Options::serverID:
+            case DHCPV6_OPTION_SERVER_ID:
                 serverID = { opt.value, opt.valueSize };
                 break;
-            case Variable::Dhcpv6::Options::reconfAccept:
+            case DHCPV6_OPTION_RECONFIG_ACCEPT:
                 reconfigAccept = true;
                 break;
-            case Variable::Dhcpv6::Options::optionRequest:
+            case DHCPV6_OPTION_OPTION_REQUEST:
             {
                 packet.send.oro = opt.value;
                 packet.send.oroSize = opt.valueSize;
                 break;
             }
-            case Variable::Dhcpv6::Options::IA_NA:
+            case DHCPV6_OPTION_IA_NA:
             {
                 auto iana = extractIA_NA(opt, network, packet.send.clientID, isBinding);
                 if (iana.has_value()) ia.ianaBlocks.push_back(iana.value());
                 break;
             }
-            case Variable::Dhcpv6::Options::IA_TA:
+            case DHCPV6_OPTION_IA_TA:
             {
                 auto iata = extractIA_TA(opt, network, isBinding);
                 if (iata.has_value()) ia.iataBlocks.push_back(iata.value());
                 break;
             }
-            case Variable::Dhcpv6::Options::IA_PD:
+            case DHCPV6_OPTION_IA_PD:
             {
                 auto iapd = extractIA_PD(opt, network, packet.send.clientID, isBinding);
                 if (iapd.has_value()) ia.iapdBlocks.push_back(iapd.value());
                 break;
             }
-            case Variable::Dhcpv6::Options::auth:
+            case DHCPV6_OPTION_AUTHENTICATION:
                 authOpt = &opt;
                 break;
             default:
@@ -136,9 +136,9 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
     // Auth
     if (authManager.getSettings().rkapEnabled.load(std::memory_order_relaxed))
     {
-        if (dhcpType == Variable::Dhcpv6::Type::renew ||
-            dhcpType == Variable::Dhcpv6::Type::rebind ||
-            dhcpType == Variable::Dhcpv6::Type::informationRequest)
+        if (dhcpType == DHCPV6_TYPE_RENEW ||
+            dhcpType == DHCPV6_TYPE_REBIND ||
+            dhcpType == DHCPV6_TYPE_INFORMATION_REQUEST)
         {
             auto reconfigInfo = activeReconfigs.find(clientID);
             if (reconfigInfo != activeReconfigs.end())
@@ -166,28 +166,28 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
 
     switch (dhcpType)
     {
-        case Variable::Dhcpv6::Type::solicit:
+        case DHCPV6_TYPE_SOLICIT:
             send = processSolicit(packet, ia);
             break;
-        case Variable::Dhcpv6::Type::request:
+        case DHCPV6_TYPE_REQUEST:
             send = processRequest(packet, ia, serverID);
             break;
-        case Variable::Dhcpv6::Type::renew:
+        case DHCPV6_TYPE_RENEW:
             send = processRenew(packet, ia, serverID);
             break;
-        case Variable::Dhcpv6::Type::rebind:
+        case DHCPV6_TYPE_REBIND:
             send = processRebind(packet, ia);
             break;
-        case Variable::Dhcpv6::Type::release:
+        case DHCPV6_TYPE_RELEASE:
             send = processRelease(packet, ia, serverID);
             break;
-        case Variable::Dhcpv6::Type::decline:
+        case DHCPV6_TYPE_DECLINE:
             send = processDecline(packet, ia, serverID);
             break;
-        case Variable::Dhcpv6::Type::confirm:
+        case DHCPV6_TYPE_CONFIRM:
             send = processConfirm(packet, ia);
             break;
-        case Variable::Dhcpv6::Type::informationRequest:
+        case DHCPV6_TYPE_INFORMATION_REQUEST:
             send = processInformationRequest(packet);
             break;
         default:
@@ -214,7 +214,7 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
         if (hasLease)
         {
             if (((configs.requireReconfigureAccept.load(std::memory_order_relaxed) || iface.configs.dhcpv6.configs->automatic.load(std::memory_order_relaxed)) && 
-                reconfigAccept && clientID.data && send.value().type != Variable::Dhcpv6::Type::advertise) ||
+                reconfigAccept && clientID.data && send.value().type != DHCPV6_TYPE_ADVERTISE) ||
                 configs.reconfigureAll.load(std::memory_order_relaxed) || iface.configs.dhcpv6.configs->reconfigureAll.load(std::memory_order_relaxed))
             {
                 reconfigAccepts[clientID] = {
@@ -227,16 +227,16 @@ bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packe
 
     switch(send.value().type)
     {
-        case Variable::Dhcpv6::Type::advertise:
+        case DHCPV6_TYPE_ADVERTISE:
             if (!sendAdvertise(packet.send, ia, dhcp.getTransId())) return false;
             break;
-        case Variable::Dhcpv6::Type::reply:
+        case DHCPV6_TYPE_REPLY:
             if (!sendReply(packet.send, &ia, dhcp.getTransId(), send.value().property)) return false;
             break;
-        case Variable::Dhcpv6::Type::confirm:
+        case DHCPV6_TYPE_CONFIRM:
             if (!sendConfirmReply(packet.send, ia, dhcp.getTransId(), send.value().property)) return false;
             break;
-        case Variable::Dhcpv6::Type::informationRequest:
+        case DHCPV6_TYPE_INFORMATION_REQUEST:
             if (!sendReply(packet.send, nullptr, dhcp.getTransId(), send.value().property)) return false;
             break;
     }
@@ -281,7 +281,7 @@ void Protocol::Dhcpv6Server::buildResponse(
                 bool hasStatus = entry.status.code != Dhcpv6StatusCode::Success;
 
                 // Option type and length
-                writeU16(iaHdr + offset, Variable::Dhcpv6::Options::IAAddr);
+                writeU16(iaHdr + offset, DHCPV6_OPTION_IAADDR);
                 writeU16(iaHdr + offset + 2, 24 + (hasStatus ? (6 + entry.status.msg.size()) : 0));
                 offset += 4;
 
@@ -292,7 +292,7 @@ void Protocol::Dhcpv6Server::buildResponse(
 
                 if (hasStatus)
                 {
-                    writeU16(iaHdr + offset, Variable::Dhcpv6::Options::statusCode);
+                    writeU16(iaHdr + offset, DHCPV6_OPTION_STATUS_CODE);
                     writeU16(iaHdr + offset + 2, 2 + entry.status.msg.size());
                     offset += 4;
 
@@ -327,7 +327,7 @@ void Protocol::Dhcpv6Server::buildResponse(
                 bool hasStatus = entry.status.code != Dhcpv6StatusCode::Success;
 
                 // Option type and length
-                writeU16(iaHdr + offset, Variable::Dhcpv6::Options::IAAddr);
+                writeU16(iaHdr + offset, DHCPV6_OPTION_IAADDR);
                 writeU16(iaHdr + offset + 2, 24 + (hasStatus ? (6 + entry.status.msg.size()) : 0));
                 offset += 4;
 
@@ -338,7 +338,7 @@ void Protocol::Dhcpv6Server::buildResponse(
 
                 if (hasStatus)
                 {
-                    writeU16(iaHdr + offset, Variable::Dhcpv6::Options::statusCode);
+                    writeU16(iaHdr + offset, DHCPV6_OPTION_STATUS_CODE);
                     writeU16(iaHdr + offset + 2, 2 + entry.status.msg.size());
                     offset += 4;
 
@@ -379,7 +379,7 @@ void Protocol::Dhcpv6Server::buildResponse(
                 if (preferredLifetime > prefixPreferredLifetime) preferredLifetime = prefixPreferredLifetime;
 
                 // Option type and length
-                writeU16(iaHdr + offset, Variable::Dhcpv6::Options::IAAddr);
+                writeU16(iaHdr + offset, DHCPV6_OPTION_IAADDR);
                 writeU16(iaHdr + offset + 2, 24 + (hasStatus ? (6 + entry.status.msg.size()) : 0));
                 offset += 4;
 
@@ -391,7 +391,7 @@ void Protocol::Dhcpv6Server::buildResponse(
 
                 if (hasStatus)
                 {
-                    writeU16(iaHdr + offset, Variable::Dhcpv6::Options::statusCode);
+                    writeU16(iaHdr + offset, DHCPV6_OPTION_STATUS_CODE);
                     writeU16(iaHdr + offset + 2, 2 + entry.status.msg.size());
                     offset += 4;
 
@@ -513,7 +513,7 @@ void Protocol::Dhcpv6Server::buildResponse(
         }
         value[offset] = 0x00;
 
-        tlv.append(Variable::Dhcpv6::Options::fqdn, total, nullptr, total);
+        tlv.append(DHCPV6_OPTION_FQDN, total, nullptr, total);
     };
 
     if (oro && oroSize != 0)
@@ -522,56 +522,56 @@ void Protocol::Dhcpv6Server::buildResponse(
         {
             switch (readU16(oro + i))
             {
-                case Variable::Dhcpv6::Options::dnsServer:
+                case DHCPV6_OPTION_DNS_SERVERS:
                 {
-                    addServerList(Variable::Dhcpv6::Options::dnsServer, ia->network->configs.dnsServers);
+                    addServerList(DHCPV6_OPTION_DNS_SERVERS, ia->network->configs.dnsServers);
                     break;
                 }
-                case Variable::Dhcpv6::Options::domainSearch:
+                case DHCPV6_OPTION_DOMAIN_SEARCH:
                 {
-                    addNames(Variable::Dhcpv6::Options::domainSearch, ia->network->configs.domainSearch);
+                    addNames(DHCPV6_OPTION_DOMAIN_SEARCH, ia->network->configs.domainSearch);
                     break;
                 }
-                case Variable::Dhcpv6::Options::ntpServer:
+                case DHCPV6_OPTION_NTP_SERVERS:
                 {
-                    addServerList(Variable::Dhcpv6::Options::ntpServer, ia->network->configs.ntpServers);
+                    addServerList(DHCPV6_OPTION_NTP_SERVERS, ia->network->configs.ntpServers);
                     break;
                 }
-                case Variable::Dhcpv6::Options::fqdn:
+                case DHCPV6_OPTION_FQDN:
                 {
                     addFQDN();
                     break;
                 }
-                case Variable::Dhcpv6::Options::infoRefreshTime:
+                case DHCPV6_OPTION_INFO_REFRESH_TIME:
                 {
                     auto value = tlv.getNextValBuf(4);
                     if (!value) continue;
                     writeU32(value, ia->network->configs.isRefreshTime.load(std::memory_order_relaxed) ? ia->network->configs.refreshTime.load(std::memory_order_relaxed) : configs.refreshTime.load(std::memory_order_relaxed));
-                    tlv.append(Variable::Dhcpv6::Options::infoRefreshTime, 4, nullptr, 4);
+                    tlv.append(DHCPV6_OPTION_INFO_REFRESH_TIME, 4, nullptr, 4);
                     break;
                 }
-                case Variable::Dhcpv6::Options::solMaxRt:
+                case DHCPV6_OPTION_SOL_MAX_RT:
                 {
                     auto value = tlv.getNextValBuf(4);
                     if (!value) continue;
                     writeU32(value, ia->network->configs.isSolMaxRt.load(std::memory_order_relaxed) ? ia->network->configs.solMaxRt.load(std::memory_order_relaxed) : configs.solMaxRt.load(std::memory_order_relaxed));
-                    tlv.append(Variable::Dhcpv6::Options::solMaxRt, 4, nullptr, 4);
+                    tlv.append(DHCPV6_OPTION_SOL_MAX_RT, 4, nullptr, 4);
                     break;
                 }
-                case Variable::Dhcpv6::Options::infMaxRt:
+                case DHCPV6_OPTION_INF_MAX_RT:
                 {
                     auto value = tlv.getNextValBuf(4);
                     if (!value) continue;
                     writeU32(value, ia->network->configs.isInfMaxRt.load(std::memory_order_relaxed) ? ia->network->configs.infMaxRt.load(std::memory_order_relaxed) : configs.infMaxRt.load(std::memory_order_relaxed));
-                    tlv.append(Variable::Dhcpv6::Options::infMaxRt, 4, nullptr, 4);
+                    tlv.append(DHCPV6_OPTION_INF_MAX_RT, 4, nullptr, 4);
                     break;
                 }
-                case Variable::Dhcpv6::Options::vendorOpts:
+                case DHCPV6_OPTION_VENDOR_OPTS:
                 {
                     //TODO
                     break;
                 }
-                case Variable::Dhcpv6::Options::vendorClassID:
+                case DHCPV6_OPTION_VENDOR_CLASS_ID:
                 {
                     //TODO
                     break;
@@ -591,7 +591,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processS
     bool rapidCommit = false;
     for (const auto& opt : packet.options)
     {
-        if (opt.type == Variable::Dhcpv6::Options::rapidCommit &&
+        if (opt.type == DHCPV6_OPTION_RAPID_COMMIT &&
             opt.valueSize == 0 && (ifaceConf.dhcpv6.configs->rapidCommit.load(std::memory_order_relaxed) || configs.rapidCommit.load(std::memory_order_relaxed)))
         {
             rapidCommit = true;
@@ -715,7 +715,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processS
             }
         }
 
-        return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::reply, true };
+        return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_REPLY, true };
     }
 
     if (ia.network)
@@ -877,7 +877,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processS
         }
     }
 
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::advertise };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_ADVERTISE };
 }
 
 std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processRequest(Dhcpv6::Dhcpv6PacketReceive& packet, Dhcpv6::Dhcpv6IAOptions& ia, Duid& serverID)
@@ -949,7 +949,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
         }
     }
 
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::reply, false };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_REPLY, false };
 }
 
 std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processConfirm(Dhcpv6::Dhcpv6PacketReceive& packet, Dhcpv6::Dhcpv6IAOptions& ia)
@@ -990,7 +990,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processC
     }
 
 
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::confirm, allOnLink };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_CONFIRM, allOnLink };
 }
 
 std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processRenew(Dhcpv6::Dhcpv6PacketReceive& packet, Dhcpv6::Dhcpv6IAOptions& ia, Duid& serverID)
@@ -1066,7 +1066,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
         }
     }
 
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::reply, false };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_REPLY, false };
 }
 
 std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processRebind(Dhcpv6::Dhcpv6PacketReceive& packet, Dhcpv6::Dhcpv6IAOptions& ia)
@@ -1124,7 +1124,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
     // IATA must not be processed in rebind
     ia.iataBlocks.clear();
 
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::reply, false };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_REPLY, false };
 }
 
 std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processRelease(Dhcpv6::Dhcpv6PacketReceive& packet, Dhcpv6::Dhcpv6IAOptions& ia, Duid& serverID)
@@ -1199,7 +1199,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
         }
     }
 
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::reply, false };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_REPLY, false };
 }
 
 std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processDecline(Dhcpv6::Dhcpv6PacketReceive& packet, Dhcpv6::Dhcpv6IAOptions& ia, Duid& serverID)
@@ -1280,7 +1280,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processD
         }
     }
 
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::reply, false };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_REPLY, false };
 }
 
 std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processInformationRequest(Dhcpv6::Dhcpv6PacketReceive& packet)
@@ -1289,7 +1289,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processI
         return std::nullopt;
     
     sendReply(packet.send, nullptr, packet.dhcpHeader.getTransId(), false);
-    return Dhcpv6::Dhcpv6SendType{ Variable::Dhcpv6::Type::informationRequest };
+    return Dhcpv6::Dhcpv6SendType{ DHCPV6_TYPE_INFORMATION_REQUEST };
 }
 
 bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay, Interface& iface, const uint8_t* clientAddress, const uint8_t* relayIp)
@@ -1343,7 +1343,7 @@ bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay,
     {
         if (offset > dhcpOffset) return false;
         std::memcpy(buffer + offset, it->relay.buffer, it->relay.fixedSize);
-        buffer[offset] = Variable::Dhcpv6::Type::relayReply;
+        buffer[offset] = DHCPV6_TYPE_RELAY_REPLY;
         offset += it->relay.fixedSize;
         for (auto opt : it->options)
         {
@@ -1353,7 +1353,7 @@ bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay,
             offset += 4 + opt.valueSize;
         }
         
-        writeU16(buffer + offset, Variable::Dhcpv6::Options::relayMsg);
+        writeU16(buffer + offset, DHCPV6_OPTION_RELAY_MSG);
         writeU16(buffer + offset + 2, static_cast<uint16_t>(end - (buffer + offset + 4)));
         offset += 4;
     }
@@ -1366,10 +1366,10 @@ bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay,
         .packetInfo = build.builder,
         .destIp = relayIp,
         .hopLimit = 64,
-        .protocolType = Variable::IP::udp
+        .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    UDP::buildUdp(AddressFamily::IPv6, ip, UDP_DHCPV6_SERVER, UDP_DHCPV6_CLIENT);
     return true;
 }
 
@@ -1387,7 +1387,7 @@ size_t Protocol::Dhcpv6Server::processRelayChain(const Dhcpv6RelayHeader& relay,
 
     while (true)
     {
-        if (current + 34 > end || current[0] != Variable::Dhcpv6::Type::relayForward)
+        if (current + 34 > end || current[0] != DHCPV6_TYPE_RELAY_FORWARD)
             return 0;
 
         // Store the parsed relay
@@ -1407,7 +1407,7 @@ size_t Protocol::Dhcpv6Server::processRelayChain(const Dhcpv6RelayHeader& relay,
         bool foundRelayMsg = false;
         for (auto& opt : options)
         {
-            if (opt.type == Variable::Dhcpv6::Options::relayMsg)
+            if (opt.type == DHCPV6_OPTION_RELAY_MSG)
             {
                 if (foundRelayMsg) return 0;
                 relayMsg = opt.value;
@@ -1460,12 +1460,12 @@ bool Protocol::Dhcpv6Server::sendAdvertise(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : Variable::Multicast::Dhcp::serverToAllv6,
+        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
         .hopLimit = 1,
-        .protocolType = Variable::IP::udp
+        .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    UDP::buildUdp(AddressFamily::IPv6, ip, UDP_DHCPV6_SERVER, UDP_DHCPV6_CLIENT);
     return true;
 }
 
@@ -1487,12 +1487,12 @@ bool Protocol::Dhcpv6Server::sendReply(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::D
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : Variable::Multicast::Dhcp::serverToAllv6,
+        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
         .hopLimit = 1,
-        .protocolType = Variable::IP::udp
+        .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    UDP::buildUdp(AddressFamily::IPv6, ip, UDP_DHCPV6_SERVER, UDP_DHCPV6_CLIENT);
     return true;
 }
 
@@ -1514,12 +1514,12 @@ bool Protocol::Dhcpv6Server::sendConfirmReply(Dhcpv6::Dhcpv6PacketSend& send, Dh
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : Variable::Multicast::Dhcp::serverToAllv6,
+        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
         .hopLimit = 1,
-        .protocolType = Variable::IP::udp
+        .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    UDP::buildUdp(AddressFamily::IPv6, ip, UDP_DHCPV6_SERVER, UDP_DHCPV6_CLIENT);
     return true;
 }
 
@@ -1546,12 +1546,12 @@ bool Protocol::Dhcpv6Server::sendReconfigure(Dhcpv6::Dhcpv6PacketSend& send, Dhc
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : Variable::Multicast::Dhcp::serverToAllv6,
+        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
         .hopLimit = 1,
-        .protocolType = Variable::IP::udp
+        .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(AddressFamily::IPv6, ip, Variable::Udp::dhcpv6Server, Variable::Udp::dhcpv6Client);
+    UDP::buildUdp(AddressFamily::IPv6, ip, UDP_DHCPV6_SERVER, UDP_DHCPV6_CLIENT);
     return true;
 }
 
@@ -1562,24 +1562,24 @@ bool Protocol::Dhcpv6Server::buildAdvertise(Dhcpv6::Dhcpv6PacketBuild& build, Dh
     auto& dhcp = build.dhcp;
     auto& builder = build.builder;
 
-    dhcp.setType(Variable::Dhcpv6::Type::advertise);
+    dhcp.setType(DHCPV6_TYPE_ADVERTISE);
     dhcp.setTransId(transId);
 
     // Add TLV options directly to trailing span
     TLV16BufferManager tlv(dhcp.getTrailData(), build.maxSize);
 
     // Add Client identifier
-    tlv.append(Variable::Dhcpv6::Options::clientID, send.clientID.size, send.clientID.data, send.clientID.size);
+    tlv.append(DHCPV6_OPTION_CLIENT_ID, send.clientID.size, send.clientID.data, send.clientID.size);
 
     // Add Server identifier
-    tlv.append(Variable::Dhcpv6::Options::serverID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
+    tlv.append(DHCPV6_OPTION_SERVER_ID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
 
     ADD_DELAYED_AUTH
 
     // Add server preference
     uint8_t preference = send.iface.configs.dhcpv6.configs->preferenceValue.load(std::memory_order_relaxed);
     if (preference != 0)
-        tlv.append(Variable::Dhcpv6::Options::preference, 1, &preference, 1);
+        tlv.append(DHCPV6_OPTION_PREFERENCE, 1, &preference, 1);
 
     // Send
     if (send.multicast && configs.allowUnicast.load(std::memory_order_relaxed) && !ia.ianaBlocks.empty())
@@ -1605,17 +1605,17 @@ bool Protocol::Dhcpv6Server::buildReply(Dhcpv6::Dhcpv6PacketBuild& build, Dhcpv6
     auto& dhcp = build.dhcp;
     auto& builder = build.builder;
 
-    dhcp.setType(Variable::Dhcpv6::Type::reply);
+    dhcp.setType(DHCPV6_TYPE_REPLY);
     dhcp.setTransId(transId);
 
     // Add TLV options directly to trailing span
     TLV16BufferManager tlv(dhcp.getTrailData(), build.maxSize);
 
     // Add Client identifier
-    tlv.append(Variable::Dhcpv6::Options::clientID, send.clientID.size, send.clientID.data, send.clientID.size);
+    tlv.append(DHCPV6_OPTION_CLIENT_ID, send.clientID.size, send.clientID.data, send.clientID.size);
 
     // Add Server identifier
-    tlv.append(Variable::Dhcpv6::Options::serverID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
+    tlv.append(DHCPV6_OPTION_SERVER_ID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
 
     ADD_DELAYED_AUTH
 
@@ -1633,7 +1633,7 @@ bool Protocol::Dhcpv6Server::buildReply(Dhcpv6::Dhcpv6PacketBuild& build, Dhcpv6
     buildResponse(dhcp, send.clientID, tlv, ia, send.oro, send.oroSize);
 
     if (rapidCommit)
-        tlv.append(Variable::Dhcpv6::Options::rapidCommit, 0, nullptr, 0);
+        tlv.append(DHCPV6_OPTION_RAPID_COMMIT, 0, nullptr, 0);
 
     builder.addTLVSize(tlv.size());
 
@@ -1647,17 +1647,17 @@ bool Protocol::Dhcpv6Server::buildConfirmReply(Dhcpv6::Dhcpv6PacketBuild& build,
     auto& dhcp = build.dhcp;
     auto& builder = build.builder;
 
-    dhcp.setType(Variable::Dhcpv6::Type::reply);
+    dhcp.setType(DHCPV6_TYPE_REPLY);
     dhcp.setTransId(transId);
 
     // Add TLV options directly to trailing span
     TLV16BufferManager tlv(dhcp.getTrailData(), build.maxSize);
 
     // Add Client identifier
-    tlv.append(Variable::Dhcpv6::Options::clientID, send.clientID.size, send.clientID.data, send.clientID.size);
+    tlv.append(DHCPV6_OPTION_CLIENT_ID, send.clientID.size, send.clientID.data, send.clientID.size);
 
     // Add Server identifier
-    tlv.append(Variable::Dhcpv6::Options::serverID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
+    tlv.append(DHCPV6_OPTION_SERVER_ID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
 
     ADD_DELAYED_AUTH
 
@@ -1665,14 +1665,14 @@ bool Protocol::Dhcpv6Server::buildConfirmReply(Dhcpv6::Dhcpv6PacketBuild& build,
     {
         uint8_t successStatus[2];
         writeU16(successStatus, 0);
-        tlv.append(Variable::Dhcpv6::Options::statusCode, 2, successStatus, 2);
+        tlv.append(DHCPV6_OPTION_STATUS_CODE, 2, successStatus, 2);
     }
     else
     {
         uint8_t unsuccess[10];
         writeU16(unsuccess, static_cast<uint16_t>(Dhcpv6StatusCode::NotOnLink));
         writeU64(unsuccess + 2, 0x626164206C696E6B); // "Bad link"
-        tlv.append(Variable::Dhcpv6::Options::statusCode, 10, unsuccess, 10);
+        tlv.append(DHCPV6_OPTION_STATUS_CODE, 10, unsuccess, 10);
     }
 
     // Add IA options
@@ -1691,16 +1691,16 @@ bool Protocol::Dhcpv6Server::buildReconfigure(Dhcpv6::Dhcpv6PacketBuild& build, 
     auto& dhcp = build.dhcp;
     auto& builder = build.builder;
 
-    dhcp.setType(Variable::Dhcpv6::Type::reconfigure);
+    dhcp.setType(DHCPV6_TYPE_RECONFIGURE);
     generateDhcpTransid(dhcp.raw->transId);
 
     TLV16BufferManager tlv(dhcp.getTrailData(), build.maxSize);
 
     // Add Server ID
-    tlv.append(Variable::Dhcpv6::Options::serverID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
+    tlv.append(DHCPV6_OPTION_SERVER_ID, dhcpUniqueIdentifier.size, dhcpUniqueIdentifier.data, dhcpUniqueIdentifier.size);
 
     // Add ClientID
-    tlv.append(Variable::Dhcpv6::Options::clientID, send.clientID.size, send.clientID.data, send.clientID.size);
+    tlv.append(DHCPV6_OPTION_CLIENT_ID, send.clientID.size, send.clientID.data, send.clientID.size);
 
     // Add Auth (RKAP)
     auto key = authManager.addRkapAuthOption(tlv, send.clientID);
@@ -1708,7 +1708,7 @@ bool Protocol::Dhcpv6Server::buildReconfigure(Dhcpv6::Dhcpv6PacketBuild& build, 
 
     // Add reconfig message
     uint8_t reconfigType = static_cast<uint8_t>(reason);
-    tlv.append(Variable::Dhcpv6::Options::reconfigureMessage, 1, &reconfigType, 1);
+    tlv.append(DHCPV6_OPTION_RECONFIG_MESSAGE, 1, &reconfigType, 1);
 
     builder.addTLVSize(tlv.size());
 
@@ -1730,7 +1730,7 @@ bool Protocol::Dhcpv6Server::buildReconfigure(Dhcpv6::Dhcpv6PacketBuild& build, 
 
 std::optional<Protocol::Dhcpv6::IANABlock> Protocol::Dhcpv6Server::extractIA_NA(const TLV16Option& option, Dhcpv6::DhcpNetwork* network, Duid& clientID, bool isBinding)
 {
-    if (option.type == Variable::Dhcpv6::Options::IA_NA && option.valueSize >= 12)
+    if (option.type == DHCPV6_OPTION_IA_NA && option.valueSize >= 12)
     {
         Dhcpv6::IANABlock iana;
         iana.iaid = option.value;
@@ -1746,7 +1746,7 @@ std::optional<Protocol::Dhcpv6::IANABlock> Protocol::Dhcpv6Server::extractIA_NA(
 
         for (const auto& iaaddr : options)
         {
-            if (iaaddr.type == Variable::Dhcpv6::Options::IAAddr && iaaddr.valueSize >= 24)
+            if (iaaddr.type == DHCPV6_OPTION_IAADDR && iaaddr.valueSize >= 24)
             {
                 if (readU32(iaaddr.value + 16) > readU32(iaaddr.value + 20))
                 {
@@ -1765,7 +1765,7 @@ std::optional<Protocol::Dhcpv6::IANABlock> Protocol::Dhcpv6Server::extractIA_NA(
                     parseDhcpv6Options(iaaddr.value + 24, iaaddr.valueSize - 24, iaaddrOpts);
                     for (const auto& iaaddrOpt : iaaddrOpts)
                     {
-                        if (iaaddrOpt.type == Variable::Dhcpv6::Options::statusCode && iaaddrOpt.valueSize >= 2)
+                        if (iaaddrOpt.type == DHCPV6_OPTION_STATUS_CODE && iaaddrOpt.valueSize >= 2)
                         {
                             status = {
                                 static_cast<Dhcpv6StatusCode>(readU16(iaaddrOpt.value)),
@@ -1785,7 +1785,7 @@ std::optional<Protocol::Dhcpv6::IANABlock> Protocol::Dhcpv6Server::extractIA_NA(
 
                 iana.addresses.push_back({ ianaAddr, { status }, preferred, valid });
             }
-            else if (iaaddr.type == Variable::Dhcpv6::Options::statusCode && iaaddr.valueSize >= 2 && iana.status.code == Dhcpv6StatusCode::None)
+            else if (iaaddr.type == DHCPV6_OPTION_STATUS_CODE && iaaddr.valueSize >= 2 && iana.status.code == Dhcpv6StatusCode::None)
             {
                 iana.status = {
                     static_cast<Dhcpv6StatusCode>(readU16(iaaddr.value)),
@@ -1800,7 +1800,7 @@ std::optional<Protocol::Dhcpv6::IANABlock> Protocol::Dhcpv6Server::extractIA_NA(
 
 std::optional<Protocol::Dhcpv6::IATABlock> Protocol::Dhcpv6Server::extractIA_TA(const TLV16Option& option, Dhcpv6::DhcpNetwork* network, bool isBinding)
 {
-    if (option.type == Variable::Dhcpv6::Options::IA_TA && option.valueSize >= 12)
+    if (option.type == DHCPV6_OPTION_IA_TA && option.valueSize >= 12)
     {
         Dhcpv6::IATABlock iata;
         iata.iaid = option.value;
@@ -1816,7 +1816,7 @@ std::optional<Protocol::Dhcpv6::IATABlock> Protocol::Dhcpv6Server::extractIA_TA(
 
         for (const auto& iaaddr : options)
         {
-            if (iaaddr.type == Variable::Dhcpv6::Options::IAAddr && iaaddr.valueSize >= 24)
+            if (iaaddr.type == DHCPV6_OPTION_IAADDR && iaaddr.valueSize >= 24)
             {
                 if (readU32(iaaddr.value + 16) > readU32(iaaddr.value + 20))
                 {
@@ -1833,7 +1833,7 @@ std::optional<Protocol::Dhcpv6::IATABlock> Protocol::Dhcpv6Server::extractIA_TA(
                     parseDhcpv6Options(iaaddr.value + 24, iaaddr.valueSize - 24, iaaddrOpts);
                     for (const auto& iaaddrOpt : iaaddrOpts)
                     {
-                        if (iaaddrOpt.type == Variable::Dhcpv6::Options::statusCode && iaaddrOpt.valueSize >= 2)
+                        if (iaaddrOpt.type == DHCPV6_OPTION_STATUS_CODE && iaaddrOpt.valueSize >= 2)
                         {
                             status = {
                                 static_cast<Dhcpv6StatusCode>(readU16(iaaddrOpt.value)),
@@ -1846,7 +1846,7 @@ std::optional<Protocol::Dhcpv6::IATABlock> Protocol::Dhcpv6Server::extractIA_TA(
 
                 iata.addresses.push_back({ readU128(iaaddr.value), status });
             }
-            else if (iaaddr.type == Variable::Dhcpv6::Options::statusCode && iaaddr.valueSize >= 2 && iata.status.code == Dhcpv6StatusCode::None)
+            else if (iaaddr.type == DHCPV6_OPTION_STATUS_CODE && iaaddr.valueSize >= 2 && iata.status.code == Dhcpv6StatusCode::None)
             {
                 iata.status = {
                     static_cast<Dhcpv6StatusCode>(readU16(iaaddr.value)),
@@ -1862,7 +1862,7 @@ std::optional<Protocol::Dhcpv6::IATABlock> Protocol::Dhcpv6Server::extractIA_TA(
 
 std::optional<Protocol::Dhcpv6::IAPDBlock> Protocol::Dhcpv6Server::extractIA_PD(const TLV16Option& option, Dhcpv6::DhcpNetwork* network, Duid& clientID, bool isBinding)
 {
-    if (option.type == Variable::Dhcpv6::Options::IA_PD && option.valueSize >= 12)
+    if (option.type == DHCPV6_OPTION_IA_PD && option.valueSize >= 12)
     {
         Dhcpv6::IAPDBlock iapd;
         iapd.iaid = option.value;
@@ -1878,7 +1878,7 @@ std::optional<Protocol::Dhcpv6::IAPDBlock> Protocol::Dhcpv6Server::extractIA_PD(
 
         for (const auto& iaprefix : options)
         {
-            if (iaprefix.type == Variable::Dhcpv6::Options::IA_Prefix && iaprefix.valueSize >= 25)
+            if (iaprefix.type == DHCPV6_OPTION_IA_PREFIX && iaprefix.valueSize >= 25)
             {
                 if (readU32(iaprefix.value) > readU32(iaprefix.value + 4))
                 {
@@ -1897,7 +1897,7 @@ std::optional<Protocol::Dhcpv6::IAPDBlock> Protocol::Dhcpv6Server::extractIA_PD(
                     parseDhcpv6Options(iaprefix.value + 25, iaprefix.valueSize - 25, iaprefixOpts);
                     for (const auto& iaprefixOpt : iaprefixOpts)
                     {
-                        if (iaprefixOpt.type == Variable::Dhcpv6::Options::statusCode && iaprefixOpt.valueSize >= 2)
+                        if (iaprefixOpt.type == DHCPV6_OPTION_STATUS_CODE && iaprefixOpt.valueSize >= 2)
                         {
                             status = {
                                 static_cast<Dhcpv6StatusCode>(readU16(iaprefixOpt.value)),
@@ -1920,7 +1920,7 @@ std::optional<Protocol::Dhcpv6::IAPDBlock> Protocol::Dhcpv6Server::extractIA_PD(
 
                 iapd.prefixes.push_back({ prefix, status, pool, preferred, valid });
             }
-            else if (iaprefix.type == Variable::Dhcpv6::Options::statusCode && iaprefix.valueSize >= 2 && iapd.status.code == Dhcpv6StatusCode::None)
+            else if (iaprefix.type == DHCPV6_OPTION_STATUS_CODE && iaprefix.valueSize >= 2 && iapd.status.code == Dhcpv6StatusCode::None)
             {
                 iapd.status = {
                     static_cast<Dhcpv6StatusCode>(readU16(iaprefix.value)),
@@ -1948,7 +1948,7 @@ bool Protocol::Dhcpv6Server::addServerUnicast(TLV16BufferManager& tlv, __uint128
     }
     if (buf)
     {
-        tlv.append(Variable::Dhcpv6::Options::unicast, 16, ip, 16);
+        tlv.append(DHCPV6_OPTION_UNICAST, 16, ip, 16);
         return true;
     }
     return false;

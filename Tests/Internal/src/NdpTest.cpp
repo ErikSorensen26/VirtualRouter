@@ -77,11 +77,11 @@ TEST_F(Internal_NdpTest, SendNS_ReceiveNA_CreatesEntry)
     uint8_t trail[24] = {0};
     std::memcpy(trail, ip, 16);
     TLV8BufferManager opt(trail + 16, 8);
-    opt.append(Variable::ICMPv6::Option::target, 1, mac, 6);
+    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
 
     Icmpv6Header na;
     na.setBuffer(buf);
-    na.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+    na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
     na.setReserved(res);
     na.setTrail(trail, 24);
@@ -100,11 +100,11 @@ TEST_F(Internal_NdpTest, UnsolicitedNA_CreatesEntry)
     uint8_t trail[24];
     std::memcpy(trail, ip, 16);
     TLV8BufferManager opt(trail + 16, 8);
-    opt.append(Variable::ICMPv6::Option::target, 1, mac, 6);
+    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
 
     Icmpv6Header na;
     na.setBuffer(buf);
-    na.setCode(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+    na.setCode(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setReserved(res);
     na.setTrail(trail, 24);
 
@@ -157,11 +157,11 @@ TEST_F(Internal_NdpTest, ReceiveNAWithoutQueue_AddsEntry)
     uint8_t trail[24];
     std::memcpy(trail, ip, 16);
     TLV8BufferManager opt(trail + 16, 8);
-    opt.append(Variable::ICMPv6::Option::target, 1, mac, 6);
+    opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
 
     Icmpv6Header na;
     na.setBuffer(buf);
-    na.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+    na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
     na.setReserved(res);
     na.setTrail(trail, 24);
@@ -188,7 +188,7 @@ TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
 
     uint8_t trail[40] = {0};
 
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // 64-bit prefix length
     trail[11] = 0xC0; // L and A bits
@@ -199,7 +199,7 @@ TEST_F(Internal_NdpTest, SLAAC_RSAndRA_CreatesAddress)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
     
@@ -242,18 +242,18 @@ TEST_F(Internal_NdpTest, SLAAC_DAD_Failure_MarksDuplicate)
         uint8_t res[4] = { 0xA0, 0x00, 0x00, 0x00 };
         uint8_t trail[24] = {0};
         TLV8BufferManager opt(trail + 16, 8);
-        opt.append(Variable::ICMPv6::Option::target, 1, mac, 6);
+        opt.append(ICMPV6_OPTION_NDP_TARGET, 1, mac, 6);
         std::memcpy(trail, fullAddr, 16);
 
         Icmpv6Header na;
         na.setBuffer(buf);
 
-        na.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+        na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
         na.setCode(0x00);
         na.setReserved(res);
         na.setTrail(trail, 24);
 
-        ndp->receiveNeighborAdvertisement(na, Variable::IPv4::source);
+        ndp->receiveNeighborAdvertisement(na, IPV6_SOURCE);
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -294,7 +294,7 @@ TEST_F(Internal_NdpTest, SLAAC_PreferredLifetimeExpires)
 
     uint8_t trail[40] = {0};
 
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // 64-bit prefix length
     trail[11] = 0xC0; // L and A bits
@@ -305,11 +305,11 @@ TEST_F(Internal_NdpTest, SLAAC_PreferredLifetimeExpires)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -328,7 +328,7 @@ TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes)
 
     uint8_t trail[48] = {0};
 
-    trail[16] = Variable::ICMPv6::Option::prefix;
+    trail[16] = ICMPV6_OPTION_NDP_PREFIX;
     trail[17] = 0x04;
     trail[18] = 0x40; // 64-bit prefix length
     trail[19] = 0xC0; // L and A bits
@@ -339,11 +339,11 @@ TEST_F(Internal_NdpTest, SLAAC_Disabled_IgnoresPrefixes)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 48);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv4::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     EXPECT_TRUE(getIPv6s().empty());
 }
@@ -381,14 +381,14 @@ TEST_F(Internal_NdpTest, DAD_ConflictFromNA_MarksDuplicate)
 
     uint8_t trail[24] = {0};
     std::memcpy(trail, ip, 16);
-    trail[16] = Variable::ICMPv6::Option::target;
+    trail[16] = ICMPV6_OPTION_NDP_TARGET;
     trail[17] = 0x01;
     std::memcpy(trail + 18, mac, 6);
 
     Icmpv6Header na;
     na.setBuffer(buf);
 
-    na.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+    na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
     na.setTrail(trail, 24);
 
@@ -453,7 +453,7 @@ TEST_F(Internal_NdpTest, ProxyNA_RespondsWithCorrectMAC)
     Icmpv6Header ns;
     ns.setBuffer(buf);
 
-    ns.setType(Variable::ICMPv6::Type::ndpNeighborSolicitation);
+    ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
     ns.setCode(0x00);
     ns.setTrail(localLinkIp, 16);
 
@@ -482,7 +482,7 @@ TEST_F(Internal_NdpTest, ProxyNA_RespondsWithCorrectMAC)
                     if (hasICMPv6) FAIL();
                     hasICMPv6 = true;
                     auto icmp = reinterpret_cast<Icmpv6HeaderRaw*>(header.buffer);
-                    EXPECT_EQ(icmp->type, Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+                    EXPECT_EQ(icmp->type, ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
                     EXPECT_EQ(std::memcmp(icmp->reserved + 4, proxyIp, 16), 0);
                 }
             }
@@ -524,7 +524,7 @@ TEST_F(Internal_NdpTest, Proxy_UnsolicitedNASent)
                     if (hasEth) FAIL();
                     hasEth = true;
                     auto eth = reinterpret_cast<EthernetHeaderRaw*>(header.buffer);
-                    EXPECT_EQ(std::memcmp(eth->destinationMac, Variable::Mac::broadcast, 6), 0);
+                    EXPECT_EQ(std::memcmp(eth->destinationMac, ETHERNET_MAC_BROADCAST, 6), 0);
                 }
                 else if (header.type == HeaderType::IPV6)
                 {
@@ -536,7 +536,7 @@ TEST_F(Internal_NdpTest, Proxy_UnsolicitedNASent)
                     if (hasICMP) FAIL();
                     hasICMP = true;
                     auto icmp = reinterpret_cast<Icmpv6HeaderRaw*>(header.buffer);
-                    EXPECT_EQ(icmp->type, Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+                    EXPECT_EQ(icmp->type, ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
                     EXPECT_EQ(std::memcmp(icmp->reserved + 4, ip, 16), 0);
                 }
             }
@@ -544,7 +544,7 @@ TEST_F(Internal_NdpTest, Proxy_UnsolicitedNASent)
         }));
 
     clearUnsolidated();
-    ndp->sendNeighborAdvertisement(Variable::Mac::broadcast, ip);
+    ndp->sendNeighborAdvertisement(ETHERNET_MAC_BROADCAST, ip);
 }
 
 // Test: DADProbe_TriggersProxyNA
@@ -556,7 +556,7 @@ TEST_F(Internal_NdpTest, DADProbe_TriggersProxyNA)
 
     Icmpv6Header ns;
     ns.setBuffer(buf);
-    ns.setType(Variable::ICMPv6::Type::ndpNeighborSolicitation);
+    ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
     ns.setTrail(ip, 16);
 
     clearUnsolidated();
@@ -584,14 +584,14 @@ TEST_F(Internal_NdpTest, DADProbe_TriggersProxyNA)
                     if (hasICMP) FAIL();
                     hasICMP = true;
                     auto icmp = reinterpret_cast<Icmpv6HeaderRaw*>(header.buffer);
-                    EXPECT_EQ(icmp->type, Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+                    EXPECT_EQ(icmp->type, ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
                     EXPECT_EQ(std::memcmp(icmp->reserved + 4, ip, 16), 0);
                 }
             }
             ASSERT_TRUE(hasEth && hasIp && hasICMP);
         }));
 
-    ndp->receiveNeighborSolicitation(ns, unspecified, Variable::Mac::source);
+    ndp->receiveNeighborSolicitation(ns, unspecified, ETHERNET_MAC_SOURCE);
 }
 
 // Test: RA_MOFlagsUpdateConfig
@@ -645,13 +645,13 @@ TEST_F(Internal_NdpTest, RA_TrustedSourceIsAccepted)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setReserved(res);
     ra.setTrail(trail, 8);
 
     // Should not be dropped
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
     SUCCEED(); // No crash/drop = accepted
 }
 
@@ -667,12 +667,12 @@ TEST_F(Internal_NdpTest, RA_FromBlockedPortIsDropped_BLOCK_ALL)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 8);
 
     // No crash = passed
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     // If it reached here, it was dropped without crashing
     SUCCEED();
@@ -690,11 +690,11 @@ TEST_F(Internal_NdpTest, RA_MacWhitelistRejectsUnknownMAC)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 8);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
     SUCCEED(); // No crash = dropped
 }
 
@@ -710,12 +710,12 @@ TEST_F(Internal_NdpTest, RA_NonICMPv6HeaderIsDropped)
     Icmpv6Header ra;
     ra.setBuffer(buf);
     
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 8);
 
     // No extension headers included — simulate filtered result
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
     SUCCEED(); // Reaching here = accepted or ignored, no crash
 }
 
@@ -729,7 +729,7 @@ TEST_F(Internal_NdpTest, RA_ExcludedPrefixIgnored)
     ndp->addSlaacExclusionPrefix({prefix, AddressFamily::IPv6}, false); // exclude
 
     uint8_t trail[40] = {0};
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A
@@ -740,11 +740,11 @@ TEST_F(Internal_NdpTest, RA_ExcludedPrefixIgnored)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
     EXPECT_TRUE(getIPv6s().empty());
@@ -758,7 +758,7 @@ TEST_F(Internal_NdpTest, RA_InvalidPrefixSizeIgnored)
     iface->configs.setMac(mac);
 
     uint8_t trail[28] = {0};
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A
@@ -769,11 +769,11 @@ TEST_F(Internal_NdpTest, RA_InvalidPrefixSizeIgnored)
     Icmpv6Header ra;
     ra.setBuffer(buf);
     
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 28);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
     EXPECT_TRUE(getIPv6s().empty());
@@ -796,7 +796,7 @@ TEST_F(Internal_NdpTest, RA_GuardBlockAllModeDropsAll)
     Functions::calculateEui64(fullAddr, prefix, mac);
 
     uint8_t trail[40];
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A
@@ -807,11 +807,11 @@ TEST_F(Internal_NdpTest, RA_GuardBlockAllModeDropsAll)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
@@ -844,7 +844,7 @@ TEST_F(Internal_NdpTest, RA_GuardTrustedModeAcceptsAll)
     Functions::calculateEui64(fullAddr, prefix, mac);
 
     uint8_t trail[40] = {0};
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L and A bit
@@ -855,11 +855,11 @@ TEST_F(Internal_NdpTest, RA_GuardTrustedModeAcceptsAll)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
@@ -888,12 +888,12 @@ TEST_F(Internal_NdpTest, RA_WithExtensionHeaders_IsDropped)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 8);
 
     // Simulate malformed/extended header RA by using suspicious source MAC
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, Variable::Mac::source);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, ETHERNET_MAC_SOURCE);
 
     // No address added = dropped
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
@@ -911,11 +911,11 @@ TEST_F(Internal_NdpTest, RA_FragmentedPacketIgnored)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 1);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
     EXPECT_TRUE(getIPv6s().empty());
@@ -968,14 +968,14 @@ TEST_F(Internal_NdpTest, Redirect_CreatesEntryForBetterNextHop)
     uint8_t trail[40];
     std::memcpy(trail, betterHop, 16);
     std::memcpy(trail + 16, destIp, 16);
-    trail[32] = Variable::ICMPv6::Option::target;
+    trail[32] = ICMPV6_OPTION_NDP_TARGET;
     trail[33] = 0x01;
     std::memcpy(trail + 34, mac, 6);
 
     Icmpv6Header redirect;
     redirect.setBuffer(buf);
 
-    redirect.setType(Variable::ICMPv6::Type::ndpRedirectMessage);
+    redirect.setType(ICMPV6_OPCODE_NDP_REDIRECT_MESSAGE);
     redirect.setCode(0x00);
     redirect.setTrail(trail, 40);
 
@@ -993,11 +993,11 @@ TEST_F(Internal_NdpTest, NA_UnsolicitedRateLimitEnforced)
 
     // First send should work
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_)).Times(1);
-    ndp->sendNeighborAdvertisement(Variable::Mac::broadcast, ip);
+    ndp->sendNeighborAdvertisement(ETHERNET_MAC_BROADCAST, ip);
 
     // Immediate resend should be skipped
     EXPECT_CALL(*iface, enqueuePacket(testing::_, testing::_)).Times(0);
-    ndp->sendNeighborAdvertisement(Variable::Mac::broadcast, ip);
+    ndp->sendNeighborAdvertisement(ETHERNET_MAC_BROADCAST, ip);
 }
 
 // Test: RA_RateLimitGlobalEnforced
@@ -1013,7 +1013,7 @@ TEST_F(Internal_NdpTest, RA_RateLimitGlobalEnforced)
     ndp->addRaGuardAllowedMac(mac2);
 
     uint8_t trail1[40];
-    trail1[8] = Variable::ICMPv6::Option::prefix;
+    trail1[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail1[9] = 0x04;
     trail1[10] = 0x40; // /64
     trail1[11] = 0xC0; // L + A
@@ -1024,12 +1024,12 @@ TEST_F(Internal_NdpTest, RA_RateLimitGlobalEnforced)
     Icmpv6Header ra1;
     ra1.setBuffer(buf);
     
-    ra1.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra1.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra1.setCode(0x00);
     ra1.setTrail(trail1, 40);
 
     uint8_t trail2[40];
-    trail2[8] = Variable::ICMPv6::Option::prefix;
+    trail2[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail2[9] = 0x04;
     trail2[10] = 0x40; // /64
     trail2[11] = 0xC0; // L and A bits
@@ -1041,12 +1041,12 @@ TEST_F(Internal_NdpTest, RA_RateLimitGlobalEnforced)
     Icmpv6Header ra2;
     ra2.setBuffer(buf2);
 
-    ra2.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra2.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra2.setCode(0x00);
     ra2.setTrail(trail2, 40);
 
-    ndp->receiveRouteAdvertisement(ra1, Variable::IPv6::source, mac2);
-    ndp->receiveRouteAdvertisement(ra2, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra1, IPV6_SOURCE, mac2);
+    ndp->receiveRouteAdvertisement(ra2, IPV6_SOURCE, mac2);
 
     EXPECT_EQ(getIPv6s().size(), 1); // Only one should be added
     EXPECT_EQ(std::memcmp(getIPv6s()[0]->ip, prefix, 8), 0);
@@ -1116,7 +1116,7 @@ TEST_F(Internal_NdpTest, RA_AddsPrefixWithCorrectTimers)
     iface->configs.setMac(mac);
 
     uint8_t trail[40];
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A bits
@@ -1127,11 +1127,11 @@ TEST_F(Internal_NdpTest, RA_AddsPrefixWithCorrectTimers)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv4::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -1149,11 +1149,11 @@ TEST_F(Internal_NdpTest, RA_MalformedFieldsAreIgnored)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 4);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
     SUCCEED(); // Drop w/o crash
 }
 
@@ -1165,7 +1165,7 @@ TEST_F(Internal_NdpTest, NA_WithoutMACOptionIsIgnored)
     Icmpv6Header na;
     na.setBuffer(buf);
 
-    na.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+    na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
     na.setReserved(res);
     na.setTrail(localLinkIp, 16);
@@ -1186,7 +1186,7 @@ TEST_F(Internal_NdpTest, NS_UnknownTargetIsIgnored)
     Icmpv6Header ns;
     ns.setBuffer(buf);
 
-    ns.setType(Variable::ICMPv6::Type::ndpNeighborSolicitation);
+    ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
     ns.setCode(0x00);
     ns.setTrail(unknownIp, 16);
 
@@ -1218,13 +1218,13 @@ TEST_F(Internal_NdpTest, NA_DuringProbe_ResetsToReachable)
     uint8_t res[4] = { 0xE0, 0x00, 0x00, 0x00 };
     uint8_t trail[24] = {0};
     std::memcpy(trail, ip, 16);
-    trail[16] = Variable::ICMPv6::Option::target;
+    trail[16] = ICMPV6_OPTION_NDP_TARGET;
     trail[17] = 0x01;
     std::memcpy(trail + 18, mac, 6);
 
     Icmpv6Header na;
     na.setBuffer(buf);
-    na.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+    na.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
     na.setCode(0x00);
     na.setReserved(res);
     na.setTrail(trail, 24);
@@ -1256,10 +1256,10 @@ TEST_F(Internal_NdpTest, DAD_And_NS_DoNotCorruptState)
     Icmpv6Header ns;
 
     ns.setBuffer(buf);
-    ns.setType(Variable::ICMPv6::Type::ndpNeighborSolicitation);
+    ns.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
     ns.setTrail(ip, 16);
 
-    ndp->receiveNeighborSolicitation(ns, Variable::IPv6::source, Variable::Mac::source); // DAD probe
+    ndp->receiveNeighborSolicitation(ns, IPV6_SOURCE, ETHERNET_MAC_SOURCE); // DAD probe
 
     dadThread.join();
 
@@ -1320,9 +1320,9 @@ TEST_F(Internal_NdpTest, UnknownICMPv6TypeIsIgnored)
     hdr.setTrail(trail, 16);
 
     // Send to all receive functions
-    ndp->receiveNeighborAdvertisement(hdr, Variable::IPv6::source);
-    ndp->receiveRouteAdvertisement(hdr, Variable::IPv6::source, Variable::Mac::source);
-    ndp->receiveRedirectMessage(hdr, Variable::IPv6::source);
+    ndp->receiveNeighborAdvertisement(hdr, IPV6_SOURCE);
+    ndp->receiveRouteAdvertisement(hdr, IPV6_SOURCE, ETHERNET_MAC_SOURCE);
+    ndp->receiveRedirectMessage(hdr, IPV6_SOURCE);
 
     SUCCEED(); // Ignored = passed
 }
@@ -1335,7 +1335,7 @@ TEST_F(Internal_NdpTest, RA_InconsistentLifetimesAreIgnored)
     ndp->configs.slaacEnabled.store(true);
 
     uint8_t trail[40] = {0};
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A Bits
@@ -1346,11 +1346,11 @@ TEST_F(Internal_NdpTest, RA_InconsistentLifetimesAreIgnored)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, Variable::Mac::source);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, ETHERNET_MAC_SOURCE);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
     EXPECT_TRUE(getIPv6s().empty());
@@ -1368,13 +1368,13 @@ TEST_F(Internal_NdpTest, RaGuardModeUpdate_TakesEffectImmediately)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 8);
 
     // BLOCK_ALL → should be dropped
     ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::BLOCK_ALL);
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
     {
         std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
         EXPECT_TRUE(getIPv6s().empty());
@@ -1382,7 +1382,7 @@ TEST_F(Internal_NdpTest, RaGuardModeUpdate_TakesEffectImmediately)
 
     // TRUSTED → should be accepted
     ndp->configs.raGuardMode.store(Protocol::Ndp::Configs::RaGuardMode::TRUSTED);
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
     SUCCEED(); // No crash means accepted
 }
 
@@ -1397,7 +1397,7 @@ TEST_F(Internal_NdpTest, SLAAC_ExclusionUpdate_AppliesImmediately)
     ndp->addSlaacExclusionPrefix({prefix, AddressFamily::IPv6}, false);
 
     uint8_t trail[40];
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A Bits
@@ -1408,10 +1408,10 @@ TEST_F(Internal_NdpTest, SLAAC_ExclusionUpdate_AppliesImmediately)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::shared_lock<std::shared_mutex> lock(iface->configs.ipMutex);
     EXPECT_TRUE(getIPv6s().empty());
@@ -1476,7 +1476,7 @@ TEST_F(Internal_NdpTest, Config_PreferredLifetimeUpdatesWithRA)
     ndp->configs.raLifetime.store(100);
 
     uint8_t trail[40];
-    trail[8] = Variable::ICMPv6::Option::prefix;
+    trail[8] = ICMPV6_OPTION_NDP_PREFIX;
     trail[9] = 0x04;
     trail[10] = 0x40; // /64
     trail[11] = 0xC0; // L + A Bits
@@ -1487,11 +1487,11 @@ TEST_F(Internal_NdpTest, Config_PreferredLifetimeUpdatesWithRA)
     Icmpv6Header ra;
     ra.setBuffer(buf);
 
-    ra.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+    ra.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
     ra.setCode(0x00);
     ra.setTrail(trail, 40);
 
-    ndp->receiveRouteAdvertisement(ra, Variable::IPv6::source, mac2);
+    ndp->receiveRouteAdvertisement(ra, IPV6_SOURCE, mac2);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 

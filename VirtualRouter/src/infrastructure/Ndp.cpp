@@ -204,8 +204,8 @@ namespace Protocol
         IPPacket::BuildIP build = {
             .iface = currentInterface,
             .packetInfo = rs,
-            .destIp = Variable::Multicast::ICMPv6::allRouters,
-            .protocolType = Variable::IP::icmpv6
+            .destIp = ICMPV6_ALL_ROUTERS,
+            .protocolType = IP_ICMPV6
         };
 
         IPPacket::buildIpv6(build);
@@ -320,7 +320,7 @@ namespace Protocol
         for (const auto& opt : options)
         {
             // Extract MAC from options
-            if (opt.type == Variable::ICMPv6::Option::target && opt.valueSize == 6)
+            if (opt.type == ICMPV6_OPTION_NDP_TARGET && opt.valueSize == 6)
             {
                 std::memcpy(mac, opt.value, 6);
                 macFound = true;
@@ -334,7 +334,7 @@ namespace Protocol
                 std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
                 for (const auto& addr : currentInterface->configs.ipv6.globalAddresses)
                 {
-                    if (std::memcmp(addr->ip, trail.data(), 16) == 0 && addr->tentative && std::memcmp(sourceIp, &Variable::IPv6::source, 16) == 0)
+                    if (std::memcmp(addr->ip, trail.data(), 16) == 0 && addr->tentative && std::memcmp(sourceIp, &IPV6_SOURCE, 16) == 0)
                     {
                         std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
                         neighborReplyStatus[targetIp] = true;
@@ -453,15 +453,15 @@ namespace Protocol
         PacketBuilder na(currentInterface);
         neighborAdvertisement(na, replyMac, isProxy ? trail.data() : srcIp);
 
-        if (srcMac && std::memcmp(srcIp, &Variable::IPv6::source, 16) == 0)
+        if (srcMac && std::memcmp(srcIp, &IPV6_SOURCE, 16) == 0)
         {
             // Multicast NA for DAD response or missing MAC
             IPPacket::BuildIP build = {
                 .iface = currentInterface,
                 .packetInfo = na,
-                .destIp = Variable::IPv6::multicact,
+                .destIp = IPV6_MULTICAST,
                 .sourceIp = trail.data(),
-                .protocolType = Variable::IP::icmpv6
+                .protocolType = IP_ICMPV6
             };
 
             IPPacket::buildIpv6(build);
@@ -475,7 +475,7 @@ namespace Protocol
                 .destIp = srcIp,
                 .sourceIp = trail.data(),
                 .destMac = srcMac,
-                .protocolType = Variable::IP::icmpv6
+                .protocolType = IP_ICMPV6
             };
 
             IPPacket::buildIpv6(build);
@@ -505,7 +505,7 @@ namespace Protocol
             {
                 //TODO add more headers
                 case HeaderType::ETHERNET:
-                    Protocol::Ethernet::build(currentInterface, pkt, targetIp.raw, macAddress, Variable::Ethernet::ipv6);
+                    Protocol::Ethernet::build(currentInterface, pkt, targetIp.raw, macAddress, ETHERNET_IPV6);
                     break;
                 default:
                     continue;
@@ -585,7 +585,7 @@ namespace Protocol
         {
             return nullptr;
         }
-        std::memcpy(out, Variable::Multicast::ICMPv6::solicitationAddress, 16);
+        std::memcpy(out, ICMPV6_SOLICIT_MULTICAST, 16);
         out[13] = targetIp[13];
         out[14] = targetIp[14];
         out[15] = targetIp[15];
@@ -605,7 +605,7 @@ namespace Protocol
 
         icmp.setBuffer(nextHeader->buffer);
 
-        icmp.setType(Variable::ICMPv6::Type::ndpNeighborSolicitation);
+        icmp.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_SOLICITATION);
         icmp.setCode(0);
         icmp.setReservedInt(0);
 
@@ -615,7 +615,7 @@ namespace Protocol
         if (currentMac)
         {
             TLV8BufferManager options(trail + 16, 8);
-            options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
+            options.append(ICMPV6_OPTION_NDP_TARGET, 1, currentMac, 6);
             nextHeader->length = Icmpv6Header::fixedSize + options.size();
         }
 
@@ -635,7 +635,7 @@ namespace Protocol
 
         icmp.setBuffer(nextHeader->buffer);
 
-        icmp.setType(Variable::ICMPv6::Type::ndpNeighborAdvertisement);
+        icmp.setType(ICMPV6_OPCODE_NDP_NEIGHBOR_ADVERTISEMENT);
         icmp.setCode(0);
         
         uint8_t reserved[4];
@@ -654,7 +654,7 @@ namespace Protocol
         }
 
         TLV8BufferManager options(trail + 16, 8);
-        options.append(Variable::ICMPv6::Option::target, 1, currentMac, 6);
+        options.append(ICMPV6_OPTION_NDP_TARGET, 1, currentMac, 6);
     }
 
     void Ndp::routeSolicitation(PacketBuilder& packet, const uint8_t* currentMac)
@@ -670,7 +670,7 @@ namespace Protocol
 
         icmp.setBuffer(nextHeader->buffer);
 
-        icmp.setType(Variable::ICMPv6::Type::ndpRouteSolicitation);
+        icmp.setType(ICMPV6_OPCODE_NDP_ROUTE_SOLICITATION);
         icmp.setCode(0);
         icmp.setReservedInt(0);
         
@@ -678,7 +678,7 @@ namespace Protocol
         uint8_t* trail = icmp.getTrailData();
         
         TLV8BufferManager options(trail, 8);
-        options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
+        options.append(ICMPV6_OPTION_NDP_SOURCE, 1, currentMac, 6);
 
         nextHeader->length = Icmpv6Header::fixedSize + options.size();
         packet.bufferOffset += nextHeader->length;
@@ -697,7 +697,7 @@ namespace Protocol
 
         icmp.setBuffer(nextHeader->buffer);
 
-        icmp.setType(Variable::ICMPv6::Type::ndpRouteAdvertisement);
+        icmp.setType(ICMPV6_OPCODE_NDP_ROUTE_ADVERTISEMENT);
         icmp.setCode(0);
 
         uint8_t reserved[4];
@@ -722,14 +722,14 @@ namespace Protocol
         writeU32(trail + 4, 0); // 0 means use your own timer
 
         TLV8BufferManager options(trail + 8);
-        options.append(Variable::ICMPv6::Option::source, 1, currentMac, 6);
+        options.append(ICMPV6_OPTION_NDP_SOURCE, 1, currentMac, 6);
 
         if (!configs.mtuSuppress.load(std::memory_order_relaxed))
         {
             uint8_t mtu[6];
             writeU16(mtu, 0); // Reserved
             writeU32(mtu + 2, currentInterface->configs.ipv6.mtu.load(std::memory_order_relaxed));
-            options.append(Variable::ICMPv6::Option::mtu, 1, mtu, 6);
+            options.append(ICMPV6_OPTION_NDP_MTU, 1, mtu, 6);
         }
 
         if (configs.autoConfigPrefix.load(std::memory_order_relaxed))
@@ -764,7 +764,7 @@ namespace Protocol
                 writeU32(value + 12, 0);
                 Functions::computeNetworkAddress(value + 16, addr->ip, prefixLen, AddressFamily::IPv6);
 
-                options.append(Variable::ICMPv6::Option::prefix, 4, value, 30);
+                options.append(ICMPV6_OPTION_NDP_PREFIX, 4, value, 30);
             }
         }
         nextHeader->length = Icmpv6Header::fixedSize + options.size();
@@ -797,9 +797,9 @@ namespace Protocol
             IPPacket::BuildIP build = {
                 .iface = currentInterface,
                 .packetInfo = naPacket,
-                .destIp = targetIp ? targetIp : Variable::IPv6::multicact,
+                .destIp = targetIp ? targetIp : IPV6_MULTICAST,
                 .destMac = destMac,
-                .protocolType = Variable::IP::icmpv6
+                .protocolType = IP_ICMPV6
             };
 
             IPPacket::buildIpv6(build);
@@ -822,7 +822,7 @@ namespace Protocol
                 .iface = currentInterface,
                 .packetInfo = rsPacket,
                 .destIp = generateMulticastSolicitationAddress(multicastIp, targetIp),
-                .protocolType = Variable::IP::icmpv6
+                .protocolType = IP_ICMPV6
             };
 
             IPPacket::buildIpv6(build);
@@ -845,7 +845,7 @@ namespace Protocol
                 .packetInfo = raPacket,
                 .destIp = targetIp,
                 .destMac = targetMac,
-                .protocolType = Variable::IP::icmpv6
+                .protocolType = IP_ICMPV6
             };
 
             IPPacket::buildIpv6(build);
@@ -869,7 +869,7 @@ namespace Protocol
         
         icmp.setBuffer(nextHeader->buffer);
 
-        icmp.setType(Variable::ICMPv6::Type::ndpRedirectMessage);
+        icmp.setType(ICMPV6_OPCODE_NDP_REDIRECT_MESSAGE);
         icmp.setCode(0);
         icmp.setReserved(0);
         
@@ -879,7 +879,7 @@ namespace Protocol
         std::memcpy(trail + 16, targetIp, 16);
         
         TLV8BufferManager options(trail + 32, 8);
-        options.append(Variable::ICMPv6::Option::target, 1, 0, 0);
+        options.append(ICMPV6_OPTION_NDP_TARGET, 1, 0, 0);
         currentInterface->configs.getMac(trail + 34);
 
         nextHeader->length = Icmpv6Header::fixedSize + 32 + options.size();
@@ -889,7 +889,7 @@ namespace Protocol
             .iface = currentInterface,
             .packetInfo = packet,
             .destIp = destinationIp,
-            .protocolType = Variable::IP::icmpv6
+            .protocolType = IP_ICMPV6
         };
 
         IPPacket::buildIpv6(build);
@@ -978,7 +978,7 @@ namespace Protocol
 
         uint8_t prfBits = (flags >> 3) & 0b11;
 
-        if (configs.autoConfigDefaultRoute.load(std::memory_order_relaxed) && routerLifetime > 0 && memcmp(sourceIp, Variable::IPv6::source, 16) != 0)
+        if (configs.autoConfigDefaultRoute.load(std::memory_order_relaxed) && routerLifetime > 0 && memcmp(sourceIp, IPV6_SOURCE, 16) != 0)
         {
             if (global.configs.ndp.ndAsRouteOwner.load(std::memory_order_relaxed))
             {
@@ -994,7 +994,7 @@ namespace Protocol
         // Process each RA option (only prefix and mtu)
         for (const auto& opt : options)
         {
-            if (opt.type == Variable::ICMPv6::Option::prefix && opt.valueSize >= 30)
+            if (opt.type == ICMPV6_OPTION_NDP_PREFIX && opt.valueSize >= 30)
             {
                 uint8_t prefixLen = opt.value[0];
                 uint8_t prefixFlags = opt.value[1];
@@ -1074,7 +1074,7 @@ namespace Protocol
 
         for (const auto& opt : options)
         {
-            if (opt.type == Variable::ICMPv6::Option::target && opt.valueSize == 6)
+            if (opt.type == ICMPV6_OPTION_NDP_TARGET && opt.valueSize == 6)
             {
                 nextHopMac = readU48(opt.value);
                 macFound = true;
@@ -1207,8 +1207,8 @@ namespace Protocol
                     .iface = currentInterface,
                     .packetInfo = ns,
                     .destIp = generateMulticastSolicitationAddress(multicastSolicitation, addr->ip),
-                    .sourceIp = Variable::IPv6::source,
-                    .protocolType = Variable::IP::icmpv6
+                    .sourceIp = IPV6_SOURCE,
+                    .protocolType = IP_ICMPV6
                 };
 
                 IPPacket::buildIpv6(build);
@@ -1288,7 +1288,7 @@ namespace Protocol
                 auto& iface = currentInterface->configs;
                 uint8_t localAddr[16];
                 if (iface.ipv6.getLocalAddress(localAddr))
-                    sendRouteAdvertisement(Variable::Mac::broadcast, localAddr);
+                    sendRouteAdvertisement(ETHERNET_MAC_BROADCAST, localAddr);
 
                 // Reschedule next RA
                 raTimerIds.erase(*raTimerId);
@@ -1397,7 +1397,7 @@ namespace Protocol
                 .iface = currentInterface,
                 .packetInfo = nsPacket,
                 .destIp = generateMulticastSolicitationAddress(multicastSolicitation, targetIp.raw),
-                .protocolType = Variable::IP::icmpv6
+                .protocolType = IP_ICMPV6
             };
 
             IPPacket::buildIpv6(build);
