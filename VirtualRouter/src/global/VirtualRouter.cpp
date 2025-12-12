@@ -5,6 +5,13 @@
 #include <Interface.h>
 #include <Global.h>
 
+VirtualRouter::VirtualRouter(Global& global, const std::string& name)
+    : global(global)
+{
+    instanceName = name;
+    enabledAddressFamilies.insert(AddressFamily::IPv4);
+}
+
 // Destructor
 VirtualRouter::~VirtualRouter()
 {

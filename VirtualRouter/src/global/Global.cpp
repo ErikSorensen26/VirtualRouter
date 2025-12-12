@@ -46,6 +46,18 @@ Global::~Global()
     }
 }
 
+void Global::setHostname(const std::string& name)
+{
+    std::unique_lock<std::shared_mutex> lock(hostnameMutex);
+    hostname = name;
+}
+
+std::string Global::getHostname()
+{
+    std::shared_lock<std::shared_mutex> lock(hostnameMutex);
+    return hostname;
+}
+
 void Global::reset()
 {
     setHostname(DEFAULT_HOSTNAME);

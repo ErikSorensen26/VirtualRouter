@@ -1,5 +1,3 @@
-// Configs.h
-
 #ifndef CONFIGS_H
 #define CONFIGS_H
 
@@ -11,7 +9,6 @@
 #include <curses.h> 
 #include <unistd.h>   
 #include <termios.h>
-#include <fstream>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -28,168 +25,233 @@
 #define MODE_KEY "commands"
 
 /**
- * @struct StartupFiles
+ * @brief Defines filesystem paths for all boot-time configuration inputs.
+ *
+ * This struct models how a router determines its initial configuration state.
+ * Paths supplied here direct the system toward:
+ *
+ * ### Configuration Loading Pipeline
+ * - The startup configuration (`startupFile`) used during boot.
+ * - The persistent router config (`routerConfigFile`) where `write memory` or equivalent
+ *   operations store the canonical running configuration.
+ * - The hardware configuration (`hwConfigFile`) consumed by `HardwareManager` to construct
+ *   platform-specific physical/virtual interfaces, line cards, and platform behavioral modules.
+ *
+ * Startup files imply no dynamic ownership; all paths remain valid for the lifetime of the calling context.
  */
 struct StartupFiles
 {
-    std::string startupFile = ROUTER_CONFIG_FILE;
-    std::string routerConfigFile = ROUTER_CONFIG_FILE;
-    std::string hwConfigFile = HW_CONFIG_FILE;
+    std::string startupFile = ROUTER_CONFIG_FILE;       ///< Startup configuration path.
+    std::string routerConfigFile = ROUTER_CONFIG_FILE;  ///< Persistent router configuration path.
+    std::string hwConfigFile = HW_CONFIG_FILE;          ///< Hardware model configuration path.
 };
 
 using json = nlohmann::ordered_json;
 
-class Global;
-struct ModeConfig;
-class HardwareManager;
+class Global;           ///< Forward declaration of Global
+struct ModeConfig;      ///< Forward declaration of ModeConfig
+class HardwareManager;  ///< Forward declaration of HardwareManager
 
 /**
- * @struct Com
- * @brief Represents a command with a name and description
+ * @brief Metadata describing a CLI command, including semantic properties and support levels.
+ *
+ * Represents an element in a router’s command taxonomy. Command definitions may be generated
+ * from schema files or static tables and serve as a basis for help systems, auto-completion,
+ * and capability negotiation across operating modes.
+ *
+ * ### Architectural Role
+ * - Acts as a normalized descriptor for CLI command components.
+ * - Does not participate in execution; consumed by higher-level CLI engines.
+ * - Serves as an input to schema-driven ordering within configuration trees.
  */
 struct Com 
 {
-    // Name of the communication object.
-    std::string name;   
-    // Description of the communication object.
-    std::string description; 
-    // Properties
-    std::vector<std::string> properties;
+    std::string name;                ///< Human-readable command keyword.
+    std::string description;         ///< Description of semantic behavior.
+    std::vector<std::string> properties; ///< Arbitrary property labels (e.g., feature flags).
 
-    // Support
-    enum class Support 
+    /**
+     * @brief Enumerates supported levels of functionality for a given command.
+     *
+     * Used by platform-capability systems to mark incomplete or partially-implemented commands.
+     */
+    enum class Support
     {
-        SUPPORTED,
-        PARTIAL,
-        NO_SUPPORT
+        SUPPORTED,      ///< Fully implemented.
+        PARTIAL,        ///< Implemented with limitations.
+        NO_SUPPORT      ///< Disabled or unavailable.
     };
-    Support support = Support::NO_SUPPORT;
+    Support support = Support::NO_SUPPORT; ///< Implementation capability indicator.
 };
 
 /**
- * @class volatileValueUsage
- * @brief Manages usage of volatile values within configurations.
+ * @brief Encapsulates local computations for volatile parameter normalization.
  *
- * Provides methods to retreive string representations of various volatile parameters.
+ * Many router commands include volatile operands (IP addresses, masks, wildcard identifiers,
+ * interface-unique strings, etc.). These are not stable keys and must be normalized before
+ * insertion into the configuration tree.
+ *
+ * ### Architectural Role
+ * - Provides classification helpers for volatile values.
+ * - Used primarily during configuration building and recovery.
+ *
+ * ### Memory & Ownership Model
+ * - Contains POD values only.
+ * - No dynamic allocation; lifetime is stack-managed.
+ *
+ * ### Threading Model
+ * - Not thread-safe; intended for single-threaded CLI and parsing contexts.
+ *
+ * ### Invariants
+ * - Returned strings must remain deterministic for identical input sequences.
+ * - No external state beyond stored POD members.
  */
 class volatileValueUsage 
 {
 public:
 
     /**
-     * @brief Retrieves the string representation of the value parameter.
-     * @return std::string The string representation of value.
+     * @brief Returns stringified numeric value.
      */
-    std::string getValue() { return std::to_string(value); } 
+    std::string getValue() { return std::to_string(value); }
 
     /**
-     * @brief Retrieves the string representation of the IP parameter.
-     * @return std::string The string representation of IP.
+     * @brief Returns stringified IPv4 address value.
      */
-    std::string getIp() { return std::to_string(ip); } 
+    std::string getIp() { return std::to_string(ip); }
 
     /**
-     * @brief Retrieves the string representation of the IPv6 parameter.
-     * @return std::string The string representation of IPv6.
+     * @brief Returns stringified IPv6 value.
      */
-    std::string getIpv6() { return std::to_string(ipv6); } 
+    std::string getIpv6() { return std::to_string(ipv6); }
 
     /**
-     * @brief Retrieves the string representation of the subnet parameter.
-     * @return std::string The string representation of subnet.
+     * @brief Returns stringified subnet mask value.
      */
-    std::string getSubnet() { return std::to_string(subnet); } 
+    std::string getSubnet() { return std::to_string(subnet); }
 
     /**
-     * @brief Retrieves the string representation of the MAC parameter.
-     * @return std::string The string representation of MAC.
+     * @brief Returns stringified MAC address value.
      */
-    std::string getMac() { return std::to_string(mac); } 
+    std::string getMac() { return std::to_string(mac); }
 
     /**
-     * @brief Retrieves the string representation of the XYZ parameter.
-     * @return std::string The string representation of XYZ.
+     * @brief Returns stringified XYZ coordinate.
      */
-    std::string getXYZ() { return std::to_string(xyz); } 
+    std::string getXYZ() { return std::to_string(xyz); }
 
     /**
-     * @brief Retrieves the string representation of the ID parameter.
-     * @return std::string The string representation of ID.
+     * @brief Returns stringified volatile identifier.
      */
-    std::string getID() { return std::to_string(id); } 
+    std::string getID() { return std::to_string(id); }
 
 private:
-
-    unsigned int value = 0;      ///< Integer value
-    unsigned int ip = 0;         ///< IP address
-    unsigned int ipv6 = 0;       ///< IPv6 address
-    unsigned int subnet = 0;     ///< Subnet mask
-    unsigned int mac = 0;        ///< MAC address
-    unsigned int xyz = 0;        ///< XYZ coordinate
-    unsigned int id = 0;         ///< Identifier
+    unsigned int value = 0;   ///< Generic volatile scalar.
+    unsigned int ip = 0;      ///< IPv4 volatile value normalized as integer.
+    unsigned int ipv6 = 0;    ///< IPv6 volatile placeholder.
+    unsigned int subnet = 0;  ///< Subnet mask volatile value.
+    unsigned int mac = 0;     ///< MAC volatile value.
+    unsigned int xyz = 0;     ///< Coordinate volatile value.
+    unsigned int id = 0;      ///< Generic ID value.
 };
 
+/**
+ * @brief Abstract interface defining router filesystem semantics.
+ *
+ * Implementations provide:
+ *
+ * ### Operational Responsibilities
+ * - Atomic loading of configuration files.
+ * - Persistent storage of running configuration snapshots.
+ * - Existence checks for boot-critical files.
+ * - Optional safe removal of configuration artifacts.
+ *
+ * ### Error Handling Model
+ * - Implementations must fail cleanly without throwing.
+ * - Callers must interpret boolean return values as success/failure.
+ */
 class IFileSystem
 {
 public:
-    virtual ~IFileSystem() = default; 
-    virtual bool readFile(const std::string& path, std::string& content) = 0; 
+    virtual ~IFileSystem() = default;
+
+    /**
+     * @brief Loads a file into memory.
+     */
+    virtual bool readFile(const std::string& path, std::string& content) = 0;
+
+    /**
+     * @brief Writes a file atomically or pseudo-atomically to disk.
+     */
     virtual bool writeFile(const std::string& path, const std::string& content) = 0;
+
+    /**
+     * @brief Determines if a filesystem node exists.
+     */
     virtual bool fileExists(const std::string& path) = 0;
+
+    /**
+     * @brief Removes a file if present.
+     */
     virtual void removeFile(const std::string& path) = 0;
 };
 
+/**
+ * @brief Concrete filesystem implementation used by the router process.
+ *
+ * Backed by POSIX operations including `open`, `mmap`, and `std::ofstream`.
+ *
+ * ### Memory & Ownership Model
+ * - `readFile` uses `mmap` for large-file efficiency.
+ * - Caller owns returned string content.
+ *
+ * ### Concurrency Model
+ * - Not thread-safe; assumes serialization by the caller.
+ */
 class FileSystem : public IFileSystem
 {
 public:
     virtual ~FileSystem() override = default;
-    bool readFile(const std::string& path, std::string& content) override
-    {
-        int fd = open(path.c_str(), O_RDONLY);
-        if (fd < 0) return false;
 
-        struct stat st;
-        fstat(fd, &st);
-
-        void* data = mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (data == MAP_FAILED) return false;
-
-        content.assign((char*)data, st.st_size);
-        munmap(data, st.st_size);
-        close(fd);
-        return true;
-    }
-
-    bool writeFile(const std::string& path, const std::string& content) override
-    {
-        std::ofstream file(path, std::ios::out | std::ios::trunc);
-        if (!file.is_open())
-        {
-            return false; // Cannot open the file for writing
-        }
-
-        file << content;
-        file.close();
-        return true;
-    }
-
-    bool fileExists(const std::string& path) override
-    {
-        return std::filesystem::exists(path);
-    }
-
-    void removeFile(const std::string& path) override
-    {
-
-    }
+    bool readFile(const std::string& path, std::string& content) override;
+    bool writeFile(const std::string& path, const std::string& content) override;
+    bool fileExists(const std::string& path) override;
+    void removeFile(const std::string& path) override;
 };
 
 /**
- * @class Configs
- * @brief Manages configuration settings for the terminal.
+ * @brief Core subsystem responsible for building, validating, ordering, saving,
+ * and recovering the router’s hierarchical configuration tree.
  *
- * The Configs class handles initialization, loading, saving, and processing of configuration data.
- * It interacts with JSON files to manage command hierarchies and interface configurations.
+ * The Configs class is the authoritative owner of the router configuration model.
+ * It consumes schema definitions, JSON-based configuration documents, hardware
+ * descriptions, and CLI-driven command mutations to maintain a consistent,
+ * mode-sensitive representation of the router state.
+ *
+ * ### Architectural Responsibilities
+ * - Serves as the central configuration authority for all CLI modes.
+ * - Owns the root JSON tree representing active configuration.
+ * - Applies schema-defined ordering rules to ensure deterministic serialization.
+ * - Manages volatile command operands (e.g., IPs, masks, IDs) via normalization.
+ * - Interacts with `HardwareManager` to bootstrap hardware topology.
+ * - Provides recovery paths by reconstructing CLI commands from stored JSON.
+ *
+ * ### Concurrency Model
+ * - Designed for single-threaded CLI workflows.
+ * - Not reentrant; callers must externally synchronize if shared.
+ *
+ * ### Memory & Ownership Model
+ * - Owns `hwManager` (allocated dynamically in `initConfigs`).
+ * - Does not own the supplied `IFileSystem`; caller must manage its lifetime.
+ * - JSON nodes (`root`, `configSchema`) persist for the entire router session.
+ *
+ * ### Mode-Machine Integration
+ * - Writes and interprets commands based on the caller-supplied `ModeConfig`.
+ * - Creates nested mode nodes under `commands` to represent router configuration contexts.
+ *
+ * ### Performance Notes
+ * - Uses ordered JSON containers to ensure deterministic flush ordering.
+ * - Minimizes memory churn during incremental command writes.
  */
 class Configs 
 {
@@ -197,184 +259,227 @@ public:
     friend class Internal_ConfigTest;
 
     /**
-     * @brief Constructor for the Configs class.
+     * @brief Constructs a Configs controller bound to a filesystem implementation.
      *
-     * Initializes the Configs object without any parameters.
+     * ### Behavior
+     * - Does not load configuration at construction.
+     * - Defers hardware bootstrap until `initConfigs`.
      *
-     * @param global Global router system.
-     * @param fileSystem Smart pointer to the kind of file system being used.
+     * ### Ownership
+     * - Does not take ownership of `fileSystem`; caller must manage lifetime.
      */
     Configs(IFileSystem* fileSystem = new FileSystem);
 
     /**
-     * @brief Initializes configuration settings from a startup file.
+     * @brief Initializes all configuration state from startup files and hardware descriptors.
      *
-     * Loads JSON configuration data from the specified startup file, processes interface configurations,
-     * and sets up MAC address lists. If the startup file is empty or cannot be opened, initializes with default settings.
+     * ### Behavior
+     * - Resets the in-memory config tree.
+     * - Spawns `HardwareManager` using platform configuration.
+     * - Loads and parses JSON router configuration if present.
+     * - Constructs `configSchema` when absent.
      *
-     * @param stfs Struct holding all startup config file information.
+     * ### Preconditions
+     * - `fileSystem` must be valid.
+     *
+     * ### Ownership
+     * - Allocates and owns `hwManager`.
+     *
+     * @param stfs File paths describing startup and hardware configuration sources.
+     * @param enableDummies Enables simulated hardware components for test environments.
      */
     void initConfigs(const StartupFiles& stfs, bool enableDummies = true);
 
     /**
-     * @brief Recovers configuration commands from the loaded JSON data.
+     * @brief Recovers routed CLI commands by traversing the stored configuration model.
      *
-     * Processes the JSON configuration tree and retrieves a list of commands for recovery purposes.
+     * This is the inverse of `saveCommand()`: it reconstructs canonical CLI expressions
+     * from the JSON hierarchy and the schema ordering rules.
      *
-     * @param nlohmann::ordered_json optional json for recovering custom configurations.
-     * @return std::vector<std::string> A vector containing the recovered command strings.
+     * ### Architectural Context
+     * - Used during boot to rebuild candidate running-config state.
+     * - Supports rollback, provisioning, and audit tools.
+     *
+     * @param json Optional JSON root for recovery. If null, uses internal `root`.
+     * @return Ordered list of canonical CLI commands.
      */
     std::vector<std::string> recoverConfigs(nlohmann::ordered_json* json = nullptr);
 
     /**
-     * @brief Processes JSON data to extract configuration commands.
+     * @brief Recursively walks the configuration tree to extract CLI command sequences.
      *
-     * Recursively traverses the JSON configuration tree to build a list of executable commands based on the provided structure.
+     * ### Behavior
+     * - Interprets volatile values.
+     * - Detects mode context branches (`commands`).
+     * - Appends fully-formed commands at recursion terminals.
      *
-     * @param currentNode Pointer to the current JSON node being processed.
-     * @param command A vector of strings representing the current command path.
-     * @param commandList A reference to a vector that accumulates the processed command strings.
+     * ### Invariants
+     * - Must not mutate configuration state.
+     *
+     * @param currentNode JSON node under traversal.
+     * @param command Accumulated command tokens.
+     * @param commandList Receiver for output commands.
      */
     void processConfigs(nlohmann::ordered_json* currentNode, std::vector<std::string> command, std::vector<std::string>& commandList);
 
     /**
-     * @brief Saves a command and updates the mode accordingly.
+     * @brief Applies a CLI command into the configuration tree with schema-aware ordering
+     * and optional mode transitions.
      *
-     * Appends the given command to the configuration tree, handling mode changes and ensuring correct command ordering.
+     * ### Behavior
+     * - Normalizes volatile operands.
+     * - Creates missing nodes, respecting schema-defined lexical order.
+     * - Detects duplicate entries for list-style commands.
+     * - Updates `modeConfig.configNode` when entering or exiting mode contexts.
      *
-     * @param oldCommand A vector of strings representing the previous command.
-     * @param command A vector of strings representing the current command to save.
-     * @param modeConfig A struct with mode configs for session.
-     * @param changeMode Boolean flag indicating whether the command triggers a mode change.
-     * @param exitMode Boolean flag indicating whether the command triggers an exit from the current mode.
-     * @param isList Boolean flag indicating if the command should be listed.
-     * @return bool Indicating if the save was successful
+     * ### Mode Interaction
+     * - Disallowed in non-configuration modes (userExec / privilegedExec).
+     * - Optionally pushes/pops mode history.
+     *
+     * ### Preconditions
+     * - `modeConfig.configNode` must reference a valid JSON node.
+     *
+     * @return True if the command was successfully applied.
      */
-    bool saveCommand(std::vector<std::string>& oldCommand, std::vector<std::string>& command, ModeConfig& modeConfig, bool changeMode, bool exitMode, bool isList); 
-
-     /**
-     * @brief Inserts commands into the configuration tree in the correct order.
-     *
-     * Ensures that commands are inserted into the JSON configuration tree following the predefined schema order.
-     *
-     * @param parentNode Pointer to the parent JSON node where the command should be inserted.
-     * @param modeConfig A struct with mode configs for session.
-     * @param mainCommand The main command string.
-     * @param subCommand The sub-command string. Defaults to an empty string.
-     * @param isListed Boolean flag indicating if the command is listed. Defaults to false.
-     */
-    void insertOrdered(nlohmann::ordered_json* parentNode, ModeConfig& modeConfig, const std::string& mainCommand, const std::string& subCommand = "", bool isListed = false);
+    bool saveCommand(std::vector<std::string>& oldCommand,
+                     std::vector<std::string>& command,
+                     ModeConfig& modeConfig,
+                     bool changeMode,
+                     bool exitMode,
+                     bool isList);
 
     /**
-     * @brief Saves the entire configuration to the startup file.
+     * @brief Inserts a command (main or subcommand) into its parent node while honoring
+     * schema-specified ordering rules.
      *
-     * Writes the current JSON configuration tree to the specified startup file in a formatted manner.
+     * ### Architectural Role
+     * - Ensures deterministic serialization regardless of insertion sequence.
+     * - Defines CLI recovery determinism across versions and platforms.
      *
-     * @return boolean Indicating if the save was successful.
+     * @param parentNode JSON node into which keys are inserted.
+     * @param modeConfig Mode configuration containing active schema.
+     * @param mainCommand Main command keyword.
+     * @param subCommand Optional subordinate command keyword.
+     * @param isListed Whether the command represents a list-style node.
+     */
+    void insertOrdered(nlohmann::ordered_json* parentNode,
+                       ModeConfig& modeConfig,
+                       const std::string& mainCommand,
+                       const std::string& subCommand = "",
+                       bool isListed = false);
+
+    /**
+     * @brief Serializes in-memory configuration to disk as formatted JSON.
+     *
+     * ### Behavior
+     * - Produces human-readable configuration captures.
+     * - Overwrites existing startup config.
+     *
+     * @return Success indicator from filesystem implementation.
      */
     bool saveConfig();
 
     /**
-     * @brief Deletes a specific configuration from the JSON tree.
+     * @brief Removes a configuration entry from the JSON tree.
      *
-     * Removes the specified configuration command from the JSON structure based on the provided parameters.
+     * Although the implementation currently acts as a stub, its architectural role is:
      *
-     * @param modeConfig Reference to the mode configs with config objects
-     * @param oldCommand A vector of strings representing the previous command.
-     * @param command A vector of strings representing the current command to delete.
-     * @param isList Boolean flag indicating if the command is listed.
+     * ### Responsibilities
+     * - Perform inverse of `saveCommand`.
+     * - Support `no ...` style CLI semantics.
+     * - Maintain schema ordering after removal.
+     *
+     * @return True if deletion succeeded.
      */
-    bool deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isList);
+    bool deleteConfig(ModeConfig& modeConfig,
+                      std::vector<std::string>& oldCommand,
+                      std::vector<std::string>& command,
+                      bool isList);
 
     /**
-     * @brief Determines if a given command string is volatile.
+     * @brief Identifies whether a command token represents a volatile operand.
      *
-     * Checks if the provided command string matches any known volatile parameters or follows specific volatile formats.
+     * Volatile operands cannot be used as stable JSON keys and require normalization:
+     * IPv4, IPv6, masks, wildcard IDs, MACs, generic `<val-range>` parameters, etc.
      *
-     * @param str The command string to evaluate.
-     * @return true If the command is volatile; otherwise, false.
+     * @param str Candidate command token.
+     * @return True if the token must be normalized.
      */
     bool isVolatile(const std::string& str);
 
     /**
-     * @brief Combines a vector of command strings into a single command string.
+     * @brief Converts a token sequence into a canonical space-delimited CLI expression.
      *
-     * Concatenates the individual command strings with spaces to form a complete command.
-     *
-     * @param command A vector of strings representing individual command parts.
-     * @return std::string The combined command string.
+     * Used during recovery and as part of the debugging pipeline.
      */
     std::string joinCommand(const std::vector<std::string>& command);
 
     /**
-     * @brief Retrieves the value of a volatile parameter based on the command.
+     * @brief Resolves a normalized volatile key name based on current JSON siblings.
      *
-     * Determines the appropriate key for a volatile parameter and appends an index if necessary to ensure uniqueness.
+     * ### Behavior
+     * - Guarantees uniqueness by appending numeric suffixes.
+     * - Determines semantic class (IP, mask, wildcard, ID, etc.).
      *
-     * @param type The type of volatile parameter (e.g., "WORD", "IP").
-     * @param value The actual command string entered by the user.
-     * @param currentJson The current JSON node being processed.
-     * @return std::string The resolved key for the volatile parameter.
+     * @return Normalized volatile key safe for use as a JSON object key.
      */
-    std::string getVolatileValue(std::string& type, std::string& value, nlohmann::ordered_json currentJson);
+    std::string getVolatileValue(std::string& type,
+                                 std::string& value,
+                                 nlohmann::ordered_json currentJson);
 
     /**
-     * @brief Overloaded method to retrieve the value of a volatile parameter based on the command.
+     * @brief Resolves volatile key names using already-observed volatile operands.
      *
-     * Similar to the above method but uses a list of existing volatile values to determine the appropriate key.
+     * Used during deduplication detection in list-style configuration modes.
      *
-     * @param type The type of volatile parameter (e.g., "WORD", "IP").
-     * @param value The actual command string entered by the user.
-     * @param volatileValues A vector of strings representing existing volatile values.
-     * @return std::string The resolved key for the volatile parameter.
+     * @return Stable JSON key for volatile operand.
      */
-    std::string getVolatileValue(std::string& type, std::string value, std::vector<std::string> volatileValues);
+    std::string getVolatileValue(std::string& type,
+                                 std::string value,
+                                 std::vector<std::string> volatileValues);
 
     /**
-     * @brief Helper method to resolve the key for a volatile parameter.
+     * @brief Computes the base volatile key type for a token (e.g., ip, mask, wildcard).
      *
-     * Determines the base key name based on the command type.
-     *
-     * @param type The type of volatile parameter (e.g., "WORD", "IP").
-     * @param value The actual command string entered by the user.
-     * @return std::string The base key name for the volatile parameter.
+     * Does not guarantee uniqueness—that is handled by the overloads of `getVolatileValue`.
      */
     std::string getVolatileValueHelper(std::string& command, std::string& com);
 
     /**
-     * @brief Sets the schema mode for setting configurations
+     * @brief Selects an alternate configuration schema based on active CLI mode.
      *
-     * Sets the schema mode for setting configurations in order to pre-set the command order in the configurations file.
+     * This drives mode-specific command ordering (e.g., interface mode, routing-protocol mode).
      *
-     * @param mode The mode that is being switched to.
+     * @param mode Target mode name.
      */
     void setSchemaMode(const std::string& mode);
 
     /**
-     * @brief Prints the current JSON configuration to the console.
+     * @brief Emits the current configuration tree for diagnostic purposes.
      *
-     * Outputs the entire JSON configuration tree in a formatted manner for debugging or verification purposes.
+     * Typically suppressed in production; used heavily during development and automated tests.
      */
     void printConfig();
 
-    // Public member variables
-
-    std::string routerConfigFilename{};     ///< Path to the startup configuration file
-    
-    nlohmann::ordered_json root;                        ///< Root of the JSON configuration tree.
-    nlohmann::ordered_json configSchema;                ///< Schema defining the configuration structure
-
-    IFileSystem* fileSystem; ///< File system interface.
-
-    Global* global = nullptr;
-    HardwareManager* hwManager = nullptr;
+    std::string routerConfigFilename{};     ///< Current persistent configuration file path.
+    json root;                              ///< Root of hierarchical router configuration.
+    json configSchema;                      ///< Active schema controlling command ordering.
+    IFileSystem* fileSystem;                ///< Filesystem interface used for persistence.
+    Global* global = nullptr;               ///< Global router subsystem pointer.
+    HardwareManager* hwManager = nullptr;   ///< Hardware abstraction subsystem.
 	
 private:
+    std::vector<std::string> volatileInputs{
+        "WORD", "LINE", "A.B.C.D", "X:X:X:X::X",
+        "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"
+    }; ///< Known volatile patterns.
 
-    std::vector<std::string> volatileInputs{"WORD", "LINE", "A.B.C.D", "X:X:X:X::X", "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"}; ///< List of volatile input types
-    std::vector<std::string> inputs{"ip", "subnet", "id", "value", "ipv6", "mac"}; ///< List of inputs parameter names.
+    std::vector<std::string> inputs{
+        "ip", "subnet", "id", "value", "ipv6", "mac"
+    }; ///< Stable volatile classifier names.
 
-    std::vector<std::string> recover;       ///< List of commands recovered from the configuration.
+    std::vector<std::string> recover; ///< Holds recovered CLI commands.
 };
 
 #endif // CONFIGS_H
+

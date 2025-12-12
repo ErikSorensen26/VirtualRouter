@@ -13,30 +13,34 @@
 
 class ConsoleTest; ///< Forward declaration of ConsoleTest
 
-/**
- * @enum Color
- * @brief Represents all available terminal colors.
+/** @enum Color @brief ANSI-compatible color selections for terminal output.
+ *
+ * Represents all standard colors supported by most VT100-compatible terminals.
+ * Additional internal values (TERMINAL, PROMPT) are used for specialized prompt
+ * rendering and should not be interpreted as ANSI colors.
  */
 enum class Color
 {
-    BLACK,
-    RED,
-    GREEN,
-    YELLOW,
-    BLUE,
-    MAGENTA,
-    CYAN,
-    WHITE,
-    NONE,
+    BLACK,  ///< Black colored text.
+    RED,    ///< Red colored text.
+    GREEN,  ///< Green colored text.
+    YELLOW, ///< Yellow colored text.
+    BLUE,   ///< Blue colored text.
+    MAGENTA,///< Magenta colored text.
+    CYAN,   ///< Cyan colored text.
+    WHITE,  ///< White colored text.
+    NONE,   ///< No colored or default.
 
     // Secret prompt option
-    TERMINAL,
-    PROMPT
+    TERMINAL, ///< Internal cheat option for front end terminal.
+    PROMPT    ///< Internal cheat option for front end prompt.
 };
 
 /**
  * @struct CursorPosition
- * @brief Represents the cursor's position in terms of row and comumn.
+ * @brief Represents terminal cursor coordinates (1-indexed row and column).
+ *
+ * Used to query and track cursor state during editing operations.
  */
 struct CursorPosition 
 {
@@ -44,55 +48,116 @@ struct CursorPosition
     int col = 0; ///< The column position of the cursor.
 };
 
+/**
+ * @class IConsole
+ * @brief Abstract terminal I/O interface used by the CLI subsystem.
+ *
+ * This interface decouples the CLI from real terminal behavior, enabling:
+ *
+ * ### Testing & Simulation
+ * - Automated console tests (mocked I/O behavior).
+ * - Headless execution without a real TTY.
+ *
+ * ### Responsibilities
+ * - Provide cursor movement primitives.
+ * - Perform formatted printing.
+ * - Report cursor position and terminal dimensions.
+ * - Handle optional terminal control functions (beep, wrap, etc.).
+ *
+ * Implementations must guarantee that no method throws exceptions and that all
+ * behavior is consistent with VT100-style terminal semantics where applicable.
+ */
 class IConsole
 {
 public:
 
     virtual ~IConsole() = default;
 
-    // Clears the terminal screen and moves the cursor to home
+    /**
+     * Clears the terminal screen and moves the cursor to home
+     */
     virtual void clearScreen() = 0;
 
-    // Enable line wrapping
+    /**
+     * Enable line wrapping
+     */
     virtual void enableLineWrapping() = 0;
 
-    // Clears from the cursor to the end of the line
+    /**
+     * Clears from the cursor to the end of the line
+     */
     virtual void clearLineAfterCursor() = 0;
 
-    // Saves the current cursor position
+    /**
+     * Saves the current cursor position
+     */
     virtual void saveCursorPosition() = 0;
 
-    // Restores the cursor position
+    /**
+     * Restores the cursor position
+     */
     virtual void restoreCursorPosition() = 0;
 
-    // Moves the cursor to the start of the line
+    /**
+     * Moves the cursor to the start of the line
+     */
     virtual void moveCursorToStart() = 0;
 
-    // Moves the cursor left by 'count' positions
+    /**
+     * Moves the cursor left by 'count' positions
+     */
     virtual void moveCursorLeft(size_t count = 1) = 0;
 
-    // Moves the cursor right by 'count' positions
+    /**
+     * Moves the cursor right by 'count' positions
+     */
     virtual void moveCursorRight(size_t count = 1) = 0;
 
-    // Moves the cursor up by 'count' positions
+    /**
+     * Moves the cursor up by 'count' positions
+     */
     virtual void moveCursorUp(size_t count = 1) = 0;
 
-    // Moves the cursor down by 'count' positions
+    /**
+     * Moves the cursor down by 'count' positions
+     */
     virtual void moveCursorDown(size_t count = 1) = 0;
 
-    // Prints a string to the terminal
+    /**
+     * Prints a string to the terminal
+     */
     virtual void print(const std::string& str, Color color = Color::NONE) = 0;
 
-    // Gets the current cursor position
+    /**
+     * Gets the current cursor position
+     */
     virtual CursorPosition getCursorPosition() = 0;
 
-    // Gets the terminal width
+    /**
+     * Gets the terminal width
+     */
     virtual size_t getTerminalWidth() = 0;
 
-    // Beep sound
+    /**
+     * Beep sound
+     */
     virtual void beep() = 0;
 };
 
+/**
+ * @class RealConsole
+ * @brief Concrete TTY-backed terminal implementation.
+ *
+ * This class interacts directly with ANSI escape sequences and POSIX terminal
+ * APIs (`termios`, `ioctl`). It provides the actual console control mechanisms
+ * used during runtime on Unix-like systems.
+ *
+ * ### Memory & Ownership
+ * * - Stateless aside from local scratch buffers.
+ *
+ * ### Concurrency Model
+ * * - Not thread-safe; assumes exclusive CLI ownership.
+ */
 class RealConsole : public IConsole
 {
 public:
@@ -248,16 +313,37 @@ public:
 
 /**
  * @class Console
- * @brief Handles Console inputs and other operations
+ * @brief High-level CLI input processor and terminal interaction manager.
  *
- * The Console class inherits from the Configs class and provides functionalities
- * for managing user input, cursor movements, and command history within the terminal.
+ * This class implements:
+ *
+ * ### Responsibilities
+ * - User input collection and real-time editing.
+ * - Cursor movement, wrapping, and redraw logic.
+ * - Command history browsing and modification.
+ * - Prompt rendering and terminal state initialization.
+ * - Integration with an abstract terminal interface (`IConsole`).
+ *
+ * It provides the interactive shell behavior expected from a router CLI, including:
+ *
+ * ### Interactions
+ * - Arrow-key navigation  
+ * - Backspace and delete handling  
+ * - Word-skipping (Ctrl+Left/Right style semantics)  
+ * - Inline insertion/overwrite modes  
+ * - Retrieval and restoration of historical commands  
+ *
+ * ### Memory & Ownership
+ * - Owns no external resources.
+ * - Holds a non-owning pointer to an `IConsole` implementation.
+ *
+ * ### Concurrency Model
+ * - Not thread-safe; intended for exclusive CLI session contexts.
  */
 class Console
 {
-private:
-    friend class Internal_ConsoleTest;
 public:
+    friend class Internal_ConsoleTest;
 
     /**
      * @brief Constructor for the Console class.
@@ -356,183 +442,38 @@ public:
      */
     size_t& getInitialLineLength() { return initialLineLength; }
 
-    // Member variables for line wrapping and display.
     IConsole* iConsole;  ///< Terminal deciding whether its using a simulated terminal.
 
 protected:
 
-    /**
-     * @brief Rewrites the tail of the input line starting from a specific position.
-     *
-     * Updates the display by rewriting characters from the start position to the end,
-     * handling line wrapping as necessary.
-     *
-     * @param input The current input string.
-     * @param startPos The starting position of the rewrite
-     */
-    void rewriteTail(const std::string& input, size_t startPos, bool backspace = false);
+    bool kbhit(); ///< Non-blocking check for pending keypress.
 
-    /**
-     * @brief Handles special key inputs such as Enter, Tab, Backspace, etc.
-     *
-     * Processes special keys and updates the input string accorsingly.
-     *
-     * @param hInput The character representing the special key pressed.
-     * @param input Reference to the current input string to be modified.
-     * @return std::string The updates input string if a terminating condition is met; otherwise, an empty string.
-     */
-    std::string handleSpecialKey(char hInput, std::string& input);
+    void rewriteTail(const std::string& input, size_t startPos, bool backspace = false); ///< Redraws tail of input.
 
-    /**
-     * @brief Handles escape sequences for arrow keys and other special inputs.
-     *
-     * Processes escape sequences to preform actions like navigating command history
-     * or moving the cursor in different directions.
-     *
-     * @param input Reference to the current input string.
-     */
-    void handleEscapeSequence(std::string& input, std::string testKey = "");
+    std::string handleSpecialKey(char hInput, std::string& input); ///< Processes Enter, Backspace, Tab, etc.
+    void handleEscapeSequence(std::string& input, std::string testKey = ""); ///< Handles arrow keys and escape sequences.
+    void handlePrintableChar(char hInput, std::string& input); ///< Inserts printable characters into buffer.
 
-    /**
-     * @brief Handles printable character inputs.
-     *
-     * Inserts printable characters into the input string at the current cursor position,
-     * managing insert and overwrite modes.
-     *
-     * @param hInput The printable character entered by the user.
-     * @param input Reference to the current input string to be modified.
-     */
-    void handlePrintableChar(char hInput, std::string& input);
+    CursorPosition getCursorPosition(); ///< Queries terminal cursor position.
+    size_t getTerminalWidth(); ///< Retrieves terminal width.
 
-    /**
-     * @brief Retrieves the current cursor position on Unix-like systems.
-     *
-     * Utilizes ANSI escape codes and terminal settings to query the cursor's row and column.
-     *
-     * @return CursorPosition The current cursor position with row and column indices.
-     */
-    CursorPosition getCursorPosition();
+    void moveCursorLeft(size_t steps); ///< Moves cursor left.
+    void moveCursorRight(size_t steps, std::string* input = nullptr); ///< Moves cursor right.
+    void moveCursorUp(size_t steps); ///< Moves cursor up.
+    void moveCursorDown(size_t steps); ///< Moves cursor down.
+    void moveCursorToStart(); ///< Moves cursor to start of line.
+    void moveCursorToEnd(std::string& input); ///< Moves cursor to end of input.
 
-    /**
-     * @brief Checks if a key has been pressed (non-blocking)
-     *
-     * Uses terminal settings to preform a non-blocking check for any keypress.
-     *
-     * @return int Returns 1 if a key has been pressed; otherwise, 0.
-     */
-    bool kbhit();
+    void skipWordLeft(std::string& input); ///< Moves cursor left by one word.
+    void skipWordRight(std::string& input); ///< Moves cursor right by one word.
 
-    /**
-     * @brief Moves the cursor to the start of the current line.
-     *
-     * If the cursor is not already at the start, it moves the cursor left to the beginning.
-     */
-    size_t getTerminalWidth();
+    bool isCursorAtLineEnd(); ///< Checks whether cursor is at wrapping boundary.
 
-    /**
-     * @brief Moves the cursor left by a specified number of steps.
-     *
-     * Sends ANSI escape codes to move the cursor right on the terminal.
-     *
-     * @param steps the number of positions to move the cursor left.
-     */
-    void moveCursorLeft(size_t steps);
+    void updateDisplayInput(std::string& oldInput, std::string& input); ///< Replaces displayed text with history entry.
 
-    /**
-     * @brief Moves the cursor right by a specified number of steps.
-     *
-     * Sends ANSI escape codes to move the cursor right on the terminal.
-     *
-     * @param steps the number of positions to move the cursor right.
-     */
-    void moveCursorRight(size_t steps, std::string* input = nullptr);
+    void navigateHistory(std::string& input, bool moveUp); ///< Navigates history buffer.
 
-    /**
-     * @brief Moves the cursor up by a specified number of steps.
-     *
-     * Sends ANSI escape codes to move the cursor right on the terminal.
-     *
-     * @param steps the number of positions to move the cursor up.
-     */
-    void moveCursorUp(size_t steps);
-
-    /**
-     * @brief Moves the cursor down by a specified number of steps.
-     *
-     * Sends ANSI escape codes to move the cursor right on the terminal.
-     *
-     * @param steps the number of positions to move the cursor down.
-     */
-    void moveCursorDown(size_t steps);
-
-    /**
-     * @brief Moves the cursor to the start of the current line.
-     *
-     * If the cursor id not already at the start, it moves the cirsor left to the beginning.
-     */
-    void moveCursorToStart();
-
-    /**
-     * @brief Moves the cursor to the end of the currnet input.
-     *
-     * Calculates the remaining steps needed to reach the end based on the input size
-     * and moves the cursor right accordingly.
-     *
-     * @param input Reference to the current input string.
-     */
-    void moveCursorToEnd(std::string& input);
-
-    /**
-     * @brief Skips a word to the left of the cursor.
-     *
-     * Moves the cursor left, skipping over spaces and non-space characters to navigate
-     * word by word
-     *
-     * @param input Reference to the current input string.
-     */
-    void skipWordLeft(std::string& input);
-
-    /**
-     * @brief Skips a word to the right of the cursor.
-     *
-     * Moves the cursor right, skipping over spaces and non-space characters to navigate
-     * word by word.
-     *
-     * @param input Reference to the current input string.
-     */
-    void skipWordRight(std::string& input);
-
-    /**
-     * @brief Checks if the cursor is at the end of the current line.
-     *
-     * Determines if the cursor position plus the initial line length modulo the terminal width
-     * equals zero, indicating the end of the line.
-     *
-     * @return true If the cursor is at the end of the line; otherwise, false.
-     */
-    bool isCursorAtLineEnd();
-
-    /**
-     * @brief Updates the display with the selected command from history.
-     *
-     * Clears the current input display and replaces it with the selected historical command.
-     *
-     * @param oldInput The previous input string before history navigation.
-     * @param input The new input string retreived from history.
-     */
-    void updateDisplayInput(std::string& oldInput, std::string& input);
-
-    /**
-     * @brief Navigates through the command history.
-     *
-     * Moves up or down in the command history based on the direction flag.
-     *
-     * @param input Reference to the current input string to be updates.
-     * @param moveUp Boolean flag indication the direction of navigating.
-     *               - 'true': Move up in history.
-     *               - 'false': Move down in history.
-     */
-    void navigateHistory(std::string& input, bool moveUp);
+    // CURSOR & LENGTH
 
     CursorPosition startPos;       ///< Starting cursor position.
     size_t cursorPos = 0;          ///< Logical cursor position within inputBuffer.
@@ -540,6 +481,7 @@ protected:
     size_t oldInputLength = 0;     ///< Previous input length to track changes.
     size_t initialLineLength = 0;  ///< Initial starting position for a command.
     size_t maxCommandLength = 0;   ///< Maximum command length based on terminal width.
+
     std::string prompt;         ///< The current prompt string.
 
     std::string nextLine;       ///< Holds the next line of input
@@ -549,7 +491,8 @@ protected:
     bool insert = false;        ///< Flag indicating if the terminal is in insert mode.
     std::string insertString;   ///< String used for keeping the original while in insert mode.
 
-    // History management
+    // HISTORY MANAGEMENT
+
     size_t historyIndex = 0;               ///< Index for navigating through command history
     std::vector<std::string> history{}; ///< Vector to store command history
     bool browsingHistory = false;       ///< Indicates whether history is being accessed
