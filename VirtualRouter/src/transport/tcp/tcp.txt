@@ -1,0 +1,72 @@
+tcp/
+├── TcpStack.hpp / TcpStack.cpp
+│   └── Owns all TCP global state and entry points
+│
+├── TcpEndpoint.hpp
+│   └── {IP address, port} pair abstraction
+│
+├── TcpSocketKey.hpp
+│   └── 4-tuple / 5-tuple connection identity
+│
+├── TcpListener.hpp / TcpListener.cpp
+│   └── LISTEN state handling
+│
+├── TcpConnection.hpp / TcpConnection.cpp
+│   └── One TCP connection (one 4-tuple)
+│
+├── TcpState.hpp
+│   └── TCP state enum (CLOSED, LISTEN, …)
+│
+├── TcpStateMachine.hpp / TcpStateMachine.cpp
+│   └── State transition logic
+│
+├── TcpSendState.hpp
+│   └── SND.UNA / SND.NXT / SND.WND
+│
+├── TcpRecvState.hpp
+│   └── RCV.NXT / RCV.WND
+│
+├── TcpSendBuffer.hpp / TcpSendBuffer.cpp
+│   └── Outgoing byte stream storage
+│
+├── TcpRecvBuffer.hpp / TcpRecvBuffer.cpp
+│   └── Incoming byte stream + reassembly
+│
+├── TcpRetransmissionQueue.hpp / TcpRetransmissionQueue.cpp
+│   └── Unacknowledged segments
+│
+├── TcpSegment.hpp
+│   └── Parsed TCP segment representation
+│
+├── TcpSegmentBuilder.hpp / TcpSegmentBuilder.cpp
+│   └── Builds outbound TCP segments
+│
+├── TcpInput.hpp / TcpInput.cpp
+│   └── Entry point for received segments
+│
+├── TcpOutput.hpp / TcpOutput.cpp
+│   └── Entry point for sending segments
+│
+├── TcpAckManager.hpp / TcpAckManager.cpp
+│   └── ACK generation logic
+│
+├── TcpFlowControl.hpp
+│   └── Advertised receive window logic
+│
+├── TcpCongestionControl.hpp / TcpCongestionControl.cpp
+│   └── cwnd / ssthresh handling
+│
+├── TcpLossRecovery.hpp / TcpLossRecovery.cpp
+│   └── Retransmit decisions
+│
+├── TcpOptions.hpp
+│   └── TCP option parsing/storage
+│
+├── TcpTimers.hpp / TcpTimers.cpp
+│   └── RTO / delayed ACK / TIME-WAIT timers
+│
+├── TcpTimeWait.hpp / TcpTimeWait.cpp
+│   └── TIME-WAIT socket handling
+│
+└── TcpErrors.hpp
+    └── RST / abort handling

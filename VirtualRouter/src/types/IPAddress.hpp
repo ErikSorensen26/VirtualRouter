@@ -54,6 +54,11 @@ struct alignas(16) IPAddress
         if (isV6 != other.isV6) return false;
         return isV6 ? (v6 == other.v6) : (v4 == other.v4);
     }
+
+    bool isUnspecified() const noexcept
+    {
+        return v6 == 0;
+    }
 };
 
 struct alignas(16) IPPrefix

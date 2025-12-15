@@ -91,6 +91,10 @@ inline __uint128_t ntohdll(__uint128_t val) {
     {                                                                                               \
         trailing = std::span(buffer + fixedSize, len);                                              \
     }                                                                                               \
+    void addTrailSize(size_t len)                                                                   \
+    {                                                                                               \
+        trailing = std::span(buffer + fixedSize, trailing.size() + len);                            \
+    }                                                                                               \
                                                                                                     \
     size_t size() const { return trailing.size() + fixedSize; }
 

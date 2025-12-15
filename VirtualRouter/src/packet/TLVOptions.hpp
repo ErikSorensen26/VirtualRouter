@@ -13,7 +13,7 @@ struct TLV8Option
 {
     uint8_t type;
     uint8_t length;
-    uint8_t* value;
+    const uint8_t* value;
     size_t valueSize;
 
     std::span<const uint8_t> asSpan() const {
