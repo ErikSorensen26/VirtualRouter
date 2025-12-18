@@ -1,5 +1,10 @@
 // Eigrp.h
 
+// TODO:
+// Add multi-topology to eigrp
+//     create topolies in global-topology mode, attach interfaces and all to it
+// Test address family mode for eigrp
+
 #ifndef EIGRP_CORE_H
 #define EIGRP_CORE_H
 

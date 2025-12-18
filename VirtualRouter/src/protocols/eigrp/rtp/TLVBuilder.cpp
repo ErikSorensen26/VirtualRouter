@@ -127,6 +127,7 @@ bool TLVBuilder::decodeClassicMetric(RouteData& data)
     data.r.reliability = data.value[data.offset++];
     data.r.load = data.value[data.offset++];
     data.r.tag = data.value[data.offset++];
+    data.r.flags = data.value[data.offset++];
     data.offset++;
 
     if (data.r.delay > 0xFFFFFFull)
@@ -150,7 +151,7 @@ bool TLVBuilder::encodeClassicMetric(RouteData& data, const uint64_t& delay, con
     data.value[data.offset + 1] = data.r.reliability;
     data.value[data.offset + 2] = data.r.load;
     data.value[data.offset + 3] = static_cast<uint8_t>(data.r.tag);
-    data.value[data.offset + 4] = 0; /* flags */
+    data.value[data.offset + 4] = data.r.flags;
     data.offset += 5;
     return true;
 }
@@ -167,7 +168,7 @@ bool TLVBuilder::decodeWideMetric(RouteData& data)
     data.r.delay = readU48(data.value + data.offset); data.offset += 6;
     data.r.bandwidth = readU48(data.value + data.offset); data.offset += 6;
     data.offset += 2; // Reserved
-    data.r.wide.wideFlags = readU16(data.value + data.offset); data.offset += 2;
+    data.r.flags = data.value[data.offset]; data.offset += 2;
 
     if (data.r.delay > 0xFFFFFFFFull)
         data.r.delay = std::numeric_limits<uint64_t>::max();
@@ -193,7 +194,7 @@ bool TLVBuilder::encodeWideMetric(RouteData& data, const uint64_t& delay, const 
     writeU48(data.value + data.offset, delay); data.offset += 6;
     writeU48(data.value + data.offset, bw); data.offset += 6;
     writeU16(data.value + data.offset, 0); data.offset += 2; // reserved
-    writeU16(data.value + data.offset, data.r.wide.wideFlags); data.offset += 2; // flags
+    data.value[data.offset] = data.r.flags; data.offset += 2; // flags
     if (data.r.wide.data.size() != 0)
     {
         std::memcpy(data.value + data.offset, data.r.wide.data.data(), data.r.wide.data.size());
