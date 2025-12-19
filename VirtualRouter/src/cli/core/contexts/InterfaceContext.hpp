@@ -5,6 +5,8 @@
 
 #include "ContextBase.hpp"
 
+#define INTERFACE_PARAMS InterfaceContext& ctx, const std::vector<std::string>& args
+
 class Interface;
 
 namespace Cli
