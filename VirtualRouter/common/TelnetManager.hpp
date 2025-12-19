@@ -32,11 +32,11 @@ public:
     TelnetClient() : sockfd(-1), telnetSession(nullptr) {}
 
     ~TelnetClient() {
-        Disconnect();
+        disconnect();
     }
 
     // Connect to a Telnet server (e.g., port 23).
-    void Connect(const std::string &ip, int port) {
+    void connect(const std::string &ip, int port) {
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0)
             throw std::runtime_error("Failed to create socket");
@@ -49,26 +49,26 @@ public:
             throw std::runtime_error("Invalid IP address");
         }
 
-        if (connect(sockfd, reinterpret_cast<struct sockaddr*>(&serverAddr), sizeof(serverAddr)) < 0) {
+        if (::connect(sockfd, reinterpret_cast<struct sockaddr*>(&serverAddr), sizeof(serverAddr)) < 0) {
             close(sockfd);
             throw std::runtime_error("Connection failed");
         }
 
         // Initialize libtelnet with an empty options array (disables negotiation)
         const telnet_telopt_t options[] = { {-1, 0, 0} };
-        telnetSession = telnet_init(options, TelnetCallback, 0, this);
+        telnetSession = telnet_init(options, telnetCallback, 0, this);
         if (!telnetSession)
             throw std::runtime_error("Failed to initialize telnet session");
 
         // Allow initial server output (e.g., login prompts)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         // Clear any initial output.
-        ReadOutput(std::chrono::milliseconds(500),
+        readOutput(std::chrono::milliseconds(500),
                    std::chrono::seconds(2),
                    std::chrono::milliseconds(0));
     }
 
-    std::string SendCommand(const std::string &command,
+    std::string sendCommand(const std::string &command,
                             bool noReturn = false,
                             std::chrono::milliseconds idleTimeout = std::chrono::milliseconds(5),
                             std::chrono::milliseconds maxWaitTime = std::chrono::seconds(10),
@@ -87,11 +87,11 @@ public:
 
         // Harvest output until we have been idle for idleTimeout,
         // but ensure at least minWaitTime has passed.
-        return ReadOutput(idleTimeout, maxWaitTime, minWaitTime);
+        return readOutput(idleTimeout, maxWaitTime, minWaitTime);
     }
 
     // Disconnect from the Telnet server.
-    void Disconnect() {
+    void disconnect() {
         if (telnetSession) {
             telnet_free(telnetSession);
             telnetSession = nullptr;
@@ -103,11 +103,11 @@ public:
     }
 
     // Returns and clears the current output buffer
-    std::string ReadSome(std::chrono::milliseconds idleTimeout = std::chrono::milliseconds(100),
+    std::string readSome(std::chrono::milliseconds idleTimeout = std::chrono::milliseconds(100),
                          std::chrono::milliseconds maxWaitTime = std::chrono::seconds(2))
     {
         outputBuffer.clear();
-        return ReadOutput(idleTimeout, maxWaitTime, std::chrono::milliseconds(0));
+        return readOutput(idleTimeout, maxWaitTime, std::chrono::milliseconds(0));
     }
 
 private:
@@ -116,7 +116,7 @@ private:
     std::string outputBuffer;
 
     // Callback from libtelnet.
-    static void TelnetCallback(telnet_t* /*telnet*/, telnet_event_t* event, void* userData) {
+    static void telnetCallback(telnet_t* /*telnet*/, telnet_event_t* event, void* userData) {
         TelnetClient *client = static_cast<TelnetClient*>(userData);
         switch (event->type) {
             case TELNET_EV_DATA:
@@ -137,7 +137,7 @@ private:
 
     // Read output from the socket until no new data is received for idleTimeout,
     // but ensure at least minWaitTime has passed (or maxWaitTime is reached).
-    std::string ReadOutput(std::chrono::milliseconds idleTimeout,
+    std::string readOutput(std::chrono::milliseconds idleTimeout,
                              std::chrono::milliseconds maxWaitTime,
                              std::chrono::milliseconds minWaitTime) {
         auto startTime = std::chrono::steady_clock::now();

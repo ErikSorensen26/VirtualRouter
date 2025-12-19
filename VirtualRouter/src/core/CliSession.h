@@ -287,7 +287,7 @@ private:
 
     void configureInterfaceMode(std::string&); ///< Interface mode setup.
     void configureRoutingMode(std::string, bool classicV6 = false); ///< Routing mode setup.
-    void configureAddressFamily(AddressFamily); ///< Address-family mode narrowing.
+    void configureAddressFamily(std::string type, std::string afMode); ///< Address-family mode narrowing.
 
     void historyToGlobal(); ///< Resets mode history → root.
 };

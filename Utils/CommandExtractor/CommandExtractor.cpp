@@ -1,6 +1,4 @@
-#include <TelnetManager.hpp>   // Your existing Telnet code
-#include <json.hpp>           // nlohmann::json header
-#include <Functions.h>
+#include <json.hpp>
 
 #include <iostream>
 #include <sstream>
@@ -9,6 +7,24 @@
 #include <fstream>
 #include <unordered_set>
 #include <chrono>
+
+#define TAG "ospf-topology"
+
+#ifndef USE_SERIAL
+#define USE_SERIAL 0
+#endif
+
+#if USE_SERIAL
+#define CLIENT_TYPE SerialManager
+#define CONNECTION1 "/dev/ttyUSB0"
+#define CONNECTION2 9600
+#include <SerialManager.hpp>
+#else
+#define CLIENT_TYPE TelnetClient
+#define CONNECTION1 "127.0.0.1"
+#define CONNECTION2 5004
+#include <TelnetManager.hpp>
+#endif
 
 auto lastBackupTime = std::chrono::steady_clock::now();
 const std::chrono::minutes backup(1);
@@ -35,8 +51,12 @@ auto trim ([](const std::string& str) -> std::string
 });
 
 std::vector<std::pair<std::string, std::vector<std::string>>> presets{
-    {"<interface>", {"GigabitEthernet", "LISP", "Ethernet"}},
-    {"<cef>", {"IPv4-to-MPLS", "IPv6-to-MPLS", "MPLS-end-of-stack", "MPLS-non-end-of-stack"}},
+    {"<interface>", {"gigabitethernet", "loopback", "fastethernet"}},
+    {"<ospf-top-nssa>", {"default-information-originate", "no-redistribution", "no-summary", "translate"}},
+    {"<ospf-nssa>", {"default-information-originate", "no-ext-capability", "no-redistribution", "no-summary", "translate"}},
+    {"<ospf-virtual-link>", {"authentication", "authentication-key", "dead-interval", "hello-interval", "message-digest-key", "retransmit-interval", "topology", "transmit-delay", "ttl-security"}},
+    {"<ospf-virtual-linkv6>", {"authentication", "dead-interval", "encryption", "hello-interval", "retransmit-interval", "transmit-delay", "ttl-security"}},
+    {"<cef>", {"ipv4-to-mpls", "ipv6-to-mpls", "mpls-end-of-stack", "mpls-non-end-of-stack"}},
     {"<dscp>", {"af11", "cs2", "af12", "cs3", "cs5"}},
     {"<ntp>", {"burst", "iburst", "key", "prefer", "minpoll", "version"}},
     {"<traps>", {"bfd", "eigrp", "aaa_server", "config", "channel", "pfr", "ip", "isis", "pim"}},
@@ -45,6 +65,16 @@ std::vector<std::pair<std::string, std::vector<std::string>>> presets{
     {"<monitor-pwoam>", {"detail", "error", "event", "exact-match"}},
     {"<monitor-l2vpn>", {"bfd", "detail", "error", "event"}},
 };
+
+bool isDecimal(const std::string& s)
+{
+    if (s.empty())
+        return false;
+    for (char c : s)
+        if (c < '0' || c > '9')
+            return false;
+    return true;
+}
 
 void updatePrefix(const std::string& prefix, std::string& next, bool& isLine)
 {
@@ -64,7 +94,7 @@ void updatePrefix(const std::string& prefix, std::string& next, bool& isLine)
     {
         next = "11:22:33:44:55:66";
     }
-    else if (next[0] == '<' && Functions::isDecimal(std::string(1, next[1])))
+    else if (next[0] == '<' && isDecimal(std::string(1, next[1])))
     {
         size_t start = next.find('<');
         size_t dash = next.find('-');
@@ -74,7 +104,7 @@ void updatePrefix(const std::string& prefix, std::string& next, bool& isLine)
             next = next.substr(start + 1, dash - start - 1);
         }
     }
-    else if (next[0] == '<' && next[1] == '-' && Functions::isDecimal(std::string(1, next[2])))
+    else if (next[0] == '<' && next[1] == '-' && isDecimal(std::string(1, next[2])))
     {
         size_t start = next.find('<');
         size_t dash = next.substr(2).find('-') + 2;
@@ -157,7 +187,7 @@ void updatePrefix(const std::string& prefix, std::string& next, bool& isLine)
         next = "1::1";
     }
 
-    if (prefix == "dspu" || prefix == "dlsw" || prefix == "privilege" || prefix == "logging" || prefix == "no" || prefix == "translate" || prefix == "username" || prefix == "access-list" || prefix == "alias" || prefix == "crypto" || prefix == "default" || next == "access-list" || next == "community-list" || next == "extcommunity-list" || prefix == "ip host" || prefix == "ip name-server" || prefix == "ip sla" || prefix == "do-exec" || next == "range")
+    if (prefix == "snmp" || prefix == "redistribute" || prefix == "redistributed" || prefix == "dspu" || prefix == "dlsw" || prefix == "privilege" || prefix == "logging" || prefix == "no" || prefix == "translate" || prefix == "username" || prefix == "access-list" || prefix == "alias" || prefix == "crypto" || prefix == "default" || next == "access-list" || next == "community-list" || next == "extcommunity-list" || prefix == "ip host" || prefix == "ip name-server" || prefix == "ip sla" || prefix == "do-exec")
     {
         isLine = true;
     }
@@ -167,7 +197,7 @@ void updatePrefix(const std::string& prefix, std::string& next, bool& isLine)
         isLine = true;
     }
 
-    if (prefix == "access-expression" || prefix == "apollo" || prefix == "appletalk" || prefix == "backup" || prefix == "bridge-group" || prefix == "clns" || prefix == "cmns" || prefix == "decnet" || prefix == "dspu" || prefix == "fras" || prefix == "iso-igrp" || prefix == "lat" || prefix == "llc2" || prefix == "mop" || prefix == "netbios" || prefix == "sap-priority" || prefix == "smrp" || prefix == "sna" || prefix == "tarp" || prefix == "vines" || prefix == "vpdn" || prefix == "ctunnel" || prefix == "media" || prefix == "media-type" || prefix == "location" || prefix == "snapshot" || prefix == "source" || prefix == "topology" || prefix == "transmit-interface" || prefix == "tx-ring-limit" || prefix == "vnet" || prefix == "xconnect" || prefix == "history" || prefix == "ip dhcp" || prefix == "ip security" || prefix == "rate-limit")
+    if (prefix == "access-expression" || prefix == "apollo" || prefix == "appletalk" || prefix == "backup" || prefix == "bridge-group" || prefix == "clns" || prefix == "cmns" || prefix == "decnet" || prefix == "dspu" || prefix == "fras" || prefix == "iso-igrp" || prefix == "lat" || prefix == "llc2" || prefix == "mop" || prefix == "netbios" || prefix == "sap-priority" || prefix == "smrp" || prefix == "sna" || prefix == "tarp" || prefix == "vines" || prefix == "vpdn" || prefix == "ctunnel" || prefix == "media" || prefix == "media-type" || prefix == "location" || prefix == "snapshot" || prefix == "source" || prefix == "transmit-interface" || prefix == "tx-ring-limit" || prefix == "vnet" || prefix == "xconnect" || prefix == "history" || prefix == "ip dhcp" || prefix == "ip security" || prefix == "rate-limit")
     {
         isLine = true;
     }
@@ -245,6 +275,15 @@ json parseCommandLine(const std::string& line) {
     return j;
 }
 
+std::string toLower(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(), 
+        [](char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+    return s;
+}
+
 bool isValidPreset(std::vector<std::string> base, std::vector<std::string> canidates)
 {
     for (const auto& canidate : canidates)
@@ -252,7 +291,7 @@ bool isValidPreset(std::vector<std::string> base, std::vector<std::string> canid
         bool found = false;
         for (const auto& str : base)
         {
-            if (str.find(canidate) == 0)
+            if (toLower(str).find(canidate) == 0)
             {
                 found = true;
                 break;
@@ -266,7 +305,7 @@ bool isValidPreset(std::vector<std::string> base, std::vector<std::string> canid
 // Recursive function to build the command tree by querying the device.
 // At each level, it sends a query (i.e., <prefix> ?), parses the output,
 // then for each returned command, appends it to the prefix and recurses.
-json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth = 0, int maxDepth = 30) {
+json getCommandTree(CLIENT_TYPE& telnet, const std::string& prefix, int depth = 0, int maxDepth = 30) {
     // Stop if we reach the maximum recursion depth.
     if (depth >= maxDepth)
         return json::array();
@@ -274,9 +313,9 @@ json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth =
     // Build the query string.
     // If prefix is empty, simply query "?"
     // Otherwise, append a space and then "?"
-    telnet.SendCommand("\x15");
+    telnet.sendCommand("\x15");
     std::string query = prefix.empty() ? "?" : prefix + " ?";
-    std::string response = telnet.SendCommand(query, true);
+    std::string response = telnet.sendCommand(query, true);
     
     // Parse the response into lines.
     std::vector<std::string> lines = splitLines(response);
@@ -316,6 +355,9 @@ json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth =
             updatePrefix(prefix, next, isLine);
             newPrefix = prefix + " " + next;
         }
+
+        // Handle properties
+
                                                
         // Recursively query for subcommands using the new prefix.
         json subcommands;
@@ -334,7 +376,7 @@ json getCommandTree(TelnetClient& telnet, const std::string& prefix, int depth =
     return commands;
 }
 
-void updateNegates(json& existingData, json& node, TelnetClient& telnet, const std::string& prefix = "", int depth = 0, int maxDepth = 30)
+void updateNegates(json& existingData, json& node, CLIENT_TYPE& telnet, const std::string& prefix = "", int depth = 0, int maxDepth = 30)
 {
     if (depth >= maxDepth || !node.contains("name"))
         return;
@@ -389,7 +431,7 @@ void updateNegates(json& existingData, json& node, TelnetClient& telnet, const s
     if (node.contains("subcommands"))
     {
         // Send "no" command
-        telnet.SendCommand("\x15");
+        telnet.sendCommand("\x15");
 
         // Normal ? output
         std::vector<std::string> normalSubCommands;
@@ -397,9 +439,8 @@ void updateNegates(json& existingData, json& node, TelnetClient& telnet, const s
         {
             normalSubCommands.push_back(sub["name"].get<std::string>());
         }
-
         std::string query = "no " + currentPrefix + " ?";
-        std::string response = telnet.SendCommand(query, true);
+        std::string response = telnet.sendCommand(query, true);
         std::vector<std::string> negateSubCommands = splitLines(response);
 
         if (negateSubCommands.empty()) return;
@@ -537,88 +578,138 @@ void updateNegates(json& existingData, json& node, TelnetClient& telnet, const s
     }
 }
 
-void markUnsupported(json& j) {
-    if (j.is_object()) {
+void markUnsupported(json& j)
+{
+    if (j.is_object())
+    {
         j["_unsupported"] = true;
-        for (auto& [key, value] : j.items()) {
+        for (auto& [key, value] : j.items())
             markUnsupported(value);
-        }
-    } else if (j.is_array()) {
-        for (auto& element : j) {
+    }
+    else if (j.is_array())
+    {
+        for (auto& element : j)
             markUnsupported(element);
-        }
     }
 }
 
-int main() {
-    std::string mode = "ipRoute";
+int main(int argc, char* argv[])
+{
+    if (argc < 2) {
+        std::cerr << "Usage:\n"
+                  << "  " << argv[0] << " -<mode>[d] [destination] <prompt> [output]\n\n"
+                  << "Modes:\n"
+                  << "  p   Property extraction\n"
+                  << "  c   Command extraction\n"
+                  << "  u   Set unsupported\n\n"
+                  << "Examples:\n"
+                  << "  " << argv[0] << " -pt \"prompt\"\n"
+                  << "  " << argv[0] << " -cs \"buh\" ./output.json\n"
+                  << "  " << argv[0] << " -psd /dev/ttyUSB0:9600 \"another\"\n";
+        return 1;
+    }
+
+    std::string flags = argv[1];
+    if (flags.size() < 2 || flags[0] != '-') {
+        std::cerr << "Error: invalid flag format. Must start with '-' and contain mode/client.\n";
+        return 1;
+    }
+
+    bool properties = false;
+    bool commands = false;
+    bool unsupported = false;
+    bool dest = false;
+
+    std::string prompt;
+    std::string output = "./output.json";
+    std::string dest1 = CONNECTION1;
+    int dest2 = CONNECTION2;
+
+
+    for (char f : flags)
+    {
+        if (f == 'p')
+            properties = true;
+        else if (f == 'c')
+            commands = true;
+        else if (f == 'd')
+            dest = true;
+    }
+
+    int argIndex = 2;
+
+    if (dest)
+    {
+        std::string destination = argv[argIndex++];
+        size_t colon = destination.find(':');
+        dest1 = destination.substr(0, colon);
+        dest2 = std::stoi(destination.substr(colon + 1));
+    }
+
+    prompt = argv[argIndex++];
+
+    if (argc > argIndex)
+        output = argv[argIndex];
 
     std::vector<std::string> lines;
     std::string line;
 
     json existingData;
-    std::ifstream existingFile("./output.json");
-    if (existingFile)
-    {
-        existingFile >> existingData;
-    }
-    else
-    {
-        existingData = json::object();
-    }
 
-    bool negate = true;
-    uint16_t port = 5032;
-
-    markUnsupported(existingData);
-    return 0;
-
-    if (!negate)
-    {
-        try {
-            // Initialize and connect the Telnet client to your Cisco device.
-            TelnetClient telnet;
-            telnet.Connect("127.0.0.1", port);  // Adjust IP and port as needed.
-            
-            // Start at the root level (empty prefix) and recursively build the tree.
-            json commandTree = getCommandTree(telnet, "");
-            
-            // Disconnect from the device once done.
-            telnet.Disconnect();
-
-            existingData[mode] = commandTree;
-            
-            // Output the complete command tree.
-            std::cout << commandTree.dump(4) << std::endl;
-        }
-        catch (const std::exception& ex) {
-            std::cerr << "Error: " << ex.what() << std::endl;
-            return 1;
-        }
-    }
-    else
-    {
-        try
+    auto getFile = [&]() {
+        std::ifstream existingFile(output);
+        if (existingFile)
         {
-            TelnetClient telnet;
-            telnet.Connect("127.0.0.1", port);
-
-            for (auto& node : existingData[mode])
-            {
-                updateNegates(existingData, node, telnet);
-            }
-
-            telnet.Disconnect();
+            existingFile >> existingData;
         }
-        catch (const std::exception& ex) {
-            std::cerr << "Error: " << ex.what() << std::endl;
-            return 1;
+        else
+        {
+            existingData = json::object();
         }
+    };
+
+    getFile();
+
+    if (commands)
+    {
+        std::cout << "command" << std::endl;
+        // Initialize and connect the Telnet client to your Cisco device.
+        CLIENT_TYPE client;
+        client.connect(dest1, dest2);  // Adjust IP and port as needed.
+        
+        // Start at the root level (empty prefix) and recursively build the tree.
+        json commandTree = getCommandTree(client, "");
+        
+        // Disconnect from the device once done.
+        client.disconnect();
+
+        existingData[prompt] = commandTree;
+        
+        // Output the complete command tree.
+        std::cout << commandTree.dump(4) << std::endl;
     }
 
-    std::ofstream outfile("./output.json");
+    if (properties)
+    {
+        CLIENT_TYPE client;
+        client.connect(dest1, dest2);
+
+        for (auto& node : existingData[prompt])
+        {
+            updateNegates(existingData, node, client);
+        }
+
+        client.disconnect();
+    }
+
+    if (unsupported)
+    {
+        markUnsupported(existingData);
+    }
+
+    std::ofstream outfile(output);
     outfile << existingData.dump(4);
     outfile.close();
-    
+
     return 0;
 }

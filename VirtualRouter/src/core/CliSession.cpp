@@ -1397,25 +1397,16 @@ void CliSession::configureRoutingMode(std::string type, bool classicV6)
     }
 }
 
-void CliSession::configureAddressFamily(AddressFamily af)
+void CliSession::configureAddressFamily(std::string type, std::string afMode)
 {
-    std::string addressFamily;
-
-    switch (af)
+    changeMode(Mode::routerAddressFamily);
+    if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(type))
     {
-        case AddressFamily::IPv4:
-            addressFamily = "ipv4";
-            break;
-        case AddressFamily::IPv6:
-            addressFamily = "ipv6";
-            break;
-        case AddressFamily::NONE:
-            break;
-    }
-
-    if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(addressFamily))
-    {
-        workingDirectory = &(*workingDirectory)[0][addressFamily];
+        workingDirectory = &(*workingDirectory)[0][type];
+        if (workingDirectory->size() > 0 && (*workingDirectory)[0].contains(afMode))
+        {
+            workingDirectory = &(*workingDirectory)[0][afMode];
+        }
     }
 }
 
