@@ -145,11 +145,11 @@ public:
 
     // Member variables
     float interfaceID;		///< Unique identifier for interfaces
-    uint32_t routingProtocolID;	        ///< ID of the current routing protocol
 
     bool isList = false;
     bool textLine = false;
     bool isDebugModeEnabled = false;
+    bool isModeChanged = false;		        ///< Indicates if the operational mode has changed.
 	
 private:
 
@@ -479,7 +479,6 @@ private:
     bool isCommandValid = false;	        ///< Indicates if the command is valid.
     bool isPatternMatching = false;	        ///< Indicates if the input matches a pattern.
     bool isPatternMatchEnd = false;	        ///< Indicates the end of a matching pattern.
-    bool isModeChanged = false;		        ///< Indicates if the operational mode has changed.
     bool isExitCommand = false;                 ///< Indicates if the command return to the previous mode.
     bool isCommandInvalid = false;              ///< Indicates if a command is invalid.
     bool isCommandExecutionSuccessful = false;  ///< Indicates if the command was successful.

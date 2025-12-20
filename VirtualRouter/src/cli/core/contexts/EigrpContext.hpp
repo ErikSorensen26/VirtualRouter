@@ -5,6 +5,8 @@
 
 #include <ContextBase.hpp>
 
+#define EIGRP_PARAMS EigrpContext& ctx, const std::vector<std::string>& args
+
 namespace Eigrp
 {
 class Eigrp;
@@ -23,6 +25,7 @@ struct EigrpContext : ContextBase
         : ContextBase(base), currentEigrp(eigrp), currentEigrpNamed(named) {}
     Eigrp::Eigrp* currentEigrp;
     Eigrp::EigrpNamed* currentEigrpNamed;
+    EigrpConfigs::InterfaceConfigs* currentEigrpInterface;
 };
 }
 

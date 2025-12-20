@@ -5,7 +5,6 @@
 
 #include <string_view>
 #include <array>
-#include <optional>
 #include <json.hpp>
 #include <ContextBase.hpp>
 
@@ -39,34 +38,43 @@ class CliSession;
  */
 enum class CliMode
 {
-#define X(name, str) name,
+#define X(name, path) name,
     CLI_MODE_TABLE
 #undef X
     Count
 };
 
-static constexpr std::array<std::string_view,
-    static_cast<size_t>(CliMode::Count)>
-CliModeStrings =
+namespace Cli
 {
-#define X(name, str) str,
+template <typename... Ts>
+constexpr auto makePath(Ts&&... xs)
+{
+    static_assert(sizeof...(Ts) >= 1, "CLI mode path must have at least 1 element");
+    return std::array<std::string_view, sizeof...(Ts)>{ std::string_view{xs}... };
+}
+
+#define X(name, ...) static constexpr auto Path_##name = makePath(__VA_ARGS__);
+    CLI_MODE_TABLE
+#undef X
+
+using ModePath = std::span<const std::string_view>;
+
+static constexpr std::array<ModePath, static_cast<size_t>(CliMode::Count)> CliModePaths =
+{
+#define X(name, ...) ModePath{ Path_##name.data(), Path_##name.size() },
     CLI_MODE_TABLE
 #undef X
 };
-
-constexpr std::string_view getModePrompt(CliMode mode)
-{
-    return CliModeStrings[static_cast<size_t>(mode)];
 }
 
-inline std::optional<CliMode> findMode(std::string_view s)
+constexpr std::string_view getPrompt(CliMode mode)
 {
-    for (size_t i = 0; i < CliModeStrings.size(); i++)
-    {
-        if (CliModeStrings[i] == s)
-            return static_cast<CliMode>(i);
-    }
-    return std::nullopt;
+    return Cli::CliModePaths[static_cast<size_t>(mode)][0];
+}
+
+constexpr Cli::ModePath getPath(CliMode mode)
+{
+    return Cli::CliModePaths[static_cast<size_t>(mode)];
 }
 
 struct ModeConfig

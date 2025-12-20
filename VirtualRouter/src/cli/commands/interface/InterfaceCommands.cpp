@@ -37,6 +37,4 @@ bool Interface_Shutdown_Handler(INTERFACE_PARAMS)
     ctx.currentInterface.shutdown(!ctx.negate);
     return true;
 }
-
-
 }
