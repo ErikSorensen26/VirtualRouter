@@ -65,7 +65,7 @@ using InterfaceIPv6_HoldTime = commandAdder<InterfaceContext,
 bool InterfaceIPv6_Mtu_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_Mtu = commandAdder<InterfaceContext,
     InterfaceIPv6_Mtu_Handler,
-    "mtu"_tok, ARG
+    "mtu"_tok, ARG_REST
 >;
 
 bool InterfaceIPv6_ND_Handler(INTERFACE_PARAMS);

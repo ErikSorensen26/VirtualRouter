@@ -23,7 +23,7 @@ using Global_Exit = commandAdder<GlobalContext,
 bool Global_SetHostname_Handler(GLOBAL_PARAMS);
 using Global_SetHostname = commandAdder<GlobalContext,
     Global_SetHostname_Handler,
-    "hostname"_tok, ARG
+    "hostname"_tok, ARG_REST
 >;
 
 bool Global_End_Handler(GLOBAL_PARAMS);

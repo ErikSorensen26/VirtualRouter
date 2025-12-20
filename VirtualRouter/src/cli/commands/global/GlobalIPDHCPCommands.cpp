@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <Global.h>
 #include <DhcpServer.h>
+#include <VirtualRouter.h>
 
 namespace Cli
 {
@@ -61,4 +62,27 @@ bool GlobalIPDHCP_Debug_Handler(GLOBAL_PARAMS)
     ctx.global.dhcpServer->configs.logAsciiClientID.store(false, std::memory_order_relaxed);
     return true;
 }
+
+bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS)
+{
+    size_t start = 0;
+    VirtualRouter* vrf = &ctx.vrf;
+    if (args[0] == "vrf")
+    {
+        vrf = ctx.global.getRoutingInstance(args[1]);
+        start = 2;
+    }
+    if (!vrf) return false;
+
+    uint32_t ipStart = Functions::addressToIntv4(args[start]);
+    uint32_t ipEnd = Functions::addressToIntv4(args[start + 1]);
+
+    {
+        //TODO
+        //std::unique_lock<std::shared_mutex> lock(ctx.global.dhcpServer->configs)
+    }
+    return true;
+}
+
+
 }

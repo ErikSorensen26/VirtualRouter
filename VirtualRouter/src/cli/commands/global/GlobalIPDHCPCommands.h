@@ -35,7 +35,7 @@ using GlobalIPDHCP_ConflictResolution = commandAdder<GlobalContext,
 bool GlobalIPDHCP_DatabaseTimeout_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_DatabaseTimeout = commandAdder<GlobalContext,
     GlobalIPDHCP_DatabaseTimeout_Handler,
-    "database"_tok, ARG, "timeout"_tok, ARG
+    "database"_tok, ARG, "timeout"_tok, ARG_REST
 >;
 
 bool GlobalIPDHCP_DatabaseWrite_Handler(GLOBAL_PARAMS);
@@ -47,7 +47,13 @@ using GlobalIPDHCP_DatabaseWrite = commandAdder<GlobalContext,
 bool GlobalIPDHCP_Debug_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_Debug = commandAdder<GlobalContext,
     GlobalIPDHCP_Debug_Handler,
-    "debug"_tok
+    "debug"_tok, ARG_REST
+>;
+
+bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS);
+using GlobalIPDHCP_ExcludedAddress = commandAdder<GlobalContext,
+    GlobalIPDHCP_ExcludedAddress_Handler,
+    "excluded-address"_tok, ARG_REST
 >;
 
 using GlobalIPDHCPCommands = CliModeParser<GlobalContext,
@@ -56,39 +62,6 @@ using GlobalIPDHCPCommands = CliModeParser<GlobalContext,
 
 /*if (commandStream[1] == "dhcp")
 {
-    else if (commandStream[2] == "debug")
-    {
-    }
-    else if (commandStream[2] == "excluded-address")
-    {
-            bool hasVrf = false;
-            std::string vrf = currentVrf->instanceName;
-            if (commandStream[3] == "vrf")
-            {
-                    hasVrf = true;
-            }
-            uint32_t ipStart = Functions::addressToIntv4(commandStream[hasVrf ? 5 : 3]);
-            uint32_t size = 1;
-            if (commandStream.size() > (hasVrf ? 6 : 4))
-            {
-                    uint32_t ipEnd = Functions::addressToIntv4(commandStream[hasVrf ? 6 : 4]);
-                    if (ipEnd >= ipStart)
-                    {
-                            size = (ipEnd - ipStart) + 1;
-                    }
-                    else
-                    {
-                            return false;
-                    }
-            }
-            //TODO
-            //std::unique_lock<std::shared_mutex> lock(global.dhcpServer->vrfConfigs.configMutex);
-            //global.dhcpServer->vrfConfigs.excludedAddresses[currentVrf->instanceName][ipStart].insert(size);
-    }
-    else if (commandStream[2] == "global-options")
-    {
-            //TODO
-    }
     else if (commandStream[2] == "limit")
     {
             if (commandStream[4] == "log")

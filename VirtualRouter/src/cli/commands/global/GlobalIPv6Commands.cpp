@@ -27,7 +27,7 @@ bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
         InterfaceType type = getInterfaceType(args[1]);
         float id = std::stof(args[2]);
         uint32_t intID = calculateInterfaceKey(type, id);
-GlobalConfigs::Ndp::Neighbor entry{
+        GlobalConfigs::Ndp::Neighbor entry{
                 intID,
                 Functions::macToInt(args[3])
         };

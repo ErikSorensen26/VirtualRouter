@@ -293,12 +293,14 @@ bool InterfaceIPv6_NextHopSelf_Handler(INTERFACE_PARAMS)
 	    }
 	}
     }
+    return true;
 }
 
 bool InterfaceIPv6_NdpRedirects_Handler(INTERFACE_PARAMS)
 {
     UNUSED(args);
     ctx.currentInterface.ndp->configs.redirects.store(!ctx.negate, std::memory_order_release);
+    return true;
 }
 
 bool InterfaceIPv6_SplitHorizon_Handler(INTERFACE_PARAMS)
@@ -316,6 +318,7 @@ bool InterfaceIPv6_SplitHorizon_Handler(INTERFACE_PARAMS)
 	    }
 	}
     }
+    return true;
 }
 
 bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
@@ -354,5 +357,6 @@ bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
 	    }
 	}
     }
+    return true;
 }
 }

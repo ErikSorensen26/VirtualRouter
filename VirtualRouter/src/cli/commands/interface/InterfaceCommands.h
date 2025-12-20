@@ -30,25 +30,6 @@ using Interface_Shutdown = commandAdder<InterfaceContext,
     Interface_Shutdown_Handler,
     "shutdown"_tok
 >;
-
-
-/*bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::string>& commandStream)
-{
-	// HELPER FUNCTIONS
-	auto refreshEigrpConfig = [&](uint32_t as, AddressFamily af, EigrpConfigs::InterfaceConfigs* config)
-	{
-		if (!currentInterface->eigrpInterfaceList.contains(as) && config->isDefault())
-		{
-			delete config;
-			currentInterface->configs.eigrp.eigrpInterfaceConfigList.erase({as, af});
-		}
-	};
-	else if (commandStream[0] == "ipv6")
-	{
-	}
-	else return false;
-	return true;
-}*/
 }
 
 #endif // INTERFACE_COMMANDS_H

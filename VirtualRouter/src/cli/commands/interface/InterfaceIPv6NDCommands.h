@@ -8,200 +8,165 @@
 
 namespace Cli
 {
+bool InterfaceIPv6ND_AdvertisementInterval_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_AdvertisementInterval = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_AdvertisementInterval_Handler,
+    "advertisement-interval"_tok
+>;
 
+bool InterfaceIPv6ND_AutoconfigDefRoute_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_AutoconfigDefRoute = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_AutoconfigDefRoute_Handler,
+    "autoconfig"_tok, "default-route"_tok
+>;
+
+bool InterfaceIPv6ND_AutoconfigPrefix_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_AutoconfigPrefix = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_AutoconfigPrefix_Handler,
+    "autoconfig"_tok, "prefix"_tok
+>;
+
+bool InterfaceIPv6ND_CacheExpire_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_CacheExpire = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_CacheExpire_Handler,
+    "cache"_tok, "expire"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_CacheInterfaceLimit_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_CacheInterfaceLimit = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_CacheInterfaceLimit_Handler,
+    "cache"_tok, "interface-limit"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_DADAttempts_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_DADAttempts = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_DADAttempts_Handler,
+    "dad"_tok, "attempts"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_DADTime_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_DADTime = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_DADTime_Handler,
+    "dad"_tok, "time"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_DestinationGuard_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_DestinationGuard = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_DestinationGuard_Handler,
+    "destination-guard"_tok
+>;
+
+bool InterfaceIPv6ND_ManagedConfigFlag_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_ManagedConfigFlag = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_ManagedConfigFlag_Handler,
+    "managed-config-flag"_tok
+>;
+
+bool InterfaceIPv6ND_NaGlean_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_NaGlean = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_NaGlean_Handler,
+    "na"_tok, "glean"_tok
+>;
+
+bool InterfaceIPv6ND_NsInterval_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_NsInterval = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_NsInterval_Handler,
+    "ns-interval"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_NudIGP_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_NudIGP = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_NudIGP_Handler,
+    "nud"_tok, "igp"_tok
+>;
+
+bool InterfaceIPv6ND_NudRetry_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_NudRetry = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_NudRetry_Handler,
+    "nud"_tok, "retry"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_OtherConfigFlag_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_OtherConfigFlag = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_OtherConfigFlag_Handler,
+    "other-config-flag"_tok
+>;
+
+bool InterfaceIPv6ND_Prefix_Handler(INTERFACE_PARAMS) {} //TODO
+
+bool InterfaceIPv6ND_RaHopLimitUnspecified_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_RaHopLimitUnspecified = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_RaHopLimitUnspecified_Handler,
+    "ra"_tok, "hop-limit"_tok, "unspecified"_tok
+>;
+
+bool InterfaceIPv6ND_RaInterval_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_RaInterval = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_RaInterval_Handler,
+    "ra"_tok, "interval"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_RaLifetime_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_RaLifetime = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_RaLifetime_Handler,
+    "ra"_tok, "lifetime"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_RaMtuSuppression_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_RaMtuSuppression = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_RaMtuSuppression_Handler,
+    "ra"_tok, "mtu"_tok, "suppress"_tok
+>;
+
+bool InterfaceIPv6ND_RaSuppression_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_RaSuppression = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_RaSuppression_Handler,
+    "ra"_tok, "suppress"_tok
+>;
+
+bool InterfaceIPv6ND_RaSuppressionAll_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_RaSuppressionAll = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_RaSuppressionAll_Handler,
+    "ra"_tok, "suppress"_tok, "all"_tok
+>;
+
+bool InterfaceIPv6ND_ReachableTime_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_ReachableTime = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_ReachableTime_Handler,
+    "reachable-time"_tok, ARG_REST
+>;
+
+bool InterfaceIPv6ND_RouterPreference_Handler(INTERFACE_PARAMS);
+using InterfaceIPv6ND_RouterPreference = commandAdder<InterfaceContext,
+    InterfaceIPv6ND_RouterPreference_Handler,
+    "router-preference"_tok, ARG_REST
+>;
+
+using InterfaceIPv6NDCommands = CliModeParser<InterfaceContext,
+    InterfaceIPv6ND_AdvertisementInterval,
+    InterfaceIPv6ND_AutoconfigDefRoute,
+    InterfaceIPv6ND_AutoconfigPrefix,
+    InterfaceIPv6ND_CacheExpire,
+    InterfaceIPv6ND_CacheInterfaceLimit,
+    InterfaceIPv6ND_DADAttempts,
+    InterfaceIPv6ND_DADTime,
+    InterfaceIPv6ND_DestinationGuard,
+    InterfaceIPv6ND_ManagedConfigFlag,
+    InterfaceIPv6ND_NaGlean,
+    InterfaceIPv6ND_NsInterval,
+    InterfaceIPv6ND_NudIGP,
+    InterfaceIPv6ND_NudRetry,
+    InterfaceIPv6ND_OtherConfigFlag,
+    /*InterfaceIPv6ND_Prefix,*/
+    InterfaceIPv6ND_RaHopLimitUnspecified,
+    InterfaceIPv6ND_RaInterval,
+    InterfaceIPv6ND_RaLifetime,
+    InterfaceIPv6ND_RaMtuSuppression,
+    InterfaceIPv6ND_RaSuppression,
+    InterfaceIPv6ND_RaSuppressionAll,
+    InterfaceIPv6ND_ReachableTime,
+    InterfaceIPv6ND_RouterPreference
+>;
 }
-/*
-        if (commandStream[2] == "advertisement-interval")
-        {
-                currentInterface->ndp->configs.advertisementInterval.store(!negate, std::memory_order_release);
-        }
-        else if (commandStream[2] == "autoconfig")
-        {
-                if (commandStream[3] == "default-route")
-                {
-                        currentInterface->ndp->configs.autoConfigDefaultRoute.store(!negate, std::memory_order_release);
-                }
-                else if (commandStream[3] == "prefix")
-                {
-                        currentInterface->ndp->configs.autoConfigPrefix.store(!negate, std::memory_order_release);
-                }
-        }
-        else if (commandStream[2] == "cache")
-        {
-                if (commandStream[3] == "expire")
-                {
-                        currentInterface->ndp->configs.cacheExpire.store(negate
-                                ? global.configs.ndp.cacheExpire.load(std::memory_order_relaxed)
-                                : static_cast<uint16_t>(std::stoul(commandStream[4]), std::memory_order_release));
-                        currentInterface->ndp->configs.cacheExpireLocal = !negate;
-                        if ((commandStream.size() > 5 && commandStream[5] == "refresh" && !negate) || negate)
-                        {
-                                currentInterface->ndp->configs.refreshLocal = !negate;
-                                currentInterface->ndp->configs.refresh.store(negate ? global.configs.ndp.refresh.load(std::memory_order_relaxed) : true, std::memory_order_release);
-                        }
-                }
-                else if (commandStream[3] == "interface-limit")
-                {
-                        currentInterface->ndp->configs.interfaceLimit.store(negate
-                                ? global.configs.ndp.interfaceLimit.load(std::memory_order_relaxed)
-                                : static_cast<uint32_t>(std::stoul(commandStream[4]), std::memory_order_release));
-                        currentInterface->ndp->configs.interfaceLimitLocal = !negate;
-                        if ((commandStream.size() > 5 && commandStream[5] == "log") || negate)
-                        {
-                                currentInterface->ndp->configs.loggingRate.store(negate
-                                        ? global.configs.ndp.loggingRate.load(std::memory_order_relaxed)
-                                        : static_cast<uint16_t>(std::stoul(commandStream[6]), std::memory_order_release));
-                                currentInterface->ndp->configs.loggingRateLocal = !negate;
-                        }
-                }
-        }
-        else if (commandStream[2] == "dad")
-        {
-                if (commandStream[3] == "attempts")
-                {
-                        currentInterface->ndp->configs.dadAttempts.store(negate ? 1 : static_cast<uint16_t>(std::stoul(commandStream[4])), std::memory_order_release);
-                }
-                else if (commandStream[3] == "time")
-                {
-                        currentInterface->ndp->configs.dadTime.store(negate
-                                ? global.configs.ndp.dadTime.load(std::memory_order_relaxed)
-                                : static_cast<uint16_t>(std::stoul(commandStream[4]), std::memory_order_release));
-                        currentInterface->ndp->configs.dadTimeLocal = !negate;
-                }
-        }
-        else if (commandStream[2] == "destination-guard")
-        {
-                currentInterface->ndp->configs.destinationGuard.store(!negate, std::memory_order_release);
-        }
-        else if (commandStream[2] == "managed-config-flag")
-        {
-                currentInterface->ndp->configs.managedConfigFlag.store(!negate, std::memory_order_release);
-        }
-        else if (commandStream[2] == "na" && commandStream[3] == "glean")
-        {
-                currentInterface->ndp->configs.naGlean.store(!negate, std::memory_order_release);
-        }
-        else if (commandStream[2] == "ns-interval")
-        {
-                currentInterface->ndp->configs.nsInterval.store(negate ? 1000
-                        : static_cast<uint32_t>(std::stoul(commandStream[3])), std::memory_order_release);
-        }
-        else if (commandStream[2] == "nud")
-        {
-                if (commandStream[3] == "igp")
-                {
-                        currentInterface->ndp->configs.nudIgp.store(!negate, std::memory_order_release);
-                }
-                else if (commandStream[3] == "retry")
-                {
-                        if (negate)
-                        {
-                                std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
-                                currentInterface->ndp->configs.nudBase = 3;
-                                currentInterface->ndp->configs.nudBaseInterval = 1000;
-                                currentInterface->ndp->configs.nudBaseAttempts = 3;
-                                currentInterface->ndp->configs.nudFinalWait = 60000;
-                        }
-                        else
-                        {
-                                std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
-                                currentInterface->ndp->configs.nudBase = static_cast<uint8_t>(std::stoul(commandStream[4]));
-                                currentInterface->ndp->configs.nudBaseInterval = static_cast<uint16_t>(std::stoul(commandStream[5]));
-                                currentInterface->ndp->configs.nudBaseAttempts = static_cast<uint16_t>(std::stoul(commandStream[6]));
-                                if (commandStream.size() > 7)
-                                {
-                                        currentInterface->ndp->configs.nudFinalWait = static_cast<uint16_t>(std::stoul(commandStream[7]));
-                                }
-                        }
-                }
-        }
-        else if (commandStream[2] == "other-config-flag")
-        {
-                currentInterface->ndp->configs.otherConfigFlag.store(!negate, std::memory_order_release);
-        }
-        else if (commandStream[2] == "prefix")
-        {
-
-        }
-        else if (commandStream[2] == "ra")
-        {
-                if (commandStream[3] == "hop-limit")
-                {
-                        currentInterface->ndp->configs.raHopLimitUnspecified.store(!negate, std::memory_order_release);
-                }
-                else if (commandStream[3] == "interval")
-                {
-                        if (negate)
-                        {
-                                std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
-                                currentInterface->ndp->configs.raIntervalMS = true;
-                                currentInterface->ndp->configs.raInterval = 600000;
-                                currentInterface->ndp->configs.raIntervalMin = 3000;
-                        }
-                        else if (Functions::isNumber(commandStream[4]))
-                        {
-                                std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
-                                currentInterface->ndp->configs.raIntervalMS = false;
-                                currentInterface->ndp->configs.raInterval = static_cast<uint32_t>(std::stoul(commandStream[4]));
-                                currentInterface->ndp->configs.raIntervalMin = static_cast<uint32_t>(std::stoul(commandStream[5]));
-                        }
-                        else if (commandStream[4] == "msec")
-                        {
-                                std::unique_lock<std::shared_mutex> lock(currentInterface->ndp->configs.configMutex);
-                                currentInterface->ndp->configs.raIntervalMS = true;
-                                currentInterface->ndp->configs.raInterval = static_cast<uint32_t>(std::stoul(commandStream[5]));
-                                currentInterface->ndp->configs.raIntervalMin = static_cast<uint32_t>(std::stoul(commandStream[6]));
-                        }
-                }
-                else if (commandStream[3] == "lifetime")
-                {
-                        currentInterface->ndp->configs.routerLifetime.store(negate ? 1800 : static_cast<uint16_t>(std::stoul(commandStream[4])));
-                }
-                else if (commandStream[3] == "mtu")
-                {
-                        currentInterface->ndp->configs.mtuSuppress.store(!negate, std::memory_order_release);
-                }
-                else if (commandStream[3] == "suppress")
-                {
-                        if (commandStream.size() == 4)
-                        {
-                                currentInterface->ndp->configs.suppressRA.store(!negate, std::memory_order_release);
-                        }
-                        else if (commandStream.size() == 5)
-                        {
-                                currentInterface->ndp->configs.raSuppressAll.store(!negate, std::memory_order_release);
-                        }
-                }
-        }
-        else if (commandStream[2] == "reachable-time")
-        {
-                currentInterface->ndp->configs.reachableTime.store(negate
-                        ? global.configs.ndp.reachableTime.load(std::memory_order_relaxed)
-                        : static_cast<uint32_t>(std::stoul(commandStream[3])));
-                currentInterface->ndp->configs.reachableTimeLocal = !negate;
-        }
-        else if (commandStream[2] == "router-preference")
-        {
-                if (negate)
-                {
-                        currentInterface->ndp->configs.preference = Protocol::Ndp::Configs::Preference::MEDIUM;
-                }
-                else
-                {
-                        if (commandStream[3] == "high")
-                        {
-                                currentInterface->ndp->configs.preference = Protocol::Ndp::Configs::Preference::HIGH;
-                        }
-                        else if (commandStream[3] == "medium")
-                        {
-                                currentInterface->ndp->configs.preference = Protocol::Ndp::Configs::Preference::MEDIUM;
-                        }
-                        else if (commandStream[3] == "low")
-                        {
-                                currentInterface->ndp->configs.preference = Protocol::Ndp::Configs::Preference::LOW;
-                        }
-                }
-        }
-*/
 
 #endif // INTERFACE_IPV6_ND_COMMANDS_H

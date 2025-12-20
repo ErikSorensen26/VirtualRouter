@@ -59,7 +59,7 @@ using InterfaceIP_HoldTime = commandAdder<InterfaceContext,
 bool InterfaceIP_Mtu_Handler(INTERFACE_PARAMS);
 using InterfaceIP_Mtu = commandAdder<InterfaceContext,
     InterfaceIP_Mtu_Handler,
-    "mtu"_tok, ARG
+    "mtu"_tok, ARG_REST
 >;
 
 bool InterfaceIP_NextHopSelf_Handler(INTERFACE_PARAMS);

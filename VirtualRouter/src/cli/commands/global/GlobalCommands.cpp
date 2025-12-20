@@ -14,7 +14,6 @@
 
 #include "GlobalIPCommands.h"
 #include "GlobalIPv6Commands.h"
-
 namespace Cli
 {
 bool Global_Arp_Handler(GLOBAL_PARAMS)
