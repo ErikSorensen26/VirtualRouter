@@ -2,8 +2,6 @@
 #ifndef COMMAND_PROCESSOR_H
 #define COMMAND_PROCESSOR_H
 
-#include <vector>
-#include <string>
 #include <CliSession.h>
 #include <CliEngine.h>
 #include <Global.h>

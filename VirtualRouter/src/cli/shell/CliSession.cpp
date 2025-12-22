@@ -1,4 +1,4 @@
-#include <CliSession.h>
+/*#include <CliSession.h>
 #include <CommandProcessor.h>
 #include <CliEngine.h>
 #include <regex>
@@ -1451,3 +1451,4 @@ void CliSession::historyToGlobal()
     modeConfig.modeHistory.push_back(&engine.root); 
     modeConfig.configNode = &engine.root;
 }
+*/
