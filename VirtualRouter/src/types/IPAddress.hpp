@@ -94,6 +94,13 @@ struct alignas(16) IPPrefix
         return std::memcmp(addr, other.addr, len) < 0;
     }
 
+    uint32_t getMask() const {
+        if (prefixLength == 0) return 0;
+        if (prefixLength >= 32) return 0xFFFFFFFF;
+
+        return 0xFFFFFFFF << (32 - prefixLength);
+    }
+
     void addPrefixLen(uint8_t newPrefixLen)
     {
         prefixLength = newPrefixLen;

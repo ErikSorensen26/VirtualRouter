@@ -8,11 +8,12 @@
 #include <string>
 #include <optional>
 #include <IPAddress.hpp>
+#include <shared_mutex>
 
 namespace OSPF
 {
 
-struct OspfConfigs
+struct TopologyConfigs
 {
     struct Neighbor
     {
@@ -23,68 +24,65 @@ struct OspfConfigs
         uint8_t priority;
     };
 
-    struct OspfTopology
+    std::atomic<bool> ribForwardingAddress;
+    std::atomic<bool> ribInterAreaSummary;
+    std::atomic<bool> ribNssaTranslation;
+    std::atomic<bool> trafficShareMin;
+    std::atomic<bool> trafficShareMinAllIface;
+
+    std::atomic<uint8_t> distance;
+    std::atomic<uint8_t> externalDistance;
+    std::atomic<uint8_t> interAreaDistance;
+    std::atomic<uint8_t> intraAreaDistance;
+    std::atomic<uint8_t> maxPaths;
+    std::atomic<uint8_t> priority;
+    std::atomic<uint8_t> floodIntervalMsec;
+    std::atomic<uint8_t> retransIntervalMsec;
+
+    std::atomic<uint16_t> lsaGroupIntervalSec;
+
+    std::atomic<uint32_t> defaultMetric;
+    std::atomic<uint32_t> lsaArrivalTimer;
+
+    struct DefaultInformation
     {
-        std::atomic<bool> ribForwardingAddress;
-        std::atomic<bool> ribInterAreaSummary;
-        std::atomic<bool> ribNssaTranslation;
-        std::atomic<bool> trafficShareMin;
-        std::atomic<bool> trafficShareMinAllIface;
+        std::atomic<uint32_t> metric;
+        std::atomic<bool> always;
+        std::optional<std::string> routeMap = std::nullopt;
 
-        std::atomic<uint8_t> distance;
-        std::atomic<uint8_t> externalDistance;
-        std::atomic<uint8_t> interAreaDistance;
-        std::atomic<uint8_t> intraAreaDistance;
-        std::atomic<uint8_t> maxPaths;
-        std::atomic<uint8_t> priority;
-        std::atomic<uint8_t> floodIntervalMsec;
-        std::atomic<uint8_t> retransIntervalMsec;
+        enum class LinkStateType : uint8_t { ROUTER = 1, NETWORK = 2 };
+        std::atomic<LinkStateType> metricType;
+    } defaultInformation;
 
-        std::atomic<uint16_t> lsaGroupIntervalSec;
+    struct DiscardRoute
+    {
+        std::atomic<uint8_t> externalAdminDistance;
+        std::atomic<uint8_t> internalAdminDistance;
+    } discardRoute;
 
-        std::atomic<uint32_t> defaultMetric;
-        std::atomic<uint32_t> lsaArrivalTimer;
+    struct MaxMetrics
+    {
+        std::atomic<bool> external;
+        std::atomic<uint32_t> externalOverride = 16711680u;
+        std::atomic<bool> summary;
+        std::atomic<uint32_t> summaryOverride = 16711680u;
+        std::atomic<bool> includeStub;
+        std::atomic<bool> onStartup;
+    } maxMetrics;
 
-        struct DefaultInformation
-        {
-            std::atomic<uint32_t> metric;
-            std::atomic<bool> always;
-            std::optional<std::string> routeMap = std::nullopt;
+    std::unordered_map<IPAddress, Neighbor> neighbors;
 
-            enum class LinkStateType : uint8_t { ROUTER = 1, NETWORK = 2 };
-            std::atomic<LinkStateType> metricType;
-        } defaultInformation;
-
-        struct DiscardRoute
-        {
-            std::atomic<uint8_t> externalAdminDistance;
-            std::atomic<uint8_t> internalAdminDistance;
-        } discardRoute;
-
-        struct MaxMetrics
-        {
-            std::atomic<bool> external;
-            std::atomic<uint32_t> externalOverride = 16711680u;
-            std::atomic<bool> summary;
-            std::atomic<uint32_t> summaryOverride = 16711680u;
-            std::atomic<bool> includeStub;
-            std::atomic<bool> onStartup;
-        } maxMetrics;
-
-        std::unordered_map<IPAddress, Neighbor> neighbors;
-
-        struct Summary
-        {
-            IPPrefix prefix;
-            struct SummaryOpts { bool nssaOnly{false}; uint32_t tag; };
-            std::optional<SummaryOpts> opts;
-        };
-        std::vector<Summary> summaries;
+    struct Summary
+    {
+        IPPrefix prefix;
+        struct SummaryOpts { bool nssaOnly{false}; uint32_t tag; };
+        std::optional<SummaryOpts> opts;
     };
+    std::vector<Summary> summaries;
+};
 
-    OspfTopology base;
-    std::vector<OspfTopology> topologies;
-
+struct OspfConfigs
+{
     AddressFamily af; 
     std::atomic<bool> multicast;
     std::atomic<bool> allInterfaceBfd{false};
@@ -165,10 +163,16 @@ struct OspfConfigs
     {
         // TODO
     };
+
+    std::shared_mutex configsMutex;
 };
 
 struct InterfaceConfigs
 {
+    InterfaceConfigs(uint32_t k) : key(k) {}
+
+    const uint32_t key;
+    
     std::atomic<bool> includeSecondaries;
     std::atomic<bool> bfd;
     std::atomic<bool> databaseFilterAll;
@@ -180,6 +184,7 @@ struct InterfaceConfigs
     std::atomic<bool> mtuIgnore;
     std::atomic<bool> prefixSuppression;
     std::atomic<bool> shutdown;
+    std::atomic<bool> isPassive;
 
     std::atomic<uint8_t> priority;
     std::atomic<uint8_t> helloMultiplier;
@@ -196,12 +201,13 @@ struct InterfaceConfigs
     enum class NetworkType { BROADCAST, NON_BROADCAST, POINT_TO_MULTIPOINT, POINT_TO_POINT };
     std::atomic<NetworkType> networkType;
 
-    std::unordered_map<IPAddress, OspfConfigs::Neighbor> neighbors;
+    std::unordered_map<IPAddress, TopologyConfigs::Neighbor> neighbors;
 
     struct auth
     {
         // v2
         std::atomic<bool> messageDigestAuth;
+        uint16_t authType;
         uint8_t digestKey;
 
         // v3
