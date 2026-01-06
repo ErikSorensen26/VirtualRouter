@@ -10,7 +10,8 @@
 #include <StaticHeader.hpp>
 #include <unordered_map>
 
-namespace Eigrp {
+namespace Eigrp
+{
 class Neighbor;
 struct ReliableInfo
 {
@@ -45,7 +46,7 @@ class MulticastReliablePacket
 {
 public:
     MulticastReliablePacket() = default;
-    MulticastReliablePacket(EigrpHeader& builder, std::unordered_map<Neighbor*, ReliableInfo> nbrs)
+    MulticastReliablePacket(EigrpHeader& builder, std::unordered_map<Neighbor*, ReliableInfo>& nbrs)
         : packet(builder.buffer, builder.fixedSize + builder.getTrail().size()), neighbors(std::move(nbrs)) {}
 
     // Default copy constructor and copy assignment operator

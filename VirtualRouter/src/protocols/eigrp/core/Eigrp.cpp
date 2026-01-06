@@ -69,39 +69,9 @@ void Eigrp::runMaintenance()
     topology.pruneStaleRoutes();
 }
 
-void Eigrp::calculateRID()
+bool Eigrp::calculateRID()
 {
-    uint32_t highestIP = 0;
-    uint32_t tempIp;
-    if (!rid.isStatic)
-    {
-        auto processID = [&](Interface* interface)
-        {
-            if (interface->shutdownFlag.load(std::memory_order_relaxed)) return;
-            auto& interfaceInfo = interface->configs;
-            tempIp = interfaceInfo.ipv4.getAddressInt();
-            if (tempIp == 0) return;
-            if (tempIp < highestIP) return;
-            highestIP = tempIp;
-        };
-        
-        {
-            std::shared_lock<std::shared_mutex> lock(routingInstance->interfaceMutex);
-            for (const auto& [id, interface] : routingInstance->interfaceList)
-            {
-                if (interface->configs.interfaceType != InterfaceType::LOOPBACK) continue;
-                processID(interface);
-            }
-            if (highestIP == 0)
-            {
-                for (const auto& [id, interface] : routingInstance->interfaceList)
-                {
-                    processID(interface);
-                }
-            }
-        }
-        writeU32(rid.ID, highestIP);
-    }
+    return routingInstance->calculateRID(rid.id);
 }
 
 void Eigrp::addGlobalNeighbor(const IPAddress& neighborIp, Neighbor* neighbor)

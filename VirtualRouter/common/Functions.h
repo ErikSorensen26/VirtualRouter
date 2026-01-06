@@ -242,6 +242,7 @@ namespace Functions {
     std::string padWithZeros(const std::string& input);
 
     uint8_t* prefixToMask(uint8_t* out, uint8_t prefixLen, AddressFamily af);
+    uint32_t prefixTo32Mask(uint8_t prefixLen);
 
     std::string generateRandomString(size_t length);
 

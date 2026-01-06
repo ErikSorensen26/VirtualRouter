@@ -73,7 +73,7 @@ void InterfaceManager::refreshInterfaceList()
     std::vector<std::pair<bool, void*>> interfacesToProcess;
 
     if (base.routerID() == 0)
-        base.calculateRID();
+        if (!base.calculateRID()) return; // No valid RID
 
     {
         std::vector<std::map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
