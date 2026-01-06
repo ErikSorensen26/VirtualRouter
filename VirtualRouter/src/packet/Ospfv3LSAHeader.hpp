@@ -70,10 +70,10 @@
 #define OSPFV3_LSA_MAX_AGE                 3600 ///< OSPFv3 MaxAge in seconds
 
 /*
- * @struct Ospfv2LSAHeaderRaw
+ * @struct Ospfv3LSAHeaderRaw
  */
 #pragma pack(push, 1)
-struct Ospfv2LSAHeaderRaw
+struct Ospfv3LSAHeaderRaw
 {
     uint8_t age[2];
     uint8_t type[2];
@@ -86,18 +86,19 @@ struct Ospfv2LSAHeaderRaw
 #pragma pack(pop)
 
 /*
- * @struct Ospfv2LSAHeader
+ * @struct Ospfv3LSAHeader
  * @brief Represents an OSPF (Open Shortest Path First) link state header.
  */
-struct Ospfv2LSUHeader
+struct Ospfv3LSAHeader
 {
-    DEFINE_PACKET_HEADER(Ospfv2LSAHeaderRaw);
+    DEFINE_PACKET_HEADER(Ospfv3LSAHeaderRaw);
 
     uint16_t getAge() const                 { return readU16(raw->age); }
     uint16_t getType() const                { return readU16(raw->type); }
-    uint32_t getLsID() const                { return readU32(raw->lsID); }
+    uint32_t getLsId() const                { return readU32(raw->lsID); }
     uint32_t getAdvRouter() const           { return readU32(raw->advRouter); }
     uint32_t getSeqNumber() const           { return readU32(raw->seqNum); }
+    uint16_t getChecksum() const            { return readU16(raw->checksum); }
     uint16_t getLen() const                 { return readU16(raw->length); }
     
     bool getFlagB(uint8_t flags) const      { return flags & 0x01; }

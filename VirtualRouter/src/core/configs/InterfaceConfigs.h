@@ -7,6 +7,7 @@
 #include <atomic>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 #include <HeaderHelpers.hpp>
 #include <cstring>
 #include <map>
@@ -23,6 +24,10 @@ enum class AddressFamily : uint8_t;
 enum class InterfaceType : uint8_t;
 
 namespace EigrpConfigs
+{
+    struct InterfaceConfigs;
+}
+namespace OSPF
 {
     struct InterfaceConfigs;
 }
@@ -66,6 +71,7 @@ public:
 
     const HwIfaceInfo& hwInfo;
 
+    std::atomic<uint8_t> tid = 0;        ///< Topology ID (default to tid 0)
     std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
     std::atomic<bool> trusted = false;           ///< Identifier for trusted interface.
     std::atomic<uint32_t> bandwidth{1000000};    ///< Bandwidth of the interface in kpbs.
@@ -87,6 +93,7 @@ public:
         uint8_t* getAddress(uint8_t* out) const;
         IPAddress getAddress() const;
         uint32_t getAddressInt() const;
+        IPPrefix getAddressMask() const;
 
         void setAddress(uint32_t newAddress, uint8_t newMask);
 
@@ -150,6 +157,8 @@ public:
         uint8_t* getGlobalUnicast(uint8_t* out) const;
         uint8_t* getLocalUnicast(uint8_t* out) const;
 
+        IPPrefix getLocalPrefix() const;
+
         __uint128_t getLocalAddress() const;
         __uint128_t getGlobalUnicast() const;
         __uint128_t getLocalUnicast() const;
@@ -162,9 +171,11 @@ public:
         bool hasGlobalUnicast(__uint128_t addr) const;
         bool hasLocalUnicast(__uint128_t addr) const;
 
+        uint8_t getLocalPair(uint8_t* out) const;
         uint8_t getGlobalUnicastPair(uint8_t* out) const;
         uint8_t getLocalUnicastPair(uint8_t* out) const;
 
+        uint8_t getLocalMask() const;
         uint8_t getGlobalUnicastMask() const;
         uint8_t getLocalUnicastMask() const;
 
@@ -202,6 +213,16 @@ public:
         std::unordered_set<uint32_t> ipv6AutonomousSystems; ///< Enabled ipv6 autonomous system list
         std::map<std::pair<uint32_t, AddressFamily>, EigrpConfigs::InterfaceConfigs*> eigrpInterfaceConfigList; ///< As number to configuration
     } eigrp;
+
+    /**
+     * @struct Ospf
+     * @brief Stores Ospf configs
+     */
+    struct Ospf
+    {
+        std::unordered_map<uint32_t, uint32_t> enabledProcesses;
+        std::map<std::pair<uint32_t, AddressFamily>, OSPF::InterfaceConfigs*> ospfInterfaceConfigList;
+    } ospf;
 
     /**
      * @struct Dhcpv6

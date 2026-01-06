@@ -112,6 +112,22 @@ public:
     ~VirtualRouter();
 
     /**
+     * @brief Calculates a Router ID for a routing process.
+     *
+     * Performs a full router ID calculation covering all interfaces in the VRF
+     *  - First will look for the highest loopback IPv4 address.
+     *  - Second will look for the highest ethernet IPv4 address.
+     *  - If no IPv4 addresses exist then it will need to be manually defined for the routing process.
+     *
+     * @note Duplicate RIDs are possible, there is no claiming ips for RIDs, if the
+     * best RID address still exists when a new process calculates, then that could
+     * create duplicates. To prevent duplicates, manually define the Router ID for the routing process.
+     *
+     * Routing IDs DO NOT change as interfaces change.
+     */
+    bool calculateRID(uint32_t& rid);
+
+    /**
      * @brief Set of enabled address families (IPv4, IPv6).
      *
      * Determines which protocol stacks are available in this VRF.

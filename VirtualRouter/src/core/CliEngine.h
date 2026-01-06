@@ -35,7 +35,7 @@ struct ModeConfig; ///< Forward declaration of ModeConfig.
  * router. Configuration for each mode typically affects persistent state, routing
  * instances, interface roles, and protocol adjacency formation.
  */
-enum RoutingMode
+enum class RoutingMode
 {
     BGP,            ///< Border Gateway Protocol.
     EIGRP_CLASSIC,  ///< Enhanced Interior Gateway Routing Protocol - Classic.

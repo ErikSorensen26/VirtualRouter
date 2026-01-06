@@ -18,6 +18,9 @@
 #define OSPFV2_AUTH_SIMPLE  0x0001 ///< OSPFv2 Auth Type Simple Password (1).
 #define OSPFV2_AUTH_CRYPTO  0x0002 ///< OSPFv2 Auth Type Cryptographicc (MD5/SHA) (2).
 
+constexpr uint8_t OSPFV2_ALL_SPF_ROUTERS[4] = { 0xE0, 0x00, 0x00, 0x05 };
+constexpr uint8_t OSPFV2_ALL_D_ROUTERS[4] = { 0x0E, 0x00, 0x00, 0x06 };
+
 /**
  * @struct Ospfv2HeaderRaw
  */
@@ -41,7 +44,7 @@ struct Ospfv2HeaderRaw
  */
 struct Ospfv2Header
 {
-    DEFINE_FIXED_HEADER(Ospfv2HeaderRaw);
+    DEFINE_PACKET_HEADER(Ospfv2HeaderRaw);
 
     uint8_t getVersion() const             { return raw->version; }
     uint8_t getType() const                { return raw->type; }

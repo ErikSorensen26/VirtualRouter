@@ -78,7 +78,7 @@
 #define OSPFV2_EXT_METRIC_E1     0  ///< Type-1 external (internal cost added)
 #define OSPFV2_EXT_METRIC_E2     1  ///< Type-2 external (external dominates)
 
-#define OSPFV2_LSA_MAX_AGE       3600  ///< MaxAge (flush LSA)
+#define OSPFV2_MAX_AGE       3600  ///< MaxAge (flush LSA)
 
 /*
  * @struct Ospfv2LSAHeaderRaw
@@ -101,7 +101,7 @@ struct Ospfv2LSAHeaderRaw
  * @struct Ospfv2LSAHeader
  * @brief Represents an OSPF (Open Shortest Path First) link state header.
  */
-struct Ospfv2LSUHeader
+struct Ospfv2LSAHeader
 {
     DEFINE_PACKET_HEADER(Ospfv2LSAHeaderRaw);
 
@@ -110,6 +110,7 @@ struct Ospfv2LSUHeader
     uint32_t getLsID() const                { return readU32(raw->lsID); }
     uint32_t getAdvRouter() const           { return readU32(raw->advRouter); }
     uint32_t getSeqNumber() const           { return readU32(raw->seqNum); }
+    uint16_t getChecksum() const            { return readU16(raw->checksum); }
     uint16_t getLen() const                 { return readU16(raw->length); }
     
     bool getOptMT() const                   { return raw->options & 0x01; }
@@ -130,6 +131,8 @@ struct Ospfv2LSUHeader
 
     void setAge(uint16_t val)
         { writeU16(raw->age, val); }
+    void setOptions(uint8_t val)
+        { raw->options = val; }
     void setType(uint8_t val)
         { raw->type = val; }
     void setLsID(uint32_t val)

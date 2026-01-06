@@ -37,7 +37,7 @@ struct Ospfv3HeaderRaw
  */
 struct Ospfv3Header
 {
-    DEFINE_FIXED_HEADER(Ospfv3HeaderRaw);
+    DEFINE_PACKET_HEADER(Ospfv3HeaderRaw);
 
     uint8_t getVersion() const              { return raw->version; }
     uint8_t getType() const                 { return raw->type; }

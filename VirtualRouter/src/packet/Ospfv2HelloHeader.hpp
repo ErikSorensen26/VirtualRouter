@@ -37,6 +37,7 @@ struct Ospfv2HelloHeader
     uint32_t getDeadInterval() const        { return readU32(raw->deadInterval); }
     uint32_t getDR() const                  { return readU32(raw->designatedRouter); }
     uint32_t getBDR() const                 { return readU32(raw->backupDesignatedRouter); }
+    uint8_t getOptions() const              { return raw->options; }
 
     bool getOptMT() const                   { return raw->options & 0x01; }
     bool getOptE() const                    { return raw->options & 0x02; }

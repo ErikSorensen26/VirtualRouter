@@ -20,6 +20,8 @@
 #include "Dhcpv6Header.hpp"
 #include "Dhcpv6RelayHeader.hpp"
 #include "EigrpHeader.hpp"
+#include "Ospfv2Header.hpp"
+#include "Ospfv3Header.hpp"
 #include "SyslogHeader.hpp"
 
 // --- uint16_t ---
@@ -119,7 +121,7 @@ enum class HeaderType : uint8_t
     ETHERNET,
     ARP, MPLS,
     IPV4, IPV6, AH, ESP, ICMP, ICMPV6,
-    TCP, UDP, EIGRP,
+    TCP, UDP, EIGRP, OSPFV2, OSPFV3,
     DHCP, DHCPV6, DHCPV6_RELAY,
     ENCAPSULATE
 };
@@ -137,21 +139,23 @@ inline size_t getHeaderSize(HeaderType type)
 {
     switch (type)
     {
-        case HeaderType::ETHERNET: return sizeof(EthernetHeader);
-        case HeaderType::ARP: return sizeof(ArpHeader);
-        case HeaderType::MPLS: return sizeof(MplsHeader);
-        case HeaderType::IPV4: return sizeof(IPv4Header);
-        case HeaderType::IPV6: return sizeof(IPv6Header);
-        case HeaderType::AH: return sizeof(AhHeader);
-        case HeaderType::ESP: return sizeof(EspHeader);
-        case HeaderType::ICMP: return sizeof(IcmpHeader);
-        case HeaderType::ICMPV6: return sizeof(Icmpv6Header);
-        case HeaderType::TCP: return sizeof(TcpHeader);
-        case HeaderType::UDP: return sizeof(UdpHeader);
-        case HeaderType::EIGRP: return sizeof(EigrpHeader);
-        case HeaderType::DHCP: return sizeof(DhcpHeader);
-        case HeaderType::DHCPV6: return sizeof(Dhcpv6Header);
-        case HeaderType::DHCPV6_RELAY: return sizeof(Dhcpv6RelayHeader);
+        case HeaderType::ETHERNET: return EthernetHeader::fixedSize;
+        case HeaderType::ARP: return ArpHeader::fixedSize;
+        case HeaderType::MPLS: return MplsHeader::fixedSize;
+        case HeaderType::IPV4: return IPv4Header::fixedSize;
+        case HeaderType::IPV6: return IPv6Header::fixedSize;
+        case HeaderType::AH: return AhHeader::fixedSize;
+        case HeaderType::ESP: return EspHeader::fixedSize;
+        case HeaderType::ICMP: return IcmpHeader::fixedSize;
+        case HeaderType::ICMPV6: return Icmpv6Header::fixedSize;
+        case HeaderType::TCP: return TcpHeader::fixedSize;
+        case HeaderType::UDP: return UdpHeader::fixedSize;
+        case HeaderType::EIGRP: return EigrpHeader::fixedSize;
+        case HeaderType::OSPFV2: return Ospfv2Header::fixedSize;
+        case HeaderType::OSPFV3: return Ospfv3Header::fixedSize;
+        case HeaderType::DHCP: return DhcpHeader::fixedSize;
+        case HeaderType::DHCPV6: return Dhcpv6Header::fixedSize;
+        case HeaderType::DHCPV6_RELAY: return Dhcpv6RelayHeader::fixedSize;
         default: return 0;
     }
 }

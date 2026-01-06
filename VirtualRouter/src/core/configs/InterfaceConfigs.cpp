@@ -57,6 +57,11 @@ uint32_t InterfaceConfigs::IPv4State::getAddressInt() const
     return address.load(std::memory_order_relaxed);
 }
 
+IPPrefix InterfaceConfigs::IPv4State::getAddressMask() const
+{
+    return {getAddress(), getMask()};
+}
+
 void InterfaceConfigs::IPv4State::setAddress(uint32_t newAddress, uint8_t newMask)
 {
     address.store(newAddress, std::memory_order_release);
@@ -273,6 +278,13 @@ uint8_t* InterfaceConfigs::IPv6State::getLocalUnicast(uint8_t* out) const
     return nullptr;
 }
 
+IPPrefix InterfaceConfigs::IPv6State::getLocalPrefix() const
+{
+    IPPrefix prefix;
+    prefix.prefixLength = getLocalPair(prefix.addr);
+    return prefix;
+}
+
 __uint128_t InterfaceConfigs::IPv6State::getLocalAddress() const
 {
     std::shared_lock<std::shared_mutex> lock(ipMutex);
@@ -343,6 +355,14 @@ bool InterfaceConfigs::IPv6State::hasGlobalUnicast(__uint128_t addr) const
     return false;
 }
 
+uint8_t InterfaceConfigs::IPv6State::getLocalPair(uint8_t* out) const
+{
+    std::shared_lock<std::shared_mutex> lock(ipMutex);
+    if (!linkLocalAddress) return 0;
+    writeU128(out, linkLocalAddress->ipInt);
+    return linkLocalAddress->prefix;
+}
+
 uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastPair(uint8_t* out) const
 {
     std::shared_lock<std::shared_mutex> lock(ipMutex);
@@ -357,6 +377,12 @@ uint8_t InterfaceConfigs::IPv6State::getLocalUnicastPair(uint8_t* out) const
     if (uniqueLocalAddresses.empty()) return 0;
     writeU128(out, uniqueLocalAddresses.front()->ipInt);
     return uniqueLocalAddresses.front()->prefix;
+}
+
+uint8_t InterfaceConfigs::IPv6State::getLocalMask() const
+{
+    std::shared_lock<std::shared_mutex> lock(ipMutex);
+    return linkLocalAddress ? linkLocalAddress->prefix : 0;
 }
 
 uint8_t InterfaceConfigs::IPv6State::getGlobalUnicastMask() const

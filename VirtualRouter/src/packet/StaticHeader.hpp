@@ -14,6 +14,60 @@ struct StaticHeader
 
     StaticHeader() = default;
 
+    StaticHeader(const uint8_t* src, size_t len)
+        : totalLen(len)
+    {
+        if (totalLen == 0) return;
+        buffer = static_cast<uint8_t*>(std::malloc(totalLen));
+        if (buffer) std::memcpy(buffer, src, totalLen);
+    }
+
+    StaticHeader(const StaticHeader& other)
+        : totalLen(other.totalLen)
+    {
+        if (!other.buffer || totalLen == 0) return;
+        buffer = static_cast<uint8_t*>(std::malloc(totalLen));
+        if (buffer) std::memcpy(buffer, other.buffer, totalLen);
+    }
+
+    StaticHeader& operator=(const StaticHeader& other)
+    {
+        if (this == &other) return *this;
+        uint8_t* newBuf = nullptr;
+        if (other.buffer && other.totalLen > 0)
+        {
+            newBuf = static_cast<uint8_t*>(std::malloc(other.totalLen));
+            if (newBuf) std::memcpy(newBuf, other.buffer, other.totalLen);
+        }
+        std::free(buffer);
+        buffer = newBuf;
+        totalLen = other.totalLen;
+        return *this;
+    }
+
+    StaticHeader(StaticHeader&& other) noexcept
+        : buffer(other.buffer), totalLen(other.totalLen)
+    {
+        other.buffer = nullptr;
+        other.totalLen = 0;
+    }
+
+    StaticHeader& operator=(StaticHeader&& other) noexcept
+    {
+        if (this == &other) return *this;
+        if (other.buffer) std::free(buffer);
+        buffer = other.buffer;
+        totalLen = other.totalLen;
+        other.buffer = nullptr;
+        other.totalLen = 0;
+        return *this;
+    }
+
+    ~StaticHeader()
+    {
+        std::free(buffer);
+    }
+
     template <typename T>
     T get()
     {
@@ -42,25 +96,6 @@ struct StaticHeader
 
         std::memcpy(out, buffer, totalLen);
         return totalLen;
-    }
-
-    StaticHeader(const uint8_t* src, size_t len)
-        : totalLen(len)
-    {
-        buffer = static_cast<uint8_t*>(std::malloc(totalLen));
-        if (buffer) std::memcpy(buffer, src, totalLen);
-    }
-
-    StaticHeader(const StaticHeader& other)
-        : totalLen(other.totalLen)
-    {
-        if (!other.buffer) return;
-        buffer = static_cast<uint8_t*>(std::malloc(totalLen));
-        if (buffer) std::memcpy(buffer, other.buffer, totalLen);
-    }
-
-    ~StaticHeader() {
-        std::free(buffer);
     }
 };
 

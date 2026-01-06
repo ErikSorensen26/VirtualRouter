@@ -29,6 +29,11 @@ namespace Eigrp
 {
 struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
 }
+namespace OSPF
+{
+struct OspfInterfaceInstance;
+struct InterfaceConfigs;
+}
 
 namespace Protocol 
 {
@@ -332,15 +337,28 @@ public:
 
     std::map<uint32_t, Eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
 
+    // OSPF INTERFACES
+    
+    std::map<uint32_t, OSPF::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
+
     /**
      * @brief Retrieve or allocate EIGRP per-interface config block.
      *
      * @param as Autonomous System number.
      * @param af Address Family (IPv4 or IPv6).
-     * @param negate If true, returns nullptr instead of allocating.
+     * @param negate If true, returns nullptr instead of allocating if it does not yet exist.
      * @return Pointer to EIGRP interface config block.
      */
     EigrpConfigs::InterfaceConfigs* getEigrpConfig(uint32_t as, AddressFamily af, bool negate);
+
+    /**
+     * @brief Retrieve or allocate OSPF per-interface config block.
+     *
+     * @param id Process ID number.
+     * @param negate If true, returns a nullptr instead of allicating if it does not yet exist.
+     * @return Pointer to OSPF interface config block.
+     */
+    OSPF::InterfaceConfigs* getOspfConfig(uint32_t id, bool negate);
 
     // DHCP CLIENT STATE
 
