@@ -1,0 +1,57 @@
+// NetworkLsaV2.hpp
+
+#ifndef NETWORK_LSA_V2_HPP
+#define NETWORK_LSA_V2_HPP
+
+#include <cstdint>
+#include <vector>
+#include <HeaderHelpers.hpp>
+#include <optional>
+
+namespace OSPF
+{
+struct NetworkLsaV2
+{
+    uint32_t networkMask;
+    std::vector<uint32_t> attachedRouters;
+
+    static std::optional<NetworkLsaV2> build(const uint8_t* buf, uint16_t len)
+    {
+        if (len < 4) return std::nullopt;
+
+        NetworkLsaV2 lsa;
+        
+        lsa.networkMask = readU32(buf);
+        size_t offset = 4;
+
+        if ((len - offset) % 4 != 0)
+            return std::nullopt;
+
+        while (offset + 4 <= len)
+        {
+            uint32_t rid = readU32(buf + offset);
+            lsa.attachedRouters.push_back(rid);
+            offset += 4;
+        }
+
+        return lsa;
+    }
+
+    bool buildBody(uint8_t* buf, uint16_t len) const
+    {
+        if ((attachedRouters.size() * 4) + 4 != len)
+            return false;
+
+        writeU32(buf, networkMask);
+        size_t off = 4;
+        for (auto& r : attachedRouters)
+        {
+            writeU32(buf + off, r);
+            off += 4;
+        }
+        return true;
+    }
+};
+}
+
+#endif // NETWORK_LSA_V2_HPP

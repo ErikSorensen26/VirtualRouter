@@ -1,0 +1,90 @@
+// v2PacketDispatcher
+
+#include <v2PacketDispatcher.h>
+#include <OspfNeighbor.h>
+#include <Ospfv2DBDHeader.hpp>
+#include <PacketBuilder.hpp>
+#include <OspfArea.h>
+#include <IPPacket.h>
+
+namespace OSPF
+{
+bool PacketDispatcherV2::setupDbd(Neighbor& neighbor, Ospfv2Header& pkt)
+{
+    Retransmission& rtr = neighbor.getRtr();
+    Ospfv2DBDHeader dbd;
+    dbd.setBuffer(pkt.getTrailData());
+    uint32_t seqNum = dbd.getSequence();
+    if (seqNum == 0)
+        return false;
+
+    {
+        std::lock_guard<std::mutex> lock(rtr.reliableMtx);
+        rtr.dbdPacket = UnicastPacket{
+            pkt.buffer,
+            Ospfv2Header::fixedSize + pkt.getTrail().size(),
+            neighbor.ipAddress
+        };
+        rtr.dbdPacket.sequence = seqNum;
+        iface.getTimers().startDbdRetransmissionTimer(neighbor);
+    }
+    return true;
+}
+
+void PacketDispatcherV2::setupLsu(Neighbor& neighbor, std::vector<LsaRecordRef>& records)
+{
+    Retransmission& rtr = neighbor.getRtr();
+    std::lock_guard<std::mutex> lock(rtr.reliableMtx);
+    bool active = rtr.getLsuActive();
+    for (auto& lsa : records)
+    {
+        rtr.addLsu(lsa);
+    }
+    if (active)
+        iface.getTimers().startLsuRetransmissionTimer(neighbor);
+}
+
+void PacketDispatcherV2::setupLsr(Neighbor& neighbor, const std::vector<LsaKey>& keys)
+{
+    Retransmission& rtr = neighbor.getRtr();
+    std::lock_guard<std::mutex> lock(rtr.reliableMtx);
+    bool active = rtr.getLsrActive();
+    for (auto& lsa : keys)
+    {
+        rtr.addLsr(lsa);
+    }
+    if (active)
+        iface.getTimers().startLsrRetransmissionTimer(neighbor);
+}
+
+void PacketDispatcherV2::setupMulticastLsu(std::vector<LsaRecordRef>& keys)
+{
+    std::shared_lock<std::shared_mutex> lock(ntable.mu);
+    for (auto& [_, nbr] : ntable.neighbors)
+    {
+        setupLsu(nbr, keys);
+    }
+}
+
+void PacketDispatcherV2::retransmitDbd(Neighbor& nbr)
+{
+    PacketBuilder retransmissionPacket(&iface.getIface());
+    af == AddressFamily::IPv4
+        ? Protocol::IPPacket::reserveIpv4(retransmissionPacket)
+        : Protocol::IPPacket::reserveIpv6(retransmissionPacket);
+    auto* hdr = retransmissionPacket.addHeader(nbr.getRtr().dbdPacket.packet, HeaderType::OSPFV2);
+    if (!hdr) return;
+
+    auto* interface = &iface.getIface();
+    Protocol::IPPacket::BuildIP build = {
+        .iface = interface,
+        .packetInfo = retransmissionPacket,
+        .destIp = nbr.ipAddress.raw,
+        .protocolType = IP_OSPF
+    };
+
+    af == AddressFamily::IPv4
+        ? Protocol::IPPacket::buildIpv4(build)
+        : Protocol::IPPacket::buildIpv6(build);
+}
+}
