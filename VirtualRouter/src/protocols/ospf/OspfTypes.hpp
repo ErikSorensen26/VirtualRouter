@@ -9,9 +9,51 @@
 #include <optional>
 #include <IPAddress.hpp>
 #include <shared_mutex>
+#include <map>
 
 namespace OSPF
 {
+struct AreaConfigs
+{
+    std::shared_mutex areaMu;
+
+    struct Range
+    {
+        IPPrefix range;
+        bool advertise = true;
+        uint32_t cost;
+    };
+    std::vector<Range> ranges;
+
+    struct Nssa
+    {
+        std::atomic<bool> enabled;
+        struct DefaultInformation
+        {
+            std::atomic<bool> enabled;
+            std::atomic<uint32_t> metric;
+            std::optional<std::string> routeMap = std::nullopt;
+
+            enum class LinkStateType : uint8_t { ROUTER = 1, NETWORK = 2 };
+            std::atomic<LinkStateType> metricType;
+        } defaultInfoOriginate;
+
+        std::atomic<bool> alwaysTranslateT7;
+        std::atomic<bool> suppressForwardAddress;
+
+        std::atomic<bool> noRedistribution;
+        std::atomic<bool> noSummary;
+    } nssa;
+
+    struct Stub
+    {
+        std::atomic<bool> enabled;
+        std::atomic<bool> noSummary;
+    } stub;
+
+    std::atomic<bool> deterministicParentOrder;
+    std::atomic<bool> strictLsaChecking;
+};
 
 struct TopologyConfigs
 {
@@ -44,15 +86,9 @@ struct TopologyConfigs
     std::atomic<uint32_t> defaultMetric;
     std::atomic<uint32_t> lsaArrivalTimer;
 
-    struct DefaultInformation
-    {
-        std::atomic<uint32_t> metric;
-        std::atomic<bool> always;
-        std::optional<std::string> routeMap = std::nullopt;
+    std::map<uint32_t, AreaConfigs> areaInfo;
 
-        enum class LinkStateType : uint8_t { ROUTER = 1, NETWORK = 2 };
-        std::atomic<LinkStateType> metricType;
-    } defaultInformation;
+    AreaConfigs::Nssa::DefaultInformation defaultInformation;
 
     struct DiscardRoute
     {
@@ -198,7 +234,7 @@ struct InterfaceConfigs
     std::atomic<uint16_t> retransmitInterval;
     std::atomic<uint16_t> transmitDelay;
 
-    enum class NetworkType { BROADCAST, NON_BROADCAST, POINT_TO_MULTIPOINT, POINT_TO_POINT };
+    enum class NetworkType : uint8_t { BROADCAST, NON_BROADCAST, POINT_TO_MULTIPOINT, POINT_TO_POINT };
     std::atomic<NetworkType> networkType;
 
     std::unordered_map<IPAddress, TopologyConfigs::Neighbor> neighbors;

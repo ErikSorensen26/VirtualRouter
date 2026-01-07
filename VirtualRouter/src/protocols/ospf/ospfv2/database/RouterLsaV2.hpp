@@ -16,8 +16,6 @@ struct RouterLinkV2
     uint32_t linkData;
     uint8_t type;
     uint16_t metric;
-
-    
 };
 
 struct RouterLsaV2

@@ -78,7 +78,7 @@
 #define OSPFV2_EXT_METRIC_E1     0  ///< Type-1 external (internal cost added)
 #define OSPFV2_EXT_METRIC_E2     1  ///< Type-2 external (external dominates)
 
-#define OSPFV2_MAX_AGE       3600  ///< MaxAge (flush LSA)
+#define OSPF_MAX_AGE       3600  ///< MaxAge (flush LSA)
 
 /*
  * @struct Ospfv2LSAHeaderRaw

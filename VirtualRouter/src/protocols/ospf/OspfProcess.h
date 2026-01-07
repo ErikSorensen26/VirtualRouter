@@ -34,10 +34,11 @@ public:
     OspfProcess(bool v3, uint32_t procId) : isV3(v3), procId(procId), ifaceMgr(*this) {}
 
     OspfConfigs& getConfigs() { return cfgs; }
+    const OspfConfigs& getConfigs() const { return cfgs; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
-    AddressFamily getAF() { return af; }
-    uint32_t getProcId() { return procId; }
-    uint32_t getRouterId() { return cfgs.routerId.load(std::memory_order_relaxed); }
+    AddressFamily getAF() const { return af; }
+    uint32_t getProcId() const { return procId; }
+    uint32_t getRouterId() const { return cfgs.routerId.load(std::memory_order_relaxed); }
 
     bool calculateRID();
 

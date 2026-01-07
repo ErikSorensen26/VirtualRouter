@@ -178,13 +178,13 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
     r.tag = 0;
     r.adminDistance = base.getGlobalConfigMgr().getAD();
     r.routeType = RouteType::SUMMARY;
+    r.flags = 0;
     
     r.wide.isWide = true;
     r.wide.topology = 0;
     r.wide.afi = (base.getAF() == AddressFamily::IPv6) ? 2 : 1;
     r.wide.rid = base.routerID();
     r.wide.priority = 0;
-    r.wide.wideFlags = 0;
 
     if (bestRoute)
     {

@@ -30,6 +30,8 @@ public:
     std::atomic<bool> isABR = false;
 
     TopologyConfigs& getConfigs() { return configs; }
+    const TopologyConfigs& getConfigs() const { return configs; }
+    const OspfProcess& getProcess() const noexcept { return process; }
 
 private:
     std::shared_mutex areaMu;

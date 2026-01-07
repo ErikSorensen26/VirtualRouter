@@ -6,12 +6,14 @@
 #include <OspfProcess.h>
 #include <OspfTypes.hpp>
 #include <OspfNeighbor.h>
+#include <OspfTypes.hpp>
 
 namespace OSPF
 {
 OspfArea::OspfArea(Topology& base, uint32_t id, std::pmr::memory_resource* mr)
     : areaId(id),
       mr(mr ? mr : std::pmr::get_default_resource()),
+      cfgs(base.getConfigs().areaInfo[id]),
       db(mr, base.process.getConfigs().maxLsa.load(std::memory_order_relaxed)),
       fq(base.process.getConfigs().maxFloodQueueDepth.load(std::memory_order_relaxed)),
       base(base) {}

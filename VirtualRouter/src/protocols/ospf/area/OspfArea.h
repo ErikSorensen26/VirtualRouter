@@ -11,6 +11,7 @@
 
 namespace OSPF
 {
+struct AreaConfigs;
 class Topology;
 class OspfInterface;
 
@@ -37,6 +38,9 @@ public:
 
     LsdbTable& lsdb() noexcept { return db; }
     const LsdbTable& lsdb() const noexcept { return db; }
+    const Topology& topology() const noexcept { return base; }
+    AreaConfigs& getConfigs() { return cfgs; }
+    const AreaConfigs& getConfigs() const noexcept { return cfgs; }
 
     void flood();
     void send(OspfInterface& iface, std::vector<LsaRecordRef>& records);
@@ -58,6 +62,7 @@ public:
 private:
     std::pmr::memory_resource* mr{nullptr};
 
+    AreaConfigs& cfgs;
     LsdbTable db;
     FloodQueue fq;
     Topology& base;
