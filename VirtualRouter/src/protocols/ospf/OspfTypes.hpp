@@ -23,8 +23,8 @@ struct AreaConfigs
         bool advertise = true;
         uint32_t cost;
     };
-    std::vector<Range> ranges;
-
+    std::vector<Range> ranges; //TODO
+ 
     struct Nssa
     {
         std::atomic<bool> enabled;
@@ -43,124 +43,123 @@ struct AreaConfigs
 
         std::atomic<bool> noRedistribution;
         std::atomic<bool> noSummary;
-    } nssa;
+    } nssa; //TODO
 
     struct Stub
     {
         std::atomic<bool> enabled;
         std::atomic<bool> noSummary;
-    } stub;
+    } stub; //TODO
 
     std::atomic<bool> deterministicParentOrder;
-    std::atomic<bool> strictLsaChecking;
 };
 
 struct TopologyConfigs
 {
     struct Neighbor
     {
-        uint16_t cost;
-        bool databaseFilterAll;
-        bool databaseFilterOut;
-        uint16_t pollInterval;
-        uint8_t priority;
+        uint16_t cost; //TODO
+        bool databaseFilterAll; //TODO
+        bool databaseFilterOut; //TODO
+        uint16_t pollInterval; //TODO
+        uint8_t priority; //TODO
     };
 
-    std::atomic<bool> ribForwardingAddress;
-    std::atomic<bool> ribInterAreaSummary;
-    std::atomic<bool> ribNssaTranslation;
-    std::atomic<bool> trafficShareMin;
-    std::atomic<bool> trafficShareMinAllIface;
+    std::atomic<bool> ribForwardingAddress; //TODO
+    std::atomic<bool> ribInterAreaSummary; //TODO
+    std::atomic<bool> ribNssaTranslation; //TODO
+    std::atomic<bool> trafficShareMin; //TODO
+    std::atomic<bool> trafficShareMinAllIface; //TODO
 
-    std::atomic<uint8_t> distance;
-    std::atomic<uint8_t> externalDistance;
-    std::atomic<uint8_t> interAreaDistance;
-    std::atomic<uint8_t> intraAreaDistance;
+    std::atomic<uint8_t> distance; //TODO
+    std::atomic<uint8_t> externalDistance; //TODO
+    std::atomic<uint8_t> interAreaDistance; //TODO
+    std::atomic<uint8_t> intraAreaDistance; //TODO
     std::atomic<uint8_t> maxPaths;
-    std::atomic<uint8_t> priority;
-    std::atomic<uint8_t> floodIntervalMsec;
-    std::atomic<uint8_t> retransIntervalMsec;
+    std::atomic<uint8_t> priority; //TODO
+    std::atomic<uint8_t> floodIntervalMsec; //TODO
+    std::atomic<uint8_t> retransIntervalMsec; //TODO
 
-    std::atomic<uint16_t> lsaGroupIntervalSec;
+    std::atomic<uint16_t> lsaGroupIntervalSec; //TODO
 
-    std::atomic<uint32_t> defaultMetric;
-    std::atomic<uint32_t> lsaArrivalTimer;
-
+    std::atomic<uint32_t> defaultMetric; //TODO
+    std::atomic<uint32_t> lsaArrivalTimer; //TODO
+ 
     std::map<uint32_t, AreaConfigs> areaInfo;
 
-    AreaConfigs::Nssa::DefaultInformation defaultInformation;
+    AreaConfigs::Nssa::DefaultInformation defaultInformation; //TODO
 
     struct DiscardRoute
     {
-        std::atomic<uint8_t> externalAdminDistance;
-        std::atomic<uint8_t> internalAdminDistance;
+        std::atomic<uint8_t> externalAdminDistance; //TODO
+        std::atomic<uint8_t> internalAdminDistance; //TODO
     } discardRoute;
 
     struct MaxMetrics
     {
-        std::atomic<bool> external;
-        std::atomic<uint32_t> externalOverride = 16711680u;
-        std::atomic<bool> summary;
-        std::atomic<uint32_t> summaryOverride = 16711680u;
-        std::atomic<bool> includeStub;
-        std::atomic<bool> onStartup;
-    } maxMetrics;
-
-    std::unordered_map<IPAddress, Neighbor> neighbors;
+        std::atomic<bool> external; //TODO
+        std::atomic<uint32_t> externalOverride = 16711680u; //TODO
+        std::atomic<bool> summary; //TODO
+        std::atomic<uint32_t> summaryOverride = 16711680u; //TODO
+        std::atomic<bool> includeStub; //TODO
+        std::atomic<bool> onStartup; //TODO
+    } maxMetrics; //TODO
+ 
+    std::unordered_map<IPAddress, Neighbor> neighbors; //TODO
 
     struct Summary
     {
-        IPPrefix prefix;
-        struct SummaryOpts { bool nssaOnly{false}; uint32_t tag; };
-        std::optional<SummaryOpts> opts;
+        IPPrefix prefix; //TODO
+        struct SummaryOpts { bool nssaOnly{false}; uint32_t tag; }; //TODO
+        std::optional<SummaryOpts> opts; //TODO
     };
-    std::vector<Summary> summaries;
+    std::vector<Summary> summaries; //TODO
 };
 
 struct OspfConfigs
 {
     AddressFamily af; 
-    std::atomic<bool> multicast;
-    std::atomic<bool> allInterfaceBfd{false};
-    std::atomic<bool> eventLogOneShot;
-    std::atomic<bool> eventLogPause;
-    std::atomic<bool> ignoreMofpf;
-    std::atomic<bool> snmpIfIndex;
-    std::atomic<bool> lspfEnabled;
-    std::atomic<bool> logAdjacencyChange;
-    std::atomic<bool> logAdjacencyChangeDetail;
-    std::atomic<bool> nsfDisable;
-    std::atomic<bool> strictLsaChecking;
-    std::atomic<bool> prefixSuppression;
+    std::atomic<bool> multicast; //TODO
+    std::atomic<bool> allInterfaceBfd{false}; //TODO
+    std::atomic<bool> eventLogOneShot; //TODO
+    std::atomic<bool> eventLogPause; //TODO
+    std::atomic<bool> ignoreMofpf; //TODO
+    std::atomic<bool> snmpIfIndex; //TODO
+    std::atomic<bool> lspfEnabled; //TODO
+    std::atomic<bool> logAdjacencyChange; //TODO
+    std::atomic<bool> logAdjacencyChangeDetail; //TODO
+    std::atomic<bool> nsfDisable; //TODO
+    std::atomic<bool> strictLsaChecking; //TODO
+    std::atomic<bool> prefixSuppression; //TODO
 
-    std::atomic<std::optional<uint8_t>> dcRetransmissions;
-    std::atomic<std::optional<uint8_t>> nonDcRetransmissions;
-    std::atomic<std::optional<uint8_t>> ttlSecHops;
-
-    std::atomic<uint16_t> numEventLogs;
+    std::atomic<std::optional<uint8_t>> dcRetransmissions; //TODO
+    std::atomic<std::optional<uint8_t>> nonDcRetransmissions; //TODO
+    std::atomic<std::optional<uint8_t>> ttlSecHops; //TODO
+ 
+    std::atomic<uint16_t> numEventLogs; //TODO
     std::atomic<uint16_t> maxAge = 3600;
     std::atomic<uint16_t> maxAgeDiff = 900;
 
-    std::atomic<uint32_t> referenceBandwidth;
-    std::atomic<uint32_t> domainTag;
-    std::atomic<uint32_t> maxLsa;
-    std::atomic<uint32_t> maxHelloQueueDepth;
-    std::atomic<uint32_t> maxUpdateQueueDepth;
+    std::atomic<uint32_t> referenceBandwidth; //TODO
+    std::atomic<uint32_t> domainTag; //TODO
+    std::atomic<uint32_t> maxLsa; //TODO
+    std::atomic<uint32_t> maxHelloQueueDepth; //TODO
+    std::atomic<uint32_t> maxUpdateQueueDepth; //TODO
     std::atomic<uint32_t> maxFloodQueueDepth = 4096;
-    std::atomic<uint32_t> routerId;
+    std::atomic<uint32_t> routerId; //TODO
 
-    std::vector<uint32_t> passiveInterfaces;
+    std::vector<uint32_t> passiveInterfaces; //TODO
 
     enum class Capability { LLS, OPAQUE, TRANSIT };
-    std::atomic<Capability> capability;
+    std::atomic<Capability> capability; //TODO
 
     enum class Compatible { RFC_1583, RFC_1587 };
-    std::atomic<Compatible> compatibility;
+    std::atomic<Compatible> compatibility; //TODO
 
     struct PrefixPriority
     {
-        std::atomic<bool> high;
-        std::string routeMap;
+        std::atomic<bool> high; //TODO
+        std::string routeMap; //TODO
     };
 
     struct Network
@@ -172,13 +171,13 @@ struct OspfConfigs
 
     struct Throttle
     {
-        uint32_t generateDelayMsec;
-        uint32_t minBetweenOrigDelayMsec;
-        uint32_t maxBetweenOrigDelayMsec;
+        uint32_t initDelayMs;
+        uint32_t holdTimeMs;
+        uint32_t maxHoldTimeMs;
     };
 
-    std::atomic<Throttle> lsaThrottle;
-    std::atomic<Throttle> spfThrottle;
+    std::atomic<Throttle> lsaThrottle; //TODO
+    std::atomic<Throttle> spfThrottle; //TODO
 
     struct DomainId
     {
@@ -188,7 +187,7 @@ struct OspfConfigs
         Type type{Type::STANDARD};
         bool isNull{false};
     };
-    std::atomic<DomainId> domainId;
+    std::atomic<DomainId> domainId; //TODO
 
     struct Mpls
     {
@@ -209,37 +208,37 @@ struct InterfaceConfigs
 
     const uint32_t key;
     
-    std::atomic<bool> includeSecondaries;
-    std::atomic<bool> bfd;
-    std::atomic<bool> databaseFilterAll;
-    std::atomic<bool> databaseFilterOut;
-    std::atomic<bool> demandCircuit;
-    std::atomic<bool> demandCircuitIgnore;
-    std::atomic<bool> floodReduction;
-    std::atomic<bool> lls;
-    std::atomic<bool> mtuIgnore;
-    std::atomic<bool> prefixSuppression;
-    std::atomic<bool> shutdown;
+    std::atomic<bool> includeSecondaries; //TODO
+    std::atomic<bool> bfd; //TODO
+    std::atomic<bool> databaseFilterAll; //TODO
+    std::atomic<bool> databaseFilterOut; //TODO
+    std::atomic<bool> demandCircuit; //TODO
+    std::atomic<bool> demandCircuitIgnore; //TODO
+    std::atomic<bool> floodReduction; //TODO
+    std::atomic<bool> lls; //TODO
+    std::atomic<bool> mtuIgnore; //TODO
+    std::atomic<bool> prefixSuppression; //TODO
+    std::atomic<bool> shutdown; //TODO
     std::atomic<bool> isPassive;
 
     std::atomic<uint8_t> priority;
-    std::atomic<uint8_t> helloMultiplier;
-    std::atomic<std::optional<uint8_t>> ttlSecHops;
+    std::atomic<uint8_t> helloMultiplier; //TODO
+    std::atomic<std::optional<uint8_t>> ttlSecHops; //TODO
 
-    std::atomic<uint16_t> area;
-    std::atomic<uint16_t> cost;
+    std::atomic<uint16_t> area; //TODO
+    std::atomic<uint16_t> cost; //TODO
     std::atomic<uint16_t> deadInterval;
     std::atomic<uint16_t> helloInterval;
-    std::atomic<uint16_t> resyncTimeout;
+    std::atomic<uint16_t> resyncTimeout; //TODO
     std::atomic<uint16_t> retransmitInterval;
-    std::atomic<uint16_t> transmitDelay;
+    std::atomic<uint16_t> transmitDelay; //TODO
 
     enum class NetworkType : uint8_t { BROADCAST, NON_BROADCAST, POINT_TO_MULTIPOINT, POINT_TO_POINT };
     std::atomic<NetworkType> networkType;
 
-    std::unordered_map<IPAddress, TopologyConfigs::Neighbor> neighbors;
+    std::unordered_map<IPAddress, TopologyConfigs::Neighbor> neighbors; //TODO
 
-    struct auth
+    struct auth //TODO
     {
         // v2
         std::atomic<bool> messageDigestAuth;

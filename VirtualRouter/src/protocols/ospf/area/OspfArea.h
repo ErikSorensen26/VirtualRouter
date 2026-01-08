@@ -6,6 +6,7 @@
 #include <memory_resource>
 
 #include <LsdbTable.h>
+#include <SpfManager.h>
 #include "FloodQueue.hpp"
 #include "FloodTypes.hpp"
 
@@ -55,6 +56,7 @@ public:
     std::vector<LsaRecordRef> tryDequeueFlood() { return fq.tryDequeueBatch(); }
 
     Result processLsa(const IncomingLsaContext& ctx, LsaBody& body);
+    void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
     const uint32_t areaId;
@@ -62,18 +64,22 @@ public:
 private:
     std::pmr::memory_resource* mr{nullptr};
 
+    std::atomic<bool> shouldRequestSpf;
+
     AreaConfigs& cfgs;
     LsdbTable db;
     FloodQueue fq;
     Topology& base;
+    SpfManager spfMgr;
 
 private:
     static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;
     void enqueueFlood(LsaRecordRef& record);
     void enqueueFlood(LsaRecordRef&& record);
 
-    InstallResult evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx);
+    InstallResult evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx, const LsaBody& body);
     LsaCompareResult compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const;
+    bool compareLsaBody(const LsaBody& a, const LsaBody& b);
 };
 }
 

@@ -3,9 +3,14 @@
 #include "OspfProcess.h"
 #include <OspfArea.h>
 #include "OspfTopology.h"
+#include <Global.h>
+#include <VirtualRouter.h>
 
 namespace OSPF
 {
+OspfProcess::OspfProcess(bool v3, uint32_t procId, VirtualRouter* vrf)
+    : isV3(v3), routingInstance(vrf), tmgr(vrf->global.timeManager), procId(procId), ifaceMgr(*this) {}
+
 Topology* OspfProcess::getTopology(uint8_t tid)
 {
     std::shared_lock<std::shared_mutex> lock(topologyMu);

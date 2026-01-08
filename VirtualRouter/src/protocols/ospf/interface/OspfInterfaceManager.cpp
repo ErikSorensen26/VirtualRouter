@@ -14,7 +14,7 @@ InterfaceManager::InterfaceManager(OspfProcess& p) : process(p) {}
 
 InterfaceManager::~InterfaceManager() {}
 
-OspfInterface* InterfaceManager::getInterface(OspfInterfaceId& id)
+OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     if (auto it = ospfInterfaceList.find(id); it != ospfInterfaceList.end())

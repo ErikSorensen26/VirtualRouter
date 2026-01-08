@@ -34,6 +34,11 @@ struct SummaryNetworkLsa
         writeU32(buf + 4, metric);
         return true;
     }
+
+    bool operator==(const SummaryNetworkLsa& rhs) const
+    {
+        return networkMask == rhs.networkMask && metric == rhs.metric;
+    }
 };
 }
 

@@ -34,8 +34,11 @@ struct InstallResult final
     // Storage instructions:
     bool shouldStoreReplace{false}; // replace (header/body) with incoming instance
     bool shouldUpdateAgeOnly{false}; // same instance; update stored header.age only
-    bool shouldRunSpf{false}; // Run spf on this specific lsa installation
     uint16_t newStoredAge{0};        // valid if shouldUpdateAgeOnly==true
+
+    // Topology impact
+    bool affectsSpfGraph{false}; ///< Lsa type participates in SPF
+    bool topologyChanged{false}; ///< Graph nodes/edges changed
 
     // Flooding/origination signals:
     bool shouldFlood{false};         // enqueue flooding of THIS incoming instance (or flush)

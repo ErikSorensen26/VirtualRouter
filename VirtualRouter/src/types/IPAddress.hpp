@@ -7,6 +7,7 @@
 #include <cstring>
 #include <AddressFamily.hpp>
 #include <functional>
+#include <HeaderHelpers.hpp>
 
 struct alignas(16) IPAddress
 {
@@ -41,6 +42,13 @@ struct alignas(16) IPAddress
             return isV6 < other.isV6;
 
         return isV6 ? (v6 < other.v6) : (v4 < other.v4);
+    }
+
+    IPAddress(uint32_t addr)
+    {
+        v6 = 0;
+        isV6 = false;
+        writeU32(raw, addr);
     }
 
     IPAddress(const uint8_t* bytes, AddressFamily fam) {
@@ -78,6 +86,13 @@ struct alignas(16) IPPrefix
     IPPrefix(const IPAddress& ip, uint8_t prefix)
         : af(ip.isV6 ? AddressFamily::IPv6 : AddressFamily::IPv4) {
         std::memcpy(addr, ip.raw, 16);
+        addPrefixLen(prefix);
+    }
+
+    IPPrefix(uint32_t ip, uint8_t prefix)
+        : af(AddressFamily::IPv4)
+    {
+        writeU32(addr, ip);
         addPrefixLen(prefix);
     }
 

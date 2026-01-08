@@ -7,6 +7,7 @@
 #include <vector>
 #include <HeaderHelpers.hpp>
 #include <optional>
+#include <algorithm>
 
 namespace OSPF
 {
@@ -50,6 +51,19 @@ struct NetworkLsaV2
             off += 4;
         }
         return true;
+    }
+
+    bool operator==(const NetworkLsaV2& lsa) const
+    {
+        if (attachedRouters.size() != lsa.attachedRouters.size())
+            return false;
+        auto a = attachedRouters;
+        auto b = lsa.attachedRouters;
+
+        std::sort(a.begin(), a.end());
+        std::sort(b.begin(), b.end());
+
+        return a == b;
     }
 };
 }

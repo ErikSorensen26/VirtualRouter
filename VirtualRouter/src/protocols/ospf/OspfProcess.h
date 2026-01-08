@@ -5,9 +5,11 @@
 
 #include <OspfTypes.hpp>
 #include <OspfInterfaceManager.h>
+#include <OspfRoutingTable.h>
 #include <map>
 
 class VirtualRouter;
+class TimeManager;
 
 namespace OSPF 
 {
@@ -15,6 +17,7 @@ class Topology;
 class OspfProcess;
 class OspfInterface;
 class OspfArea;
+class OspfRib;
 
 struct OspfV3Instance
 {
@@ -31,11 +34,12 @@ struct OspfInterfaceInstance
 class OspfProcess
 {
 public:
-    OspfProcess(bool v3, uint32_t procId) : isV3(v3), procId(procId), ifaceMgr(*this) {}
+    OspfProcess(bool v3, uint32_t procId, VirtualRouter* vrf);
 
     OspfConfigs& getConfigs() { return cfgs; }
     const OspfConfigs& getConfigs() const { return cfgs; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
+    OspfRib& getRib() { return rib; }
     AddressFamily getAF() const { return af; }
     uint32_t getProcId() const { return procId; }
     uint32_t getRouterId() const { return cfgs.routerId.load(std::memory_order_relaxed); }
@@ -49,6 +53,8 @@ public:
 
     VirtualRouter* routingInstance = nullptr;
 
+    TimeManager& tmgr;
+
 private:
     std::shared_mutex topologyMu;
     std::map<uint8_t, Topology> topologies;
@@ -57,6 +63,7 @@ private:
     AddressFamily af;
     OspfConfigs cfgs;
     InterfaceManager ifaceMgr;
+    OspfRib rib;
 };
 }
 

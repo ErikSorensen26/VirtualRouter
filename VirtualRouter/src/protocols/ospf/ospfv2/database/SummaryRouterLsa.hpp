@@ -36,6 +36,11 @@ struct SummaryRouterLsa
 
         return true;
     }
+
+    bool operator==(const SummaryRouterLsa& rhs) const
+    {
+        return metric == rhs.metric;
+    }
 };
 }
 

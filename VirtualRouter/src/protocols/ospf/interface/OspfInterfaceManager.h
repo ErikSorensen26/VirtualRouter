@@ -29,7 +29,7 @@ public:
 
     void deactivateAll();
 
-    OspfInterface* getInterface(OspfInterfaceId& id);
+    OspfInterface* getInterface(const OspfInterfaceId& id);
 
     // Lists
     std::map<OspfInterfaceId, OspfInterface> ospfInterfaceList;

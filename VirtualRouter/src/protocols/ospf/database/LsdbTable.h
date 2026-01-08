@@ -19,6 +19,7 @@
 
 namespace OSPF
 {
+
 class LsdbTable final
 {
 public:

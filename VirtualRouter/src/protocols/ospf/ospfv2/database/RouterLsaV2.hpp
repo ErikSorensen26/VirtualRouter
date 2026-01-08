@@ -16,6 +16,14 @@ struct RouterLinkV2
     uint32_t linkData;
     uint8_t type;
     uint16_t metric;
+
+    bool operator==(const RouterLinkV2& rhs) const noexcept
+    {
+        return linkId == rhs.linkId &&
+               linkData == rhs.linkData &&
+               type == rhs.type &&
+               metric == rhs.metric;
+    }
 };
 
 struct RouterLsaV2
@@ -78,6 +86,11 @@ struct RouterLsaV2
             off += 12;
         }
         return true;
+    }
+
+    bool operator==(const RouterLsaV2& rhs) const
+    {
+        return links == rhs.links;
     }
 };
 }

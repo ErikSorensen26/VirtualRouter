@@ -6,14 +6,14 @@
 #include <HeaderHelpers.hpp>
 #include <TlvOptions.hpp>
 
-#define OSPFV3_LSA_ROUTER                  0x0001 ///< OSPFv3 Router LSA
-#define OSPFV3_LSA_NETWORK                 0x0002 ///< OSPFv3 Network LSA
-#define OSPFV3_LSA_INTER_AREA_PREFIX       0x0003 ///< OSPFv3 Inter-Area Prefix LSA
-#define OSPFV3_LSA_INTER_AREA_ROUTER       0x0004 ///< OSPFv3 Inter-Area Router LSA
-#define OSPFV3_LSA_AS_EXTERNAL             0x0005 ///< OSPFv3 AS-External LSA
-#define OSPFV3_LSA_NSSA_EXTERNAL           0x0007 ///< OSPFv3 NSSA External LSA
+#define OSPFV3_LSA_ROUTER                  0x2001 ///< OSPFv3 Router LSA
+#define OSPFV3_LSA_NETWORK                 0x2002 ///< OSPFv3 Network LSA
+#define OSPFV3_LSA_INTER_AREA_PREFIX       0x2003 ///< OSPFv3 Inter-Area Prefix LSA
+#define OSPFV3_LSA_INTER_AREA_ROUTER       0x2004 ///< OSPFv3 Inter-Area Router LSA
+#define OSPFV3_LSA_AS_EXTERNAL             0x4005 ///< OSPFv3 AS-External LSA
+#define OSPFV3_LSA_NSSA_EXTERNAL           0x2007 ///< OSPFv3 NSSA External LSA
 #define OSPFV3_LSA_LINK                    0x0008 ///< OSPFv3 Link LSA
-#define OSPFV3_LSA_INTRA_AREA_PREFIX       0x0009 ///< OSPFv3 Intra-Area Prefix LSA
+#define OSPFV3_LSA_INTRA_AREA_PREFIX       0x2009 ///< OSPFv3 Intra-Area Prefix LSA
 
 #define OSPFV3_TYPE_ROUTER_INFORMATION     0x000C ///< Router Information LS type (RFC 7770)
 #define OSPFV3_TYPE_EGRESS_PEER            0x000D ///< Egress Peer Engineering LS type (RFC 5392)

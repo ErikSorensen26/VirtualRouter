@@ -2,8 +2,7 @@
 
 #include "OspfInterface.h"
 #include <OspfProcess.h>
-#include <VirtualRouter.h>
-#include <Global.h>
+#include <Interface.h>
 #include <OspfTopology.h>
 
 #include <v2PacketDispatcher.h>
@@ -23,7 +22,7 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, OspfInterfaceI
       topology(&proc.insureTopology(iface.configs.tid.load(std::memory_order_relaxed))),
       id(id),
       interfaceAddress(getIfaceAddr(iface, process.getAF())),
-      tmgr(process.routingInstance->global.timeManager, *this),
+      tmgr(proc.tmgr, *this),
       iface(iface)
 {
     dispatcher = proc.isV3

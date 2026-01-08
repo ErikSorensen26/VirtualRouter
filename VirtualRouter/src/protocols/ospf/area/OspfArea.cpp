@@ -16,7 +16,9 @@ OspfArea::OspfArea(Topology& base, uint32_t id, std::pmr::memory_resource* mr)
       cfgs(base.getConfigs().areaInfo[id]),
       db(mr, base.process.getConfigs().maxLsa.load(std::memory_order_relaxed)),
       fq(base.process.getConfigs().maxFloodQueueDepth.load(std::memory_order_relaxed)),
-      base(base) {}
+      base(base),
+      spfMgr(*this, base.process.tmgr)
+  {}
 
 void OspfArea::clear()
 {
@@ -38,6 +40,9 @@ void OspfArea::flood()
         if (id.area == areaId)
             send(iface, floodList);
     }
+
+    if (shouldRequestSpf.load(std::memory_order_relaxed))
+        spfMgr.requestSpf();
 }
 
 void OspfArea::send(OspfInterface& iface, std::vector<LsaRecordRef>& records)
@@ -66,7 +71,7 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& bo
 
     const LsaRecord* existing = db.find(ctx.key);
 
-    out.decision = evaluateIncomingLsa(existing, ctx);
+    out.decision = evaluateIncomingLsa(existing, ctx, body);
     
     if (out.decision.action == InstallAction::REJECT_INVALID ||
         out.decision.action == InstallAction::IGNORE_OLDER)
@@ -113,14 +118,17 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& bo
         LsaRecord& rec = db.upsertMeta(ctx, flags);
         rec.body = std::move(body);
         out.record = &rec;
-
-        if (out.decision.shouldFlood)
-            enqueueFlood(LsaRecordRef{ctx.key, rec});
     }
 
-    out.decision.shouldRunSpf = true;
-
     return out;
+}
+
+void OspfArea::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
+{
+    if (result.decision.shouldFlood && result.record)
+        enqueueFlood(LsaRecordRef{ctx.key, *result.record});
+    if (result.decision.affectsSpfGraph && result.decision.topologyChanged && !shouldRequestSpf.load(std::memory_order_relaxed))
+        shouldRequestSpf.store(true, std::memory_order_release);
 }
 
 bool OspfArea::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
@@ -160,10 +168,14 @@ void OspfArea::enqueueFlood(LsaRecordRef&& record)
     fq.enqueue(record);
 }
 
-InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx)
+InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx, const LsaBody& body)
 {
     InstallResult out{};
     const uint16_t maxAge = base.process.getConfigs().maxAge.load(std::memory_order_relaxed);
+
+    // RouterLsa, NetworkLsa, SummaryLsa, AsbrLsa
+    out.affectsSpfGraph = ctx.key.lsaType >= 1 && ctx.key.lsaType <= 4;
+        
 
     if (!ctx.checksumValid)
     {
@@ -186,6 +198,10 @@ InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const Inc
         out.action = InstallAction::INSTALL_NEWER;
         out.shouldStoreReplace = true;
         out.shouldFlood = true;
+
+        if (out.affectsSpfGraph)
+            out.topologyChanged = true;
+
         return out;
     }
 
@@ -206,6 +222,10 @@ InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const Inc
                 out.action = InstallAction::FLUSH_MAX_AGE;
                 out.shouldStoreReplace = true;
                 out.shouldFlood = true;
+
+                if (out.affectsSpfGraph)
+                    out.topologyChanged = true;
+
                 return out;
             }
 
@@ -221,6 +241,13 @@ InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const Inc
             out.action = InstallAction::INSTALL_NEWER;
             out.shouldStoreReplace = true;
             out.shouldFlood = true;
+
+            if (out.affectsSpfGraph)
+            {
+                if (!compareLsaBody(existing->body, body))
+                    out.topologyChanged = true;
+            }
+
             return out;
         }
     }
@@ -248,5 +275,24 @@ LsaCompareResult OspfArea::compareLsaHeaders(const LsaHeader& a, const LsaHeader
         return (a.age < b.age) ? LsaCompareResult::NEWER : LsaCompareResult::OLDER;
 
     return LsaCompareResult::SAME;
+}
+
+bool OspfArea::compareLsaBody(const LsaBody& a, const LsaBody& b)
+{
+    if (a.index() != b.index())
+        return true;
+
+    return std::visit(
+        [](const auto& lhs, const auto& rhs) -> bool
+        {
+            using T = std::decay_t<decltype(lhs)>;
+
+            if constexpr (std::equality_comparable<T>)
+                return lhs == rhs;
+            else
+                return true;
+        },
+        a, b
+    );
 }
 }
