@@ -213,6 +213,7 @@ struct LsaRecordRef final
 };
 
 using U_LSDB = UMap<LsaKey, LsaRecord*>;
+using A_LSDB = UMap<LsaAdvKey, UMap<uint32_t, LsaRecord*>>;
 using O_LSDB = OMap<LsaKey, LsaRecord>;
 
 } // namespace OSPF

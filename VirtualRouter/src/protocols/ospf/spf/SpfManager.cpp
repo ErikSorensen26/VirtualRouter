@@ -2,6 +2,7 @@
 
 #include "SpfManager.h"
 #include "SpfEngine.h"
+#include "OspfRouteManager.h"
 #include <TimeManager.h>
 #include <OspfArea.h>
 #include <OspfTopology.h>
@@ -16,7 +17,7 @@
 namespace OSPF
 {
 SpfManager::SpfManager(OspfArea& area, TimeManager& tmgr)
-    : area(area), tmgr(tmgr), isV3(area.topology().process.isV3), throttle(area.topology().process.getConfigs().spfThrottle)
+    : area(area), tmgr(tmgr), rib(area.topology().process.getRib()), isV3(area.topology().process.isV3), throttle(area.topology().process.getConfigs().spfThrottle)
 {}
 
 void SpfManager::requestSpf()
@@ -44,29 +45,13 @@ void SpfManager::onSpfTimer()
     if (spfRunning.exchange(true))
         return;
 
-    runSpf();
-}
-
-void SpfManager::scheduleSpf(uint32_t delayMs)
-{
-    if (spfScheduled.exchange(true))
-        return;
-
-    auto delay = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
-    timerId = tmgr.addTimer(delay, [this]() {
-        this->onSpfTimer();
-    });
-}
-
-void SpfManager::runSpf()
-{
     requested.store(false, std::memory_order_release);
 
-    // Run spf
-    auto result = isV3
-        ? SpfEngine::run<RouterLsaV3, NetworkLsaV2>(area)
-        : SpfEngine::run<RouterLsaV2, NetworkLsaV2>(area);
-    // run intra area route injection
+    // Run SPF
+    if (!isV3)
+        runSpf<RouterLsaV2, NetworkLsaV2, RouterLsaV2, NetworkLsaV2>();
+    else
+        runSpf<RouterLsaV3, NetworkLsaV3, IntraAreaPrefixLsa, IntraAreaPrefixLsa>();
 
     lastSpfTime.store(std::chrono::steady_clock::now(), std::memory_order_release);
     spfRunning.store(false, std::memory_order_release);
@@ -80,6 +65,39 @@ void SpfManager::runSpf()
 
     // No pending changes
     currentDelayMs.store(0, std::memory_order_release);
+}
+
+void SpfManager::scheduleSpf(uint32_t delayMs)
+{
+    if (spfScheduled.exchange(true))
+        return;
+
+    auto delay = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
+    timerId = tmgr.addTimer(delay, [this]() {
+        this->onSpfTimer();
+    });
+}
+
+template <typename RouterLsa, typename NetworkLsa, typename SpfRouterLsa, typename SpfNetworkLsa>
+void SpfManager::runSpf()
+{
+    // Create graph
+    SpfTopology<RouterLsa, NetworkLsa> topo(area);
+    // Run Dijkstra on graph
+    SpfResult result = SpfEngine::run<RouterLsa, NetworkLsa>(topo);
+    // Look up networks from Dikjstra results
+    auto pathList = RouteManager::deriveIntraAreaRouters<SpfRouterLsa, SpfNetworkLsa>(result, area);
+    // Install to rib
+    auto changes = rib.replaceArea(area.areaId, pathList);
+
+    if (area.topology().isABR.load(std::memory_order_relaxed))
+    {
+        // Reoriginate intra as inter 
+        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+            area.topology().reoriginateSummaries<SummaryNetworkLsa, SummaryRouterLsa>(area, changes);
+        else
+            area.topology().reoriginateSummaries<InterAreaPrefixLsa, InterAreaRouterLsa>(area, changes);
+    }
 }
 
 uint32_t SpfManager::computeNextDelay()
@@ -110,4 +128,7 @@ uint32_t SpfManager::computeNextDelay()
     currentDelayMs.store(backoff, std::memory_order_release);
     return next;
 }
+
+template void SpfManager::runSpf<RouterLsaV2, NetworkLsaV2, RouterLsaV2, NetworkLsaV3>();
+template void SpfManager::runSpf<RouterLsaV3, NetworkLsaV3, IntraAreaPrefixLsa, IntraAreaPrefixLsa>();
 }

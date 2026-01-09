@@ -13,7 +13,7 @@ namespace OSPF
 struct RouterLinkV3
 {
     uint8_t type;
-    uint32_t metric;
+    uint16_t metric;
     uint32_t interfaceId;
     uint32_t neighborInterfaceId;
     uint32_t neighborRouterId;

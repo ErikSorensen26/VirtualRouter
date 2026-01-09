@@ -10,6 +10,7 @@
 
 namespace OSPF
 {
+struct OspfRouteChange;
 class OspfProcess;
 class OspfArea;
 class Topology
@@ -33,9 +34,14 @@ public:
     const TopologyConfigs& getConfigs() const { return configs; }
     const OspfProcess& getProcess() const noexcept { return process; }
 
+    // Reorigination
+    template <typename SummaryNetwork, typename SummaryRouter>
+    void reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList);
+
 private:
     std::shared_mutex areaMu;
     std::map<uint32_t, OspfArea> areas;
+    std::atomic<size_t> areaSize;
 
     TopologyConfigs configs;
 };

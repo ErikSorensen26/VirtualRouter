@@ -85,7 +85,6 @@ static inline uint64_t packNetwork(uint32_t advRouter, uint32_t lsId)
 static inline uint32_t networkAdvRouter(uint64_t packed) { return static_cast<uint32_t>(packed >> 32); }
 static inline uint32_t networkLsId(uint64_t packed) { return static_cast<uint32_t>(packed & 0xFFFFFFFFu); }
 static inline LsaKey networkLsaKey(uint64_t packed, uint16_t type) { return LsaKey{type, networkLsId(packed), networkAdvRouter(packed)};}
-static inline LsaKey routerLsakey(uint64_t id, uint16_t type) { return LsaKey{type, 0, static_cast<uint32_t>(id)}; }
 
 static inline bool vertexLess(const Vertex& a, const Vertex& b)
 {

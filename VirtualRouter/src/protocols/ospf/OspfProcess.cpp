@@ -9,7 +9,7 @@
 namespace OSPF
 {
 OspfProcess::OspfProcess(bool v3, uint32_t procId, VirtualRouter* vrf)
-    : isV3(v3), routingInstance(vrf), tmgr(vrf->global.timeManager), procId(procId), ifaceMgr(*this) {}
+    : isV3(v3), routingInstance(vrf), tmgr(vrf->global.timeManager), procId(procId), ifaceMgr(*this), rmgr(*this) {}
 
 Topology* OspfProcess::getTopology(uint8_t tid)
 {

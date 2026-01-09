@@ -35,8 +35,8 @@ public:
     explicit LsdbTable(std::pmr::memory_resource* upstream = std::pmr::get_default_resource(), size_t initialReserve = 0);
 
     // Movable
-    LsdbTable(LsdbTable&&) noexcept = default;
-    LsdbTable& operator=(LsdbTable&&) noexcept = default;
+    LsdbTable(LsdbTable&&) noexcept = delete;
+    LsdbTable& operator=(LsdbTable&&) noexcept = delete;
 
     // Memory resource used for LSDB storage (when PMR enabled; otherwide returns default_resource()).
     std::pmr::memory_resource* resource() noexcept;
@@ -73,6 +73,9 @@ public:
     template <typename Fn>
     void forEach(Fn&& fn) const;
 
+    template <typename Fn>
+    void forEachInAdv(LsaAdvKey& key, Fn&& fn) const;
+
     // Aging helpers
     size_t ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired);
     size_t purgeExpired(uint16_t maxAge);
@@ -91,6 +94,7 @@ private:
 #if OSPF_LSDB_USE_PMR
     PoolResource pool;
     U_LSDB db;
+    A_LSDB advDb;
     O_LSDB dbStorage;
 #else
     LSDB db
@@ -158,6 +162,18 @@ inline void LsdbTable::forEach(Fn&& fn) const
     std::shared_lock<std::shared_mutex> lk(mu);
 #endif
     for (const auto& kv : db)
+        fn(kv.first, kv.second);
+}
+
+template <typename Fn>
+inline void LsdbTable::forEachInAdv(LsaAdvKey& advRtr, Fn&& fn) const
+{
+#if OSPF_LSDB_THREADSAFE
+    std::shared_lock<std::shared_mutex> lk(mu);
+#endif
+    auto it = advDb.find(advRtr);
+    if (it == advDb.end()) return;
+    for (const auto& kv : it->second)
         fn(kv.first, kv.second);
 }
 

@@ -195,7 +195,6 @@ void SpfEngine::expandAndRelax(SpfTopology<RouterLsa, NetworkLsa>& topo, const V
     }
 }
 
-
 using NodeMap = std::unordered_map<Vertex, SptNode, VertexHash>;
 using PQ = std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>>;
 

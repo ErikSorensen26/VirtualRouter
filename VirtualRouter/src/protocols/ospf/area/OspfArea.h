@@ -13,6 +13,7 @@
 namespace OSPF
 {
 struct AreaConfigs;
+struct OspfPath;
 class Topology;
 class OspfInterface;
 
@@ -37,27 +38,35 @@ public:
 
     explicit OspfArea(Topology& base, uint32_t area, std::pmr::memory_resource* mr = std::pmr::get_default_resource());
 
+    // Getters
     LsdbTable& lsdb() noexcept { return db; }
     const LsdbTable& lsdb() const noexcept { return db; }
     const Topology& topology() const noexcept { return base; }
+    Topology& topology() { return base; }
     AreaConfigs& getConfigs() { return cfgs; }
     const AreaConfigs& getConfigs() const noexcept { return cfgs; }
-
-    void flood();
-    void send(OspfInterface& iface, std::vector<LsaRecordRef>& records);
-
     FloodQueue& floodQueue() noexcept { return fq; }
     const FloodQueue& floodQueue() const noexcept { return fq; }
 
     void clear();
     void releaseMemory();
 
+    // Flooding
+    void flood();
     bool hasPendingFlood() const noexcept { return !fq.empty(); }
+    void send(OspfInterface& iface, std::vector<LsaRecordRef>& records);
     std::vector<LsaRecordRef> tryDequeueFlood() { return fq.tryDequeueBatch(); }
 
+    // Processing
     Result processLsa(const IncomingLsaContext& ctx, LsaBody& body);
+    void processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body);
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
+
+    // Reorigination
+    template <typename Lsa>
+    void reoriginateRouter();
+    void reoriginateNetwork();
 
     const uint32_t areaId;
 

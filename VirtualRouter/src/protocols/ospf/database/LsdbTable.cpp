@@ -81,6 +81,9 @@ bool LsdbTable::erase(const LsaKey& key)
     std::unique_lock<std::shared_mutex> lk(mu);
 #endif
     db.erase(key);
+    auto& adv = advDb[key];
+    adv.erase(key.linkStateId);
+    if (adv.empty()) advDb.erase(key);
     return dbStorage.erase(key) != 0;
 }
 
@@ -90,6 +93,7 @@ void LsdbTable::clear()
     std::unique_lock<std::shared_mutex> lk(mu);
 #endif
     db.clear();
+    advDb.clear();
     dbStorage.clear();
 }
 
@@ -99,6 +103,7 @@ void LsdbTable::releaseMemory()
     std::unique_lock<std::shared_mutex> lk(mu);
 #endif
     db.clear();
+    advDb.clear();
     dbStorage.clear();
 #if OSPF_LSDB_USE_PMR
     pool.release();
@@ -113,7 +118,11 @@ LsaRecord& LsdbTable::upsertMeta(const IncomingLsaContext& lsa, LsaRecordFlags f
 
     // Single lookup + in-place default construction if missing.
     auto [it, inserted] = dbStorage.try_emplace(lsa.key);
-    if (inserted) db[lsa.key] = &it->second;
+    if (inserted) 
+    {
+        db[lsa.key] = &it->second;
+        advDb[lsa.key][lsa.key.linkStateId] = &it->second;
+    }
 
     LsaRecord& rec = it->second;
 
@@ -186,6 +195,9 @@ size_t LsdbTable::ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired)
         if (h.age >= maxAge)
         {
             db.erase(it->first);
+            auto& adv = advDb[it->first];
+            adv.erase(it->first.linkStateId);
+            if (adv.empty()) advDb.erase(it->first);
             it = dbStorage.erase(it);
             ++expired;
         }

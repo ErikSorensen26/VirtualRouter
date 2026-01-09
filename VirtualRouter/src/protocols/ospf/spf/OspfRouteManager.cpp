@@ -2,6 +2,7 @@
 
 #include "OspfRouteManager.h"
 #include <OspfProcess.h>
+#include <OspfTopology.h>
 #include <OspfArea.h>
 #include <OspfInterface.h>
 #include <OspfNeighborTable.h>
@@ -16,10 +17,47 @@
 
 namespace OSPF
 {
-RouteManager::RouteManager(OspfProcess& proc)
-    : process(proc), rib(proc.getRib()), af(proc.getAF()) {}
+std::optional<OspfNextHop> resolveDirectNextHop(OspfArea& area, const Vertex& v, const ParentRef& pref)
+{
+    uint32_t rid = v.type == VertexType::ROUTER
+        ? static_cast<uint32_t>(v.id)
+        : networkAdvRouter(v.id);
 
-std::vector<OspfNextHop> RouteManager::computeNextHops(uint32_t area, const Vertex& v, const SpfResult& spf, NhCache& cache)
+    auto& ifaceMgr = area.topology().process.getIfaceMgr();
+
+    OspfInterface* iface = ifaceMgr.getInterface({pref.ifid, area.areaId});
+    if (!iface) return std::nullopt;
+
+    Neighbor* nbr = iface->getNTable().lookup(rid);
+    if (!nbr) return std::nullopt;
+
+    return OspfNextHop{pref.ifid, nbr->ipAddress};
+}
+
+void dedupe(std::vector<OspfNextHop>& hops)
+{
+    auto eq = [](const OspfNextHop& a, const OspfNextHop& b)
+    {
+        return a.interfaceId == b.interfaceId &&
+               a.nextHop == b.nextHop;
+    };
+
+    std::vector<OspfNextHop> unique;
+    unique.reserve(hops.size());
+
+    for (const auto& nh : hops)
+    {
+        if (std::find_if(unique.begin(), unique.end(),
+            [&](const OspfNextHop& u) { return eq(u, nh); }) == unique.end())
+        {
+            unique.push_back(nh);
+        }
+    }
+
+    hops.swap(unique);
+}
+
+std::vector<OspfNextHop> computeNextHops(OspfArea& area, const Vertex& v, const SpfResult& spf, RouteManager::NhCache& cache)
 {
     if (auto it = cache.find(v); it != cache.end())
         return it->second;
@@ -48,50 +86,11 @@ std::vector<OspfNextHop> RouteManager::computeNextHops(uint32_t area, const Vert
     return result;
 }
 
-void RouteManager::dedupe(std::vector<OspfNextHop>& hops)
-{
-    auto eq = [](const OspfNextHop& a, const OspfNextHop& b)
-    {
-        return a.interfaceId == b.interfaceId &&
-               a.nextHop == b.nextHop;
-    };
-
-    std::vector<OspfNextHop> unique;
-    unique.reserve(hops.size());
-
-    for (const auto& nh : hops)
-    {
-        if (std::find_if(unique.begin(), unique.end(),
-            [&](const OspfNextHop& u) { return eq(u, nh); }) == unique.end())
-        {
-            unique.push_back(nh);
-        }
-    }
-
-    hops.swap(unique);
-}
-
-std::optional<OspfNextHop> RouteManager::resolveDirectNextHop(uint32_t area, const Vertex& v, const ParentRef& pref)
-{
-    uint32_t rid = v.type == VertexType::ROUTER
-        ? static_cast<uint32_t>(v.id)
-        : networkAdvRouter(v.id);
-
-    auto& ifaceMgr = process.getIfaceMgr();
-
-    OspfInterface* iface = ifaceMgr.getInterface({pref.ifid, area});
-    if (!iface) return std::nullopt;
-
-    Neighbor* nbr = iface->getNTable().lookup(rid);
-    if (!nbr) return std::nullopt;
-
-    return OspfNextHop{pref.ifid, nbr->ipAddress};
-}
-
-template <typename NetworkLsa, typename RouterLsa>
-void RouteManager::deriveIntraAreaRouters(const SpfResult& spf, const OspfArea& area)
+template <typename RouterLsa, typename NetworkLsa>
+std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(const SpfResult& spf, OspfArea& area)
 {
     auto& lsdb = area.lsdb();
+    uint8_t adminDistance = area.topology().getConfigs().distance.load(std::memory_order_relaxed);
 
     NhCache nhCache;
     std::vector<std::pair<IPPrefix, OspfPath>> pathList;
@@ -112,23 +111,27 @@ void RouteManager::deriveIntraAreaRouters(const SpfResult& spf, const OspfArea& 
                 type = OSPFV3_LSA_INTRA_AREA_PREFIX;
 
             LsaKey key = networkLsaKey(v.id, type);
-            const auto& nextLsa = lsdb.find(key);
-            if (!std::holds_alternative<NetworkLsa>(nextLsa->body)) continue;
+            const auto* nextLsa = lsdb.find(key);
+            if (!nextLsa || !std::holds_alternative<NetworkLsa>(nextLsa->body)) continue;
             const NetworkLsa& body = std::get<NetworkLsa>(nextLsa->body);
 
-            auto nextHops = computeNextHops(area.areaId, v, spf, nhCache);
+            auto nextHops = computeNextHops(area, v, spf, nhCache);
+
+            if (nextHops.empty())
+                continue;
 
             if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
             {
                 pathList.emplace_back(
                     IPPrefix{
                         key.linkStateId,
-                        std::popcount(body.networkMask)
+                        static_cast<uint8_t>(std::popcount(body.networkMask))
                     },
                     OspfPath{
                         .area = area.areaId,
                         .type = OspfRouteType::INTRA_AREA,
                         .cost = node.dist,
+                        .adminDistance = adminDistance,
                         .nextHops = nextHops
                     });
             }
@@ -139,9 +142,11 @@ void RouteManager::deriveIntraAreaRouters(const SpfResult& spf, const OspfArea& 
                     pathList.emplace_back(
                         prefix.prefix,
                         OspfPath{
+                            .options = prefix.options,
                             .area = area.areaId,
                             .type = OspfRouteType::INTRA_AREA,
-                            .cost = prefix.metric,
+                            .cost = node.dist + prefix.metric,
+                            .adminDistance = adminDistance,
                             .nextHops = nextHops
                         });
                 }
@@ -157,42 +162,69 @@ void RouteManager::deriveIntraAreaRouters(const SpfResult& spf, const OspfArea& 
             else
                 type = OSPFV3_LSA_INTRA_AREA_PREFIX;
 
-            LsaKey key = routerLsakey(v.id, type);
-            const auto& nextLsa = lsdb.find(key);
-            if (!std::holds_alternative<RouterLsa>(nextLsa->body)) continue;
-            const RouterLsa& body = std::get<RouterLsa>(nextLsa->body);
+            LsaAdvKey key(type, static_cast<uint32_t>(v.id));
 
-            auto nextHops = computeNextHops(area.areaId, v, spf, nhCache);
+            auto nextHops = computeNextHops(area, v, spf, nhCache);
+            if (nextHops.empty())
+                continue;
 
             if constexpr (std::is_same_v<std::remove_cv_t<RouterLsa>, RouterLsaV2>)
             {
-                for (const auto& stub : body.links)
+                std::vector<RouterLinkV2> links;
+
+                // Defragment
+                lsdb.forEachInAdv(key, [&](uint32_t, const LsaRecord* record) {
+                    if (std::holds_alternative<RouterLsaV2>(record->body))
+                    {
+                        const RouterLsaV2& fragment = std::get<RouterLsaV2>(record->body);
+                        for (const auto& link : fragment.links)
+                            if (link.type == OSPFV2_LINK_STUB) links.push_back(link);
+                    }
+                });
+
+                for (const auto& stub : links)
                 {
                     if (stub.type != OSPFV2_LINK_STUB) continue;
 
                     pathList.emplace_back(
                         IPPrefix{
                             stub.linkId,
-                            std::popcount(stub.linkData)
+                            static_cast<uint8_t>(std::popcount(stub.linkData))
                         },
                         OspfPath{
                             .area = area.areaId,
                             .type = OspfRouteType::INTRA_AREA,
                             .cost = stub.metric,
+                            .adminDistance = adminDistance,
                             .nextHops = nextHops
                         });
                 }
             }
             else if constexpr (std::is_same_v<std::remove_cv_t<RouterLsa>, RouterLsaV3>)
             {
-                for (const auto& prefix : body.prefixes)
+                std::vector<IntraAreaPrefix> prefixes;
+
+                // Defragment
+                lsdb.forEachInAdv(key, [&](uint32_t, const LsaRecord* record) {
+                    if (std::holds_alternative<IntraAreaPrefixLsa>(record->body))
+                    {
+                        const IntraAreaPrefixLsa& fragment = std::get<IntraAreaPrefixLsa>(record->body);
+                        if (fragment.referencedAdvRouter != key.advertisingRouter || fragment.referencesLsaType != key.lsaType || fragment.referencesLinkStateId != 0)
+                            return;
+                        prefixes.insert(prefixes.end(), fragment.prefixes.begin(), fragment.prefixes.end());
+                    }
+                });
+
+                for (const auto& prefix : prefixes)
                 {
                     pathList.emplace_back(
                         prefix.prefix,
                         OspfPath{
+                            .options = prefix.options,
                             .area = area.areaId,
                             .type = OspfRouteType::INTRA_AREA,
                             .cost = prefix.metric,
+                            .adminDistance = adminDistance,
                             .nextHops = nextHops
                         });
                 }
@@ -200,9 +232,9 @@ void RouteManager::deriveIntraAreaRouters(const SpfResult& spf, const OspfArea& 
         }
     }
 
-    rib.replaceArea(area.areaId, pathList);
+    return pathList;
 }
 
-template void RouteManager::deriveIntraAreaRouters<RouterLsaV2, NetworkLsaV2>(const SpfResult&, const OspfArea&);
-template void RouteManager::deriveIntraAreaRouters<IntraAreaPrefixLsa, IntraAreaPrefixLsa>(const SpfResult&, const OspfArea&);
+template std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters<RouterLsaV2, NetworkLsaV2>(const SpfResult&, OspfArea&);
+template std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters<IntraAreaPrefixLsa, IntraAreaPrefixLsa>(const SpfResult&, OspfArea&);
 }

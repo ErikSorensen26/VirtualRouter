@@ -12,6 +12,7 @@ class TimeManager;
 namespace OSPF
 {
 class OspfArea;
+class OspfRib;
 struct SpfResult;
 
 class SpfManager
@@ -25,12 +26,15 @@ public:
 
 private:
     void scheduleSpf(uint32_t delayMs);
-    void runSpf();
     uint32_t computeNextDelay();
+
+    template <typename RouterLsa, typename NetworkLsa, typename SpfRouterLsa, typename SpfNetworkLsa>
+    void runSpf();
 
 private:
     OspfArea& area;
     TimeManager& tmgr;
+    OspfRib& rib;
     const bool isV3;
 
     std::atomic<bool> requested{false};

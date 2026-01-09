@@ -16,15 +16,23 @@ using AreaId = uint32_t;
 using InstanceId = uint32_t;
 using LinkStateId = uint32_t;
 
-struct LsaKey
+struct LsaAdvKey
+{
+    LsaAdvKey() = default;
+    LsaAdvKey(uint16_t type, RouterId advRtr)
+        : lsaType(type), advertisingRouter(advRtr) {}
+
+    uint16_t lsaType{0};
+    RouterId advertisingRouter;
+};
+
+struct LsaKey : LsaAdvKey
 {
     LsaKey() = default;
     LsaKey(uint16_t type, uint32_t id, RouterId advRtr)
-        : lsaType(type), linkStateId(id), advertisingRouter(advRtr) {}
+        : LsaAdvKey(type, advRtr), linkStateId(id) {}
 
-    uint16_t lsaType{0};
     uint32_t linkStateId{0};
-    RouterId advertisingRouter{0};
 
     bool operator==(const LsaKey& o) const noexcept
     {
@@ -37,6 +45,18 @@ struct LsaKey
 
 namespace std
 {
+template <>
+struct hash<OSPF::LsaAdvKey>
+{
+    size_t operator()(const OSPF::LsaAdvKey& k) const noexcept
+    {
+        uint64_t x = 0;
+        x ^= static_cast<uint64_t>(k.lsaType) << 32;
+        x ^= static_cast<uint64_t>(k.advertisingRouter) << 1;
+        return std::hash<uint64_t>{}(x);
+    }
+};
+
 template <>
 struct hash<OSPF::LsaKey>
 {

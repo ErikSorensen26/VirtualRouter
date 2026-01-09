@@ -1,6 +1,6 @@
 // Ospfv2Tx.cpp
 
-// TODO: make functions for reliable sedning, and retransmission sending
+// TODO: add router lsa fragmentation
 
 // NOTE: set ttl to 1
 

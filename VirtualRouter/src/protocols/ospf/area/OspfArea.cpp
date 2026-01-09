@@ -123,6 +123,11 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& bo
     return out;
 }
 
+void processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body)
+{
+    ctx.
+}
+
 void OspfArea::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
 {
     if (result.decision.shouldFlood && result.record)
@@ -285,9 +290,7 @@ bool OspfArea::compareLsaBody(const LsaBody& a, const LsaBody& b)
     return std::visit(
         [](const auto& lhs, const auto& rhs) -> bool
         {
-            using T = std::decay_t<decltype(lhs)>;
-
-            if constexpr (std::equality_comparable<T>)
+            if constexpr (requires { lhs == rhs; })
                 return lhs == rhs;
             else
                 return true;

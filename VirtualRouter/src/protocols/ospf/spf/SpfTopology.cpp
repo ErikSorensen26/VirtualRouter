@@ -1,5 +1,10 @@
 // SpfTopology.cpp
 
+// TODO: add fragmentation
+
+// v2: starts with advrouter in lsid, then fragment sequences
+// v3: randomly chosen lsid for fragmentation
+
 #include "SpfTopology.h"
 #include <OspfArea.h>
 #include <OspfTopology.h>
@@ -39,8 +44,7 @@ SpfTopology<RouterLsa, NetworkLsa>::SpfTopology(const OspfArea& area)
                 {
                     if (a->header.sequence != b->header.sequence)
                         return a->header.sequence > b->header.sequence;
-                    if (a->header.checksum != b->header.checksum)
-                        return a->header.checksum > b->header.checksum;
+                    if (a->header.checksum != b->header.checksum) return a->header.checksum > b->header.checksum;
                     return a->header.age < b->header.age;
                 };
 
