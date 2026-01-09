@@ -209,7 +209,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(
                     if (std::holds_alternative<IntraAreaPrefixLsa>(record->body))
                     {
                         const IntraAreaPrefixLsa& fragment = std::get<IntraAreaPrefixLsa>(record->body);
-                        if (fragment.referencedAdvRouter != key.advertisingRouter || fragment.referencesLsaType != key.lsaType || fragment.referencesLinkStateId != 0)
+                        if (fragment.referencedAdvRouter != key.advertisingRouter || fragment.referencedLsaType != key.lsaType || fragment.referencedLinkStateId != 0)
                             return;
                         prefixes.insert(prefixes.end(), fragment.prefixes.begin(), fragment.prefixes.end());
                     }

@@ -6,6 +6,7 @@
 #include <IPAddress.hpp>
 #include <optional>
 #include <HeaderHelpers.hpp>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -18,8 +19,8 @@ struct IntraAreaPrefix
 
 struct IntraAreaPrefixLsa
 {
-    uint16_t referencesLsaType;
-    uint32_t referencesLinkStateId;
+    uint16_t referencedLsaType;
+    uint32_t referencedLinkStateId;
     uint32_t referencedAdvRouter;
     std::vector<IntraAreaPrefix> prefixes;
 
@@ -30,8 +31,8 @@ struct IntraAreaPrefixLsa
         uint16_t prefixes = readU16(buf);
 
         IntraAreaPrefixLsa lsa;
-        lsa.referencesLsaType = readU16(buf + 2);
-        lsa.referencesLinkStateId = readU32(buf + 4);
+        lsa.referencedLsaType = readU16(buf + 2);
+        lsa.referencedLinkStateId = readU32(buf + 4);
         lsa.referencedAdvRouter = readU32(buf + 8);
 
         size_t off = 12;
@@ -57,6 +58,62 @@ struct IntraAreaPrefixLsa
         }
 
         return lsa;
+    }
+
+    bool buildBody(uint8_t* buf, uint16_t len) const
+    {
+        if (len > 12) return false;
+
+        writeU16(buf, static_cast<uint16_t>(prefixes.size()));
+        writeU16(buf + 2, referencedLsaType);
+        writeU32(buf + 4, referencedLinkStateId);
+        writeU32(buf + 8, referencedAdvRouter);
+
+        size_t off = 12;
+        for (const auto& prefix : prefixes)
+        {
+            if (off + 4 > len) return false;
+
+            buf[off++] = prefix.prefix.prefixLength;
+            buf[off++] = prefix.options;
+            writeU16(buf + off, prefix.metric);
+            off += 2;
+
+            uint8_t prefixBytes = (prefix.prefix.prefixLength + 7) / 8;
+            if (off + prefixBytes > len) return false;
+
+            std::memcpy(buf + off, prefix.prefix.addr, prefixBytes);
+        }
+
+        return true;
+    }
+
+    inline size_t size() const
+    {
+        size_t len = 12;
+        for (const auto& prefix : prefixes)
+        {
+            len += (4 + ((prefix.prefix.prefixLength + 7) / 8));
+        }
+        return len;
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        check.addU16(static_cast<uint16_t>(prefixes.size()));
+        check.addU16(referencedLsaType);
+        check.addU32(referencedLinkStateId);
+        check.addU32(referencedAdvRouter);
+
+        for (const auto& prefix : prefixes)
+        {
+            check.add(prefix.prefix.prefixLength);
+            check.add(prefix.options);
+            check.addU16(prefix.metric);
+
+            uint8_t prefixBytes = (prefix.prefix.prefixLength + 7) / 8;
+            check.addBytes(prefix.prefix.addr, prefixBytes);
+        }
     }
 };
 }

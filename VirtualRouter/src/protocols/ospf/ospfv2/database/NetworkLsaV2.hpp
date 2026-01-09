@@ -8,6 +8,7 @@
 #include <HeaderHelpers.hpp>
 #include <optional>
 #include <algorithm>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -51,6 +52,18 @@ struct NetworkLsaV2
             off += 4;
         }
         return true;
+    }
+
+    inline size_t size() const
+    {
+        return 4 + (4 * attachedRouters.size());
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        check.addU32(networkMask);
+        for (auto& r : attachedRouters)
+            check.addU32(r);
     }
 
     bool operator==(const NetworkLsaV2& lsa) const

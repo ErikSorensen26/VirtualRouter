@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <HeaderHelpers.hpp>
 #include <optional>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -33,6 +34,17 @@ struct SummaryNetworkLsa
         writeU32(buf, networkMask);
         writeU32(buf + 4, metric);
         return true;
+    }
+
+    static constexpr size_t size()
+    {
+        return 8;
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        check.addU32(networkMask);
+        check.addU32(metric);
     }
 
     bool operator==(const SummaryNetworkLsa& rhs) const

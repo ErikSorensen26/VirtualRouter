@@ -8,6 +8,7 @@
 #include <HeaderHelpers.hpp>
 #include <optional>
 #include <Functions.h>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -28,7 +29,7 @@ struct InterAreaPrefixLsa
 
         uint8_t prefixLen = buf[4];
         lsa.options = buf[5];
-        if (readU16(buf + 5) != 0) return std::nullopt;
+        if (readU16(buf + 6) != 0) return std::nullopt;
 
         uint8_t prefixWords = (prefixLen + 31) / 32;
         uint8_t prefixBytes = prefixWords * 4;
@@ -38,21 +39,53 @@ struct InterAreaPrefixLsa
 
         std::memcpy(lsa.prefix.addr, buf + 8, prefixBytes);
 
-        if (prefixLen % 8 != 0 && prefixBytes > 0)
-        {
-            uint8_t mask = 0xFF << (8 - (prefixLen % 8));
-            lsa.prefix.addr[(prefixLen + 7) / 8 - 1] &= mask;
-        }
+        lsa.prefix.af = AddressFamily::IPv6;
+        lsa.prefix.addPrefixLen(prefixLen);
 
         for (size_t i = 8 + prefixBytes; i < len; ++i)
         {
             if (buf[i] != 0) return std::nullopt;
         }
 
-        lsa.prefix.prefixLength = prefixLen;
-        lsa.prefix.af = AddressFamily::IPv6;
-
         return lsa;
+    }
+
+    bool buildBody(uint8_t* buf, uint16_t len) const
+    {
+        if (len < 8) return false;
+
+        buf[0] = 0;
+        writeU24(buf + 1, metric);
+        buf[4] = prefix.prefixLength;
+        buf[5] = options;
+        buf[6] = 0;
+        buf[7] = 0;
+
+        uint8_t prefixWords = (prefix.prefixLength + 31) / 32;
+        uint8_t prefixBytes = prefixWords * 4;
+        if (8 + prefixBytes > len) return false;
+        std::memcpy(buf + 8, prefix.addr, prefixBytes);
+
+        return true;
+    }
+
+    inline size_t size() const
+    {
+        uint8_t prefixWords = (prefix.prefixLength + 31) / 32;
+        return 8 + (prefixWords * 4);
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        check.addU24(metric);
+        check.add(prefix.prefixLength);
+        check.add(options);
+
+        uint8_t prefixBytes = ((prefix.prefixLength + 31) / 32) * 4;
+        for (size_t i = 0; i < 16 || i < prefixBytes; ++i)
+        {
+            check.add(prefix.addr[i]);
+        }
     }
 };
 }

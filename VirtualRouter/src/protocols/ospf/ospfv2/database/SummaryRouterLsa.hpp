@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <HeaderHelpers.hpp>
 #include <optional>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -35,6 +36,18 @@ struct SummaryRouterLsa
         writeU32(buf + 4, metric);
 
         return true;
+    }
+
+    static constexpr size_t size()
+    {
+        return 8;
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        uint32_t metricWord = metric;
+        metricWord |= 0x00FFFFFF;
+        check.addU32(metricWord);
     }
 
     bool operator==(const SummaryRouterLsa& rhs) const

@@ -7,6 +7,7 @@
 #include <IPAddress.hpp>
 #include <HeaderHelpers.hpp>
 #include <optional>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -28,7 +29,7 @@ struct ExternalLsaV2
 
         uint32_t metricWord = readU32(buf + 4);
         lsa.isType2 = (metricWord & 0x80000000) != 0;
-        lsa.metric = metricWord & 0x00FFFFFF;
+        lsa.metric = metricWord & 0x7FFFFFFF;
 
         lsa.forwardingAddress = readU32(buf + 8);
         lsa.routerTag = readU32(buf + 12);
@@ -41,11 +42,28 @@ struct ExternalLsaV2
         if (len != 16) return false;
 
         writeU32(buf, networkMask);
-        writeU32(buf + 4, metric);
+        uint32_t metricWord = metric & 0x7FFFFFFF;
+        if (isType2) metricWord |= 0x80000000;
+        writeU32(buf + 4, metricWord);
         if (isType2) buf[4] = 0x80;
         writeU32(buf + 8, forwardingAddress);
         writeU32(buf + 12, routerTag);
         return true;
+    }
+
+    static constexpr size_t size()
+    {
+        return 16;
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        check.addU32(networkMask);
+        uint32_t metricWord = metric & 0x7FFFFFFF;
+        if (isType2) metricWord |= 0x80000000;
+        check.addU32(metricWord);
+        check.addU32(forwardingAddress);
+        check.addU32(routerTag);
     }
 };
 }

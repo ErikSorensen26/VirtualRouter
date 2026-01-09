@@ -123,8 +123,14 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& bo
     return out;
 }
 
-void processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body)
+void OspfArea::processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body)
 {
+    LsaRecord* existing = db.find(ctx.key);
+
+    if (!existing)
+    {
+        
+    }
     ctx.
 }
 

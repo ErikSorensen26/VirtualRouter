@@ -92,17 +92,14 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
 
         auto processLsas = [&](OspfArea& a)
         {
-            for (const auto& network : networks)
+            for (const auto& [key, network] : networks)
             {
-                LsaHeader hdr = {
-                    .age = 0,
-                    .
-                }
-                IncomingLsaContext
-                {
-
-                }
-                a.processLsa()
+                LsaHeader hdr{};
+                IncomingLsaContext ctx = {
+                    .key = key,
+                    .header = hdr
+                };
+                a.processReoriginatedLsa()
             }
         }
 

@@ -7,6 +7,7 @@
 #include <vector>
 #include <HeaderHelpers.hpp>
 #include <optional>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -86,6 +87,26 @@ struct RouterLsaV2
             off += 12;
         }
         return true;
+    }
+
+    inline size_t size() const
+    {
+        return 4 + (4 * links.size());
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        check.add(flags);
+        // Next byte is 0
+        check.addU16(static_cast<uint16_t>(links.size()));
+        for (const auto& link : links)
+        {
+            check.addU32(link.linkId);
+            check.addU32(link.linkData);
+            check.add(link.type);
+            // Next byte is 0
+            check.addU16(link.metric);
+        }
     }
 
     bool operator==(const RouterLsaV2& rhs) const

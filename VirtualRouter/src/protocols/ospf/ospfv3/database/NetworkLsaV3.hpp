@@ -7,6 +7,7 @@
 #include <vector>
 #include <HeaderHelpers.hpp>
 #include <optional>
+#include <OspfFletcher.hpp>
 
 namespace OSPF
 {
@@ -21,7 +22,7 @@ struct NetworkLsaV3
 
         NetworkLsaV3 lsa;
 
-        lsa.options = readU24(buf);
+        lsa.options = readU24(buf + 1);
         size_t off = 4;
 
         if ((len - off) % 4 != 0) return std::nullopt;
@@ -33,6 +34,36 @@ struct NetworkLsaV3
         }
 
         return lsa;
+    }
+
+    bool buildBody(uint8_t* buf, uint16_t len) const
+    {
+        if (len < 4) return false;
+
+        writeU24(buf + 1, options);
+        size_t off = 4;
+        
+        if (4 + (4 * attachedRouters.size()) != len) return false;
+
+        for (const auto& router : attachedRouters)
+        {
+            writeU32(buf + off, router);
+            off += 4;
+        }
+
+        return true;
+    }
+
+    inline size_t size() const
+    {
+        return 4 + (4 * attachedRouters.size());
+    }
+
+    void appendChecksum(ChecksumFletcher& check) const
+    {
+        check.addU24(options);
+        for (const auto& router : attachedRouters)
+            check.addU32(router);
     }
 };
 }
