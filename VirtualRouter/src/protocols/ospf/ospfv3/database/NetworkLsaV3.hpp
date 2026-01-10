@@ -54,9 +54,9 @@ struct NetworkLsaV3
         return true;
     }
 
-    inline size_t size() const
+    inline uint16_t size() const
     {
-        return 4 + (4 * attachedRouters.size());
+        return 4 + static_cast<uint16_t>(4 * attachedRouters.size());
     }
 
     void appendChecksum(ChecksumFletcher& check) const

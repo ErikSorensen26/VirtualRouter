@@ -54,7 +54,7 @@ struct NetworkLsaV2
         return true;
     }
 
-    inline size_t size() const
+    inline uint16_t size() const
     {
         return 4 + (4 * attachedRouters.size());
     }

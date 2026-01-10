@@ -55,6 +55,7 @@ public:
     const bool unicast{false};
     const uint32_t routerID;
     uint16_t mtu = 0;
+    uint32_t neighborInterfaceId = 0;    
 
     std::atomic<uint32_t> currentSeq;
 
@@ -65,9 +66,6 @@ public:
     std::atomic<__uint128_t> bdr;
     std::atomic<bool> isDr;
     std::atomic<bool> isBdr;
-
-    // Options
-    std::atomic<uint32_t> supportOpts;
 
     // Timers
     std::atomic<uint32_t> inactivityTimerId{0};

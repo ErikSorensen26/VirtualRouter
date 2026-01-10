@@ -69,7 +69,7 @@ struct InterAreaPrefixLsa
         return true;
     }
 
-    inline size_t size() const
+    inline uint16_t size() const
     {
         uint8_t prefixWords = (prefix.prefixLength + 31) / 32;
         return 8 + (prefixWords * 4);

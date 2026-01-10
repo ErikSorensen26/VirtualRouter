@@ -7,6 +7,12 @@
 #include <OspfTypes.hpp>
 #include <OspfNeighbor.h>
 #include <OspfTypes.hpp>
+#include <OspfFletcher.hpp>
+#include <Interface.h>
+#include <InterfaceType.hpp>
+#include <OspfNeighborTable.h>
+#include <OspfNeighbor.h>
+#include <variant>
 
 namespace OSPF
 {
@@ -17,7 +23,8 @@ OspfArea::OspfArea(Topology& base, uint32_t id, std::pmr::memory_resource* mr)
       db(mr, base.process.getConfigs().maxLsa.load(std::memory_order_relaxed)),
       fq(base.process.getConfigs().maxFloodQueueDepth.load(std::memory_order_relaxed)),
       base(base),
-      spfMgr(*this, base.process.tmgr)
+      spfMgr(*this, base.process.tmgr),
+      flags(base.getProcess().isV3)
   {}
 
 void OspfArea::clear()
@@ -127,11 +134,39 @@ void OspfArea::processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body)
 {
     LsaRecord* existing = db.find(ctx.key);
 
-    if (!existing)
+    auto addHeaderChecksum = [&](ChecksumFletcher& check)
     {
-        
-    }
-    ctx.
+        if (!topology().process.isV3)
+            check.add(ctx.header.options);
+        check.addU16(ctx.key.lsaType);
+        check.addU32(ctx.key.linkStateId);
+        check.addU32(ctx.key.advertisingRouter);
+        check.addU32(ctx.header.sequence);
+        check.addU16(ctx.header.length);
+        ctx.checksumValid = true;
+        return;
+    };
+
+    if (!flags.isV3)
+        ctx.header.options = static_cast<uint8_t>(flags.getFlags());
+    ctx.selfOriginatedKey = true;
+    ctx.header.age = 0;
+    ctx.header.sequence = existing
+        ? existing->header.sequence + 1 : 0;
+
+    std::visit([&](auto& lsa) {
+        using T = std::decay_t<decltype(lsa)>;
+        if constexpr (!std::is_same_v<T, std::monostate>)
+        {
+            ctx.header.length = 20 /*Lsa header size*/ + lsa.size();
+            ChecksumFletcher check;
+            addHeaderChecksum(check);
+            lsa.appendChecksum(check);
+            ctx.header.checksum = check.finalize();
+        }
+    }, body);
+
+    (void)processLsa(ctx, body);
 }
 
 void OspfArea::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
@@ -159,6 +194,170 @@ bool OspfArea::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
     }
 
     return true;
+}
+
+template <typename RouterLsa>
+void OspfArea::originateRouterLsa()
+{
+
+}
+
+template <typename NetworkLsa>
+void OspfArea::originateNetworkLsa(OspfInterface& iface)
+{
+
+}
+
+template <typename RouterLsa, typename NetworkLsa>
+void OspfArea::synchronizeConnected()
+{
+    RouterLsa lsa;
+    IntraAreaPrefixLsa intra;
+
+    auto& addTransitLink = [&](OspfInterface& iface, Neighbor& transitNbr)
+    {
+        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+        {
+            lsa.links.push_back(RouterLinkV2{
+                .linkId = readU32(transitNbr.ipAddress.raw),
+                .linkData = readU32(iface.interfaceAddress.addr),
+                .type = OSPFV2_LINK_TRANSIT,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed)
+            });
+        }
+        else
+        {
+            lsa.links.push_back(RouterLinkV3{
+                .type = OSPFV3_LINK_TRANSIT,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed),
+                .interfaceId = iface.getIface().configs.key,
+                .neighborInterfaceId = transitNbr.neighborInterfaceId,
+                .neighborRouterId = transitNbr.routerID
+            });
+        }
+    };
+
+    auto& addP2PLink = [&](OspfInterface& iface, Neighbor& neighbor)
+    {
+        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+        {
+            lsa.links.push_back(RouterLinkV2{
+                .linkId = neighbor.routerID,
+                .linkData = readU32(iface.interfaceAddress.addr),
+                .type = OSPFV2_LINK_P2P,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed)
+            });
+        }
+        else
+        {
+            lsa.links.push_back(RouterLinkV3{
+                .type = OSPFV3_LINK_P2P,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed),
+                .interfaceId = iface.getIface().configs.key,
+                .neighborInterfaceId = neighbor.neighborInterfaceId,
+                .neighborRouterId = neighbor.routerID
+            });
+        }
+    };
+
+    auto& addStubLink = [&](OspfInterface& iface)
+    {
+        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+        {
+            lsa.links.push_back(RouterLinkV2{
+                .linkId = readU32(iface.interfaceAddress.addr),
+                .linkData = Functions::prefixTo32Mask(iface.interfaceAddress.prefixLength),
+                .type = OSPFV2_LINK_STUB,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed)
+            });
+        }
+        else
+        {
+            lsa.links.push_back(RouterLinkV3{
+                .type = OSPFV3_LINK_STUB,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed),
+                .interfaceId = iface.getIface().configs.key,
+                .neighborInterfaceId = 0,
+                .neighborRouterId = 0
+            });
+        }
+    };
+
+    auto& addVirtualLink = [&](OspfInterface& iface, Neighbor& vNbr)
+    {
+        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+        {
+            lsa.links.push_back(RouterLinkV2{
+                .linkId = vNbr.routerID,
+                .linkData = areaId,
+                .type = OSPFV2_LINK_VIRTUAL,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed)
+            });
+        }
+        else
+        {
+            lsa.links.push_back(RouterLinkV3{
+                .type = OSPFV3_LINK_P2P,
+                .metric = iface.configs->cost.load(std::memory_order_relaxed),
+                .interfaceId = iface.getIface().configs.key,
+                .neighborInterfaceId = vNbr.neighborInterfaceId,
+                .neighborRouterId = vNbr.routerID
+            });
+        }
+    };
+
+    auto& ifaceMgr = base.process.getIfaceMgr();
+    std::shared_lock<std::shared_mutex> lock(ifaceMgr.interfaceMutex);
+    for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
+    {
+        if (id.area != areaId) continue;
+
+        auto ntype = iface.configs->networkType.load(std::memory_order_relaxed);
+        auto& ntable = iface.getNTable();
+
+        if (iface.configs->isPassive.load(std::memory_order_relaxed) ||
+            iface.getIface().configs.interfaceType == InterfaceType::LOOPBACK)
+        {
+            addStubLink(iface);
+            continue;
+        }
+
+        if (ntype == InterfaceConfigs::NetworkType::POINT_TO_POINT)
+        {
+            bool isVirtual = iface.isVirtual.load(std::memory_order_relaxed);
+            std::shared_lock<std::shared_mutex> nlock(ntable.mu);
+            for (auto& [rid, nbr] : ntable.neighbors)
+            {
+                if (nbr.getState() != Neighbor::State::FULL)
+                    continue;
+
+                if (isVirtual)
+                    addVirtualLink(iface, nbr);
+                else
+                    addP2PLink(iface, nbr);
+            }
+            continue;
+        }
+
+        if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||
+            ntype == InterfaceConfigs::NetworkType::NON_BROADCAST)
+        {
+            if (iface.isDr.load(std::memory_order_relaxed))
+            {
+                addStubLink(iface);
+                originateNetwork();
+                continue;
+            }
+
+            Neighbor* drNbr = ntable.lookup(iface.dr);
+            if (drNbr && drNbr->getState() == Neighbor::State::FULL)
+            {
+                addTransitLink(iface, *drNbr);
+            }
+
+            continue;
+        }
+    }
 }
 
 LsaRecordFlags OspfArea::makeFlags(const IncomingLsaContext& ctx) noexcept

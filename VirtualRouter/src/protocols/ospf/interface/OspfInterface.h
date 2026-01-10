@@ -40,11 +40,12 @@ public:
 
     void election();
 
-    std::atomic<__uint128_t> dr;
-    std::atomic<__uint128_t> bdr;
+    std::atomic<uint32_t> dr;
+    std::atomic<uint32_t> bdr;
 
     std::atomic<bool> isDr = false;
     std::atomic<bool> isBdr = false;
+    std::atomic<bool> isVirtual = false;
 
 private:
     PacketDispatcher* dispatcher = nullptr;

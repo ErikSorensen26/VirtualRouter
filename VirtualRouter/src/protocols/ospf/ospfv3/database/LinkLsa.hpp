@@ -78,9 +78,9 @@ struct LinkLsa
         return true;
     }
 
-    inline size_t size() const
+    inline uint16_t size() const
     {
-        size_t len = 20;
+        uint16_t len = 20;
         for (const auto& link : prefixes)
         {
             len += 2 + ((link.prefix.prefixLength + 7) / 8);

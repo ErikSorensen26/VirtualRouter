@@ -46,7 +46,7 @@ struct InterAreaRouterLsa
         return true;
     }
 
-    static constexpr size_t size()
+    static constexpr uint16_t size()
     {
         return 12;
     }

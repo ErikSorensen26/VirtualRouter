@@ -355,7 +355,8 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
             lsaHdr.getSeqNumber(),
             lsaHdr.getChecksum(),
             lsaHdr.getLen(),
-            lsaHdr.getAge()
+            lsaHdr.getAge(),
+                lsaHdr.getOptions()
         };
 
         IncomingLsaContext context{

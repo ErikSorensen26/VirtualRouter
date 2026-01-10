@@ -74,9 +74,9 @@ struct RouterLsaV3
         return true;
     }
 
-    inline size_t size() const
+    inline uint16_t size() const
     {
-        return 4 + (16 * links.size());
+        return 4 + static_cast<uint16_t>(16 * links.size());
     }
 
     void appendChecksum(ChecksumFletcher& check) const

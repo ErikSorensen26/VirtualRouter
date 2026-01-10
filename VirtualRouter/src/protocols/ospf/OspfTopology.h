@@ -35,7 +35,7 @@ public:
     const OspfProcess& getProcess() const noexcept { return process; }
 
     // Reorigination
-    template <typename SummaryNetwork, typename SummaryRouter>
+    template <typename SummaryNetwork>
     void reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList);
 
 private:

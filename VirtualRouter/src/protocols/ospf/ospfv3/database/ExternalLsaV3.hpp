@@ -115,7 +115,7 @@ struct ExternalLsaV3
         return true;
     }
 
-    inline size_t size() const
+    inline uint16_t size() const
     {
         size_t len = 8 + (prefix.prefixLength + 7) / 8;
         if (forwardingAddress.has_value())

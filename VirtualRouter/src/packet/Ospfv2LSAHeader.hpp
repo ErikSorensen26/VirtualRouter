@@ -106,6 +106,7 @@ struct Ospfv2LSAHeader
     DEFINE_PACKET_HEADER(Ospfv2LSAHeaderRaw);
 
     uint16_t getAge() const                 { return readU16(raw->age); }
+    uint8_t getOptions() const              { return raw->options; }
     uint8_t getType() const                 { return raw->type; }
     uint32_t getLsID() const                { return readU32(raw->lsID); }
     uint32_t getAdvRouter() const           { return readU32(raw->advRouter); }

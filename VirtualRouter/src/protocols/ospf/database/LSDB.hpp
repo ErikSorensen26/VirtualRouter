@@ -59,7 +59,7 @@ struct LsaHeader final
     uint16_t checksum{0};
     uint16_t length{0};
     uint16_t age{0};
-    uint16_t pad{0};
+    uint8_t options{0};
 };
 static_assert(sizeof(LsaHeader) == 12, "Unexpected LsaHeader size");
 
@@ -75,7 +75,7 @@ enum class LsaRecordFlags : uint8_t
 struct IncomingLsaContext final
 {
     const LsaKey& key;
-    const LsaHeader& header;
+    LsaHeader& header;
     
     bool checksumValid{false};
     bool selfOriginatedKey{false};
@@ -142,7 +142,7 @@ using LsaBody = std::variant<
     SummaryNetworkLsa,
     SummaryRouterLsa,
     ExternalLsaV2,
-    OpaqueLsaV2,
+    //OpaqueLsaV2,
     RouterLsaV3,
     NetworkLsaV3,
     InterAreaPrefixLsa,

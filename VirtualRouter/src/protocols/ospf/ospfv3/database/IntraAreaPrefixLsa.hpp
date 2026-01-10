@@ -88,9 +88,9 @@ struct IntraAreaPrefixLsa
         return true;
     }
 
-    inline size_t size() const
+    inline uint16_t size() const
     {
-        size_t len = 12;
+        uint16_t len = 12;
         for (const auto& prefix : prefixes)
         {
             len += (4 + ((prefix.prefix.prefixLength + 7) / 8));

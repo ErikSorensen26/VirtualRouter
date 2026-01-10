@@ -9,6 +9,7 @@
 #include <SpfManager.h>
 #include "FloodQueue.hpp"
 #include "FloodTypes.hpp"
+#include "OspfFlagManager.hpp"
 
 namespace OSPF
 {
@@ -47,6 +48,8 @@ public:
     const AreaConfigs& getConfigs() const noexcept { return cfgs; }
     FloodQueue& floodQueue() noexcept { return fq; }
     const FloodQueue& floodQueue() const noexcept { return fq; }
+    OspfFlagManager& getFlags() { return flags; }
+    const OspfFlagManager& getFlags() const noexcept { return flags; }
 
     void clear();
     void releaseMemory();
@@ -63,10 +66,13 @@ public:
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
-    // Reorigination
-    template <typename Lsa>
-    void reoriginateRouter();
-    void reoriginateNetwork();
+    // Origination
+    template <typename RouterLsa, typename NetworkLsa>
+    void synchronizeConnected();
+    template <typename RouterLsa>
+    void originateRouterLsa();
+    template <typename NetworkLsa>
+    void originateNetworkLsa(OspfInterface& iface);
 
     const uint32_t areaId;
 
@@ -74,12 +80,14 @@ private:
     std::pmr::memory_resource* mr{nullptr};
 
     std::atomic<bool> shouldRequestSpf;
+    std::atomic<uint8_t> options;
 
     AreaConfigs& cfgs;
     LsdbTable db;
     FloodQueue fq;
     Topology& base;
     SpfManager spfMgr;
+    OspfFlagManager flags;
 
 private:
     static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;

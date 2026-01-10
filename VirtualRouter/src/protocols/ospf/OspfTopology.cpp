@@ -51,22 +51,24 @@ void Topology::flood()
         area.flood();
 }
 
-template <typename SummaryNetwork, typename SummaryRouter>
+template <typename SummaryNetwork>
 void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList)
 {
     if (!isABR.load(std::memory_order_relaxed) || areaSize.load(std::memory_order_relaxed) == 1) return;
 
-    std::vector<std::pair<LsaKey, SummaryNetwork>> networks;
+    std::vector<std::pair<LsaKey, LsaBody>> networks;
 
     for (const auto& path : pathList)
     {
         auto& net = networks.emplace_back(LsaKey{}, SummaryNetwork{});
 
         LsaKey& key = net.first;
-        SummaryNetwork& network = net.second;
+        LsaBody& n = net.second;
 
         if constexpr (std::is_same_v<std::remove_cv_t<SummaryNetwork>, SummaryNetworkLsa>)
         {
+            n = SummaryNetwork{};
+            SummaryNetwork& network = std::get<SummaryNetwork>(n);
             network.networkMask = Functions::prefixTo32Mask(path.prefix.prefixLength);
             network.metric = static_cast<uint32_t>(path.cost);
 
@@ -76,6 +78,9 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
         }
         else
         {
+            n = SummaryNetwork{};
+            SummaryNetwork& network = std::get<SummaryNetwork>(n);
+
             network.prefix = path.prefix;
             network.metric = static_cast<uint32_t>(path.cost);
             network.options = path.options;
@@ -92,33 +97,35 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
 
         auto processLsas = [&](OspfArea& a)
         {
-            for (const auto& [key, network] : networks)
+            for (auto& [key, network] : networks)
             {
                 LsaHeader hdr{};
                 IncomingLsaContext ctx = {
                     .key = key,
                     .header = hdr
                 };
-                a.processReoriginatedLsa()
+                LsaBody& b = network;
+                a.processReoriginatedLsa(ctx, b);
             }
-        }
+        };
 
-        if (sourceAreaId == 0)
+        if (sourceAreaId == 0) // Transit area reoriginates to all other normal areas.
         {
             for (auto& [id, area] : areas)
             {
                 if (id == 0) continue;
-                auto& areaCfgs = area.getConfigs();
-                if (areaCfgs.nssa.enabled.load(std::memory_order_relaxed) || areaCfgs.stub.enabled.load(std::memory_order_relaxed))
+                if (!area.getFlags().getExternalRouting())
                     continue;
-
+                processLsas(area);
             }
         }
-
-        for (const auto& )
+        else if (auto* area = getArea(1); area) // Normal areas reoriginate to Transit area.
+        {
+            processLsas(*area);
+        }
     }
 }
 
-template void Topology::reoriginateSummaries<SummaryNetworkLsa, SummaryRouterLsa>(OspfArea&, std::vector<OspfRouteChange>&);
-template void Topology::reoriginateSummaries<InterAreaPrefixLsa, InterAreaRouterLsa>(OspfArea&, std::vector<OspfRouteChange>&);
+template void Topology::reoriginateSummaries<SummaryNetworkLsa>(OspfArea&, std::vector<OspfRouteChange>&);
+template void Topology::reoriginateSummaries<InterAreaPrefixLsa>(OspfArea&, std::vector<OspfRouteChange>&);
 }

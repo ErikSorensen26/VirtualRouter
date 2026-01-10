@@ -39,6 +39,7 @@ public:
     OspfConfigs& getConfigs() { return cfgs; }
     const OspfConfigs& getConfigs() const { return cfgs; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
+    const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
     OspfRib& getRib() { return rib; }
     AddressFamily getAF() const { return af; }
     uint32_t getProcId() const { return procId; }
