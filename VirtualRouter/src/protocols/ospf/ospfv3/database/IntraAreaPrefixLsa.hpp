@@ -3,6 +3,8 @@
 #ifndef INTRA_AREA_PREFIX_HPP
 #define INTRA_AREA_PREFIX_HPP
 
+#include <Ospfv2LSAHeader.hpp>
+
 #include <IPAddress.hpp>
 #include <optional>
 #include <HeaderHelpers.hpp>
@@ -15,6 +17,22 @@ struct IntraAreaPrefix
     uint8_t options;
     uint16_t metric;
     IPPrefix prefix;
+
+    void setNoUnicast(bool val)
+        { setBit(&options, 7, val); }
+    void setLocalAddress(bool val)
+        { setBit(&options, 6, val); }
+    void setMulticast(bool val)
+        { setBit(&options, 5, val); }
+    void setPropagate(bool val)
+        { setBit(&options, 4, val); }
+
+    bool operator==(const IntraAreaPrefix& rhs) const noexcept
+    {
+        return options == rhs.options &&
+               metric == rhs.metric &&
+               prefix == rhs.prefix;
+    }
 };
 
 struct IntraAreaPrefixLsa

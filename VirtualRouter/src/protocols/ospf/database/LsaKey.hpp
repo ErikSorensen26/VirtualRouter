@@ -33,6 +33,12 @@ struct LsaKey : LsaAdvKey
         : LsaAdvKey(type, advRtr), linkStateId(id) {}
 
     uint32_t linkStateId{0};
+    
+    bool operator==(const LsaAdvKey& o) const noexcept
+    {
+        return lsaType == o.lsaType &&
+               advertisingRouter == o.advertisingRouter;
+    }
 
     bool operator==(const LsaKey& o) const noexcept
     {

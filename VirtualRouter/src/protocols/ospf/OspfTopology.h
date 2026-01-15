@@ -21,7 +21,7 @@ public:
     OspfArea* getArea(uint32_t areaId);
     OspfArea& insureArea(uint32_t areaId);
 
-    OspfArea::Result processExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody& body);
+    void distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody& body);
 
     const uint8_t tid;
     OspfProcess& process;

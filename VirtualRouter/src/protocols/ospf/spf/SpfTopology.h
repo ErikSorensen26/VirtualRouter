@@ -22,7 +22,7 @@ public:
     mutable std::vector<SpfEdge> edgeScratch;
     mutable std::vector<uint32_t> attachedScratch;
 
-    std::unordered_map<uint64_t, const RouterLsa*> rtr;
+    std::unordered_map<uint64_t, std::vector<const RouterLsa*>> rtr;
     std::unordered_map<uint64_t, const NetworkLsa*> net;
 
     struct NetV2ByLsId { uint32_t advRouter; const LsaRecord* rec; const NetworkLsa* lsa; };

@@ -11,6 +11,7 @@
 #include <HeaderHelpers.hpp>
 #include <cstring>
 #include <map>
+#include <unordered_set>
 
 // Forward declarations
 class Global;
@@ -141,6 +142,8 @@ public:
             friend class ::Internal_NdpTest;
         };
 
+        bool hasRoutableAddress();
+
         // Add/Remove functions
         IPv6Address* addAddress(const uint8_t* ip, bool local, uint8_t prefix);
         IPv6Address* addUniqueLocalAddress(const uint8_t* ip, uint8_t prefixLen);
@@ -179,11 +182,21 @@ public:
         uint8_t getGlobalUnicastMask() const;
         uint8_t getLocalUnicastMask() const;
 
+        std::vector<IPAddress> getRoutableList() const;
         std::vector<IPAddress> getGlobalList() const;
         std::vector<IPAddress> getLocalList() const;
 
-        std::vector<IPPrefix> getGlobalPrefixList() const;
-        std::vector<IPPrefix> getLocalPrefixList() const;
+        std::vector<IPPrefix> getRoutablePrefixList(bool maintainAddress = false) const;
+        std::vector<IPPrefix> getGlobalPrefixList(bool maintainAddress = false) const;
+        std::vector<IPPrefix> getLocalPrefixList(bool maintainAddress = false) const;
+
+        std::unordered_set<IPAddress> getRoutableSet() const;
+        std::unordered_set<IPAddress> getGlobalSet() const;
+        std::unordered_set<IPAddress> getUniqueSet() const;
+
+        std::unordered_set<IPPrefix> getRoutablePrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<IPPrefix> getGlobalPrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<IPPrefix> getUniquePrefixSet(bool maintainAddress = false) const;
 
 
         // Other IPv6 configurations

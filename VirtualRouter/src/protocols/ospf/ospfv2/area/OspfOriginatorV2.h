@@ -1,0 +1,37 @@
+// OspfOriginatorV2.h
+
+#ifndef OSPF_ORIGINATOR_V2_H
+#define OSPF_ORIGINATOR_V2_H
+
+#include <OspfOriginator.h>
+#include <RouterLsaV2.hpp>
+
+namespace OSPF
+{
+class OspfInterface;
+class Neighbor;
+
+class OspfOriginatorV2 : public OspfOriginator
+{
+public:
+    OspfOriginatorV2(OspfArea& a);
+
+    void updateInterface(uint32_t ifaceId) override;
+
+    void addRouterLsa(uint32_t ifaceId) override;
+    void addNetworkLsa(const OspfInterface& iface) override;
+
+protected:
+
+    std::optional<LsaBody> lastRouterLsa{std::nullopt};
+
+    void removeNetworkLsa(uint32_t ifaceId) override;
+
+    void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;
+    void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) override;
+    void addStubLink(LsaBody& router, const OspfInterface& iface) override;
+    void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr) override;
+};
+}
+
+#endif

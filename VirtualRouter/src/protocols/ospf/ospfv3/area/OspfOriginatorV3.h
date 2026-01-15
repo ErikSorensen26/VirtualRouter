@@ -1,0 +1,50 @@
+// OspfOriginatorV3.h
+
+#ifndef OSPF_ORIGINATOR_V3_H
+#define OSPF_ORIGINATOR_V3_H
+
+#include <OspfOriginator.h>
+#include <RouterLsaV3.hpp>
+#include <deque>
+
+namespace OSPF
+{
+class OspfOriginatorV3 : public OspfOriginator
+{
+public:
+    OspfOriginatorV3(OspfArea& a);
+
+    void updateInterface(uint32_t ifaceId) override;
+
+    void addRouterLsa(uint32_t ifaceId) override;
+    void addNetworkLsa(const OspfInterface& iface) override;
+
+
+protected:
+
+    std::vector<std::pair<uint32_t, LsaBody>> lastRouterLsas;
+    std::vector<std::pair<uint32_t, LsaBody>> lastRouterPrefixes;
+    std::vector<std::pair<uint32_t, std::vector<std::pair<uint32_t, LsaBody>>>> lastNetworkPrefixes;
+
+    uint32_t maxPrefixLsid{0};
+    std::deque<uint32_t> prefixLsidQueue;
+    uint32_t findNextPrefixLsid();
+
+    uint32_t maxRouterLsid{0};
+    std::deque<uint32_t> routerLsidQueue;
+    uint32_t findNextRouterLsid();
+
+    void expire(LsaKey& key, LsaBody& body);
+    void removeNetworkLsa(uint32_t ifaceId) override;
+
+    void addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBody>>& routerLsas);
+    void addNetworkPrefixLsa(LsaKey& key, const OspfInterface& iface);
+
+    void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;
+    void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) override;
+    void addStubLink(LsaBody& router, const OspfInterface& iface) override;
+    void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr) override;
+};
+}
+
+#endif // OSPF_ORIGINATOR_V3_H

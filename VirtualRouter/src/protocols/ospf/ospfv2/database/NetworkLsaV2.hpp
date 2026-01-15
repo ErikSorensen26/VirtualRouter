@@ -56,7 +56,7 @@ struct NetworkLsaV2
 
     inline uint16_t size() const
     {
-        return 4 + (4 * attachedRouters.size());
+        return static_cast<uint16_t>(4 + (4 * attachedRouters.size()));
     }
 
     void appendChecksum(ChecksumFletcher& check) const
@@ -68,7 +68,7 @@ struct NetworkLsaV2
 
     bool operator==(const NetworkLsaV2& lsa) const
     {
-        if (attachedRouters.size() != lsa.attachedRouters.size())
+        if (attachedRouters.size() != lsa.attachedRouters.size() || networkMask != lsa.networkMask)
             return false;
         auto a = attachedRouters;
         auto b = lsa.attachedRouters;

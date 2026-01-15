@@ -24,6 +24,15 @@ Neighbor* NeighborTable::lookup(uint32_t rid)
     return nullptr;
 }
 
+const Neighbor* NeighborTable::lookup(uint32_t rid) const
+{
+    std::shared_lock<std::shared_mutex> lock(mu);
+    auto it = neighbors.find(rid);
+    if (it != neighbors.end())
+        return &it->second;
+    return nullptr;
+}
+
 std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSize)
 {
     std::shared_lock<std::shared_mutex> lock(mu);

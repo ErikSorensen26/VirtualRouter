@@ -1,6 +1,6 @@
 // Ospfv2Rx.cpp
 
-#include "v2PacketDispatcher.h"
+#include "PacketDispatcherV2.h"
 #include <OspfProcess.h>
 #include <OspfInterface.h>
 #include <OspfInterfaceTimers.h>
@@ -105,8 +105,8 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
     else if (unicast && info.neighbor)
     {
         auto state = info.neighbor->getState();
-        if (state == Neighbor::DOWN || state == Neighbor::ATTEMPT)
-            info.neighbor->setState(Neighbor::INIT);
+        if (state == Neighbor::State::DOWN || state == Neighbor::State::ATTEMPT)
+            info.neighbor->setState(Neighbor::State::INIT);
         election = true;
     }
 
@@ -145,7 +145,7 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
     if (info.neighbor->priority.load(std::memory_order_relaxed) != hdr.getPriority())
         info.neighbor->priority.store(hdr.getPriority(), std::memory_order_release);
 
-    if (multiAccess)
+    /*if (multiAccess)
     {
         if (info.neighbor->dr.load(std::memory_order_relaxed) != hdr.getDR())
             info.neighbor->dr.store(hdr.getDR(), std::memory_order_release);
@@ -166,7 +166,7 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
 
     // Store options
     if (static_cast<uint8_t>(info.neighbor->supportOpts.load(std::memory_order_relaxed)) != hdr.getOptions())
-        info.neighbor->supportOpts.store(hdr.getOptions(), std::memory_order_release);
+        info.neighbor->supportOpts.store(hdr.getOptions(), std::memory_order_release);*/
 
     // Check presence of LLS
     if (hdr.getOptEA())
@@ -267,7 +267,7 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
                 rtr.addLsr(key);
         }
 
-        if ((info.neighbor->currentDbd.has_value() || hdr.getFlagM()) || info.neighbor->getRole())
+        if ((info.neighbor->currentDbd.has_value() || hdr.getFlagM()) || info.neighbor->getRole() == Neighbor::Role::SLAVE)
         {
             sendDBD(*info.neighbor);
         }
@@ -380,10 +380,10 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 
         if (!body.has_value()) continue;
 
-        auto result = std::holds_alternative<ExternalLsaV2>(body.value())
-            ? topology.processExternalLsa(area.areaId, context, body.value())
-            : area.processLsa(context, body.value());
+        if (std::holds_alternative<ExternalLsaV2>(body.value()))
+            topology.distributeExternalLsa(area.areaId, context, body.value()); // Distributes to all other areas
 
+        OspfArea::Result result = area.processLsa(context, std::forward<LsaBody>(body.value()));
         acks.push_back({context.key, *result.record});
     }
 

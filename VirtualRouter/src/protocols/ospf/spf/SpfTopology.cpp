@@ -1,10 +1,5 @@
 // SpfTopology.cpp
 
-// TODO: add fragmentation
-
-// v2: starts with advrouter in lsid, then fragment sequences
-// v3: randomly chosen lsid for fragmentation
-
 #include "SpfTopology.h"
 #include <OspfArea.h>
 #include <OspfTopology.h>
@@ -27,7 +22,9 @@ SpfTopology<RouterLsa, NetworkLsa>::SpfTopology(const OspfArea& area)
         {
             auto& lsa = std::get<RouterLsa>(body);
             if (rec.header.age >= OSPF_MAX_AGE) return;
-            rtr[key.advertisingRouter] = &lsa;
+            if (!isV3 && key.advertisingRouter != key.linkStateId)
+                return; // Allow 1 entry for ospfv2
+            rtr[key.advertisingRouter].push_back(&lsa);
             return;
         }
 
@@ -71,148 +68,154 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandRouter(uint32_t rid, std::vector<
     outEdges.clear();
 
     auto it = rtr.find(rid);
-    if (it == rtr.end() || it->second == nullptr) return false;
-    const RouterLsa& rlsa = *it->second;
+    if (it == rtr.end() || it->second.empty()) return false;
+    const std::vector<const RouterLsa*> rlsas = it->second;
 
-    auto extractIfId = [](const auto& l) -> uint32_t
+    for (const auto* rlsa : rlsas)
     {
-        if constexpr (requires { l.ifid; })
-            return static_cast<uint32_t>(l.ifid);
-        else if constexpr (requires { l.interfaceId; })
-            return static_cast<uint32_t>(l.interfaceId);
-        else if constexpr (requires { l.linkData; })
-            return static_cast<uint32_t>(l.linkData);
-        else
-            return 0;
-    };
-
-    for (const auto& l : rlsa.links)
-    {
-        const uint8_t t = l.type;
-        const uint32_t ifid = extractIfId(l);
-
-        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+        auto extractIfId = [](const auto& l) -> uint32_t
         {
-            if (t == static_cast<uint8_t>(OSPFV2_LINK_P2P))
+            if constexpr (requires { l.ifid; })
+                return static_cast<uint32_t>(l.ifid);
+            else if constexpr (requires { l.interfaceId; })
+                return static_cast<uint32_t>(l.interfaceId);
+            else if constexpr (requires { l.linkData; })
+                return static_cast<uint32_t>(l.linkData);
+            else
+                return 0;
+        };
+
+        for (const auto& l : rlsa->links)
+        {
+            const uint8_t t = l.type;
+            const uint32_t ifid = extractIfId(l);
+
+            if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
             {
-                const uint32_t nbr = l.linkId;
-
-                auto nit = rtr.find(nbr);
-                if (nit == rtr.end()) continue;
-
-                // backlink check
-                const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::ROUTER, static_cast<uint64_t>(nbr));
-                bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
-                if (!backlink)
+                if (t == static_cast<uint8_t>(OSPFV2_LINK_P2P))
                 {
-                    for (const auto& bl : nit->second->links)
+                    const uint32_t nbr = l.linkId;
+
+                    auto nit = rtr.find(nbr);
+                    if (nit == rtr.end()) continue;
+
+                    // backlink check
+                    const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::ROUTER, static_cast<uint64_t>(nbr));
+                    bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
+                    if (!backlink)
                     {
-                        if (bl.type == OSPFV2_LINK_P2P && bl.linkId == rid)
+                        for (const auto& bl : nit->second.front()->links)
+                        {
+                            if (bl.type == OSPFV2_LINK_P2P && bl.linkId == rid)
+                            {
+                                backlink = true;
+                                backlinkCache.insert(bk);
+                                break;
+                            }
+                        }
+                    }
+                    if (!backlink) continue;
+
+                    Vertex to{VertexType::ROUTER, static_cast<uint64_t>(nbr)};
+                    outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
+                }
+                else if (t == OSPFV2_LINK_TRANSIT)
+                {
+                    // linkId is typically Network-LSA LSID; map it to a specific (adv,lsid) if Possible
+                    const uint32_t netLsId = l.linkId;
+                    auto nit = netV2ByLsId.find(netLsId);
+                    if (nit == netV2ByLsId.end()) continue;
+
+                    const auto* netlsa = nit->second.lsa;
+                    const uint64_t netVertexId = packNetwork(nit->second.advRouter, netLsId);
+
+                    // Backlink cache
+                    const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::NETWORK, netVertexId);
+                    bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
+                    if (!backlink)
+                    {
+                        if (std::find(netlsa->attachedRouters.begin(),
+                                      netlsa->attachedRouters.end(),
+                                      rid) != netlsa->attachedRouters.end())
                         {
                             backlink = true;
                             backlinkCache.insert(bk);
-                            break;
                         }
                     }
+                    if (!backlink) continue;
+
+                    Vertex to{VertexType::NETWORK, netVertexId};
+                    outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
                 }
-                if (!backlink) continue;
-
-                Vertex to{VertexType::ROUTER, static_cast<uint64_t>(nbr)};
-                outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
-            }
-            else if (t == OSPFV2_LINK_TRANSIT)
-            {
-                // linkId is typically Network-LSA LSID; map it to a specific (adv,lsid) if Possible
-                const uint32_t netLsId = l.linkId;
-                auto nit = netV2ByLsId.find(netLsId);
-                if (nit == netV2ByLsId.end()) continue;
-
-                const auto* netlsa = nit->second.lsa;
-                const uint64_t netVertexId = packNetwork(nit->second.advRouter, netLsId);
-
-                // Backlink cache
-                const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::NETWORK, netVertexId);
-                bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
-                if (!backlink)
+                else
                 {
-                    if (std::find(netlsa->attachedRouters.begin(),
-                                  netlsa->attachedRouters.end(),
-                                  rid) != netlsa->attachedRouters.end())
-                    {
-                        backlink = true;
-                        backlinkCache.insert(bk);
-                    }
+                    // Stub or unknown, not included in SPF
+                    continue;
                 }
-                if (!backlink) continue;
-
-                Vertex to{VertexType::NETWORK, netVertexId};
-                outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
             }
             else
             {
-                // Stub or unknown, not included in SPF
-                continue;
-            }
-        }
-        else
-        {
-            if (t == static_cast<uint8_t>(OSPFV3_LINK_P2P))
-            {
-                uint32_t nbr = l.neighborRouterId;
-
-                auto nit = rtr.find(nbr);
-                if (nit == rtr.end()) continue;
-
-                // Backlink cache
-                const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::ROUTER, static_cast<uint64_t>(nbr));
-                bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
-                if (!backlink)
+                if (t == static_cast<uint8_t>(OSPFV3_LINK_P2P))
                 {
-                    for (const auto& bl : nit->second->links)
+                    uint32_t nbr = l.neighborRouterId;
+
+                    auto nit = rtr.find(nbr);
+                    if (nit == rtr.end()) continue;
+
+                    // Backlink cache
+                    const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::ROUTER, static_cast<uint64_t>(nbr));
+                    bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
+                    if (!backlink)
                     {
-                        if (bl.type == OSPFV3_LINK_P2P && bl.neighborRouterId == rid)
+                        for (const auto& links : nit->second)
+                        {
+                            for (const auto& bl : links->links)
+                            {
+                                if (bl.type == OSPFV3_LINK_P2P && bl.neighborRouterId == rid)
+                                {
+                                    backlink = true;
+                                    backlinkCache.insert(bk);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (!backlink) continue;
+
+                    Vertex to{VertexType::ROUTER, static_cast<uint64_t>(l.neighborRouterId)};
+                    outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
+                }
+                else if (t == OSPFV3_LINK_TRANSIT)
+                {
+                    uint64_t netId = packNetwork(l.neighborRouterId, l.neighborInterfaceId);
+
+                    auto nit = net.find(netId);
+                    if (nit == net.end()) continue;
+
+                    const NetworkLsa* netlsa = nit->second;
+
+                    const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::NETWORK, netId);
+                    bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
+                    if (!backlink)
+                    {
+                        if (std::find(netlsa->attachedRouters.begin(),
+                                      netlsa->attachedRouters.end(),
+                                      rid) != netlsa->attachedRouters.end())
                         {
                             backlink = true;
                             backlinkCache.insert(bk);
-                            break;
                         }
                     }
+                    if (!backlink) continue;
+
+                    Vertex to{VertexType::NETWORK, netId};
+                    outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
                 }
-                if (!backlink) continue;
-
-                Vertex to{VertexType::ROUTER, static_cast<uint64_t>(l.neighborRouterId)};
-                outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
-            }
-            else if (t == OSPFV3_LINK_TRANSIT)
-            {
-                uint64_t netId = packNetwork(l.neighborRouterId, l.neighborInterfaceId);
-
-                auto nit = net.find(netId);
-                if (nit == net.end()) continue;
-
-                const NetworkLsa* netlsa = nit->second;
-
-                const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::NETWORK, netId);
-                bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
-                if (!backlink)
+                else
                 {
-                    if (std::find(netlsa->attachedRouters.begin(),
-                                  netlsa->attachedRouters.end(),
-                                  rid) != netlsa->attachedRouters.end())
-                    {
-                        backlink = true;
-                        backlinkCache.insert(bk);
-                    }
+                    // Stub or unknown, not included in SPF
+                    continue;
                 }
-                if (!backlink) continue;
-
-                Vertex to{VertexType::NETWORK, netId};
-                outEdges.push_back({to, static_cast<uint32_t>(l.metric), ifid});
-            }
-            else
-            {
-                // Stub or unknown, not included in SPF
-                continue;
             }
         }
     }
@@ -243,7 +246,7 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandNetwork(uint64_t vertexId, std::v
             {
                 uint32_t netLsId = networkLsId(vertexId);
 
-                for (const auto& l : rit->second->links)
+                for (const auto& l : rit->second.front()->links)
                 {
                     if (l.type == OSPFV2_LINK_TRANSIT && l.linkId == netLsId)
                     {
@@ -255,13 +258,16 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandNetwork(uint64_t vertexId, std::v
             }
             else
             {
-                for (const auto& l : rit->second->links)
+                for (const auto& links : rit->second)
                 {
-                    if (l.type == OSPFV3_LINK_TRANSIT && packNetwork(l.neighborRouterId, l.neighborInterfaceId) == vertexId)
+                    for (const auto& l : links->links)
                     {
-                        backlink = true;
-                        backlinkCache.insert(bk);
-                        break;
+                        if (l.type == OSPFV3_LINK_TRANSIT && packNetwork(l.neighborRouterId, l.neighborInterfaceId) == vertexId)
+                        {
+                            backlink = true;
+                            backlinkCache.insert(bk);
+                            break;
+                        }
                     }
                 }
             }

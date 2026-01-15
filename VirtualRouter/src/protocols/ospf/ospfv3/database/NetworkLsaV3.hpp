@@ -8,6 +8,7 @@
 #include <HeaderHelpers.hpp>
 #include <optional>
 #include <OspfFletcher.hpp>
+#include <algorithm>
 
 namespace OSPF
 {
@@ -64,6 +65,19 @@ struct NetworkLsaV3
         check.addU24(options);
         for (const auto& router : attachedRouters)
             check.addU32(router);
+    }
+
+    bool operator==(const NetworkLsaV3& lsa) const
+    {
+        if (attachedRouters.size() != lsa.attachedRouters.size() || options != lsa.options)
+            return false;
+        auto a = attachedRouters;
+        auto b = lsa.attachedRouters;
+
+        std::sort(a.begin(), a.end());
+        std::sort(b.begin(), b.end());
+
+        return a == b;
     }
 };
 }

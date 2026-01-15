@@ -22,8 +22,8 @@ class InterfaceTimers;
 class Neighbor
 {
 public:
-    enum State { DOWN, ATTEMPT, INIT, TWOWAY, EXSTART, EXCHANGE, LOADING, FULL };
-    enum Role { SLAVE, MASTER, NONE };
+    enum class State { DOWN, ATTEMPT, INIT, TWOWAY, EXSTART, EXCHANGE, LOADING, FULL };
+    enum class Role { SLAVE, MASTER, NONE };
 
     explicit Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, IPAddress& neighborIp, bool unicast = false);
     ~Neighbor();
@@ -34,7 +34,7 @@ public:
     Neighbor& operator=(Neighbor&&) = delete;
 
     // State
-    State getState() { return state.load(std::memory_order_relaxed); }
+    State getState() const { return state.load(std::memory_order_relaxed); }
     bool setState(State s);
 
     // Role
@@ -62,8 +62,6 @@ public:
     std::atomic<uint8_t> priority;
 
     // MultiAccess
-    std::atomic<__uint128_t> dr;
-    std::atomic<__uint128_t> bdr;
     std::atomic<bool> isDr;
     std::atomic<bool> isBdr;
 

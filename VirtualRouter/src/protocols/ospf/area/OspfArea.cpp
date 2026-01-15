@@ -13,6 +13,11 @@
 #include <OspfNeighborTable.h>
 #include <OspfNeighbor.h>
 #include <variant>
+#include <type_traits>
+
+#include "OspfOriginator.h"
+#include <OspfOriginatorV2.h>
+#include <OspfOriginatorV3.h>
 
 namespace OSPF
 {
@@ -25,7 +30,12 @@ OspfArea::OspfArea(Topology& base, uint32_t id, std::pmr::memory_resource* mr)
       base(base),
       spfMgr(*this, base.process.tmgr),
       flags(base.getProcess().isV3)
-  {}
+{
+    if (base.process.isV3)
+        originator = new OspfOriginatorV3(*this);
+    else
+        originator = new OspfOriginatorV2(*this);
+}
 
 void OspfArea::clear()
 {
@@ -72,7 +82,7 @@ void OspfArea::send(OspfInterface& iface, std::vector<LsaRecordRef>& records)
     }
 }
 
-OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& body)
+OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& body)
 {
     Result out{};
 
@@ -114,7 +124,7 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& bo
     if (out.decision.action == InstallAction::FIGHT_BACK_SELF)
     {
         LsaRecord& rec = db.upsertMeta(ctx, flags);
-        rec.body = std::move(body);
+        rec.body = body;
         out.record = &rec;
 
         out.decision.shouldFightBack = true;
@@ -123,15 +133,21 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& bo
         out.decision.shouldStoreReplace)
     {
         LsaRecord& rec = db.upsertMeta(ctx, flags);
-        rec.body = std::move(body);
+        rec.body = body;
         out.record = &rec;
     }
 
     return out;
 }
 
-void OspfArea::processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body)
+void OspfArea::processReoriginatedLsa(const LsaKey& key, LsaBody&& body, bool expire)
 {
+    LsaHeader hdr{};
+    IncomingLsaContext ctx = {
+        .key = key,
+        .header = hdr
+    };
+
     LsaRecord* existing = db.find(ctx.key);
 
     auto addHeaderChecksum = [&](ChecksumFletcher& check)
@@ -150,7 +166,7 @@ void OspfArea::processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body)
     if (!flags.isV3)
         ctx.header.options = static_cast<uint8_t>(flags.getFlags());
     ctx.selfOriginatedKey = true;
-    ctx.header.age = 0;
+    ctx.header.age = expire ? 3600 : 0;
     ctx.header.sequence = existing
         ? existing->header.sequence + 1 : 0;
 
@@ -166,7 +182,7 @@ void OspfArea::processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body)
         }
     }, body);
 
-    (void)processLsa(ctx, body);
+    (void)processLsa(ctx, std::forward<LsaBody>(body));
 }
 
 void OspfArea::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
@@ -196,168 +212,19 @@ bool OspfArea::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
     return true;
 }
 
-template <typename RouterLsa>
-void OspfArea::originateRouterLsa()
-{
-
-}
-
-template <typename NetworkLsa>
-void OspfArea::originateNetworkLsa(OspfInterface& iface)
-{
-
-}
-
-template <typename RouterLsa, typename NetworkLsa>
 void OspfArea::synchronizeConnected()
 {
-    RouterLsa lsa;
-    IntraAreaPrefixLsa intra;
+    OspfOriginator* originator = nullptr;
 
-    auto& addTransitLink = [&](OspfInterface& iface, Neighbor& transitNbr)
-    {
-        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
-        {
-            lsa.links.push_back(RouterLinkV2{
-                .linkId = readU32(transitNbr.ipAddress.raw),
-                .linkData = readU32(iface.interfaceAddress.addr),
-                .type = OSPFV2_LINK_TRANSIT,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed)
-            });
-        }
-        else
-        {
-            lsa.links.push_back(RouterLinkV3{
-                .type = OSPFV3_LINK_TRANSIT,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed),
-                .interfaceId = iface.getIface().configs.key,
-                .neighborInterfaceId = transitNbr.neighborInterfaceId,
-                .neighborRouterId = transitNbr.routerID
-            });
-        }
-    };
+    if (base.process.isV3)
+        originator = new OspfOriginatorV3(*this);
+    else
+        originator = new OspfOriginatorV2(*this);
 
-    auto& addP2PLink = [&](OspfInterface& iface, Neighbor& neighbor)
-    {
-        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
-        {
-            lsa.links.push_back(RouterLinkV2{
-                .linkId = neighbor.routerID,
-                .linkData = readU32(iface.interfaceAddress.addr),
-                .type = OSPFV2_LINK_P2P,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed)
-            });
-        }
-        else
-        {
-            lsa.links.push_back(RouterLinkV3{
-                .type = OSPFV3_LINK_P2P,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed),
-                .interfaceId = iface.getIface().configs.key,
-                .neighborInterfaceId = neighbor.neighborInterfaceId,
-                .neighborRouterId = neighbor.routerID
-            });
-        }
-    };
 
-    auto& addStubLink = [&](OspfInterface& iface)
-    {
-        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
-        {
-            lsa.links.push_back(RouterLinkV2{
-                .linkId = readU32(iface.interfaceAddress.addr),
-                .linkData = Functions::prefixTo32Mask(iface.interfaceAddress.prefixLength),
-                .type = OSPFV2_LINK_STUB,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed)
-            });
-        }
-        else
-        {
-            lsa.links.push_back(RouterLinkV3{
-                .type = OSPFV3_LINK_STUB,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed),
-                .interfaceId = iface.getIface().configs.key,
-                .neighborInterfaceId = 0,
-                .neighborRouterId = 0
-            });
-        }
-    };
+    originator->flush();
 
-    auto& addVirtualLink = [&](OspfInterface& iface, Neighbor& vNbr)
-    {
-        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
-        {
-            lsa.links.push_back(RouterLinkV2{
-                .linkId = vNbr.routerID,
-                .linkData = areaId,
-                .type = OSPFV2_LINK_VIRTUAL,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed)
-            });
-        }
-        else
-        {
-            lsa.links.push_back(RouterLinkV3{
-                .type = OSPFV3_LINK_P2P,
-                .metric = iface.configs->cost.load(std::memory_order_relaxed),
-                .interfaceId = iface.getIface().configs.key,
-                .neighborInterfaceId = vNbr.neighborInterfaceId,
-                .neighborRouterId = vNbr.routerID
-            });
-        }
-    };
-
-    auto& ifaceMgr = base.process.getIfaceMgr();
-    std::shared_lock<std::shared_mutex> lock(ifaceMgr.interfaceMutex);
-    for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
-    {
-        if (id.area != areaId) continue;
-
-        auto ntype = iface.configs->networkType.load(std::memory_order_relaxed);
-        auto& ntable = iface.getNTable();
-
-        if (iface.configs->isPassive.load(std::memory_order_relaxed) ||
-            iface.getIface().configs.interfaceType == InterfaceType::LOOPBACK)
-        {
-            addStubLink(iface);
-            continue;
-        }
-
-        if (ntype == InterfaceConfigs::NetworkType::POINT_TO_POINT)
-        {
-            bool isVirtual = iface.isVirtual.load(std::memory_order_relaxed);
-            std::shared_lock<std::shared_mutex> nlock(ntable.mu);
-            for (auto& [rid, nbr] : ntable.neighbors)
-            {
-                if (nbr.getState() != Neighbor::State::FULL)
-                    continue;
-
-                if (isVirtual)
-                    addVirtualLink(iface, nbr);
-                else
-                    addP2PLink(iface, nbr);
-            }
-            continue;
-        }
-
-        if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||
-            ntype == InterfaceConfigs::NetworkType::NON_BROADCAST)
-        {
-            if (iface.isDr.load(std::memory_order_relaxed))
-            {
-                addStubLink(iface);
-                originateNetwork();
-                continue;
-            }
-
-            Neighbor* drNbr = ntable.lookup(iface.dr);
-            if (drNbr && drNbr->getState() == Neighbor::State::FULL)
-            {
-                addTransitLink(iface, *drNbr);
-            }
-
-            continue;
-        }
-    }
+    delete originator;
 }
 
 LsaRecordFlags OspfArea::makeFlags(const IncomingLsaContext& ctx) noexcept

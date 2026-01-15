@@ -111,9 +111,6 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(
                 type = OSPFV3_LSA_INTRA_AREA_PREFIX;
 
             LsaKey key = networkLsaKey(v.id, type);
-            const auto* nextLsa = lsdb.find(key);
-            if (!nextLsa || !std::holds_alternative<NetworkLsa>(nextLsa->body)) continue;
-            const NetworkLsa& body = std::get<NetworkLsa>(nextLsa->body);
 
             auto nextHops = computeNextHops(area, v, spf, nhCache);
 
@@ -122,6 +119,12 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(
 
             if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
             {
+                auto* routerLsa = lsdb.find(key);
+                if (!routerLsa || !std::holds_alternative<RouterLsa>(routerLsa->body))
+                    continue;
+
+                auto& body = std::get<NetworkLsaV2>(routerLsa->body);
+
                 pathList.emplace_back(
                     IPPrefix{
                         key.linkStateId,
@@ -135,9 +138,21 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(
                         .nextHops = nextHops
                     });
             }
-            else if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV3>)
+            else if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, InterAreaPrefixLsa>)
             {
-                for (const auto& prefix : body.prefixes)
+                std::vector<IntraAreaPrefix> prefixes;
+
+                lsdb.forEachInAdv(key, [&](uint32_t, const LsaRecord* record) {
+                    if (std::holds_alternative<IntraAreaPrefixLsa>(record->body))
+                    {
+                        const IntraAreaPrefixLsa& fragment = std::get<IntraAreaPrefixLsa>(record->body);
+                        if (fragment.referencedAdvRouter != key.advertisingRouter || fragment.referencedLsaType != key.lsaType || fragment.referencedLinkStateId != 0)
+                            return;
+                        prefixes.insert(prefixes.end(), fragment.prefixes.begin(), fragment.prefixes.end());
+                    }
+                });
+
+                for (const auto& prefix : prefixes)
                 {
                     pathList.emplace_back(
                         prefix.prefix,
@@ -162,7 +177,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(
             else
                 type = OSPFV3_LSA_INTRA_AREA_PREFIX;
 
-            LsaAdvKey key(type, static_cast<uint32_t>(v.id));
+            LsaKey key(type, static_cast<uint32_t>(v.id), static_cast<uint32_t>(v.id));
 
             auto nextHops = computeNextHops(area, v, spf, nhCache);
             if (nextHops.empty())
@@ -170,17 +185,11 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(
 
             if constexpr (std::is_same_v<std::remove_cv_t<RouterLsa>, RouterLsaV2>)
             {
-                std::vector<RouterLinkV2> links;
+                auto* routerLsa = lsdb.find(key);
+                if (!routerLsa || !std::holds_alternative<RouterLsa>(routerLsa->body))
+                    continue;
 
-                // Defragment
-                lsdb.forEachInAdv(key, [&](uint32_t, const LsaRecord* record) {
-                    if (std::holds_alternative<RouterLsaV2>(record->body))
-                    {
-                        const RouterLsaV2& fragment = std::get<RouterLsaV2>(record->body);
-                        for (const auto& link : fragment.links)
-                            if (link.type == OSPFV2_LINK_STUB) links.push_back(link);
-                    }
-                });
+                auto links = std::get<RouterLsa>(routerLsa->body).links;
 
                 for (const auto& stub : links)
                 {
@@ -204,7 +213,6 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveIntraAreaRouters(
             {
                 std::vector<IntraAreaPrefix> prefixes;
 
-                // Defragment
                 lsdb.forEachInAdv(key, [&](uint32_t, const LsaRecord* record) {
                     if (std::holds_alternative<IntraAreaPrefixLsa>(record->body))
                     {

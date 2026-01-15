@@ -8,6 +8,8 @@
 #include <HeaderHelpers.hpp>
 #include <optional>
 #include <OspfFletcher.hpp>
+#include <algorithm>
+#include <numeric>
 
 namespace OSPF
 {
@@ -24,6 +26,12 @@ struct RouterLinkV2
                linkData == rhs.linkData &&
                type == rhs.type &&
                metric == rhs.metric;
+    }
+
+    bool operator<(const RouterLinkV2& rhs) const noexcept
+    {
+        return std::tie(type, linkId, linkData, metric)
+             < std::tie(rhs.type, rhs.linkId, rhs.linkData, rhs.metric);
     }
 };
 
@@ -111,7 +119,22 @@ struct RouterLsaV2
 
     bool operator==(const RouterLsaV2& rhs) const
     {
-        return links == rhs.links;
+        if (flags != rhs.flags || links.size() != rhs.links.size())
+            return false;
+
+        std::vector<uint16_t> a(links.size()), b(rhs.links.size());
+
+        std::iota(a.begin(), a.end(), 0);
+        std::iota(b.begin(), b.end(), 0);
+
+        std::sort(a.begin(), a.end(), [&](uint16_t i, uint16_t j) { return links[i] < links[j]; });
+        std::sort(b.begin(), b.end(), [&](uint16_t i, uint16_t j) { return rhs.links[i] < rhs.links[j]; });
+
+        for (size_t k = 0; k < a.size(); ++k)
+            if (!(links[a[k]] != rhs.links[b[k]]))
+                return false;
+
+        return true;
     }
 };
 }

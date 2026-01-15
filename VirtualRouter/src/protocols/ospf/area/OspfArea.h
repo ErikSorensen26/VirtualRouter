@@ -10,6 +10,7 @@
 #include "FloodQueue.hpp"
 #include "FloodTypes.hpp"
 #include "OspfFlagManager.hpp"
+#include "OspfOriginator.h"
 
 namespace OSPF
 {
@@ -61,22 +62,21 @@ public:
     std::vector<LsaRecordRef> tryDequeueFlood() { return fq.tryDequeueBatch(); }
 
     // Processing
-    Result processLsa(const IncomingLsaContext& ctx, LsaBody& body);
-    void processReoriginatedLsa(IncomingLsaContext& ctx, LsaBody& body);
+    Result processLsa(const IncomingLsaContext& ctx, LsaBody&& body);
+    void processReoriginatedLsa(const LsaKey& key, LsaBody&& body, bool expire = false);
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
     // Origination
-    template <typename RouterLsa, typename NetworkLsa>
-    void synchronizeConnected();
-    template <typename RouterLsa>
-    void originateRouterLsa();
-    template <typename NetworkLsa>
-    void originateNetworkLsa(OspfInterface& iface);
+    virtual void synchronizeConnected();
+    virtual void originateRouterLsa();
+    virtual void originateNetworkLsa(OspfInterface& iface);
 
     const uint32_t areaId;
 
-private:
+    std::atomic<uint32_t> intraOpaqueIndex{0};
+
+protected:
     std::pmr::memory_resource* mr{nullptr};
 
     std::atomic<bool> shouldRequestSpf;
@@ -88,6 +88,8 @@ private:
     Topology& base;
     SpfManager spfMgr;
     OspfFlagManager flags;
+
+    OspfOriginator* originator{nullptr};
 
 private:
     static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;

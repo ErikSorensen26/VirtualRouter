@@ -30,18 +30,16 @@ OspfArea& Topology::insureArea(uint32_t areaId)
     return areas.at(areaId);
 }
 
-OspfArea::Result Topology::processExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody& body)
+void Topology::distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody& body)
 {
     std::shared_lock<std::shared_mutex> lock(areaMu);
-    OspfArea::Result result;
     for (auto& [id, area] : areas)
     {
-        if (id == areaId)
-            result = area.processLsa(ctx, body);
-        else
-            area.processLsa(ctx, body);
+        if (id != areaId)
+        {
+            area.processLsa(ctx, std::forward<LsaBody>(body));
+        }
     }
-    return result;
 }
 
 void Topology::flood()
@@ -98,15 +96,7 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
         auto processLsas = [&](OspfArea& a)
         {
             for (auto& [key, network] : networks)
-            {
-                LsaHeader hdr{};
-                IncomingLsaContext ctx = {
-                    .key = key,
-                    .header = hdr
-                };
-                LsaBody& b = network;
-                a.processReoriginatedLsa(ctx, b);
-            }
+                a.processReoriginatedLsa(key, std::move(network));
         };
 
         if (sourceAreaId == 0) // Transit area reoriginates to all other normal areas.

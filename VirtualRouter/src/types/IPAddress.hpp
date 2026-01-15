@@ -76,24 +76,33 @@ struct alignas(16) IPPrefix
 
     IPPrefix() = default;
 
-    IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family)
+    IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool maintainAddress = false)
         : af(family) {
         std::memset(addr, 0, 16);
         std::memcpy(addr, ip, static_cast<size_t>(af));
-        addPrefixLen(prefix);
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
     }
 
-    IPPrefix(const IPAddress& ip, uint8_t prefix)
+    IPPrefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress = false)
         : af(ip.isV6 ? AddressFamily::IPv6 : AddressFamily::IPv4) {
         std::memcpy(addr, ip.raw, 16);
-        addPrefixLen(prefix);
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
     }
 
-    IPPrefix(uint32_t ip, uint8_t prefix)
+    IPPrefix(uint32_t ip, uint8_t prefix, bool maintainAddress = false)
         : af(AddressFamily::IPv4)
     {
         writeU32(addr, ip);
-        addPrefixLen(prefix);
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
     }
 
     bool operator==(const IPPrefix& other) const {

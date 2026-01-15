@@ -8,6 +8,8 @@
 #include <HeaderHelpers.hpp>
 #include <optional>
 #include <OspfFletcher.hpp>
+#include <algorithm>
+#include <numeric>
 
 namespace OSPF
 {
@@ -18,11 +20,25 @@ struct RouterLinkV3
     uint32_t interfaceId;
     uint32_t neighborInterfaceId;
     uint32_t neighborRouterId;
+
+    bool operator==(const RouterLinkV3& rhs) const noexcept
+    {
+        return type == rhs.type &&
+               metric == rhs.metric &&
+               interfaceId == rhs.interfaceId &&
+               neighborInterfaceId == rhs.neighborInterfaceId &&
+               neighborRouterId == rhs.neighborRouterId;
+    }
+
+    bool operator<(const RouterLinkV3& rhs) const noexcept
+    {
+        return std::tie(type, interfaceId, neighborInterfaceId, neighborRouterId)
+             < std::tie(rhs.type, rhs.interfaceId, rhs.neighborInterfaceId, rhs.neighborRouterId);
+    }
 };
 
 struct RouterLsaV3
 {
-    uint8_t flags;
     uint32_t options;
     std::vector<RouterLinkV3> links;
 
@@ -32,8 +48,7 @@ struct RouterLsaV3
 
         RouterLsaV3 lsa;
 
-        lsa.flags = buf[0];
-        lsa.options = readU24(buf + 1);
+        lsa.options = readU32(buf);
 
         size_t off = 4;
 
@@ -57,8 +72,7 @@ struct RouterLsaV3
     {
         if (len != (4 + (16 * links.size()))) return false;
 
-        buf[0] = flags;
-        writeU24(buf + 1, options);
+        writeU32(buf, options);
 
         size_t off = 4;
         for (const auto& link : links)
@@ -81,8 +95,7 @@ struct RouterLsaV3
 
     void appendChecksum(ChecksumFletcher& check) const
     {
-        check.add(flags);
-        check.addU24(options);
+        check.addU32(options);
         for (const auto& link : links)
         {
             check.add(link.type);
@@ -91,6 +104,26 @@ struct RouterLsaV3
             check.addU32(link.neighborInterfaceId);
             check.addU32(link.neighborRouterId);
         }
+    }
+
+    bool operator==(const RouterLsaV3& rhs) const
+    {
+        if (options != rhs.options || links.size() != rhs.links.size())
+            return false;
+
+        std::vector<uint16_t> a(links.size()), b(rhs.links.size());
+
+        std::iota(a.begin(), a.end(), 0);
+        std::iota(b.begin(), b.end(), 0);
+
+        std::sort(a.begin(), a.end(), [&](uint16_t i, uint16_t j) { return links[i] < links[j]; });
+        std::sort(b.begin(), b.end(), [&](uint16_t i, uint16_t j) { return rhs.links[i] < rhs.links[j]; });
+
+        for (size_t k = 0; k < a.size(); ++k)
+            if (!(links[a[k]] == rhs.links[b[k]]))
+                return false;
+
+        return true;
     }
 };
 }

@@ -29,19 +29,22 @@ public:
     InterfaceConfigs* configs = nullptr;
 
     NeighborTable& getNTable() { return ntable; }
+    const NeighborTable& getNTable() const { return ntable; }
     InterfaceTimers& getTimers() { return tmgr; }
     PacketDispatcher& getDispatcher() { return *dispatcher; }
 
     OspfArea& getArea();
-    uint32_t getAreaId() { return id.area; }
+    uint32_t getAreaId() const { return id.area; }
     Interface& getIface() { return iface; }
+    const Interface& getIface() const { return iface; }
 
     const IPPrefix interfaceAddress;
 
     void election();
 
-    std::atomic<uint32_t> dr;
-    std::atomic<uint32_t> bdr;
+    struct Designation { std::atomic<uint32_t> rid; std::atomic<__uint128_t> ip; };
+    Designation dr;
+    Designation bdr;
 
     std::atomic<bool> isDr = false;
     std::atomic<bool> isBdr = false;

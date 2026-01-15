@@ -19,6 +19,7 @@ public:
     Neighbor* createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool unicast = false);
     void deleteNeighbor(uint32_t rid, bool unicast);
     Neighbor* lookup(uint32_t rid);
+    const Neighbor* lookup(uint32_t rid) const;
     bool isUnicast(uint32_t rid);
 
     std::optional<size_t> addNeighborList(uint8_t* buf, size_t maxSize);
