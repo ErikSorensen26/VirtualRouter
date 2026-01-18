@@ -4,9 +4,9 @@
 #define OSPF_TOPOLOGY_H
 
 #include <cstdint>
-#include <map>
 #include "OspfTypes.hpp"
 #include <OspfArea.h>
+#include <OspfTopologyTable.h>
 
 namespace OSPF
 {
@@ -21,11 +21,13 @@ public:
     OspfArea* getArea(uint32_t areaId);
     OspfArea& insureArea(uint32_t areaId);
 
-    void distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody& body);
+    template <typename Policy>
+    void distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody&& body);
 
     const uint8_t tid;
     OspfProcess& process;
 
+    template<typename Policy>
     void flood();
 
     std::atomic<bool> isABR = false;
@@ -35,12 +37,21 @@ public:
     const OspfProcess& getProcess() const noexcept { return process; }
 
     // Reorigination
-    template <typename SummaryNetwork>
+    template <typename Policy>
     void reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList);
+
+    std::shared_mutex& getAreaLock() { return areaMu; }
+    std::unordered_map<uint32_t, OspfArea>& getAreas() { return areas; }
+    const std::unordered_map<uint32_t, OspfArea>& getAreas() const { return areas; }
+
+    std::mutex externalMu;
+    std::unordered_map<LsaKey, std::pair<LsaHeader, LsaBody>> externalDb;
+
+    TopologyTable table;
 
 private:
     std::shared_mutex areaMu;
-    std::map<uint32_t, OspfArea> areas;
+    std::unordered_map<uint32_t, OspfArea> areas;
     std::atomic<size_t> areaSize;
 
     TopologyConfigs configs;

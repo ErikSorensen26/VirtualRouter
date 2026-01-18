@@ -3,6 +3,7 @@
 #include "OspfTopology.h"
 #include <OspfProcess.h>
 #include <OspfRoutingTable.h>
+#include <OspfRouteManager.h>
 
 namespace OSPF
 {
@@ -30,26 +31,50 @@ OspfArea& Topology::insureArea(uint32_t areaId)
     return areas.at(areaId);
 }
 
-void Topology::distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody& body)
+template <typename Policy>
+void Topology::distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody&& body)
 {
-    std::shared_lock<std::shared_mutex> lock(areaMu);
-    for (auto& [id, area] : areas)
     {
-        if (id != areaId)
+        std::shared_lock<std::shared_mutex> lock(areaMu);
+        for (auto& [id, area] : areas)
         {
-            area.processLsa(ctx, std::forward<LsaBody>(body));
+            if (id != areaId)
+            {
+                area.processExternalLsa(ctx, std::forward<LsaBody>(body));
+            }
         }
     }
+
+    std::pair<IPPrefix, std::optional<OspfPath>> result;
+    {
+        std::lock_guard<std::mutex> lock(externalMu);
+
+        auto existingIt = externalDb.find(ctx.key);
+        std::optional<uint32_t> seq{std::nullopt};
+        if (existingIt != externalDb.end())
+            seq = existingIt->second.first.sequence;
+            
+        if (!seq.has_value() || seq.value() < ctx.header.sequence) return;
+
+        auto& rec = externalDb[ctx.key];
+
+        rec.first = ctx.header;
+        rec.second = body;
+
+        result = RouteManager::deriveExternalRoute<Policy>(*this, ctx.key, rec);
+    }
+    process.getRib().replaceExternal(result);
 }
 
+template<typename Policy>
 void Topology::flood()
 {
     std::shared_lock<std::shared_mutex> lock(areaMu);
     for (auto& [_, area] : areas)
-        area.flood();
+        area.flood<Policy>();
 }
 
-template <typename SummaryNetwork>
+template <typename Policy>
 void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList)
 {
     if (!isABR.load(std::memory_order_relaxed) || areaSize.load(std::memory_order_relaxed) == 1) return;
@@ -58,15 +83,15 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
 
     for (const auto& path : pathList)
     {
-        auto& net = networks.emplace_back(LsaKey{}, SummaryNetwork{});
+        auto& net = networks.emplace_back(LsaKey{}, typename Policy::InterNetworkLsa{});
 
         LsaKey& key = net.first;
         LsaBody& n = net.second;
 
-        if constexpr (std::is_same_v<std::remove_cv_t<SummaryNetwork>, SummaryNetworkLsa>)
+        typename Policy::InterNetworkLsa& network = std::get<typename Policy::InterNetworkLsa>(n);
+
+        if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
         {
-            n = SummaryNetwork{};
-            SummaryNetwork& network = std::get<SummaryNetwork>(n);
             network.networkMask = Functions::prefixTo32Mask(path.prefix.prefixLength);
             network.metric = static_cast<uint32_t>(path.cost);
 
@@ -76,9 +101,6 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
         }
         else
         {
-            n = SummaryNetwork{};
-            SummaryNetwork& network = std::get<SummaryNetwork>(n);
-
             network.prefix = path.prefix;
             network.metric = static_cast<uint32_t>(path.cost);
             network.options = path.options;
@@ -96,7 +118,7 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
         auto processLsas = [&](OspfArea& a)
         {
             for (auto& [key, network] : networks)
-                a.processReoriginatedLsa(key, std::move(network));
+                a.processReoriginatedLsa<Policy>(key, std::move(network));
         };
 
         if (sourceAreaId == 0) // Transit area reoriginates to all other normal areas.
@@ -116,6 +138,12 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
     }
 }
 
-template void Topology::reoriginateSummaries<SummaryNetworkLsa>(OspfArea&, std::vector<OspfRouteChange>&);
-template void Topology::reoriginateSummaries<InterAreaPrefixLsa>(OspfArea&, std::vector<OspfRouteChange>&);
+template void Topology::distributeExternalLsa<PolicyV2>(uint32_t, const IncomingLsaContext&, LsaBody&&);
+template void Topology::distributeExternalLsa<PolicyV3>(uint32_t, const IncomingLsaContext&, LsaBody&&);
+
+template void Topology::flood<PolicyV2>();
+template void Topology::flood<PolicyV3>();
+
+template void Topology::reoriginateSummaries<PolicyV2>(OspfArea&, std::vector<OspfRouteChange>&);
+template void Topology::reoriginateSummaries<PolicyV3>(OspfArea&, std::vector<OspfRouteChange>&);
 }

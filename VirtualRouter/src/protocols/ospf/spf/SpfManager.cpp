@@ -17,9 +17,10 @@
 namespace OSPF
 {
 SpfManager::SpfManager(OspfArea& area, TimeManager& tmgr)
-    : area(area), tmgr(tmgr), rib(area.topology().process.getRib()), isV3(area.topology().process.isV3), throttle(area.topology().process.getConfigs().spfThrottle)
+    : area(area), tmgr(tmgr), rib(area.topology().process.getRib()), throttle(area.topology().process.getConfigs().spfThrottle)
 {}
 
+template<typename Policy>
 void SpfManager::requestSpf()
 {
     requested.store(true, std::memory_order_release);
@@ -34,9 +35,10 @@ void SpfManager::requestSpf()
         return;
 
     uint32_t delay = computeNextDelay();
-    scheduleSpf(delay);
+    scheduleSpf<Policy>(delay);
 }
 
+template<typename Policy>
 void SpfManager::onSpfTimer()
 {
     spfScheduled.store(false, std::memory_order_relaxed);
@@ -48,10 +50,7 @@ void SpfManager::onSpfTimer()
     requested.store(false, std::memory_order_release);
 
     // Run SPF
-    if (!isV3)
-        runSpf<RouterLsaV2, NetworkLsaV2, RouterLsaV2, NetworkLsaV2>();
-    else
-        runSpf<RouterLsaV3, NetworkLsaV3, IntraAreaPrefixLsa, IntraAreaPrefixLsa>();
+    runSpf<Policy>();
 
     lastSpfTime.store(std::chrono::steady_clock::now(), std::memory_order_release);
     spfRunning.store(false, std::memory_order_release);
@@ -59,7 +58,7 @@ void SpfManager::onSpfTimer()
     if (reschedule.exchange(false))
     {
         uint32_t delay = computeNextDelay();
-        scheduleSpf(delay);
+        scheduleSpf<Policy>(delay);
         return;
     }
 
@@ -67,6 +66,7 @@ void SpfManager::onSpfTimer()
     currentDelayMs.store(0, std::memory_order_release);
 }
 
+template<typename Policy>
 void SpfManager::scheduleSpf(uint32_t delayMs)
 {
     if (spfScheduled.exchange(true))
@@ -74,29 +74,35 @@ void SpfManager::scheduleSpf(uint32_t delayMs)
 
     auto delay = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
     timerId = tmgr.addTimer(delay, [this]() {
-        this->onSpfTimer();
+        this->onSpfTimer<Policy>();
     });
 }
 
-template <typename RouterLsa, typename NetworkLsa, typename SpfRouterLsa, typename SpfNetworkLsa>
+template <typename Policy>
 void SpfManager::runSpf()
 {
     // Create graph
-    SpfTopology<RouterLsa, NetworkLsa> topo(area);
+    SpfTopology<Policy> topo(area);
     // Run Dijkstra on graph
-    SpfResult result = SpfEngine::run<RouterLsa, NetworkLsa>(topo);
+    SpfResult spfRes = SpfEngine::run<Policy>(topo);
+
+    std::vector<std::pair<IPPrefix,OspfPath>> pathList;
+
     // Look up networks from Dikjstra results
-    auto pathList = RouteManager::deriveIntraAreaRouters<SpfRouterLsa, SpfNetworkLsa>(result, area);
-    // Install to rib
-    auto changes = rib.replaceArea(area.areaId, pathList);
+    RouteManager::deriveIntraAreaRoutes<Policy>(spfRes, pathList, area);
+    RouteManager::deriveInterAreaRoutes<Policy>(spfRes, pathList, area);
+
+    auto summaryChanges = rib.replaceArea(area.areaId, pathList);
+
+    area.topology().table.consumeSpfResult(area.areaId, spfRes);
 
     if (area.topology().isABR.load(std::memory_order_relaxed))
     {
         // Reoriginate intra as inter 
-        if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
-            area.topology().reoriginateSummaries<SummaryNetworkLsa, SummaryRouterLsa>(area, changes);
+        if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
+            area.topology().reoriginateSummaries<SummaryNetworkLsa>(area, summaryChanges);
         else
-            area.topology().reoriginateSummaries<InterAreaPrefixLsa, InterAreaRouterLsa>(area, changes);
+            area.topology().reoriginateSummaries<InterAreaPrefixLsa>(area, summaryChanges);
     }
 }
 
@@ -129,6 +135,15 @@ uint32_t SpfManager::computeNextDelay()
     return next;
 }
 
-template void SpfManager::runSpf<RouterLsaV2, NetworkLsaV2, RouterLsaV2, NetworkLsaV3>();
-template void SpfManager::runSpf<RouterLsaV3, NetworkLsaV3, IntraAreaPrefixLsa, IntraAreaPrefixLsa>();
+template void SpfManager::requestSpf<PolicyV2>();
+template void SpfManager::requestSpf<PolicyV3>();
+
+template void SpfManager::onSpfTimer<PolicyV2>();
+template void SpfManager::onSpfTimer<PolicyV3>();
+
+template void SpfManager::scheduleSpf<PolicyV2>(uint32_t);
+template void SpfManager::scheduleSpf<PolicyV3>(uint32_t);
+
+template void SpfManager::runSpf<PolicyV2>();
+template void SpfManager::runSpf<PolicyV3>();
 }

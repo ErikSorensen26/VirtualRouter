@@ -7,8 +7,8 @@
 
 namespace OSPF
 {
-template <typename RouterLsa, typename NetworkLsa>
-SpfTopology<RouterLsa, NetworkLsa>::SpfTopology(const OspfArea& area)
+template <typename Policy>
+SpfTopology<Policy>::SpfTopology(const OspfArea& area)
     : area(area), isV3(area.topology().getProcess().isV3)
 {
     area.lsdb().forEach([this](const LsaKey& key, const LsaRecord* record)
@@ -18,9 +18,9 @@ SpfTopology<RouterLsa, NetworkLsa>::SpfTopology(const OspfArea& area)
         const LsaBody& body = rec.body;
 
         // Router LSAs
-        if (std::holds_alternative<RouterLsa>(body))
+        if (std::holds_alternative<typename Policy::RouterLsa>(body))
         {
-            auto& lsa = std::get<RouterLsa>(body);
+            auto& lsa = std::get<typename Policy::RouterLsa>(body);
             if (rec.header.age >= OSPF_MAX_AGE) return;
             if (!isV3 && key.advertisingRouter != key.linkStateId)
                 return; // Allow 1 entry for ospfv2
@@ -29,12 +29,12 @@ SpfTopology<RouterLsa, NetworkLsa>::SpfTopology(const OspfArea& area)
         }
 
         // Network LSAs
-        if (std::holds_alternative<NetworkLsa>(body))
+        if (std::holds_alternative<typename Policy::NetworkLsa>(body))
         {
             if (rec.header.age >= OSPF_MAX_AGE) return;
-            const auto* p = &std::get<NetworkLsa>(body);
+            const auto* p = &std::get<typename Policy::NetworkLsa>(body);
 
-            if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+            if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
             {
                 auto it2 = netV2ByLsId.find(key.linkStateId);
                 auto better = [&](const LsaRecord* a, const LsaRecord* b) -> bool
@@ -62,14 +62,14 @@ SpfTopology<RouterLsa, NetworkLsa>::SpfTopology(const OspfArea& area)
     });
 }
 
-template <typename RouterLsa, typename NetworkLsa>
-bool SpfTopology<RouterLsa, NetworkLsa>::expandRouter(uint32_t rid, std::vector<SpfEdge>& outEdges)
+template <typename Policy>
+bool SpfTopology<Policy>::expandRouter(uint32_t rid, std::vector<SpfEdge>& outEdges)
 {
     outEdges.clear();
 
     auto it = rtr.find(rid);
     if (it == rtr.end() || it->second.empty()) return false;
-    const std::vector<const RouterLsa*> rlsas = it->second;
+    const std::vector<const typename Policy::RouterLsa*> rlsas = it->second;
 
     for (const auto* rlsa : rlsas)
     {
@@ -90,7 +90,7 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandRouter(uint32_t rid, std::vector<
             const uint8_t t = l.type;
             const uint32_t ifid = extractIfId(l);
 
-            if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+            if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
             {
                 if (t == static_cast<uint8_t>(OSPFV2_LINK_P2P))
                 {
@@ -192,7 +192,7 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandRouter(uint32_t rid, std::vector<
                     auto nit = net.find(netId);
                     if (nit == net.end()) continue;
 
-                    const NetworkLsa* netlsa = nit->second;
+                    const typename Policy::NetworkLsa* netlsa = nit->second;
 
                     const auto bk = BacklinkKey(VertexType::ROUTER, static_cast<uint64_t>(rid), VertexType::NETWORK, netId);
                     bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
@@ -222,8 +222,8 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandRouter(uint32_t rid, std::vector<
     return true;
 }
 
-template <typename RouterLsa, typename NetworkLsa>
-bool SpfTopology<RouterLsa, NetworkLsa>::expandNetwork(uint64_t vertexId, std::vector<uint32_t>& attachedRouters)
+template <typename Policy>
+bool SpfTopology<Policy>::expandNetwork(uint64_t vertexId, std::vector<uint32_t>& attachedRouters)
 {
     auto it = net.find(vertexId);
     if (it == net.end() || it->second == nullptr) return false;
@@ -242,7 +242,7 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandNetwork(uint64_t vertexId, std::v
         bool backlink = (backlinkCache.find(bk) != backlinkCache.end());
         if (!backlink)
         {
-            if constexpr (std::is_same_v<std::remove_cv_t<NetworkLsa>, NetworkLsaV2>)
+            if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
             {
                 uint32_t netLsId = networkLsId(vertexId);
 
@@ -280,6 +280,6 @@ bool SpfTopology<RouterLsa, NetworkLsa>::expandNetwork(uint64_t vertexId, std::v
     return true;
 }
 
-template class SpfTopology<RouterLsaV2, NetworkLsaV2>;
-template class SpfTopology<RouterLsaV3, NetworkLsaV3>;
+template class SpfTopology<PolicyV2>;
+template class SpfTopology<PolicyV3>;
 }

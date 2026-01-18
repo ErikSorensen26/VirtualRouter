@@ -82,7 +82,7 @@ public:
         return true;
     }
 
-    bool removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint32_t pid = 0)
+    bool removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint8_t topoId, uint32_t pid = 0)
     {
         std::lock_guard<std::mutex> lock(ribMtx);
         PrefixKey key{ mask(prefix, length), length };
@@ -92,7 +92,7 @@ public:
         
 
         RibBucket<AddrType>* b = it->second;
-        b->removeRoute(src, pid);
+        b->removeRoute(src, topoId, pid);
 
         if (b->empty())
         {
@@ -129,6 +129,36 @@ public:
     RibEntry<AddrType>* lookup(AddrType addr)
     {
         return fib.lookup(addr);
+    }
+
+    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, uint8_t topoId, RouteSource source)
+    {
+        auto* n = fib.root.load(std::memory_order_acquire);
+        if (!n) return false;
+
+        RibEntry<AddrType>* best = nullptr;
+
+        std::lock_guard<std::mutex> lock(ribMtx);
+
+        while (n)
+        {
+            auto pit = table.find({n->prefix, n->length});
+            if (pit == table.end()) continue;
+
+            RibBucket<AddrType>& bucket = pit.second;
+
+            AddrType pfx = mask(a, n->length);
+            if (pfx == n->prefix)
+            {
+                auto* rt = bucket.getBestRoute(source, topoId, procId);
+                if (rt) best = rt;
+            }
+
+            bool dir = bitAt(a, n->bit);
+            n = dir ? n->right.load(std::memory_order_acquire)
+                    : n->left.load(std::memory_order_acquire);
+        }
+        return best;
     }
 
     size_t size() const noexcept

@@ -21,10 +21,14 @@ public:
     void addRouterLsa(uint32_t ifaceId) override;
     void addNetworkLsa(const OspfInterface& iface) override;
 
+    void addExternal(uint32_t asbr, uint32_t lsid, bool remove) override;
+
 protected:
 
     std::optional<LsaBody> lastRouterLsa{std::nullopt};
 
+    void expire(LsaKey& key, LsaBody& body) override;
+    void addAsbrLsa(uint32_t asbr) override;
     void removeNetworkLsa(uint32_t ifaceId) override;
 
     void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;

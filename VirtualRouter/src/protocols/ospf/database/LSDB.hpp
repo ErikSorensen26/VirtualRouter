@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <variant>
 #include <unordered_map>
+#include <unordered_set>
 #include <map>
 #include <memory_resource>
 #include <vector>
@@ -41,6 +42,8 @@ template <typename T> using Vec = std::pmr::vector<T>;
 using ByteVec = std::pmr::vector<std::byte>;
 template <typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>>
 using UMap = std::pmr::unordered_map<K, V, H, E>;
+template <typename K, typename H = std::hash<K>, typename E = std::equal_to<K>>
+using USet = std::pmr::unordered_set<K, H, E>;
 template <typename K, typename V>
 using OMap = std::pmr::map<K, V>;
 #else
@@ -152,6 +155,25 @@ using LsaBody = std::variant<
     IntraAreaPrefixLsa
 >;
 
+// Policies
+struct PolicyV2
+{
+    using RouterLsa = RouterLsaV2;
+    using NetworkLsa = NetworkLsaV2;
+    using InterNetworkLsa = SummaryNetworkLsa;
+    using InterRouterLsa = SummaryRouterLsa;
+    using ExternalLsa = ExternalLsaV2;
+};
+
+struct PolicyV3
+{
+    using RouterLsa = RouterLsaV3;
+    using NetworkLsa = NetworkLsaV3;
+    using InterNetworkLsa = InterAreaPrefixLsa;
+    using InterRouterLsa = InterAreaRouterLsa;
+    using ExternalLsa = ExternalLsaV3;
+};
+
 // One LSDB record.
 struct LsaRecord final
 {
@@ -214,6 +236,7 @@ struct LsaRecordRef final
 
 using U_LSDB = UMap<LsaKey, LsaRecord*>;
 using A_LSDB = UMap<LsaAdvKey, UMap<uint32_t, LsaRecord*>>;
+using T_LSDB = UMap<uint32_t, UMap<LsaTypeKey, LsaRecord*>>;
 using O_LSDB = OMap<LsaKey, LsaRecord>;
 
 } // namespace OSPF

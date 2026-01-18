@@ -83,7 +83,10 @@ bool LsdbTable::erase(const LsaKey& key)
     db.erase(key);
     auto& adv = advDb[key];
     adv.erase(key.linkStateId);
+    auto& type = typeDb[key.lsaType];
+    type.erase(key);
     if (adv.empty()) advDb.erase(key);
+    if (type.empty()) typeDb.erase(key.lsaType);
     return dbStorage.erase(key) != 0;
 }
 
@@ -94,6 +97,7 @@ void LsdbTable::clear()
 #endif
     db.clear();
     advDb.clear();
+    typeDb.clear();
     dbStorage.clear();
 }
 
@@ -104,6 +108,7 @@ void LsdbTable::releaseMemory()
 #endif
     db.clear();
     advDb.clear();
+    typeDb.clear();
     dbStorage.clear();
 #if OSPF_LSDB_USE_PMR
     pool.release();
@@ -122,6 +127,7 @@ LsaRecord& LsdbTable::upsertMeta(const IncomingLsaContext& lsa, LsaRecordFlags f
     {
         db[lsa.key] = &it->second;
         advDb[lsa.key][lsa.key.linkStateId] = &it->second;
+        typeDb[lsa.key.lsaType][lsa.key] = &it->second;
     }
 
     LsaRecord& rec = it->second;
@@ -167,6 +173,14 @@ bool LsdbTable::setFlags(const LsaKey& key, LsaRecordFlags flags)
     return true;
 }
 
+size_t LsdbTable::getTypeSize(uint32_t type)
+{
+    std::shared_lock<std::shared_mutex> lk(mu);
+    auto it = typeDb.find(type);
+    if (it == typeDb.end()) return 0;
+    return it->second.size();
+}
+
 size_t LsdbTable::ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired)
 {
 #if OSPF_LSDB_THREADSAFE
@@ -197,7 +211,10 @@ size_t LsdbTable::ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired)
             db.erase(it->first);
             auto& adv = advDb[it->first];
             adv.erase(it->first.linkStateId);
+            auto& type = typeDb[it->first.lsaType];
+            type.erase(it->first);
             if (adv.empty()) advDb.erase(it->first);
+            if (type.empty()) typeDb.erase(it->first.lsaType);
             it = dbStorage.erase(it);
             ++expired;
         }

@@ -22,8 +22,8 @@ struct QItem
     }
 };
 
-template <typename RouterLsa, typename NetworkLsa>
-SpfResult SpfEngine::run(SpfTopology<RouterLsa, NetworkLsa>& topo)
+template <typename Policy>
+SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 {
     auto& area = topo.area;
     uint32_t rid = area.topology().getProcess().getRouterId();
@@ -41,7 +41,7 @@ SpfResult SpfEngine::run(SpfTopology<RouterLsa, NetworkLsa>& topo)
     RelaxInfo info(res, pq);
 
     // Seed canidates from root
-    expandAndRelax<RouterLsa, NetworkLsa>(topo, res.root, info);
+    expandAndRelax<Policy>(topo, res.root, info);
 
     // Main loop
     while (!pq.empty())
@@ -62,7 +62,7 @@ SpfResult SpfEngine::run(SpfTopology<RouterLsa, NetworkLsa>& topo)
         it->second.confirmed = true;
         res.confirmedOrder.push_back(cur.v);
 
-        expandAndRelax<RouterLsa, NetworkLsa>(topo, cur.v, info);
+        expandAndRelax<Policy>(topo, cur.v, info);
     }
 
     if (area.getConfigs().deterministicParentOrder.load(std::memory_order_relaxed))
@@ -157,8 +157,8 @@ void SpfEngine::relaxEdge(
     }
 }
 
-template <typename RouterLsa, typename NetworkLsa, typename PQ>
-void SpfEngine::expandAndRelax(SpfTopology<RouterLsa, NetworkLsa>& topo, const Vertex& v, RelaxInfo<PQ>& info)
+template <typename Policy, typename PQ>
+void SpfEngine::expandAndRelax(SpfTopology<Policy>& topo, const Vertex& v, RelaxInfo<PQ>& info)
 {
     auto it = info.out.nodes.find(v);
     if (it == info.out.nodes.end()) return;
@@ -198,11 +198,11 @@ void SpfEngine::expandAndRelax(SpfTopology<RouterLsa, NetworkLsa>& topo, const V
 using NodeMap = std::unordered_map<Vertex, SptNode, VertexHash>;
 using PQ = std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>>;
 
-template SpfResult SpfEngine::run<RouterLsaV2, NetworkLsaV2>(SpfTopology<RouterLsaV2, NetworkLsaV2>&);
-template SpfResult SpfEngine::run<RouterLsaV3, NetworkLsaV3>(SpfTopology<RouterLsaV3, NetworkLsaV3>&);
+template SpfResult SpfEngine::run<PolicyV2>(SpfTopology<PolicyV2>&);
+template SpfResult SpfEngine::run<PolicyV3>(SpfTopology<PolicyV3>&);
 
 template void SpfEngine::relaxEdge<PQ>(const Vertex&, const Vertex&, uint64_t, uint32_t, RelaxInfo<PQ>&);
 
-template void SpfEngine::expandAndRelax<RouterLsaV2, NetworkLsaV2, PQ>(SpfTopology<RouterLsaV2, NetworkLsaV2>&, const Vertex&, RelaxInfo<PQ>&);
-template void SpfEngine::expandAndRelax<RouterLsaV3, NetworkLsaV3, PQ>(SpfTopology<RouterLsaV3, NetworkLsaV3>&, const Vertex&, RelaxInfo<PQ>&);
+template void SpfEngine::expandAndRelax<PolicyV2, PQ>(SpfTopology<PolicyV2>&, const Vertex&, RelaxInfo<PQ>&);
+template void SpfEngine::expandAndRelax<PolicyV3, PQ>(SpfTopology<PolicyV3>&, const Vertex&, RelaxInfo<PQ>&);
 }

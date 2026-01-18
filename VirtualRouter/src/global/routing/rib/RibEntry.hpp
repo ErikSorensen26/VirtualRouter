@@ -25,6 +25,7 @@ struct RibEntry
     uint8_t length;
     RouteSource source;
     uint32_t processId;
+    uint8_t topoId;
     uint8_t adminDistance;
     uint64_t metric;
     void* topInfo = nullptr;
@@ -55,6 +56,7 @@ struct RibEntry
           length(other.length),
           source(other.source),
           processId(other.processId),
+          topoId(other.topoId),
           adminDistance(other.adminDistance),
           metric(other.metric),
           topInfo(other.topInfo),
@@ -73,6 +75,7 @@ struct RibEntry
         length = other.length;
         source = other.source;
         processId = other.processId;
+        topoId = other.topoId;
         adminDistance = other.adminDistance;
         metric = other.metric;
         topInfo = other.topInfo;

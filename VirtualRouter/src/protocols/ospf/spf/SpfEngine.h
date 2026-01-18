@@ -17,8 +17,8 @@ struct SpfResult;
 class SpfEngine
 {
 public:
-    template <typename RouterLsa, typename NetworkLsa>
-    static SpfResult run(SpfTopology<RouterLsa, NetworkLsa>& topo);
+    template <typename Policy>
+    static SpfResult run(SpfTopology<Policy>& topo);
 private:
 
     static inline uint64_t addCost(uint64_t base, uint32_t cost)
@@ -42,8 +42,8 @@ private:
     template <typename PQ>
     static void relaxEdge(const Vertex& from, const Vertex& to, uint64_t newDist, uint32_t edgeIfid, RelaxInfo<PQ>& info);
 
-    template <typename RouterLsa, typename NetworkLsa, typename PQ>
-    static void expandAndRelax(SpfTopology<RouterLsa, NetworkLsa>& topo, const Vertex& v, RelaxInfo<PQ>& info);
+    template <typename Policy, typename PQ>
+    static void expandAndRelax(SpfTopology<Policy>& topo, const Vertex& v, RelaxInfo<PQ>& info);
 };
 }
 

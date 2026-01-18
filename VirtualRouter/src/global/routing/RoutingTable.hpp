@@ -47,12 +47,12 @@ public:
     }
 
     template <typename AddrType>
-    bool removeEntry(AddrType prefix, uint8_t length, RouteSource src, uint32_t pid)
+    bool removeEntry(AddrType prefix, uint8_t length, RouteSource src, uint8_t topoId, uint32_t pid)
     {
         if constexpr (std::is_same_v<AddrType, uint32_t>)
-            return rib4.removeRoute(prefix, length, src, pid);
+            return rib4.removeRoute(prefix, length, src, topoId, pid);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
-            return rib6.removeRoute(prefix, length, src, pid);
+            return rib6.removeRoute(prefix, length, src, topoId, pid);
         else
             static_assert(always_false<AddrType>, "Unsupported Address Type");
         return false;
@@ -78,6 +78,18 @@ public:
             return rib4.lookup(addr);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
             return rib6.lookup(addr);
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
+    }
+
+    template <typename AddrType>
+    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, RouteSource source)
+    {
+        RCU::Guard g;
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            return rib4.lookup(a, procId, source);
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            return rib6.lookup(a, procId, source);
         else
             static_assert(always_false<AddrType>, "Unsupported Address Type");
     }

@@ -19,6 +19,7 @@ public:
     void addRouterLsa(uint32_t ifaceId) override;
     void addNetworkLsa(const OspfInterface& iface) override;
 
+    void addExternal(uint32_t asbr, uint32_t lsid, bool remove) override;
 
 protected:
 
@@ -34,7 +35,8 @@ protected:
     std::deque<uint32_t> routerLsidQueue;
     uint32_t findNextRouterLsid();
 
-    void expire(LsaKey& key, LsaBody& body);
+    void expire(LsaKey& key, LsaBody& body) override;
+    void addAsbrLsa(uint32_t asbr) override;
     void removeNetworkLsa(uint32_t ifaceId) override;
 
     void addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBody>>& routerLsas);

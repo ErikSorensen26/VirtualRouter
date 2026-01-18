@@ -380,17 +380,14 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 
         if (!body.has_value()) continue;
 
-        if (std::holds_alternative<ExternalLsaV2>(body.value()))
-            topology.distributeExternalLsa(area.areaId, context, body.value()); // Distributes to all other areas
-
-        OspfArea::Result result = area.processLsa(context, std::forward<LsaBody>(body.value()));
+        OspfArea::Result result = area.processLsa<PolicyV2>(context, std::forward<LsaBody>(body.value()));
         acks.push_back({context.key, *result.record});
     }
 
     if (!acks.empty())
         sendLSAck(*info.neighbor, acks);
 
-    topology.flood();
+    topology.flood<PolicyV2>();
 }
 
 void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)

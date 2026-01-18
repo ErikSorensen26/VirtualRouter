@@ -47,6 +47,24 @@ struct LsaKey : LsaAdvKey
                advertisingRouter == o.advertisingRouter;
     }
 };
+
+struct LsaTypeKey
+{
+    LsaTypeKey() = default;
+    LsaTypeKey(uint32_t id, RouterId advRtr)
+        : linkStateId(id), advRouter(advRtr) {}
+    LsaTypeKey(const LsaKey& other)
+        : linkStateId(other.linkStateId), advRouter(other.advertisingRouter) {}
+
+    uint32_t linkStateId{0};
+    uint32_t advRouter{0};
+
+    bool operator==(const LsaTypeKey& o) const noexcept
+    {
+        return linkStateId == o.linkStateId &&
+               advRouter == o.advRouter;
+    }
+};
 }
 
 namespace std
@@ -72,6 +90,18 @@ struct hash<OSPF::LsaKey>
         x ^= static_cast<uint64_t>(k.lsaType) << 32;
         x ^= static_cast<uint64_t>(k.linkStateId);
         x ^= static_cast<uint64_t>(k.advertisingRouter) << 1;
+        return std::hash<uint64_t>{}(x);
+    }
+};
+
+template <>
+struct hash<OSPF::LsaTypeKey>
+{
+    size_t operator()(const OSPF::LsaTypeKey& k) const noexcept
+    {
+        uint64_t x = 0;
+        x ^= static_cast<uint64_t>(k.linkStateId) << 32;
+        x ^= static_cast<uint64_t>(k.advRouter) << 1;
         return std::hash<uint64_t>{}(x);
     }
 };

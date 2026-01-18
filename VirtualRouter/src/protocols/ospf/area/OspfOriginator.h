@@ -22,6 +22,8 @@ public:
     virtual void addRouterLsa(uint32_t ifaceId);
     virtual void addNetworkLsa(const OspfInterface& iface);
 
+    virtual void addExternal(uint32_t asbr, uint32_t lsid, bool expire);
+
 protected:
     LsaAdvKey lastRouterKey{};
 
@@ -32,10 +34,13 @@ protected:
     };
 
     std::unordered_map<OspfInterfaceId, NetworkState> networkLsas{};
+    std::unordered_map<uint32_t, std::pair<LsaBody, std::vector<uint32_t>>> asbrExternalRouters{};
 
     void addRouterLink(LsaBody& router, const OspfInterface& iface, bool attemptNetLsa = false);
     void processLsa(LsaKey& key, LsaBody& body);
 
+    virtual void expire(LsaKey& key, LsaBody& body);
+    virtual void addAsbrLsa(uint32_t asbr);
     virtual void removeNetworkLsa(uint32_t ifaceId);
 
     virtual void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr);

@@ -13,6 +13,7 @@
 #include <OspfNeighborTable.h>
 #include <OspfNeighbor.h>
 #include <variant>
+#include <OspfRouteManager.h>
 #include <type_traits>
 
 #include "OspfOriginator.h"
@@ -47,6 +48,7 @@ void OspfArea::releaseMemory()
     db.releaseMemory();
 }
 
+template<typename Policy>
 void OspfArea::flood()
 {
     auto floodList = fq.tryDequeueBatch();
@@ -59,7 +61,7 @@ void OspfArea::flood()
     }
 
     if (shouldRequestSpf.load(std::memory_order_relaxed))
-        spfMgr.requestSpf();
+        spfMgr.requestSpf<Policy>();
 }
 
 void OspfArea::send(OspfInterface& iface, std::vector<LsaRecordRef>& records)
@@ -82,7 +84,26 @@ void OspfArea::send(OspfInterface& iface, std::vector<LsaRecordRef>& records)
     }
 }
 
+template <typename Policy>
 OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& body)
+{
+    if (std::holds_alternative<typename Policy::ExternalLsa>(body))
+    {
+        base.distributeExternalLsa<Policy>(areaId, ctx, std::forward<LsaBody>(body));
+    }
+    else if (std::holds_alternative<typename Policy::InterNetworkLsa>(body))
+    {
+        auto result = RouteManager::deriveInterAreaNetwork<Policy>(*this, ctx.key, ctx.header, body);
+        base.process.getRib().replaceRoute(areaId, result);
+    }
+    else if (std::holds_alternative<typename Policy::InterRouterLsa>(body))
+    {
+        RouteManager::deriveInterAreaRouter<Policy>(*this, ctx.key, ctx.header, body);
+    }
+    return process(ctx, std::forward<LsaBody>(body));
+}
+
+OspfArea::Result OspfArea::process(const IncomingLsaContext& ctx, LsaBody&& body)
 {
     Result out{};
 
@@ -96,7 +117,7 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& b
         return out;
     }
 
-    const LsaRecordFlags flags = makeFlags(ctx);
+    const LsaRecordFlags lsaFlags = makeFlags(ctx);
 
     if (out.decision.action == InstallAction::IGNORE_DUPLICATE)
     {
@@ -106,7 +127,7 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& b
             {
                 r->header.age = out.decision.newStoredAge;
                 r->lastRefreshTime = std::chrono::steady_clock::now();
-                r->flags = flags;
+                r->flags = lsaFlags;
                 out.record = r;
             }
         }
@@ -114,7 +135,7 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& b
         {
             if (auto* r = db.find(ctx.key))
             {
-                r->flags = flags;
+                r->flags = lsaFlags;
                 out.record = r;
             }
         }
@@ -123,16 +144,15 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& b
 
     if (out.decision.action == InstallAction::FIGHT_BACK_SELF)
     {
-        LsaRecord& rec = db.upsertMeta(ctx, flags);
+        LsaRecord& rec = db.upsertMeta(ctx, lsaFlags);
         rec.body = body;
         out.record = &rec;
-
         out.decision.shouldFightBack = true;
     }
     else if (out.decision.action == InstallAction::FLUSH_MAX_AGE ||
         out.decision.shouldStoreReplace)
     {
-        LsaRecord& rec = db.upsertMeta(ctx, flags);
+        LsaRecord& rec = db.upsertMeta(ctx, lsaFlags);
         rec.body = body;
         out.record = &rec;
     }
@@ -140,6 +160,16 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& b
     return out;
 }
 
+void OspfArea::processExternalLsa(const IncomingLsaContext& ctx, LsaBody&& body)
+{
+    bool expire = ctx.header.age == 3600;
+
+    // Manage type 4 if needed
+    originator->addExternal(ctx.key.advertisingRouter, ctx.key.linkStateId, expire);
+    process(ctx, std::forward<LsaBody>(body));
+}
+
+template <typename Policy>
 void OspfArea::processReoriginatedLsa(const LsaKey& key, LsaBody&& body, bool expire)
 {
     LsaHeader hdr{};
@@ -182,7 +212,10 @@ void OspfArea::processReoriginatedLsa(const LsaKey& key, LsaBody&& body, bool ex
         }
     }, body);
 
-    (void)processLsa(ctx, std::forward<LsaBody>(body));
+    if (!flags.isV3)
+        (void)processLsa<PolicyV2>(ctx, std::forward<LsaBody>(body));
+    else
+        (void)processLsa<PolicyV3>(ctx, std::forward<LsaBody>(body));
 }
 
 void OspfArea::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
@@ -210,21 +243,6 @@ bool OspfArea::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
     }
 
     return true;
-}
-
-void OspfArea::synchronizeConnected()
-{
-    OspfOriginator* originator = nullptr;
-
-    if (base.process.isV3)
-        originator = new OspfOriginatorV3(*this);
-    else
-        originator = new OspfOriginatorV2(*this);
-
-
-    originator->flush();
-
-    delete originator;
 }
 
 LsaRecordFlags OspfArea::makeFlags(const IncomingLsaContext& ctx) noexcept
@@ -370,4 +388,13 @@ bool OspfArea::compareLsaBody(const LsaBody& a, const LsaBody& b)
         a, b
     );
 }
+
+template OspfArea::Result OspfArea::processLsa<PolicyV2>(const IncomingLsaContext&, LsaBody&&);
+template OspfArea::Result OspfArea::processLsa<PolicyV3>(const IncomingLsaContext&, LsaBody&&);
+
+template void OspfArea::flood<PolicyV2>();
+template void OspfArea::flood<PolicyV3>();
+
+template void OspfArea::processReoriginatedLsa<PolicyV2>(const LsaKey&, LsaBody&&, bool);
+template void OspfArea::processReoriginatedLsa<PolicyV3>(const LsaKey&, LsaBody&&, bool);
 }

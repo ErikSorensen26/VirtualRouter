@@ -74,7 +74,12 @@ public:
     void forEach(Fn&& fn) const;
 
     template <typename Fn>
-    void forEachInAdv(LsaAdvKey& key, Fn&& fn) const;
+    void forEachInAdv(const LsaAdvKey& key, Fn&& fn) const;
+
+    template <typename Fn>
+    void forEachInType(uint32_t type, Fn&& fn) const;
+
+    size_t getTypeSize(uint32_t type);
 
     // Aging helpers
     size_t ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired);
@@ -84,7 +89,10 @@ public:
     size_t purgeIf(Pred&& pred);
 
     O_LSDB& getIterableLSDB() { return dbStorage; }
-    std::shared_mutex& getLock() { return mu; }
+    const O_LSDB& getIterableLSDB() const { return dbStorage; }
+    T_LSDB& getIterableTypeLSDB() { return typeDb; }
+    const T_LSDB& getIterableTypeLSDB() const { return typeDb; }
+    std::shared_mutex& getLock() const { return mu; }
 
 private:
 #if OSPF_LSDB_THREADSAFE
@@ -94,6 +102,7 @@ private:
 #if OSPF_LSDB_USE_PMR
     PoolResource pool;
     U_LSDB db;
+    T_LSDB typeDb;
     A_LSDB advDb;
     O_LSDB dbStorage;
 #else
@@ -166,13 +175,24 @@ inline void LsdbTable::forEach(Fn&& fn) const
 }
 
 template <typename Fn>
-inline void LsdbTable::forEachInAdv(LsaAdvKey& advRtr, Fn&& fn) const
+inline void LsdbTable::forEachInAdv(const LsaAdvKey& advRtr, Fn&& fn) const
 {
 #if OSPF_LSDB_THREADSAFE
     std::shared_lock<std::shared_mutex> lk(mu);
 #endif
     auto it = advDb.find(advRtr);
     if (it == advDb.end()) return;
+    for (const auto& kv : it->second)
+        fn(kv.first, kv.second);
+}
+
+template <typename Fn>
+inline void LsdbTable::forEachInType(uint32_t type, Fn&& fn) const
+{
+#if OSPF_LSDB_THREADSAFE
+    std::shared_lock<std::shared_mutex> lk(mu);
+#endif
+    auto it = typeDb.find(type);
     for (const auto& kv : it->second)
         fn(kv.first, kv.second);
 }

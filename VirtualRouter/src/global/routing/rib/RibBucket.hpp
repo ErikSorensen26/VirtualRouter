@@ -29,7 +29,7 @@ public:
 
         for (RibEntry<AddrType>& r : routes)
         {
-            if (r.source == e.source && r.processId == e.processId)
+            if (r.source == e.source && r.processId == e.processId && r.topoId == e.topoId)
             {
                 if (r.metric == e.metric && r.nextHopCount == e.nextHopCount && r.adminDistance == e.adminDistance)
                     return false;
@@ -46,14 +46,31 @@ public:
         return true;
     }
 
-    void removeRoute(RouteSource src, uint32_t pid = 0) noexcept
+    void removeRoute(RouteSource src, uint8_t topoId, uint32_t pid = 0) noexcept
     {
         routes.erase(
             std::remove_if(routes.begin(), routes.end(),
-                [src, pid](const RibEntry<AddrType>& r){ return r.source == src && r.processId == pid; }),
+                [src, pid, topoId](const RibEntry<AddrType>& r){ return r.source == src && r.processId == pid && r.topoId == topoId; }),
             routes.end());
         selectBest();
         return;
+    }
+
+    RibEntry<AddrType>* getBestRoute(RouteSource src, uint8_t topoId, uint32_t pid) noexcept
+    {
+        RibEntry<AddrType>* best = nullptr;
+
+        for (const RibEntry<AddrType>& r : routes)
+        {
+            if (r.source == src && r.processId == pid && r.topoId == topoId)
+            {
+                if (!best)
+                    best = &r;
+                else if (r.adminDistance < best->adminDistance || r.metric < best->metric)
+                    best = &r;
+            }
+        }
+        return best;
     }
 
     void selectBest() noexcept

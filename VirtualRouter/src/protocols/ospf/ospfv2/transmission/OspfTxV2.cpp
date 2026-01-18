@@ -4,7 +4,7 @@
 
 // NOTE: set ttl to 1
 
-#include "v2PacketDispatcher.h"
+#include "PacketDispatcherV2.h"
 #include <PacketBuilder.hpp>
 #include <IPPacket.h>
 #include <OspfProcess.h>
@@ -330,8 +330,8 @@ std::optional<Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder buil
 
     hello.setPriority(iface.configs->priority.load(std::memory_order_relaxed));
     hello.setDeadInterval(iface.configs->deadInterval.load(std::memory_order_relaxed));
-    hello.setDR(static_cast<uint32_t>(iface.dr.load(std::memory_order_relaxed)));
-    hello.setBDR(static_cast<uint32_t>(iface.bdr.load(std::memory_order_relaxed)));
+    hello.setDR(static_cast<uint32_t>(iface.dr.rid.load(std::memory_order_relaxed)));
+    hello.setBDR(static_cast<uint32_t>(iface.bdr.rid.load(std::memory_order_relaxed)));
 
     auto ntype = iface.configs->networkType.load(std::memory_order_relaxed);
     if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||

@@ -7,12 +7,14 @@
 #include <limits>
 #include <functional>
 #include <LsaKey.hpp>
+#include <LSDB.hpp>
 
 #define OSPF_DETERMINISTIC_PARENT_ORDER true
 #define OSPF_STRICT_MISSING_NETWORK_LSA false
 
 namespace OSPF
 {
+
 enum class VertexType : uint8_t
 {
     ROUTER = 1,

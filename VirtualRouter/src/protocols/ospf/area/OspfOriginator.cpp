@@ -1,6 +1,7 @@
 // OspfOriginator.cpp
 
-#include "OspfOriginator.h" #include <OspfArea.h>
+#include "OspfOriginator.h"
+#include <OspfArea.h>
 #include <OspfTopology.h>
 #include <OspfProcess.h>
 #include <OspfInterface.h>

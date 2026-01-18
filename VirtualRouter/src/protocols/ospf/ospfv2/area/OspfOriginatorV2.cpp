@@ -44,7 +44,7 @@ void OspfOriginatorV2::addRouterLsa(uint32_t ifaceId)
     lastRouterLsa = lsa;
     lastRouterKey = key;
 
-    area.processReoriginatedLsa(key, std::move(lsa));
+    area.processReoriginatedLsa<PolicyV2>(key, std::move(lsa));
 }
 
 void OspfOriginatorV2::addNetworkLsa(const OspfInterface& iface)
@@ -73,7 +73,55 @@ void OspfOriginatorV2::addNetworkLsa(const OspfInterface& iface)
         return;
 
     networkLsas[iface.id] = NetworkState{key, lsa};
-    area.processReoriginatedLsa(key, std::move(lsa));
+    area.processReoriginatedLsa<PolicyV2>(key, std::move(lsa));
+}
+
+void OspfOriginatorV2::addExternal(uint32_t asbr, uint32_t lsid, bool remove)
+{
+    if (!asbrExternalRouters.contains(asbr))
+    {
+        if (remove) return;
+        addAsbrLsa(asbr);
+    }
+
+    auto& external = asbrExternalRouters[asbr];
+
+    bool found = std::find(external.second.begin(), external.second.end(), lsid) != external.second.end();
+
+    if (!found && !remove)
+    {
+        external.second.push_back(lsid);
+    }
+    else if (found && remove)
+    {
+        external.second.erase(std::find(external.second.begin(), external.second.end(), lsid));
+        if (external.second.empty())
+        {
+            LsaKey key{OSPFV2_LSA_SUM_ASBR, asbr, area.topology().process.getRouterId()};
+            expire(key, external.first);
+            asbrExternalRouters.erase(asbr);
+        }
+    }
+}
+
+void OspfOriginatorV2::expire(LsaKey& key, LsaBody& lsa)
+{
+    area.processReoriginatedLsa<PolicyV2>(key, std::move(lsa), true);
+}
+
+void OspfOriginatorV2::addAsbrLsa(uint32_t asbr)
+{
+    uint32_t metric = area.topology().table.lookupDistance(asbr);
+    if (metric == 0) return;
+    auto it = asbrExternalRouters.emplace(asbr, SummaryRouterLsa{}, std::vector<uint32_t>{});
+    if (!it.second) return;
+
+    auto& lsa = std::get<SummaryRouterLsa>(it.first->second.first);
+    lsa.metric = metric;
+
+    LsaKey key(OSPFV3_LSA_INTER_AREA_ROUTER, asbr, area.topology().process.getRouterId());
+
+    area.processReoriginatedLsa<PolicyV2>(key, lsa);
 }
 
 void OspfOriginatorV2::removeNetworkLsa(uint32_t ifaceId)
@@ -82,7 +130,7 @@ void OspfOriginatorV2::removeNetworkLsa(uint32_t ifaceId)
     auto it = networkLsas.find(id);
     if (it == networkLsas.end()) return;
 
-    area.processReoriginatedLsa(it->second.key, std::move(it->second.lastLsa), true);
+    area.processReoriginatedLsa<PolicyV2>(it->second.key, std::move(it->second.lastLsa), true);
     networkLsas.erase(it);
 }
 

@@ -48,33 +48,32 @@ public:
     AreaConfigs& getConfigs() { return cfgs; }
     const AreaConfigs& getConfigs() const noexcept { return cfgs; }
     FloodQueue& floodQueue() noexcept { return fq; }
-    const FloodQueue& floodQueue() const noexcept { return fq; }
-    OspfFlagManager& getFlags() { return flags; }
+    const FloodQueue& floodQueue() const noexcept { return fq; } OspfFlagManager& getFlags() { return flags; }
     const OspfFlagManager& getFlags() const noexcept { return flags; }
+    const SpfManager& getSpfManager() const noexcept { return spfMgr; }
 
     void clear();
     void releaseMemory();
 
     // Flooding
+    template<typename Policy>
     void flood();
     bool hasPendingFlood() const noexcept { return !fq.empty(); }
     void send(OspfInterface& iface, std::vector<LsaRecordRef>& records);
     std::vector<LsaRecordRef> tryDequeueFlood() { return fq.tryDequeueBatch(); }
 
     // Processing
+    template <typename Policy>
     Result processLsa(const IncomingLsaContext& ctx, LsaBody&& body);
+    void processExternalLsa(const IncomingLsaContext& ctx, LsaBody&& body);
+    template <typename Policy>
     void processReoriginatedLsa(const LsaKey& key, LsaBody&& body, bool expire = false);
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
-    // Origination
-    virtual void synchronizeConnected();
-    virtual void originateRouterLsa();
-    virtual void originateNetworkLsa(OspfInterface& iface);
+    static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;
 
     const uint32_t areaId;
-
-    std::atomic<uint32_t> intraOpaqueIndex{0};
 
 protected:
     std::pmr::memory_resource* mr{nullptr};
@@ -92,7 +91,8 @@ protected:
     OspfOriginator* originator{nullptr};
 
 private:
-    static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;
+    Result process(const IncomingLsaContext& ctx, LsaBody&& body);
+
     void enqueueFlood(LsaRecordRef& record);
     void enqueueFlood(LsaRecordRef&& record);
 

@@ -20,22 +20,24 @@ class SpfManager
 public:
     explicit SpfManager(OspfArea& area, TimeManager& tmgr);
 
+    template<typename Policy>
     void requestSpf();
 
+    template<typename Policy>
     void onSpfTimer();
 
 private:
+    template<typename Policy>
     void scheduleSpf(uint32_t delayMs);
     uint32_t computeNextDelay();
 
-    template <typename RouterLsa, typename NetworkLsa, typename SpfRouterLsa, typename SpfNetworkLsa>
+    template <typename Policy>
     void runSpf();
 
 private:
     OspfArea& area;
     TimeManager& tmgr;
     OspfRib& rib;
-    const bool isV3;
 
     std::atomic<bool> requested{false};
     std::atomic<bool> spfScheduled{false};
