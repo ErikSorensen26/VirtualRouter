@@ -18,7 +18,7 @@ void TimerManager::startSIATimer(OutgoingQuery& query, Neighbor& neighbor)
     // Schedule SIA-Query timer
     query.siaTimerId = tmgr.addTimer(expirationTime, [
         this, queryPtr = &query, neighborPtr = &neighbor
-    ](){
+    ](uint32_t){
         base.getTopology().handleSIATimeout(*queryPtr, *neighborPtr);
     });
 }

@@ -126,7 +126,7 @@ namespace Protocol
             {
                 entry.timerId = global.timeManager.addTimer(
                     std::chrono::steady_clock::now() + std::chrono::seconds(refresh),
-                    [this, targetIp]() {
+                    [this, targetIp](uint32_t) {
                         refreshNeighborEntry(targetIp);
                     }
                 );
@@ -136,7 +136,7 @@ namespace Protocol
                 // Schedule a timer for NUD reachable time.
                 entry.timerId = global.timeManager.addTimer(
                     std::chrono::steady_clock::now() + std::chrono::milliseconds(configs.reachableTime.load(std::memory_order_relaxed)),
-                    [this, targetIp]() { onReachableTimeout(targetIp);
+                    [this, targetIp](uint32_t) { onReachableTimeout(targetIp);
                 });
             }
         }
@@ -363,7 +363,7 @@ namespace Protocol
                     {
                         it->second.timerId = global.timeManager.addTimer(
                             std::chrono::steady_clock::now() + std::chrono::seconds(refresh),
-                            [this, targetIp]() {
+                            [this, targetIp](uint32_t) {
                                 refreshNeighborEntry(targetIp);
                             }
                         );
@@ -372,7 +372,7 @@ namespace Protocol
                     {
                         it->second.timerId = global.timeManager.addTimer(
                             std::chrono::steady_clock::now() + std::chrono::milliseconds(configs.reachableTime.load(std::memory_order_relaxed)),
-                            [this, targetIp]() { onReachableTimeout(targetIp); }
+                            [this, targetIp](uint32_t) { onReachableTimeout(targetIp); }
                         );
                     }
                 }
@@ -387,7 +387,7 @@ namespace Protocol
                     {
                         entry.timerId = global.timeManager.addTimer(
                             std::chrono::steady_clock::now() + std::chrono::seconds(refresh),
-                            [this, targetIp]() {
+                            [this, targetIp](uint32_t) {
                                 refreshNeighborEntry(targetIp);
                             }
                         );
@@ -396,7 +396,7 @@ namespace Protocol
                     {
                         entry.timerId = global.timeManager.addTimer(
                             std::chrono::steady_clock::now() + std::chrono::milliseconds(configs.reachableTime.load(std::memory_order_relaxed)),
-                            [this, targetIp]() { onReachableTimeout(targetIp); }
+                            [this, targetIp](uint32_t) { onReachableTimeout(targetIp); }
                         );
                     }
                     ndpCache[targetIp] = entry;
@@ -1033,7 +1033,7 @@ namespace Protocol
 
                     slaacAddr->expirationId = global.timeManager.addTimer(
                         std::chrono::steady_clock::now() + std::chrono::seconds(validLifetime),
-                        [this, slaacAddr]()
+                        [this, slaacAddr](uint32_t)
                         {
                             std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
                             slaacAddr->globalValid = false;
@@ -1043,7 +1043,7 @@ namespace Protocol
 
                     slaacAddr->preferedExpirationId = global.timeManager.addTimer(
                         std::chrono::steady_clock::now() + std::chrono::seconds(preferredLifetime),
-                        [this, slaacAddr]()
+                        [this, slaacAddr](uint32_t)
                         {
                             std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
                             slaacAddr->deprecated = true;
@@ -1114,7 +1114,7 @@ namespace Protocol
                         ipCopy,
                         global.timeManager.addTimer(
                             global.configs.nsfStartTime + suppressWindow,
-                            [this, addr, ipCopy, isLinkLocal]() {
+                            [this, addr, ipCopy, isLinkLocal](uint32_t) {
                                 pendingDadReschedules.erase(ipCopy);
                                 duplicateAddressDetection(addr, isLinkLocal);
                             }
@@ -1219,7 +1219,7 @@ namespace Protocol
 
             uint32_t timerId = global.timeManager.addTimer(
                 std::chrono::steady_clock::now() + delay,
-                [this, addr, isLinkLocal]() {
+                [this, addr, isLinkLocal](uint32_t) {
                     preformDad(addr, isLinkLocal);
                 }
             );
@@ -1263,8 +1263,6 @@ namespace Protocol
             }
         }
         
-        uint32_t* raTimerId = new uint32_t();
-
         uint32_t baseInterval;
         {
             std::shared_lock<std::shared_mutex> lock(configs.configMutex);
@@ -1277,9 +1275,9 @@ namespace Protocol
                 baseInterval = min + (static_cast<uint32_t>(rand()) % (delta + 1));
             }
         }
-        *raTimerId = global.timeManager.addTimer(
+        uint32_t raTimerId = global.timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::milliseconds(baseInterval),
-            [this, raTimerId]()
+            [this](uint32_t timerId)
             {
                 if (!running.load(std::memory_order_relaxed) ||
                     configs.suppressRA.load(std::memory_order_relaxed))
@@ -1291,13 +1289,12 @@ namespace Protocol
                     sendRouteAdvertisement(ETHERNET_MAC_BROADCAST, localAddr);
 
                 // Reschedule next RA
-                raTimerIds.erase(*raTimerId);
-                delete raTimerId;
+                raTimerIds.erase(timerId);
                 scheduleNextRA();
             }
         );
 
-        raTimerIds.insert(*raTimerId);
+        raTimerIds.insert(raTimerId);
     }
 
     void Ndp::scheduleNeighborSolicitation(const IPAddress& targetIp)
@@ -1337,7 +1334,7 @@ namespace Protocol
                         uint32_t finalWait = configs.nudFinalWait;
                         entry->nudRetryTimerId = global.timeManager.addTimer(
                             std::chrono::steady_clock::now() + std::chrono::milliseconds(finalWait),
-                            [this, ip = targetIp]() { retryNud(ip); }
+                            [this, ip = targetIp](uint32_t) { retryNud(ip); }
                         );
 
                         currentNudProbes.fetch_sub(1, std::memory_order_seq_cst);
@@ -1417,7 +1414,7 @@ namespace Protocol
             std::chrono::steady_clock::now() + std::chrono::milliseconds(runningNud 
                 ? nudBaseInterval
                 : configs.nsInterval.load(std::memory_order_relaxed)),
-            [this, targetIp]()
+            [this, targetIp](uint32_t)
             {
                 {
                     std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);

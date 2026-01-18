@@ -48,7 +48,7 @@ void InterfaceTimers::startHello()
         auto* vrf = base->routingInstance;
         uint32_t helloId = tmgr.addTimer(nextExpiration, [
             &, VALIDATION_CAPTURES
-        ](){
+        ](uint32_t){
             if (InterfaceTimers::validateProcess(vrf, as, af, global))
             {
                 helloTimerId = 0;
@@ -132,7 +132,7 @@ void InterfaceTimers::startHoldTimer(Neighbor& neighbor)
 {
     cancelHoldTimer(neighbor);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(neighbor.holdTime.load(std::memory_order_relaxed));
-    neighbor.holdTimerId.store(tmgr.addTimer(expirationTime, [this, nbr = &neighbor](){
+    neighbor.holdTimerId.store(tmgr.addTimer(expirationTime, [this, nbr = &neighbor](uint32_t){
         handleHoldTimeExpire(*nbr);
     }), std::memory_order_release);
 }
@@ -166,7 +166,7 @@ void InterfaceTimers::startRetransmissionTimer(Neighbor* neighbor, MulticastReli
     double timeout = neighbor->rto;
     if (info.timerId != 0) tmgr.cancelTimer(info.timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout * 1000));
-    info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, m = &multicast, i = &info, seq]() {
+    info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, m = &multicast, i = &info, seq](uint32_t) {
         iface.getRtp().handleRetransmission(neighbor, *m, *i, seq);
     });
 }
@@ -176,7 +176,7 @@ void InterfaceTimers::startRetransmissionTimer(Neighbor* neighbor, UnicastReliab
     double timeout = neighbor->rto;
     if (unicast.info.timerId != 0) tmgr.cancelTimer(unicast.info.timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout * 1000));
-    unicast.info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, u = &unicast, seq]() {
+    unicast.info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, u = &unicast, seq](uint32_t) {
         iface.getRtp().handleRetransmission(neighbor, *u, seq);
     });
 }
@@ -193,7 +193,7 @@ void InterfaceTimers::cancelRetransmissionTimer(ReliableInfo& pkt)
 void InterfaceTimers::startGracefulTimer(Neighbor& neighbor)
 {
     auto expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getPurgeTime());
-    uint32_t gracefulTimerId = tmgr.addTimer(expireTime, [this, nbr = &neighbor]() {
+    uint32_t gracefulTimerId = tmgr.addTimer(expireTime, [this, nbr = &neighbor](uint32_t) {
         iface.getNTable().onDown(*nbr);
     });
     neighbor.gracefulTimerId.store(gracefulTimerId, std::memory_order_release);
@@ -241,7 +241,7 @@ void InterfaceTimers::restartDampeningResetTimer()
     suppressedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningResetTime()),
     dampeningResetId.store(tmgr.addTimer(
         suppressedUntil,
-        [&]() { iface.onDampeningResetExpire(); }
+        [this](uint32_t) { iface.onDampeningResetExpire(); }
     ), std::memory_order_release);
 }
 
@@ -252,7 +252,7 @@ void InterfaceTimers::restartDampeningRestartTimer()
 
     dampeningRestartId.store(tmgr.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningRestart()),
-        [&]() { iface.onDampeningRestartExpire(); }
+        [this](uint32_t) { iface.onDampeningRestartExpire(); }
     ), std::memory_order_release);
 }
 
@@ -266,7 +266,7 @@ void InterfaceTimers::startDampeningIntervalTimer()
         : iface.getBase().getGlobalConfigMgr().getDampeningInterval();
     dampeningIntervalId.store(tmgr.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(dampeningTime),
-        [&]() { iface.onDampeningIntervalExpire(); }
+        [this](uint32_t) { iface.onDampeningIntervalExpire(); }
     ), std::memory_order_release);
 }
 }

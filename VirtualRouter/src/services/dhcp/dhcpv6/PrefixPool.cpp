@@ -88,7 +88,7 @@ std::pair<IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocateAdvertisedPrefix(
         const IAPrefixKey prefixKey = {key.duid, key.iaid, prefix.addr, prefix.prefixLength};
 
         advertised[prefixKey] = {
-            timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout), [this, prefixKey, prefix]() {
+            timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout), [this, prefixKey, prefix](uint32_t) {
                 std::lock_guard<std::mutex> lock(mutex);
                 advertised.erase(prefixKey);
                 advertisedPDs.erase(prefix);
@@ -128,7 +128,7 @@ std::pair<uint8_t, Dhcpv6StatusMessage> PrefixPool::allocateRequestedAdvertisedP
         return { 0, { Dhcpv6StatusCode::NoPrefixAvail } };
 
     advertised[key] = {
-        timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout), [this, key]() {
+        timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout), [this, key](uint32_t) {
             std::lock_guard<std::mutex> lock(mutex);
             advertised.erase(key);
             advertisedPDs.erase({key.address, key.prefixLength});
@@ -191,7 +191,7 @@ void PrefixPool::expirePrefix(const IAPrefixKey& key, uint32_t timeout)
     allocated.erase(prefix);
     quarantined[key] = {
         timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-        [this, key]() {
+        [this, key](uint32_t) {
             std::lock_guard<std::mutex> lock(mutex);
             quarantined.erase(key);
             quarantinedPDs.erase({key.address, key.prefixLength});
@@ -206,7 +206,7 @@ bool PrefixPool::setConflicted(const IAPrefixKey& key, uint32_t duration)
     const IPv6Prefix prefix = {key.address, key.prefixLength};
     if (isAllocated(prefix)) return false;
     bad[prefix] = timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(duration),
-        [this, prefix]() {
+        [this, prefix](uint32_t) {
             std::lock_guard<std::mutex> lock(mutex);
             bad.erase(prefix);
         });

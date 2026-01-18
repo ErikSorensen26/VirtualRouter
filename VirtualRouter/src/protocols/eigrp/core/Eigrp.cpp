@@ -14,10 +14,10 @@ Eigrp::Eigrp(uint32_t as, AddressFamily af, VirtualRouter* vrf, bool named)
   : routingInstance(vrf),
     asNumber(as),
     addressFamily(af),
-    configMgr(*this),
-    ifaceMgr(*this),
-    aggregator(*this),
     topology(*this),
+    ifaceMgr(*this),
+    configMgr(*this),
+    aggregator(*this),
     namedMode(named),
     routeManager(*this)
 {

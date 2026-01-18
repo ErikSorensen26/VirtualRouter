@@ -118,7 +118,7 @@ namespace Protocol
         // Refresh vs expire logic
         entry.timerId = global.timeManager.addTimer(
             entry.expiryTime,
-            [this, targetIp]() { expireArpEntry(targetIp); }
+            [this, targetIp](uint32_t) { expireArpEntry(targetIp); }
         );
 
         // Insert into cache
@@ -367,7 +367,7 @@ namespace Protocol
                 // Expire time
                 entry.timerId = global.timeManager.addTimer(
                     entry.expiryTime,
-                    [this, targetIp]()
+                    [this, targetIp](uint32_t)
                     {
                         expireArpEntry(targetIp);
                     }
@@ -408,7 +408,7 @@ namespace Protocol
             // Expire time
             entry.timerId = global.timeManager.addTimer(
                 entry.expiryTime,
-                [this, targetIp]()
+                [this, targetIp](uint32_t)
                 {
                     expireArpEntry(targetIp);
                 }
@@ -568,7 +568,7 @@ namespace Protocol
         // Wait for the conditional variable to be modified or timeout
         uint32_t timerId = global.timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(interval),
-            [this, targetIp, &entry]() {
+            [this, targetIp, &entry](uint32_t) {
                 scheduleRequest(targetIp, entry);
             }
         );

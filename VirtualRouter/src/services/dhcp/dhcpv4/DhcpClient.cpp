@@ -269,7 +269,7 @@ bool Protocol::DhcpClient::buildDhcpRelease(PacketBuilder& builder)
     std::memset(dhcp.raw->flags, 0, 2);
 
     // Set ciaddr to current leased IP
-    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    currentInterface->configs.ipv4.getPrimaryAddress(dhcp.raw->ciaddr);
     std::memset(dhcp.raw->yiaddr, 0, 12);
 
     currentInterface->configs.getMac(dhcp.raw->chaddr);
@@ -330,7 +330,7 @@ bool Protocol::DhcpClient::buildDhcpInform(PacketBuilder& builder, const std::st
     std::memset(dhcp.raw->flags, 0, 2);
 
     // Set ciaddr to client IP
-    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    currentInterface->configs.ipv4.getPrimaryAddress(dhcp.raw->ciaddr);
     std::memset(dhcp.raw->yiaddr, 0, 12);
 
     dhcp.setClientMac(mac);
@@ -401,7 +401,7 @@ void Protocol::DhcpClient::sendDhcpDiscover(const std::string& hostname, const u
     // Retry scheduling
     uint32_t timerId = currentInterface->getVRF()->global.timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(4),
-        [this, hostname]() {
+        [this, hostname](uint32_t) {
             if (!offered.load(std::memory_order_relaxed) && !stopFlag.load(std::memory_order_relaxed)) {
                 uint8_t mac[6];
                 currentInterface->configs.getMac(mac);
@@ -440,7 +440,7 @@ void Protocol::DhcpClient::sendDhcpRequest(uint32_t transID, const std::string& 
     // Retry
     uint32_t timerId = currentInterface->getVRF()->global.timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(4),
-        [this, transID, hostname, requestedIp, serverId]() {
+        [this, transID, hostname, requestedIp, serverId](uint32_t) {
             if (!acked.load(std::memory_order_relaxed) && !stopFlag.load(std::memory_order_relaxed)) {
                 sendDhcpRequest(transID, hostname, requestedIp, serverId);
             }
@@ -459,7 +459,7 @@ void Protocol::DhcpClient::sendDhcpRelease()
     if (!buildDhcpRelease(builder)) return;
 
     uint8_t ip[4];
-    currentInterface->configs.ipv4.getAddress(ip);
+    currentInterface->configs.ipv4.getPrimaryAddress(ip);
 
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
@@ -734,15 +734,15 @@ void Protocol::DhcpClient::scheduleLeaseTimers(uint32_t t1, uint32_t t2, uint32_
 
     renewTimerId = global.timeManager.addTimer(
         now + std::chrono::seconds(renewTime),
-        [this]() { sendRenew(); });
+        [this](uint32_t) { sendRenew(); });
 
     rebindTimerId = global.timeManager.addTimer(
         now + std::chrono::seconds(rebindTime),
-        [this]() { sendRebind(); });
+        [this](uint32_t) { sendRebind(); });
 
     expireTimerId = global.timeManager.addTimer(
         now + std::chrono::seconds(lease),
-        [this]() { expireLease(); });
+        [this](uint32_t) { expireLease(); });
 }
 
 void Protocol::DhcpClient::cancelLeaseTimers()
@@ -774,7 +774,7 @@ void Protocol::DhcpClient::sendRenew()
     dhcp.setSecs(0);
     std::memset(dhcp.raw->flags, 0, 2);
 
-    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    currentInterface->configs.ipv4.getPrimaryAddress(dhcp.raw->ciaddr);
     std::memset(dhcp.raw->yiaddr, 0, 12);
 
     uint8_t mac[6];
@@ -796,7 +796,7 @@ void Protocol::DhcpClient::sendRenew()
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
     if (configs.clientID.size > 0)
         Dhcp::appendTLV(tlv, DHCP_OPTION_CLIENT_ID, configs.clientID.size, configs.clientID.data);
-    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getAddressInt());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getPrimaryAddress());
 
     if (tlv.file)
     {
@@ -816,7 +816,7 @@ void Protocol::DhcpClient::sendRenew()
         .iface = currentInterface,
         .packetInfo = builder,
         .destIp = configs.serverID.raw,
-        .sourceIp = currentInterface->configs.ipv4.getAddress(ip),
+        .sourceIp = currentInterface->configs.ipv4.getPrimaryAddress(ip),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -848,7 +848,7 @@ void Protocol::DhcpClient::sendRebind()
     dhcp.raw->flags[0] = 0x80;
     dhcp.raw->flags[1] = 0x00;
 
-    currentInterface->configs.ipv4.getAddress(dhcp.raw->ciaddr);
+    currentInterface->configs.ipv4.getPrimaryAddress(dhcp.raw->ciaddr);
     std::memset(dhcp.raw->yiaddr, 0, 12);
 
     uint8_t mac[6];
@@ -870,7 +870,7 @@ void Protocol::DhcpClient::sendRebind()
     uint8_t type = DHCP_TYPE_REQUEST;
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
     Dhcp::appendTLV(tlv, DHCP_OPTION_CLIENT_ID, 6, mac);
-    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getAddressInt());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getPrimaryAddress());
 
     if (tlv.file)
     {
@@ -890,7 +890,7 @@ void Protocol::DhcpClient::sendRebind()
         .iface = currentInterface,
         .packetInfo = builder,
         .destIp = IPV4_BROADCAST,
-        .sourceIp = currentInterface->configs.ipv4.getAddress(ip),
+        .sourceIp = currentInterface->configs.ipv4.getPrimaryAddress(ip),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };

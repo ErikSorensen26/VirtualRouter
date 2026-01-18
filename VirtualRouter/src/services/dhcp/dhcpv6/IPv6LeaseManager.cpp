@@ -12,7 +12,7 @@ std::unordered_set<__uint128_t> IPv6LeaseManager::createLease(const IAKey& key, 
     if (addr == 0) return {};
 
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-    leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, addr, key]() {
+    leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, addr, key](uint32_t) {
         expireLease(addr, key);
     });
 
@@ -27,7 +27,7 @@ Dhcpv6StatusMessage IPv6LeaseManager::createLeaseFromAdvertised(__uint128_t addr
 {
     auto startLeaseTimer = [&]() {
         auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-        leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, key, addr]() {
+        leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, key, addr](uint32_t) {
             expireLease(addr, key);
         });
     };
@@ -59,7 +59,7 @@ Dhcpv6StatusMessage IPv6LeaseManager::createLeaseFromRequest(__uint128_t addr, c
 {
     auto startLeaseTimer = [&]() {
         auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-        leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, key, addr]() {
+        leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, key, addr](uint32_t) {
             expireLease(addr, key);
         });
     };
@@ -94,7 +94,7 @@ Dhcpv6StatusMessage IPv6LeaseManager::renewLease(__uint128_t addr, const IAKey& 
 
     timeManager.cancelTimer(timerIt->second);
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-    leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, key, addr]() {
+    leaseTimerIDs[addr] = timeManager.addTimer(expiry, [this, key, addr](uint32_t) {
         expireLease(addr, key);
     });
 

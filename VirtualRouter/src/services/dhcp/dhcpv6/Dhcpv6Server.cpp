@@ -1718,7 +1718,7 @@ bool Protocol::Dhcpv6Server::buildReconfigure(Dhcpv6::Dhcpv6PacketBuild& build, 
         .interfaceKey = send.iface.configs.key,
         .timerID = timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(configs.reconfigureTimeout.load(std::memory_order_relaxed)),
-            [this, clientID = send.clientID]() {
+            [this, clientID = send.clientID](uint32_t) {
                 activeReconfigs.erase(clientID);
             }
         ),
@@ -2006,7 +2006,7 @@ bool Protocol::Dhcpv6Server::addStaticLease(Dhcpv6::IANABlock& block, const IAKe
             block.addresses.push_back({ it->second.address, { Dhcpv6StatusCode::Success }, it->second.preferred, it->second.valid });
             if (auto tit = network->leaseManager->leaseTimerIDs.find(it->second.address); tit != network->leaseManager->leaseTimerIDs.end()) timeManager.cancelTimer(tit->second);
             auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(it->second.valid);
-            network->leaseManager->leaseTimerIDs[it->second.address] = timeManager.addTimer(expiry, [lmgr = network->leaseManager, addr = it->second.address, key]() {
+            network->leaseManager->leaseTimerIDs[it->second.address] = timeManager.addTimer(expiry, [lmgr = network->leaseManager, addr = it->second.address, key](uint32_t) {
                 lmgr->expireLease(addr, key);
             });
             network->leaseManager->leaseKeys[it->second.address] = key;
@@ -2026,7 +2026,7 @@ bool Protocol::Dhcpv6Server::addStaticPrefix(Dhcpv6::IAPDBlock& block, const IAK
             block.prefixes.push_back({ it->second.prefix, { Dhcpv6StatusCode::Success }, prefix, it->second.preferred, it->second.valid });
             if (auto tit = prefix->leaseManager->prefixTimerIDs.find(it->second.prefix); tit != prefix->leaseManager->prefixTimerIDs.end()) timeManager.cancelTimer(tit->second);
             auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(it->second.valid);
-            prefix->leaseManager->prefixTimerIDs[it->second.prefix] = timeManager.addTimer(expiry, [lmgr = prefix->leaseManager, p = it->second.prefix, key]() {
+            prefix->leaseManager->prefixTimerIDs[it->second.prefix] = timeManager.addTimer(expiry, [lmgr = prefix->leaseManager, p = it->second.prefix, key](uint32_t) {
                 lmgr->expirePrefix(p, key);
             });
             prefix->leaseManager->prefixKeys[it->second.prefix] = key;
@@ -2048,7 +2048,7 @@ bool Protocol::Dhcpv6Server::addStaticAdvertisedLease(Dhcpv6::IANABlock& block, 
             network->pool->advertised[leaseKey] = {
                 timeManager.addTimer(
                 std::chrono::steady_clock::now() + std::chrono::seconds(it->second.valid),
-                [pool = network->pool, leaseKey]() {
+                [pool = network->pool, leaseKey](uint32_t) {
                     std::lock_guard<std::mutex> lock(pool->mutex);
                     pool->advertised.erase(leaseKey);
                     pool->advertisedIPs.erase(leaseKey.address);
@@ -2073,7 +2073,7 @@ bool Protocol::Dhcpv6Server::addStaticAdvertisedPrefix(Dhcpv6::IAPDBlock& block,
             prefix->pool->advertised[leaseKey] = {
                 timeManager.addTimer(
                 std::chrono::steady_clock::now() + std::chrono::seconds(it->second.valid),
-                [pool = prefix->pool, leaseKey]() {
+                [pool = prefix->pool, leaseKey](uint32_t) {
                     std::lock_guard<std::mutex> lock(pool->mutex);
                     pool->advertised.erase(leaseKey);
                     pool->advertisedPDs.erase({ leaseKey.address, leaseKey.prefixLength });
