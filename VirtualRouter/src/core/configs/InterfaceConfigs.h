@@ -12,14 +12,14 @@
 #include <cstring>
 #include <map>
 #include <unordered_set>
+#include <IPAddress.hpp>
+#include <optional>
 
 // Forward declarations
 class Global;
 class TimeManager;
 class MockInterface;
 class Internal_NdpTest;
-class IPAddress;
-class IPPrefix;
 struct HwIfaceInfo;
 enum class AddressFamily : uint8_t;
 enum class InterfaceType : uint8_t;
@@ -59,8 +59,8 @@ public:
 
     ~InterfaceConfigs();
 
-    bool hasAddress(const uint8_t* address);
-    bool hasAddress(__uint128_t address);
+    bool hasAddress(const uint8_t* address, uint8_t len);
+    bool hasAddress(__uint128_t address, uint8_t len);
 
     uint8_t* getMac(uint8_t* mac);
     uint64_t getMac();
@@ -91,22 +91,51 @@ public:
         std::atomic<uint16_t> mtu{1500};
         std::atomic<bool> mtuLocal{false};
 
-        uint8_t* getAddress(uint8_t* out) const;
-        IPAddress getAddress() const;
-        uint32_t getAddressInt() const;
-        IPPrefix getAddressMask() const;
+        void setPrimaryAddress(uint32_t newAddress, uint8_t newMask);
+        void setPrimaryAddress(const uint8_t* newAddress, uint8_t newMask);
+        void addSecondaryAddress(uint32_t newAddress, uint8_t newMask);
+        void addSecondaryAddress(const uint8_t* newAddress, uint8_t newMask);
 
-        void setAddress(uint32_t newAddress, uint8_t newMask);
+        void removePrimaryAddress();
+        void removeSecondaryAddress(uint32_t ip, uint8_t mask);
+        void removeSecondaryAddress(const uint8_t* ip, uint8_t mask);
 
-        bool compareAddress(const uint8_t* ip);
-        bool compareAddress(uint32_t ip);
+        IPv4Prefix getPrimaryPrefix() const;
+        std::optional<IPv4Prefix> getSecondaryPrefix();
 
-        uint8_t getMask() const;
+        uint8_t* getPrimaryAddress(uint8_t* out) const;
+        uint8_t* getSecondaryAddress(uint8_t* out) const;
+
+        uint32_t getPrimaryAddress() const;
+        std::optional<uint32_t> getSecondaryAddress() const;
+
+        bool hasPrimaryAddress() const;
+        bool hasPrimaryAddress(uint32_t addr, uint8_t mask) const;
+        bool hasPrimaryAddress(const uint8_t* addr, uint8_t mask) const;
+        bool hasSecondaryAddress(uint32_t addr, uint8_t mask) const;
+        bool hasSecondaryAddress(const uint8_t* addr, uint8_t mask) const;
+
+        uint8_t getPrimaryPair(uint8_t* out) const;
+        std::optional<uint8_t> getSecondaryPair(uint8_t* out) const;
+
+        uint8_t getPrimaryMask() const;
+        std::optional<uint8_t> getSecondaryMask() const;
+
+        std::vector<uint32_t> getSecondaryList() const;
+        std::vector<IPv4Prefix> getSecondaryPrefixList(bool maintainAddress = false) const;
+
+        std::unordered_set<uint32_t> getSecondarySet() const;
+        std::unordered_set<IPv4Prefix> getSecondaryPrefixSet(bool maintainAddress = false) const;
+
+        bool comparePrimaryAddress(const uint8_t* ip);
+        bool comparePrimaryAddress(uint32_t ip);
 
     private:
-        std::shared_mutex ipMutex;
+        mutable std::mutex ipMutex;
         std::atomic<uint8_t> mask{0};            ///< Subnet mask.
         std::atomic<uint32_t> address;
+
+        std::vector<IPv4Prefix> secondary;
 
         friend class MockInterface;
         friend class Interface;
@@ -149,8 +178,8 @@ public:
         IPv6Address* addUniqueLocalAddress(const uint8_t* ip, uint8_t prefixLen);
         IPv6Address* addGlobalAddress(const uint8_t* ip, uint8_t prefixLen);
         void removeLocalAddress();
-        void removeAddress(const uint8_t* ip);
-        void removeAddress(__uint128_t ip);
+        void removeAddress(const uint8_t* ip, uint8_t len);
+        void removeAddress(__uint128_t ip, uint8_t len);
         void removeAllAddresses();
 
         void validateGlobalAddresses();
@@ -166,13 +195,13 @@ public:
         __uint128_t getGlobalUnicast() const;
         __uint128_t getLocalUnicast() const;
 
-        bool hasLocalAddress(const uint8_t* addr) const;
-        bool hasGlobalUnicast(const uint8_t* addr) const;
-        bool hasLocalUnicast(const uint8_t* addr) const;
+        bool hasLocalAddress(const uint8_t* addr, uint8_t len) const;
+        bool hasGlobalUnicast(const uint8_t* addr, uint8_t len) const;
+        bool hasLocalUnicast(const uint8_t* addr, uint8_t len) const;
 
-        bool hasLocalAddress(__uint128_t addr) const;
-        bool hasGlobalUnicast(__uint128_t addr) const;
-        bool hasLocalUnicast(__uint128_t addr) const;
+        bool hasLocalAddress(__uint128_t addr, uint8_t len) const;
+        bool hasGlobalUnicast(__uint128_t addr, uint8_t len) const;
+        bool hasLocalUnicast(__uint128_t addr, uint8_t len) const;
 
         uint8_t getLocalPair(uint8_t* out) const;
         uint8_t getGlobalUnicastPair(uint8_t* out) const;
