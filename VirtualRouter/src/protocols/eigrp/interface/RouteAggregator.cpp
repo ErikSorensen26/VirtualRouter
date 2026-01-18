@@ -164,7 +164,7 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
     auto& ifCfg = iface.getIfaceCfg();
     if (af == AddressFamily::IPv4)
     {
-        ifCfg.ipv4.getAddress(r.nextHop.raw);
+        ifCfg.ipv4.getPrimaryAddress(r.nextHop.raw);
     }
     else
     {

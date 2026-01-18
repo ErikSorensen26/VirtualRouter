@@ -71,9 +71,9 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     if (base.getAF() == AddressFamily::IPv4)
     {
         IPPrefix prefix;
-        if (interface->configs.ipv4.getAddress(prefix.addr))
+        if (interface->configs.ipv4.getPrimaryAddress(prefix.addr))
         {
-            prefix.addPrefixLen(interface->configs.ipv4.getMask());
+            prefix.addPrefixLen(interface->configs.ipv4.getPrimaryMask());
             prefix.af = AddressFamily::IPv4;
             install(prefix);
         }

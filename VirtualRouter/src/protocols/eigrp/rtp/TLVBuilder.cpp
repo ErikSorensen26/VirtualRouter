@@ -122,7 +122,7 @@ bool TLVBuilder::decodeClassicMetric(RouteData& data)
     uint32_t bw = readU32(data.value + data.offset); data.offset += 4;
     data.r.delay = (dl != 0) ? (((uint64_t)dl * 10ULL * 1'000'000ULL) / 256ULL) : dl;
     data.r.bandwidth = (bw != 0) ? ((10'000'000ULL * 256ULL) / bw) : bw;
-    data.r.mtu = readU24(data.value + data.offset); data.offset += 3;
+    data.r.mtu = static_cast<uint16_t>(readU24(data.value + data.offset)); data.offset += 3;
     data.r.hopCount = data.value[data.offset++];
     data.r.reliability = data.value[data.offset++];
     data.r.load = data.value[data.offset++];
@@ -139,8 +139,8 @@ bool TLVBuilder::decodeClassicMetric(RouteData& data)
 bool TLVBuilder::encodeClassicMetric(RouteData& data, const uint64_t& delay, const uint64_t& bw)
 {
     if (data.offset + 16 > data.valueSize) return false;
-    uint32_t scaledDelay = (delay != 0 && delay != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((delay * 256ULL) / (10ULL * 1'000'000ULL)) : delay;
-    uint32_t scaledBW = (bw != 0 && bw != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((10'000'000 * 256ULL) / (bw > 10'000'000 ? 10'000'000 : bw)) : bw;
+    uint32_t scaledDelay = (delay != 0 && delay != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((delay * 256ULL) / (10ULL * 1'000'000ULL)) : static_cast<uint32_t>(delay);
+    uint32_t scaledBW = (bw != 0 && bw != std::numeric_limits<uint64_t>::max()) ? static_cast<uint32_t>((10'000'000 * 256ULL) / (bw > 10'000'000 ? 10'000'000 : bw)) : static_cast<uint32_t>(bw);
     writeU32(data.value + data.offset, scaledDelay >= 0xFFFFFFFF ? 0xFFFFFFFF : scaledDelay);
     data.offset += 4;
     writeU32(data.value + data.offset, scaledBW);
@@ -163,7 +163,7 @@ bool TLVBuilder::decodeWideMetric(RouteData& data)
     data.r.wide.priority = data.value[data.offset++];
     data.r.reliability = data.value[data.offset++];
     data.r.load = data.value[data.offset++];
-    data.r.mtu = readU24(data.value + data.offset); data.offset += 3;
+    data.r.mtu = static_cast<uint16_t>(readU24(data.value + data.offset)); data.offset += 3;
     data.r.hopCount = data.value[data.offset++];
     data.r.delay = readU48(data.value + data.offset); data.offset += 6;
     data.r.bandwidth = readU48(data.value + data.offset); data.offset += 6;

@@ -178,7 +178,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
 
             uint8_t ourAddr[16];
             if (iface.getBase().getAF() == AddressFamily::IPv4)
-                iface.getIface()->configs.ipv4.getAddress(ourAddr);
+                iface.getIface()->configs.ipv4.getPrimaryAddress(ourAddr);
             else
                 writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress());
 

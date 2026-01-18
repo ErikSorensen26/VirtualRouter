@@ -114,11 +114,11 @@ void InterfaceManager::refreshInterfaceList()
             if (base.getAF() == AddressFamily::IPv4)
             {
                 uint8_t ipAddress[4];
-                ipInfo.ipv4.getAddress(ipAddress);
+                ipInfo.ipv4.getPrimaryAddress(ipAddress);
                 inRange = config.isInNetworkRange(ipAddress);
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
-                    remake = inRange && !ipInfo.ipv4.compareAddress(it->second.ifaceAddress.v4);
+                    remake = inRange && !ipInfo.ipv4.comparePrimaryAddress(it->second.ifaceAddress.v4);
             }
             else
             {

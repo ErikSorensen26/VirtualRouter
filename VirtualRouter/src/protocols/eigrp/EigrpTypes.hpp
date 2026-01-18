@@ -4,7 +4,6 @@
 #define EIGRP_TYPES_HPP
 
 #include <shared_mutex>
-#include <memory>
 #include <unordered_set>
 #include <TimeManager.h>
 #include <TopologyTable.h>

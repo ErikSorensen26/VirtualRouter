@@ -22,9 +22,9 @@ RouteManager::RouteManager(Eigrp& process)
 void RouteManager::withdrawRoute(const IPPrefix withdraw)
 {
     if (af == AddressFamily::IPv4)
-        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP, as);
+        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, 0, as);
     else
-        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP, as);
+        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, 0, as);
 }
 
 void RouteManager::withdrawRoutes(const std::vector<IPPrefix>& withdraws)

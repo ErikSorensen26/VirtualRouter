@@ -14,18 +14,18 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     base(eigrpSystem),
     currentInterface(&interface),
     currentInterfaceInfo(&interface.configs),
+    rtp(*this),
+    topology(ntable, eigrpSystem.getTopology().duel, *this),
+    ntable(*this),
     auth(intConfigs, eigrpSystem.routingInstance->global.keyChainManager),
     metrics(*this),
-    rtp(*this),
     aggregator(*this),
-    tmgr(*this, eigrpSystem.routingInstance->global.timeManager),
-    ntable(*this),
-    topology(ntable, eigrpSystem.getTopology().duel, *this)
+    tmgr(*this, eigrpSystem.routingInstance->global.timeManager)
 {
     // Set local ip
     if (base.getAF() == AddressFamily::IPv4)
     {
-        ifaceAddress.v4 = interface.configs.ipv4.getAddressInt();
+        ifaceAddress.v4 = interface.configs.ipv4.getPrimaryAddress();
     }
     else
     {
