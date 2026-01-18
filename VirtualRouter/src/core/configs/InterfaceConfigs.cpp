@@ -78,17 +78,10 @@ void InterfaceConfigs::IPv4State::removePrimaryAddress()
     mask.store(0, std::memory_order_release);
 }
 
-void InterfaceConfigs::IPv4State::removeSecondaryAddress(uint32_t ip, uint8_t len)
+void InterfaceConfigs::IPv4State::removeSecondaryAddress(const IPv4Prefix& prefix)
 {
     std::lock_guard<std::mutex> lock(ipMutex);
-    secondary.erase(std::remove_if(secondary.begin(), secondary.end(), [&](const IPv4Prefix& p) { return p.addr == ip && p.prefixLength == len; }));
-}
-
-void InterfaceConfigs::IPv4State::removeSecondaryAddress(const uint8_t* ipBuf, uint8_t len)
-{
-    uint32_t ip = readU32(ipBuf);
-    std::lock_guard<std::mutex> lock(ipMutex);
-    secondary.erase(std::remove_if(secondary.begin(), secondary.end(), [&](const IPv4Prefix& p) { return p.addr == ip && p.prefixLength == len; }));
+    secondary.erase(std::remove_if(secondary.begin(), secondary.end(), [&](const IPv4Prefix& p) { return p == prefix; }));
 }
 
 IPv4Prefix InterfaceConfigs::IPv4State::getPrimaryPrefix() const
@@ -338,23 +331,12 @@ void InterfaceConfigs::IPv6State::removeLocalAddress()
     }
 }
 
-void InterfaceConfigs::IPv6State::removeAddress(const uint8_t* ip, uint8_t len)
+void InterfaceConfigs::IPv6State::removeAddress(const IPv6Prefix& prefix)
 {
     std::unique_lock<std::shared_mutex> lock(ipMutex);
-    auto& list = (ip[0] == 0xfc && ip[1] == 0x00) ? uniqueLocalAddresses : globalAddresses;
+    auto& list = (((prefix.addr >> 112) & 0xFFFF) == 0xFC00) ? uniqueLocalAddresses : globalAddresses;
     std::erase_if(list, [&](const IPv6Address* addr) {
-        bool match = std::memcmp(addr->ip, ip, 16) == 0 && len == addr->prefix;
-        if (match) delete addr;
-        return match;
-    });
-}
-
-void InterfaceConfigs::IPv6State::removeAddress(__uint128_t ip, uint8_t len)
-{
-    std::unique_lock<std::shared_mutex> lock(ipMutex);
-    auto& list = (ip >> 120 == 0xfc) ? uniqueLocalAddresses : globalAddresses;
-    std::erase_if(list, [&](const IPv6Address* addr) {
-        bool match = (addr->ipInt == ip && addr->prefix == len);
+        bool match = prefix.addr == addr->ipInt && prefix.prefixLength == addr->prefix;
         if (match) delete addr;
         return match;
     });
@@ -437,7 +419,7 @@ uint8_t* InterfaceConfigs::IPv6State::getLocalUnicast(uint8_t* out) const
 IPPrefix InterfaceConfigs::IPv6State::getLocalPrefix() const
 {
     IPPrefix prefix;
-    prefix.prefixLength = getLocalPair(prefix.addr, prefix.prefixLength);
+    prefix.prefixLength = getLocalPair(prefix.addr);
     return prefix;
 }
 
@@ -463,6 +445,29 @@ __uint128_t InterfaceConfigs::IPv6State::getLocalUnicast() const
     return uniqueLocalAddresses.empty() ? 0 : readU128(uniqueLocalAddresses.front()->ip);
 }
 
+bool InterfaceConfigs::IPv6State::hasAddress(const auto* addr)
+{
+    return hasAddress(readU128(addr));
+}
+
+bool InterfaceConfigs::IPv6State::hasAddress(__uint128_t addr)
+{
+    std::shared_lock<std::shared_mutex> lock(ipMutex);
+    if (((addr >> 118) & 0x3FF) == 0xb1111111010)
+        return linkLocalAddress->ipInt == addr;
+    else if (((addr >> 121) & 0x7F) == 0b1111110)
+    {
+        for (const auto& ip : uniqueLocalAddresses)
+            if (ip->ipInt == addr) return true;
+    }
+    else if (((addr >> 125) & 0x7) == 0b001)
+    {
+        for (const auto& ip : globalAddresses)
+            if (ip->ipInt == addr) return true;
+    }
+    return false;
+}
+
 bool InterfaceConfigs::IPv6State::hasLocalAddress(const uint8_t* addr, uint8_t len) const
 {
     std::shared_lock<std::shared_mutex> lock(ipMutex);
@@ -471,20 +476,12 @@ bool InterfaceConfigs::IPv6State::hasLocalAddress(const uint8_t* addr, uint8_t l
 
 bool InterfaceConfigs::IPv6State::hasLocalUnicast(const uint8_t* addr, uint8_t len) const
 {
-    std::shared_lock<std::shared_mutex> lock(ipMutex);
-    for (auto* ip : uniqueLocalAddresses)
-        if (std::memcmp(ip->ip, addr, 16) == 0 && ip->prefix == len)
-            return true;
-    return false;
+    return hasLocalUnicast(readU128(addr), len);
 }
 
 bool InterfaceConfigs::IPv6State::hasGlobalUnicast(const uint8_t* addr, uint8_t len) const
 {
-    std::shared_lock<std::shared_mutex> lock(ipMutex);
-    for (auto* ip : globalAddresses)
-        if (std::memcmp(ip->ip, addr, 16) == 0 && ip->prefix == len)
-            return true;
-    return false;
+    return hasGlobalUnicast(readU128(addr), len);
 }
 
 bool InterfaceConfigs::IPv6State::hasLocalAddress(__uint128_t addr, uint8_t len) const

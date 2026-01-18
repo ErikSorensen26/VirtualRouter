@@ -59,10 +59,11 @@ void Interface::cleanupInterface()
     }
 }
 
-void Interface::setIPv4(uint32_t ip, uint8_t subnet)
+void Interface::setIPv4(uint32_t ip, uint8_t subnet, bool secondary)
 {
+    if (!secondary)
     {
-        configs.ipv4.setAddress(ip, subnet);
+        configs.ipv4.setPrimaryAddress(ip, subnet);
         configs.ipv4.mask = subnet;
         // Send gratuitous arps
         if (arp)
@@ -73,6 +74,11 @@ void Interface::setIPv4(uint32_t ip, uint8_t subnet)
             arp->sendReply(ETHERNET_MAC_BROADCAST, addr);
         }
         stateChange(StateChange::IPCHANGE);
+    }
+    else
+    {
+        configs.ipv4.addSecondaryAddress(ip, subnet);
+        stateChange(StateChange::IPCHANGE2);
     }
 }
 
@@ -106,20 +112,37 @@ void Interface::setIPv6(const uint8_t* ip, bool localLink, uint8_t prefix, bool 
         return;
     }
 
-    stateChangeV6(StateChange::IPCHANGE);
+    if (localLink)
+        stateChangeV6(StateChange::IPCHANGE);
+    else
+        stateChangeV6(StateChange::IPCHANGE2);
 }
 
-void Interface::removeIPv4()
+void Interface::removeIPv4(const IPv4Prefix* prefix)
 {
-    configs.ipv4.address.store(0, std::memory_order_release);
-    configs.ipv4.mask.store(0, std::memory_order_release);
-    stateChange(StateChange::IPREMOVAL);
+    if (!prefix)
+    {
+        configs.ipv4.removePrimaryAddress();
+        stateChange(StateChange::IPREMOVAL);
+    }
+    else
+    {
+        configs.ipv4.removeSecondaryAddress(*prefix);
+    }
 }
 
-void Interface::removeIPv6(const uint8_t* ip)
+void Interface::removeIPv6(const IPv6Prefix* prefix)
 {
-    ip ? configs.ipv6.removeAddress(ip) : configs.ipv6.removeLocalAddress();
-    stateChangeV6(StateChange::IPREMOVAL);
+    if (prefix)
+    {
+        configs.ipv6.removeAddress(*prefix);
+        stateChangeV6(StateChange::IPREMOVAL);
+    }
+    else
+    {
+        configs.ipv6.removeLocalAddress();
+        stateChangeV6(StateChange::IPREMOVAL);
+    }
 }
 
 void Interface::removeAllIPv6()
@@ -331,9 +354,17 @@ void Interface::stateChange(StateChange state)
             }
             break;
         }
+        case StateChange::IPCHANGE2:
+        {
+            break;
+        }
         case StateChange::IPREMOVAL:
         {
             if (arp) arp->shutdown();
+            break;
+        }
+        case StateChange::IPREMOVAL2:
+        {
             break;
         }
     }
@@ -389,9 +420,17 @@ void Interface::stateChangeV6(StateChange state)
             }
             break;
         }
+        case StateChange::IPCHANGE2:
+        {
+            break;
+        }
         case StateChange::IPREMOVAL:
         {
             if (ndp) ndp->shutdown();
+            break;
+        }
+        case StateChange::IPREMOVAL2:
+        {
             break;
         }
     }

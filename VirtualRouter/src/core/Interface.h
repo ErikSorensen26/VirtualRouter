@@ -54,10 +54,12 @@ struct InterfaceConfigs; ///< Forward declaration of InterfaceConfigs.
  */
 enum class StateChange
 {
-    SHUTDOWN, ///< Bring-up sequence (ARP/NDP/DHCP start)
-    INITIATE, ///< Tear-down sequence (ARP/NDP/DHCP stop)
-    IPCHANGE, ///< React to change in IPv4/IPv6 address
-    IPREMOVAL ///< React to address deletion
+    SHUTDOWN,  ///< Bring-up sequence (ARP/NDP/DHCP start)
+    INITIATE,  ///< Tear-down sequence (ARP/NDP/DHCP stop)
+    IPCHANGE,  ///< React to change in IPv4/IPv6 address
+    IPCHANGE2, ///< React to change of secondary IPv4/IPv6 address
+    IPREMOVAL, ///< React to address deletion
+    IPREMOVAL2 ///< React to secondary address deletion
 };
 
 /**
@@ -198,10 +200,11 @@ public:
      * - Gratuitous ARP broadcasts (two, per RFC behavior)
      * - EIGRP interface refresh events
      *
-     * @param ip     IPv4 address in host byte order.
-     * @param subnet Prefix length (0–32).
+     * @param ip        IPv4 address in host byte order.
+     * @param subnet    Prefix length (0–32).
+     * @param secondary Set the IP as a secondary address.
      */
-    virtual void setIPv4(uint32_t ip, uint8_t subnet);
+    virtual void setIPv4(uint32_t ip, uint8_t subnet, bool secondary = false);
 
     /**
      * @brief Assign an IPv6 address to the interface.
@@ -223,14 +226,14 @@ public:
     /**
      * @brief Remove the interface's IPv4 configuration.
      */
-    void removeIPv4();
+    void removeIPv4(const IPv4Prefix* ip = nullptr);
 
     /**
      * @brief Remove a specific IPv6 address or the link-local address.
      *
      * @param ip Optional IPv6 address; if null, removes the link-local.
      */
-    void removeIPv6(const uint8_t* ip = nullptr);
+    void removeIPv6(const IPv6Prefix* ip = nullptr);
 
     /**
      * @brief Remove all IPv6 addresses from this interface.

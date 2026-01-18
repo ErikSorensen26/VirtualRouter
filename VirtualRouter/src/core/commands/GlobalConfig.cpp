@@ -4,7 +4,7 @@
 #include <DhcpServer.h>
 #include <Eigrp.h>
 #include <Arp.h>
-#include <Ospf.h>
+#include <OspfProcess.h>
 #include <Bgp.h>
 #include <Ndp.h>
 #include <InterfaceType.hpp>

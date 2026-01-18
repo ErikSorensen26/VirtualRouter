@@ -96,7 +96,7 @@ void buildIpv4(
     if (ipv4Build.sourceIp)
         ip.setSourceAddress(ipv4Build.sourceIp);
     else
-        ipv4Build.iface->configs.ipv4.getAddress(ip.raw->sourceAddress);
+        ipv4Build.iface->configs.ipv4.getPrimaryAddress(ip.raw->sourceAddress);
     ip.setVersion(4);
     ip.setHeaderLength(5); //TODO
     ip.setTypeOfService(ipv4Build.DSCP);

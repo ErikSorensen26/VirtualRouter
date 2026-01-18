@@ -97,8 +97,7 @@ public:
         void addSecondaryAddress(const uint8_t* newAddress, uint8_t newMask);
 
         void removePrimaryAddress();
-        void removeSecondaryAddress(uint32_t ip, uint8_t mask);
-        void removeSecondaryAddress(const uint8_t* ip, uint8_t mask);
+        void removeSecondaryAddress(const IPv4Prefix& prefix);
 
         IPv4Prefix getPrimaryPrefix() const;
         std::optional<IPv4Prefix> getSecondaryPrefix();
@@ -178,8 +177,7 @@ public:
         IPv6Address* addUniqueLocalAddress(const uint8_t* ip, uint8_t prefixLen);
         IPv6Address* addGlobalAddress(const uint8_t* ip, uint8_t prefixLen);
         void removeLocalAddress();
-        void removeAddress(const uint8_t* ip, uint8_t len);
-        void removeAddress(__uint128_t ip, uint8_t len);
+        void removeAddress(const IPv6Prefix& prefix);
         void removeAllAddresses();
 
         void validateGlobalAddresses();
@@ -194,6 +192,9 @@ public:
         __uint128_t getLocalAddress() const;
         __uint128_t getGlobalUnicast() const;
         __uint128_t getLocalUnicast() const;
+
+        bool hasAddress(const auto* addr);
+        bool hasAddress(__uint128_t addr);
 
         bool hasLocalAddress(const uint8_t* addr, uint8_t len) const;
         bool hasGlobalUnicast(const uint8_t* addr, uint8_t len) const;

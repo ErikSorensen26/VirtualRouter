@@ -121,7 +121,7 @@ namespace Protocol
         // Only start refresh timer if enabled and dynamic
         if (!isStatic)
         {
-            uint8_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
+            uint16_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
             if (refresh > 0)
             {
                 entry.timerId = global.timeManager.addTimer(
@@ -336,7 +336,7 @@ namespace Protocol
                 {
                     if (std::memcmp(addr->ip, trail.data(), 16) == 0 && addr->tentative && std::memcmp(sourceIp, &IPV6_SOURCE, 16) == 0)
                     {
-                        std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
+                        std::lock_guard<std::mutex> lk(neighborReplyStatusMutex);
                         neighborReplyStatus[targetIp] = true;
                         return;
                     }
@@ -358,7 +358,7 @@ namespace Protocol
                     it->second.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.cacheExpire.load(std::memory_order_relaxed));
                     global.timeManager.cancelTimer(it->second.timerId);
                     it->second.timerId = 0;
-                    uint8_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
+                    uint16_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
                     if (refresh > 0)
                     {
                         it->second.timerId = global.timeManager.addTimer(
@@ -382,7 +382,7 @@ namespace Protocol
                     std::memcpy(entry.macAddress, mac, 6);
                     entry.state = NudState::REACHABLE;
                     entry.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.cacheExpire.load(std::memory_order_relaxed));
-                    uint8_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
+                    uint16_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
                     if (refresh > 0)
                     {
                         entry.timerId = global.timeManager.addTimer(
@@ -434,7 +434,7 @@ namespace Protocol
         bool isProxy = false;
 
         {
-            if (currentInterface->configs.hasAddress(trail.data()))
+            if (currentInterface->configs.ipv6.hasAddress(trail.data()))
             {
                 currentInterface->configs.getMac(replyMac);
                 isOwned = true;
@@ -747,7 +747,7 @@ namespace Protocol
                 uint32_t lifetime = configs.raLifetime.load(std::memory_order_relaxed);
                 uint32_t preferredLifetime = configs.raPreferredLifetime.load(std::memory_order_relaxed);
                 {
-                    std::shared_lock<std::shared_mutex> lock(configs.configMutex);
+                    std::shared_lock<std::shared_mutex> lk(configs.configMutex);
                     if (configs.raIntervalMS)
                     {
                         lifetime /= 1000;
@@ -971,7 +971,7 @@ namespace Protocol
         uint16_t routerLifetime = 0;
         bool mFlag = false, oFlag = false;
         uint8_t flags = receivedRA.getReserved()[1];
-        routerLifetime = readU32(receivedRA.getReserved() + 2);
+        routerLifetime = readU16(receivedRA.getReserved() + 2);
 
         mFlag = flags & 0x80;
         oFlag = flags & 0x40;
@@ -1271,10 +1271,10 @@ namespace Protocol
             baseInterval = configs.raInterval;
             if (configs.advertisementInterval)
             {
-                uint8_t min = configs.raIntervalMin;
+                uint32_t min = configs.raIntervalMin;
                 if (min > baseInterval) min = baseInterval;
                 uint32_t delta = baseInterval - min;
-                baseInterval = min + (rand() % (delta + 1));
+                baseInterval = min + (static_cast<uint32_t>(rand()) % (delta + 1));
             }
         }
         *raTimerId = global.timeManager.addTimer(
@@ -1307,13 +1307,13 @@ namespace Protocol
         bool runningNud = false; // Is NUD running
 
         uint8_t attempt = nsRetryCount[targetIp];
-        uint8_t maxAttempts = 3; // Default max retries for NS
+        uint16_t maxAttempts = 3; // Default max retries for NS
 
         NdpCacheEntry* entry = nullptr;
         {
             std::shared_lock<std::shared_mutex> lock(configs.configMutex); // Lock for nud values, this makes all nud values thread safe at the same time for reconfiguration.
             {
-                std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
+                std::unique_lock<std::shared_mutex> lk(ndpCacheMutex);
                 auto it = ndpCache.find(targetIp);
                 if (it != ndpCache.end())
                 {
@@ -1330,7 +1330,7 @@ namespace Protocol
             if (attempt >= maxAttempts)
             {
                 {
-                    std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
+                    std::unique_lock<std::shared_mutex> lk(ndpCacheMutex);
                     if (runningNud && entry && entry->nudGroup <= configs.nudBase)
                     {
                         entry->state = NudState::UNREACHABLE;
@@ -1356,7 +1356,7 @@ namespace Protocol
                             auto it = ndpCache.find(retryIp);
                             if (it != ndpCache.end())
                             {
-                                startNud(retryIp, it->second, lock);
+                                startNud(retryIp, it->second, lk);
                             }
                         }
                     }
@@ -1368,14 +1368,14 @@ namespace Protocol
                 }
 
                 {
-                    std::lock_guard<std::mutex> lock(requestMutex);
+                    std::lock_guard<std::mutex> lk(requestMutex);
                     pendingRequests.erase(targetIp);
                     nsRetryCount.erase(targetIp);
                     nsRetryTimers.erase(targetIp);
                 }
 
                 {
-                    std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
+                    std::lock_guard<std::mutex> lk(neighborReplyStatusMutex);
                     neighborReplyStatus.erase(targetIp);
                 }
 
@@ -1423,7 +1423,7 @@ namespace Protocol
                     std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
                     if (neighborReplyStatus.count(targetIp) && neighborReplyStatus[targetIp])
                     {
-                        std::lock_guard<std::mutex> lock(requestMutex);
+                        std::lock_guard<std::mutex> lk(requestMutex);
                         pendingRequests.erase(targetIp);
                         nsRetryCount.erase(targetIp);
                         return;
@@ -1448,7 +1448,7 @@ namespace Protocol
                 return;
 
             {
-                std::lock_guard<std::mutex> lock(requestMutex);
+                std::lock_guard<std::mutex> lk(requestMutex);
                 nsRetryCount[targetIp] = 0;
                 pendingRequests.insert(targetIp);
             }

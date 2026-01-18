@@ -448,7 +448,7 @@ namespace Protocol
         bool isProxy = false;
 
         {
-            if (currentInterface->configs.ipv4.compareAddress(request.raw->targetIpAddress))
+            if (currentInterface->configs.ipv4.comparePrimaryAddress(request.raw->targetIpAddress))
             {
                 currentInterface->configs.getMac(replyMac);
                 isLocal = true;
@@ -558,7 +558,7 @@ namespace Protocol
 
         uint8_t mac[6], ip[4], tip[4];
         iface.getMac(mac);
-        iface.ipv4.getAddress(ip);
+        iface.ipv4.getPrimaryAddress(ip);
         writeU32(tip, targetIp);
         arpRequest(arpReq, mac, ip, tip);
 
@@ -573,7 +573,7 @@ namespace Protocol
             }
         );
         {
-            std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(arpCacheMutex);
             entry.timerId = timerId;
         }
     }
@@ -588,7 +588,7 @@ namespace Protocol
 
             uint8_t ip[4], mac[6];
             interfaceInfo.getMac(mac);
-            interfaceInfo.ipv4.getAddress(ip);
+            interfaceInfo.ipv4.getPrimaryAddress(ip);
             arpReply(replyPacket, mac, targetMac, ip, targetIp);
 
             //Ethernet::build(currentInterface, replyPacket, nullptr, &targetMac, Variable::Ethernet::arp);

@@ -131,7 +131,7 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 			if (commandStream[1] == "event-log-size" && Functions::isNumber(commandStream[2])) { configs.eventLogSize.store(static_cast<uint32_t>(std::stoi(commandStream[2])), std::memory_order_release); }
 			else if (commandStream[1] == "logNeighborChanges") { configs.logNeighborChanges.store(!negate, std::memory_order_release); }
 			else if (commandStream[1] == "logNeighborWarnings") { configs.logNeighborWarnings.store(!negate, std::memory_order_release); }
-			else if (commandStream[1] == "router-id") { if (!negate) currentEigrp->setRouterID(Functions::getAddress(commandStream[2]).raw); else currentEigrp->clearRouterID(); }
+			else if (commandStream[1] == "router-id") { if (!negate) currentEigrp->setRouterId(readU32(Functions::getAddress(commandStream[2]).raw)); else currentEigrp->clearRouterID(); }
 			else if (commandStream[1] == "stub")
 			{
 				std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
