@@ -67,6 +67,34 @@ void PacketDispatcher::handleIncoming(const Ospfv3Header& ospfHeader, const uint
     }
 }
 
+bool PacketDispatcherV3::processOptions(uint32_t options)
+{
+    auto& flags = iface.getFlags();
+    auto& areaFlags = iface.getArea().getFlags();
+
+    if (flags.getDemandCircuits() && !InterfaceFlagManager::getDemandCircuits(options) &&
+        !iface.configs.demandCircuitIgnore.load(std::memory_order_relaxed))
+    {
+        if (!isStatic)
+            flags.setDemandCircuits(false);
+        else return false;
+    }
+    if (areaFlags.getExternalRouting() != AreaFlagManager::getExternalRouting(options))
+        return false;
+    if (areaFlags.getNssa() != AreaFlagManager::getNssa(options))
+        return false;
+
+    if (areaFlags.getV6() != AreaFlagManager::getV6(options))
+        return false;
+    if (areaFlags.getRouterBit() != AreaFlagManager::getRouterBit(options))
+        return false;
+    if (areaFlags.getAddressFamilySupport() != AreaFlagManager::getAddressFamilySupport(options))
+        return false;
+    if (areaFlags.getLBit() != AreaFlagManager::getLBit(options))
+        return false;
+    return true;
+}
+
 void PacketDispatcher::processHello(PacketDispatcher::HeaderInfo& info)
 {
     Ospfv3HelloHeader hdr;

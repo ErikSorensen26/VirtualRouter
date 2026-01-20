@@ -39,14 +39,6 @@ struct Ospfv2HelloHeader
     uint32_t getBDR() const                 { return readU32(raw->backupDesignatedRouter); }
     uint8_t getOptions() const              { return raw->options; }
 
-    bool getOptMT() const                   { return raw->options & 0x01; }
-    bool getOptE() const                    { return raw->options & 0x02; }
-    bool getOptMC() const                   { return raw->options & 0x04; }
-    bool getOptNP() const                   { return raw->options & 0x08; }
-    bool getOptEA() const                   { return raw->options & 0x10; }
-    bool getOptDC() const                   { return raw->options & 0x20; }
-    bool getOptO() const                    { return raw->options & 0x40; }
-
     void setMask(uint32_t val)
         { writeU32(raw->networkMask, val); }
     void setHelloInterval(uint16_t val)
@@ -59,21 +51,8 @@ struct Ospfv2HelloHeader
         { writeU32(raw->designatedRouter, val); }
     void setBDR(uint32_t val)
         { writeU32(raw->backupDesignatedRouter, val); }
-
-    void setOptMT(bool val)
-        { setBit(&raw->options, 7, val); }
-    void setOptE(bool val)
-        { setBit(&raw->options, 6, val); }
-    void setOptMC(bool val)
-        { setBit(&raw->options, 5, val); }
-    void setOptNP(bool val)
-        { setBit(&raw->options, 4, val); }
-    void setOptEA(bool val)
-        { setBit(&raw->options, 3, val); }
-    void setOptDC(bool val)
-        { setBit(&raw->options, 2, val); }
-    void setOptO(bool val)
-        { setBit(&raw->options, 1, val); }
+    void setOptions(uint8_t val)
+        { raw->options = val; }
 };
 
 #endif // OSPFV2_HELLO_HEADER_HPP

@@ -48,6 +48,42 @@ void OspfArea::releaseMemory()
     db.releaseMemory();
 }
 
+void OspfArea::runDCIntegrityScan()
+{
+    bool enabled = db.runDCIntegrityScan();
+    bool old = dcCompatible.exchange(enabled, std::memory_order_acq_rel);
+    if (old != enabled)
+    {
+        auto& ifaceMgr = base.process.getIfaceMgr();
+        std::shared_lock<std::shared_mutex> lk(ifaceMgr.interfaceMutex);
+        for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
+        {
+            if ((iface.configs.demandCircuit.load(std::memory_order_relaxed) ||
+                iface.configs.floodReduction.load(std::memory_order_relaxed)) &&
+                iface.floodReduction.load() != enabled)
+            {
+                iface.floodReduction.store(enabled, std::memory_order_release);
+                // TODO: refresh interface
+            }
+        }
+    }
+}
+
+void OspfArea::setFloodReduction(OspfInterface& iface)
+{
+    const bool enableFloodReduction =
+        dcCompatible.load(std::memory_order_relaxed) && (
+            iface.configs.floodReduction.load(std::memory_order_relaxed) ||
+            iface.configs.demandCircuit.load(std::memory_order_relaxed)
+        );
+
+    if (iface.floodReduction.load(std::memory_order_relaxed) != enableFloodReduction)
+    {
+        iface.floodReduction.store(enableFloodReduction, std::memory_order_relaxed);
+        // TODO: refresh interface
+    }
+}
+
 template<typename Policy>
 void OspfArea::flood()
 {
@@ -56,7 +92,7 @@ void OspfArea::flood()
     std::shared_lock<std::shared_mutex> lock(ifaceMgr.interfaceMutex);
     for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
     {
-        if (id.area == areaId)
+        if (id.area == areaId && !iface.configs.databaseFilterAll.load(std::memory_order_relaxed))
             send(iface, floodList);
     }
 
@@ -64,12 +100,12 @@ void OspfArea::flood()
         spfMgr.requestSpf<Policy>();
 }
 
-void OspfArea::send(OspfInterface& iface, std::vector<LsaRecordRef>& records)
+void OspfArea::send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records)
 {
     auto& ntable = iface.getNTable();
     auto& dispatcher = iface.getDispatcher();
 
-    if (iface.configs->networkType.load(std::memory_order_relaxed) == OSPF::InterfaceConfigs::NetworkType::BROADCAST)
+    if (iface.configs.networkType.load(std::memory_order_relaxed) == OSPF::InterfaceConfigs::NetworkType::BROADCAST)
     {
         std::shared_lock<std::shared_mutex> lock(ntable.mu);
         dispatcher.sendLSUpdate(nullptr, records);
@@ -85,25 +121,33 @@ void OspfArea::send(OspfInterface& iface, std::vector<LsaRecordRef>& records)
 }
 
 template <typename Policy>
-OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody&& body)
+OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& body)
 {
-    if (std::holds_alternative<typename Policy::ExternalLsa>(body))
+    auto result = process(ctx, body);
+
+    if (result.decision.action != InstallAction::REJECT_INVALID &&
+        result.decision.action != InstallAction::IGNORE_OLDER &&
+        result.decision.topologyChanged)
     {
-        base.distributeExternalLsa<Policy>(areaId, ctx, std::forward<LsaBody>(body));
+        if (std::holds_alternative<typename Policy::ExternalLsa>(body))
+        {
+            base.distributeExternalLsa<Policy>(areaId, ctx, body);
+        }
+        else if (std::holds_alternative<typename Policy::InterNetworkLsa>(body))
+        {
+            auto res = RouteManager::deriveInterAreaNetwork<Policy>(*this, ctx.key, ctx.header, body);
+            base.process.getRib().replaceRoute(areaId, res);
+        }
+        else if (std::holds_alternative<typename Policy::InterRouterLsa>(body))
+        {
+            RouteManager::deriveInterAreaRouter<Policy>(*this, ctx.key, ctx.header, body);
+        }
     }
-    else if (std::holds_alternative<typename Policy::InterNetworkLsa>(body))
-    {
-        auto result = RouteManager::deriveInterAreaNetwork<Policy>(*this, ctx.key, ctx.header, body);
-        base.process.getRib().replaceRoute(areaId, result);
-    }
-    else if (std::holds_alternative<typename Policy::InterRouterLsa>(body))
-    {
-        RouteManager::deriveInterAreaRouter<Policy>(*this, ctx.key, ctx.header, body);
-    }
-    return process(ctx, std::forward<LsaBody>(body));
+
+    return result;
 }
 
-OspfArea::Result OspfArea::process(const IncomingLsaContext& ctx, LsaBody&& body)
+OspfArea::Result OspfArea::process(const IncomingLsaContext& ctx, LsaBody& body)
 {
     Result out{};
 
@@ -160,68 +204,36 @@ OspfArea::Result OspfArea::process(const IncomingLsaContext& ctx, LsaBody&& body
     return out;
 }
 
-void OspfArea::processExternalLsa(const IncomingLsaContext& ctx, LsaBody&& body)
+template <typename Policy>
+void OspfArea::processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries)
+{
+    constexpr uint16_t interNetwork = std::is_same_v<typename Policy::InterNetworkLsa, SummaryNetworkLsa>
+        ? OSPFV2_LSA_SUM_NET : OSPFV3_LSA_INTER_AREA_PREFIX;
+
+    db.forEachInType(interNetwork, [&](LsaKey& key, LsaRecord& record) {
+        if (!summaries.contains(key))
+            originator->processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(record.body), false, true);
+    });
+
+    for (auto& [key, body] : summaries)
+    {
+        originator->processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(body));
+    }
+}
+
+void OspfArea::processExternalLsa(const IncomingLsaContext& ctx, LsaBody& body)
 {
     bool expire = ctx.header.age == 3600;
 
     // Manage type 4 if needed
     originator->addExternal(ctx.key.advertisingRouter, ctx.key.linkStateId, expire);
-    process(ctx, std::forward<LsaBody>(body));
-}
-
-template <typename Policy>
-void OspfArea::processReoriginatedLsa(const LsaKey& key, LsaBody&& body, bool expire)
-{
-    LsaHeader hdr{};
-    IncomingLsaContext ctx = {
-        .key = key,
-        .header = hdr
-    };
-
-    LsaRecord* existing = db.find(ctx.key);
-
-    auto addHeaderChecksum = [&](ChecksumFletcher& check)
-    {
-        if (!topology().process.isV3)
-            check.add(ctx.header.options);
-        check.addU16(ctx.key.lsaType);
-        check.addU32(ctx.key.linkStateId);
-        check.addU32(ctx.key.advertisingRouter);
-        check.addU32(ctx.header.sequence);
-        check.addU16(ctx.header.length);
-        ctx.checksumValid = true;
-        return;
-    };
-
-    if (!flags.isV3)
-        ctx.header.options = static_cast<uint8_t>(flags.getFlags());
-    ctx.selfOriginatedKey = true;
-    ctx.header.age = expire ? 3600 : 0;
-    ctx.header.sequence = existing
-        ? existing->header.sequence + 1 : 0;
-
-    std::visit([&](auto& lsa) {
-        using T = std::decay_t<decltype(lsa)>;
-        if constexpr (!std::is_same_v<T, std::monostate>)
-        {
-            ctx.header.length = 20 /*Lsa header size*/ + lsa.size();
-            ChecksumFletcher check;
-            addHeaderChecksum(check);
-            lsa.appendChecksum(check);
-            ctx.header.checksum = check.finalize();
-        }
-    }, body);
-
-    if (!flags.isV3)
-        (void)processLsa<PolicyV2>(ctx, std::forward<LsaBody>(body));
-    else
-        (void)processLsa<PolicyV3>(ctx, std::forward<LsaBody>(body));
+    process(ctx, body);
 }
 
 void OspfArea::evaluateDecision(Result& result, const IncomingLsaContext& ctx)
 {
     if (result.decision.shouldFlood && result.record)
-        enqueueFlood(LsaRecordRef{ctx.key, *result.record});
+        enqueueFlood(LsaRecordRef{ctx.key, *result.record}, ctx.info);
     if (result.decision.affectsSpfGraph && result.decision.topologyChanged && !shouldRequestSpf.load(std::memory_order_relaxed))
         shouldRequestSpf.store(true, std::memory_order_release);
 }
@@ -253,14 +265,14 @@ LsaRecordFlags OspfArea::makeFlags(const IncomingLsaContext& ctx) noexcept
     return f;
 }
 
-void OspfArea::enqueueFlood(LsaRecordRef& record)
+void OspfArea::enqueueFlood(LsaRecordRef& record, FloodInfo info)
 {
-    fq.enqueue(record);
+    fq.enqueue(record, info);
 }
 
-void OspfArea::enqueueFlood(LsaRecordRef&& record)
+void OspfArea::enqueueFlood(LsaRecordRef&& record, FloodInfo info)
 {
-    fq.enqueue(record);
+    fq.enqueue(record, info);
 }
 
 InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx, const LsaBody& body)
@@ -271,9 +283,9 @@ InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const Inc
     // RouterLsa, NetworkLsa, SummaryLsa, AsbrLsa
     out.affectsSpfGraph = ctx.key.lsaType >= 1 && ctx.key.lsaType <= 4;
         
-
     if (!ctx.checksumValid)
     {
+        out.shouldAck = false;
         out.action = InstallAction::REJECT_INVALID;
         return out;
     }
@@ -389,12 +401,9 @@ bool OspfArea::compareLsaBody(const LsaBody& a, const LsaBody& b)
     );
 }
 
-template OspfArea::Result OspfArea::processLsa<PolicyV2>(const IncomingLsaContext&, LsaBody&&);
-template OspfArea::Result OspfArea::processLsa<PolicyV3>(const IncomingLsaContext&, LsaBody&&);
+template OspfArea::Result OspfArea::processLsa<PolicyV2>(const IncomingLsaContext&, LsaBody&);
+template OspfArea::Result OspfArea::processLsa<PolicyV3>(const IncomingLsaContext&, LsaBody&);
 
 template void OspfArea::flood<PolicyV2>();
 template void OspfArea::flood<PolicyV3>();
-
-template void OspfArea::processReoriginatedLsa<PolicyV2>(const LsaKey&, LsaBody&&, bool);
-template void OspfArea::processReoriginatedLsa<PolicyV3>(const LsaKey&, LsaBody&&, bool);
 }

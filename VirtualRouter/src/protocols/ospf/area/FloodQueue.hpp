@@ -9,6 +9,7 @@
 #include <new>
 #include <utility>
 #include <vector>
+#include <FloodTypes.hpp>
 
 #include <LSDB.hpp>
 
@@ -40,10 +41,10 @@ public:
         return size() == 0;
     }
 
-    bool enqueue(const LsaRecordRef& req) { return enqueueImpl(req); }
-    bool enqueue(LsaRecordRef&& req) { return enqueueImpl(std::move(req)); }
+    bool enqueue(const LsaRecordRef& req, FloodInfo r) { return enqueueImpl(req, r); }
+    bool enqueue(LsaRecordRef&& req, FloodInfo r) { return enqueueImpl(std::move(req), r); }
 
-    std::vector<LsaRecordRef> tryDequeueBatch()
+    std::vector<std::pair<FloodInfo, LsaRecordRef>> tryDequeueBatch()
     {
         while (true)
         {
@@ -71,7 +72,7 @@ public:
                 continue;
             }
 
-            std::vector<LsaRecordRef> out;
+            std::vector<std::pair<FloodInfo, LsaRecordRef>> out;
             out.reserve(k);
 
             for (size_t i = 0; i < k; ++i)
@@ -80,7 +81,7 @@ public:
                 Slot& slot = slots[pos % cap];
 
                 LsaRecordRef* p = slot.ptr();
-                out.emplace_back(std::move(*p));
+                out.emplace_back(slot.info, std::move(*p));
                 p->~LsaRecordRef();
 
                 slot.seq.store(pos + cap, std::memory_order_release);
@@ -94,6 +95,7 @@ private:
     struct Slot
     {
         std::atomic<size_t> seq{0};
+        FloodInfo info;
         alignas(LsaRecordRef) unsigned char storage[sizeof(LsaRecordRef)];
 
         LsaRecordRef* ptr() noexcept
@@ -103,7 +105,7 @@ private:
     };
 
     template <class T>
-    bool enqueueImpl(T&& req)
+    bool enqueueImpl(T&& req, FloodInfo r)
     {
         size_t localTail = tail.load(std::memory_order_relaxed);
 
@@ -122,6 +124,7 @@ private:
                         LsaRecordRef(std::forward<T>(req));
 
                     slot.seq.store(tail + 1, std::memory_order_release);
+                    slot.info = r;
                     count.fetch_add(1, std::memory_order_release);
                     return true;
                 }

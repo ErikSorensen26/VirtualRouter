@@ -9,7 +9,7 @@
 namespace Eigrp
 {
 EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfigs& intConfigs, Interface& interface)
-  : configs(&intConfigs),
+  : configs(intConfigs),
     interfaceKey(interface.configs.key),
     base(eigrpSystem),
     currentInterface(&interface),
@@ -34,34 +34,34 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     }
 
     // Add pending summary routes if needed
-    for (const auto& prefix : configs->pendingSummaryRoutes)
+    for (const auto& prefix : configs.pendingSummaryRoutes)
         aggregator.installSummary(prefix);
-    configs->pendingSummaryRoutes.clear();
+    configs.pendingSummaryRoutes.clear();
 
     // Gather locked values for local metric calculation
-    uint32_t delay = currentInterfaceInfo->delay.load(std::memory_order_relaxed);
-    uint32_t bandwidth = currentInterfaceInfo->bandwidth.load(std::memory_order_relaxed);
+    uint32_t delay      = currentInterfaceInfo->delay.load(std::memory_order_relaxed);
+    uint32_t bandwidth  = currentInterfaceInfo->bandwidth.load(std::memory_order_relaxed);
     uint8_t reliability = currentInterfaceInfo->reliability.load(std::memory_order_relaxed);
-    uint8_t load = currentInterfaceInfo->load.load(std::memory_order_relaxed);
+    uint8_t load        = currentInterfaceInfo->load.load(std::memory_order_relaxed);
 
     // Check if this interface is passive
     if (base.getGlobalConfigMgr().isPassive(interfaceKey))
         setPassiveMode(true);
 
-    configs->localMetric = metrics.calculateCompositeMetric(
+    configs.localMetric = metrics.calculateCompositeMetric(
         load, reliability, delay * 1'000'000, bandwidth);
 
     // Handle unciast neighbors
     std::unordered_set<IPAddress> unicastNeighbors = base.getGlobalConfigMgr().getUnicastNeighbors(interfaceKey);
     if (!unicastNeighbors.empty())
     {
-        configs->multicastEnabled.store(false, std::memory_order_release);
+        configs.multicastEnabled.store(false, std::memory_order_release);
         for (auto neighbor : unicastNeighbors)
             ntable.createNeighbor(neighbor, Neighbor::Version::UNKNOWN, true);
     }
 
     startDampening();
-    tmgr.startHelloHelper();
+    tmgr.startHello();
 }
 
 EigrpInterface::~EigrpInterface()
@@ -73,31 +73,14 @@ EigrpInterface::~EigrpInterface()
     // Remove routes
     base.getTopology().clearConnected(*this);
 
-    if (base.isNamed())
-    {
-        auto& ifmgr = base.getIfaceMgr();
-        auto it = ifmgr.eigrpInterfaceConfigList.find(currentInterface->configs.key);
-        if (it != ifmgr.eigrpInterfaceConfigList.end())
-        {
-            delete ifmgr.eigrpInterfaceConfigList[currentInterface->configs.key];
-            ifmgr.eigrpInterfaceConfigList.erase(currentInterface->configs.key);
-        }
-    }
-
     if (currentInterface->eigrpInterfaceList.find(id) != currentInterface->eigrpInterfaceList.end())
     {
         if (af == AddressFamily::IPv4)
-        {
             currentInterface->eigrpInterfaceList[id].IPv4 = nullptr;
-        }
         else if (af == AddressFamily::IPv6)
-        {
             currentInterface->eigrpInterfaceList[id].IPv6 = nullptr;
-        }
         if (!currentInterface->eigrpInterfaceList[id].IPv4 && !currentInterface->eigrpInterfaceList[id].IPv6)
-        {
             currentInterface->eigrpInterfaceList.erase(id);
-        }
     }
 }
 
@@ -114,7 +97,7 @@ void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& ch
         rtp.sendUpdate(neighbor, changedRoutes);
     }
 
-    if (hasMulticast && configs->multicastEnabled.load(std::memory_order_relaxed))
+    if (hasMulticast && configs.multicastEnabled.load(std::memory_order_relaxed))
     {
         rtp.sendUpdate(nullptr, changedRoutes);
     }
@@ -122,12 +105,13 @@ void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& ch
 
 void EigrpInterface::setPassiveMode(bool passive)
 {
-    configs->isPassive.store(passive, std::memory_order_release);
+    configs.isPassive.store(passive, std::memory_order_release);
     if (passive)
     {
-        ntable.cancelAllHoldTimers();
+        std::shared_lock<std::shared_mutex> lock(ntable.neighborMutex);
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
         {
+            tmgr.cancelHoldTimer(it->second);
             auto next = std::next(it);
             Neighbor& nbr = it->second;
             ntable.onDown(nbr);
@@ -143,20 +127,24 @@ void EigrpInterface::setPassiveMode(bool passive)
 
 void EigrpInterface::setMulticast(bool state)
 {
-    if (state && !configs->multicastEnabled.load(std::memory_order_relaxed))
+    if (state && !configs.multicastEnabled.load(std::memory_order_relaxed))
     {
-        configs->multicastEnabled.store(true, std::memory_order_release);
+        configs.multicastEnabled.store(true, std::memory_order_release);
     }
-    else if (configs->multicastEnabled.load(std::memory_order_relaxed))
+    else if (configs.multicastEnabled.load(std::memory_order_relaxed))
     {
-        configs->multicastEnabled.store(false, std::memory_order_release);
+        configs.multicastEnabled.store(false, std::memory_order_release);
         ntable.removeAllMulticast();
     }
 }
 
 const uint8_t* EigrpInterface::multicastEnabled()
 {
-    return configs->multicastEnabled.load(std::memory_order_release) ? (base.getAF() == AddressFamily::IPv4) ? EIGRP_MULTICAST_ADDRESS : EIGRP_MULTICAST_ADDRESS_V6 : nullptr;
+    return configs.multicastEnabled.load(std::memory_order_release)
+        ? (base.getAF() == AddressFamily::IPv4)
+            ? EIGRP_MULTICAST_ADDRESS
+            : EIGRP_MULTICAST_ADDRESS_V6
+        : nullptr;
 }
 
 void EigrpInterface::startDampening()
@@ -174,7 +162,7 @@ bool EigrpInterface::recordDampeningEvent()
     routeChangeTimes.push_back(now);
 
     // Drop old changes outside of interval
-    const auto intervalSec = std::chrono::seconds(configs->dampeningInterval.load(std::memory_order_relaxed));
+    const auto intervalSec = std::chrono::seconds(configs.dampeningInterval.load(std::memory_order_relaxed));
     while (!routeChangeTimes.empty() && now - routeChangeTimes.front() > intervalSec)
         routeChangeTimes.pop_front();
 
@@ -192,7 +180,7 @@ void EigrpInterface::triggerDampeningOnRouteChange()
     //TODO use count
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefix) * 100.0;
-    double triggerPercent = configs->dampeningChange.load(std::memory_order_relaxed);
+    double triggerPercent = configs.dampeningChange.load(std::memory_order_relaxed);
 
     if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
     {
@@ -247,7 +235,7 @@ void EigrpInterface::onDampeningIntervalExpire()
     if (maxPrefixes == 0) return;
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefixes) * 100.0;
-    double triggerPercent = configs->dampeningChange.load(std::memory_order_relaxed);
+    double triggerPercent = configs.dampeningChange.load(std::memory_order_relaxed);
 
     if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
     {

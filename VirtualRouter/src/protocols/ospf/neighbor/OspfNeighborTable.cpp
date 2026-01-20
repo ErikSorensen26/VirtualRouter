@@ -3,13 +3,18 @@
 #include "OspfNeighborTable.h"
 #include "OspfNeighbor.h"
 #include <LsaKey.hpp>
+#include <OspfInterface.h>
 
 namespace OSPF
 {
+NeighborTable::NeighborTable(OspfInterface& iface)
+    : iface(iface) {}
+
 Neighbor* NeighborTable::createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool unicast)
 {
-
+    
 }
+
 void NeighborTable::deleteNeighbor(uint32_t rid, bool unicast)
 {
 
@@ -45,5 +50,12 @@ std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSiz
         off += 4;
     }
     return off;
+}
+
+void NeighborTable::cancelAllInactiveTimers()
+{
+    std::shared_lock<std::shared_mutex> lk(mu);
+    for (auto& [_, nbr] : neighbors)
+        iface.getTimers().cancleInactiveTimer(nbr);
 }
 }

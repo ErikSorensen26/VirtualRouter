@@ -1,10 +1,11 @@
 // v3PacketDispatcher.h
 
-#ifndef V3_PACKET_DISPATCHER_H
-#define V3_PACKET_DISPATCHER_H
+#ifndef PACKET_DISPATCHER_V3_H
+#define PACKET_DISPATCHER_V3_H
 
 #include <Ospfv3Header.hpp>
 #include <LSDB.hpp>
+#include <PacketDispatcher.h>
 
 #include <RouterLsaV3.hpp>
 #include <NetworkLsaV3.hpp>
@@ -21,20 +22,18 @@ namespace OSPF
 class OspfInterface;
 class Neighbor;
 
-class PacketDispatcher
+class PacketDispatcherV3 : PacketDispatcher
 {
 public:
-    PacketDispatcher(OspfInterface& iface)
-        : iface(iface) {}
+    PacketDispatcherV3(OspfInterface& iface) : PacketDispatcher(iface) {}
 
     void handleIncoming(const Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
 
 private:
+    bool processOptions(uint32_t options) override;
 
     struct HeaderInfo
-    {
-        HeaderInfo(const Ospfv3Header& ospf, const IPAddress& neighborIp, const uint32_t rid) : rid(rid), ospf(ospf), neighborIp(neighborIp)
-        {
+    { HeaderInfo(const Ospfv3Header& ospf, const IPAddress& neighborIp, const uint32_t rid) : rid(rid), ospf(ospf), neighborIp(neighborIp) {
             payloadSize = ospf.getPacketLen();
             payload = ospf.getTrail().data();
         }
@@ -60,8 +59,6 @@ private:
     bool sendLSAck(std::vector<LsaRecord*>& records);
 
     std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len);
-
-    OspfInterface& iface;
 };
 }
 

@@ -7,6 +7,7 @@
 #include <vector>
 #include <optional>
 #include <OspfPacket.hpp>
+#include <FloodTypes.hpp>
 
 namespace OSPF
 {
@@ -24,22 +25,25 @@ public:
     std::atomic<uint32_t> lsuTimerId;
 
     // Reliability
-    std::vector<LsaRecordRef>::iterator addLsu(LsaRecordRef& ref);
+    std::vector<std::pair<FloodInfo, LsaRecordRef>>::iterator addLsu(LsaRecordRef& ref);
     std::vector<LsaKey>::iterator addLsr(const LsaKey& key);
 
     bool hasLsu(LsaKey& key);
     bool hasLsr(LsaKey& key);
 
-    std::optional<LsaRecordRef> moveLsu(const LsaKey& key);
+    std::optional<LsaRecordRef> getLsu(const LsaKey& key);
+    void eraseLsu(LsaKey& key);
     void eraseLsr(LsaKey& key);
+
+    void clearLsu();
+    void clearLsr();
 
     bool getLsuActive();
     bool getLsrActive();
 
-    void retransmitDbd();
-
     std::mutex& getRelMtx() { return reliableMtx; }
-    const std::vector<LsaRecordRef>& getLsu() const { return outboundLsus; }
+    const std::vector<std::pair<FloodInfo, LsaRecordRef>>& getLsu() const { return outboundLsus; }
+    std::vector<std::pair<FloodInfo, LsaRecordRef>>& getLsu() { return outboundLsus; }
     const std::vector<LsaKey>& getLsr() const { return outboundLsrs; }
 
     std::mutex reliableMtx;
@@ -47,7 +51,7 @@ public:
 
 private:
     // Reliability
-    std::vector<LsaRecordRef> outboundLsus;
+    std::vector<std::pair<FloodInfo, LsaRecordRef>> outboundLsus;
     std::vector<LsaKey> outboundLsrs;
 };
 }

@@ -5,10 +5,22 @@
 
 #include <cstdint>
 #include <LsaKey.hpp>
-#include <LSDB.hpp>
+#include <optional>
 
 namespace OSPF
 {
+enum class FloodReason
+{
+    REFRESH,
+    UPDATE,
+    FLUSH
+};
+
+struct FloodInfo
+{
+    FloodReason reason;
+};
+
 enum class LsaCompareResult
 {
     NEWER,    
@@ -34,6 +46,7 @@ struct InstallResult final
     // Storage instructions:
     bool shouldStoreReplace{false}; // replace (header/body) with incoming instance
     bool shouldUpdateAgeOnly{false}; // same instance; update stored header.age only
+    bool shouldAck{true};            // should ack the lsa (false for corruped lsas).
     uint16_t newStoredAge{0};        // valid if shouldUpdateAgeOnly==true
 
     // Topology impact

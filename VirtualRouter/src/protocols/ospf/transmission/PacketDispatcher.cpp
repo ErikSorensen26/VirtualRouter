@@ -6,9 +6,12 @@
 #include <OspfInterface.h>
 #include <OspfProcess.h>
 #include <OspfNeighbor.h>
+#include <OspfFletcher.hpp>
 
 #include <IPPacket.h>
 #include <PacketBuilder.hpp>
+
+#define SUPPORT_RESYNC false
 
 namespace OSPF
 {
@@ -22,6 +25,7 @@ void PacketDispatcher::transmit(PacketBuilder& pkt, const uint8_t* dest)
         .iface = interface,
         .packetInfo = pkt,
         .destIp = dest,
+        .hopLimit = 1,
         .protocolType = IP_OSPF
     };
 
@@ -38,5 +42,30 @@ bool PacketDispatcher::retransmitLsu(Neighbor& nbr)
 bool PacketDispatcher::retransmitLsr(Neighbor& nbr)
 {
     return sendLSRequest(nbr, nbr.getRtr().getLsr());
+}
+
+size_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart)
+{
+    writeU32(buf, 0x00000000); // Checksum and size not calculated yet
+    writeU16(buf + 4, 0x0001); // Ext TLV type
+    writeU16(buf + 6, 0x0004); // Ext TLV size
+
+    uint32_t options = 0x0000;
+    if (SUPPORT_RESYNC)
+        options |= 0x0001; // Resync flag
+    if (restart)
+        options |= 0x0002; // Restart signal
+    
+    writeU32(buf + 8, options);
+
+    return 12;
+}
+
+void PacketDispatcher::addLinkLocalChecksum(uint8_t* buf)
+{
+    writeU16(buf + 2, 0x0003); // 12 (default)
+    ChecksumFletcher check;
+    check.addBytes(buf, 12);
+    writeU16(buf, check.finalize());
 }
 }

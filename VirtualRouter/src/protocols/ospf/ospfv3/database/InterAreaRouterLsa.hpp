@@ -57,6 +57,11 @@ struct InterAreaRouterLsa
         check.addU24(metric);
         check.addU32(destinationRouterId);
     }
+
+    bool operator==(const InterAreaRouterLsa& rhs) const
+    {
+        return metric == rhs.metric && destinationRouterId == rhs.destinationRouterId;
+    }
 };
 }
 

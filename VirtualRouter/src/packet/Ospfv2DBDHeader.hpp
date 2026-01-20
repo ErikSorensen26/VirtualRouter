@@ -30,14 +30,8 @@ struct Ospfv2DBDHeader
 
     uint16_t getMtu() const                 { return readU16(raw->mtu); }
     uint32_t getSequence() const            { return readU32(raw->sequence); }
-
-    bool getOptMT() const                   { return raw->options & 0x01; }
-    bool getOptE() const                    { return raw->options & 0x02; }
-    bool getOptMC() const                   { return raw->options & 0x04; }
-    bool getOptNP() const                   { return raw->options & 0x08; }
-    bool getOptEA() const                   { return raw->options & 0x10; }
-    bool getOptDC() const                   { return raw->options & 0x20; }
-    bool getOptO() const                    { return raw->options & 0x40; }
+    uint8_t getOptions() const              { return raw->options; }
+    uint8_t getFlags() const                { return raw->flags; }
 
     bool getFlagMS() const                  { return raw->flags & 0x01; }
     bool getFlagM() const                   { return raw->flags & 0x02; }
@@ -48,21 +42,8 @@ struct Ospfv2DBDHeader
         { writeU16(raw->mtu, val); }
     void setSequence(uint32_t val)
         { writeU32(raw->sequence, val); }
-
-    void setOptMT(bool val)
-        { setBit(&raw->options, 7, val); }
-    void setOptE(bool val)
-        { setBit(&raw->options, 6, val); }
-    void setOptMC(bool val)
-        { setBit(&raw->options, 5, val); }
-    void setOptNP(bool val)
-        { setBit(&raw->options, 4, val); }
-    void setOptEA(bool val)
-        { setBit(&raw->options, 3, val); }
-    void setOptDC(bool val)
-        { setBit(&raw->options, 2, val); }
-    void setOptO(bool val)
-        { setBit(&raw->options, 1, val); }
+    void setOptions(uint8_t val)
+        { raw->options = val; }
 
     void setFlagMS(bool val)
         { setBit(&raw->flags, 7, val); }

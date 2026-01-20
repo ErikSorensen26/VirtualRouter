@@ -1,7 +1,5 @@
 // Ospfv2Tx.cpp
 
-// TODO: add router lsa fragmentation
-
 // NOTE: set ttl to 1
 
 #include "PacketDispatcherV2.h"
@@ -19,11 +17,20 @@
 #include <Ospfv2LSRHeader.hpp>
 #include <Ospfv2LSAHeader.hpp>
 
+#include <Ospfv3LSAHeader.hpp>
+
 namespace OSPF
 {
 uint16_t PacketDispatcherV2::getMtu()
 {
     return iface.getIface().configs.ipv4.mtu.load(std::memory_order_relaxed);
+}
+
+void PacketDispatcherV2::finalizeHeader(Ospfv2Header& hdr, OspfBuilder& builder, bool lls)
+{
+    hdr.setPacketLen(static_cast<uint16_t>(builder.offset + Ospfv2Header::fixedSize));
+
+    // TODO: add auth to header
 }
 
 void PacketDispatcherV2::sendHello()
@@ -38,8 +45,10 @@ void PacketDispatcherV2::sendHello()
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    if (!buildHello(builder)) return;
+    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    if (!buildHello(builder, lls)) return;
 
+    finalizeHeader(*ospfHeader, builder);
     transmit(pkt, OSPFV2_ALL_SPF_ROUTERS);
 }
 
@@ -57,6 +66,7 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
 
     if (!buildHello(builder)) return;
 
+    finalizeHeader(*ospfHeader, builder);
     transmit(pkt, nbr.ipAddress.raw);
 }
 
@@ -81,6 +91,8 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
 
     ospfHeader.value().setTrailSize(Ospfv2DBDHeader::fixedSize);
     setupDbd(nbr, ospfHeader.value());
+
+    finalizeHeader(*ospfHeader, builder);
     transmit(pkt, nbr.ipAddress.raw);
 }
 
@@ -108,6 +120,8 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
 
     ospfHeader.value().setTrailSize(builder.offset);
     setupDbd(nbr, ospfHeader.value());
+
+    finalizeHeader(*ospfHeader, builder);
     transmit(pkt, nbr.ipAddress.raw);
 
     return true;
@@ -137,6 +151,7 @@ bool PacketDispatcherV2::sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ack
         sent += acksSent;
 
         ospfHeader.value().setTrailSize(builder.offset);
+        finalizeHeader(*ospfHeader, builder);
     }
 
     for (auto& pkt : pkts)
@@ -164,7 +179,7 @@ bool PacketDispatcherV2::sendLSRequest(Neighbor& nbr, const std::vector<LsaKey>&
     return true;
 }
 
-bool PacketDispatcherV2::sendReliableLSUpdate(Neighbor* nbr, std::vector<LsaRecordRef>& keys)
+bool PacketDispatcherV2::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys)
 {
     std::vector<LsaRecordRef> sent;
     auto updates = buildLSUpdateList(keys, sent);
@@ -192,7 +207,7 @@ bool PacketDispatcherV2::sendReliableLSUpdate(Neighbor* nbr, std::vector<LsaReco
     return true;
 }
 
-bool PacketDispatcherV2::sendLSUpdate(Neighbor* nbr, std::vector<LsaRecordRef>& keys)
+bool PacketDispatcherV2::sendLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys)
 {
     std::vector<LsaRecordRef> sent;
     auto updates = buildLSUpdateList(keys, sent);
@@ -251,12 +266,13 @@ std::deque<PacketBuilder> PacketDispatcherV2::buildLSRequestList(const std::vect
         sent += reqSent;
 
         ospfHeader.value().setTrailSize(builder.offset);
+        finalizeHeader(*ospfHeader, builder);
     }
 
     return pkts;
 }
 
-std::deque<PacketBuilder> PacketDispatcherV2::buildLSUpdateList(std::vector<LsaRecordRef>& records, std::vector<LsaRecordRef>& sentKeys)
+std::deque<PacketBuilder> PacketDispatcherV2::buildLSUpdateList(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records, std::vector<LsaRecordRef>& sentKeys)
 {
     size_t sent = 0;
 
@@ -281,7 +297,7 @@ std::deque<PacketBuilder> PacketDispatcherV2::buildLSUpdateList(std::vector<LsaR
         OspfBuilder builder{pkt, trail, 0, maxSize};
         builder.offset += 2;
 
-        using UpdList = std::span<LsaRecordRef>;
+        using UpdList = std::span<std::pair<FloodInfo, LsaRecordRef>>;
         UpdList updList = UpdList(records.data() + sent, records.size() - sent);
 
         auto updSent = buildLSUpdate(builder, sentKeys, updList);
@@ -294,6 +310,7 @@ std::deque<PacketBuilder> PacketDispatcherV2::buildLSUpdateList(std::vector<LsaR
         sent += updSent;
 
         ospfHeader.value().setTrailSize(builder.offset);
+        finalizeHeader(*ospfHeader, builder);
     }
 
     return pkts;
@@ -314,7 +331,7 @@ std::optional<Ospfv2Header> PacketDispatcherV2::buildHeader(PacketBuilder& pkt, 
     return ospf;
 }
 
-std::optional<Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder builder)
+std::optional<Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder builder, bool lls)
 {
     if (!builder.hasRoom(Ospfv2HelloHeader::fixedSize))
         return std::nullopt;
@@ -324,16 +341,18 @@ std::optional<Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder buil
     hello.setBuffer(builder.getBuf());
 
     hello.setMask(iface.interfaceAddress.getMask());
-    hello.setHelloInterval(iface.configs->helloInterval.load(std::memory_order_relaxed));
+    hello.setHelloInterval(iface.configs.helloInterval.load(std::memory_order_relaxed));
 
-    // TODO: handle options
+    uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
+    if (lls) options |= 0x10;
+    hello.setOptions(options);
 
-    hello.setPriority(iface.configs->priority.load(std::memory_order_relaxed));
-    hello.setDeadInterval(iface.configs->deadInterval.load(std::memory_order_relaxed));
+    hello.setPriority(iface.configs.priority.load(std::memory_order_relaxed));
+    hello.setDeadInterval(iface.configs.deadInterval.load(std::memory_order_relaxed));
     hello.setDR(static_cast<uint32_t>(iface.dr.rid.load(std::memory_order_relaxed)));
     hello.setBDR(static_cast<uint32_t>(iface.bdr.rid.load(std::memory_order_relaxed)));
 
-    auto ntype = iface.configs->networkType.load(std::memory_order_relaxed);
+    auto ntype = iface.configs.networkType.load(std::memory_order_relaxed);
     if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||
         ntype == InterfaceConfigs::NetworkType::NON_BROADCAST)
     {
@@ -345,7 +364,7 @@ std::optional<Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder buil
     return hello;
 }
 
-std::optional<Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder& builder, Neighbor& nbr)
+std::optional<Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls)
 {
     if (!builder.hasRoom(Ospfv2DBDHeader::fixedSize))
         return std::nullopt;
@@ -354,7 +373,9 @@ std::optional<Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder& builder
     Ospfv2DBDHeader dbd;
     dbd.setBuffer(builder.getBuf());
 
-    // TODO: handle options
+    uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
+    if (lls) options |= 0x10;
+    dbd.setFlagI(options);
 
     dbd.setMtu(iface.getIface().configs.ipv4.mtu.load(std::memory_order_relaxed));
     dbd.setSequence(nbr.currentSeq.load(std::memory_order_relaxed));
@@ -362,7 +383,7 @@ std::optional<Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder& builder
     return dbd;
 }
 
-std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaHeader& header)
+std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record)
 {
     if (!builder.hasRoom(Ospfv2LSAHeader::fixedSize))
         return std::nullopt;
@@ -370,18 +391,33 @@ std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBuilder& b
 
     Ospfv2LSAHeader db;
     db.setBuffer(builder.getBuf());
-    db.setAge(header.age);
+
+    if (iface.floodReduction.load(std::memory_order_relaxed))
+    {
+        // Set age to not expire
+        db.setAge(0x8000);
+    }
+    else
+    {
+        uint16_t timeSinceRefresh = static_cast<uint16_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - record.lastRefreshTime
+            ).count()
+        );
+        db.setAge(timeSinceRefresh + record.header.age);
+    }
+
 
     // TODO: Options
 
     db.setType(static_cast<uint8_t>(key.lsaType));
     db.setLsID(key.linkStateId);
     db.setAdvRouter(key.advertisingRouter);
-    db.setSeqNum(header.sequence);
+    db.setSeqNum(record.header.sequence);
 
     // TODO: handle checksum
 
-    db.setLen(header.length);
+    db.setLen(record.header.length);
 
     return db;
 }
@@ -409,26 +445,33 @@ size_t PacketDispatcherV2::buildLSAck(OspfBuilder& builder, std::span<LsaRecordR
     size_t sent{0};
     for (auto& ack : acks)
     {
-        auto lsa = buildLSAHeader(builder, ack.key, ack.record->header);
+        auto lsa = buildLSAHeader(builder, ack.key, *ack.record);
         if (!lsa.has_value()) return sent;
         sent++;
     }
     return sent;
 }
 
-size_t PacketDispatcherV2::buildLSUpdate(OspfBuilder& builder, std::vector<LsaRecordRef>& sentKeys, std::span<LsaRecordRef>& records)
+size_t PacketDispatcherV2::buildLSUpdate(OspfBuilder& builder, std::vector<LsaRecordRef>& sentKeys, std::span<std::pair<FloodInfo, LsaRecordRef>>& records)
 {
+    // Filter for Intra lsas
+    bool filter = iface.configs.databaseFilterOut.load(std::memory_order_relaxed);
+    bool floodReduction = iface.floodReduction.load(std::memory_order_relaxed);
+
     // Handle LSAs
     size_t sent{0};
-    for (auto& record : records)
+    for (auto& [info, record] : records)
     {
-        auto& lsa = record.record;
-        auto& key = record.key;
-        if (!builder.hasRoom(lsa->header.length)) return sent;
-        if (!buildLSAHeader(builder, key, lsa->header)) return sent;
-        if (!buildLSABody(builder, *lsa, static_cast<uint8_t>(key.lsaType))) return sent;
-        builder.offset += (lsa->header.length - Ospfv2LSAHeader::fixedSize);
-        sentKeys.push_back(std::move(record));
+        if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
+        {
+            auto& lsa = record.record;
+            auto& key = record.key;
+            if (!builder.hasRoom(lsa->header.length)) return sent;
+            if (!buildLSAHeader(builder, key, *lsa)) return sent;
+            if (!buildLSABody(builder, *lsa, static_cast<uint8_t>(key.lsaType))) return sent;
+            builder.offset += (lsa->header.length - Ospfv2LSAHeader::fixedSize);
+            sentKeys.push_back(std::move(record));
+        }
         sent++;
     }
     return sent;
@@ -444,7 +487,7 @@ void PacketDispatcherV2::buildDescriptions(OspfBuilder& builder, Neighbor& nbr)
 
     for (auto it = lsdb.upper_bound(*nbr.currentDbd); it != lsdb.end(); it++)
     {
-        auto hdr = buildLSAHeader(builder, it->first, it->second.header);
+        auto hdr = buildLSAHeader(builder, it->first, it->second);
         if (!hdr.has_value())
         {
             if (it != lsdb.begin())

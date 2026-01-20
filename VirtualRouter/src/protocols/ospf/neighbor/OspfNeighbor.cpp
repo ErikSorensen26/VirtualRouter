@@ -4,6 +4,7 @@
 #include <LsaKey.hpp>
 #include <OspfInterface.h>
 #include <OspfInterfaceTimers.h>
+#include <Interface.h>
 #include <random>
 
 static uint32_t generateInitialDDSequence()
@@ -14,15 +15,24 @@ static uint32_t generateInitialDDSequence()
     return dis(gen);
 }
 
+static uint16_t getMtu(bool isV6, OSPF::OspfInterface& iface)
+{
+    if (isV6)
+        return iface.getIface().configs.ipv6.mtu.load(std::memory_order_relaxed);
+    else
+        return iface.getIface().configs.ipv4.mtu.load(std::memory_order_relaxed);
+}
+
 namespace OSPF
 {
 Neighbor::Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, IPAddress& neighborIp, bool unicast)
     : ipAddress(neighborIp),
       unicast(unicast),
       routerID(rid),
+      mtu(getMtu(neighborIp.isV6, iface)),
       currentSeq(generateInitialDDSequence()),
       iface(iface),
-      tmgr(tmgr) 
+      tmgr(tmgr)
 {}
 
 void Neighbor::resetDbExchange()
@@ -47,7 +57,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             state.store(s, std::memory_order_release);
             
-            auto ntype = iface.configs->networkType.load(std::memory_order_relaxed);
+            auto ntype = iface.configs.networkType.load(std::memory_order_relaxed);
             if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||
                 ntype == InterfaceConfigs::NetworkType::NON_BROADCAST)
             {
@@ -63,7 +73,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState != State::EXSTART)
             {
-                requestDbd.clear();
+                rtr.clearLsr();
                 state.store(s, std::memory_order_release);
                 iface.getDispatcher().sendInitDBD(*this);
             }
@@ -86,7 +96,8 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState == State::EXCHANGE)
             {
-                if (requestDbd.empty())
+                std::lock_guard<std::mutex> lock(rtr.getRelMtx());
+                if (!rtr.getLsrActive())
                 {
                     // Go straight to LOADING
                     setState(Neighbor::State::LOADING);
@@ -94,7 +105,7 @@ bool Neighbor::setState(Neighbor::State s)
                 else
                 {
                     state.store(s, std::memory_order_release);
-                    iface.getDispatcher().sendReliableLSRequest(*this, requestDbd);
+                    iface.getDispatcher().sendReliableLSRequest(*this, rtr.getLsr());
                 }
             }
             break;
@@ -105,6 +116,8 @@ bool Neighbor::setState(Neighbor::State s)
             if (oldState == State::EXCHANGE || oldState == State::LOADING)
             {
                 state.store(s, std::memory_order_release);
+                if (iface.demandCircuit.load(std::memory_order_relaxed) == OspfInterface::DcDecision::ENABLED)
+                    iface.getTimers().stopHello();
             }
             break;
         }

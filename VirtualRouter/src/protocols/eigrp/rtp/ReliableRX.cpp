@@ -197,7 +197,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         info.neighbor->receivedConditions[conditionalSeq] = conditionExemption;
 
     info.neighbor->markHeard();
-    iface.getTimers().restartHoldTimer(*nbr);
+    iface.getTimers().startHoldTimer(*nbr);
 
     // Safely extract the neighbor state
     if (parametersFound)

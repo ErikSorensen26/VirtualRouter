@@ -67,8 +67,6 @@
 #define OSPFV3_EL_SUBTLV_LAN_ADJ_SID       0x0002 ///< Extended Link LAN Adjacency SID sub-TLV
 #define OSPFV3_EL_SUBTLV_LINK_MSD          0x0003 ///< Extended Link Maximum SID Depth sub-TLV
 
-#define OSPFV3_LSA_MAX_AGE                 3600 ///< OSPFv3 MaxAge in seconds
-
 /*
  * @struct Ospfv3LSAHeaderRaw
  */

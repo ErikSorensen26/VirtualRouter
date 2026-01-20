@@ -11,6 +11,7 @@
 #include <SummaryNetworkLsa.hpp>
 #include <SummaryRouterLsa.hpp>
 #include <ExternalLsaV2.hpp>
+#include <FloodTypes.hpp>
 
 struct IPAddress;
 class PacketBuilder;
@@ -33,8 +34,6 @@ public:
     PacketDispatcher(OspfInterface& iface);
     virtual ~PacketDispatcher() = 0;
 
-    virtual void handleIncoming(const Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast) = 0;
-
     virtual void sendHello() = 0;
     virtual void sendUnicastHello(Neighbor& nbr) = 0;
     virtual void sendInitDBD(Neighbor& nbr) = 0;
@@ -42,8 +41,12 @@ public:
     virtual bool sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ) = 0;
     virtual bool sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds) = 0;
     virtual bool sendLSRequest(Neighbor& nbr, const std::vector<LsaKey>& keys) = 0;
-    virtual bool sendReliableLSUpdate(Neighbor* nbr, std::vector<LsaRecordRef>& keys) = 0;
-    virtual bool sendLSUpdate(Neighbor* nbr, std::vector<LsaRecordRef>& keys) = 0;
+    virtual bool sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys) = 0;
+    virtual bool sendLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys) = 0;
+
+    virtual bool processOptions(uint32_t options, bool isStatic = false);
+    
+    // TODO: finish demand citcuit in options
 
     virtual void retransmitDbd(Neighbor& nbr) = 0;
     bool retransmitLsu(Neighbor& nbr);
@@ -51,7 +54,10 @@ public:
 
 protected:
 
-    void transmit(PacketBuilder& pkt, const uint8_t* dest);
+    virtual void transmit(PacketBuilder& pkt, const uint8_t* dest);
+
+    size_t addLinkLocalExtension(uint8_t* buf, bool restart);
+    void addLinkLocalChecksum(uint8_t* buf);
 
     struct OspfBuilder
     {

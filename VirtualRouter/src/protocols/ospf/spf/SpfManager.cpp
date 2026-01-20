@@ -73,7 +73,7 @@ void SpfManager::scheduleSpf(uint32_t delayMs)
         return;
 
     auto delay = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
-    timerId = tmgr.addTimer(delay, [this]() {
+    timerId = tmgr.addTimer(delay, [this](uint32_t) {
         this->onSpfTimer<Policy>();
     });
 }

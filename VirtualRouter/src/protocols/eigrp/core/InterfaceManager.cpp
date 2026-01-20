@@ -34,18 +34,19 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
         uint32_t as = base.getAS();
 
         EigrpConfigs::InterfaceConfigs* intConfig;
-        auto pairIt = eigrpInterfaceConfigList.find(interface->configs.key);
-        if (pairIt != eigrpInterfaceConfigList.end())
+        if (base.isNamed())
         {
-            intConfig = pairIt->second;
+            auto configIt = eigrpInterfaceConfigList.find(interface->configs.key);
+            if (configIt == eigrpInterfaceConfigList.end())
+            {
+                auto newConfig = eigrpInterfaceConfigList.emplace(interface->configs.key, interface->configs.key);
+                intConfig = &newConfig.first->second;
+            }
+            else intConfig = &configIt->second;
         }
         else
         {
-            // INITIALIZE EIGRP CONFIGURATIONS
-            intConfig = base.isNamed()
-                ? new EigrpConfigs::InterfaceConfigs(interface->configs.key)
-                : interface->getEigrpConfig(as, af, false);
-            eigrpInterfaceConfigList[interface->configs.key] = intConfig;
+            intConfig = interface->getEigrpConfig(as, af, false);
         }
 
         if (af == AddressFamily::IPv4)

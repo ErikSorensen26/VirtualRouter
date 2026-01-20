@@ -32,7 +32,7 @@ OspfArea& Topology::insureArea(uint32_t areaId)
 }
 
 template <typename Policy>
-void Topology::distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody&& body)
+void Topology::distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& ctx, LsaBody& body)
 {
     {
         std::shared_lock<std::shared_mutex> lock(areaMu);
@@ -40,7 +40,8 @@ void Topology::distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& 
         {
             if (id != areaId)
             {
-                area.processExternalLsa(ctx, std::forward<LsaBody>(body));
+                LsaBody bodyCpy = body;
+                area.processExternalLsa(ctx, body);
             }
         }
     }
@@ -118,7 +119,7 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
         auto processLsas = [&](OspfArea& a)
         {
             for (auto& [key, network] : networks)
-                a.processReoriginatedLsa<Policy>(key, std::move(network));
+                a.getOriginator().processReoriginatedLsa<Policy>(key, network);
         };
 
         if (sourceAreaId == 0) // Transit area reoriginates to all other normal areas.
@@ -138,8 +139,8 @@ void Topology::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteC
     }
 }
 
-template void Topology::distributeExternalLsa<PolicyV2>(uint32_t, const IncomingLsaContext&, LsaBody&&);
-template void Topology::distributeExternalLsa<PolicyV3>(uint32_t, const IncomingLsaContext&, LsaBody&&);
+template void Topology::distributeExternalLsa<PolicyV2>(uint32_t, const IncomingLsaContext&, LsaBody&);
+template void Topology::distributeExternalLsa<PolicyV3>(uint32_t, const IncomingLsaContext&, LsaBody&);
 
 template void Topology::flood<PolicyV2>();
 template void Topology::flood<PolicyV3>();

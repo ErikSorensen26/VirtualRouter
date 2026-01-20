@@ -9,9 +9,8 @@
 #include <SpfManager.h>
 #include "FloodQueue.hpp"
 #include "FloodTypes.hpp"
-#include "OspfFlagManager.hpp"
+#include "OspfFlagManager.h"
 #include "OspfOriginator.h"
-
 namespace OSPF
 {
 struct AreaConfigs;
@@ -27,6 +26,38 @@ constexpr inline bool isMaxAge(const LsaHeader& h, uint16_t maxAge) noexcept
 constexpr inline uint16_t absDiffU16(uint16_t a, uint16_t b) noexcept
 {
     return (a >= b) ? static_cast<uint16_t>(a - b) : static_cast<uint16_t>(b - a);
+}
+
+struct CalcResults
+{
+    uint16_t checksum;
+    uint16_t size;
+};
+
+template<typename Policy>
+CalcResults runLsaCalculations(const LsaHeader& hdr, const LsaKey& key, const LsaBody& body)
+{
+    CalcResults res;
+
+    std::visit([&](auto& lsa) {
+        using T = std::decay_t<decltype(lsa)>;
+        if constexpr (!std::is_same_v<T, std::monostate>)
+        {
+            res.size = 20 + lsa.size();
+            ChecksumFletcher check;
+            if constexpr (std::is_same_v<Policy, PolicyV2>)
+                check.add(hdr.options);
+            check.addU16(key.lsaType);
+            check.addU32(key.linkStateId);
+            check.addU32(key.advertisingRouter);
+            check.addU32(hdr.sequence);
+            check.addU16(hdr.length);
+            lsa.appendChecksum(check);
+            res.checksum = check.finalize();
+        }
+    }, body);
+
+    return res;
 }
 
 class OspfArea
@@ -48,30 +79,37 @@ public:
     AreaConfigs& getConfigs() { return cfgs; }
     const AreaConfigs& getConfigs() const noexcept { return cfgs; }
     FloodQueue& floodQueue() noexcept { return fq; }
-    const FloodQueue& floodQueue() const noexcept { return fq; } OspfFlagManager& getFlags() { return flags; }
-    const OspfFlagManager& getFlags() const noexcept { return flags; }
+    const FloodQueue& floodQueue() const noexcept { return fq; }
+    AreaFlagManager& getFlags() { return flags; }
+    const AreaFlagManager& getFlags() const noexcept { return flags; }
     const SpfManager& getSpfManager() const noexcept { return spfMgr; }
-
-    void clear();
-    void releaseMemory();
+    OspfOriginator& getOriginator() { return *originator; }
 
     // Flooding
     template<typename Policy>
     void flood();
     bool hasPendingFlood() const noexcept { return !fq.empty(); }
-    void send(OspfInterface& iface, std::vector<LsaRecordRef>& records);
-    std::vector<LsaRecordRef> tryDequeueFlood() { return fq.tryDequeueBatch(); }
+    void send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
+    std::vector<std::pair<FloodInfo, LsaRecordRef>> tryDequeueFlood() { return fq.tryDequeueBatch(); }
 
     // Processing
     template <typename Policy>
-    Result processLsa(const IncomingLsaContext& ctx, LsaBody&& body);
-    void processExternalLsa(const IncomingLsaContext& ctx, LsaBody&& body);
+    Result processLsa(const IncomingLsaContext& ctx, LsaBody& body);
     template <typename Policy>
-    void processReoriginatedLsa(const LsaKey& key, LsaBody&& body, bool expire = false);
+    void processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries);
+    void processExternalLsa(const IncomingLsaContext& ctx, LsaBody& body);
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
+    // Other
+    void clear();
+    void releaseMemory();
+    void runDCIntegrityScan();
+    void setFloodReduction(OspfInterface& iface);
+
     static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;
+
+    std::atomic<bool> dcCompatible{true};
 
     const uint32_t areaId;
 
@@ -86,15 +124,15 @@ protected:
     FloodQueue fq;
     Topology& base;
     SpfManager spfMgr;
-    OspfFlagManager flags;
+    AreaFlagManager flags;
 
     OspfOriginator* originator{nullptr};
 
 private:
-    Result process(const IncomingLsaContext& ctx, LsaBody&& body);
+    Result process(const IncomingLsaContext& ctx, LsaBody& body);
 
-    void enqueueFlood(LsaRecordRef& record);
-    void enqueueFlood(LsaRecordRef&& record);
+    void enqueueFlood(LsaRecordRef& record, FloodInfo info);
+    void enqueueFlood(LsaRecordRef&& record, FloodInfo info);
 
     InstallResult evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx, const LsaBody& body);
     LsaCompareResult compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const;

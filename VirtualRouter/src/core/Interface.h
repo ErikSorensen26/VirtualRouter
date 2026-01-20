@@ -361,7 +361,7 @@ public:
      * @param negate If true, returns a nullptr instead of allicating if it does not yet exist.
      * @return Pointer to OSPF interface config block.
      */
-    OSPF::InterfaceConfigs* getOspfConfig(uint32_t id, bool negate);
+    OSPF::InterfaceConfigs& getOspfConfig(uint32_t id, AddressFamily af);
 
     // DHCP CLIENT STATE
 

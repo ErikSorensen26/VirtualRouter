@@ -1,6 +1,7 @@
 // LsdbTable.cpp
 
 #include "LsdbTable.h"
+#include <OspfFlagManager.h>
 
 namespace OSPF
 {
@@ -232,5 +233,15 @@ size_t LsdbTable::purgeExpired(uint16_t maxAge)
     return purgeIf([&](const LsaKey&, const LsaRecord& r){
         return r.header.age >= maxAge;
     });
+}
+
+bool LsdbTable::runDCIntegrityScan()
+{
+    bool enabled = true;
+    forEach([&](const LsaKey& key, const LsaRecord& record) {
+        if (!InterfaceFlagManager::getDemandCircuits(record.header.options))
+            enabled = false;
+    });
+    return enabled;
 }
 }

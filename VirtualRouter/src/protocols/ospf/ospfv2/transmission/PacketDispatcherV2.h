@@ -33,7 +33,7 @@ class PacketDispatcherV2 : public PacketDispatcher
 public:
     PacketDispatcherV2(OspfInterface& iface) : PacketDispatcher(iface) {}
 
-    void handleIncoming(const Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast) override;
+    void handleIncoming(const Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
 
     void sendHello() override;
     void sendUnicastHello(Neighbor& nbr) override;
@@ -42,12 +42,15 @@ public:
     bool sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& records) override;
     bool sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds) override;
     bool sendLSRequest(Neighbor& nbr, const std::vector<LsaKey>& keys) override;
-    bool sendReliableLSUpdate(Neighbor* nbr, std::vector<LsaRecordRef>& keys) override;
-    bool sendLSUpdate(Neighbor* nbr, std::vector<LsaRecordRef>& keys) override;
+    bool sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys) override;
+    bool sendLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys) override;
 
     void retransmitDbd(Neighbor& nbr) override;
 
 private:
+    bool processOptions(uint32_t options, bool isStatic = false) override;
+
+    void finalizeHeader(Ospfv2Header& hdr, OspfBuilder& builder, bool lls = false);
 
     void transmitReliable(PacketBuilder& pkt, Neighbor* neighbor, Ospfv2Header& header);
     bool setupDbd(Neighbor& neighbor, Ospfv2Header& pkt);
@@ -58,16 +61,16 @@ private:
     uint16_t getMtu();
 
     std::optional<Ospfv2Header> buildHeader(PacketBuilder& builder, uint8_t type);
-    std::optional<Ospfv2HelloHeader> buildHello(OspfBuilder builder);
-    std::optional<Ospfv2DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr);
-    std::optional<Ospfv2LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaHeader& record);
+    std::optional<Ospfv2HelloHeader> buildHello(OspfBuilder builder, bool lls);
+    std::optional<Ospfv2DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
+    std::optional<Ospfv2LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record);
 
     std::deque<PacketBuilder> buildLSRequestList(const std::vector<LsaKey>& records);
-    std::deque<PacketBuilder> buildLSUpdateList(std::vector<LsaRecordRef>& records, std::vector<LsaRecordRef>& sentKeys);
+    std::deque<PacketBuilder> buildLSUpdateList(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records, std::vector<LsaRecordRef>& sentKeys);
 
     size_t buildLSRequest(OspfBuilder& builder, std::span<const LsaKey>& key);
     size_t buildLSAck(OspfBuilder& builder, std::span<LsaRecordRef>& acks);
-    size_t buildLSUpdate(OspfBuilder& builder, std::vector<LsaRecordRef>& sentKeys, std::span<LsaRecordRef>& keys);
+    size_t buildLSUpdate(OspfBuilder& builder, std::vector<LsaRecordRef>& sentKeys, std::span<std::pair<FloodInfo, LsaRecordRef>>& keys);
 
     void buildDescriptions(OspfBuilder& builder, Neighbor& nbr);
     bool buildLSABody(OspfBuilder& builder, LsaRecord& body, uint8_t type);

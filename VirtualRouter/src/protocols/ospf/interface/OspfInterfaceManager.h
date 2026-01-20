@@ -24,7 +24,7 @@ public:
     InterfaceManager(OspfProcess& process);
     ~InterfaceManager();
 
-    OspfInterface* createInterface(Interface* interface, OspfInterfaceId& id);
+    OspfInterface& createInterface(Interface& interface, OspfInterfaceId& id);
     void refreshInterfaceList();
 
     void deactivateAll();
@@ -33,7 +33,6 @@ public:
 
     // Lists
     std::map<OspfInterfaceId, OspfInterface> ospfInterfaceList;
-    std::unordered_map<OspfInterfaceId, InterfaceConfigs*> ospfInterfaceConfigList;
     std::shared_mutex interfaceMutex;
 
 private:

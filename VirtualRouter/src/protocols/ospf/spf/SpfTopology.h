@@ -33,7 +33,6 @@ public:
     bool expandNetwork(uint64_t vertexId, std::vector<uint32_t>& attachedRouters);
 
     const OspfArea& area;
-    const bool isV3;
 };
 }
 

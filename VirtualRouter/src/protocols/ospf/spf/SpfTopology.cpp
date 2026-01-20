@@ -9,8 +9,10 @@ namespace OSPF
 {
 template <typename Policy>
 SpfTopology<Policy>::SpfTopology(const OspfArea& area)
-    : area(area), isV3(area.topology().getProcess().isV3)
+    : area(area)
 {
+    std::vector<LsaKey> expired;
+
     area.lsdb().forEach([this](const LsaKey& key, const LsaRecord* record)
     {
         if (!record) return;
@@ -22,8 +24,9 @@ SpfTopology<Policy>::SpfTopology(const OspfArea& area)
         {
             auto& lsa = std::get<typename Policy::RouterLsa>(body);
             if (rec.header.age >= OSPF_MAX_AGE) return;
-            if (!isV3 && key.advertisingRouter != key.linkStateId)
-                return; // Allow 1 entry for ospfv2
+            if constexpr (std::is_same_v<Policy, PolicyV2>)
+                if (key.advertisingRouter != key.linkStateId)
+                    return;  // Allow 1 entry for ospfv2
             rtr[key.advertisingRouter].push_back(&lsa);
             return;
         }

@@ -6,18 +6,33 @@
 #include <OspfArea.h>
 #include <OspfTopology.h>
 #include <OspfProcess.h>
+#include <Interface.h>
 
 namespace OSPF
 {
 OspfOriginatorV2::OspfOriginatorV2(OspfArea& area) : OspfOriginator(area) {}
 
-void OspfOriginatorV2::updateInterface(uint32_t ifaceId)
+void OspfOriginatorV2::fullRefresh()
 {
-    addRouterLsa(ifaceId);
-    area.flood();
+    RefreshInfo info{.isRefresh = true};
+    addRouterLsa(std::nullopt, info, true);
+    
+    for (const auto& asbr : asbrLsas)
+        addAsbrLsa(asbr.first, info);
+
+    startRefresh<PolicyV2>(info);
+    area.flood<PolicyV2>();
 }
 
-void OspfOriginatorV2::addRouterLsa(uint32_t ifaceId)
+void OspfOriginatorV2::updateInterface(uint32_t ifaceId)
+{
+    RefreshInfo info{};
+    addRouterLsa(ifaceId, info);
+    startRefresh<PolicyV2>(info);
+    area.flood<PolicyV2>();
+}
+
+void OspfOriginatorV2::addRouterLsa(std::optional<uint32_t> ifaceId, RefreshInfo& refresh, bool fullRefresh)
 {
     LsaBody lsa = RouterLsaV2{};
     RouterLsaV2& router = std::get<RouterLsaV2>(lsa);
@@ -30,7 +45,7 @@ void OspfOriginatorV2::addRouterLsa(uint32_t ifaceId)
         for (auto& [id, iface] : ifmgr.ospfInterfaceList)
         {
             if (id.area != area.areaId) continue;
-            addRouterLink(lsa, iface, id.interfaceId == ifaceId);
+            addRouterLink(lsa, iface, refresh, fullRefresh || (ifaceId.has_value() && ifaceId.value() == id.interfaceId));
         }
     }
     uniqueLinks(router.links);
@@ -38,16 +53,16 @@ void OspfOriginatorV2::addRouterLsa(uint32_t ifaceId)
     uint32_t rid = area.topology().process.getRouterId();
     LsaKey key(OSPFV2_LSA_ROUTER, rid, rid);
 
-    if (lastRouterLsa.has_value() && (std::get<RouterLsaV2>(lastRouterLsa.value()) == router || key != lastRouterKey))
+    if (!refresh.isRefresh && lastRouterLsa.has_value() && std::get<RouterLsaV2>(lastRouterLsa.value()) == router && key == lastRouterKey)
         return;
 
     lastRouterLsa = lsa;
     lastRouterKey = key;
 
-    area.processReoriginatedLsa<PolicyV2>(key, std::move(lsa));
+    processOriginatedLsa<PolicyV2>(key, lsa, &refresh);
 }
 
-void OspfOriginatorV2::addNetworkLsa(const OspfInterface& iface)
+void OspfOriginatorV2::addNetworkLsa(const OspfInterface& iface, RefreshInfo& refresh)
 {
     LsaBody lsa = NetworkLsaV2{};
     NetworkLsaV2& network = std::get<NetworkLsaV2>(lsa);
@@ -69,59 +84,65 @@ void OspfOriginatorV2::addNetworkLsa(const OspfInterface& iface)
     LsaKey key(OSPFV2_LSA_NETWORK, readU32(iface.interfaceAddress.addr), selfRid);
     
     auto it = networkLsas.find(iface.id);
-    if (it != networkLsas.end() && std::get<NetworkLsaV2>(it->second.lastLsa) == network && it->second.key == key)
+    if (!refresh.isRefresh && it != networkLsas.end() && std::get<NetworkLsaV2>(it->second.lastLsa) == network && it->second.key == key)
         return;
 
-    networkLsas[iface.id] = NetworkState{key, lsa};
-    area.processReoriginatedLsa<PolicyV2>(key, std::move(lsa));
+    networkLsas[iface.id] = LsaState{key, lsa};
+    processOriginatedLsa<PolicyV2>(key, lsa, &refresh);
 }
 
 void OspfOriginatorV2::addExternal(uint32_t asbr, uint32_t lsid, bool remove)
 {
-    if (!asbrExternalRouters.contains(asbr))
+    if (!remove)
     {
-        if (remove) return;
-        addAsbrLsa(asbr);
+        RefreshInfo info{};
+        addAsbrLsa(asbr, info);
+        startRefresh<PolicyV2>(info);
     }
 
-    auto& external = asbrExternalRouters[asbr];
+    auto& external = externalRoutes[asbr];
 
-    bool found = std::find(external.second.begin(), external.second.end(), lsid) != external.second.end();
+    bool found = std::find(external.begin(), external.end(), lsid) != external.end();
 
     if (!found && !remove)
     {
-        external.second.push_back(lsid);
+        external.push_back(lsid);
     }
     else if (found && remove)
     {
-        external.second.erase(std::find(external.second.begin(), external.second.end(), lsid));
-        if (external.second.empty())
+        external.erase(std::find(external.begin(), external.end(), lsid));
+        if (external.empty())
         {
-            LsaKey key{OSPFV2_LSA_SUM_ASBR, asbr, area.topology().process.getRouterId()};
-            expire(key, external.first);
-            asbrExternalRouters.erase(asbr);
+            auto& asbrLsa = asbrLsas[asbr];
+            expire(asbrLsa.key, asbrLsa.lastLsa);
+            externalRoutes.erase(asbr);
+            asbrLsas.erase(asbr);
         }
     }
 }
 
 void OspfOriginatorV2::expire(LsaKey& key, LsaBody& lsa)
 {
-    area.processReoriginatedLsa<PolicyV2>(key, std::move(lsa), true);
+    processOriginatedLsa<PolicyV2>(key, lsa, nullptr);
 }
 
-void OspfOriginatorV2::addAsbrLsa(uint32_t asbr)
+void OspfOriginatorV2::addAsbrLsa(uint32_t asbr, RefreshInfo& refresh)
 {
     uint32_t metric = area.topology().table.lookupDistance(asbr);
     if (metric == 0) return;
-    auto it = asbrExternalRouters.emplace(asbr, SummaryRouterLsa{}, std::vector<uint32_t>{});
-    if (!it.second) return;
+    auto it = asbrLsas.find(asbr);
 
-    auto& lsa = std::get<SummaryRouterLsa>(it.first->second.first);
-    lsa.metric = metric;
+    LsaBody lsa = SummaryNetworkLsa{};
+    auto& asbrLsa = std::get<SummaryRouterLsa>(lsa);
+    asbrLsa.metric = metric;
 
     LsaKey key(OSPFV3_LSA_INTER_AREA_ROUTER, asbr, area.topology().process.getRouterId());
 
-    area.processReoriginatedLsa<PolicyV2>(key, lsa);
+    if (!refresh.isRefresh && it != asbrLsas.end() && std::get<SummaryRouterLsa>(it->second.lastLsa) == asbrLsa && key == it->second.key)
+        return;
+
+    asbrLsas[asbr] = LsaState{key, lsa};
+    processOriginatedLsa<PolicyV2>(key, lsa, &refresh);
 }
 
 void OspfOriginatorV2::removeNetworkLsa(uint32_t ifaceId)
@@ -130,8 +151,23 @@ void OspfOriginatorV2::removeNetworkLsa(uint32_t ifaceId)
     auto it = networkLsas.find(id);
     if (it == networkLsas.end()) return;
 
-    area.processReoriginatedLsa<PolicyV2>(it->second.key, std::move(it->second.lastLsa), true);
+    processOriginatedLsa<PolicyV2>(it->second.key, it->second.lastLsa, nullptr);
     networkLsas.erase(it);
+}
+
+void OspfOriginatorV2::addSecondaryLinks(LsaBody& router, const OspfInterface& iface)
+{
+    auto& lsa = std::get<RouterLsaV2>(router);
+    auto secondaries = iface.getIface().configs.ipv4.getSecondaryPrefixList(true);
+    for (const auto& secondary : secondaries)
+    {
+        lsa.links.push_back(RouterLinkV2{
+            .linkId = secondary.addr,
+            .linkData = Functions::prefixTo32Mask(secondary.prefixLength),
+            .type = OSPFV2_LINK_STUB,
+            .metric = iface.configs->cost.load(std::memory_order_relaxed)
+        });
+    }
 }
 
 void OspfOriginatorV2::addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr)
@@ -143,6 +179,8 @@ void OspfOriginatorV2::addTransitLink(LsaBody& router, const OspfInterface& ifac
         .type = OSPFV2_LINK_TRANSIT,
         .metric = iface.configs->cost.load(std::memory_order_relaxed)
     });
+    if (iface.configs->includeSecondaries.load(std::memory_order_relaxed))
+        addSecondaryLinks(router, iface);
 }
 
 void OspfOriginatorV2::addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor)
@@ -153,6 +191,8 @@ void OspfOriginatorV2::addP2PLink(LsaBody& router, const OspfInterface& iface, c
         .type = OSPFV2_LINK_P2P,
         .metric = iface.configs->cost.load(std::memory_order_relaxed)
     });
+    if (iface.configs->includeSecondaries.load(std::memory_order_relaxed))
+        addSecondaryLinks(router, iface);
 }
 
 void OspfOriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface)
@@ -163,6 +203,8 @@ void OspfOriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface)
         .type = OSPFV2_LINK_STUB,
         .metric = iface.configs->cost.load(std::memory_order_relaxed)
     });
+    if (iface.configs->includeSecondaries.load(std::memory_order_relaxed))
+        addSecondaryLinks(router, iface);
 }
 
 void OspfOriginatorV2::addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr)

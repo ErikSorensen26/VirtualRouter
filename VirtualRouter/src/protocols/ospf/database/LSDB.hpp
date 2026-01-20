@@ -29,6 +29,7 @@
 #include <ExternalLsaV3.hpp>
 #include <LinkLsa.hpp>
 #include <IntraAreaPrefixLsa.hpp>
+#include <FloodTypes.hpp>
 
 namespace OSPF
 {
@@ -63,6 +64,15 @@ struct LsaHeader final
     uint16_t length{0};
     uint16_t age{0};
     uint8_t options{0};
+
+    bool operator==(LsaHeader& rhs)
+    {
+        return sequence == rhs.sequence &&
+               checksum == rhs.checksum &&
+               length == rhs.length &&
+               age == rhs.age &&
+               options == rhs.options;
+    }
 };
 static_assert(sizeof(LsaHeader) == 12, "Unexpected LsaHeader size");
 
@@ -82,6 +92,7 @@ struct IncomingLsaContext final
     
     bool checksumValid{false};
     bool selfOriginatedKey{false};
+    FloodInfo info{};
 
     uint32_t incomingInterface{0};
     uint32_t incomingNeighbor{0};

@@ -468,11 +468,24 @@ bool Interface::setVRF(VirtualRouter* vrf)
 EigrpConfigs::InterfaceConfigs* Interface::getEigrpConfig(uint32_t as, AddressFamily af, bool negate)
 {
     std::pair<uint32_t, AddressFamily> key = {as, af};
-    if (!configs.eigrp.eigrpInterfaceConfigList.contains(key))
+    auto configIt = configs.eigrp.eigrpInterfaceConfigList.find(key);
+    if (configIt == configs.eigrp.eigrpInterfaceConfigList.end())
     {
         if (negate) return nullptr;
-        EigrpConfigs::InterfaceConfigs* config = new EigrpConfigs::InterfaceConfigs(configs.key);
-        configs.eigrp.eigrpInterfaceConfigList[key] = config;
+        auto newConfig = configs.eigrp.eigrpInterfaceConfigList.emplace(key, configs.key);
+        return &newConfig.first->second;
     }
-    return configs.eigrp.eigrpInterfaceConfigList[key];
+    return &configs.eigrp.eigrpInterfaceConfigList[key];
+}
+
+OSPF::InterfaceConfigs& Interface::getOspfConfig(uint32_t id, AddressFamily af)
+{
+    std::pair<uint32_t, AddressFamily> key = { id, af };
+    auto configIt = configs.ospf.ospfInterfaceConfigList.find(key);
+    if (configIt == configs.ospf.ospfInterfaceConfigList.end())
+    {
+        auto newConfig = configs.ospf.ospfInterfaceConfigList.emplace(key, configs.key);
+        return newConfig.first->second;
+    }
+    return configs.ospf.ospfInterfaceConfigList[key];
 }

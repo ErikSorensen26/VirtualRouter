@@ -51,14 +51,15 @@ public:
     LsaRecord* find(const LsaKey& key);
     const LsaRecord* find(const LsaKey& key) const;
 
+    // Clear the table and released pooled memory back to the upstream resource.
+    void releaseMemory();
     bool erase(const LsaKey& key);
     void clear();
 
-    // Clear the table and released pooled memory back to the upstream resource.
-    void releaseMemory();
+    template <typename Pred>
+    size_t purgeIf(Pred&& pred);
 
     LsaRecord& upsertMeta(const IncomingLsaContext& lsa, LsaRecordFlags flags);
-
     template <typename Body>
     Body& upsertBody(const IncomingLsaContext& lsa, LsaRecordFlags flags);
 
@@ -67,9 +68,6 @@ public:
     bool setFlags(const LsaKey& key, LsaRecordFlags flags);
 
     // Iteration (single pass; callback signature)
-    template <typename Fn>
-    void forEach(Fn&& fn);
-
     template <typename Fn>
     void forEach(Fn&& fn) const;
 
@@ -85,8 +83,8 @@ public:
     size_t ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired);
     size_t purgeExpired(uint16_t maxAge);
 
-    template <typename Pred>
-    size_t purgeIf(Pred&& pred);
+    // Other
+    bool runDCIntegrityScan();
 
     O_LSDB& getIterableLSDB() { return dbStorage; }
     const O_LSDB& getIterableLSDB() const { return dbStorage; }
@@ -155,22 +153,12 @@ inline Body& LsdbTable::emplaceBody(LsaRecord& rec)
 }
 
 template <typename Fn>
-inline void LsdbTable::forEach(Fn&& fn)
-{
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
-    for (auto& kv : db)
-        fn(kv.first, kv.second);
-}
-
-template <typename Fn>
 inline void LsdbTable::forEach(Fn&& fn) const
 {
 #if OSPF_LSDB_THREADSAFE
     std::shared_lock<std::shared_mutex> lk(mu);
 #endif
-    for (const auto& kv : db)
+    for (auto& kv : db)
         fn(kv.first, kv.second);
 }
 
@@ -182,7 +170,7 @@ inline void LsdbTable::forEachInAdv(const LsaAdvKey& advRtr, Fn&& fn) const
 #endif
     auto it = advDb.find(advRtr);
     if (it == advDb.end()) return;
-    for (const auto& kv : it->second)
+    for (auto& kv : it->second)
         fn(kv.first, kv.second);
 }
 
@@ -193,7 +181,7 @@ inline void LsdbTable::forEachInType(uint32_t type, Fn&& fn) const
     std::shared_lock<std::shared_mutex> lk(mu);
 #endif
     auto it = typeDb.find(type);
-    for (const auto& kv : it->second)
+    for (auto& kv : it->second)
         fn(kv.first, kv.second);
 }
 

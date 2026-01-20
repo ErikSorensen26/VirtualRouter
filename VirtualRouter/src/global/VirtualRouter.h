@@ -9,6 +9,7 @@
 #include <shared_mutex>
 #include <AddressFamily.hpp>
 #include <Eigrp.h>
+#include <OspfProcess.h>
 
 class Interface; ///< Forward declaration of Interface.
 class Global;    ///< Forward declaration of Global.

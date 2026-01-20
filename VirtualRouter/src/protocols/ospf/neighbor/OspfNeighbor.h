@@ -47,6 +47,9 @@ public:
 
     OspfInterface& getIface() const { return iface; }
 
+    std::atomic<uint32_t> dr{0};
+    std::atomic<uint32_t> bdr{0};
+
 public:
 
     std::optional<LsaKey> currentDbd = std::nullopt;
@@ -54,16 +57,12 @@ public:
     const IPAddress ipAddress;
     const bool unicast{false};
     const uint32_t routerID;
-    uint16_t mtu = 0;
+    const uint16_t mtu;
     uint32_t neighborInterfaceId = 0;    
 
     std::atomic<uint32_t> currentSeq;
 
     std::atomic<uint8_t> priority;
-
-    // MultiAccess
-    std::atomic<bool> isDr;
-    std::atomic<bool> isBdr;
 
     // Timers
     std::atomic<uint32_t> inactivityTimerId{0};

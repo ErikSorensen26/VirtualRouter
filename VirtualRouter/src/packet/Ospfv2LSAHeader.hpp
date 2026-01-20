@@ -5,7 +5,6 @@
 
 #include <HeaderHelpers.hpp>
 #include <TlvOptions.hpp>
-#include <span>
 
 #define OSPFV2_LSA_ROUTER        0x01  ///< Router LSA (intra-area topology)
 #define OSPFV2_LSA_NETWORK       0x02  ///< Network LSA (DR-generated)
@@ -77,8 +76,6 @@
 
 #define OSPFV2_EXT_METRIC_E1     0  ///< Type-1 external (internal cost added)
 #define OSPFV2_EXT_METRIC_E2     1  ///< Type-2 external (external dominates)
-
-#define OSPF_MAX_AGE       3600  ///< MaxAge (flush LSA)
 
 /*
  * @struct Ospfv2LSAHeaderRaw

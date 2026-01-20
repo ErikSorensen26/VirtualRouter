@@ -7,6 +7,7 @@
 #include <Interface.h>
 #include <OspfTypes.hpp>
 #include <VirtualRouter.h>
+#include <OspfArea.h>
 
 namespace OSPF
 {
@@ -22,52 +23,35 @@ OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
     return nullptr;
 }
 
-OspfInterface* InterfaceManager::createInterface(Interface* interface, OspfInterfaceId& key)
+OspfInterface& InterfaceManager::createInterface(Interface& interface, OspfInterfaceId& key)
 {
     if (auto it = ospfInterfaceList.find(key); it != ospfInterfaceList.end())
-        return &it->second;
+        return it->second;
 
-    if (interface)
+    AddressFamily af = process.getAF();
+    uint32_t id = process.getProcId();
+
+    InterfaceConfigs& intConfig = interface.getOspfConfig(id, af);
+
+    if (!process.isV3)
     {
-        AddressFamily af = process.getAF();
-        uint32_t id = process.getProcId();
-
-        InterfaceConfigs* intConfig;
-        auto pairIt = ospfInterfaceConfigList.find(key);
-        if (pairIt != ospfInterfaceConfigList.end())
-        {
-            intConfig = pairIt->second;
-        }
-        else
-        {
-            // INITIALIZE OSPF CONFIGURATIONS
-            intConfig = process.isV3
-                ? new InterfaceConfigs(interface->configs.key)
-                : interface->getOspfConfig(id, false);
-            ospfInterfaceConfigList[key] = intConfig;
-        }
-
-        if (!process.isV3)
-        {
-            auto ifaceIt = ospfInterfaceList.try_emplace(key, process, *interface, key);
-            OspfInterface* ospfIfacePtr = &ifaceIt.first->second;
-            // TODO: Sync connected
-            interface->ospfInterfaceList[id].IPv4 = ospfIfacePtr;
-            return ospfIfacePtr;
-        }
-        else
-        {
-            auto ifaceIt = ospfInterfaceList.try_emplace(key, process, *interface, key);
-            OspfInterface* ospfIfacePtr = &ifaceIt.first->second;
-            // TODO: Sync connected
-            if (af == AddressFamily::IPv4)
-                interface->ospfInterfaceList[id].IPv4 = ospfIfacePtr;
-            else
-                interface->ospfInterfaceList[id].IPv6 = ospfIfacePtr;
-            return ospfIfacePtr;
-        }
+        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, intConfig, key);
+        OspfInterface& ospfIface = ifaceIt.first->second;
+        ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
+        interface.ospfInterfaceList[id].IPv4 = &ospfIface;
+        return ospfIface;
     }
-    return nullptr;
+    else
+    {
+        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, intConfig, key);
+        OspfInterface& ospfIface = ifaceIt.first->second;
+        ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
+        if (af == AddressFamily::IPv4)
+            interface.ospfInterfaceList[id].IPv4 = &ospfIface;
+        else
+            interface.ospfInterfaceList[id].IPv6 = &ospfIface;
+        return ospfIface;
+    }
 }
 
 void InterfaceManager::refreshInterfaceList()
@@ -99,7 +83,6 @@ void InterfaceManager::refreshInterfaceList()
             }
         }
 
-        auto& config = process.getConfigs();
         uint32_t procId = process.getProcId();
 
         auto isInNetworkRange = [&](uint8_t* ip) -> std::optional<uint32_t>
@@ -129,9 +112,9 @@ void InterfaceManager::refreshInterfaceList()
 
             if (!process.isV3)
             {
-                currentAddress = interface->configs.ipv4.getAddressMask();
+                currentAddress = interface->configs.ipv4.getPrimaryPrefix();
                 auto area = isInNetworkRange(currentAddress.addr);
-                if (area.has_value()) key.emplace(id, area.value());
+                if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress(), area.value());
             }
             else
             {
@@ -167,10 +150,12 @@ void InterfaceManager::refreshInterfaceList()
         // Check if this interface already exists.
         bool exists = key.interfaceId == 0 && key.area == 0;
         if (exists)
-        {//TODO: syncronize connected
+        {
+            auto* iface = static_cast<OspfInterface*>(interface);
+            iface->getArea().getOriginator().updateInterface(iface->id.interfaceId);
         }
         else
-            createInterface(static_cast<Interface*>(interface), key);
+            createInterface(*static_cast<Interface*>(interface), key);
     }
 }
 

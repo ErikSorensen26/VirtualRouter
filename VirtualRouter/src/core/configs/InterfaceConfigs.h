@@ -254,7 +254,7 @@ public:
     struct Eigrp
     {
         std::unordered_set<uint32_t> ipv6AutonomousSystems; ///< Enabled ipv6 autonomous system list
-        std::map<std::pair<uint32_t, AddressFamily>, EigrpConfigs::InterfaceConfigs*> eigrpInterfaceConfigList; ///< As number to configuration
+        std::map<std::pair<uint32_t, AddressFamily>, EigrpConfigs::InterfaceConfigs> eigrpInterfaceConfigList; ///< As number to configuration
     } eigrp;
 
     /**
@@ -264,7 +264,7 @@ public:
     struct Ospf
     {
         std::unordered_map<uint32_t, uint32_t> enabledProcesses;
-        std::map<std::pair<uint32_t, AddressFamily>, OSPF::InterfaceConfigs*> ospfInterfaceConfigList;
+        std::map<std::pair<uint32_t, AddressFamily>, OSPF::InterfaceConfigs> ospfInterfaceConfigList;
     } ospf;
 
     /**

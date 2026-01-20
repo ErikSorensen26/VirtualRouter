@@ -11,6 +11,13 @@
 #include <shared_mutex>
 #include <map>
 
+#include <Ospfv2LSAHeader.hpp>
+#include <Ospfv3LSAHeader.hpp>
+
+#define OSPF_MAX_AGE 3600
+#define OSPF_REFRESH_AGE 1800
+#define OSPF_MAX_DIFF 900
+
 namespace OSPF
 {
 struct AreaConfigs
@@ -208,15 +215,15 @@ struct InterfaceConfigs
 
     const uint32_t key;
     
-    std::atomic<bool> includeSecondaries; //TODO
-    std::atomic<bool> bfd; //TODO
-    std::atomic<bool> databaseFilterAll; //TODO
-    std::atomic<bool> databaseFilterOut; //TODO
-    std::atomic<bool> demandCircuit; //TODO
-    std::atomic<bool> demandCircuitIgnore; //TODO
-    std::atomic<bool> floodReduction; //TODO
-    std::atomic<bool> lls; //TODO
-    std::atomic<bool> mtuIgnore; //TODO
+    std::atomic<bool> includeSecondaries = false;
+    std::atomic<bool> bfd = false; //TODO
+    std::atomic<bool> databaseFilterAll = false;
+    std::atomic<bool> databaseFilterOut = false;
+    std::atomic<bool> demandCircuit = false;
+    std::atomic<bool> demandCircuitIgnore = false;
+    std::atomic<bool> floodReduction = false;
+    std::atomic<bool> lls = true;
+    std::atomic<bool> mtuIgnore = false;
     std::atomic<bool> prefixSuppression; //TODO
     std::atomic<bool> shutdown; //TODO
     std::atomic<bool> isPassive;
@@ -233,8 +240,8 @@ struct InterfaceConfigs
     std::atomic<uint16_t> retransmitInterval;
     std::atomic<uint16_t> transmitDelay; //TODO
 
-    enum class NetworkType : uint8_t { BROADCAST, NON_BROADCAST, POINT_TO_MULTIPOINT, POINT_TO_POINT };
-    std::atomic<NetworkType> networkType;
+    enum class NetworkType : uint8_t { BROADCAST, NON_BROADCAST, POINT_TO_MULTIPOINT, MULTIPOINT_NON_BROADCAST, POINT_TO_POINT };
+    std::atomic<NetworkType> networkType; // TODO NEED TO SET UNICAST/MULTICAST BOOL BASED ON THIS
 
     std::unordered_map<IPAddress, TopologyConfigs::Neighbor> neighbors; //TODO
 
