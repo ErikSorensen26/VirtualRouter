@@ -67,8 +67,10 @@ void OspfOriginatorV2::addNetworkLsa(const OspfInterface& iface, RefreshInfo& re
     LsaBody lsa = NetworkLsaV2{};
     NetworkLsaV2& network = std::get<NetworkLsaV2>(lsa);
 
+    bool prefixSuppression = iface.configs.prefixSuppression.load(std::memory_order_relaxed);
+
     uint32_t selfRid = area.topology().process.getRouterId();
-    network.networkMask = iface.interfaceAddress.getMask();
+    network.networkMask = prefixSuppression ? 0xFFFFFFFF : iface.interfaceAddress.getMask();
     network.attachedRouters.push_back(selfRid);
 
     {
@@ -165,7 +167,7 @@ void OspfOriginatorV2::addSecondaryLinks(LsaBody& router, const OspfInterface& i
             .linkId = secondary.addr,
             .linkData = Functions::prefixTo32Mask(secondary.prefixLength),
             .type = OSPFV2_LINK_STUB,
-            .metric = iface.configs->cost.load(std::memory_order_relaxed)
+            .metric = iface.configs.cost.load(std::memory_order_relaxed)
         });
     }
 }
@@ -177,9 +179,9 @@ void OspfOriginatorV2::addTransitLink(LsaBody& router, const OspfInterface& ifac
         .linkId = static_cast<uint32_t>(iface.dr.ip.load(std::memory_order_relaxed)),
         .linkData = readU32(iface.interfaceAddress.addr),
         .type = OSPFV2_LINK_TRANSIT,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed)
+        .metric = iface.configs.cost.load(std::memory_order_relaxed)
     });
-    if (iface.configs->includeSecondaries.load(std::memory_order_relaxed))
+    if (iface.configs.includeSecondaries.load(std::memory_order_relaxed) && iface.configs.prefixSuppression.load(std::memory_order_relaxed))
         addSecondaryLinks(router, iface);
 }
 
@@ -189,21 +191,21 @@ void OspfOriginatorV2::addP2PLink(LsaBody& router, const OspfInterface& iface, c
         .linkId = neighbor.routerID,
         .linkData = readU32(iface.interfaceAddress.addr),
         .type = OSPFV2_LINK_P2P,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed)
+        .metric = iface.configs.cost.load(std::memory_order_relaxed)
     });
-    if (iface.configs->includeSecondaries.load(std::memory_order_relaxed))
+    if (iface.configs.includeSecondaries.load(std::memory_order_relaxed))
         addSecondaryLinks(router, iface);
 }
 
-void OspfOriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface)
+void OspfOriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask)
 {
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
         .linkId = readU32(iface.interfaceAddress.addr),
-        .linkData = Functions::prefixTo32Mask(iface.interfaceAddress.prefixLength),
+        .linkData = fullMask ? 0xFFFFFFFF : Functions::prefixTo32Mask(iface.interfaceAddress.prefixLength),
         .type = OSPFV2_LINK_STUB,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed)
+        .metric = iface.configs.cost.load(std::memory_order_relaxed)
     });
-    if (iface.configs->includeSecondaries.load(std::memory_order_relaxed))
+    if (iface.configs.includeSecondaries.load(std::memory_order_relaxed))
         addSecondaryLinks(router, iface);
 }
 
@@ -213,7 +215,7 @@ void OspfOriginatorV2::addVirtualLink(LsaBody& router, const OspfInterface& ifac
         .linkId = vNbr.routerID,
         .linkData = iface.getAreaId(),
         .type = OSPFV2_LINK_VIRTUAL,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed)
+        .metric = iface.configs.cost.load(std::memory_order_relaxed)
     });
 }
 }

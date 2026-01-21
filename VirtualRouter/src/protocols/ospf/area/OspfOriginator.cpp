@@ -91,10 +91,11 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
 {
     if (iface.getAreaId() != area.areaId) return;
 
-    auto ntype = iface.configs->networkType.load(std::memory_order_relaxed);
+    bool prefixSuppression = iface.configs.prefixSuppression.load(std::memory_order_relaxed);
+    auto ntype = iface.configs.networkType.load(std::memory_order_relaxed);
     const auto& ntable = iface.getNTable();
 
-    if (iface.configs->isPassive.load(std::memory_order_relaxed) ||
+    if (iface.configs.isPassive.load(std::memory_order_relaxed) ||
         iface.getIface().configs.interfaceType == InterfaceType::LOOPBACK)
     {
         addStubLink(router, iface);
@@ -113,9 +114,27 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
             if (isVirtual)
                 addVirtualLink(router, iface, nbr);
             else
+            {
                 addP2PLink(router, iface, nbr);
+                if (!prefixSuppression)
+                    addStubLink(router, iface);
+            }
         }
         return;
+    }
+
+    if (ntype == InterfaceConfigs::NetworkType::POINT_TO_MULTIPOINT)
+    {
+        std::shared_lock<std::shared_mutex> lock(ntable.mu);
+        for (auto& [rid, nbr] : ntable.neighbors)
+        {
+            if (nbr.getState() != Neighbor::State::FULL)
+                continue;
+
+            addP2PLink(router, iface, nbr);
+            if (!prefixSuppression)
+                addStubLink(router, iface, true);
+        }
     }
 
     if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||

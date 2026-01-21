@@ -44,7 +44,7 @@ protected:
 
     void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;
     void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) override;
-    void addStubLink(LsaBody& router, const OspfInterface& iface) override;
+    void addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask = false) override;
     void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr) override;
 };
 }

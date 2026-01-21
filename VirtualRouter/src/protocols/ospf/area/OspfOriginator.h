@@ -75,7 +75,7 @@ protected:
     // Links
     virtual void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr);
     virtual void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor);
-    virtual void addStubLink(LsaBody& router, const OspfInterface& iface);
+    virtual void addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask = false);
     virtual void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr);
 
     template <typename RouterLink>

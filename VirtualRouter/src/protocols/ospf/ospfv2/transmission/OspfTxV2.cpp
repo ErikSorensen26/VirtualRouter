@@ -30,6 +30,15 @@ void PacketDispatcherV2::finalizeHeader(Ospfv2Header& hdr, OspfBuilder& builder,
 {
     hdr.setPacketLen(static_cast<uint16_t>(builder.offset + Ospfv2Header::fixedSize));
 
+    if (lls)
+    {
+        uint8_t* buf = builder.getBuf();
+        addLinkLocalExtension(buf, false);
+
+        if (/*no auth*/true) // Auth does not require checksum
+            addLinkLocalChecksum(buf);
+    }
+
     // TODO: add auth to header
 }
 
@@ -48,7 +57,7 @@ void PacketDispatcherV2::sendHello()
     bool lls = iface.configs.lls.load(std::memory_order_relaxed);
     if (!buildHello(builder, lls)) return;
 
-    finalizeHeader(*ospfHeader, builder);
+    finalizeHeader(*ospfHeader, builder, lls);
     transmit(pkt, OSPFV2_ALL_SPF_ROUTERS);
 }
 
@@ -64,9 +73,10 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    if (!buildHello(builder)) return;
+    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    if (!buildHello(builder, lls)) return;
 
-    finalizeHeader(*ospfHeader, builder);
+    finalizeHeader(*ospfHeader, builder, lls);
     transmit(pkt, nbr.ipAddress.raw);
 }
 
@@ -82,7 +92,8 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto dbd = buildDBD(builder, nbr);
+    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    auto dbd = buildDBD(builder, nbr, lls);
     if (!dbd.has_value()) return;
 
     dbd->setFlagI(true);
@@ -92,7 +103,7 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
     ospfHeader.value().setTrailSize(Ospfv2DBDHeader::fixedSize);
     setupDbd(nbr, ospfHeader.value());
 
-    finalizeHeader(*ospfHeader, builder);
+    finalizeHeader(*ospfHeader, builder, lls);
     transmit(pkt, nbr.ipAddress.raw);
 }
 
@@ -111,7 +122,8 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto db = buildDBD(builder, nbr);
+    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    auto db = buildDBD(builder, nbr, lls);
     if (!db.has_value()) return false;
 
     buildDescriptions(builder, nbr);
@@ -121,7 +133,7 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
     ospfHeader.value().setTrailSize(builder.offset);
     setupDbd(nbr, ospfHeader.value());
 
-    finalizeHeader(*ospfHeader, builder);
+    finalizeHeader(*ospfHeader, builder, lls);
     transmit(pkt, nbr.ipAddress.raw);
 
     return true;

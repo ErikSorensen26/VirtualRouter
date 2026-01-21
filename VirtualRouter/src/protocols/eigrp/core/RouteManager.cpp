@@ -1,5 +1,7 @@
 // RouteManager.cpp
 
+// TODO add external route capability for adding to rib
+
 #include <RouteManager.h>
 #include "Eigrp.h"
 #include <EigrpInterface.h>

@@ -224,18 +224,21 @@ struct InterfaceConfigs
     std::atomic<bool> floodReduction = false;
     std::atomic<bool> lls = true;
     std::atomic<bool> mtuIgnore = false;
-    std::atomic<bool> prefixSuppression; //TODO
-    std::atomic<bool> shutdown; //TODO
-    std::atomic<bool> isPassive;
+    std::atomic<bool> prefixSuppression = false; // this needs to re originate when set // Link lsa suppresses prefixes
+    std::atomic<bool> shutdown = false; //TODO
+    std::atomic<bool> isPassive = false;
 
-    std::atomic<uint8_t> priority;
-    std::atomic<uint8_t> helloMultiplier; //TODO
+    bool prefixSuppressionConfig = false;
+    bool deadIntervalConfig = false;
+
+    std::atomic<uint8_t> priority = 1;
+    std::atomic<uint8_t> helloMultiplier = 1;
     std::atomic<std::optional<uint8_t>> ttlSecHops; //TODO
 
     std::atomic<uint16_t> area; //TODO
     std::atomic<uint16_t> cost; //TODO
-    std::atomic<uint16_t> deadInterval;
-    std::atomic<uint16_t> helloInterval;
+    std::atomic<uint16_t> deadInterval = 40; // 4x hello if not configured
+    std::atomic<uint16_t> helloInterval = 10;
     std::atomic<uint16_t> resyncTimeout; //TODO
     std::atomic<uint16_t> retransmitInterval;
     std::atomic<uint16_t> transmitDelay; //TODO

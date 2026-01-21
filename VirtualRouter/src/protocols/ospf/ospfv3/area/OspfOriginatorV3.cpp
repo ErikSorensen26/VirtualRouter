@@ -170,16 +170,26 @@ void OspfOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBod
                 OspfInterfaceId ifaceId(link.interfaceId, area.areaId);
 
                 auto it = ifaceMgr.ospfInterfaceList.find(ifaceId);
-                if (it == ifaceMgr.ospfInterfaceList.end())
+                if (it == ifaceMgr.ospfInterfaceList.end() || it->second.configs.prefixSuppression.load(std::memory_order_relaxed))
                     continue;
 
-                uint16_t cost = it->second.configs->cost.load(std::memory_order_relaxed);
+                bool isP2MP = it->second.configs.networkType == InterfaceConfigs::NetworkType::POINT_TO_MULTIPOINT;
+
+                uint16_t cost = it->second.configs.cost.load(std::memory_order_relaxed);
                 auto prefixes = it->second.getIface().configs.ipv6.getRoutablePrefixSet(true);
 
                 out.reserve(prefixes.size());
 
                 for (auto pit = prefixes.begin(); pit != prefixes.end();)
-                    out.emplace(std::move(prefixes.extract(pit++).value()), cost);
+                {
+                    auto prefix = prefixes.extract(pit++);
+                    if (isP2MP) 
+                    {
+                        out.emplace(std::move(prefix), cost);
+                        prefix.value().prefixLength = 128;
+                    }
+                    out.emplace(std::move(prefix), cost);
+                }
             }
         }
     }
@@ -217,6 +227,7 @@ void OspfOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBod
         }
     }
 
+    // Compare current against old
     for (auto& [refLsid, prefixMap] : prefixesByLsid)
     {
         for (auto& [prefix, cost] : prefixMap)
@@ -342,7 +353,7 @@ void OspfOriginatorV3::addNetworkPrefixLsa(LsaKey& key, const OspfInterface& ifa
     uint32_t selfRid = area.topology().process.getRouterId();
 
     std::unordered_set<IPPrefix> prefixSet = iface.getIface().configs.ipv6.getRoutablePrefixSet();
-    uint32_t cost = iface.configs->cost.load(std::memory_order_relaxed);
+    uint32_t cost = iface.configs.cost.load(std::memory_order_relaxed);
 
     std::vector<std::pair<uint32_t, LsaBody>> newLsas;
     newLsas.reserve(lastNetworkPrefixes.size() + 4);
@@ -350,6 +361,13 @@ void OspfOriginatorV3::addNetworkPrefixLsa(LsaKey& key, const OspfInterface& ifa
     // Rebuild existing prefix lsas
     auto lastIt = std::find_if(lastNetworkPrefixes.begin(), lastNetworkPrefixes.end(),
         [&](const std::pair<uint32_t, std::vector<std::pair<uint32_t, LsaBody>>>& p) { return p.first == iface.id.interfaceId; });
+
+    if (iface.configs.prefixSuppression.load(std::memory_order_relaxed))
+    {
+        // No network prefixes sent when suppressed, clear previous state.
+        lastIt->second.clear();
+        return;
+    }
 
     if (lastIt != lastNetworkPrefixes.end())
     {
@@ -507,7 +525,7 @@ void OspfOriginatorV3::addTransitLink(LsaBody& router, const OspfInterface& ifac
     uint32_t intId = nbr ? nbr->neighborInterfaceId : iface.id.interfaceId;
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_TRANSIT,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed),
+        .metric = iface.configs.cost.load(std::memory_order_relaxed),
         .interfaceId = iface.id.interfaceId,
         .neighborInterfaceId = intId,
         .neighborRouterId = iface.dr.rid.load(std::memory_order_relaxed)
@@ -518,18 +536,19 @@ void OspfOriginatorV3::addP2PLink(LsaBody& router, const OspfInterface& iface, c
 {
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_P2P,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed),
+        .metric = iface.configs.cost.load(std::memory_order_relaxed),
         .interfaceId = iface.getIface().configs.key,
         .neighborInterfaceId = neighbor.neighborInterfaceId,
         .neighborRouterId = neighbor.routerID
     });
 }
 
-void OspfOriginatorV3::addStubLink(LsaBody& router, const OspfInterface& iface)
+void OspfOriginatorV3::addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask)
 {
+    if (fullMask) return; // Full mask is only a v2 feature
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_STUB,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed),
+        .metric = iface.configs.cost.load(std::memory_order_relaxed),
         .interfaceId = iface.getIface().configs.key,
         .neighborInterfaceId = 0,
         .neighborRouterId = 0
@@ -540,7 +559,7 @@ void OspfOriginatorV3::addVirtualLink(LsaBody& router, const OspfInterface& ifac
 {
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_VIRTUAL,
-        .metric = iface.configs->cost.load(std::memory_order_relaxed),
+        .metric = iface.configs.cost.load(std::memory_order_relaxed),
         .interfaceId = iface.getIface().configs.key,
         .neighborInterfaceId = vNbr.neighborInterfaceId,
         .neighborRouterId = vNbr.routerID

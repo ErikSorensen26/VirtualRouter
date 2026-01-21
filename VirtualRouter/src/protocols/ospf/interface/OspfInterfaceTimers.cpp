@@ -4,6 +4,7 @@
 #include <OspfNeighbor.h>
 #include <OspfInterface.h>
 #include <TimeManager.h>
+#include <algorithm>
 
 namespace OSPF
 {
@@ -15,7 +16,7 @@ InterfaceTimers::InterfaceTimers(TimeManager& tm, OspfInterface& iface)
 
 void InterfaceTimers::scheduleHello()
 {
-    if (iface.configs->isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
     // Mark hello as active
     if (helloTimerId.load(std::memory_order_relaxed) != 0)
         return; // Timer already active
@@ -26,7 +27,8 @@ void InterfaceTimers::scheduleHello()
             helloStartTime = std::chrono::steady_clock::now();
         }
 
-        auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(iface.configs->helloInterval.load(std::memory_order_relaxed));
+        uint32_t multiplier = std::max(static_cast<uint8_t>(1), iface.configs.helloMultiplier.load(std::memory_order_relaxed));
+        auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(iface.configs.helloInterval.load(std::memory_order_relaxed) / multiplier);
 
         uint32_t timerId = tmgr.addTimer(nextExpiration, [this](uint32_t) {
             helloTimerId.store(0, std::memory_order_release);
@@ -71,7 +73,7 @@ void InterfaceTimers::startInactiveTimer(Neighbor& neighbor)
 {
     cancleInactiveTimer(neighbor);
     auto expirationTime = std::chrono::steady_clock::now()
-        + std::chrono::seconds(iface.configs->deadInterval.load(std::memory_order_relaxed));
+        + std::chrono::seconds(iface.configs.deadInterval.load(std::memory_order_relaxed));
     neighbor.inactivityTimerId.store(tmgr.addTimer(expirationTime,
         [this, nbr = &neighbor](uint32_t) {
             handleInactiveTimeExpire(*nbr);
@@ -96,7 +98,7 @@ void InterfaceTimers::handleInactiveTimeExpire(Neighbor& neighbor)
 
 void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.configs->retransmitInterval.load(std::memory_order_relaxed);
+    uint16_t timeout = iface.configs.retransmitInterval.load(std::memory_order_relaxed);
     uint32_t timerId = nbr.getRtr().dbdTimerId.load(std::memory_order_relaxed);
     if (timerId != 0) tmgr.cancelTimer(timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
@@ -108,7 +110,7 @@ void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.configs->retransmitInterval.load(std::memory_order_relaxed);
+    uint16_t timeout = iface.configs.retransmitInterval.load(std::memory_order_relaxed);
     uint32_t timerId = nbr.getRtr().lsrTimerId.load(std::memory_order_relaxed);
     if (timerId != 0) tmgr.cancelTimer(timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
@@ -119,7 +121,7 @@ void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
 
 void InterfaceTimers::startLsuRetransmissionTimer(Neighbor& nbr)
 {
-    uint16_t timeout = iface.configs->retransmitInterval.load(std::memory_order_relaxed);
+    uint16_t timeout = iface.configs.retransmitInterval.load(std::memory_order_relaxed);
     uint32_t timerId = nbr.getRtr().lsuTimerId.load(std::memory_order_relaxed);
     if (timerId != 0) tmgr.cancelTimer(timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
