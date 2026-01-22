@@ -1,8 +1,5 @@
 // Eigrp.h
 
-// TODO:
-// implement classic graceful restart
-
 #ifndef EIGRP_CORE_H
 #define EIGRP_CORE_H
 
@@ -94,7 +91,7 @@ public:
     inline uint32_t routerID() const { return readU32(rid.ID); }
 
     bool isNamed() const { return namedMode; }
-    uint16_t getAS() const { return asNumber; }
+    uint32_t getAS() const { return asNumber; }
     AddressFamily getAF() const { return addressFamily; }
 
     void setRouterID(const uint8_t* routerId) { std::memcpy(rid.ID, routerId, 4); rid.isStatic = true;}
@@ -103,7 +100,7 @@ public:
     VirtualRouter* routingInstance; ///< Routing instance coorsponding with the current process.
 
 private:
-    const uint16_t asNumber; ///< Autonomous System number.
+    const uint32_t asNumber; ///< Autonomous System number.
     const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
 
     EigrpTopology topology;
