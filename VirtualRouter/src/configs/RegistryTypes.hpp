@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <concepts>
+#include <cassert>
 
 #define FIELD(field) \
     (FieldBase*)&field
@@ -38,7 +39,7 @@ class AtomicField
 {
 public:
     using type = T;
-    static constexpr T dValue = D;
+    static constexpr auto dValue = D;
     static constexpr auto field = F;
 
     inline T load() const noexcept
@@ -55,8 +56,44 @@ public:
     {
         value.store(dValue, std::memory_order_relaxed);
     }
+
 private:
     std::atomic<T> value = D;
+};
+
+template <typename T, auto F>
+class UnsetAtomicField
+{
+public:
+    using type = T;
+    using isUnset = void; // Used for identification
+    static constexpr auto field = F;
+
+    inline T load() const noexcept
+    {
+        assert(valueSet.load(std::memory_order_relaxed) == true);
+        return value.load(std::memory_order_relaxed);
+    }
+
+    inline T set(T v) noexcept
+    {
+        value.store(v, std::memory_order_release);
+        valueSet.store(true, std::memory_order_release);
+    }
+
+    inline T unset() noexcept
+    {
+        valueSet.store(false, std::memory_order_release);
+    }
+
+    inline bool hasValue() noexcept
+    {
+        return valueSet.load(std::memory_order_relaxed);
+    }
+
+private:
+    std::atomic<bool> valueSet{false};
+    std::atomic<T> value;
 };
 
 template <VariableMultiplicityField T, auto F>
@@ -110,6 +147,50 @@ private:
     std::atomic<T> value;
     std::atomic<MaskState> state;
     AtomicField<T, D, F>* base;
+};
+
+template <auto F>
+class MaskedRefContainer
+{
+    static constexpr auto type = F;
+};
+
+template <typename T, auto F>
+class MaskedUnsetAtomicField
+{
+public:
+    MaskedUnsetAtomicField(UnsetAtomicField<T, F>& fallback)
+        : state(MaskState::INHERIT),
+          base(&fallback)
+    {}
+
+    inline T get() const noexcept
+    {
+        if (state.load(std::memory_order_relaxed) == MaskState::SET)
+            return value.load(std::memory_order_relaxed);
+        return base->load();
+    }
+
+    inline void set(T v) noexcept
+    {
+        value.store(v, std::memory_order_relaxed);
+        state.store(MaskState::SET, std::memory_order_relaxed);
+    }
+
+    inline void unset() noexcept
+    {
+        state.store(MaskState::INHERIT, std::memory_order_relaxed);
+    }
+
+    inline bool hasValue() noexcept
+    {
+        return state.load(std::memory_order_relaxed) == MaskState::SET || base->hasValue();
+    }
+
+private:
+    std::atomic<T> value;
+    std::atomic<MaskState> state;
+    UnsetAtomicField<T, F>* base;
 };
 
 template <VariableMultiplicityField T, auto F>

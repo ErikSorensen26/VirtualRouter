@@ -19,11 +19,36 @@ concept IsAtomicField = requires
     };
 
 template <typename T>
+concept IsUnsetAtomicField = requires
+    {
+        typename T::type;
+        typename T::isUnset;
+        { T::field };
+    };
+
+template <typename T>
+concept IsRefContainer = requires
+    {
+        typename T::type;
+        typename T::refType;
+        { T::field };
+    };
+
+template <typename T>
+concept IsMaskRefContainer = requires
+    {
+        typename T::type;
+        typename T::refType;
+        { T::refIndex };
+        { T::field };
+    } && (!IsRefContainer<T>);
+
+template <typename T>
 concept IsVariableField = requires
     {
         typename T::type;
         { T::field };
-    } && (!IsAtomicField<T>);
+    } && (!IsAtomicField<T>) && (!IsRefContainer<T>) && (!IsMaskRefContainer<T>);
 
 template <typename T>
 struct MaskedFieldSelector;
@@ -36,6 +61,27 @@ struct MaskedFieldSelector<T>
         T::dValue,
         T::field
     >;
+};
+
+template <IsUnsetAtomicField T>
+struct MaskedFieldSelector<T>
+{
+    using type = MaskedUnsetAtomicField<
+        typename T::type,
+        T::field
+    >;
+};
+
+template <IsRefContainer T>
+struct MaskedFieldSelector<T>
+{
+    using type = T*;
+};
+
+template <IsMaskRefContainer T>
+struct MaskedFieldSelector<T>
+{
+    using type = T*;
 };
 
 template <IsVariableField T>
@@ -110,14 +156,11 @@ struct MaskTuple;
 template <typename ENUM, typename... Ts>
 struct MaskTuple<SubRegistry<ENUM, Ts...>>
 {
-    using InputType = SubRegistry<ENUM, Ts...>;
-
-    using OutputType = std::tuple<
-        MaskedFieldFor<Ts>...
-    >;
+    using MaskInputType = SubRegistry<ENUM, Ts...>;
+    using MaskOutputType = std::tuple<MaskedFieldFor<Ts>...>;
 
     template <typename S>
-    static OutputType apply(S&& s)
+    static MaskOutputType apply(S&& s)
     {
         return applyImpl(
             std::forward<S>(s).fields,
@@ -137,6 +180,19 @@ private:
                 Field::field
             >(f);
         }
+        else if constexpr (IsUnsetAtomicField<Field>)
+        {
+            return MaskedUnsetAtomicField<
+                typename Field::type,
+                Field::field
+            >(f);
+        }
+        else if constexpr (IsRefContainer<Field>)
+        {
+            return MaskedRefContainer<
+                Field::field
+            >();
+        }
         else
         {
             static_assert(
@@ -152,12 +208,12 @@ private:
     }
 
     template <typename T, size_t... I>
-    static OutputType applyImpl(
+    static MaskOutputType applyImpl(
         T&& t,
         std::index_sequence<I...>
     )
     {
-        return OutputType{
+        return MaskOutputType{
             makeMasked(std::get<I>(t))...
         };
     }
