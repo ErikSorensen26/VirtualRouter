@@ -96,7 +96,7 @@ public:
     inline uint32_t routerID() const { return rid.id; }
 
     bool isNamed() const { return namedMode; }
-    uint32_t getAS() const { return asNumber; }
+    uint16_t getAS() const { return asNumber; }
     AddressFamily getAF() const { return addressFamily; }
 
     void clearRouterID() { rid.isStatic = false; calculateRID(); }
@@ -104,7 +104,7 @@ public:
     VirtualRouter* routingInstance; ///< Routing instance coorsponding with the current process.
 
 private:
-    const uint32_t asNumber; ///< Autonomous System number.
+    const uint16_t asNumber; ///< Autonomous System number.
     const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
 
     EigrpTopology topology;

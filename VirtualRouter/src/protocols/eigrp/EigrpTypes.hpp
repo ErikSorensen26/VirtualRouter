@@ -95,7 +95,8 @@ namespace EigrpConfigs
     enum class TrafficShareMode
     {
         Balanced, ///< Balanced traffic sharing.
-        Minimum   ///< Minimum traffic sharing.
+        Minimum,   ///< Minimum traffic sharing.
+        MinimumAcrossInterfaces ///< TODO: will still do ecmp but with variance of 0
     };
 
     /**
@@ -162,8 +163,9 @@ namespace EigrpConfigs
         std::atomic<uint8_t> externalAdminDistance = 170; ///< Administrative distance for external routes.
         std::atomic<uint8_t> variance = 1; ///< Variance for unequal-cost load balancing.
         std::atomic<uint8_t> trafficShare = 0; ///< Traffic sharing mode.
-        std::atomic<uint8_t> ribScale = 128; ///< Rib scale for metric when adding to RIB. //TODO
+        std::atomic<uint8_t> ribScale = 128; ///< Rib scale for metric when adding to RIB.
         std::atomic<uint8_t> dampeningInterval = 75; ///< Dampening interval for route dampening.
+        std::atomic<uint16_t> warningInterval = 10; ///< Warning logging interval. // TODO
         std::atomic<uint16_t> dampeningResetTime = 0; ///< Reset time for dampening.
         std::atomic<uint16_t> dampeningRestart = 0; ///< Restart time for dampening.
         std::atomic<uint16_t> dampeningRestartCount = 1; ///< Restart count for dampening.
