@@ -3,20 +3,29 @@
 #ifndef REGISTRY_TYPES_HPP
 #define REGISTRY_TYPES_HPP
 
-#include <cstdint>
 #include <atomic>
-#include <span>
+#include <concepts>
 
 #define FIELD(field) \
     (FieldBase*)&field
 
 namespace Config
 {
-enum class ValueState : uint8_t
-{
-    UNSET,
-    SET
-};
+template <typename T>
+concept HasEmpty = requires(const T& t)
+    {
+        { t.empty() } -> std::convertible_to<bool>;
+    };
+
+template <typename T>
+concept HasClear = requires(T t)
+    {
+        t.clear();
+    };
+
+template <typename T>
+concept VariableMultiplicityField =
+    HasEmpty<T> && HasClear<T>;
 
 enum class MaskState : uint8_t
 {
@@ -24,13 +33,13 @@ enum class MaskState : uint8_t
     SET
 };
 
-template <typename T, T dval>
-struct AtomicValue
+template <typename T, T D, auto F>
+class AtomicField
 {
-    std::atomic<T> value;
-
-    AtomicValue(T def)
-        : value(def) {}
+public:
+    using type = T;
+    static constexpr T dValue = D;
+    static constexpr auto field = F;
 
     inline T load() const noexcept
     {
@@ -44,24 +53,42 @@ struct AtomicValue
 
     inline void unset() noexcept
     {
-        value.store(dval, std::memory_order_relaxed);
+        value.store(dValue, std::memory_order_relaxed);
     }
+private:
+    std::atomic<T> value = D;
 };
 
-template <typename T, T dval>
-struct MaskedAtomicValue
+template <VariableMultiplicityField T, auto F>
+class VariableField
 {
-    std::atomic<T> value;
-    std::atomic<MaskState> state;
-    AtomicValue<T, dval>* base;
+public:
+    using type = T;
+    static constexpr auto field = F;
 
-    MaskedAtomicValue(AtomicValue<T, dval>& fallback)
-        : value(fallback.load()),
-          state(MaskState::INHERIT),
+    inline T& get() const noexcept
+    {
+        return value;
+    }
+
+    inline void unset() noexcept
+    {
+        value = {};
+    }
+private:
+    T value = {};
+};
+
+template <typename T, T D, auto F>
+class MaskedAtomicField
+{
+public:
+    MaskedAtomicField(AtomicField<T, D, F>& fallback)
+        : state(MaskState::INHERIT),
           base(&fallback)
     {}
 
-    inline T load() const noexcept
+    inline T get() const noexcept
     {
         if (state.load(std::memory_order_relaxed) == MaskState::SET)
             return value.load(std::memory_order_relaxed);
@@ -78,66 +105,35 @@ struct MaskedAtomicValue
     {
         state.store(MaskState::INHERIT, std::memory_order_relaxed);
     }
-}
-}
 
-namespace Config2
-{
-using FieldId = uint32_t;
-using RecordTypeId = uint32_t;
-
-template <typename T>
-struct Field
-{
-    FieldId id;
-    const char* name;
+private:
+    std::atomic<T> value;
+    std::atomic<MaskState> state;
+    AtomicField<T, D, F>* base;
 };
 
-struct FieldBase
-{
-    FieldId id;
-    const char* name;
-};
-
-template <typename T>
-struct FieldDef : FieldBase
-{
+template <VariableMultiplicityField T, auto F>
+class MaskedVariableField
+{ 
+public:
     using type = T;
-    T defaultValue;
+    static constexpr T field = F;
+
+    inline T& get() const noexcept
+    {
+        if (!value.empty())
+            return value;
+        return base->get();
+    }
+
+    inline void unset() noexcept
+    {
+        value.clear();
+    }
+private:
+    T value;
+    VariableField<T, F>* base;
 };
-
-struct RecordType
-{
-    RecordTypeId id;
-    const char* name;
-    std::span<const Field<void>*> fields;
-};
-
-
-
-enum MaskState : uint8_t
-{
-    INHERIT,
-    SET
-};
-
-template <typename T>
-struct Masked
-{
-    MaskState state{MaskState::INHERIT};
-    T value{};
-};
-
-template <typename T>
-T resolve(const Masked<T>& local, const Masked<T>* inherit, const FieldDef<T>& field)
-{
-    if (local.state == MaskState::SET)
-        return local.value;
-    if (inherit && inherit->state == MaskState::SET)
-        return inherit->value;
-
-    return field.defaultValue;
-}
 }
 
 #endif // REGISTRY_TYPES_HPP
