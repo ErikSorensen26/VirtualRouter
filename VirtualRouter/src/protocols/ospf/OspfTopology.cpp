@@ -1,14 +1,38 @@
 // OspfTopology.cpp
 
 #include "OspfTopology.h"
+#include <OspfRegistry.hpp>
 #include <OspfProcess.h>
 #include <OspfRoutingTable.h>
 #include <OspfRouteManager.h>
+#include <VirtualRouter.h>
+#include <Global.h>
+#include <OspfRegistry.hpp>
 
 namespace OSPF
 {
-Topology::Topology(OspfProcess& p, uint8_t t)
-    : tid(t), process(p)
+Topology::Topology(OspfProcess& p, uint8_t t, AddressFamily f)
+    : tid(t), process(p), af(f), rib(*this),
+    configs([this]() {
+        auto& registry = process.routingInstance->global.registry;
+        if (!process.isV3)
+        {
+            processConfigs = &process.configs();
+        }
+        else
+        {
+            auto* v3 = process.getV3Configs();
+            auto* base = getAf() == AddressFamily::IPv4
+                ? v3->get<Config::OspfAddressFamilyV3::IPV4>().get().ptr()
+                : v3->get<Config::OspfAddressFamilyV3::IPV6>().get().ptr();
+
+            auto& bucket = registry.bucket<Config::Ospf, Config::MASK>();
+        }
+        auto& bucket = process.routingInstance->global.registry.bucket<Config::OspfTopology, Config::BASE>();
+        handle = bucket.create();
+        auto* configs = bucket.get(handle);
+        processConfigs.
+    })();
 {}
 
 OspfArea* Topology::getArea(uint32_t areaId)
@@ -64,7 +88,7 @@ void Topology::distributeExternalLsa(uint32_t areaId, const IncomingLsaContext& 
 
         result = RouteManager::deriveExternalRoute<Policy>(*this, ctx.key, rec);
     }
-    process.getRib().replaceExternal(result);
+    rib.replaceExternal(result);
 }
 
 template<typename Policy>

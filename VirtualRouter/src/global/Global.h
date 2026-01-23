@@ -17,6 +17,7 @@
 #include <IPAddress.hpp>
 #include <map>
 #include <KeyChainManager.h>
+#include <Registry.hpp>
 
 #define DEFAULT_HOSTNAME "router"
 
@@ -453,6 +454,8 @@ public:
 
     bool routingEnabled = false; ///< Initial routing enable flag.
     bool testingMode = false;    ///< Testing mode flag.
+
+    Config::Registry registry;
 
     GlobalConfigs configs;       ///< Global ARP/NDP/NSF/etc configuration
 

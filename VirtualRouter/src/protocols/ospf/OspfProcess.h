@@ -6,6 +6,8 @@
 #include <OspfTypes.hpp>
 #include <OspfInterfaceManager.h>
 #include <OspfRoutingTable.h>
+#include <OspfRegistry.hpp>
+#include <RegistryTypes.hpp>
 #include <map>
 
 class VirtualRouter;
@@ -17,7 +19,6 @@ class Topology;
 class OspfProcess;
 class OspfInterface;
 class OspfArea;
-class OspfRib;
 
 struct OspfV3Instance
 {
@@ -34,16 +35,24 @@ struct OspfInterfaceInstance
 class OspfProcess
 {
 public:
-    OspfProcess(bool v3, uint32_t procId, VirtualRouter* vrf);
+    friend class Topology;
 
-    OspfConfigs& getConfigs() { return cfgs; }
-    const OspfConfigs& getConfigs() const { return cfgs; }
+    OspfProcess(bool isV3, uint32_t procId, VirtualRouter* vrf);
+    ~OspfProcess();
+
+    Config::OspfAddressFamilyV3Registry* getV3Configs() { return v3cfgs; }
+    Config::OspfRegistry& configs() { return cfgs; }
+    const Config::OspfRegistry& configs() const { return cfgs; }
+
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
-    OspfRib& getRib() { return rib; }
-    AddressFamily getAF() const { return af; }
     uint32_t getProcId() const { return procId; }
-    uint32_t getRouterId() const { return cfgs.routerId.load(std::memory_order_relaxed); }
+    uint32_t getRouterId() const {
+        auto& id = cfgs.template get<Config::Ospf::ROUTER_ID>();
+        if (id.hasValue()) return id.load();
+        return rid.load(std::memory_order_relaxed);
+    }
+
 
     bool calculateRID();
 
@@ -59,12 +68,16 @@ public:
 private:
     std::shared_mutex topologyMu;
     std::map<uint8_t, Topology> topologies;
+    std::atomic<uint32_t> rid;
 
     const uint32_t procId;
-    AddressFamily af;
-    OspfConfigs cfgs;
     InterfaceManager ifaceMgr;
-    OspfRib rib;
+
+    Config::Bucket<Config::OspfRegistry>::Handle cfgsHandle;
+    Config::OspfRegistry& cfgs;
+
+    Config::Bucket<Config::OspfAddressFamilyV3Registry>::Handle v3cfgsHandle;
+    Config::OspfAddressFamilyV3Registry* v3cfgs{nullptr};
 };
 }
 

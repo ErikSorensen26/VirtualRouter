@@ -4,9 +4,10 @@
 #define OSPF_TOPOLOGY_H
 
 #include <cstdint>
-#include "OspfTypes.hpp"
 #include <OspfArea.h>
 #include <OspfTopologyTable.h>
+#include <OspfRoutingTable.h>
+#include <OspfRegistry.hpp>
 
 namespace OSPF
 {
@@ -16,7 +17,7 @@ class OspfArea;
 class Topology
 {
 public:
-    Topology(OspfProcess& process, uint8_t tid);
+    Topology(OspfProcess& process, uint8_t tid, AddressFamily af);
 
     OspfArea* getArea(uint32_t areaId);
     OspfArea& insureArea(uint32_t areaId);
@@ -32,9 +33,12 @@ public:
 
     std::atomic<bool> isABR = false;
 
-    TopologyConfigs& getConfigs() { return configs; }
-    const TopologyConfigs& getConfigs() const { return configs; }
+    Config::OspfTopologyRegistry& getConfigs() { return *configs; }
+    const Config::OspfTopologyRegistry& getConfigs() const { return *configs; }
+    OspfRib& getRib() { return rib; }
+    const OspfRib& getRib() const { return rib; }
     const OspfProcess& getProcess() const noexcept { return process; }
+    AddressFamily getAf() { return af; }
 
     // Reorigination
     template <typename Policy>
@@ -53,8 +57,14 @@ private:
     std::shared_mutex areaMu;
     std::unordered_map<uint32_t, OspfArea> areas;
     std::atomic<size_t> areaSize;
+    AddressFamily af;
 
-    TopologyConfigs configs;
+    OspfRib rib;
+
+    Config::OspfRegistry* processConfigs{nullptr};
+
+    Config::Bucket<Config::OspfTopologyRegistry>::Handle handle;
+    Config::OspfTopologyRegistry& configs;
 };
 }
 

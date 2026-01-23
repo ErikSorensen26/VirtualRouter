@@ -18,6 +18,10 @@ public:
     {
         size_t index;
         uint32_t generation;
+        Handle() = default;
+        Handle(const Handle&) = default;
+        Handle(Handle&) = default;
+        Handle& operator=(const Handle&) = default;
         bool operator==(const Handle&) const = default;
     };
 
@@ -42,7 +46,8 @@ public:
     Bucket(const Bucket&) = delete;
     Bucket& operator=(const Bucket&) = delete;
 
-    Handle create()
+    template <typename... Args>
+    Handle create(Args&&... args)
     {
         size_t index;
 
@@ -60,7 +65,7 @@ public:
         Slot& s = slots[index];
         assert(!s.alive);
 
-        new (s.storage) T;
+        new (s.storage) T(std::forward<Args>(args)...);
         s.alive = true;
 
         return Handle{ index, s.generation };

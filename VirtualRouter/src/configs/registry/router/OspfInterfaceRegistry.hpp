@@ -24,14 +24,6 @@ enum class NetworkType : uint8_t
 namespace Config
 {
 
-enum class OspfNeighbor : uint8_t
-{
-    ADDRESS,
-    COST,
-    POLL_INTERVAL,
-    PRIORITY
-};
-
 enum class OspfInterface : uint8_t
 {
     BFD,
@@ -86,8 +78,8 @@ enum class OspfInterfaceAddressFamily : uint8_t
 
 using OspfInterfaceAddressFamilyRegistry = SubRegistry<OspfInterfaceAddressFamily,
     ReferenceContainer<OspfInterface, OspfInterfaceRegistry, OspfInterfaceAddressFamily::BASE>,
-    ReferenceContainer<OspfInterface, OspfInterfaceRegistryMask, OspfInterfaceAddressFamily::BASE>,
-    ReferenceContainer<OspfInterface, OspfInterfaceRegistryMask, OspfInterfaceAddressFamily::BASE>
+    ReferenceContainer<OspfInterface, OspfInterfaceRegistryMask, OspfInterfaceAddressFamily::IPV4>,
+    ReferenceContainer<OspfInterface, OspfInterfaceRegistryMask, OspfInterfaceAddressFamily::IPV6>
 >;
 
 enum class OspfInterfaceBase : uint8_t

@@ -6,7 +6,9 @@
 #include <atomic>
 #include <concepts>
 #include <cassert>
-#include <utility>
+
+#define FIELD(field) \
+    (FieldBase*)&field
 
 namespace Config
 {

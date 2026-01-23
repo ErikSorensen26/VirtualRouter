@@ -11,56 +11,9 @@
 namespace Config
 {
 template <typename T>
-concept IsAtomicField = requires
-    {
-        typename T::type;
-        { T::dValue };
-        { T::field };
-    };
-
-template <typename T>
-concept IsUnsetAtomicField = requires
-    {
-        typename T::type;
-        typename T::isUnset;
-        { T::field };
-    };
-
-template <typename T>
-concept IsRefContainer = requires
-    {
-        typename T::type;
-        typename T::refType;
-        { T::field };
-    };
-
-template <typename T>
-concept IsMaskRefContainer = requires
-    {
-        typename T::type;
-        typename T::refType;
-        { T::refIndex };
-        { T::field };
-    } && (!IsRefContainer<T>);
-
-template <typename T>
-concept IsVariableField = requires
-    {
-        typename T::type;
-        { T::field };
-    } && (!IsAtomicField<T>) && (!IsRefContainer<T>) && (!IsMaskRefContainer<T>);
-
-template <typename T>
-struct MaskedFieldSelector;
-
-template <IsAtomicField T>
-struct MaskedFieldSelector<T>
+struct MaskedFieldSelector
 {
-    using type = MaskedAtomicField<
-        typename T::type,
-        T::dValue,
-        T::field
-    >;
+    static_assert(IsFieldBase<T>, "T is not a valid field type");
 };
 
 template <IsUnsetAtomicField T>
@@ -72,25 +25,48 @@ struct MaskedFieldSelector<T>
     >;
 };
 
+template <IsAtomicField T>
+    requires (!IsUnsetAtomicField<T>)
+struct MaskedFieldSelector<T>
+{
+    using type = MaskedAtomicField<
+        typename T::type,
+        T::dValue,
+        T::field
+    >;
+};
+
 template <IsRefContainer T>
 struct MaskedFieldSelector<T>
 {
-    using type = T*;
+    using type = MaskedReferenceContainer<
+        typename T::refType,
+        typename T::type,
+        T::field
+    >;
 };
 
-template <IsMaskRefContainer T>
-struct MaskedFieldSelector<T>
-{
-    using type = T*;
-};
+template <typename T>
+concept IsMultiplicityVariableField =
+    IsVariableField<T> &&
+    VariableMultiplicityField<typename T::type>;
 
-template <IsVariableField T>
+template <typename T>
+    requires IsMultiplicityVariableField<T>
 struct MaskedFieldSelector<T>
 {
     using type = MaskedVariableField<
         typename T::type,
         T::field
     >;
+};
+
+template <typename T>
+    requires IsVariableField<T> &&
+             (!VariableMultiplicityField<typename T::type>)
+struct MaskedFieldSelector<T>
+{
+    using type = typename T::type*;
 };
 
 template <typename T>
@@ -121,6 +97,8 @@ class SubRegistry
 {
 public:
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
+    
+    using type = ENUM;
 
     using FieldTuple = std::tuple<Fields...>;
 
@@ -146,105 +124,7 @@ public:
 
     decltype(auto) get(ENUM f) noexcept
     {
-        return Config::tupleGetRuntime(fields, Config::toIndex<f>);
-    }
-};
-
-template <typename Sub>
-struct MaskTuple;
-
-template <typename ENUM, typename... Ts>
-struct MaskTuple<SubRegistry<ENUM, Ts...>>
-{
-    using MaskInputType = SubRegistry<ENUM, Ts...>;
-    using MaskOutputType = std::tuple<MaskedFieldFor<Ts>...>;
-
-    template <typename S>
-    static MaskOutputType apply(S&& s)
-    {
-        return applyImpl(
-            std::forward<S>(s).fields,
-            std::index_sequence_for<Ts...>{}
-        );
-    }
-
-private:
-    template <typename Field>
-    static auto makeMasked(Field& f)
-    {
-        if constexpr (IsAtomicField<Field>)
-        {
-            return MaskedAtomicField<
-                typename Field::type,
-                Field::dValue,
-                Field::field
-            >(f);
-        }
-        else if constexpr (IsUnsetAtomicField<Field>)
-        {
-            return MaskedUnsetAtomicField<
-                typename Field::type,
-                Field::field
-            >(f);
-        }
-        else if constexpr (IsRefContainer<Field>)
-        {
-            return MaskedRefContainer<
-                Field::field
-            >();
-        }
-        else
-        {
-            static_assert(
-                IsVariableField<Field>,
-                "Field must be AtomicField or VariableField"
-            );
-
-            return MaskedVariableField<
-                typename Field::type,
-                Field::field
-            >(f);
-        }
-    }
-
-    template <typename T, size_t... I>
-    static MaskOutputType applyImpl(
-        T&& t,
-        std::index_sequence<I...>
-    )
-    {
-        return MaskOutputType{
-            makeMasked(std::get<I>(t))...
-        };
-    }
-};
-
-template <typename Sub>
-class MaskSubRegistry;
-
-template <typename ENUM, typename... Ts>
-class MaskSubRegistry<SubRegistry<ENUM, Ts...>>
-{
-public:
-    using InputType = SubRegistry<ENUM, Ts...>;
-    using OutputType = typename MaskTuple<InputType>::OutputType;
-
-    OutputType fields;
-
-    template <typename S>
-    explicit MaskSubRegistry(S&& s)
-        : fields(MaskTuple<InputType>::apply(std::forward<S>(s)))
-    {}
-
-    template <ENUM F>
-    decltype(auto) get() noexcept
-    {
-        return std::get<Config::toIndex<F>>(fields);
-    }
-
-    decltype(auto) get(ENUM f) noexcept
-    {
-        return Config::tupleGetRuntime(fields, Config::toIndex<f>);
+        return Config::tupleGetRuntime(fields, static_cast<size_t>(f));
     }
 };
 }
