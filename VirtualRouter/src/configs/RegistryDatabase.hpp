@@ -1,148 +1,84 @@
-// Registry.hpp
+// RegistryDatabase.hpp
 
 #ifndef REGISTRY_DATABASE_HPP
 #define REGISTRY_DATABASE_HPP
 
 #include "RegistryReference.hpp"
+#include <tuple>
+#include <cassert>
 
 namespace Config
 {
-enum RegistryRole
-{
-    BASE,
-    MASK
-};
-
-template <typename K, RegistryRole R>
-struct RegistryKey
-{
-    using keyType = K;
-    static constexpr RegistryRole role = R;
-};
-
-template <typename T>
-concept IsMask =
-    requires
-    {
-        typename T::MaskInputType;
-        typename T::MaskOutputType;
-    };
-
-template <typename T>
-concept IsBase =
-    requires
-    {
-        typename T::FieldTuple;
-    } && (!IsMask<T>);
-
-template <typename T>
-struct RegistrySelector
-{
-    static_assert(IsBase<T> || IsMask<T>,
-        "RegistrySelector error: Entry is not a leaf value type");
-};
-
-template <IsBase T>
-struct RegistrySelector<T>
-{
-    using key = RegistryKey<typename T::type, BASE>;
-};
-
-template <IsMask T>
-struct RegistrySelector<T>
-{
-    using key = RegistryKey<typename T::type, MASK>;
-};
 
 template <typename... Entries>
 class RegistryDatabase
 {
     template <typename Entry>
-    struct BucketHolder
+    struct Holder
     {
-        using keyValue = typename RegistrySelector<Entry>::key;
-        using valueType = Entry;
-
-        Bucket<valueType> bucket;
+        Bucket<Entry> bucket;
     };
 
-    using Holders = std::tuple<BucketHolder<Entries>...>;
-    Holders buckets;
+    std::tuple<Holder<Entries>...> holders;
 
-    template <typename Key, std::size_t I = 0>
-    static constexpr size_t findIndex()
+    template <typename T>
+    Holder<T>& getHolder()
     {
-        if constexpr (I == sizeof...(Entries))
-        {
-            static_assert(I != sizeof...(Entries),
-                "Registry does not contain a bucket for this key type");
-            return 0;
-        }
-        else if constexpr (
-            std::is_same_v<
-                Key,
-                typename std::tuple_element_t<I,
-                    std::tuple<BucketHolder<Entries>...>
-                >::keyValue
-            >
-        )
-        {
-            return I;
-        }
-        else
-        {
-            return findIndex<Key, I + 1>();
-        }
-    }
-
-    template <typename Key>
-    auto& getHolder()
-    {
-        constexpr size_t index = findIndex<Key>();
-        return std::get<index>(buckets);
+        return std::get<Holder<T>>(holders);
     }
 
 public:
     RegistryDatabase() = default;
-    RegistryDatabase(const RegistryDatabase&) = delete;
-    RegistryDatabase& operator=(const RegistryDatabase&) = delete;
 
-    template <typename K, RegistryRole R>
-    auto& bucket()
+    template <typename T>
+    Bucket<T>& bucket()
     {
-        return getHolder<RegistryKey<K, R>>().bucket;
+        return getHolder<T>().bucket;
     }
 
-    template <typename K, RegistryRole R>
-    const auto& bucket() const
+    template <typename T>
+    Reference<T> create(typename T::keyType key)
     {
-        return getHolder<RegistryKey<K, R>>().bucket;
+        auto& b = bucket<T>();
+        auto h = b.create(key);
+        return Reference<T>(b, key, h);
     }
 
-    template <typename K, typename T, typename... Args>
-    Reference<K, T> createBase(uint64_t key, Args&&... args)
+    template <typename T>
+    Reference<T> create(typename T::keyType key, const T& parent)
     {
-        auto& b = bucket<K, BASE>();
-        return Reference<K, T>(b, key, T(std::forward<Args>(args)...));
+        auto& b = bucket<T>();
+        auto h = b.create(key, *this, parent);
+        return Reference<T>(b, key, h);
     }
 
-    template <typename K, typename T, auto F, typename... Args>
-    void emplaceBase(ReferenceContainer<K, T, F>& out, uint64_t key, Args&&... args)
+    template <typename T, auto F>
+    Reference<T> emplace(ReferenceContainer<T, F>& container, typename T::keyType key)
     {
-        out.ref = createBase<K, T>(key, std::forward<Args>(args)...);
+        if (container.ref.bound())
+        {
+            assert(container.ref.getKey() == key);
+            return container.ref;
+        }
+
+        Reference<T> ref;
+        if (container.base && assert(container.base->bound()))
+            ref = create<T>(key, *container.base); // Masked Version
+        ref = create<T>(key);
+        container.setLocal(ref);
+        return ref;
     }
 
-    template <typename K, typename T>
-    Reference<K, MaskSubRegistry<T>> mask(Reference<K, T>& baseRef)
+    template <typename T, auto F>
+    Reference<T> ensure(ReferenceContainer<T, F>& container, typename T::keyType key)
     {
-        static_assert(IsSubRegistry<T>, "mask(): T must be a SubRegistry type");
-        assert(baseRef.bound());
-
-        auto& mb = bucket<K, MASK>();
-
-        MaskSubRegistry<T> maskObj(*this, baseRef.get());
-
-        return Reference<K, MaskSubRegistry<T>>(mb, baseRef.getKey(), std::move(maskObj));
+        Reference<T> ref;
+        if (container.base && assert(container.base->bound()))
+            ref = create<T>(key, *container.base); // Masked Version
+        ref = create<T>(key);
+        container.unsetLocal();
+        container.setLocal(ref);
+        return ref;
     }
 };
 }

@@ -38,17 +38,12 @@ public:
     friend class Topology;
 
     OspfProcess(bool isV3, uint32_t procId, VirtualRouter* vrf);
-    ~OspfProcess();
-
-    Config::OspfAddressFamilyV3Registry* getV3Configs() { return v3cfgs; }
-    Config::OspfRegistry& configs() { return cfgs; }
-    const Config::OspfRegistry& configs() const { return cfgs; }
 
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
     uint32_t getProcId() const { return procId; }
     uint32_t getRouterId() const {
-        auto& id = cfgs.template get<Config::Ospf::ROUTER_ID>();
+        const auto& id = configs.get().get<Config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
         return rid.load(std::memory_order_relaxed);
     }
@@ -66,6 +61,8 @@ public:
     TimeManager& tmgr;
 
 private:
+    friend class Topology;
+
     std::shared_mutex topologyMu;
     std::map<uint8_t, Topology> topologies;
     std::atomic<uint32_t> rid;
@@ -73,11 +70,8 @@ private:
     const uint32_t procId;
     InterfaceManager ifaceMgr;
 
-    Config::Bucket<Config::OspfRegistry>::Handle cfgsHandle;
-    Config::OspfRegistry& cfgs;
-
-    Config::Bucket<Config::OspfAddressFamilyV3Registry>::Handle v3cfgsHandle;
-    Config::OspfAddressFamilyV3Registry* v3cfgs{nullptr};
+    Config::Reference<Config::OspfRegistry> configs;
+    Config::Reference<Config::OspfAddressFamilyV3Registry> v3Configs;
 };
 }
 

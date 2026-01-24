@@ -5,8 +5,8 @@
 
 #include <RegistryReference.hpp>
 #include <SubRegistry.hpp>
-#include <optional>
-#include <tuple>
+#include <AddressFamily.hpp>
+#include <HeaderHelpers.hpp>
 #include <string>
 
 namespace OSPF
@@ -23,6 +23,15 @@ enum class NetworkType : uint8_t
 
 namespace Config
 {
+inline uint64_t generateOspfInterfaceKey(uint32_t ifaceId, AddressFamily af, bool isV3) {
+    uint8_t addressFamily = af == AddressFamily::NONE ? 0
+        : af == AddressFamily::IPv4 ? 1 : 2;
+    uint64_t k = 0;    
+    k |= uint64_t(ifaceId) & maskU64Bits(32);
+    k |= (uint64_t(addressFamily) & maskU64Bits(2)) << 32;
+    k |= (uint64_t(isV3 ? 1u : 0u) & maskU64Bits(1)) < 34;
+    return k;
+}
 
 enum class OspfInterface : uint8_t
 {
@@ -43,7 +52,7 @@ enum class OspfInterface : uint8_t
     COUNT
 };
 
-using OspfInterfaceRegistry = SubRegistry<OspfInterface,
+using OspfInterfaceRegistry = SubRegistry<uint64_t, OspfInterface,
     AtomicField<bool, false, OspfInterface::BFD>,
     AtomicField<uint16_t, 1, OspfInterface::COST>,
     AtomicField<bool, false, OspfInterface::DATABASE_FILTER>,
@@ -53,7 +62,7 @@ using OspfInterfaceRegistry = SubRegistry<OspfInterface,
     AtomicField<uint16_t, 10, OspfInterface::HELLO_INTERVAL>,
     AtomicField<uint8_t, 1, OspfInterface::HELLO_MULTIPLIER>,
     AtomicField<bool, false, OspfInterface::MTU_IGNORE>,
-    VariableField<std::vector<std::tuple<
+    ValueField<std::vector<std::tuple<
         __uint128_t,
         std::optional<uint16_t>,
         std::optional<bool>,
@@ -66,8 +75,6 @@ using OspfInterfaceRegistry = SubRegistry<OspfInterface,
     AtomicField<uint16_t, 1, OspfInterface::TRANSMIT_DELAY>
 >;
 
-using OspfInterfaceRegistryMask = MaskSubRegistry<OspfInterfaceRegistry>;
-
 enum class OspfInterfaceAddressFamily : uint8_t
 {
     BASE,
@@ -76,10 +83,10 @@ enum class OspfInterfaceAddressFamily : uint8_t
     COUNT,
 };
 
-using OspfInterfaceAddressFamilyRegistry = SubRegistry<OspfInterfaceAddressFamily,
-    ReferenceContainer<OspfInterface, OspfInterfaceRegistry, OspfInterfaceAddressFamily::BASE>,
-    ReferenceContainer<OspfInterface, OspfInterfaceRegistryMask, OspfInterfaceAddressFamily::IPV4>,
-    ReferenceContainer<OspfInterface, OspfInterfaceRegistryMask, OspfInterfaceAddressFamily::IPV6>
+using OspfInterfaceAddressFamilyRegistry = SubRegistry<uint64_t, OspfInterfaceAddressFamily,
+    ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceAddressFamily::BASE>,
+    ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceAddressFamily::IPV4>,
+    ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceAddressFamily::IPV6>
 >;
 
 enum class OspfInterfaceBase : uint8_t
@@ -104,20 +111,20 @@ enum class OspfInterfaceBase : uint8_t
     COUNT
 };
 
-using OspfInterfaceBaseRegistry = SubRegistry<OspfInterfaceBase,
-    ReferenceContainer<OspfInterface, OspfInterfaceRegistry, OspfInterfaceBase::BASE>,
-    VariableField<std::vector<Reference<OspfInterfaceAddressFamily, OspfInterfaceAddressFamilyRegistry>>, OspfInterfaceBase::PROCESS_CONFIGS>,
-    UnsetAtomicField<uint16_t, OspfInterfaceBase::PROCESS_ID>,
-    UnsetAtomicField<uint32_t, OspfInterfaceBase::AREA_ID>,
+using OspfInterfaceBaseRegistry = SubRegistry<uint64_t, OspfInterfaceBase,
+    ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceBase::BASE>,
+    OwnedListField<OspfInterfaceAddressFamilyRegistry, OspfInterfaceBase::PROCESS_CONFIGS>,
+    OptionalAtomicField<uint16_t, OspfInterfaceBase::PROCESS_ID>,
+    OptionalAtomicField<uint32_t, OspfInterfaceBase::AREA_ID>,
     AtomicField<bool, true, OspfInterfaceBase::INCLUDE_SECONDARIES>,
     AtomicField<bool, false, OspfInterfaceBase::AUTHENTICATION_MESSAGE_DIGEST>,
-    UnsetAtomicField<bool, OspfInterfaceBase::AUTHENTICATION_ENCRYPT>,
-    VariableField<std::string, OspfInterfaceBase::AUTHENTICATION_KEY>,
+    OptionalAtomicField<bool, OspfInterfaceBase::AUTHENTICATION_ENCRYPT>,
+    ValueField<std::string, OspfInterfaceBase::AUTHENTICATION_KEY>,
     AtomicField<uint32_t, 0, OspfInterfaceBase::AUTHENTICATION_SPI>,
     AtomicField<bool, true, OspfInterfaceBase::AUTHENTICATION_NULL>,
     AtomicField<bool, true, OspfInterfaceBase::LLS>,
-    UnsetAtomicField<uint8_t, OspfInterfaceBase::MESSAGE_DIGEST_KEY_ID>,
-    VariableField<std::string, OspfInterfaceBase::MESSAGE_DIGEST_KEY>,
+    OptionalAtomicField<uint8_t, OspfInterfaceBase::MESSAGE_DIGEST_KEY_ID>,
+    ValueField<std::string, OspfInterfaceBase::MESSAGE_DIGEST_KEY>,
     AtomicField<bool, false, OspfInterfaceBase::MESSAGE_DIGEST_ENCRRYPT>,
     AtomicField<bool, false, OspfInterfaceBase::PREFIX_SUPPRESSION>,
     AtomicField<uint16_t, 5, OspfInterfaceBase::RESYNC_TIMEOUT>,

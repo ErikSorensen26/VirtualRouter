@@ -33,8 +33,10 @@ public:
 
     std::atomic<bool> isABR = false;
 
-    Config::OspfTopologyRegistry& getConfigs() { return *configs; }
-    const Config::OspfTopologyRegistry& getConfigs() const { return *configs; }
+    Config::OspfTopologyRegistry& getConfigs() { return configs.get(); }
+    const Config::OspfTopologyRegistry& getConfigs() const { return configs.get(); }
+    Config::OspfRegistry& getProcessConfigs() { return processConfigs.get(); }
+    const Config::OspfRegistry& getProcessConfigs() const { return processConfigs.get(); }
     OspfRib& getRib() { return rib; }
     const OspfRib& getRib() const { return rib; }
     const OspfProcess& getProcess() const noexcept { return process; }
@@ -61,10 +63,8 @@ private:
 
     OspfRib rib;
 
-    Config::OspfRegistry* processConfigs{nullptr};
-
-    Config::Bucket<Config::OspfTopologyRegistry>::Handle handle;
-    Config::OspfTopologyRegistry& configs;
+    Config::Reference<Config::OspfTopologyRegistry> configs;
+    Config::Reference<Config::OspfRegistry> processConfigs;
 };
 }
 

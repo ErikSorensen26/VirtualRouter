@@ -120,6 +120,30 @@ inline __uint128_t ntohdll(__uint128_t val) {
         return fixedSize;                                                                           \
     }
 
+inline static uint8_t maskU8Bits(unsigned bits)
+{
+    return (bits == 8) ? uint8_t(0) : static_cast<uint8_t>((uint8_t(1) << bits) - 1);
+}
+
+inline static uint16_t maskU16Bits(unsigned bits)
+{
+    return (bits == 16) ? uint16_t(0) : static_cast<uint16_t>((uint16_t(0) << bits) - 1);
+}
+
+inline static uint32_t maskU32Bits(unsigned bits)
+{
+    return (bits == 32) ? uint32_t(0) : static_cast<uint32_t>((uint32_t(0) << bits) - 1);
+}
+
+inline static uint64_t maskU64Bits(unsigned bits)
+{
+    return (bits == 64) ? uint64_t(0) : static_cast<uint64_t>((uint64_t(0) << bits) - 1);
+}
+
+inline static __uint128_t maskU128Bits(unsigned bits)
+{
+    return (bits == 128) ? __uint128_t(0) : ((__uint128_t(0) << bits) - 1);
+}
 
 inline static uint16_t readU16(const uint8_t* p)
 {

@@ -1,4 +1,7 @@
-// RegistryBucket
+// RegistryBucket.hpp
+
+#ifndef REGISTRY_BUCKET_HPP
+#define REGISTRY_BUCKET_HPP
 
 #include <deque>
 #include <vector>
@@ -7,21 +10,29 @@
 #include <new>
 #include <cassert>
 #include <algorithm>
+#include <unordered_map>
+#include <utility>
 
 namespace Config
 {
 template <typename T>
+concept Hashable =
+    requires(const T& v)
+    {
+        { std::hash<T>{}(v) } -> std::convertible_to<size_t>;
+    };
+
+template <typename T>
 class Bucket
 {
+    static_assert(Hashable<typename T::keyType>, "Key type must be hashable");
 public:
+    using keyType = T::keyType;
+
     struct Handle
     {
         size_t index;
         uint32_t generation;
-        Handle() = default;
-        Handle(const Handle&) = default;
-        Handle(Handle&) = default;
-        Handle& operator=(const Handle&) = default;
         bool operator==(const Handle&) const = default;
     };
 
@@ -29,17 +40,50 @@ private:
     struct Slot
     {
         alignas(T) unsigned char storage[sizeof(T)];
-        uint32_t generation = 0;
-        bool alive = false;
+        keyType key{0};
+
+        uint32_t generation{0};
+        uint32_t refCount{0};
+        bool alive{false};
 
         T* ptr()
         {
             return std::launder(reinterpret_cast<T*>(storage));
         }
+
+        const T* ptr() const noexcept
+        {
+            return std::launder(reinterpret_cast<const T*>(storage));
+        }
     };
 
     std::deque<Slot> slots;
     std::vector<size_t> free;
+    std::unordered_map<keyType, Handle> keyIndex;
+
+    void trimTail()
+    {
+        while (!slots.empty())
+        {
+            Slot& s = slots.back();
+            if (s.alive)
+                break;
+
+            auto idx = slots.size() - 1;
+            auto it = std::find(free.begin(), free.end(), idx);
+            if (it != free.end())
+                free.erase(it);
+
+            slots.pop_back();
+        }
+    }
+
+    bool handleValid(const Handle& h) const noexcept
+    {
+        return h.index < slots.size() &&
+               slots[h.index].alive &&
+               slots[h.index].generation == h.generation;
+    }
 
 public:
     Bucket() = default;
@@ -47,10 +91,12 @@ public:
     Bucket& operator=(const Bucket&) = delete;
 
     template <typename... Args>
-    Handle create(Args&&... args)
+    Handle create(keyType key, Args&&... args)
     {
-        size_t index;
+        auto it = keyIndex.find(key);
+        assert(it == keyIndex.end());
 
+        size_t index;
         if (!free.empty())
         {
             index = free.back();
@@ -65,79 +111,76 @@ public:
         Slot& s = slots[index];
         assert(!s.alive);
 
+        s.key = key;
         new (s.storage) T(std::forward<Args>(args)...);
         s.alive = true;
+        s.refCount = 0;
 
-        return Handle{ index, s.generation };
+        Handle h{index, s.generation};
+        keyIndex.emplace(key, h);
+        return h;
     }
 
-    T* get(const Handle& h)
+    bool find(keyType key, Handle& out) const noexcept
     {
-        if (h.index >= slots.size())
+        auto it = keyIndex.find(key);
+        if (it == keyIndex.end())
+            return false;
+
+        out = it->second;
+        return handleValid(out);
+    }
+
+    T* get(const Handle& h) noexcept
+    {
+        if (!handleValid(h))
             return nullptr;
-
-        Slot& s = slots[h.index];
-
-        if (!s.alive || s.generation != h.generation)
-            return nullptr;
-
-        return s.ptr();
+        return slots[h.index].ptr();
     }
 
     const T* get(const Handle& h) const
     {
-        return const_cast<Bucket*>(this)->get(h);
+        if (!handleValid(h))
+            return nullptr;
+        return slots[h.index].ptr();
     }
 
-    void trimTail()
+    void addRef(const Handle& h) noexcept
     {
-        while (!slots.empty())
+        assert(handleValid(h));
+        ++slots[h.index].refCount;
+    }
+
+    void releaseRef(const Handle& h) noexcept
+    {
+        if (!handleValid(h))
+            return;
+
+        Slot& s = slots[h.index];
+        assert(s.refCount > 0);
+        --s.refCount;
+
+        if (s.refCount == 0)
         {
-            Slot& s = slots.back();
+            // Destroy object and free slot
+            s.ptr()->~T();
+            s.alive = false;
+            ++s.generation;
 
-            if (s.alive)
-                break;
+            // Remove key mapping
+            keyIndex.erase(s.key);
+            s.key = keyType{};
 
-            auto it = std::find(free.begin(), free.end(), slots.size() - 1);
-            if (it != free.end())
-                free.erase(it);
-
-            slots.pop_back();
+            free.push_back(h.index);
+            trimTail();
         }
     }
 
-    void erase(const Handle& h)
+    bool alive(const Handle& h) const noexcept
     {
-        assert(h.index < slots.size());
-        Slot& s = slots[h.index];
-
-        if (!s.alive || s.generation != h.generation)
-            return;
-
-        s.ptr()->~T();
-        s.alive = false;
-        ++s.generation;
-
-        free.push_back(h.index);
-
-        trimTail();
-    }
-
-    bool alive(const Handle& h) const
-    {
-        return h.index < slots.size() &&
-               slots[h.index].alive &&
-               slots[h.index].generation == h.generation;
-    }
-
-    size_t capacity() const
-    {
-        return slots.size();
-    }
-
-    size_t freeCount() const
-    {
-        return free.size();
+        return handleValid(h);
     }
 };
 }
+
+#endif // REGISTRY_BUCKET_HPP

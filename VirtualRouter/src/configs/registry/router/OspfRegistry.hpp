@@ -9,18 +9,30 @@
 #include <IPAddress.hpp>
 #include <string>
 
-namespace OSPF
-{
-}
-
 namespace Config
 {
+inline __uint128_t generateOspfVirtualLinkKey(__uint128_t areaKey, uint32_t ip)
+{
+    __uint128_t key = 0;
+    key |= __uint128_t(ip);
+    key |= (areaKey & maskU128Bits(96)) << 32;
+    return key;
+}
+
 enum class OspfVirtualLink
 {
     COUNT
 };
 
-using OspfVirtualLinkRegistry = SubRegistry<OspfVirtualLink>;
+using OspfVirtualLinkRegistry = SubRegistry<__uint128_t, OspfVirtualLink>;
+
+inline __uint128_t generateOspfAreaKey(__uint128_t topoKey, uint32_t areaId)
+{
+    __uint128_t key = 0;
+    key |= __uint128_t(areaId);
+    key |= (topoKey & maskU128Bits(99)) << 32;
+    return key;
+}
 
 enum class OspfArea
 {
@@ -44,12 +56,12 @@ enum class OspfArea
     COUNT
 };
 
-using OspfAreaRegistry = SubRegistry<OspfArea,
+using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea,
     AtomicField<bool, false, OspfArea::AUTHENTICATION_MESSAGE_DIGEST>, // TODO
-    UnsetAtomicField<uint32_t, OspfArea::AUTHENTICATION_SPI>, // TODO
+    OptionalAtomicField<uint32_t, OspfArea::AUTHENTICATION_SPI>, // TODO
     AtomicField<bool, false, OspfArea::DEFAULT_EXCLUSION>, // TODO
-    UnsetAtomicField<uint32_t, OspfArea::DEFAULT_COST>, // TODO
-    UnsetAtomicField<std::nullptr_t, OspfArea::FILTER_LIST>, // TODO
+    OptionalAtomicField<uint32_t, OspfArea::DEFAULT_COST>, // TODO
+    OptionalAtomicField<std::nullptr_t, OspfArea::FILTER_LIST>, // TODO
     AtomicField<bool, false, OspfArea::NSSA>, // TODO
     AtomicField<uint32_t, 1, OspfArea::NSSA_METRIC>, // TODO
     AtomicField<bool, true, OspfArea::NSSA_METRIC_TYPE>, // TODO
@@ -59,10 +71,18 @@ using OspfAreaRegistry = SubRegistry<OspfArea,
     AtomicField<bool, false, OspfArea::NSSA_ONLY>, // TODO
     AtomicField<bool, false, OspfArea::NSSA_ALWAYS_TRANSLATE>, // TODO
     AtomicField<bool, false, OspfArea::NSSA_SUPPRESS_FA>, // TODO
-    VariableField<std::vector<std::tuple<IPPrefix, bool, uint32_t>>, OspfArea::RANGE>, // TODO
+    ValueField<std::vector<std::tuple<IPPrefix, bool, uint32_t>>, OspfArea::RANGE>, // TODO
     AtomicField<bool, false, OspfArea::STUB_NO_SUMMARY>, // TODO
-    VariableField<std::vector<std::tuple<>>, OspfArea::VIRTUAL_LINKS> // TODO
+    ValueField<std::vector<std::tuple<>>, OspfArea::VIRTUAL_LINKS> // TODO
 >;
+
+inline __uint128_t generateOspfTopologyKey(__uint128_t ospfKey, uint32_t tid)
+{
+    __uint128_t key = 0;
+    key |= __uint128_t(tid);
+    key |= (ospfKey & maskU128Bits(67)) << 32;
+    return key;
+}
 
 enum class OspfTopologyBase
 {
@@ -86,23 +106,23 @@ enum class OspfTopologyBase
     COUNT
 };
 
-using OspfTopologyBaseRegistry = SubRegistry<OspfTopologyBase,
+using OspfTopologyBaseRegistry = SubRegistry<__uint128_t, OspfTopologyBase,
     AtomicField<bool, false, OspfTopologyBase::DEFAULT_ORIGINATE_ALWAYS>, // TODO
     AtomicField<uint32_t, 1, OspfTopologyBase::DEFAULT_ORIGINATE_METRIC>, // TODO
     AtomicField<bool, true, OspfTopologyBase::DEFAULT_ORIGINATE_METRIC_TYPE>, // TODO
-    VariableField<std::string, OspfTopologyBase::DEFAULT_ORIGINATE_ROUTE_MAP>, // TODO
-    UnsetAtomicField<uint32_t, OspfTopologyBase::DEFAULT_METRIC>, // TODO
+    ValueField<std::string, OspfTopologyBase::DEFAULT_ORIGINATE_ROUTE_MAP>, // TODO
+    OptionalAtomicField<uint32_t, OspfTopologyBase::DEFAULT_METRIC>, // TODO
     AtomicField<bool, true, OspfTopologyBase::DISCARD_INTERNAL>, // TODO
     AtomicField<uint8_t, 110, OspfTopologyBase::DISCARD_INTERNAL_DISTANCE>, // TODO
     AtomicField<bool, true, OspfTopologyBase::DISCARD_EXTERNAL>, // TODO
     AtomicField<uint8_t, 110, OspfTopologyBase::DISCARD_EXTERNAL_DISTANCE>, // TODO
-    UnsetAtomicField<std::nullptr_t, OspfTopologyBase::DISTANCE>, // TODO
+    OptionalAtomicField<std::nullptr_t, OspfTopologyBase::DISTANCE>, // TODO
     AtomicField<uint8_t, 110, OspfTopologyBase::EXTERNAL_DISTANCE>, // TODO
     AtomicField<uint8_t, 110, OspfTopologyBase::INTER_AREA_DISTANCE>, // TODO
     AtomicField<uint8_t, 110, OspfTopologyBase::INTRA_AREA_DISTANCE>, // TODO
-    UnsetAtomicField<std::nullptr_t, OspfTopologyBase::DISTRIBUTE_LIST>, // TODO
-    VariableField<std::string, OspfTopologyBase::PREFIX_PRIORITY_ROUTE_MAP>, // TODO
-    VariableField<std::string, OspfTopologyBase::TABLE_MAP>, // TODO
+    OptionalAtomicField<std::nullptr_t, OspfTopologyBase::DISTRIBUTE_LIST>, // TODO
+    ValueField<std::string, OspfTopologyBase::PREFIX_PRIORITY_ROUTE_MAP>, // TODO
+    ValueField<std::string, OspfTopologyBase::TABLE_MAP>, // TODO
     AtomicField<bool, false, OspfTopologyBase::TABLE_MAP_FILTER> // TODO
 >;
 
@@ -152,39 +172,39 @@ enum class OspfTopology
     COUNT
 };
 
-using OspfTopologyRegistry = SubRegistry<OspfTopology,
-    ReferenceContainer<OspfTopologyBase, OspfTopologyBaseRegistry, OspfTopology::BASE>, // TODO
-    VariableField<std::vector<Reference<OspfArea, OspfAreaRegistry>>, OspfTopology::AREA_CONFIGS>, // TODO
+using OspfTopologyRegistry = SubRegistry<__uint128_t, OspfTopology,
+    ReferenceContainer<OspfTopologyBaseRegistry, OspfTopology::BASE>, // TODO
+    OwnedListField<OspfAreaRegistry, OspfTopology::AREA_CONFIGS>, // TODO
     AtomicField<bool, false, OspfTopology::LRC_FORWARDING_ADDRESS>, // TODO
     AtomicField<bool, false, OspfTopology::LRC_INTER_AREA_SUMMARY>, // TODO
     AtomicField<bool, false, OspfTopology::LRC_NSSA_TRANSLATION>, // TODO
     AtomicField<bool, false, OspfTopology::MAX_METRIC_EXTERNAL>, // TODO
     AtomicField<uint32_t, 16711680, OspfTopology::MAX_METRIC_EXTERNAL_OVERRIDE>, // TODO
     AtomicField<bool, false, OspfTopology::MAX_METRIC_INCLUDE_STUB>, // TODO
-    UnsetAtomicField<uint16_t, OspfTopology::MAX_METRIC_ON_STARTUP_TIME>, // TODO
+    OptionalAtomicField<uint16_t, OspfTopology::MAX_METRIC_ON_STARTUP_TIME>, // TODO
     AtomicField<bool, false, OspfTopology::MAX_METRIC_ON_STARTUP_WAIT_FOR_BGP>, // TODO
     AtomicField<bool, false, OspfTopology::MAX_METRIC_SUMMARY_LSA>, // TODO
-    UnsetAtomicField<uint32_t, OspfTopology::MAX_LSA>, // TODO
+    OptionalAtomicField<uint32_t, OspfTopology::MAX_LSA>, // TODO
     AtomicField<uint8_t, 75, OspfTopology::MAX_LSA_THRESHOLD>, // TODO
-    UnsetAtomicField<uint16_t, OspfTopology::MAX_LSA_IGNORE_COUNT>, // TODO
+    OptionalAtomicField<uint16_t, OspfTopology::MAX_LSA_IGNORE_COUNT>, // TODO
     AtomicField<uint16_t, 5, OspfTopology::MAX_LSA_IGNORE_TIME>, // TODO
-    UnsetAtomicField<uint16_t, OspfTopology::MAX_LSA_RESET_TIME>, // TODO
+    OptionalAtomicField<uint16_t, OspfTopology::MAX_LSA_RESET_TIME>, // TODO
     AtomicField<bool, false, OspfTopology::MAX_LSA_WARNING_ONLY>, // TODO
     AtomicField<uint8_t, 4, OspfTopology::MAXIMUM_PATHS>, // TODO
-    VariableField<std::vector<uint32_t>, OspfTopology::MPLS_LDP_AREAS>, // TODO
-    VariableField<std::vector<uint32_t>, OspfTopology::MPLS_TRAF_ENG_AREAS>, // TODO
-    VariableField<std::vector<std::tuple<uint32_t, uint32_t>>, OspfTopology::MPLS_TRAF_ENG_INTERFACES>, // TODO
-    VariableField<std::vector<std::tuple<uint32_t, uint32_t, uint32_t>>, OspfTopology::MPLS_TRAF_ENG_MESH_GROUP>, // TODO
+    ValueField<std::vector<uint32_t>, OspfTopology::MPLS_LDP_AREAS>, // TODO
+    ValueField<std::vector<uint32_t>, OspfTopology::MPLS_TRAF_ENG_AREAS>, // TODO
+    ValueField<std::vector<std::tuple<uint32_t, uint32_t>>, OspfTopology::MPLS_TRAF_ENG_INTERFACES>, // TODO
+    ValueField<std::vector<std::tuple<uint32_t, uint32_t, uint32_t>>, OspfTopology::MPLS_TRAF_ENG_MESH_GROUP>, // TODO
     AtomicField<bool, false, OspfTopology::MPLS_TRAF_ENG_MULTICAST_INACT>, // TODO
-    UnsetAtomicField<uint32_t, OspfTopology::MPLS_TRAF_ENG_ROUTER_ID>, // TODO
-    VariableField<std::vector<std::tuple<IPPrefix, uint32_t>>, OspfTopology::NETWORKS>, // TODO
-    VariableField<std::vector<std::tuple<IPAddress, uint16_t>>, OspfTopology::NEIGHBORS>, // TODO
+    OptionalAtomicField<uint32_t, OspfTopology::MPLS_TRAF_ENG_ROUTER_ID>, // TODO
+    ValueField<std::vector<std::tuple<IPPrefix, uint32_t>>, OspfTopology::NETWORKS>, // TODO
+    ValueField<std::vector<std::tuple<IPAddress, uint16_t>>, OspfTopology::NEIGHBORS>, // TODO
     AtomicField<bool, false, OspfTopology::NSF_CISCO_HELPER>, // TODO
     AtomicField<bool, false, OspfTopology::NSF_STRICT_CHECKING>, // TODO
     AtomicField<uint8_t, 1, OspfTopology::PRIORITY>, // TODO
-    UnsetAtomicField<std::nullptr_t, OspfTopology::REDISTRIBUTE>, // TODO
-    UnsetAtomicField<std::nullptr_t, OspfTopology::SNMP>, // TODO
-    VariableField<std::vector<std::tuple<IPPrefix, bool, bool>>, OspfTopology::SUMMARY_ADDRESS>, // TODO
+    OptionalAtomicField<std::nullptr_t, OspfTopology::REDISTRIBUTE>, // TODO
+    OptionalAtomicField<std::nullptr_t, OspfTopology::SNMP>, // TODO
+    ValueField<std::vector<std::tuple<IPPrefix, bool, bool>>, OspfTopology::SUMMARY_ADDRESS>, // TODO
     AtomicField<uint32_t, 0, OspfTopology::LSA_THROTTLE_DELAY>, // TODO
     AtomicField<uint32_t, 5000, OspfTopology::LSA_THROTTLE_HOLD>, // TODO
     AtomicField<uint32_t, 5000, OspfTopology::LSA_THROTTLE_MAX>, // TODO
@@ -195,6 +215,19 @@ using OspfTopologyRegistry = SubRegistry<OspfTopology,
     AtomicField<bool, false, OspfTopology::TTL_SEC>, // TODO
     AtomicField<uint8_t, 1, OspfTopology::TTL_SEC_HOPS> // TODO
 >;
+
+inline __uint128_t generateOspfKey(uint32_t vrf, uint32_t procId, AddressFamily af /*uint8_t*/, bool isV3)
+{
+    uint8_t addressFamily = af == AddressFamily::NONE ? 0
+        : af == AddressFamily::IPv4 ? 1 : 2;
+
+    __uint128_t key = 0;
+    key |= __uint128_t(addressFamily) & maskU128Bits(2);
+    key |= __uint128_t(isV3 ? 1 : 0) << 2;
+    key |= __uint128_t(vrf) << 3;
+    key |= __uint128_t(procId) << 35;
+    return key;
+}
 
 enum class Ospf
 {
@@ -228,37 +261,35 @@ enum class Ospf
     COUNT,
 };
 
-using OspfRegistry = SubRegistry<Ospf,
-    ReferenceContainer<OspfTopology, OspfTopologyRegistry, Ospf::BASE>, // TODO
+using OspfRegistry = SubRegistry<__uint128_t, Ospf,
+    ReferenceContainer<OspfTopologyRegistry, Ospf::BASE>, // TODO
     AtomicField<uint32_t, 100, Ospf::REFERENCE_BANDWIDTH>, // TODO
     AtomicField<bool, false, Ospf::BFD>, // TODO
     AtomicField<bool, true, Ospf::LLS>, // TODO
     AtomicField<bool, false, Ospf::OPAQUE>, // TODO
     AtomicField<bool, false, Ospf::TRANSIT>, // TODO
-    UnsetAtomicField<uint32_t, Ospf::DOMAIN_ID>, // TODO
-    VariableField<std::vector<uint32_t>, Ospf::SECONDARY_DOMAIN_ID>, // TODO
-    UnsetAtomicField<uint32_t, Ospf::DOMAIN_TAG>, // TODO
+    OptionalAtomicField<uint32_t, Ospf::DOMAIN_ID>, // TODO
+    ValueField<std::vector<uint32_t>, Ospf::SECONDARY_DOMAIN_ID>, // TODO
+    OptionalAtomicField<uint32_t, Ospf::DOMAIN_TAG>, // TODO
     AtomicField<bool, false, Ospf::EVENT_LOG_ONE_SHOT>, // TODO
     AtomicField<bool, false, Ospf::EVENT_LOG_PAUSE>, // TODO
     AtomicField<uint64_t, 0, Ospf::EVENT_LOG_SIZE>, // TODO
     AtomicField<bool, true, Ospf::IGNORE_MOSPF>, // TODO
     AtomicField<bool, false, Ospf::SNMP_IFINDEX>, // TODO
     AtomicField<bool, false, Ospf::ISPF>, // TODO
-    UnsetAtomicField<uint8_t, Ospf::DC_LIMIT>, // TODO
-    UnsetAtomicField<uint8_t, Ospf::NON_DC_LIMIT>, // TODO
+    OptionalAtomicField<uint8_t, Ospf::DC_LIMIT>, // TODO
+    OptionalAtomicField<uint8_t, Ospf::NON_DC_LIMIT>, // TODO
     AtomicField<bool, false, Ospf::LOG_ADJACENCY_CHANGES>, // TODO
     AtomicField<bool, false, Ospf::LOG_ADJACENCY_DETAILS>, // TODO
-    UnsetAtomicField<uint32_t, Ospf::HELLO_QUEUE_DEPTH>, // TODO
-    UnsetAtomicField<uint32_t, Ospf::UPDATE_QUEUE_DEPTH>, // TODO
-    UnsetAtomicField<uint32_t, Ospf::ROUTER_ID>, // TODO
+    OptionalAtomicField<uint32_t, Ospf::HELLO_QUEUE_DEPTH>, // TODO
+    OptionalAtomicField<uint32_t, Ospf::UPDATE_QUEUE_DEPTH>, // TODO
+    OptionalAtomicField<uint32_t, Ospf::ROUTER_ID>, // TODO
     AtomicField<bool, false, Ospf::SHUTDOWN>, // TODO
     AtomicField<uint32_t, 1000, Ospf::LSA_ARRIVAL>, // TODO
     AtomicField<uint8_t, 33, Ospf::FLOOD_PACING>, // TODO
     AtomicField<uint16_t, 240, Ospf::LSA_GROUP_PACING>, // TODO
     AtomicField<uint8_t, 66, Ospf::RETRANSMISSION_PACING> // TODO
 >;
-
-using OspfRegistryMask = MaskSubRegistry<OspfRegistry>;
 
 enum class OspfAddressFamilyV3
 {
@@ -268,10 +299,10 @@ enum class OspfAddressFamilyV3
     COUNT
 };
 
-using OspfAddressFamilyV3Registry = SubRegistry<OspfAddressFamilyV3,
-    ReferenceContainer<Ospf, OspfRegistry, OspfAddressFamilyV3::BASE>, // TODO
-    ReferenceContainer<Ospf, OspfRegistryMask, OspfAddressFamilyV3::IPV4>, // TODO
-    ReferenceContainer<Ospf, OspfRegistryMask, OspfAddressFamilyV3::IPV6> // TODO
+using OspfAddressFamilyV3Registry = SubRegistry<__uint128_t, OspfAddressFamilyV3,
+    ReferenceContainer<OspfRegistry, OspfAddressFamilyV3::BASE>, // TODO
+    ReferenceContainer<OspfRegistry, OspfAddressFamilyV3::IPV4>, // TODO masked of base
+    ReferenceContainer<OspfRegistry, OspfAddressFamilyV3::IPV6> // TODO masked of base
 >;
 
 enum class OspfAddressFamilyV2
@@ -281,9 +312,9 @@ enum class OspfAddressFamilyV2
     COUNT
 };
 
-using OspfAddressFamilyV2Registry = SubRegistry<OspfAddressFamilyV2,
-    UnsetAtomicField<std::nullptr_t, OspfAddressFamilyV2::SNMP>, // TODO
-    VariableField<std::vector<Reference<OspfTopology, OspfTopologyRegistry>>, OspfAddressFamilyV2::TOPOLOGIES> // TODO
+using OspfAddressFamilyV2Registry = SubRegistry<__uint128_t, OspfAddressFamilyV2,
+    OptionalAtomicField<std::nullptr_t, OspfAddressFamilyV2::SNMP>, // TODO
+    OwnedListField<OspfTopologyRegistry, OspfAddressFamilyV2::TOPOLOGIES> // TODO
 >;
 }
 

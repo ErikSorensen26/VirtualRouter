@@ -7,33 +7,22 @@
 #include <concepts>
 #include <cassert>
 #include <utility>
+#include <optional>
+#include <vector>
 
 namespace Config
 {
-template <typename I, typename T, auto F>
+template <typename T, auto F>
 class MaskedReferenceContainer;
 
+template <typename T>
+class Reference;
+
 struct AtomicFieldFlag {};
-struct UnsetAtomicFieldFlag : AtomicFieldFlag {};
-struct RefContainerFieldFlag;
-
-template <typename T>
-concept HasEmpty =
-    requires(const T& t)
-    {
-        { t.empty() } -> std::convertible_to<bool>;
-    };
-
-template <typename T>
-concept HasClear =
-    requires(T t)
-    {
-        t.clear();
-    };
-
-template <typename T>
-concept VariableMultiplicityField =
-    HasEmpty<T> && HasClear<T>;
+struct OptionalAtomicFieldFlag : AtomicFieldFlag {};
+struct RefContainerFieldFlag {};
+struct ValueFieldFlag {};
+struct OwnedListFieldFlag {};
 
 template <typename T>
 concept IsFieldBase =
@@ -42,27 +31,6 @@ concept IsFieldBase =
         typename T::type;
         { T::field };
     };
-
-template <typename T>
-concept IsAtomicField =
-    IsFieldBase<T> &&
-    std::derived_from<T, AtomicFieldFlag>;
-
-template <typename T>
-concept IsUnsetAtomicField =
-    IsFieldBase<T> &&
-    std::derived_from<T, UnsetAtomicFieldFlag>;
-
-template <typename T>
-concept IsRefContainer =
-    IsFieldBase<T> &&
-    std::derived_from<T, RefContainerFieldFlag>;
-
-template <typename T>
-concept IsVariableField =
-    IsFieldBase<T> &&
-    (!IsAtomicField<T>) &&
-    (!IsRefContainer<T>);
 
 enum class MaskState : uint8_t
 {
@@ -78,200 +46,231 @@ public:
     static constexpr auto dValue = D;
     static constexpr auto field = F;
 
+    AtomicField() = default;
+
+    AtomicField(const AtomicField& parent) noexcept
+        : value(D),
+          state(MaskState::INHERIT),
+          base(&parent)
+    {}
+
     inline T load() const noexcept
     {
+        if (base && state.load(std::memory_order_relaxed) == MaskState::INHERIT)
+            return base->load();
+
         return value.load(std::memory_order_relaxed);
     }
 
     inline void set(T v) noexcept
     {
         value.store(v, std::memory_order_release);
+        state.store(MaskState::SET, std::memory_order_release);
     }
 
     inline void unset() noexcept
     {
         value.store(dValue, std::memory_order_relaxed);
+        state.store(MaskState::INHERIT, std::memory_order_relaxed);
+    }
+
+    inline bool overridden() const noexcept
+    {
+        return state.load(std::memory_order_relaxed) == MaskState::SET;
     }
 
 private:
-    std::atomic<T> value = D;
+    std::atomic<T> value{D};
+    std::atomic<MaskState> state{MaskState::INHERIT};
+    const AtomicField* base{nullptr};
 };
 
 template <typename T, auto F>
-class UnsetAtomicField : public UnsetAtomicFieldFlag
+class OptionalAtomicField : public OptionalAtomicFieldFlag
 {
 public:
     using type = T;
     static constexpr auto field = F;
 
+    OptionalAtomicField() = default;
+
+    explicit OptionalAtomicField(const OptionalAtomicField& parent) noexcept
+        : value(),
+          state(MaskState::INHERIT),
+          base(&parent)
+    {}
+
+    inline bool hasValue() const noexcept
+    {
+        if (state.load(std::memory_order_relaxed) == MaskState::SET)
+            return true;
+
+        if (base)
+            return base->hasValue();
+
+        return false;
+    }
+
     inline T load() const noexcept
     {
-        assert(valueSet.load(std::memory_order_relaxed) == true);
+        if (base && state.load(std::memory_order_relaxed) == MaskState::INHERIT)
+        {
+            assert(base->hasValue());
+            return base->load();
+        }
         return value.load(std::memory_order_relaxed);
     }
 
     inline void set(T v) noexcept
     {
         value.store(v, std::memory_order_release);
-        valueSet.store(true, std::memory_order_release);
+        state.store(MaskState::SET, std::memory_order_release);
     }
 
     inline void unset() noexcept
     {
-        valueSet.store(false, std::memory_order_release);
+        state.store(MaskState::INHERIT, std::memory_order_release);
     }
 
-    inline bool hasValue() noexcept
+    inline bool overridden() const noexcept
     {
-        return valueSet.load(std::memory_order_relaxed);
+        return state.load(std::memory_order_relaxed) == MaskState::SET;
     }
 
 private:
-    std::atomic<bool> valueSet{false};
     std::atomic<T> value{};
-};
-
-template <VariableMultiplicityField T, auto F>
-class VariableField
-{
-public:
-    using type = T;
-    static constexpr auto field = F;
-
-    inline T& get() noexcept
-    {
-        return value;
-    }
-
-    inline const T& get() const noexcept
-    {
-        return value;
-    }
-
-    inline void unset() noexcept
-    {
-        value.clear();
-    }
-
-private:
-    T value = {};
-};
-
-template <typename T, T D, auto F>
-class MaskedAtomicField
-{
-public:
-    MaskedAtomicField(AtomicField<T, D, F>& fallback)
-        : base(&fallback)
-    {}
-
-    inline T get() const noexcept
-    {
-        if (state.load(std::memory_order_relaxed) == MaskState::SET)
-            return value.load(std::memory_order_relaxed);
-        return base->load();
-    }
-
-    inline void set(T v) noexcept
-    {
-        value.store(v, std::memory_order_relaxed);
-        state.store(MaskState::SET, std::memory_order_relaxed);
-    }
-
-    inline void unset() noexcept
-    {
-        state.store(MaskState::INHERIT, std::memory_order_relaxed);
-    }
-
-private:
-    std::atomic<T> value{D};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    AtomicField<T, D, F>* base{nullptr};
+    const OptionalAtomicField* base{nullptr};
 };
 
 template <typename T, auto F>
-class MaskedUnsetAtomicField
+class ValueField : public ValueFieldFlag
 {
-public:
-    MaskedUnsetAtomicField(UnsetAtomicField<T, F>& fallback) noexcept
-        : value{},
-          state(MaskState::INHERIT),
-          base(&fallback)
-    {}
-
-    inline T get() const noexcept
-    {
-        if (state.load(std::memory_order_relaxed) == MaskState::SET)
-            return value.load(std::memory_order_relaxed);
-        return base->load();
-    }
-
-    inline void set(T v) noexcept
-    {
-        value.store(v, std::memory_order_relaxed);
-        state.store(MaskState::SET, std::memory_order_relaxed);
-    }
-
-    inline void unset() noexcept
-    {
-        state.store(MaskState::INHERIT, std::memory_order_relaxed);
-    }
-
-    inline bool hasValue() noexcept
-    {
-        return state.load(std::memory_order_relaxed) == MaskState::SET || base->hasValue();
-    }
-
-private:
-    std::atomic<T> value{};
-    std::atomic<MaskState> state{MaskState::INHERIT};
-    UnsetAtomicField<T, F>* base{nullptr};
-};
-
-template <VariableMultiplicityField T, auto F>
-class MaskedVariableField
-{ 
 public:
     using type = T;
     static constexpr auto field = F;
 
-    explicit MaskedVariableField(VariableField<T, F>& fallback) noexcept
-        : base(&fallback)
+    ValueField() = default;
+
+    explicit ValueField(const ValueField& parent) noexcept
+        : value(),
+          state(MaskState::SET),
+          base(&parent)
     {}
 
     inline T& get() noexcept
     {
-        if (!value.empty())
-            return value;
-        return base->get();
+        if (base && state == MaskState::INHERIT)
+            return base->get();
+        return value;
     }
 
     inline const T& get() const noexcept
     {
-        if (!value.empty())
-            return value;
-        return base->get();
+        if (base && state == MaskState::INHERIT)
+            return base->get();
+        return value;
     }
 
-    inline void set(const T& v)
+    void set(const T& v)
     {
         value = v;
+        state = MaskState::SET;
     }
 
-    inline void set(T&& v)
+    void set(T&& v)
     {
         value = std::move(v);
+        state = MaskState::SET;
     }
 
     inline void unset() noexcept
     {
-        value.clear();
+        value = T{};
+        state = MaskState::INHERIT;
+    }
+
+    inline bool overridden() const noexcept
+    {
+        return state == MaskState::SET;
     }
 
 private:
     T value{};
-    VariableField<T, F>* base{nullptr};
+    MaskState state;
+    const ValueField* base{nullptr};
 };
+
+template <typename T, auto F>
+class OwnedListField : public OwnedListFieldFlag
+{
+public:
+    using type = std::vector<std::pair<uint32_t, Reference<T>>>;
+    static constexpr auto field = F;
+
+    OwnedListField() = default;
+
+    explicit OwnedListField(const OwnedListField& parent) noexcept
+        : children(),
+          state(MaskState::INHERIT),
+          base(&parent)
+    {}
+
+    inline type& getMutable() noexcept
+    {
+        state = MaskState::SET;
+        return children;
+    }
+
+    inline const type& get() const noexcept
+    {
+        if (base && state == MaskState::INHERIT)
+            return base->get();
+        return children;
+    }
+
+    inline void clear() noexcept
+    {
+        children.clear();
+        state = MaskState::INHERIT;
+    }
+
+    inline bool overridden() const noexcept
+    {
+        return state == MaskState::SET;
+    }
+
+private:
+    type children{};
+    MaskState state{MaskState::INHERIT};
+    const OwnedListField* base{nullptr};
+};
+
+template <typename T>
+concept IsAtomicField =
+    IsFieldBase<T> &&
+    std::derived_from<T, AtomicFieldFlag> &&
+    (!std::derived_from<T, OptionalAtomicFieldFlag>);
+
+template <typename T>
+concept IsOptionalAtomicField =
+    IsFieldBase<T> &&
+    std::derived_from<T, OptionalAtomicFieldFlag>;
+
+template <typename T>
+concept IsRefContainer =
+    IsFieldBase<T> &&
+    std::derived_from<T, RefContainerFieldFlag>;
+
+template <typename T>
+concept IsValueField =
+    IsFieldBase<T> &&
+    std::derived_from<T, ValueFieldFlag>;
+
+template <typename T>
+concept IsOwnedListField =
+    IsFieldBase<T> &&
+    std::derived_from<T, OwnedListFieldFlag>;
 }
 
 #endif // REGISTRY_TYPES_HPP

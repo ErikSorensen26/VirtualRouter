@@ -12,13 +12,11 @@ namespace Config
 {
 using Registry = RegistryDatabase<
     OspfRegistry,
-    OspfRegistryMask,
     OspfTopologyBaseRegistry,
     OspfTopologyRegistry,
     OspfAddressFamilyV2Registry,
     OspfAddressFamilyV3Registry,
     OspfInterfaceRegistry,
-    OspfInterfaceRegistryMask,
     OspfInterfaceBaseRegistry,
     OspfInterfaceAddressFamilyRegistry
 >;

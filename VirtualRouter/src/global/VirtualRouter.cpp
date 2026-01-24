@@ -7,7 +7,7 @@
 #include <InterfaceType.hpp>
 
 VirtualRouter::VirtualRouter(Global& global, const std::string& name)
-    : global(global)
+    : isDefault(name == "default"), global(global)
 {
     instanceName = name;
     enabledAddressFamilies.insert(AddressFamily::IPv4);

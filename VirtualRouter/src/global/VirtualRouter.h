@@ -280,6 +280,8 @@ public:
     std::map<std::string, Eigrp::EigrpNamed*> namedEigrpList; ///< Named-mode EIGRP groups.
 
     std::string instanceName; ///< Human-readable VRF identifier.
+    uint32_t instanceId{0};
+    bool isDefault{false};
 
     RoutingTable routingTable; ///< Per-VRF Routing Table (RIB + FIB generation logic).
 

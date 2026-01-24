@@ -5,42 +5,27 @@
 #include "OspfTopology.h"
 #include <Global.h>
 #include <VirtualRouter.h>
-
 namespace OSPF
 {
 
 OspfProcess::OspfProcess(bool isV3, uint32_t procId, VirtualRouter* vrf)
-    : isV3(isV3), routingInstance(vrf), tmgr(vrf->global.timeManager), procId(procId), ifaceMgr(*this),
-    cfgs([this, isV3]() -> Config::OspfRegistry& {
-        if (isV3)
-        {
-            auto& bucket = routingInstance->global.registry.bucket<Config::OspfAddressFamilyV3, Config::BASE>();
-            v3cfgsHandle = bucket.create();
-            v3cfgs = bucket.get(bucket.create());
-            return *v3cfgs->get<Config::OspfAddressFamilyV3::BASE>().get().ptr();
-        }
-        else
-        {
-            auto& bucket = routingInstance->global.registry.bucket<Config::Ospf, Config::BASE>();
-            cfgsHandle = bucket.create();
-            return *bucket.get(cfgsHandle);
-        }
-      }()) {}
-
-OspfProcess::~OspfProcess()
+    : isV3(isV3), routingInstance(vrf), tmgr(vrf->global.timeManager), procId(procId), ifaceMgr(*this)
 {
     auto& registry = routingInstance->global.registry;
-    if (v3cfgs)
+    auto key = Config::generateOspfKey(routingInstance->instanceId, getProcId(), AddressFamily::NONE, isV3);
+    if (isV3 && routingInstance->isDefault)
     {
-        registry.bucket<Config::OspfAddressFamilyV3, Config::BASE>().erase(v3cfgsHandle);
-        v3cfgs = nullptr;
+        v3Configs = registry.create<Config::OspfAddressFamilyV3Registry>(key);
+        auto& base = v3Configs.get().template get<Config::OspfAddressFamilyV3::BASE>();
+        configs = registry.ensure(base, key);
+        auto topo = registry.ensure(configs.get().get<Config::Ospf::BASE>(), key);
+        registry.ensure(topo.get().get<Config::OspfTopology::BASE>(), key);
     }
     else
     {
-        registry.bucket<Config::Ospf, Config::BASE>().erase(cfgsHandle);
+        configs = routingInstance->global.registry.template create<Config::OspfRegistry>(key);
     }
 }
-
 
 Topology* OspfProcess::getTopology(uint8_t tid)
 {

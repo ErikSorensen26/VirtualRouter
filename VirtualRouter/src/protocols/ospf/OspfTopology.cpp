@@ -12,28 +12,14 @@
 namespace OSPF
 {
 Topology::Topology(OspfProcess& p, uint8_t t, AddressFamily f)
-    : tid(t), process(p), af(f), rib(*this),
-    configs([this]() {
-        auto& registry = process.routingInstance->global.registry;
-        if (!process.isV3)
-        {
-            processConfigs = &process.configs();
-        }
-        else
-        {
-            auto* v3 = process.getV3Configs();
-            auto* base = getAf() == AddressFamily::IPv4
-                ? v3->get<Config::OspfAddressFamilyV3::IPV4>().get().ptr()
-                : v3->get<Config::OspfAddressFamilyV3::IPV6>().get().ptr();
-
-            auto& bucket = registry.bucket<Config::Ospf, Config::MASK>();
-        }
-        auto& bucket = process.routingInstance->global.registry.bucket<Config::OspfTopology, Config::BASE>();
-        handle = bucket.create();
-        auto* configs = bucket.get(handle);
-        processConfigs.
-    })();
-{}
+    : tid(t), process(p), af(f), rib(*this)
+{
+    auto key = Config::generateOspfTopologyKey(p.configs.getKey(), tid);
+    auto& registry = p.routingInstance->global.registry;
+    auto& base = p.configs.get().get<Config::Ospf::BASE>();
+    configs = registry.create<Config::OspfTopologyRegistry>(key, base.get().get());
+    registry.ensure(configs.get().get<Config::OspfTopology::BASE>(), key);
+}
 
 OspfArea* Topology::getArea(uint32_t areaId)
 {
