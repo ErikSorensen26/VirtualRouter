@@ -34,6 +34,31 @@ void PacketDispatcher::transmit(PacketBuilder& pkt, const uint8_t* dest)
         : Protocol::IPPacket::buildIpv6(build);
 }
 
+uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& record)
+{
+    // Extract DoNotAge from LS age
+    bool dna = (record.header.age & 0x8000) != 0;
+    uint32_t age = record.header.age & 0x7FFF;
+
+    if (!dna)
+    {
+        uint16_t delta = static_cast<uint16_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::steady_clock::now() - record.lastRefreshTime
+            ).count()
+        );
+        age = (record.header.age & 0x7FFF) + delta;
+    }
+
+    age += iface.getConfigs().get<Config::OspfInterface::TRANSMIT_DELAY>().load();
+
+    if (age > OSPF_MAX_AGE) age = OSPF_MAX_AGE;
+
+    bool dnaOut = age != 3600 && floodReduction;
+
+    return static_cast<uint16_t>(age) | (dnaOut ? 0x8000 : 0);
+}
+
 bool PacketDispatcher::retransmitLsu(Neighbor& nbr)
 {
     return sendLSUpdate(&nbr, nbr.getRtr().getLsu());

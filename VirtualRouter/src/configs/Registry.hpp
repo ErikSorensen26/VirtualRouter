@@ -3,7 +3,8 @@
 #ifndef REGISTRY_HPP
 #define REGISTRY_HPP
 
-#include <RegistryDatabase.hpp>
+#include "RegistryDatabase.hpp"
+#include "SubRegistry.hpp" // KEEP
 
 #include <OspfInterfaceRegistry.hpp>
 #include <OspfRegistry.hpp>

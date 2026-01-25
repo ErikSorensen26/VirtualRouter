@@ -25,7 +25,7 @@ class Neighbor;
 class PacketDispatcherV3 : PacketDispatcher
 {
 public:
-    PacketDispatcherV3(OspfInterface& iface) : PacketDispatcher(iface) {}
+    PacketDispatcherV3(OspfInterface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>&) : PacketDispatcher(iface) {}
 
     void handleIncoming(const Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
 

@@ -3,6 +3,7 @@
 #ifndef SPF_MANAGER_H
 #define SPF_MANAGER_H
 
+#include <Registry.hpp>
 #include <cstdint>
 #include <atomic>
 #include <OspfTypes.hpp>
@@ -45,8 +46,6 @@ private:
     std::atomic<bool> reschedule{false};
 
     std::atomic<std::chrono::steady_clock::time_point> lastSpfTime;
-
-    std::atomic<OspfConfigs::Throttle>& throttle;
 
     std::atomic<uint32_t> currentDelayMs{0};
     uint32_t timerId;

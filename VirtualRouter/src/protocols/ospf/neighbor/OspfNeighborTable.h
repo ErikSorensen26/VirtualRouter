@@ -17,6 +17,9 @@ class NeighborTable
 public:
     NeighborTable(OspfInterface& iface);
 
+    void syncUnicast();
+    void clearUnicast();
+
     Neighbor* createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool unicast = false);
     void deleteNeighbor(uint32_t rid, bool unicast);
     Neighbor* lookup(uint32_t rid);
@@ -29,8 +32,16 @@ public:
     mutable std::shared_mutex mu;
     std::unordered_map<uint32_t, Neighbor> neighbors;
 
+    struct UnicastConfigs
+    {
+        std::optional<uint16_t> cost{std::nullopt};
+        bool databaseFilter{false};
+        uint16_t pollInterval{120};
+        uint8_t priority{0};
+    };
+
 private:
-    std::unordered_set<uint32_t> unicast;
+    std::unordered_map<IPAddress, UnicastConfigs> unicast;
     OspfInterface& iface;
 };
 }

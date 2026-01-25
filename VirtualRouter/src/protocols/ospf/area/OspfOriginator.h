@@ -3,6 +3,7 @@
 #ifndef OSPF_ORIGINATOR_H
 #define OSPF_ORIGINATOR_H
 
+#include <Registry.hpp>
 #include <LSDB.hpp>
 #include <OspfInterfaceId.hpp>
 

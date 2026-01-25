@@ -17,7 +17,7 @@
 namespace OSPF
 {
 SpfManager::SpfManager(OspfArea& area, TimeManager& tmgr)
-    : area(area), tmgr(tmgr), rib(area.topology().process.getRib()), throttle(area.topology().process.getConfigs().spfThrottle)
+    : area(area), tmgr(tmgr), rib(area.topology().getRib())
 {}
 
 template<typename Policy>
@@ -108,15 +108,18 @@ void SpfManager::runSpf()
 
 uint32_t SpfManager::computeNextDelay()
 {
-    auto thr = throttle.load(std::memory_order_acquire);
+    Config::OspfTopologyRegistry& cfgs = area.topology().getConfigs();
+    uint32_t initDelayMs = cfgs.get<Config::OspfTopology::SPF_THROTTLE_DELAY>().load();
+    uint32_t holdTimeMs = cfgs.get<Config::OspfTopology::SPF_THROTTLE_HOLD>().load();
+    uint32_t maxHoldTimeMs = cfgs.get<Config::OspfTopology::SPF_THROTTLE_MAX>().load();
 
     uint32_t prev = currentDelayMs.load(std::memory_order_relaxed);
     uint32_t backoff;
 
     if (prev == 0)
-        backoff = thr.initDelayMs;
+        backoff = initDelayMs;
     else
-        backoff = std::min(prev * 2, thr.maxHoldTimeMs);
+        backoff = std::min(prev * 2, maxHoldTimeMs);
 
     auto now = std::chrono::steady_clock::now();
     auto last = lastSpfTime.load(std::memory_order_relaxed);
@@ -125,8 +128,8 @@ uint32_t SpfManager::computeNextDelay()
     if (last != std::chrono::steady_clock::time_point{})
     {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last).count();
-        if (elapsed < thr.holdTimeMs)
-            holdRemaining = static_cast<uint32_t>(thr.holdTimeMs - elapsed);
+        if (elapsed < holdTimeMs)
+            holdRemaining = static_cast<uint32_t>(holdTimeMs - elapsed);
     }
 
     uint32_t next = std::max(backoff, holdRemaining);

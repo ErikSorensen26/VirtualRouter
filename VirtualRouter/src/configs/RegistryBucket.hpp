@@ -40,11 +40,21 @@ private:
     struct Slot
     {
         alignas(T) unsigned char storage[sizeof(T)];
-        keyType key{0};
+        keyType key{};
 
         uint32_t generation{0};
         uint32_t refCount{0};
         bool alive{false};
+
+        T& get()
+        {
+            return *std::launder(reinterpret_cast<T*>(storage));
+        }
+
+        const T& get() const
+        {
+            return *std::launder(reinterpret_cast<T*>(storage));
+        }
 
         T* ptr()
         {
@@ -131,18 +141,16 @@ public:
         return handleValid(out);
     }
 
-    T* get(const Handle& h) noexcept
+    T& get(const Handle& h) noexcept
     {
-        if (!handleValid(h))
-            return nullptr;
-        return slots[h.index].ptr();
+        assert(handleValid(h));
+        return slots[h.index].get();
     }
 
-    const T* get(const Handle& h) const
+    const T& get(const Handle& h) const
     {
-        if (!handleValid(h))
-            return nullptr;
-        return slots[h.index].ptr();
+        assert(handleValid(h));
+        return slots[h.index].get();
     }
 
     void addRef(const Handle& h) noexcept

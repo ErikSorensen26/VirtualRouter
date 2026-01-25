@@ -3,8 +3,7 @@
 #ifndef OSPF_REGISTRY_HPP
 #define OSPF_REGISTRY_HPP
 
-#include <RegistryReference.hpp>
-#include <SubRegistry.hpp>
+#include <RegistryTemplate.hpp>
 #include <tuple>
 #include <IPAddress.hpp>
 #include <string>
@@ -117,9 +116,9 @@ using OspfTopologyBaseRegistry = SubRegistry<__uint128_t, OspfTopologyBase,
     AtomicField<bool, true, OspfTopologyBase::DISCARD_EXTERNAL>, // TODO
     AtomicField<uint8_t, 110, OspfTopologyBase::DISCARD_EXTERNAL_DISTANCE>, // TODO
     OptionalAtomicField<std::nullptr_t, OspfTopologyBase::DISTANCE>, // TODO
-    AtomicField<uint8_t, 110, OspfTopologyBase::EXTERNAL_DISTANCE>, // TODO
-    AtomicField<uint8_t, 110, OspfTopologyBase::INTER_AREA_DISTANCE>, // TODO
-    AtomicField<uint8_t, 110, OspfTopologyBase::INTRA_AREA_DISTANCE>, // TODO
+    AtomicField<uint8_t, 110, OspfTopologyBase::EXTERNAL_DISTANCE>,
+    AtomicField<uint8_t, 110, OspfTopologyBase::INTER_AREA_DISTANCE>,
+    AtomicField<uint8_t, 110, OspfTopologyBase::INTRA_AREA_DISTANCE>,
     OptionalAtomicField<std::nullptr_t, OspfTopologyBase::DISTRIBUTE_LIST>, // TODO
     ValueField<std::string, OspfTopologyBase::PREFIX_PRIORITY_ROUTE_MAP>, // TODO
     ValueField<std::string, OspfTopologyBase::TABLE_MAP>, // TODO
@@ -307,12 +306,14 @@ using OspfAddressFamilyV3Registry = SubRegistry<__uint128_t, OspfAddressFamilyV3
 
 enum class OspfAddressFamilyV2
 {
+    BASE,
     SNMP,
     TOPOLOGIES,
     COUNT
 };
 
 using OspfAddressFamilyV2Registry = SubRegistry<__uint128_t, OspfAddressFamilyV2,
+    ReferenceContainer<OspfRegistry, OspfAddressFamilyV2::BASE>, // TODO
     OptionalAtomicField<std::nullptr_t, OspfAddressFamilyV2::SNMP>, // TODO
     OwnedListField<OspfTopologyRegistry, OspfAddressFamilyV2::TOPOLOGIES> // TODO
 >;

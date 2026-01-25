@@ -6,6 +6,7 @@
 #include <OspfNeighbor.h>
 #include <OspfTopology.h>
 #include <OspfFlagManager.h>
+#include <VirtualRouter.h>
 
 #include <PacketDispatcherV2.h>
 #include <PacketDispatcherV3.h>
@@ -19,23 +20,20 @@ auto getIfaceAddr(Interface& iface, AddressFamily af) -> IPPrefix
 
 namespace OSPF
 {
-OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, InterfaceConfigs& configs, OspfInterfaceId& id)
+OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, OspfInterfaceId& id)
     : process(proc),
       topology(&proc.insureTopology(iface.configs.tid.load(std::memory_order_relaxed))),
       area(&(topology.load()->insureArea(id.area))),
       id(id),
+      interfaceId(iface.configs.key),
       interfaceAddress(getIfaceAddr(iface, process.getAF())),
-      configs(configs),
+      dispatcher(proc.isV3 ? new PacketDispatcherV3(*this, configs) : PacketDispatcherV2(*this, configs)),
       flags(*this),
       lsaFlags(*this),
       ntable(*this),
       tmgr(proc.tmgr, *this),
       iface(iface)
 {
-    dispatcher = proc.isV3
-        ? new PacketDispatcherV3(*this)
-        : new PacketDispatcherV2(*this);
-
     syncConfigs();
     tmgr.startHello();
 }
@@ -114,7 +112,7 @@ void OspfInterface::election()
 
     // Add self
     uint32_t selfRid = getArea().topology().process.getRouterId();
-    uint8_t selfPrio = configs.priority.load(std::memory_order_relaxed);
+    uint8_t selfPrio = configs->get<Config::OspfInterface::PRIORITY>().load();
     
     if (selfPrio > 0)
         eligible.emplace_back(selfRid, selfPrio);
@@ -185,7 +183,7 @@ void OspfInterface::syncConfigs()
 
 void OspfInterface::setPassiveMode(bool passive)
 {
-    configs.isPassive.store(passive, std::memory_order_release);
+    configs->get<Config::OspfInterface::PASSIVE>().load();
     if (passive)
     {
         std::shared_lock<std::shared_mutex> lock(ntable.mu);

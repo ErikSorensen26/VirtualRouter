@@ -5,15 +5,16 @@
 
 #include <memory_resource>
 
+#include <Registry.hpp>
 #include <LsdbTable.h>
 #include <SpfManager.h>
 #include "FloodQueue.hpp"
 #include "FloodTypes.hpp"
 #include "OspfFlagManager.h"
 #include "OspfOriginator.h"
+
 namespace OSPF
 {
-struct AreaConfigs;
 struct OspfPath;
 class Topology;
 class OspfInterface;
@@ -43,16 +44,22 @@ CalcResults runLsaCalculations(const LsaHeader& hdr, const LsaKey& key, const Ls
         using T = std::decay_t<decltype(lsa)>;
         if constexpr (!std::is_same_v<T, std::monostate>)
         {
+            // Finalize length
             res.size = 20 + lsa.size();
+
             ChecksumFletcher check;
+
             if constexpr (std::is_same_v<Policy, PolicyV2>)
                 check.add(hdr.options);
+
             check.addU16(key.lsaType);
             check.addU32(key.linkStateId);
             check.addU32(key.advertisingRouter);
             check.addU32(hdr.sequence);
-            check.addU16(hdr.length);
+            check.addU16(res.size); // Length
+
             lsa.appendChecksum(check);
+
             res.checksum = check.finalize();
         }
     }, body);
@@ -76,14 +83,14 @@ public:
     const LsdbTable& lsdb() const noexcept { return db; }
     const Topology& topology() const noexcept { return base; }
     Topology& topology() { return base; }
-    AreaConfigs& getConfigs() { return cfgs; }
-    const AreaConfigs& getConfigs() const noexcept { return cfgs; }
+    Config::OspfAreaRegistry& getConfigs() { return configs.get(); }
+    const Config::OspfAreaRegistry& getConfigs() const noexcept { return configs.get(); }
     FloodQueue& floodQueue() noexcept { return fq; }
     const FloodQueue& floodQueue() const noexcept { return fq; }
     AreaFlagManager& getFlags() { return flags; }
     const AreaFlagManager& getFlags() const noexcept { return flags; }
     const SpfManager& getSpfManager() const noexcept { return spfMgr; }
-    OspfOriginator& getOriginator() { return *originator; }
+    OspfOriginator& getOriginator() { return originator; }
 
     // Flooding
     template<typename Policy>
@@ -119,14 +126,15 @@ protected:
     std::atomic<bool> shouldRequestSpf;
     std::atomic<uint8_t> options;
 
-    AreaConfigs& cfgs;
+    Config::Reference<Config::OspfAreaRegistry> configs;
+
     LsdbTable db;
     FloodQueue fq;
     Topology& base;
     SpfManager spfMgr;
     AreaFlagManager flags;
 
-    OspfOriginator* originator{nullptr};
+    OspfOriginator& originator;
 
 private:
     Result process(const IncomingLsaContext& ctx, LsaBody& body);

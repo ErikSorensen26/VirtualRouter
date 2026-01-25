@@ -3,6 +3,7 @@
 #ifndef OSPF_INTERFACE_H
 #define OSPF_INTERFACE_H
 
+#include <Registry.hpp>
 #include <OspfTypes.hpp>
 #include <OspfNeighborTable.h>
 #include <PacketDispatcher.h>
@@ -21,21 +22,26 @@ class OspfArea;
 class OspfInterface
 {
 public:
-    OspfInterface(OspfProcess& proc, Interface& iface, InterfaceConfigs& configs, OspfInterfaceId& id);
+    OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, OspfInterfaceId& id);
     ~OspfInterface();
     OspfProcess& process;
     std::atomic<Topology*> topology;
     std::atomic<OspfArea*> area;
     const OspfInterfaceId id;
+    const uint32_t interfaceId;
 
     NeighborTable& getNTable() { return ntable; }
     const NeighborTable& getNTable() const { return ntable; }
     InterfaceTimers& getTimers() { return tmgr; }
     PacketDispatcher& getDispatcher() { return *dispatcher; }
-    const InterfaceFlagManager& getFlags() const { return flags; }
     InterfaceFlagManager& getFlags() { return flags; }
-    const InterfaceFlagManager& getLsaFlags() const { return lsaFlags; }
+    const InterfaceFlagManager& getFlags() const { return flags; }
     InterfaceFlagManager& getLsaFlags() { return lsaFlags; }
+    const InterfaceFlagManager& getLsaFlags() const { return lsaFlags; }
+    Config::OspfInterfaceRegistry& getConfigs() { return configs.get(); }
+    const Config::OspfInterfaceRegistry& getConfigs() const { return configs.get(); }
+    Config::OspfInterfaceBaseRegistry& getBaseConfigs() { return baseConfigs.get(); }
+    const Config::OspfInterfaceBaseRegistry& getBaseConfigs() const noexcept { return baseConfigs.get(); }
 
     OspfArea& getArea();
     uint32_t getAreaId() const { return id.area; }
@@ -65,7 +71,6 @@ public:
     std::atomic<DcDecision> demandCircuit = DcDecision::UNDECIDED;
     std::atomic<bool> floodReduction = false;
 
-    InterfaceConfigs& configs;
 private:
     PacketDispatcher* dispatcher = nullptr;
 
@@ -74,6 +79,9 @@ private:
     NeighborTable ntable;
     InterfaceTimers tmgr;
     Interface& iface;
+
+    Config::Reference<Config::OspfInterfaceRegistry> configs;
+    Config::Reference<Config::OspfInterfaceBaseRegistry> baseConfigs;
 };
 }
 

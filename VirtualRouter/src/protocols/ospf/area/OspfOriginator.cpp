@@ -91,18 +91,20 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
 {
     if (iface.getAreaId() != area.areaId) return;
 
-    bool prefixSuppression = iface.configs.prefixSuppression.load(std::memory_order_relaxed);
-    auto ntype = iface.configs.networkType.load(std::memory_order_relaxed);
+    auto& ifaceConfigs = iface.getConfigs();
+
+    bool prefixSuppression = iface.getBaseConfigs().get<Config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load();
+    auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
     const auto& ntable = iface.getNTable();
 
-    if (iface.configs.isPassive.load(std::memory_order_relaxed) ||
+    if (ifaceConfigs.get<Config::OspfInterface::PASSIVE>().load() ||
         iface.getIface().configs.interfaceType == InterfaceType::LOOPBACK)
     {
         addStubLink(router, iface);
         return;
     }
 
-    if (ntype == InterfaceConfigs::NetworkType::POINT_TO_POINT)
+    if (ntype == NetworkType::POINT_TO_POINT)
     {
         bool isVirtual = iface.isVirtual.load(std::memory_order_relaxed);
         std::shared_lock<std::shared_mutex> nlock(ntable.mu);
@@ -123,7 +125,7 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
         return;
     }
 
-    if (ntype == InterfaceConfigs::NetworkType::POINT_TO_MULTIPOINT)
+    if (ntype == NetworkType::POINT_TO_MULTIPOINT)
     {
         std::shared_lock<std::shared_mutex> lock(ntable.mu);
         for (auto& [rid, nbr] : ntable.neighbors)
@@ -137,8 +139,8 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
         }
     }
 
-    if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||
-        ntype == InterfaceConfigs::NetworkType::NON_BROADCAST)
+    if (ntype == NetworkType::BROADCAST ||
+        ntype == NetworkType::NON_BROADCAST)
     {
         bool isDr = iface.isDr.load(std::memory_order_relaxed);
         bool haveDr = isDr;
@@ -181,9 +183,13 @@ void OspfOriginator::processReoriginatedLsa(const LsaKey& key, LsaBody& body, bo
     LsaRecord* existing = area.lsdb().find(ctx.key);
 
     if constexpr (std::is_same_v<Policy, PolicyV2>)
-        ctx.header.options = static_cast<uint8_t>(area.getFlags().getFlags());
+    {
+        uint8_t options = static_cast<uint8_t>(area.getFlags().getFlags());
+        InterfaceFlagManager::setDemandCircuits(options, true);
+        ctx.header.options = options;
+    }
     ctx.selfOriginatedKey = true;
-    ctx.header.age = expire ? 3600 : 0;
+    ctx.header.age = expire ? OSPF_MAX_AGE : 0;
     FloodReason reason = expire ? FloodReason::FLUSH : refresh ? FloodReason::REFRESH : FloodReason::UPDATE;
     ctx.info = {.reason = reason};
     ctx.header.sequence = existing

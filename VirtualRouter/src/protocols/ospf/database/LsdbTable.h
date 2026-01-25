@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "LSDB.hpp"
+#include <Registry.hpp>
 
 #ifndef OSPF_LSDB_THREADSAFE
 #define OSPF_LSDB_THREADSAFE 1
@@ -32,7 +33,7 @@ public:
 #endif
 #endif
 
-    explicit LsdbTable(std::pmr::memory_resource* upstream = std::pmr::get_default_resource(), size_t initialReserve = 0);
+    explicit LsdbTable(std::pmr::memory_resource* upstream = std::pmr::get_default_resource());
 
     // Movable
     LsdbTable(LsdbTable&&) noexcept = delete;

@@ -57,12 +57,11 @@ bool Neighbor::setState(Neighbor::State s)
         {
             state.store(s, std::memory_order_release);
             
-            auto ntype = iface.configs.networkType.load(std::memory_order_relaxed);
-            if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||
-                ntype == InterfaceConfigs::NetworkType::NON_BROADCAST)
+            auto ntype = iface.getConfigs().get<Config::OspfInterface::NETWORK>().load();
+            if (ntype == NetworkType::BROADCAST ||
+                ntype == NetworkType::NON_BROADCAST)
             {
-                if (!isBdr.load(std::memory_order_relaxed) &&
-                    !isDr.load(std::memory_order_relaxed))
+                if (!isDr() && !isBdr())
                     break;
             }
             setState(Neighbor::State::EXSTART);

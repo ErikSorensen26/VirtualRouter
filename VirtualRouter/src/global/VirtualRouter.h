@@ -271,6 +271,13 @@ public:
      */
     bool removeEigrpNamed(const std::string& name);
 
+    // OSPF PROCESS
+    //...
+
+    // GLOBAL HELPERS
+    
+    Config::Registry& getRegistry();
+
     std::shared_mutex interfaceMutex; ///< Protects interfaceList.
     std::unordered_map<uint32_t, Interface*> interfaceList; ///< Interfaces belonging to this VRF.
 

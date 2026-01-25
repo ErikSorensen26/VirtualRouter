@@ -10,6 +10,77 @@ namespace OSPF
 NeighborTable::NeighborTable(OspfInterface& iface)
     : iface(iface) {}
 
+void NeighborTable::syncUnicast()
+{
+    auto& ifaceConfigs = iface.getConfigs();
+    auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
+
+    std::unique_lock<std::shared_mutex> lk(mu);
+
+    if (ntype == NetworkType::POINT_TO_MULTIPOINT || ntype == NetworkType::NON_BROADCAST)
+    {
+        std::unordered_set<IPAddress> unicastNbrs;
+
+        // Snap shot of all current neighbors
+        for (const auto& [ip, _] : unicast)
+            unicastNbrs.insert(ip);
+
+        // Update configs of all unicast neighbors
+        ifaceConfigs.get<Config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs) {
+            for (const auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)
+            {
+                unicastNbrs.erase(ip);
+                auto it = unicast.emplace(ip);
+                auto& nbr = it.first->second;
+                nbr.cost = cost;
+                nbr.databaseFilter = dbfilter.has_value() ? dbfilter.value() : false;
+                nbr.pollInterval = pollIntv.has_value() ? pollIntv.value() : 120;
+                nbr.priority = priority.has_value() ? priority.value() : 0;
+            }
+        });
+
+        // Erase left over neighbors
+        for (const auto& ip : unicastNbrs)
+        {
+            unicastNbrs.erase(ip);
+            for (auto it = neighbors.begin(); it != neighbors.end();)
+            {
+                if (it->second.ipAddress == ip && it->second.unicast)
+                {
+                    it = neighbors.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+    }
+    else
+    {
+        // Clear all unicast neighbors
+
+        unicast.clear();
+        
+        for (auto it = neighbors.begin(); it != neighbors.end();)
+        {
+            if (it->second.unicast)
+            {
+                it = neighbors.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+}
+
+void NeighborTable::clearUnicast()
+{
+
+}
+
 Neighbor* NeighborTable::createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool unicast)
 {
     

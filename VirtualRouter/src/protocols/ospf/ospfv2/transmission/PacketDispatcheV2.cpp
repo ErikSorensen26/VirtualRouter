@@ -1,6 +1,6 @@
 // v2PacketDispatcher
 
-#include <v2PacketDispatcher.h>
+#include <PacketDispatcherV2.h>
 #include <OspfNeighbor.h>
 #include <Ospfv2DBDHeader.hpp>
 #include <PacketBuilder.hpp>
@@ -9,6 +9,12 @@
 
 namespace OSPF
 {
+PacketDispatcherV2::PacketDispatcherV2(OspfInterface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& cfgs)
+    : PacketDispatcher(iface),
+      baseConfigs(cfgs),
+      configs(baseConfigs->get<Config::OspfInterfaceBase::BASE>().get())
+{}
+
 bool PacketDispatcherV2::setupDbd(Neighbor& neighbor, Ospfv2Header& pkt)
 {
     Retransmission& rtr = neighbor.getRtr();

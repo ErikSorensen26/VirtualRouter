@@ -3,9 +3,11 @@
 #ifndef SUB_REGISTRY_HPP
 #define SUB_REGISTRY_HPP
 
-#include <cstddef>
 #include <tuple>
 #include <utility>
+#include <cstddef>
+#include <mutex>
+#include <RegistryTypes.hpp>
 
 namespace Config
 {
@@ -35,11 +37,12 @@ public:
     );
 
     explicit SubRegistry() noexcept
-        : fields(Fields{}...)
+        : fields(this->template createField<Fields>()...),
+          base(nullptr)
     {}
 
     SubRegistry(SubRegistry& parent)
-        : fields(Fields{}...),
+        : fields(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{}),
           base(&parent)
     {}
 
@@ -62,12 +65,37 @@ public:
         return base != nullptr;
     }
 
+    std::mutex mu;
+
 private:
 
-    template <size_t... I>
-    static FieldTuple makeMaskedFields(const SubRegistry& parent, std::index_sequence<I...>) noexcept
+    template <typename F>
+    F createField()
     {
-        return FieldTuple(Fields(std::get<I>(parent.fields))...);
+        if constexpr (IsValueField<F>)
+            return F(mu);
+        return F{};
+    }
+
+    template <size_t... I>
+    FieldTuple makeMaskedFields(
+        const SubRegistry& parent,
+        std::index_sequence<I...>
+    ) noexcept
+    {
+        return FieldTuple(
+            createMaskedField(
+                std::get<I>(parent.fields)
+            )...
+        );
+    }
+
+    template <typename F>
+    F createMaskedField(const F& parentField)
+    {
+        if constexpr (IsValueField<F>)
+            return F(mu, parentField);
+        return F(parentField);
     }
 
     FieldTuple fields;

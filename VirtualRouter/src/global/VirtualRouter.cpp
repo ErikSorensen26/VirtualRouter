@@ -232,3 +232,8 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
     }
     return false;
 }
+
+Config::Registry& VirtualRouter::getRegistry()
+{
+    return global.registry;
+}

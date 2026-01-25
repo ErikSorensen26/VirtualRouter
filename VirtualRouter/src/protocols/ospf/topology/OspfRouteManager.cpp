@@ -109,7 +109,7 @@ template <typename Policy>
 void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::pair<IPPrefix, OspfPath>>& out, OspfArea& area)
 {
     auto& lsdb = area.lsdb();
-    uint8_t adminDistance = area.topology().getConfigs().distance.load(std::memory_order_relaxed);
+    const uint8_t adminDistance = area.topology().getBaseConfigs().get<Config::OspfTopologyBase::INTRA_AREA_DISTANCE>().load();
 
     NhCache nhCache;
     out.reserve(out.size() + spf.confirmedOrder.size());
@@ -245,7 +245,7 @@ static std::optional<RouterReach> resolveToAbrs(Topology& topo, uint32_t abrRid)
 template<typename Policy>
 std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveInterAreaNetwork(OspfArea& area, const LsaKey& key, const LsaHeader& header, const LsaBody& body)
 {
-    uint8_t adminDistance = area.topology().getConfigs().distance.load(std::memory_order_relaxed);
+    const uint8_t adminDistance = area.topology().getBaseConfigs().get<Config::OspfTopologyBase::INTER_AREA_DISTANCE>().load();
 
     const typename Policy::InterNetworkLsa& summary = std::get<typename Policy::InterNetworkLsa>(body);
     
@@ -255,12 +255,12 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveInterAreaNetwor
     else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, InterAreaPrefixLsa>)
         prefix = summary.prefix;
 
-    if (header.age == 3600) return {prefix, std::nullopt};
+    if (header.age == OSPF_MAX_AGE) return {prefix, std::nullopt};
 
     auto abrInfo = resolveToAbrs(area.topology(), key.advertisingRouter);
     if (!abrInfo.has_value()) return {prefix, std::nullopt}; // ABR not found
 
-    uint64_t distance = abrInfo->cost + summary.metric;
+    const uint64_t distance = abrInfo->cost + summary.metric;
 
     return {prefix, makePath(area.areaId, 0, adminDistance, distance, std::move(abrInfo->nextHops), OspfRouteType::INTER_AREA)};
 }
@@ -268,7 +268,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveInterAreaNetwor
 template <typename Policy>
 void RouteManager::deriveInterAreaRouter(OspfArea& area, const LsaKey& key, const LsaHeader& header, const LsaBody& body)
 {
-    bool remove = header.age == 3600;
+    const bool remove = header.age == OSPF_MAX_AGE;
 
     auto abrInfo = resolveToAbrs(area.topology(), key.advertisingRouter);
 
@@ -282,7 +282,7 @@ template<typename Policy>
 void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::pair<IPPrefix, OspfPath>>& out, OspfArea& area)
 {
     auto& lsdb = area.lsdb();
-    uint8_t adminDistance = area.topology().getConfigs().distance.load(std::memory_order_relaxed);
+    const uint8_t adminDistance = area.topology().getBaseConfigs().get<Config::OspfTopologyBase::INTER_AREA_DISTANCE>().load();
 
     NhCache nhCache;
     out.reserve(out.size() + spf.confirmedOrder.size());
@@ -296,7 +296,7 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
 
     lsdb.forEachInType(networkType, [&](const LsaKey& key, const LsaRecord* record)
     {
-        if (!record || !std::holds_alternative<typename Policy::InterNetworkLsa>(record->body) || record->header.age == 3600) return;
+        if (!record || !std::holds_alternative<typename Policy::InterNetworkLsa>(record->body) || record->header.age == OSPF_MAX_AGE) return;
 
         auto abrInfo = resolveToAbr(area, spf, key.advertisingRouter, nhCache);
         if (!abrInfo.has_value()) return; // ABR not found
@@ -315,7 +315,7 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
 
     lsdb.forEachInType(routerType, [&](const LsaKey& key, const LsaRecord* record)
     {
-        if (!record || !std::holds_alternative<typename Policy::InterNetworkLsa>(record->body) || record->header.age == 3600) return;
+        if (!record || !std::holds_alternative<typename Policy::InterNetworkLsa>(record->body) || record->header.age == OSPF_MAX_AGE) return;
 
         auto abrInfo = resolveToAbr(area, spf, key.advertisingRouter, nhCache);
 
@@ -352,12 +352,12 @@ static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInter
 template<typename Policy>
 std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(Topology& topology, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec)
 {
-    const uint8_t  adminDistance = topology.getConfigs().distance.load(std::memory_order_relaxed);
+    const uint8_t adminDistance = topology.getBaseConfigs().get<Config::OspfTopologyBase::EXTERNAL_DISTANCE>().load();
     const uint32_t selfRid       = topology.process.getRouterId();
 
     using EL = std::remove_cv_t<typename Policy::ExternalLsa>;
 
-    constexpr uint16_t kMaxAge = 3600;
+    constexpr uint16_t kMaxAge = OSPF_MAX_AGE;
 
     auto& globalRib = topology.process.routingInstance->routingTable;
 
@@ -441,12 +441,12 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(T
 template<typename Policy>
 std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Topology& topology)
 {
-    const uint8_t  adminDistance = topology.getConfigs().distance.load(std::memory_order_relaxed);
+    const uint8_t adminDistance = topology.getBaseConfigs().get<Config::OspfTopologyBase::EXTERNAL_DISTANCE>().load();
     const uint32_t selfRid       = topology.process.getRouterId();
 
     using EL = std::remove_cv_t<typename Policy::ExternalLsa>;
 
-    constexpr uint16_t kMaxAge = 3600;
+    constexpr uint16_t kMaxAge = OSPF_MAX_AGE;
 
     std::vector<std::pair<IPPrefix, OspfPath>> out;
     out.reserve(64);

@@ -15,6 +15,8 @@
 #include <variant>
 #include <OspfRouteManager.h>
 #include <type_traits>
+#include <Global.h>
+#include <VirtualRouter.h>
 
 #include "OspfOriginator.h"
 #include <OspfOriginatorV2.h>
@@ -25,18 +27,19 @@ namespace OSPF
 OspfArea::OspfArea(Topology& base, uint32_t id, std::pmr::memory_resource* mr)
     : areaId(id),
       mr(mr ? mr : std::pmr::get_default_resource()),
-      cfgs(base.getConfigs().areaInfo[id]),
-      db(mr, base.process.getConfigs().maxLsa.load(std::memory_order_relaxed)),
-      fq(base.process.getConfigs().maxFloodQueueDepth.load(std::memory_order_relaxed)),
+      configs(base.getConfigs().get<Config::OspfTopology::AREA_CONFIGS>().getMutable().emplace_back(
+          areaId, base.process.routingInstance->global.registry.create<Config::OspfAreaRegistry>(
+              Config::generateOspfAreaKey(base.configs.getKey(), areaId))).second),
+      db(mr),
+      fq(0),
       base(base),
       spfMgr(*this, base.process.tmgr),
-      flags(base.getProcess().isV3)
-{
-    if (base.process.isV3)
-        originator = new OspfOriginatorV3(*this);
-    else
-        originator = new OspfOriginatorV2(*this);
-}
+      flags(base.getProcess().isV3),
+      originator(base.process.isV3
+          ? *static_cast<OspfOriginator*>(new OspfOriginatorV3(*this))
+          : *static_cast<OspfOriginator*>(new OspfOriginatorV2(*this))
+      )
+{}
 
 void OspfArea::clear()
 {
@@ -58,11 +61,13 @@ void OspfArea::runDCIntegrityScan()
         std::shared_lock<std::shared_mutex> lk(ifaceMgr.interfaceMutex);
         for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
         {
-            if ((iface.configs.demandCircuit.load(std::memory_order_relaxed) ||
-                iface.configs.floodReduction.load(std::memory_order_relaxed)) &&
+            auto& ifaceConfigs = iface.getConfigs();
+            if ((ifaceConfigs.get<Config::OspfInterface::DEMAND_CIRCUIT>().load() ||
+                ifaceConfigs.get<Config::OspfInterface::FLOOD_REDUCTION>().load()) &&
                 iface.floodReduction.load() != enabled)
             {
                 iface.floodReduction.store(enabled, std::memory_order_release);
+
                 // TODO: refresh interface
             }
         }
@@ -71,10 +76,11 @@ void OspfArea::runDCIntegrityScan()
 
 void OspfArea::setFloodReduction(OspfInterface& iface)
 {
+    auto& ifaceConfigs = iface.getConfigs();
     const bool enableFloodReduction =
         dcCompatible.load(std::memory_order_relaxed) && (
-            iface.configs.floodReduction.load(std::memory_order_relaxed) ||
-            iface.configs.demandCircuit.load(std::memory_order_relaxed)
+            ifaceConfigs.get<Config::OspfInterface::FLOOD_REDUCTION>().load() ||
+            ifaceConfigs.get<Config::OspfInterface::DEMAND_CIRCUIT>().load()
         );
 
     if (iface.floodReduction.load(std::memory_order_relaxed) != enableFloodReduction)
@@ -92,7 +98,7 @@ void OspfArea::flood()
     std::shared_lock<std::shared_mutex> lock(ifaceMgr.interfaceMutex);
     for (auto& [id, iface] : ifaceMgr.ospfInterfaceList)
     {
-        if (id.area == areaId && !iface.configs.databaseFilterAll.load(std::memory_order_relaxed))
+        if (id.area == areaId && !iface.getConfigs().get<Config::OspfInterface::DATABASE_FILTER>().load())
             send(iface, floodList);
     }
 
@@ -105,7 +111,7 @@ void OspfArea::send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRe
     auto& ntable = iface.getNTable();
     auto& dispatcher = iface.getDispatcher();
 
-    if (iface.configs.networkType.load(std::memory_order_relaxed) == OSPF::InterfaceConfigs::NetworkType::BROADCAST)
+    if (iface.getConfigs().get<Config::OspfInterface::NETWORK>().load() == NetworkType::BROADCAST)
     {
         std::shared_lock<std::shared_mutex> lock(ntable.mu);
         dispatcher.sendLSUpdate(nullptr, records);
@@ -136,7 +142,7 @@ OspfArea::Result OspfArea::processLsa(const IncomingLsaContext& ctx, LsaBody& bo
         else if (std::holds_alternative<typename Policy::InterNetworkLsa>(body))
         {
             auto res = RouteManager::deriveInterAreaNetwork<Policy>(*this, ctx.key, ctx.header, body);
-            base.process.getRib().replaceRoute(areaId, res);
+            base.getRib().replaceRoute(areaId, res);
         }
         else if (std::holds_alternative<typename Policy::InterRouterLsa>(body))
         {
@@ -212,21 +218,21 @@ void OspfArea::processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries)
 
     db.forEachInType(interNetwork, [&](LsaKey& key, LsaRecord& record) {
         if (!summaries.contains(key))
-            originator->processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(record.body), false, true);
+            originator.processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(record.body), false, true);
     });
 
     for (auto& [key, body] : summaries)
     {
-        originator->processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(body));
+        originator.processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(body));
     }
 }
 
 void OspfArea::processExternalLsa(const IncomingLsaContext& ctx, LsaBody& body)
 {
-    bool expire = ctx.header.age == 3600;
+    bool expire = ctx.header.age == OSPF_MAX_AGE;
 
     // Manage type 4 if needed
-    originator->addExternal(ctx.key.advertisingRouter, ctx.key.linkStateId, expire);
+    originator.addExternal(ctx.key.advertisingRouter, ctx.key.linkStateId, expire);
     process(ctx, body);
 }
 
@@ -278,7 +284,6 @@ void OspfArea::enqueueFlood(LsaRecordRef&& record, FloodInfo info)
 InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx, const LsaBody& body)
 {
     InstallResult out{};
-    const uint16_t maxAge = base.process.getConfigs().maxAge.load(std::memory_order_relaxed);
 
     // RouterLsa, NetworkLsa, SummaryLsa, AsbrLsa
     out.affectsSpfGraph = ctx.key.lsaType >= 1 && ctx.key.lsaType <= 4;
@@ -294,7 +299,7 @@ InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const Inc
     if (!existing)
     {
         // Missing + MaxAge -> ACK only (not a flush)
-        if (isMaxAge(ctx.header, maxAge))
+        if (isMaxAge(ctx.header, OSPF_MAX_AGE))
         {
             out.action = InstallAction::FLUSH_MAX_AGE;
             out.shouldFlood = true;
@@ -324,7 +329,7 @@ InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const Inc
             return out;
         case LsaCompareResult::NEWER:
         {
-            if (ctx.header.age == maxAge)
+            if (ctx.header.age == OSPF_MAX_AGE)
             {
                 out.action = InstallAction::FLUSH_MAX_AGE;
                 out.shouldStoreReplace = true;
@@ -362,23 +367,20 @@ InstallResult OspfArea::evaluateIncomingLsa(const LsaRecord* existing, const Inc
 
 LsaCompareResult OspfArea::compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const
 {
-    uint16_t maxAge = base.process.getConfigs().maxAge.load(std::memory_order_relaxed);
-    uint16_t maxAgeDiff = base.process.getConfigs().maxAgeDiff.load(std::memory_order_relaxed);
-
     if (a.sequence != b.sequence)
         return (a.sequence > b.sequence) ? LsaCompareResult::NEWER : LsaCompareResult::OLDER;
 
     if (a.checksum != b.checksum)
         return (a.checksum > b.checksum) ? LsaCompareResult::NEWER : LsaCompareResult::OLDER;
 
-    const bool aMax = isMaxAge(a, maxAge);
-    const bool bMax = isMaxAge(b, maxAge);
+    const bool aMax = isMaxAge(a, OSPF_MAX_AGE);
+    const bool bMax = isMaxAge(b, OSPF_MAX_AGE);
 
     if (aMax != bMax)
         return aMax ? LsaCompareResult::NEWER : LsaCompareResult::OLDER;
 
     const uint16_t diff = absDiffU16(a.age, b.age);
-    if (diff > maxAgeDiff)
+    if (diff > OSPF_MAX_DIFF)
         return (a.age < b.age) ? LsaCompareResult::NEWER : LsaCompareResult::OLDER;
 
     return LsaCompareResult::SAME;

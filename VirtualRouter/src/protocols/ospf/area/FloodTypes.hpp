@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <LsaKey.hpp>
-#include <optional>
 
 namespace OSPF
 {

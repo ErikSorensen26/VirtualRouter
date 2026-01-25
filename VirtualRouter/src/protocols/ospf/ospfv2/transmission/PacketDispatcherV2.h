@@ -31,7 +31,9 @@ class NeighborTable;
 class PacketDispatcherV2 : public PacketDispatcher
 {
 public:
-    PacketDispatcherV2(OspfInterface& iface) : PacketDispatcher(iface) {}
+    PacketDispatcherV2(OspfInterface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs);
+
+    Config::OspfInterfaceBaseRegistry& getBaseConfigs() override;
 
     void handleIncoming(const Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
 
@@ -48,7 +50,7 @@ public:
     void retransmitDbd(Neighbor& nbr) override;
 
 private:
-    bool processOptions(uint32_t options, bool isStatic = false) override;
+    bool processOptions(uint32_t options) override;
 
     void finalizeHeader(Ospfv2Header& hdr, OspfBuilder& builder, bool lls = false);
 
@@ -63,7 +65,7 @@ private:
     std::optional<Ospfv2Header> buildHeader(PacketBuilder& builder, uint8_t type);
     std::optional<Ospfv2HelloHeader> buildHello(OspfBuilder builder, bool lls);
     std::optional<Ospfv2DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
-    std::optional<Ospfv2LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record);
+    std::optional<Ospfv2LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record, bool floodReduction);
 
     std::deque<PacketBuilder> buildLSRequestList(const std::vector<LsaKey>& records);
     std::deque<PacketBuilder> buildLSUpdateList(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records, std::vector<LsaRecordRef>& sentKeys);
@@ -83,9 +85,12 @@ private:
     void processLSRequest(HeaderInfo& info);
     void processLSUpdate(HeaderInfo& info);
 
-    void processLLSDataBlock(HeaderInfo& info);
+    std::optional<size_t> processLLSDataBlock(HeaderInfo& info);
 
     std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len);
+
+    Config::Reference<Config::OspfInterfaceBaseRegistry> baseConfigs;
+    Config::Reference<Config::OspfInterfaceRegistry> configs;
 };
 }
 

@@ -5,7 +5,6 @@
 
 #include <HeaderHelpers.hpp>
 #include <TlvOptions.hpp>
-
 #define OSPFV2_LSA_ROUTER        0x01  ///< Router LSA (intra-area topology)
 #define OSPFV2_LSA_NETWORK       0x02  ///< Network LSA (DR-generated)
 #define OSPFV2_LSA_SUM_NET       0x03  ///< Summary LSA (inter-area network)
@@ -139,6 +138,8 @@ struct Ospfv2LSAHeader
         { writeU32(raw->advRouter, val); }
     void setSeqNum(uint32_t val)
         { writeU32(raw->seqNum, val); }
+    void setChecksum(uint16_t val)
+        { writeU16(raw->checksum, val); }
     void setLen(uint16_t val)
         { writeU16(raw->length, val); }
 

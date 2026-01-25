@@ -3,11 +3,12 @@
 #ifndef OSPF_H
 #define OSPF_H
 
+#include <Registry.hpp>
 #include <OspfTypes.hpp>
 #include <OspfInterfaceManager.h>
 #include <OspfRoutingTable.h>
-#include <OspfRegistry.hpp>
 #include <RegistryTypes.hpp>
+#include <variant>
 #include <map>
 
 class VirtualRouter;
@@ -37,17 +38,24 @@ class OspfProcess
 public:
     friend class Topology;
 
-    OspfProcess(bool isV3, uint32_t procId, VirtualRouter* vrf);
+    using V3AfConfigs = Config::Reference<Config::OspfAddressFamilyV3Registry>;
+    using V2AfConfigs = Config::Reference<Config::OspfAddressFamilyV2Registry>;
 
+    OspfProcess(bool isV3, uint32_t procId, AddressFamily af, VirtualRouter* vrf);
+
+    AddressFamily getAF() { return af; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
+    Config::OspfRegistry& getConfigs() { return configs.get(); }
+    const Config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
+
     uint32_t getProcId() const { return procId; }
-    uint32_t getRouterId() const {
+    uint32_t getRouterId() const
+    {
         const auto& id = configs.get().get<Config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
         return rid.load(std::memory_order_relaxed);
     }
-
 
     bool calculateRID();
 
@@ -60,18 +68,20 @@ public:
 
     TimeManager& tmgr;
 
+    std::shared_mutex topologyMu;
+    std::map<uint8_t, Topology> topologies;
+
 private:
     friend class Topology;
 
-    std::shared_mutex topologyMu;
-    std::map<uint8_t, Topology> topologies;
     std::atomic<uint32_t> rid;
 
     const uint32_t procId;
+    const AddressFamily af;
     InterfaceManager ifaceMgr;
 
+    std::variant<std::monostate, V3AfConfigs, V2AfConfigs> afConfigs;
     Config::Reference<Config::OspfRegistry> configs;
-    Config::Reference<Config::OspfAddressFamilyV3Registry> v3Configs;
 };
 }
 

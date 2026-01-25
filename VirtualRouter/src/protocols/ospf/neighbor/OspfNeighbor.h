@@ -50,6 +50,9 @@ public:
     std::atomic<uint32_t> dr{0};
     std::atomic<uint32_t> bdr{0};
 
+    bool isDr() { return dr.load(std::memory_order_relaxed) == routerID; }
+    bool isBdr() { return bdr.load(std::memory_order_relaxed) == routerID; }
+
 public:
 
     std::optional<LsaKey> currentDbd = std::nullopt;

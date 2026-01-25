@@ -4,6 +4,7 @@
 #define OSPF_INTERFACE_MANAGER_H
 
 #include <OspfInterfaceId.hpp>
+#include <IPAddress.hpp>
 #include <unordered_map>
 #include <map>
 #include <shared_mutex>

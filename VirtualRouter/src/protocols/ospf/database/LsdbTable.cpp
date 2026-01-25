@@ -5,16 +5,13 @@
 
 namespace OSPF
 {
-LsdbTable::LsdbTable(std::pmr::memory_resource* upstream, std::size_t initialReserve)
+LsdbTable::LsdbTable(std::pmr::memory_resource* upstream)
 #if OSPF_LSDB_USE_PMR
     : pool(upstream), db(&pool), dbStorage(&pool)
 #else
     : db()
 #endif
-{
-    if (initialReserve)
-        reserve(initialReserve);
-}
+{}
 
 void LsdbTable::reserve(size_t n)
 {

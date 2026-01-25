@@ -4,6 +4,7 @@
 #define OSPF_TOPOLOGY_H
 
 #include <cstdint>
+#include <OspfProcess.h>
 #include <OspfArea.h>
 #include <OspfTopologyTable.h>
 #include <OspfRoutingTable.h>
@@ -35,8 +36,10 @@ public:
 
     Config::OspfTopologyRegistry& getConfigs() { return configs.get(); }
     const Config::OspfTopologyRegistry& getConfigs() const { return configs.get(); }
-    Config::OspfRegistry& getProcessConfigs() { return processConfigs.get(); }
-    const Config::OspfRegistry& getProcessConfigs() const { return processConfigs.get(); }
+    Config::OspfTopologyBaseRegistry& getBaseConfigs() { return baseConfigs.get(); }
+    const Config::OspfTopologyBaseRegistry& getBaseConfigs() const { return baseConfigs.get(); }
+    Config::OspfRegistry& getProcessConfigs() { return process.configs.get(); }
+    const Config::OspfRegistry& getProcessConfigs() const { return process.configs.get(); }
     OspfRib& getRib() { return rib; }
     const OspfRib& getRib() const { return rib; }
     const OspfProcess& getProcess() const noexcept { return process; }
@@ -56,6 +59,8 @@ public:
     TopologyTable table;
 
 private:
+    friend class OspfArea;
+
     std::shared_mutex areaMu;
     std::unordered_map<uint32_t, OspfArea> areas;
     std::atomic<size_t> areaSize;
@@ -64,7 +69,7 @@ private:
     OspfRib rib;
 
     Config::Reference<Config::OspfTopologyRegistry> configs;
-    Config::Reference<Config::OspfRegistry> processConfigs;
+    Config::Reference<Config::OspfTopologyBaseRegistry> baseConfigs;
 };
 }
 

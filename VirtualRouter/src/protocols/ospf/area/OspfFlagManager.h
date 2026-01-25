@@ -24,6 +24,15 @@ static void setBit(std::atomic<uint32_t>& flags, uint8_t bit, bool val)
         flags.fetch_and(~mask, std::memory_order_relaxed);
 }
 
+static void setBit(uint32_t& flags, uint8_t bit, bool val)
+{
+    const uint32_t mask = (static_cast<uint32_t>(1u) << bit);
+    if (val)
+        flags |= mask;
+    else
+        flags |= ~mask;
+}
+
 static bool testBit(uint32_t fgs, uint8_t bit)
 {
     return (fgs & (static_cast<uint32_t>(1u) << bit)) != 0;
@@ -34,12 +43,22 @@ static void setFlag(std::atomic<uint32_t>& flags, uint8_t flagBit, bool val)
     setBit(flags, static_cast<uint8_t>(FLAGS_BASE + flagBit), val);
 }
 
+static void setFlag(uint32_t& flags, uint8_t flagBit, bool val)
+{
+    setBit(flags, static_cast<uint8_t>(FLAGS_BASE + flagBit), val);
+}
+
 static bool testFlag(uint32_t flags, uint8_t flagBit)
 {
     return testBit(flags, static_cast<uint8_t>(FLAGS_BASE + flagBit));
 }
 
 static void setOption(std::atomic<uint32_t>& flags, uint8_t optionBit, bool val)
+{
+    setBit(flags, static_cast<uint8_t>(OPTIONS_BASE + optionBit), val);
+}
+
+static void setOption(uint32_t& flags, uint8_t optionBit, bool val)
 {
     setBit(flags, static_cast<uint8_t>(OPTIONS_BASE + optionBit), val);
 }
@@ -97,6 +116,10 @@ public:
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::EXTERNAL_ROUTING), val); }
     void setNssa(bool val)
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::NSSA), val); }
+    static void setExternalRouting(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::EXTERNAL_ROUTING), val); }
+    static void setNssa(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::NSSA), val); }
 
     void setMultiTopology(bool val)
         { if (!isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY), val); }
@@ -104,6 +127,12 @@ public:
         { if (!isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V2Option::EXTERNAL_ATTR), val); }
     void setOpaque(bool val)
         { if (!isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V2Option::OPAQUE), val); }
+    static void setMultiTopology(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY), val); }
+    static void setExternalAttribute(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V2Option::EXTERNAL_ATTR), val); }
+    static void setOpaque(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V2Option::OPAQUE), val); }
 
     void setV6(bool val)
         { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::V6), val); }
@@ -115,6 +144,16 @@ public:
         { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::L_BIT), val); }
     void setAttached(bool val)
         { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::ATTACHED), val); }
+    static void setV6(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::V6), val); }
+    static void setRouterBit(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::ROUTER_BIT), val); }
+    static void setAddressFamilySupport(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::ADDRESS_FAMILY_SUPPORT), val); }
+    static void setLBit(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::L_BIT), val); }
+    static void setAttached(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::ATTACHED), val); }
 
     bool getExternalRouting()
         { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::EXTERNAL_ROUTING)); }
@@ -163,6 +202,10 @@ public:
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::ABR), val); }
     void setAsbr(bool val)
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::ASBR), val); }
+    static void setAbr(uint32_t fgs, bool val)
+        { FlagManager::setFlag(fgs, static_cast<uint8_t>(Flags::ABR), val); }
+    static void setAsbr(uint32_t fgs, bool val)
+        { FlagManager::setFlag(fgs, static_cast<uint8_t>(Flags::ASBR), val); }
 
     bool getAbr()
         { return FlagManager::testFlag(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Flags::ABR)); }
@@ -202,6 +245,10 @@ public:
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::MULTICAST), val); }
     void setDemandCircuits(bool val)
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::DEMAND_CIRCUITS), val); }
+    static void setMulticast(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::MULTICAST), val); }
+    static void setDemandCircuits(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::DEMAND_CIRCUITS), val); }
 
     bool getMulticast()
         { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::MULTICAST)); }
@@ -216,6 +263,10 @@ public:
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::V_LINK), val); }
     void setWildcard(bool val)
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::WILDCARD), val); }
+    static void setVLink(uint32_t fgs, bool val)
+        { FlagManager::setFlag(fgs, static_cast<uint8_t>(Flags::V_LINK), val); }
+    static void setWildcard(uint32_t fgs, bool val)
+        { FlagManager::setFlag(fgs, static_cast<uint8_t>(Flags::WILDCARD), val); }
 
     bool getVLink()
         { return FlagManager::testFlag(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Flags::V_LINK)); }

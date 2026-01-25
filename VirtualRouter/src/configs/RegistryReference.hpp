@@ -4,7 +4,7 @@
 #define REGISTRY_REFERENCE_HPP
 
 #include "RegistryBucket.hpp"
-#include <RegistryTypes.hpp>
+#include "RegistryTypes.hpp"
 #include <cassert>
 
 namespace Config
@@ -23,106 +23,73 @@ template <typename T>
 class Reference
 {
 public:
-    using keyType = T::type;
-
-    Reference() = default;
+    using keyType = T::keyType;
 
     Reference(const Reference& other) noexcept
-        : key(other.key), bucket(other.bucket), handle(other.handle)
+        : key(other.key),
+          bucket(other.bucket),
+          handle(other.handle),
+          ref(other.ref)
     {
-        if (bucket)
-            bucket->addRef(handle);
-    }
-
-    Reference& operator=(const Reference& other) noexcept
-    {
-        if (this == &other)
-            return *this;
-
-        reset();
-        key = other.key;
-        bucket = other.bucket;
-        handle = other.handle;
-
-        if (bucket)
-            bucket->addRef(handle);
-
-        return *this;
+        bucket.addRef(handle);
     }
 
     Reference(Reference&& other) noexcept
-        : key(other.key), bucket(other.bucket), handle(other.handle)
+        : key(other.key),
+          bucket(other.bucket),
+          handle(other.handle),
+          ref(other.ref)
     {
-        other.key = 0;
-        other.bucket = nullptr;
-        other.handle = {};
+        bucket.addRef(handle);
     }
 
-    Reference& operator=(Reference&& other) noexcept
-    {
-        if (this == &other)
-            return *this;
-
-        reset();
-        key = other.key;
-        bucket = other.bucket;
-        handle = other.handle;
-
-        other.key = 0;
-        other.bucket = nullptr;
-        other.handle = {};
-
-        return *this;
-    }
+    Reference& operator=(const Reference&) = delete;
+    Reference& operator=(Reference&&) = delete;
 
     ~Reference()
     {
-        reset();
+        bucket.releaseRef(handle);
     }
 
-    bool bound() const noexcept
-    {
-        return bucket != nullptr && bucket->get(handle) != nullptr;
-    }
-
-    T::keyType getKey() const noexcept
+    keyType getKey() const noexcept
     {
         return key;
     }
 
-    T* ptr() const noexcept
+    T* operator->() noexcept
     {
-        return bucket ? bucket->get(handle) : nullptr;
+        return &ref;
     }
 
-    T& get() const noexcept
+    const T* operator->() const noexcept
     {
-        T* p = ptr();
-        assert(p != nullptr);
-        return *p;
+        return &ref;
+    }
+
+    T& get() noexcept
+    {
+        return ref;
+    }
+
+    const T& get() const noexcept
+    {
+        return ref;
     }
 
 private:
-    Reference(Bucket<T>& bucket, T::keyType k, const typename Bucket<T>::Handle& h)
-        : key(k), bucket(&bucket), handle(h)
+    Reference(Bucket<T>& b, T::keyType k, const typename Bucket<T>::Handle& h)
+        : key(k),
+          bucket(b),
+          handle(h),
+          ref(b.get(h))
     {
-        assert(bucket->get(handle) != nullptr);
-        bucket->addRef(handle);
+        bucket.addRef(handle);
     }
 
-    void reset() noexcept
-    {
-        if (bucket)
-            bucket->releaseRef(handle);
-
-        key = 0;
-        bucket = nullptr;
-        handle = {};
-    }
-
-    keyType key{0};
-    Bucket<T>* bucket{nullptr};
+    keyType key{};
+    Bucket<T>& bucket;
     typename Bucket<T>::Handle handle{};
+    T& ref;
 
     template <typename...>
     friend class RegistryDatabase;
@@ -138,38 +105,51 @@ public:
 
     ReferenceContainer() = default;
 
+    ReferenceContainer(const Reference<T>& ref)
+        : ref(ref),
+          state(MaskState::SET),
+          base(nullptr)
+    {}
+
     explicit ReferenceContainer(const ReferenceContainer& parent) noexcept
-        : ref(),
+        : ref(std::nullopt),
           state(MaskState::INHERIT),
           base(&parent)
     {}
+
+    bool bound() const noexcept
+    {
+        if (state == MaskState::SET)
+            return ref.has_value();
+
+        return base ? base->bound() : false;
+    }
 
     const Reference<T>& effective() const noexcept
     {
         if (base && state == MaskState::INHERIT)
             return base->effective();
 
-        assert(ref.bound());
-        return ref;
+        assert(ref.has_value());
+        return *ref;
     }
 
     const Reference<T>& get() const noexcept
     {
-        const auto& eff = effective();
-        assert(eff.bound());
-        return eff;
+        assert(bound());
+        return effective();
     }
 
     Reference<T>& local() noexcept
     {
-        assert(ref.bound());
-        return ref;
+        assert(ref.has_value());
+        return *ref;
     }
 
     const Reference<T>& local() const noexcept
     {
-        assert(ref.bound());
-        return ref;
+        assert(ref.has_value());
+        return *ref;
     }
 
 private:
@@ -178,17 +158,17 @@ private:
 
     void setLocal(const Reference<T>& r) noexcept
     {
-        ref = r;
+        ref.emplace(r);
         state = MaskState::SET;
     }
 
     void unsetLocal() noexcept
     {
-        ref = Reference<T>{};
+        ref.reset();
         state = MaskState::INHERIT;
     }
 
-    Reference<T> ref{};
+    std::optional<Reference<T>> ref{std::nullopt};
     MaskState state{MaskState::INHERIT};
     const ReferenceContainer* base{nullptr};
 };

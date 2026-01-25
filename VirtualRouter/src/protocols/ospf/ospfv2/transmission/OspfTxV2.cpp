@@ -54,7 +54,7 @@ void PacketDispatcherV2::sendHello()
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
     finalizeHeader(*ospfHeader, builder, lls);
@@ -73,7 +73,7 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
     finalizeHeader(*ospfHeader, builder, lls);
@@ -92,7 +92,7 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
     auto dbd = buildDBD(builder, nbr, lls);
     if (!dbd.has_value()) return;
 
@@ -122,7 +122,7 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = iface.configs.lls.load(std::memory_order_relaxed);
+    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
     auto db = buildDBD(builder, nbr, lls);
     if (!db.has_value()) return false;
 
@@ -353,20 +353,20 @@ std::optional<Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuilder buil
     hello.setBuffer(builder.getBuf());
 
     hello.setMask(iface.interfaceAddress.getMask());
-    hello.setHelloInterval(iface.configs.helloInterval.load(std::memory_order_relaxed));
+    hello.setHelloInterval(configs->get<Config::OspfInterface::HELLO_INTERVAL>().load());
 
     uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
     if (lls) options |= 0x10;
     hello.setOptions(options);
 
-    hello.setPriority(iface.configs.priority.load(std::memory_order_relaxed));
-    hello.setDeadInterval(iface.configs.deadInterval.load(std::memory_order_relaxed));
+    hello.setPriority(configs->get<Config::OspfInterface::PRIORITY>().load());
+    hello.setDeadInterval(configs->get<Config::OspfInterface::DEAD_INTERVAL>().load());
     hello.setDR(static_cast<uint32_t>(iface.dr.rid.load(std::memory_order_relaxed)));
     hello.setBDR(static_cast<uint32_t>(iface.bdr.rid.load(std::memory_order_relaxed)));
 
-    auto ntype = iface.configs.networkType.load(std::memory_order_relaxed);
-    if (ntype == InterfaceConfigs::NetworkType::BROADCAST ||
-        ntype == InterfaceConfigs::NetworkType::NON_BROADCAST)
+    auto ntype = configs->get<Config::OspfInterface::NETWORK>().load();
+    if (ntype == NetworkType::BROADCAST ||
+        ntype == NetworkType::NON_BROADCAST)
     {
         auto result = ntable.addNeighborList(builder.getBuf(), builder.maxSize - builder.offset);
         if (!result.has_value()) return std::nullopt;
@@ -395,7 +395,7 @@ std::optional<Ospfv2DBDHeader> PacketDispatcherV2::buildDBD(OspfBuilder& builder
     return dbd;
 }
 
-std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record)
+std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record, bool floodReduction)
 {
     if (!builder.hasRoom(Ospfv2LSAHeader::fixedSize))
         return std::nullopt;
@@ -404,32 +404,18 @@ std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBuilder& b
     Ospfv2LSAHeader db;
     db.setBuffer(builder.getBuf());
 
-    if (iface.floodReduction.load(std::memory_order_relaxed))
-    {
-        // Set age to not expire
-        db.setAge(0x8000);
-    }
-    else
-    {
-        uint16_t timeSinceRefresh = static_cast<uint16_t>(
-            std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::steady_clock::now() - record.lastRefreshTime
-            ).count()
-        );
-        db.setAge(timeSinceRefresh + record.header.age);
-    }
-
-
-    // TODO: Options
-
+    // Check if self originated
+    db.setAge(calculateAge(floodReduction, record));
+    db.setOptions(record.header.options);
     db.setType(static_cast<uint8_t>(key.lsaType));
     db.setLsID(key.linkStateId);
     db.setAdvRouter(key.advertisingRouter);
     db.setSeqNum(record.header.sequence);
 
-    // TODO: handle checksum
-
-    db.setLen(record.header.length);
+    auto calcs = runLsaCalculations<PolicyV2>(record.header, key, record.body);
+     
+    db.setAdvRouter(calcs.checksum);
+    db.setLen(calcs.size);
 
     return db;
 }
@@ -467,7 +453,7 @@ size_t PacketDispatcherV2::buildLSAck(OspfBuilder& builder, std::span<LsaRecordR
 size_t PacketDispatcherV2::buildLSUpdate(OspfBuilder& builder, std::vector<LsaRecordRef>& sentKeys, std::span<std::pair<FloodInfo, LsaRecordRef>>& records)
 {
     // Filter for Intra lsas
-    bool filter = iface.configs.databaseFilterOut.load(std::memory_order_relaxed);
+    bool filter = configs->get<Config::OspfInterface::DATABASE_FILTER>().load();
     bool floodReduction = iface.floodReduction.load(std::memory_order_relaxed);
 
     // Handle LSAs
