@@ -88,9 +88,9 @@ class AreaFlagManager
     {
         V6 = 0,
         ROUTER_BIT = 4,
-        ADDRESS_FAMILY_SUPPORT = 6,
-        L_BIT = 7,
-        ATTACHED = 8
+        ADDRESS_FAMILY_SUPPORT = 8,
+        L_BIT = 9,
+        AUTH_TRAILER = 10
     };
 
     enum class Flags : uint8_t
@@ -142,8 +142,8 @@ public:
         { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::ADDRESS_FAMILY_SUPPORT), val); }
     void setLBit(bool val)
         { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::L_BIT), val); }
-    void setAttached(bool val)
-        { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::ATTACHED), val); }
+    void setAuthTrailer(bool val)
+        { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::AUTH_TRAILER), val); }
     static void setV6(uint32_t fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::V6), val); }
     static void setRouterBit(uint32_t fgs, bool val)
@@ -152,8 +152,8 @@ public:
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::ADDRESS_FAMILY_SUPPORT), val); }
     static void setLBit(uint32_t fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::L_BIT), val); }
-    static void setAttached(uint32_t fgs, bool val)
-        { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::ATTACHED), val); }
+    static void setAuthTrailer(uint32_t fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::AUTH_TRAILER), val); }
 
     bool getExternalRouting()
         { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::EXTERNAL_ROUTING)); }
@@ -185,8 +185,8 @@ public:
         { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::ADDRESS_FAMILY_SUPPORT)); }
     bool getLBit()
         { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::L_BIT)); }
-    bool getAttached()
-        { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::ATTACHED)); }
+    bool getAuthTrailer()
+        { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(V3Option::AUTH_TRAILER)); }
     static bool getV6(uint32_t fgs)
         { return FlagManager::testOption(fgs, static_cast<uint8_t>(V3Option::V6)); }
     static  bool getRouterBit(uint32_t fgs)
@@ -195,8 +195,8 @@ public:
         { return FlagManager::testOption(fgs, static_cast<uint8_t>(V3Option::ADDRESS_FAMILY_SUPPORT)); }
     static bool getLBit(uint32_t fgs)
         { return FlagManager::testOption(fgs, static_cast<uint8_t>(V3Option::L_BIT)); }
-    static bool getAttached(uint32_t fgs)
-        { return FlagManager::testOption(fgs, static_cast<uint8_t>(V3Option::ATTACHED)); }
+    static bool getAuthTrailer(uint32_t fgs)
+        { return FlagManager::testOption(fgs, static_cast<uint8_t>(V3Option::AUTH_TRAILER)); }
 
     void setAbr(bool val)
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::ABR), val); }

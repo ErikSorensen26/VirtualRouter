@@ -8,6 +8,7 @@
 #include <OspfProcess.h>
 #include <OspfNeighbor.h>
 #include <OspfPacket.hpp>
+#include <Encryption.hpp>
 
 #include <LSDB.hpp>
 #include <OspfArea.h>
@@ -30,16 +31,47 @@ void PacketDispatcherV2::finalizeHeader(Ospfv2Header& hdr, OspfBuilder& builder,
 {
     hdr.setPacketLen(static_cast<uint16_t>(builder.offset + Ospfv2Header::fixedSize));
 
-    if (lls)
+    AuthType auth = baseConfigs->get<Config::OspfInterfaceBase::AUTHENTICATION_TYPE>().load();
+    if (auth == AuthType::CRYPTO)
     {
-        uint8_t* buf = builder.getBuf();
-        addLinkLocalExtension(buf, false);
+        auto& id = baseConfigs->get<Config::OspfInterfaceBase::MESSAGE_DIGEST_KEY_ID>();
+        auto& key = baseConfigs->get<Config::OspfInterfaceBase::MESSAGE_DIGEST_KEY>();
+        if (id.hasValue() && key.hasValue())
+        {
+            uint32_t seq = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
 
-        if (/*no auth*/true) // Auth does not require checksum
+            // Add auth
+            uint8_t secret[16] = {};
+            writeU128(secret, key.load());
+            if (!buildOspfCryptoAuthentication(builder, hdr, seq, id.load(), secret))
+                return;
+
+            if (lls)
+            {
+                uint16_t size = addLinkLocalExtension(builder.getBuf(), false);
+                if (!buildLLSAuthentication(builder, size, seq, secret))
+                    return;
+            }
+        }
+    }
+    else
+    {
+        if (lls)
+        {
+            uint8_t* buf = builder.getBuf();
+            uint16_t size = addLinkLocalExtension(buf, false);
             addLinkLocalChecksum(buf);
+            builder.offset += size;
+        }
+
+        if (auth == AuthType::SIMPLE)
+        {
+            auto& key = baseConfigs->get<Config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+            if (key.hasValue()) buildOspfSimpleAuthentication(hdr, key.load());
+        }
     }
 
-    // TODO: add auth to header
+    hdr.setTrailSize(builder.offset);
 }
 
 void PacketDispatcherV2::sendHello()
@@ -100,7 +132,7 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
     dbd->setFlagM(true);
     dbd->setFlagMS(true);
 
-    ospfHeader.value().setTrailSize(Ospfv2DBDHeader::fixedSize);
+    builder.offset = Ospfv2DBDHeader::fixedSize;
     setupDbd(nbr, ospfHeader.value());
 
     finalizeHeader(*ospfHeader, builder, lls);
@@ -130,7 +162,6 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
     if (nbr.currentDbd)
         db->setFlagM(true); // More to process
 
-    ospfHeader.value().setTrailSize(builder.offset);
     setupDbd(nbr, ospfHeader.value());
 
     finalizeHeader(*ospfHeader, builder, lls);
@@ -162,7 +193,6 @@ bool PacketDispatcherV2::sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ack
         if (acksSent == 0) return false;
         sent += acksSent;
 
-        ospfHeader.value().setTrailSize(builder.offset);
         finalizeHeader(*ospfHeader, builder);
     }
 
@@ -277,7 +307,6 @@ std::deque<PacketBuilder> PacketDispatcherV2::buildLSRequestList(const std::vect
         }
         sent += reqSent;
 
-        ospfHeader.value().setTrailSize(builder.offset);
         finalizeHeader(*ospfHeader, builder);
     }
 
@@ -321,7 +350,6 @@ std::deque<PacketBuilder> PacketDispatcherV2::buildLSUpdateList(std::vector<std:
         }
         sent += updSent;
 
-        ospfHeader.value().setTrailSize(builder.offset);
         finalizeHeader(*ospfHeader, builder);
     }
 
@@ -414,8 +442,29 @@ std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildLSAHeader(OspfBuilder& b
 
     auto calcs = runLsaCalculations<PolicyV2>(record.header, key, record.body);
      
-    db.setAdvRouter(calcs.checksum);
+    db.setChecksum(calcs.checksum);
     db.setLen(calcs.size);
+
+    return db;
+}
+
+std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildCopyLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record)
+{
+    if (!builder.hasRoom(Ospfv2LSAHeader::fixedSize))
+        return std::nullopt;
+    builder.offset += Ospfv2LSAHeader::fixedSize;
+
+    Ospfv2LSAHeader db;
+    db.setBuffer(builder.getBuf());
+
+    db.setAge(record.header.age);
+    db.setOptions(record.header.options);
+    db.setType(static_cast<uint8_t>(key.lsaType));
+    db.setLsID(key.linkStateId);
+    db.setAdvRouter(key.advertisingRouter);
+    db.setSeqNum(record.header.sequence);
+    db.setChecksum(record.header.checksum);
+    db.setLen(record.header.length);
 
     return db;
 }
@@ -443,7 +492,7 @@ size_t PacketDispatcherV2::buildLSAck(OspfBuilder& builder, std::span<LsaRecordR
     size_t sent{0};
     for (auto& ack : acks)
     {
-        auto lsa = buildLSAHeader(builder, ack.key, *ack.record);
+        auto lsa = buildCopyLSAHeader(builder, ack.key, *ack.record);
         if (!lsa.has_value()) return sent;
         sent++;
     }
@@ -465,7 +514,7 @@ size_t PacketDispatcherV2::buildLSUpdate(OspfBuilder& builder, std::vector<LsaRe
             auto& lsa = record.record;
             auto& key = record.key;
             if (!builder.hasRoom(lsa->header.length)) return sent;
-            if (!buildLSAHeader(builder, key, *lsa)) return sent;
+            if (!buildLSAHeader(builder, key, *lsa, floodReduction)) return sent;
             if (!buildLSABody(builder, *lsa, static_cast<uint8_t>(key.lsaType))) return sent;
             builder.offset += (lsa->header.length - Ospfv2LSAHeader::fixedSize);
             sentKeys.push_back(std::move(record));
@@ -485,7 +534,7 @@ void PacketDispatcherV2::buildDescriptions(OspfBuilder& builder, Neighbor& nbr)
 
     for (auto it = lsdb.upper_bound(*nbr.currentDbd); it != lsdb.end(); it++)
     {
-        auto hdr = buildLSAHeader(builder, it->first, it->second);
+        auto hdr = buildCopyLSAHeader(builder, it->first, it->second);
         if (!hdr.has_value())
         {
             if (it != lsdb.begin())
@@ -497,6 +546,42 @@ void PacketDispatcherV2::buildDescriptions(OspfBuilder& builder, Neighbor& nbr)
     }
 
     nbr.currentDbd = std::nullopt;
+}
+
+bool PacketDispatcherV2::buildLLSAuthentication(OspfBuilder& info, uint16_t llsSize, uint32_t seq, uint8_t* secret)
+{
+    if (info.offset + llsSize + 24 > info.maxSize) return false;
+    uint8_t* lls = info.getBuf() + info.offset;
+    writeU16(lls + 2, llsSize + 24/*Auth tlv size*/);
+
+    writeU16(lls, 0x0002);
+    writeU16(lls + 2, 0x0014);
+    writeU32(lls + 4, seq);
+    
+    Authentication::generateHMAC(lls + 8, lls, llsSize + 8, secret, 16, Authentication::HmacType::MD5);
+
+    info.offset += llsSize + 24;
+    return true;
+}
+
+void PacketDispatcherV2::buildOspfSimpleAuthentication(Ospfv2Header& hdr, uint64_t secret)
+{
+    hdr.setAuthType(static_cast<uint16_t>(AuthType::SIMPLE));
+    uint8_t* auth = hdr.getAuthentication();
+    writeU64(auth, secret);
+}
+
+bool PacketDispatcherV2::buildOspfCryptoAuthentication(OspfBuilder& info, Ospfv2Header& hdr, uint32_t seq, uint8_t id, uint8_t* secret)
+{
+    hdr.setAuthType(static_cast<uint16_t>(AuthType::CRYPTO));
+    if (info.offset + 16 > info.maxSize) return false;
+    uint8_t* auth = hdr.getAuthentication();
+    writeU16(auth, 0);
+    auth[2] = id;
+    auth[3] = 0x10;
+    writeU32(auth + 4, seq);
+    Authentication::generateHMAC(info.getBuf() + info.offset, info.getBuf(), info.offset, secret, 16, Authentication::HmacType::MD5);
+    return true;
 }
 
 bool PacketDispatcherV2::buildLSABody(OspfBuilder& builder, LsaRecord& record, uint8_t type)

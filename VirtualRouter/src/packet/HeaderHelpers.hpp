@@ -82,6 +82,7 @@ inline __uint128_t ntohdll(__uint128_t val) {
                                                                                                     \
     std::span<uint8_t> getTrail() const { return trailing; }                                        \
     uint8_t* getTrailData() { return trailing.data(); }                                             \
+    const uint8_t* getTrailData() const { return trailing.data(); }                                 \
     void setTrail(uint8_t* data, size_t len)                                                        \
     {                                                                                               \
         std::memcpy(buffer + fixedSize, data, len);                                                 \

@@ -62,6 +62,7 @@ public:
     const uint32_t routerID;
     const uint16_t mtu;
     uint32_t neighborInterfaceId = 0;    
+    std::atomic<uint32_t> lastAuthSeq{0};
 
     std::atomic<uint32_t> currentSeq;
 
@@ -72,6 +73,8 @@ public:
 
     // Retransmission
     Retransmission& getRtr() { return rtr; }
+
+    std::atomic<bool> isTransit{true};
 
 private:
     std::atomic<State> state;

@@ -51,6 +51,7 @@ struct Ospfv2Header
     uint16_t getPacketLen() const          { return readU16(raw->packetLength); }
     uint32_t getRouterID() const           { return readU32(raw->routerID); }
     uint32_t getAreaID() const             { return readU32(raw->areaID); }
+    uint16_t getChecksum() const           { return readU16(raw->checksum); }
     uint16_t getAuthType() const           { return readU16(raw->authType); }
     uint8_t* getAuthentication() const     { return raw->authentication; }
 

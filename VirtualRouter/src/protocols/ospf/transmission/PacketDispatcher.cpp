@@ -69,7 +69,7 @@ bool PacketDispatcher::retransmitLsr(Neighbor& nbr)
     return sendLSRequest(nbr, nbr.getRtr().getLsr());
 }
 
-size_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart)
+uint16_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart)
 {
     writeU32(buf, 0x00000000); // Checksum and size not calculated yet
     writeU16(buf + 4, 0x0001); // Ext TLV type

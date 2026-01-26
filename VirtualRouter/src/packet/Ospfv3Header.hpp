@@ -14,6 +14,9 @@
 #define OSPFV3_TYPE_LINK_STATE_UPDATE       0x04 ///< OSPFv3 Link State Update Type (4).
 #define OSPFV3_TYPE_LINK_STATE_ACK          0x05 ///< OSPFv3 Link State Acknowledgment (5).
 
+static constexpr uint8_t OSPFV3_ALL_SPF_ROUTERS[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 };
+static constexpr uint8_t OSPFV3_ALL_D_ROUTERS[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06 };
+
 /**
  * @struct Ospfv3HeaderRaw
  */
@@ -44,6 +47,7 @@ struct Ospfv3Header
     uint16_t getPacketLen() const           { return readU16(raw->packetLength); }
     uint32_t getRouterID() const            { return readU32(raw->routerID); }
     uint32_t getAreaID() const              { return readU32(raw->areaID); }
+    uint16_t getChecksum() const            { return readU16(raw->checksum); }
     uint8_t getInstanceID() const           { return raw->instanceID; }
 
     void setVersion(uint8_t val)

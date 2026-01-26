@@ -50,7 +50,7 @@ public:
     void retransmitDbd(Neighbor& nbr) override;
 
 private:
-    bool processOptions(uint32_t options) override;
+    bool processOptions(uint32_t options, Neighbor& nbr) override;
 
     void finalizeHeader(Ospfv2Header& hdr, OspfBuilder& builder, bool lls = false);
 
@@ -66,6 +66,7 @@ private:
     std::optional<Ospfv2HelloHeader> buildHello(OspfBuilder builder, bool lls);
     std::optional<Ospfv2DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
     std::optional<Ospfv2LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record, bool floodReduction);
+    std::optional<Ospfv2LSAHeader> buildCopyLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record);
 
     std::deque<PacketBuilder> buildLSRequestList(const std::vector<LsaKey>& records);
     std::deque<PacketBuilder> buildLSUpdateList(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records, std::vector<LsaRecordRef>& sentKeys);
@@ -85,7 +86,14 @@ private:
     void processLSRequest(HeaderInfo& info);
     void processLSUpdate(HeaderInfo& info);
 
-    std::optional<size_t> processLLSDataBlock(HeaderInfo& info);
+    void processLLSDataBlock(PacketDispatcher::HeaderInfo& info);
+
+    bool buildLLSAuthentication(OspfBuilder& info, uint16_t llsSize, uint32_t seq, uint8_t* secret);
+    void buildOspfSimpleAuthentication(Ospfv2Header& header, uint64_t secret);
+    bool buildOspfCryptoAuthentication(OspfBuilder& info, Ospfv2Header& hdr, uint32_t seq, uint8_t id, uint8_t* secret);
+
+    bool processOspfSimpleAuthentication(HeaderInfo& info, const Ospfv2Header& hdr);
+    bool processOspfCryptoAuthentication(HeaderInfo& info, const Ospfv2Header& hdr);
 
     std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len);
 

@@ -117,6 +117,8 @@ struct Ospfv3LSAHeader
         { writeU32(raw->advRouter, val); }
     void setSeqNum(uint32_t val)
         { writeU32(raw->seqNum, val); }
+    void setChecksum(uint16_t val)
+        { writeU16(raw->checksum, val); }
     void setLen(uint16_t val)
         { writeU16(raw->length, val); }
 

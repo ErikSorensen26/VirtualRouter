@@ -21,6 +21,20 @@ enum class NetworkType : uint8_t
     POINT_TO_MULTIPOINT_BROADCAST,
     POINT_TO_POINT
 };
+
+enum class AuthType : uint8_t
+{
+    NULL_AUTH = 0,
+    SIMPLE = 1,
+    CRYPTO = 2
+};
+
+enum class IPsecAuthType : uint8_t
+{
+    NULL_AUTH,
+    MD5,
+    SHA1
+};
 }
 
 namespace Config
@@ -76,7 +90,7 @@ using OspfInterfaceRegistry = SubRegistry<uint64_t, OspfInterface,
     AtomicField<uint8_t, 1, OspfInterface::PRIORITY>,
     AtomicField<bool, false, OspfInterface::PASSIVE>,
     AtomicField<uint16_t, 5, OspfInterface::RETRANSMIT_INTERVAL>,
-    AtomicField<uint16_t, 1, OspfInterface::TRANSMIT_DELAY> // TODO
+    AtomicField<uint16_t, 1, OspfInterface::TRANSMIT_DELAY>
 >;
 
 enum class OspfInterfaceAddressFamily : uint8_t
@@ -100,14 +114,14 @@ enum class OspfInterfaceBase : uint8_t
     PROCESS_ID,
     AREA_ID,
     INCLUDE_SECONDARIES,
-    AUTHENTICATION_MESSAGE_DIGEST,
+    AUTHENTICATION_TYPE,
     AUTHENTICATION_ENCRYPT,
     AUTHENTICATION_KEY,
-    AUTHENTICATION_SPI,
-    AUTHENTICATION_NULL,
+    AUTHENTICATION_IPSEC,
     LLS,
-    MESSAGE_DIGEST_KEY_ID,
     MESSAGE_DIGEST_KEY,
+    MESSAGE_DIGEST_KEY_ID,
+    MESSAGE_DIGEST_KEYS,
     MESSAGE_DIGEST_ENCRRYPT,
     PREFIX_SUPPRESSION,
     RESYNC_TIMEOUT,
@@ -116,20 +130,23 @@ enum class OspfInterfaceBase : uint8_t
 };
 
 using OspfInterfaceBaseRegistry = SubRegistry<uint64_t, OspfInterfaceBase,
-    ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceBase::BASE>, // TODO
-    OwnedListField<OspfInterfaceAddressFamilyRegistry, OspfInterfaceBase::PROCESS_CONFIGS>, // TODO
-    OptionalAtomicField<uint16_t, OspfInterfaceBase::PROCESS_ID>, // TODO
-    OptionalAtomicField<uint32_t, OspfInterfaceBase::AREA_ID>, // TODO
-    AtomicField<bool, true, OspfInterfaceBase::INCLUDE_SECONDARIES>, // TODO
-    AtomicField<bool, false, OspfInterfaceBase::AUTHENTICATION_MESSAGE_DIGEST>, // TODO
-    OptionalAtomicField<bool, OspfInterfaceBase::AUTHENTICATION_ENCRYPT>, // TODO
-    ValueField<std::string, OspfInterfaceBase::AUTHENTICATION_KEY>, // TODO
-    AtomicField<uint32_t, 0, OspfInterfaceBase::AUTHENTICATION_SPI>, // TODO
-    AtomicField<bool, true, OspfInterfaceBase::AUTHENTICATION_NULL>, // TODO
+    ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceBase::BASE>,
+    OwnedListField<OspfInterfaceAddressFamilyRegistry, OspfInterfaceBase::PROCESS_CONFIGS>,
+    OptionalAtomicField<uint16_t, OspfInterfaceBase::PROCESS_ID>,
+    OptionalAtomicField<uint32_t, OspfInterfaceBase::AREA_ID>,
+    AtomicField<bool, true, OspfInterfaceBase::INCLUDE_SECONDARIES>,
+    AtomicField<OSPF::AuthType, OSPF::AuthType::NULL_AUTH, OspfInterfaceBase::AUTHENTICATION_TYPE>,
+    OptionalAtomicField<bool, OspfInterfaceBase::AUTHENTICATION_ENCRYPT>,
+    OptionalAtomicField<uint64_t, OspfInterfaceBase::AUTHENTICATION_KEY>,
+    ValueField<std::tuple<
+        OSPF::IPsecAuthType, // Type enabled
+        std::tuple<uint32_t, OSPF::IPsecAuthType, std::array<uint8_t, 40>
+    >>, OspfInterfaceBase::AUTHENTICATION_IPSEC>, // TODO
     AtomicField<bool, true, OspfInterfaceBase::LLS>,
-    OptionalAtomicField<uint8_t, OspfInterfaceBase::MESSAGE_DIGEST_KEY_ID>, // TODO
-    ValueField<std::string, OspfInterfaceBase::MESSAGE_DIGEST_KEY>, // TODO
-    AtomicField<bool, false, OspfInterfaceBase::MESSAGE_DIGEST_ENCRRYPT>, // TODO
+    OptionalAtomicField<__uint128_t, OspfInterfaceBase::MESSAGE_DIGEST_KEY>, // place up to date key when keys change
+    OptionalAtomicField<uint8_t, OspfInterfaceBase::MESSAGE_DIGEST_KEY_ID>, 
+    ValueField<std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>, OspfInterfaceBase::MESSAGE_DIGEST_KEYS>,
+    AtomicField<bool, false, OspfInterfaceBase::MESSAGE_DIGEST_ENCRRYPT>,
     AtomicField<bool, false, OspfInterfaceBase::PREFIX_SUPPRESSION>,
     AtomicField<uint16_t, 5, OspfInterfaceBase::RESYNC_TIMEOUT>, // TODO 
     AtomicField<bool, false, OspfInterfaceBase::SHUTDOWN> // TODO

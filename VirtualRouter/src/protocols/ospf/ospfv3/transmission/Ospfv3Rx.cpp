@@ -1,56 +1,74 @@
-// Ospfv2Rx.cpp
+// Ospfv3Rx.cpp
 
-#include "v3PacketDispatcher.h"
+#include "PacketDispatcherV3.h"
 #include <OspfProcess.h>
 #include <OspfInterface.h>
+#include <OspfInterfaceTimers.h>
 
 #include <Ospfv3HelloHeader.hpp>
 #include <Ospfv3DBDHeader.hpp>
 #include <Ospfv3LSAHeader.hpp>
 #include <Ospfv3LSRHeader.hpp>
 #include <OspfNeighbor.h>
-
+#include <OspfTopology.h>
 #include <OspfArea.h>
+#include <OspfFlagManager.h>
+#include <Encryption.hpp>
+
+#include <Interface.h>
+#include <InterfaceConfigs.h>
 
 namespace OSPF
 {
-void PacketDispatcher::handleIncoming(const Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
+Config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getBaseConfigs()
+{
+    return baseConfigs.get();
+}
+
+void PacketDispatcherV3::handleIncoming(const Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
 {
     IPAddress neigIp(neighborIp, iface.process.getAF());
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check passive
-    if (iface.configs->isPassive.load(std::memory_order_relaxed))
+    if (iface.getConfigs().get<Config::OspfInterface::PASSIVE>().load())
         return;
 
     // Validate version
     if (ospfHeader.getVersion() != OSPFV3_VERSION)
         return;
 
-    if (ospfHeader.getAreaID() != iface.areaId)
+    if (ospfHeader.getAreaID() != iface.getAreaId())
         return;
 
     // Validate size
-    if (ospfHeader.getPacketLen() != Ospfv3Header::fixedSize /* + ospfHeader.trail.size() */)
-        return;
+    size_t packetSize = Ospfv3Header::fixedSize + ospfHeader.getTrail().size();
+    if (ospfHeader.getPacketLen() > packetSize) return;
 
-    HeaderInfo info(ospfHeader, neigIp, rid);
+    HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), neigIp, rid);
     info.neighbor = iface.getNTable().lookup(rid);
+
+    {
+        // Process Checksum
+        ChecksumFletcher check;
+        check.addBytes(ospfHeader.buffer, 8); // Up to checksum field
+        check.addBytes(ospfHeader.buffer + 10, ospfHeader.getPacketLen() - 10); // To end of header
+        uint16_t checksum = check.finalize();
+        if (checksum != ospfHeader.getChecksum())
+            return; // Invalid checksum
+    }
     // TODO header stuff
 
     if (ospfHeader.getType() == OSPFV3_TYPE_HELLO)
     {
-        if (iface.getNTable().isUnicast(rid) == multicast)
+        if (info.neighbor && info.neighbor->unicast == multicast)
             return;
-        processHello(info);
+        processHello(info, !multicast);
     }
     else if (info.neighbor)
     {
         switch (ospfHeader.getType())
         {
-            case OSPFV3_TYPE_HELLO:
-                processHello(info);
-                break;
             case OSPFV3_TYPE_DATABASE_DESCRIPTION:
                 processDBD(info);
                 break;
@@ -67,48 +85,135 @@ void PacketDispatcher::handleIncoming(const Ospfv3Header& ospfHeader, const uint
     }
 }
 
-bool PacketDispatcherV3::processOptions(uint32_t options)
+bool PacketDispatcherV3::processOptions(uint32_t options, Neighbor& nbr)
 {
     auto& flags = iface.getFlags();
     auto& areaFlags = iface.getArea().getFlags();
 
-    if (flags.getDemandCircuits() && !InterfaceFlagManager::getDemandCircuits(options) &&
-        !iface.configs.demandCircuitIgnore.load(std::memory_order_relaxed))
+    if (iface.demandCircuit.load(std::memory_order_relaxed) == OspfInterface::DcDecision::UNDECIDED)
     {
-        if (!isStatic)
-            flags.setDemandCircuits(false);
-        else return false;
+        if (InterfaceFlagManager::getDemandCircuits(options) && flags.getDemandCircuits() &&
+            iface.getConfigs().get<Config::OspfInterface::NETWORK>().load() == NetworkType::POINT_TO_POINT)
+            iface.demandCircuit.store(OspfInterface::DcDecision::ENABLED, std::memory_order_release);
+        else
+            iface.demandCircuit.store(OspfInterface::DcDecision::DISABLED, std::memory_order_release);
     }
+    if (auto r = AreaFlagManager::getRouterBit(options); r != nbr.isTransit.load(std::memory_order_relaxed))
+        nbr.isTransit.store(r, std::memory_order_release);
     if (areaFlags.getExternalRouting() != AreaFlagManager::getExternalRouting(options))
         return false;
     if (areaFlags.getNssa() != AreaFlagManager::getNssa(options))
         return false;
-
-    if (areaFlags.getV6() != AreaFlagManager::getV6(options))
-        return false;
-    if (areaFlags.getRouterBit() != AreaFlagManager::getRouterBit(options))
-        return false;
-    if (areaFlags.getAddressFamilySupport() != AreaFlagManager::getAddressFamilySupport(options))
-        return false;
-    if (areaFlags.getLBit() != AreaFlagManager::getLBit(options))
-        return false;
     return true;
 }
 
-void PacketDispatcher::processHello(PacketDispatcher::HeaderInfo& info)
+void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool unicast)
 {
     Ospfv3HelloHeader hdr;
     hdr.setBuffer(info.payload);
+
+    auto& ifaceConfigs = iface.getConfigs();
 
     info.offset += Ospfv3HelloHeader::fixedSize;
     if (info.offset > info.payloadSize)
         return;
 
-    //TODO do hello stuff
+    // Validate timers
+    if (hdr.getHelloInterval() != ifaceConfigs.get<Config::OspfInterface::HELLO_INTERVAL>().load() ||
+        hdr.getDeadInterval() != ifaceConfigs.get<Config::OspfInterface::DEAD_INTERVAL>().load())
+    {
+        info.neighbor->setState(Neighbor::State::DOWN);
+        return;
+    }
+
+    if (info.neighbor->getState() != Neighbor::State::FULL && !processOptions(static_cast<uint32_t>(hdr.getOptions()), *info.neighbor))
+    {
+        info.neighbor->setState(Neighbor::State::DOWN);
+        return;
+    }
+
+    auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
+    bool multiAccess = ntype == NetworkType::BROADCAST || ntype == NetworkType::NON_BROADCAST;
+
+    if (!info.neighbor)
+    {
+        info.neighbor = ntable.createNeighbor(info.rid, info.neighborIp);
+    }
+    else if (unicast && info.neighbor)
+    {
+        auto state = info.neighbor->getState();
+        if (state == Neighbor::State::DOWN || state == Neighbor::State::ATTEMPT)
+            info.neighbor->setState(Neighbor::State::INIT);
+    }
+
+    if (ntype == NetworkType::BROADCAST || ntype == NetworkType::NON_BROADCAST)
+    {
+        uint8_t* neighborList = info.payload + Ospfv3HelloHeader::fixedSize;
+        size_t listSize = info.payloadSize - Ospfv3HelloHeader::fixedSize;
+        if (listSize % 4 != 0) return;
+
+        // Find RID
+        bool ridFound = false;
+        for (size_t i = 0; i < listSize; i += 4)
+        {
+            if (readU32(neighborList + i) == iface.process.getRouterId())
+            {
+                ridFound = true;
+                break;
+            }
+        }
+
+        // Handle two way
+        if (!ridFound) return;
+        if (ridFound && info.neighbor->getState() == Neighbor::State::INIT)
+            info.neighbor->setState(Neighbor::State::TWOWAY);
+    }
+    else if (info.neighbor->getState() == Neighbor::State::INIT)
+    {
+        info.neighbor->setState(Neighbor::State::TWOWAY);
+    }
+
+    info.neighbor->markHeard();
+    iface.getTimers().startInactiveTimer(*info.neighbor);
+
+    // Update neighbor variables
+    if (info.neighbor->priority.load(std::memory_order_relaxed) != hdr.getRouterPriority())
+        info.neighbor->priority.store(hdr.getRouterPriority(), std::memory_order_release);
+
+    if (multiAccess)
+    {
+        // Read new values from the Hello
+        const uint8_t  newPriority = hdr.getRouterPriority();
+        const uint32_t newDr       = hdr.getDrID();
+        const uint32_t newBdr      = hdr.getBdrID();
+
+        // Update neighbor-advertised DR/BDR and priority from the Hello
+        info.neighbor->priority.store(newPriority, std::memory_order_relaxed);
+        info.neighbor->dr.store(newDr, std::memory_order_relaxed);
+        info.neighbor->bdr.store(newBdr, std::memory_order_relaxed);
+
+        uint32_t currentDr = iface.dr.rid.load(std::memory_order_relaxed);
+        uint32_t currentBdr = iface.bdr.rid.load(std::memory_order_relaxed);
+
+        const bool election = (newPriority == 0 &&
+            (info.neighbor->routerID == currentBdr ||
+             info.neighbor->routerID == currentDr)) ||
+            (info.neighbor->getState() == Neighbor::State::TWOWAY &&
+            ((iface.dr.rid.load(std::memory_order_relaxed) == 0) ||
+            (iface.bdr.rid.load(std::memory_order_relaxed) == 0)));
+
+        if (election)
+            iface.election();
+    }
 }
 
-void PacketDispatcher::processDBD(PacketDispatcher::HeaderInfo& info)
+void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
 {
+    OspfArea& area = iface.getArea();
+
+    auto state = info.neighbor->getState();
+    if (state < Neighbor::State::EXSTART) return;
+
     Ospfv3DBDHeader hdr;
     hdr.setBuffer(info.payload);
 
@@ -119,10 +224,106 @@ void PacketDispatcher::processDBD(PacketDispatcher::HeaderInfo& info)
     // Varify only 20 byte lsa blocks exist
     if ((info.payloadSize - info.offset) % 20 != 0)
         return;
-    
-    //TODO do dbd stuff
 
-    // Process DB description
+    uint32_t options = hdr.getOptions();
+    if (!processOptions(options, *info.neighbor))
+    {
+        info.neighbor->setState(Neighbor::State::DOWN);
+        return;
+    }
+
+    // Verify MTU
+    if (iface.getConfigs().get<Config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
+    {
+        info.neighbor->setState(Neighbor::State::DOWN);
+        return;
+    }
+
+    bool ack = hdr.getSeqNum() == info.neighbor->currentSeq.load(std::memory_order_relaxed);
+    bool init = hdr.getFlagI();
+
+    if (init)
+    {
+        // Run INIT
+        if (!hdr.getFlagI())
+            return;
+        if (info.offset != info.payloadSize)
+            return;
+
+        if (info.offset != info.payloadSize)
+            return;
+
+        Neighbor::Role role = info.neighbor->routerID > iface.process.getRouterId()
+            ? Neighbor::Role::MASTER
+            : Neighbor::Role::SLAVE;
+        info.neighbor->setRole(role);
+
+        if (role == Neighbor::Role::SLAVE)
+            info.neighbor->currentSeq.store(hdr.getSeqNum());
+
+        else if (state != Neighbor::State::EXSTART)
+            // Move to EXSTART, will send init either acking or setting initial sequence.
+            info.neighbor->setState(Neighbor::State::EXSTART);
+
+        if (role == Neighbor::Role::SLAVE) // SLAVE
+        {
+            // Ack MASTERs init, move to EXCHANGE, and await MASTER.
+            sendInitDBD(*info.neighbor);
+            info.neighbor->setState(Neighbor::State::EXCHANGE);
+        }
+        else if (ack) // MASTER and Ack received, move to EXCHANGE.
+        {
+            info.neighbor->setState(Neighbor::State::EXCHANGE);
+        }
+    }
+    else if (state == Neighbor::State::EXCHANGE)
+    {
+        // Process DB description.
+        auto& rtr = info.neighbor->getRtr();
+        while (info.offset < info.payloadSize)
+        {
+            Ospfv3LSAHeader lsaHdr;
+            lsaHdr.setBuffer(info.payload + info.offset);
+
+            info.offset += Ospfv3LSAHeader::fixedSize;
+            if (info.offset > info.payloadSize) 
+                return;
+
+            LsaKey key(lsaHdr.getType(), lsaHdr.getLsId(), lsaHdr.getAdvRouter());
+
+            LsaHeader lsa = {
+                .sequence = lsaHdr.getSeqNumber(),
+                .checksum = lsaHdr.getChecksum(),
+                .length = lsaHdr.getLen(),
+                .age = lsaHdr.getAge()
+            };
+
+            if (area.compareLSASummary(lsa, key))
+                rtr.addLsr(key);
+        }
+
+        if ((info.neighbor->currentDbd.has_value() || hdr.getFlagM()) || info.neighbor->getRole() == Neighbor::Role::SLAVE)
+        {
+            sendDBD(*info.neighbor);
+        }
+        else
+        {
+            if (info.neighbor->getRole() == Neighbor::Role::SLAVE)
+                sendDBD(*info.neighbor); // Respond to MASTER even if no lsas to process
+
+            // Move to LOADING
+            info.neighbor->setState(Neighbor::State::LOADING); 
+        }
+    }
+
+    if (AreaFlagManager::getLBit(options))
+        processLLSDataBlock(info);
+}
+
+void PacketDispatcherV3::processLSAck(HeaderInfo& info)
+{
+    // Process ACKs.
+    auto& rtr = info.neighbor->getRtr();
     while (info.offset < info.payloadSize)
     {
         Ospfv3LSAHeader lsaHdr;
@@ -141,67 +342,61 @@ void PacketDispatcher::processDBD(PacketDispatcher::HeaderInfo& info)
             .age = lsaHdr.getAge()
         };
 
-        if (iface.area.compareLSASummary(lsa, key))
-            info.neighbor->lsaDbd.push_back(key);
-    }
+        auto record = rtr.getLsu(key);
+        if (!record.has_value()) continue;
 
-    if (!hdr.getFlagM())
-    {
-        // TODO: Send request with lsas
+        if (record->record->header == lsa)
+            rtr.eraseLsu(key);
     }
 }
 
-void PacketDispatcher::processLSRequest(PacketDispatcher::HeaderInfo& info)
+void PacketDispatcherV3::processLSRequest(PacketDispatcher::HeaderInfo& info)
 {
     Ospfv3LSRHeader hdr;
     hdr.setBuffer(info.payload);
 
-    info.offset += Ospfv3LSRHeader::fixedSize;
-    if (info.offset > info.payloadSize) 
-        return;
-
     // Varify only 12 byte lsa blocks exist
     if ((info.payloadSize - info.offset) % 12 != 0)
         return;
-    
-    //TODO do req stuff
 
     // Process request
-    std::vector<LsaKey> keys;
+    std::vector<std::pair<FloodInfo, LsaRecordRef>> records;
+    auto& lsdb = iface.getArea().lsdb();
     while (info.offset < info.payloadSize)
     {
         Ospfv3LSRHeader lsrHdr;
         lsrHdr.setBuffer(info.payload + info.offset);
 
-        info.offset += Ospfv3LSAHeader::fixedSize;
+        info.offset += Ospfv3LSRHeader::fixedSize;
         if (info.offset > info.payloadSize) 
             return;
 
         LsaKey key(static_cast<uint16_t>(lsrHdr.getType()), lsrHdr.getLsID(), lsrHdr.getAdvRouter());
-        if (iface.area.lsdb().contains(key))
+        if (LsaRecord* record = lsdb.find(key); record)
         {
-            keys.push_back({
-                static_cast<uint16_t>(lsrHdr.getType()),
-                lsrHdr.getLsID(),
-                lsrHdr.getAdvRouter()
-            });
+            records.push_back({{FloodReason::UPDATE}, {key, *record}});
         }
     }
 
-    // TODO: Send updates for requests
+    sendReliableLSUpdate(info.neighbor, records);
 }
 
-void PacketDispatcher::processLSUpdate(PacketDispatcher::HeaderInfo& info)
+void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 {
+    auto& topology = *iface.topology.load(std::memory_order_relaxed);
+    auto& area = iface.getArea();
     if (info.payloadSize < 4)
+        return;
+
+    if (info.neighbor->getState() < Neighbor::State::EXCHANGE)
         return;
 
     uint32_t lsuSize = readU32(info.payload);
     uint32_t routerId = iface.process.getRouterId();
 
-    std::vector<OspfArea::Result> results;
+    info.offset += 4;
 
-    std::vector<LsaRecord*> acks;
+    std::vector<LsaRecordRef> acks;
 
     for (int i = 0; i < static_cast<int>(lsuSize); i++)
     {
@@ -214,9 +409,6 @@ void PacketDispatcher::processLSUpdate(PacketDispatcher::HeaderInfo& info)
         if (off > info.payloadSize) 
             return;
 
-        // TODO: Validate checksum
-        bool checksumValid = false;
-
         bool selfOrigin = lsaHdr.getAdvRouter() == routerId;
 
         LsaKey key = {
@@ -228,39 +420,102 @@ void PacketDispatcher::processLSUpdate(PacketDispatcher::HeaderInfo& info)
             lsaHdr.getSeqNumber(),
             lsaHdr.getChecksum(),
             lsaHdr.getLen(),
-            lsaHdr.getAge()
-        };
-
-        OspfArea::IncomingLsaContext context{
-            key,
-            hdr,
-            checksumValid,
-            selfOrigin,
-            iface.configs->key,
-            true
+            lsaHdr.getAge(),
         };
 
         uint16_t bodyLen = hdr.length - Ospfv3LSAHeader::fixedSize;
         auto body = buildLsaBody(static_cast<uint8_t>(key.lsaType), info.payload + off, bodyLen);
+
+        if (hdr.length < Ospfv3LSAHeader::fixedSize)
+            return;
+        if (info.offset + hdr.length > info.payloadSize)
+            return;
+
         info.offset += hdr.length;
 
         if (!body.has_value()) continue;
 
-        auto result = iface.area.processLsa(context, body.value());
+        auto calc = runLsaCalculations<PolicyV3>(hdr, key, body.value());
+        bool checksumValid = calc.checksum == hdr.checksum;
 
+        IncomingLsaContext context{
+            key,
+            hdr,
+            checksumValid,
+            selfOrigin,
+            {FloodReason::UPDATE},
+            iface.interfaceId,
+            info.neighbor->routerID
+        };
+
+        OspfArea::Result result = area.processLsa<PolicyV3>(context, body.value());
         if (result.decision.shouldAck)
-            acks.push_back(result.record);
-
-        results.push_back(result);
+            acks.push_back({context.key, *result.record});
     }
 
     if (!acks.empty())
-        sendLSAck(acks);
+        sendLSAck(*info.neighbor, acks);
 
-    iface.area.flood();
+    topology.flood<PolicyV3>();
 }
 
-std::optional<LsaBody> PacketDispatcher::buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len)
+void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
+{
+    info.offset += info.authSize; // Only structure that needs to include auth size
+
+    if (info.offset != info.payloadSize)
+        return;
+
+    uint8_t* llsBase = info.payload + info.payloadSize;
+
+    if (info.packetSize < info.offset + 4)
+        return;
+
+    uint16_t llsLen = readU16(llsBase + 2);
+    if (llsLen < 4 || info.offset + llsLen > info.packetSize)
+        return;
+
+    uint32_t extension{0};
+    size_t offset = 4;
+
+    auto parseExtensionTLV = [&](uint16_t size) noexcept
+    {
+        if (size != 4 || offset + 4 > llsLen) 
+            return false;
+
+        extension = readU32(llsBase + offset);
+        offset += 4;
+        return true;
+    };
+
+    while (offset + 4 < llsLen)
+    {
+        uint16_t type = readU16(llsBase + offset);
+        uint16_t size = readU16(llsBase + offset + 2);
+        offset += 4;
+
+        switch (type)
+        {
+            case 0x0001:
+                if (!parseExtensionTLV(size))
+                    return;
+                break;
+                if (offset + size > llsLen)
+                    return;
+                offset += size;
+                break;
+        }
+    }
+
+    ChecksumFletcher check;
+    check.addBytes(llsBase + 2, llsLen - 2);
+    if (check.finalize() != readU16(llsBase))
+        return;
+
+    // TODO: process extension
+}
+
+std::optional<LsaBody> PacketDispatcherV3::buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len)
 {
     switch (type)
     {
@@ -272,16 +527,15 @@ std::optional<LsaBody> PacketDispatcher::buildLsaBody(uint8_t type, const uint8_
             return InterAreaPrefixLsa::build(buf, len);
         case OSPFV3_LSA_INTER_AREA_ROUTER:
             return InterAreaRouterLsa::build(buf, len);
+        case OSPFV3_LSA_LINK:
+            return LinkLsa::build(buf, len);
         case OSPFV3_LSA_AS_EXTERNAL:
         case OSPFV3_LSA_NSSA_EXTERNAL:
             return ExternalLsaV3::build(buf, len);
-        case OSPFV3_LSA_LINK:
-            return LinkLsa::build(buf, len);
-        case OSPFV3_LSA_INTRA_AREA_PREFIX:
-            return IntraAreaPrefixLsa::build(buf, len);
         default:
             return std::nullopt;
     }
     return std::nullopt;
 }
 }
+
