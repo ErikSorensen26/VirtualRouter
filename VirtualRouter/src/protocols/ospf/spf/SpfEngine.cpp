@@ -2,9 +2,10 @@
 
 #include "SpfEngine.h"
 #include <OspfArea.h>
-#include <OspfTopology.h>
 #include <OspfProcess.h>
 #include <queue>
+
+#include <OspfRegistry.hpp>
 
 namespace OSPF
 {
@@ -26,7 +27,7 @@ template <typename Policy>
 SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 {
     auto& area = topo.area;
-    uint32_t rid = area.topology().getProcess().getRouterId();
+    uint32_t rid = area.process().getRouterId();
 
     SpfResult res;
     res.root = Vertex{VertexType::ROUTER, static_cast<uint64_t>(rid)};
@@ -65,30 +66,27 @@ SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
         expandAndRelax<Policy>(topo, cur.v, info);
     }
 
-    if (area.getConfigs().deterministicParentOrder.load(std::memory_order_relaxed))
+    uint8_t maxPaths = area.process().getConfigs().template get<Config::Ospf::MAXIMUM_PATHS>().load();
+
+    for (auto& kv : res.nodes)
     {
-        uint8_t maxPaths = area.topology().getConfigs().maxPaths.load(std::memory_order_relaxed);
+        auto& parents = kv.second.parents;
 
-        for (auto& kv : res.nodes)
-        {
-            auto& parents = kv.second.parents;
+        std::sort(parents.begin(), parents.end(),
+            [](const ParentRef& a, const ParentRef& b)
+            { 
+                if (a.parent == b.parent) return a.ifid < b.ifid;
+                return vertexLess(a.parent, b.parent);
+            });
 
-            std::sort(parents.begin(), parents.end(),
-                [](const ParentRef& a, const ParentRef& b)
-                { 
-                    if (a.parent == b.parent) return a.ifid < b.ifid;
-                    return vertexLess(a.parent, b.parent);
-                });
-
-            parents.erase(std::unique(parents.begin(), parents.end(), 
-                [](const ParentRef& a, const ParentRef& b)
-                {
-                    return a.parent == b.parent && a.ifid == b.ifid;
-                }), parents.end());
-            
-            if (maxPaths > 0 && parents.size() > maxPaths)
-                parents.resize(maxPaths);
-        }
+        parents.erase(std::unique(parents.begin(), parents.end(), 
+            [](const ParentRef& a, const ParentRef& b)
+            {
+                return a.parent == b.parent && a.ifid == b.ifid;
+            }), parents.end());
+        
+        if (maxPaths > 0 && parents.size() > maxPaths)
+            parents.resize(maxPaths);
     }
 
     return res;

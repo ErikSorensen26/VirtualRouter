@@ -3,7 +3,6 @@
 #include "OspfRoutingTable.h"
 
 #include <OspfProcess.h>
-#include <OspfTopology.h>
 #include <VirtualRouter.h>
 #include <RoutingTable.hpp>
 
@@ -58,8 +57,8 @@ static std::vector<OspfNextHop> mergeEcmpNextHops(const std::vector<OspfPath>& b
     return merged;
 }
 
-OspfRib::OspfRib(Topology& p)
-    : topology(p), rib(topology.process.routingInstance->routingTable) {}
+OspfRib::OspfRib(OspfProcess& p)
+    : process(p), rib(process.routingInstance->routingTable) {}
 
 const OspfRoute* OspfRib::lookup(const IPPrefix& prefix) const
 {
@@ -211,8 +210,8 @@ void OspfRib::replaceExternal(const std::pair<IPPrefix, std::optional<OspfPath>>
 
 std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<IPPrefix>& touched)
 {
-    AddressFamily af = topology.process.getAF();
-    uint32_t procId = topology.process.getProcId();
+    AddressFamily af = process.getAF();
+    uint32_t procId = process.getProcId();
 
     std::vector<OspfRouteChange> changes;
     changes.reserve(touched.size());
@@ -241,8 +240,8 @@ std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<I
                 RouteSource src = deriveOspfType(st.selected.type);
 
                 af == AddressFamily::IPv4
-                    ? rib.removeEntry(readU32(prefix.addr), prefix.prefixLength, src, topology.tid, procId)
-                    : rib.removeEntry(readU128(prefix.addr), prefix.prefixLength, src, topology.tid, procId);
+                    ? rib.removeEntry(readU32(prefix.addr), prefix.prefixLength, src, procId)
+                    : rib.removeEntry(readU128(prefix.addr), prefix.prefixLength, src, procId);
             }
 
             prefixStates.erase(prefix);

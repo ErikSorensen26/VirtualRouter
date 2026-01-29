@@ -365,7 +365,7 @@ std::optional<Ospfv2Header> PacketDispatcherV2::buildHeader(PacketBuilder& pkt, 
 
     ospf.setVersion(OSPFV2_VERSION);
     ospf.setType(type);
-    ospf.setRouterID(iface.process.getRouterId());
+    ospf.setRouterID(iface.getProcess().getRouterId());
     ospf.setAreaID(iface.getAreaId());
 
     return ospf;

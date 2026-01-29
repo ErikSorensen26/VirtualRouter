@@ -174,6 +174,13 @@ struct PolicyV2
     using InterNetworkLsa = SummaryNetworkLsa;
     using InterRouterLsa = SummaryRouterLsa;
     using ExternalLsa = ExternalLsaV2;
+
+    static constexpr uint16_t RouterLsaType = OSPFV2_LSA_ROUTER;
+    static constexpr uint16_t NetworkLsaType = OSPFV2_LSA_NETWORK;
+    static constexpr uint16_t InterNetworkType = OSPFV2_LSA_SUM_NET;
+    static constexpr uint16_t InterRouterType = OSPFV2_LSA_SUM_ASBR;
+    static constexpr uint16_t ExternalType = OSPFV2_LSA_EXTERNAL;
+    static constexpr uint16_t NssaType = OSPFV2_LSA_NSSA;
 };
 
 struct PolicyV3
@@ -183,6 +190,13 @@ struct PolicyV3
     using InterNetworkLsa = InterAreaPrefixLsa;
     using InterRouterLsa = InterAreaRouterLsa;
     using ExternalLsa = ExternalLsaV3;
+
+    static constexpr uint16_t RouterLsaType = OSPFV3_LSA_ROUTER;
+    static constexpr uint16_t NetworkLsaType = OSPFV3_LSA_NETWORK;
+    static constexpr uint16_t InterNetworkType = OSPFV3_LSA_INTER_AREA_PREFIX;
+    static constexpr uint16_t InterRouterType = OSPFV3_LSA_INTER_AREA_ROUTER;
+    static constexpr uint16_t ExternalType = OSPFV3_LSA_AS_EXTERNAL;
+    static constexpr uint16_t NssaType = OSPFV3_LSA_NSSA_EXTERNAL;
 };
 
 // One LSDB record.

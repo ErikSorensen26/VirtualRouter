@@ -7,10 +7,10 @@
 namespace OSPF
 {
 InterfaceFlagManager::InterfaceFlagManager(OspfInterface& iface)
-    : area(iface.area) {}
+    : area(iface.getArea()) {}
 
 uint32_t InterfaceFlagManager::getFlags()
 {
-    return area.load(std::memory_order_relaxed)->getFlags().getFlags() | flags.load(std::memory_order_relaxed);
+    return area.getFlags().getFlags() | flags.load(std::memory_order_relaxed);
 }
 }

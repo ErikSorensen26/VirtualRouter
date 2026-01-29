@@ -3,7 +3,6 @@
 #include "OspfRouteManager.h"
 
 #include <OspfProcess.h>
-#include <OspfTopology.h>
 #include <OspfArea.h>
 #include <OspfInterface.h>
 #include <OspfNeighborTable.h>
@@ -44,7 +43,7 @@ std::optional<OspfNextHop> resolveDirectNextHop(OspfArea& area, const Vertex& v,
         ? static_cast<uint32_t>(v.id)
         : networkAdvRouter(v.id);
 
-    auto& ifaceMgr = area.topology().process.getIfaceMgr();
+    auto& ifaceMgr = area.process().getIfaceMgr();
 
     OspfInterface* iface = ifaceMgr.getInterface({pref.ifid, area.areaId});
     if (!iface) return std::nullopt;
@@ -109,7 +108,7 @@ template <typename Policy>
 void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::pair<IPPrefix, OspfPath>>& out, OspfArea& area)
 {
     auto& lsdb = area.lsdb();
-    const uint8_t adminDistance = area.topology().getBaseConfigs().get<Config::OspfTopologyBase::INTRA_AREA_DISTANCE>().load();
+    const uint8_t adminDistance = area.process().getConfigs().get<Config::Ospf::INTRA_AREA_DISTANCE>().load();
 
     NhCache nhCache;
     out.reserve(out.size() + spf.confirmedOrder.size());
@@ -235,7 +234,7 @@ static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveToAbr
     return std::make_pair(dist, std::move(nh));
 }
 
-static std::optional<RouterReach> resolveToAbrs(Topology& topo, uint32_t abrRid)
+static std::optional<RouterReach> resolveToAbrs(OspfProcess& topo, uint32_t abrRid)
 {
     auto* res = topo.table.lookup(abrRid);
     if (res) return *res;
@@ -245,7 +244,7 @@ static std::optional<RouterReach> resolveToAbrs(Topology& topo, uint32_t abrRid)
 template<typename Policy>
 std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveInterAreaNetwork(OspfArea& area, const LsaKey& key, const LsaHeader& header, const LsaBody& body)
 {
-    const uint8_t adminDistance = area.topology().getBaseConfigs().get<Config::OspfTopologyBase::INTER_AREA_DISTANCE>().load();
+    const uint8_t adminDistance = area.process().getConfigs().get<Config::Ospf::INTER_AREA_DISTANCE>().load();
 
     const typename Policy::InterNetworkLsa& summary = std::get<typename Policy::InterNetworkLsa>(body);
     
@@ -257,7 +256,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveInterAreaNetwor
 
     if (header.age == OSPF_MAX_AGE) return {prefix, std::nullopt};
 
-    auto abrInfo = resolveToAbrs(area.topology(), key.advertisingRouter);
+    auto abrInfo = resolveToAbrs(area.process(), key.advertisingRouter);
     if (!abrInfo.has_value()) return {prefix, std::nullopt}; // ABR not found
 
     const uint64_t distance = abrInfo->cost + summary.metric;
@@ -270,19 +269,19 @@ void RouteManager::deriveInterAreaRouter(OspfArea& area, const LsaKey& key, cons
 {
     const bool remove = header.age == OSPF_MAX_AGE;
 
-    auto abrInfo = resolveToAbrs(area.topology(), key.advertisingRouter);
+    auto abrInfo = resolveToAbrs(area.process(), key.advertisingRouter);
 
     const typename Policy::InterRouterLsa& asbr = std::get<typename Policy::InterRouterLsa>(body);
     uint64_t distance = abrInfo->cost + asbr.metric;
 
-    area.topology().table.updateAreaAsbr(area.areaId, OspfRouter{key.linkStateId, distance, std::move(abrInfo->nextHops)}, remove);
+    area.process().table.updateAreaAsbr(area.areaId, OspfRouter{key.linkStateId, distance, std::move(abrInfo->nextHops)}, remove);
 }
 
 template<typename Policy>
 void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::pair<IPPrefix, OspfPath>>& out, OspfArea& area)
 {
     auto& lsdb = area.lsdb();
-    const uint8_t adminDistance = area.topology().getBaseConfigs().get<Config::OspfTopologyBase::INTER_AREA_DISTANCE>().load();
+    const uint8_t adminDistance = area.process().getConfigs().get<Config::Ospf::INTER_AREA_DISTANCE>().load();
 
     NhCache nhCache;
     out.reserve(out.size() + spf.confirmedOrder.size());
@@ -326,14 +325,12 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
     });
 
     if (!asbrs.empty())
-        area.topology().table.updateAreaAsbrs(area.areaId, asbrs);
+        area.process().table.updateAreaAsbrs(area.areaId, asbrs);
 }
 
 template <typename AddrT>
-static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress(AddrT addr, Topology& topo, RoutingTable& globalRib)
+static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress(AddrT addr, OspfProcess& process, RoutingTable& globalRib)
 {
-    auto& process = topo.process;
-
     RibEntry<AddrT>* r = globalRib.lookup<AddrT>(addr, process.getProcId(), RouteSource::OSPF_INTRA);
     if (!r) r = globalRib.lookup<AddrT>(addr, process.getProcId(), RouteSource::OSPF_INTER);
     if (!r || r->nextHopCount == 0) return std::nullopt;
@@ -350,16 +347,16 @@ static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInter
 };
 
 template<typename Policy>
-std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(Topology& topology, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec)
+std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(OspfProcess& process, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec)
 {
-    const uint8_t adminDistance = topology.getBaseConfigs().get<Config::OspfTopologyBase::EXTERNAL_DISTANCE>().load();
-    const uint32_t selfRid       = topology.process.getRouterId();
+    const uint8_t adminDistance = process.getConfigs().get<Config::Ospf::EXTERNAL_DISTANCE>().load();
+    const uint32_t selfRid       = process.getRouterId();
 
     using EL = std::remove_cv_t<typename Policy::ExternalLsa>;
 
     constexpr uint16_t kMaxAge = OSPF_MAX_AGE;
 
-    auto& globalRib = topology.process.routingInstance->routingTable;
+    auto& globalRib = process.routingInstance->routingTable;
 
     const typename Policy::ExternalLsa& extLsa = std::get<typename Policy::ExternalLsa>(rec.second);
 
@@ -399,7 +396,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(T
         if constexpr (std::is_same_v<EL, ExternalLsaV2>)
         {
             const uint32_t fwdAddr = readU32(ext.fwd.raw);
-            if (auto res = resolveInternalAddress(fwdAddr, topology, globalRib); res.has_value())
+            if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
             {
                 X = res->first;
                 nh = std::move(res->second);
@@ -409,7 +406,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(T
         else
         {
             const __uint128_t fwdAddr = readU128(ext.fwd.raw);
-            if (auto res = resolveInternalAddress(fwdAddr, topology, globalRib); res.has_value())
+            if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
             {
                 X = res->first;
                 nh = std::move(res->second);
@@ -420,7 +417,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(T
 
     if (!anchored)
     {
-        const auto* rr = topology.table.lookup(asbrRid);
+        const auto* rr = process.table.lookup(asbrRid);
         if (!rr || rr->nextHops.empty())
             return {ext.prefix, std::nullopt};
 
@@ -439,10 +436,10 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(T
 }
 
 template<typename Policy>
-std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Topology& topology)
+std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(OspfProcess& process)
 {
-    const uint8_t adminDistance = topology.getBaseConfigs().get<Config::OspfTopologyBase::EXTERNAL_DISTANCE>().load();
-    const uint32_t selfRid       = topology.process.getRouterId();
+    const uint8_t adminDistance = process.getConfigs().get<Config::Ospf::EXTERNAL_DISTANCE>().load();
+    const uint32_t selfRid       = process.getRouterId();
 
     using EL = std::remove_cv_t<typename Policy::ExternalLsa>;
 
@@ -451,12 +448,12 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(To
     std::vector<std::pair<IPPrefix, OspfPath>> out;
     out.reserve(64);
 
-    auto& globalRib = topology.process.routingInstance->routingTable;
+    auto& globalRib = process.routingInstance->routingTable;
 
     {
-        std::lock_guard<std::mutex> lock(topology.externalMu);
+        std::lock_guard<std::mutex> lock(process.externalMu);
 
-        for (const auto& [key, rec] : topology.externalDb)
+        for (const auto& [key, rec] : process.externalDb)
         {
             if (rec.first.age == kMaxAge)
                 continue;
@@ -496,7 +493,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(To
                 if constexpr (std::is_same_v<EL, ExternalLsaV2>)
                 {
                     const uint32_t fwdAddr = readU32(ext.fwd.raw);
-                    if (auto res = resolveInternalAddress(fwdAddr, topology, globalRib); res.has_value())
+                    if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
                     {
                         X = res->first;
                         nh = std::move(res->second);
@@ -506,7 +503,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(To
                 else
                 {
                     const __uint128_t fwdAddr = readU128(ext.fwd.raw);
-                    if (auto res = resolveInternalAddress(fwdAddr, topology, globalRib); res.has_value())
+                    if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
                     {
                         X = res->first;
                         nh = std::move(res->second);
@@ -517,7 +514,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(To
 
             if (!anchored)
             {
-                const auto* rr = topology.table.lookup(asbrRid);
+                const auto* rr = process.table.lookup(asbrRid);
                 if (!rr || rr->nextHops.empty())
                     continue;
 
@@ -551,12 +548,12 @@ template void RouteManager::deriveInterAreaRouter<PolicyV3>(OspfArea&, const Lsa
 template void RouteManager::deriveInterAreaRoutes<PolicyV2>(const SpfResult&, std::vector<std::pair<IPPrefix, OspfPath>>&, OspfArea&);
 template void RouteManager::deriveInterAreaRoutes<PolicyV3>(const SpfResult&, std::vector<std::pair<IPPrefix, OspfPath>>&, OspfArea&);
 
-template std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress<uint32_t>(uint32_t, Topology&, RoutingTable&);
-template std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress<__uint128_t>(__uint128_t, Topology&, RoutingTable&);
+template std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress<uint32_t>(uint32_t, OspfProcess&, RoutingTable&);
+template std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress<__uint128_t>(__uint128_t, OspfProcess&, RoutingTable&);
 
-template std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute<PolicyV2>(Topology&, const LsaKey&, const std::pair<LsaHeader, LsaBody>&);
-template std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute<PolicyV3>(Topology&, const LsaKey&, const std::pair<LsaHeader, LsaBody>&);
+template std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute<PolicyV2>(OspfProcess&, const LsaKey&, const std::pair<LsaHeader, LsaBody>&);
+template std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute<PolicyV3>(OspfProcess&, const LsaKey&, const std::pair<LsaHeader, LsaBody>&);
 
-template std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes<PolicyV2>(Topology&);
-template std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes<PolicyV3>(Topology&);
+template std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes<PolicyV2>(OspfProcess&);
+template std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes<PolicyV3>(OspfProcess&);
 }

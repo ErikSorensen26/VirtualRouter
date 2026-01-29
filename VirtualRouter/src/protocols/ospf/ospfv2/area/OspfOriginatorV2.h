@@ -19,6 +19,8 @@ public:
     void fullRefresh() override;
     void updateInterface(uint32_t ifaceId) override;
     void addExternal(uint32_t asbr, uint32_t lsid, bool remove) override;
+    void originateExternal(ExternalOriginateContext& ctx) override;
+    void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa) override;
 
 protected:
     void addRouterLsa(std::optional<uint32_t> ifaceId, RefreshInfo& refresh, bool fullRefresh = false) override;

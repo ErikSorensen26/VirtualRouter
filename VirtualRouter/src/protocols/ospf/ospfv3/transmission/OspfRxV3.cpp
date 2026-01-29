@@ -10,7 +10,6 @@
 #include <Ospfv3LSAHeader.hpp>
 #include <Ospfv3LSRHeader.hpp>
 #include <OspfNeighbor.h>
-#include <OspfTopology.h>
 #include <OspfArea.h>
 #include <OspfFlagManager.h>
 #include <Encryption.hpp>
@@ -27,8 +26,13 @@ Config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getBaseConfigs()
 
 void PacketDispatcherV3::handleIncoming(const Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
 {
-    IPAddress neigIp(neighborIp, iface.process.getAF());
+    IPAddress neigIp(neighborIp, iface.getProcess().getAF());
     uint32_t rid = ospfHeader.getRouterID();
+
+    // Check if 
+    auto ntype = configs->get<Config::OspfInterface::NETWORK>().load();
+    if (multicast && (ntype == NetworkType::NON_BROADCAST || ntype == NetworkType::POINT_TO_MULTIPOINT))
+        return;
 
     // Check passive
     if (iface.getConfigs().get<Config::OspfInterface::PASSIVE>().load())
@@ -45,7 +49,7 @@ void PacketDispatcherV3::handleIncoming(const Ospfv3Header& ospfHeader, const ui
     size_t packetSize = Ospfv3Header::fixedSize + ospfHeader.getTrail().size();
     if (ospfHeader.getPacketLen() > packetSize) return;
 
-    HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), neigIp, rid);
+    HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), 0, neigIp, rid);
     info.neighbor = iface.getNTable().lookup(rid);
 
     {
@@ -156,7 +160,7 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
         bool ridFound = false;
         for (size_t i = 0; i < listSize; i += 4)
         {
-            if (readU32(neighborList + i) == iface.process.getRouterId())
+            if (readU32(neighborList + i) == iface.getProcess().getRouterId())
             {
                 ridFound = true;
                 break;
@@ -253,7 +257,7 @@ void PacketDispatcherV3::processDBD(PacketDispatcher::HeaderInfo& info)
         if (info.offset != info.payloadSize)
             return;
 
-        Neighbor::Role role = info.neighbor->routerID > iface.process.getRouterId()
+        Neighbor::Role role = info.neighbor->routerID > iface.getProcess().getRouterId()
             ? Neighbor::Role::MASTER
             : Neighbor::Role::SLAVE;
         info.neighbor->setRole(role);
@@ -383,7 +387,6 @@ void PacketDispatcherV3::processLSRequest(PacketDispatcher::HeaderInfo& info)
 
 void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 {
-    auto& topology = *iface.topology.load(std::memory_order_relaxed);
     auto& area = iface.getArea();
     if (info.payloadSize < 4)
         return;
@@ -392,7 +395,7 @@ void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
         return;
 
     uint32_t lsuSize = readU32(info.payload);
-    uint32_t routerId = iface.process.getRouterId();
+    uint32_t routerId = iface.getProcess().getRouterId();
 
     info.offset += 4;
 
@@ -448,15 +451,15 @@ void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
             info.neighbor->routerID
         };
 
-        OspfArea::Result result = area.processLsa<PolicyV3>(context, body.value());
-        if (result.decision.shouldAck)
-            acks.push_back({context.key, *result.record});
+        auto result = area.processLsa<PolicyV3>(context, body.value());
+        if (result.has_value() && result->decision.shouldAck)
+            acks.push_back({context.key, *result->record});
     }
 
     if (!acks.empty())
         sendLSAck(*info.neighbor, acks);
 
-    topology.flood<PolicyV3>();
+    iface.getProcess().flood<PolicyV3>();
 }
 
 void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)

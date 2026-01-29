@@ -31,6 +31,7 @@ public:
     void deactivateAll();
 
     OspfInterface* getInterface(const OspfInterfaceId& id);
+    OspfInterface* getInterfaceByAddress(const IPAddress& addr);
 
     // Lists
     std::map<OspfInterfaceId, OspfInterface> ospfInterfaceList;

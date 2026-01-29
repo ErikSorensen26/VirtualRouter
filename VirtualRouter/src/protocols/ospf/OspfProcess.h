@@ -9,7 +9,11 @@
 #include <OspfRoutingTable.h>
 #include <RegistryTypes.hpp>
 #include <variant>
-#include <map>
+#include <OspfArea.h>
+#include <OspfTopologyTable.h>
+#include <OspfRoutingTable.h>
+#include <OspfRegistry.hpp>
+#include <type_traits>
 
 class VirtualRouter;
 class TimeManager;
@@ -43,11 +47,30 @@ public:
 
     OspfProcess(bool isV3, uint32_t procId, AddressFamily af, VirtualRouter* vrf);
 
+    // Reorigination
+    template <typename Policy>
+    void distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, LsaBody& body);
+
+    template <typename Policy>
+    void originateExternal(Policy::ExternalLsa& lsa);
+
+    template <typename Policy>
+    void reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList);
+
+    template<typename Policy>
+    void flood();
+
+    std::atomic<bool> isABR = false;
+    std::atomic<bool> isASBR = false;
+
     AddressFamily getAF() { return af; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
     Config::OspfRegistry& getConfigs() { return configs.get(); }
+    __uint128_t getConfigKey() const { return configs.getKey(); }
     const Config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
+    OspfRib& getRib() { return rib; }
+    const OspfRib& getRib() const { return rib; }
 
     uint32_t getProcId() const { return procId; }
     uint32_t getRouterId() const
@@ -59,8 +82,8 @@ public:
 
     bool calculateRID();
 
-    Topology* getTopology(uint8_t tid);
-    Topology& insureTopology(uint8_t tid);
+    OspfArea* getArea(uint32_t areaId);
+    OspfArea& insureArea(uint32_t areaId);
 
     const bool isV3;
 
@@ -68,11 +91,18 @@ public:
 
     TimeManager& tmgr;
 
-    std::shared_mutex topologyMu;
-    std::map<uint8_t, Topology> topologies;
+    std::mutex externalMu;
+    std::unordered_map<LsaKey, std::pair<LsaHeader, LsaBody>> externalDb;
+    std::atomic<uint32_t> monotonicExternalId{0};
+
+    TopologyTable table;
 
 private:
-    friend class Topology;
+    std::shared_mutex areaMu;
+    std::unordered_map<uint32_t, OspfArea> areas;
+    std::atomic<size_t> areaSize;
+
+    OspfRib rib;
 
     std::atomic<uint32_t> rid;
 

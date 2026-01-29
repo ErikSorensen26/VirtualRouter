@@ -2,7 +2,6 @@
 
 #include "SpfTopology.h"
 #include <OspfArea.h>
-#include <OspfTopology.h>
 #include <OspfProcess.h>
 
 namespace OSPF

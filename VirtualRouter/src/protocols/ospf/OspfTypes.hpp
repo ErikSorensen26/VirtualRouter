@@ -16,6 +16,9 @@ static constexpr uint16_t OSPF_MAX_AGE = 3600;
 static constexpr uint16_t OSPF_REFRESH_AGE = 1800;
 static constexpr uint16_t OSPF_MAX_DIFF = 900;
 
+static constexpr uint16_t OSPF_HELLO_TIME = 10;
+static constexpr uint16_t OSPF_MU_HELLO_TIME = 30;
+
 /*namespace OSPF
 {
 struct AreaConfigs

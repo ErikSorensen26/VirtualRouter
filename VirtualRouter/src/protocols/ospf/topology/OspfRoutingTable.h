@@ -14,12 +14,12 @@ enum class RouteSource : uint8_t;
 
 namespace OSPF
 {
-class Topology;
+class OspfProcess;
 
 class OspfRib
 {
 public:
-    OspfRib(Topology& process);
+    OspfRib(OspfProcess& process);
 
     const OspfRoute* lookup(const IPPrefix& prefix) const;
 
@@ -48,7 +48,7 @@ private:
 
     mutable std::shared_mutex mutex;
 
-    Topology& topology;
+    OspfProcess& process;
     RoutingTable& rib;
 
 private:

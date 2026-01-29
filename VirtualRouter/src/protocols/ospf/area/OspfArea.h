@@ -16,7 +16,7 @@
 namespace OSPF
 {
 struct OspfPath;
-class Topology;
+class OspfProcess;
 class OspfInterface;
 
 constexpr inline bool isMaxAge(const LsaHeader& h, uint16_t maxAge) noexcept
@@ -72,17 +72,18 @@ class OspfArea
 public:
     struct Result final
     {
+        FloodReason reason;
         InstallResult decision{};
         LsaRecord* record{nullptr};
     };
 
-    explicit OspfArea(Topology& base, uint32_t area, std::pmr::memory_resource* mr = std::pmr::get_default_resource());
+    explicit OspfArea(OspfProcess& base, uint32_t area, std::pmr::memory_resource* mr = std::pmr::get_default_resource());
 
     // Getters
     LsdbTable& lsdb() noexcept { return db; }
     const LsdbTable& lsdb() const noexcept { return db; }
-    const Topology& topology() const noexcept { return base; }
-    Topology& topology() { return base; }
+    const OspfProcess& process() const noexcept { return base; }
+    OspfProcess& process() { return base; }
     Config::OspfAreaRegistry& getConfigs() { return configs.get(); }
     const Config::OspfAreaRegistry& getConfigs() const noexcept { return configs.get(); }
     FloodQueue& floodQueue() noexcept { return fq; }
@@ -101,10 +102,10 @@ public:
 
     // Processing
     template <typename Policy>
-    Result processLsa(const IncomingLsaContext& ctx, LsaBody& body);
+    std::optional<Result> processLsa(IncomingLsaContext& ctx, LsaBody& body);
     template <typename Policy>
     void processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries);
-    void processExternalLsa(const IncomingLsaContext& ctx, LsaBody& body);
+    void processExternalLsa(IncomingLsaContext& ctx, LsaBody& body);
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
@@ -116,10 +117,6 @@ public:
 
     static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;
 
-    std::atomic<bool> dcCompatible{true};
-
-    const uint32_t areaId;
-
 protected:
     std::pmr::memory_resource* mr{nullptr};
 
@@ -130,21 +127,26 @@ protected:
 
     LsdbTable db;
     FloodQueue fq;
-    Topology& base;
+    OspfProcess& base;
     SpfManager spfMgr;
     AreaFlagManager flags;
 
     OspfOriginator& originator;
-
 private:
-    Result process(const IncomingLsaContext& ctx, LsaBody& body);
+    Result process(IncomingLsaContext& ctx, LsaBody& body);
 
     void enqueueFlood(LsaRecordRef& record, FloodInfo info);
     void enqueueFlood(LsaRecordRef&& record, FloodInfo info);
 
-    InstallResult evaluateIncomingLsa(const LsaRecord* existing, const IncomingLsaContext& ctx, const LsaBody& body);
+    InstallResult evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaContext& ctx, const LsaBody& body);
     LsaCompareResult compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const;
     bool compareLsaBody(const LsaBody& a, const LsaBody& b);
+
+public:
+    const AreaType type;
+    const uint32_t areaId;
+
+    std::atomic<bool> dcCompatible{true};
 };
 }
 

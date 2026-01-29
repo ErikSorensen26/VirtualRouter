@@ -47,12 +47,12 @@ public:
     }
 
     template <typename AddrType>
-    bool removeEntry(AddrType prefix, uint8_t length, RouteSource src, uint8_t topoId, uint32_t pid)
+    bool removeEntry(AddrType prefix, uint8_t length, RouteSource src, uint32_t pid)
     {
         if constexpr (std::is_same_v<AddrType, uint32_t>)
-            return rib4.removeRoute(prefix, length, src, topoId, pid);
+            return rib4.removeRoute(prefix, length, src, pid);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
-            return rib6.removeRoute(prefix, length, src, topoId, pid);
+            return rib6.removeRoute(prefix, length, src, pid);
         else
             static_assert(always_false<AddrType>, "Unsupported Address Type");
         return false;

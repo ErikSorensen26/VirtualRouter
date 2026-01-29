@@ -16,7 +16,7 @@
 namespace OSPF
 {
 PacketDispatcher::PacketDispatcher(OspfInterface& iface)
-    : iface(iface), ntable(iface.getNTable()), af(iface.process.getAF()) {}
+    : iface(iface), ntable(iface.getNTable()), af(iface.getProcess().getAF()) {}
 
 void PacketDispatcher::transmit(PacketBuilder& pkt, const uint8_t* dest)
 {

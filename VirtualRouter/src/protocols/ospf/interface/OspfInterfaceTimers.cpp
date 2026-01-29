@@ -27,9 +27,7 @@ void InterfaceTimers::scheduleHello()
             helloStartTime = std::chrono::steady_clock::now();
         }
 
-        auto& configs = iface.getConfigs();
-        uint32_t multiplier = std::max(static_cast<uint8_t>(1), configs.get<Config::OspfInterface::HELLO_MULTIPLIER>().load());
-        auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(configs.get<Config::OspfInterface::HELLO_INTERVAL>().load() / multiplier);
+        auto nextExpiration = std::chrono::steady_clock::now() + iface.helloTime.load(std::memory_order_relaxed);
 
         uint32_t timerId = tmgr.addTimer(nextExpiration, [this](uint32_t) {
             helloTimerId.store(0, std::memory_order_release);
@@ -66,15 +64,15 @@ void InterfaceTimers::sendHello()
         auto& ntable = iface.getNTable();
         std::shared_lock<std::shared_mutex> lock(ntable.mu);
         for (auto& [_, nbr] : ntable.neighbors)
-            dispatcher.sendUnicastHello(nbr);
+            if (nbr.unicast)
+                dispatcher.sendUnicastHello(nbr);
     }
 }
 
 void InterfaceTimers::startInactiveTimer(Neighbor& neighbor)
 {
     cancleInactiveTimer(neighbor);
-    auto expirationTime = std::chrono::steady_clock::now()
-        + std::chrono::seconds(iface.getConfigs().get<Config::OspfInterface::DEAD_INTERVAL>().load());
+    auto expirationTime = std::chrono::steady_clock::now() + iface.deadTime.load(std::memory_order_relaxed);
     neighbor.inactivityTimerId.store(tmgr.addTimer(expirationTime,
         [this, nbr = &neighbor](uint32_t) {
             handleInactiveTimeExpire(*nbr);

@@ -116,9 +116,9 @@ public:
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::EXTERNAL_ROUTING), val); }
     void setNssa(bool val)
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::NSSA), val); }
-    static void setExternalRouting(uint32_t fgs, bool val)
+    static void setExternalRouting(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::EXTERNAL_ROUTING), val); }
-    static void setNssa(uint32_t fgs, bool val)
+    static void setNssa(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::NSSA), val); }
 
     void setMultiTopology(bool val)
@@ -127,11 +127,11 @@ public:
         { if (!isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V2Option::EXTERNAL_ATTR), val); }
     void setOpaque(bool val)
         { if (!isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V2Option::OPAQUE), val); }
-    static void setMultiTopology(uint32_t fgs, bool val)
+    static void setMultiTopology(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V2Option::MULTI_TOPOLOGY), val); }
-    static void setExternalAttribute(uint32_t fgs, bool val)
+    static void setExternalAttribute(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V2Option::EXTERNAL_ATTR), val); }
-    static void setOpaque(uint32_t fgs, bool val)
+    static void setOpaque(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V2Option::OPAQUE), val); }
 
     void setV6(bool val)
@@ -144,15 +144,15 @@ public:
         { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::L_BIT), val); }
     void setAuthTrailer(bool val)
         { if (isV3) FlagManager::setOption(flags, static_cast<uint8_t>(V3Option::AUTH_TRAILER), val); }
-    static void setV6(uint32_t fgs, bool val)
+    static void setV6(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::V6), val); }
-    static void setRouterBit(uint32_t fgs, bool val)
+    static void setRouterBit(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::ROUTER_BIT), val); }
-    static void setAddressFamilySupport(uint32_t fgs, bool val)
+    static void setAddressFamilySupport(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::ADDRESS_FAMILY_SUPPORT), val); }
-    static void setLBit(uint32_t fgs, bool val)
+    static void setLBit(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::L_BIT), val); }
-    static void setAuthTrailer(uint32_t fgs, bool val)
+    static void setAuthTrailer(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(V3Option::AUTH_TRAILER), val); }
 
     bool getExternalRouting()
@@ -202,9 +202,9 @@ public:
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::ABR), val); }
     void setAsbr(bool val)
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::ASBR), val); }
-    static void setAbr(uint32_t fgs, bool val)
+    static void setAbr(uint32_t& fgs, bool val)
         { FlagManager::setFlag(fgs, static_cast<uint8_t>(Flags::ABR), val); }
-    static void setAsbr(uint32_t fgs, bool val)
+    static void setAsbr(uint32_t& fgs, bool val)
         { FlagManager::setFlag(fgs, static_cast<uint8_t>(Flags::ASBR), val); }
 
     bool getAbr()
@@ -230,6 +230,11 @@ class InterfaceFlagManager
         DEMAND_CIRCUITS = 5
     };
 
+    enum class v2Options : uint8_t
+    {
+        PROPAGATE = 3,
+    };
+
     enum class Flags : uint8_t
     {
         V_LINK = 2,
@@ -245,10 +250,15 @@ public:
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::MULTICAST), val); }
     void setDemandCircuits(bool val)
         { FlagManager::setOption(flags, static_cast<uint8_t>(Options::DEMAND_CIRCUITS), val); }
-    static void setMulticast(uint32_t fgs, bool val)
+    static void setMulticast(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::MULTICAST), val); }
-    static void setDemandCircuits(uint32_t fgs, bool val)
+    static void setDemandCircuits(uint32_t& fgs, bool val)
         { FlagManager::setOption(fgs, static_cast<uint8_t>(Options::DEMAND_CIRCUITS), val); }
+
+    void setPropagate(bool val)
+        { FlagManager::setOption(flags, static_cast<uint8_t>(v2Options::PROPAGATE), val); }
+    static void setPropagate(uint32_t& fgs, bool val)
+        { FlagManager::setOption(fgs, static_cast<uint8_t>(v2Options::PROPAGATE), val); }
 
     bool getMulticast()
         { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(Options::MULTICAST)); }
@@ -258,6 +268,11 @@ public:
         { return FlagManager::testOption(fgs, static_cast<uint8_t>(Options::MULTICAST)); }
     static bool getDemandCircuits(uint32_t fgs)
         { return FlagManager::testOption(fgs, static_cast<uint8_t>(Options::DEMAND_CIRCUITS)); }
+
+    bool getPropagate()
+        { return FlagManager::testOption(flags.load(std::memory_order_relaxed), static_cast<uint8_t>(v2Options::PROPAGATE)); }
+    static bool getPropagate(uint32_t fgs)
+        { return FlagManager::testOption(fgs, static_cast<uint8_t>(v2Options::PROPAGATE)); }
 
     void setVLink(bool val)
         { FlagManager::setFlag(flags, static_cast<uint8_t>(Flags::V_LINK), val); }
@@ -278,7 +293,7 @@ public:
         { return FlagManager::testFlag(fgs, static_cast<uint8_t>(Flags::WILDCARD)); }
 
 private:
-    std::atomic<OspfArea*>& area;
+    OspfArea& area;
     std::atomic<uint32_t> flags;
 };
 }

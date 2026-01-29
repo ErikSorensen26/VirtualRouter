@@ -24,12 +24,12 @@ class OspfInterface
 public:
     OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, OspfInterfaceId& id);
     ~OspfInterface();
-    OspfProcess& process;
-    std::atomic<Topology*> topology;
-    std::atomic<OspfArea*> area;
+
     const OspfInterfaceId id;
     const uint32_t interfaceId;
 
+    OspfProcess& getProcess() { return process; }
+    const OspfProcess& getProcess() const { return process; }
     NeighborTable& getNTable() { return ntable; }
     const NeighborTable& getNTable() const { return ntable; }
     InterfaceTimers& getTimers() { return tmgr; }
@@ -51,9 +51,11 @@ public:
     const IPPrefix interfaceAddress;
 
     void election();
+    void calculateCost();
     bool setDr(uint32_t dr);
     bool setBdr(uint32_t bdr);
     void syncConfigs();
+    void syncTimers();
     void setPassiveMode(bool passive);
 
     struct Designation { std::atomic<uint32_t> rid; std::atomic<__uint128_t> ip; };
@@ -68,11 +70,17 @@ public:
     std::atomic<bool> opaqueEnabled = true;
     enum class DcDecision { UNDECIDED, ENABLED, DISABLED };
 
+    std::atomic<uint16_t> cost;
+    std::atomic<std::chrono::seconds> helloTime;
+    std::atomic<std::chrono::seconds> deadTime;
     std::atomic<DcDecision> demandCircuit = DcDecision::UNDECIDED;
     std::atomic<bool> floodReduction = false;
 
 private:
     PacketDispatcher* dispatcher = nullptr;
+
+    OspfProcess& process;
+    OspfArea& area;
 
     InterfaceFlagManager flags;
     InterfaceFlagManager lsaFlags;

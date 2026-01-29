@@ -46,11 +46,11 @@ public:
         return true;
     }
 
-    void removeRoute(RouteSource src, uint8_t topoId, uint32_t pid = 0) noexcept
+    void removeRoute(RouteSource src, uint32_t pid = 0) noexcept
     {
         routes.erase(
             std::remove_if(routes.begin(), routes.end(),
-                [src, pid, topoId](const RibEntry<AddrType>& r){ return r.source == src && r.processId == pid && r.topoId == topoId; }),
+                [src, pid](const RibEntry<AddrType>& r){ return r.source == src && r.processId == pid; }),
             routes.end());
         selectBest();
         return;

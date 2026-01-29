@@ -9,7 +9,6 @@
 #include <IPAddress.hpp>
 #include <AddressFamily.hpp>
 #include <HeaderHelpers.hpp>
-#include <string>
 
 namespace OSPF
 {
@@ -49,6 +48,17 @@ inline uint64_t generateOspfInterfaceKey(uint32_t ifaceId, AddressFamily af, boo
     return k;
 }
 
+inline __uint128_t generateOspfAfInterfaceKey(uint32_t ifaceId, uint32_t procId, AddressFamily af, bool isV3) {
+    uint8_t addressFamily = af == AddressFamily::NONE ? 0
+        : af == AddressFamily::IPv4 ? 1 : 2;
+    uint64_t k = 0;    
+    k |= uint64_t(ifaceId) & maskU64Bits(32);
+    k |= (uint64_t(addressFamily) & maskU64Bits(2)) << 32;
+    k |= (uint64_t(isV3 ? 1u : 0u) & maskU64Bits(1)) < 34;
+    k |= (uint64_t(procId) & maskU64Bits(32)) << 35;
+    return k;
+}
+
 enum class OspfInterface : uint8_t
 {
     BFD,
@@ -69,15 +79,15 @@ enum class OspfInterface : uint8_t
     COUNT
 };
 
-using OspfInterfaceRegistry = SubRegistry<uint64_t, OspfInterface,
+using OspfInterfaceRegistry = SubRegistry<__uint128_t, OspfInterface,
     AtomicField<bool, false, OspfInterface::BFD>, // TODO
-    AtomicField<uint16_t, 1, OspfInterface::COST>,
+    OptionalAtomicField<uint16_t, OspfInterface::COST>,
     AtomicField<bool, false, OspfInterface::DATABASE_FILTER>,
-    AtomicField<uint16_t, 30, OspfInterface::DEAD_INTERVAL>,
+    OptionalAtomicField<uint16_t, OspfInterface::DEAD_INTERVAL>, // edit hello interval on interface
     AtomicField<bool, false, OspfInterface::DEMAND_CIRCUIT>,
     AtomicField<bool, false, OspfInterface::FLOOD_REDUCTION>,
-    AtomicField<uint16_t, 10, OspfInterface::HELLO_INTERVAL>,
-    AtomicField<uint8_t, 1, OspfInterface::HELLO_MULTIPLIER>,
+    OptionalAtomicField<uint16_t, OspfInterface::HELLO_INTERVAL>, // edit hello interval on interface
+    OptionalAtomicField<uint8_t, OspfInterface::HELLO_MULTIPLIER>, // edit hello interval on interface
     AtomicField<bool, false, OspfInterface::MTU_IGNORE>,
     ValueField<std::vector<std::tuple<
         IPAddress,
@@ -86,7 +96,7 @@ using OspfInterfaceRegistry = SubRegistry<uint64_t, OspfInterface,
         std::optional<uint16_t>,
         std::optional<uint8_t
     >>>, OspfInterface::NEIGHBOR>,
-    AtomicField<OSPF::NetworkType, OSPF::NetworkType::BROADCAST, OspfInterface::NETWORK>, // update neighbors
+    AtomicField<OSPF::NetworkType, OSPF::NetworkType::BROADCAST, OspfInterface::NETWORK>, // update neighbors, timers, and multicast capability
     AtomicField<uint8_t, 1, OspfInterface::PRIORITY>,
     AtomicField<bool, false, OspfInterface::PASSIVE>,
     AtomicField<uint16_t, 5, OspfInterface::RETRANSMIT_INTERVAL>,
@@ -101,7 +111,7 @@ enum class OspfInterfaceAddressFamily : uint8_t
     COUNT,
 };
 
-using OspfInterfaceAddressFamilyRegistry = SubRegistry<uint64_t, OspfInterfaceAddressFamily,
+using OspfInterfaceAddressFamilyRegistry = SubRegistry<__uint128_t, OspfInterfaceAddressFamily,
     ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceAddressFamily::BASE>,
     ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceAddressFamily::IPV4>,
     ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceAddressFamily::IPV6>
@@ -135,7 +145,7 @@ using OspfInterfaceBaseRegistry = SubRegistry<uint64_t, OspfInterfaceBase,
     OptionalAtomicField<uint16_t, OspfInterfaceBase::PROCESS_ID>,
     OptionalAtomicField<uint32_t, OspfInterfaceBase::AREA_ID>,
     AtomicField<bool, true, OspfInterfaceBase::INCLUDE_SECONDARIES>,
-    AtomicField<OSPF::AuthType, OSPF::AuthType::NULL_AUTH, OspfInterfaceBase::AUTHENTICATION_TYPE>,
+    OptionalAtomicField<OSPF::AuthType, OspfInterfaceBase::AUTHENTICATION_TYPE>,
     OptionalAtomicField<bool, OspfInterfaceBase::AUTHENTICATION_ENCRYPT>,
     OptionalAtomicField<uint64_t, OspfInterfaceBase::AUTHENTICATION_KEY>,
     ValueField<std::tuple<

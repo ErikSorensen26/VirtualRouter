@@ -5,7 +5,6 @@
 #include "OspfRouteManager.h"
 #include <TimeManager.h>
 #include <OspfArea.h>
-#include <OspfTopology.h>
 #include <OspfProcess.h>
 #include <OspfTypes.hpp>
 
@@ -17,7 +16,7 @@
 namespace OSPF
 {
 SpfManager::SpfManager(OspfArea& area, TimeManager& tmgr)
-    : area(area), tmgr(tmgr), rib(area.topology().getRib())
+    : area(area), tmgr(tmgr), rib(area.process().getRib())
 {}
 
 template<typename Policy>
@@ -94,24 +93,24 @@ void SpfManager::runSpf()
 
     auto summaryChanges = rib.replaceArea(area.areaId, pathList);
 
-    area.topology().table.consumeSpfResult(area.areaId, spfRes);
+    area.process().table.consumeSpfResult(area.areaId, spfRes);
 
-    if (area.topology().isABR.load(std::memory_order_relaxed))
+    if (area.process().isABR.load(std::memory_order_relaxed))
     {
         // Reoriginate intra as inter 
         if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
-            area.topology().reoriginateSummaries<SummaryNetworkLsa>(area, summaryChanges);
+            area.process().reoriginateSummaries<SummaryNetworkLsa>(area, summaryChanges);
         else
-            area.topology().reoriginateSummaries<InterAreaPrefixLsa>(area, summaryChanges);
+            area.process().reoriginateSummaries<InterAreaPrefixLsa>(area, summaryChanges);
     }
 }
 
 uint32_t SpfManager::computeNextDelay()
 {
-    Config::OspfTopologyRegistry& cfgs = area.topology().getConfigs();
-    uint32_t initDelayMs = cfgs.get<Config::OspfTopology::SPF_THROTTLE_DELAY>().load();
-    uint32_t holdTimeMs = cfgs.get<Config::OspfTopology::SPF_THROTTLE_HOLD>().load();
-    uint32_t maxHoldTimeMs = cfgs.get<Config::OspfTopology::SPF_THROTTLE_MAX>().load();
+    auto& cfgs = area.process().getConfigs();
+    uint32_t initDelayMs = cfgs.get<Config::Ospf::SPF_THROTTLE_DELAY>().load();
+    uint32_t holdTimeMs = cfgs.get<Config::Ospf::SPF_THROTTLE_HOLD>().load();
+    uint32_t maxHoldTimeMs = cfgs.get<Config::Ospf::SPF_THROTTLE_MAX>().load();
 
     uint32_t prev = currentDelayMs.load(std::memory_order_relaxed);
     uint32_t backoff;

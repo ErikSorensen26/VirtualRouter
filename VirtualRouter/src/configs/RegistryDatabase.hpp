@@ -45,7 +45,7 @@ public:
     }
 
     template <typename T>
-    Reference<T> create(typename T::keyType key, const T& parent)
+    Reference<T> create(typename T::keyType key, const Reference<T>& parent)
     {
         auto& b = bucket<T>();
         auto h = b.create(key, *this, parent);
@@ -64,7 +64,25 @@ public:
         Reference<T> ref;
         if (container.base && assert(container.base->bound()))
             ref = create<T>(key, *container.base); // Masked Version
-        ref = create<T>(key);
+        else
+            ref = create<T>(key);
+        container.setLocal(ref);
+        return ref;
+    }
+
+    template <typename T, auto F>
+    Reference<T> emplace(ReferenceContainer<T, F>& container, Reference<T>& parent, typename T::keyType key)
+    {
+        if (container.ref.bound())
+        {
+            assert(container.ref.getKey() == key);
+            return container.ref;
+        }
+
+        if (!container.base)
+            container.base = parent;
+
+        Reference<T> ref = create<T>(key, *container.base); // Masked Version
         container.setLocal(ref);
         return ref;
     }
@@ -79,6 +97,33 @@ public:
         container.unsetLocal();
         container.setLocal(ref);
         return ref;
+    }
+
+    template <typename T, auto F>
+    Reference<T> ensure(ReferenceContainer<T, F>& container, Reference<T>& parent, typename T::keyType key)
+    {
+        container.base = parent;
+        Reference<T> ref = create<T>(key, *container.base); // Masked Version
+        container.unsetLocal();
+        container.setLocal(ref);
+        return ref;
+    }
+
+
+    template <typename T, auto F>
+    Reference<T> emplaceBack(OwnedListField<T, F>& list, uint32_t id, typename T::keyType key)
+    {
+        if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
+            return it.second;
+        return list.getMutable().emplace_back({id, create<T>(key)}).second;
+    }
+
+    template <typename T, auto F>
+    Reference<T> emplaceBack(OwnedListField<T, F>& list, uint32_t id, const Reference<T>& parent, typename T::keyType key)
+    {
+        if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
+            return it.second;
+        return list.getMutable().emplace_back({id, create<T>(key, parent)}).second;
     }
 };
 }

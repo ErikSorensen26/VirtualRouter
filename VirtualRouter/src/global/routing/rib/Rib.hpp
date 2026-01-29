@@ -82,7 +82,7 @@ public:
         return true;
     }
 
-    bool removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint8_t topoId, uint32_t pid = 0)
+    bool removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint32_t pid = 0)
     {
         std::lock_guard<std::mutex> lock(ribMtx);
         PrefixKey key{ mask(prefix, length), length };
@@ -92,7 +92,7 @@ public:
         
 
         RibBucket<AddrType>* b = it->second;
-        b->removeRoute(src, topoId, pid);
+        b->removeRoute(src, pid);
 
         if (b->empty())
         {
@@ -131,7 +131,7 @@ public:
         return fib.lookup(addr);
     }
 
-    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, uint8_t topoId, RouteSource source)
+    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, RouteSource source)
     {
         auto* n = fib.root.load(std::memory_order_acquire);
         if (!n) return false;

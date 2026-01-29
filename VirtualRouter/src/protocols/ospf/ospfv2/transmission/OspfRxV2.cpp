@@ -10,7 +10,6 @@
 #include <Ospfv2LSAHeader.hpp>
 #include <Ospfv2LSRHeader.hpp>
 #include <OspfNeighbor.h>
-#include <OspfTopology.h>
 #include <OspfArea.h>
 #include <OspfFlagManager.h>
 #include <Encryption.hpp>
@@ -27,7 +26,7 @@ Config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getBaseConfigs()
 
 void PacketDispatcherV2::handleIncoming(const Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
 {
-    IPAddress neigIp(neighborIp, iface.process.getAF());
+    IPAddress neigIp(neighborIp, iface.getProcess().getAF());
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check passive
@@ -45,10 +44,13 @@ void PacketDispatcherV2::handleIncoming(const Ospfv2Header& ospfHeader, const ui
     size_t packetSize = Ospfv2Header::fixedSize + ospfHeader.getTrail().size();
     if (ospfHeader.getPacketLen() > packetSize) return;
 
-    HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), neigIp, rid);
+    auto& interfaceAuth = baseConfigs->get<Config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    auto authType = interfaceAuth.hasValue() ? interfaceAuth.load()
+        : iface.getArea().getConfigs().get<Config::OspfArea::AUTHENTICATION_TYPE>().load();
+
+    HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), static_cast<uint8_t>(authType), neigIp, rid);
     info.neighbor = iface.getNTable().lookup(rid);
 
-    auto authType = baseConfigs->get<Config::OspfInterfaceBase::AUTHENTICATION_TYPE>().load();
     switch (authType)
     {
         case AuthType::CRYPTO:
@@ -120,7 +122,7 @@ bool PacketDispatcherV2::processOptions(uint32_t options, Neighbor& nbr)
         return false;
     if (areaFlags.getNssa() != AreaFlagManager::getNssa(options))
         return false;
-    if (areaFlags.getAddressFamilySupport() != AreaFlagManager::getAddressFamilySupport(options) && iface.process.getAF() == AddressFamily::IPv4)
+    if (areaFlags.getAddressFamilySupport() != AreaFlagManager::getAddressFamilySupport(options) && iface.getProcess().getAF() == AddressFamily::IPv4)
         return false;
     return true;
 }
@@ -184,7 +186,7 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         bool ridFound = false;
         for (size_t i = 0; i < listSize; i += 4)
         {
-            if (readU32(neighborList + i) == iface.process.getRouterId())
+            if (readU32(neighborList + i) == iface.getProcess().getRouterId())
             {
                 ridFound = true;
                 break;
@@ -254,7 +256,7 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
         return;
 
     uint8_t options = hdr.getOptions();
-    if (!processOptions(options))
+    if (!processOptions(options, *info.neighbor))
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;
@@ -281,7 +283,7 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
         if (info.offset != info.payloadSize)
             return;
 
-        Neighbor::Role role = info.neighbor->routerID > iface.process.getRouterId()
+        Neighbor::Role role = info.neighbor->routerID > iface.getProcess().getRouterId()
             ? Neighbor::Role::MASTER
             : Neighbor::Role::SLAVE;
         info.neighbor->setRole(role);
@@ -412,7 +414,6 @@ void PacketDispatcherV2::processLSRequest(PacketDispatcher::HeaderInfo& info)
 
 void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 {
-    auto& topology = *iface.topology.load(std::memory_order_relaxed);
     auto& area = iface.getArea();
     if (info.payloadSize < 4)
         return;
@@ -421,7 +422,7 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
         return;
 
     uint32_t lsuSize = readU32(info.payload);
-    uint32_t routerId = iface.process.getRouterId();
+    uint32_t routerId = iface.getProcess().getRouterId();
 
     info.offset += 4;
 
@@ -473,20 +474,20 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
             hdr,
             checksumValid,
             selfOrigin,
-            {FloodReason::UPDATE},
+            {},
             iface.interfaceId,
             info.neighbor->routerID
         };
 
-        OspfArea::Result result = area.processLsa<PolicyV2>(context, body.value());
-        if (result.decision.shouldAck)
-            acks.push_back({context.key, *result.record});
+        auto result = area.processLsa<PolicyV2>(context, body.value());
+        if (result.has_value() && result->decision.shouldAck)
+            acks.push_back({context.key, *result->record});
     }
 
     if (!acks.empty())
         sendLSAck(*info.neighbor, acks);
 
-    topology.flood<PolicyV2>();
+    iface.getProcess().flood<PolicyV2>();
 }
 
 void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
@@ -505,8 +506,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     if (llsLen < 4 || info.offset + llsLen > info.packetSize)
         return;
 
-    bool authEnabled =
-        baseConfigs->get<Config::OspfInterfaceBase::AUTHENTICATION_TYPE>().load() == AuthType::CRYPTO &&
+    bool authEnabled = info.authType == static_cast<uint8_t>(AuthType::CRYPTO) &&
         baseConfigs->get<Config::OspfInterfaceBase::MESSAGE_DIGEST_KEY>().hasValue();
 
     uint32_t extension{0};

@@ -6,6 +6,7 @@
 #include <Registry.hpp>
 #include <LSDB.hpp>
 #include <OspfInterfaceId.hpp>
+#include <RibEntry.hpp>
 
 class TimeManager;
 
@@ -21,9 +22,20 @@ public:
     OspfOriginator(OspfArea& a);
     ~OspfOriginator();
 
+    struct ExternalOriginateContext
+    {
+        IPPrefix prefix;
+        uint32_t metric;
+        uint32_t tag;
+        std::optional<IPAddress> nextHop;
+        bool metricIsE2; // false = E1, true = E2
+    };
+
     virtual void fullRefresh();
     virtual void updateInterface(uint32_t ifaceId);
     virtual void addExternal(uint32_t asbr, uint32_t lsid, bool expire);
+    virtual void originateExternal(ExternalOriginateContext& ctx);
+    virtual void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa);
 
     template<typename Policy>
     void processReoriginatedLsa(const LsaKey& key, LsaBody& body, bool refresh = false, bool expire = false);
@@ -46,7 +58,8 @@ protected:
 protected:
     template <typename Policy>
     // Refresh being undefined means this value is expired and no longer needs refreshing.
-    void processOriginatedLsa(const LsaKey& key, LsaBody& body, RefreshInfo* refresh);
+    void processOriginatedLsa(const LsaKey& key, LsaBody& body, RefreshInfo* refresh = nullptr);
+    bool isValidForwardAddress(const std::optional<IPAddress>& nh) const;
 
     virtual void addRouterLsa(std::optional<uint32_t> id, RefreshInfo& refresh, bool fullRefresh = false);
     virtual void addNetworkLsa(const OspfInterface& iface, RefreshInfo& refresh);

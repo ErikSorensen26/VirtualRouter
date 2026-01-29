@@ -5,13 +5,14 @@
 
 #include "RouteSource.hpp"
 #include <IPAddress.hpp>
+#include <optional>
 
 #define MAX_NEXTHOP 8
 
 template <typename AddrType>
 struct NextHopPath
 {
-    AddrType nextHop;
+    std::optional<AddrType> nextHop;
     uint32_t iface;
     uint32_t weight;
 };
@@ -25,9 +26,9 @@ struct RibEntry
     uint8_t length;
     RouteSource source;
     uint32_t processId;
-    uint8_t topoId;
     uint8_t adminDistance;
     uint64_t metric;
+    uint32_t tag = 0;
     void* topInfo = nullptr;
 
     NextHopPath<AddrType> nextHops[MAX_NEXTHOP];
@@ -45,9 +46,32 @@ struct RibEntry
             return false;
 
         for (uint8_t i = 0; i < nextHopCount; ++i)
-            if (nextHops[i].nextHop == nhAddr && nextHops[i].iface == iface)
+        {
+            auto& nextHop = nextHops[i];
+            if (!nextHop.nextHop.has_value() && nextHop.iface == iface)
+            {
+                nextHop.nextHop = nhAddr;
+                return true;
+            }
+            else if (nextHop.nextHop.has_value() && nextHop.nextHop.value() == nhAddr && nextHop.iface == iface)
+            {
                 return false;
+            }
+        }
+
         nextHops[nextHopCount++] = { nhAddr, iface, weight };
+        return true;
+    }
+
+    bool addNextHop(uint32_t iface, uint32_t weight = 1) noexcept
+    {
+        if (nextHopCount >= MAX_NEXTHOP)
+            return false;
+
+        for (uint8_t i = 0; i < nextHopCount; ++i)
+            if (nextHops[i].iface == iface)
+                return false;
+        nextHops[nextHopCount++] = { std::nullopt, iface, weight };
         return true;
     }
 
@@ -56,7 +80,6 @@ struct RibEntry
           length(other.length),
           source(other.source),
           processId(other.processId),
-          topoId(other.topoId),
           adminDistance(other.adminDistance),
           metric(other.metric),
           topInfo(other.topInfo),
@@ -75,7 +98,6 @@ struct RibEntry
         length = other.length;
         source = other.source;
         processId = other.processId;
-        topoId = other.topoId;
         adminDistance = other.adminDistance;
         metric = other.metric;
         topInfo = other.topInfo;

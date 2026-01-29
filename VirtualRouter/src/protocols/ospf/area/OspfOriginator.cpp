@@ -2,18 +2,18 @@
 
 #include "OspfOriginator.h"
 #include <OspfArea.h>
-#include <OspfTopology.h>
 #include <OspfProcess.h>
 #include <OspfInterface.h>
 #include <OspfNeighbor.h>
 #include <TimeManager.h>
+#include <VirtualRouter.h>
 
 #include <Interface.h>
 #include <InterfaceType.hpp>
 
 namespace OSPF
 {
-OspfOriginator::OspfOriginator(OspfArea& a) : area(a), tmgr(area.topology().process.tmgr) {}
+OspfOriginator::OspfOriginator(OspfArea& a) : area(a), tmgr(area.process().tmgr) {}
 
 OspfOriginator::~OspfOriginator()
 {
@@ -51,7 +51,7 @@ void OspfOriginator::handleRefreshTimeout(uint32_t tid)
     constexpr uint16_t asbrType = std::is_same_v<typename Policy::InterRouterLsa, InterAreaRouterLsa>
         ? OSPFV2_LSA_SUM_ASBR : OSPFV3_LSA_INTER_AREA_ROUTER;
 
-    auto& ifaceMgr = area.topology().process.getIfaceMgr();
+    auto& ifaceMgr = area.process().getIfaceMgr();
     RefreshInfo info{.isRefresh = true, .activeTimerId = tid};
 
     bool processRouter = false;
@@ -184,9 +184,11 @@ void OspfOriginator::processReoriginatedLsa(const LsaKey& key, LsaBody& body, bo
 
     if constexpr (std::is_same_v<Policy, PolicyV2>)
     {
-        uint8_t options = static_cast<uint8_t>(area.getFlags().getFlags());
+        uint32_t options = area.getFlags().getFlags();
+        if (key.linkStateId == OSPFV2_LSA_NSSA && !area.getConfigs().get<Config::OspfArea::NSSA_ONLY>().load())
+            InterfaceFlagManager::setPropagate(options, true);
         InterfaceFlagManager::setDemandCircuits(options, true);
-        ctx.header.options = options;
+        ctx.header.options = static_cast<uint8_t>(options);
     }
     ctx.selfOriginatedKey = true;
     ctx.header.age = expire ? OSPF_MAX_AGE : 0;
@@ -212,6 +214,32 @@ void OspfOriginator::processOriginatedLsa(const LsaKey& key, LsaBody& body, Refr
         refresh->keys.push_back(key);
     else
         lsaRefreshes.erase(key);
+}
+
+bool OspfOriginator::isValidForwardAddress(const std::optional<IPAddress>& nh) const
+{
+    if (!nh.has_value() || area.getConfigs().get<Config::OspfArea::NSSA_SUPPRESS_FA>().load())
+        return false;
+
+    const OspfInterface* iface = area.process().getIfaceMgr().getInterfaceByAddress(nh.value());
+    if (!iface) return false;
+
+    if (iface->getAreaId() != area.areaId)
+        return false;
+
+    auto& rib = area.process().routingInstance->routingTable;
+    if (nh->isV6)
+    {
+        if (auto* entry = rib.lookup(readU128(nh->raw)); !entry || entry->source != RouteSource::OSPF_INTRA)
+            return false;
+    }
+    else
+    {
+        if (auto* entry = rib.lookup(readU32(nh->raw)); !entry || entry->source != RouteSource::OSPF_INTRA)
+            return false;
+    }
+
+    return true;
 }
 
 template void OspfOriginator::startRefresh<PolicyV2>(RefreshInfo&);

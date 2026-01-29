@@ -9,9 +9,6 @@
 
 namespace Config
 {
-template <typename...>
-class RegistryDatabase;
-
 template <typename T>
 concept IsSubRegistry = requires
     {
@@ -105,16 +102,16 @@ public:
 
     ReferenceContainer() = default;
 
-    ReferenceContainer(const Reference<T>& ref)
-        : ref(ref),
-          state(MaskState::SET),
-          base(nullptr)
+    explicit ReferenceContainer(const Reference<T>& parent) noexcept
+        : ref(std::nullopt),
+          state(MaskState::INHERIT),
+          base(&parent)
     {}
 
     explicit ReferenceContainer(const ReferenceContainer& parent) noexcept
         : ref(std::nullopt),
           state(MaskState::INHERIT),
-          base(&parent)
+          base(&parent.local())
     {}
 
     bool bound() const noexcept
@@ -170,7 +167,7 @@ private:
 
     std::optional<Reference<T>> ref{std::nullopt};
     MaskState state{MaskState::INHERIT};
-    const ReferenceContainer* base{nullptr};
+    const Reference<T>* base{nullptr};
 };
 }
 

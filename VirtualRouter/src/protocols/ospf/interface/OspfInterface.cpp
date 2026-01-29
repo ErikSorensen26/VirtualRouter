@@ -4,7 +4,6 @@
 #include <OspfProcess.h>
 #include <Interface.h>
 #include <OspfNeighbor.h>
-#include <OspfTopology.h>
 #include <OspfFlagManager.h>
 #include <VirtualRouter.h>
 
@@ -21,20 +20,26 @@ auto getIfaceAddr(Interface& iface, AddressFamily af) -> IPPrefix
 namespace OSPF
 {
 OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, OspfInterfaceId& id)
-    : process(proc),
-      topology(&proc.insureTopology(iface.configs.tid.load(std::memory_order_relaxed))),
-      area(&(topology.load()->insureArea(id.area))),
-      id(id),
+    : id(id),
       interfaceId(iface.configs.key),
-      interfaceAddress(getIfaceAddr(iface, process.getAF())),
+      interfaceAddress(getIfaceAddr(iface, proc.getAF())),
       dispatcher(proc.isV3 ? new PacketDispatcherV3(*this, configs) : PacketDispatcherV2(*this, configs)),
+      process(proc),
+      area(process.insureArea(id.area)),
       flags(*this),
       lsaFlags(*this),
       ntable(*this),
       tmgr(proc.tmgr, *this),
-      iface(iface)
+      iface(iface),
+    configs([]() -> Config::Reference<Config::OspfInterfaceRegistry> {
+        // TODO
+    }()),
+    baseConfigs([]() -> Config::Reference<Config::OspfInterfaceBaseRegistry> {
+        // TODO
+    }())
 {
     syncConfigs();
+    calculateCost();
     tmgr.startHello();
 }
 
@@ -43,7 +48,7 @@ OspfInterface::~OspfInterface()
     uint32_t pid = process.getProcId();
     AddressFamily af = process.getAF();
 
-    // TODO: clear connected
+    // TODO: expire originated in lsdb
 
     if (iface.ospfInterfaceList.find(pid) != iface.ospfInterfaceList.end())
     {
@@ -56,6 +61,31 @@ OspfInterface::~OspfInterface()
     }
 
     delete dispatcher;
+}
+
+void OspfInterface::calculateCost()
+{
+    uint16_t oldCost = cost.load(std::memory_order_relaxed);
+    uint16_t newCost{0};
+
+    auto& configuredCost = configs->get<Config::OspfInterface::COST>();
+    if (configuredCost.hasValue())
+    {
+        newCost = configuredCost.load();
+    }
+    else
+    {
+        uint32_t referenceBw = process.getConfigs().get<Config::Ospf::REFERENCE_BANDWIDTH>().load();
+        uint32_t interfaceBw = iface.configs.bandwidth.load(std::memory_order_relaxed);
+        newCost = static_cast<uint16_t>(referenceBw / interfaceBw);
+    }
+    
+    cost.store(newCost, std::memory_order_release);
+
+    if (oldCost != newCost)
+    {
+        area.getOriginator().updateInterface(interfaceId);
+    }
 }
 
 bool OspfInterface::setDr(uint32_t candDr)
@@ -111,7 +141,7 @@ void OspfInterface::election()
     }
 
     // Add self
-    uint32_t selfRid = getArea().topology().process.getRouterId();
+    uint32_t selfRid = getArea().process().getRouterId();
     uint8_t selfPrio = configs->get<Config::OspfInterface::PRIORITY>().load();
     
     if (selfPrio > 0)
@@ -179,6 +209,47 @@ void OspfInterface::election()
 void OspfInterface::syncConfigs()
 {
     opaqueEnabled.store(true, std::memory_order_release);
+    syncTimers();
+}
+
+void OspfInterface::syncTimers()
+{
+    auto& helloTimer = configs->get<Config::OspfInterface::HELLO_INTERVAL>();
+    auto& helloMultiplier = configs->get<Config::OspfInterface::HELLO_MULTIPLIER>();
+    auto& deadTimer = configs->get<Config::OspfInterface::DEAD_INTERVAL>();
+
+    if (helloMultiplier.hasValue())
+    {
+        helloTime.store(std::chrono::seconds(1) / helloMultiplier.load(), std::memory_order_release);
+        deadTime.store(std::chrono::seconds(1), std::memory_order_release);
+        return;
+    }
+    else
+    {
+        uint16_t ht;
+        uint16_t dt;
+
+        if (helloTimer.hasValue())
+        {
+            ht = helloTimer.load();
+        }
+        else
+        {
+            auto net = configs->get<Config::OspfInterface::NETWORK>().load();
+            if (net == NetworkType::NON_BROADCAST || net == NetworkType::POINT_TO_MULTIPOINT_BROADCAST || net == NetworkType::POINT_TO_MULTIPOINT)
+                ht = OSPF_MU_HELLO_TIME;
+            else
+                ht = OSPF_HELLO_TIME;
+        }
+
+        if (deadTimer.hasValue())
+            dt = deadTimer.load();
+        else
+            dt = ht * 4;
+
+        helloTime.store(std::chrono::seconds(ht), std::memory_order_release);
+        deadTime.store(std::chrono::seconds(dt), std::memory_order_release);
+    }
 }
 
 void OspfInterface::setPassiveMode(bool passive)
@@ -205,6 +276,6 @@ void OspfInterface::setPassiveMode(bool passive)
 
 OspfArea& OspfInterface::getArea()
 {
-    return *area.load(std::memory_order_relaxed);
+    return area;
 }
 }

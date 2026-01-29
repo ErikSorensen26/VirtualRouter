@@ -12,6 +12,9 @@
 
 namespace Config
 {
+template <typename...>
+class RegistryDatabase;
+
 template <typename T>
 class Reference;
 
@@ -459,6 +462,9 @@ public:
     }
 
 private:
+    template <typename...>
+    friend class RegistryDatabase;
+
     type children{};
     MaskState state{MaskState::INHERIT};
     const OwnedListField* base{nullptr};
@@ -479,6 +485,16 @@ template <typename T>
 concept IsRefContainer =
     IsFieldBase<T> &&
     std::derived_from<T, RefContainerFieldFlag>;
+
+template <typename T>
+concept IsIndexedRefContainer =
+    IsRefContainer<T> &&
+    T::hasRefIndex;
+
+template <typename T>
+concept IsUnindexedRefContainer =
+    IsRefContainer<T> &&
+    !T::hasRefIndex;
 
 template <typename T>
 concept IsValueField =

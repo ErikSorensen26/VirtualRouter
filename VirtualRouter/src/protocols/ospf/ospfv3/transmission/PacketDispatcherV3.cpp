@@ -6,13 +6,32 @@
 #include <PacketBuilder.hpp>
 #include <OspfArea.h>
 #include <IPPacket.h>
+#include <OspfProcess.h>
+#include <VirtualRouter.h>
+
+#include <OspfInterfaceRegistry.hpp>
 
 namespace OSPF
 {
 PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& cfgs)
     : PacketDispatcher(iface),
-      baseConfigs(cfgs),
-      configs(baseConfigs->get<Config::OspfInterfaceBase::BASE>().get())
+    baseConfigs(cfgs),
+    configs([&cfgs, &iface]() {
+        auto& registry = iface.getProcess().routingInstance->getRegistry();
+        auto& processConfigs = cfgs->get<Config::OspfInterfaceBase::PROCESS_CONFIGS>();
+        uint32_t procId = iface.getProcess().getProcId();
+        auto key = Config::generateOspfAfInterfaceKey(
+            iface.interfaceId, procId, AddressFamily::NONE, iface.getProcess().isV3);
+        auto afBase = registry.emplaceBack(processConfigs, procId, key);
+        auto base = registry.emplace(afBase->get<Config::OspfInterfaceAddressFamily::BASE>(), cfgs->get<Config::OspfInterfaceBase::BASE>().local(), key);
+        auto af = iface.getProcess().getAF();
+
+        auto afKey = Config::generateOspfAfInterfaceKey(iface.interfaceId, procId, af, iface.getProcess().isV3);
+        auto buh = registry.emplace(afBase->get<Config::OspfInterfaceAddressFamily::IPV4>(), afKey);
+        return af == AddressFamily::IPv4
+            ? registry.emplace(afBase->get<Config::OspfInterfaceAddressFamily::IPV4>(), base, afKey)
+            : registry.emplace(afBase->get<Config::OspfInterfaceAddressFamily::IPV6>(), base, afKey);
+    }())
 {}
 
 bool PacketDispatcherV3::setupDbd(Neighbor& neighbor, Ospfv3Header& pkt)

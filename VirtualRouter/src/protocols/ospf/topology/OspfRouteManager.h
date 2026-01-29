@@ -12,7 +12,7 @@ struct IPAddress;
 namespace OSPF
 {
 class OspfArea;
-class Topology;
+class OspfProcess;
 
 struct ExtRec
 {
@@ -51,9 +51,9 @@ namespace RouteManager
     void deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::pair<IPPrefix, OspfPath>>& pathList, OspfArea& area);
     
     template<typename Policy>
-    std::pair<IPPrefix, std::optional<OspfPath>> deriveExternalRoute(Topology& area, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec);
+    std::pair<IPPrefix, std::optional<OspfPath>> deriveExternalRoute(OspfProcess& area, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec);
     template<typename Policy>
-    std::vector<std::pair<IPPrefix, OspfPath>> deriveExternalRoutes(Topology& area);
+    std::vector<std::pair<IPPrefix, OspfPath>> deriveExternalRoutes(OspfProcess& area);
 }
 }
 

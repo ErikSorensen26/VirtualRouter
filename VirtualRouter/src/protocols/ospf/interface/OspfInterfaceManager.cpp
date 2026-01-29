@@ -1,7 +1,6 @@
 // OspfInterfaceManager.cpp
 
 #include "OspfInterfaceManager.h"
-#include <OspfTopology.h>
 #include "OspfInterface.h"
 #include <OspfProcess.h>
 #include <Functions.h>
@@ -21,6 +20,15 @@ OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     if (auto it = ospfInterfaceList.find(id); it != ospfInterfaceList.end())
         return &it->second;
+    return nullptr;
+}
+
+OspfInterface* InterfaceManager::getInterfaceByAddress(const IPAddress& addr)
+{
+    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+    for (auto& [id, iface] : ospfInterfaceList)
+        if (iface.interfaceAddress.v6 == addr.v6)
+            return &iface;
     return nullptr;
 }
 
@@ -57,8 +65,6 @@ OspfInterface& InterfaceManager::createInterface(Interface& interface, OspfInter
 
 void InterfaceManager::refreshInterfaceList()
 {
-    // TODO: eventually clear out unused areas.
-
     // If OspfInterfaceId is 0, then its assumed that this interface exists.
     std::vector<std::pair<OspfInterfaceId, void*>> interfacesToProcess;
 
@@ -68,10 +74,9 @@ void InterfaceManager::refreshInterfaceList()
     {
         std::vector<std::map<OspfInterfaceId, OspfInterface>::node_type> interfacesToRemove;
 
-        // Lock global interface/topology state
+        // Lock global interface state
         std::shared_lock<std::shared_mutex> sysLock(process.routingInstance->interfaceMutex);
         std::unique_lock<std::shared_mutex> lock(interfaceMutex);
-        std::shared_lock<std::shared_mutex> topoLock(process.topologyMu);
 
         // Remove shutdown interfaces
         for (auto it = ospfInterfaceList.begin(); it != ospfInterfaceList.end();)
@@ -89,16 +94,17 @@ void InterfaceManager::refreshInterfaceList()
 
         uint32_t procId = process.getProcId();
 
-        auto isInNetworkRange = [&](uint8_t tid, uint8_t* ip) -> std::optional<uint32_t>
+        auto isInNetworkRange = [&](uint8_t* ip) -> std::optional<uint32_t>
         {
             // Use first area defined that matches.
-            auto& topology = process.insureTopology(tid);
-            topology.getConfigs().get<Config::OspfTopology::NETWORKS>().withRead([&](const auto& net) {
-                for (const auto& [prefix, area] : net)
+            std::optional<uint32_t> area{std::nullopt};
+            process.getConfigs().get<Config::Ospf::NETWORKS>().withRead([&](const auto& networks) {
+                for (const auto& [prefix, a] : networks)
                 {
                     if (Functions::compareNetworkWithIp(prefix.addr, ip, prefix.prefixLength, AddressFamily::IPv4))
                     {
-                        return area;
+                        area = a;
+                        break;
                     }
                 }
             });
@@ -118,7 +124,7 @@ void InterfaceManager::refreshInterfaceList()
             if (!process.isV3)
             {
                 currentAddress = interface->configs.ipv4.getPrimaryPrefix();
-                auto area = isInNetworkRange(interface->configs.tid.load(std::memory_order_relaxed), currentAddress.addr);
+                auto area = isInNetworkRange(currentAddress.addr);
                 if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress(), area.value());
             }
             else
@@ -129,25 +135,14 @@ void InterfaceManager::refreshInterfaceList()
                 if (inRange) key.emplace(id, ipInfo.ospf.enabledProcesses[procId]);
             }
 
-            // Remove or change any interfaces
+            // Remove any invalid interfaces (wrong area or wrong ip)
             for (auto it = ospfInterfaceList.begin(); it != ospfInterfaceList.end();)
             {
-                if (it->second.interfaceId == id)
+                if (!key.has_value() || it->first.area != key.value().area ||
+                    it->second.interfaceAddress != currentAddress)
                 {
-                    uint8_t tid = interface->configs.tid.load(std::memory_order_relaxed);
-                    if (!key.has_value() || it->first.area != key.value().area ||
-                        it->second.interfaceAddress != currentAddress)
-                    {
-                        auto node = ospfInterfaceList.extract(it);
-                        interfacesToRemove.push_back(std::move(node));
-                    }
-                    // Change topology/area (OSPFv2 MTR ONLY)
-                    else if (!process.isV3 && it->second.topology.load(std::memory_order_relaxed)->tid != tid)
-                    {
-                        auto& topology = process.insureTopology(tid);
-                        it->second.topology.store(&topology, std::memory_order_relaxed);
-                        it->second.area.store(&topology.insureArea(key->area), std::memory_order_relaxed);
-                    }
+                    auto node = ospfInterfaceList.extract(it);
+                    interfacesToRemove.push_back(std::move(node));
                 }
             }
 
