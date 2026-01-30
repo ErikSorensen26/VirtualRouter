@@ -23,7 +23,9 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Refere
     : id(id),
       interfaceId(iface.configs.key),
       interfaceAddress(getIfaceAddr(iface, proc.getAF())),
-      dispatcher(proc.isV3 ? new PacketDispatcherV3(*this, configs) : PacketDispatcherV2(*this, configs)),
+      dispatcher(proc.isV3
+          ? static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this, configs))
+          : static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this, configs))),
       process(proc),
       area(process.insureArea(id.area)),
       flags(*this),

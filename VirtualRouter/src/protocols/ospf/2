@@ -131,24 +131,7 @@ void OspfOriginatorV2::addExternal(uint32_t asbr, uint32_t lsid, bool remove)
     }
 }
 
-void OspfOriginatorV2::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire)
-{
-    LsaKey key;
-    LsaBody body = SummaryNetworkLsa();
-
-    auto& summary = std::get<SummaryNetworkLsa>(body);
-
-    key.lsaType = OSPFV2_LSA_SUM_NET;
-    key.linkStateId = lsid;
-    key.advertisingRouter = area.process().getRouterId();
-
-    summary.metric = cost;
-    summary.networkMask = prefix.getMask();
-
-    processOriginatedLsa<PolicyV2>(key, body, expire);
-}
-
-void OspfOriginatorV2::originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire)
+std::optional<LsaKey> OspfOriginatorV2::originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire)
 {
     LsaKey key;
     LsaBody body = ExternalLsaV2();
@@ -157,18 +140,38 @@ void OspfOriginatorV2::originateExternal(uint32_t lsid, ExternalOriginateContext
         key.lsaType = OSPFV2_LSA_EXTERNAL;
     else if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
         key.lsaType = OSPFV2_LSA_NSSA;
-    else return; // Stub not supported
+    else return std::nullopt; // Stub not supported
 
     key.advertisingRouter = area.process().getRouterId();
-    key.linkStateId = lsid;
 
     auto& external = std::get<ExternalLsaV2>(body);
+    key.linkStateId = lsid;
     external.networkMask = ctx.prefix.getMask();
     external.metric = expire ? 0x00FFFFFF : ctx.metric;
     external.isType2 = ctx.metricIsE2;
     external.routerTag = ctx.tag;
     if (isValidForwardAddress(ctx.nextHop))
         external.forwardingAddress = readU32(ctx.nextHop.value().raw);
+
+    processOriginatedLsa<PolicyV2>(key, body, expire);
+    return key;
+}
+
+std::optional<LsaKey> OspfOriginatorV2::originateSummary(uint32_t lsid, IPPrefix& prefix, uint32_t cost, bool expire)
+{
+    LsaBody body = SummaryNetworkLsa();
+
+    auto& summary = std::get<SummaryNetworkLsa>(body);
+
+    if (!existing)
+    {
+        key.lsaType = OSPFV2_LSA_SUM_NET;
+        key.linkStateId = readU32(prefix.addr);
+        key.advertisingRouter = area.process().getRouterId();
+    }
+
+    summary.metric = cost;
+    summary.networkMask = prefix.getMask();
 
     processOriginatedLsa<PolicyV2>(key, body, expire);
 }

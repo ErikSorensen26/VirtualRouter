@@ -15,6 +15,9 @@
 #include <OspfRouteManager.h>
 #include <Global.h>
 #include <VirtualRouter.h>
+#include <limits>
+
+#include <OspfRegistry.hpp>
 
 #include "OspfOriginator.h"
 #include <OspfOriginatorV2.h>
@@ -89,6 +92,201 @@ void OspfArea::setFloodReduction(OspfInterface& iface)
     }
 }
 
+void OspfArea::syncRangeConfig()
+{
+    auto& cfgRanges = configs->get<Config::OspfArea::RANGE>();
+    std::unordered_set<IPPrefix> activeRanges;
+
+    {
+        std::lock_guard<std::mutex> lk(rangeMu);
+
+        std::unordered_set<IPPrefix> seen;
+
+        cfgRanges.withRead([&](const std::tuple<IPPrefix, bool, std::optional<uint32_t>>& t)
+        {
+            const auto& [pfx, noAdv, cost] = t;
+            seen.insert(pfx);
+
+            auto& r = ranges[pfx];
+            r.notAdvertise = noAdv;
+            r.costOverride = cost;
+        });
+
+        for (auto it = ranges.begin(); it != ranges.end();)
+        {
+            if (seen.find(it->first) == seen.end())
+                it = ranges.erase(it);
+            else
+                ++it;
+        }
+
+        for (const auto& [r, _] : ranges)
+            activeRanges.insert(r);
+    }
+
+    syncRangeSuppression(activeRanges);
+}
+
+void OspfArea::syncRangeSuppression(const std::unordered_set<IPPrefix>& activeRanges)
+{
+    auto changes = base.getRib().refreshIntraRangeSuppression(areaId, activeRanges);
+    if (base.isV3)
+        base.reoriginateSummaries<PolicyV3>(*this, changes);
+    else
+        base.reoriginateSummaries<PolicyV2>(*this, changes);
+
+    auto intra = base.getRib().getIntraAreaRoutes(areaId);
+
+    syncRangeRuntime(intra);
+}
+
+void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& intraRoutes)
+{
+    struct SummaryAction
+    {
+        uint32_t lsid;
+        IPPrefix pfx;
+        uint32_t metric;
+        bool flush;
+    };
+    struct DiscardAction
+    {
+        IPPrefix pfx;
+        uint32_t metric;
+        bool install;
+    };
+
+    std::vector<SummaryAction> summaryActions;
+    std::vector<DiscardAction> discardActions;
+
+    // If not ABR: withdraw any previously originated range summaries + discards, but do NOT just clear silently.
+    if (!base.isABR())
+    {
+        std::lock_guard<std::mutex> lk(rangeMu);
+
+        // Build withdrawals from existing runtime state
+        for (auto& [pfx, r] : ranges)
+        {
+            if (r.summary.has_value())
+            {
+                summaryActions.push_back({ r.summary.value(), pfx, 0, true });
+                r.summary = std::nullopt;
+            }
+
+            if (r.discardPresent)
+                discardActions.push_back({ pfx, 0, false });
+
+            r.contributorCount = 0;
+            r.computedMetric = 0;
+        }
+    }
+    else
+    {
+        // ABR case: compute contributors and update runtime state
+        std::lock_guard<std::mutex> lk(rangeMu);
+
+        auto rcs = computeRangeContributors(intraRoutes, ranges);
+
+        for (auto& [pfx, r] : ranges)
+        {
+            auto it = rcs.find(pfx);
+            uint32_t count = 0;
+            uint32_t minMetric = 0;
+            if (it != rcs.end())
+            {
+                count = it->second.first;
+                minMetric = it->second.second;
+            }
+
+            const bool active = count > 0;
+            const uint32_t metric = r.costOverride ? *r.costOverride : minMetric;
+
+            const bool shouldAdvertise = active && !r.notAdvertise;
+            const bool shouldDiscard   = active;
+
+            // Summary
+            if (!r.summary.has_value() && shouldAdvertise)
+            {
+                const uint32_t lsid = base.isV3
+                    ? base.monotonicSummaryId.fetch_add(1, std::memory_order_release)
+                    : readU32(pfx.addr);
+
+                r.summary = lsid;
+                summaryActions.push_back({ lsid, pfx, metric, false });
+            }
+            else if (r.summary.has_value() && !shouldAdvertise)
+            {
+                summaryActions.push_back({ r.summary.value(), pfx, 0, true });
+                r.summary = std::nullopt;
+            }
+            else if (r.summary.has_value() && shouldAdvertise && r.computedMetric != metric)
+            {
+                summaryActions.push_back({ r.summary.value(), pfx, metric, false });
+            }
+
+            // Discard (must follow shouldDiscard, not shouldAdvertise)
+            if (r.discardPresent && shouldDiscard)
+                discardActions.push_back({ pfx, metric, true });
+            else if (r.discardPresent && !shouldDiscard)
+                discardActions.push_back({ pfx, 0, false });
+
+            r.contributorCount = count;
+            r.computedMetric = active ? metric : 0;
+        }
+    }
+
+    // Execute actions OUTSIDE rangeMu
+    for (const auto& a : summaryActions)
+        originator.originateSummary(a.lsid, a.pfx, a.metric, a.flush);
+
+    auto& rib = base.getRib();
+    for (const auto& d : discardActions)
+    {
+        if (d.install)
+        {
+            const uint8_t ad = base.getConfigs().get<Config::Ospf::DISCARD_INTERNAL_DISTANCE>().load();
+            rib.installDiscardRoute({ d.pfx, areaId }, d.metric, ad);
+        }
+        else
+        {
+            rib.withdrawDiscardRoute({ d.pfx, areaId });
+        }
+    }
+}
+
+std::unordered_set<IPPrefix> OspfArea::getRanges()
+{
+    std::unordered_set<IPPrefix> rs;
+    std::lock_guard<std::mutex> lk(rangeMu);
+    for (const auto& [pfx, _] : ranges)
+        rs.insert(pfx);
+    return rs;
+}
+
+std::unordered_map<IPPrefix, std::pair<uint32_t, uint32_t>> OspfArea::computeRangeContributors(
+    const std::vector<std::pair<IPPrefix, OspfPath>>& intraAreaRoutes,
+    const std::unordered_map<IPPrefix, OspfAreaRange>& activeRanges)
+{
+    std::unordered_map<IPPrefix, std::pair<uint32_t, uint32_t>> rcs;
+
+    rcs.reserve(activeRanges.size());
+    for (const auto& [pfx, _] : activeRanges)
+        rcs.emplace(pfx, 0, std::numeric_limits<uint32_t>::max());
+
+    for (const auto& [pfx, path] : intraAreaRoutes)
+    {
+        if (path.suppressed || path.discard) continue;
+        if (!activeRanges.contains(pfx))
+            continue;
+
+        auto& r = rcs[pfx];
+        r.first++;
+        r.second = std::min(r.second, static_cast<uint32_t>(path.cost));
+    }
+
+    return rcs;
+}
+
 template<typename Policy>
 void OspfArea::flood()
 {
@@ -130,7 +328,7 @@ std::optional<OspfArea::Result> OspfArea::processLsa(IncomingLsaContext& ctx, Ls
 {
     bool isNssa = type == AreaType::NSSA || type == AreaType::TOTALLY_NSSA;
     if (std::holds_alternative<typename Policy::InterNetworkLsa>(body) &&
-        (type == AreaType::TOTALLY_STUBBY || type == AreaType::TOTALLY_NSSA))
+        (type == AreaType::TOTALLY_STUB || type == AreaType::TOTALLY_NSSA))
         return std::nullopt;
     if (std::holds_alternative<typename Policy::InterRouterLsa>(body) && type != AreaType::NORMAL)
         return std::nullopt;
@@ -157,7 +355,7 @@ std::optional<OspfArea::Result> OspfArea::processLsa(IncomingLsaContext& ctx, Ls
     {
         if (std::holds_alternative<typename Policy::ExternalLsa>(body))
         {
-            base.distributeExternalLsa<Policy>(areaId, ctx, body);
+            base.distributeExternalLsa<Policy>(*this, ctx, body);
         }
         else if (std::holds_alternative<typename Policy::InterNetworkLsa>(body))
         {

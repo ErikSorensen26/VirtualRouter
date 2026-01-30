@@ -86,6 +86,13 @@ struct alignas(16) IPPrefix
 
     IPPrefix() = default;
 
+    IPPrefix(AddressFamily family)
+        : af(family)
+    {
+        v6 = 0;
+        prefixLength = 0;
+    }
+
     IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool maintainAddress = false)
         : af(family) {
         std::memset(addr, 0, 16);

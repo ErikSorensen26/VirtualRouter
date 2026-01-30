@@ -54,6 +54,8 @@ struct OspfPath
     uint64_t cost{};
     uint8_t adminDistance{};
     uint8_t options{};
+    bool discard{false};
+    bool suppressed{false};
     std::vector<OspfNextHop> nextHops{};
 
     friend bool operator==(const OspfPath& a, const OspfPath& b)
@@ -73,6 +75,7 @@ struct OspfRoute
     uint8_t adminDistance{};
     OspfRouteType type{};
     std::optional<uint32_t> area{};
+    bool suppressed{false};
     std::vector<OspfPath> paths{};
 };
 

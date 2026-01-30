@@ -13,7 +13,6 @@
 #include <OspfTopologyTable.h>
 #include <OspfRoutingTable.h>
 #include <OspfRegistry.hpp>
-#include <type_traits>
 
 class VirtualRouter;
 class TimeManager;
@@ -60,9 +59,6 @@ public:
     template<typename Policy>
     void flood();
 
-    std::atomic<bool> isABR = false;
-    std::atomic<bool> isASBR = false;
-
     AddressFamily getAF() { return af; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
@@ -85,6 +81,11 @@ public:
     OspfArea* getArea(uint32_t areaId);
     OspfArea& insureArea(uint32_t areaId);
 
+    void setASBR(bool val);
+    void setABR(bool val);
+    bool isASBR();
+    bool isABR();
+
     const bool isV3;
 
     VirtualRouter* routingInstance = nullptr;
@@ -95,6 +96,10 @@ public:
     std::unordered_map<LsaKey, std::pair<LsaHeader, LsaBody>> externalDb;
     std::atomic<uint32_t> monotonicExternalId{0};
 
+    std::mutex summaryMu;
+    std::unordered_map<IPPrefix, uint32_t> summaryLsids;
+    std::atomic<uint32_t> monotonicSummaryId{0};
+
     TopologyTable table;
 
 private:
@@ -104,6 +109,8 @@ private:
 
     OspfRib rib;
 
+    std::atomic<bool> abr = false;
+    std::atomic<bool> asbr = false;
     std::atomic<uint32_t> rid;
 
     const uint32_t procId;

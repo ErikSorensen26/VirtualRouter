@@ -113,6 +113,8 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
     NhCache nhCache;
     out.reserve(out.size() + spf.confirmedOrder.size());
 
+    auto ranges = area.getRanges();
+
     auto collectIntraAreaPrefixFragments = [&](const LsaKey& refKey) -> std::vector<IntraAreaPrefix>
     {
         std::vector<IntraAreaPrefix> prefixes;
@@ -162,7 +164,11 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                 const uint8_t plen = static_cast<uint8_t>(std::popcount(body.networkMask));
                 const IPPrefix prefix{ key.linkStateId, plen };
 
-                out.emplace_back(prefix, makePath(area.areaId, 0, adminDistance, node.dist, std::move(nextHops), OspfRouteType::INTRA_AREA));
+                out.emplace_back(prefix, makePath(
+                        area.areaId, 0,
+                        adminDistance, node.dist,
+                        std::move(nextHops),
+                        OspfRouteType::INTRA_AREA));
             }
             else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV3>)
             {
@@ -172,7 +178,10 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                 auto prefixes = collectIntraAreaPrefixFragments(refKey);
                 for (const auto& pr : prefixes)
                 {
-                    out.emplace_back(pr.prefix, makePath(area.areaId, pr.options, adminDistance, node.dist + pr.metric, nextHops, OspfRouteType::INTRA_AREA));
+                    out.emplace_back(pr.prefix, makePath(
+                            area.areaId, pr.options,
+                            adminDistance, node.dist + pr.metric,
+                            nextHops, OspfRouteType::INTRA_AREA));
                 }
             }
             continue;
@@ -198,7 +207,10 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                     const uint8_t plen = static_cast<uint8_t>(std::popcount(link.linkData));
                     const IPPrefix prefix{ link.linkId, plen };
                     
-                    out.emplace_back(prefix, makePath(area.areaId, 0, adminDistance, link.metric, nextHops, OspfRouteType::INTRA_AREA));
+                    out.emplace_back(prefix, makePath(
+                            area.areaId, 0,
+                            adminDistance, link.metric,
+                            nextHops, OspfRouteType::INTRA_AREA));
                 }
             }
             else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::RouterLsa>, RouterLsaV3>)
@@ -209,7 +221,10 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                 auto prefixes = collectIntraAreaPrefixFragments(refKey);
                 for (const auto& pr : prefixes)
                 {
-                    out.emplace_back(pr.prefix, makePath(area.areaId, pr.options, adminDistance, pr.metric, nextHops, OspfRouteType::INTRA_AREA));
+                    out.emplace_back(pr.prefix, makePath(
+                            area.areaId, pr.options,
+                            adminDistance, pr.metric,
+                            nextHops, OspfRouteType::INTRA_AREA));
                 }
             }
 
@@ -291,8 +306,6 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
     constexpr uint32_t routerType = std::is_same_v<std::remove_cv_t<typename Policy::InterRouterLsa>, SummaryRouterLsa>
         ? OSPFV2_LSA_SUM_ASBR : OSPFV3_LSA_INTER_AREA_ROUTER;
 
-    std::vector<IPPrefix> prefixes;
-
     lsdb.forEachInType(networkType, [&](const LsaKey& key, const LsaRecord* record)
     {
         if (!record || !std::holds_alternative<typename Policy::InterNetworkLsa>(record->body) || record->header.age == OSPF_MAX_AGE) return;
@@ -340,7 +353,7 @@ static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInter
     for (size_t i = 0; i < r->nextHopCount; i++)
     {
         auto& hop = r->nextHops[i];
-        hops.push_back(OspfNextHop{hop.iface, IPAddress{hop.nextHop}});
+        hops.push_back(OspfNextHop{hop.iface, IPAddress{hop.nextHop.value()}});
     }
 
     return std::make_pair(r->metric, hops);

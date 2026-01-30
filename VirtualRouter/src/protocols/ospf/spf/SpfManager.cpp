@@ -6,7 +6,6 @@
 #include <TimeManager.h>
 #include <OspfArea.h>
 #include <OspfProcess.h>
-#include <OspfTypes.hpp>
 
 #include <RouterLsaV2.hpp>
 #include <NetworkLsaV2.hpp>
@@ -85,23 +84,28 @@ void SpfManager::runSpf()
     // Run Dijkstra on graph
     SpfResult spfRes = SpfEngine::run<Policy>(topo);
 
-    std::vector<std::pair<IPPrefix,OspfPath>> pathList;
+    std::vector<std::pair<IPPrefix, OspfPath>> pathList;
 
     // Look up networks from Dikjstra results
     RouteManager::deriveIntraAreaRoutes<Policy>(spfRes, pathList, area);
     RouteManager::deriveInterAreaRoutes<Policy>(spfRes, pathList, area);
 
-    auto summaryChanges = rib.replaceArea(area.areaId, pathList);
+    auto summaryChanges = rib.replaceArea(area, pathList);
 
     area.process().table.consumeSpfResult(area.areaId, spfRes);
 
-    if (area.process().isABR.load(std::memory_order_relaxed))
+    if (area.process().isABR())
     {
         // Reoriginate intra as inter 
         if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
             area.process().reoriginateSummaries<SummaryNetworkLsa>(area, summaryChanges);
         else
             area.process().reoriginateSummaries<InterAreaPrefixLsa>(area, summaryChanges);
+    }
+
+    {
+        std::lock_guard<std::mutex> lk(spfMu);
+        spfResult = std::move(spfRes);
     }
 }
 

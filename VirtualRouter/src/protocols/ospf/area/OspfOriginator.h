@@ -7,6 +7,7 @@
 #include <LSDB.hpp>
 #include <OspfInterfaceId.hpp>
 #include <RibEntry.hpp>
+#include <OspfTopologyTypes.hpp>
 
 class TimeManager;
 
@@ -34,8 +35,13 @@ public:
     virtual void fullRefresh();
     virtual void updateInterface(uint32_t ifaceId);
     virtual void addExternal(uint32_t asbr, uint32_t lsid, bool expire);
-    virtual void originateExternal(ExternalOriginateContext& ctx);
-    virtual void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa);
+    virtual void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa, bool expire);
+    virtual void addStubDefaultRoute(bool add);
+    virtual void originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire);
+    virtual void originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire = false);
+
+    void nssaDefaultOriginate(bool add);
+    void addDefaultRoute(bool add);
 
     template<typename Policy>
     void processReoriginatedLsa(const LsaKey& key, LsaBody& body, bool refresh = false, bool expire = false);
@@ -58,7 +64,7 @@ protected:
 protected:
     template <typename Policy>
     // Refresh being undefined means this value is expired and no longer needs refreshing.
-    void processOriginatedLsa(const LsaKey& key, LsaBody& body, RefreshInfo* refresh = nullptr);
+    void processOriginatedLsa(const LsaKey& key, LsaBody& body, bool expire, RefreshInfo* refresh = nullptr);
     bool isValidForwardAddress(const std::optional<IPAddress>& nh) const;
 
     virtual void addRouterLsa(std::optional<uint32_t> id, RefreshInfo& refresh, bool fullRefresh = false);
@@ -76,6 +82,9 @@ protected:
 
     std::unordered_map<LsaKey, uint32_t> lsaRefreshes;
     std::unordered_map<uint32_t, std::vector<LsaKey>> refreshTimers;
+    std::optional<LsaKey> nssaDefaultRoute = std::nullopt;
+    std::optional<LsaKey> stubDefaultRoute = std::nullopt;
+    std::optional<LsaKey> defaultRoute = std::nullopt;
 
     // Lsa Storage
     LsaAdvKey lastRouterKey{};

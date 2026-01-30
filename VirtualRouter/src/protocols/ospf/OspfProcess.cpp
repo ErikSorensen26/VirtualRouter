@@ -51,14 +51,43 @@ OspfArea& OspfProcess::insureArea(uint32_t areaId)
     {
         auto a = areas.try_emplace(areaId, *this, areaId); // TODO: maybe add pmr
         if (a.second) areaSize.store(areas.size(), std::memory_order_release);
-        isABR.store(areas.size() > 1 && areas.contains(0), std::memory_order_release);
+        setABR(areas.size() > 1 && areas.contains(0));
     }
     return areas.at(areaId);
+}
+
+void OspfProcess::setASBR(bool val)
+{
+    bool current = asbr.load(std::memory_order_relaxed);
+    if (current == val) return;
+
+    // Refresh default routes
+    for (auto& [id, area] : areas)
+    {
+        area.getOriginator().fullRefresh();
+    }
+}
+
+void OspfProcess::setABR(bool val)
+{
+    bool current = abr.load(std::memory_order_relaxed);
+    if (current == val) return;
+}
+
+bool OspfProcess::isASBR()
+{
+
+}
+
+bool OspfProcess::isABR()
+{
+
 }
 
 template <typename Policy>
 void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, LsaBody& body)
 {
+    bool expire = ctx.header.age == OSPF_MAX_AGE;
     {
         std::shared_lock<std::shared_mutex> lock(areaMu);
         for (auto& [targetAreaId, targetArea] : areas)
@@ -71,7 +100,7 @@ void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaC
                  sourceArea.type == AreaType::TOTALLY_NSSA) &&
                 targetArea.type == AreaType::NORMAL)
             {
-                targetArea.getOriginator().translateNssaToExternal(ctx.key, body);
+                targetArea.getOriginator().translateNssaToExternal(ctx.key, body, expire);
                 continue;
             }
 
@@ -112,23 +141,23 @@ void OspfProcess::originateExternal(Policy::ExternalLsa& lsa)
     std::shared_lock<std::shared_mutex> lock(areaMu);
     for (auto& [id, area] : areas)
     {
+        if (area.type == AreaType::STUB || area.type == AreaType::TOTALLY_STUB)
+            continue;
+
         LsaKey key{};
+        LsaBody lsaCopy = lsa;
+
         if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
         {
-            // TODO handle nssa fa suppression
             if (area.getConfigs().get<Config::OspfArea::NSSA_NO_REDISTRIBUTION>().load())
                 continue;
 
             if constexpr (std::is_same_v<Policy, PolicyV3>)
-                lsa.options |= (1 << 3); // Enable Propagate bit
+                std::get<ExternalLsaV3>(lsaCopy).options = 0x08;
             key.lsaType = Policy::NssaLsa;
         }
         if (area.type == AreaType::NORMAL)
-        {
-            if constexpr (std::is_same_v<Policy, PolicyV3>)
-                lsa.options &= ~(1 << 3); // Clear Propagate bit
             key.lsaType = OSPFV2_LSA_EXTERNAL;
-        }
         else continue; // Stub Areas do not allow external LSAs
 
         area.getOriginator().processOriginatedLsa<Policy>(key, lsa);
@@ -146,9 +175,11 @@ void OspfProcess::flood()
 template <typename Policy>
 void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList)
 {
-    if (!isABR.load(std::memory_order_relaxed) || areaSize.load(std::memory_order_relaxed) == 1) return;
+    if (!isABR() || areaSize.load(std::memory_order_relaxed) == 1) return;
 
     std::vector<std::pair<LsaKey, LsaBody>> networks;
+
+    std::lock_guard<std::mutex> lock(summaryMu);
 
     for (const auto& path : pathList)
     {
@@ -175,13 +206,21 @@ void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRou
             network.options = path.options;
 
             key.advertisingRouter = getRouterId();
-            key.linkStateId = readU32(path.prefix.addr);
+            if (auto it = summaryLsids.find(path.prefix); it != summaryLsids.end())
+            {
+                key.linkStateId = it->second;
+            }
+            else
+            {
+                key.linkStateId = monotonicSummaryId.fetch_add(1, std::memory_order_release);
+                summaryLsids.emplace(path.prefix, key.linkStateId);
+            }
+
             key.lsaType = OSPFV3_LSA_INTER_AREA_PREFIX;
         }
     }
 
     {
-        std::shared_lock<std::shared_mutex> lock(areaMu);
         uint32_t sourceAreaId = sourceArea.areaId;
 
         auto processLsas = [&](OspfArea& a)
@@ -192,6 +231,7 @@ void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRou
 
         if (sourceAreaId == 0) // Transit area reoriginates to all other normal areas.
         {
+            std::shared_lock<std::shared_mutex> lk(areaMu);
             for (auto& [id, area] : areas)
             {
                 if (id == 0) continue;
@@ -207,8 +247,8 @@ void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRou
     }
 }
 
-template void OspfProcess::distributeExternalLsa<PolicyV2>(uint32_t, IncomingLsaContext&, LsaBody&);
-template void OspfProcess::distributeExternalLsa<PolicyV3>(uint32_t, IncomingLsaContext&, LsaBody&);
+template void OspfProcess::distributeExternalLsa<PolicyV2>(const OspfArea&, IncomingLsaContext&, LsaBody&);
+template void OspfProcess::distributeExternalLsa<PolicyV3>(const OspfArea&, IncomingLsaContext&, LsaBody&);
 
 template void OspfProcess::flood<PolicyV2>();
 template void OspfProcess::flood<PolicyV3>();

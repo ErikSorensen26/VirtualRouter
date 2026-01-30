@@ -19,8 +19,10 @@ public:
     void fullRefresh() override;
     void updateInterface(uint32_t ifaceId) override;
     void addExternal(uint32_t asbr, uint32_t lsid, bool remove) override;
-    void originateExternal(ExternalOriginateContext& ctx) override;
-    void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa) override;
+    void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa, bool expire) override;
+    void addStubDefaultRoute(bool add) override;
+    void originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire) override;
+    void originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire) override;
 
 protected:
     void addRouterLsa(std::optional<uint32_t> ifaceId, RefreshInfo& refresh, bool fullRefresh = false) override;

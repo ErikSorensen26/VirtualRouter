@@ -63,7 +63,7 @@ struct RibEntry
         return true;
     }
 
-    bool addNextHop(uint32_t iface, uint32_t weight = 1) noexcept
+    bool addNextHopInterface(uint32_t iface, uint32_t weight = 1) noexcept
     {
         if (nextHopCount >= MAX_NEXTHOP)
             return false;

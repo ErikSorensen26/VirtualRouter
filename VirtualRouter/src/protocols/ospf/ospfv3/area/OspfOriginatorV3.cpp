@@ -11,12 +11,24 @@
 
 namespace OSPF
 {
-OspfOriginatorV3::OspfOriginatorV3(OspfArea& area) : OspfOriginator(area) {}
+OspfOriginatorV3::OspfOriginatorV3(OspfArea& area) : OspfOriginator(area)
+{
+    fullRefresh();
+}
 
 void OspfOriginatorV3::fullRefresh()
 {
     RefreshInfo info{.isRefresh = true};
     addRouterLsa(std::nullopt, info, true);
+
+    if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
+        nssaDefaultOriginate(area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load());
+    else
+        nssaDefaultOriginate(false);
+    if (area.type == AreaType::STUB || area.type == AreaType::TOTALLY_STUB)
+        addStubDefaultRoute(true);
+    else
+        addStubDefaultRoute(false);
     
     if (area.type == AreaType::NORMAL)
         for (const auto& asbr : asbrLsas)
@@ -125,7 +137,7 @@ void OspfOriginatorV3::addRouterLsa(std::optional<uint32_t> ifaceId, RefreshInfo
             continue;
     
         LsaBody bodyCpy = newBody;
-        processOriginatedLsa<PolicyV3>(key, bodyCpy, &refresh);
+        processOriginatedLsa<PolicyV3>(key, bodyCpy, false, &refresh);
     }
 
     for (auto& [lsid, oldLsa] : lastRouterLsas)
@@ -270,7 +282,7 @@ void OspfOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBod
             oldLsa.prefixes == newLsa.prefixes)
             continue;
 
-        processOriginatedLsa<PolicyV3>(key, newBody, &refresh);
+        processOriginatedLsa<PolicyV3>(key, newBody, false, &refresh);
     }
 
     for (auto& [lsid, oldLsa] : lastRouterPrefixes)
@@ -313,7 +325,7 @@ void OspfOriginatorV3::addNetworkLsa(const OspfInterface& iface, RefreshInfo& re
 
     networkLsas[iface.id] = LsaState{key, lsa};
 
-    processOriginatedLsa<PolicyV3>(key, lsa, &refresh); 
+    processOriginatedLsa<PolicyV3>(key, lsa, false, &refresh); 
     addNetworkPrefixLsa(key, iface, refresh);
 }
 
@@ -435,7 +447,7 @@ void OspfOriginatorV3::addNetworkPrefixLsa(LsaKey& key, const OspfInterface& ifa
             continue;
 
         LsaBody bodyCpy = newBody;
-        processOriginatedLsa<PolicyV3>(intraKey, bodyCpy, &refresh);
+        processOriginatedLsa<PolicyV3>(intraKey, bodyCpy, false, &refresh);
     }
 
     for (auto& [lsid, oldLsa] : lastIt->second)
@@ -451,7 +463,7 @@ void OspfOriginatorV3::addNetworkPrefixLsa(LsaKey& key, const OspfInterface& ifa
     lastIt->second.swap(newLsas);
 }
 
-void OspfOriginatorV3::originateExternal(ExternalOriginateContext& ctx)
+void OspfOriginatorV3::originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire)
 {
     LsaKey key;
     LsaBody body = ExternalLsaV3();
@@ -464,15 +476,13 @@ void OspfOriginatorV3::originateExternal(ExternalOriginateContext& ctx)
     else if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
     {
         key.lsaType = OSPFV3_LSA_NSSA_EXTERNAL;
-        if (!area.getConfigs().get<Config::OspfArea::NSSA_ONLY>().load())
-            external.options ^= 0x08; // Set P-bit
+        external.options ^= 0x08; // Set P-bit
     }
     else return; // Stub not supported
 
     key.advertisingRouter = area.process().getRouterId();
+    key.linkStateId = lsid;
 
-    key.linkStateId = area.process().monotonicExternalId.fetch_add(1, std::memory_order_release);
-    external.metric = ctx.metric;
     external.isType2 = ctx.metricIsE2;
     external.prefix = ctx.prefix;
     external.referencedLsType = 0;
@@ -481,11 +491,33 @@ void OspfOriginatorV3::originateExternal(ExternalOriginateContext& ctx)
     if (ctx.tag != 0)
         external.routeTag = ctx.tag;
 
-    processOriginatedLsa<PolicyV3>(key, body);
+    processOriginatedLsa<PolicyV3>(key, body, expire);
 }
 
-void OspfOriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody& body7)
+void OspfOriginatorV3::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire)
 {
+    LsaKey key;
+    LsaBody body = IntraAreaPrefixLsa();
+
+    auto& summary = std::get<InterAreaPrefixLsa>(body);
+
+    key.lsaType = OSPFV2_LSA_SUM_NET;
+    key.linkStateId = lsid;
+    key.advertisingRouter = area.process().getRouterId();
+
+    summary.metric = cost;
+    summary.options = 0;
+    summary.prefix = prefix;
+
+    processOriginatedLsa<PolicyV3>(key, body, expire);
+}
+
+void OspfOriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody& body7, bool expire)
+{
+    if (std::get<ExternalLsaV3>(body7).prefix.prefixLength == 0 && std::get<ExternalLsaV3>(body7).prefix.v6 == 0 &&
+        !area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ONLY>().load())
+        return;
+
     LsaKey key5;
     LsaBody body5 = body7;
 
@@ -495,25 +527,51 @@ void OspfOriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody
     key5.linkStateId = key7.linkStateId;
     key5.advertisingRouter = area.process().getRouterId();
 
-    auto& areaConfigs = area.getConfigs();
-    auto& metric = areaConfigs.get<Config::OspfArea::NSSA_METRIC>();
-    auto& mtype  = areaConfigs.get<Config::OspfArea::NSSA_METRIC_TYPE>();
-
-    if (metric.hasValue())
-        ext5.metric = metric.load();
-    if (mtype.hasValue())
-        ext5.isType2 = mtype.load();
-
     ext5.options &= ~0x08;
     if (ext5.forwardingAddress.has_value() && !isValidForwardAddress(ext5.forwardingAddress))
         ext5.forwardingAddress.reset();
 
-    processOriginatedLsa<PolicyV3>(key5, body5);
+    processOriginatedLsa<PolicyV3>(key5, body5, expire);
+}
+
+void OspfOriginatorV3::addStubDefaultRoute(bool add)
+{
+    if (area.type != AreaType::STUB && area.type != AreaType::TOTALLY_STUB)
+        return;
+    if (stubDefaultRoute.has_value() == add)
+        return;
+    if (!area.process().isABR() && add)
+    {
+        if (stubDefaultRoute)
+            addStubDefaultRoute(false);
+        return;
+    }
+
+    LsaBody body = InterAreaPrefixLsa();
+
+    auto& summary = std::get<InterAreaPrefixLsa>(body);
+
+    if (!stubDefaultRoute.has_value())
+    {
+        LsaKey key;
+        key.lsaType = OSPFV2_LSA_SUM_NET;
+        key.linkStateId = 0;
+        key.advertisingRouter = area.process().getRouterId();
+        stubDefaultRoute = key;
+    }
+
+    summary.metric = area.getConfigs().get<Config::OspfArea::DEFAULT_COST>().load();
+    summary.options = 0;
+    summary.prefix = IPPrefix{area.process().getAF()};
+
+    processOriginatedLsa<PolicyV3>(stubDefaultRoute.value(), body, !add);
+
+    if (!add) stubDefaultRoute.reset();
 }
 
 void OspfOriginatorV3::expire(LsaKey& key, LsaBody& lsa)
 {
-    processOriginatedLsa<PolicyV3>(key, lsa);
+    processOriginatedLsa<PolicyV3>(key, lsa, true);
     if (std::holds_alternative<IntraAreaPrefixLsa>(lsa))
         prefixLsidQueue.push_back(key.linkStateId); // Set id available
     else if (std::holds_alternative<RouterLsaV3>(lsa))
@@ -537,7 +595,7 @@ void OspfOriginatorV3::addAsbrLsa(uint32_t asbr, RefreshInfo& refresh)
         return;
 
     asbrLsas[asbr] = LsaState{key, lsa};
-    processOriginatedLsa<PolicyV3>(key, lsa, &refresh);
+    processOriginatedLsa<PolicyV3>(key, lsa, false, &refresh);
 }
 
 void OspfOriginatorV3::removeNetworkLsa(uint32_t ifaceId)
@@ -546,7 +604,7 @@ void OspfOriginatorV3::removeNetworkLsa(uint32_t ifaceId)
     uint32_t selfRid = area.process().getRouterId();
     auto it = networkLsas.find(id);
     if (it == networkLsas.end()) return;
-    processOriginatedLsa<PolicyV3>(it->second.key, it->second.lastLsa, nullptr);
+    processOriginatedLsa<PolicyV3>(it->second.key, it->second.lastLsa, true, nullptr);
     networkLsas.erase(it);
 
     auto pit = std::find_if(lastNetworkPrefixes.begin(), lastNetworkPrefixes.end(),

@@ -77,6 +77,22 @@ public:
         LsaRecord* record{nullptr};
     };
 
+    struct OspfAreaRange
+    {
+        // Config
+        bool notAdvertise;
+        std::optional<uint32_t> costOverride;
+
+        // Runtime
+        uint32_t contributorCount = 0;
+        uint32_t computedMetric = 0;
+
+        std::optional<uint32_t> summary = std::nullopt;
+        bool discardPresent = false;
+
+        std::unordered_set<LsaKey> suppressed;
+    };
+
     explicit OspfArea(OspfProcess& base, uint32_t area, std::pmr::memory_resource* mr = std::pmr::get_default_resource());
 
     // Getters
@@ -96,6 +112,7 @@ public:
     // Flooding
     template<typename Policy>
     void flood();
+    void injectDefaultStubRoute();
     bool hasPendingFlood() const noexcept { return !fq.empty(); }
     void send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
     std::vector<std::pair<FloodInfo, LsaRecordRef>> tryDequeueFlood() { return fq.tryDequeueBatch(); }
@@ -108,6 +125,13 @@ public:
     void processExternalLsa(IncomingLsaContext& ctx, LsaBody& body);
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
+
+    // Range
+    void syncRangeConfig();
+    void syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& pathList);
+    void syncRangeSuppression(const std::unordered_set<IPPrefix>& ranges);
+    void suppressInterAreaPrefix(const IPPrefix& prefix) const;
+    std::unordered_set<IPPrefix> getRanges();
 
     // Other
     void clear();
@@ -125,6 +149,9 @@ protected:
 
     Config::Reference<Config::OspfAreaRegistry> configs;
 
+    std::mutex rangeMu;
+    std::unordered_map<IPPrefix, OspfAreaRange> ranges;
+
     LsdbTable db;
     FloodQueue fq;
     OspfProcess& base;
@@ -137,6 +164,13 @@ private:
 
     void enqueueFlood(LsaRecordRef& record, FloodInfo info);
     void enqueueFlood(LsaRecordRef&& record, FloodInfo info);
+
+    // Ranges
+    std::unordered_map<IPPrefix, std::pair<uint32_t, uint32_t>> computeRangeContributors(const std::vector<std::pair<IPPrefix, OspfPath>>& intraAreaRoutes, const std::unordered_map<IPPrefix, OspfAreaRange>& ranges);
+    template <typename Policy>
+    void applyRange(OspfAreaRange& r);
+    template <typename Policy>
+    void withdrawRange(OspfAreaRange& r);
 
     InstallResult evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaContext& ctx, const LsaBody& body);
     LsaCompareResult compareLsaHeaders(const LsaHeader& a, const LsaHeader& b) const;

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <atomic>
 #include <OspfTypes.hpp>
+#include "SpfTypes.hpp"
 
 class TimeManager;
 
@@ -14,7 +15,6 @@ namespace OSPF
 {
 class OspfArea;
 class OspfRib;
-struct SpfResult;
 
 class SpfManager
 {
@@ -26,6 +26,9 @@ public:
 
     template<typename Policy>
     void onSpfTimer();
+
+    std::mutex spfMu;
+    SpfResult spfResult;
 
 private:
     template<typename Policy>
