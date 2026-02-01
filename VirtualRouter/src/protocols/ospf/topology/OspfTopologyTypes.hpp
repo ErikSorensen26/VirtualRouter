@@ -5,6 +5,7 @@
 
 #include <IPAddress.hpp>
 #include <optional>
+#include <LSDB.hpp>
 
 namespace OSPF
 {
@@ -85,6 +86,16 @@ struct OspfRouteChange
     uint8_t options{};
     uint64_t cost{};
     bool isRemoval{false};
+};
+
+struct ExternalOriginateContext
+{
+    uint32_t lsId;
+    IPPrefix prefix;
+    uint32_t metric;
+    uint32_t tag;
+    std::optional<IPAddress> nextHop;
+    bool metricIsE2; // false = E1, true = E2
 };
 }
 

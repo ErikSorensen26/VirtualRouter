@@ -79,6 +79,22 @@ const OspfRoute* OspfRib::lookup(const IPPrefix& prefix) const
     return &it->second.selected;
 }
 
+bool OspfRib::lpmLookup(const IPAddress& addr, uint32_t area) const
+{
+    std::shared_lock<std::shared_mutex> lock(mutex);
+
+    auto it = areaIndex.find(area);
+    if (it == areaIndex.end())
+        return false;
+
+    for (const IPPrefix& prefix : it->second)
+    {
+        if (prefix.contains(addr))
+            return true;
+    }
+    return false;
+}
+
 std::vector<OspfRouteChange> OspfRib::replaceArea(OspfArea& area, const std::vector<std::pair<IPPrefix, OspfPath>>& paths)
 {
     const uint32_t areaId = area.areaId;

@@ -23,28 +23,20 @@ public:
     OspfOriginator(OspfArea& a);
     ~OspfOriginator();
 
-    struct ExternalOriginateContext
-    {
-        IPPrefix prefix;
-        uint32_t metric;
-        uint32_t tag;
-        std::optional<IPAddress> nextHop;
-        bool metricIsE2; // false = E1, true = E2
-    };
-
+    // Public Originations
     virtual void fullRefresh();
     virtual void updateInterface(uint32_t ifaceId);
     virtual void addExternal(uint32_t asbr, uint32_t lsid, bool expire);
     virtual void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa, bool expire);
     virtual void addStubDefaultRoute(bool add);
-    virtual void originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire);
     virtual void originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire = false);
 
     void nssaDefaultOriginate(bool add);
-    void addDefaultRoute(bool add);
 
     template<typename Policy>
     void processReoriginatedLsa(const LsaKey& key, LsaBody& body, bool refresh = false, bool expire = false);
+    template <typename Policy>
+    void originateExternalLsa(const LsaKey& key, LsaBody& body, bool expire);
 
 protected:
 
@@ -63,14 +55,14 @@ protected:
 
 protected:
     template <typename Policy>
-    // Refresh being undefined means this value is expired and no longer needs refreshing.
     void processOriginatedLsa(const LsaKey& key, LsaBody& body, bool expire, RefreshInfo* refresh = nullptr);
-    bool isValidForwardAddress(const std::optional<IPAddress>& nh) const;
 
+    // Adding
     virtual void addRouterLsa(std::optional<uint32_t> id, RefreshInfo& refresh, bool fullRefresh = false);
     virtual void addNetworkLsa(const OspfInterface& iface, RefreshInfo& refresh);
     virtual void addAsbrLsa(uint32_t asbr, RefreshInfo& refresh);
 
+    // Removing
     virtual void removeNetworkLsa(uint32_t ifaceId);
     virtual void expire(LsaKey& key, LsaBody& body);
 
@@ -80,22 +72,24 @@ protected:
     template <typename Policy>
     void handleRefreshTimeout(uint32_t tid);
 
+    // Refresh timers
     std::unordered_map<LsaKey, uint32_t> lsaRefreshes;
     std::unordered_map<uint32_t, std::vector<LsaKey>> refreshTimers;
-    std::optional<LsaKey> nssaDefaultRoute = std::nullopt;
+    
+    // Default routes
+    std::optional<uint32_t> nssaDefaultRoute = std::nullopt;
     std::optional<LsaKey> stubDefaultRoute = std::nullopt;
-    std::optional<LsaKey> defaultRoute = std::nullopt;
 
-    // Lsa Storage
+    // Lsa Cache Storage
     LsaAdvKey lastRouterKey{};
     std::unordered_map<OspfInterfaceId, LsaState> networkLsas{};
     std::unordered_map<uint32_t, LsaState> asbrLsas{};
     std::unordered_map<uint32_t, std::vector<uint32_t>> externalRoutes{};
 
-    void addRouterLink(LsaBody& router, const OspfInterface& iface, RefreshInfo& info, bool attemptNetLsa = false);
     void processLsa(LsaKey& key, LsaBody& body);
 
     // Links
+    void addRouterLink(LsaBody& router, const OspfInterface& iface, RefreshInfo& info, bool attemptNetLsa = false);
     virtual void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr);
     virtual void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor);
     virtual void addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask = false);

@@ -14,26 +14,6 @@ namespace OSPF
 class OspfArea;
 class OspfProcess;
 
-struct ExtRec
-{
-    IPPrefix prefix{};
-    IPAddress fwd{};
-    uint8_t options{0};
-    uint32_t asbrRid{0};
-    uint32_t metric{0};
-    bool isType2{false};
-};
-
-struct SelState
-{
-    bool set = false;
-    bool isType2 = false;
-    uint64_t installedCost = 0;  // For E2, this is Y; for E1, X+Y
-    uint64_t tieX = 0;           // Only meaningful for E2
-    uint8_t options = 0;
-    std::vector<OspfNextHop> nextHops;
-};
-
 namespace RouteManager
 {
     using NhCache = std::unordered_map<Vertex, std::vector<OspfNextHop>, VertexHash>;
@@ -51,7 +31,7 @@ namespace RouteManager
     void deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::pair<IPPrefix, OspfPath>>& pathList, OspfArea& area);
     
     template<typename Policy>
-    std::pair<IPPrefix, std::optional<OspfPath>> deriveExternalRoute(OspfProcess& area, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec);
+    std::pair<IPPrefix, std::optional<OspfPath>> deriveExternalRoute(OspfProcess& process, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec);
     template<typename Policy>
     std::vector<std::pair<IPPrefix, OspfPath>> deriveExternalRoutes(OspfProcess& area);
 }

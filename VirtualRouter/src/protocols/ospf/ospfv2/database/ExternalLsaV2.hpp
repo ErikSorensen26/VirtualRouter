@@ -17,7 +17,7 @@ struct ExternalLsaV2
     uint32_t metric;
     bool isType2;
     uint32_t forwardingAddress;
-    uint32_t routerTag;
+    uint32_t routeTag;
     
     static std::optional<ExternalLsaV2> build(const uint8_t* buf, uint16_t len)
     {
@@ -32,7 +32,7 @@ struct ExternalLsaV2
         lsa.metric = metricWord & 0x7FFFFFFF;
 
         lsa.forwardingAddress = readU32(buf + 8);
-        lsa.routerTag = readU32(buf + 12);
+        lsa.routeTag = readU32(buf + 12);
 
         return lsa;
     }
@@ -47,7 +47,7 @@ struct ExternalLsaV2
         writeU32(buf + 4, metricWord);
         if (isType2) buf[4] = 0x80;
         writeU32(buf + 8, forwardingAddress);
-        writeU32(buf + 12, routerTag);
+        writeU32(buf + 12, routeTag);
         return true;
     }
 
@@ -63,7 +63,7 @@ struct ExternalLsaV2
         if (isType2) metricWord |= 0x80000000;
         check.addU32(metricWord);
         check.addU32(forwardingAddress);
-        check.addU32(routerTag);
+        check.addU32(routeTag);
     }
 };
 }

@@ -77,22 +77,6 @@ public:
         LsaRecord* record{nullptr};
     };
 
-    struct OspfAreaRange
-    {
-        // Config
-        bool notAdvertise;
-        std::optional<uint32_t> costOverride;
-
-        // Runtime
-        uint32_t contributorCount = 0;
-        uint32_t computedMetric = 0;
-
-        std::optional<uint32_t> summary = std::nullopt;
-        bool discardPresent = false;
-
-        std::unordered_set<LsaKey> suppressed;
-    };
-
     explicit OspfArea(OspfProcess& base, uint32_t area, std::pmr::memory_resource* mr = std::pmr::get_default_resource());
 
     // Getters
@@ -112,7 +96,8 @@ public:
     // Flooding
     template<typename Policy>
     void flood();
-    void injectDefaultStubRoute();
+    template<typename Policy>
+    void scheduleFlood();
     bool hasPendingFlood() const noexcept { return !fq.empty(); }
     void send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
     std::vector<std::pair<FloodInfo, LsaRecordRef>> tryDequeueFlood() { return fq.tryDequeueBatch(); }
@@ -120,18 +105,22 @@ public:
     // Processing
     template <typename Policy>
     std::optional<Result> processLsa(IncomingLsaContext& ctx, LsaBody& body);
+
     template <typename Policy>
     void processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries);
+
     void processExternalLsa(IncomingLsaContext& ctx, LsaBody& body);
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
     // Range
     void syncRangeConfig();
-    void syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& pathList);
-    void syncRangeSuppression(const std::unordered_set<IPPrefix>& ranges);
+    void syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& pathList, bool abrChange = false);
+    void syncRangeSuppression(const std::unordered_set<IPPrefix>& ranges, bool abrChange = false);
     void suppressInterAreaPrefix(const IPPrefix& prefix) const;
     std::unordered_set<IPPrefix> getRanges();
+
+    bool isValidForwardAddress(const IPAddress& h) const;
 
     // Other
     void clear();
@@ -148,6 +137,20 @@ protected:
     std::atomic<uint8_t> options;
 
     Config::Reference<Config::OspfAreaRegistry> configs;
+
+    struct OspfAreaRange
+    {
+        // Config
+        bool notAdvertise;
+        std::optional<uint32_t> costOverride;
+
+        // Runtime
+        uint32_t contributorCount = 0;
+        uint32_t computedMetric = 0;
+
+        std::optional<uint32_t> summary = std::nullopt;
+        bool discardPresent = false;
+    };
 
     std::mutex rangeMu;
     std::unordered_map<IPPrefix, OspfAreaRange> ranges;

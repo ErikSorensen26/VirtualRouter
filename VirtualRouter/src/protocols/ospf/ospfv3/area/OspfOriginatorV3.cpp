@@ -152,7 +152,7 @@ void OspfOriginatorV3::addRouterLsa(std::optional<uint32_t> ifaceId, RefreshInfo
 
     addRouterPrefixLsa(newLsas, refresh);
 
-    lastRouterLsas.swap(newLsas);
+    lastRouterLsas = std::move(newLsas);
 }
 
 void OspfOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBody>>& routerLsas, RefreshInfo& refresh)
@@ -295,7 +295,7 @@ void OspfOriginatorV3::addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBod
         }
     }
 
-    lastRouterPrefixes.swap(newLsas);
+    lastRouterPrefixes = std::move(newLsas);
 }
 
 void OspfOriginatorV3::addNetworkLsa(const OspfInterface& iface, RefreshInfo& refresh)
@@ -460,38 +460,7 @@ void OspfOriginatorV3::addNetworkPrefixLsa(LsaKey& key, const OspfInterface& ifa
         }
     }
 
-    lastIt->second.swap(newLsas);
-}
-
-void OspfOriginatorV3::originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire)
-{
-    LsaKey key;
-    LsaBody body = ExternalLsaV3();
-
-    auto& external = std::get<ExternalLsaV3>(body);
-    external.options = 0;
-
-    if (area.type == AreaType::NORMAL)
-        key.lsaType = OSPFV3_LSA_AS_EXTERNAL;
-    else if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
-    {
-        key.lsaType = OSPFV3_LSA_NSSA_EXTERNAL;
-        external.options ^= 0x08; // Set P-bit
-    }
-    else return; // Stub not supported
-
-    key.advertisingRouter = area.process().getRouterId();
-    key.linkStateId = lsid;
-
-    external.isType2 = ctx.metricIsE2;
-    external.prefix = ctx.prefix;
-    external.referencedLsType = 0;
-    if (isValidForwardAddress(ctx.nextHop))
-        external.forwardingAddress = ctx.nextHop.value();
-    if (ctx.tag != 0)
-        external.routeTag = ctx.tag;
-
-    processOriginatedLsa<PolicyV3>(key, body, expire);
+    lastIt->second = std::move(newLsas);
 }
 
 void OspfOriginatorV3::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire)
@@ -528,7 +497,7 @@ void OspfOriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody
     key5.advertisingRouter = area.process().getRouterId();
 
     ext5.options &= ~0x08;
-    if (ext5.forwardingAddress.has_value() && !isValidForwardAddress(ext5.forwardingAddress))
+    if (ext5.forwardingAddress.has_value() && !area.process().isValidForwardAddress(ext5.forwardingAddress))
         ext5.forwardingAddress.reset();
 
     processOriginatedLsa<PolicyV3>(key5, body5, expire);

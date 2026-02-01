@@ -19,7 +19,6 @@ OspfOriginator::~OspfOriginator()
 {
     nssaDefaultOriginate(false);
     addStubDefaultRoute(false);
-    addDefaultRoute(false);
 
     for (const auto& [tid, _] : refreshTimers)
         tmgr.cancelTimer(tid);
@@ -210,6 +209,12 @@ void OspfOriginator::processReoriginatedLsa(const LsaKey& key, LsaBody& body, bo
 }
 
 template <typename Policy>
+void OspfOriginator::originateExternalLsa(const LsaKey& key, LsaBody& body, bool expire)
+{
+    processOriginatedLsa<Policy>(key, body, expire);
+}
+
+template <typename Policy>
 void OspfOriginator::processOriginatedLsa(const LsaKey& key, LsaBody& body, bool expire, RefreshInfo* refresh)
 {
     processReoriginatedLsa<Policy>(key, body, refresh == nullptr, expire);
@@ -218,32 +223,6 @@ void OspfOriginator::processOriginatedLsa(const LsaKey& key, LsaBody& body, bool
         refresh->keys.push_back(key);
     else
         lsaRefreshes.erase(key);
-}
-
-bool OspfOriginator::isValidForwardAddress(const std::optional<IPAddress>& nh) const
-{
-    if (!nh.has_value() || area.getConfigs().get<Config::OspfArea::NSSA_SUPPRESS_FA>().load())
-        return false;
-
-    const OspfInterface* iface = area.process().getIfaceMgr().getInterfaceByAddress(nh.value());
-    if (!iface) return false;
-
-    if (iface->getAreaId() != area.areaId)
-        return false;
-
-    auto& rib = area.process().routingInstance->routingTable;
-    if (nh->isV6)
-    {
-        if (auto* entry = rib.lookup(readU128(nh->raw)); !entry || entry->source != RouteSource::OSPF_INTRA)
-            return false;
-    }
-    else
-    {
-        if (auto* entry = rib.lookup(readU32(nh->raw)); !entry || entry->source != RouteSource::OSPF_INTRA)
-            return false;
-    }
-
-    return true;
 }
 
 void OspfOriginator::nssaDefaultOriginate(bool add)
@@ -260,53 +239,32 @@ void OspfOriginator::nssaDefaultOriginate(bool add)
     }
 
     auto& configs = area.getConfigs();
+
+    if (!nssaDefaultRoute.has_value())
+        nssaDefaultRoute = area.process().monotonicIntraId.fetch_add(1, std::memory_order_release);
+
     ExternalOriginateContext ctx = {
-        .lsId = nssaDefaultRoute.has_value() ? std::optional{nssaDefaultRoute->linkStateId} : std::nullopt,
+        .lsId = nssaDefaultRoute.value(),
         .prefix = IPPrefix(area.process().getAF()),
         .metric = configs.get<Config::OspfArea::NSSA_DEFAULT_METRIC>().load(),
         .tag = 0,
-        .nextHop = IPAddress(area.process().getAF()),
+        .nextHop = std::nullopt,
         .metricIsE2 = configs.get<Config::OspfArea::NSSA_DEFAULT_METRIC_TYPE>().load()
     };
 
-    nssaDefaultRoute = originateExternal(ctx, !add);
-}
-
-void OspfOriginator::addDefaultRoute(bool add)
-{
-    if (area.type != AreaType::NORMAL)
-        return;
-    if (defaultRoute.has_value() == add)
-        return;
-
-    auto configs = area.process().getConfigs();
-    AddressFamily af = area.process().getAF();
-
-    bool always = configs.get<Config::Ospf::DEFAULT_ORIGINATE_ALWAYS>().load();
-
-    if (!always)
+    auto& process = area.process();
+    if (process.isV3)
     {
-        auto& rib = area.process().routingInstance->routingTable;
-        if (af == AddressFamily::IPv4)
-        {
-            if (!rib.lookup<uint32_t>(0)) return;
-        }
-        else
-        {
-            if (!rib.lookup<__uint128_t>(0)) return;
-        }
+        auto lsa = process.buildExternal<PolicyV3>(ctx, true);
+        processOriginatedLsa<PolicyV3>(lsa.first, lsa.second, !add);
+    }
+    else
+    {
+        auto lsa = process.buildExternal<PolicyV2>(ctx, true);
+        processOriginatedLsa<PolicyV2>(lsa.first, lsa.second, !add);
     }
 
-    ExternalOriginateContext ctx = {
-        .lsId = defaultRoute.has_value() ? std::optional{defaultRoute.value().linkStateId} : std::nullopt,
-        .prefix = IPPrefix(area.process().getAF()),
-        .metric = configs.get<Config::Ospf::DEFAULT_ORIGINATE_METRIC>().load(),
-        .tag = 0,
-        .nextHop = IPAddress(af),
-        .metricIsE2 = configs.get<Config::Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>().load(),
-    };
-
-    defaultRoute = originateExternal(ctx, !add);
+    if (!add) nssaDefaultRoute.reset();
 }
 
 template void OspfOriginator::startRefresh<PolicyV2>(RefreshInfo&);
@@ -317,6 +275,9 @@ template void OspfOriginator::handleRefreshTimeout<PolicyV3>(uint32_t);
 
 template void OspfOriginator::processReoriginatedLsa<PolicyV2>(const LsaKey&, LsaBody&, bool, bool);
 template void OspfOriginator::processReoriginatedLsa<PolicyV3>(const LsaKey&, LsaBody&, bool, bool);
+
+template void OspfOriginator::originateExternalLsa<PolicyV2>(const LsaKey&, LsaBody&, bool);
+template void OspfOriginator::originateExternalLsa<PolicyV3>(const LsaKey&, LsaBody&, bool);
 
 template void OspfOriginator::processOriginatedLsa<PolicyV2>(const LsaKey&, LsaBody&, bool, RefreshInfo*);
 template void OspfOriginator::processOriginatedLsa<PolicyV3>(const LsaKey&, LsaBody&, bool, RefreshInfo*);

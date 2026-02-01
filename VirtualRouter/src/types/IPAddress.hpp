@@ -11,6 +11,7 @@
 
 struct IPv4Prefix;
 struct IPv6Prefix;
+struct IPPrefix;
 
 struct alignas(16) IPAddress
 {
@@ -61,11 +62,14 @@ struct alignas(16) IPAddress
         writeU128(raw, addr);
     }
 
-    IPAddress(const uint8_t* bytes, AddressFamily fam) {
+    IPAddress(const uint8_t* bytes, AddressFamily fam)
+    {
         v6 = 0;
         isV6 =  (fam == AddressFamily::IPv6);
         std::memcpy(raw, bytes, fam == AddressFamily::IPv4 ? 4 : 16);
     }
+
+    IPAddress(const IPPrefix& prefix);
     
     bool operator==(const IPAddress& other) const 
     {
@@ -73,6 +77,19 @@ struct alignas(16) IPAddress
         return isV6 ? (v6 == other.v6) : (v4 == other.v4);
     }
 };
+
+constexpr uint32_t v4Mask(uint8_t len)
+{
+    return len == 0 ? 0 : htonl(0xFFFFFFFFu << (32 - len));
+}
+
+constexpr __uint128_t v6Mask(uint8_t len)
+{
+    if (len == 0)
+        return 0;
+
+    return (__uint128_t(-1)) << (128 - len);
+}
 
 struct alignas(16) IPPrefix
 {
@@ -165,7 +182,48 @@ struct alignas(16) IPPrefix
             addr[i] = 0;
         }
     }
+
+    bool contains(const IPAddress& addr) const
+    {
+        if (addr.isV6 && af != AddressFamily::IPv6)
+            return false;
+
+        if (addr.isV6)
+        {
+            __uint128_t mask = v6Mask(prefixLength);
+            return (addr.v6 && mask) == (v6 & mask);
+        }
+        else
+        {
+            uint32_t mask = v4Mask(prefixLength);
+            return (addr.v4 & mask) == (v4 & mask);
+        }
+    }
+
+    bool contains(const IPPrefix& addr) const
+    {
+        if (addr.af != af)
+            return false;
+
+        if (addr.af == AddressFamily::IPv6)
+        {
+            __uint128_t mask = v6Mask(prefixLength);
+            return (addr.v6 && mask) == (v6 & mask);
+        }
+        else
+        {
+            uint32_t mask = v4Mask(prefixLength);
+            return (addr.v4 & mask) == (v4 & mask);
+        }
+    }
 };
+
+inline IPAddress::IPAddress(const IPPrefix& prefix)
+{
+    v6 = 0;
+    isV6 = prefix.af == AddressFamily::IPv6;
+    std::memcpy(raw, prefix.addr, isV6 ? 16 : 4);
+}
 
 struct alignas(16) IPv4Prefix
 {

@@ -5,7 +5,6 @@
 
 #include <OspfInterfaceId.hpp>
 #include <IPAddress.hpp>
-#include <unordered_map>
 #include <map>
 #include <shared_mutex>
 
@@ -32,10 +31,12 @@ public:
 
     OspfInterface* getInterface(const OspfInterfaceId& id);
     OspfInterface* getInterfaceByAddress(const IPAddress& addr);
+    std::vector<IPAddress> getReachableInterfaces(uint32_t area);
+    bool isInterfaceReachable(uint32_t area, uint32_t id);
 
     // Lists
     std::map<OspfInterfaceId, OspfInterface> ospfInterfaceList;
-    std::shared_mutex interfaceMutex;
+    mutable std::shared_mutex interfaceMutex;
 
 private:
     OspfProcess& process;

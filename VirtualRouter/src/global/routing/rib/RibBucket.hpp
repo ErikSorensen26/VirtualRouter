@@ -56,13 +56,30 @@ public:
         return;
     }
 
-    RibEntry<AddrType>* getBestRoute(RouteSource src, uint8_t topoId, uint32_t pid) noexcept
+    RibEntry<AddrType>* getBestRoute(uint32_t pid) noexcept
     {
         RibEntry<AddrType>* best = nullptr;
 
         for (const RibEntry<AddrType>& r : routes)
         {
-            if (r.source == src && r.processId == pid && r.topoId == topoId)
+            if (r.processId == pid)
+            {
+                if (!best)
+                    best = &r;
+                else if (r.adminDistance < best->adminDistance || r.metric < best->metric)
+                    best = &r;
+            }
+        }
+        return best;
+    }
+
+    RibEntry<AddrType>* getBestRoute(RouteSource src, uint32_t pid) noexcept
+    {
+        RibEntry<AddrType>* best = nullptr;
+
+        for (const RibEntry<AddrType>& r : routes)
+        {
+            if (r.source == src && r.processId == pid)
             {
                 if (!best)
                     best = &r;

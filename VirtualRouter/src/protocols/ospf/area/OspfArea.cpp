@@ -92,6 +92,15 @@ void OspfArea::setFloodReduction(OspfInterface& iface)
     }
 }
 
+bool OspfArea::isValidForwardAddress(const IPAddress& addr) const
+{
+    if ((type == AreaType::NSSA || type == AreaType::TOTALLY_NSSA) &&
+        configs->get<Config::OspfArea::NSSA_SUPPRESS_FA>().load())
+        return false;
+
+    return base.getRib().lpmLookup(addr, areaId);
+}
+
 void OspfArea::syncRangeConfig()
 {
     auto& cfgRanges = configs->get<Config::OspfArea::RANGE>();
@@ -125,22 +134,34 @@ void OspfArea::syncRangeConfig()
     }
 
     syncRangeSuppression(activeRanges);
+
+    base.isV3 ? flood<PolicyV3>() : flood<PolicyV2>();
 }
 
-void OspfArea::syncRangeSuppression(const std::unordered_set<IPPrefix>& activeRanges)
+void OspfArea::syncRangeSuppression(const std::unordered_set<IPPrefix>& activeRanges, bool abrChange)
 {
-    auto changes = base.getRib().refreshIntraRangeSuppression(areaId, activeRanges);
+    bool isABR = base.isABR();
+
+    auto changes = isABR
+        ? base.getRib().refreshIntraRangeSuppression(areaId, activeRanges)
+        : base.getRib().refreshIntraRangeSuppression(areaId, {});
+
     if (base.isV3)
         base.reoriginateSummaries<PolicyV3>(*this, changes);
     else
         base.reoriginateSummaries<PolicyV2>(*this, changes);
 
-    auto intra = base.getRib().getIntraAreaRoutes(areaId);
+    if (isABR || abrChange)
+    {
+        std::vector<std::pair<IPPrefix, OspfPath>> intra = isABR
+            ? base.getRib().getIntraAreaRoutes(areaId)
+            : std::vector<std::pair<IPPrefix, OspfPath>>{};
 
-    syncRangeRuntime(intra);
+        syncRangeRuntime(intra, abrChange);
+    }
 }
 
-void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& intraRoutes)
+void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& intraRoutes, bool abrChange)
 {
     struct SummaryAction
     {
@@ -162,6 +183,8 @@ void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>
     // If not ABR: withdraw any previously originated range summaries + discards, but do NOT just clear silently.
     if (!base.isABR())
     {
+        if (!abrChange) return;
+
         std::lock_guard<std::mutex> lk(rangeMu);
 
         // Build withdrawals from existing runtime state
@@ -208,7 +231,7 @@ void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>
             if (!r.summary.has_value() && shouldAdvertise)
             {
                 const uint32_t lsid = base.isV3
-                    ? base.monotonicSummaryId.fetch_add(1, std::memory_order_release)
+                    ? base.monotonicIntraId.fetch_add(1, std::memory_order_release)
                     : readU32(pfx.addr);
 
                 r.summary = lsid;
@@ -275,7 +298,7 @@ std::unordered_map<IPPrefix, std::pair<uint32_t, uint32_t>> OspfArea::computeRan
 
     for (const auto& [pfx, path] : intraAreaRoutes)
     {
-        if (path.suppressed || path.discard) continue;
+        if (path.suppressed || path.discard || path.type != OspfRouteType::INTRA_AREA) continue;
         if (!activeRanges.contains(pfx))
             continue;
 
@@ -433,14 +456,14 @@ OspfArea::Result OspfArea::process(IncomingLsaContext& ctx, LsaBody& body)
 template <typename Policy>
 void OspfArea::processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries)
 {
-    db.forEachInType(Policy::InterPrefixType, [&](LsaKey& key, LsaRecord& record) {
+    db.forEachInType(Policy::InterNetworkType, [&](LsaKey& key, LsaRecord& record) {
         if (!summaries.contains(key))
-            originator.processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(record.body), false, true);
+            originator.processReoriginatedLsa<Policy>(key, record.body, false, true);
     });
 
     for (auto& [key, body] : summaries)
     {
-        originator.processReoriginatedLsa<Policy>(key, std::forward<LsaBody>(body));
+        originator.processReoriginatedLsa<Policy>(key, body);
     }
 }
 
@@ -625,6 +648,9 @@ bool OspfArea::compareLsaBody(const LsaBody& a, const LsaBody& b)
 
 template std::optional<OspfArea::Result> OspfArea::processLsa<PolicyV2>(IncomingLsaContext&, LsaBody&);
 template std::optional<OspfArea::Result> OspfArea::processLsa<PolicyV3>(IncomingLsaContext&, LsaBody&);
+
+template void OspfArea::processSummaries<PolicyV2>(std::unordered_map<LsaKey, LsaBody>&);
+template void OspfArea::processSummaries<PolicyV3>(std::unordered_map<LsaKey, LsaBody>&);
 
 template void OspfArea::flood<PolicyV2>();
 template void OspfArea::flood<PolicyV3>();

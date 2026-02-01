@@ -78,7 +78,7 @@ using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea,
     AtomicField<bool, false, OspfArea::NSSA_NO_REDISTRIBUTION>,
     AtomicField<bool, false, OspfArea::NSSA_ALWAYS_TRANSLATE>,
     AtomicField<bool, false, OspfArea::NSSA_SUPPRESS_FA>,
-    ValueField<std::vector<std::tuple<IPPrefix, bool, std::optional<uint32_t>>>, OspfArea::RANGE>, // XXX:
+    ValueField<std::vector<std::tuple<IPPrefix, bool, std::optional<uint32_t>>>, OspfArea::RANGE>,
     ValueField<std::vector<std::tuple<>>, OspfArea::VIRTUAL_LINKS> // TODO:
 >;
 
@@ -189,9 +189,9 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     OwnedListField<OspfAreaRegistry, Ospf::AREA_CONFIGS>,
     AtomicField<uint32_t, 100, Ospf::REFERENCE_BANDWIDTH>,
     AtomicField<bool, false, Ospf::BFD>, // TODO:
-    AtomicField<bool, true, Ospf::LLS>, // XXX:
-    AtomicField<bool, false, Ospf::OPAQUE>, // XXX: // default
-    AtomicField<bool, false, Ospf::TRANSIT>, // XXX: // controls r bit
+    AtomicField<bool, true, Ospf::LLS>,
+    AtomicField<bool, false, Ospf::OPAQUE>, // TODO:
+    AtomicField<bool, false, Ospf::TRANSIT>, // TODO: // virtual link
     OptionalAtomicField<uint32_t, Ospf::DOMAIN_ID>, // TODO:
     ValueField<std::vector<uint32_t>, Ospf::SECONDARY_DOMAIN_ID>, // TODO:
     AtomicField<bool, false, Ospf::DEFAULT_ORIGINATE_ALWAYS>,
@@ -207,7 +207,7 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<uint8_t, 110, Ospf::EXTERNAL_DISTANCE>,
     AtomicField<uint8_t, 110, Ospf::INTER_AREA_DISTANCE>,
     AtomicField<uint8_t, 110, Ospf::INTRA_AREA_DISTANCE>,
-    OptionalAtomicField<std::nullptr_t, Ospf::DISTRIBUTE_LIST>, // XXX:
+    OptionalAtomicField<std::nullptr_t, Ospf::DISTRIBUTE_LIST>, // TODO:
     OptionalAtomicField<uint32_t, Ospf::DOMAIN_TAG>, // TODO:
     AtomicField<bool, false, Ospf::EVENT_LOG_ONE_SHOT>, // TODO:
     AtomicField<bool, false, Ospf::EVENT_LOG_PAUSE>, // TODO:
@@ -250,23 +250,23 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     OptionalAtomicField<uint32_t, Ospf::UPDATE_QUEUE_DEPTH>, // XXX:
     OptionalAtomicField<uint32_t, Ospf::ROUTER_ID>,
     AtomicField<bool, false, Ospf::SHUTDOWN>, // XXX:
-    AtomicField<uint32_t, 1000, Ospf::LSA_ARRIVAL>, // XXX:
-    AtomicField<uint8_t, 33, Ospf::FLOOD_PACING>, // XXX:
-    AtomicField<uint16_t, 240, Ospf::LSA_GROUP_PACING>, // XXX:
-    AtomicField<uint8_t, 66, Ospf::RETRANSMISSION_PACING>, // XXX:
+    AtomicField<uint32_t, 1000, Ospf::LSA_ARRIVAL>, // XXX: time needed in order to accept a new version of a lsa
+    AtomicField<uint8_t, 33, Ospf::FLOOD_PACING>, // XXX: spaces flood packets apart
+    AtomicField<uint16_t, 240, Ospf::LSA_GROUP_PACING>, // XXX: spaces out checksumming and refreshing
+    AtomicField<uint8_t, 66, Ospf::RETRANSMISSION_PACING>, // XXX: spaces out batches of retransmissions
     ValueField<std::string, Ospf::TABLE_MAP>, // TODO:
     AtomicField<bool, false, Ospf::TABLE_MAP_FILTER>, // TODO:
     AtomicField<uint8_t, 1, Ospf::PRIORITY>,
     OptionalAtomicField<std::nullptr_t, Ospf::REDISTRIBUTE>, // TODO:
     OptionalAtomicField<std::nullptr_t, Ospf::SNMP>, // TODO:
-    ValueField<std::vector<std::tuple<IPPrefix, bool, bool>>, Ospf::SUMMARY_ADDRESS>, // XXX:
-    AtomicField<uint32_t, 0, Ospf::LSA_THROTTLE_DELAY>, // XXX:
+    ValueField<std::vector<std::tuple<IPPrefix, bool, bool, std::optional<uint32_t>>>, Ospf::SUMMARY_ADDRESS>,
+    AtomicField<uint32_t, 0, Ospf::LSA_THROTTLE_DELAY>, // XXX:     // FOR FLOODING
     AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_HOLD>, // XXX:
     AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_MAX>, // XXX:
     AtomicField<uint32_t, 5000, Ospf::SPF_THROTTLE_DELAY>,
     AtomicField<uint32_t, 10000, Ospf::SPF_THROTTLE_HOLD>,
     AtomicField<uint32_t, 10000, Ospf::SPF_THROTTLE_MAX>,
-    AtomicField<bool, false, Ospf::TRAFFIC_SHARE_MIN>, // XXX:
+    AtomicField<bool, false, Ospf::TRAFFIC_SHARE_MIN>, // XXX:   // Try to pick next hops that reside on different interfaces
     AtomicField<bool, false, Ospf::TTL_SEC>, // XXX:
     AtomicField<uint8_t, 1, Ospf::TTL_SEC_HOPS> // XXX:
 >;

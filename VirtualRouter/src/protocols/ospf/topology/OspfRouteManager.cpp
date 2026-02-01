@@ -18,6 +18,26 @@
 
 namespace OSPF
 {
+struct ExtRec
+{
+    IPPrefix prefix{};
+    IPAddress fwd{};
+    uint8_t options{0};
+    uint32_t asbrRid{0};
+    uint32_t metric{0};
+    bool isType2{false};
+};
+
+struct SelState
+{
+    bool set = false;
+    bool isType2 = false;
+    uint64_t installedCost = 0;  // For E2, this is Y; for E1, X+Y
+    uint64_t tieX = 0;           // Only meaningful for E2
+    uint8_t options = 0;
+    std::vector<OspfNextHop> nextHops;
+};
+
 OspfPath RouteManager::makePath(
     std::optional<uint32_t> areaId,
     uint8_t options,
@@ -466,7 +486,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
     {
         std::lock_guard<std::mutex> lock(process.externalMu);
 
-        for (const auto& [key, rec] : process.externalDb)
+        for (auto& [key, rec] : process.externalDb)
         {
             if (rec.first.age == kMaxAge)
                 continue;

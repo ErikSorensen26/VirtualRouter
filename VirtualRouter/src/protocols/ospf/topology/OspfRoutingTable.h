@@ -24,6 +24,7 @@ public:
     OspfRib(OspfProcess& process);
 
     const OspfRoute* lookup(const IPPrefix& prefix) const;
+    bool lpmLookup(const IPAddress& addr, uint32_t area) const;
 
     std::vector<OspfRouteChange> replaceArea(OspfArea& area, const std::vector<std::pair<IPPrefix, OspfPath>>& paths);
     void replaceRoute(uint32_t areaId, const std::pair<IPPrefix, std::optional<OspfPath>>& path);

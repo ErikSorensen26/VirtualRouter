@@ -86,7 +86,8 @@ void PacketDispatcherV2::sendHello()
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
+    auto& ifaceLLS = baseConfigs->get<Config::OspfInterfaceBase::LLS>();
+    bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<Config::Ospf::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
     finalizeHeader(*ospfHeader, builder, lls);
@@ -105,7 +106,8 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
+    auto& ifaceLLS = baseConfigs->get<Config::OspfInterfaceBase::LLS>();
+    bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<Config::Ospf::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
     finalizeHeader(*ospfHeader, builder, lls);
@@ -124,7 +126,8 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
+    auto& ifaceLLS = baseConfigs->get<Config::OspfInterfaceBase::LLS>();
+    bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<Config::Ospf::LLS>().load();
     auto dbd = buildDBD(builder, nbr, lls);
     if (!dbd.has_value()) return;
 
@@ -154,7 +157,8 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    bool lls = baseConfigs->get<Config::OspfInterfaceBase::LLS>().load();
+    auto& ifaceLLS = baseConfigs->get<Config::OspfInterfaceBase::LLS>();
+    bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<Config::Ospf::LLS>().load();
     auto db = buildDBD(builder, nbr, lls);
     if (!db.has_value()) return false;
 

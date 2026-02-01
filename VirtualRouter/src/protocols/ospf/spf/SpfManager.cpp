@@ -92,6 +92,9 @@ void SpfManager::runSpf()
 
     auto summaryChanges = rib.replaceArea(area, pathList);
 
+    // Update Ranges
+    area.syncRangeRuntime(pathList);
+
     area.process().table.consumeSpfResult(area.areaId, spfRes);
 
     if (area.process().isABR())

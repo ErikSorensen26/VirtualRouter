@@ -152,7 +152,7 @@ using OspfInterfaceBaseRegistry = SubRegistry<uint64_t, OspfInterfaceBase,
         OSPF::IPsecAuthType, // Type enabled
         std::tuple<uint32_t, OSPF::IPsecAuthType, std::array<uint8_t, 40>
     >>, OspfInterfaceBase::AUTHENTICATION_IPSEC>, // TODO
-    AtomicField<bool, true, OspfInterfaceBase::LLS>,
+    OptionalAtomicField<bool, OspfInterfaceBase::LLS>,
     OptionalAtomicField<__uint128_t, OspfInterfaceBase::MESSAGE_DIGEST_KEY>, // place up to date key when keys change
     OptionalAtomicField<uint8_t, OspfInterfaceBase::MESSAGE_DIGEST_KEY_ID>, 
     ValueField<std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>, OspfInterfaceBase::MESSAGE_DIGEST_KEYS>,

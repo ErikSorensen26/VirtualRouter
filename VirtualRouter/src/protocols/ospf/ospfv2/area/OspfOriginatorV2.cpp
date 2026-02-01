@@ -148,31 +148,6 @@ void OspfOriginatorV2::originateSummary(uint32_t lsid, const IPPrefix& prefix, u
     processOriginatedLsa<PolicyV2>(key, body, expire);
 }
 
-void OspfOriginatorV2::originateExternal(uint32_t lsid, ExternalOriginateContext& ctx, bool expire)
-{
-    LsaKey key;
-    LsaBody body = ExternalLsaV2();
-
-    if (area.type == AreaType::NORMAL)
-        key.lsaType = OSPFV2_LSA_EXTERNAL;
-    else if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
-        key.lsaType = OSPFV2_LSA_NSSA;
-    else return; // Stub not supported
-
-    key.advertisingRouter = area.process().getRouterId();
-    key.linkStateId = lsid;
-
-    auto& external = std::get<ExternalLsaV2>(body);
-    external.networkMask = ctx.prefix.getMask();
-    external.metric = expire ? 0x00FFFFFF : ctx.metric;
-    external.isType2 = ctx.metricIsE2;
-    external.routerTag = ctx.tag;
-    if (isValidForwardAddress(ctx.nextHop))
-        external.forwardingAddress = readU32(ctx.nextHop.value().raw);
-
-    processOriginatedLsa<PolicyV2>(key, body, expire);
-}
-
 void OspfOriginatorV2::translateNssaToExternal(const LsaKey& key7, const LsaBody& body7, bool expire)
 {
     if (key7.linkStateId == 0 && std::get<ExternalLsaV2>(body7).networkMask == 0 &&
@@ -188,7 +163,7 @@ void OspfOriginatorV2::translateNssaToExternal(const LsaKey& key7, const LsaBody
     key5.linkStateId = key7.linkStateId;
     key5.advertisingRouter = area.process().getRouterId();
 
-    if (ext5.forwardingAddress != 0 && !isValidForwardAddress(ext5.forwardingAddress))
+    if (ext5.forwardingAddress != 0 && !area.isValidForwardAddress(ext5.forwardingAddress))
         ext5.forwardingAddress = 0;
 
     processOriginatedLsa<PolicyV2>(key5, body5, expire);

@@ -32,6 +32,25 @@ OspfInterface* InterfaceManager::getInterfaceByAddress(const IPAddress& addr)
     return nullptr;
 }
 
+std::vector<IPAddress> InterfaceManager::getReachableInterfaces(uint32_t area)
+{
+    std::vector<IPAddress> addrs;
+    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+    for (auto& [id, iface] : ospfInterfaceList)
+        if (id.area == area)
+            addrs.push_back(iface.interfaceAddress);
+    return addrs;
+}
+
+bool InterfaceManager::isInterfaceReachable(uint32_t area, uint32_t ifaceId)
+{
+    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+    for (auto& [id, iface] : ospfInterfaceList)
+        if (id.area == area && iface.interfaceId == ifaceId)
+            return true;
+    return false;
+}
+
 OspfInterface& InterfaceManager::createInterface(Interface& interface, OspfInterfaceId& key)
 {
     if (auto it = ospfInterfaceList.find(key); it != ospfInterfaceList.end())
