@@ -15,8 +15,6 @@ void NeighborTable::syncUnicast()
     auto& ifaceConfigs = iface.getConfigs();
     auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
 
-    std::unique_lock<std::shared_mutex> lk(mu);
-
     if (ntype == NetworkType::POINT_TO_MULTIPOINT || ntype == NetworkType::NON_BROADCAST)
     {
         std::unordered_set<IPAddress> unicastNbrs;
@@ -93,7 +91,6 @@ void NeighborTable::deleteNeighbor(uint32_t rid, bool unicast)
 
 Neighbor* NeighborTable::lookup(uint32_t rid)
 {
-    std::shared_lock<std::shared_mutex> lock(mu);
     auto it = neighbors.find(rid);
     if (it != neighbors.end())
         return &it->second;
@@ -102,7 +99,6 @@ Neighbor* NeighborTable::lookup(uint32_t rid)
 
 const Neighbor* NeighborTable::lookup(uint32_t rid) const
 {
-    std::shared_lock<std::shared_mutex> lock(mu);
     auto it = neighbors.find(rid);
     if (it != neighbors.end())
         return &it->second;
@@ -111,7 +107,6 @@ const Neighbor* NeighborTable::lookup(uint32_t rid) const
 
 std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSize)
 {
-    std::shared_lock<std::shared_mutex> lock(mu);
     size_t siz = neighbors.size();
     if (maxSize > siz * 4) return std::nullopt;
     size_t off = 0;
@@ -125,7 +120,6 @@ std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSiz
 
 void NeighborTable::cancelAllInactiveTimers()
 {
-    std::shared_lock<std::shared_mutex> lk(mu);
     for (auto& [_, nbr] : neighbors)
         iface.getTimers().cancleInactiveTimer(nbr);
 }

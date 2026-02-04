@@ -6,7 +6,6 @@
 #include <Registry.hpp>
 #include <OspfTypes.hpp>
 #include <OspfNeighborTable.h>
-#include <PacketDispatcher.h>
 #include <OspfFlagManager.h>
 #include "OspfInterfaceTimers.h"
 #include "OspfInterfaceId.hpp"
@@ -15,6 +14,7 @@ class Interface;
 
 namespace OSPF
 {
+class PacketDispatcher;
 class OspfProcess;
 class Topology;
 class OspfArea;

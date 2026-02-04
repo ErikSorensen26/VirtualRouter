@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <mutex>
 
 namespace OSPF
 {
@@ -51,7 +50,6 @@ private:
 
     std::unordered_map<uint32_t, std::unordered_set<ReachEntry, ReachEntryHash>> areaReach;
     std::unordered_map<uint32_t, RouterReach> reach;
-    mutable std::mutex mu;
 
 private:
     std::optional<bool/*ADD*/>/*CHANGE*/ mergeCanidate(const OspfRouter& canidate);

@@ -107,13 +107,13 @@ bool OspfArea::isValidForwardAddress(const IPAddress& addr) const
 
     if (base.getConfigs().get<Config::Ospf::LRC_FORWARDING_ADDRESS>().load())
     {
-        return base.getRib().lpmLookup(addr, areaId);
-    }
-    else
-    {
         return addr.isV6
             ? base.routingInstance->routingTable.lookup(readU128(addr.raw)) != nullptr
             : base.routingInstance->routingTable.lookup(readU32(addr.raw)) != nullptr;
+    }
+    else
+    {
+        return base.getRib().lpmLookup(addr, areaId);
     }
 }
 
@@ -121,33 +121,31 @@ void OspfArea::syncRangeConfig()
 {
     auto& cfgRanges = configs->get<Config::OspfArea::RANGE>();
     std::unordered_set<IPPrefix> activeRanges;
+    rangePrefixes.clear();
 
+    cfgRanges.withRead([&](const std::tuple<IPPrefix, bool, std::optional<uint32_t>>& t)
     {
-        std::lock_guard<std::mutex> lk(rangeMu);
+        const auto& [pfx, noAdv, cost] = t;
+        rangePrefixes.insert(pfx);
 
-        std::unordered_set<IPPrefix> seen;
+        auto& r = ranges[pfx];
+        r.notAdvertise = noAdv;
+        r.costOverride = cost;
+    });
 
-        cfgRanges.withRead([&](const std::tuple<IPPrefix, bool, std::optional<uint32_t>>& t)
+    for (auto it = ranges.begin(); it != ranges.end();)
+    {
+        if (rangePrefixes.find(it->first) == rangePrefixes.end())
         {
-            const auto& [pfx, noAdv, cost] = t;
-            seen.insert(pfx);
-
-            auto& r = ranges[pfx];
-            r.notAdvertise = noAdv;
-            r.costOverride = cost;
-        });
-
-        for (auto it = ranges.begin(); it != ranges.end();)
-        {
-            if (seen.find(it->first) == seen.end())
-                it = ranges.erase(it);
-            else
-                ++it;
+            it = ranges.erase(it);
+            rangePrefixes.erase(it->first);
         }
-
-        for (const auto& [r, _] : ranges)
-            activeRanges.insert(r);
+        else
+            ++it;
     }
+
+    for (const auto& [r, _] : ranges)
+        activeRanges.insert(r);
 
     syncRangeSuppression(activeRanges);
 }
@@ -199,8 +197,6 @@ void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>
     {
         if (!abrChange) return;
 
-        std::lock_guard<std::mutex> lk(rangeMu);
-
         // Build withdrawals from existing runtime state
         for (auto& [pfx, r] : ranges)
         {
@@ -220,8 +216,6 @@ void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>
     else
     {
         // ABR case: compute contributors and update runtime state
-        std::lock_guard<std::mutex> lk(rangeMu);
-
         auto rcs = computeRangeContributors(intraRoutes, ranges);
 
         for (auto& [pfx, r] : ranges)
@@ -294,13 +288,9 @@ void OspfArea::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>
     }
 }
 
-std::unordered_set<IPPrefix> OspfArea::getRanges()
+const std::unordered_set<IPPrefix>& OspfArea::getRanges() const
 {
-    std::unordered_set<IPPrefix> rs;
-    std::lock_guard<std::mutex> lk(rangeMu);
-    for (const auto& [pfx, _] : ranges)
-        rs.insert(pfx);
-    return rs;
+    return rangePrefixes;
 }
 
 std::unordered_map<IPPrefix, std::pair<uint32_t, uint32_t>> OspfArea::computeRangeContributors(
@@ -412,12 +402,8 @@ void OspfArea::postProcess(Result& result, IncomingLsaContext& ctx, const LsaBod
         else if (std::holds_alternative<typename Policy::InterNetworkLsa>(body))
         {
             auto res = RouteManager::deriveInterAreaNetwork<Policy>(*this, ctx.key, ctx.header, body);
-            if (base.getConfigs().get<Config::Ospf::LRC_INTER_AREA_SUMMARY>().load())
-            {
-                auto changes = base.getRib().replaceRoute(*this, res);
-                if (!changes.empty())
-                    base.reoriginateSummaries<Policy>(*this, changes);
-            }
+            auto changes = base.getRib().replaceRoute(*this, res);
+            if (!changes.empty()) base.reoriginateSummaries<Policy>(*this, changes);
         }
         else if (std::holds_alternative<typename Policy::InterRouterLsa>(body))
         {
@@ -803,4 +789,7 @@ template void OspfArea::processSummaries<PolicyV3>(std::unordered_map<LsaKey, Ls
 
 template void OspfArea::processExternalLsa<PolicyV2>(IncomingLsaContext&, const LsaBody&);
 template void OspfArea::processExternalLsa<PolicyV3>(IncomingLsaContext&, const LsaBody&);
+
+template bool OspfArea::isValidNssaTranslation<uint32_t>(uint32_t) const;
+template bool OspfArea::isValidNssaTranslation<__uint128_t>(__uint128_t) const;
 }

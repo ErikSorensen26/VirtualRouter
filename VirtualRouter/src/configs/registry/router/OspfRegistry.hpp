@@ -125,8 +125,8 @@ enum class Ospf
     IGNORE_MOSPF,
     SNMP_IFINDEX,
     ISPF,
-    DC_LIMIT,
-    NON_DC_LIMIT,
+    RETRANSMISSION_DC_LIMIT,
+    RETRANSMISSION_NON_DC_LIMIT,
     LOG_ADJACENCY_CHANGES,
     LOG_ADJACENCY_DETAILS,
     LRC_FORWARDING_ADDRESS,
@@ -215,13 +215,13 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<bool, true, Ospf::IGNORE_MOSPF>, // TODO:
     AtomicField<bool, false, Ospf::SNMP_IFINDEX>, // TODO:
     AtomicField<bool, false, Ospf::ISPF>, // XXX:
-    OptionalAtomicField<uint8_t, Ospf::DC_LIMIT>, // XXX:
-    OptionalAtomicField<uint8_t, Ospf::NON_DC_LIMIT>, // XXX:
+    OptionalAtomicField<uint8_t, Ospf::RETRANSMISSION_DC_LIMIT>, // XXX:
+    OptionalAtomicField<uint8_t, Ospf::RETRANSMISSION_NON_DC_LIMIT>, // XXX:
     AtomicField<bool, false, Ospf::LOG_ADJACENCY_CHANGES>, // XXX:
     AtomicField<bool, false, Ospf::LOG_ADJACENCY_DETAILS>, // XXX:
-    AtomicField<bool, false, Ospf::LRC_FORWARDING_ADDRESS>, // XXX:
-    AtomicField<bool, false, Ospf::LRC_INTER_AREA_SUMMARY>, // XXX:
-    AtomicField<bool, false, Ospf::LRC_NSSA_TRANSLATION>, // XXX:
+    AtomicField<bool, true, Ospf::LRC_FORWARDING_ADDRESS>,
+    AtomicField<bool, true, Ospf::LRC_INTER_AREA_SUMMARY>,
+    AtomicField<bool, false, Ospf::LRC_NSSA_TRANSLATION>,
     AtomicField<bool, false, Ospf::MAX_METRIC_EXTERNAL>, // XXX:
     AtomicField<uint32_t, 16711680, Ospf::MAX_METRIC_EXTERNAL_OVERRIDE>, // XXX:
     AtomicField<bool, false, Ospf::MAX_METRIC_INCLUDE_STUB>,

@@ -5,6 +5,7 @@
 #include <OspfInterface.h>
 #include <TimeManager.h>
 #include <OspfProcess.h>
+#include <PacketDispatcher.h>
 
 namespace OSPF
 {

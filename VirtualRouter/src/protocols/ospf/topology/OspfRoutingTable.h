@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <IPAddress.hpp>
 #include <unordered_set>
-#include <shared_mutex>
 #include "OspfTopologyTypes.hpp"
 
 class RoutingTable;
@@ -39,7 +38,7 @@ public:
 
     std::vector<OspfRouteChange> refreshIntraRangeSuppression(uint32_t areaId, const std::unordered_set<IPPrefix>& ranges);
 
-    std::vector<std::pair<IPPrefix, OspfPath>> getAreaRoutes(uint32_t area);
+    std::vector<std::pair<IPPrefix, OspfPath>> getIntraAreaRoutes(uint32_t area);
 
 private:
     struct PrefixState

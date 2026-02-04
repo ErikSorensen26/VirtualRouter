@@ -17,7 +17,6 @@ InterfaceManager::~InterfaceManager() {}
 
 OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
 {
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     if (auto it = ospfInterfaceList.find(id); it != ospfInterfaceList.end())
         return &it->second;
     return nullptr;
@@ -25,7 +24,6 @@ OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
 
 OspfInterface* InterfaceManager::getInterfaceByAddress(const IPAddress& addr)
 {
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     for (auto& [id, iface] : ospfInterfaceList)
         if (iface.interfaceAddress.v6 == addr.v6)
             return &iface;
@@ -35,7 +33,6 @@ OspfInterface* InterfaceManager::getInterfaceByAddress(const IPAddress& addr)
 std::vector<IPAddress> InterfaceManager::getReachableInterfaces(uint32_t area)
 {
     std::vector<IPAddress> addrs;
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     for (auto& [id, iface] : ospfInterfaceList)
         if (id.area == area)
             addrs.push_back(iface.interfaceAddress);
@@ -44,7 +41,6 @@ std::vector<IPAddress> InterfaceManager::getReachableInterfaces(uint32_t area)
 
 bool InterfaceManager::isInterfaceReachable(uint32_t area, uint32_t ifaceId)
 {
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     for (auto& [id, iface] : ospfInterfaceList)
         if (id.area == area && iface.interfaceId == ifaceId)
             return true;
@@ -95,7 +91,6 @@ void InterfaceManager::refreshInterfaceList()
 
         // Lock global interface state
         std::shared_lock<std::shared_mutex> sysLock(process.routingInstance->interfaceMutex);
-        std::unique_lock<std::shared_mutex> lock(interfaceMutex);
 
         // Remove shutdown interfaces
         for (auto it = ospfInterfaceList.begin(); it != ospfInterfaceList.end();)
@@ -191,7 +186,6 @@ void InterfaceManager::refreshInterfaceList()
 
 void InterfaceManager::deactivateAll()
 {
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     ospfInterfaceList.clear();
 }
 }

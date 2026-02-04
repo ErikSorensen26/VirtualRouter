@@ -196,7 +196,6 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
     if (ntype == NetworkType::POINT_TO_POINT)
     {
         bool isVirtual = iface.isVirtual.load(std::memory_order_relaxed);
-        std::shared_lock<std::shared_mutex> nlock(ntable.mu);
         for (auto& [rid, nbr] : ntable.neighbors)
         {
             if (nbr.getState() != Neighbor::State::FULL)
@@ -216,7 +215,6 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
 
     if (ntype == NetworkType::POINT_TO_MULTIPOINT)
     {
-        std::shared_lock<std::shared_mutex> lock(ntable.mu);
         for (auto& [rid, nbr] : ntable.neighbors)
         {
             if (nbr.getState() != Neighbor::State::FULL)

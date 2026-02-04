@@ -9,15 +9,6 @@
 #include "LSDB.hpp"
 #include <Registry.hpp>
 
-#ifndef OSPF_LSDB_THREADSAFE
-#define OSPF_LSDB_THREADSAFE 1
-#endif
-
-#if OSPF_LSDB_THREADSAFE
-#include <shared_mutex>
-#include <mutex>
-#endif
-
 namespace OSPF
 {
 
@@ -26,11 +17,7 @@ class LsdbTable final
 public:
 #if OSPF_LSDB_USE_PMR
     using PoolResource = 
-#if OSPF_LSDB_THREADSAFE
-        std::pmr::synchronized_pool_resource;
-#else
-        std::pmr::unsynchronized_pool_resource;
-#endif
+    std::pmr::unsynchronized_pool_resource;
 #endif
 
     explicit LsdbTable(std::pmr::memory_resource* upstream = std::pmr::get_default_resource());
@@ -91,12 +78,8 @@ public:
     const O_LSDB& getIterableLSDB() const { return dbStorage; }
     T_LSDB& getIterableTypeLSDB() { return typeDb; }
     const T_LSDB& getIterableTypeLSDB() const { return typeDb; }
-    std::shared_mutex& getLock() const { return mu; }
 
 private:
-#if OSPF_LSDB_THREADSAFE
-    mutable std::shared_mutex mu;
-#endif
 
 #if OSPF_LSDB_USE_PMR
     PoolResource pool;
@@ -156,9 +139,6 @@ inline Body& LsdbTable::emplaceBody(LsaRecord& rec)
 template <typename Fn>
 inline void LsdbTable::forEach(Fn&& fn) const
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     for (auto& kv : db)
         fn(kv.first, kv.second);
 }
@@ -166,9 +146,6 @@ inline void LsdbTable::forEach(Fn&& fn) const
 template <typename Fn>
 inline void LsdbTable::forEachInAdv(const LsaAdvKey& advRtr, Fn&& fn) const
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     auto it = advDb.find(advRtr);
     if (it == advDb.end()) return;
     for (auto& kv : it->second)
@@ -178,9 +155,6 @@ inline void LsdbTable::forEachInAdv(const LsaAdvKey& advRtr, Fn&& fn) const
 template <typename Fn>
 inline void LsdbTable::forEachInType(uint32_t type, Fn&& fn) const
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     auto it = typeDb.find(type);
     for (auto& kv : it->second)
         fn(kv.first, kv.second);
@@ -189,9 +163,6 @@ inline void LsdbTable::forEachInType(uint32_t type, Fn&& fn) const
 template <typename Pred>
 inline size_t LsdbTable::purgeIf(Pred&& pred)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif 
     size_t removed = 0;
     for (auto it = db.begin(); it != db.end();)
     {

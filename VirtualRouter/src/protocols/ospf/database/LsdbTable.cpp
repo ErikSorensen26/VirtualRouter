@@ -15,33 +15,21 @@ LsdbTable::LsdbTable(std::pmr::memory_resource* upstream)
 
 void LsdbTable::reserve(size_t n)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
     db.reserve(n);
 }
 
 size_t LsdbTable::size() const noexcept
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     return db.size();
 }
 
 bool LsdbTable::empty() const noexcept
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     return db.empty();
 }
 
 bool LsdbTable::contains(const LsaKey& key) const
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     return db.find(key) != db.end();
 }
 
@@ -57,27 +45,18 @@ LsdbTable::ConstIterator LsdbTable::findIt(const LsaKey& key) const
 
 LsaRecord* LsdbTable::find(const LsaKey& key)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     auto it = findIt(key);
     return (it == db.end()) ? nullptr : it->second;
 }
 
 const LsaRecord* LsdbTable::find(const LsaKey& key) const
 {
-#if OSPF_LSDB_THREADSAFE
-    std::shared_lock<std::shared_mutex> lk(mu);
-#endif
     auto it = findIt(key);
     return (it == db.end()) ? nullptr : it->second;
 }
 
 bool LsdbTable::erase(const LsaKey& key)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
     db.erase(key);
     auto& adv = advDb[key];
     adv.erase(key.linkStateId);
@@ -90,9 +69,6 @@ bool LsdbTable::erase(const LsaKey& key)
 
 void LsdbTable::clear()
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
     db.clear();
     advDb.clear();
     typeDb.clear();
@@ -101,9 +77,6 @@ void LsdbTable::clear()
 
 void LsdbTable::releaseMemory()
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
     db.clear();
     advDb.clear();
     typeDb.clear();
@@ -115,9 +88,6 @@ void LsdbTable::releaseMemory()
 
 LsaRecord& LsdbTable::upsertMeta(const IncomingLsaContext& lsa, LsaRecordFlags flags)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
 
     // Single lookup + in-place default construction if missing.
     auto [it, inserted] = dbStorage.try_emplace(lsa.key);
@@ -147,9 +117,6 @@ LsaRecord& LsdbTable::upsertMeta(const IncomingLsaContext& lsa, LsaRecordFlags f
 
 bool LsdbTable::touchRefresh(const LsaKey& key)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
     auto it = db.find(key);
     if (it == db.end())
         return false;
@@ -160,9 +127,6 @@ bool LsdbTable::touchRefresh(const LsaKey& key)
 
 bool LsdbTable::setFlags(const LsaKey& key, LsaRecordFlags flags)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
     auto it = db.find(key);
     if (it == db.end())
         return false;
@@ -173,7 +137,6 @@ bool LsdbTable::setFlags(const LsaKey& key, LsaRecordFlags flags)
 
 size_t LsdbTable::getTypeSize(uint32_t type)
 {
-    std::shared_lock<std::shared_mutex> lk(mu);
     auto it = typeDb.find(type);
     if (it == typeDb.end()) return 0;
     return it->second.size();
@@ -181,10 +144,6 @@ size_t LsdbTable::getTypeSize(uint32_t type)
 
 size_t LsdbTable::ageAll(uint16_t deltaAge, uint16_t maxAge, bool eraseExpired)
 {
-#if OSPF_LSDB_THREADSAFE
-    std::unique_lock<std::shared_mutex> lk(mu);
-#endif
-
     size_t expired = 0;
 
     if (!eraseExpired)

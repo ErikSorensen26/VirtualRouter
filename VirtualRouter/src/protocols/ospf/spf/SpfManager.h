@@ -27,7 +27,6 @@ public:
     template<typename Policy>
     void onSpfTimer();
 
-    std::mutex spfMu;
     SpfResult spfResult;
 
 private:

@@ -8,6 +8,7 @@
 #include <Interface.h>
 #include <Functions.h>
 #include <SpfManager.h>
+#include <VirtualRouter.h>
 
 namespace OSPF
 {
@@ -305,7 +306,6 @@ void OspfOriginatorV3::addNetworkLsa(const OspfInterface& iface, bool refresh)
 
     {
         auto& ntable = iface.getNTable();
-        std::shared_lock<std::shared_mutex> lock(ntable.mu);
         for (const auto& [rid, nbr] : ntable.neighbors)
             if (nbr.getState() == Neighbor::State::FULL)
                 network.attachedRouters.push_back(rid);
@@ -493,6 +493,26 @@ void OspfOriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody
     if (std::get<ExternalLsaV3>(body7).prefix.prefixLength == 0 && std::get<ExternalLsaV3>(body7).prefix.v6 == 0 &&
         !area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ONLY>().load())
         return;
+
+    if (area.process().getConfigs().get<Config::Ospf::LRC_NSSA_TRANSLATION>().load())
+    {
+        auto& ext7 = std::get<ExternalLsaV3>(body7);
+        auto& base = area.process();
+
+        IPAddress addr = (!ext7.forwardingAddress.has_value() || ext7.forwardingAddress->v6 == 0)
+            ? ext7.prefix : ext7.forwardingAddress.value();
+
+        if (ext7.prefix.af == AddressFamily::IPv4)
+        {
+            if (!base.routingInstance->routingTable.lookup(readU32(addr.raw)))
+                return;
+        }
+        else
+        {
+            if (!base.routingInstance->routingTable.lookup(readU128(addr.raw)))
+                return;
+        }
+    }
 
     LsaKey key5;
     

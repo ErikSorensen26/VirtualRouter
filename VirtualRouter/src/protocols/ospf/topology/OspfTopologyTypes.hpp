@@ -78,6 +78,25 @@ struct OspfRoute
     std::optional<uint32_t> area{};
     bool suppressed{false};
     std::vector<OspfPath> paths{};
+
+    bool operator==(const OspfPath& other)
+    {
+        return options == other.options &&
+               type == other.type &&
+               area == other.area &&
+               cost == other.cost &&
+               adminDistance == other.adminDistance;
+    }
+
+    bool operator==(const OspfRoute& other)
+    {
+        return type == other.type &&
+               cost == other.cost &&
+               options == other.options &&
+               adminDistance == other.adminDistance &&
+               area == other.area &&
+               suppressed == other.suppressed;
+    }
 };
 
 struct OspfRouteChange

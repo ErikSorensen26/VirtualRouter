@@ -6,6 +6,7 @@
 #include <OspfArea.h>
 #include <OspfProcess.h>
 #include <Interface.h>
+#include <VirtualRouter.h>
 
 namespace OSPF
 {
@@ -86,7 +87,6 @@ void OspfOriginatorV2::addNetworkLsa(const OspfInterface& iface, bool refresh)
 
     {
         auto& ntable = iface.getNTable();
-        std::shared_lock<std::shared_mutex> lock(ntable.mu);
         for (const auto& [rid, nbr] : ntable.neighbors)
             if (nbr.getState() == Neighbor::State::FULL)
                 network.attachedRouters.push_back(rid);
@@ -156,6 +156,22 @@ void OspfOriginatorV2::translateNssaToExternal(const LsaKey& key7, const LsaBody
     if (key7.linkStateId == 0 && std::get<ExternalLsaV2>(body7).networkMask == 0 &&
         !area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ONLY>().load())
         return;
+
+    auto& ext7 = std::get<ExternalLsaV2>(body7);
+    auto& base = area.process();
+    if (area.process().getConfigs().get<Config::Ospf::LRC_NSSA_TRANSLATION>().load())
+    {
+        if (ext7.forwardingAddress == 0)
+        {
+            if (!base.routingInstance->routingTable.lookup(key7.linkStateId))
+                return;
+        }
+        else
+        {
+            if (!base.routingInstance->routingTable.lookup(ext7.forwardingAddress))
+                return;
+        }
+    }
 
     LsaKey key5;
 

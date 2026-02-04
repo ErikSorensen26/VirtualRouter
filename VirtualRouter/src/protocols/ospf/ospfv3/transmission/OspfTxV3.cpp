@@ -403,7 +403,7 @@ size_t PacketDispatcherV3::addLSRequests(OspfBuilder& builder, Neighbor& nbr)
         lsr.setLsID(key.linkStateId);
         lsr.setAdvRouter(key.advertisingRouter);
         builder.offset += Ospfv3LSRHeader::fixedSize;
-        list.markBurst();
+        list.markBurst(key);
         sent++;
     }
     return sent;
@@ -445,7 +445,7 @@ size_t PacketDispatcherV3::addLSUpdates(OspfBuilder& builder, Neighbor* nbr)
         if (!buildLSABody(builder, *lsa, static_cast<uint8_t>(key.lsaType))) return sent;
 
         builder.offset += (lsa->header.length - Ospfv2LSAHeader::fixedSize);
-        list.markBurst();
+        list.markBurst(key);
         sent++;
     }
 
@@ -457,7 +457,6 @@ void PacketDispatcherV3::buildDescriptions(OspfBuilder& builder, Neighbor& nbr)
     if (!nbr.currentDbd) return;
 
     auto& area = iface.getArea();
-    std::shared_lock<std::shared_mutex> lk(area.lsdb().getLock());
     auto& lsdb = area.lsdb().getIterableLSDB();
 
     for (auto it = lsdb.upper_bound(*nbr.currentDbd); it != lsdb.end(); it++)

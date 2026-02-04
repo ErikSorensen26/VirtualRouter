@@ -106,10 +106,7 @@ void SpfManager::runSpf()
             area.process().reoriginateSummaries<InterAreaPrefixLsa>(area, summaryChanges);
     }
 
-    {
-        std::lock_guard<std::mutex> lk(spfMu);
-        spfResult = std::move(spfRes);
-    }
+    spfResult = std::move(spfRes);
 }
 
 uint32_t SpfManager::computeNextDelay()

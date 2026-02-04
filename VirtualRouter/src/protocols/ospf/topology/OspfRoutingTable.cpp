@@ -163,8 +163,9 @@ std::vector<OspfRouteChange> OspfRib::replaceArea(OspfArea& area, const std::vec
 std::vector<OspfRouteChange> OspfRib::replaceRoute(OspfArea& area, const std::pair<IPPrefix, std::optional<OspfPath>>& path)
 {
     uint32_t areaId = area.areaId;
-    auto areaList = areaIndex.find(areaId);
-    bool areaFound = areaList != areaIndex.end();
+
+    auto idxIt = areaIndex.find(areaId);
+    bool areaFound = idxIt != areaIndex.end();
 
     auto psIt = prefixStates.find(path.first);
     if (psIt != prefixStates.end())
@@ -179,18 +180,25 @@ std::vector<OspfRouteChange> OspfRib::replaceRoute(OspfArea& area, const std::pa
                 }),
             cand.end());
         if (areaFound)
-            areaList->second.erase(path.first);
+            idxIt->second.erase(path.first);
     }
 
     if (path.second.has_value())
     {
+        OspfPath p = path.second.value();
+        if (p.type == OspfRouteType::INTER_AREA && p.area.has_value() && p.area.value() == areaId)
+        {
+            const std::unordered_set<IPPrefix>& ranges = area.getRanges();
+            p.suppressed = isIntraRangeSuppressed(path.first, ranges);
+        }
+
         prefixStates[path.first].canidates.push_back(path.second.value());
         areaIndex[areaId].insert(path.first);
-        processWide.insert(path.first);
     }
-    else if (areaFound && areaList->second.empty())
+    else
     {
-        areaIndex.erase(areaId);
+        if (areaFound && idxIt->second.empty())
+            areaIndex.erase(areaId);
     }
 
     RecomputeCtx ctx{
@@ -201,12 +209,8 @@ std::vector<OspfRouteChange> OspfRib::replaceRoute(OspfArea& area, const std::pa
     recomputeLocked(path.first, process.getAF(), process.getProcId(), &ctx);
 
     std::vector<OspfRouteChange> changes;
-
-    if (ctx.intraChanged)
-        changes.push_back(ctx.intraChange);
-    if (ctx.interChanged)
-        changes.push_back(ctx.interChange);
-
+    if (ctx.intraChanged) changes.push_back(ctx.intraChange);
+    if (ctx.interChanged) changes.push_back(ctx.interChange);
     return changes;
 }
 
@@ -269,7 +273,7 @@ void OspfRib::replaceExternal(const std::pair<IPPrefix, std::optional<OspfPath>>
     recomputeLocked(path.first, process.getAF(), process.getProcId());
 }
 
-std::vector<std::pair<IPPrefix, OspfPath>> OspfRib::getAreaRoutes(uint32_t area)
+std::vector<std::pair<IPPrefix, OspfPath>> OspfRib::getIntraAreaRoutes(uint32_t area)
 {
     std::vector<std::pair<IPPrefix, OspfPath>> areaRoutes;
 
@@ -280,7 +284,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> OspfRib::getAreaRoutes(uint32_t area)
 
         const OspfPath* bestPath = nullptr;
 
-        if (state.selected.type != OspfRouteType::INTRA_AREA && state.selected.type != OspfRouteType::INTER_AREA)
+        if (state.selected.type != OspfRouteType::INTRA_AREA)
             continue;
         if (!state.selected.area.has_value() || state.selected.area.value() != area)
             continue;
@@ -417,19 +421,21 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         return true;
     };
 
+    const bool hadOld = st.hasSelected;
+    const OspfRoute oldCopy = hadOld ? st.selected : OspfRoute{};
+
+    const bool oldIntraEffective = hadOld ? isIntraEffective(oldCopy) : false;
+    const bool oldInterEffective = hadOld ? isInterEffective(oldCopy) : false;
+
     if (st.canidates.empty())
     {
-        if (!st.hasSelected)
+        if (!hadOld)
         {
             prefixStates.erase(it);
             return false;
         }
 
-        const OspfRoute& old = st.selected;
-        const bool oldIntraEffective = isIntraEffective(old);
-        const bool oldInterEffective = isInterEffective(old);
-
-        RouteSource src = deriveOspfType(old.type);
+        const RouteSource src = deriveOspfType(oldCopy.type);
 
         if (af == AddressFamily::IPv4)
             rib.removeEntry(readU32(prefix.addr), prefix.prefixLength, src, procId);
@@ -439,29 +445,28 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         st.hasSelected = false;
         prefixStates.erase(it);
 
-        bool anyCtxChange = false;
-
-        if (oldIntraEffective && ctx)
+        bool anyCtx = false;
+        if (ctx && oldIntraEffective)
         {
-            ctx->intraChange.prefix = old.prefix;
-            ctx->intraChange.options = old.options;
-            ctx->intraChange.cost = old.cost;
+            ctx->intraChange.prefix = oldCopy.prefix;
+            ctx->intraChange.options = oldCopy.options;
+            ctx->intraChange.cost = oldCopy.cost;
             ctx->intraChange.isRemoval = true;
             ctx->intraChanged = true;
-            anyCtxChange = true;
+            anyCtx = true;
         }
 
         if (oldInterEffective && ctx)
         {
-            ctx->interChange.prefix = old.prefix;
-            ctx->interChange.options = old.options;
-            ctx->interChange.cost = old.cost;
+            ctx->interChange.prefix = oldCopy.prefix;
+            ctx->interChange.options = oldCopy.options;
+            ctx->interChange.cost = oldCopy.cost;
             ctx->interChange.isRemoval = true;
             ctx->interChanged = true;
-            anyCtxChange = true;
+            anyCtx = true;
         }
 
-        return anyCtxChange;
+        return anyCtx;
     }
 
     const OspfPath* best = nullptr;
@@ -484,7 +489,7 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
     next.paths.reserve(st.canidates.size());
     for (const auto& p : st.canidates)
     {
-        if (p.type == best->type && p.cost == best->cost)
+        if (*best == p)
             next.paths.push_back(p);
     }
 #ifndef NDEBUG
@@ -492,97 +497,72 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
          assert(p.suppressed == next.suppressed);
 #endif
 
-    const bool hadOld = st.hasSelected;
+    const bool newIntraEffective = isIntraEffective(next);
+    const bool newInterEffective = isInterEffective(next);
 
     bool routeChanged = true;
     bool ecmpChanged = true;
 
     if (hadOld)
     {
-        const OspfRoute& old = st.selected;
-
-        routeChanged =
-            old.type != next.type ||
-            old.cost != next.cost ||
-            old.options != next.options ||
-            old.adminDistance != next.adminDistance ||
-            old.area != next.area ||
-            old.suppressed != next.suppressed;
-
-        ecmpChanged = (old.paths != next.paths);
+        routeChanged = oldCopy != next;
+        ecmpChanged = (oldCopy.paths != next.paths);
     }
 
-    const bool oldIntraEffective = hadOld ? isIntraEffective(st.selected) : false;
-    const bool oldInterEffective = hadOld ? isInterEffective(st.selected) : false;
-
-    const bool newIntraEffective = isIntraEffective(next);
-    const bool newInterEffective = isInterEffective(next);
-
-    if (oldIntraEffective != newIntraEffective || oldInterEffective != newInterEffective)
+    if (ctx)
     {
-        st.selected = std::move(next);
-        st.hasSelected = true;
-
-        bool anyCtxChange = false;
-
-        if (ctx && (oldIntraEffective != newIntraEffective))
+        if (oldIntraEffective != newIntraEffective)
         {
             ctx->intraChange.prefix = prefix;
-            ctx->intraChange.options = st.selected.options;
-            ctx->intraChange.cost = st.selected.cost;
-            ctx->intraChange.isRemoval = oldIntraEffective;
-            ctx->intraChanged = true;
-            anyCtxChange = true;
-        }
 
-        if (ctx && (oldInterEffective != newInterEffective))
-        {
-            ctx->interChange.prefix = prefix;
-            ctx->interChange.options = st.selected.options;
-            ctx->interChange.cost = st.selected.cost;
-            ctx->interChange.isRemoval = oldIntraEffective;
-            ctx->interChanged = true;
-            anyCtxChange = true;
-        }
+            if (oldInterEffective && !newInterEffective)
+            {
+                ctx->intraChange.options = oldCopy.options;
+                ctx->intraChange.cost = oldCopy.cost;
+                ctx->intraChange.isRemoval = true;
+            }
+            else
+            {
+                ctx->intraChange.options = next.options;
+                ctx->intraChange.cost = next.cost;
+                ctx->intraChange.isRemoval = false;
+            }
 
-        if (anyCtxChange)
-            return true;
-    }
-
-    if (newIntraEffective && (!hadOld || routeChanged))
-    {
-        st.selected = std::move(next);
-        st.hasSelected = true;
-
-        if (ctx)
-        {
-            ctx->intraChange.prefix = prefix;
-            ctx->intraChange.options = st.selected.options;
-            ctx->intraChange.cost = st.selected.cost;
-            ctx->intraChange.isRemoval = false;
             ctx->intraChanged = true;
         }
-        return true;
-    }
 
-    if (newInterEffective && (!hadOld || routeChanged))
-    {
-        st.selected = std::move(next);
-        st.hasSelected = true;
-
-        if (ctx)
+        if (oldInterEffective != newInterEffective)
         {
             ctx->interChange.prefix = prefix;
-            ctx->interChange.options = st.selected.options;
-            ctx->interChange.cost = st.selected.cost;
-            ctx->interChange.isRemoval = false;
+
+            if (oldInterEffective && !newInterEffective)
+            {
+                ctx->interChange.options = oldCopy.options;
+                ctx->interChange.cost = oldCopy.cost;
+                ctx->interChange.isRemoval = true;
+            }
+            else
+            {
+                ctx->interChange.options = next.options;
+                ctx->interChange.cost = next.cost;
+                ctx->interChange.isRemoval = false;
+            }
+
             ctx->interChanged = true;
         }
-        return true;
     }
 
     if (!hadOld || routeChanged || ecmpChanged)
     {
+        if (hadOld)
+        {
+            const RouteSource oldSrc = deriveOspfType(oldCopy.type);
+            if (af == AddressFamily::IPv4)
+                rib.removeEntry(readU32(prefix.addr), prefix.prefixLength, oldSrc, procId);
+            else
+                rib.removeEntry(readU128(prefix.addr), prefix.prefixLength, oldSrc, procId);
+        }
+        
         const auto& merged = mergeEcmpNextHops(next.paths);
 
         if (af == AddressFamily::IPv4)
@@ -618,7 +598,8 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
     st.selected = std::move(next);
     st.hasSelected = true;
 
-    return ctx ? false : routeChanged;
+    return ctx ? (routeChanged || ecmpChanged || (oldInterEffective != newInterEffective) || (oldInterEffective != newInterEffective))
+               : (routeChanged || ecmpChanged);
 }
 
 std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<IPPrefix>& touched, uint32_t areaId, const std::unordered_set<IPPrefix>& ranges)
@@ -637,13 +618,13 @@ std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<I
     for (const auto& prefix : touched)
     {
         ctx.intraChanged = false;
-        ctx.intraChanged = false;
+        ctx.interChanged = false;
 
         recomputeLocked(prefix, af, procId, &ctx);
-        
-        if (ctx.intraChanged)
-            changes.push_back(std::move(ctx.intraChange));
-        if (ctx.interChanged)
+
+        if (ctx.intraChanged && validateInterAreaSummaryEligibility(prefix))
+            changes.push_back(std::move(ctx.interChange));
+        if (ctx.interChanged && areaId == 0)
             changes.push_back(std::move(ctx.interChange));
     }
 
@@ -659,5 +640,25 @@ void OspfRib::recomputeLocked(const std::unordered_set<IPPrefix>& touched)
     {
         recomputeLocked(prefix, af, procId);
     }
+}
+
+bool OspfRib::globalRibContains(const IPPrefix& prefix) const
+{
+    if (prefix.af == AddressFamily::IPv4)
+        return rib.lookup(readU32(prefix.addr));
+    else
+        return rib.lookup(readU128(prefix.addr));
+}
+
+bool OspfRib::validateInterAreaSummaryEligibility(const IPPrefix& prefix) const
+{
+    const bool useLocal = process.getConfigs().get<Config::Ospf::LRC_INTER_AREA_SUMMARY>().load();
+
+    if (useLocal)
+    {
+        return  lookup(prefix);
+    }
+
+    return globalRibContains(prefix);
 }
 }

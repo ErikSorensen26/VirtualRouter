@@ -3,7 +3,6 @@
 #ifndef OSPF_NEIGHBOR_TABLE_H
 #define OSPF_NEIGHBOR_TABLE_H
 
-#include <shared_mutex>
 #include <NeighborTable.h>
 
 struct IPAddress;

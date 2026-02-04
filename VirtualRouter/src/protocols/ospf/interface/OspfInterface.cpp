@@ -7,6 +7,7 @@
 #include <OspfFlagManager.h>
 #include <VirtualRouter.h>
 
+#include <PacketDispatcher.h>
 #include <PacketDispatcherV2.h>
 #include <PacketDispatcherV3.h>
 
@@ -117,29 +118,25 @@ void OspfInterface::election()
     std::vector<Canidate> drClaims;
     std::vector<Canidate> bdrClaims;
 
+    for (const auto& [rid, nbr] : ntable.neighbors)
     {
-        std::shared_lock<std::shared_mutex> lock(ntable.mu);
+        if (nbr.getState() < Neighbor::State::TWOWAY)
+            continue;
 
-        for (const auto& [rid, nbr] : ntable.neighbors)
-        {
-            if (nbr.getState() < Neighbor::State::TWOWAY)
-                continue;
+        uint prio = nbr.priority.load(std::memory_order_relaxed);
+        if (prio == 0)
+            continue;
 
-            uint prio = nbr.priority.load(std::memory_order_relaxed);
-            if (prio == 0)
-                continue;
+        eligible.emplace_back(rid, prio);
 
-            eligible.emplace_back(rid, prio);
+        uint32_t claimedDr = nbr.dr.load(std::memory_order_relaxed);
+        uint32_t claimedBdr = nbr.bdr.load(std::memory_order_relaxed);
 
-            uint32_t claimedDr = nbr.dr.load(std::memory_order_relaxed);
-            uint32_t claimedBdr = nbr.bdr.load(std::memory_order_relaxed);
+        if (claimedDr != 0 && claimedBdr == rid)
+            drClaims.emplace_back(rid, prio);
 
-            if (claimedDr != 0 && claimedBdr == rid)
-                drClaims.emplace_back(rid, prio);
-
-            if (claimedBdr != 0 && claimedBdr == rid)
-                bdrClaims.emplace_back(rid, prio);
-        }
+        if (claimedBdr != 0 && claimedBdr == rid)
+            bdrClaims.emplace_back(rid, prio);
     }
 
     // Add self
@@ -259,7 +256,6 @@ void OspfInterface::setPassiveMode(bool passive)
     configs->get<Config::OspfInterface::PASSIVE>().load();
     if (passive)
     {
-        std::shared_lock<std::shared_mutex> lock(ntable.mu);
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
         {
             tmgr.cancleInactiveTimer(it->second);

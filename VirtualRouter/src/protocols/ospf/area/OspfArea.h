@@ -117,7 +117,7 @@ public:
     void syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& pathList, bool abrChange = false);
     void syncRangeSuppression(const std::unordered_set<IPPrefix>& ranges, bool abrChange = false);
     void suppressInterAreaPrefix(const IPPrefix& prefix) const;
-    std::unordered_set<IPPrefix> getRanges();
+    const std::unordered_set<IPPrefix>& getRanges() const;
 
     bool isValidForwardAddress(const IPAddress& h) const;
 
@@ -154,8 +154,8 @@ protected:
         bool discardPresent = false;
     };
 
-    std::mutex rangeMu;
     std::unordered_map<IPPrefix, OspfAreaRange> ranges;
+    std::unordered_set<IPPrefix> rangePrefixes;
 
     LsdbTable db;
     OspfProcess& base;

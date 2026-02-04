@@ -4,7 +4,6 @@
 #define OSPF_INTERFACE_TIMERS_H
 
 #include <OspfPacket.hpp>
-#include <mutex>
 #include <atomic>
 
 class TimeManager;

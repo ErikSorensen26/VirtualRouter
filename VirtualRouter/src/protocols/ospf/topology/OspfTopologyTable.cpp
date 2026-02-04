@@ -86,7 +86,6 @@ bool TopologyTable::updateAreaAsbr(uint32_t area, const OspfRouter& asbr, bool r
 
 const RouterReach* TopologyTable::lookup(uint32_t rid) const
 {
-    std::lock_guard<std::mutex> lock(mu);
     auto it = reach.find(rid);
     if (it == reach.end())
         return nullptr;
@@ -95,7 +94,6 @@ const RouterReach* TopologyTable::lookup(uint32_t rid) const
 
 uint32_t TopologyTable::lookupDistance(uint32_t rid) const
 {
-    std::lock_guard<std::mutex> lock(mu);
     auto it = reach.find(rid);
     if (it == reach.end())
         return std::numeric_limits<uint32_t>::max();
@@ -104,7 +102,6 @@ uint32_t TopologyTable::lookupDistance(uint32_t rid) const
 
 void TopologyTable::clear()
 {
-    std::lock_guard<std::mutex> lock(mu);
     reach.clear();
 }
 
@@ -154,8 +151,6 @@ std::optional<bool> TopologyTable::mergeCanidate(const OspfRouter& canidate)
 bool TopologyTable::mergeCanidates(uint32_t area, const std::vector<OspfRouter>& canidates, Type type)
 {
     bool change = false;
-
-    std::lock_guard<std::mutex> lock(mu);
 
     auto& areaList = areaReach[area];
 

@@ -6,7 +6,6 @@
 #include <OspfInterfaceId.hpp>
 #include <IPAddress.hpp>
 #include <map>
-#include <shared_mutex>
 
 class Interface;
 struct IPAddress;
