@@ -43,6 +43,7 @@ struct InstallResult final
     LsaCompareResult compare{LsaCompareResult::SAME};
 
     // Storage instructions:
+    bool newLsa{false}; // indicates if this lsa has not been seen before.
     bool shouldStoreReplace{false}; // replace (header/body) with incoming instance
     bool shouldUpdateAgeOnly{false}; // same instance; update stored header.age only
     bool shouldAck{true};            // should ack the lsa (false for corruped lsas).

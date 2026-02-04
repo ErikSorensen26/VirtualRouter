@@ -29,7 +29,6 @@ public:
     void cancelAllInactiveTimers();
 
     std::optional<size_t> addNeighborList(uint8_t* buf, size_t maxSize);
-    mutable std::shared_mutex mu;
     std::unordered_map<uint32_t, Neighbor> neighbors;
 
     struct UnicastConfigs

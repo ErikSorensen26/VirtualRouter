@@ -45,7 +45,7 @@ public:
 
     // External Origination
     template <typename Policy>
-    void distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, LsaBody& body);
+    void distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, const LsaBody& body);
 
     template <typename Policy>
     void originateExternal(ExternalOriginateContext& ctx, bool expire);
@@ -54,18 +54,20 @@ public:
     void originateExternals(std::vector<std::pair<ExternalOriginateContext, bool>>& ctxs);
 
     template <typename Policy>
-    std::pair<LsaKey, LsaBody> buildExternal(ExternalOriginateContext& ctx, bool isNssa);
+    LsaKey buildExternalKey(ExternalOriginateContext& ctx, bool isNssa);
+
+    template <typename Policy>
+    void buildExternalBody(ExternalOriginateContext& ctx, Policy::ExternalLsa& body, bool isNssa);
 
     // Summary Origination
     template <typename Policy>
     void reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList);
 
+    template <typename Policy>
+    void reoriginateSummary(OspfArea& sourceArea, OspfRouteChange& path);
+
     // ASBR Summarization
     void syncSummaryConfig();
-
-    // Flooding
-    template<typename Policy>
-    void flood();
 
     // Getters
     AddressFamily getAF() { return af; }
@@ -96,6 +98,8 @@ public:
     bool isASBR();
     bool isABR();
 
+    void initiateReset();
+
     void addDefaultRoute(bool add);
 
     const bool isV3;
@@ -105,12 +109,10 @@ public:
     TimeManager& tmgr;
 
     // External
-    std::mutex externalMu;
     std::unordered_map<LsaKey, std::pair<LsaHeader, LsaBody>> externalDb;
     std::atomic<uint32_t> monotonicExternalId{0};
 
     // Summaries
-    std::mutex intraMu;
     std::unordered_map<IPPrefix, uint32_t> intraLsids;
     std::atomic<uint32_t> monotonicIntraId{0};
 
@@ -134,15 +136,12 @@ private:
     };
 
     // Summaries
-    std::mutex asbrSummaryMu;
     std::unordered_map<IPPrefix, OspfSummaryAddress> summaries;
     template <typename Policy>
     void syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummaryAddress>& activeSummaries);
 
     // Areas
-    std::shared_mutex areaMu;
     std::unordered_map<uint32_t, OspfArea> areas;
-    std::atomic<size_t> areaSize;
 
     OspfRib rib;
 

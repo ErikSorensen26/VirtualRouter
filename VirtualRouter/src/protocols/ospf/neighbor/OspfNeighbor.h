@@ -6,11 +6,9 @@
 #include <atomic>
 #include <IPAddress.hpp>
 #include <optional>
-#include <mutex>
 #include <LSDB.hpp>
-#include <set>
 #include <OspfPacket.hpp>
-#include "Retransmission.h"
+#include "Retransmission.hpp"
 
 namespace OSPF
 {
@@ -34,12 +32,12 @@ public:
     Neighbor& operator=(Neighbor&&) = delete;
 
     // State
-    State getState() const { return state.load(std::memory_order_relaxed); }
+    State getState() const { return state; }
     bool setState(State s);
 
     // Role
-    Role getRole() { return role.load(std::memory_order_relaxed); }
-    void setRole(Role r) { role.store(r, std::memory_order_release); }
+    Role getRole() { return role; }
+    void setRole(Role r) { role = r; }
     bool isMaster() { return getRole() == Role::MASTER; }
     void resetDbExchange();
 
@@ -77,8 +75,8 @@ public:
     std::atomic<bool> isTransit{true};
 
 private:
-    std::atomic<State> state;
-    std::atomic<Role> role = Role::NONE;
+    State state;
+    Role role = Role::NONE;
 
     Retransmission rtr;
     OspfInterface& iface;

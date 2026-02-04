@@ -13,6 +13,7 @@
 #include <SummaryRouterLsa.hpp>
 #include <ExternalLsaV2.hpp>
 #include <FloodTypes.hpp>
+#include <RetransmissionList.hpp>
 
 struct IPAddress;
 class PacketBuilder;
@@ -42,20 +43,26 @@ public:
     virtual void sendInitDBD(Neighbor& nbr) = 0;
     virtual bool sendDBD(Neighbor& nbr) = 0;
     virtual bool sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ) = 0;
-    virtual bool sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds) = 0;
-    virtual bool sendLSRequest(Neighbor& nbr, const std::vector<LsaKey>& keys) = 0;
-    virtual bool sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys) = 0;
-    virtual bool sendLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys) = 0;
 
-    virtual bool processOptions(uint32_t options, Neighbor& nbr);
+    void sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds);
+    void sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys);
 
-    virtual void retransmitDbd(Neighbor& nbr) = 0;
-    bool retransmitLsu(Neighbor& nbr);
-    bool retransmitLsr(Neighbor& nbr);
+    virtual void onDbdRetransmissionTimer(Neighbor& nbr) = 0;
+    void onLsuRetransmissionTimer(Neighbor& nbr);
+    void onLsrRetransmissionTimer(Neighbor& nbr);
+
+    void onLsuPacingTimer(Neighbor* nbr);
+    void onLsrPacingTimer(Neighbor& nbr);
+
+    RetransmissionList<LsaKey, LsaRecordRef>& getMulticastLsu() { return multicastLsus; }
 
 protected:
+    virtual bool sendLSRequest(Neighbor& nbr) = 0;
+    virtual bool sendLSUpdate(Neighbor* nbr) = 0;
 
-    virtual void transmit(PacketBuilder& pkt, const uint8_t* dest);
+    virtual void transmit(PacketBuilder& pkt, const uint8_t* dest) = 0;
+
+    virtual bool processOptions(uint32_t options, Neighbor& nbr) = 0;
 
     uint16_t calculateAge(bool floodReduction, const LsaRecord& record);
     uint16_t addLinkLocalExtension(uint8_t* buf, bool restart);
@@ -90,6 +97,8 @@ protected:
         const IPAddress& neighborIp;    ///< Sender IP.
         Neighbor* neighbor = nullptr;   ///< Neighbor object.
     };
+
+    RetransmissionList<LsaKey, LsaRecordRef> multicastLsus;
 
     OspfInterface& iface;
     NeighborTable& ntable;

@@ -36,7 +36,6 @@ public:
 
     // Lists
     std::map<OspfInterfaceId, OspfInterface> ospfInterfaceList;
-    mutable std::shared_mutex interfaceMutex;
 
 private:
     OspfProcess& process;

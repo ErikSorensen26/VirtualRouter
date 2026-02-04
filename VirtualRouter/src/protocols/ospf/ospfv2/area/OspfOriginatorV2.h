@@ -24,13 +24,11 @@ public:
     void originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire) override;
 
 protected:
-    void addRouterLsa(std::optional<uint32_t> ifaceId, RefreshInfo& refresh, bool fullRefresh = false) override;
-    void addNetworkLsa(const OspfInterface& iface, RefreshInfo& refresh) override;
+    void addRouterLsa(std::optional<uint32_t> ifaceId, bool refresh, bool fullRefresh = false) override;
+    void addNetworkLsa(const OspfInterface& iface, bool refresh) override;
 
-    std::optional<LsaBody> lastRouterLsa{std::nullopt};
-
-    void expire(LsaKey& key, LsaBody& body) override;
-    void addAsbrLsa(uint32_t asbr, RefreshInfo& refresh) override;
+    void expire(LsaKey& key) override;
+    void addAsbrLsa(uint32_t asbr, bool refresh = false) override;
     void removeNetworkLsa(uint32_t ifaceId) override;
 
     void addSecondaryLinks(LsaBody& router, const OspfInterface& iface);

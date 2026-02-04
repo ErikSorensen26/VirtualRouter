@@ -23,12 +23,12 @@ public:
 
 protected:
 
-    void addRouterLsa(std::optional<uint32_t> ifaceId, RefreshInfo& refresh, bool fullRefresh = false) override;
-    void addNetworkLsa(const OspfInterface& iface, RefreshInfo& refresh) override;
+    void addRouterLsa(std::optional<uint32_t> ifaceId, bool refresh, bool fullRefresh = false) override;
+    void addNetworkLsa(const OspfInterface& iface, bool refresh) override;
 
-    std::vector<std::pair<uint32_t, LsaBody>> lastRouterLsas;
-    std::vector<std::pair<uint32_t, LsaBody>> lastRouterPrefixes;
-    std::vector<std::pair<uint32_t, std::vector<std::pair<uint32_t, LsaBody>>>> lastNetworkPrefixes;
+    std::vector<LsaKey> lastRouterLsas;
+    std::vector<LsaKey> lastRouterPrefixes;
+    std::vector<std::pair<uint32_t, std::vector<LsaKey>>> lastNetworkPrefixes;
 
     uint32_t maxPrefixLsid{0};
     std::deque<uint32_t> prefixLsidQueue;
@@ -38,12 +38,12 @@ protected:
     std::deque<uint32_t> routerLsidQueue;
     uint32_t findNextRouterLsid();
 
-    void expire(LsaKey& key, LsaBody& body) override;
-    void addAsbrLsa(uint32_t asbr, RefreshInfo& refresh) override;
+    void expire(LsaKey& key) override;
+    void addAsbrLsa(uint32_t asbr, bool refresh = false) override;
     void removeNetworkLsa(uint32_t ifaceId) override;
 
-    void addRouterPrefixLsa(std::vector<std::pair<uint32_t, LsaBody>>& routerLsas, RefreshInfo& refresh);
-    void addNetworkPrefixLsa(LsaKey& key, const OspfInterface& iface, RefreshInfo& refresh);
+    void addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::optional<bool>>>& routerLsas, bool refresh);
+    void addNetworkPrefixLsa(const OspfInterface& iface, bool refresh);
 
     void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;
     void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) override;

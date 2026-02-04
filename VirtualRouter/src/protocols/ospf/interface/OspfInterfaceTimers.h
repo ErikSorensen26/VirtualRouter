@@ -30,10 +30,12 @@ public:
     void startDbdRetransmissionTimer(Neighbor& neighbor);
     void startLsrRetransmissionTimer(Neighbor& neighbor);
     void startLsuRetransmissionTimer(Neighbor& neighbor);
+
+    void startLsrPacingTimer(Neighbor& neighbor);
+    void startLsuPacingTimer(Neighbor* neighbor);
     
 private:
     // Hello timer
-    std::mutex helloTimerMutex;
     std::atomic<uint32_t> helloTimerId{0};
     std::chrono::steady_clock::time_point helloStartTime;
 

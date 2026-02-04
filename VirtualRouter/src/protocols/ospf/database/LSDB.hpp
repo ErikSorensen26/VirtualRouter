@@ -223,6 +223,8 @@ struct LsaRecordRef final
     LsaKey key;
     LsaRecord* record;
 
+    LsaRecordRef() = default;
+
     LsaRecordRef(const LsaKey& k, LsaRecord& r) : key(k), record(&r)
     {
         record->refCnt.fetch_add(1, std::memory_order_relaxed);
@@ -249,6 +251,22 @@ struct LsaRecordRef final
             key = std::move(other.key);
             record = other.record;
             other.record = nullptr;
+        }
+        return *this;
+    }
+
+    LsaRecordRef& operator=(const LsaRecordRef& other)
+    {
+        if (this != &other)
+        {
+            if (record)
+                record->refCnt.fetch_sub(1, std::memory_order_relaxed);
+
+            key = other.key;
+            record = other.record;
+
+            if (record)
+                record->refCnt.fetch_add(1, std::memory_order_relaxed);
         }
         return *this;
     }

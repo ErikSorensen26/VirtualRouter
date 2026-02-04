@@ -38,7 +38,6 @@ OspfProcess::OspfProcess(bool isV3, uint32_t procId, AddressFamily af, VirtualRo
 
 OspfArea* OspfProcess::getArea(uint32_t areaId)
 {
-    std::shared_lock<std::shared_mutex> lock(areaMu);
     auto it = areas.find(areaId);
     if (it == areas.end()) return nullptr;
     return &it->second;
@@ -46,11 +45,9 @@ OspfArea* OspfProcess::getArea(uint32_t areaId)
     
 OspfArea& OspfProcess::insureArea(uint32_t areaId)
 {
-    std::unique_lock<std::shared_mutex> lock(areaMu);
     if (!areas.contains(areaId))
     {
-        auto a = areas.try_emplace(areaId, *this, areaId); // TODO: maybe add pmr
-        if (a.second) areaSize.store(areas.size(), std::memory_order_release);
+        areas.try_emplace(areaId, *this, areaId); // TODO: maybe add pmr
         setABR(areas.size() > 1 && areas.contains(0));
     }
     return areas.at(areaId);
@@ -62,7 +59,6 @@ void OspfProcess::setASBR(bool val)
     if (current == val) return;
 
     // Refresh default routes
-    std::shared_lock<std::shared_mutex> lock(areaMu);
     for (auto& [id, area] : areas)
     {
         area.getOriginator().fullRefresh();
@@ -75,7 +71,6 @@ void OspfProcess::setABR(bool val)
     if (current == val) return;
 
     // Refresh ranges
-    std::shared_lock<std::shared_mutex> lock(areaMu);
     for (auto& [id, area] : areas)
     {
         // Ranges only need to be specified when they are in use.
@@ -92,6 +87,11 @@ bool OspfProcess::isASBR()
 bool OspfProcess::isABR()
 {
     return abr.load(std::memory_order_relaxed);
+}
+
+void OspfProcess::initiateReset()
+{
+    // TODO: completely reset ospf process
 }
 
 void OspfProcess::addDefaultRoute(bool add)
@@ -130,11 +130,10 @@ void OspfProcess::addDefaultRoute(bool add)
 }
 
 template <typename Policy>
-void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, LsaBody& body)
+void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, const LsaBody& body)
 {
     bool expire = ctx.header.age == OSPF_MAX_AGE;
     {
-        std::shared_lock<std::shared_mutex> lock(areaMu);
         for (auto& [targetAreaId, targetArea] : areas)
         {
             if (targetAreaId == sourceArea.areaId)
@@ -151,16 +150,13 @@ void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaC
 
             if (ctx.key.lsaType == Policy::ExternalType && sourceArea.type == AreaType::NORMAL)
             {
-                LsaBody bodyCopy = body;
-                targetArea.processExternalLsa(ctx, bodyCopy);
+                targetArea.processExternalLsa<Policy>(ctx, body);
             }
         }
     }
 
     std::pair<IPPrefix, std::optional<OspfPath>> result;
     {
-        std::lock_guard<std::mutex> lock(externalMu);
-
         auto existingIt = externalDb.find(ctx.key);
         std::optional<uint32_t> seq{std::nullopt};
 
@@ -181,7 +177,6 @@ void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaC
 
     std::unordered_map<IPPrefix, OspfSummaryAddress> activeSummaries;
     {
-        std::lock_guard<std::mutex> lk(asbrSummaryMu);
         if (summaries.empty()) return;
         activeSummaries = summaries;
     }
@@ -190,25 +185,27 @@ void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaC
 }
 
 template <typename Policy>
-std::pair<LsaKey, LsaBody> OspfProcess::buildExternal(ExternalOriginateContext& ctx, bool isNssa)
+LsaKey OspfProcess::buildExternalKey(ExternalOriginateContext& ctx, bool isNssa)
 {
-    std::pair<LsaKey, LsaBody> lsa = {LsaKey{}, typename Policy::ExternalLsa()};
-    auto& [key, body] = lsa;
-
-    auto& external = std::get<typename Policy::ExternalLsa>(body);
-
-    constexpr bool isExtV3 = std::is_same_v<Policy, PolicyV3>;
+    LsaKey key;
 
     key.lsaType = isNssa
         ? Policy::NssaType : Policy::ExternalType;
+    key.advertisingRouter = getRouterId();
+    key.linkStateId = ctx.lsId;
+
+    return key;
+}
+
+template <typename Policy>
+void OspfProcess::buildExternalBody(ExternalOriginateContext& ctx, Policy::ExternalLsa& external, bool isNssa)
+{
+    constexpr bool isExtV3 = std::is_same_v<Policy, PolicyV3>;
 
     if constexpr (isExtV3)
     {
         if (isNssa) external.options ^= 0x08;
     }
-
-    key.advertisingRouter = getRouterId();
-    key.linkStateId = ctx.lsId;
 
     external.isType2 = ctx.metricIsE2;
     external.metric = ctx.metric;
@@ -226,35 +223,31 @@ std::pair<LsaKey, LsaBody> OspfProcess::buildExternal(ExternalOriginateContext& 
         external.isType2 = ctx.metricIsE2;
         external.routeTag = ctx.tag;
     }
-
-    return lsa;
 }
 
 template <typename Policy>
 void OspfProcess::originateExternal(ExternalOriginateContext& ctx, bool expire)
 {
     if (expire) ctx.metric = 0x00FFFFFF;
-    auto [key, lsa] = buildExternal<Policy>(ctx, false);
+    auto key = buildExternalKey<Policy>(ctx, false);
+    LsaBody& lsa = externalDb[key].second;
+    buildExternalBody<Policy>(ctx, std::get<typename Policy::ExternalLsa>(lsa), false);
 
+    for (auto& [id, area] : areas)
     {
-        std::lock_guard<std::shared_mutex> lk(areaMu);
-        for (auto& [id, area] : areas)
+        if (area.type != AreaType::NORMAL)
+            continue;
+
+        if (ctx.nextHop.has_value())
         {
-            if (area.type != AreaType::NORMAL)
-                continue;
-
-            if (ctx.nextHop.has_value())
-            {
-                auto& external = std::get<typename Policy::ExternalLsa>(lsa);
-                bool faValid = area.isValidForwardAddress(ctx.nextHop.value());
-                if constexpr (std::is_same_v<Policy, PolicyV2>)
-                    external.forwardingAddress = faValid ? readU32(ctx.nextHop->raw) : 0;
-                else
-                    external.forwardingAddress = faValid ? std::optional{ctx.nextHop.value()} : std::nullopt;
-            }
-
-            area.getOriginator().originateExternalLsa<Policy>(key, lsa, expire);
+            auto& external = std::get<typename Policy::ExternalLsa>(lsa);
+            bool faValid = area.isValidForwardAddress(ctx.nextHop.value());
+            if constexpr (std::is_same_v<Policy, PolicyV2>)
+                external.forwardingAddress = faValid ? readU32(ctx.nextHop->raw) : 0;
+            else
+                external.forwardingAddress = faValid ? std::optional{ctx.nextHop.value()} : std::nullopt;
         }
+        area.getOriginator().originateLsa<Policy>(key, lsa, expire);
     }
 }
 
@@ -264,30 +257,28 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
     for (auto& [ctx, expire]: ctxs)
         if (expire) ctx.metric = 0x00FFFFFF;
 
+    for (auto [ctx, expire] : ctxs)
     {
-        std::shared_lock<std::shared_mutex> lk(areaMu);
+        LsaKey key = buildExternalKey<Policy>(ctx, false);
+        LsaBody& body = externalDb[key].second;
+        auto& external = std::get<typename Policy::ExternalLsa>(body);
+        buildExternalBody<Policy>(ctx, external, false);
 
-        for (auto [ctx, expire] : ctxs)
+        for (auto& [id, area] : areas)
         {
-            auto [key, lsa] = buildExternal<Policy>(ctx, false);
+            if (area.type != AreaType::NORMAL)
+                continue;
 
-            for (auto& [id, area] : areas)
+            if (ctx.nextHop.has_value())
             {
-                if (area.type != AreaType::NORMAL)
-                    continue;
-
-                if (ctx.nextHop.has_value())
-                {
-                    auto& external = std::get<typename Policy::ExternalLsa>(lsa);
-                    bool faValid = area.isValidForwardAddress(ctx.nextHop.value());
-                    if constexpr (std::is_same_v<Policy, PolicyV2>)
-                        external.forwardingAddress = faValid ? readU32(ctx.nextHop->raw) : 0;
-                    else
-                        external.forwardingAddress = faValid ? std::optional{ctx.nextHop.value()} : std::nullopt;
-                }
-
-                area.getOriginator().originateExternalLsa<Policy>(key, lsa, expire);
+                bool faValid = area.isValidForwardAddress(ctx.nextHop.value());
+                if constexpr (std::is_same_v<Policy, PolicyV2>)
+                    external.forwardingAddress = faValid ? readU32(ctx.nextHop->raw) : 0;
+                else
+                    external.forwardingAddress = faValid ? std::optional{ctx.nextHop.value()} : std::nullopt;
             }
+
+            area.getOriginator().originateLsa<Policy>(key, body, expire);
         }
     }
 }
@@ -296,12 +287,7 @@ void OspfProcess::syncSummaryConfig()
 {
     auto& cfg = configs->get<Config::Ospf::SUMMARY_ADDRESS>();
 
-    std::unordered_map<IPPrefix, OspfSummaryAddress> active;
-
-    {
-        std::lock_guard<std::mutex> lk(asbrSummaryMu);
-        active = summaries;
-    }
+    std::unordered_map<IPPrefix, OspfSummaryAddress> active = summaries;
 
     std::unordered_set<IPPrefix> seen;
 
@@ -382,69 +368,65 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
     std::vector<SpecificState> specifics;
     std::vector<std::pair<ExternalOriginateContext, bool>> actions;
 
+    specifics.reserve(externalDb.size());
+
+    for (const auto& [k, r] : externalDb)
     {
-        std::lock_guard<std::mutex> lk(externalMu);
+        const LsaHeader& hdr = r.first;
+        const LsaBody& body = r.second;
 
-        specifics.reserve(externalDb.size());
+        const uint32_t metric = metricOf(body);
+        const bool isE2 = isE2Of(body);
 
-        for (const auto& [k, r] : externalDb)
+        if (hdr.age == OSPF_MAX_AGE)
         {
-            const LsaHeader& hdr = r.first;
-            const LsaBody& body = r.second;
+            specifics.push_back({
+                .lsId = k.linkStateId,
+                .prefix = entryPrefix(k, body),
+                .originalMetric = metric,
+                .originalTag = tagOf(body),
+                .originalIsE2 = isE2,
+                .covered = false,
+                .suppressed = true
+            });
+            continue;
+        }
 
-            const uint32_t metric = metricOf(body);
-            const bool isE2 = isE2Of(body);
+        const IPPrefix pfx = entryPrefix(k, body);
 
-            if (hdr.age == OSPF_MAX_AGE)
+        bool coveredByValidSummary = false;
+
+        for (auto& [sumPfx, s] : activeSummaries)
+        {
+            if (!Functions::compareNetworkWithIp(sumPfx.addr, pfx.addr, sumPfx.prefixLength, pfx.af))
+                continue;
+
+            if (s.contributorCount == 0)
             {
-                specifics.push_back({
-                    .lsId = k.linkStateId,
-                    .prefix = entryPrefix(k, body),
-                    .originalMetric = metric,
-                    .originalTag = tagOf(body),
-                    .originalIsE2 = isE2,
-                    .covered = false,
-                    .suppressed = true
-                });
+                s.isType2 = isE2;
+            }
+            if (s.contributorCount != 0 && s.isType2 != isE2)
+            {
+                s.contributorCount = std::numeric_limits<uint32_t>::max();
                 continue;
             }
 
-            const IPPrefix pfx = entryPrefix(k, body);
+            if (s.contributorCount != std::numeric_limits<uint32_t>::max())
+                ++s.contributorCount;
 
-            bool coveredByValidSummary = false;
-
-            for (auto& [sumPfx, s] : activeSummaries)
-            {
-                if (!Functions::compareNetworkWithIp(sumPfx.addr, pfx.addr, sumPfx.prefixLength, pfx.af))
-                    continue;
-
-                if (s.contributorCount == 0)
-                {
-                    s.isType2 = isE2;
-                }
-                if (s.contributorCount != 0 && s.isType2 != isE2)
-                {
-                    s.contributorCount = std::numeric_limits<uint32_t>::max();
-                    continue;
-                }
-
-                if (s.contributorCount != std::numeric_limits<uint32_t>::max())
-                    ++s.contributorCount;
-
-                s.computedMetric = std::min(s.computedMetric, metric);
-                coveredByValidSummary = true;
-            }
-
-            specifics.push_back({
-                .lsId = k.linkStateId,
-                .prefix = pfx,
-                .originalMetric = metricOf(body),
-                .originalTag = tagOf(body),
-                .originalIsE2 = isE2Of(body),
-                .covered = coveredByValidSummary,
-                .suppressed = false
-            });
+            s.computedMetric = std::min(s.computedMetric, metric);
+            coveredByValidSummary = true;
         }
+
+        specifics.push_back({
+            .lsId = k.linkStateId,
+            .prefix = pfx,
+            .originalMetric = metricOf(body),
+            .originalTag = tagOf(body),
+            .originalIsE2 = isE2Of(body),
+            .covered = coveredByValidSummary,
+            .suppressed = false
+        });
     }
 
     for (auto& [_, s] : activeSummaries)
@@ -526,25 +508,42 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
         }
     }
 
-    originateExternals<Policy>(actions);
-}
+    if (configs->get<Config::Ospf::DISCARD_EXTERNAL>().load())
+    {
+        const uint8_t ad = configs->get<Config::Ospf::DISCARD_EXTERNAL_DISTANCE>().load();
 
-template<typename Policy>
-void OspfProcess::flood()
-{
-    std::shared_lock<std::shared_mutex> lock(areaMu);
-    for (auto& [_, area] : areas)
-        area.flood<Policy>();
+        for (const auto& [sumPfx, s] : activeSummaries)
+        {
+            const bool valid =
+                s.contributorCount > 0 &&
+                s.contributorCount != std::numeric_limits<uint32_t>::max() &&
+                !s.notAdvertise &&
+                s.discardPresent;
+
+            if (valid)
+            {
+                rib.installDiscardRoute(
+                    { sumPfx, std::nullopt },
+                    s.computedMetric,
+                    ad
+                );
+            }
+            else
+            {
+                rib.withdrawDiscardRoute({ sumPfx, std::nullopt });
+            }
+        }
+    }
+
+    originateExternals<Policy>(actions);
 }
 
 template <typename Policy>
 void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList)
 {
-    if (!isABR() || areaSize.load(std::memory_order_relaxed) == 1) return;
+    if (!isABR() || areas.size() == 1) return;
 
     std::vector<std::pair<LsaKey, LsaBody>> networks;
-
-    std::lock_guard<std::mutex> lock(intraMu);
 
     for (const auto& path : pathList)
     {
@@ -591,12 +590,11 @@ void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRou
         auto processLsas = [&](OspfArea& a)
         {
             for (auto& [key, network] : networks)
-                a.getOriginator().processReoriginatedLsa<Policy>(key, network);
+                a.getOriginator().originateLsa<Policy>(key, network, false);
         };
 
         if (sourceAreaId == 0) // Transit area reoriginates to all other normal areas.
         {
-            std::shared_lock<std::shared_mutex> lk(areaMu);
             for (auto& [id, area] : areas)
             {
                 if (id == 0) continue;
@@ -612,8 +610,72 @@ void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRou
     }
 }
 
-template void OspfProcess::distributeExternalLsa<PolicyV2>(const OspfArea&, IncomingLsaContext&, LsaBody&);
-template void OspfProcess::distributeExternalLsa<PolicyV3>(const OspfArea&, IncomingLsaContext&, LsaBody&);
+template <typename Policy>
+void OspfProcess::reoriginateSummary(OspfArea& sourceArea, OspfRouteChange& path)
+{
+    if (!isABR() || areas.size() == 1) return;
+
+    std::vector<std::pair<LsaKey, LsaBody>> networks;
+
+    LsaKey key;
+    LsaBody summary = typename Policy::InterNetworkLsa();
+
+    typename Policy::InterNetworkLsa& network = std::get<typename Policy::InterNetworkLsa>(summary);
+
+    if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
+    {
+        network.networkMask = Functions::prefixTo32Mask(path.prefix.prefixLength);
+        network.metric = static_cast<uint32_t>(path.cost);
+
+        key.advertisingRouter = getRouterId();
+        key.linkStateId = readU32(path.prefix.addr);
+        key.lsaType = OSPFV2_LSA_SUM_NET;
+    }
+    else
+    {
+        network.prefix = path.prefix;
+        network.metric = static_cast<uint32_t>(path.cost);
+        network.options = path.options;
+
+        key.advertisingRouter = getRouterId();
+        if (auto it = intraLsids.find(path.prefix); it != intraLsids.end())
+        {
+            key.linkStateId = it->second;
+        }
+        else
+        {
+            key.linkStateId = monotonicIntraId.fetch_add(1, std::memory_order_release);
+            intraLsids.emplace(path.prefix, key.linkStateId);
+        }
+
+        key.lsaType = OSPFV3_LSA_INTER_AREA_PREFIX;
+    }
+
+    uint32_t sourceAreaId = sourceArea.areaId;
+
+    auto processLsa = [&](OspfArea& a)
+    {
+        a.getOriginator().originateLsa<Policy>(key, summary, false);
+    };
+
+    if (sourceAreaId == 0) // Transit area reoriginates to all other normal areas.
+    {
+        for (auto& [id, area] : areas)
+        {
+            if (id == 0) continue;
+            if (!area.getFlags().getExternalRouting())
+                continue;
+            processLsa(area);
+        }
+    }
+    else if (auto* area = getArea(1); area) // Normal areas reoriginate to Transit area.
+    {
+        processLsa(*area);
+    }
+}
+
+template void OspfProcess::distributeExternalLsa<PolicyV2>(const OspfArea&, IncomingLsaContext&, const LsaBody&);
+template void OspfProcess::distributeExternalLsa<PolicyV3>(const OspfArea&, IncomingLsaContext&, const LsaBody&);
 
 template void OspfProcess::originateExternal<PolicyV2>(ExternalOriginateContext&, bool);
 template void OspfProcess::originateExternal<PolicyV3>(ExternalOriginateContext&, bool);
@@ -621,15 +683,18 @@ template void OspfProcess::originateExternal<PolicyV3>(ExternalOriginateContext&
 template void OspfProcess::originateExternals<PolicyV2>(std::vector<std::pair<ExternalOriginateContext, bool>>&);
 template void OspfProcess::originateExternals<PolicyV3>(std::vector<std::pair<ExternalOriginateContext, bool>>&);
 
-template std::pair<LsaKey, LsaBody> OspfProcess::buildExternal<PolicyV2>(ExternalOriginateContext&, bool);
-template std::pair<LsaKey, LsaBody> OspfProcess::buildExternal<PolicyV3>(ExternalOriginateContext&, bool);
+template LsaKey OspfProcess::buildExternalKey<PolicyV2>(ExternalOriginateContext&, bool);
+template LsaKey OspfProcess::buildExternalKey<PolicyV3>(ExternalOriginateContext&, bool);
+
+template void OspfProcess::buildExternalBody<PolicyV2>(ExternalOriginateContext&, PolicyV2::ExternalLsa&, bool);
+template void OspfProcess::buildExternalBody<PolicyV3>(ExternalOriginateContext&, PolicyV3::ExternalLsa&, bool);
 
 template void OspfProcess::syncSummarySuppression<PolicyV2>(std::unordered_map<IPPrefix, OspfSummaryAddress>&);
 template void OspfProcess::syncSummarySuppression<PolicyV3>(std::unordered_map<IPPrefix, OspfSummaryAddress>&);
 
-template void OspfProcess::flood<PolicyV2>();
-template void OspfProcess::flood<PolicyV3>();
-
 template void OspfProcess::reoriginateSummaries<PolicyV2>(OspfArea&, std::vector<OspfRouteChange>&);
 template void OspfProcess::reoriginateSummaries<PolicyV3>(OspfArea&, std::vector<OspfRouteChange>&);
+
+template void OspfProcess::reoriginateSummary<PolicyV2>(OspfArea&, OspfRouteChange&);
+template void OspfProcess::reoriginateSummary<PolicyV3>(OspfArea&, OspfRouteChange&);
 }

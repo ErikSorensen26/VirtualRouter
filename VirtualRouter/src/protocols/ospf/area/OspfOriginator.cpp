@@ -20,77 +20,163 @@ OspfOriginator::~OspfOriginator()
     nssaDefaultOriginate(false);
     addStubDefaultRoute(false);
 
-    for (const auto& [tid, _] : refreshTimers)
-        tmgr.cancelTimer(tid);
-    refreshTimers.clear();
+    cancelGroupPacing();
 }
 
-template <typename Policy>
-void OspfOriginator::startRefresh(RefreshInfo& info)
+void OspfOriginator::cancelGroupPacing()
 {
-    if (info.keys.empty()) return; // No keys refreshed, no need to start another timer.
-
-    if (info.activeTimerId.has_value()) // Id from prevous refresh
-        refreshTimers.erase(info.activeTimerId.value());
-
-    std::chrono::steady_clock::time_point expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(OSPF_REFRESH_AGE);
-    uint32_t tid = tmgr.addTimer(expireTime, [this](uint32_t tid) {
-        handleRefreshTimeout<Policy>(tid);
-    });
-
-    refreshTimers[tid] = std::move(info.keys);
-}
-
-template <typename Policy>
-void OspfOriginator::handleRefreshTimeout(uint32_t tid)
-{
-    auto refresh = refreshTimers.find(tid);
-    if (refresh == refreshTimers.end()) return;
-
-    constexpr uint16_t routerType = std::is_same_v<typename Policy::RouterLsa, RouterLsaV2>
-        ? OSPFV2_LSA_ROUTER : OSPFV3_LSA_ROUTER;
-    constexpr uint16_t networkType = std::is_same_v<typename Policy::NetworkLsa, NetworkLsaV2>
-        ? OSPFV2_LSA_NETWORK : OSPFV3_LSA_NETWORK;
-    constexpr uint16_t asbrType = std::is_same_v<typename Policy::InterRouterLsa, InterAreaRouterLsa>
-        ? OSPFV2_LSA_SUM_ASBR : OSPFV3_LSA_INTER_AREA_ROUTER;
-
-    auto& ifaceMgr = area.process().getIfaceMgr();
-    RefreshInfo info{.isRefresh = true, .activeTimerId = tid};
-
-    bool processRouter = false;
-
-    for (const auto& key : refresh->second)
+    for (auto& b : refreshBuckets)
     {
+        if (b.timerId != 0)
+            tmgr.cancelTimer(b.timerId);
+        b.timerId = 0;
+        b.keys.clear();
+    }
+    refreshBuckets.clear();
+    keyToBucket.clear();
+}
+
+void OspfOriginator::scheduleForGroupPacing(const LsaKey& key)
+{
+    // Only self-originated lsas that still exist should be refreshed
+    if (originationState.find(key) == originationState.end())
+        return;
+    if (keyToBucket.find(key) != keyToBucket.end())
+        return;
+    if (refreshBuckets.empty())
+        return;
+
+    uint32_t idx = static_cast<uint32_t>(std::hash<LsaKey>{}(key) % refreshBuckets.size());
+
+    keyToBucket.emplace(key, idx);
+    refreshBuckets[idx].keys.push_back(key);
+}
+
+void OspfOriginator::unscheduleForGroupPacing(const LsaKey& key)
+{
+    auto it = keyToBucket.find(key);
+    if (it == keyToBucket.end())
+        return;
+
+    uint32_t idx = it->second;
+    keyToBucket.erase(it);
+
+    if (idx >= refreshBuckets.size())
+        return;
+
+    auto& vec = refreshBuckets[idx].keys;
+    vec.erase(std::remove(vec.begin(), vec.end(), key), vec.end());
+}
+
+template <typename Policy>
+void OspfOriginator::initGroupPacing()
+{
+    cancelGroupPacing();
+
+    uint32_t groupIntervalSec = area.process().getConfigs().get<Config::Ospf::LSA_GROUP_PACING>().load();
+    uint32_t bucketCount = (OSPF_REFRESH_AGE + groupIntervalSec - 1) / groupIntervalSec;
+
+    if (bucketCount == 0) bucketCount = 1;
+
+    refreshBuckets.resize(bucketCount);
+
+    const auto now = std::chrono::steady_clock::now();
+
+    for (uint32_t i = 0; i < bucketCount; ++i)
+    {
+        auto firstFire = now + std::chrono::seconds(i * groupIntervalSec);
+
+        refreshBuckets[i].timerId = tmgr.addTimer(firstFire, [this, i](uint32_t tid)
+        {
+            this->handleGroupPackingBucket<Policy>(tid, i);
+        });
+    }
+
+    for (const auto& [key, info] : originationState)
+    {
+        if (!info.expire)
+            scheduleForGroupPacing(key);
+    }
+}
+
+template <typename Policy>
+void OspfOriginator::handleGroupPackingBucket(uint32_t tid, uint32_t bucketIndex)
+{
+    if (bucketIndex >= refreshBuckets.size())
+        return;
+
+    auto& bucket = refreshBuckets[bucketIndex];
+    if (bucket.timerId != tid)
+        return;
+
+    std::vector<LsaKey> keys = bucket.keys;
+
+    auto ifaceMgr = area.process().getIfaceMgr();
+
+    bool needsRouterRefresh = false;
+
+    for (const auto& key : keys)
+    {
+        auto it = originationState.find(key);
+        if (it == originationState.end())
+        {
+            unscheduleForGroupPacing(key);
+            continue;
+        }
+
+        if (it->second.expire)
+        {
+            continue;
+        }
+
         switch (key.lsaType)
         {
-            case routerType:
+            case Policy::RouterLsaType:
             {
-                if (!processRouter)
-                {
-                    if (processRouter) addRouterLsa(std::nullopt, info);
-                    processRouter = true;
-                }
+                needsRouterRefresh = true;
                 break;
             }
-            case networkType:
+            case Policy::NetworkLsaType:
             {
                 auto* iface = ifaceMgr.getInterface(OspfInterfaceId{key.linkStateId, area.areaId});
-                if (!iface) break;
-                addNetworkLsa(*iface, info);
+                if (!iface)
+                    removeNetworkLsa(key.linkStateId);
+                else
+                    addNetworkLsa(*iface, true);
                 break;
             }
-            case asbrType:
+            case Policy::InterRouterType:
             {
-                addAsbrLsa(key.linkStateId, info);
+                addAsbrLsa(key.linkStateId, true);
+                break;
+            }
+            default:
+            {
+                it->second.refresh = true;
+                processOriginatedLsa<Policy>(key);
+                it = originationState.find(key);
+                if (it != originationState.end())
+                    it->second.refresh = false;
+                break;
             }
         }
     }
 
-    startRefresh<Policy>(info);
-    area.flood<Policy>();
+    if (needsRouterRefresh)
+        addRouterLsa(std::nullopt, true, true);
+
+    uint32_t groupIntervalSec = area.process().getConfigs().get<Config::Ospf::LSA_GROUP_PACING>().load();
+    uint32_t bucketCount = static_cast<uint32_t>(refreshBuckets.size());
+    auto period = std::chrono::seconds(bucketCount * groupIntervalSec);
+
+    auto nextFire = std::chrono::steady_clock::now() + period;
+    bucket.timerId = tmgr.addTimer(nextFire, [this, bucketIndex](uint32_t tid2)
+    {
+        this->handleGroupPackingBucket<Policy>(tid2, bucketIndex);
+    });
 }
 
-void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, RefreshInfo& refresh, bool attemptNetLsa)
+void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, bool refresh, bool attemptNetLsa)
 {
     if (iface.getAreaId() != area.areaId) return;
 
@@ -175,7 +261,69 @@ void OspfOriginator::addRouterLink(LsaBody& router, const OspfInterface& iface, 
 }
 
 template <typename Policy>
-void OspfOriginator::processReoriginatedLsa(const LsaKey& key, LsaBody& body, bool refresh, bool expire)
+void OspfOriginator::requestReorigination(const LsaKey& key)
+{
+    auto& cfgs = area.process().getConfigs();
+    auto& info = originationState[key];
+    auto& state = info.throttleInfo;
+
+    uint32_t delayMs = cfgs.get<Config::Ospf::LSA_THROTTLE_DELAY>().load();
+    uint32_t holdMs = cfgs.get<Config::Ospf::LSA_THROTTLE_HOLD>().load();
+    uint32_t maxMs = cfgs.get<Config::Ospf::LSA_THROTTLE_MAX>().load();
+
+    auto now = std::chrono::steady_clock::now();
+
+    // If already pending, nothing to do
+    if (state.pending.load(std::memory_order_relaxed))
+        return;
+
+    uint32_t fireDelay = 0;
+
+    // First re-origination
+    if (state.lastOriginate == std::chrono::steady_clock::time_point{})
+    {
+        state.backoffMs = delayMs;
+        fireDelay = delayMs;
+    }
+    else
+    {
+        // Enforce hold timer
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - state.lastOriginate).count();
+
+        uint32_t holdRemaining = elapsed < holdMs ? static_cast<uint32_t>(holdMs - elapsed) : 0;
+
+        state.backoffMs = state.backoffMs == 0
+            ? delayMs
+            : std::min(state.backoffMs * 2,  maxMs);
+
+        fireDelay = std::max(state.backoffMs, holdRemaining);
+    }
+
+    state.pending = true;
+    state.nextFire = now + std::chrono::milliseconds(fireDelay);
+
+    state.timerId = tmgr.addTimer(state.nextFire, [this, key](uint32_t)
+    {
+        this->runReorigination<Policy>(key);
+    });
+}
+
+template <typename Policy>
+void OspfOriginator::runReorigination(const LsaKey& key)
+{
+    auto it = originationState.find(key);
+    if (it == originationState.end())
+        return;
+
+    processReoriginatedLsa<Policy>(key, it->second);
+
+    auto& info = it->second.throttleInfo;
+    info.lastOriginate = std::chrono::steady_clock::now();
+    info.pending.store(false, std::memory_order_release);
+}
+
+template <typename Policy>
+void OspfOriginator::processReoriginatedLsa(const LsaKey& key, const OriginationInfo& info)
 {
     LsaHeader hdr{};
     IncomingLsaContext ctx = {
@@ -188,41 +336,47 @@ void OspfOriginator::processReoriginatedLsa(const LsaKey& key, LsaBody& body, bo
     if constexpr (std::is_same_v<Policy, PolicyV2>)
     {
         uint32_t options = area.getFlags().getFlags();
-        if (key.linkStateId == OSPFV2_LSA_NSSA)
+        if (key.lsaType == OSPFV2_LSA_NSSA)
             InterfaceFlagManager::setPropagate(options, true);
         InterfaceFlagManager::setDemandCircuits(options, true);
         ctx.header.options = static_cast<uint8_t>(options);
     }
     ctx.selfOriginatedKey = true;
-    ctx.header.age = expire ? OSPF_MAX_AGE : 0;
-    FloodReason reason = expire ? FloodReason::FLUSH : refresh ? FloodReason::REFRESH : FloodReason::UPDATE;
+    ctx.header.age = info.expire ? OSPF_MAX_AGE : 0;
+    FloodReason reason = info.expire ? FloodReason::FLUSH : info.refresh ? FloodReason::REFRESH : FloodReason::UPDATE;
     ctx.info = {.reason = reason};
     ctx.header.sequence = existing
         ? existing->header.sequence + 1 : 0;
 
-    auto results = runLsaCalculations<Policy>(ctx.header, key, body);
+    auto results = runLsaCalculations<Policy>(ctx.header, key, info.body);
 
     ctx.header.length = results.size;
     ctx.header.checksum = results.checksum;
 
-    (void)area.processLsa<Policy>(ctx, body);
+    (void)area.processLsa<Policy>(ctx, info.body);
+
+    if (info.expire)
+    {
+        unscheduleForGroupPacing(key);
+        originationState.erase(key);
+    }
 }
 
 template <typename Policy>
-void OspfOriginator::originateExternalLsa(const LsaKey& key, LsaBody& body, bool expire)
+void OspfOriginator::originateLsa(const LsaKey& key, const LsaBody& body, bool expire)
 {
-    processOriginatedLsa<Policy>(key, body, expire);
+    auto& info = originationState[key];
+    info.body = body;
+    info.expire = expire;
+    processOriginatedLsa<Policy>(key);
 }
 
 template <typename Policy>
-void OspfOriginator::processOriginatedLsa(const LsaKey& key, LsaBody& body, bool expire, RefreshInfo* refresh)
+void OspfOriginator::processOriginatedLsa(const LsaKey& key)
 {
-    processReoriginatedLsa<Policy>(key, body, refresh == nullptr, expire);
+    scheduleForGroupPacing(key);
 
-    if (refresh)
-        refresh->keys.push_back(key);
-    else
-        lsaRefreshes.erase(key);
+    requestReorigination<Policy>(key);
 }
 
 void OspfOriginator::nssaDefaultOriginate(bool add)
@@ -255,30 +409,44 @@ void OspfOriginator::nssaDefaultOriginate(bool add)
     auto& process = area.process();
     if (process.isV3)
     {
-        auto lsa = process.buildExternal<PolicyV3>(ctx, true);
-        processOriginatedLsa<PolicyV3>(lsa.first, lsa.second, !add);
+        LsaKey key = process.buildExternalKey<PolicyV3>(ctx, true);
+        auto& ext = originationState[key];
+        ext.body = ExternalLsaV3();
+        ext.expire = !add;
+        process.buildExternalBody<PolicyV3>(ctx, std::get<ExternalLsaV3>(ext.body), true);
+        processOriginatedLsa<PolicyV3>(key);
     }
     else
     {
-        auto lsa = process.buildExternal<PolicyV2>(ctx, true);
-        processOriginatedLsa<PolicyV2>(lsa.first, lsa.second, !add);
+        LsaKey key = process.buildExternalKey<PolicyV2>(ctx, true);
+        auto& ext = originationState[key];
+        ext.body = ExternalLsaV2();
+        ext.expire = !add;
+        process.buildExternalBody<PolicyV2>(ctx, std::get<ExternalLsaV2>(ext.body), true);
+        processOriginatedLsa<PolicyV2>(key);
     }
 
     if (!add) nssaDefaultRoute.reset();
 }
 
-template void OspfOriginator::startRefresh<PolicyV2>(RefreshInfo&);
-template void OspfOriginator::startRefresh<PolicyV3>(RefreshInfo&);
+template void OspfOriginator::initGroupPacing<PolicyV2>();
+template void OspfOriginator::initGroupPacing<PolicyV3>();
 
-template void OspfOriginator::handleRefreshTimeout<PolicyV2>(uint32_t);
-template void OspfOriginator::handleRefreshTimeout<PolicyV3>(uint32_t);
+template void OspfOriginator::handleGroupPackingBucket<PolicyV2>(uint32_t, uint32_t);
+template void OspfOriginator::handleGroupPackingBucket<PolicyV3>(uint32_t, uint32_t);
 
-template void OspfOriginator::processReoriginatedLsa<PolicyV2>(const LsaKey&, LsaBody&, bool, bool);
-template void OspfOriginator::processReoriginatedLsa<PolicyV3>(const LsaKey&, LsaBody&, bool, bool);
+template void OspfOriginator::requestReorigination<PolicyV2>(const LsaKey&);
+template void OspfOriginator::requestReorigination<PolicyV3>(const LsaKey&);
 
-template void OspfOriginator::originateExternalLsa<PolicyV2>(const LsaKey&, LsaBody&, bool);
-template void OspfOriginator::originateExternalLsa<PolicyV3>(const LsaKey&, LsaBody&, bool);
+template void OspfOriginator::runReorigination<PolicyV2>(const LsaKey&);
+template void OspfOriginator::runReorigination<PolicyV3>(const LsaKey&);
 
-template void OspfOriginator::processOriginatedLsa<PolicyV2>(const LsaKey&, LsaBody&, bool, RefreshInfo*);
-template void OspfOriginator::processOriginatedLsa<PolicyV3>(const LsaKey&, LsaBody&, bool, RefreshInfo*);
+template void OspfOriginator::processReoriginatedLsa<PolicyV2>(const LsaKey&, const OriginationInfo&);
+template void OspfOriginator::processReoriginatedLsa<PolicyV3>(const LsaKey&, const OriginationInfo&);
+
+template void OspfOriginator::originateLsa<PolicyV2>(const LsaKey&, const LsaBody&, bool);
+template void OspfOriginator::originateLsa<PolicyV3>(const LsaKey&, const LsaBody&, bool);
+
+template void OspfOriginator::processOriginatedLsa<PolicyV2>(const LsaKey&);
+template void OspfOriginator::processOriginatedLsa<PolicyV3>(const LsaKey&);
 }

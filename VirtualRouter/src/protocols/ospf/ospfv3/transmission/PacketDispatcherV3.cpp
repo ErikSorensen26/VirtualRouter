@@ -34,9 +34,38 @@ PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface, Config::Reference<C
     }())
 {}
 
+void PacketDispatcherV3::transmit(PacketBuilder& pkt, const uint8_t* dest)
+{
+    auto* interface = &iface.getIface();
+
+    const uint8_t* destination = dest;
+    if (!dest)
+    {
+        if (iface.isDr.load(std::memory_order_relaxed))
+            destination = OSPFV3_ALL_SPF_ROUTERS;
+        else
+            destination = OSPFV3_ALL_D_ROUTERS;
+    }
+
+    Protocol::IPPacket::BuildIP build = {
+        .iface = interface,
+        .packetInfo = pkt,
+        .destIp = destination,
+        .hopLimit = 1,
+        .protocolType = IP_OSPF
+    };
+
+    af == AddressFamily::IPv4
+        ? Protocol::IPPacket::buildIpv4(build)
+        : Protocol::IPPacket::buildIpv6(build);
+}
+
 bool PacketDispatcherV3::setupDbd(Neighbor& neighbor, Ospfv3Header& pkt)
 {
     Retransmission& rtr = neighbor.getRtr();
+    if (rtr.getDbdActive())
+        iface.getTimers().startDbdRetransmissionTimer(neighbor);
+
     Ospfv3DBDHeader dbd;
     dbd.setBuffer(pkt.getTrailData());
     uint32_t seqNum = dbd.getSeqNum();
@@ -44,7 +73,6 @@ bool PacketDispatcherV3::setupDbd(Neighbor& neighbor, Ospfv3Header& pkt)
         return false;
 
     {
-        std::lock_guard<std::mutex> lock(rtr.reliableMtx);
         rtr.dbdPacket = UnicastPacket{
             pkt.buffer,
             Ospfv3Header::fixedSize + pkt.getTrail().size(),
@@ -56,42 +84,7 @@ bool PacketDispatcherV3::setupDbd(Neighbor& neighbor, Ospfv3Header& pkt)
     return true;
 }
 
-void PacketDispatcherV3::setupLsu(Neighbor& neighbor, std::vector<LsaRecordRef>& records)
-{
-    Retransmission& rtr = neighbor.getRtr();
-    std::lock_guard<std::mutex> lock(rtr.reliableMtx);
-    bool active = rtr.getLsuActive();
-    for (auto& lsa : records)
-    {
-        rtr.addLsu(lsa);
-    }
-    if (active)
-        iface.getTimers().startLsuRetransmissionTimer(neighbor);
-}
-
-void PacketDispatcherV3::setupLsr(Neighbor& neighbor, const std::vector<LsaKey>& keys)
-{
-    Retransmission& rtr = neighbor.getRtr();
-    std::lock_guard<std::mutex> lock(rtr.reliableMtx);
-    bool active = rtr.getLsrActive();
-    for (auto& lsa : keys)
-    {
-        rtr.addLsr(lsa);
-    }
-    if (active)
-        iface.getTimers().startLsrRetransmissionTimer(neighbor);
-}
-
-void PacketDispatcherV3::setupMulticastLsu(std::vector<LsaRecordRef>& keys)
-{
-    std::shared_lock<std::shared_mutex> lock(ntable.mu);
-    for (auto& [_, nbr] : ntable.neighbors)
-    {
-        setupLsu(nbr, keys);
-    }
-}
-
-void PacketDispatcherV3::retransmitDbd(Neighbor& nbr)
+void PacketDispatcherV3::onDbdRetransmissionTimer(Neighbor& nbr)
 {
     PacketBuilder retransmissionPacket(&iface.getIface());
     af == AddressFamily::IPv4

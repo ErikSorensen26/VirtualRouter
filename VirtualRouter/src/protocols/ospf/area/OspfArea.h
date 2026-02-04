@@ -8,10 +8,10 @@
 #include <Registry.hpp>
 #include <LsdbTable.h>
 #include <SpfManager.h>
-#include "FloodQueue.hpp"
 #include "FloodTypes.hpp"
 #include "OspfFlagManager.h"
 #include "OspfOriginator.h"
+#include "FloodManager.h"
 
 namespace OSPF
 {
@@ -72,12 +72,14 @@ class OspfArea
 public:
     struct Result final
     {
+        LsaRecordFlags flags;
         FloodReason reason;
         InstallResult decision{};
         LsaRecord* record{nullptr};
     };
 
     explicit OspfArea(OspfProcess& base, uint32_t area, std::pmr::memory_resource* mr = std::pmr::get_default_resource());
+    ~OspfArea();
 
     // Getters
     LsdbTable& lsdb() noexcept { return db; }
@@ -86,30 +88,27 @@ public:
     OspfProcess& process() { return base; }
     Config::OspfAreaRegistry& getConfigs() { return configs.get(); }
     const Config::OspfAreaRegistry& getConfigs() const noexcept { return configs.get(); }
-    FloodQueue& floodQueue() noexcept { return fq; }
-    const FloodQueue& floodQueue() const noexcept { return fq; }
     AreaFlagManager& getFlags() { return flags; }
     const AreaFlagManager& getFlags() const noexcept { return flags; }
     const SpfManager& getSpfManager() const noexcept { return spfMgr; }
+    FloodManager& getFloodManager() noexcept { return floodMgr; }
     OspfOriginator& getOriginator() { return originator; }
 
-    // Flooding
-    template<typename Policy>
-    void flood();
-    template<typename Policy>
-    void scheduleFlood();
-    bool hasPendingFlood() const noexcept { return !fq.empty(); }
+    // Flood
     void send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
-    std::vector<std::pair<FloodInfo, LsaRecordRef>> tryDequeueFlood() { return fq.tryDequeueBatch(); }
 
     // Processing
     template <typename Policy>
     std::optional<Result> processLsa(IncomingLsaContext& ctx, LsaBody& body);
+    template <typename Policy>
+    std::optional<Result> processLsa(IncomingLsaContext& ctx, const LsaBody& body);
 
     template <typename Policy>
     void processSummaries(std::unordered_map<LsaKey, LsaBody>& summaries);
+    template <typename Policy>
+    void processExternalLsa(IncomingLsaContext& ctx, const LsaBody& body);
 
-    void processExternalLsa(IncomingLsaContext& ctx, LsaBody& body);
+    template <typename Policy>
     void evaluateDecision(Result& decision, const IncomingLsaContext& ctx);
     bool compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const;
 
@@ -133,8 +132,11 @@ public:
 protected:
     std::pmr::memory_resource* mr{nullptr};
 
-    std::atomic<bool> shouldRequestSpf;
     std::atomic<uint8_t> options;
+
+    size_t ignoreSize{0};
+    uint32_t ignoreTid{0};
+    uint32_t resetTid{0};
 
     Config::Reference<Config::OspfAreaRegistry> configs;
 
@@ -156,17 +158,26 @@ protected:
     std::unordered_map<IPPrefix, OspfAreaRange> ranges;
 
     LsdbTable db;
-    FloodQueue fq;
     OspfProcess& base;
     SpfManager spfMgr;
     AreaFlagManager flags;
+    FloodManager floodMgr;
 
     OspfOriginator& originator;
 private:
-    Result process(IncomingLsaContext& ctx, LsaBody& body);
+    bool onNewLsa();
+    void ignoreLsa();
+    void startIgnoreTimer();
+    void startResetTimer();
 
-    void enqueueFlood(LsaRecordRef& record, FloodInfo info);
-    void enqueueFlood(LsaRecordRef&& record, FloodInfo info);
+    void installLsa(Result& result, const IncomingLsaContext& ctx, LsaBody& body);
+    void installLsa(Result& result, const IncomingLsaContext& ctx, const LsaBody& body);
+
+    Result process(IncomingLsaContext& ctx, const LsaBody& body);
+    template <typename Policy>
+    bool preProcess(IncomingLsaContext& ctx, const LsaBody& body);
+    template <typename Policy>
+    void postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& body);
 
     // Ranges
     std::unordered_map<IPPrefix, std::pair<uint32_t, uint32_t>> computeRangeContributors(const std::vector<std::pair<IPPrefix, OspfPath>>& intraAreaRoutes, const std::unordered_map<IPPrefix, OspfAreaRange>& ranges);

@@ -193,7 +193,7 @@ bool PacketDispatcherV2::sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ack
 
         using AckList = std::span<LsaRecordRef>;
         AckList ackList = AckList(acks.data() + sent, acks.size() - sent);
-        size_t acksSent = buildLSAck(builder, ackList);
+        size_t acksSent = addLSAcks(builder, ackList);
         if (acksSent == 0) return false;
         sent += acksSent;
 
@@ -206,158 +206,100 @@ bool PacketDispatcherV2::sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ack
     return true;
 }
 
-bool PacketDispatcherV2::sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds)
+bool PacketDispatcherV2::sendLSRequest(Neighbor& nbr)
 {
-    auto requests = buildLSRequestList(dbds);
-    setupLsr(nbr, dbds);
-    for (auto& pkt : requests)
-        transmit(pkt, nbr.ipAddress.raw);
-    
+    auto request = buildLSRequest(nbr);
+    if (!request.has_value()) return false;
+    transmit(request.value(), nbr.ipAddress.raw);
     return true;
 }
 
-bool PacketDispatcherV2::sendLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds)
-{
-    auto requests = buildLSRequestList(dbds);
-    for (auto& pkt : requests)
-        transmit(pkt, nbr.ipAddress.raw);
-
-    return true;
-}
-
-bool PacketDispatcherV2::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys)
+bool PacketDispatcherV2::sendLSUpdate(Neighbor* nbr)
 {
     std::vector<LsaRecordRef> sent;
-    auto updates = buildLSUpdateList(keys, sent);
+    auto pkt = buildLSUpdate(nbr);
+    if (!pkt.has_value()) return false;
 
     if (nbr)
     {
-        setupLsu(*nbr, sent);
-        for (auto& pkt : updates)
-            transmit(pkt, nbr->ipAddress.raw);
+        transmit(pkt.value(), nbr->ipAddress.raw);
     }
     else
     {
         if (iface.isDr.load(std::memory_order_relaxed))
         {
-            for (auto& pkt : updates)
-                transmit(pkt, OSPFV2_ALL_SPF_ROUTERS);
+            transmit(pkt.value(), OSPFV2_ALL_SPF_ROUTERS);
         }
         else
         {
-            for (auto& pkt : updates)
-                transmit(pkt, OSPFV2_ALL_D_ROUTERS);
+            transmit(pkt.value(), OSPFV2_ALL_D_ROUTERS);
         }
     }
 
     return true;
 }
 
-bool PacketDispatcherV2::sendLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& keys)
+std::optional<PacketBuilder> PacketDispatcherV2::buildLSRequest(Neighbor& nbr)
 {
-    std::vector<LsaRecordRef> sent;
-    auto updates = buildLSUpdateList(keys, sent);
+    PacketBuilder pkt(&iface.getIface());
 
-    if (nbr)
+    auto ospfHeader = buildHeader(pkt, OSPFV2_TYPE_LINK_STATE_REQUEST);
+    if (!ospfHeader)
     {
-        for (auto& pkt : updates)
-            transmit(pkt, nbr->ipAddress.raw);
-    }
-    else
-    {
-        if (iface.isDr.load(std::memory_order_relaxed))
-        {
-            for (auto& pkt : updates)
-                transmit(pkt, OSPFV2_ALL_SPF_ROUTERS);
-        }
-        else
-        {
-            for (auto& pkt : updates)
-                transmit(pkt, OSPFV2_ALL_D_ROUTERS);
-        }
+        iface.getIface().tx->release(pkt.frame);
+        return std::nullopt;
     }
 
-    return true;
+    uint16_t maxSize = static_cast<uint16_t>(pkt.getMaxHeaderSize(getMtu()));
+    uint8_t* trail = ospfHeader->getTrailData();
+
+    OspfBuilder builder{pkt, trail, 0, maxSize};
+
+    size_t sent = addLSRequests(builder, nbr);
+    if (sent == 0) 
+    {
+        iface.getIface().tx->release(pkt.frame);
+        return std::nullopt;
+    }
+
+    finalizeHeader(*ospfHeader, builder);
+
+    return pkt;
 }
 
-std::deque<PacketBuilder> PacketDispatcherV2::buildLSRequestList(const std::vector<LsaKey>& dbds)
+std::optional<PacketBuilder> PacketDispatcherV2::buildLSUpdate(Neighbor* nbr)
 {
     size_t sent = 0;
 
-    std::deque<PacketBuilder> pkts;
-    while (sent < dbds.size())
+    PacketBuilder pkt(&iface.getIface());
+
+    auto ospfHeader = buildHeader(pkt, OSPFV2_TYPE_LINK_STATE_UPDATE);
+    if (!ospfHeader)
     {
-        PacketBuilder& pkt = pkts.emplace_back(&iface.getIface());
-
-        auto ospfHeader = buildHeader(pkt, OSPFV2_TYPE_LINK_STATE_REQUEST);
-        if (!ospfHeader)
-        {
-            pkts.pop_back();
-            return pkts;
-        }
-
-        uint16_t maxSize = static_cast<uint16_t>(pkt.getMaxHeaderSize(getMtu()));
-        uint8_t* trail = ospfHeader->getTrailData();
-
-        OspfBuilder builder{pkt, trail, 0, maxSize};
-
-        using ReqList = std::span<const LsaKey>;
-        ReqList reqList = ReqList(dbds.data() + sent, dbds.size() - sent);
-        size_t reqSent = buildLSRequest(builder, reqList);
-        if (reqSent == 0)
-        {
-            pkts.pop_back();
-            return pkts;
-        }
-        sent += reqSent;
-
-        finalizeHeader(*ospfHeader, builder);
+        iface.getIface().tx->release(pkt.frame);
+        return std::nullopt;
     }
 
-    return pkts;
-}
+    uint16_t maxSize = static_cast<uint16_t>(pkt.getMaxHeaderSize(getMtu()));
+    uint8_t* trail = ospfHeader->getTrailData();
 
-std::deque<PacketBuilder> PacketDispatcherV2::buildLSUpdateList(std::vector<std::pair<FloodInfo, LsaRecordRef>>& records, std::vector<LsaRecordRef>& sentKeys)
-{
-    size_t sent = 0;
+    // Reserve 2 bytes for LSA count
+    OspfBuilder builder{pkt, trail, 0, maxSize};
+    builder.offset += 2;
 
-    std::deque<PacketBuilder> pkts;
-    sentKeys.reserve(records.size());
-
-    while (sent < records.size())
+    auto updSent = addLSUpdates(builder, nbr);
+    if (sent == 0) return std::nullopt;
+    writeU16(trail, static_cast<uint16_t>(updSent));
+    if (updSent == 0)
     {
-        PacketBuilder& pkt = pkts.emplace_back(&iface.getIface());
-
-        auto ospfHeader = buildHeader(pkt, OSPFV2_TYPE_LINK_STATE_UPDATE);
-        if (!ospfHeader)
-        {
-            pkts.pop_back();
-            return pkts;
-        }
-
-        uint16_t maxSize = static_cast<uint16_t>(pkt.getMaxHeaderSize(getMtu()));
-        uint8_t* trail = ospfHeader->getTrailData();
-
-        // Reserve 2 bytes for LSA count
-        OspfBuilder builder{pkt, trail, 0, maxSize};
-        builder.offset += 2;
-
-        using UpdList = std::span<std::pair<FloodInfo, LsaRecordRef>>;
-        UpdList updList = UpdList(records.data() + sent, records.size() - sent);
-
-        auto updSent = buildLSUpdate(builder, sentKeys, updList);
-        writeU16(trail, static_cast<uint16_t>(updSent));
-        if (updSent == 0)
-        {
-            pkts.pop_back();
-            return pkts;
-        }
-        sent += updSent;
-
-        finalizeHeader(*ospfHeader, builder);
+        iface.getIface().tx->release(pkt.frame);
+        return std::nullopt;
     }
+    sent += updSent;
 
-    return pkts;
+    finalizeHeader(*ospfHeader, builder);
+
+    return pkt;
 }
 
 std::optional<Ospfv2Header> PacketDispatcherV2::buildHeader(PacketBuilder& pkt, uint8_t type)
@@ -473,25 +415,33 @@ std::optional<Ospfv2LSAHeader> PacketDispatcherV2::buildCopyLSAHeader(OspfBuilde
     return db;
 }
 
-size_t PacketDispatcherV2::buildLSRequest(OspfBuilder& builder, std::span<const LsaKey>& keys)
+size_t PacketDispatcherV2::addLSRequests(OspfBuilder& builder, Neighbor& nbr)
 {
     size_t sent{0};
-    for (auto& key : keys)
+    auto& list = nbr.getRtr().lsrs();
+
+    while (true)
     {
         if (!builder.hasRoom(Ospfv2LSRHeader::fixedSize))
-            return sent;
+            break;
+
+        LsaKey key;
+        if (!list.nextInBurst(key))
+            break;
+
         Ospfv2LSRHeader lsr;
         lsr.setBuffer(builder.getBuf());
         lsr.setType(key.lsaType);
         lsr.setLsID(key.linkStateId);
         lsr.setAdvRouter(key.advertisingRouter);
         builder.offset += Ospfv2LSRHeader::fixedSize;
+        list.markBurst();
         sent++;
     }
     return sent;
 }
 
-size_t PacketDispatcherV2::buildLSAck(OspfBuilder& builder, std::span<LsaRecordRef>& acks)
+size_t PacketDispatcherV2::addLSAcks(OspfBuilder& builder, std::span<LsaRecordRef>& acks)
 {
     size_t sent{0};
     for (auto& ack : acks)
@@ -503,28 +453,34 @@ size_t PacketDispatcherV2::buildLSAck(OspfBuilder& builder, std::span<LsaRecordR
     return sent;
 }
 
-size_t PacketDispatcherV2::buildLSUpdate(OspfBuilder& builder, std::vector<LsaRecordRef>& sentKeys, std::span<std::pair<FloodInfo, LsaRecordRef>>& records)
+size_t PacketDispatcherV2::addLSUpdates(OspfBuilder& builder, Neighbor* nbr)
 {
     // Filter for Intra lsas
-    bool filter = configs->get<Config::OspfInterface::DATABASE_FILTER>().load();
     bool floodReduction = iface.floodReduction.load(std::memory_order_relaxed);
 
     // Handle LSAs
     size_t sent{0};
-    for (auto& [info, record] : records)
+    
+    RetransmissionList<LsaKey, LsaRecordRef>& list = nbr
+        ? nbr->getRtr().lsus() : multicastLsus;
+
+    while (true)
     {
-        if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
-        {
-            auto& lsa = record.record;
-            auto& key = record.key;
-            if (!builder.hasRoom(lsa->header.length)) return sent;
-            if (!buildLSAHeader(builder, key, *lsa, floodReduction)) return sent;
-            if (!buildLSABody(builder, *lsa, static_cast<uint8_t>(key.lsaType))) return sent;
-            builder.offset += (lsa->header.length - Ospfv2LSAHeader::fixedSize);
-            sentKeys.push_back(std::move(record));
-        }
+        LsaRecordRef record;
+        if (!list.nextInBurst(record))
+            break;
+
+        auto& lsa = record.record;
+        auto& key = record.key;
+        if (!builder.hasRoom(lsa->header.length)) return sent;
+        if (!buildLSAHeader(builder, key, *lsa, floodReduction)) return sent;
+        if (!buildLSABody(builder, *lsa, static_cast<uint8_t>(key.lsaType))) return sent;
+
+        builder.offset += (lsa->header.length - Ospfv2LSAHeader::fixedSize);
+        list.markBurst();
         sent++;
     }
+
     return sent;
 }
 

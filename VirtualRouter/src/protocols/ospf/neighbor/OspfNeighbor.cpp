@@ -48,14 +48,17 @@ bool Neighbor::setState(Neighbor::State s)
     switch (s)
     {
         case State::DOWN:
+        {
+            // TODO: clear routes out of lsdb
+        }
         case State::ATTEMPT:
         case State::INIT:
-            state.store(s, std::memory_order_release);
+            state = s;
             break;
 
         case State::TWOWAY:
         {
-            state.store(s, std::memory_order_release);
+            state = s;
             
             auto ntype = iface.getConfigs().get<Config::OspfInterface::NETWORK>().load();
             if (ntype == NetworkType::BROADCAST ||
@@ -72,8 +75,8 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState != State::EXSTART)
             {
-                rtr.clearLsr();
-                state.store(s, std::memory_order_release);
+                rtr.lsrs().clear();
+                state = s;
                 iface.getDispatcher().sendInitDBD(*this);
             }
             break;
@@ -83,7 +86,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState == State::EXSTART)
             {
-                state.store(s, std::memory_order_release);
+                state = s;
                 currentDbd = LsaKey{}; // Reset current LSA key
                 if (getRole() == Role::MASTER)
                     iface.getDispatcher().sendDBD(*this);
@@ -95,16 +98,15 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState == State::EXCHANGE)
             {
-                std::lock_guard<std::mutex> lock(rtr.getRelMtx());
-                if (!rtr.getLsrActive())
+                if (!rtr.lsrs().getActive())
                 {
                     // Go straight to LOADING
                     setState(Neighbor::State::LOADING);
                 }
                 else
                 {
-                    state.store(s, std::memory_order_release);
-                    iface.getDispatcher().sendReliableLSRequest(*this, rtr.getLsr());
+                    state = s;
+                    iface.getDispatcher().sendReliableLSRequest(*this, rtr.lsrs().getAll());
                 }
             }
             break;
@@ -114,7 +116,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             if (oldState == State::EXCHANGE || oldState == State::LOADING)
             {
-                state.store(s, std::memory_order_release);
+                state = s;
                 if (iface.demandCircuit.load(std::memory_order_relaxed) == OspfInterface::DcDecision::ENABLED)
                     iface.getTimers().stopHello();
             }

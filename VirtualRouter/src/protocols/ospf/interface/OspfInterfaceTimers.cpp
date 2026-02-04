@@ -4,7 +4,7 @@
 #include <OspfNeighbor.h>
 #include <OspfInterface.h>
 #include <TimeManager.h>
-#include <algorithm>
+#include <OspfProcess.h>
 
 namespace OSPF
 {
@@ -21,7 +21,6 @@ void InterfaceTimers::scheduleHello()
     if (helloTimerId.load(std::memory_order_relaxed) != 0)
         return; // Timer already active
     {
-        std::lock_guard<std::mutex> lock(helloTimerMutex);
         if (helloStartTime.time_since_epoch().count() == 0)
         {
             helloStartTime = std::chrono::steady_clock::now();
@@ -62,7 +61,6 @@ void InterfaceTimers::sendHello()
     {
         // Send unicast hello for each neighbor
         auto& ntable = iface.getNTable();
-        std::shared_lock<std::shared_mutex> lock(ntable.mu);
         for (auto& [_, nbr] : ntable.neighbors)
             if (nbr.unicast)
                 dispatcher.sendUnicastHello(nbr);
@@ -91,42 +89,76 @@ void InterfaceTimers::cancleInactiveTimer(Neighbor& neighbor)
 
 void InterfaceTimers::handleInactiveTimeExpire(Neighbor& neighbor)
 {
-    auto& dispatcher = iface.getDispatcher();
-    // TODO: set neighbor down
+    neighbor.setState(Neighbor::State::DOWN);
 }
 
 void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
 {
     uint16_t timeout = iface.getConfigs().get<Config::OspfInterface::RETRANSMIT_INTERVAL>().load();
-    uint32_t timerId = nbr.getRtr().dbdTimerId.load(std::memory_order_relaxed);
-    if (timerId != 0) tmgr.cancelTimer(timerId);
+
+    uint32_t& tid = nbr.getRtr().dbdTimerId;
+    if (tid != 0) tmgr.cancelTimer(tid);
+
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
-    timerId = tmgr.addTimer(expirationTime, [this, &nbr](uint32_t) {
-        iface.getDispatcher().retransmitDbd(nbr);
+    tid = tmgr.addTimer(expirationTime, [this, &nbr](uint32_t)
+    {
+        iface.getDispatcher().onDbdRetransmissionTimer(nbr);
     });
-    nbr.getRtr().dbdTimerId.store(timerId, std::memory_order_release);
 }
 
 void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
 {
     uint16_t timeout = iface.getConfigs().get<Config::OspfInterface::RETRANSMIT_INTERVAL>().load();
-    uint32_t timerId = nbr.getRtr().lsrTimerId.load(std::memory_order_relaxed);
-    if (timerId != 0) tmgr.cancelTimer(timerId);
+
+    uint32_t& tid = nbr.getRtr().lsrs().retransmitTimerId;
+    if (tid != 0) tmgr.cancelTimer(tid);
+
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
-    timerId = tmgr.addTimer(expirationTime, [this, &nbr](uint32_t) {
-        iface.getDispatcher().retransmitLsr(nbr);
+    tid = tmgr.addTimer(expirationTime, [this, &nbr](uint32_t)
+    {
+        iface.getDispatcher().onLsrRetransmissionTimer(nbr);
     });
 }
 
 void InterfaceTimers::startLsuRetransmissionTimer(Neighbor& nbr)
 {
     uint16_t timeout = iface.getConfigs().get<Config::OspfInterface::RETRANSMIT_INTERVAL>().load();
-    uint32_t timerId = nbr.getRtr().lsuTimerId.load(std::memory_order_relaxed);
-    if (timerId != 0) tmgr.cancelTimer(timerId);
+
+    uint32_t& tid = nbr.getRtr().lsus().retransmitTimerId;
+    if (tid != 0) tmgr.cancelTimer(tid);
+
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
-    timerId = tmgr.addTimer(expirationTime, [this, &nbr](uint32_t) {
-        iface.getDispatcher().retransmitLsu(nbr);
+    tid = tmgr.addTimer(expirationTime, [this, &nbr](uint32_t)
+    {
+        iface.getDispatcher().onLsuRetransmissionTimer(nbr);
     });
-    nbr.getRtr().lsuTimerId.store(timerId, std::memory_order_release);
+}
+
+void InterfaceTimers::startLsrPacingTimer(Neighbor& nbr)
+{
+    uint8_t timeout = iface.getProcess().getConfigs().get<Config::Ospf::RETRANSMISSION_PACING>().load();
+
+    uint32_t& tid = nbr.getRtr().lsrs().pacingTimerId;
+    if (tid != 0) tmgr.cancelTimer(tid);
+
+    auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout));
+    tid = tmgr.addTimer(expirationTime, [this, &nbr](uint32_t)
+    {
+        iface.getDispatcher().onLsrPacingTimer(nbr);
+    });
+}
+
+void InterfaceTimers::startLsuPacingTimer(Neighbor* nbr)
+{
+    uint8_t timeout = iface.getProcess().getConfigs().get<Config::Ospf::RETRANSMISSION_PACING>().load();
+
+    uint32_t& tid = nbr ? nbr->getRtr().lsrs().pacingTimerId : iface.getDispatcher().getMulticastLsu().pacingTimerId;
+    if (tid != 0) tmgr.cancelTimer(tid);
+
+    auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout));
+    tid = tmgr.addTimer(expirationTime, [this, nbr](uint32_t)
+    {
+        iface.getDispatcher().onLsuPacingTimer(nbr);
+    });
 }
 }

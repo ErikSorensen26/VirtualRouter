@@ -4,10 +4,7 @@
 #define OSPF_TYPES_HPP
 
 #include <AddressFamily.hpp>
-#include <optional>
 #include <IPAddress.hpp>
-#include <shared_mutex>
-#include <map>
 
 #include <Ospfv2LSAHeader.hpp>
 #include <Ospfv3LSAHeader.hpp>

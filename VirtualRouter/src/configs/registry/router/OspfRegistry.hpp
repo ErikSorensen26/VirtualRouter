@@ -199,10 +199,10 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<bool, true, Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>,
     ValueField<std::string, Ospf::DEFAULT_ORIGINATE_ROUTE_MAP>, // TODO:
     OptionalAtomicField<uint32_t, Ospf::DEFAULT_METRIC>, // XXX: // Default for external routes
-    AtomicField<bool, true, Ospf::DISCARD_INTERNAL>, // XXX:
-    AtomicField<uint8_t, 110, Ospf::DISCARD_INTERNAL_DISTANCE>, // XXX:
-    AtomicField<bool, true, Ospf::DISCARD_EXTERNAL>, // XXX:
-    AtomicField<uint8_t, 110, Ospf::DISCARD_EXTERNAL_DISTANCE>, // XXX:
+    AtomicField<bool, true, Ospf::DISCARD_INTERNAL>,
+    AtomicField<uint8_t, 110, Ospf::DISCARD_INTERNAL_DISTANCE>,
+    AtomicField<bool, true, Ospf::DISCARD_EXTERNAL>,
+    AtomicField<uint8_t, 110, Ospf::DISCARD_EXTERNAL_DISTANCE>,
     OptionalAtomicField<std::nullptr_t, Ospf::DISTANCE>, // XXX:
     AtomicField<uint8_t, 110, Ospf::EXTERNAL_DISTANCE>,
     AtomicField<uint8_t, 110, Ospf::INTER_AREA_DISTANCE>,
@@ -224,15 +224,15 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<bool, false, Ospf::LRC_NSSA_TRANSLATION>, // XXX:
     AtomicField<bool, false, Ospf::MAX_METRIC_EXTERNAL>, // XXX:
     AtomicField<uint32_t, 16711680, Ospf::MAX_METRIC_EXTERNAL_OVERRIDE>, // XXX:
-    AtomicField<bool, false, Ospf::MAX_METRIC_INCLUDE_STUB>, // XXX:
+    AtomicField<bool, false, Ospf::MAX_METRIC_INCLUDE_STUB>,
     OptionalAtomicField<uint16_t, Ospf::MAX_METRIC_ON_STARTUP_TIME>, // XXX:
     AtomicField<bool, false, Ospf::MAX_METRIC_ON_STARTUP_WAIT_FOR_BGP>, // XXX:
-    AtomicField<bool, false, Ospf::MAX_METRIC_SUMMARY_LSA>, // XXX:
-    OptionalAtomicField<uint32_t, Ospf::MAX_LSA>, // XXX:
-    AtomicField<uint8_t, 75, Ospf::MAX_LSA_THRESHOLD>, // XXX:
-    OptionalAtomicField<uint16_t, Ospf::MAX_LSA_IGNORE_COUNT>, // XXX:
-    AtomicField<uint16_t, 5, Ospf::MAX_LSA_IGNORE_TIME>, // XXX:
-    OptionalAtomicField<uint16_t, Ospf::MAX_LSA_RESET_TIME>, // XXX:
+    AtomicField<bool, false, Ospf::MAX_METRIC_SUMMARY_LSA>,
+    OptionalAtomicField<uint32_t, Ospf::MAX_LSA>,
+    AtomicField<uint8_t, 75, Ospf::MAX_LSA_THRESHOLD>,
+    OptionalAtomicField<uint16_t, Ospf::MAX_LSA_IGNORE_COUNT>,
+    AtomicField<uint16_t, 5, Ospf::MAX_LSA_IGNORE_TIME>,
+    OptionalAtomicField<uint16_t, Ospf::MAX_LSA_RESET_TIME>,
     AtomicField<bool, false, Ospf::MAX_LSA_WARNING_ONLY>, // XXX:
     AtomicField<uint8_t, 4, Ospf::MAXIMUM_PATHS>,
     ValueField<std::vector<uint32_t>, Ospf::MPLS_LDP_AREAS>, // TODO:
@@ -250,19 +250,19 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     OptionalAtomicField<uint32_t, Ospf::UPDATE_QUEUE_DEPTH>, // XXX:
     OptionalAtomicField<uint32_t, Ospf::ROUTER_ID>,
     AtomicField<bool, false, Ospf::SHUTDOWN>, // XXX:
-    AtomicField<uint32_t, 1000, Ospf::LSA_ARRIVAL>, // XXX: time needed in order to accept a new version of a lsa
-    AtomicField<uint8_t, 33, Ospf::FLOOD_PACING>, // XXX: spaces flood packets apart
-    AtomicField<uint16_t, 240, Ospf::LSA_GROUP_PACING>, // XXX: spaces out checksumming and refreshing
-    AtomicField<uint8_t, 66, Ospf::RETRANSMISSION_PACING>, // XXX: spaces out batches of retransmissions
+    AtomicField<uint32_t, 1000, Ospf::LSA_ARRIVAL>,
+    AtomicField<uint8_t, 33, Ospf::FLOOD_PACING>,
+    AtomicField<uint16_t, 240, Ospf::LSA_GROUP_PACING>,
+    AtomicField<uint8_t, 66, Ospf::RETRANSMISSION_PACING>,
     ValueField<std::string, Ospf::TABLE_MAP>, // TODO:
     AtomicField<bool, false, Ospf::TABLE_MAP_FILTER>, // TODO:
     AtomicField<uint8_t, 1, Ospf::PRIORITY>,
     OptionalAtomicField<std::nullptr_t, Ospf::REDISTRIBUTE>, // TODO:
     OptionalAtomicField<std::nullptr_t, Ospf::SNMP>, // TODO:
     ValueField<std::vector<std::tuple<IPPrefix, bool, bool, std::optional<uint32_t>>>, Ospf::SUMMARY_ADDRESS>,
-    AtomicField<uint32_t, 0, Ospf::LSA_THROTTLE_DELAY>, // XXX:     // FOR FLOODING
-    AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_HOLD>, // XXX:
-    AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_MAX>, // XXX:
+    AtomicField<uint32_t, 0, Ospf::LSA_THROTTLE_DELAY>,
+    AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_HOLD>,
+    AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_MAX>,
     AtomicField<uint32_t, 5000, Ospf::SPF_THROTTLE_DELAY>,
     AtomicField<uint32_t, 10000, Ospf::SPF_THROTTLE_HOLD>,
     AtomicField<uint32_t, 10000, Ospf::SPF_THROTTLE_MAX>,

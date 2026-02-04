@@ -294,7 +294,8 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveInterAreaNetwor
     auto abrInfo = resolveToAbrs(area.process(), key.advertisingRouter);
     if (!abrInfo.has_value()) return {prefix, std::nullopt}; // ABR not found
 
-    const uint64_t distance = abrInfo->cost + summary.metric;
+    const uint64_t distance = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+        ? std::numeric_limits<uint64_t>::max() : abrInfo->cost + summary.metric;
 
     return {prefix, makePath(area.areaId, 0, adminDistance, distance, std::move(abrInfo->nextHops), OspfRouteType::INTER_AREA)};
 }
@@ -307,7 +308,8 @@ void RouteManager::deriveInterAreaRouter(OspfArea& area, const LsaKey& key, cons
     auto abrInfo = resolveToAbrs(area.process(), key.advertisingRouter);
 
     const typename Policy::InterRouterLsa& asbr = std::get<typename Policy::InterRouterLsa>(body);
-    uint64_t distance = abrInfo->cost + asbr.metric;
+    uint64_t distance = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+        ? std::numeric_limits<uint64_t>::max() : abrInfo->cost + asbr.metric;
 
     area.process().table.updateAreaAsbr(area.areaId, OspfRouter{key.linkStateId, distance, std::move(abrInfo->nextHops)}, remove);
 }
@@ -334,7 +336,8 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
         if (!abrInfo.has_value()) return; // ABR not found
 
         const typename Policy::InterNetworkLsa& summary = std::get<typename Policy::InterNetworkLsa>(record->body);
-        uint64_t distance = abrInfo->first + summary.metric;
+        const uint64_t distance = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+            ? std::numeric_limits<uint64_t>::max() : abrInfo->first + summary.metric;
 
         if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
             out.emplace_back(IPPrefix{key.linkStateId, static_cast<uint8_t>(std::popcount(summary.networkMask))},
@@ -352,7 +355,8 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
         auto abrInfo = resolveToAbr(area, spf, key.advertisingRouter, nhCache);
 
         const typename Policy::InterRouterLsa& asbr = std::get<typename Policy::InterRouterLsa>(record->body);
-        uint64_t distance = abrInfo->first + asbr.metric;
+        const uint64_t distance = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+            ? std::numeric_limits<uint64_t>::max() : abrInfo->first + asbr.metric;
 
         asbrs.emplace_back(key.linkStateId, distance, abrInfo->second);
     });
@@ -483,87 +487,83 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
 
     auto& globalRib = process.routingInstance->routingTable;
 
+    for (auto& [key, rec] : process.externalDb)
     {
-        std::lock_guard<std::mutex> lock(process.externalMu);
+        if (rec.first.age == kMaxAge)
+            continue;
 
-        for (auto& [key, rec] : process.externalDb)
+        const uint32_t asbrRid = key.advertisingRouter;
+        if (asbrRid == 0 || asbrRid == selfRid)
+            continue;
+
+        const typename Policy::ExternalLsa& extLsa = std::get<typename Policy::ExternalLsa>(rec.second);
+
+        ExtRec ext{};
+
+        if constexpr (std::is_same_v<EL, ExternalLsaV2>)
         {
-            if (rec.first.age == kMaxAge)
-                continue;
+            ext.prefix = IPPrefix{key.linkStateId, static_cast<uint8_t>(std::popcount(extLsa.networkMask))};
+            ext.fwd = extLsa.forwardingAddress;
+            ext.metric = extLsa.metric;
+            ext.isType2 = extLsa.isType2;
+            ext.options = 0;
+        }
+        else
+        {
+            ext.prefix = extLsa.prefix;
+            ext.fwd = extLsa.forwardingAddress.has_value() ? extLsa.forwardingAddress.value() : uint32_t{0};
+            ext.metric = extLsa.metric;
+            ext.isType2 = extLsa.isType2;
+            ext.options = extLsa.options;
+        }
 
-            const uint32_t asbrRid = key.advertisingRouter;
-            if (asbrRid == 0 || asbrRid == selfRid)
-                continue;
+        uint64_t X = 0;
+        std::vector<OspfNextHop> nh;
 
-            const typename Policy::ExternalLsa& extLsa = std::get<typename Policy::ExternalLsa>(rec.second);
+        bool anchored = false;
 
-            ExtRec ext{};
-
+        if (ext.fwd != IPAddress{})
+        {
             if constexpr (std::is_same_v<EL, ExternalLsaV2>)
             {
-                ext.prefix = IPPrefix{key.linkStateId, static_cast<uint8_t>(std::popcount(extLsa.networkMask))};
-                ext.fwd = extLsa.forwardingAddress;
-                ext.metric = extLsa.metric;
-                ext.isType2 = extLsa.isType2;
-                ext.options = 0;
+                const uint32_t fwdAddr = readU32(ext.fwd.raw);
+                if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
+                {
+                    X = res->first;
+                    nh = std::move(res->second);
+                    anchored = true;
+                }
             }
             else
             {
-                ext.prefix = extLsa.prefix;
-                ext.fwd = extLsa.forwardingAddress.has_value() ? extLsa.forwardingAddress.value() : uint32_t{0};
-                ext.metric = extLsa.metric;
-                ext.isType2 = extLsa.isType2;
-                ext.options = extLsa.options;
-            }
-
-            uint64_t X = 0;
-            std::vector<OspfNextHop> nh;
-
-            bool anchored = false;
-
-            if (ext.fwd != IPAddress{})
-            {
-                if constexpr (std::is_same_v<EL, ExternalLsaV2>)
+                const __uint128_t fwdAddr = readU128(ext.fwd.raw);
+                if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
                 {
-                    const uint32_t fwdAddr = readU32(ext.fwd.raw);
-                    if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
-                    {
-                        X = res->first;
-                        nh = std::move(res->second);
-                        anchored = true;
-                    }
-                }
-                else
-                {
-                    const __uint128_t fwdAddr = readU128(ext.fwd.raw);
-                    if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
-                    {
-                        X = res->first;
-                        nh = std::move(res->second);
-                        anchored = true;
-                    }
+                    X = res->first;
+                    nh = std::move(res->second);
+                    anchored = true;
                 }
             }
+        }
 
-            if (!anchored)
-            {
-                const auto* rr = process.table.lookup(asbrRid);
-                if (!rr || rr->nextHops.empty())
-                    continue;
-
-                X = rr->cost;
-                nh = rr->nextHops;
-                anchored = true;
-            }
-
-            if (!anchored || nh.empty())
+        if (!anchored)
+        {
+            const auto* rr = process.table.lookup(asbrRid);
+            if (!rr || rr->nextHops.empty())
                 continue;
 
-            const uint64_t Y = static_cast<uint64_t>(ext.metric);
-            const uint64_t installed = ext.isType2 ? Y : (X + Y);
-
-            out.emplace_back(ext.prefix, makePath(std::nullopt, ext.options, adminDistance, installed, std::move(nh), OspfRouteType::EXTERNAL));
+            X = rr->cost;
+            nh = rr->nextHops;
+            anchored = true;
         }
+
+        if (!anchored || nh.empty())
+            continue;
+
+        const uint64_t Y = static_cast<uint64_t>(ext.metric);
+        const uint64_t installed = ext.isType2 ? Y : (X + Y);
+
+        out.emplace_back(ext.prefix, makePath(std::nullopt, ext.options, adminDistance, installed, std::move(nh), OspfRouteType::EXTERNAL));
     }
 
     return out;

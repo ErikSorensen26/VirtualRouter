@@ -18,22 +18,6 @@ namespace OSPF
 PacketDispatcher::PacketDispatcher(OspfInterface& iface)
     : iface(iface), ntable(iface.getNTable()), af(iface.getProcess().getAF()) {}
 
-void PacketDispatcher::transmit(PacketBuilder& pkt, const uint8_t* dest)
-{
-    auto* interface = &iface.getIface();
-    Protocol::IPPacket::BuildIP build = {
-        .iface = interface,
-        .packetInfo = pkt,
-        .destIp = dest,
-        .hopLimit = 1,
-        .protocolType = IP_OSPF
-    };
-
-    af == AddressFamily::IPv4
-        ? Protocol::IPPacket::buildIpv4(build)
-        : Protocol::IPPacket::buildIpv6(build);
-}
-
 uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& record)
 {
     // Extract DoNotAge from LS age
@@ -59,16 +43,6 @@ uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& re
     return static_cast<uint16_t>(age) | (dnaOut ? 0x8000 : 0);
 }
 
-bool PacketDispatcher::retransmitLsu(Neighbor& nbr)
-{
-    return sendLSUpdate(&nbr, nbr.getRtr().getLsu());
-}
-
-bool PacketDispatcher::retransmitLsr(Neighbor& nbr)
-{
-    return sendLSRequest(nbr, nbr.getRtr().getLsr());
-}
-
 uint16_t PacketDispatcher::addLinkLocalExtension(uint8_t* buf, bool restart)
 {
     writeU32(buf, 0x00000000); // Checksum and size not calculated yet
@@ -92,5 +66,90 @@ void PacketDispatcher::addLinkLocalChecksum(uint8_t* buf)
     ChecksumFletcher check;
     check.addBytes(buf, 12);
     writeU16(buf, check.finalize());
+}
+
+void PacketDispatcher::sendReliableLSRequest(Neighbor& nbr, const std::vector<LsaKey>& dbds)
+{
+    auto lsrs = nbr.getRtr().lsrs();
+    for (auto& key : dbds)
+    {
+        lsrs.add(key, key);
+    }
+    onLsrPacingTimer(nbr);
+}
+
+void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
+{
+    bool filter = iface.getConfigs().get<Config::OspfInterface::DATABASE_FILTER>().load();
+    bool floodReduction = iface.floodReduction.load(std::memory_order_relaxed);
+
+    if (nbr)
+    {
+        auto& lsus = nbr->getRtr().lsus();
+        for (const auto& [info, record] : updates)
+        {
+            if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
+                lsus.add(record.key, record);
+        }
+    }
+    else
+    {
+        for (const auto& [info, record] : updates)
+        {
+            if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
+                multicastLsus.add(record.key, record);
+        }
+
+        for (auto& [_, neighbor] : iface.getNTable().neighbors)
+        {
+            auto& lsus = neighbor.getRtr().lsus();
+            for (const auto& [info, record] : updates)
+            {
+                if (!(filter || (floodReduction && info.reason == FloodReason::REFRESH)))
+                    lsus.add(record.key, record);
+            }
+            iface.getTimers().startLsuRetransmissionTimer(neighbor);
+        }
+    }
+
+    onLsuPacingTimer(nbr);
+}
+
+void PacketDispatcher::onLsuRetransmissionTimer(Neighbor& nbr)
+{
+    auto& list = nbr.getRtr().lsus();
+    list.beginRetransmitBurst();
+    if (list.getActive())
+        iface.getTimers().startLsuRetransmissionTimer(nbr);
+    onLsuPacingTimer(&nbr);
+}
+
+void PacketDispatcher::onLsrRetransmissionTimer(Neighbor& nbr)
+{
+    auto& list = nbr.getRtr().lsrs();
+    list.beginRetransmitBurst();
+    if (list.getActive())
+        iface.getTimers().startLsrRetransmissionTimer(nbr);
+    onLsrPacingTimer(nbr);
+}
+
+void PacketDispatcher::onLsuPacingTimer(Neighbor* nbr)
+{
+    auto list = nbr ? nbr->getRtr().lsus() : multicastLsus;
+
+    sendLSUpdate(nbr);
+
+    if (list.burstActive()) 
+        iface.getTimers().startLsuPacingTimer(nbr);
+}
+
+void PacketDispatcher::onLsrPacingTimer(Neighbor& nbr)
+{
+    auto list = nbr.getRtr().lsrs();
+
+    sendLSRequest(nbr);
+
+    if (list.burstActive()) 
+        iface.getTimers().startLsrPacingTimer(nbr);
 }
 }
