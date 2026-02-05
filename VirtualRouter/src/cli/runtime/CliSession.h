@@ -20,281 +20,459 @@
 #define COMMAND_NAME "name"
 #define COMMAND_PROPERTIES "properties"
 
-enum class AddressFamily : uint8_t; ///< Forward declaration of AddressFamily
-class CommandProcessor; ///< Forward declaration of CommandProcessor
-class CliEngine;        ///< Forward declaration of CliEngine
-class VirtualRouter;    ///< Forward declaration of VirtualRouter
-class Interface;        ///< Forward declaration of Interface
-class Configs;          ///< Forward declaration of Configs
-struct Com;             ///< Forward declaration of Com
-struct ModeConfig;      ///< Forward declaration of ModeConfig
-
+enum class AddressFamily : uint8_t;
+class CommandProcessor;
+class CliEngine;
+class VirtualRouter;
+class Interface;
+class Configs;
+struct Com;
 namespace Eigrp
 {
-class Eigrp;                ///< Forward declaration of Eigrp::Eigrp
-struct EigrpNamed;          ///< Forward declaration of Eigrp::EigrpNamed
-class EigrpInterface;       ///< Forward declaration of Eigrp::EigrpInterface
+    class Eigrp;
+    class EigrpNamed;
+    class EigrpInterface;
 }
 
-namespace Protocol::Dhcp
+namespace Protocol
 {
-struct DhcpNetworkConfig;  ///< Forward declaration of Protocol::Dhcp::DhcpNetworkConfig
+    namespace Dhcp
+    {
+        struct DhcpNetworkConfig;
+    }
 }
 
 /**
- * @class CliSession
- * @brief Represents an interactive command-line session managed by a CliEngine.
+ * @class Terminal
+ * @brief Represents a command-line terminal interface.
  *
- * CliSession implements all interactive CLI behavior, including:
- * - Mode handling (user, privileged, configuration, interface, routing, AF-specific modes)
- * - Input parsing, tokenization, help display, and tab-completion
- * - Command normalization and dispatch to CommandProcessor
- * - Pagination and contextual command discovery based on the engine's JSON command tree
- *
- * Architectural role:
- * - Acts as the user-facing frontend to the CLI system.
- * - Coordinates with CliEngine for command metadata, schemas, and global state.
- * - Delegates execution to CommandProcessor after normalizing commands.
- *
- * Concurrency:
- * - Not thread-safe. All interaction must occur from a single thread.
- *
- * Memory model:
- * - Owns CommandProcessor.
- * - Holds non-owning references/pointers into CliEngine-managed JSON trees.
- * - Cleans up temporary JSON nodes created during pattern expansion.
- *
- * Invariants:
- * - `workingDirectory` always points to the active JSON command node for the current mode.
- * - After normalizeCommand(), `commandHistory` holds the parsed form of the command.
- * - Mode transitions always update prompt and schema pointer consistency.
+ * The terminal class provides functionalities to interact with the user via the command line.
+ * It supports various commands, modes, and maintains the state between sessions.
  */
 class CliSession : public Console
 {
 public:
+    // Friend classes for testing
+    friend class Internal_CliTest;
+    friend class CommandProcessor;
+    friend class CliEngine;
+    friend Configs;
 
     /**
-     * @brief Creates a session using an internally created Console.
-     *
-     * Initializes CLI mode state, selects default mode, resets parsing state,
-     * initializes console backend, constructs CommandProcessor, and sets the
-     * default VRF.
-     *
-     * @param engine Reference to the shared CliEngine.
-     * @param enableDebug Enables verbose debugging behavior for development use.
+     * @brief Constructor for the Terminal class.
+     * 
+     * Initializes the terminal by setting up debugging options, loading command configurations,
+     * setting the default mode, and restoring the previous state if available.
+     * 
+     * @param engine The CLI engine managing all sessions.
+     * @param enableDebug A boolean flag to enable or disable debug mode.
      */
     CliSession(CliEngine& engine, bool enableDebug = false);
 
     /**
-     * @brief Creates a session using a caller-supplied console.
-     *
-     * Behaves like the primary constructor but uses the provided IConsole backend.
-     * Useful for testing or specialized I/O environments.
-     *
-     * @param engine Reference to the shared CliEngine.
-     * @param term External IConsole instance (not owned).
+     * @brief Constructor for the Terminal class.
+     * 
+     * Initializes the terminal by setting up debugging options, loading command configurations,
+     * setting the default mode, and restoring the previous state if available.
+     * 
+     * @param term IConsole shared pointer for testing
+     * @param fs IFileSystem shared pointer for testing
      */
     CliSession(CliEngine& engine, IConsole* term);
 
     /**
-     * @brief Releases session-owned resources, including CommandProcessor.
-     */
-    ~CliSession();
-
-    /**
-     * @brief Prints the session prompt and resets input state.
+     * @brief Captures and processes user input in the terminal.
+     * 
+     * This function reads the user's input, processes IPv6 addresses if applicable,
+     * handles shortcuts (e.g., Ctrl-Z for mode switching), and executes valid commands.
      *
-     * Recomputes the prompt based on hostname and active CLI mode. Applies queued
-     * auto-completion/help output when needed.
+     * @param input String for giving manual input
      */
     void handlePrompt();
-
-    /**
-     * @brief Processes a full line of input: normalization, execution, pagination.
-     *
-     * Handles control sequences, help triggers, pagination continuation, and
-     * delegates execution to executeCommand().
-     *
-     * @param input Optional raw input supplied programmatically.
-     * @return true if session remains active; false if execution stops or fails.
-     */
     bool handleInput(std::string input = "");
 
     /**
-     * @brief Switches the CLI session into a new mode and updates all related context.
+     * @brief Changes the terminal's operational mode.
      *
-     * This method rebinds the session to a new command namespace, updates the prompt,
-     * refreshes schema references, and manages mode-history tracking for nested
-     * configuration contexts. It does not validate semantic correctness beyond
-     * ensuring that the target mode exists in the command tree.
+     * Updates the current mode of the terminal, adjusts the working directory based on the new mode,
+     * and manages mode history for potential state restoration.
      *
-     * ### Behavior
-     * - Verifies the mode exists and is backed by a command array.
-     * - Updates `modeConfig.currentMode`, prompt, and directory pointers.
-     * - Loads the mode-specific schema into either the active or temporary schema slot.
-     * - Maintains `modeHistory` to support returning from nested configuration modes.
-     *
-     * @param newMode Name of the target CLI mode.
-     * @param processing Whether this change occurs during command processing
-     *                   (affects whether `modeSchema` or `tempModeSchema` is used).
-     * @return true if the mode exists and was applied; otherwise false.
+     * @param newMode A reference to the string representing the new mode to switch to.
+     * @param processing A boolean flag indicating whether the mode change is part of command processing. Defaults to false.
      */
-    bool changeMode(std::string& newMode, bool processing = false); ///< Mode transition logic.
+    template <CliMode T, typename... Args>
+    bool changeMode(Args&&... args);
 
     /**
-     * @brief Marks the session as exiting the current mode and performs a mode change.
+     * @brief Exits the current mode and switches to a new mode.
      *
-     * This helper sets the internal exit flag and delegates the actual transition
-     * to `changeMode()`. It is used by commands that unwind one level of the
-     * mode hierarchy (e.g., leaving interface or router configuration contexts).
+     * Marks the exit command and changes the mode accordingly.
      *
-     * @param newMode The mode to transition into after exiting the current one.
+     * @param newMode The mode to switch to upon exiting the current mode.
      */
-    inline void exitMode(std::string& newMode) { isExitCommand = true; changeMode(newMode); }
+    template <CliMode T, typename... Args>
+    inline void exitMode(Args&&... args) { isExitCommand = true; changeMode<T>(std::forward<Args>(args)...);}
+
+    // Member variables
+    float interfaceID;		///< Unique identifier for interfaces
+
+    bool isList = false;
+    bool textLine = false;
+    bool isDebugModeEnabled = false;
+    bool isModeChanged = false;		        ///< Indicates if the operational mode has changed.
+	
+private:
 
     /**
-     * @brief Resets all transient command-processing state for a new input cycle.
+     * @brief Executes a single command
      *
-     * This method clears all match buffers, resets command-validation flags,
-     * restores directory pointers, and prepares the session for parsing and
-     * executing the next user command. It is invoked before each command
-     * evaluation to guarantee a consistent processing baseline.
+     * Processes the given command string and performs the corresponding action within the cli
      *
-     * ### Responsibilities
-     * * - Clears previous match and pattern trackers.
-     * * - Resets mode/command status flags (help mode, validity markers, global-command attempts).
-     * * - Resets transient I/O and parsing state (line-based mode, end-of-command).
-     * * - Restores `currentDirectory` to the active working mode.
-     * * - Resets negation state inside the command processor.
-     *
-     * ### Postconditions
-     * * - All processing flags are in a neutral state.
-     * * - No leftover state from prior commands can influence the next one.
-     */
-    void initializeProcessingState(); ///< Resets per-command parsing flags.
-
-    /**
-     * @brief Executes a normalized CLI command within the current mode.
-     *
-     * Performs preprocessing, word segmentation, LINE-mode handling, and dispatches
-     * the resulting command stream to the appropriate mode handler. Handles config
-     * persistence (save/delete), exit-mode transitions, and command validation flags.
-     *
-     * @param command Raw command string to execute; normalized form is written back.
-     * @return true on successful execution or valid mode transition; false otherwise.
+     * @param command The command string to process and execute.
+     * @return boolean Indicates whether the execution was a success or not.
      */
     bool executeCommand(std::string& command);
     std::vector<std::string> compileCommandStream(const std::string& command);
     bool executeModeParser(const std::vector<std::string>& tokens);
     bool processConfigPersistence(const std::vector<std::string>& tokens, CliMode preMode);
 
+    /**
+     * @brief Normalizes and fixes user-entered commands.
+     *
+     * Processes the input command string to ensure it adheres to expected formats and standards.
+     *
+     * @param command The original user-entered command string.
+     * @return std::string The normalized and formatted command string.
+     */
+    std::string normalizeCommand(const std::string& command);
+
+    /**
+     * @brief Appends a word to the fully formatted and volatile command strings for line-based inputs.
+     *
+     * Concatenates the current word to both the fully formatted command and the volatile command,
+     * maintaining the structure required for line-based command processing.
+     *
+     * @param parsedWords A vector of string representing the parsed command words.
+     * @param currentIndex The current index in the parsedWords vector thats being processed.
+     * @param fullyFormattedCommand Reference to the string accumalating the fully formatted command.
+     * @param volatileCommand Reference to the string accumalating the volatile command.
+     */
+    void appendLineBasedCommand(const std::vector<std::string>& parsedWords, size_t currentIndex, std::string& fullyFormattedCommand, std::string& volatileCommand);
+
+    /**
+     * @brief
+     *
+     * Handles the parsing and matching of individual words in a command that's not part of a line-based input.
+     * This includes managing help requests, tab completions, and validating command directories from the command structure JSON.
+     *
+     * @param word The current word being processed
+     * @param previousCommandList A reference to a vector storing previously matched commands.
+     * @param formattedOldCommand Reference to the string storing the formatted directory based command.
+     * @param fullyFormattedCommand Reference to the string accumulating the fully formatted command.
+     * @param volatileCommand Reference to the string accumulating the volatile command.
+     * @param inputCommand The original user command string.
+     * @param isFirstIteration A flag indicating if this is the first iteration of processing.
+     */
+    void processNonLineBasedWord(std::string& word, std::vector<Com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand, const std::string& inputCommand, bool& isFirstIteration);
+
+    /**
+     * @brief Initializes the processing state for command execution
+     *
+     * Sets up the initial state variables required for processing user commands,
+     * including the current directory, flags for help requests, and input modes.
+     */
+    void initializeProcessingState();
+
+    /**
+     * @brief Detects triggers for help mode based on parsed command words.
+     *
+     * Evaluates the parsed words to determine if a help request has been made,
+     * such as the presence of "?" or "vk_tab" in the input.
+     *
+     * @param parsedWords A vector of strings representing the parsed command words.
+     * @return true If a help trigger is detected; otherwise, false.
+     */
+    bool detectHelpTriggers(const std::vector<std::string>& parsedWords);
+
+    /**
+     * @brief Determines if the current command is a "no" command
+     *
+     * Checks whether the parsed words represent a "no" command that should be executed.
+     *
+     * @param parsedWords A vector of strings representing the parsed command words.
+     * @return true If the command is a valid "no" command; otherwise, false.
+     */
+    bool isNoCommand(const std::vector<std::string>& parsedWords);
+
+    /**
+     * @brief Determines if the current command is a "do" command
+     *
+     * Checks whether the parsed words represent a "do" command that should be executed
+     * in a different mode, ensuring it does not interfere with mode changes.
+     *
+     * @param parsedWords A vector of strings representing the parsed command words.
+     * @return true If the command is a valid "do" command; otherwise, false.
+     */
+    bool isDoCommand(const std::vector<std::string>& parsedWords);
+
+    /**
+     * @brief Executes a "do" command by switching modes, running the command, and restoring the mode.
+     *
+     * Handles the execution of commands prefixed with "do" by temporarily switching to privileged mode,
+     * executing the command, and the reverting to the original mode and configuration.
+     *
+     * @param remainingCommand The portion of the command string following the "do" keyword.
+     * @return std::string Returns "error" to signify no further processing is needed.
+     */
+    std::string executeDoCommand(std::string remainingCommand);
+
+    /**
+     * @brief Handles help requests triggeredf by the "?" character.
+     *
+     * If a help request is detected and applicable, displays available commands and updates the next line input.
+     *
+     * @param word The current word being processed.
+     * @param previousCommandList A reference to a vector storing previously matched commands.
+     * @param inputCommand The original user input command string.
+     * @param formattedOldCommand Reference to the string storing the formatted directory based command.
+     * @param fullyFormattedCommand Reference to the string accumulating the fully formatted command.
+     * @param volatileCommand Reference to the string accumulating the volatile command.
+     * @return true If the help question was handled; otherwise, false.
+     */
+    bool handleHelpQuestion(const std::string& word, std::vector<Com>& previousCommandList, const std::string& inputCommand, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand);
+
+    /**
+     * @brief Handles tab completion triggered by the "vk_tab" input.
+     *
+     * Manages the auto-completion or suggestion of commands based on the current input state and available commands
+     *
+     * @param word The current word being processed.
+     * @param previousCommandList A reference to a vector storing previously matched commands.
+     * @param inputCommand The original user input command string.
+     * @param formattedOldCommand Reference to the string storing the formatted directory based command.
+     * @param fullyFormattedCommand Reference to the string accumulating the fully formatted command.
+     * @param volatileCommand Reference to the string accumulating the volatile command.
+     * @return true If the tab completion was handled; otherwise, false.
+     */
+    bool handleTabCompletion(const std::string& word, std::vector<Com>& previousCommandList, const std::string& inputCommand, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand);
+
+    /**
+     * @brief Attempts to execute a global command when in an error state.
+     *
+     * If the terminal is in an error state and the input command is not a global command or exit,
+     * switches to global configuration mode to attempt execution. Restores the previous state if unsuccessful.
+     *
+     * @param inputCommand The original user input command string.
+     * @return true If the global command execution was successful; otherwise, false.
+     */
+    bool attemptGlobalCommand(const std::string& inputCommand);
+
+    /**
+     * @brief Handles the marking of invalid input within the command.
+     *
+     * Flags the command as invalid, stops further processing, and provides user feedback indicating
+     * the location of the invalid input.
+     *
+     * @param formattedOldCommand The formatted command string up to the point of invalid input.
+     */
+    void handleInvalidInputMarker(const std::string& formattedOldCommand);
+
+    /**
+     * @brief Handles the marking of ambiguous input within the command.
+     *
+     * Flags the command as ambiguous, stops further processing, and provides user feedback indicating
+     * the location of the ambiguous input.
+     *
+     * @param ambiguousCommand The formatted command string up to the point of invalid input.
+     */
+    void handleAmbiguousInputMarker(const std::string& ambiguousCommand);
+
+    /**
+     * @brief Matches the user input command with available commands.
+     *
+     * Compares the input command with a list of available commands, updates matching states,
+     * and determines the next steps based on the number of matches found.
+     *
+     * @param inputCommand The original user input command string.
+     * @param word The current word being processed.
+     * @param availableCommands A vector of available command structures to match against.
+     * @param previousCommandList A reference to a vector storing previously matched commands.
+     * @param formattedOldCommand Reference to the string storing the formatted old command.
+     * @param fullyFormattedCommand Reference to the string accumulating the fully formatted command.
+     * @param volatileCommand Reference to the string accumulating the volatile command.
+     * @param isCommandDone A reference to a boolean indicating if the command matching is complete.
+     */
+    void matchCommand(const std::string& inputCommand, const std::string& word, const std::vector<Com>& availableCommands, std::vector<Com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand, bool& isCommandDone);
+
+    /**
+     * @brief Retrieves a list of available commands based on the current command tree and user input.
+     *
+     * Parses the command tree JSON structure to find matching commands for the user's input,
+     * handles exact matches, pattern matching, and updates the current directory accordingly.
+     *
+     * @param commandTree The JSON structure representing the command hierarchy.
+     * @param userInput The current word input by the user.
+     * @param inPrivilegedMode A boolean indicating if the terminal is in privileged mode.
+     * @param previousCommands A vector of the previous command(s) used.
+     * @return std::vector<com> A vector of available commands matching the user input.
+     */
+    std::vector<Com> getAvailableCommands(const std::string& userInput, bool inPriviledgedMode, std::vector<Com>& previousCommands);
+
+    /**
+     * @brief Checks if a given command name is a global command.
+     *
+     * Iterates through the list of global commands to determine if the provided command name matches any global command.
+     *
+     * @param commandName The name of the command to check.
+     * @return true If the command is a global command; otherwise, false.
+     */
+    bool isGlobalCommand(std::string& commandName);
+
+    /**
+     * @brief Displays a list of available commands to the user.
+     *
+     * Formats and prints the available commands with their descriptions, handling pagination
+     * if the number of commands exceeds the terminal's display capacity.
+     *
+     * @param commandList A vector of command structures to display.
+     */
+    void displayAvailableCommands(std::vector<Com> commandList);
+
+    /**
+     * @brief Retrieves the last word from an input string.
+     *
+     * Splits the input string into words and returns the last word found.
+     *
+     * @param input The input string from which to extract the last word.
+     * @return std::string The last word in the input string.
+     */
+    std::string getLastWord(const std::string& input);
+
+    /**
+     * @brief Splits a string into individual words based on whitespace and special characters.
+     *
+     * Parses the input string, handling spaces, question marks, and tab characters to separate it into words.
+     *
+     * @param str The input string to split.
+     * @return std::vector<std::string> A vector of words extracted from the input string.
+     */
+    std::vector<std::string> splitIntoWords(const std::string& str);
+
+    /**
+     * @brief Trims leading and trailing whitespace characters from a string.
+     *
+     * Removes all leading and trailing whitespace characters from the provided string, returning the trimmed result.
+     *
+     * @param str The input string to trim.
+     * @return std::string The trimmed string with leading and trailing whitespace removed.
+     */
+    std::string trimString(std::string str);
+
+    /**
+     * @brief Matches the user input against a specific pattern (e.g., IPv6, MAC address).
+     *
+     * Evaluates the user input to determine if it conforms to predefined patterns such as IP addresses,
+     * MAC addresses, numeric ranges, or other specified formats.
+     *
+     * @param userInput The user's input command string.
+     * @param expectedPattern The pattern against which to match the user input.
+     * @return true If the user input matches the expected pattern; otherwise, false.
+     */
+    bool matchInputPattern(const std::string& userInput, const std::string& expectedPattern);
+
+    /**
+     * @brief Determines if a given string represents a numeric value.
+     *
+     * Checks whether the input string consists solely of digits, optionally preceded by a sign.
+     *
+     * @param input The input string to evaluate.
+     * @return true If the input string is numeric; otherwise, false.
+     */
+    bool isNumeric(const std::string& input);
+
+    /**
+     * @brief Validates whether a JSON object represents a valid command directory.
+     *
+     * Checks if the provided JSON object includes a "subcommands" key, indicating it is a valid command directory.
+     *
+     * @param directory The JSON object representing a command directory.
+     * @return true If the directory contains subcommands; otherwise, false.
+     */ 
+    bool isValidCommandDirectory(const nlohmann::ordered_json* directory);
+
+    /**
+     * @brief Handles pagination for displaying large lists of commands.
+     *
+     * If the number of lines exceeds a certain threshold (e.g., 10 lines), prompts the user to continue
+     * or quit viewing additional commands.
+     *
+     * @param ch A character input from the user to control pagination.
+     * @return true If pagination continues; otherwise, false to stop displaying more lines.
+     */
+    bool handlePagination(char ch = '\0');
+
+    /**
+     * @brief Updates the global configuration history from the local history.
+     *
+     * Clears the previous global configuration and appends the current root node.
+     */
+    void historyToGlobal();
+
+    bool setCommandDirectory(std::span<const std::string_view>& dir);
+    CliMode getMode();
+
+    Cli::ExecutionManager execution;
+
+    std::vector<std::string> commandHistory;    ///< History of previous entered commands
+
+    std::vector<std::string> currentPatterns;   ///< Current matching patterns
+    std::string currentPattern;                 ///< Current matching pattern
+    std::string endCommandString;	        ///< String for marking the end of a command
+    std::string previousMatch;		        ///< Previous successfull command match
+    std::string currentCommand;		        ///< Current command being processed
+    std::string currentSubMode;		        ///< Current sub-mode (e.g., specific interface or protocol)
+
+    const nlohmann::ordered_json* currentDirectory;	        ///< Current directory in the command tree.
+    const nlohmann::ordered_json* workingDirectory = nullptr;   ///< Working directory in the JSON structure.
+
+    std::vector<const nlohmann::ordered_json*> tempDir;                 ///< Temporary directory for creating temporary directories.
+    std::vector<nlohmann::ordered_json*> loosePtrs;               ///< Temporary directory for removing loose pointers.
+
+    std::vector<std::string> recursiveHistory;  ///< Recursive history for using a command once.
+
+    std::vector<std::string> executionHistory;	///< History of executed commands
+
+    bool isRunning = true;		        ///< Terminal run state
+    bool error = false;                         ///< Indicates if the next command is invalid.
+    bool endOfCommand = false;		        ///< Indicates if the command has reached its end.
+    bool isNextWordHelpRequested = false;       ///< Indicated if help is requested for the next word.
+    bool isMatchSuccessful = false;             ///< Indicates if a command match was successfull.
+    bool isLineBasedInput = false;	        ///< indicates if input is line-based.
+    bool isHelpModeActive = false;	        ///< Indicates if help mode is active.
+    bool isCommandValid = false;	        ///< Indicates if the command is valid.
+    bool isPatternMatching = false;	        ///< Indicates if the input matches a pattern.
+    bool isPatternMatchEnd = false;	        ///< Indicates the end of a matching pattern.
+    bool isExitCommand = false;                 ///< Indicates if the command return to the previous mode.
+    bool isCommandInvalid = false;              ///< Indicates if a command is invalid.
+    bool isCommandExecutionSuccessful = false;  ///< Indicates if the command was successful.
+    bool isGlobalCommandExecution = false;      ///< Indicates if a global command is being executed.
+    bool attemptingGlobalCommand = false;       ///< Indicates if a global command is being attempted.
+
+    std::vector<Com> paginationList;            ///< List of commands for pagination.
+    size_t maxNameLength = 0;                   ///< Max command size for pagination.
+
+    std::string currentPrompt;          ///< Indicates the current prompt.
+
+    // CONFIG OBJECTS
+
+    const nlohmann::ordered_json *prevConfig;     ///< Pointer to the previous configuration node
+    const nlohmann::ordered_json* configNode = nullptr;       ///< Pointer to the current configuration node.
+    std::vector<const nlohmann::ordered_json*> modeHistory;   ///< History of configuration nodes for mode management
+    const nlohmann::ordered_json* modeSchema = nullptr;       ///< Pointer to the current mode's schema
+    const nlohmann::ordered_json* tempModeSchema = nullptr;   ///< Temporary pointer for schema operations.
+
 public:
-
-    CommandProcessor* commandProcessor = nullptr; ///< Session-owned command executor.
-
-    CliEngine& engine; ///< Non-owning reference to the global engine.
-
-    ModeConfig modeConfig; ///< Tracks mode, config-node, and mode history.
-
-    float interfaceID;		///< Interface identifier (session context).
-    uint32_t routingProtocolID; ///< Active routing protocol ID.
-
-    std::vector<std::string> commandHistory;    ///< Last normalized command tokens.
-
-    std::vector<std::string> currentPatterns;   ///< Active pattern stack.
-    std::string currentPattern;                 ///< Current pattern name.
-    std::string endCommandString;	        ///< End-of-command marker.
-    std::string previousMatch;		        ///< Last matched command/pattern.
-    std::string currentCommand;		        ///< Current raw command.
-    std::string currentSubMode;		        ///< Interface/routing mode subtype.
-
-    const nlohmann::ordered_json* currentDirectory; ///< Active command directory.
-    const nlohmann::ordered_json* workingDirectory = nullptr; ///< Working JSON node.
-
-    std::vector<const nlohmann::ordered_json*> tempDir; ///< Temp expansion buffer.
-    std::vector<nlohmann::ordered_json*> loosePtrs;     ///< Heap-owned temp nodes.
-
-    std::vector<std::string> recursiveHistory;  ///< Recursion control history.
-    std::vector<std::string> executionHistory;  ///< Past executed commands.
-
-    bool isRunning = true;		        ///< Overall session run state; false stops further processing.
-    bool error = false;                         ///< Indicates that the next command is invalid or in error context.
-    bool endOfCommand = false;		        ///< Indicates that the parser has reached an end-of-command token.
-    bool isNextWordHelpRequested = false;       ///< Indicated that help is requested for the next token.
-    bool isMatchSuccessful = false;             ///< Indicates whether a unique command match has been achieved.
-    bool isLineBasedInput = false;	        ///< indicates whether remaining input is treated as a free-form line.
-    bool isHelpModeActive = false;	        ///< Indicates whether the current command is in help mode.
-    bool isCommandValid = false;	        ///< Indicates whether the current command sequence is valid
-    bool isPatternMatching = false;	        ///< Indicates that the parser is in pattern-matching mode.
-    bool isPatternMatchEnd = false;	        ///< Indicates that the current pattern marks the end of the match.
-    bool isModeChanged = false;		        ///< Indicates that the operational mode was changed during processing.
-    bool isExitCommand = false;                 ///< Indicates that the current command triggers a mode exit.
-    bool isCommandInvalid = false;              ///< Indicates that the current command is known to be invalid.
-    bool isCommandExecutionSuccessful = false;  ///< Indicates that command execution completed successfully.
-    bool isGlobalCommandExecution = false;      ///< Indicates the current command is being executed as a global command.
-    bool isDebugModeEnabled = false;            ///< Indicates that this sessions running with debug enabled.
-    bool attemptingGlobalCommand = false;       ///< Indicates that a global command fallback has been attempted.
-
-    std::vector<Com> paginationList; ///< Commands queued for pagination.
-    size_t maxNameLength = 0;        ///< Longest visible command name.
-
-    std::string currentPrompt; ///< Suffix for prompt (mode string).
-    std::string prevMode;      ///< Previously active mode.
-
-    bool isList = false;
-    bool textLine = false;
-
-    nlohmann::ordered_json *prevConfig = nullptr; ///< Used during global fallback.
-
-private:
-
-    std::string normalizeCommand(const std::string& command); ///< Converts raw input → canonical command.
-
-    void appendLineBasedCommand(const std::vector<std::string>&, size_t,
-                                std::string&, std::string&); ///< Handles line-based tokens.
-
-    void processNonLineBasedWord(std::string&, std::vector<Com>&,
-                                 std::string&, std::string&, std::string&,
-                                 const std::string&, bool&); ///< Processes structured tokens.
-
-    bool detectHelpTriggers(const std::vector<std::string>&); ///< Detects "?" or tab.
-    bool isNoCommand(const std::vector<std::string>&); ///< Checks for negation command.
-    bool isDoCommand(const std::vector<std::string>&); ///< Checks for "do" command.
-    std::string executeDoCommand(std::string); ///< Executes command in exec mode.
-
-    bool handleHelpQuestion(const std::string&, std::vector<Com>&,
-                            const std::string&, std::string&, std::string&, std::string&); ///< Handles "?".
-    bool handleTabCompletion(const std::string&, std::vector<Com>&,
-                             const std::string&, std::string&, std::string&, std::string&); ///< Handles tab.
-
-    bool attemptGlobalCommand(const std::string&); ///< Attempts global config fallback.
-
-    void handleInvalidInputMarker(const std::string&); ///< Prints invalid input marker.
-    void handleAmbiguousInputMarker(const std::string&); ///< Prints ambiguous command marker.
-
-    void matchCommand(const std::string&, const std::string&, const std::vector<Com>&,
-                      std::vector<Com>&, std::string&, std::string&, std::string&, bool&); ///< Match logic.
-
-    std::vector<Com> getAvailableCommands(const std::string&, bool, std::vector<Com>&); ///< JSON-based lookup.
-
-    bool isGlobalCommand(std::string&); ///< Checks if name is global command.
-    void displayAvailableCommands(std::vector<Com>); ///< Prepares pagination list.
-
-    std::string getLastWord(const std::string&); ///< Utility tokenizer.
-    std::vector<std::string> splitIntoWords(const std::string&); ///< Input tokenizer.
-    std::string trimString(std::string); ///< Removes leading spaces.
-
-    bool matchInputPattern(const std::string&, const std::string&); ///< Pattern matcher.
-    bool isNumeric(const std::string&); ///< Checks integer type.
-    bool isValidCommandDirectory(const nlohmann::ordered_json*); ///< JSON directory test.
-
-    bool handlePagination(char = '\0'); ///< Pagination engine.
-
-    void configureInterfaceMode(std::string&); ///< Interface mode setup.
-    void configureRoutingMode(std::string, bool classicV6 = false); ///< Routing mode setup.
-    void configureAddressFamily(AddressFamily); ///< Address-family mode narrowing.
-
-    void historyToGlobal(); ///< Resets mode history → root.
+    CliEngine& engine;
 };
 
 template <CliMode T, typename... Args>

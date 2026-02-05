@@ -13,7 +13,7 @@
 CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), execution(*this), engine(engine)
 {
     // Set debug mode based on the input parameter
-    configNode = &engine.tree.root;
+    configNode = &engine.getCommandTree();
     modeHistory.push_back(configNode);
     isDebugModeEnabled = enableDebug;
     changeMode<CliMode::UserExec>();
@@ -32,7 +32,7 @@ CliSession::CliSession(CliEngine& engine, IConsole* term) : Console(term), execu
     isDebugModeEnabled = false;
 
     // Set debug mode based on the input parameter
-    configNode = &engine.tree.root;
+    configNode = &engine.getCommandTree();
     modeHistory.push_back(configNode);
     changeMode<CliMode::UserExec>();
 
@@ -182,7 +182,7 @@ std::string CliSession::executeDoCommand(std::string remainingCommand)
     // Save current state
     std::string previousPrompt = currentPrompt;
     const json* previousCommandTree = &(*workingDirectory);
-    nlohmann::ordered_json* previousConfigNode = &(*configNode);
+    const nlohmann::ordered_json* previousConfigNode = &(*configNode);
 
     // Switch to privileged mode and execute
     changeMode<CliMode::PrivilegedExec>();
