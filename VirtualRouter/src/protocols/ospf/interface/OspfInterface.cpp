@@ -35,10 +35,10 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Refere
       tmgr(proc.tmgr, *this),
       iface(iface),
     configs([]() -> Config::Reference<Config::OspfInterfaceRegistry> {
-        // TODO
+        // TODO: implement once interface configs are done
     }()),
     baseConfigs([]() -> Config::Reference<Config::OspfInterfaceBaseRegistry> {
-        // TODO
+        // TODO: implement once interface configs are done
     }())
 {
     syncConfigs();

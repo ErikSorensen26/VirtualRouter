@@ -41,6 +41,35 @@ struct VertexHash
     }
 };
 
+struct EdgeKey
+{
+    Vertex from{};
+    Vertex to{};
+    uint32_t lastHopIfid{0};
+
+    friend bool operator==(const EdgeKey& a, const EdgeKey& b) noexcept
+    {
+        return a.from == b.from && a.to == b.to && a.lastHopIfid == b.lastHopIfid;
+    }
+};
+
+struct EdgeKeyHash
+{
+    size_t operator()(const EdgeKey& k) const noexcept
+    {
+        size_t h = 0;
+        h ^= VertexHash{}(k.from) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+        h ^= VertexHash{}(k.to)   + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+        h ^= std::hash<uint32_t>{}(k.lastHopIfid) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+struct EdgeVal
+{
+    uint32_t cost{0};
+};
+
 struct BacklinkKey
 {
     VertexType t1;
@@ -94,10 +123,35 @@ static inline bool vertexLess(const Vertex& a, const Vertex& b)
     return a.id < b.id;
 }
 
+struct SpfDelta
+{
+    struct Change
+    {
+        enum class Kind : uint8_t
+        {
+            ADD,
+            REMOVE,
+            COST_DECREASE,
+            COST_INCREASE
+        };
+
+        Kind kind{};
+        EdgeKey key{};
+        uint32_t oldCost{0};
+        uint32_t newCost{0};
+    };
+
+    bool hasAnyChange{false};
+    bool hasAnyIncreaseOrRemove{false};
+    std::vector<Change> changes;
+};
+
 struct ParentRef
 {
     Vertex parent{};
-    uint32_t ifid{0};
+    uint32_t firstHopIfid{0};
+    uint32_t lastHopIfid{0};
+    uint32_t edgeCost{0};
 };
 
 struct SpfEdge
@@ -119,6 +173,18 @@ struct SpfResult
     Vertex root;
     std::unordered_map<Vertex, SptNode, VertexHash> nodes;
     std::vector<Vertex> confirmedOrder;
+};
+
+template <typename PQ>
+struct RelaxInfo
+{
+    RelaxInfo(SpfResult& r, PQ& q)
+        : out(r), pq(q) {}
+    
+    bool repairMode{false};
+
+    SpfResult& out;
+    PQ& pq;
 };
 }
 

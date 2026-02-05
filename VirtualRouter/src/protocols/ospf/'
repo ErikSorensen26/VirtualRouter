@@ -26,8 +26,7 @@ struct QItem
 template <typename Policy>
 SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 {
-    if (!topo.area.process().getConfigs().template get<Config::Ospf::ISPF>().load() ||
-        !last.has_value() || lastEdges.empty())
+    if (!topo.area.process().getConfigs().template get<Config::Ospf::ISPF>().load() !last.has_value() || lastEdges.empty())
     {
         SpfResult res = runFull<Policy>(topo);
         return res;
@@ -354,23 +353,21 @@ SpfResult SpfEngine::runIspfRepair(SpfTopology<Policy>& topo, const SpfDelta& de
     RelaxInfo<decltype(pq)> info(res, pq);
     info.repairMode = true;
 
-    auto rit = res.nodes.find(res.root);
-    if (rit == res.nodes.end())
-        res.nodes.emplace(res.root, SptNode{0, false, {}});
-    else
-        rit->second.dist = 0;
-
-    pq.push(QItem{0, res.root});
-
-    for (const auto& ch : delta.changes)
     {
-        const Vertex& v = ch.key.to;
+        auto rit = res.nodes.find(res.root);
+        if (rit == res.nodes.end())
+            res.nodes.emplace(res.root, SptNode{0, false, {}});
+        else
+            rit->second.dist = 0;
 
-        auto it = res.nodes.find(v);
-        if (it == res.nodes.end()) continue;
-        if (it->second.dist == std::numeric_limits<uint64_t>::max()) continue;
+        pq.push(QItem{0, res.root});
+    }
 
-        pq.push(QItem{it->second.dist, v});
+    for (const auto& [v, n] : res.nodes)
+    {
+        if (v == res.root) continue;
+        if (n.dist != std::numeric_limits<uint64_t>::max())
+            pq.push(QItem{n.dist, v});
     }
 
     res.confirmedOrder.clear();

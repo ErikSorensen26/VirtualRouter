@@ -16,7 +16,7 @@
 namespace OSPF
 {
 PacketDispatcher::PacketDispatcher(OspfInterface& iface)
-    : iface(iface), ntable(iface.getNTable()), af(iface.getProcess().getAF()) {}
+    : multicastLsus(iface.getProcess(), iface), iface(iface), ntable(iface.getNTable()), af(iface.getProcess().getAF()) {}
 
 uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& record)
 {

@@ -25,7 +25,7 @@ public:
     std::unordered_map<uint64_t, std::vector<const typename Policy::RouterLsa*>> rtr;
     std::unordered_map<uint64_t, const typename Policy::NetworkLsa*> net;
 
-    struct NetV2ByLsId { uint32_t advRouter; const LsaRecord* rec; const Policy::NetworkLsa* lsa; };
+    struct NetV2ByLsId { uint32_t advRouter; const LsaRecord* rec; const typename Policy::NetworkLsa* lsa; };
     std::unordered_map<uint32_t, NetV2ByLsId> netV2ByLsId;
 
     SpfTopology(const OspfArea& area);

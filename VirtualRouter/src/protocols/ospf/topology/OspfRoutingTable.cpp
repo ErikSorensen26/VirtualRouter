@@ -43,6 +43,24 @@ static bool isBetterPath(const OspfPath& a, const OspfPath& b)
     return a.adminDistance < b.adminDistance;
 }
 
+static void addTrafficShare(std::vector<OspfNextHop>& nhs, uint8_t maxPaths, bool traffMin)
+{
+    if (nhs.size() <= 1)
+        return;
+
+    if (traffMin)
+    {
+        nhs.erase(std::unique(nhs.begin(), nhs.end(),
+            [](const OspfNextHop& a, const OspfNextHop& b)
+            {
+                return a.interfaceId == b.interfaceId;
+            }), nhs.end());
+    }
+
+    if (nhs.size() > maxPaths)
+        nhs.resize(maxPaths);
+}
+
 static void dedupeNextHops(std::vector<OspfNextHop>& nhs)
 {
     std::sort(nhs.begin(), nhs.end(),
@@ -563,7 +581,12 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
                 rib.removeEntry(readU128(prefix.addr), prefix.prefixLength, oldSrc, procId);
         }
         
-        const auto& merged = mergeEcmpNextHops(next.paths);
+        auto merged = mergeEcmpNextHops(next.paths);
+        addTrafficShare(
+            merged,
+            process.getConfigs().get<Config::Ospf::MAXIMUM_PATHS>().load(),
+            process.getConfigs().get<Config::Ospf::TRAFFIC_SHARE_MIN>().load()
+        );
 
         if (af == AddressFamily::IPv4)
         {

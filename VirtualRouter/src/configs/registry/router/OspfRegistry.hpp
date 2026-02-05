@@ -198,7 +198,7 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<uint32_t, 1, Ospf::DEFAULT_ORIGINATE_METRIC>,
     AtomicField<bool, true, Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>,
     ValueField<std::string, Ospf::DEFAULT_ORIGINATE_ROUTE_MAP>, // TODO:
-    OptionalAtomicField<uint32_t, Ospf::DEFAULT_METRIC>, // XXX: // Default for external routes
+    OptionalAtomicField<uint32_t, Ospf::DEFAULT_METRIC>, // XXX: REDISTRIBUTION
     AtomicField<bool, true, Ospf::DISCARD_INTERNAL>,
     AtomicField<uint8_t, 110, Ospf::DISCARD_INTERNAL_DISTANCE>,
     AtomicField<bool, true, Ospf::DISCARD_EXTERNAL>,
@@ -214,19 +214,19 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<uint64_t, 0, Ospf::EVENT_LOG_SIZE>, // TODO:
     AtomicField<bool, true, Ospf::IGNORE_MOSPF>, // TODO:
     AtomicField<bool, false, Ospf::SNMP_IFINDEX>, // TODO:
-    AtomicField<bool, false, Ospf::ISPF>, // XXX:
-    OptionalAtomicField<uint8_t, Ospf::RETRANSMISSION_DC_LIMIT>, // XXX:
-    OptionalAtomicField<uint8_t, Ospf::RETRANSMISSION_NON_DC_LIMIT>, // XXX:
+    AtomicField<bool, false, Ospf::ISPF>,
+    OptionalAtomicField<uint8_t, Ospf::RETRANSMISSION_DC_LIMIT>,
+    OptionalAtomicField<uint8_t, Ospf::RETRANSMISSION_NON_DC_LIMIT>,
     AtomicField<bool, false, Ospf::LOG_ADJACENCY_CHANGES>, // XXX:
     AtomicField<bool, false, Ospf::LOG_ADJACENCY_DETAILS>, // XXX:
     AtomicField<bool, true, Ospf::LRC_FORWARDING_ADDRESS>,
     AtomicField<bool, true, Ospf::LRC_INTER_AREA_SUMMARY>,
     AtomicField<bool, false, Ospf::LRC_NSSA_TRANSLATION>,
-    AtomicField<bool, false, Ospf::MAX_METRIC_EXTERNAL>, // XXX:
-    AtomicField<uint32_t, 16711680, Ospf::MAX_METRIC_EXTERNAL_OVERRIDE>, // XXX:
+    AtomicField<bool, false, Ospf::MAX_METRIC_EXTERNAL>, // XXX: REDISTRIBUTE
+    AtomicField<uint32_t, 16711680, Ospf::MAX_METRIC_EXTERNAL_OVERRIDE>, // XXX: REDISTRIBUTE
     AtomicField<bool, false, Ospf::MAX_METRIC_INCLUDE_STUB>,
-    OptionalAtomicField<uint16_t, Ospf::MAX_METRIC_ON_STARTUP_TIME>, // XXX:
-    AtomicField<bool, false, Ospf::MAX_METRIC_ON_STARTUP_WAIT_FOR_BGP>, // XXX:
+    OptionalAtomicField<uint16_t, Ospf::MAX_METRIC_ON_STARTUP_TIME>, // XXX: idk or care really
+    AtomicField<bool, false, Ospf::MAX_METRIC_ON_STARTUP_WAIT_FOR_BGP>, // XXX: BGP
     AtomicField<bool, false, Ospf::MAX_METRIC_SUMMARY_LSA>,
     OptionalAtomicField<uint32_t, Ospf::MAX_LSA>,
     AtomicField<uint8_t, 75, Ospf::MAX_LSA_THRESHOLD>,
@@ -266,7 +266,7 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<uint32_t, 5000, Ospf::SPF_THROTTLE_DELAY>,
     AtomicField<uint32_t, 10000, Ospf::SPF_THROTTLE_HOLD>,
     AtomicField<uint32_t, 10000, Ospf::SPF_THROTTLE_MAX>,
-    AtomicField<bool, false, Ospf::TRAFFIC_SHARE_MIN>, // XXX:   // Try to pick next hops that reside on different interfaces
+    AtomicField<bool, false, Ospf::TRAFFIC_SHARE_MIN>,
     AtomicField<bool, false, Ospf::TTL_SEC>, // XXX:
     AtomicField<uint8_t, 1, Ospf::TTL_SEC_HOPS> // XXX:
 >;

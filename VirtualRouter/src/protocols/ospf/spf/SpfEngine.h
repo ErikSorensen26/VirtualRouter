@@ -17,9 +17,24 @@ struct SpfResult;
 class SpfEngine
 {
 public:
+
     template <typename Policy>
-    static SpfResult run(SpfTopology<Policy>& topo);
+    SpfResult run(SpfTopology<Policy>& topo);
 private:
+
+    std::optional<SpfResult> last;
+    std::unordered_map<EdgeKey, EdgeVal, EdgeKeyHash> lastEdges;
+
+    // Full SPF
+    template <typename Policy>
+    SpfResult runFull(SpfTopology<Policy>& topo);
+
+    // iSPF repair
+    template <typename Policy>
+    SpfResult runIspfRepair(SpfTopology<Policy>& topo, const SpfDelta& delta);
+
+    template <typename Policy>
+    SpfDelta computeDeltaAndUpdateEdgeIndex(SpfTopology<Policy>& topo);
 
     static inline uint64_t addCost(uint64_t base, uint32_t cost)
     {
@@ -30,20 +45,18 @@ private:
     }
 
     template <typename PQ>
-    struct RelaxInfo
-    {
-        RelaxInfo(SpfResult& r, PQ& q)
-            : out(r), pq(q) {}
-        
-        SpfResult& out;
-        PQ& pq;
-    };
+    void relaxEdgeFull(const Vertex& from, const Vertex& to, uint64_t newDist, uint32_t lastHopIfid, uint32_t edgeCost, RelaxInfo<PQ>& info);
 
     template <typename PQ>
-    static void relaxEdge(const Vertex& from, const Vertex& to, uint64_t newDist, uint32_t edgeIfid, RelaxInfo<PQ>& info);
+    void relaxEdgeRepair(const Vertex& from, const Vertex& to, uint64_t newDist, uint32_t lastHopIfid, uint32_t edgeCost, RelaxInfo<PQ>& info);
 
     template <typename Policy, typename PQ>
-    static void expandAndRelax(SpfTopology<Policy>& topo, const Vertex& v, RelaxInfo<PQ>& info);
+    void expandAndRelax(SpfTopology<Policy>& topo, const Vertex& v, RelaxInfo<PQ>& info);
+
+    template <typename Policy>
+    void finalizeParents(SpfTopology<Policy>& topo, SpfResult& res);
+
+    void invalidateForIncreasesAndRemovals(SpfResult& res, const SpfDelta& delta);
 };
 }
 
