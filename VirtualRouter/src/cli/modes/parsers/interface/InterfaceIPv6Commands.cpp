@@ -53,7 +53,8 @@ bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
 	    }
 	    else
 	    {
-		ctx.currentInterface.removeIPv6(ipv6Address.raw);
+		IPv6Prefix ip(readU128(ipv6Address.raw), mask);
+		ctx.currentInterface.removeIPv6(&ip);
 	    }
 	}
     }

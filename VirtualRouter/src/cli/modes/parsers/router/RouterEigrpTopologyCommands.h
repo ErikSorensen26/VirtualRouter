@@ -25,7 +25,7 @@ using RouterEigrpTopology_DefaultMetric = commandAdder<EigrpContext,
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_Distance = commandAdder<EigrpContext,
     RouterEigrpTopology_Distance_Handler,
-    "distance"_tok, "eigrp"_tok, ARG_REST
+    "distance"_tok, ARG_REST
 >;
 
 bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS);
@@ -70,7 +70,7 @@ using RouterEigrpTopology_Variance = commandAdder<EigrpContext,
     "variance"_tok, ARG_REST
 >;
 
-using RouterEigrpTopologyV4Commands = CliModeParser<CliMode::RouterEigrpTopologyV4, EigrpContext,
+using RouterEigrpTopologyCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpTopology_AutoSummary,
     RouterEigrpTopology_DefaultMetric,
     RouterEigrpTopology_Distance,
@@ -83,16 +83,12 @@ using RouterEigrpTopologyV4Commands = CliModeParser<CliMode::RouterEigrpTopology
     RouterEigrpTopology_Variance
 >;
 
+using RouterEigrpTopologyV4Commands = CliModeParser<CliMode::RouterEigrpTopologyV4, EigrpContext,
+    RouterEigrpTopologyCommands
+>;
+
 using RouterEigrpTopologyV6Commands = CliModeParser<CliMode::RouterEigrpTopologyV6, EigrpContext,
-    RouterEigrpTopology_DefaultMetric,
-    RouterEigrpTopology_Distance,
-    RouterEigrpTopology_EigrpEventLogSize,
-    RouterEigrpTopology_Exit,
-    RouterEigrpTopology_MaximumPaths,
-    RouterEigrpTopology_MetricMaximumHops,
-    RouterEigrpTopology_ActiveTime,
-    RouterEigrpTopology_TrafficShare,
-    RouterEigrpTopology_Variance
+    RouterEigrpTopologyCommands
 >;
 }
 

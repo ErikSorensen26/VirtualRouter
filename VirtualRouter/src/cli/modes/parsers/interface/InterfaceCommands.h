@@ -7,6 +7,7 @@
 #include <InterfaceContext.hpp>
 #include "InterfaceIPCommands.h"
 #include "InterfaceIPv6Commands.h"
+#include "InterfaceOspfv3Commands.h"
 
 namespace Cli
 {
@@ -24,6 +25,11 @@ using Interface_IP = subAdder<InterfaceContext,
 using Interface_IPv6 = subAdder<InterfaceContext,
     InterfaceIPv6Commands,
     "ipv6"_tok
+>;
+
+using Interface_Ospfv3 = subAdder<InterfaceContext,
+    InterfaceOspfv3Commands,
+    "ospfv3"_tok
 >;
 
 bool Interface_Shutdown_Handler(INTERFACE_PARAMS);

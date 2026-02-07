@@ -23,10 +23,12 @@ public:
     InterfaceManager(OspfProcess& process);
     ~InterfaceManager();
 
-    OspfInterface& createInterface(Interface& interface, OspfInterfaceId& id);
+    OspfInterface& createInterface(Interface& interface, const OspfInterfaceId& id);
+    void removeInterface(const OspfInterfaceId& id);
     void refreshInterfaceList();
 
     void deactivateAll();
+    void syncNeighbors();
 
     OspfInterface* getInterface(const OspfInterfaceId& id);
     OspfInterface* getInterfaceByAddress(const IPAddress& addr);

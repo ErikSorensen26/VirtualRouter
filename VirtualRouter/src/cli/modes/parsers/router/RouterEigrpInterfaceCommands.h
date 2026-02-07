@@ -82,7 +82,8 @@ using RouterEigrpInterface_SummaryAddress = commandAdder<EigrpContext,
     "summary-address"_tok, ARG, ARG_REST
 >;
 
-using RouterEigrpInterfaceV4Commands = CliModeParser<CliMode::RouterEigrpInterfaceV4, EigrpContext,
+struct buh{};
+using RouterEigrpInterfaceCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpInterface_AuthenticationKeyChain,
     RouterEigrpInterface_AuthenticationMode,
     RouterEigrpInterface_BandwidthPercentage,
@@ -97,19 +98,12 @@ using RouterEigrpInterfaceV4Commands = CliModeParser<CliMode::RouterEigrpInterfa
     RouterEigrpInterface_SummaryAddress
 >;
 
+using RouterEigrpInterfaceV4Commands = CliModeParser<CliMode::RouterEigrpInterfaceV4, EigrpContext,
+    RouterEigrpInterfaceCommands
+>;
+
 using RouterEigrpInterfaceV6Commands = CliModeParser<CliMode::RouterEigrpInterfaceV6, EigrpContext,
-    RouterEigrpInterface_AuthenticationKeyChain,
-    RouterEigrpInterface_AuthenticationMode,
-    RouterEigrpInterface_BandwidthPercentage,
-    RouterEigrpInterface_DampeningChange,
-    RouterEigrpInterface_DampeningInterval,
-    RouterEigrpInterface_Exit,
-    RouterEigrpInterface_HelloInterval,
-    RouterEigrpInterface_HoldTime,
-    RouterEigrpInterface_NextHopSelf,
-    RouterEigrpInterface_PassiveInterface,
-    RouterEigrpInterface_SplitHorizon,
-    RouterEigrpInterface_SummaryAddress
+    RouterEigrpInterfaceCommands
 >;
 }
 

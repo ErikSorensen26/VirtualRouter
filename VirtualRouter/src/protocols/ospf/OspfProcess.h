@@ -12,7 +12,7 @@
 #include <OspfArea.h>
 #include <OspfTopologyTable.h>
 #include <OspfRoutingTable.h>
-#include <OspfRegistry.hpp>
+#include <OspfRegistry.h>
 
 class VirtualRouter;
 class TimeManager;
@@ -23,10 +23,16 @@ class Topology;
 class OspfProcess;
 class OspfInterface;
 class OspfArea;
+
 struct OspfV3Instance
 {
+    OspfV3Instance(Config::Reference<Config::OspfAddressFamilyV3Registry> cfgs)
+        : configs(std::move(cfgs)) {}
+
     OspfProcess* ipv4 = nullptr;
     OspfProcess* ipv6 = nullptr;
+    
+    Config::Reference<Config::OspfAddressFamilyV3Registry> configs;
 };
 
 struct OspfInterfaceInstance
@@ -41,7 +47,7 @@ public:
     using V3AfConfigs = Config::Reference<Config::OspfAddressFamilyV3Registry>;
     using V2AfConfigs = Config::Reference<Config::OspfAddressFamilyV2Registry>;
 
-    OspfProcess(bool isV3, uint32_t procId, AddressFamily af, VirtualRouter* vrf);
+    OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRouter* vrf);
 
     // External Origination
     template <typename Policy>
@@ -78,7 +84,7 @@ public:
     const Config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
     OspfRib& getRib() { return rib; }
     const OspfRib& getRib() const { return rib; }
-    uint32_t getProcId() const { return procId; }
+    uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const
     {
         const auto& id = configs.get().get<Config::Ospf::ROUTER_ID>();
@@ -152,7 +158,7 @@ private:
 
     std::optional<uint32_t> defaultRoute = std::nullopt;
 
-    const uint32_t procId;
+    const uint16_t procId;
     const AddressFamily af;
     InterfaceManager ifaceMgr;
 

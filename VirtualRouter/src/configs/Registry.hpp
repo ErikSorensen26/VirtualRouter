@@ -6,8 +6,8 @@
 #include "RegistryDatabase.hpp"
 #include "SubRegistry.hpp" // KEEP
 
-#include <OspfInterfaceRegistry.hpp>
-#include <OspfRegistry.hpp>
+#include <OspfInterfaceRegistry.h>
+#include <OspfRegistry.h>
 
 namespace Config
 {
@@ -17,6 +17,7 @@ using Registry = RegistryDatabase<
     OspfAddressFamilyV3Registry,
     OspfInterfaceRegistry,
     OspfInterfaceBaseRegistry,
+    OspfInterfaceIPSecRegistry,
     OspfInterfaceAddressFamilyRegistry
 >;
 }

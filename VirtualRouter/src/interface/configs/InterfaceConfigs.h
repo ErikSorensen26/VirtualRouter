@@ -15,6 +15,10 @@
 #include <IPAddress.hpp>
 #include <optional>
 
+#include <RegistryDatabase.hpp>
+#include <OspfInterface.h>
+#include <OspfInterfaceRegistry.h>
+
 // Forward declarations
 class Global;
 class TimeManager;
@@ -25,10 +29,6 @@ enum class AddressFamily : uint8_t;
 enum class InterfaceType : uint8_t;
 
 namespace EigrpConfigs
-{
-    struct InterfaceConfigs;
-}
-namespace OSPF
 {
     struct InterfaceConfigs;
 }
@@ -264,7 +264,8 @@ public:
     struct Ospf
     {
         std::unordered_map<uint32_t, uint32_t> enabledProcesses;
-        std::map<std::pair<uint32_t, AddressFamily>, OSPF::InterfaceConfigs> ospfInterfaceConfigList;
+        std::optional<Config::Reference<Config::OspfInterfaceBaseRegistry>> ospfInterfaceConfigs = std::nullopt;
+        std::map<std::pair<uint32_t, AddressFamily>, Config::OspfInterfaceAddressFamilyRegistry> ospfInterfaceConfigList;
     } ospf;
 
     /**

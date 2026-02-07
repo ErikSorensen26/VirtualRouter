@@ -6,6 +6,7 @@
 #include <CliModeParser.hpp>
 #include <InterfaceContext.hpp>
 #include "InterfaceIPv6NDCommands.h"
+#include "InterfaceIPv6OspfCommands.h"
 
 namespace Cli
 {
@@ -84,6 +85,11 @@ bool InterfaceIPv6_NdpRedirects_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_NdpRedirects = commandAdder<InterfaceContext,
     InterfaceIPv6_NdpRedirects_Handler,
     "redirects"_tok
+>;
+
+using InterfaceIPv6_Ospf = subAdder<InterfaceContext,
+    InterfaceIPv6OspfCommands,
+    "ospf"_tok
 >;
 
 bool InterfaceIPv6_SplitHorizon_Handler(INTERFACE_PARAMS);

@@ -10,8 +10,11 @@ namespace Config
 template <typename... Entries>
 class RegistryDatabase;
 
-template <typename KEY, typename ENUM, typename... Fields>
+template <typename KEY, typename ENUM, typename Ctx, typename... Fields>
 class SubRegistry;
+
+template <typename KEY, typename ENUM, typename... Fields>
+class SimpleSubRegistry;
 
 template <typename T, T D, auto F, typename Ctx = void, auto H = nullptr>
 class AtomicField;

@@ -28,14 +28,13 @@ bool RouterEigrpAddressFamily_AfInterface_Handler(EIGRP_PARAMS)
     {
         if (intIt != ifaceMgr.eigrpInterfaceConfigList.end())
         {
-            ctx.currentEigrpInterface = intIt->second;
+            ctx.currentEigrpInterface = &intIt->second;
             ctx.currentEigrpInterface->userMade = true;
         }
         else
         {
-            EigrpConfigs::InterfaceConfigs* newConfigs = new EigrpConfigs::InterfaceConfigs(key);
-            newConfigs->userMade = true;
-            ifaceMgr.eigrpInterfaceConfigList[key] = newConfigs;
+            auto it = ifaceMgr.eigrpInterfaceConfigList.emplace(key, key);
+            it.first->second.userMade = true;
         }
         if (ctx.currentEigrp->getAF() == AddressFamily::IPv4)
             ctx.terminal.changeMode<CliMode::RouterEigrpInterfaceV4>(ctx.currentEigrp, ctx.currentEigrpNamed, ctx.currentEigrpInterface);
@@ -46,10 +45,9 @@ bool RouterEigrpAddressFamily_AfInterface_Handler(EIGRP_PARAMS)
     {
         if (intIt != ifaceMgr.eigrpInterfaceConfigList.end())
         {
-            ctx.currentEigrpInterface = intIt->second;
+            ctx.currentEigrpInterface = &intIt->second;
             if (ctx.currentEigrpInterface->userMade)
             {
-                delete ifaceMgr.eigrpInterfaceConfigList[key];
                 ifaceMgr.eigrpInterfaceConfigList.erase(key);
             }
             else return true;
@@ -118,7 +116,7 @@ bool RouterEigrpAddressFamily_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
     if (!ctx.negate)
-        ctx.currentEigrp->setRouterID(Functions::getAddress(args[0]).raw);
+        ctx.currentEigrp->routerID(Functions::getAddress(args[0]).raw);
     else
         ctx.currentEigrp->clearRouterID();
     return true;

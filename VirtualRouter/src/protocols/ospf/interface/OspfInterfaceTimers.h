@@ -5,6 +5,7 @@
 
 #include <OspfPacket.hpp>
 #include <atomic>
+#include <chrono>
 
 class TimeManager;
 

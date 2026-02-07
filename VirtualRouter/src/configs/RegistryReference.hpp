@@ -5,6 +5,7 @@
 
 #include "RegistryBucket.hpp"
 #include "RegistryTypes.hpp"
+#include <memory>
 #include <cassert>
 
 namespace Config
@@ -15,6 +16,9 @@ concept IsSubRegistry = requires
         typename T::type;
         typename T::FieldTuple;
     };
+
+template <typename T, size_t N>
+using heapArray = std::unique_ptr<std::array<T, N>>;
 
 template <typename T>
 class Reference

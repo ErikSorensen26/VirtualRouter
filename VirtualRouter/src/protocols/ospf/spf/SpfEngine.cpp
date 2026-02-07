@@ -5,8 +5,6 @@
 #include <OspfProcess.h>
 #include <queue>
 
-#include <OspfRegistry.hpp>
-
 namespace OSPF
 {
 // Min-heap by dist (lazy decrease-key)

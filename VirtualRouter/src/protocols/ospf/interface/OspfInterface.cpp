@@ -251,6 +251,41 @@ void OspfInterface::syncTimers()
     }
 }
 
+void OspfInterface::syncNetworkType()
+{
+    auto ntype = getConfigs().get<Config::OspfInterface::NETWORK>().load();
+
+    syncTimers();
+    isMulticast.store(
+        ntype == NetworkType::BROADCAST ||
+        ntype == NetworkType::POINT_TO_MULTIPOINT_BROADCAST ||
+        ntype == NetworkType::POINT_TO_POINT,
+        std::memory_order_release
+    );
+    getNTable().syncUnicast();
+}
+
+void OspfInterface::syncDigestKey()
+{
+    baseConfigs->get<Config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>& keys)
+    {
+        auto it = std::max_element(keys.begin(), keys.end(), [](const auto& a, const auto& b) {
+            return std::get<2>(a) < std::get<2>(b);
+        });
+
+        if (it != keys.end())
+        {
+            authKey = readU128(std::get<1>(*it).data());
+            authKeyId = std::get<0>(*it);
+        }
+        else
+        {
+            authKey.reset();
+            authKeyId.reset();
+        }
+    });
+}
+
 void OspfInterface::setPassiveMode(bool passive)
 {
     configs->get<Config::OspfInterface::PASSIVE>().load();

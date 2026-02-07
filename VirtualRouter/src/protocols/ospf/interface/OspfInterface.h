@@ -56,6 +56,8 @@ public:
     bool setBdr(uint32_t bdr);
     void syncConfigs();
     void syncTimers();
+    void syncNetworkType();
+    void syncDigestKey();
     void setPassiveMode(bool passive);
 
     struct Designation { std::atomic<uint32_t> rid; std::atomic<__uint128_t> ip; };
@@ -65,6 +67,10 @@ public:
     std::atomic<bool> isDr = false;
     std::atomic<bool> isBdr = false;
     std::atomic<bool> isVirtual = false;
+
+    // Auth
+    std::optional<__uint128_t> authKey = std::nullopt;
+    std::optional<uint8_t> authKeyId = std::nullopt;
 
     std::atomic<bool> isMulticast = false;
     std::atomic<bool> opaqueEnabled = true;

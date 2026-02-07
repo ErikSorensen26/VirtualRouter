@@ -5,6 +5,7 @@
 
 #include <CliModeParser.hpp>
 #include <InterfaceContext.hpp>
+#include "InterfaceIPOspfCommands.h"
 
 namespace Cli
 {
@@ -68,6 +69,11 @@ using InterfaceIP_NextHopSelf = commandAdder<InterfaceContext,
     "next-hop-self"_tok, ARG_REST
 >;
 
+using InterfaceIP_Ospf = subAdder<InterfaceContext,
+    InterfaceIPOspfCommands, 
+    "ospf"_tok
+>;
+
 bool InterfaceIP_SplitHorizon_Handler(INTERFACE_PARAMS);
 using InterfaceIP_SplitHorizon = commandAdder<InterfaceContext,
     InterfaceIP_SplitHorizon_Handler,
@@ -91,6 +97,7 @@ using InterfaceIPCommands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceIP_HoldTime,
     InterfaceIP_Mtu,
     InterfaceIP_NextHopSelf,
+    InterfaceIP_Ospf,
     InterfaceIP_SplitHorizon,
     InterfaceIP_SummaryAddress
 >;

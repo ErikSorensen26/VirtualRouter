@@ -122,6 +122,8 @@ public:
     bool isValidForwardAddress(const IPAddress& h) const;
 
     // Other
+    void initializeReset();
+    void reset();
     void clear();
     void releaseMemory();
     void runDCIntegrityScan();

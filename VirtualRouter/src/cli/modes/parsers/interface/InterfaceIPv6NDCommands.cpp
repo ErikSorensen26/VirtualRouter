@@ -33,13 +33,13 @@ bool InterfaceIPv6ND_AutoconfigPrefix_Handler(INTERFACE_PARAMS)
 bool InterfaceIPv6ND_CacheExpire_Handler(INTERFACE_PARAMS)
 {
     ctx.currentInterface.ndp->configs.cacheExpire.store(ctx.negate
-	? ctx.currentInterface.getVRF()->global.configs.ndp.cacheExpire.load(std::memory_order_relaxed)
+	? ctx.currentInterface.getVRF()->getGlobal().configs.ndp.cacheExpire.load(std::memory_order_relaxed)
 	: static_cast<uint16_t>(std::stoul(args[0]), std::memory_order_release));
     ctx.currentInterface.ndp->configs.cacheExpireLocal = !ctx.negate;
     if ((args.size() == 2 && args[1] == "refresh" && !ctx.negate) || ctx.negate)
     {
 	ctx.currentInterface.ndp->configs.refreshLocal = !ctx.negate;
-	ctx.currentInterface.ndp->configs.refresh.store(ctx.negate ? ctx.currentInterface.getVRF()->global.configs.ndp.refresh.load(std::memory_order_relaxed) : true, std::memory_order_release);
+	ctx.currentInterface.ndp->configs.refresh.store(ctx.negate ? ctx.currentInterface.getVRF()->getGlobal().configs.ndp.refresh.load(std::memory_order_relaxed) : true, std::memory_order_release);
     }
     return true;
 }
@@ -47,13 +47,13 @@ bool InterfaceIPv6ND_CacheExpire_Handler(INTERFACE_PARAMS)
 bool InterfaceIPv6ND_CacheInterfaceLimit_Handler(INTERFACE_PARAMS)
 {
     ctx.currentInterface.ndp->configs.interfaceLimit.store(ctx.negate
-	? ctx.currentInterface.getVRF()->global.configs.ndp.interfaceLimit.load(std::memory_order_relaxed)
+	? ctx.currentInterface.getVRF()->getGlobal().configs.ndp.interfaceLimit.load(std::memory_order_relaxed)
 	: static_cast<uint32_t>(std::stoul(args[0]), std::memory_order_release));
     ctx.currentInterface.ndp->configs.interfaceLimitLocal = !ctx.negate;
     if ((args.size() == 3 && args[1] == "log") || ctx.negate)
     {
 	ctx.currentInterface.ndp->configs.loggingRate.store(ctx.negate
-	    ? ctx.currentInterface.getVRF()->global.configs.ndp.loggingRate.load(std::memory_order_relaxed)
+	    ? ctx.currentInterface.getVRF()->getGlobal().configs.ndp.loggingRate.load(std::memory_order_relaxed)
 	    : static_cast<uint16_t>(std::stoul(args[2]), std::memory_order_release));
 	ctx.currentInterface.ndp->configs.loggingRateLocal = !ctx.negate;
     }
@@ -69,7 +69,7 @@ bool InterfaceIPv6ND_DADAttempts_Handler(INTERFACE_PARAMS)
 bool InterfaceIPv6ND_DADTime_Handler(INTERFACE_PARAMS)
 {
     ctx.currentInterface.ndp->configs.dadTime.store(ctx.negate
-	? ctx.currentInterface.getVRF()->global.configs.ndp.dadTime.load(std::memory_order_relaxed)
+	? ctx.currentInterface.getVRF()->getGlobal().configs.ndp.dadTime.load(std::memory_order_relaxed)
 	: static_cast<uint16_t>(std::stoul(args[0]), std::memory_order_release));
     ctx.currentInterface.ndp->configs.dadTimeLocal = !ctx.negate;
     return true;
@@ -204,7 +204,7 @@ bool InterfaceIPv6ND_RaSuppressionAll_Handler(INTERFACE_PARAMS)
 bool InterfaceIPv6ND_ReachableTime_Handler(INTERFACE_PARAMS)
 {
     ctx.currentInterface.ndp->configs.reachableTime.store(ctx.negate
-	    ? ctx.currentInterface.getVRF()->global.configs.ndp.reachableTime.load(std::memory_order_relaxed)
+	    ? ctx.currentInterface.getVRF()->getGlobal().configs.ndp.reachableTime.load(std::memory_order_relaxed)
 	    : static_cast<uint32_t>(std::stoul(args[0])));
     ctx.currentInterface.ndp->configs.reachableTimeLocal = !ctx.negate;
     return true;

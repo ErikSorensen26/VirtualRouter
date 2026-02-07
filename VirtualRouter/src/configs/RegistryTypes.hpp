@@ -18,13 +18,13 @@ class RegistryDatabase;
 template <typename T>
 class Reference;
 
+template <typename KEY, typename ENUM, typename Ctx, typename... Fields>
+class SubRegistry;
+
 using ApplyKey = uint64_t;
 
-template <typename Ctx, typename T>
-using ApplyFn = void (*)(Ctx& ctx, const T& value) noexcept;
-
-template <typename Ctx, typename T>
-using OptionalApplyFn = void (*)(Ctx& ctx, const std::optional<T> value) noexcept;
+template <typename Ctx>
+using ApplyFn = void (*)(Ctx& ctx);
 
 struct AtomicFieldFlag {};
 struct OptionalAtomicFieldFlag : AtomicFieldFlag {};
@@ -44,6 +44,33 @@ enum class MaskState : uint8_t
 {
     INHERIT,
     SET
+};
+
+template <typename Ctx>
+struct ContextProvider
+{
+    inline bool hasCtx() noexcept
+    {
+        return ctx;
+    }
+
+    inline Ctx& get() noexcept
+    {
+        return *ctx;
+    }
+
+    void set(Ctx& c) noexcept
+    {
+        ctx = &c;
+    }
+
+    void clear() noexcept
+    {
+        ctx = nullptr;
+    }
+
+private:
+    Ctx* ctx{nullptr};
 };
 
 template <typename T, T D, auto F, typename Ctx, auto H>
@@ -96,19 +123,22 @@ private:
     const AtomicField* base{nullptr};
 };
 
-template <typename T, T D, auto F, typename Ctx, ApplyFn<Ctx, T> H>
+template <typename T, T D, auto F, typename Ctx, ApplyFn<Ctx> H>
 class AtomicField<T, D, F, Ctx, H> : public AtomicFieldFlag
 {
 public:
     using type = T;
     static constexpr auto dValue = D;
     static constexpr auto field = F;
-    static constexpr ApplyFn<Ctx, T> applier = H;
+    static constexpr ApplyFn<Ctx> applier = H;
 
-    AtomicField() = default;
+    AtomicField(ContextProvider<Ctx>& provider) noexcept
+        : provider(provider)
+    {}
 
-    AtomicField(const AtomicField& parent) noexcept
-        : value(D),
+    AtomicField(ContextProvider<Ctx>& provider, const AtomicField& parent) noexcept
+        : provider(provider),
+          value(D),
           state(MaskState::INHERIT),
           base(&parent)
     {}
@@ -117,24 +147,23 @@ public:
     {
         if (base && state.load(std::memory_order_relaxed) == MaskState::INHERIT)
             return base->load();
-
         return value.load(std::memory_order_relaxed);
     }
 
-    inline void set(Ctx& ctx, T v) noexcept
+    inline void set(T v) noexcept
     {
         bool apply = load() != v;
         value.store(v, std::memory_order_release);
         state.store(MaskState::SET, std::memory_order_release);
-        if (apply) applier(ctx, v);
+        if (apply && provider.hasCtx()) applier(*provider.get());
     }
 
-    inline void unset(Ctx& ctx) noexcept
+    inline void unset() noexcept
     {
         T old = load();
         value.store(dValue, std::memory_order_relaxed);
         state.store(MaskState::INHERIT, std::memory_order_relaxed);
-        if (load() != old) applier(ctx, dValue);
+        if (load() != old && provider.hasCtx()) applier(provider.get());
     }
 
     inline bool overridden() const noexcept
@@ -143,6 +172,7 @@ public:
     }
 
 private:
+    ContextProvider<Ctx>& provider;
     std::atomic<T> value{D};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const AtomicField* base{nullptr};
@@ -209,18 +239,21 @@ private:
     const OptionalAtomicField* base{nullptr};
 };
 
-template <typename T, auto F, typename Ctx, OptionalApplyFn<Ctx, T> H>
+template <typename T, auto F, typename Ctx, ApplyFn<Ctx> H>
 class OptionalAtomicField<T, F, Ctx, H> : public OptionalAtomicFieldFlag
 {
 public:
     using type = T;
     static constexpr auto field = F;
-    static constexpr OptionalApplyFn<Ctx, T> applier = H;
+    static constexpr ApplyFn<Ctx> applier = H;
 
-    OptionalAtomicField() = default;
+    OptionalAtomicField(ContextProvider<Ctx>& provider)
+        : provider(provider)
+    {}
 
-    explicit OptionalAtomicField(const OptionalAtomicField& parent) noexcept
-        : value(),
+    explicit OptionalAtomicField(ContextProvider<Ctx>& provider, const OptionalAtomicField& parent) noexcept
+        : provider(provider),
+          value(),
           state(MaskState::INHERIT),
           base(&parent)
     {}
@@ -246,19 +279,19 @@ public:
         return value.load(std::memory_order_relaxed);
     }
 
-    inline void set(Ctx& ctx, T v) noexcept
+    inline void set(T v) noexcept
     {
         bool apply = hasValue() || load() != v;
         value.store(v, std::memory_order_release);
         state.store(MaskState::SET, std::memory_order_release);
-        if (apply) applier(ctx, v);
+        if (apply && provider.hasCtx()) applier(provider.get());
     }
 
-    inline void unset(Ctx& ctx) noexcept
+    inline void unset() noexcept
     {
         bool apply = state == MaskState::SET;
         state.store(MaskState::INHERIT, std::memory_order_release);
-        if (apply) applier(ctx, hasValue() ? load() : std::nullopt);
+        if (apply && provider.hasCtx()) applier(provider.get());
     }
 
     inline bool overridden() const noexcept
@@ -267,6 +300,7 @@ public:
     }
 
 private:
+    ContextProvider<Ctx>& provider;
     std::atomic<T> value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const OptionalAtomicField* base{nullptr};
@@ -331,29 +365,33 @@ private:
     const ValueField* base{nullptr};
 };
 
-template <typename T, auto F, typename Ctx, ApplyFn<Ctx, T> H>
+template <typename T, auto F, typename Ctx, ApplyFn<Ctx> H>
 class ValueField<T, F, Ctx, H> : public ValueFieldFlag
 {
 public:
     using type = T;
     static constexpr auto field = F;
-    static constexpr ApplyFn<Ctx, T> applier = H;
+    static constexpr ApplyFn<Ctx> applier = H;
 
-    ValueField(std::mutex& m)
-        : mu(m)
+    ValueField(ContextProvider<Ctx>& provider, std::mutex& m)
+        : provider(provider),
+          mu(m)
     {}
 
-    explicit ValueField(std::mutex& m, const ValueField& parent) noexcept
-        : mu(m),
+    explicit ValueField(ContextProvider<Ctx>& provider, std::mutex& m, const ValueField& parent) noexcept
+        : provider(provider),
+          mu(m),
           value(),
           state(MaskState::SET),
           base(&parent)
     {}
 
-    void runApply(Ctx& ctx)
+    void runApply()
     {
+        if (!provider.hasCtx())
+            return;
         std::lock_guard<std::mutex> lk(mu);
-        applier(ctx, value);
+        applier(provider.get());
     }
 
     template <typename Fn>
@@ -363,35 +401,41 @@ public:
             return base->withRead(std::forward<Fn>(fn));
 
         std::lock_guard<std::mutex> lk(mu);
-        return std::forward<Fn>(fn)(value);
+        std::forward<Fn>(fn)(value);
     }
 
     template <typename Fn>
-    void withRead(Ctx& ctx, Fn&& fn)
+    void withWrite(Fn&& fn)
     {
+        bool runApplier{false};
         state.store(MaskState::SET, std::memory_order_release);
         {
             std::lock_guard<std::mutex> lk(mu);
             auto old = value;
-            auto result = std::forward<Fn>(fn)(value);
-            if (old != value) applier(ctx, value);
+            std::forward<Fn>(fn)(value);
+            runApplier = old != value;
+        }
+
+        if (runApplier && provider.hasCtx())
+        {
+            applier(provider.get());
         }
     }
 
-    inline void unset(Ctx& ctx) noexcept
+    inline void unset() noexcept
     {
         bool apply = state.exchange(MaskState::INHERIT, std::memory_order_relaxed) == MaskState::SET;
         {
             std::lock_guard<std::mutex> lk(mu);
             value = T{};
-            if (apply && !base)
+            if (apply && !base && provider.hasCtx())
             {
-                applier(ctx, value);
+                applier(provider.get());
                 return;
             }
         }
-        if (apply && base)
-            base->runApply(ctx);
+        if (apply && base && provider.hasCtx())
+            base->runApply(provider.get());
     }
 
     inline bool overridden() const noexcept
@@ -402,6 +446,7 @@ public:
     std::mutex& mu;
 
 private:
+    ContextProvider<Ctx>& provider;
     T value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const ValueField* base{nullptr};
@@ -469,6 +514,10 @@ private:
     MaskState state{MaskState::INHERIT};
     const OwnedListField* base{nullptr};
 };
+
+template <typename T>
+concept RequiresContext =
+    requires { T::applier; };
 
 template <typename T>
 concept IsAtomicField =

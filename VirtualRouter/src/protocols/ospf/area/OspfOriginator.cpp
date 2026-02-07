@@ -13,7 +13,16 @@
 
 namespace OSPF
 {
-OspfOriginator::OspfOriginator(OspfArea& a) : area(a), tmgr(area.process().tmgr) {}
+OspfOriginator::OspfOriginator(OspfArea& a) : area(a), tmgr(area.process().tmgr)
+{
+    auto& configs = a.getConfigs();
+    auto type = configs.get<Config::OspfArea::AREA_TYPE>().load();
+
+    if (type == AreaType::NSSA || type == AreaType::TOTALLY_NSSA)
+        nssaDefaultOriginate(configs.get<Config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load());
+    else if (type == AreaType::TOTALLY_STUB || type == AreaType::TOTALLY_STUB)
+        addStubDefaultRoute(true);
+}
 
 OspfOriginator::~OspfOriginator()
 {

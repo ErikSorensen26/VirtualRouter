@@ -110,7 +110,7 @@ using RouterEigrpAddressFamily_Topology = commandAdder<EigrpContext,
     "topology"_tok, ARG_REST
 >;
 
-using RouterEigrpAddressFamilyV4Commands = CliModeParser<CliMode::RouterEigrpAddressFamilyV4, EigrpContext,
+using RouterEigrpAddressFamilyCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpAddressFamily_AfInterface,
     RouterEigrpAddressFamily_EigrpDefaultRouteTag,
     RouterEigrpAddressFamily_EigrpEventLogSize,
@@ -129,22 +129,12 @@ using RouterEigrpAddressFamilyV4Commands = CliModeParser<CliMode::RouterEigrpAdd
     RouterEigrpAddressFamily_Topology
 >;
 
+using RouterEigrpAddressFamilyV4Commands = CliModeParser<CliMode::RouterEigrpAddressFamilyV4, EigrpContext,
+    RouterEigrpAddressFamilyCommands
+>;
+
 using RouterEigrpAddressFamilyV6Commands = CliModeParser<CliMode::RouterEigrpAddressFamilyV6, EigrpContext,
-    RouterEigrpAddressFamily_AfInterface,
-    RouterEigrpAddressFamily_EigrpDefaultRouteTag,
-    RouterEigrpAddressFamily_EigrpEventLogSize,
-    RouterEigrpAddressFamily_EigrpLogNeighborChanges,
-    RouterEigrpAddressFamily_EigrpLogNeighborWarnings,
-    RouterEigrpAddressFamily_EigrpRouterId,
-    RouterEigrpAddressFamily_EigrpStub,
-    RouterEigrpAddressFamily_Exit,
-    RouterEigrpAddressFamily_MaximumPrefix,
-    RouterEigrpAddressFamily_MetricRibScale,
-    RouterEigrpAddressFamily_MetricWeights,
-    RouterEigrpAddressFamily_Neighbor,
-    RouterEigrpAddressFamily_SoftSia,
-    RouterEigrpAddressFamily_TimersGracefulRestart,
-    RouterEigrpAddressFamily_Topology
+    RouterEigrpAddressFamilyCommands
 >;
 }
 

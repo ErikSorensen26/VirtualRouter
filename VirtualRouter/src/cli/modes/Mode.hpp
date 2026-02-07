@@ -8,32 +8,34 @@
 #include <json.hpp>
 
 #define CLI_MODE_TABLE \
-    X(UserExec,                        ">") \
-    X(PrivilegedExec,                  "#") \
-    X(GlobalConfiguration,             "(config)#") \
-    X(DhcpGlobalOptions,               "(config-dhcp-global-options)#") \
-    X(DhcpConfig,                      "(config-dhcp)#") \
-    X(Dhcpv6Config,                    "(config-dhcpv6)#") \
-    X(FlowExporter,                    "(config-flow-exporter)#") \
-    X(FlowMonitor,                     "(config-flow-monitor)#") \
-    X(FlowRecord,                      "(config-flow-record)#") \
-    X(Interface,                       "(config-if)#", "ethernet") \
-    X(ClassMap,                        "(config-cmap)#") \
-    X(Dhcp,                            "(config-dhcp)#") \
-    X(ExtendedACL,                     "(config-ext-nacl)#") \
-    X(StandardACL,                     "(config-std-nacl)#") \
-    X(PolicyMap,                       "(config-pmap)#") \
+    X(None,                             "") \
+    X(UserExec,                         ">") \
+    X(PrivilegedExec,                   "#") \
+    X(GlobalConfiguration,              "(config)#") \
+    X(DhcpGlobalOptions,                "(config-dhcp-global-options)#") \
+    X(DhcpConfig,                       "(config-dhcp)#") \
+    X(Dhcpv6Config,                     "(config-dhcpv6)#") \
+    X(FlowExporter,                     "(config-flow-exporter)#") \
+    X(FlowMonitor,                      "(config-flow-monitor)#") \
+    X(FlowRecord,                       "(config-flow-record)#") \
+    X(Interface,                        "(config-if)#", "ethernet") \
+    X(ClassMap,                         "(config-cmap)#") \
+    X(Dhcp,                             "(config-dhcp)#") \
+    X(ExtendedACL,                      "(config-ext-nacl)#") \
+    X(StandardACL,                      "(config-std-nacl)#") \
+    X(PolicyMap,                        "(config-pmap)#") \
 /*Eigrp*/ \
-    X(RouterEigrpNamed,               "(config-router)#", "eigrp_named") \
+    X(RouterEigrpNamed,                 "(config-router)#", "eigrp_named") \
     X(RouterEigrpClassicV4,             "(config-router)#", "eigrp_classic") \
-    X(RouterEigrpClassicV6,           "(config-rtr)#", "eigrp_classic") \
-    X(RouterEigrpClassicVRF,          "(config-router-af)#", "eigrp", "eigrp_classic_vrf") \
-    X(RouterEigrpAddressFamilyV4,     "(config-router-af)#", "eigrp", "ipv4") \
-    X(RouterEigrpAddressFamilyV6,     "(config-router-af)#", "eigrp", "ipv6") \
-    X(RouterEigrpInterfaceV4,         "(config-router-af-interface)#", "ipv4") \
-    X(RouterEigrpInterfaceV6,         "(config-router-af-interface)#", "ipv6") \
-    X(RouterEigrpTopologyV4,          "(config-router-af-topology)#", "eigrp", "ipv4") \
-    X(RouterEigrpTopologyV6,          "(config-router-af-topology)#", "eigrp", "ipv6")
+    X(RouterEigrpClassicV6,             "(config-rtr)#", "eigrp_classic") \
+    X(RouterEigrpClassicVRF,            "(config-router-af)#", "eigrp", "eigrp_classic_vrf") \
+    X(RouterEigrpAddressFamilyV4,       "(config-router-af)#", "eigrp", "ipv4") \
+    X(RouterEigrpAddressFamilyV6,       "(config-router-af)#", "eigrp", "ipv6") \
+    X(RouterEigrpInterfaceV4,           "(config-router-af-interface)#", "ipv4") \
+    X(RouterEigrpInterfaceV6,           "(config-router-af-interface)#", "ipv6") \
+    X(RouterEigrpTopologyV4,            "(config-router-af-topology)#", "eigrp", "ipv4") \
+    X(RouterEigrpTopologyV6,            "(config-router-af-topology)#", "eigrp", "ipv6") \
+/*Ospf*/ \
 
 /**
  * @struct Mode

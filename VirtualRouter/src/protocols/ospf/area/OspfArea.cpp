@@ -17,7 +17,8 @@
 #include <VirtualRouter.h>
 #include <limits>
 
-#include <OspfRegistry.hpp>
+#include <OspfRegistry.h>
+#include <PacketDispatcher.h>
 
 #include "OspfOriginator.h"
 #include <OspfOriginatorV2.h>
@@ -49,6 +50,16 @@ OspfArea::~OspfArea()
         base.tmgr.cancelTimer(ignoreTid);
     if (resetTid != 0)
         base.tmgr.cancelTimer(resetTid);
+}
+
+void OspfArea::initializeReset()
+{
+    // TODO
+}
+
+void OspfArea::reset()
+{
+    // TODO
 }
 
 void OspfArea::clear()
@@ -789,7 +800,4 @@ template void OspfArea::processSummaries<PolicyV3>(std::unordered_map<LsaKey, Ls
 
 template void OspfArea::processExternalLsa<PolicyV2>(IncomingLsaContext&, const LsaBody&);
 template void OspfArea::processExternalLsa<PolicyV3>(IncomingLsaContext&, const LsaBody&);
-
-template bool OspfArea::isValidNssaTranslation<uint32_t>(uint32_t) const;
-template bool OspfArea::isValidNssaTranslation<__uint128_t>(__uint128_t) const;
 }

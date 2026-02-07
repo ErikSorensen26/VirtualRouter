@@ -9,7 +9,7 @@
 #include <OspfProcess.h>
 #include <VirtualRouter.h>
 
-#include <OspfInterfaceRegistry.hpp>
+#include <OspfInterfaceRegistry.h>
 
 namespace OSPF
 {

@@ -9,14 +9,14 @@
 
 namespace OSPF
 {
-OspfProcess::OspfProcess(bool isV3, uint32_t procId, AddressFamily af, VirtualRouter* vrf)
-    : isV3(isV3), routingInstance(vrf), tmgr(vrf->global.timeManager), rib(*this), procId(procId), af(af), ifaceMgr(*this),
+OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRouter* vrf)
+    : isV3(isV3), routingInstance(vrf), tmgr(vrf->getGlobal().timeManager), rib(*this), procId(procId), af(af), ifaceMgr(*this),
     configs([this, isV3]() {
-        auto& registry = routingInstance->global.registry;
-        auto key = Config::generateOspfKey(routingInstance->instanceId, getProcId(), getAF(), isV3);
+        auto& registry = routingInstance->getGlobal().registry;
+        auto key = Config::generateOspfKey(routingInstance->getInstanceId(), getProcId(), getAF(), isV3);
         if (isV3)
         {
-            if (routingInstance->isDefault)
+            if (routingInstance->isDefault())
             {
                 // TODO: add address family v3 configs from elsewhere
                 auto& afCfgs = std::get<V3AfConfigs>(afConfigs);
@@ -100,7 +100,7 @@ void OspfProcess::addDefaultRoute(bool add)
 
     if (!always)
     {
-        auto& globalRib = routingInstance->routingTable;
+        auto& globalRib = routingInstance->getRib();
         if (af == AddressFamily::IPv4)
         {
             if (!globalRib.lookup<uint32_t>(0)) return;

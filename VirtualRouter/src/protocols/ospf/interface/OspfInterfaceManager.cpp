@@ -47,7 +47,7 @@ bool InterfaceManager::isInterfaceReachable(uint32_t area, uint32_t ifaceId)
     return false;
 }
 
-OspfInterface& InterfaceManager::createInterface(Interface& interface, OspfInterfaceId& key)
+OspfInterface& InterfaceManager::createInterface(Interface& interface, const OspfInterfaceId& key)
 {
     if (auto it = ospfInterfaceList.find(key); it != ospfInterfaceList.end())
         return it->second;
@@ -55,11 +55,9 @@ OspfInterface& InterfaceManager::createInterface(Interface& interface, OspfInter
     AddressFamily af = process.getAF();
     uint32_t id = process.getProcId();
 
-    InterfaceConfigs& intConfig = interface.getOspfConfig(id, af);
-
     if (!process.isV3)
     {
-        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, intConfig, key);
+        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, key);
         OspfInterface& ospfIface = ifaceIt.first->second;
         ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
         interface.ospfInterfaceList[id].IPv4 = &ospfIface;
@@ -67,7 +65,7 @@ OspfInterface& InterfaceManager::createInterface(Interface& interface, OspfInter
     }
     else
     {
-        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, intConfig, key);
+        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, key);
         OspfInterface& ospfIface = ifaceIt.first->second;
         ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
         if (af == AddressFamily::IPv4)
@@ -76,6 +74,11 @@ OspfInterface& InterfaceManager::createInterface(Interface& interface, OspfInter
             interface.ospfInterfaceList[id].IPv6 = &ospfIface;
         return ospfIface;
     }
+}
+
+void InterfaceManager::removeInterface(const OspfInterfaceId& id)
+{
+    remove
 }
 
 void InterfaceManager::refreshInterfaceList()
@@ -187,5 +190,13 @@ void InterfaceManager::refreshInterfaceList()
 void InterfaceManager::deactivateAll()
 {
     ospfInterfaceList.clear();
+}
+
+void InterfaceManager::syncNeighbors()
+{
+    for (auto& [_, iface] : ospfInterfaceList)
+    {
+        iface.getNTable().syncUnicast();
+    }
 }
 }

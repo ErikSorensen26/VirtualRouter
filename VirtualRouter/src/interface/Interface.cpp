@@ -478,7 +478,7 @@ EigrpConfigs::InterfaceConfigs* Interface::getEigrpConfig(uint32_t as, AddressFa
     return &configs.eigrp.eigrpInterfaceConfigList[key];
 }
 
-OSPF::InterfaceConfigs& Interface::getOspfConfig(uint32_t id, AddressFamily af)
+Config::OspfInterfaceAddressFamilyRegistry& Interface::getOspfv3Config(uint32_t id, AddressFamily af)
 {
     std::pair<uint32_t, AddressFamily> key = { id, af };
     auto configIt = configs.ospf.ospfInterfaceConfigList.find(key);
@@ -488,4 +488,15 @@ OSPF::InterfaceConfigs& Interface::getOspfConfig(uint32_t id, AddressFamily af)
         return newConfig.first->second;
     }
     return configs.ospf.ospfInterfaceConfigList[key];
+}
+
+Config::OspfInterfaceBaseRegistry& Interface::getOspfConfig()
+{
+    if (!configs.ospf.ospfInterfaceConfigs.has_value())
+    {
+        auto* vrf = routingInstance.load(std::memory_order_relaxed);
+        configs.ospf.ospfInterfaceConfigs.emplace(vrf->getRegistry().create<Config::OspfInterfaceBaseRegistry>(configs.key));
+        vrf->getRegistry().emplace(configs.ospf.ospfInterfaceConfigs.value()->get<Config::OspfInterfaceBase::BASE>(), configs.key);
+    }
+    return configs.ospf.ospfInterfaceConfigs.value().get();
 }

@@ -1,9 +1,9 @@
-// OspfRegistry.hpp
+// OspfRegistry.h
 
-#ifndef OSPF_REGISTRY_HPP
-#define OSPF_REGISTRY_HPP
+#ifndef OSPF_REGISTRY_H
+#define OSPF_REGISTRY_H
 
-#include "OspfInterfaceRegistry.hpp"
+#include "OspfInterfaceRegistry.h"
 #include <RegistryTemplate.hpp>
 #include <tuple>
 #include <IPAddress.hpp>
@@ -11,6 +11,9 @@
 
 namespace OSPF
 {
+class OspfProcess;
+class OspfArea;
+
 enum class AreaType
 {
     NORMAL,
@@ -36,7 +39,7 @@ enum class OspfVirtualLink
     COUNT
 };
 
-using OspfVirtualLinkRegistry = SubRegistry<__uint128_t, OspfVirtualLink>;
+using OspfVirtualLinkRegistry = SubRegistry<__uint128_t, OspfVirtualLink, OSPF::OspfArea>;
 
 inline __uint128_t generateOspfAreaKey(__uint128_t topoKey, uint32_t areaId)
 {
@@ -65,12 +68,16 @@ enum class OspfArea
     COUNT
 };
 
-using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea,
+void OspfAreaTypeChange(OSPF::OspfArea& area);
+void OspfAreaSycnRanges(OSPF::OspfArea& area);
+
+using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea, OSPF::OspfArea,
     AtomicField<OSPF::AuthType, OSPF::AuthType::NULL_AUTH, OspfArea::AUTHENTICATION_TYPE>,
     OptionalAtomicField<uint32_t, OspfArea::DEFAULT_COST>,
     OptionalAtomicField<std::nullptr_t, OspfArea::FILTER_LIST>, // TODO:
-    AtomicField<OSPF::AreaType, OSPF::AreaType::NORMAL, OspfArea::AREA_TYPE>,
-    AtomicField<bool, false, OspfArea::NSSA_DEFAULT_ORIGINATE>, // add/remove default route
+    AtomicField<OSPF::AreaType, OSPF::AreaType::NORMAL, OspfArea::AREA_TYPE,
+        OSPF::OspfArea, OspfAreaTypeChange>,
+    AtomicField<bool, false, OspfArea::NSSA_DEFAULT_ORIGINATE>,
     AtomicField<uint32_t, 1, OspfArea::NSSA_DEFAULT_METRIC>,
     AtomicField<bool, true, OspfArea::NSSA_DEFAULT_METRIC_TYPE>,
     AtomicField<bool, false, OspfArea::NSSA_DEFAULT_ONLY>,
@@ -78,7 +85,8 @@ using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea,
     AtomicField<bool, false, OspfArea::NSSA_NO_REDISTRIBUTION>,
     AtomicField<bool, false, OspfArea::NSSA_ALWAYS_TRANSLATE>,
     AtomicField<bool, false, OspfArea::NSSA_SUPPRESS_FA>,
-    ValueField<std::vector<std::tuple<IPPrefix, bool, std::optional<uint32_t>>>, OspfArea::RANGE>,
+    ValueField<std::vector<std::tuple<IPPrefix, bool, std::optional<uint32_t>>>, OspfArea::RANGE,
+        OSPF::OspfArea, OspfAreaSycnRanges>,
     ValueField<std::vector<std::tuple<>>, OspfArea::VIRTUAL_LINKS> // TODO:
 >;
 
@@ -183,9 +191,11 @@ enum class Ospf
 };
 
 
+void OspfSyncNeighbors(OSPF::OspfProcess& base);
+void OspfSyncNetworks(OSPF::OspfProcess& base);
+void OspfSyncSummaries(OSPF::OspfProcess& base);
 
-
-using OspfRegistry = SubRegistry<__uint128_t, Ospf,
+using OspfRegistry = SubRegistry<__uint128_t, Ospf, OSPF::OspfProcess,
     OwnedListField<OspfAreaRegistry, Ospf::AREA_CONFIGS>,
     AtomicField<uint32_t, 100, Ospf::REFERENCE_BANDWIDTH>,
     AtomicField<bool, false, Ospf::BFD>, // TODO:
@@ -241,8 +251,16 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     ValueField<std::vector<std::tuple<uint32_t, uint32_t, uint32_t>>, Ospf::MPLS_TRAF_ENG_MESH_GROUP>, // TODO:
     AtomicField<bool, false, Ospf::MPLS_TRAF_ENG_MULTICAST_INACT>, // TODO:
     OptionalAtomicField<uint32_t, Ospf::MPLS_TRAF_ENG_ROUTER_ID>, // TODO:
-    ValueField<std::vector<std::tuple<IPPrefix, uint32_t>>, Ospf::NETWORKS>,
-    ValueField<std::vector<std::tuple<IPAddress, uint16_t>>, Ospf::NEIGHBORS>,
+    ValueField<std::vector<std::tuple<IPPrefix, uint32_t>>, Ospf::NETWORKS,
+        OSPF::OspfProcess, OspfSyncNetworks>,
+    ValueField<std::vector<std::tuple<
+        uint32_t,
+        std::optional<uint16_t>,
+        std::optional<bool>,
+        std::optional<uint16_t>,
+        std::optional<uint8_t>
+    >>, Ospf::NEIGHBORS,
+        OSPF::OspfProcess, OspfSyncNeighbors>,
     AtomicField<bool, false, Ospf::NSF_CISCO_HELPER>, // TODO:
     AtomicField<bool, false, Ospf::NSF_STRICT_CHECKING>, // TODO:
     OptionalAtomicField<uint32_t, Ospf::HELLO_QUEUE_DEPTH>, // XXX:
@@ -259,7 +277,8 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf,
     AtomicField<uint8_t, 1, Ospf::PRIORITY>,
     OptionalAtomicField<std::nullptr_t, Ospf::REDISTRIBUTE>, // TODO:
     OptionalAtomicField<std::nullptr_t, Ospf::SNMP>, // TODO:
-    ValueField<std::vector<std::tuple<IPPrefix, bool, bool, std::optional<uint32_t>>>, Ospf::SUMMARY_ADDRESS>,
+    ValueField<std::vector<std::tuple<IPPrefix, bool, bool, std::optional<uint32_t>>>, Ospf::SUMMARY_ADDRESS,
+        OSPF::OspfProcess, OspfSyncSummaries>,
     AtomicField<uint32_t, 0, Ospf::LSA_THROTTLE_DELAY>,
     AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_HOLD>,
     AtomicField<uint32_t, 5000, Ospf::LSA_THROTTLE_MAX>,
@@ -279,7 +298,7 @@ enum class OspfAddressFamilyV3
     COUNT
 };
 
-using OspfAddressFamilyV3Registry = SubRegistry<__uint128_t, OspfAddressFamilyV3,
+using OspfAddressFamilyV3Registry = SimpleSubRegistry<__uint128_t, OspfAddressFamilyV3,
     ReferenceContainer<OspfRegistry, OspfAddressFamilyV3::BASE>,
     ReferenceContainer<OspfRegistry, OspfAddressFamilyV3::IPV4>,
     ReferenceContainer<OspfRegistry, OspfAddressFamilyV3::IPV6>
@@ -291,9 +310,9 @@ enum class OspfAddressFamilyV2
     COUNT
 };
 
-using OspfAddressFamilyV2Registry = SubRegistry<__uint128_t, OspfAddressFamilyV2,
+using OspfAddressFamilyV2Registry = SimpleSubRegistry<__uint128_t, OspfAddressFamilyV2,
     ReferenceContainer<OspfRegistry, OspfAddressFamilyV2::BASE>
 >;
 }
 
-#endif // OSPF_REGISTRY_HPP
+#endif // OSPF_REGISTRY_H

@@ -24,9 +24,12 @@ void NeighborTable::syncUnicast()
             unicastNbrs.insert(ip);
 
         // Update configs of all unicast neighbors
-        ifaceConfigs.get<Config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs) {
+        auto updateNeighbors = [&](const auto& nbrs)
+        {
             for (const auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)
             {
+                if (!iface.interfaceAddress.contains(ip))
+                    continue;
                 unicastNbrs.erase(ip);
                 auto it = unicast.emplace(ip);
                 auto& nbr = it.first->second;
@@ -35,6 +38,14 @@ void NeighborTable::syncUnicast()
                 nbr.pollInterval = pollIntv.has_value() ? pollIntv.value() : 120;
                 nbr.priority = priority.has_value() ? priority.value() : 0;
             }
+        };
+
+        ifaceConfigs.get<Config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs) {
+            updateNeighbors(nbrs);
+        });
+
+        iface.getArea().process().getConfigs().get<Config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrs) {
+            updateNeighbors(nbrs);
         });
 
         // Erase left over neighbors

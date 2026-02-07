@@ -340,10 +340,6 @@ public:
 
     std::map<uint32_t, Eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
 
-    // OSPF INTERFACES
-    
-    std::map<uint32_t, OSPF::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
-
     /**
      * @brief Retrieve or allocate EIGRP per-interface config block.
      *
@@ -354,6 +350,10 @@ public:
      */
     EigrpConfigs::InterfaceConfigs* getEigrpConfig(uint32_t as, AddressFamily af, bool negate);
 
+    // OSPF INTERFACES
+    
+    std::map<uint32_t, OSPF::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
+
     /**
      * @brief Retrieve or allocate OSPF per-interface config block.
      *
@@ -361,7 +361,14 @@ public:
      * @param negate If true, returns a nullptr instead of allicating if it does not yet exist.
      * @return Pointer to OSPF interface config block.
      */
-    OSPF::InterfaceConfigs& getOspfConfig(uint32_t id, AddressFamily af);
+    Config::OspfInterfaceAddressFamilyRegistry& getOspfv3Config(uint32_t id, AddressFamily af);
+
+    /**
+     * @brief Retreives or allocates OSPF per-interface config block.
+     *
+     * @return Pointer to OSPF interface config block.
+     */
+    Config::OspfInterfaceBaseRegistry& getOspfConfig();
 
     // DHCP CLIENT STATE
 

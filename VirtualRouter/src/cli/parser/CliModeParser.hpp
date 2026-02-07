@@ -23,6 +23,17 @@ consteval auto operator""_tok()
     return S;
 }
 
+template <CliMode Mode, typename Context, typename... Commands>
+class CliModeParser;
+
+template <typename T, typename = void> struct is_cli_mode : std::false_type {};
+
+template <typename T>
+struct is_cli_mode<T, std::void_t<decltype(T::mode)>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_cli_mode_v = is_cli_mode<std::decay_t<T>>::value;
+
 // CliEngine: Executes commands for a given Context + command set
 template <CliMode Mode, typename Context, typename... Commands>
 class CliModeParser
@@ -47,8 +58,20 @@ public:
         auto tryOne = [&](auto cmdType)
         {
             using CmdT = decltype(cmdType);
-            if (!executed && CmdT::tryExecute(ctx, first, last))
-                executed = true;
+
+            if (execute)
+                return;
+
+            if constexpr (is_cli_mode_v<CmdT>)
+            {
+                if (CmdT::execute(ctx, first, last))
+                    executed = true;
+            }
+            else
+            {
+                if (CmdT::tryExecute(ctx, first, last))
+                    executed = true;
+            }
         };
 
         (tryOne(Commands{}), ...);
@@ -69,8 +92,20 @@ public:
         auto tryOne = [&](auto cmdType)
         {
             using CmdT = decltype(cmdType);
-            if (!found && CmdT::match(first, last))
-                found = true;
+
+            if (found)
+                return;
+
+            if constexpr (is_cli_mode_v<CmdT>)
+            {
+                if (CmdT::match(first, last))
+                    found = true;
+            }
+            else
+            {
+                if (CmdT::match(first, last))
+                    found = true;
+            }
         };
 
         (tryOne(Commands{}), ...);
@@ -144,16 +179,6 @@ private:
         return Support::NONE;
     }
 };
-
-template <typename T>
-struct is_cli_mode : std::false_type {};
-
-template <CliMode M, typename Ctx, typename... Cmds>
-struct is_cli_mode<Cli::CliModeParser<M, Ctx, Cmds...>> : std::true_type {};
-
-template <typename T>
-inline constexpr bool is_cli_mode_v = 
-    is_cli_mode<std::decay_t<T>>::value;
 }
 
 #endif // CLI_MODE_PARSER_HPP

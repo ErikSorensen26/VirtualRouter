@@ -5,6 +5,7 @@
 
 #include <CliModeParser.hpp>
 #include <EigrpContext.hpp>
+#include "RouterEigrpTopologyCommands.h"
 
 namespace Cli
 {
@@ -16,31 +17,7 @@ using RouterEigrpClassic_AddressFamilyVrf = commandAdder<EigrpContext,
 
 //bool RouterEigrp_AddressFamilyVrfUnicast_Handler(EIGRP_PARAMS) {} //TODO
 
-bool RouterEigrpClassic_AutoSummary_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_AutoSummary = commandAdder<EigrpContext,
-    RouterEigrpClassic_AutoSummary_Handler,
-    "auto-summary"_tok
->;
-
 //bool RouterEigrpClassic_DefaultInformation_Handler(EIGRP_PARAMS) {} //TODO
-
-bool RouterEigrpClassic_DefaultMetric_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_DefaultMetric = commandAdder<EigrpContext,
-    RouterEigrpClassic_DefaultMetric_Handler,
-    "default-metric"_tok, ARG_REST
->;
-
-bool RouterEigrpClassic_Distance_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_Distance = commandAdder<EigrpContext,
-    RouterEigrpClassic_Distance_Handler,
-    "distance"_tok, ARG_REST
->;
-
-bool RouterEigrpClassic_EigrpEventLogSize_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_EigrpEventLogSize = commandAdder<EigrpContext,
-    RouterEigrpClassic_EigrpEventLogSize_Handler,
-    "eigrp"_tok, "event-log-size"_tok, ARG_REST
->;
 
 bool RouterEigrpClassic_EigrpLogNeighborChanges_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_EigrpLogNeighborChanges = commandAdder<EigrpContext,
@@ -72,18 +49,6 @@ using RouterEigrpClassic_Exit = commandAdder<EigrpContext,
     "exit"_tok
 >;
 
-bool RouterEigrpClassic_MaximumPaths_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_MaximumPaths = commandAdder<EigrpContext,
-    RouterEigrpClassic_MaximumPaths_Handler,
-    "maximum-paths"_tok, ARG_REST
->;
-
-bool RouterEigrpClassic_MetricMaximumHops_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_MetricMaximumHops = commandAdder<EigrpContext,
-    RouterEigrpClassic_MaximumPaths_Handler,
-    "metric"_tok, "maximum-hops"_tok, ARG_REST
->;
-
 bool RouterEigrpClassic_MetricWeights_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_MetricWeights = commandAdder<EigrpContext,
     RouterEigrpClassic_MetricWeights_Handler,
@@ -108,73 +73,34 @@ using RouterEigrpClassic_PassiveInterface = commandAdder<EigrpContext,
     "passive-interface"_tok, ARG, ARG
 >;
 
-bool RouterEigrpClassic_TimersActive_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_TimersActive = commandAdder<EigrpContext,
-    RouterEigrpClassic_TimersActive_Handler,
-    "timers"_tok, "active-time"_tok, ARG_REST
->;
-
 bool RouterEigrpClassic_TimersGracefulRestart_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_TimersGracefulRestart = commandAdder<EigrpContext,
     RouterEigrpClassic_TimersGracefulRestart_Handler,
     "timers"_tok, "graceful-restart"_tok, ARG_REST
 >;
 
-bool RouterEigrpClassic_TrafficShare_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_TrafficShare = commandAdder<EigrpContext,
-    RouterEigrpClassic_TrafficShare_Handler,
-    "traffic-share"_tok, ARG_REST
->;
-
-bool RouterEigrpClassic_Variance_Handler(EIGRP_PARAMS);
-using RouterEigrpClassic_Variance = commandAdder<EigrpContext,
-    RouterEigrpClassic_Variance_Handler,
-    "variance"_tok, ARG_REST
->;
-
-using RouterEigrpClassicCommandsV4 = CliModeParser<CliMode::RouterEigrpClassicV4, EigrpContext,
+using RouterEigrpClassicCommands = CliModeParser<CliMode::RouterEigrpClassicV4, EigrpContext,
+    RouterEigrpTopologyCommands,
     RouterEigrpClassic_AddressFamilyVrf,
-    RouterEigrpClassic_AutoSummary,
-    RouterEigrpClassic_DefaultMetric,
-    RouterEigrpClassic_Distance,
-    RouterEigrpClassic_EigrpEventLogSize,
     RouterEigrpClassic_EigrpLogNeighborChanges,
     RouterEigrpClassic_EigrpLogNeighborWarnings,
     RouterEigrpClassic_EigrpRouterId,
     RouterEigrpClassic_EigrpStub,
     RouterEigrpClassic_Exit,
-    RouterEigrpClassic_MaximumPaths,
-    RouterEigrpClassic_MetricMaximumHops,
     RouterEigrpClassic_MetricWeights,
     RouterEigrpClassic_Neighbor,
     RouterEigrpClassic_Network,
     RouterEigrpClassic_PassiveInterface,
-    RouterEigrpClassic_TimersActive,
-    RouterEigrpClassic_TimersGracefulRestart,
-    RouterEigrpClassic_TrafficShare,
-    RouterEigrpClassic_Variance
+    RouterEigrpClassic_TimersGracefulRestart
+>;
+
+using RouterEigrpClassicCommandsV4 = CliModeParser<CliMode::RouterEigrpClassicV4, EigrpContext,
+    RouterEigrpClassicCommands
 >;
 
 using RouterEigrpClassicCommandsV6 = CliModeParser<CliMode::RouterEigrpClassicV6, EigrpContext,
-    RouterEigrpClassic_DefaultMetric,
-    RouterEigrpClassic_Distance,
-    RouterEigrpClassic_EigrpEventLogSize,
-    RouterEigrpClassic_EigrpLogNeighborChanges,
-    RouterEigrpClassic_EigrpLogNeighborWarnings,
-    RouterEigrpClassic_EigrpRouterId,
-    RouterEigrpClassic_EigrpStub,
-    RouterEigrpClassic_Exit,
-    RouterEigrpClassic_MaximumPaths,
-    RouterEigrpClassic_MetricMaximumHops,
-    RouterEigrpClassic_MetricWeights,
-    RouterEigrpClassic_Neighbor,
-    RouterEigrpClassic_PassiveInterface,
-    RouterEigrpClassic_TimersActive,
-    RouterEigrpClassic_TimersGracefulRestart,
-    RouterEigrpClassic_TrafficShare,
-    RouterEigrpClassic_Variance
+    RouterEigrpClassicCommands
 >;
-
 }
 
 #endif // ROUTER_EIGRP_COMMANDS_H

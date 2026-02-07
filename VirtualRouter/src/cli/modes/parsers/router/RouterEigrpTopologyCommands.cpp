@@ -44,18 +44,24 @@ bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
-    if (!ctx.negate)
+    if (Functions::isNumber(args[0]))
     {
-        configs.adminDistance.store(static_cast<uint8_t>(std::stoi(args[0])), std::memory_order_release);
-        configs.externalAdminDistance.store(static_cast<uint8_t>(std::stoi(args[1])), std::memory_order_release);
+        // XXX
     }
-    else
+    else if (args[0] == "eigrp")
     {
-        configs.adminDistance.store(90, std::memory_order_release);
-        configs.externalAdminDistance.store(170, std::memory_order_release);
+        auto& configs = ctx.currentEigrp->getConfigs();
+        if (!ctx.negate)
+        {
+            configs.adminDistance.store(static_cast<uint8_t>(std::stoi(args[1])), std::memory_order_release);
+            configs.externalAdminDistance.store(static_cast<uint8_t>(std::stoi(args[2])), std::memory_order_release);
+        }
+        else
+        {
+            configs.adminDistance.store(90, std::memory_order_release);
+            configs.externalAdminDistance.store(170, std::memory_order_release);
+        }
     }
-    return true;
 }
 
 bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS)
