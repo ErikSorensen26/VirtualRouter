@@ -131,6 +131,66 @@ public:
         return fib.lookup(addr);
     }
 
+    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId)
+    {
+        auto* n = fib.root.load(std::memory_order_acquire);
+        if (!n) return false;
+
+        RibEntry<AddrType>* best = nullptr;
+
+        std::lock_guard<std::mutex> lock(ribMtx);
+
+        while (n)
+        {
+            auto pit = table.find({n->prefix, n->length});
+            if (pit == table.end()) continue;
+
+            RibBucket<AddrType>& bucket = pit.second;
+
+            AddrType pfx = mask(a, n->length);
+            if (pfx == n->prefix)
+            {
+                auto* rt = bucket.getBestRoute(procId);
+                if (rt) best = rt;
+            }
+
+            bool dir = bitAt(a, n->bit);
+            n = dir ? n->right.load(std::memory_order_acquire)
+                    : n->left.load(std::memory_order_acquire);
+        }
+        return best;
+    }
+
+    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, RouteSource source)
+    {
+        auto* n = fib.root.load(std::memory_order_acquire);
+        if (!n) return false;
+
+        RibEntry<AddrType>* best = nullptr;
+
+        std::lock_guard<std::mutex> lock(ribMtx);
+
+        while (n)
+        {
+            auto pit = table.find({n->prefix, n->length});
+            if (pit == table.end()) continue;
+
+            RibBucket<AddrType>& bucket = pit.second;
+
+            AddrType pfx = mask(a, n->length);
+            if (pfx == n->prefix)
+            {
+                auto* rt = bucket.getBestRoute(source, procId);
+                if (rt) best = rt;
+            }
+
+            bool dir = bitAt(a, n->bit);
+            n = dir ? n->right.load(std::memory_order_acquire)
+                    : n->left.load(std::memory_order_acquire);
+        }
+        return best;
+    }
+
     size_t size() const noexcept
     {
         std::lock_guard<std::mutex> lock(ribMtx);

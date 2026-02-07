@@ -5,6 +5,19 @@
 
 #include <HeaderHelpers.hpp>
 
+#define ARP_HARDWARE_ETHERNET       0x0001      ///< ARP hardware type for Ethernet
+
+#define ARP_OPCODE_REQUEST          0x0001      ///< ARP Request
+#define ARP_OPCODE_REPLY            0x0002      ///< ARP Reply
+#define ARP_OPCODE_REVERSE_REQUEST  0x0003      ///< Reverse ARP Request
+#define ARP_OPCODE_REVERSE_REPLY    0x0004      ///< Reverse ARP Reply
+#define ARP_OPCODE_DYNAMIC_REQUEST  0x0005      ///< Dynamic ARP Request
+#define ARP_OPCODE_DYNAMIC_REPLY    0x0006      ///< Dynamic ARP Reply
+#define ARP_OPCODE_DYNAMIC_ERROR    0x0007      ///< Dynamic ARP Error
+#define ARP_OPCODE_INVERSE_REQUEST  0x0008      ///< Inverse ARP Error
+#define ARP_OPCODE_INVERSE_REPLY    0x0009      ///< Inverse ARP Reply
+#define ARP_OPCODE_NAK              0x000A      ///< ARP NAK (Negative Acknowledgment)
+
 /**
  * @struct ArpHeaderRaw
  * @brief Represents a raw ARP header.

@@ -115,7 +115,7 @@ bool AuthHandler::appendAuthHMAC(Global& global, uint8_t* packetStart, size_t si
         uint16_t type = readU16(cursor);
         uint16_t length = readU16(cursor + 2);
 
-        if (type == Variable::Eigrp::Option::authentication)
+        if (type == EIGRP_OPTION_AUTHENTICATION)
         {
             authTLV = cursor + 4;
             EigrpConfigs::AuthType authType = static_cast<EigrpConfigs::AuthType>(readU16(authTLV));

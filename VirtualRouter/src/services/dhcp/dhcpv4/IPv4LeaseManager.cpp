@@ -14,7 +14,7 @@ bool IPv4LeaseManager::createLeaseFromTemp(const ClientID& clientId, uint32_t te
         return false;
 
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-    uint32_t timerId = timeManager.addTimer(expiry, [this, clientId]() {
+    uint32_t timerId = timeManager.addTimer(expiry, [this, clientId](uint32_t) {
         expireLease(clientId);
     });
 
@@ -31,7 +31,7 @@ uint32_t IPv4LeaseManager::createLease(const ClientID& clientId, uint32_t leaseT
     if (finalIP == 0) return 0;
 
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-    uint32_t timerId = timeManager.addTimer(expiry, [this, clientId]() {
+    uint32_t timerId = timeManager.addTimer(expiry, [this, clientId](uint32_t) {
         expireLease(clientId);
     });
 
@@ -48,7 +48,7 @@ bool IPv4LeaseManager::createLeaseFromReq(const ClientID& clientId, uint32_t req
         return false;
 
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-    uint32_t timerId = timeManager.addTimer(expiry, [this, clientId]() {
+    uint32_t timerId = timeManager.addTimer(expiry, [this, clientId](uint32_t) {
         expireLease(clientId);
     });
 
@@ -64,7 +64,7 @@ bool IPv4LeaseManager::renewLease(const ClientID& clientId, uint32_t leaseTime, 
 
     timeManager.cancelTimer(it->second.timerId);
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(leaseTime);
-    uint64_t timerId = timeManager.addTimer(expiry, [this, clientId]() {
+    uint64_t timerId = timeManager.addTimer(expiry, [this, clientId](uint32_t) {
         expireLease(clientId);
     });
 

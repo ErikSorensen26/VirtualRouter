@@ -150,9 +150,8 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
             entry->successors.push_back(nbr);
     }
 
-    if (base.isNamed())
-        for (auto route : entry->routesBySource)
-            route.second.routeInfo.wide.clearFlag(ReceivedRoute::Wide::WideFlags::ACTIVE);
+    for (auto route : entry->routesBySource)
+        route.second.routeInfo.clearFlag(ReceivedRoute::RouteFlags::ACTIVE);
 
     if (entry->successors.empty())
     {
@@ -305,9 +304,8 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
 
             entry->state = TopologyEntry::State::ACTIVE;
 
-            if (base.isNamed())
-                for (auto& route : entry->routesBySource)
-                    route.second.routeInfo.wide.setFlag(ReceivedRoute::Wide::WideFlags::ACTIVE);
+            for (auto& route : entry->routesBySource)
+                route.second.routeInfo.setFlag(ReceivedRoute::RouteFlags::ACTIVE);
 
             routes.push_back(&ar);
 

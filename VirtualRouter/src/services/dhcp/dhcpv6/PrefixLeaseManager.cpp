@@ -12,7 +12,7 @@ std::pair<IPv6Prefix, Dhcpv6StatusMessage> PrefixLeaseManager::createPrefix(cons
     if (prefix.second.code != Dhcpv6StatusCode::Success) return prefix;
 
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(valid);
-    prefixTimerIDs[prefix.first] = timeManager.addTimer(expiry, [this, prefix = prefix.first, key]() {
+    prefixTimerIDs[prefix.first] = timeManager.addTimer(expiry, [this, prefix = prefix.first, key](uint32_t) {
         expirePrefix(prefix, key);
     });
 
@@ -31,7 +31,7 @@ std::pair<Dhcpv6StatusMessage, std::unordered_set<IPv6Prefix>> PrefixLeaseManage
     if (prefix.second.code != Dhcpv6StatusCode::Success) return {prefix.second, { prefix.first } };
 
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(valid);
-    prefixTimerIDs[prefix.first] = timeManager.addTimer(expiry, [this, prefix = prefix.first, key]() {
+    prefixTimerIDs[prefix.first] = timeManager.addTimer(expiry, [this, prefix = prefix.first, key](uint32_t) {
         expirePrefix(prefix, key);
     });
 
@@ -46,7 +46,7 @@ Dhcpv6StatusMessage PrefixLeaseManager::createPrefixFromAdvertised(const IPv6Pre
 {
     auto startPrefixLease = [&]() {
         auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(valid);
-        prefixTimerIDs[prefix] = timeManager.addTimer(expiry, [this, key, prefix]() {
+        prefixTimerIDs[prefix] = timeManager.addTimer(expiry, [this, key, prefix](uint32_t) {
             expirePrefix(prefix, key);
         });
     };
@@ -80,7 +80,7 @@ Dhcpv6StatusMessage PrefixLeaseManager::createPrefixFromRequest(const IPv6Prefix
 {
     auto startPrefixLease = [&]() {
         auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(valid);
-        prefixTimerIDs[prefix] = timeManager.addTimer(expiry, [this, key, prefix]() {
+        prefixTimerIDs[prefix] = timeManager.addTimer(expiry, [this, key, prefix](uint32_t) {
             expirePrefix(prefix, key);
         });
     };
@@ -119,7 +119,7 @@ Dhcpv6StatusMessage PrefixLeaseManager::renewPrefix(const IPv6Prefix& prefix, co
 
     timeManager.cancelTimer(timerIt->second);
     auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(valid);
-    prefixTimerIDs[prefix] = timeManager.addTimer(expiry, [this, key, prefix]() {
+    prefixTimerIDs[prefix] = timeManager.addTimer(expiry, [this, key, prefix](uint32_t) {
         expirePrefix(prefix, key);
     });
 

@@ -34,18 +34,19 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
         uint32_t as = base.getAS();
 
         EigrpConfigs::InterfaceConfigs* intConfig;
-        auto pairIt = eigrpInterfaceConfigList.find(interface->configs.key);
-        if (pairIt != eigrpInterfaceConfigList.end())
+        if (base.isNamed())
         {
-            intConfig = pairIt->second;
+            auto configIt = eigrpInterfaceConfigList.find(interface->configs.key);
+            if (configIt == eigrpInterfaceConfigList.end())
+            {
+                auto newConfig = eigrpInterfaceConfigList.emplace(interface->configs.key, interface->configs.key);
+                intConfig = &newConfig.first->second;
+            }
+            else intConfig = &configIt->second;
         }
         else
         {
-            // INITIALIZE EIGRP CONFIGURATIONS
-            intConfig = base.isNamed()
-                ? new EigrpConfigs::InterfaceConfigs(interface->configs.key)
-                : interface->getEigrpConfig(as, af, false);
-            eigrpInterfaceConfigList[interface->configs.key] = intConfig;
+            intConfig = interface->getEigrpConfig(as, af, false);
         }
 
         if (af == AddressFamily::IPv4)
@@ -73,7 +74,7 @@ void InterfaceManager::refreshInterfaceList()
     std::vector<std::pair<bool, void*>> interfacesToProcess;
 
     if (base.routerID() == 0)
-        base.calculateRID();
+        if (!base.calculateRID()) return; // No valid RID
 
     {
         std::vector<std::map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
@@ -114,11 +115,11 @@ void InterfaceManager::refreshInterfaceList()
             if (base.getAF() == AddressFamily::IPv4)
             {
                 uint8_t ipAddress[4];
-                ipInfo.ipv4.getAddress(ipAddress);
+                ipInfo.ipv4.getPrimaryAddress(ipAddress);
                 inRange = config.isInNetworkRange(ipAddress);
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
-                    remake = inRange && !ipInfo.ipv4.compareAddress(it->second.ifaceAddress.v4);
+                    remake = inRange && !ipInfo.ipv4.comparePrimaryAddress(it->second.ifaceAddress.v4);
             }
             else
             {

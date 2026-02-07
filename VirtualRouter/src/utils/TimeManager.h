@@ -19,13 +19,13 @@ public:
     ~TimeManager();
 
     // Adds a timer task to the manager and returns a unique timer ID
-    uint32_t addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void()> callback);
+    uint32_t addTimer(std::chrono::steady_clock::time_point expirationTime, std::function<void(uint32_t)> callback);
 
     // Adds a time task to the manager that runs a specified amount of times.
-    uint32_t addLimitedRecurringTimer(std::chrono::milliseconds interval, size_t repeatCount, std::function<void()> repeated, std::function<void()> finalCallback = nullptr);
+    uint32_t addLimitedRecurringTimer(std::chrono::milliseconds interval, size_t repeatCount, std::function<void(uint32_t)> repeated, std::function<void(uint32_t)> finalCallback = nullptr);
 
     // Recurring timer
-    uint32_t addRecurringTimer(std::chrono::milliseconds interval, std::function<void()> callback);
+    uint32_t addRecurringTimer(std::chrono::milliseconds interval, std::function<void(uint32_t)> callback);
 
     // Cancels a timer based on its ID
     bool cancelTimer(uint32_t timerId);
@@ -42,7 +42,7 @@ private:
     struct TimerData
     {
         uint32_t id;
-        std::function<void()> callback;
+        std::function<void(uint32_t)> callback;
         std::chrono::milliseconds interval; // 0 for one-shot
     };
 
@@ -63,7 +63,7 @@ private:
     std::unordered_map<uint32_t, std::atomic<bool>> cancelFlags;
     std::unordered_map<uint32_t, size_t> repeatedCounters;
     std::unordered_map<uint32_t, size_t> repeatLimits;
-    std::unordered_map<uint32_t, std::function<void()>> finalCallbacks;
+    std::unordered_map<uint32_t, std::function<void(uint32_t)>> finalCallbacks;
     std::condition_variable timerDoneCV;
     std::thread timerThread;
     ThreadPool& threadPool;

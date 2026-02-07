@@ -11,12 +11,6 @@
 #include <Eigrp.h>
 #include <DuelEngine.h>
 
-#define VALIDATION_CAPTURES  \
-    vrf = vrf->instanceName, \
-    global = &vrf->global,   \
-    as = base->getAS(),      \
-    af = base->getAF()       \
-
 namespace Eigrp
 {
 InterfaceTimers::InterfaceTimers(EigrpInterface& iface, TimeManager& tmgr) : iface(iface), tmgr(tmgr)
@@ -29,89 +23,36 @@ InterfaceTimers::~InterfaceTimers()
     stopHello();
 }
 
-void InterfaceTimers::startHello()
+void InterfaceTimers::scheduleHello()
 {
-    if (iface.configs->isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
     // Mark hello as active
-    if (helloTimerActive.load(std::memory_order_relaxed) && helloTimerId.load(std::memory_order_relaxed) != 0)
+    if (helloTimerId.load(std::memory_order_relaxed) != 0)
         return; // Timer already active
     
-    {
-        std::lock_guard<std::mutex> lock(helloTimerMutex);
-        if (helloStartTime.time_since_epoch().count() == 0)
-        {
-            helloStartTime = std::chrono::steady_clock::now();
-        }
+    auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(iface.configs.helloTime.load(std::memory_order_relaxed));
 
-        auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(iface.configs->helloTime.load(std::memory_order_relaxed));
-
-        auto* vrf = base->routingInstance;
-        uint32_t helloId = tmgr.addTimer(nextExpiration, [
-            &, VALIDATION_CAPTURES
-        ](){
-            if (InterfaceTimers::validateProcess(vrf, as, af, global))
-            {
-                helloTimerId = 0;
-                handleHelloReschedule();
-            }
-        });
-        helloTimerId.store(helloId, std::memory_order_release);
-    }
-}
-
-void InterfaceTimers::startHelloHelper()
-{
-    if (helloTimerActive.exchange(true))
-    {
-        // Hello timer is already active
-        return;
-    }
-    helloTimerActive.store(true, std::memory_order_release);
-
-    sendHello();
-    startHello();
+    uint32_t helloId = tmgr.addTimer(nextExpiration, [this](uint32_t){
+        helloTimerId.store(0, std::memory_order_release);
+        startHello();
+    });
+    helloTimerId.store(helloId, std::memory_order_release);
 }
 
 void InterfaceTimers::stopHello()
 {
-    helloTimerActive.store(false, std::memory_order_release);
-    if (helloTimerId != 0)
+    if (helloTimerId.load(std::memory_order_relaxed) != 0)
     {
         tmgr.cancelTimer(helloTimerId);
-        if (!helloDone.load(std::memory_order_relaxed))
-        {
-            // Wait until the hello timer is fully shut down
-            while (!helloDone.load(std::memory_order_relaxed))
-            {
-                std::this_thread::yield();
-            }
-        }
-        helloTimerId = 0;
+        helloTimerId.store(0, std::memory_order_release);
     }
     iface.getNTable().cancelAllHoldTimers();
 }
 
-void InterfaceTimers::handleHelloReschedule()
+void InterfaceTimers::startHello()
 {
-    if (!helloTimerActive.load(std::memory_order_relaxed))
-        return;
-    helloDone.store(false, std::memory_order_release);
-    try
-    {
-        sendHello();
-    }
-    catch (...)
-
-    // Reset and reschedule Hello timer
-    {
-        std::lock_guard<std::mutex> lock(helloTimerMutex);
-        helloTimerId = 0; // Clear timer ID after packet is sent
-        helloStartTime = std::chrono::steady_clock::now();
-    }
-
-    // Mark hello as done
-    helloDone.store(true, std::memory_order_release);
-    startHello(); // Reschedule
+    sendHello();
+    scheduleHello(); // Reschedule
 }
 
 void InterfaceTimers::sendHello()
@@ -122,7 +63,7 @@ void InterfaceTimers::sendHello()
     {
         rtp.sendUnicastHello(neighbor->ipAddress);
     }
-    if (iface.configs->multicastEnabled.load(std::memory_order_relaxed))
+    if (iface.configs.multicastEnabled.load(std::memory_order_relaxed))
     {
         rtp.sendHello();
     }
@@ -132,24 +73,18 @@ void InterfaceTimers::startHoldTimer(Neighbor& neighbor)
 {
     cancelHoldTimer(neighbor);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(neighbor.holdTime.load(std::memory_order_relaxed));
-    neighbor.holdTimerId.store(tmgr.addTimer(expirationTime, [this, nbr = &neighbor](){
+    neighbor.holdTimerId.store(tmgr.addTimer(expirationTime, [this, nbr = &neighbor](uint32_t){
         handleHoldTimeExpire(*nbr);
     }), std::memory_order_release);
 }
 
 void InterfaceTimers::cancelHoldTimer(Neighbor& neighbor)
 {
-    if (neighbor.holdTimerId.load(std::memory_order_relaxed) != 0)
+    if (auto tid = neighbor.holdTimerId.load(std::memory_order_relaxed); tid != 0)
     {
-        tmgr.cancelTimer(neighbor.holdTimerId);
-        neighbor.holdTimerId.load(std::memory_order_release);
+        tmgr.cancelTimer(tid);
+        neighbor.holdTimerId.store(0, std::memory_order_release);
     }
-}
-
-void InterfaceTimers::restartHoldTimer(Neighbor& neighbor)
-{
-    cancelHoldTimer(neighbor);
-    startHoldTimer(neighbor);
 }
 
 void InterfaceTimers::handleHoldTimeExpire(Neighbor& neighbor)
@@ -166,7 +101,7 @@ void InterfaceTimers::startRetransmissionTimer(Neighbor* neighbor, MulticastReli
     double timeout = neighbor->rto;
     if (info.timerId != 0) tmgr.cancelTimer(info.timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout * 1000));
-    info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, m = &multicast, i = &info, seq]() {
+    info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, m = &multicast, i = &info, seq](uint32_t) {
         iface.getRtp().handleRetransmission(neighbor, *m, *i, seq);
     });
 }
@@ -176,7 +111,7 @@ void InterfaceTimers::startRetransmissionTimer(Neighbor* neighbor, UnicastReliab
     double timeout = neighbor->rto;
     if (unicast.info.timerId != 0) tmgr.cancelTimer(unicast.info.timerId);
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout * 1000));
-    unicast.info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, u = &unicast, seq]() {
+    unicast.info.timerId = tmgr.addTimer(expirationTime, [this, neighbor, u = &unicast, seq](uint32_t) {
         iface.getRtp().handleRetransmission(neighbor, *u, seq);
     });
 }
@@ -193,7 +128,7 @@ void InterfaceTimers::cancelRetransmissionTimer(ReliableInfo& pkt)
 void InterfaceTimers::startGracefulTimer(Neighbor& neighbor)
 {
     auto expireTime = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getPurgeTime());
-    uint32_t gracefulTimerId = tmgr.addTimer(expireTime, [this, nbr = &neighbor]() {
+    uint32_t gracefulTimerId = tmgr.addTimer(expireTime, [this, nbr = &neighbor](uint32_t) {
         iface.getNTable().onDown(*nbr);
     });
     neighbor.gracefulTimerId.store(gracefulTimerId, std::memory_order_release);
@@ -216,23 +151,6 @@ void InterfaceTimers::cancelNeighborTimers(Neighbor& neighbor)
     cancelHoldTimer(neighbor);
 }
 
-bool InterfaceTimers::validateProcess(const std::string& vrfname, uint32_t as, const AddressFamily& af, Global* global)
-{
-    if (VirtualRouter* virtualRouter = global->getRoutingInstance(vrfname))
-    {
-        if (auto* eigrp = virtualRouter->getEigrpAutonomousSystem(as))
-        {
-            if (af == AddressFamily::IPv4 ? !eigrp->ipv4 : !eigrp->ipv6)
-            {
-                return false;
-            }
-        }
-        else return false;
-    }
-    else return false;
-    return true;
-}
-
 void InterfaceTimers::restartDampeningResetTimer()
 {
     if (auto id = dampeningResetId.load(std::memory_order_relaxed); id != 0)
@@ -241,7 +159,7 @@ void InterfaceTimers::restartDampeningResetTimer()
     suppressedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningResetTime()),
     dampeningResetId.store(tmgr.addTimer(
         suppressedUntil,
-        [&]() { iface.onDampeningResetExpire(); }
+        [this](uint32_t) { iface.onDampeningResetExpire(); }
     ), std::memory_order_release);
 }
 
@@ -252,7 +170,7 @@ void InterfaceTimers::restartDampeningRestartTimer()
 
     dampeningRestartId.store(tmgr.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(base->getGlobalConfigMgr().getDampeningRestart()),
-        [&]() { iface.onDampeningRestartExpire(); }
+        [this](uint32_t) { iface.onDampeningRestartExpire(); }
     ), std::memory_order_release);
 }
 
@@ -261,12 +179,12 @@ void InterfaceTimers::startDampeningIntervalTimer()
     if (auto id = dampeningIntervalId.load(std::memory_order_relaxed); id != 0)
         tmgr.cancelTimer(id);
 
-    auto dampeningTime = iface.configs->dampeningIntervalConfigured.load(std::memory_order_relaxed)
-        ? iface.configs->dampeningInterval.load(std::memory_order_relaxed)
+    auto dampeningTime = iface.configs.dampeningIntervalConfigured.load(std::memory_order_relaxed)
+        ? iface.configs.dampeningInterval.load(std::memory_order_relaxed)
         : iface.getBase().getGlobalConfigMgr().getDampeningInterval();
     dampeningIntervalId.store(tmgr.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(dampeningTime),
-        [&]() { iface.onDampeningIntervalExpire(); }
+        [this](uint32_t) { iface.onDampeningIntervalExpire(); }
     ), std::memory_order_release);
 }
 }

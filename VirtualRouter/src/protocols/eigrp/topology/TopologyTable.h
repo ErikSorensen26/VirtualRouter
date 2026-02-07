@@ -8,7 +8,6 @@
 #include <chrono>
 #include <mutex>
 #include <map>
-#include <atomic>
 #include <unordered_set>
 
 namespace Eigrp
@@ -64,20 +63,6 @@ struct ReceivedRoute
         uint16_t afi = 0;
         uint32_t rid = 0;
         uint8_t priority = 0;
-        uint16_t wideFlags = 0;
-
-        enum class WideFlags : uint16_t
-        {
-            WITHDRAWL = 0x0001,
-            DEFAULT = 0x0002,
-            ACTIVE = 0x0004,
-            REPLICATED = 0x0008
-        };
-
-        inline void setFlag(WideFlags bit) { wideFlags |= static_cast<uint16_t>(bit); }
-        inline void clearFlag(WideFlags bit) { wideFlags &= ~static_cast<uint16_t>(bit); }
-        inline void toggleFlag(WideFlags bit) { wideFlags ^= static_cast<uint16_t>(bit); }
-        inline bool hasFlag(WideFlags bit) { return wideFlags & static_cast<uint16_t>(bit); }
 
         std::vector<uint8_t> data;
         void allocate(const uint8_t* src, size_t n)
@@ -95,6 +80,21 @@ struct ReceivedRoute
         Wide(Wide&&) noexcept = default;
         Wide& operator=(Wide&&) noexcept = default;
     } wide;
+    
+    uint8_t flags = 0;
+
+    enum class RouteFlags : uint8_t
+    {
+        WITHDRAWL = 0x01,
+        DEFAULT = 0x02,
+        ACTIVE = 0x04,
+        REPLICATED = 0x08
+    };
+
+    inline void setFlag(RouteFlags bit) { flags |= static_cast<uint8_t>(bit); }
+    inline void clearFlag(RouteFlags bit) { flags &= ~static_cast<uint8_t>(bit); }
+    inline void toggleFlag(RouteFlags bit) { flags ^= static_cast<uint8_t>(bit); }
+    inline bool hasFlag(RouteFlags bit) { return flags & static_cast<uint8_t>(bit); }
 
     RouteType routeType{};
 

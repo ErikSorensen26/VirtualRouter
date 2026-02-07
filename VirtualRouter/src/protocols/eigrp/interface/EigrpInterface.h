@@ -63,7 +63,7 @@ public:
     void onDampeningRestartExpire();
     void onDampeningIntervalExpire();
 
-    EigrpConfigs::InterfaceConfigs* configs; ///< Configuration settings for the interface.
+    EigrpConfigs::InterfaceConfigs& configs; ///< Configuration settings for the interface.
 
     ReliableTransport& getRtp() { return rtp; }
     InterfaceMetrics& getMetrics() { return metrics; }

@@ -1,6 +1,6 @@
 #include <Dhcpv6AuthManager.h>
 #include <PacketStructure.h>
-#include <TLVOptions.hpp>
+#include <TlvOptions.hpp>
 #include <Encryption.hpp>
 #include <Functions.h>
 
@@ -103,7 +103,7 @@ std::optional<Protocol::Dhcpv6::AuthManager::DelayedAuthInfo> Protocol::Dhcpv6::
     // Zero out auth digest for digest calculation
     std::memset(option + 15, 0, headerSize - 15);
 
-    tlv.append(Variable::Dhcp::Option::authentication, headerSize, nullptr, headerSize);
+    tlv.append(DHCPV6_OPTION_AUTHENTICATION, headerSize, nullptr, headerSize);
 
     // Return info for calculating digest later
     return DelayedAuthInfo{
@@ -181,7 +181,7 @@ std::optional<__uint128_t> Protocol::Dhcpv6::AuthManager::addRkapAuthOption(TLV1
 
     writeU128(option + 4, key);
 
-    tlv.append(Variable::Dhcpv6::Options::auth, 20, nullptr, 20);
+    tlv.append(DHCPV6_OPTION_AUTHENTICATION, 20, nullptr, 20);
 
     return key;
 }
@@ -281,7 +281,7 @@ std::optional<Protocol::Dhcpv6::ClientAuthManager::DelayedAuthInfo> Protocol::Dh
     // Zero out auth digest for digest calculation
     std::memset(option + 15, 0, headerSize - 15);
 
-    tlv.append(Variable::Dhcp::Option::authentication, headerSize, nullptr, headerSize);
+    tlv.append(DHCPV6_OPTION_AUTHENTICATION, headerSize, nullptr, headerSize);
 
     // Return info for calculating digest later
     return DelayedAuthInfo{
@@ -352,7 +352,7 @@ const uint8_t* Protocol::Dhcpv6::ClientAuthManager::addRkapAuthOption(TLV16Buffe
 
     std::memset(option + 4, 0, 16);
 
-    tlv.append(Variable::Dhcpv6::Options::auth, 20, nullptr, 20);
+    tlv.append(DHCPV6_OPTION_AUTHENTICATION, 20, nullptr, 20);
 
     return option + 4;
 }

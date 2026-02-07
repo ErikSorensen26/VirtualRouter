@@ -75,7 +75,7 @@ RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neigh
         routeEntry.notFeasible = true;
 
         if (routeEntry.routeInfo.wide.isWide)
-            routeEntry.routeInfo.wide.setFlag(ReceivedRoute::Wide::WideFlags::WITHDRAWL);
+            routeEntry.routeInfo.setFlag(ReceivedRoute::RouteFlags::WITHDRAWL);
     }
 
     return routeEntry;
@@ -124,8 +124,7 @@ void TopologyTable::markRouteUnreachable(RouteInfo& route, const IPAddress& neig
     route.isSuccessor = false;
     route.notFeasible = true;
 
-    if (eigrpProcess.isNamed())
-        route.routeInfo.wide.setFlag(ReceivedRoute::Wide::WideFlags::WITHDRAWL);
+    route.routeInfo.setFlag(ReceivedRoute::RouteFlags::WITHDRAWL);
 
     entry.feasibleSuccessors.erase(
         std::remove(entry.feasibleSuccessors.begin(), entry.feasibleSuccessors.end(), neighborIp),

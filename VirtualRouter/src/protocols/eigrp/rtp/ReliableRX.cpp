@@ -26,7 +26,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     const TLV16Option* authOpt = nullptr;
     for (const auto& opt : hdrInfo.opts)
     {
-        if (opt.type == Variable::Eigrp::Option::authentication)
+        if (opt.type == EIGRP_OPTION_AUTHENTICATION)
         {
             authOpt = &opt;
             break;
@@ -40,7 +40,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     Neighbor* neighbor = ntable->lookup(neigIp);
     hdrInfo.neighbor = neighbor;
 
-    if (eigrpPacket.getOpcode() == Variable::Eigrp::Type::hello)
+    if (eigrpPacket.getOpcode() == EIGRP_TYPE_HELLO)
     {
         if (eigrpPacket.getAck() == 0)
         {
@@ -58,19 +58,19 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
 
         switch (eigrpPacket.getOpcode())
         {
-            case Variable::Eigrp::Type::update:
+            case EIGRP_TYPE_UPDATE:
                 processUpdate(hdrInfo);
                 break;
-            case Variable::Eigrp::Type::reply:
+            case EIGRP_TYPE_REPLY:
                 processReply(hdrInfo);
                 break;
-            case Variable::Eigrp::Type::siaReply:
+            case EIGRP_TYPE_SIA_REPLY:
                 processSIAReply(hdrInfo);
                 break;
-            case Variable::Eigrp::Type::query:
+            case EIGRP_TYPE_QUERY:
                 processQuery(hdrInfo);
                 break;
-            case Variable::Eigrp::Type::siaQuery:
+            case EIGRP_TYPE_SIA_QUERY:
                 processSIAQuery(hdrInfo);
                 break;
             default:
@@ -95,7 +95,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
 
         for (const auto& v : info.opts)
         {
-            if (v.type == Variable::Eigrp::Option::version && v.valueSize >= 4)
+            if (v.type == EIGRP_OPTION_VERSION && v.valueSize >= 4)
             {
                 version = readU16(v.value + 2);
                 sawVersion = true;
@@ -139,7 +139,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
     // Process TLVs
     for (const auto& opt : info.opts)
     {
-        if (opt.type == Variable::Eigrp::Option::parameter)
+        if (opt.type == EIGRP_OPTION_PARAMETER)
         {
             // Check for Peer Termination
             static const uint8_t legacyPeerTerm[6] = {0};
@@ -163,11 +163,11 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
 
             parametersFound = true;
         }
-        else if (opt.type == Variable::Eigrp::Option::multicastSequence && opt.valueSize == 4)
+        else if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && opt.valueSize == 4)
         {
             conditionalSeq = readU32(opt.value);
         }
-        else if (opt.type == Variable::Eigrp::Option::sequence && opt.valueSize > 1)
+        else if (opt.type == EIGRP_OPTION_SEQUENCE && opt.valueSize > 1)
         {
             const uint8_t addrLen = opt.value[0];
             if (addrLen != 4 && addrLen != 16)
@@ -178,7 +178,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
 
             uint8_t ourAddr[16];
             if (iface.getBase().getAF() == AddressFamily::IPv4)
-                iface.getIface()->configs.ipv4.getAddress(ourAddr);
+                iface.getIface()->configs.ipv4.getPrimaryAddress(ourAddr);
             else
                 writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress());
 
@@ -197,7 +197,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         info.neighbor->receivedConditions[conditionalSeq] = conditionExemption;
 
     info.neighbor->markHeard();
-    iface.getTimers().restartHoldTimer(*nbr);
+    iface.getTimers().startHoldTimer(*nbr);
 
     // Safely extract the neighbor state
     if (parametersFound)

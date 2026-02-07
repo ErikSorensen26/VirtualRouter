@@ -46,8 +46,8 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
             case HeaderType::ARP:
             {
                 GET_HEADER(arp, ArpHeader)
-                if (arp.getOpcode() == Variable::Arp::Opcode::request) interface->arp->sendReply(arp.getSenderHwAddr(), arp.getSenderIpAddr());
-                if (arp.getOpcode() == Variable::Arp::Opcode::reply) interface->arp->receiveReply(arp);
+                if (arp.getOpcode() == ARP_OPCODE_REQUEST) interface->arp->sendReply(arp.getSenderHwAddr(), arp.getSenderIpAddr());
+                if (arp.getOpcode() == ARP_OPCODE_REPLY) interface->arp->receiveReply(arp);
                 break;
             }
             case HeaderType::MPLS:
@@ -110,7 +110,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                         parseIcmpv6Options(icmp.getTrail().data(), icmp.getTrail().size(), options);
                         for (auto& opt : options)
                         {
-                            if (opt.type == Variable::ICMPv6::Option::source && opt.valueSize == 6)
+                            if (opt.type == ICMPV6_OPTION_NDP_SOURCE && opt.valueSize == 6)
                             {
                                 std::memcpy(naMac, opt.value, 6);
                                 break;
@@ -161,11 +161,11 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
             case HeaderType::DHCP:
             {
                 GET_HEADER_EXTENDED(dhcp, DhcpHeader)
-                if (sourcePort == Variable::Udp::dhcpServer && destinationPort == Variable::Udp::dhcpServer)
+                if (sourcePort == UDP_DHCP_SERVER && destinationPort == UDP_DHCP_CLIENT)
                 {
                     interface->dhcp->handleDhcpPacket(dhcp);
                 }
-                else if (sourcePort == Variable::Udp::dhcpClient && destinationPort == Variable::Udp::dhcpClient)
+                else if (sourcePort == UDP_DHCP_CLIENT && destinationPort == UDP_DHCP_SERVER)
                 {
                     interface->getVRF()->global.dhcpServer->handlePacket(dhcp, mac, *interface);
                 }

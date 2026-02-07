@@ -4,6 +4,14 @@
 #include <Eigrp.h>
 #include <Interface.h>
 #include <Global.h>
+#include <InterfaceType.hpp>
+
+VirtualRouter::VirtualRouter(Global& global, const std::string& name)
+    : isDefault(name == "default"), global(global)
+{
+    instanceName = name;
+    enabledAddressFamilies.insert(AddressFamily::IPv4);
+}
 
 // Destructor
 VirtualRouter::~VirtualRouter()
@@ -52,6 +60,40 @@ VirtualRouter::~VirtualRouter()
         }
         namedEigrpList.clear();
     }
+}
+
+bool VirtualRouter::calculateRID(uint32_t& rid)
+{
+    uint32_t highestIP = 0;
+    uint32_t tempIp;
+
+    auto processID = [&](Interface* interface)
+    {
+        if (interface->shutdownFlag.load(std::memory_order_relaxed)) return;
+        auto& interfaceInfo = interface->configs;
+        tempIp = interfaceInfo.ipv4.getPrimaryAddress();
+        if (tempIp == 0) return;
+        if (tempIp < highestIP) return;
+        highestIP = tempIp;
+    };
+    
+    {
+        std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+        for (const auto& [id, interface] : interfaceList)
+        {
+            if (interface->configs.interfaceType != InterfaceType::LOOPBACK) continue;
+            processID(interface);
+        }
+        if (highestIP == 0)
+        {
+            for (const auto& [id, interface] : interfaceList)
+            {
+                processID(interface);
+            }
+        }
+    }
+    rid = highestIP;
+    return highestIP != 0;
 }
 
 // Interfaces
@@ -189,4 +231,9 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
         return true;
     }
     return false;
+}
+
+Config::Registry& VirtualRouter::getRegistry()
+{
+    return global.registry;
 }

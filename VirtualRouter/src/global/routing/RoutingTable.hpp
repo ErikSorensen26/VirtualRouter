@@ -82,6 +82,30 @@ public:
             static_assert(always_false<AddrType>, "Unsupported Address Type");
     }
 
+    template <typename AddrType>
+    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId)
+    {
+        RCU::Guard g;
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            return rib4.lookup(a, procId);
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            return rib6.lookup(a, procId);
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
+    }
+
+    template <typename AddrType>
+    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, RouteSource source)
+    {
+        RCU::Guard g;
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            return rib4.lookup(a, procId, source);
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            return rib6.lookup(a, procId, source);
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
+    }
+
     void clearAll() noexcept
     {
         rib4.clear();

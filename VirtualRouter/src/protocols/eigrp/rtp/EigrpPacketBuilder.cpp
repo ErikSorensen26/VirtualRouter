@@ -41,14 +41,14 @@ void EigrpPacketBuilder::appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& 
     if (!iface.configs->auth.fullyEnabled.load(std::memory_order_relaxed)) return;
     auto* buf = tlv.getNextValBuf(36);
     iface.getAuth().buildAuthTLV(buf);
-    tlv.append(Variable::Eigrp::Option::authentication, 40, nullptr, 36);
+    tlv.append(EIGRP_OPTION_AUTHENTICATION, 40, nullptr, 36);
 }
 
 bool EigrpPacketBuilder::appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg)
 {
     if (!cfg.stubEnabled()) return false;
     TLVBuilder::encodeStubOption(tlv.getNextValBuf(), cfg.getStubConfig());
-    tlv.append(Variable::Eigrp::Option::stub, 6, nullptr, 2);
+    tlv.append(EIGRP_OPTION_STUB, 6, nullptr, 2);
     return true;
 }
 
@@ -86,16 +86,16 @@ bool EigrpPacketBuilder::appendParameterTLV(TLV16BufferManager& tlv, EigrpInterf
         EigrpConfigs::KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
         TLVBuilder::calculateParameters(val, k, iface.configs->holdTime.load(std::memory_order_relaxed));
     }
-    return tlv.append(Variable::Eigrp::Option::parameter, 12, nullptr, 8);
+    return tlv.append(EIGRP_OPTION_PARAMETER, 12, nullptr, 8);
 }
 
 bool EigrpPacketBuilder::appendVersionTLV(TLV16BufferManager& tlv)
 {
     uint8_t* val = tlv.getNextValBuf(4);
     if (!val) return false;
-    writeU16(val, Variable::Eigrp::Version::release);
-    writeU16(val + 2, Variable::Eigrp::Version::tls);
-    return tlv.append(Variable::Eigrp::Option::version, 8, nullptr, 4);
+    writeU16(val, EIGRP_VERSION_RELEASE);
+    writeU16(val + 2, EIGRP_VERSION_TLS);
+    return tlv.append(EIGRP_OPTION_VERSION, 8, nullptr, 4);
 }
 
 size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std::vector<IPAddress>& neighbors)
@@ -123,7 +123,7 @@ size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std
         offset += ipSize;
     }
     
-    tlv.append(Variable::Eigrp::Option::sequence, tlvLength, nullptr, payloadLength);
+    tlv.append(EIGRP_OPTION_SEQUENCE, tlvLength, nullptr, payloadLength);
     return amount;
 }
 
@@ -132,6 +132,6 @@ bool EigrpPacketBuilder::appendMulticastSeqTLV(TLV16BufferManager& tlv, uint32_t
     uint8_t* val = tlv.getNextValBuf(4);
     if (!val) return false;
     writeU32(val, seq);
-    return tlv.append(Variable::Eigrp::Option::multicastSequence, 8, nullptr, 4);
+    return tlv.append(EIGRP_OPTION_MULTICAST_SEQUENCE, 8, nullptr, 4);
 }
 }

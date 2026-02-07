@@ -48,7 +48,7 @@ bool encapsulate(PacketBuilder& packet)
                 std::memcpy(pseudoHeader, ip.buffer + 8, 32);
                 writeU32(pseudoHeader + 32, header.length);
                 std::memset(pseudoHeader + 36, 0, 3);
-                pseudoHeader[39] = Variable::IP::icmpv6;
+                pseudoHeader[39] = IP_ICMPV6;
                 Checksum::calculateChecksum(header.buffer, header.length, 2, 2, pseudoHeader, 40);
                 break;
             }
@@ -71,7 +71,7 @@ bool encapsulate(PacketBuilder& packet)
                     uint8_t pseudoHeader[12];
                     std::memcpy(pseudoHeader, ip.buffer + 12, 8);
                     pseudoHeader[8] = 0x00;
-                    pseudoHeader[9] = Variable::IP::tcp;
+                    pseudoHeader[9] = IP_TCP;
                     writeU16(pseudoHeader + 10, size);
                     Checksum::calculateChecksum(header.buffer, size, 16, 2, pseudoHeader, 12);
                 }
@@ -81,7 +81,7 @@ bool encapsulate(PacketBuilder& packet)
                     std::memcpy(pseudoHeader, ip.buffer + 8, 32);
                     writeU32(pseudoHeader + 32, static_cast<uint32_t>(size));
                     std::memset(pseudoHeader + 36, 0, 3);
-                    pseudoHeader[39] = Variable::IP::tcp;
+                    pseudoHeader[39] = IP_TCP;
                     Checksum::calculateChecksum(header.buffer, size, 16, 2, pseudoHeader, 40);
                 }
                 else return false;
@@ -104,7 +104,7 @@ bool encapsulate(PacketBuilder& packet)
                     uint8_t pseudoHeader[12];
                     std::memcpy(pseudoHeader, ip.buffer + 12, 8);
                     pseudoHeader[8] = 0x00;
-                    pseudoHeader[9] = Variable::IP::udp;
+                    pseudoHeader[9] = IP_UDP;
                     writeU16(pseudoHeader + 10, size);
                     Checksum::calculateChecksum(header.buffer, size, 6, 2, pseudoHeader, 12);
                 }
@@ -114,7 +114,7 @@ bool encapsulate(PacketBuilder& packet)
                     std::memcpy(pseudoHeader, ip.buffer + 8, 32);
                     writeU32(pseudoHeader + 32, static_cast<uint32_t>(size));
                     std::memset(pseudoHeader + 36, 0, 3);
-                    pseudoHeader[39] = Variable::IP::udp;
+                    pseudoHeader[39] = IP_UDP;
                     Checksum::calculateChecksum(header.buffer, size, 6, 2, pseudoHeader, 40);
                 }
                 else return false;

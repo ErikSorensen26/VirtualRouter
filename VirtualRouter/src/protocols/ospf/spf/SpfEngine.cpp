@@ -1,0 +1,649 @@
+// SpfEngine.cpp
+
+#include "SpfEngine.h"
+#include <OspfArea.h>
+#include <OspfProcess.h>
+#include <queue>
+
+namespace OSPF
+{
+// Min-heap by dist (lazy decrease-key)
+struct QItem
+{
+    uint64_t dist;
+    Vertex v;
+
+    bool operator>(const QItem& o) const
+    {
+        if (dist != o.dist) return dist > o.dist;
+        if (v.type != o.v.type) return v.type > o.v.type;
+        return v.id > o.v.id;
+    }
+};
+
+template <typename Policy>
+SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
+{
+    if (!topo.area.process().getConfigs().template get<Config::Ospf::ISPF>().load() ||
+        !last.has_value() || lastEdges.empty())
+    {
+        SpfResult res = runFull<Policy>(topo);
+        return res;
+    }
+
+    SpfDelta delta = computeDeltaAndUpdateEdgeIndex<Policy>(topo);
+    
+    if (!delta.hasAnyChange)
+    {
+        return *last;
+    }
+
+    SpfResult res = runIspfRepair<Policy>(topo, delta);
+    return res;
+}
+
+template <typename Policy>
+SpfResult SpfEngine::runFull(SpfTopology<Policy>& topo)
+{
+    auto& area = topo.area;
+    uint32_t rid = area.process().getRouterId();
+
+    SpfResult res;
+    res.root = Vertex{VertexType::ROUTER, static_cast<uint64_t>(rid)};
+    res.nodes.emplace(res.root, SptNode{0, false, {}});
+
+    std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>> pq;
+
+    // Confirm root immediately
+    res.nodes[res.root].confirmed = true;
+    res.confirmedOrder.clear();
+    res.confirmedOrder.push_back(res.root);
+
+    RelaxInfo info(res, pq);
+    info.repairMode = false;
+
+    // Seed canidates from root
+    expandAndRelax<Policy>(topo, res.root, info);
+
+    // Main loop
+    while (!pq.empty())
+    {
+        QItem cur = pq.top();
+        pq.pop();
+
+        auto it = res.nodes.find(cur.v);
+        if (it == res.nodes.end()) continue;
+
+        // stale PQ entry?
+        if (cur.dist != it->second.dist) continue;
+
+        // already finalized?
+        if (it->second.confirmed) continue;
+
+        // finalize
+        it->second.confirmed = true;
+        res.confirmedOrder.push_back(cur.v);
+
+        expandAndRelax<Policy>(topo, cur.v, info);
+    }
+
+    finalizeParents<Policy>(topo, res);
+
+    last = res;
+    return res;
+}
+
+template <typename Policy>
+SpfDelta SpfEngine::computeDeltaAndUpdateEdgeIndex(SpfTopology<Policy>& topo)
+{
+    // Build current edge index by enumerating SPF-visible directed edges.
+    std::unordered_map<EdgeKey, EdgeVal, EdgeKeyHash> curEdges;
+
+    // Enumerate router vertices -> edges via existing expansion logic.
+    for (const auto& kv : topo.rtr)
+    {
+        const uint32_t rid = static_cast<uint32_t>(kv.first);
+
+        std::vector<SpfEdge> edges;
+        edges.reserve(32);
+
+        if (!topo.expandRouter(rid, edges))
+            continue;
+
+        Vertex from{VertexType::ROUTER, static_cast<uint64_t>(rid)};
+
+        for (const auto& e : edges)
+        {
+            EdgeKey k;
+            k.from = from;
+            k.to = e.to;
+            k.lastHopIfid = e.ifid;
+
+            curEdges.emplace(k, EdgeVal{e.cost});
+        }
+    }
+
+    // Enumerate network vertices -> attached routers (cost 0, lastHopIfid 0).
+    for (const auto& kv : topo.net)
+    {
+        const uint64_t netId = kv.first;
+
+        std::vector<uint32_t> attached;
+        attached.reserve(32);
+
+        if (!topo.expandNetwork(netId, attached))
+            continue;
+
+        Vertex from{VertexType::NETWORK, netId};
+
+        for (uint32_t rid : attached)
+        {
+            Vertex to{VertexType::ROUTER, static_cast<uint64_t>(rid)};
+
+            EdgeKey k;
+            k.from = from;
+            k.to = to;
+            k.lastHopIfid = 0;
+
+            curEdges.emplace(k, EdgeVal{0});
+        }
+    }
+
+    SpfDelta delta;
+
+    // Compare old -> new
+    for (const auto& [k, v] : curEdges)
+    {
+        auto it = lastEdges.find(k);
+        if (it == lastEdges.end())
+        {
+            delta.hasAnyChange = true;
+            delta.changes.push_back(SpfDelta::Change{
+                SpfDelta::Change::Kind::ADD, k, 0u, v.cost
+            });
+            continue;
+        }
+
+        const uint32_t oldCost = it->second.cost;
+        const uint32_t newCost = v.cost;
+
+        if (newCost < oldCost)
+        {
+            delta.hasAnyChange = true;
+            delta.changes.push_back(SpfDelta::Change{
+                SpfDelta::Change::Kind::COST_DECREASE, k, oldCost, newCost
+            });
+        }
+        else if (newCost > oldCost)
+        {
+            delta.hasAnyChange = true;
+            delta.hasAnyIncreaseOrRemove = true;
+            delta.changes.push_back(SpfDelta::Change{
+                SpfDelta::Change::Kind::COST_INCREASE, k, oldCost, newCost
+            });
+        }
+    }
+
+    // Removals: edges that existed before but no longer exist.
+    for (const auto& [k, v] : lastEdges)
+    {
+        if (curEdges.find(k) == curEdges.end())
+        {
+            delta.hasAnyChange = true;
+            delta.hasAnyIncreaseOrRemove = true;
+            delta.changes.push_back(SpfDelta::Change{
+                SpfDelta::Change::Kind::REMOVE, k, v.cost, 0u
+            });
+        }
+    }
+
+    // Update stored edge index to current for next run
+    lastEdges = std::move(curEdges);
+
+    return delta;
+}
+
+void SpfEngine::invalidateForIncreasesAndRemovals(SpfResult& res, const SpfDelta& delta)
+{
+    if (!delta.hasAnyIncreaseOrRemove)
+        return;
+
+    // Build parent->children adjacency from current SPT parents.
+    std::unordered_map<Vertex, std::vector<Vertex>, VertexHash> children;
+    children.reserve(res.nodes.size() * 2);
+
+    for (const auto& [v, node] : res.nodes)
+    {
+        for (const auto& pr : node.parents)
+        {
+            children[pr.parent].push_back(v);
+        }
+    }
+
+    auto recomputeNodeFromParents = [&](const Vertex& v) -> bool
+    {
+        auto it = res.nodes.find(v);
+        if (it == res.nodes.end()) return false;
+
+        SptNode& n = it->second;
+
+        if (v == res.root)
+        {
+            const bool changed = (n.dist != 0);
+            n.dist = 0;
+            return changed;
+        }
+
+        if (n.parents.empty())
+        {
+            const bool changed = (n.dist != std::numeric_limits<uint64_t>::max());
+            n.dist = std::numeric_limits<uint64_t>::max();
+            return changed;
+        }
+
+        uint64_t best = std::numeric_limits<uint64_t>::max();
+
+        for (const auto& pr : n.parents)
+        {
+            auto pit = res.nodes.find(pr.parent);
+            if (pit == res.nodes.end()) continue;
+
+            const uint64_t pd = pit->second.dist;
+            if (pd == std::numeric_limits<uint64_t>::max()) continue;
+
+            const uint64_t cand = addCost(pd, pr.edgeCost);
+            if (cand < best) best = cand;
+        }
+
+        std::vector<ParentRef> kept;
+        kept.reserve(n.parents.size());
+
+        for (const auto& pr : n.parents)
+        {
+            auto pit = res.nodes.find(pr.parent);
+            if (pit == res.nodes.end()) continue;
+            
+            const uint64_t pd = pit->second.dist;
+            if (pd == std::numeric_limits<uint64_t>::max()) continue;
+
+            const uint64_t cand = addCost(pd, pr.edgeCost);
+            if (cand == best)
+                kept.push_back(pr);
+        }
+
+        const uint64_t oldDist = n.dist;
+        n.parents = std::move(kept);
+        n.dist = best;
+
+        return oldDist != n.dist;
+    };
+
+    std::vector<Vertex> startQueue;
+    startQueue.reserve(delta.changes.size() * 2);
+
+    for (const auto& ch : delta.changes)
+    {
+        if (ch.kind != SpfDelta::Change::Kind::REMOVE &&
+            ch.kind != SpfDelta::Change::Kind::COST_INCREASE)
+            continue;
+
+        const Vertex& from = ch.key.from;
+        const Vertex& to = ch.key.to;
+        const uint64_t lastHopIfid = ch.key.lastHopIfid;
+        const uint64_t oldCost = ch.oldCost;
+
+        auto tit = res.nodes.find(to);
+        if (tit == res.nodes.end()) continue;
+
+        SptNode& n = tit->second;
+
+        const size_t before = n.parents.size();
+        n.parents.erase(
+            std::remove_if(n.parents.begin(), n.parents.end(),
+                [&](const ParentRef& pr)
+                {
+                    return pr.parent == from &&
+                           pr.lastHopIfid == lastHopIfid &&
+                           pr.edgeCost == oldCost;
+                }),
+            n.parents.end());
+
+        if (n.parents.size() != before)
+        {
+            startQueue.push_back(to);
+        }
+    }
+
+    // Propagate increases/INF down the dependency graph.
+    std::deque<Vertex> q;
+    for (const auto& v : startQueue) q.push_back(v);
+
+    std::unordered_set<Vertex, VertexHash> enqueued;
+    enqueued.reserve(startQueue.size() * 2);
+    for (const auto& v : startQueue) enqueued.insert(v);
+
+    while (!q.empty())
+    {
+        Vertex v = q.front();
+        q.pop_front();
+
+        bool changed = recomputeNodeFromParents(v);
+        if (!changed) continue;
+
+        auto cit = children.find(v);
+        if (cit == children.end()) continue;
+
+        for (const Vertex& child : cit->second)
+        {
+            if (enqueued.insert(child).second)
+                q.push_back(child);
+        }
+    }
+}
+
+template <typename Policy>
+SpfResult SpfEngine::runIspfRepair(SpfTopology<Policy>& topo, const SpfDelta& delta)
+{
+    SpfResult res = *last;
+
+    invalidateForIncreasesAndRemovals(res, delta);
+
+    std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>> pq;
+    RelaxInfo<decltype(pq)> info(res, pq);
+    info.repairMode = true;
+
+    auto rit = res.nodes.find(res.root);
+    if (rit == res.nodes.end())
+        res.nodes.emplace(res.root, SptNode{0, false, {}});
+    else
+        rit->second.dist = 0;
+
+    pq.push(QItem{0, res.root});
+
+    for (const auto& ch : delta.changes)
+    {
+        const Vertex& v = ch.key.to;
+
+        auto it = res.nodes.find(v);
+        if (it == res.nodes.end()) continue;
+        if (it->second.dist == std::numeric_limits<uint64_t>::max()) continue;
+
+        pq.push(QItem{it->second.dist, v});
+    }
+
+    res.confirmedOrder.clear();
+    for (auto& [v, n] : res.nodes)
+        n.confirmed = false;
+
+    while (!pq.empty())
+    {
+        QItem cur = pq.top();
+        pq.pop();
+
+        auto it = res.nodes.find(cur.v);
+        if (it == res.nodes.end()) continue;
+
+        if (cur.dist != it->second.dist) continue;
+
+        expandAndRelax<Policy>(topo, cur.v, info);
+    }
+
+    finalizeParents<Policy>(topo, res);
+
+    last = res;
+    return res;
+}
+
+template <typename Policy>
+void SpfEngine::finalizeParents(SpfTopology<Policy>& topo, SpfResult& res)
+{
+    auto& area = topo.area;
+    uint8_t maxPaths = area.process().getConfigs().template get<Config::Ospf::MAXIMUM_PATHS>().load();
+
+    for (auto& kv : res.nodes)
+    {
+        auto& parents = kv.second.parents;
+
+        std::sort(parents.begin(), parents.end(),
+            [](const ParentRef& a, const ParentRef& b)
+            {
+                if (a.parent == b.parent)
+                {
+                    if (a.firstHopIfid != b.firstHopIfid) return a.firstHopIfid < b.firstHopIfid;
+                    if (a.lastHopIfid != b.lastHopIfid) return a.lastHopIfid < b.lastHopIfid;
+                    return a.edgeCost < b.edgeCost;
+                }
+                return vertexLess(a.parent, b.parent);
+            });
+
+        parents.erase(std::unique(parents.begin(), parents.end(),
+            [](const ParentRef& a, const ParentRef& b)
+            {
+                return a.parent == b.parent &&
+                       a.firstHopIfid == b.firstHopIfid &&
+                       a.lastHopIfid == b.lastHopIfid &&
+                       a.edgeCost == b.edgeCost;
+            }), parents.end());
+
+        if (maxPaths > 0 && parents.size() > maxPaths)
+            parents.resize(maxPaths);
+    }
+}
+
+template <typename PQ>
+void SpfEngine::relaxEdgeFull(
+    const Vertex& from,
+    const Vertex& to,
+    uint64_t newDist,
+    uint32_t lastHopIfid,
+    uint32_t edgeCost,
+    RelaxInfo<PQ>& info)
+{
+    auto [it, inserted] = info.out.nodes.try_emplace(
+        to, SptNode{std::numeric_limits<uint64_t>::max(), false, {}});
+    
+    auto& n = it->second;
+
+    std::vector<uint32_t> firstHops;
+    firstHops.reserve(4);
+
+    if (from == info.out.root)
+    {
+        firstHops.push_back(lastHopIfid);
+    }
+    else
+    {
+        auto fit = info.out.nodes.find(from);
+        if (fit != info.out.nodes.end())
+        {
+            for (const auto& p : fit->second.parents)
+                firstHops.push_back(p.firstHopIfid);
+        }
+        if (firstHops.empty())
+            firstHops.push_back(lastHopIfid);
+    }
+
+    std::sort(firstHops.begin(), firstHops.end());
+    firstHops.erase(std::unique(firstHops.begin(), firstHops.end()), firstHops.end());
+
+    auto addParentIfMissing = [&](uint32_t firstHopIfid)
+    {
+        const bool exists = std::any_of(
+            n.parents.begin(), n.parents.end(),
+            [&](const ParentRef& pr)
+            {
+                return pr.parent == from &&
+                       pr.firstHopIfid == firstHopIfid &&
+                       pr.lastHopIfid == lastHopIfid &&
+                       pr.edgeCost == edgeCost;
+            });
+
+        if (!exists)
+            n.parents.push_back(ParentRef{from, firstHopIfid, lastHopIfid, edgeCost});
+    };
+
+    if (newDist < n.dist)
+    {
+        if (n.confirmed) return;
+
+        n.dist = newDist;
+        n.parents.clear();
+
+        for (uint32_t fh : firstHops)
+            n.parents.push_back(ParentRef{from, fh, lastHopIfid, edgeCost});
+
+        info.pq.push(QItem{newDist, to});
+    }
+    else if (newDist == n.dist)
+    {
+        for (uint32_t ifid : firstHops)
+            addParentIfMissing(ifid);
+    }
+}
+
+template <typename PQ>
+void SpfEngine::relaxEdgeRepair(
+    const Vertex& from,
+    const Vertex& to,
+    uint64_t newDist,
+    uint32_t lastHopIfid,
+    uint32_t edgeCost,
+    RelaxInfo<PQ>& info)
+{
+    auto [it, inserted] = info.out.nodes.try_emplace(
+        to, SptNode{std::numeric_limits<uint64_t>::max(), false, {}});
+
+    auto& n = it->second;
+
+    std::vector<uint32_t> firstHops;
+    firstHops.reserve(4);
+
+    if (from == info.out.root)
+    {
+        firstHops.push_back(lastHopIfid);
+    }
+    else
+    {
+        auto fit = info.out.nodes.find(from);
+        if (fit != info.out.nodes.end())
+        {
+            for (const auto& p : fit->second.parents)
+                firstHops.push_back(p.firstHopIfid);
+        }
+        if (firstHops.empty())
+            firstHops.push_back(lastHopIfid);
+    }
+
+    std::sort(firstHops.begin(), firstHops.end());
+    firstHops.erase(std::unique(firstHops.begin(), firstHops.end()), firstHops.end());
+
+    bool changed = false;
+
+    auto addParentIfMissing = [&](uint32_t firstHopIfid)
+    {
+        const bool exists = std::any_of(
+            n.parents.begin(), n.parents.end(),
+            [&](const ParentRef& pr)
+            {
+            return pr.parent == from &&
+                   pr.firstHopIfid == firstHopIfid &&
+                   pr.lastHopIfid == lastHopIfid &&
+                   pr.edgeCost == edgeCost;
+            });
+
+        if (!exists)
+            n.parents.push_back(ParentRef{from, firstHopIfid, lastHopIfid, edgeCost});
+    };
+
+    if (newDist < n.dist)
+    {
+        n.dist = newDist;
+        n.parents.clear();
+
+        for (uint32_t fh : firstHops)
+            n.parents.push_back(ParentRef{from, fh, lastHopIfid, edgeCost});
+
+        changed = true;
+    }
+    else if (newDist == n.dist)
+    {
+        for (uint32_t ifid : firstHops)
+            addParentIfMissing(ifid);
+    }
+
+    if (changed)
+    {
+        info.pq.push(QItem{n.dist, to});
+    }
+}
+
+template <typename Policy, typename PQ>
+void SpfEngine::expandAndRelax(SpfTopology<Policy>& topo, const Vertex& v, RelaxInfo<PQ>& info)
+{
+    auto it = info.out.nodes.find(v);
+    if (it == info.out.nodes.end()) return;
+
+    const uint64_t base = it->second.dist;
+    if (base == std::numeric_limits<uint64_t>::max()) return;
+
+    auto relax = [&](const Vertex& from, const Vertex& to, uint64_t nd, uint32_t lastHopIfid, uint32_t edgeCost)
+    {
+        if (info.repairMode)
+            relaxEdgeRepair(from, to, nd, lastHopIfid, edgeCost, info);
+        else
+            relaxEdgeFull(from, to, nd, lastHopIfid, edgeCost, info);
+    };
+
+    if (v.type == VertexType::ROUTER)
+    {
+        auto& edges = topo.edgeScratch;
+        if (!topo.expandRouter(static_cast<uint32_t>(v.id), edges)) return;
+
+        for (const auto& e : edges)
+        {
+            const Vertex& to = e.to;
+            const uint32_t c = e.cost;
+
+            const uint64_t nd = addCost(base, c);
+            if (nd == std::numeric_limits<uint64_t>::max()) continue;
+
+            relax(v, to, nd, e.ifid, e.cost);
+        }
+        return;
+    }
+
+    // Network vertex: cost to attached routers is +0
+    std::vector<uint32_t>& attached = topo.attachedScratch;
+    if (!topo.expandNetwork(v.id, attached)) return;
+
+    for (uint32_t rid : attached)
+    {
+        Vertex to{VertexType::ROUTER, static_cast<uint64_t>(rid)};
+        relax(v, to, base, 0, 0);
+    }
+}
+
+using NodeMap = std::unordered_map<Vertex, SptNode, VertexHash>;
+using PQ = std::priority_queue<QItem, std::vector<QItem>, std::greater<QItem>>;
+
+template SpfResult SpfEngine::run<PolicyV2>(SpfTopology<PolicyV2>&);
+template SpfResult SpfEngine::run<PolicyV3>(SpfTopology<PolicyV3>&);
+
+template SpfResult SpfEngine::runFull<PolicyV2>(SpfTopology<PolicyV2>&);
+template SpfResult SpfEngine::runFull<PolicyV3>(SpfTopology<PolicyV3>&);
+
+template SpfResult SpfEngine::runIspfRepair<PolicyV2>(SpfTopology<PolicyV2>&, const SpfDelta&);
+template SpfResult SpfEngine::runIspfRepair<PolicyV3>(SpfTopology<PolicyV3>&, const SpfDelta&);
+
+template SpfDelta SpfEngine::computeDeltaAndUpdateEdgeIndex<PolicyV2>(SpfTopology<PolicyV2>&);
+template SpfDelta SpfEngine::computeDeltaAndUpdateEdgeIndex<PolicyV3>(SpfTopology<PolicyV3>&);
+
+template void SpfEngine::finalizeParents<PolicyV2>(SpfTopology<PolicyV2>&, SpfResult&);
+template void SpfEngine::finalizeParents<PolicyV3>(SpfTopology<PolicyV3>&, SpfResult&);
+
+template void SpfEngine::relaxEdgeFull<PQ>(const Vertex&, const Vertex&, uint64_t, uint32_t, uint32_t, RelaxInfo<PQ>&);
+template void SpfEngine::relaxEdgeRepair<PQ>(const Vertex&, const Vertex&, uint64_t, uint32_t, uint32_t, RelaxInfo<PQ>&);
+
+template void SpfEngine::expandAndRelax<PolicyV2, PQ>(SpfTopology<PolicyV2>&, const Vertex&, RelaxInfo<PQ>&);
+template void SpfEngine::expandAndRelax<PolicyV3, PQ>(SpfTopology<PolicyV3>&, const Vertex&, RelaxInfo<PQ>&);
+}

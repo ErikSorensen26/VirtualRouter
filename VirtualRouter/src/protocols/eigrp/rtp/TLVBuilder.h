@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <EigrpTypes.hpp>
 #include <Neighbor.h>
-#include <TLVOptions.hpp>
+#include <TlvOptions.hpp>
 
 struct IPAddress;
 struct EigrpHeader;

@@ -1,5 +1,10 @@
 // Eigrp.h
 
+// TODO:
+// Add multi-topology to eigrp
+//     create topolies in global-topology mode, attach interfaces and all to it
+// Test address family mode for eigrp
+
 #ifndef EIGRP_CORE_H
 #define EIGRP_CORE_H
 
@@ -62,7 +67,7 @@ public:
     virtual void shutdown();
     void restart();
     void runMaintenance();
-    void calculateRID();
+    bool calculateRID();
     bool isInNetworkRange(const uint8_t* testIp);
 
     void addGlobalNeighbor(const IPAddress& neighborIp, Neighbor* neighbor);
@@ -82,25 +87,24 @@ public:
 public:
     struct RouterID
     {
-        uint8_t ID[4] = { 0x00, 0x00, 0x00, 0x00 }; ///< Router ID.
+        uint32_t id = 0; // Router ID.
         bool isStatic = false;                 ///< Indicates if the Router ID is static.
     };
 
     inline uint16_t getVirtualRouterID() const { return virtualRouterID; }
-    inline uint8_t* routerID(uint8_t* out) const { std::memcpy(out, rid.ID, 4); return out; }
-    inline uint32_t routerID() const { return readU32(rid.ID); }
+    inline uint8_t* routerID(uint8_t* out) const { writeU32(out, rid.id); return out; }
+    inline uint32_t routerID() const { return rid.id; }
 
     bool isNamed() const { return namedMode; }
-    uint32_t getAS() const { return asNumber; }
+    uint16_t getAS() const { return asNumber; }
     AddressFamily getAF() const { return addressFamily; }
 
-    void setRouterID(const uint8_t* routerId) { std::memcpy(rid.ID, routerId, 4); rid.isStatic = true;}
     void clearRouterID() { rid.isStatic = false; calculateRID(); }
 
     VirtualRouter* routingInstance; ///< Routing instance coorsponding with the current process.
 
 private:
-    const uint32_t asNumber; ///< Autonomous System number.
+    const uint16_t asNumber; ///< Autonomous System number.
     const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
 
     EigrpTopology topology;

@@ -7,6 +7,11 @@
 #include <cstring>
 #include <AddressFamily.hpp>
 #include <functional>
+#include <HeaderHelpers.hpp>
+
+struct IPv4Prefix;
+struct IPv6Prefix;
+struct IPPrefix;
 
 struct alignas(16) IPAddress
 {
@@ -43,11 +48,28 @@ struct alignas(16) IPAddress
         return isV6 ? (v6 < other.v6) : (v4 < other.v4);
     }
 
-    IPAddress(const uint8_t* bytes, AddressFamily fam) {
+    IPAddress(uint32_t addr)
+    {
+        v6 = 0;
+        isV6 = false;
+        writeU32(raw, addr);
+    }
+
+    IPAddress(__uint128_t addr)
+    {
+        v6 = 0;
+        isV6 = true;
+        writeU128(raw, addr);
+    }
+
+    IPAddress(const uint8_t* bytes, AddressFamily fam)
+    {
         v6 = 0;
         isV6 =  (fam == AddressFamily::IPv6);
         std::memcpy(raw, bytes, fam == AddressFamily::IPv4 ? 4 : 16);
     }
+
+    IPAddress(const IPPrefix& prefix);
     
     bool operator==(const IPAddress& other) const 
     {
@@ -61,6 +83,19 @@ struct alignas(16) IPAddress
     }
 };
 
+constexpr uint32_t v4Mask(uint8_t len)
+{
+    return len == 0 ? 0 : htonl(0xFFFFFFFFu << (32 - len));
+}
+
+constexpr __uint128_t v6Mask(uint8_t len)
+{
+    if (len == 0)
+        return 0;
+
+    return (__uint128_t(-1)) << (128 - len);
+}
+
 struct alignas(16) IPPrefix
 {
     union {
@@ -73,18 +108,44 @@ struct alignas(16) IPPrefix
 
     IPPrefix() = default;
 
-    IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family)
+    IPPrefix(AddressFamily family)
+        : af(family)
+    {
+        v6 = 0;
+        prefixLength = 0;
+    }
+
+    IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool maintainAddress = false)
         : af(family) {
         std::memset(addr, 0, 16);
         std::memcpy(addr, ip, static_cast<size_t>(af));
-        addPrefixLen(prefix);
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
     }
 
-    IPPrefix(const IPAddress& ip, uint8_t prefix)
+    IPPrefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress = false)
         : af(ip.isV6 ? AddressFamily::IPv6 : AddressFamily::IPv4) {
         std::memcpy(addr, ip.raw, 16);
-        addPrefixLen(prefix);
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
     }
+
+    IPPrefix(uint32_t ip, uint8_t prefix, bool maintainAddress = false)
+        : af(AddressFamily::IPv4)
+    {
+        writeU32(addr, ip);
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
+    }
+
+    IPPrefix(const IPv4Prefix& prefix, bool maintainAddress = false);
+    IPPrefix(const IPv6Prefix& prefix, bool maintainAddress = false);
 
     bool operator==(const IPPrefix& other) const {
         if (af != other.af || prefixLength != other.prefixLength) return false;
@@ -97,6 +158,13 @@ struct alignas(16) IPPrefix
         if (prefixLength != other.prefixLength) return prefixLength < other.prefixLength;
         size_t len = (af == AddressFamily::IPv4) ? 4 : 16;
         return std::memcmp(addr, other.addr, len) < 0;
+    }
+
+    uint32_t getMask() const {
+        if (prefixLength == 0) return 0;
+        if (prefixLength >= 32) return 0xFFFFFFFF;
+
+        return 0xFFFFFFFF << (32 - prefixLength);
     }
 
     void addPrefixLen(uint8_t newPrefixLen)
@@ -119,20 +187,73 @@ struct alignas(16) IPPrefix
             addr[i] = 0;
         }
     }
+
+    bool contains(const IPAddress& addr) const
+    {
+        if (addr.isV6 && af != AddressFamily::IPv6)
+            return false;
+
+        if (addr.isV6)
+        {
+            __uint128_t mask = v6Mask(prefixLength);
+            return (addr.v6 && mask) == (v6 & mask);
+        }
+        else
+        {
+            uint32_t mask = v4Mask(prefixLength);
+            return (addr.v4 & mask) == (v4 & mask);
+        }
+    }
+
+    bool contains(const IPPrefix& addr) const
+    {
+        if (addr.af != af)
+            return false;
+
+        if (addr.af == AddressFamily::IPv6)
+        {
+            __uint128_t mask = v6Mask(prefixLength);
+            return (addr.v6 && mask) == (v6 & mask);
+        }
+        else
+        {
+            uint32_t mask = v4Mask(prefixLength);
+            return (addr.v4 & mask) == (v4 & mask);
+        }
+    }
 };
 
-struct IPv4Prefix
+inline IPAddress::IPAddress(const IPPrefix& prefix)
+{
+    v6 = 0;
+    isV6 = prefix.af == AddressFamily::IPv6;
+    std::memcpy(raw, prefix.addr, isV6 ? 16 : 4);
+}
+
+struct alignas(16) IPv4Prefix
 {
     uint32_t addr{};
     uint8_t prefixLength{};
     
     IPv4Prefix() = default;
 
-    IPv4Prefix(uint32_t ip, uint8_t prefix, AddressFamily family)
-        : addr(ip), prefixLength(prefix) {}
+    IPv4Prefix(uint32_t ip, uint8_t prefix, bool maintainAddress = false)
+        : addr(ip)
+    {
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
+    }
 
-    IPv4Prefix(const IPAddress& ip, uint8_t prefix)
-        : addr(ip.v4), prefixLength(prefix) {}
+    IPv4Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress = false)
+        : addr(ip.v4)
+    {
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
+    }
 
     bool operator==(const IPv4Prefix& other) const {
         if (addr != other.addr || prefixLength != other.prefixLength) return false;
@@ -143,6 +264,13 @@ struct IPv4Prefix
         if (prefixLength != other.prefixLength) return prefixLength < other.prefixLength;
         return addr < other.addr;
     }
+
+    void addPrefixLen(uint8_t newPrefixLen)
+    {
+        prefixLength = newPrefixLen;
+
+        addr &= (~0u << (32 - newPrefixLen));
+    }
 };
 
 struct IPv6Prefix
@@ -152,8 +280,13 @@ struct IPv6Prefix
     
     IPv6Prefix() = default;
 
-    IPv6Prefix(__uint128_t ip, uint8_t prefix)
-        : addr(ip), prefixLength(prefix) {
+    IPv6Prefix(__uint128_t ip, uint8_t prefix, bool maintainAddress = false)
+        : addr(ip)
+    {
+        if (maintainAddress)
+            prefixLength = prefix;
+        else
+            addPrefixLen(prefix);
     }
 
     bool operator==(const IPv6Prefix& other) const {
@@ -164,7 +297,35 @@ struct IPv6Prefix
         if (prefixLength != other.prefixLength) return prefixLength < other.prefixLength;
         return addr < other.addr;
     }
+
+    void addPrefixLen(uint8_t newPrefixLen)
+    {
+        prefixLength = newPrefixLen;
+
+        addr &= (~(__uint128_t)0u << (128 - newPrefixLen));
+    }
 };
+
+
+inline IPPrefix::IPPrefix(const IPv4Prefix& prefix, bool maintainAddress)
+    : af(AddressFamily::IPv4)
+{
+    writeU32(addr, prefix.addr);
+    if (maintainAddress)
+        prefixLength = prefix.prefixLength;
+    else
+        addPrefixLen(prefix.prefixLength);
+}
+
+inline IPPrefix::IPPrefix(const IPv6Prefix& prefix, bool maintainAddress)
+    : af(AddressFamily::IPv6)
+{
+    writeU128(addr, prefix.addr);
+    if (maintainAddress)
+        prefixLength = prefix.prefixLength;
+    else
+        addPrefixLen(prefix.prefixLength);
+}
 
 namespace std {
 

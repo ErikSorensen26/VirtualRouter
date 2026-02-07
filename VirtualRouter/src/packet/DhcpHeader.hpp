@@ -4,8 +4,65 @@
 #define DHCP_HEADER_HPP
 
 #include <HeaderHelpers.hpp>
-#include <TLVOptions.hpp>
+#include <TlvOptions.hpp>
 #include <vector>
+
+#define DHCP_TYPE_DISCOVER                  0x01U ///< DHCP Discover message type
+#define DHCP_TYPE_OFFER                     0x02U ///< DHCP Offer message type
+#define DHCP_TYPE_REQUEST                   0x03U ///< DHCP Request message type
+#define DHCP_TYPE_DECLINE                   0x04U ///< DHCP Decline message type
+#define DHCP_TYPE_ACK                       0x05U ///< DHCP Acknowledgment message type
+#define DHCP_TYPE_NAK                       0x06U ///< DHCP Negative Acknowledgment message type
+#define DHCP_TYPE_RELEASE                   0x07U ///< DHCP Release message type
+#define DHCP_TYPE_INFORM                    0x08U ///< DHCP Inform message type
+#define DHCP_TYPE_FORCE_RENEW               0x09U ///< DHCP Force Renew message type
+#define DHCP_TYPE_LEASE_QUERY               0x0AU ///< DHCP Lease Query message type
+#define DHCP_TYPE_LEASE_UNASSIGNED          0x0BU ///< DHCP Lease Unassigned type
+#define DHCP_TYPE_LEASE_UNKNOWN             0x0CU ///< DHCP Lease Unknown type
+#define DHCP_TYPE_LEASE_ACTIVE              0x0DU ///< DHCP Lease Active type
+
+#define DHCP_OPTION_MASK                    0x01U ///< DHCP Option for Subnet Mask
+#define DHCP_OPTION_BROADCAST               0x1CU ///< DHCP Option for Broadcast Message
+#define DHCP_OPTION_ROUTER                  0x03U ///< DHCP Option for Router
+#define DHCP_OPTION_DOMAIN_NAME             0x0FU ///< DHCP Option for Domain Name
+#define DHCP_OPTION_DOMAIN_SERVER           0x06U ///< DHCP Option for Domain Server
+#define DHCP_OPTION_DOMAIN_SEARCH           0x77U ///< DHCP Option for Domain Search
+#define DHCP_OPTION_NETBIOS_SERVER          0x2CU ///< DHCP Option for NETBIOS Server
+#define DHCP_OPTION_MTU                     0x1AU ///< DHCP Option for MTU
+#define DHCP_OPTION_CLASSLESS_STATIC_ROUTE  0x79U ///< DHCP Option for Classless Static Route
+#define DHCP_OPTION_NTP                     0x2AU ///< DHCP Option for NTP
+#define DHCP_OPTION_OVERLOAD                0x34U ///< DHCP Option for Overload
+#define DHCP_OPTION_TYPE                    0x35U ///< DHCP Option for Type
+#define DHCP_OPTION_HOSTNAME                0x0CU ///< DHCP Option for Hostname
+#define DHCP_OPTION_CLIENT_ID               0x3DU ///< DHCP Option for Client ID
+#define DHCP_OPTION_SERVER_IDENTIFIER       0x36U ///< DHCP Option for Server Identifier
+#define DHCP_OPTION_LEASE_TIME              0x33U ///< DHCP Option for Lease Time
+#define DHCP_OPTION_RENEWAL_TIME            0x3AU ///< DHCP Option for Renewal Time
+#define DHCP_OPTION_REBINDING_TIME          0x3BU ///< DHCP Option for Rebinding Time
+#define DHCP_OPTION_REQUEST_IP              0x32U ///< DHCP Option for Request IP
+#define DHCP_OPTION_REQUEST_LIST            0x37U ///< DHCP Option for Request List
+#define DHCP_OPTION_MAX_SIZE                0x39U ///< DHCP Option for Max Size
+#define DHCP_OPTION_TFTP_SERVER_NAME        0x42U ///< DHCP Option for TFTP Server Name
+#define DHCP_OPTION_BOOT_FILE               0x43U ///< DHCP Option for Boot File
+#define DHCP_OPTION_STATIC_ROUTE            0x21U ///< DHCP Option for Static Route
+#define DHCP_OPTION_VENDOR_SPECIFIC         0x2BU ///< DHCP Option for Vendor Specific
+#define DHCP_OPTION_VENDOR_CLASS_ID         0x3CU ///< DHCP Option for Vendor Class ID
+#define DHCP_OPTION_AUTHENTICATION          0x5AU ///< DHCP Option for Authentication
+#define DHCP_OPTION_RAPID_COMMIT            0x50U ///< DHCP Option for Rapid Commit
+#define DHCP_OPTION_RELAY_AGENT_INFO        0x52U ///< DHCP Option for Relay Agent Info
+#define DHCP_OPTION_TIMESTAMP               0x5BU ///< DHCP Option for Timestamp
+#define DHCP_OPTION_TFTP_SERVERS            0x96U ///< DHCP Option for TFTP Servers
+#define DHCP_OPTION_END                     0xFFU ///< DHCP Option End Marker
+
+#define DHCP_MAGIC_COOKIE 0x63825363U //< DHCP Magic Cookie
+
+#define DHCP_TIMER_MIN_LEASE_TIME 3600
+#define DHCP_TIMER_MAX_LEASE_TIME 86400
+
+inline constexpr uint8_t DHCP_CLIENT_HARDWARE_ADDRESS_PADDING[10] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; ///< Padding for Client Hardware Address.
+inline constexpr uint8_t DHCP_SERVER_HOSTNAME[64] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; ///< Server Name.
+inline constexpr uint8_t DHCP_BOOT_FILE[128] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; ///< Bootfile Name.
+inline constexpr uint8_t DHCP_END_PADDING[25] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; ///< Padding after DHCP options.
 
 /**
  * @struct DhcpHeaderRaw

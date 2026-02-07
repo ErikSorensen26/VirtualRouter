@@ -118,7 +118,7 @@ namespace Protocol
         // Refresh vs expire logic
         entry.timerId = global.timeManager.addTimer(
             entry.expiryTime,
-            [this, targetIp]() { expireArpEntry(targetIp); }
+            [this, targetIp](uint32_t) { expireArpEntry(targetIp); }
         );
 
         // Insert into cache
@@ -329,7 +329,7 @@ namespace Protocol
         bool garp = std::memcmp(ip, tip, 4) == 0;
         if (garp && (!global.configs.arp.acceptGratiutous.load(std::memory_order_relaxed) ||
             !running.load(std::memory_order_relaxed) || !global.routingEnabled ||
-            std::memcmp(mac, Variable::Mac::broadcast, 6) == 0))
+            std::memcmp(mac, ETHERNET_MAC_BROADCAST, 6) == 0))
             return;
 
         if (arpCache.count(targetIp))
@@ -367,7 +367,7 @@ namespace Protocol
                 // Expire time
                 entry.timerId = global.timeManager.addTimer(
                     entry.expiryTime,
-                    [this, targetIp]()
+                    [this, targetIp](uint32_t)
                     {
                         expireArpEntry(targetIp);
                     }
@@ -408,7 +408,7 @@ namespace Protocol
             // Expire time
             entry.timerId = global.timeManager.addTimer(
                 entry.expiryTime,
-                [this, targetIp]()
+                [this, targetIp](uint32_t)
                 {
                     expireArpEntry(targetIp);
                 }
@@ -448,7 +448,7 @@ namespace Protocol
         bool isProxy = false;
 
         {
-            if (currentInterface->configs.ipv4.compareAddress(request.raw->targetIpAddress))
+            if (currentInterface->configs.ipv4.comparePrimaryAddress(request.raw->targetIpAddress))
             {
                 currentInterface->configs.getMac(replyMac);
                 isLocal = true;
@@ -496,7 +496,7 @@ namespace Protocol
             {
                 //TODO add more headers
                 case HeaderType::ETHERNET:
-                    Protocol::Ethernet::build(currentInterface, pkt, targetIp, macAddress, Variable::Ethernet::ipv6);
+                    Protocol::Ethernet::build(currentInterface, pkt, targetIp, macAddress, ETHERNET_IPV6);
                     break;
                 default:
                     continue;
@@ -558,22 +558,22 @@ namespace Protocol
 
         uint8_t mac[6], ip[4], tip[4];
         iface.getMac(mac);
-        iface.ipv4.getAddress(ip);
+        iface.ipv4.getPrimaryAddress(ip);
         writeU32(tip, targetIp);
         arpRequest(arpReq, mac, ip, tip);
 
         //Ethernet::build(currentInterface, arpReq, nullptr, &Variable::Mac::broadcast, Variable::Ethernet::arp);
-        currentInterface->enqueuePacket(arpReq, Variable::Mac::broadcast);
+        currentInterface->enqueuePacket(arpReq, ETHERNET_MAC_BROADCAST);
 
         // Wait for the conditional variable to be modified or timeout
         uint32_t timerId = global.timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(interval),
-            [this, targetIp, &entry]() {
+            [this, targetIp, &entry](uint32_t) {
                 scheduleRequest(targetIp, entry);
             }
         );
         {
-            std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
+            std::shared_lock<std::shared_mutex> lk(arpCacheMutex);
             entry.timerId = timerId;
         }
     }
@@ -588,7 +588,7 @@ namespace Protocol
 
             uint8_t ip[4], mac[6];
             interfaceInfo.getMac(mac);
-            interfaceInfo.ipv4.getAddress(ip);
+            interfaceInfo.ipv4.getPrimaryAddress(ip);
             arpReply(replyPacket, mac, targetMac, ip, targetIp);
 
             //Ethernet::build(currentInterface, replyPacket, nullptr, &targetMac, Variable::Ethernet::arp);
@@ -609,18 +609,18 @@ namespace Protocol
         arp.setBuffer(arpEntry->buffer);
 
         // Set up the Ethernet header for the ARP request
-        eth.setDestinationMac(Variable::Mac::broadcast);
+        eth.setDestinationMac(ETHERNET_MAC_BROADCAST);
         eth.setSourceMac(currentMac);
-        eth.setType(Variable::Ethernet::arp);
+        eth.setType(ETHERNET_ARP);
 
-        arp.setHardwareType(Variable::Arp::ethernet);
-        arp.setProtocolType(Variable::Arp::ipv4);
+        arp.setHardwareType(ARP_HARDWARE_ETHERNET);
+        arp.setProtocolType(ETHERNET_IPV4);
         arp.setHardwareSize(0x06);
         arp.setProtocolSize(0x04);
-        arp.setOpcode(Variable::Arp::Opcode::request);
+        arp.setOpcode(ARP_OPCODE_REQUEST);
         arp.setSenderHwAddr(currentMac);
         arp.setSenderIpAddr(ip);
-        arp.setTargetHwAddr(Variable::Mac::source);
+        arp.setTargetHwAddr(ETHERNET_MAC_SOURCE);
         arp.setTargetIpAddr(targetIp);
     }
 
@@ -639,14 +639,14 @@ namespace Protocol
         // Set up the Ethernet header for the ARP request
         eth.setDestinationMac(targetMac);
         eth.setSourceMac(currentMac);
-        eth.setType(Variable::Ethernet::arp);
+        eth.setType(ETHERNET_ARP);
 
         // Set up the ARP header for the reply
-        arp.setHardwareType(Variable::Arp::ethernet);
-        arp.setProtocolType(Variable::Arp::ipv4);
+        arp.setHardwareType(ARP_HARDWARE_ETHERNET);
+        arp.setProtocolType(ETHERNET_IPV4);
         arp.setHardwareSize(0x06);
         arp.setProtocolSize(0x04);
-        arp.setOpcode(Variable::Arp::Opcode::reply);
+        arp.setOpcode(ARP_OPCODE_REPLY);
         arp.setSenderHwAddr(currentMac);
         arp.setSenderIpAddr(ip);
         arp.setTargetHwAddr(targetMac);

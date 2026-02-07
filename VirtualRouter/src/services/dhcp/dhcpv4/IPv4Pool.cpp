@@ -79,7 +79,7 @@ uint32_t IPv4Pool::allocateTemporaryIP(const ClientID& clientId, uint32_t timeou
             timeManager.cancelTimer(it->second.second);
             it->second.second = timeManager.addTimer(
                 std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-                [this, ip = it->first, clientId]() {
+                [this, ip = it->first, clientId](uint32_t) {
                     std::lock_guard<std::mutex> lock(poolMutex);
                     temporary.erase(ip);
                     reverseTemporary.erase(clientId);
@@ -100,7 +100,7 @@ uint32_t IPv4Pool::allocateTemporaryIP(const ClientID& clientId, uint32_t timeou
             temporary[ip] = {
                 clientId,
                 timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-                [this, ip, clientId]() {
+                [this, ip, clientId](uint32_t) {
                     std::lock_guard<std::mutex> lock(poolMutex);
                     temporary.erase(ip);
                     reverseTemporary.erase(clientId);
@@ -120,7 +120,7 @@ uint32_t IPv4Pool::allocateTemporaryIP(const ClientID& clientId, uint32_t timeou
             clientId,
             timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-            [this, ip, clientId]() {
+            [this, ip, clientId](uint32_t) {
                 std::lock_guard<std::mutex> lock(poolMutex);
                 temporary.erase(ip);
                 reverseTemporary.erase(clientId);
@@ -140,7 +140,7 @@ uint32_t IPv4Pool::allocateTemporaryIP(const ClientID& clientId, uint32_t timeou
         temporary[ip] = {
             clientId,
             timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-            [this, ip, clientId]() {
+            [this, ip, clientId](uint32_t) {
                 std::lock_guard<std::mutex> lock(poolMutex);
                 temporary.erase(ip);
                 reverseTemporary.erase(clientId);
@@ -174,7 +174,7 @@ bool IPv4Pool::allocateRequestedTemporaryIP(uint32_t ip, const ClientID& clientI
     temporary[ip] = {
         clientId,
         timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-        [this, ip, clientId]() {
+        [this, ip, clientId](uint32_t) {
             std::lock_guard<std::mutex> lock(poolMutex);
             temporary.erase(ip);
             reverseTemporary.erase(clientId);
@@ -265,7 +265,7 @@ void IPv4Pool::expireIP(uint32_t ip, const ClientID& client, size_t timeout)
         client,
         timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-        [this, ip, client]() {
+        [this, ip, client](uint32_t) {
             std::lock_guard<std::mutex> lock(poolMutex);
             if (!isExcluded(ip) && !isConflicted(ip))
                 release.push_back(ip); // For tracking if needed
@@ -293,7 +293,7 @@ bool IPv4Pool::setConflicted(uint32_t ip, uint32_t duration)
     reverseAllocated.erase(client);
     bad[ip] = timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::minutes(duration),
-        [this, ip]() {
+        [this, ip](uint32_t) {
             std::lock_guard<std::mutex> lock(poolMutex);
             bad.erase(ip);
         });

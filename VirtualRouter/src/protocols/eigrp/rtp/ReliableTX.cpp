@@ -15,8 +15,8 @@ void ReliableTransport::transmit(PacketBuilder& pkt, const uint8_t* dest)
 {
     const uint8_t* target = dest ? dest :
         af == AddressFamily::IPv4
-            ? Variable::Multicast::Eigrp::address
-            : Variable::Multicast::Eigrp::addressv6;
+            ? EIGRP_MULTICAST_ADDRESS
+            : EIGRP_MULTICAST_ADDRESS_V6;
 
     auto* interface = iface.getIface();
     Protocol::IPPacket::BuildIP build = {
@@ -24,7 +24,7 @@ void ReliableTransport::transmit(PacketBuilder& pkt, const uint8_t* dest)
         .packetInfo = pkt,
         .destIp = target,
         .DSCP = iface.configs->DSCP.load(std::memory_order_relaxed),
-        .protocolType = Variable::IP::eigrp
+        .protocolType = IP_EIGRP
     };
 
     af == AddressFamily::IPv4
@@ -414,7 +414,7 @@ void ReliableTransport::sendSIAReply(Neighbor& neighbor)
 std::optional<EigrpHeader> ReliableTransport::createHello(PacketBuilder& builder)
 {
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
-        Variable::Eigrp::Type::hello,
+        EIGRP_TYPE_HELLO,
         0, 0,
         iface.getBase().getVirtualRouterID(),
         as
@@ -433,7 +433,7 @@ std::optional<EigrpHeader> ReliableTransport::createHello(PacketBuilder& builder
 std::optional<EigrpHeader> ReliableTransport::createConditionalHello(PacketBuilder& builder, PktInfo& info, const std::vector<IPAddress>& neighbors, uint32_t seq)
 {
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
-        Variable::Eigrp::Type::hello,
+        EIGRP_TYPE_HELLO,
         0, 0,
         iface.getBase().getVirtualRouterID(),
         as
@@ -459,7 +459,7 @@ std::optional<EigrpHeader> ReliableTransport::createConditionalHello(PacketBuild
 std::optional<EigrpHeader> ReliableTransport::createUnicastHello(PacketBuilder& builder)
 {
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
-        Variable::Eigrp::Type::hello,
+        EIGRP_TYPE_HELLO,
         0, 0,
         iface.getBase().getVirtualRouterID(),
         as
@@ -478,7 +478,7 @@ std::optional<EigrpHeader> ReliableTransport::createUnicastHello(PacketBuilder& 
 std::optional<EigrpHeader> ReliableTransport::createAck(PacketBuilder& builder, uint32_t seq)
 {
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
-        Variable::Eigrp::Type::hello,
+        EIGRP_TYPE_HELLO,
         0, seq,
         iface.getBase().getVirtualRouterID(),
         as
@@ -492,7 +492,7 @@ std::optional<EigrpHeader> ReliableTransport::createNullUpdate(PacketBuilder& bu
 {
     auto& base = iface.getBase();
     auto eigrpHeader = EigrpPacketBuilder::buildHeader(builder,
-        Variable::Eigrp::Type::update,
+        EIGRP_TYPE_UPDATE,
         incrementSequenceNumber(),
         0,
         base.getVirtualRouterID(),
@@ -515,7 +515,7 @@ std::optional<EigrpHeader> ReliableTransport::createUpdate(PacketBuilder& builde
 {
     auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
-    std::optional<EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(builder, Variable::Eigrp::Type::update, seqNum, 0, base.getVirtualRouterID(), as);
+    std::optional<EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(builder, EIGRP_TYPE_UPDATE, seqNum, 0, base.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + EigrpHeader::fixedSize);
@@ -538,7 +538,7 @@ std::optional<EigrpHeader> ReliableTransport::createQuery(PacketBuilder& builder
     auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(
-        builder, Variable::Eigrp::Type::query, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_QUERY, seqNum, 0, base.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + EigrpHeader::fixedSize);
@@ -570,7 +570,7 @@ std::optional<EigrpHeader> ReliableTransport::createUnicastQuery(PacketBuilder& 
     auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<EigrpHeader> eigrp = EigrpPacketBuilder::buildHeader(
-        builder, Variable::Eigrp::Type::query, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_QUERY, seqNum, 0, base.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + EigrpHeader::fixedSize);
@@ -600,7 +600,7 @@ std::optional<EigrpHeader> ReliableTransport::createReply(PacketBuilder& builder
     auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<EigrpHeader> eigrp =  EigrpPacketBuilder::buildHeader(
-        builder, Variable::Eigrp::Type::reply, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_REPLY, seqNum, 0, base.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + EigrpHeader::fixedSize);
@@ -622,7 +622,7 @@ std::optional<EigrpHeader> ReliableTransport::createSIAQuery(PacketBuilder& buil
     auto& base = iface.getBase();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<EigrpHeader> eigrp =  EigrpPacketBuilder::buildHeader(
-        builder, Variable::Eigrp::Type::siaQuery, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_SIA_QUERY, seqNum, 0, base.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = info.mtu - static_cast<uint16_t>(builder.bufferOffset + EigrpHeader::fixedSize);
@@ -654,7 +654,7 @@ std::optional<EigrpHeader> ReliableTransport::createSIAReply(PacketBuilder& buil
     uint16_t mtu = getMtu();
     uint32_t seqNum = incrementSequenceNumber();
     std::optional<EigrpHeader> eigrp =  EigrpPacketBuilder::buildHeader(
-        builder, Variable::Eigrp::Type::reply, seqNum, 0, base.getVirtualRouterID(), as);
+        builder, EIGRP_TYPE_SIA_REPLY, seqNum, 0, base.getVirtualRouterID(), as);
     if (!eigrp.has_value()) return std::nullopt;
 
     uint16_t maxSize = static_cast<uint16_t>(builder.getMaxHeaderSize(mtu));

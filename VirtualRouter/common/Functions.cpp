@@ -530,7 +530,7 @@ uint8_t* Functions::prefixToMask(uint8_t* out, uint8_t prefixLen, AddressFamily 
         out[fullBytes] = static_cast<uint8_t>(0xFF << (8 - remainingBits));
     return out;
 }
-    
+
 size_t Functions::getRandomBetween(size_t min, size_t max) {
     if (min > max) std::swap(min, max);
     std::random_device rd;

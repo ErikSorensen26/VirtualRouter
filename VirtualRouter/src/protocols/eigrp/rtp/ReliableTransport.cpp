@@ -153,7 +153,7 @@ void ReliableTransport::sendRetransmission(Neighbor& neighbor, StaticHeader& hea
         .packetInfo = retransmissionPacket,
         .destIp = neighbor.ipAddress.raw,
         .DSCP = iface.configs->DSCP.load(std::memory_order_relaxed),
-        .protocolType = Variable::IP::eigrp
+        .protocolType = IP_EIGRP
     };
 
     af == AddressFamily::IPv4

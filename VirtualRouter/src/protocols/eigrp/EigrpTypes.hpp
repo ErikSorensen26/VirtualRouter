@@ -4,7 +4,6 @@
 #define EIGRP_TYPES_HPP
 
 #include <shared_mutex>
-#include <memory>
 #include <unordered_set>
 #include <TimeManager.h>
 #include <TopologyTable.h>
@@ -96,7 +95,8 @@ namespace EigrpConfigs
     enum class TrafficShareMode
     {
         Balanced, ///< Balanced traffic sharing.
-        Minimum   ///< Minimum traffic sharing.
+        Minimum,   ///< Minimum traffic sharing.
+        MinimumAcrossInterfaces ///< TODO: will still do ecmp but with variance of 0
     };
 
     /**
@@ -163,8 +163,9 @@ namespace EigrpConfigs
         std::atomic<uint8_t> externalAdminDistance = 170; ///< Administrative distance for external routes.
         std::atomic<uint8_t> variance = 1; ///< Variance for unequal-cost load balancing.
         std::atomic<uint8_t> trafficShare = 0; ///< Traffic sharing mode.
-        std::atomic<uint8_t> ribScale = 128; ///< Rib scale for metric when adding to RIB. //TODO
+        std::atomic<uint8_t> ribScale = 128; ///< Rib scale for metric when adding to RIB.
         std::atomic<uint8_t> dampeningInterval = 75; ///< Dampening interval for route dampening.
+        std::atomic<uint16_t> warningInterval = 10; ///< Warning logging interval. // TODO
         std::atomic<uint16_t> dampeningResetTime = 0; ///< Reset time for dampening.
         std::atomic<uint16_t> dampeningRestart = 0; ///< Restart time for dampening.
         std::atomic<uint16_t> dampeningRestartCount = 1; ///< Restart count for dampening.
@@ -209,14 +210,16 @@ namespace EigrpConfigs
         uint32_t key;
         bool shutdown = false;
         bool userMade = false;
+        bool holdConfig = false;
+        bool helloConfig = false;
         mutable std::shared_mutex configsMutex;
         std::vector<IPPrefix> pendingSummaryRoutes;
         std::atomic<uint8_t> DSCP = 0; ///< Differentiated Services Code Point.
         std::atomic<uint8_t> interfaceMask; ///< Interface subnet mask.
         std::atomic<uint8_t> dampeningChange = 1; ///< Number of prefix changes that triggers dampening.
         std::atomic<uint16_t> dampeningInterval = 5; /// Interval the interface will check for changed routes.
-        std::atomic<uint16_t> helloTime = 5; ///< Hello interval in seconds.
-        std::atomic<uint16_t> holdTime = 15; ///< Hold time in seconds.
+        std::atomic<uint16_t> helloTime = 5; ///< Hello interval in seconds. // TODO will default to 60 when low band (1544 kbps)
+        std::atomic<uint16_t> holdTime = 15; ///< Hold time in seconds. //TODO by default hold is 3x hello unless hold is configured
         std::atomic<uint32_t> bandwidthPercentage = 50; ///< Bandwidth percentage to use.
         std::atomic<bool> splitHorizon = true; ///< Enable split horizon.
         std::atomic<bool> nextHopSelf = false; ///< Enable next hop self.
@@ -239,15 +242,15 @@ namespace EigrpConfigs
             std::shared_lock<std::shared_mutex> lock(configsMutex);
             return 
                 pendingSummaryRoutes.empty() &&
-                helloTime.load() == other.helloTime.load() &&
-                holdTime.load() == other.holdTime.load() &&
-                bandwidthPercentage.load() == other.bandwidthPercentage.load() &&
-                splitHorizon.load() == other.splitHorizon.load() &&
-                nextHopSelf.load() == other.nextHopSelf.load() &&
-                dampeningChange.load() == other.dampeningChange.load() &&
-                dampeningInterval.load() == other.dampeningInterval.load() &&
+                helloTime.load() == other.helloTime &&
+                holdTime.load() == other.holdTime &&
+                bandwidthPercentage.load() == other.bandwidthPercentage &&
+                splitHorizon.load() == other.splitHorizon &&
+                nextHopSelf.load() == other.nextHopSelf &&
+                dampeningChange.load() == other.dampeningChange &&
+                dampeningInterval.load() == other.dampeningInterval &&
                 auth.authType == other.auth.authType && 
-                auth.fullyEnabled.load() == other.auth.fullyEnabled.load();
+                auth.fullyEnabled.load() == other.auth.fullyEnabled;
         }
     };
 }

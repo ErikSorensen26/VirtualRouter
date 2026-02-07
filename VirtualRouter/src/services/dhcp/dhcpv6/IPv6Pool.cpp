@@ -47,7 +47,7 @@ __uint128_t IPv6Pool::allocateAdvertised(const IAKey& key, uint32_t timeout)
         advertised[leaseKey] = {
             timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-            [this, leaseKey]() {
+            [this, leaseKey](uint32_t) {
                 std::lock_guard<std::mutex> lock(mutex);
                 advertised.erase(leaseKey);
                 advertisedIPs.erase(leaseKey.address);
@@ -72,7 +72,7 @@ Dhcpv6StatusMessage IPv6Pool::allocateRequestedAdvertised(const IALeaseKey& key,
         advertised[key] = {
             timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(timeout),
-            [this, key]() {
+            [this, key](uint32_t) {
                 std::lock_guard<std::mutex> lock(mutex);
                 advertised.erase(key);
                 advertisedIPs.erase(key.address);
@@ -163,7 +163,7 @@ void IPv6Pool::expire(const IALeaseKey& key, uint32_t duration)
     quarantined[key] = {
         timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(duration),
-        [this, key]() {
+        [this, key](uint32_t) {
             std::lock_guard<std::mutex> lock(mutex);
             quarantined.erase(key);
             quarantinedIPs.erase(key.address);
@@ -198,7 +198,7 @@ bool IPv6Pool::setConflicted(const IALeaseKey& key, uint32_t duration)
 
     bad[key.address] = timeManager.addTimer(
         std::chrono::steady_clock::now() + std::chrono::seconds(duration),
-        [this, addr = key.address]() {
+        [this, addr = key.address](uint32_t) {
             std::lock_guard<std::mutex> lock(mutex);
             bad.erase(addr);
         });

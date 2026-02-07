@@ -1,0 +1,57 @@
+// SpfManager.h
+
+#ifndef SPF_MANAGER_H
+#define SPF_MANAGER_H
+
+#include <Registry.hpp>
+#include <cstdint>
+#include <atomic>
+#include <OspfTypes.hpp>
+#include "SpfTypes.hpp"
+
+class TimeManager;
+
+namespace OSPF
+{
+class OspfArea;
+class OspfRib;
+
+class SpfManager
+{
+public:
+    explicit SpfManager(OspfArea& area, TimeManager& tmgr);
+
+    template<typename Policy>
+    void requestSpf();
+
+    template<typename Policy>
+    void onSpfTimer();
+
+    SpfResult spfResult;
+
+private:
+    template<typename Policy>
+    void scheduleSpf(uint32_t delayMs);
+    uint32_t computeNextDelay();
+
+    template <typename Policy>
+    void runSpf();
+
+private:
+    OspfArea& area;
+    TimeManager& tmgr;
+    OspfRib& rib;
+
+    std::atomic<bool> requested{false};
+    std::atomic<bool> spfScheduled{false};
+    std::atomic<bool> spfRunning{false};
+    std::atomic<bool> reschedule{false};
+
+    std::atomic<std::chrono::steady_clock::time_point> lastSpfTime;
+
+    std::atomic<uint32_t> currentDelayMs{0};
+    uint32_t timerId;
+};
+}
+
+#endif // SPF_MANAGER_H
