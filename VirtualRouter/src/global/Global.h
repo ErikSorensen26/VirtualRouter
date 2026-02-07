@@ -18,6 +18,7 @@
 #include <map>
 #include <KeyChainManager.h>
 #include <Registry.hpp>
+#include "ControlScheduler.h"
 
 #define DEFAULT_HOSTNAME "router"
 
@@ -461,6 +462,7 @@ public:
 
     ThreadPool threadPool;       ///< Global thread pool for off-loading.
     TimeManager timeManager;     ///< Global time manager for time keeping.
+    ControlScheduler scheduler;  ///< Global control plane execution engine.
 
     CliEngine engine;            ///< Global CLI engine for user interface.
 

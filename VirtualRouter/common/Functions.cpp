@@ -1,6 +1,5 @@
 #include "Functions.h"
 #include <Logger.h>
-#include <bitset>
 #include <random>
 #include <regex>
 #include <cstring>

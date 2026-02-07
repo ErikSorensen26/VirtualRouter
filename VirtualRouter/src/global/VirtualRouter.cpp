@@ -7,7 +7,7 @@
 #include <InterfaceType.hpp>
 
 VirtualRouter::VirtualRouter(Global& global, const std::string& name)
-    : isDefault(name == "default"), global(global)
+    : defaulted(name == "default"), global(global)
 {
     instanceName = name;
     enabledAddressFamilies.insert(AddressFamily::IPv4);
@@ -16,50 +16,34 @@ VirtualRouter::VirtualRouter(Global& global, const std::string& name)
 // Destructor
 VirtualRouter::~VirtualRouter()
 {
+    std::unordered_map<uint32_t, Interface*> interfaceListCopy;
     {
-        std::unordered_map<uint32_t, Interface*> interfaceListCopy;
-        {
-            // Move out interfaces so any callbacks during destruction
-            // do not see stale pointers in the shared map.
-            std::unique_lock<std::shared_mutex> lock(interfaceMutex);
-            interfaceListCopy.swap(interfaceList);
-        }
-        // Interfaces
-        for (auto [key, interface] : interfaceListCopy)
-        {
-            global.removeInterface(key);
-        }
+        // Move out interfaces so any callbacks during destruction
+        // do not see stale pointers in the shared map.
+        std::unique_lock<std::shared_mutex> lock(interfaceMutex);
+        interfaceListCopy.swap(interfaceList);
+    }
+    // Interfaces
+    for (auto [key, interface] : interfaceListCopy)
+    {
+        global.removeInterface(key);
     }
 
+    // Eigrp Autonomous Systems
+    for (auto it : eigrpList)
     {
-        std::unique_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
-        // Eigrp Autonomous Systems
-        for (auto it : eigrpList)
+        if (it.second.ipv4)
         {
-            if (it.second->ipv4)
-            {
-                delete it.second->ipv4;
-            }
-            if (it.second->ipv6)
-            {
-                delete it.second->ipv6;
-            }
-            delete it.second;
-            it.second = nullptr;
+            delete it.second.ipv4;
         }
-        eigrpList.clear();
+        if (it.second.ipv6)
+        {
+            delete it.second.ipv6;
+        }
     }
+    eigrpList.clear();
 
-    {
-        std::unique_lock<std::shared_mutex> lock(eigrpNamedMutex);
-        // Eigrp Named
-        for (auto it : namedEigrpList)
-        {
-            delete it.second;
-            it.second = nullptr;
-        }
-        namedEigrpList.clear();
-    }
+    namedEigrpList.clear();
 }
 
 bool VirtualRouter::calculateRID(uint32_t& rid)
@@ -138,31 +122,22 @@ bool VirtualRouter::removeInterface(uint32_t key)
 // Eigrp Autonomous Systems
 Eigrp::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
 {
-    std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
-    if (eigrpList.find(id) != eigrpList.end())
-    {
+    if (eigrpList.contains(id))
         return nullptr;
-    }
-    eigrpList[id] = new Eigrp::EigrpAutonomousSystem();
-    return eigrpList[id];
+    return &eigrpList[id];
 }
 
 Eigrp::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
 {
-    std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
-    if (eigrpList.find(id) != eigrpList.end())
-    {
-        return eigrpList[id];
-    }
+    if (auto it = eigrpList.find(id); it != eigrpList.end())
+        return &it->second;
     return nullptr;
 }
 
 bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
 {
-    std::shared_lock<std::shared_mutex> lock(eigrpAutonomousSystemMutex);
     if (eigrpList.find(id) != eigrpList.end())
     {
-        delete eigrpList[id];
         eigrpList.erase(id);
         return true;
     }
@@ -170,64 +145,158 @@ bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
 }
 
 // Eigrp Named Systems
-Eigrp::EigrpNamed* VirtualRouter::addEigrpNamed(const std::string& name)
+Eigrp::EigrpNamed& VirtualRouter::addEigrpNamed(const std::string& name)
 {
-    std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
-    if (namedEigrpList.find(name) != namedEigrpList.end())
-    {
-        return nullptr;
-    }
-    namedEigrpList[name] = new Eigrp::EigrpNamed();
     return namedEigrpList[name];
 }
 
 Eigrp::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
 {
-    std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
-    if (namedEigrpList.find(name) != namedEigrpList.end())
-    {
-        return namedEigrpList[name];
-    }
+    if (auto it = namedEigrpList.find(name); it != namedEigrpList.end())
+        return &it->second;
     return nullptr;
 }
 
 bool VirtualRouter::removeEigrpNamed(const std::string& name)
 {
-    std::shared_lock<std::shared_mutex> lock(eigrpNamedMutex);
     if (namedEigrpList.find(name) != namedEigrpList.end())
     {
-        auto eigrp = namedEigrpList[name];
-        if (eigrp->ipv4)
+        auto& eigrp = namedEigrpList[name];
+        if (eigrp.ipv4)
         {
-            uint32_t as = eigrp->ipv4->getAS();
+            uint32_t as = eigrp.ipv4->getAS();
             if (eigrpList.find(as) != eigrpList.end())
             {
-                delete eigrpList[as]->ipv4;
-                eigrpList[as]->ipv4 = nullptr;
-                eigrpList[as]->ipv4Named = false;
-                if (!eigrpList[as]->ipv6)
+                delete eigrpList[as].ipv4;
+                eigrpList[as].ipv4 = nullptr;
+                if (!eigrpList[as].ipv6)
                 {
                     removeEigrpAutonomousSystem(as);
                 }
             }
         }
-        if (eigrp->ipv6)
+        if (eigrp.ipv6)
         {
-            uint32_t as = eigrp->ipv6->getAS();
+            uint32_t as = eigrp.ipv6->getAS();
             if (eigrpList.find(as) != eigrpList.end())
             {
-                delete eigrpList[as]->ipv6;
-                eigrpList[as]->ipv6 = nullptr;
-                eigrpList[as]->ipv6Named = false;
-                if (!eigrpList[as]->ipv4)
+                delete eigrpList[as].ipv6;
+                eigrpList[as].ipv6 = nullptr;
+                if (!eigrpList[as].ipv4)
                 {
                     removeEigrpAutonomousSystem(as);
                 }
             }
 
         }
-        delete namedEigrpList[name];
         namedEigrpList.erase(name);
+        return true;
+    }
+    return false;
+}
+
+OSPF::OspfProcess& VirtualRouter::addOspf(uint32_t id)
+{
+    if (auto it = ospfList.find(id); it == ospfList.end())
+    {
+        ospfList.emplace(id, false, id, AddressFamily::IPv4, this);
+        return it->second;
+    }
+    return ospfList[id];
+}
+
+OSPF::OspfProcess* VirtualRouter::getOspf(uint32_t id)
+{
+    if (auto it = ospfList.find(id); it != ospfList.end())
+        return &it->second;
+    return nullptr;
+}
+
+bool VirtualRouter::removeOspf(uint32_t id)
+{
+    if (auto it = ospfList.find(id); it != ospfList.end()) 
+    {
+        ospfList.erase(it);
+        return true;
+    }
+    return false;
+}
+
+OSPF::OspfV3Instance& VirtualRouter::addOspfv3(uint32_t id)
+{
+    return ospfv3List[id];
+}
+
+OSPF::OspfProcess& VirtualRouter::addOspfv3(uint32_t id, AddressFamily af)
+{
+    auto& ospf = ospfv3List[id];
+
+    if (af == AddressFamily::IPv4)
+    {
+        if (!ospf.ipv4)
+            ospf.ipv4 = new OSPF::OspfProcess(true, id, af, this);
+        return *ospf.ipv4;
+    }
+    else
+    {
+        if (!ospf.ipv6)
+            ospf.ipv6 = new OSPF::OspfProcess(true, id, af, this);
+        return *ospf.ipv6;
+    }
+}
+
+OSPF::OspfV3Instance* VirtualRouter::getOspfv3(uint32_t id)
+{
+    if (auto it = ospfv3List.find(id); it != ospfv3List.end())
+        return &it->second;
+    return nullptr;
+}
+
+bool VirtualRouter::removeOspfv3(uint32_t id)
+{
+    if (auto it = ospfv3List.find(id); it != ospfv3List.end())
+    {
+        auto& ospf = it->second;
+        if (ospf.ipv4)
+        {
+            delete ospf.ipv4;
+            ospf.ipv4 = nullptr;
+        }
+        if (ospf.ipv6)
+        {
+            delete ospf.ipv6;
+            ospf.ipv6 = nullptr;
+        }
+        ospfv3List.erase(id);
+        return true;
+    }
+    return false;
+}
+
+bool VirtualRouter::removeOspfv3(uint32_t id, AddressFamily af)
+{
+    if (auto it = ospfv3List.find(id); it != ospfv3List.end())
+    {
+        auto& ospf = it->second;
+        if (af == AddressFamily::IPv4)
+        {
+            if (ospf.ipv4)
+            {
+                delete ospf.ipv4;
+                ospf.ipv4 = nullptr;
+            }
+        }
+        else
+        {
+            if (ospf.ipv6)
+            {
+                delete ospf.ipv6;
+                ospf.ipv6 = nullptr;
+            }
+        }
+
+        if (!ospf.ipv4 && !ospf.ipv6)
+            ospfv3List.erase(id);
         return true;
     }
     return false;
@@ -236,4 +305,9 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
 Config::Registry& VirtualRouter::getRegistry()
 {
     return global.registry;
+}
+
+ControlScheduler& VirtualRouter::getControlScheduler()
+{
+    return global.scheduler;
 }
