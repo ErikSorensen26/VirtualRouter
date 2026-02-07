@@ -8,8 +8,9 @@
 #include <atomic>
 #include <OspfTypes.hpp>
 #include "SpfTypes.hpp"
+#include "SpfEngine.h"
 
-class TimeManager;
+class ProcessQueue;
 
 namespace OSPF
 {
@@ -19,7 +20,7 @@ class OspfRib;
 class SpfManager
 {
 public:
-    explicit SpfManager(OspfArea& area, TimeManager& tmgr);
+    explicit SpfManager(OspfArea& area, ProcessQueue& scheduler);
 
     template<typename Policy>
     void requestSpf();
@@ -38,8 +39,10 @@ private:
     void runSpf();
 
 private:
+    SpfEngine engine;
+
     OspfArea& area;
-    TimeManager& tmgr;
+    ProcessQueue& scheduler;
     OspfRib& rib;
 
     std::atomic<bool> requested{false};

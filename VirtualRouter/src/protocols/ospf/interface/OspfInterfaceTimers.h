@@ -7,7 +7,7 @@
 #include <atomic>
 #include <chrono>
 
-class TimeManager;
+class ProcessQueue;
 
 namespace OSPF
 {
@@ -16,7 +16,7 @@ class OspfInterface;
 class InterfaceTimers
 {
 public:
-    InterfaceTimers(TimeManager& tm, OspfInterface& iface);
+    InterfaceTimers(ProcessQueue& pq, OspfInterface& iface);
 
     void scheduleHello(); 
     void startHello();
@@ -41,7 +41,7 @@ private:
 
     std::atomic<bool> runTimers = true;
 
-    TimeManager& tmgr;
+    ProcessQueue& scheduler;
     OspfInterface& iface;
 };
 }

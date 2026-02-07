@@ -19,6 +19,9 @@ struct LsaKey;
 class Retransmission
 {
 public:
+    Retransmission(OspfProcess& process, OspfInterface& iface)
+        : outboundLsus(process, iface), outboundLsrs(process, iface) {}
+
     uint32_t dbdTimerId;
 
     // Reliability

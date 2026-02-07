@@ -9,7 +9,7 @@
 #include <RibEntry.hpp>
 #include <OspfTopologyTypes.hpp>
 
-class TimeManager;
+class ProcessQueue;
 
 namespace OSPF
 {
@@ -125,7 +125,7 @@ protected:
 protected:
 
     OspfArea& area;
-    TimeManager& tmgr;
+    ProcessQueue& scheduler;
 };
 
 template <typename RouterLink>

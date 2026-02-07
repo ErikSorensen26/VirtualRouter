@@ -31,6 +31,7 @@ Neighbor::Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, IP
       routerID(rid),
       mtu(getMtu(neighborIp.isV6, iface)),
       currentSeq(generateInitialDDSequence()),
+      rtr(iface.getProcess(), iface),
       iface(iface),
       tmgr(tmgr)
 {}

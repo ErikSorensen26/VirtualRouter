@@ -13,9 +13,9 @@
 #include <OspfTopologyTable.h>
 #include <OspfRoutingTable.h>
 #include <OspfRegistry.h>
+#include <ControlScheduler.h>
 
 class VirtualRouter;
-class TimeManager;
 
 namespace OSPF 
 {
@@ -83,6 +83,7 @@ public:
     __uint128_t getConfigKey() const { return configs.getKey(); }
     const Config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
     OspfRib& getRib() { return rib; }
+    ProcessQueue& getScheduler() { return scheduler; }
     const OspfRib& getRib() const { return rib; }
     uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const
@@ -112,8 +113,6 @@ public:
 
     VirtualRouter* routingInstance = nullptr;
 
-    TimeManager& tmgr;
-
     // External
     std::unordered_map<LsaKey, std::pair<LsaHeader, LsaBody>> externalDb;
     std::atomic<uint32_t> monotonicExternalId{0};
@@ -125,8 +124,7 @@ public:
     TopologyTable table;
 
 private:
-    struct OspfSummaryAddress
-    {
+    struct OspfSummaryAddress {
         // Config
         bool notAdvertise = false;
         bool nssaOnly = false;
@@ -150,6 +148,7 @@ private:
     std::unordered_map<uint32_t, OspfArea> areas;
 
     OspfRib rib;
+    ProcessQueue scheduler;
 
     // Route type
     std::atomic<bool> abr = false;
