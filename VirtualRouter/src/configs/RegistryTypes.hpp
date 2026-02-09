@@ -30,6 +30,7 @@ struct AtomicFieldFlag {};
 struct OptionalAtomicFieldFlag : AtomicFieldFlag {};
 struct RefContainerFieldFlag {};
 struct ValueFieldFlag {};
+struct OptionalValueFieldFlag {};
 struct OwnedListFieldFlag {};
 
 template <typename T>
@@ -428,14 +429,9 @@ public:
         {
             std::lock_guard<std::mutex> lk(mu);
             value = T{};
-            if (apply && !base && provider.hasCtx())
-            {
-                applier(provider.get());
-                return;
-            }
         }
-        if (apply && base && provider.hasCtx())
-            base->runApply(provider.get());
+        if (apply && provider.hasCtx())
+            runApply(provider.get());
     }
 
     inline bool overridden() const noexcept
@@ -452,11 +448,159 @@ private:
     const ValueField* base{nullptr};
 };
 
+template <typename T, auto F, typename Ctx, auto H>
+class OptionalValueField;
+
 template <typename T, auto F>
+class OptionalValueField<T, F, void, nullptr> : public OptionalValueFieldFlag
+{
+public:
+    using type = T;
+    static constexpr auto field = F;
+
+    OptionalValueField(std::mutex& m) noexcept
+        : mu(m)
+    {}
+
+    explicit OptionalValueField(std::mutex& m, const OptionalValueField& parent) noexcept
+        : mu(m),
+          value(),
+          state(MaskState::SET),
+          base(&parent)
+    {}
+
+    inline bool hasValue() const noexcept
+    {
+        if (state.load(std::memory_order_relaxed) == MaskState::SET)
+            return true;
+
+        if (base)
+            return base->hasValue();
+
+        return false;
+    }
+
+    inline T load() const noexcept
+    {
+        if (base && state.load(std::memory_order_relaxed) == MaskState::INHERIT)
+        {
+            assert(base->hasValue());
+            base->load();
+        }
+
+        std::lock_guard<std::mutex> lock(mu);
+        return value;
+    }
+
+    inline T set(T v) noexcept
+    {
+        {
+            std::lock_guard<std::mutex> lk(mu);
+            value = v;
+        }
+        state.store(MaskState::SET, std::memory_order_release);
+    }
+
+    inline void unset() noexcept
+    {
+        state.store(MaskState::INHERIT, std::memory_order_release);
+    }
+
+    inline bool overridden() const noexcept
+    {
+        return state.load(std::memory_order_relaxed) == MaskState::SET;
+    }
+
+    std::mutex& mu;
+
+private:
+    T value{};
+    std::atomic<MaskState> state{MaskState::INHERIT};
+    const OptionalValueField* base{nullptr};
+};
+
+template <typename T, auto F, typename Ctx, ApplyFn<Ctx> H>
+class OptionalValueField<T, F, Ctx, H> : public OptionalValueFieldFlag
+{
+public:
+    using type = T;
+    static constexpr auto field = F;
+    static constexpr ApplyFn<Ctx> applier = H;
+
+    OptionalValueField(ContextProvider<Ctx>& provider, std::mutex& m)
+        : provider(provider),
+          mu(m)
+    {}
+
+    explicit OptionalValueField(ContextProvider<Ctx>& provider, std::mutex& m, const OptionalValueField& parent) noexcept
+        : provider(provider),
+          mu(m),
+          value(),
+          state(MaskState::SET),
+          base(&parent)
+    {}
+
+    inline bool hasValue() const noexcept
+    {
+        if (state.load(std::memory_order_relaxed) == MaskState::SET)
+            return true;
+
+        if (base)
+            return base->hasValue();
+
+        return false;
+    }
+
+    inline T load() const noexcept
+    {
+        if (base && state.load(std::memory_order_relaxed) == MaskState::INHERIT)
+        {
+            assert(base->hasValue());
+            base->load();
+        }
+
+        std::lock_guard<std::mutex> lock(mu);
+        return value;
+    }
+
+    inline T set(T v) noexcept
+    {
+        bool apply = load() != v;
+        {
+            std::lock_guard<std::mutex> lk(mu);
+            value = v;
+        }
+        state.store(MaskState::SET, std::memory_order_release);
+        if (apply && provider.hasCtx()) applier(*provider.get());
+    }
+
+    inline void unset() noexcept
+    {
+        T old = load();
+        state.store(MaskState::INHERIT, std::memory_order_relaxed);
+        if (load() != old && provider.hasCtx()) applier(provider.get());
+    }
+
+    inline bool overridden() const noexcept
+    {
+        return state.load(std::memory_order_relaxed) == MaskState::SET;
+    }
+
+    std::mutex& mu;
+
+private:
+    ContextProvider<Ctx>& provider;
+    T value{};
+    std::atomic<MaskState> state{MaskState::INHERIT};
+    const OptionalValueField* base{nullptr};
+};
+
+template <typename T, typename K, auto F>
 class OwnedListField : public OwnedListFieldFlag
 {
 public:
-    using type = std::vector<std::pair<uint32_t, Reference<T>>>;
+    using type = std::vector<std::pair<K, Reference<T>>>;
+    using key = K;
     static constexpr auto field = F;
 
     OwnedListField() = default;
@@ -473,7 +617,7 @@ public:
         return children;
     }
 
-    const inline type::const_iterator find(uint32_t key) const noexcept
+    const inline type::const_iterator find(K key) const noexcept
     {
         return std::find_if(children.begin(), children.end(), [key](const auto& pair) { return pair.first == key; });
     }
@@ -549,6 +693,11 @@ template <typename T>
 concept IsValueField =
     IsFieldBase<T> &&
     std::derived_from<T, ValueFieldFlag>;
+
+template <typename T>
+concept IsOptionalValueField = 
+    IsFieldBase<T> &&
+    std::derived_from<T, OptionalValueFieldFlag>;
 
 template <typename T>
 concept IsOwnedListField =

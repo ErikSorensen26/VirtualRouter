@@ -8,6 +8,7 @@
 
 #include <OspfInterfaceRegistry.h>
 #include <OspfRegistry.h>
+#include <BgpRegistry.h>
 
 namespace Config
 {
@@ -18,7 +19,10 @@ using Registry = RegistryDatabase<
     OspfInterfaceRegistry,
     OspfInterfaceBaseRegistry,
     OspfInterfaceIPSecRegistry,
-    OspfInterfaceAddressFamilyRegistry
+    OspfInterfaceAddressFamilyRegistry,
+    BgpRegistry,
+    BgpBaseRegistry,
+    BgpNeighborRegistry
 >;
 }
 

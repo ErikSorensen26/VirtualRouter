@@ -76,7 +76,7 @@ private:
     template <typename F>
     F createField()
     {
-        if constexpr (IsValueField<F>)
+        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
         {
             if constexpr (RequiresContext<F>)
                 return F(ctxProvider, mu);
@@ -105,7 +105,7 @@ private:
     template <typename F>
     F createMaskedField(const F& parentField)
     {
-        if constexpr (IsValueField<F>)
+        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
         {
             if constexpr (RequiresContext<F>)
                 return F(ctxProvider, mu, parentField);
@@ -181,7 +181,7 @@ private:
     template <typename F>
     F createField()
     {
-        if constexpr (IsValueField<F>)
+        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
             return F(mu);
         return F{};
     }
@@ -202,7 +202,7 @@ private:
     template <typename F>
     F createMaskedField(const F& parentField)
     {
-        if constexpr (IsValueField<F>)
+        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
             return F(mu, parentField);
         return F(parentField);
     }

@@ -25,7 +25,10 @@ class OptionalAtomicField;
 template <typename T, auto F, typename Ctx = void, auto H = nullptr>
 class ValueField;
 
-template <typename T, auto F>
+template <typename T, auto F, typename Ctx = void, auto H = nullptr>
+class OptionalValueField;
+
+template <typename T, typename K, auto F>
 class OwnedListField;
 }
 

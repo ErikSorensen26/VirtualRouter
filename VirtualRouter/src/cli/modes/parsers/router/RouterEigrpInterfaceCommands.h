@@ -82,7 +82,6 @@ using RouterEigrpInterface_SummaryAddress = commandAdder<EigrpContext,
     "summary-address"_tok, ARG, ARG_REST
 >;
 
-struct buh{};
 using RouterEigrpInterfaceCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpInterface_AuthenticationKeyChain,
     RouterEigrpInterface_AuthenticationMode,

@@ -188,7 +188,7 @@ void OspfInterfaceBasePrefixSuppression(OSPF::OspfInterface& iface);
 
 using OspfInterfaceBaseRegistry = SubRegistry<uint64_t, OspfInterfaceBase, OSPF::OspfInterface,
     ReferenceContainer<OspfInterfaceRegistry, OspfInterfaceBase::BASE>,
-    OwnedListField<OspfInterfaceAddressFamilyRegistry, OspfInterfaceBase::PROCESS_CONFIGS>,
+    OwnedListField<OspfInterfaceAddressFamilyRegistry, uint32_t, OspfInterfaceBase::PROCESS_CONFIGS>,
     AtomicField<uint8_t, 0, OspfInterfaceBase::INSTANCE_ID>,
     OptionalAtomicField<uint16_t, OspfInterfaceBase::PROCESS_ID>,
     OptionalAtomicField<uint32_t, OspfInterfaceBase::AREA_ID>,

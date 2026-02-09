@@ -196,7 +196,7 @@ void OspfSyncNetworks(OSPF::OspfProcess& base);
 void OspfSyncSummaries(OSPF::OspfProcess& base);
 
 using OspfRegistry = SubRegistry<__uint128_t, Ospf, OSPF::OspfProcess,
-    OwnedListField<OspfAreaRegistry, Ospf::AREA_CONFIGS>,
+    OwnedListField<OspfAreaRegistry, uint32_t, Ospf::AREA_CONFIGS>,
     AtomicField<uint32_t, 100, Ospf::REFERENCE_BANDWIDTH>,
     AtomicField<bool, false, Ospf::BFD>, // TODO:
     AtomicField<bool, true, Ospf::LLS>,
