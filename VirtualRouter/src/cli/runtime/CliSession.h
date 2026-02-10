@@ -29,9 +29,9 @@ class Configs;
 struct Com;
 namespace Eigrp
 {
-    class Eigrp;
-    class EigrpNamed;
-    class EigrpInterface;
+class Eigrp;                ///< Forward declaration of Eigrp::Eigrp
+class EigrpNamed;          ///< Forward declaration of Eigrp::EigrpNamed
+class EigrpInterface;       ///< Forward declaration of Eigrp::EigrpInterface
 }
 
 namespace Protocol

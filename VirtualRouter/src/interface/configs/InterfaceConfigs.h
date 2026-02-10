@@ -3,6 +3,8 @@
 #ifndef INTERFACE_CONFIGS_H
 #define INTERFACE_CONFIGS_H
 
+#include <OspfInterfaceRegistry.h>
+
 #include <shared_mutex>
 #include <atomic>
 #include <vector>
