@@ -13,6 +13,7 @@
 
 class Interface; ///< Forward declaration of Interface.
 class Global;    ///< Forward declaration of Global.
+class ControlScheduler;
 namespace Eigrp
 {
     struct EigrpAutonomousSystem; ///< Forward declaration of Eigrp Autonomous System.
@@ -200,8 +201,6 @@ public:
      * - IPv4 EIGRP instance (optional)
      * - IPv6 EIGRP instance (optional)
      * - Metrics, K-values, timers, bandwidth/delay policies
-     *
-     * @thread_safety Shared read lock during insertion.
      */
     Eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
 
@@ -210,8 +209,6 @@ public:
      *
      * @param id AS number.
      * @return Pointer to AS instance or nullptr if not found.
-     *
-     * @thread_safety Shared read lock.
      */
     Eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
 
@@ -223,8 +220,6 @@ public:
      *
      * @param id AS number to remove.
      * @return True if removed, false if missing.
-     *
-     * @thread_safety Shared read lock.
      */
     bool removeEigrpAutonomousSystem(uint32_t id);
 
@@ -238,18 +233,14 @@ public:
      *
      * @param name The EIGRP instance name.
      * @return Pointer to the newly created named instance, or nullptr if name exists.
-     *
-     * @thread_safety Shared read lock during insertion.
      */
-    Eigrp::EigrpNamed* addEigrpNamed(const std::string& name);
+    Eigrp::EigrpNamed& addEigrpNamed(const std::string& name);
 
     /**
      * @brief Retrieve a named EIGRP instance.
      *
      * @param name The named EIGRP configuration identifier.
      * @return Pointer to instance or nullptr if missing.
-     *
-     * @thread_safety Shared read lock.
      */
     Eigrp::EigrpNamed* getEigrpNamed(const std::string& name);
 
@@ -266,32 +257,110 @@ public:
      *
      * @param name EIGRP name to delete.
      * @return True if removed, false otherwise.
-     *
-     * @thread_safety Shared read lock.
      */
     bool removeEigrpNamed(const std::string& name);
 
     // OSPF PROCESS
-    //...
 
-    // GLOBAL HELPERS
-    
-    Config::Registry& getRegistry();
+    /**
+     * @brief Creates a OSPFv2 instance.
+     *
+     * OSPFv2 allows a IPv4 process under a single process ID.
+     *
+     * @param id Process ID.
+     * @return Reference to the newly created OSPFv2 instance.
+     */
+    OSPF::OspfProcess& addOspf(uint32_t id);
+
+    /**
+     * @brief Retreives an OSPFv2 instance.
+     *
+     * @param id Process ID.
+     * @return Pointer to instance or nullptr if missing.
+     */
+    OSPF::OspfProcess* getOspf(uint32_t id);
+
+    /**
+     * @brief Remove and delete an OSPFv2 process.
+     *
+     * @param id Process ID to remove.
+     * @return True if removed, false if missing.
+     */
+    bool removeOspf(uint32_t id);
+
+    // OSPFv3 PROCESS
+
+    /**
+     * @brief Creates a OSPFv3 instance.
+     *
+     * OSPFv3 allows IPv4 and IPv6 processes under a single process ID.
+     *
+     * @param id Process ID.
+     * @return Reference to the newly created OSPFv2 instance.
+     */
+    OSPF::OspfV3Instance& addOspfv3(uint32_t id);
+
+    /**
+     * @brief Creates a OSPFv3 address family instance.
+     *
+     * Creates 1 address family running either ipv4 or ipv6.
+     *
+     * @param id Process ID.
+     * @param af Address Family.
+     * @return Reference to the newly created OSPFv2 instance.
+     */
+    OSPF::OspfProcess& addOspfv3(uint32_t id, AddressFamily af);
+
+    /**
+     * @brief Retreives an OSPFv3 instance.
+     *
+     * @param id Process ID.
+     * @return Pointer to instance or nullptr if missing.
+     */
+    OSPF::OspfV3Instance* getOspfv3(uint32_t id);
+
+    /**
+     * @brief Remove and delete an OSPFv3 process.
+     *
+     * @param id Process ID to remove.
+     * @return True if removed, false if missing.
+     */
+    bool removeOspfv3(uint32_t id);
+
+    /**
+     * @brief Remove and delete a OSPFv3 address family.
+     *
+     * @param id Process ID to remove.
+     * @param af Address Family.
+     * @return True if removed, false if missing.
+     */
+    bool removeOspfv3(uint32_t id, AddressFamily af);
 
     std::shared_mutex interfaceMutex; ///< Protects interfaceList.
     std::unordered_map<uint32_t, Interface*> interfaceList; ///< Interfaces belonging to this VRF.
 
-    std::shared_mutex eigrpAutonomousSystemMutex; ///< Protects eigrpList
-    std::map<uint32_t, Eigrp::EigrpAutonomousSystem*> eigrpList; ///< Classic-mode EIGRP AS containers.
-    std::shared_mutex eigrpNamedMutex; ///< Protects namedEigrpList.
-    std::map<std::string, Eigrp::EigrpNamed*> namedEigrpList; ///< Named-mode EIGRP groups.
+    // GLOBAL HELPERS
+    Config::Registry& getRegistry();
+    std::string getName() { return instanceName; }
+    uint32_t getInstanceId() { return instanceId; }
+    bool isDefault() { return defaulted; }
+    Global& getGlobal() { return global; }
+    RoutingTable& getRib() { return routingTable; }
+    ControlScheduler& getControlScheduler();
+    
+private:
+    uint32_t instanceId{0};
+    const bool defaulted{false};
+
+    std::unordered_map<uint32_t, Eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
+    std::unordered_map<std::string, Eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups.
+
+    std::unordered_map<uint32_t, OSPF::OspfProcess> ospfList;
+    std::unordered_map<uint32_t, OSPF::OspfV3Instance> ospfv3List;
 
     std::string instanceName; ///< Human-readable VRF identifier.
-    uint32_t instanceId{0};
-    bool isDefault{false};
 
     RoutingTable routingTable; ///< Per-VRF Routing Table (RIB + FIB generation logic).
-
     Global& global; ///< Reference to global system controller.
 };
 

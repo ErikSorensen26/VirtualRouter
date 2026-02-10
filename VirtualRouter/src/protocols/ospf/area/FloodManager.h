@@ -7,7 +7,7 @@
 #include <atomic>
 #include "FloodQueue.hpp"
 
-class TimeManager;
+class ProcessQueue;
 
 namespace OSPF
 {
@@ -17,7 +17,7 @@ class OspfRib;
 class FloodManager
 {
 public:
-    explicit FloodManager(OspfArea& area, TimeManager& tmgr);
+    explicit FloodManager(OspfArea& area, ProcessQueue& sch);
 
     void enqueueFlood(LsaRecordRef& record, const FloodInfo& info);
     void enqueueFlood(LsaRecordRef&& record, const FloodInfo& info);
@@ -31,7 +31,7 @@ private:
 
 private:
     OspfArea& area;
-    TimeManager& tmgr;
+    ProcessQueue& scheduler;
     FloodQueue fq;
 
     std::atomic<bool> timerActive{0};

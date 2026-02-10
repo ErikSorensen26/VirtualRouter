@@ -29,13 +29,13 @@ namespace OSPF
 OspfArea::OspfArea(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
     : mr(mr ? mr : std::pmr::get_default_resource()),
       configs(base.getConfigs().get<Config::Ospf::AREA_CONFIGS>().getMutable().emplace_back(
-          areaId, base.routingInstance->global.registry.create<Config::OspfAreaRegistry>(
+          areaId, base.routingInstance->getGlobal().registry.create<Config::OspfAreaRegistry>(
               Config::generateOspfAreaKey(base.getConfigKey(), id))).second),
       db(mr),
       base(base),
-      spfMgr(*this, base.tmgr),
+      spfMgr(*this, base.getScheduler()),
       flags(base.isV3),
-      floodMgr(*this, base.tmgr),
+      floodMgr(*this, base.getScheduler()),
       originator(base.isV3
           ? *static_cast<OspfOriginator*>(new OspfOriginatorV3(*this))
           : *static_cast<OspfOriginator*>(new OspfOriginatorV2(*this))
@@ -47,14 +47,16 @@ OspfArea::OspfArea(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr
 OspfArea::~OspfArea()
 {
     if (ignoreTid != 0)
-        base.tmgr.cancelTimer(ignoreTid);
+        base.getScheduler().cancel(ignoreTid);
     if (resetTid != 0)
-        base.tmgr.cancelTimer(resetTid);
+        base.getScheduler().cancel(resetTid);
 }
 
 void OspfArea::initializeReset()
 {
-    // TODO
+    base.getScheduler().post([this] {
+        reset();
+    });
 }
 
 void OspfArea::reset()
@@ -119,8 +121,8 @@ bool OspfArea::isValidForwardAddress(const IPAddress& addr) const
     if (base.getConfigs().get<Config::Ospf::LRC_FORWARDING_ADDRESS>().load())
     {
         return addr.isV6
-            ? base.routingInstance->routingTable.lookup(readU128(addr.raw)) != nullptr
-            : base.routingInstance->routingTable.lookup(readU32(addr.raw)) != nullptr;
+            ? base.routingInstance->getRib().lookup(readU128(addr.raw)) != nullptr
+            : base.routingInstance->getRib().lookup(readU32(addr.raw)) != nullptr;
     }
     else
     {
@@ -549,7 +551,7 @@ void OspfArea::startIgnoreTimer()
     if (ignoreTid != 0) return;
     uint16_t timeout = base.getConfigs().get<Config::Ospf::MAX_LSA_IGNORE_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
-    ignoreTid = base.tmgr.addTimer(expirationTime, [this](uint32_t)
+    ignoreTid = base.getScheduler().schedule(expirationTime, [this](uint32_t)
     {
         startResetTimer();
     });
@@ -560,7 +562,7 @@ void OspfArea::startResetTimer()
     if (resetTid != 0) return;
     uint16_t timeout = base.getConfigs().get<Config::Ospf::MAX_LSA_RESET_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
-    resetTid = base.tmgr.addTimer(expirationTime, [this](uint32_t)
+    resetTid = base.getScheduler().schedule(expirationTime, [this](uint32_t)
     {
         base.initiateReset();
     });

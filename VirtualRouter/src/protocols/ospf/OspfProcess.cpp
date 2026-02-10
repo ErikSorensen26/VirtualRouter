@@ -10,7 +10,7 @@
 namespace OSPF
 {
 OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRouter* vrf)
-    : isV3(isV3), routingInstance(vrf), tmgr(vrf->getGlobal().timeManager), rib(*this), procId(procId), af(af), ifaceMgr(*this),
+    : isV3(isV3), routingInstance(vrf), rib(*this), exec(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
     configs([this, isV3]() {
         auto& registry = routingInstance->getGlobal().registry;
         auto key = Config::generateOspfKey(routingInstance->getInstanceId(), getProcId(), getAF(), isV3);

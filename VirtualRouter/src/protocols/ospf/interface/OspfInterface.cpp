@@ -32,7 +32,7 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Refere
       flags(*this),
       lsaFlags(*this),
       ntable(*this),
-      tmgr(proc.tmgr, *this),
+      tmgr(proc.getScheduler(), *this),
       iface(iface),
     configs([]() -> Config::Reference<Config::OspfInterfaceRegistry> {
         // TODO: implement once interface configs are done
@@ -98,6 +98,7 @@ bool OspfInterface::setDr(uint32_t candDr)
 
     dr.rid.store(candDr, std::memory_order_release);
     dr.ip.store(readU128(nbr->ipAddress.raw), std::memory_order_release);
+    return true;
 }
 
 bool OspfInterface::setBdr(uint32_t candBdr)
@@ -107,6 +108,7 @@ bool OspfInterface::setBdr(uint32_t candBdr)
 
     bdr.rid.store(candBdr, std::memory_order_release);
     bdr.ip.store(readU128(nbr->ipAddress.raw), std::memory_order_release);
+    return true;
 }
 
 void OspfInterface::election()

@@ -14,8 +14,8 @@
 
 namespace OSPF
 {
-SpfManager::SpfManager(OspfArea& area, TimeManager& tmgr)
-    : area(area), tmgr(tmgr), rib(area.process().getRib())
+SpfManager::SpfManager(OspfArea& area, ProcessQueue& scheduler)
+    : area(area), scheduler(scheduler), rib(area.process().getRib())
 {}
 
 template<typename Policy>
@@ -71,7 +71,7 @@ void SpfManager::scheduleSpf(uint32_t delayMs)
         return;
 
     auto delay = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
-    timerId = tmgr.addTimer(delay, [this](uint32_t) {
+    timerId = scheduler.schedule(delay, [this](uint32_t) {
         this->onSpfTimer<Policy>();
     });
 }
@@ -82,7 +82,7 @@ void SpfManager::runSpf()
     // Create graph
     SpfTopology<Policy> topo(area);
     // Run Dijkstra on graph
-    SpfResult spfRes = SpfEngine::run<Policy>(topo);
+    SpfResult spfRes = engine.run<Policy>(topo);
 
     std::vector<std::pair<IPPrefix, OspfPath>> pathList;
 

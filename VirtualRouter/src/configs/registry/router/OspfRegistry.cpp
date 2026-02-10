@@ -8,26 +8,36 @@ namespace Config
 {
 void OspfAreaTypeChange(OSPF::OspfArea& area)
 {
-    area.initializeReset();
+    area.process().getScheduler().post([&area]{
+        area.reset();
+    });
 }
 
 void OspfAreaSycnRanges(OSPF::OspfArea& area)
 {
-    area.syncRangeConfig();
+    area.process().getScheduler().post([&area] {
+        area.syncRangeConfig();
+    });
 }
 
 void OspfSyncNeighbors(OSPF::OspfProcess& base)
 {
-    base.getIfaceMgr().syncNeighbors();
+    base.getScheduler().post([&base] {
+        base.getIfaceMgr().syncNeighbors();
+    });
 }
 
 void OspfSyncNetworks(OSPF::OspfProcess& base)
 {
-    base.getIfaceMgr().refreshInterfaceList();
+    base.getScheduler().post([&base] {
+        base.getIfaceMgr().refreshInterfaceList();
+    });
 }
 
 void OspfSyncSummaries(OSPF::OspfProcess& base)
 {
-    base.syncSummaryConfig();
+    base.getScheduler().post([&base] {
+        base.syncSummaryConfig();
+    });
 }
 }
