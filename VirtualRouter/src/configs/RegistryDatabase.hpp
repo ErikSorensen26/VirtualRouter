@@ -52,8 +52,8 @@ public:
         return Reference<T>(b, key, h);
     }
 
-    template <typename T, auto F>
-    Reference<T> emplace(ReferenceContainer<T, F>& container, typename T::keyType key)
+    template <typename T CONFIG_INDEX_PARAM>
+    Reference<T> emplace(ReferenceContainer<T CONFIG_INDEX_ARG(F)>& container, typename T::keyType key)
     {
         if (container.bound())
         {
@@ -68,8 +68,8 @@ public:
         return ref;
     }
 
-    template <typename T, auto F>
-    Reference<T> emplace(ReferenceContainer<T, F>& container, Reference<T>& parent, typename T::keyType key)
+    template <typename T CONFIG_INDEX_PARAM>
+    Reference<T> emplace(ReferenceContainer<T CONFIG_INDEX_ARG(F)>& container, Reference<T>& parent, typename T::keyType key)
     {
         if (container.ref.has_value())
         {
@@ -85,8 +85,8 @@ public:
         return ref;
     }
 
-    template <typename T, auto F>
-    Reference<T> ensure(ReferenceContainer<T, F>& container, typename T::keyType key)
+    template <typename T CONFIG_INDEX_PARAM>
+    Reference<T> ensure(ReferenceContainer<T CONFIG_INDEX_ARG(F)>& container, typename T::keyType key)
     {
         Reference<T> ref = container.base
             ? create<T>(key, *container.base)
@@ -96,8 +96,8 @@ public:
         return ref;
     }
 
-    template <typename T, auto F>
-    Reference<T> ensure(ReferenceContainer<T, F>& container, Reference<T>& parent, typename T::keyType key)
+    template <typename T CONFIG_INDEX_PARAM>
+    Reference<T> ensure(ReferenceContainer<T CONFIG_INDEX_ARG(F)>& container, Reference<T>& parent, typename T::keyType key)
     {
         container.base = parent;
         Reference<T> ref = create<T>(key, *container.base); // Masked Version
@@ -107,16 +107,16 @@ public:
     }
 
 
-    template <typename T, typename K, auto F>
-    Reference<T> emplaceBack(OwnedListField<T, K, F>& list, uint32_t id, typename T::keyType key)
+    template <typename T, typename K CONFIG_INDEX_PARAM>
+    Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, uint32_t id, typename T::keyType key)
     {
         if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
             return it->second;
         return list.getMutable().emplace_back(id, create<T>(key)).second;
     }
 
-    template <typename T, typename K, auto F>
-    Reference<T> emplaceBack(OwnedListField<T, K, F>& list, uint32_t id, const Reference<T>& parent, typename T::keyType key)
+    template <typename T, typename K CONFIG_INDEX_PARAM>
+    Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, uint32_t id, const Reference<T>& parent, typename T::keyType key)
     {
         if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
             return it.second;

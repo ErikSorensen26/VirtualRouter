@@ -12,20 +12,24 @@
 
 #define ENABLE_CONFIG_INDEX 1
 
-#ifndef NDEBUG
-    #define USE_CONFIG_INDEX 1
+#if defined(NDEBUG)
+    #define USE_CONFIG_INDEX 0
 #else
     #if ENABLE_CONFIG_INDEX
         #define USE_CONFIG_INDEX 1
     #else
-        #define USE_CONFIG_INDEX 1
+        #define USE_CONFIG_INDEX 0
     #endif
 #endif
 
-#ifdef USE_CONFIG_INDEX
-    #define CONFIG_INDEX(...) , __VA_ARGS__
+#if USE_CONFIG_INDEX
+    #define CONFIG_INDEX_PARAM , auto F
+    #define CONFIG_INDEX_ARG(x) , x
+    #define CONFIG_INDEX_MEMBER static constexpr auto field = F;
 #else
-    #define CONFIG_INDEX(...)
+    #define CONFIG_INDEX_PARAM
+    #define CONFIG_INDEX_ARG(x)
+    #define CONFIG_INDEX_MEMBER
 #endif
 
 namespace Config
@@ -92,18 +96,16 @@ private:
     Ctx* ctx{nullptr};
 };
 
-template <typename T, T D CONFIG_INDEX(auto F), typename Ctx = void, auto H = nullptr>
+template <typename T, T D CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
 class AtomicField;
 
-template <typename T, T D CONFIG_INDEX(auto F)>
-class AtomicField<T, D CONFIG_INDEX(F), void, nullptr> : public AtomicFieldFlag
+template <typename T, T D CONFIG_INDEX_PARAM>
+class AtomicField<T, D CONFIG_INDEX_ARG(F), void, nullptr> : public AtomicFieldFlag
 {
 public:
     using type = T;
     static constexpr auto dValue = D;
-#if USE_CONFIG_INDEX
-    static constexpr auto field = F;
-#endif
+    CONFIG_INDEX_MEMBER
 
     AtomicField() = default;
 
@@ -144,16 +146,14 @@ private:
     const AtomicField* base{nullptr};
 };
 
-template <typename T, T D CONFIG_INDEX(auto F), typename Ctx, ApplyFn<Ctx> H>
-class AtomicField<T, D CONFIG_INDEX(F), Ctx, H> : public AtomicFieldFlag
+template <typename T, T D CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
+class AtomicField<T, D CONFIG_INDEX_ARG(F), Ctx, H> : public AtomicFieldFlag
 {
 public:
     using type = T;
     static constexpr auto dValue = D;
     static constexpr ApplyFn<Ctx> applier = H;
-#if USE_CONFIG_INDEX
-    static constexpr auto field = F;
-#endif
+    CONFIG_INDEX_MEMBER
 
     AtomicField(ContextProvider<Ctx>& provider) noexcept
         : provider(provider)
@@ -201,11 +201,11 @@ private:
     const AtomicField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX(auto F), typename Ctx = void, auto H = nullptr>
+template <typename T CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
 class OptionalAtomicField;
 
-template <typename T, auto F>
-class OptionalAtomicField<T, F, void, nullptr> : public OptionalAtomicFieldFlag
+template <typename T CONFIG_INDEX_PARAM>
+class OptionalAtomicField<T CONFIG_INDEX_ARG(F), void, nullptr> : public OptionalAtomicFieldFlag
 {
 public:
     using type = T;
@@ -264,15 +264,13 @@ private:
     const OptionalAtomicField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX(auto F), typename Ctx, ApplyFn<Ctx> H>
-class OptionalAtomicField<T CONFIG_INDEX(F), Ctx, H> : public OptionalAtomicFieldFlag
+template <typename T CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
+class OptionalAtomicField<T CONFIG_INDEX_ARG(F), Ctx, H> : public OptionalAtomicFieldFlag
 {
 public:
     using type = T;
     static constexpr ApplyFn<Ctx> applier = H;
-#if USE_CONFIG_INDEX
-    static constexpr auto field = F;
-#endif
+    CONFIG_INDEX_MEMBER
 
     OptionalAtomicField(ContextProvider<Ctx>& provider)
         : provider(provider)
@@ -333,17 +331,15 @@ private:
     const OptionalAtomicField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX(auto F), typename Ctx = void, auto H = nullptr>
+template <typename T CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
 class ValueField;
 
-template <typename T, auto F>
-class ValueField<T, F, void, nullptr> : public ValueFieldFlag
+template <typename T CONFIG_INDEX_PARAM>
+class ValueField<T CONFIG_INDEX_ARG(F), void, nullptr> : public ValueFieldFlag
 {
 public:
     using type = T;
-#if USE_CONFIG_INDEX
-    static constexpr auto field = F;
-#endif
+    CONFIG_INDEX_MEMBER
 
     ValueField(std::mutex& m) noexcept
         : mu(m)
@@ -394,15 +390,13 @@ private:
     const ValueField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX(auto F), typename Ctx, ApplyFn<Ctx> H>
-class ValueField<T CONFIG_INDEX(F), Ctx, H> : public ValueFieldFlag
+template <typename T CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
+class ValueField<T CONFIG_INDEX_ARG(F), Ctx, H> : public ValueFieldFlag
 {
 public:
     using type = T;
     static constexpr ApplyFn<Ctx> applier = H;
-#if USE_CONFIG_INDEX
-    static constexpr auto field = F;
-#endif
+    CONFIG_INDEX_MEMBER
 
     ValueField(ContextProvider<Ctx>& provider, std::mutex& m)
         : provider(provider),
@@ -478,15 +472,15 @@ private:
     const ValueField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX(auto F), typename Ctx = void, auto H = nullptr>
+template <typename T CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
 class OptionalValueField;
 
-template <typename T CONFIG_INDEX(auto F)>
-class OptionalValueField<T CONFIG_INDEX(F), void, nullptr> : public OptionalValueFieldFlag
+template <typename T CONFIG_INDEX_PARAM>
+class OptionalValueField<T CONFIG_INDEX_ARG(F), void, nullptr> : public OptionalValueFieldFlag
 {
 public:
     using type = T;
-    static constexpr auto field = F;
+    CONFIG_INDEX_MEMBER
 
     OptionalValueField(std::mutex& m) noexcept
         : mu(m)
@@ -549,15 +543,13 @@ private:
     const OptionalValueField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX(auto F), typename Ctx, ApplyFn<Ctx> H>
-class OptionalValueField<T CONFIG_INDEX(F), Ctx, H> : public OptionalValueFieldFlag
+template <typename T CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
+class OptionalValueField<T CONFIG_INDEX_ARG(F), Ctx, H> : public OptionalValueFieldFlag
 {
 public:
     using type = T;
     static constexpr ApplyFn<Ctx> applier = H;
-#if USE_CONFIG_INDEX
-    static constexpr auto field = F;
-#endif
+    CONFIG_INDEX_MEMBER
 
     OptionalValueField(ContextProvider<Ctx>& provider, std::mutex& m)
         : provider(provider),
@@ -627,15 +619,13 @@ private:
     const OptionalValueField* base{nullptr};
 };
 
-template <typename T, typename K CONFIG_INDEX(auto F)>
+template <typename T, typename K CONFIG_INDEX_PARAM>
 class OwnedListField : public OwnedListFieldFlag
 {
 public:
     using type = std::vector<std::pair<K, Reference<T>>>;
     using key = K;
-#if USE_CONFIG_INDEX
-    static constexpr auto field = F;
-#endif
+    CONFIG_INDEX_MEMBER
 
     OwnedListField() = default;
 
@@ -740,3 +730,4 @@ concept IsOwnedListField =
 }
 
 #endif // REGISTRY_TYPES_HPP
+
