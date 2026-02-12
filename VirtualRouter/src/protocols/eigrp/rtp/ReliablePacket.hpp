@@ -6,9 +6,9 @@
 #include <cstring>
 #include <chrono>
 #include <IPAddress.hpp>
-#include <EigrpHeader.hpp>
-#include <StaticHeader.hpp>
-#include <unordered_map>
+
+#include "packet/headers/EigrpHeader.hpp"
+#include "packet/StaticHeader.hpp"
 
 namespace Eigrp
 {

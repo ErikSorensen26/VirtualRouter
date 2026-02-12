@@ -1,11 +1,11 @@
 // InterfaceIpv6NDCommands.cpp
 
-#include "InterfaceIPv6NDCommands.h"
-
-#include <Interface.h>
-#include <Ndp.h>
 #include <VirtualRouter.h>
 #include <Global.h>
+
+#include "InterfaceIPv6NDCommands.h"
+#include "interface/Interface.h"
+#include "infrastructure/Ndp.h"
 
 namespace Cli
 {

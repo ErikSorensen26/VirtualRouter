@@ -1,7 +1,11 @@
-#include "InterfaceConfigs.h"
+// InterfaceConfigs.cpp
+
 #include <IPAddress.hpp>
-#include <HardwareManager.h>
-#include <Eigrp.h>
+#include <TimeManager.h>
+
+#include "InterfaceConfigs.h"
+#include "hardware/HardwareManager.h"
+#include "eigrp/core/Eigrp.h"
 
 //ADD LOCK FREE VECTOR
 
@@ -17,8 +21,6 @@ InterfaceConfigs::InterfaceConfigs(TimeManager& timeManager, InterfaceType type,
 
 InterfaceConfigs::~InterfaceConfigs()
 {
-    for (auto& [_, cfg] : eigrp.eigrpInterfaceConfigList)
-        delete cfg;
     eigrp.eigrpInterfaceConfigList.clear();
 }
 
@@ -445,7 +447,7 @@ __uint128_t InterfaceConfigs::IPv6State::getLocalUnicast() const
     return uniqueLocalAddresses.empty() ? 0 : readU128(uniqueLocalAddresses.front()->ip);
 }
 
-bool InterfaceConfigs::IPv6State::hasAddress(const auto* addr)
+bool InterfaceConfigs::IPv6State::hasAddress(const uint8_t* addr)
 {
     return hasAddress(readU128(addr));
 }

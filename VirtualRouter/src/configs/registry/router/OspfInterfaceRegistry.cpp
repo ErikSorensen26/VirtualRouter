@@ -1,9 +1,9 @@
 // OspfInterfaceRegistry.cpp
 
 #include "OspfInterfaceRegistry.h"
-#include <OspfInterface.h>
-#include <OspfArea.h>
-#include <OspfProcess.h>
+#include "ospf/interface/OspfInterface.h"
+#include "ospf/area/Area.h"
+#include "ospf/OspfProcess.h"
 
 namespace Config
 {

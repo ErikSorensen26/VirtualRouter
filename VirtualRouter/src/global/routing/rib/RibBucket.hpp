@@ -29,7 +29,7 @@ public:
 
         for (RibEntry<AddrType>& r : routes)
         {
-            if (r.source == e.source && r.processId == e.processId && r.topoId == e.topoId)
+            if (r.source == e.source && r.processId == e.processId)
             {
                 if (r.metric == e.metric && r.nextHopCount == e.nextHopCount && r.adminDistance == e.adminDistance)
                     return false;
@@ -77,7 +77,7 @@ public:
     {
         RibEntry<AddrType>* best = nullptr;
 
-        for (const RibEntry<AddrType>& r : routes)
+        for (RibEntry<AddrType>& r : routes)
         {
             if (r.source == src && r.processId == pid)
             {

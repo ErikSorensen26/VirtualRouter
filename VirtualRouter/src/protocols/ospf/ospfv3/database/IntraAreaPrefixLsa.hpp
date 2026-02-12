@@ -3,12 +3,11 @@
 #ifndef INTRA_AREA_PREFIX_HPP
 #define INTRA_AREA_PREFIX_HPP
 
-#include <Ospfv2LSAHeader.hpp>
-
 #include <IPAddress.hpp>
 #include <optional>
-#include <HeaderHelpers.hpp>
-#include <OspfFletcher.hpp>
+
+#include "ospf/transmission/OspfFletcher.hpp"
+#include "packet/HeaderHelpers.hpp"
 
 namespace OSPF
 {

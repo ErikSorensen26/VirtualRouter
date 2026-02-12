@@ -1,13 +1,17 @@
-#include <Process.h>
-#include <EigrpInterface.h>
-#include <Interface.h>
+// Process.cpp
+
 #include <VirtualRouter.h>
 #include <Global.h>
-#include <DhcpServer.h>
-#include <DhcpClient.h>
-#include <Arp.h>
-#include <Ndp.h>
-#include <PacketStructure.h>
+
+#include "Process.h"
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "interface/Interface.h"
+#include "dhcp/dhcpv4/DhcpServer.h"
+#include "dhcp/dhcpv4/DhcpClient.h"
+#include "infrastructure/Arp.h"
+#include "infrastructure/Ndp.h"
+#include "packet/PacketStructure.h"
 
 #define GET_HEADER(HdrVar, HeaderType)                              \
     uint8_t* base = const_cast<uint8_t*>(data) + entry.offset;      \
@@ -167,7 +171,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 }
                 else if (sourcePort == UDP_DHCP_CLIENT && destinationPort == UDP_DHCP_SERVER)
                 {
-                    interface->getVRF()->global.dhcpServer->handlePacket(dhcp, mac, *interface);
+                    interface->getVRF()->getGlobal().dhcpServer->handlePacket(dhcp, mac, *interface);
                 }
                 break;
             }

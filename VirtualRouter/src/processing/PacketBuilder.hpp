@@ -6,11 +6,13 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
-#include <PacketStructure.h>
-#include <PacketSlot.hpp>
-#include <Interface.h>
-#include <TxDistributor.h>
-#include <StaticHeader.hpp>
+#include <stdexcept>
+
+#include "hardware/PacketSlot.hpp"
+#include "interface/Interface.h"
+#include "qos/egress/TxDistributor.h"
+#include "packet/StaticHeader.hpp"
+#include "packet/PacketStructure.h"
 
 constexpr size_t MaxPacketSize = 2048;
 

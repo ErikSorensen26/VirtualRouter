@@ -1,12 +1,14 @@
 // InterfaceIPOspfCommands.cpp
 
-#include "InterfaceIPOspfCommands.h"
-#include <Interface.h>
 #include <VirtualRouter.h>
-#include <OspfInterfaceRegistry.h>
 
-#include <CliSession.h>
-#include <Mode.hpp>
+#include "InterfaceIPOspfCommands.h"
+#include "interface/Interface.h"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "cli/runtime/CliSession.h"
+#include "ospf/OspfProcess.h"
+#include "ospf/interface/OspfInterface.h"
+#include "ospf/interface/InterfaceManager.h"
 
 namespace Cli
 {
@@ -95,7 +97,7 @@ bool InterfaceIPOspf_LLS_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPOspf_MessageDigestKey_Handler(INTERFACE_PARAMS)
 {
-    ctx.currentInterface.getOspfConfig().get<Config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead(
+    ctx.currentInterface.getOspfConfig().get<Config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite(
     [&](std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>& keys) {
 	    if (ctx.negate)
 	    {

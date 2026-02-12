@@ -5,7 +5,8 @@
 
 #include <cstdint>
 #include <vector>
-#include <HeaderHelpers.hpp>
+
+#include "packet/HeaderHelpers.hpp"
 
 namespace OSPF
 {

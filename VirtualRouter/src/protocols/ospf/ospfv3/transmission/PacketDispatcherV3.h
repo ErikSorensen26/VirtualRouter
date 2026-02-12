@@ -3,16 +3,10 @@
 #ifndef V3_PACKET_DISPATCHER_H
 #define V3_PACKET_DISPATCHER_H
 
-#include <Ospfv3Header.hpp>
-#include <OspfInterface.h>
-#include <LSDB.hpp>
-#include <PacketDispatcher.h>
-
-#include <RouterLsaV3.hpp>
-#include <NetworkLsaV3.hpp>
-#include <SummaryNetworkLsa.hpp>
-#include <SummaryRouterLsa.hpp>
-#include <ExternalLsaV3.hpp>
+#include "packet/headers/Ospfv3Header.hpp"
+#include "ospf/interface/OspfInterface.h"
+#include "ospf/database/LSDB.hpp"
+#include "ospf/transmission/PacketDispatcher.h"
 
 struct IPAddress;
 class PacketBuilder;

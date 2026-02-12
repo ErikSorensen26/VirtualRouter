@@ -1,8 +1,9 @@
 // TimerManager.cpp
 
-#include "TimerManager.h"
-#include <Eigrp.h>
 #include <TimeManager.h>
+
+#include "TimerManager.h"
+#include "eigrp/core/Eigrp.h"
 #include "DuelEngine.h"
 
 namespace Eigrp

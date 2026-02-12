@@ -1,12 +1,9 @@
-#include <Configs.h>
-#include <iostream>
-#include <Logger.h>
-#include <Mode.hpp>
-#include <HardwareManager.h>
+// Configs.cpp
 
-#include <unistd.h>
-#include <net/if.h>
-#include <linux/if_tun.h>
+#include <iostream>
+
+#include "Configs.h"
+#include "hardware/HardwareManager.h"
 
 void Configs::printConfig() 
 {
@@ -18,7 +15,7 @@ Configs::Configs(IFileSystem* fs) : fileSystem(fs) {}
 void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
 {
     // Reset all variables before
-    tree.root.clear();
+    root.clear();
 
     hwManager = new HardwareManager(stfs.hwConfigFile, *fileSystem, enableDummies);
 
@@ -37,17 +34,17 @@ void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
         {
             try
             {
-                tree.root = nlohmann::ordered_json::parse(content);
+                root = nlohmann::ordered_json::parse(content);
             }
             catch (json::parse_error& e)
             {
-                tree.root = nlohmann::ordered_json::object();
+                root = nlohmann::ordered_json::object();
             }
         }
     }
     else 
     {
-        tree.root = nlohmann::ordered_json::object();
+        root = nlohmann::ordered_json::object();
     }
 }
 
@@ -146,7 +143,7 @@ std::vector<std::string> Configs::recoverConfigs(nlohmann::ordered_json* json)
     }
     else
     {
-        processConfigs(&tree.root, {}, recover);
+        processConfigs(&root, {}, recover);
     }
 
     // Process each child node of the root node
@@ -155,7 +152,7 @@ std::vector<std::string> Configs::recoverConfigs(nlohmann::ordered_json* json)
 
 bool Configs::saveConfig()
 {
-    std::string serialized = tree.root.dump(4);
+    std::string serialized = root.dump(4);
     if (fileSystem->writeFile(routerConfigFilename, serialized))
     {
         return true;
@@ -165,7 +162,8 @@ bool Configs::saveConfig()
 
 bool Configs::saveCommand(
     std::vector<std::string>& oldCommand,
-    const std::vector<std::string>& command,
+    std::vector<std::string>& command,
+    ModeConfig& modeConfig,
     bool changeMode,
     bool exitMode,
     bool isListed
@@ -476,7 +474,7 @@ void Configs::insertOrdered(nlohmann::ordered_json* parentNode, ModeConfig& mode
     */
 }
 
-bool Configs::deleteConfig(std::vector<std::string>& oldCommand, const std::vector<std::string>& command, bool isListed)
+bool Configs::deleteConfig(ModeConfig& modeConfig, std::vector<std::string>& oldCommand, std::vector<std::string>& command, bool isListed)
 {
     return true;
 }

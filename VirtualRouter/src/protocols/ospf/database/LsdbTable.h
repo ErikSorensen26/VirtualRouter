@@ -7,7 +7,6 @@
 #include <type_traits>
 
 #include "LSDB.hpp"
-#include <Registry.hpp>
 
 namespace OSPF
 {
@@ -140,7 +139,8 @@ template <typename Fn>
 inline void LsdbTable::forEach(Fn&& fn) const
 {
     for (auto& kv : db)
-        fn(kv.first, kv.second);
+        if (kv.second)
+            fn(kv.first, *kv.second);
 }
 
 template <typename Fn>
@@ -149,15 +149,17 @@ inline void LsdbTable::forEachInAdv(const LsaAdvKey& advRtr, Fn&& fn) const
     auto it = advDb.find(advRtr);
     if (it == advDb.end()) return;
     for (auto& kv : it->second)
-        fn(kv.first, kv.second);
+        if (kv.second)
+            fn(kv.first, *kv.second);
 }
 
 template <typename Fn>
 inline void LsdbTable::forEachInType(uint32_t type, Fn&& fn) const
 {
     auto it = typeDb.find(type);
-    for (auto& kv : it->second)
-        fn(kv.first, kv.second);
+    for (const auto& kv : it->second)
+        if (kv.second)
+            fn(kv.first, *kv.second);
 }
 
 template <typename Pred>
@@ -166,7 +168,7 @@ inline size_t LsdbTable::purgeIf(Pred&& pred)
     size_t removed = 0;
     for (auto it = db.begin(); it != db.end();)
     {
-        if (pred(it->first, it->second))
+        if (pred(it->first, *it->second))
         {
             it = db.erase(it);
             ++removed;

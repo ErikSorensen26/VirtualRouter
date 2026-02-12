@@ -3,16 +3,14 @@
 #ifndef DHCPV6_SERVER_H
 #define DHCPV6_SERVER_H
 
-#include <DhcpInfo.hpp>
-#include <PacketStructure.h>
-#include <PrefixLeaseManager.h>
-#include <PrefixPool.h>
-#include <IPv6LeaseManager.h>
-#include <IPv6Pool.h>
+#include "dhcp/DhcpInfo.hpp"
+#include "PrefixLeaseManager.h"
+#include "IPv6LeaseManager.h"
+#include "Dhcpv6AuthManager.h"
+#include "processing/PacketBuilder.hpp"
+
 #include <atomic>
 #include <unordered_map>
-#include <Dhcpv6AuthManager.h>
-#include <PacketBuilder.hpp>
 #include <set>
 
 // Forward declarations

@@ -2,11 +2,11 @@
 
 #include "InterfaceMetrics.h"
 #include "EigrpInterface.h"
-#include "InterfaceConfigs.h"
-#include <HardwareManager.h>
-#include <Eigrp.h>
-#include <EigrpConfig.h>
-#include <Neighbor.h>
+#include "interface/configs/InterfaceConfigs.h"
+#include "hardware/HardwareManager.h"
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/EigrpTypes.hpp"
+#include "eigrp/rtp/Neighbor.h"
 
 namespace Eigrp
 {

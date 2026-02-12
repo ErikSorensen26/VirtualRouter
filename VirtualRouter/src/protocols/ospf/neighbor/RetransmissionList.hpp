@@ -6,10 +6,9 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
-#include <OspfPacket.hpp>
-#include <FloodTypes.hpp>
-#include <OspfProcess.h>
-#include <OspfInterface.h>
+
+#include "ospf/OspfProcess.h"
+#include "ospf/interface/OspfInterface.h"
 
 namespace OSPF
 {
@@ -35,8 +34,9 @@ public:
             return false;
         }
 
-        outboundInfo.emplace(key, outbound.size(), 0);
         outbound.emplace_back(std::move(record));
+        outboundKeys.emplace_back(key);
+        outboundInfo.emplace(key, OutboundInfo{outbound.size(), 0});
         return true;
     }
 
@@ -50,8 +50,9 @@ public:
             return false;
         }
 
-        outboundInfo.emplace(key, outbound.size(), 0);
         outbound.emplace_back(record);
+        outboundKeys.emplace_back(key);
+        outboundInfo.emplace(key, OutboundInfo{outbound.size(), 0});
         return true;
     }
 
@@ -65,7 +66,7 @@ public:
         auto it = outboundInfo.find(key);
         if (it == outboundInfo.end())
             return std::nullopt;
-        return outbound[it->second.index].second;
+        return outbound[it->second.index];
     }
 
     const std::vector<Record>& getAll() const
@@ -84,11 +85,13 @@ public:
 
         if (idx != last)
         {
-            outbound[idx] = outbound[last];
-            outboundInfo[outbound[idx]] = idx;
+            outbound[idx] = std::move(outbound[last]);
+            outboundKeys[idx] = std::move(outboundKeys[last]);
+            outboundInfo[outboundKeys[idx]].index = idx;
         }
 
         outbound.pop_back();
+        outboundKeys.pop_back();
         outboundInfo.erase(it);
 
         if (cursor >= outbound.size()) cursor = 0;
@@ -105,6 +108,7 @@ public:
     void clear()
     {
         outbound.clear();
+        outboundKeys.clear();
         outboundInfo.clear();
         cursor = 0;
         burstRemaining = 0;
@@ -134,7 +138,7 @@ public:
         return true;
     }
 
-    bool markBurst(Key& key)
+    void markBurst(Key& key)
     {
         if (auto it = outboundInfo.find(key); it != outboundInfo.end())
         {
@@ -145,7 +149,11 @@ public:
             if (it->second.retransmissions >= getMaxRetransmission())
             {
                 erase(key);
+                return;
             }
+
+            cursor = (cursor + 1) % outbound.size();
+            --burstRemaining;
         }
     }
 
@@ -173,6 +181,7 @@ private:
     };
 
     std::unordered_map<Key,  OutboundInfo> outboundInfo;
+    std::vector<Key> outboundKeys;
     std::vector<Record> outbound;
 
     OspfProcess& process;

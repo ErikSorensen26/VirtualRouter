@@ -3,8 +3,7 @@
 #ifndef IP_PACKET_H
 #define IP_PACKET_H
 
-#include <PacketStructure.h>
-#include <Logger.h>
+#include <cstdint>
 
 class Interface;
 class PacketBuilder;

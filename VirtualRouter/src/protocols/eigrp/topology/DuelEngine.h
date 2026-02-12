@@ -6,8 +6,10 @@
 #include <cstdint>
 #include <set>
 #include <IPAddress.hpp>
-#include <TopologyTable.h>
-#include <EigrpTypes.hpp>
+#include <map>
+
+#include "eigrp/EigrpTypes.hpp"
+#include "TopologyTable.h"
 #include "TimerManager.h"
 
 class Internal_EigrpTest;
@@ -16,8 +18,11 @@ namespace Eigrp
 {
 class EigrpInterface;
 class Eigrp;
+class Neighbor;
 
 struct ActiveRoute;
+struct ReceivedRoute;
+struct TopologyEntry;
 
 struct OutgoingQuery
 {
@@ -25,7 +30,6 @@ struct OutgoingQuery
     uint32_t siaSequence{0};
     uint32_t querySequence{0};
     uint32_t siaTimerId{0}, siaAttempts{0};
-    std::chrono::steady_clock::time_point lastHeard;
 };
 
 struct ActiveRoute

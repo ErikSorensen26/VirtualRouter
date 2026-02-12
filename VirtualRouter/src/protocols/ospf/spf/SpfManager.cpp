@@ -1,20 +1,16 @@
 // SpfManager.cpp
 
+#include <TimeManager.h>
+
 #include "SpfManager.h"
 #include "SpfEngine.h"
-#include "OspfRouteManager.h"
-#include <TimeManager.h>
-#include <OspfArea.h>
-#include <OspfProcess.h>
-
-#include <RouterLsaV2.hpp>
-#include <NetworkLsaV2.hpp>
-#include <RouterLsaV3.hpp>
-#include <NetworkLsaV3.hpp>
+#include "ospf/topology/RouteManager.h"
+#include "ospf/area/Area.h"
+#include "ospf/OspfProcess.h"
 
 namespace OSPF
 {
-SpfManager::SpfManager(OspfArea& area, ProcessQueue& scheduler)
+SpfManager::SpfManager(Area& area, ProcessQueue& scheduler)
     : area(area), scheduler(scheduler), rib(area.process().getRib())
 {}
 
@@ -100,10 +96,7 @@ void SpfManager::runSpf()
     if (area.process().isABR())
     {
         // Reoriginate intra as inter 
-        if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV2>)
-            area.process().reoriginateSummaries<SummaryNetworkLsa>(area, summaryChanges);
-        else
-            area.process().reoriginateSummaries<InterAreaPrefixLsa>(area, summaryChanges);
+        area.process().reoriginateSummaries<Policy>(area, summaryChanges);
     }
 
     spfResult = std::move(spfRes);

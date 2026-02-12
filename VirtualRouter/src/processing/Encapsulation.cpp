@@ -1,7 +1,9 @@
-#include <Encapsulation.h>
-#include <PacketStructure.h>
-#include <HeaderHelpers.hpp>
-#include <PacketBuilder.hpp>
+// Encapsulation.cpp
+
+#include "Encapsulation.h"
+#include "packet/PacketStructure.h"
+#include "PacketBuilder.hpp"
+#include "security/Checksums.h"
 
 // Encapsulates packet information into a formatted string.
 bool encapsulate(PacketBuilder& packet)

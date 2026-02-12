@@ -3,16 +3,10 @@
 #ifndef V2_PACKET_DISPATCHER_H
 #define V2_PACKET_DISPATCHER_H
 
-#include <Ospfv2Header.hpp>
-#include <OspfInterface.h>
-#include <LSDB.hpp>
-#include <PacketDispatcher.h>
-
-#include <RouterLsaV2.hpp>
-#include <NetworkLsaV2.hpp>
-#include <SummaryNetworkLsa.hpp>
-#include <SummaryRouterLsa.hpp>
-#include <ExternalLsaV2.hpp>
+#include "packet/headers/Ospfv2Header.hpp"
+#include "ospf/interface/OspfInterface.h"
+#include "ospf/database/LSDB.hpp"
+#include "ospf/transmission/PacketDispatcher.h"
 
 struct IPAddress;
 class PacketBuilder;
@@ -90,7 +84,7 @@ private:
     void buildOspfSimpleAuthentication(Ospfv2Header& header, uint64_t secret);
     bool buildOspfCryptoAuthentication(OspfBuilder& info, Ospfv2Header& hdr, uint32_t seq, uint8_t id, uint8_t* secret);
 
-    bool processOspfSimpleAuthentication(HeaderInfo& info, const Ospfv2Header& hdr);
+    bool processOspfSimpleAuthentication(const Ospfv2Header& hdr);
     bool processOspfCryptoAuthentication(HeaderInfo& info, const Ospfv2Header& hdr);
 
     std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len);

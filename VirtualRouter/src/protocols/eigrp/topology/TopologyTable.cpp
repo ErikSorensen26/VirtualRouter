@@ -1,12 +1,9 @@
 // TopologyTable.cpp
 
 #include "TopologyTable.h"
-#include <Eigrp.h>
-#include <EigrpInterface.h>
-#include <VirtualRouter.h>
-#include <Global.h>
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
 #include "DuelEngine.h"
-#include <TimeManager.h>
 
 namespace Eigrp
 {

@@ -3,17 +3,13 @@
 #ifndef OSPF_H
 #define OSPF_H
 
-#include <Registry.hpp>
-#include <OspfTypes.hpp>
-#include <OspfInterfaceManager.h>
-#include <OspfRoutingTable.h>
-#include <RegistryTypes.hpp>
-#include <variant>
-#include <OspfArea.h>
-#include <OspfTopologyTable.h>
-#include <OspfRoutingTable.h>
-#include <OspfRegistry.h>
 #include <ControlScheduler.h>
+
+#include "ospf/interface/InterfaceManager.h"
+#include "ospf/area/Area.h"
+#include "ospf/topology/RoutingTable.h"
+#include "ospf/topology/TopologyTable.h"
+#include "configs/registry/router/OspfRegistry.h"
 
 class VirtualRouter;
 
@@ -22,7 +18,7 @@ namespace OSPF
 class Topology;
 class OspfProcess;
 class OspfInterface;
-class OspfArea;
+class Area;
 
 struct OspfV3Instance
 {
@@ -51,7 +47,7 @@ public:
 
     // External Origination
     template <typename Policy>
-    void distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, const LsaBody& body);
+    void distributeExternalLsa(const Area& sourceArea, IncomingLsaContext& ctx, const LsaBody& body);
 
     template <typename Policy>
     void originateExternal(ExternalOriginateContext& ctx, bool expire);
@@ -67,10 +63,10 @@ public:
 
     // Summary Origination
     template <typename Policy>
-    void reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList);
+    void reoriginateSummaries(Area& sourceArea, std::vector<OspfRouteChange>& pathList);
 
     template <typename Policy>
-    void reoriginateSummary(OspfArea& sourceArea, OspfRouteChange& path);
+    void reoriginateSummary(Area& sourceArea, OspfRouteChange& path);
 
     // ASBR Summarization
     void syncSummaryConfig();
@@ -90,14 +86,14 @@ public:
     {
         const auto& id = configs.get().get<Config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
-        return rid.load(std::memory_order_relaxed);
+        return rid;
     }
 
     bool calculateRID();
 
     // Areas
-    OspfArea* getArea(uint32_t areaId);
-    OspfArea& insureArea(uint32_t areaId);
+    Area* getArea(uint32_t areaId);
+    Area& insureArea(uint32_t areaId);
 
     // Router types
     void setASBR(bool val);
@@ -145,15 +141,15 @@ private:
     void syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummaryAddress>& activeSummaries);
 
     // Areas
-    std::unordered_map<uint32_t, OspfArea> areas;
+    std::unordered_map<uint32_t, Area> areas;
 
     OspfRib rib;
     ProcessQueue scheduler;
 
     // Route type
-    std::atomic<bool> abr = false;
-    std::atomic<bool> asbr = false;
-    std::atomic<uint32_t> rid;
+    bool abr = false;
+    bool asbr = false;
+    uint32_t rid;
 
     std::optional<uint32_t> defaultRoute = std::nullopt;
 

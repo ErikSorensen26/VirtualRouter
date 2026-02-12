@@ -1,14 +1,13 @@
 // InterfaceIPCommands.cpp
 
+#include <Functions.h>
+
 #include "InterfaceIPCommands.h"
 #include "InterfaceHelpers.hpp"
-
-#include <CliSession.h>
-#include <Mode.hpp>
-#include <Functions.h>
-#include <DhcpClient.h>
-#include <Eigrp.h>
-#include <EigrpInterface.h>
+#include "cli/runtime/CliSession.h"
+#include "dhcp/dhcpv4/DhcpClient.h"
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
 
 namespace Cli
 {

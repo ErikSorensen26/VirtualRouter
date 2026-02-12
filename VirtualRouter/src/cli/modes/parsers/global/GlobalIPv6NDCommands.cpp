@@ -1,8 +1,9 @@
 // GlobalIPv6NDCommands.cpp
 
-#include "GlobalIPv6NDCommands.h"
 #include <Global.h>
-#include <Ndp.h>
+
+#include "GlobalIPv6NDCommands.h"
+#include "infrastructure/Ndp.h"
 
 namespace Cli
 {

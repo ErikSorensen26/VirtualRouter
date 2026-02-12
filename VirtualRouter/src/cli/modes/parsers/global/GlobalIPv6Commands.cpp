@@ -1,15 +1,17 @@
 // GlobalIPv6Commands.h
 
-#include "GlobalIPv6Commands.h"
-#include <IPAddress.hpp>
-#include <InterfaceType.hpp>
-#include <InterfaceConfigs.h>
-#include <Global.h>
-#include <Ndp.h>
 #include <Functions.h>
+#include <IPAddress.hpp>
+#include <Global.h>
 #include <VirtualRouter.h>
-#include <CliSession.h>
-#include <EigrpContext.hpp>
+
+#include "GlobalIPv6Commands.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "interface/configs/InterfaceConfigs.h"
+#include "infrastructure/Ndp.h"
+#include "cli/runtime/CliSession.h"
+#include "cli/modes/contexts/EigrpContext.hpp"
+#include "eigrp/core/Eigrp.h"
 
 namespace Cli
 {

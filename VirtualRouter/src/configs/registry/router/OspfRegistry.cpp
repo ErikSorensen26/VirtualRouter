@@ -1,19 +1,19 @@
 // OspfRegistry.cpp
 
 #include "OspfRegistry.h"
-#include <OspfProcess.h>
-#include <OspfArea.h>
+#include "ospf/OspfProcess.h"
+#include "ospf/area/Area.h"
 
 namespace Config
 {
-void OspfAreaTypeChange(OSPF::OspfArea& area)
+void OspfAreaTypeChange(OSPF::Area& area)
 {
     area.process().getScheduler().post([&area]{
         area.reset();
     });
 }
 
-void OspfAreaSycnRanges(OSPF::OspfArea& area)
+void OspfAreaSycnRanges(OSPF::Area& area)
 {
     area.process().getScheduler().post([&area] {
         area.syncRangeConfig();

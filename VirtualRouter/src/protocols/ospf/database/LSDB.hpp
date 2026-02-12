@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <variant>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
@@ -13,23 +12,27 @@
 #include <vector>
 #include <atomic>
 
+#include "packet/headers/embedded/ospf/Ospfv2LSAHeader.hpp"
+#include "packet/headers/embedded/ospf/Ospfv3LSAHeader.hpp"
+
 #include "LsaKey.hpp"
 
-#include <RouterLsaV2.hpp>
-#include <NetworkLsaV2.hpp>
-#include <SummaryNetworkLsa.hpp>
-#include <SummaryRouterLsa.hpp>
-#include <ExternalLsaV2.hpp>
-#include <OpaqueLsaV2.hpp>
+#include "ospf/ospfv2/database/RouterLsaV2.hpp"
+#include "ospf/ospfv2/database/NetworkLsaV2.hpp"
+#include "ospf/ospfv2/database/SummaryNetworkLsa.hpp"
+#include "ospf/ospfv2/database/SummaryRouterLsa.hpp"
+#include "ospf/ospfv2/database/ExternalLsaV2.hpp"
+#include "ospf/ospfv2/database/OpaqueLsaV2.hpp" // TODO
 
-#include <RouterLsaV3.hpp>
-#include <NetworkLsaV3.hpp>
-#include <InterAreaPrefixLsa.hpp>
-#include <InterAreaRouterLsa.hpp>
-#include <ExternalLsaV3.hpp>
-#include <LinkLsa.hpp>
-#include <IntraAreaPrefixLsa.hpp>
-#include <FloodTypes.hpp>
+#include "ospf/ospfv3/database/RouterLsaV3.hpp"
+#include "ospf/ospfv3/database/NetworkLsaV3.hpp"
+#include "ospf/ospfv3/database/InterAreaPrefixLsa.hpp"
+#include "ospf/ospfv3/database/InterAreaRouterLsa.hpp"
+#include "ospf/ospfv3/database/ExternalLsaV3.hpp"
+#include "ospf/ospfv3/database/LinkLsa.hpp"
+#include "ospf/ospfv3/database/IntraAreaPrefixLsa.hpp"
+
+#include "ospf/area/FloodTypes.hpp"
 
 namespace OSPF
 {
@@ -279,7 +282,7 @@ struct LsaRecordRef final
 
 using U_LSDB = UMap<LsaKey, LsaRecord*>;
 using A_LSDB = UMap<LsaAdvKey, UMap<uint32_t, LsaRecord*>>;
-using T_LSDB = UMap<uint32_t, UMap<LsaTypeKey, LsaRecord*>>;
+using T_LSDB = UMap<uint32_t, UMap<LsaKey, LsaRecord*>>;
 using O_LSDB = OMap<LsaKey, LsaRecord>;
 
 } // namespace OSPF

@@ -12,13 +12,13 @@
 #include <cstdint>
 #include <mutex>
 #include <cstring>
-#include <HeaderHelpers.hpp>
 
+#include "packet/HeaderHelpers.hpp"
+#include "eigrp/core/EigrpConfig.h"
 #include "EigrpConfig.h"
 #include "InterfaceManager.h"
-#include "EigrpTopology.h"
+#include "Topology.h"
 #include "RouteManager.h"
-#include <EigrpTypes.hpp>
 
 class Internal_EigrpTest;
 class VirtualRouter;

@@ -1,19 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
-project(VirtualRouter)
+project(VirtualRouter LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} -latomic")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
-# Compiler Warnings
 add_compile_options(-Wall -Wno-unused-parameter)
 
-# Option to control static build
 option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" OFF)
-
-# Option to include debug symbols and backtrace info
-option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" OFF)
+option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" ON)
 
 add_custom_target(copy_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -85,7 +82,6 @@ if (BUILD_STATIC_ROUTER)
     endforeach()
     list(REMOVE_DUPLICATES VR_INCLUDE_DIRS)
 
-    # Debug / symbol flags
     if (ENABLE_DEBUG_SYMBOLS)
         message(STATUS "Including debug symbols (-g -rdynamic)")
         add_compile_options(-g -rdynamic)
@@ -109,8 +105,11 @@ if (BUILD_STATIC_ROUTER)
         ${ZLIB_LIBRARY}
         pthread
     )
+
 else()
     set(cmake_interprocedural_optimization false)
+
+    # keep your debug-ish flags as-is
     add_compile_options(
         -O0
         -g3
@@ -120,11 +119,9 @@ else()
         -fno-optimize-sibling-calls
         -Wall -Wextra -Wpedantic -Wshadow -Wcast-align -Wconversion -Wsign-conversion
     )
-    #add_link_options(-fsanitize=address,undefined)
-    #add_compile_options(-fsanitize=address,undefined)
     add_compile_definitions(DEBUG)
 
-    # External Dependencies
+    # External Dependencies (visible to subdirs)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(PCAP REQUIRED libpcap)
     find_package(ZLIB REQUIRED)
@@ -137,3 +134,4 @@ else()
     add_subdirectory(Utils)
     add_subdirectory(Tests)
 endif()
+

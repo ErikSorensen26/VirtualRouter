@@ -3,8 +3,9 @@
 #ifndef INTERFACE_OSPF_COMMANDS_H
 #define INTERFACE_OSPF_COMMANDS_H
 
-#include <CliModeParser.hpp>
-#include <InterfaceContext.hpp>
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/Command.hpp"
+#include "cli/modes/contexts/InterfaceContext.hpp"
 
 namespace Cli
 {

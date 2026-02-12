@@ -1,14 +1,13 @@
 // RouterEigrpClassicVrfCommands.h
 
-#include "RouterEigrpClassicVrfCommands.h"
+#include <Functions.h>
 
-#include <Eigrp.h>
-#include <EigrpTypes.hpp>
-#include <CliSession.h>
-#include <Global.h>
-#include <VirtualRouter.h>
-#include <InterfaceType.hpp>
-#include <EigrpInterface.h>
+#include "RouterEigrpClassicVrfCommands.h"
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "cli/runtime/CliSession.h"
+#include "interface/Interface.h"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace Cli
 {
@@ -38,7 +37,7 @@ bool RouterEigrpClassicVrf_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 bool RouterEigrpClassicVrf_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
     if (!ctx.negate)
-        ctx.currentEigrp->setRouterID(Functions::getAddress(args[0]).raw);
+        ctx.currentEigrp->routerID(Functions::getAddress(args[0]).raw);
     else
         ctx.currentEigrp->clearRouterID();
     return true;

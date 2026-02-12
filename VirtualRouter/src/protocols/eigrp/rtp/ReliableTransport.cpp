@@ -12,17 +12,14 @@
  */
 
 #include "ReliableTransport.h"
-#include "EigrpInterface.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/interface/AuthHandler.h"
 #include "NeighborTable.h"
-#include "AuthHandler.h"
 #include "EigrpPacketBuilder.h"
-#include <Eigrp.h>
+#include "eigrp/core/Eigrp.h"
 
-#include <PacketBuilder.hpp>
-#include <IPPacket.h>
-#include <Ethernet.h>
-#include <EigrpHeader.hpp>
-#include <StaticHeader.hpp>
+#include "processing/PacketBuilder.hpp"
+#include "infrastructure/IPPacket.h"
 
 namespace Eigrp
 {
@@ -152,7 +149,7 @@ void ReliableTransport::sendRetransmission(Neighbor& neighbor, StaticHeader& hea
         .iface = interface,
         .packetInfo = retransmissionPacket,
         .destIp = neighbor.ipAddress.raw,
-        .DSCP = iface.configs->DSCP.load(std::memory_order_relaxed),
+        .DSCP = iface.configs.DSCP.load(std::memory_order_relaxed),
         .protocolType = IP_EIGRP
     };
 

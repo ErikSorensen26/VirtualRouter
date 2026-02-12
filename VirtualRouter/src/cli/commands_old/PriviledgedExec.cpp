@@ -1,8 +1,8 @@
-#include "CommandProcessor.h"
+/*#include "CommandProcessor.h"
 
 #include <CliEngine.h>
 
-/*bool CommandProcessor::handlePriviledgedExec(const std::vector<std::string>& commandStream)
+bool CommandProcessor::handlePriviledgedExec(const std::vector<std::string>& commandStream)
 {
 	if (commandStream[0] == "configure" && commandStream[1] == "terminal")
 	{

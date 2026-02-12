@@ -5,8 +5,8 @@
 
 #include <cstdint>
 #include <atomic>
-#include <thread>
-#include <TxQueueOpts.hpp>
+
+#include "qos/egress/TxQueueOpts.hpp"
 
 #define MTU_PADDING 128
 

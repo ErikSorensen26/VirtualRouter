@@ -1,4 +1,5 @@
-#include <Console.h>
+// Console.cpp
+
 #include <iostream>
 #include <cstdio>
 #include <sys/ioctl.h>
@@ -6,6 +7,8 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <vector>
+
+#include "Console.h"
 
 Console::Console() : iConsole(new RealConsole()) {}
 

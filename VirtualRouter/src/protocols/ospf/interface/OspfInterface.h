@@ -1,14 +1,13 @@
-// OspfInterface.h
+// Interface.h
 
 #ifndef OSPF_INTERFACE_H
 #define OSPF_INTERFACE_H
 
-#include <Registry.hpp>
-#include <OspfTypes.hpp>
-#include <OspfNeighborTable.h>
-#include <OspfFlagManager.h>
-#include "OspfInterfaceTimers.h"
-#include "OspfInterfaceId.hpp"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "ospf/area/FlagManager.h"
+#include "ospf/neighbor/NeighborTable.h"
+#include "ospf/interface/InterfaceTimers.h"
+#include "InterfaceId.hpp"
 
 class Interface;
 
@@ -17,12 +16,13 @@ namespace OSPF
 class PacketDispatcher;
 class OspfProcess;
 class Topology;
-class OspfArea;
+class Area;
+class Neighbor;
 
 class OspfInterface
 {
 public:
-    OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, OspfInterfaceId& id);
+    OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id);
     ~OspfInterface();
 
     const OspfInterfaceId id;
@@ -43,7 +43,7 @@ public:
     Config::OspfInterfaceBaseRegistry& getBaseConfigs() { return baseConfigs.get(); }
     const Config::OspfInterfaceBaseRegistry& getBaseConfigs() const noexcept { return baseConfigs.get(); }
 
-    OspfArea& getArea();
+    Area& getArea();
     uint32_t getAreaId() const { return id.area; }
     Interface& getIface() { return iface; }
     const Interface& getIface() const { return iface; }
@@ -76,17 +76,17 @@ public:
     std::atomic<bool> opaqueEnabled = true;
     enum class DcDecision { UNDECIDED, ENABLED, DISABLED };
 
-    std::atomic<uint16_t> cost;
-    std::atomic<std::chrono::seconds> helloTime;
-    std::atomic<std::chrono::seconds> deadTime;
-    std::atomic<DcDecision> demandCircuit = DcDecision::UNDECIDED;
-    std::atomic<bool> floodReduction = false;
+    uint16_t cost;
+    std::chrono::seconds helloTime;
+    std::chrono::seconds deadTime;
+    DcDecision demandCircuit = DcDecision::UNDECIDED;
+    bool floodReduction = false;
 
 private:
     PacketDispatcher* dispatcher = nullptr;
 
     OspfProcess& process;
-    OspfArea& area;
+    Area& area;
 
     InterfaceFlagManager flags;
     InterfaceFlagManager lsaFlags;

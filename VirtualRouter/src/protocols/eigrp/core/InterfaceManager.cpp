@@ -1,12 +1,13 @@
 // InterfaceTable.cpp
 
+#include <Functions.h>
+#include <VirtualRouter.h>
+
 #include "InterfaceManager.h"
 #include "Eigrp.h"
-#include <EigrpInterface.h>
-#include <VirtualRouter.h>
-#include <Functions.h>
-#include <Interface.h>
-#include <InterfaceConfigs.h>
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/EigrpTypes.hpp"
+#include "interface/Interface.h"
 
 namespace Eigrp
 {
@@ -126,7 +127,7 @@ void InterfaceManager::refreshInterfaceList()
                 bool ipv6Contained = false;
                 if (isNamed)
                     ipv6Contained = eigrpInterfaceConfigList.contains(ipInfo.key) &&
-                                    !eigrpInterfaceConfigList[ipInfo.key]->shutdown;
+                                    !eigrpInterfaceConfigList.at(ipInfo.key).shutdown;
                 if (!ipv6Contained)
                     ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&
                                     interface->getVRF() == base.routingInstance;

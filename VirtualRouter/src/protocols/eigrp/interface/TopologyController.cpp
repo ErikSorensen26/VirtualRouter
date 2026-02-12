@@ -1,12 +1,11 @@
 // EigrpInterfaceTopology.cpp
 
 #include "TopologyController.h"
-#include <DuelEngine.h>
-#include <TopologyTable.h>
-#include "NeighborTable.h"
+#include "eigrp/topology/DuelEngine.h"
+#include "eigrp/topology/TopologyTable.h"
+#include "eigrp/rtp/NeighborTable.h"
 #include "EigrpInterface.h"
-#include <Eigrp.h>
-#include <Interface.h>
+#include "eigrp/core/Eigrp.h"
 
 namespace Eigrp
 {
@@ -25,11 +24,11 @@ std::unordered_map<IPPrefix, TopologyEntry*>& TopologyController::getTopologies(
 std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const std::vector<const RouteInfo*> routes)
 {
     std::vector<const RouteInfo*> filtered;
-    if (routes.empty() || iface.configs->isPassive.load(std::memory_order_relaxed)) return filtered;
+    if (routes.empty() || iface.configs.isPassive.load(std::memory_order_relaxed)) return filtered;
 
     auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
     const auto& stubCfg = cfgMgr.getStubConfig();
-    const bool splitHorizon = iface.configs->splitHorizon.load(std::memory_order_relaxed);
+    const bool splitHorizon = iface.configs.splitHorizon.load(std::memory_order_relaxed);
 
     for (const auto* route : routes)
     {

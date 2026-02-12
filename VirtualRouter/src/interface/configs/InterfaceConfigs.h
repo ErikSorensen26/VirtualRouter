@@ -3,23 +3,19 @@
 #ifndef INTERFACE_CONFIGS_H
 #define INTERFACE_CONFIGS_H
 
-#include <OspfInterfaceRegistry.h>
-
 #include <shared_mutex>
 #include <atomic>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
-#include <HeaderHelpers.hpp>
 #include <cstring>
 #include <map>
 #include <unordered_set>
 #include <IPAddress.hpp>
 #include <optional>
 
-#include <RegistryDatabase.hpp>
-#include <OspfInterface.h>
-#include <OspfInterfaceRegistry.h>
+#include "packet/HeaderHelpers.hpp"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
 
 // Forward declarations
 class Global;
@@ -195,7 +191,7 @@ public:
         __uint128_t getGlobalUnicast() const;
         __uint128_t getLocalUnicast() const;
 
-        bool hasAddress(const auto* addr);
+        bool hasAddress(const uint8_t* addr);
         bool hasAddress(__uint128_t addr);
 
         bool hasLocalAddress(const uint8_t* addr, uint8_t len) const;
@@ -267,7 +263,7 @@ public:
     {
         std::unordered_map<uint32_t, uint32_t> enabledProcesses;
         std::optional<Config::Reference<Config::OspfInterfaceBaseRegistry>> ospfInterfaceConfigs = std::nullopt;
-        std::map<std::pair<uint32_t, AddressFamily>, Config::OspfInterfaceAddressFamilyRegistry> ospfInterfaceConfigList;
+        std::map<std::pair<uint32_t, AddressFamily>, Config::Reference<Config::OspfInterfaceAddressFamilyRegistry>> ospfInterfaceConfigList;
     } ospf;
 
     /**

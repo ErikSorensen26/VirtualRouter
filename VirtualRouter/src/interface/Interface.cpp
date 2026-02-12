@@ -1,53 +1,53 @@
 // Interface.cpp
 
-#include <Interface.h>
-#include <iostream>
 #include <mutex>
-#include <DhcpClient.h>
-//#include <Dhcpv6.h>
-#include <Arp.h>
-#include <Ndp.h>
-#include <Ethernet.h>
-#include <IPPacket.h>
-#include <Decapsulation.h>
-#include <Encapsulation.h>
-#include <VirtualRouter.h>
-#include <InterfaceConfigs.h>
-#include <PacketBuilder.hpp>
-#include <TxQueueManager.h>
-#include <RxQueueManager.h>
 #include <Global.h>
-#include <Process.h>
-#include <HardwareManager.h>
+#include <VirtualRouter.h>
 
-#include <PacketBuilder.hpp>
-#include <StaticHeader.hpp>
+#include "Interface.h"
+#include "configs/InterfaceConfigs.h"
+#include "dhcp/dhcpv4/DhcpClient.h"
+//#include <Dhcpv6.h>
+
+#include "infrastructure/Arp.h"
+#include "infrastructure/Ndp.h"
+#include "processing/Decapsulation.h"
+#include "processing/Encapsulation.h"
+#include "processing/Process.h"
+#include "processing/PacketBuilder.hpp"
+#include "qos/egress/TxQueueManager.h"
+#include "qos/ingress/RxQueueManager.h"
+#include "processing/Process.h"
+#include "hardware/HardwareManager.h"
+
+#include "eigrp/core/Eigrp.h"
+#include "ospf/OspfProcess.h"
 
 Interface::Interface(const InterfaceCreation& cfgs)
-  : configs(cfgs.vrf.global.timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
+  : configs(cfgs.vrf.getGlobal().timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
     routingInstance(&cfgs.vrf),
     debug(cfgs.debug),
     threadsRunning(false)
 {
-    cfgs.vrf.global.txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-    cfgs.vrf.global.rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-    cfgs.vrf.global.engine.hwManager->registerInterface(&configs.hwInfo, this);
+    cfgs.vrf.getGlobal().txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    cfgs.vrf.getGlobal().rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
+    cfgs.vrf.getGlobal().engine.hwManager->registerInterface(&configs.hwInfo, this);
 }
 
 Interface::~Interface()
 {
     cleanupInterface();
     VirtualRouter* vrf = getVRF();
-    vrf->global.txMgr.removeInterface(*this);
-    vrf->global.rxMgr.removeInterface(*this);
-    vrf->global.engine.hwManager->registerInterface(&configs.hwInfo, this);
+    vrf->getGlobal().txMgr.removeInterface(*this);
+    vrf->getGlobal().rxMgr.removeInterface(*this);
+    vrf->getGlobal().engine.hwManager->registerInterface(&configs.hwInfo, this);
 }
 
 void Interface::cleanupInterface()
 {
     shutdown(true);
     VirtualRouter* vrf = getVRF();
-    if (auto dhcpv6Server = vrf->global.dhcpv6Server)
+    if (auto dhcpv6Server = vrf->getGlobal().dhcpv6Server)
     {
         //dhcpv6Server->removeInterface(this);
     }
@@ -245,10 +245,7 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
     if (!threadsRunning.load(std::memory_order_relaxed)) return;
 
     if (!encapsulate(packetInfo))
-    {
-        Logger::getInstance().error() << "Invalid Packet" << std::endl;
         return;
-    }
 
     if (mac)
     {
@@ -275,11 +272,11 @@ void Interface::startThreads()
 {
     // Add the interface to the TX Queue manager
     VirtualRouter* vrf = getVRF();
-    vrf->global.txMgr.start(this);
+    vrf->getGlobal().txMgr.start(this);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    vrf->global.rxMgr.start(this);
+    vrf->getGlobal().rxMgr.start(this);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    vrf->global.engine.hwManager->bringUp(configs.hwInfo.ifname);
+    vrf->getGlobal().engine.hwManager->bringUp(configs.hwInfo.ifname);
 
     // Initialize shared pointers for Protocol objects
     if (!arp)
@@ -308,8 +305,8 @@ void Interface::stopThreads()
         
     // Add the interface to the TX Queue manager
     VirtualRouter* vrf = getVRF();
-    vrf->global.txMgr.stop(this);
-    vrf->global.rxMgr.stop(this);
+    vrf->getGlobal().txMgr.stop(this);
+    vrf->getGlobal().rxMgr.stop(this);
     threadsRunning.store(false, std::memory_order_release); 
 }
 
@@ -319,18 +316,17 @@ void Interface::stateChange(StateChange state)
     VirtualRouter* vrf = getVRF();
     if (vrf)
     {
-        std::shared_lock<std::shared_mutex> lock(vrf->eigrpAutonomousSystemMutex);
         for (const auto& [_, eigrpPtr] : vrf->eigrpList)
         {
-            if (eigrpPtr->ipv4)
+            if (eigrpPtr.ipv4)
             {
-                eigrpPtr->ipv4->refreshInterfaceList();
+                eigrpPtr.ipv4->refreshInterfaceList();
             }
         };
     }
     // Other updates...
 
-    if (!vrf->global.routingEnabled)
+    if (!vrf->getGlobal().routingEnabled)
         return;
 
     switch (state)
@@ -378,12 +374,11 @@ void Interface::stateChangeV6(StateChange state)
     VirtualRouter* vrf = getVRF();
     if (routingInstance)
     {
-        std::shared_lock<std::shared_mutex> lock(vrf->eigrpAutonomousSystemMutex);
         for (const auto& [_, eigrpPtr] : vrf->eigrpList)
         {
-            if (eigrpPtr->ipv6)
+            if (eigrpPtr.ipv6)
             {
-                eigrpPtr->ipv6->refreshInterfaceList();
+                eigrpPtr.ipv6->refreshInterfaceList();
             }
         };
     }
@@ -477,7 +472,7 @@ EigrpConfigs::InterfaceConfigs* Interface::getEigrpConfig(uint32_t as, AddressFa
         auto newConfig = configs.eigrp.eigrpInterfaceConfigList.emplace(key, configs.key);
         return &newConfig.first->second;
     }
-    return &configs.eigrp.eigrpInterfaceConfigList[key];
+    return &configs.eigrp.eigrpInterfaceConfigList.at(key);
 }
 
 Config::OspfInterfaceAddressFamilyRegistry& Interface::getOspfv3Config(uint32_t id, AddressFamily af)
@@ -486,10 +481,10 @@ Config::OspfInterfaceAddressFamilyRegistry& Interface::getOspfv3Config(uint32_t 
     auto configIt = configs.ospf.ospfInterfaceConfigList.find(key);
     if (configIt == configs.ospf.ospfInterfaceConfigList.end())
     {
-        auto newConfig = configs.ospf.ospfInterfaceConfigList.emplace(key, configs.key);
-        return newConfig.first->second;
+        auto newConfig = configs.ospf.ospfInterfaceConfigList.try_emplace(key, routingInstance.load(std::memory_order_relaxed)->getGlobal().registry.create<Config::OspfInterfaceAddressFamilyRegistry>(Config::generateOspfInterfaceKey(configs.key, af, true)));
+        return newConfig.first->second.get();
     }
-    return configs.ospf.ospfInterfaceConfigList[key];
+    return configs.ospf.ospfInterfaceConfigList.at(key).get();
 }
 
 Config::OspfInterfaceBaseRegistry& Interface::getOspfConfig()

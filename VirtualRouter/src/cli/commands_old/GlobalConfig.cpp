@@ -1,4 +1,4 @@
-#include "CommandProcessor.h"
+/*#include "CommandProcessor.h"
 #include <VirtualRouter.h>
 #include <CliEngine.h>
 #include <DhcpServer.h>
@@ -10,7 +10,7 @@
 #include <InterfaceType.hpp>
 #include <HardwareManager.h>
 
-/*bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> commandStream)
+bool CommandProcessor::handleGlobalConfiguration(const std::vector<std::string> commandStream)
 {
 	if (commandStream[0] == "arp")
 	{

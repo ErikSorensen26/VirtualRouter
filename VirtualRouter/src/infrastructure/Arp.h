@@ -6,21 +6,20 @@
 #define ARP_H
 
 #include <queue>
-#include <PacketStructure.h>
 #include <Functions.h>
-#include <Encapsulation.h>
-#include <atomic>
 #include <mutex>
 #include <chrono>
 #include <unordered_map>
 #include <unordered_set>
 #include <shared_mutex>
+#include <atomic>
 
 // Forward declarations
 class PacketBuilder;
 class Interface;
 class Global;
 class Internal_ArpTest;
+struct ArpHeader;
 
 /**
  * @namespace Protocol

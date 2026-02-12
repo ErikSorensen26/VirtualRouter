@@ -1,67 +1,79 @@
-# Ensure the Telnet library is found
 set(TELNET_LIBRARIES /usr/lib/x86_64-linux-gnu/libtelnet.so)
 set(TELNET_INCLUDE_DIR /usr/include)
 
-# Check for Telnet library existence
-if (EXISTS ${TELNET_LIBRARIES} AND EXISTS ${TELNET_INCLUDE_DIR}/libtelnet.h)
-    message(STATUS "Found libtelnet: ${TELNET_LIBRARIES}")
-else()
+if (NOT EXISTS ${TELNET_LIBRARIES} OR NOT EXISTS ${TELNET_INCLUDE_DIR}/libtelnet.h)
     message(FATAL_ERROR "libtelnet not found in expected paths. Please verify installation.")
 endif()
 
-# Collect all .cpp, .hpp, and .h files recursively from src/
-file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
-list(FILTER SRC_FILES EXCLUDE REGEX "./main\\.cpp$")
+# ----- Paths inside VirtualRouter/ -----
+set(VR_ROOT     ${CMAKE_CURRENT_SOURCE_DIR})
+set(VR_SRC      ${VR_ROOT}/src)
+set(VR_COMMON   ${VR_ROOT}/common)
+set(VR_EXTERNAL ${VR_ROOT}/external)
+set(VR_TYPES    ${VR_ROOT}/types)
 
-# Create VirtualRouter library with all source files
-add_library(VirtualRouter STATIC ${SRC_FILES})
-
-# Collect all header directories recursively
-file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
-
-# Collect unique directories where the headers are located
-set(HEADER_DIRS "")
-foreach(header ${HEADER_FILES})
-    get_filename_component(HEADER_DIR ${header} DIRECTORY)
-    list(APPEND HEADER_DIRS ${HEADER_DIR})
-endforeach()
-
-list(REMOVE_DUPLICATES HEADER_DIRS) # Ensure unique directories
-
-# Add the collected directories to include path
-target_include_directories(VirtualRouter PUBLIC ${HEADER_DIRS})
-
-# Link external and common libraries
-target_include_directories(VirtualRouter PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/common
-    ${CMAKE_CURRENT_SOURCE_DIR}/external
-    ${CMAKE_CURRENT_SOURCE_DIR}/types
+# Base roots (always exposed)
+set(VR_PUBLIC_INCLUDE_ROOTS
+    ${VR_SRC}
+    ${VR_COMMON}
+    ${VR_EXTERNAL}
+    ${VR_TYPES}
+    ${TELNET_INCLUDE_DIR}
 )
 
-# Add source files from common and external directories (if any)
-file(GLOB_RECURSE COMMON_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/common/*.cpp)
-file(GLOB_RECURSE EXTERNAL_SRC CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/external/*.cpp)
+# Optional additional public src paths
+set(VR_PUBLIC_INCLUDE_DIRS
+    global
+    utils
+    protocols
+    services
+    transport
+    types
+)
 
-# Add to the VirtualRouter library
-target_sources(VirtualRouter PRIVATE ${COMMON_SRC} ${EXTERNAL_SRC})
+# Expand rel paths under src/
+foreach(rel ${VR_PUBLIC_INCLUDE_DIRS})
+    list(APPEND VR_PUBLIC_INCLUDE_ROOTS "${VR_SRC}/${rel}")
+endforeach()
 
-# Link the Telnet library to the VirtualRouter
-target_link_libraries(VirtualRouter PRIVATE ${TELNET_LIBRARIES})
 
-# Link OpenSSL libraries
+# ----- Sources: dynamic, cpp-only -----
+file(GLOB_RECURSE VR_SRC_CPP      CONFIGURE_DEPENDS ${VR_SRC}/*.cpp)
+file(GLOB_RECURSE VR_COMMON_CPP   CONFIGURE_DEPENDS ${VR_COMMON}/*.cpp)
+file(GLOB_RECURSE VR_EXTERNAL_CPP CONFIGURE_DEPENDS ${VR_EXTERNAL}/*.cpp)
+file(GLOB_RECURSE VR_TYPES_CPP    CONFIGURE_DEPENDS ${VR_TYPES}/*.cpp)
+
+# Remove main.cpp from library so it compiles alone
+list(FILTER VR_SRC_CPP EXCLUDE REGEX "/main\\.cpp$")
+
+add_library(VirtualRouter STATIC
+    ${VR_SRC_CPP}
+    ${VR_COMMON_CPP}
+    ${VR_EXTERNAL_CPP}
+    ${VR_TYPES_CPP}
+)
+
+# ----- INCLUDE POLICY (this is the entire point) -----
+# 1) protocol includes: "eigrp/..." (root is src/protocol)
+# 2) common/external/types stay <file> (each folder is its own root)
+# 3) src is PRIVATE root (lets you include other internal headers without forcing "src/")
+target_include_directories(VirtualRouter PUBLIC ${VR_PUBLIC_INCLUDE_ROOTS})
+
+# ----- Link deps (reuse packages found at root; safe to call again if needed) -----
 find_package(OpenSSL REQUIRED)
-target_link_libraries(VirtualRouter PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-
-# Link PCAP libraries
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCAP REQUIRED libpcap)
-target_link_libraries(VirtualRouter PRIVATE ${PCAP_LIBRARIES})
 
-# Now create the executable for the VirtualRouter from main.cpp
-add_executable(VirtualRouterExec ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
+target_include_directories(VirtualRouter PRIVATE ${PCAP_INCLUDE_DIRS})
+target_link_libraries(VirtualRouter PRIVATE
+    ${TELNET_LIBRARIES}
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ${PCAP_LIBRARIES}
+    pthread
+)
 
-# Link the VirtualRouter library to the executable
-target_link_libraries(VirtualRouterExec PRIVATE VirtualRouter OpenSSL::SSL OpenSSL::Crypto ${PCAP_LIBRARIES} pthread)
+# ----- Executable: isolated compile unit -----
+add_executable(VirtualRouterExec ${VR_SRC}/main.cpp)
+target_link_libraries(VirtualRouterExec PRIVATE VirtualRouter)
 
-# Add the include directories for the executable (VirtualRouter already has them)
-target_include_directories(VirtualRouterExec PRIVATE ${HEADER_DIRS})

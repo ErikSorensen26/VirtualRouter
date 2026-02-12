@@ -1,10 +1,10 @@
 // EigrpInterfaceNeighborManager.cpp
 
 #include "NeighborTable.h"
-#include <EigrpTypes.hpp>
+#include "eigrp/EigrpTypes.hpp"
 #include "ReliableTransport.h"
-#include <EigrpInterface.h>
-#include <Eigrp.h>
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/core/Eigrp.h"
 
 namespace Eigrp
 {
@@ -47,7 +47,7 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::V
         auto* neighbor = &neighborIt.first->second;
         base.addGlobalNeighbor(neighborIp, neighbor);
 
-        if (isUnicast && iface.configs->multicastEnabled.load(std::memory_order_relaxed))
+        if (isUnicast && iface.configs.multicastEnabled.load(std::memory_order_relaxed))
         {
             disableMulticast();
         }
@@ -60,18 +60,18 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::V
 
 void NeighborTable::enableMulticast()
 {
-    if (!iface.configs->multicastEnabled.load(std::memory_order_relaxed))
+    if (!iface.configs.multicastEnabled.load(std::memory_order_relaxed))
     {
-        iface.configs->multicastEnabled.store(true, std::memory_order_release);
+        iface.configs.multicastEnabled.store(true, std::memory_order_release);
     }
 }
 
 void NeighborTable::disableMulticast()
 {
     // Check if multicast is already disabled
-    if (!iface.configs->multicastEnabled.load(std::memory_order_relaxed)) return;
+    if (!iface.configs.multicastEnabled.load(std::memory_order_relaxed)) return;
 
-    iface.configs->multicastEnabled.store(false, std::memory_order_release);
+    iface.configs.multicastEnabled.store(false, std::memory_order_release);
     removeAllMulticast();
 }
 
@@ -184,7 +184,7 @@ void NeighborTable::startGracefulRestart(Neighbor& neighbor)
 
 bool NeighborTable::validatePTP(const IPAddress& neighborIp)
 {
-    if (iface.configs->interfaceMode.load(std::memory_order_relaxed) == EigrpConfigs::Mode::POINT_TO_POINT)
+    if (iface.configs.interfaceMode.load(std::memory_order_relaxed) == EigrpConfigs::Mode::POINT_TO_POINT)
     {
         // If no neighbors yet, allow.
         if (neighbors.empty())

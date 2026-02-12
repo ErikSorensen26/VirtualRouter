@@ -3,8 +3,8 @@
 #ifndef DHCPV6_CLIENT_H
 #define DHCPV6_CLIENT_H
 
-#include <Dhcpv6.h>
-#include <DhcpInfo.hpp>
+#include "Dhcpv6.h"
+#include "dhcp/DhcpInfo.hpp"
 
 // Forward declarations
 class Interface;

@@ -1,14 +1,12 @@
-#include <Ethernet.h>
-#include <Functions.h>
-#include <Interface.h>
-#include <PacketBuilder.hpp>
-#include <Arp.h>
-#include <Ndp.h>
-#include <HeaderHelpers.hpp>
+// Ethernet.cpp
+
+#include "packet/PacketStructure.h"
+#include "interface/Interface.h"
+#include "processing/PacketBuilder.hpp"
 
 namespace Protocol::Ethernet
 {
-bool build(Interface* iface, PacketBuilder& packetInfo, const uint8_t* destIp, const uint8_t* destMac, uint16_t type)
+bool build(Interface* iface, PacketBuilder& packetInfo, const uint8_t* destMac, uint16_t type)
 {
     // Create Header
     EthernetHeader ethernetHeader;

@@ -3,17 +3,9 @@
 #ifndef PACKET_DISPATCHER_H
 #define PACKET_DISPATCHER_H
 
-#include <Registry.hpp>
-#include <Ospfv2Header.hpp>
-#include <LSDB.hpp>
-
-#include <RouterLsaV2.hpp>
-#include <NetworkLsaV2.hpp>
-#include <SummaryNetworkLsa.hpp>
-#include <SummaryRouterLsa.hpp>
-#include <ExternalLsaV2.hpp>
-#include <FloodTypes.hpp>
-#include <RetransmissionList.hpp>
+#include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "ospf/database/LSDB.hpp"
+#include "ospf/neighbor/RetransmissionList.hpp"
 
 struct IPAddress;
 class PacketBuilder;
@@ -34,9 +26,9 @@ class PacketDispatcher
 {
 public:
     PacketDispatcher(OspfInterface& iface);
-    virtual ~PacketDispatcher() = 0;
+    virtual ~PacketDispatcher();
 
-    virtual Config::OspfInterfaceBaseRegistry& getBaseConfigs();
+    virtual Config::OspfInterfaceBaseRegistry& getBaseConfigs() = 0;
 
     virtual void sendHello() = 0;
     virtual void sendUnicastHello(Neighbor& nbr) = 0;

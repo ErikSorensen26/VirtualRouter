@@ -4,15 +4,20 @@
 #define EIGRP_TOPOLOGY_CONTROLLER_H
 
 #include <cstdint>
-#include <TopologyTable.h>
-#include <Neighbor.h>
+#include <vector>
+#include <IPAddress.hpp>
+#include <unordered_map>
 
-#include <iostream>
 namespace Eigrp
 {
+class EigrpInterface;
 class DuelEngine;
 class Neighbor;
 class NeighborTable;
+
+struct RouteInfo;
+struct TopologyEntry;
+struct ReceivedRoute;
 
 class TopologyController
 {

@@ -3,9 +3,10 @@
 #ifndef INTERFACE_HELPERS_HPP
 #define INTERFACE_HELPERS_HPP
 
-#include <Interface.h>
 #include <AddressFamily.hpp>
-#include <EigrpTypes.hpp>
+
+#include "eigrp/EigrpTypes.hpp"
+#include "interface/Interface.h"
 
 namespace Cli
 {

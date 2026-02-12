@@ -4,9 +4,10 @@
 #define SUMMARY_ROUTER_LSA_HPP
 
 #include <cstdint>
-#include <HeaderHelpers.hpp>
 #include <optional>
-#include <OspfFletcher.hpp>
+
+#include "ospf/transmission/OspfFletcher.hpp"
+#include "packet/HeaderHelpers.hpp"
 
 namespace OSPF
 {

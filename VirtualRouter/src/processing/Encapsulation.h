@@ -3,7 +3,7 @@
 #ifndef ENCAPSULATION_H
 #define ENCAPSULATION_H
 
-#include <Checksums.h>
+#include <cstdint>
 
 class PacketBuilder;
 enum class HeaderType : uint8_t;

@@ -1,8 +1,11 @@
-#include <Dhcpv6AuthManager.h>
-#include <PacketStructure.h>
-#include <TlvOptions.hpp>
-#include <Encryption.hpp>
+// Dhcpv6AuthManager.cpp
+
 #include <Functions.h>
+
+#include "packet/headers/Dhcpv6Header.hpp"
+#include "Dhcpv6AuthManager.h"
+#include "packet/TlvOptions.hpp"
+#include "security/Encryption.hpp"
 
 using namespace std::chrono;
 

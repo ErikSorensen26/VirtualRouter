@@ -1,10 +1,11 @@
 // ReliableRX.cpp
 
 #include "ReliableTransport.h"
+#include "eigrp/topology/TopologyTable.h"
 #include "TLVBuilder.h"
-#include "EigrpInterface.h"
-#include <Eigrp.h>
-#include <PacketBuilder.hpp>
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/core/Eigrp.h"
+#include "interface/Interface.h"
 
 namespace Eigrp
 {
@@ -13,7 +14,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     IPAddress neigIp(neighborIp, af);
 
     // Check if passive
-    if (iface.configs->isPassive.load(std::memory_order_relaxed))
+    if (iface.configs.isPassive.load(std::memory_order_relaxed))
         return;
 
     // Validate packet version
@@ -196,7 +197,6 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
     if (conditionalSeq != 0)
         info.neighbor->receivedConditions[conditionalSeq] = conditionExemption;
 
-    info.neighbor->markHeard();
     iface.getTimers().startHoldTimer(*nbr);
 
     // Safely extract the neighbor state
@@ -304,7 +304,6 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     {
         std::vector<ReceivedRoute> routeBuffer;
         routeBuffer.reserve(routeOpts.size());
-        bool nextHopSelf = iface.configs->nextHopSelf.load(std::memory_order_relaxed);
         for (const auto& opt : routeOpts)
         {
             if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)

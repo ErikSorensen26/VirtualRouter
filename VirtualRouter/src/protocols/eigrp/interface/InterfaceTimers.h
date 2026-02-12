@@ -7,7 +7,6 @@
 #include <chrono>
 #include <atomic>
 #include <IPAddress.hpp>
-#include <EigrpTypes.hpp>
 
 class Global;
 class TimeManager;

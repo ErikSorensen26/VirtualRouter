@@ -6,9 +6,6 @@
 #include <cstdint>
 #include <functional>
 
-#include <Ospfv2LSAHeader.hpp>
-#include <Ospfv3LSAHeader.hpp>
-
 namespace OSPF
 {
 using RouterId = uint32_t;
@@ -16,11 +13,21 @@ using AreaId = uint32_t;
 using InstanceId = uint32_t;
 using LinkStateId = uint32_t;
 
+struct LsaKey;
+
 struct LsaAdvKey
 {
     LsaAdvKey() = default;
     LsaAdvKey(uint16_t type, RouterId advRtr)
         : lsaType(type), advertisingRouter(advRtr) {}
+
+    bool operator==(const LsaAdvKey& o) const noexcept
+    {
+        return lsaType == o.lsaType &&
+               advertisingRouter == o.advertisingRouter;
+    }
+
+    inline bool operator==(const LsaKey& o) const noexcept;
 
     uint16_t lsaType{0};
     RouterId advertisingRouter;
@@ -46,7 +53,19 @@ struct LsaKey : LsaAdvKey
                linkStateId == o.linkStateId &&
                advertisingRouter == o.advertisingRouter;
     }
+
+    bool operator<(const LsaKey& o) const noexcept
+    {
+        return std::tie(lsaType, advertisingRouter, linkStateId)
+             < std::tie(o.lsaType, o.advertisingRouter, o.linkStateId);
+    }
 };
+
+bool LsaAdvKey::operator==(const LsaKey& o) const noexcept
+{
+    return lsaType == o.lsaType &&
+           advertisingRouter == o.advertisingRouter;
+}
 
 struct LsaTypeKey
 {

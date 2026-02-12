@@ -3,8 +3,9 @@
 #ifndef GLOBAL_IP_COMMANDS_H
 #define GLOBAL_IP_COMMANDS_H
 
-#include <CliModeParser.hpp>
-#include <GlobalContext.hpp>
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/SubCommand.hpp"
+#include "cli/modes/contexts/GlobalContext.hpp"
 #include "GlobalIPDHCPCommands.h"
 
 namespace Cli

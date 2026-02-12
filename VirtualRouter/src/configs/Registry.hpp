@@ -4,16 +4,16 @@
 #define REGISTRY_HPP
 
 #include "RegistryDatabase.hpp"
-#include "SubRegistry.hpp" // KEEP
 
-#include <OspfInterfaceRegistry.h>
-#include <OspfRegistry.h>
-#include <BgpRegistry.h>
+#include "registry/router/OspfInterfaceRegistry.h"
+#include "registry/router/OspfRegistry.h"
+#include "registry/router/BgpRegistry.h"
 
 namespace Config
 {
 using Registry = RegistryDatabase<
     OspfRegistry,
+    OspfAreaRegistry,
     OspfAddressFamilyV2Registry,
     OspfAddressFamilyV3Registry,
     OspfInterfaceRegistry,

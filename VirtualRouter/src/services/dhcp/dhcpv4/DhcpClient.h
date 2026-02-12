@@ -3,7 +3,7 @@
 #ifndef DHCP_CLIENT_H
 #define DHCP_CLIENT_H
 
-#include <DhcpInfo.hpp>
+#include "dhcp/DhcpInfo.hpp"
 
 // Forward declarations
 struct TLV8Option;

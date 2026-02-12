@@ -3,8 +3,8 @@
 #ifndef INTERFACE_IPV6_COMMANDS_H
 #define INTERFACE_IPV6_COMMANDS_H
 
-#include <CliModeParser.hpp>
-#include <InterfaceContext.hpp>
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/SubCommand.hpp"
 #include "InterfaceIPv6NDCommands.h"
 #include "InterfaceIPv6OspfCommands.h"
 

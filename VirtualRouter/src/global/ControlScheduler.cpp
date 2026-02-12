@@ -1,7 +1,8 @@
 // ControlScheduler.cpp
 
-#include "ControlScheduler.h"
 #include <array>
+
+#include "ControlScheduler.h"
 
 static thread_local int gcontrolEngineTlsMarker = 0;
 

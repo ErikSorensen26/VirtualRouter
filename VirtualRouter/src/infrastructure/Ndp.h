@@ -3,19 +3,10 @@
 #ifndef NDP_H
 #define NDP_H
 
-#include <PacketStructure.h>
-#include <Functions.h>
-#include <Encapsulation.h>
 #include <queue>
-#include <mutex>
-#include <chrono>
-#include <unordered_map>
-#include <unordered_set>
-#include <shared_mutex>
-#include <atomic>
-#include <vector>
-#include <TimeManager.h>
-#include <Interface.h>
+
+#include "packet/PacketStructure.h"
+#include "interface/Interface.h"
 
 class Internal_NdpTest;
 

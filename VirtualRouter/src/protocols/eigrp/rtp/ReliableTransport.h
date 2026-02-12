@@ -3,20 +3,23 @@
 #ifndef EIGRP_RELIABLE_TRANSPORT_H
 #define EIGRP_RELIABLE_TRANSPORT_H
 
-#include "EigrpTypes.hpp"
-#include "Neighbor.h"
+#include <map>
+#include <IPAddress.hpp>
+#include <atomic>
+
+#include "eigrp/EigrpTypes.hpp"
+#include "packet/TlvOptions.hpp"
+#include "eigrp/rtp/Neighbor.h"
 
 #define MAX_RETRANSMISSIONS 16
 
 class Internal_EigrpTest;
 class PacketBuilder;
-class Interface;
 
 namespace Eigrp
 {
-class EigrpInterface;
 class NeighborTable;
-struct ReceivedRoute;
+
 struct OutgoingQuery;
 struct ActiveRoute;
 

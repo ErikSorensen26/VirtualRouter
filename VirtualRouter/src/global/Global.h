@@ -8,17 +8,18 @@
 #include <mutex>
 #include <shared_mutex>
 #include <atomic>
+#include <map>
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
-#include <TxQueueManager.h>
-#include <RxQueueManager.h>
-#include <CliEngine.h>
-#include <AddressFamily.hpp>
-#include <IPAddress.hpp>
-#include <map>
-#include <KeyChainManager.h>
-#include <Registry.hpp>
+
+#include "qos/egress/TxQueueManager.h"
+#include "qos/ingress/RxQueueManager.h"
+#include "cli/runtime/CliEngine.h"
+#include "security/keys/KeyChainManager.h"
+#include "configs/Registry.hpp"
 #include "ControlScheduler.h"
+#include "AddressFamily.hpp"
+#include "IPAddress.hpp"
 
 #define DEFAULT_HOSTNAME "router"
 

@@ -1,4 +1,4 @@
-// RegistryTypes.hpp
+// SubRegistry.hpp
 
 #ifndef SUB_REGISTRY_HPP
 #define SUB_REGISTRY_HPP
@@ -7,7 +7,10 @@
 #include <utility>
 #include <cstddef>
 #include <mutex>
-#include <RegistryTypes.hpp>
+#include <optional>
+#include <type_traits>
+
+#include "RegistryTypes.hpp"
 
 namespace Config
 {
@@ -19,9 +22,14 @@ class SubRegistry
 {
 public:
     using keyType = KEY;
-    using type = ENUM;
+    using type    = ENUM;
     using ctxType = Ctx;
+
+    // Meta tuple: used ONLY for compile-time checks / type indexing.
     using FieldTuple = std::tuple<Fields...>;
+
+    // Storage tuple: holds non-movable fields without ever moving/copying them.
+    using StorageTuple = std::tuple<std::optional<Fields>...>;
 
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
 
@@ -40,28 +48,33 @@ public:
     ContextProvider<Ctx>& context() noexcept { return ctxProvider; }
 
     explicit SubRegistry() noexcept
-        : fields(this->template createField<Fields>()...),
+        : ctxProvider(),
+          fields(),
           base(nullptr)
-    {}
+    {
+        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
 
     SubRegistry(SubRegistry& parent)
-        : fields(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{}),
-          base(&parent),
-          ctxProvider(parent.ctxProvider)
-    {}
+        : ctxProvider(parent.ctxProvider),
+          fields(),
+          base(&parent)
+    {
+        constructMaskedFields(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
 
     template <ENUM F>
     decltype(auto) get() noexcept
     {
         constexpr size_t I = Config::toIndex<F>;
-        return (std::get<I>(fields));
+        return (*std::get<I>(fields));
     }
 
     template <ENUM F>
     decltype(auto) get() const noexcept
     {
         constexpr size_t I = Config::toIndex<F>;
-        return (std::get<I>(fields));
+        return (*std::get<I>(fields));
     }
 
     bool isMasked() const noexcept
@@ -72,55 +85,89 @@ public:
     std::mutex mu;
 
 private:
+    // -------------------------
+    // Field argument factories
+    // -------------------------
 
     template <typename F>
-    F createField()
+    auto createField()
     {
         if constexpr (IsValueField<F> || IsOptionalValueField<F>)
         {
             if constexpr (RequiresContext<F>)
-                return F(ctxProvider, mu);
+                return std::forward_as_tuple(ctxProvider, mu);
             else
-                return F(mu);
+                return std::forward_as_tuple(mu);
         }
         else if constexpr (RequiresContext<F>)
-            return F(ctxProvider);
+            return std::forward_as_tuple(ctxProvider);
         else
-            return F{};
+            return std::tuple<>{};
     }
 
-    template <size_t... I>
-    FieldTuple makeMaskedFields(
-        const SubRegistry& parent,
-        std::index_sequence<I...>
-    ) noexcept
+    template <typename F>
+    auto createMaskedField(const F& parentField)
     {
-        return FieldTuple(
-            createMaskedField(
-                std::get<I>(parent.fields)
-            )...
+        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
+        {
+            if constexpr (RequiresContext<F>)
+                return std::forward_as_tuple(ctxProvider, mu, parentField);
+            else
+                return std::forward_as_tuple(mu, parentField);
+        }
+        else if constexpr (RequiresContext<F>)
+            return std::forward_as_tuple(ctxProvider, parentField);
+        else
+            return std::forward_as_tuple(parentField);
+    }
+
+    // ------------------------------------
+    // In-place construction (NO moves/copies)
+    // ------------------------------------
+
+    template <size_t... I>
+    void constructFields(std::index_sequence<I...>) noexcept
+    {
+        (constructOne<I, std::tuple_element_t<I, FieldTuple>>(), ...);
+    }
+
+    template <size_t I, typename F>
+    void constructOne() noexcept
+    {
+        auto& opt = std::get<I>(fields); // std::optional<F>
+        std::apply(
+            [&](auto&&... args)
+            {
+                opt.emplace(std::forward<decltype(args)>(args)...);
+            },
+            this->template createField<F>()
         );
     }
 
-    template <typename F>
-    F createMaskedField(const F& parentField)
+    template <size_t... I>
+    void constructMaskedFields(const SubRegistry& parent, std::index_sequence<I...>) noexcept
     {
-        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
-        {
-            if constexpr (RequiresContext<F>)
-                return F(ctxProvider, mu, parentField);
-            else
-                return F(mu, parentField);
-        }
-        else if constexpr (RequiresContext<F>)
-            return F(ctxProvider, parentField);
-        else
-            return F(parentField);
+        (constructMaskedOne<I, std::tuple_element_t<I, FieldTuple>>(
+            *std::get<I>(parent.fields)
+        ), ...);
     }
 
-    FieldTuple fields;
-    const SubRegistry* base{nullptr};
+    template <size_t I, typename F>
+    void constructMaskedOne(const F& parentField) noexcept
+    {
+        auto& opt = std::get<I>(fields); // std::optional<F>
+        std::apply(
+            [&](auto&&... args)
+            {
+                opt.emplace(std::forward<decltype(args)>(args)...);
+            },
+            createMaskedField(parentField)
+        );
+    }
+
     ContextProvider<Ctx> ctxProvider;
+    StorageTuple fields;
+    const SubRegistry* base{nullptr};
 };
 
 template <typename KEY, typename ENUM, typename... Fields>
@@ -128,8 +175,13 @@ class SimpleSubRegistry
 {
 public:
     using keyType = KEY;
-    using type = ENUM;
+    using type    = ENUM;
+
+    // Meta tuple (compile-time)
     using FieldTuple = std::tuple<Fields...>;
+
+    // Storage tuple (runtime)
+    using StorageTuple = std::tuple<std::optional<Fields>...>;
 
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
 
@@ -146,27 +198,31 @@ public:
     );
 
     explicit SimpleSubRegistry() noexcept
-        : fields(this->template createField<Fields>()...),
+        : fields(),
           base(nullptr)
-    {}
+    {
+        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
 
     SimpleSubRegistry(SimpleSubRegistry& parent)
-        : fields(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{}),
+        : fields(),
           base(&parent)
-    {}
+    {
+        constructMaskedFields(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
 
     template <ENUM F>
     decltype(auto) get() noexcept
     {
         constexpr size_t I = Config::toIndex<F>;
-        return (std::get<I>(fields));
+        return (*std::get<I>(fields));
     }
 
     template <ENUM F>
     decltype(auto) get() const noexcept
     {
         constexpr size_t I = Config::toIndex<F>;
-        return (std::get<I>(fields));
+        return (*std::get<I>(fields));
     }
 
     bool isMasked() const noexcept
@@ -177,39 +233,66 @@ public:
     std::mutex mu;
 
 private:
-
     template <typename F>
-    F createField()
+    auto createField()
     {
         if constexpr (IsValueField<F> || IsOptionalValueField<F>)
-            return F(mu);
-        return F{};
+            return std::forward_as_tuple(mu);
+        return std::tuple<>{};
+    }
+
+    template <typename F>
+    auto createMaskedField(const F& parentField)
+    {
+        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
+            return std::forward_as_tuple(mu, parentField);
+        return std::forward_as_tuple(parentField);
     }
 
     template <size_t... I>
-    FieldTuple makeMaskedFields(
-        const SimpleSubRegistry& parent,
-        std::index_sequence<I...>
-    ) noexcept
+    void constructFields(std::index_sequence<I...>) noexcept
     {
-        return FieldTuple(
-            createMaskedField(
-                std::get<I>(parent.fields)
-            )...
+        (constructOne<I, std::tuple_element_t<I, FieldTuple>>(), ...);
+    }
+
+    template <size_t I, typename F>
+    void constructOne() noexcept
+    {
+        auto& opt = std::get<I>(fields); // std::optional<F>
+        std::apply(
+            [&](auto&&... args)
+            {
+                opt.emplace(std::forward<decltype(args)>(args)...);
+            },
+            this->template createField<F>()
         );
     }
 
-    template <typename F>
-    F createMaskedField(const F& parentField)
+    template <size_t... I>
+    void constructMaskedFields(const SimpleSubRegistry& parent, std::index_sequence<I...>) noexcept
     {
-        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
-            return F(mu, parentField);
-        return F(parentField);
+        (constructMaskedOne<I, std::tuple_element_t<I, FieldTuple>>(
+            *std::get<I>(parent.fields)
+        ), ...);
     }
 
-    FieldTuple fields;
+    template <size_t I, typename F>
+    void constructMaskedOne(const F& parentField) noexcept
+    {
+        auto& opt = std::get<I>(fields); // std::optional<F>
+        std::apply(
+            [&](auto&&... args)
+            {
+                opt.emplace(std::forward<decltype(args)>(args)...);
+            },
+            createMaskedField(parentField)
+        );
+    }
+
+    StorageTuple fields;
     const SimpleSubRegistry* base{nullptr};
 };
 }
 
 #endif // SUB_REGISTRY_HPP
+

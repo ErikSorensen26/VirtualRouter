@@ -3,12 +3,11 @@
 #ifndef TCP_H
 #define TCP_H
 
-#include "TcpTypes.hpp"
-#include <unordered_map>
-#include <vector>
 #include <optional>
 #include <cstdint>
 #include <span>
+
+#include "TcpTypes.hpp"
 
 class VirtualRouter;
 class TcpSegment;

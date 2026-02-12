@@ -5,11 +5,12 @@
 
 #include <cstdint>
 #include <vector>
-#include <HeaderHelpers.hpp>
 #include <optional>
-#include <OspfFletcher.hpp>
 #include <algorithm>
 #include <numeric>
+
+#include "ospf/transmission/OspfFletcher.hpp"
+#include "packet/HeaderHelpers.hpp"
 
 namespace OSPF
 {

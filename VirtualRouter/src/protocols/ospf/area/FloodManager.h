@@ -11,13 +11,13 @@ class ProcessQueue;
 
 namespace OSPF
 {
-class OspfArea;
+class Area;
 class OspfRib;
 
 class FloodManager
 {
 public:
-    explicit FloodManager(OspfArea& area, ProcessQueue& sch);
+    explicit FloodManager(Area& area, ProcessQueue& sch);
 
     void enqueueFlood(LsaRecordRef& record, const FloodInfo& info);
     void enqueueFlood(LsaRecordRef&& record, const FloodInfo& info);
@@ -30,7 +30,7 @@ private:
     void runFlood();
 
 private:
-    OspfArea& area;
+    Area& area;
     ProcessQueue& scheduler;
     FloodQueue fq;
 

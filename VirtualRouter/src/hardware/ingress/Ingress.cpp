@@ -2,8 +2,6 @@
 
 #include "Ingress.h"
 #include "IngressPacket.h"
-#include <iostream>
-#include <exception>
 
 IngressBase* IngressFactory::create(Interface* iface, const RxQueueOpts& opts)
 {

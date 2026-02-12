@@ -1,10 +1,11 @@
 // VirtualRouter.cpp
 
-#include <VirtualRouter.h>
-#include <Eigrp.h>
-#include <Interface.h>
-#include <Global.h>
-#include <InterfaceType.hpp>
+#include "VirtualRouter.h"
+#include "Global.h"
+#include "interface/Interface.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "eigrp/core/Eigrp.h"
+#include "ospf/OspfProcess.h"
 
 VirtualRouter::VirtualRouter(Global& global, const std::string& name)
     : defaulted(name == "default"), global(global)
@@ -195,24 +196,24 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
     return false;
 }
 
-OSPF::OspfProcess& VirtualRouter::addOspf(uint32_t id)
+OSPF::OspfProcess& VirtualRouter::addOspf(uint16_t id)
 {
     if (auto it = ospfList.find(id); it == ospfList.end())
     {
-        ospfList.emplace(id, false, id, AddressFamily::IPv4, this);
+        ospfList.try_emplace(id, false, id, AddressFamily::IPv4, this);
         return it->second;
     }
-    return ospfList[id];
+    return ospfList.at(id);
 }
 
-OSPF::OspfProcess* VirtualRouter::getOspf(uint32_t id)
+OSPF::OspfProcess* VirtualRouter::getOspf(uint16_t id)
 {
     if (auto it = ospfList.find(id); it != ospfList.end())
         return &it->second;
     return nullptr;
 }
 
-bool VirtualRouter::removeOspf(uint32_t id)
+bool VirtualRouter::removeOspf(uint16_t id)
 {
     if (auto it = ospfList.find(id); it != ospfList.end()) 
     {
@@ -222,14 +223,19 @@ bool VirtualRouter::removeOspf(uint32_t id)
     return false;
 }
 
-OSPF::OspfV3Instance& VirtualRouter::addOspfv3(uint32_t id)
+OSPF::OspfV3Instance& VirtualRouter::addOspfv3(uint16_t id)
 {
-    return ospfv3List[id];
+    return ospfv3List.at(id);
 }
 
-OSPF::OspfProcess& VirtualRouter::addOspfv3(uint32_t id, AddressFamily af)
+OSPF::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, AddressFamily af)
 {
-    auto& ospf = ospfv3List[id];
+    if (ospfv3List.find(id) == ospfv3List.end())
+    {
+        Config::Reference<Config::OspfAddressFamilyV3Registry> afConfigs = global.registry.create<Config::OspfAddressFamilyV3Registry>(Config::generateOspfKey(instanceId, id, AddressFamily::NONE, true));
+        ospfv3List.emplace(id, afConfigs);
+    }
+    auto ospf = ospfv3List.at(id);
 
     if (af == AddressFamily::IPv4)
     {
@@ -245,14 +251,14 @@ OSPF::OspfProcess& VirtualRouter::addOspfv3(uint32_t id, AddressFamily af)
     }
 }
 
-OSPF::OspfV3Instance* VirtualRouter::getOspfv3(uint32_t id)
+OSPF::OspfV3Instance* VirtualRouter::getOspfv3(uint16_t id)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
         return &it->second;
     return nullptr;
 }
 
-bool VirtualRouter::removeOspfv3(uint32_t id)
+bool VirtualRouter::removeOspfv3(uint16_t id)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
     {
@@ -273,7 +279,7 @@ bool VirtualRouter::removeOspfv3(uint32_t id)
     return false;
 }
 
-bool VirtualRouter::removeOspfv3(uint32_t id, AddressFamily af)
+bool VirtualRouter::removeOspfv3(uint16_t id, AddressFamily af)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
     {

@@ -1,8 +1,9 @@
-#include <Checksums.h>
-#include <Functions.h>
-#include <Encapsulation.h>
-#include <HeaderHelpers.hpp>
+// Checksums.cpp
+
 #include <cstring>
+
+#include "Checksums.h"
+#include "packet/HeaderHelpers.hpp"
 
 // Calculates the CRC32 checksum of the given string data
 /*bool Checksum::crc32(uint8_t* out, const uint8_t* data, size_t dataSize)

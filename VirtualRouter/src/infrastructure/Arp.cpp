@@ -1,10 +1,15 @@
-#include <Arp.h>
-#include <Interface.h>
-#include <Ethernet.h>
-#include <VirtualRouter.h>
+// Arp.h
+
+// TODO: remove ethernet from arp, put it into queue
+
 #include <Global.h>
-#include <PacketBuilder.hpp>
-#include <HeaderHelpers.hpp>
+#include <VirtualRouter.h>
+
+#include "Arp.h"
+#include "interface/Interface.h"
+#include "packet/headers/ArpHeader.hpp"
+#include "processing/PacketBuilder.hpp"
+#include "Ethernet.h"
 
 namespace Protocol 
 {
@@ -12,7 +17,7 @@ namespace Protocol
     // Constructor: Initiates the ARP object with the given interface
     Arp::Arp(Interface& CurrentInterface) 
         : currentInterface(&CurrentInterface),
-        global(CurrentInterface.getVRF()->global)
+        global(CurrentInterface.getVRF()->getGlobal())
     {
         if (global.routingEnabled)
             initiateArp();
@@ -21,7 +26,7 @@ namespace Protocol
     void Arp::initiateArp()
     {
         std::shared_lock<std::shared_mutex> lock(global.configs.arp.neighborMutex);
-        auto it = global.configs.arp.neighbors.find(currentInterface->getVRF()->instanceName);
+        auto it = global.configs.arp.neighbors.find(currentInterface->getVRF()->getName());
         if (it != global.configs.arp.neighbors.end())
         {
             for (const auto& [ip, neighbor] : it->second)
@@ -496,7 +501,7 @@ namespace Protocol
             {
                 //TODO add more headers
                 case HeaderType::ETHERNET:
-                    Protocol::Ethernet::build(currentInterface, pkt, targetIp, macAddress, ETHERNET_IPV6);
+                    Protocol::Ethernet::build(currentInterface, pkt, macAddress, ETHERNET_IPV6);
                     break;
                 default:
                     continue;

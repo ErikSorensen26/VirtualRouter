@@ -1,10 +1,10 @@
-#include "CommandProcessor.h"
+/*#include "CommandProcessor.h"
 #include <Eigrp.h>
 #include <EigrpInterface.h>
 #include <AddressFamily.hpp>
 #include <Mode.hpp>
 
-/*bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::string>& commandStream)
+bool CommandProcessor::handleAddressFamilyInterface(const std::vector<std::string>& commandStream)
 {
 	if (terminal.currentSubMode == "eigrp_named")
 	{

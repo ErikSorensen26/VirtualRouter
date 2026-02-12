@@ -1,10 +1,12 @@
 // RouterEigrpTopologyCommands.cpp
 
-#include "RouterEigrpTopologyCommands.h"
-#include <Eigrp.h>
-#include <EigrpTypes.hpp>
-#include <CliSession.h>
 #include <Functions.h>
+#include <Global.h>
+#include <VirtualRouter.h>
+
+#include "RouterEigrpTopologyCommands.h"
+#include "eigrp/core/Eigrp.h"
+#include "cli/runtime/CliSession.h"
 
 namespace Cli
 {
@@ -62,6 +64,7 @@ bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
             configs.externalAdminDistance.store(170, std::memory_order_release);
         }
     }
+    return true;
 }
 
 bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS)

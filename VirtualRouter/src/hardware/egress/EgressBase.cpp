@@ -1,10 +1,12 @@
 // EgressBase.cpp
 
-#include "EgressBase.h"
 #include <pthread.h>
 #include <sched.h>
-#include <Interface.h>
-#include <TxQueueOpts.hpp>
+
+#include "EgressBase.h"
+#include "qos/egress/TxQueueOpts.hpp"
+#include "interface/Interface.h"
+#include "hardware/PacketSlot.hpp"
 
 EgressBase::EgressBase(Interface& iface, const TxQueueOpts& o)
     : iface(iface), opts(o), qid(static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)), packetSize(iface.configs.globalMtu.load(std::memory_order_relaxed))

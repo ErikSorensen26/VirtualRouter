@@ -7,7 +7,8 @@
 #include <chrono>
 #include <atomic>
 #include <unordered_map>
-#include <Dhcpv6.h>
+
+#include "dhcp/DhcpInfo.hpp"
 
 struct Dhcpv6Header;
 struct TLV16BufferManager;

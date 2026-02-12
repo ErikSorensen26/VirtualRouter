@@ -6,23 +6,24 @@
 #include <cstdint>
 #include <cstddef>
 
-#include "EthernetHeader.hpp"
-#include "ArpHeader.hpp"
-#include "MplsHeader.hpp"
-#include "IpHeaders.hpp"
-#include "TcpHeader.hpp"
-#include "UdpHeader.hpp"
-#include "IcmpHeader.hpp"
-#include "Icmpv6Header.hpp"
-#include "AhHeader.hpp"
-#include "EspHeader.hpp"
-#include "DhcpHeader.hpp"
-#include "Dhcpv6Header.hpp"
-#include "Dhcpv6RelayHeader.hpp"
-#include "EigrpHeader.hpp"
-#include "Ospfv2Header.hpp"
-#include "Ospfv3Header.hpp"
-#include "SyslogHeader.hpp"
+#include "packet/headers/EthernetHeader.hpp"
+#include "packet/headers/ArpHeader.hpp"
+#include "packet/headers/MplsHeader.hpp"
+#include "packet/headers/IpHeaders.hpp"
+#include "packet/headers/TcpHeader.hpp"
+#include "packet/headers/UdpHeader.hpp"
+#include "packet/headers/IcmpHeader.hpp"
+#include "packet/headers/Icmpv6Header.hpp"
+#include "packet/headers/AhHeader.hpp"
+#include "packet/headers/EspHeader.hpp"
+#include "packet/headers/DhcpHeader.hpp"
+#include "packet/headers/Dhcpv6Header.hpp"
+#include "packet/headers/Dhcpv6RelayHeader.hpp"
+#include "packet/headers/EigrpHeader.hpp"
+#include "packet/headers/Ospfv2Header.hpp"
+#include "packet/headers/Ospfv3Header.hpp"
+#include "packet/headers/BgpHeader.hpp"
+#include "packet/headers/SyslogHeader.hpp"
 
 // --- uint16_t ---
 constexpr uint16_t NET16(uint16_t val) {
@@ -122,7 +123,7 @@ enum class HeaderType : uint8_t
     ARP, MPLS,
     IPV4, IPV6, AH, ESP, ICMP, ICMPV6,
     TCP, UDP, EIGRP, OSPFV2, OSPFV3,
-    DHCP, DHCPV6, DHCPV6_RELAY,
+    DHCP, DHCPV6, DHCPV6_RELAY, BGP,
     ENCAPSULATE
 };
 
@@ -156,6 +157,7 @@ inline size_t getHeaderSize(HeaderType type)
         case HeaderType::DHCP: return DhcpHeader::fixedSize;
         case HeaderType::DHCPV6: return Dhcpv6Header::fixedSize;
         case HeaderType::DHCPV6_RELAY: return Dhcpv6RelayHeader::fixedSize;
+        case HeaderType::BGP: return BgpHeader::fixedSize;
         default: return 0;
     }
 }

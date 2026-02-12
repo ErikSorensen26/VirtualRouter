@@ -3,9 +3,7 @@
 #ifndef ROUTER_EIGRP_CLASSIC_COMMANDS_H
 #define ROUTER_EIGRP_CLASSIC_COMMANDS_H
 
-#include <CliModeParser.hpp>
-#include <EigrpContext.hpp>
-#include "RouterEigrpTopologyCommands.h"
+#include "cli/modes/parsers/router/RouterEigrpTopologyCommands.h"
 
 namespace Cli
 {

@@ -1,11 +1,11 @@
 // EigrpInterfaceSummary.cpp
 
-#include "RouteAggregator.h"
 #include <mutex>
-#include "EigrpInterface.h"
 #include <Functions.h>
-#include <Eigrp.h>
-#include <InterfaceConfigs.h>
+#include "RouteAggregator.h"
+#include "EigrpInterface.h"
+#include "eigrp/core/Eigrp.h"
+#include "interface/configs/InterfaceConfigs.h"
 
 namespace Eigrp
 {
@@ -14,11 +14,11 @@ RouteAggregator::RouteAggregator(EigrpInterface& iface)
 
 RouteAggregator::~RouteAggregator()
 {
-    std::shared_lock<std::shared_mutex> lock(iface.configs->configsMutex);
+    std::shared_lock<std::shared_mutex> lock(iface.configs.configsMutex);
     for (const auto& [prefix, sr] : summaryRoutes)
     {
         if (!sr.isAuto)
-            iface.configs->pendingSummaryRoutes.emplace_back(prefix);
+            iface.configs.pendingSummaryRoutes.emplace_back(prefix);
     }
     clearAutoSummaries();
     summaryRoutes.clear();

@@ -1,14 +1,14 @@
 // InterfaceIPv6Commands.cpp
 
+#include <Functions.h>
+#include <VirtualRouter.h>
+
 #include "InterfaceIPv6Commands.h"
 #include "InterfaceHelpers.hpp"
-
-#include <CliSession.h>
-#include <Functions.h>
-#include <Eigrp.h>
-#include <EigrpInterface.h>
-#include <VirtualRouter.h>
-#include <Ndp.h>
+#include "cli/runtime/CliSession.h"
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include <infrastructure/Ndp.h>
 
 namespace Cli
 {

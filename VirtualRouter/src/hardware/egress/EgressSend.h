@@ -3,13 +3,10 @@
 #ifndef EGRESS_SEND_H
 #define EGRESS_SEND_H
 
-#include "EgressBase.h"
-#include <PacketSlot.hpp>
-
-#include <cstddef>
-#include <cstdint>
 #include <linux/if_packet.h>
-#include <net/ethernet.h>
+
+#include "EgressBase.h"
+#include "hardware/PacketSlot.hpp"
 
 class EgressSend : public EgressBase
 {

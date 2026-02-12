@@ -8,6 +8,7 @@
 #include <string>
 
 #include "Command.hpp"
+#include "FixedString.hpp"
 
 namespace Cli
 {

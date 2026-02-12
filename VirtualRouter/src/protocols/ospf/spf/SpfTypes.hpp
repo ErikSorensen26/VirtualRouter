@@ -6,8 +6,8 @@
 #include <cstdint>
 #include <limits>
 #include <functional>
-#include <LsaKey.hpp>
-#include <LSDB.hpp>
+
+#include "ospf/database/LsaKey.hpp"
 
 #define OSPF_DETERMINISTIC_PARENT_ORDER true
 #define OSPF_STRICT_MISSING_NETWORK_LSA false

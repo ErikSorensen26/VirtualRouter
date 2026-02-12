@@ -1,12 +1,11 @@
 // InterfaceOspfCommands.cpp
 
-#include "InterfaceOspfCommands.h"
-#include <Interface.h>
 #include <VirtualRouter.h>
-#include <OspfInterfaceRegistry.h>
 
-#include <CliSession.h>
-#include <Mode.hpp>
+#include "InterfaceOspfCommands.h"
+#include "interface/Interface.h"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "cli/runtime/CliSession.h"
 
 namespace Cli
 {

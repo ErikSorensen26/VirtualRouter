@@ -3,8 +3,10 @@
 #ifndef GLOBAL_IPV6_COMMANDS_H
 #define GLOBAL_IPV6_COMMANDS_H
 
-#include <CliModeParser.hpp>
-#include <GlobalContext.hpp>
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/Command.hpp"
+#include "cli/parser/SubCommand.hpp"
+#include "cli/modes/contexts/GlobalContext.hpp"
 #include "GlobalIPv6NDCommands.h"
 
 namespace Cli

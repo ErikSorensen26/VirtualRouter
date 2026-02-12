@@ -4,12 +4,12 @@
 #define VIRTUAL_ROUTER_H
 
 #include <string>
-#include <RoutingTable.hpp>
 #include <set>
 #include <shared_mutex>
 #include <AddressFamily.hpp>
-#include <Eigrp.h>
-#include <OspfProcess.h>
+
+#include "configs/Registry.hpp"
+#include "routing/RoutingTable.hpp"
 
 class Interface; ///< Forward declaration of Interface.
 class Global;    ///< Forward declaration of Global.
@@ -18,6 +18,11 @@ namespace Eigrp
 {
     struct EigrpAutonomousSystem; ///< Forward declaration of Eigrp Autonomous System.
     struct EigrpNamed;            ///< Forward declaration of Eigrp Named.
+}
+namespace OSPF
+{
+    class OspfProcess;
+    class OspfV3Instance;
 }
 enum class InterfaceType: uint8_t; ///< Forward declaration of InterfaceType.
 
@@ -270,15 +275,15 @@ public:
      * @param id Process ID.
      * @return Reference to the newly created OSPFv2 instance.
      */
-    OSPF::OspfProcess& addOspf(uint32_t id);
+    OSPF::OspfProcess& addOspf(uint16_t id);
 
     /**
-     * @brief Retreives an OSPFv2 instance.
+     * @brief retreives an ospfv2 instance.
      *
-     * @param id Process ID.
-     * @return Pointer to instance or nullptr if missing.
+     * @param id process id.
+     * @return pointer to instance or nullptr if missing.
      */
-    OSPF::OspfProcess* getOspf(uint32_t id);
+    OSPF::OspfProcess* getOspf(uint16_t id);
 
     /**
      * @brief Remove and delete an OSPFv2 process.
@@ -286,7 +291,7 @@ public:
      * @param id Process ID to remove.
      * @return True if removed, false if missing.
      */
-    bool removeOspf(uint32_t id);
+    bool removeOspf(uint16_t id);
 
     // OSPFv3 PROCESS
 
@@ -298,7 +303,7 @@ public:
      * @param id Process ID.
      * @return Reference to the newly created OSPFv2 instance.
      */
-    OSPF::OspfV3Instance& addOspfv3(uint32_t id);
+    OSPF::OspfV3Instance& addOspfv3(uint16_t id);
 
     /**
      * @brief Creates a OSPFv3 address family instance.
@@ -309,7 +314,7 @@ public:
      * @param af Address Family.
      * @return Reference to the newly created OSPFv2 instance.
      */
-    OSPF::OspfProcess& addOspfv3(uint32_t id, AddressFamily af);
+    OSPF::OspfProcess& addOspfv3(uint16_t id, AddressFamily af);
 
     /**
      * @brief Retreives an OSPFv3 instance.
@@ -317,7 +322,7 @@ public:
      * @param id Process ID.
      * @return Pointer to instance or nullptr if missing.
      */
-    OSPF::OspfV3Instance* getOspfv3(uint32_t id);
+    OSPF::OspfV3Instance* getOspfv3(uint16_t id);
 
     /**
      * @brief Remove and delete an OSPFv3 process.
@@ -325,7 +330,7 @@ public:
      * @param id Process ID to remove.
      * @return True if removed, false if missing.
      */
-    bool removeOspfv3(uint32_t id);
+    bool removeOspfv3(uint16_t id);
 
     /**
      * @brief Remove and delete a OSPFv3 address family.
@@ -334,7 +339,7 @@ public:
      * @param af Address Family.
      * @return True if removed, false if missing.
      */
-    bool removeOspfv3(uint32_t id, AddressFamily af);
+    bool removeOspfv3(uint16_t id, AddressFamily af);
 
     std::shared_mutex interfaceMutex; ///< Protects interfaceList.
     std::unordered_map<uint32_t, Interface*> interfaceList; ///< Interfaces belonging to this VRF.
@@ -349,6 +354,7 @@ public:
     ControlScheduler& getControlScheduler();
     
 private:
+    friend class Interface;
     uint32_t instanceId{0};
     const bool defaulted{false};
 

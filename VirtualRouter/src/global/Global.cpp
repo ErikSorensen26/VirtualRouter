@@ -1,16 +1,16 @@
-#include <Global.h>
-#include <Interface.h>
-#include <InterfaceConfigs.h>
-#include <RoutingTable.hpp>
-#include <VirtualRouter.h>
-#include <HardwareManager.h>
+// Global.cpp
 
 #include <string>
 #include <map>
 #include <mutex>
 
+#include "Global.h"
+#include "VirtualRouter.h"
+#include "interface/Interface.h"
+#include "hardware/HardwareManager.h"
+
 Global::Global(const StartupFiles& stfs, bool enableRouting, bool test)
-    : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), engine(*this, stfs, test)
+    : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), scheduler(threadPool, timeManager), engine(*this, stfs, test)
 {
     txMgr.setCorePool({0, 1, 2, 3});
     txMgr.setCpuPolicy(CpuPolicy::EqualShare);
@@ -24,7 +24,7 @@ Global::Global(const StartupFiles& stfs, bool enableRouting, bool test)
     }
 }
 
-Global::Global(IFileSystem* fs, const StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), engine(*this, stfs, fs, test) {}
+Global::Global(IFileSystem* fs, const StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), scheduler(threadPool, timeManager), engine(*this, stfs, fs, test) {}
 
 Global::~Global()
 {

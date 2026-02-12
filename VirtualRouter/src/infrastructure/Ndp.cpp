@@ -1,20 +1,23 @@
+// Ndp.cpp
+
 // TODO naglean
 // TODO nudigp
-#include <Ndp.h>
+
 #include <Functions.h>
-#include <IPPacket.h>
-#include <TimeManager.h>
-#include <VirtualRouter.h>
 #include <Global.h>
-#include <PacketBuilder.hpp>
-#include <Ethernet.h>
+#include <VirtualRouter.h>
+
+#include "Ndp.h"
+#include "IPPacket.h"
+#include "processing/PacketBuilder.hpp"
+#include "Ethernet.h"
 
 namespace Protocol
 {
     // Constructor: Initiates the NDP object with the given interface
     Ndp::Ndp(Interface& iface)
         : currentInterface(&iface),
-        global(iface.getVRF()->global)
+        global(iface.getVRF()->getGlobal())
     {
         // Initialize global configs
         configs.refresh = global.configs.ndp.refresh.load(std::memory_order_relaxed);
@@ -505,7 +508,7 @@ namespace Protocol
             {
                 //TODO add more headers
                 case HeaderType::ETHERNET:
-                    Protocol::Ethernet::build(currentInterface, pkt, targetIp.raw, macAddress, ETHERNET_IPV6);
+                    Protocol::Ethernet::build(currentInterface, pkt, macAddress, ETHERNET_IPV6);
                     break;
                 default:
                     continue;

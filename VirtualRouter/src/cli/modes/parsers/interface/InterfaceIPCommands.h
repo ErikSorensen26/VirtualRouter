@@ -3,8 +3,7 @@
 #ifndef INTERFACE_IP_COMMANDS_H
 #define INTERFACE_IP_COMMANDS_H
 
-#include <CliModeParser.hpp>
-#include <InterfaceContext.hpp>
+#include "cli/parser/SubCommand.hpp"
 #include "InterfaceIPOspfCommands.h"
 
 namespace Cli

@@ -1,6 +1,5 @@
-#include <HardwareManager.h>
-#include <Configs.h>
-#include <InterfaceType.hpp>
+// HardwareManager.cpp
+
 #include <stdexcept>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
@@ -11,9 +10,13 @@
 #include <linux/rtnetlink.h>
 #include <linux/ethtool.h>
 #include <linux/sockios.h>
-#include <HeaderHelpers.hpp>
-#include <Interface.h>
-#include <Ifname.h>
+
+#include "HardwareManager.h"
+#include "cli/runtime/Configs.h"
+#include "packet/HeaderHelpers.hpp"
+#include "interface/Interface.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "hardware/Ifname.h"
 
 HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& fileSystem, bool enableDummies)
     : allowDummies(enableDummies)

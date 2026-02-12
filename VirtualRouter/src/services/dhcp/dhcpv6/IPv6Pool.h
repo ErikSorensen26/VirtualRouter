@@ -7,8 +7,8 @@
 #include <unordered_set>
 #include <mutex>
 #include <atomic>
-#include <DhcpInfo.hpp>
-#include <Dhcpv6.h>
+
+#include "Dhcpv6.h"
 
 class TimeManager;
 class IPv6LeaseManager;

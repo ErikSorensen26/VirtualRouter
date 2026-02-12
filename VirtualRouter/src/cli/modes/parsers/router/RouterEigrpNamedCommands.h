@@ -3,8 +3,9 @@
 #ifndef ROUTER_EIGRP_COMMANDS_H
 #define ROUTER_EIGRP_COMMANDS_H
 
-#include <EigrpContext.hpp>
-#include <CliModeParser.hpp>
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/Command.hpp"
+#include "cli/modes/contexts/EigrpContext.hpp"
 
 namespace Cli
 {

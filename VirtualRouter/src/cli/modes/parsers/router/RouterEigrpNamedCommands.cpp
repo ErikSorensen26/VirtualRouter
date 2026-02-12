@@ -2,10 +2,11 @@
 
 #include "RouterEigrpNamedCommands.h"
 
-#include <CliSession.h>
-#include <CliEngine.h>
 #include <Global.h>
 #include <VirtualRouter.h>
+
+#include "eigrp/core/Eigrp.h"
+#include "cli/runtime/CliSession.h"
 
 namespace Cli
 {

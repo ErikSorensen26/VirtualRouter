@@ -2,20 +2,19 @@
 
 // TODO add external route capability for adding to rib
 
-#include <RouteManager.h>
-#include "Eigrp.h"
-#include <EigrpInterface.h>
 #include <VirtualRouter.h>
-#include <RoutingTable.hpp>
-#include <Interface.h>
-#include <InterfaceConfigs.h>
-#include <HardwareManager.h>
+
+#include "RouteManager.h"
+#include "Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "routing/RoutingTable.hpp"
+#include "interface/Interface.h"
 
 namespace Eigrp
 {
 
 RouteManager::RouteManager(Eigrp& process)
-    : base(process), rib(process.routingInstance->routingTable)
+    : base(process), rib(process.routingInstance->getRib())
 {
     af = base.getAF();
     as = base.getAS();
@@ -24,15 +23,15 @@ RouteManager::RouteManager(Eigrp& process)
 void RouteManager::withdrawRoute(const IPPrefix withdraw)
 {
     if (af == AddressFamily::IPv4)
-        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, 0, as);
+    {
+        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
+        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+    }
     else
-        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, 0, as);
-}
-
-void RouteManager::withdrawRoutes(const std::vector<IPPrefix>& withdraws)
-{
-    for (const auto& prefix : withdraws)
-        withdrawRoute(prefix);
+    {
+        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
+        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+    }
 }
 
 void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)

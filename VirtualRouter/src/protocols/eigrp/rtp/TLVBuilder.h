@@ -4,9 +4,10 @@
 #define EIGRP_TLV_BUILDER_H
 
 #include <cstdint>
-#include <EigrpTypes.hpp>
-#include <Neighbor.h>
-#include <TlvOptions.hpp>
+
+#include "eigrp/EigrpTypes.hpp"
+#include "eigrp/rtp/Neighbor.h"
+#include "packet/TlvOptions.hpp"
 
 struct IPAddress;
 struct EigrpHeader;

@@ -1,13 +1,16 @@
-#include <DhcpServer.h>
-#include <IPPacket.h>
-#include <Udp.h>
-#include <PacketBuilder.hpp>
-#include <Interface.h>
-#include <InterfaceConfigs.h>
-#include <TlvOptions.hpp>
-#include <Encryption.hpp>
-#include <DhcpInfo.hpp>
+// DhcpServer.cpp
+
 #include <Global.h>
+#include <iostream>
+
+#include "DhcpServer.h"
+#include "infrastructure/IPPacket.h"
+#include "udp/Udp.h"
+#include "processing/PacketBuilder.hpp"
+#include "interface/Interface.h"
+#include "packet/TlvOptions.hpp"
+#include "security/Encryption.hpp"
+#include "dhcp/DhcpInfo.hpp"
 
 void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* sourceMac, Interface& iface)
 {
@@ -111,7 +114,7 @@ void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* s
             if (configs.snooping.verifyGiaddr.load(std::memory_order_relaxed))
             {
                 uint32_t giaddr = readU32(dhcp.raw->giaddr);
-                if (!iface.configs.ipv4.compareAddress(giaddr))
+                if (!iface.configs.ipv4.comparePrimaryAddress(giaddr))
                     return;
             }
 
@@ -234,7 +237,7 @@ void Protocol::DhcpServer::sendOffer(
     tlv.tlv.append(DHCP_OPTION_TYPE, 1, &type, 1);
 
     // Server Identifier
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getAddressInt()))
+    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress()))
         return;
 
     // Lease Config
@@ -365,7 +368,7 @@ void Protocol::DhcpServer::sendAck(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getAddressInt());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
 
     // Lease config
     Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
@@ -503,7 +506,7 @@ void Protocol::DhcpServer::sendNak(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getAddressInt());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
 
     // Echo relay option
     if (relayInfo)
@@ -589,7 +592,7 @@ void Protocol::DhcpServer::sendInformReply(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getAddressInt());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
 
     Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net) return;
@@ -698,7 +701,7 @@ void Protocol::DhcpServer::sendForceRenew(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getAddressInt());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
 
     // Echo relay option
     if (relayInfo)
@@ -806,7 +809,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
         Dhcp::appendTLV(tlv, DHCP_OPTION_MASK, 4, Functions::prefixToMask(buf, prefixLen, AddressFamily::IPv4));
 
         // Router
-        Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, iface.configs.ipv4.getAddressInt());
+        Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, iface.configs.ipv4.getPrimaryAddress());
 
         // Timestamp
         Dhcp::appendTLV(tlv, DHCP_OPTION_TIMESTAMP, secondsSinceEpoch());

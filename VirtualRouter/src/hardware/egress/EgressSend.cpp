@@ -1,17 +1,18 @@
 // EgressSend.cpp
 
-#include "EgressSend.h"
-#include <Ifname.h>
-
-#include <Interface.h>
-#include <TxQueueOpts.hpp>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <net/ethernet.h>
 #include <unistd.h>
 #include <cerrno>
 #include <cstring>
 #include <cstdlib>
 #include <stdexcept>
+
+#include "EgressSend.h"
+#include "hardware/Ifname.h"
+#include "interface/Interface.h"
+#include "qos/egress/TxQueueOpts.hpp"
 
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0

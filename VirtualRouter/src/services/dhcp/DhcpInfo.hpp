@@ -4,7 +4,6 @@
 #define DHCP_INFO_HPP
 
 #include <vector>
-#include <HeaderHelpers.hpp>
 #include <IPAddress.hpp>
 #include <random>
 #include <atomic>
@@ -14,6 +13,8 @@
 #include <stdexcept>
 #include <string>
 #include <optional>
+
+#include "packet/HeaderHelpers.hpp"
 
 // Forward declarations
 class Interface;

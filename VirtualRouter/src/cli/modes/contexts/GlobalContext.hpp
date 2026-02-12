@@ -3,7 +3,7 @@
 #ifndef GLOBAL_CONTEXT_HPP
 #define GLOBAL_CONTEXT_HPP
 
-#include <ContextBase.hpp>
+#include "ContextBase.hpp"
 
 #define GLOBAL_PARAMS GlobalContext& ctx, const std::vector<std::string>& args
 

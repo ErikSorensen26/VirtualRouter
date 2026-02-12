@@ -8,7 +8,6 @@
 #include <type_traits>
 #include <cstddef>
 #include <iterator>
-#include <FixedString.hpp>
 
 namespace Cli
 {

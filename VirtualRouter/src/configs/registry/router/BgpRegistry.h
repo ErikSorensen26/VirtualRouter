@@ -3,9 +3,14 @@
 #ifndef BGP_REGISTRY_H
 #define BGP_REGISTRY_H
 
-#include <RegistryTemplate.hpp>
-#include <IPAddress.hpp>
-#include <TupleSchema.hpp>
+#include <string>
+
+#include "IPAddress.hpp"
+#include "configs/TupleSchema.hpp"
+#include "configs/RegistryTypes.hpp"
+#include "configs/RegistryReference.hpp"
+
+struct buh {};
 
 namespace Config
 {
@@ -27,9 +32,10 @@ enum class BgpBase
     HOLDTIME,
     MINIMUM_HOLDTIME,
     TRANSPORT_PATH_MTU_DISCOVERY,
+    COUNT
 };
 
-using BgpBaseRegistry = SubRegistry<__uint128_t, BgpBase,
+using BgpBaseRegistry = SubRegistry<__uint128_t, BgpBase, buh,
     AtomicField<uint16_t, 60, BgpBase::KEEPALIVE_INTERVAL>,
     AtomicField<uint16_t, 180, BgpBase::HOLDTIME>,
     OptionalAtomicField<uint16_t, BgpBase::MINIMUM_HOLDTIME>,
@@ -39,6 +45,7 @@ using BgpBaseRegistry = SubRegistry<__uint128_t, BgpBase,
 
 enum class BgpNeighbor
 {
+    BGP_BASE,
     ACTIVATE,
     ADDITIONAL_PATHS_RECEIVE,
     ADDITIONAL_PATHS_SEND,
@@ -121,10 +128,12 @@ enum class BgpNeighbor
     TTL_SEC,
     TTL_SEC_HOP,
     UNSUPPRESS_MAP,
-    WEIGHT
+    WEIGHT,
+    COUNT
 };
 
-using BgpNeighborRegistry = SubRegistry<__uint128_t, BgpNeighbor,
+using BgpNeighborRegistry = SubRegistry<__uint128_t, BgpNeighbor, buh,
+    ReferenceContainer<BgpBaseRegistry, BgpNeighbor::BGP_BASE>,
     AtomicField<bool, false, BgpNeighbor::ACTIVATE>,
     AtomicField<bool, false, BgpNeighbor::ADDITIONAL_PATHS_RECEIVE>,
     AtomicField<bool, false, BgpNeighbor::ADDITIONAL_PATHS_SEND>,
@@ -147,9 +156,9 @@ using BgpNeighborRegistry = SubRegistry<__uint128_t, BgpNeighbor,
     OptionalValueField<std::string, BgpNeighbor::ORIGINATE_ROUTE_MAP>,
     OptionalValueField<std::string, BgpNeighbor::DESCRIPTION>,
     AtomicField<bool, false, BgpNeighbor::DISABLE_CONNECTION_CHECK>,
-    OptionalAtomicField<std::string, BgpNeighbor::DISTRIBUTE_LIST_IN>,
+    OptionalValueField<std::string, BgpNeighbor::DISTRIBUTE_LIST_IN>,
     OptionalAtomicField<uint32_t, BgpNeighbor::DISTRIBUTE_LIST_IN_INTERFACE>,
-    OptionalAtomicField<std::string, BgpNeighbor::DISTRIBUTE_LIST_OUT>,
+    OptionalValueField<std::string, BgpNeighbor::DISTRIBUTE_LIST_OUT>,
     OptionalAtomicField<uint32_t, BgpNeighbor::DISTRIBUTE_LIST_OUT_INTERFACE>,
     AtomicField<bool, false, BgpNeighbor::DMZLINK_BW>,
     AtomicField<bool, false, BgpNeighbor::EBGP_MULTIHOP>,
@@ -166,6 +175,9 @@ using BgpNeighborRegistry = SubRegistry<__uint128_t, BgpNeighbor,
     OptionalValueField<std::string, BgpNeighbor::INHERIT_PEER_SESSION>,
     AtomicField<bool, false, BgpNeighbor::LOCAL_AS>,
     OptionalAtomicField<uint32_t, BgpNeighbor::LOCAL_AS_AS>,
+    AtomicField<bool, false, BgpNeighbor::LOCAL_AS_NO_PREPEND>,
+    AtomicField<bool, false, BgpNeighbor::LOCAL_AS_REPLACE_AS>,
+    AtomicField<bool, false, BgpNeighbor::LOCAL_AS_DUEL_AS>,
     OptionalAtomicField<uint32_t, BgpNeighbor::MAXIMUM_PREFIX>,
     OptionalAtomicField<uint8_t, BgpNeighbor::MAXIMUM_PREFIX_THRESHOLD>,
     OptionalAtomicField<uint16_t, BgpNeighbor::MAXIMUM_PREFIX_RESTART>,
@@ -326,11 +338,12 @@ enum class Bgp
 
 DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS)
 
-using BgpRegistry = SubRegistry<__uint128_t, Bgp,
+using BgpRegistry = SubRegistry<__uint128_t, Bgp, buh,
     ValueField<std::vector<BgpAggregateAddress::Tuple>, Bgp::AGGREGATE_ADDRESS>,
-    ReferenceContainer<BgpBase, Bgp::BGP_BASE>,
+    ReferenceContainer<BgpBaseRegistry, Bgp::BGP_BASE>,
     AtomicField<bool, false, Bgp::BGP_ADDITIONAL_PATHS_INSTALL>,
     AtomicField<bool, false, Bgp::BGP_ADDITIONAL_PATHS_RECEIVE>,
+    OptionalAtomicField<uint8_t, Bgp::BGP_ADDITIONAL_PATHS_SELECT>,
     AtomicField<bool, false, Bgp::BGP_ADDITIONAL_PATHS_SELECT_ALL>,
     AtomicField<bool, false, Bgp::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>,
     OptionalAtomicField<uint8_t, Bgp::BGP_ADDITIONAL_PATHS_SELECT_BEST>,
@@ -377,6 +390,7 @@ using BgpRegistry = SubRegistry<__uint128_t, Bgp,
     OptionalAtomicField<uint16_t, Bgp::BGP_MAX_COMMUNITY_LIMIT>,
     OptionalAtomicField<uint16_t, Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT>,
     OptionalValueField<std::string, Bgp::BGP_NEXT_HOP_ROUTE_MAP>,
+    OptionalValueField<uint16_t, Bgp::BGP_NEXT_HOP_TRIGGER_DELAY>,
     AtomicField<bool, true, Bgp::BGP_NEXT_HOP_TRACKING>,
     OptionalAtomicField<uint16_t, Bgp::BGP_NOPEERUP_DELAY_COLD_BOOT>,
     OptionalAtomicField<uint16_t, Bgp::BGP_NOPEERUP_DELAY_NSF_SWITCHOVER>,
@@ -413,13 +427,13 @@ using BgpRegistry = SubRegistry<__uint128_t, Bgp,
     AtomicField<uint8_t, 20, Bgp::DISTANCE_MBGP_EXTERNAL>,
     AtomicField<uint8_t, 200, Bgp::DISTANCE_MBGP_INTERNAL>,
     AtomicField<uint8_t, 200, Bgp::DISTANCE_MBGP_LOCAL>,
-    OptionalAtomicField<std::string, Bgp::DISTRIBUTE_LIST_IN>,
+    OptionalValueField<std::string, Bgp::DISTRIBUTE_LIST_IN>,
     OptionalAtomicField<uint32_t, Bgp::DISTRIBUTE_LIST_IN_INTERFACE>,
     AtomicField<bool, false, Bgp::DISTRIBUTE_LIST_IN_PREFIX>,
-    OptionalAtomicField<std::string, Bgp::DISTRIBUTE_LIST_OUT>,
+    OptionalValueField<std::string, Bgp::DISTRIBUTE_LIST_OUT>,
     OptionalAtomicField<uint32_t, Bgp::DISTRIBUTE_LIST_OUT_INTERFACE>,
     AtomicField<bool, false, Bgp::DISTRIBUTE_LIST_OUT_PREFIX>,
-    OptionalAtomicField<std::string, Bgp::DISTRIBUTE_LIST_GATEWAY>,
+    OptionalValueField<std::string, Bgp::DISTRIBUTE_LIST_GATEWAY>,
     OptionalAtomicField<uint8_t, Bgp::MAXIMUM_PATHS_EBGP>,
     OptionalAtomicField<uint8_t, Bgp::MAXIMUM_PATHS_IBGP>,
     OwnedListField<BgpNeighborRegistry, __uint128_t, Bgp::NEIGHBOR>,

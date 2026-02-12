@@ -5,9 +5,10 @@
 
 #include <cstdint>
 #include <IPAddress.hpp>
-#include <HeaderHelpers.hpp>
 #include <optional>
-#include <OspfFletcher.hpp>
+
+#include "ospf/transmission/OspfFletcher.hpp"
+#include "packet/HeaderHelpers.hpp"
 
 namespace OSPF
 {

@@ -9,7 +9,10 @@
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [],
+            "environment": [
+                { "name": "FORCE_COLOR", "value": "1" },
+                { "name": "CLICOLOR_FORCE", "value": "1" }
+            ],
             "externalConsole": false,
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb",

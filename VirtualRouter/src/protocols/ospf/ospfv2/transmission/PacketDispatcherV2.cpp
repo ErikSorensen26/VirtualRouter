@@ -1,11 +1,11 @@
 // v2PacketDispatcher
 
-#include <PacketDispatcherV2.h>
-#include <OspfNeighbor.h>
-#include <Ospfv2DBDHeader.hpp>
-#include <PacketBuilder.hpp>
-#include <OspfArea.h>
-#include <IPPacket.h>
+#include "PacketDispatcherV2.h"
+#include "ospf/neighbor/Neighbor.h"
+#include "ospf/area/Area.h"
+#include "packet/headers/embedded/ospf/Ospfv2DBDHeader.hpp"
+#include "processing/PacketBuilder.hpp"
+#include "infrastructure/IPPacket.h"
 
 namespace OSPF
 {

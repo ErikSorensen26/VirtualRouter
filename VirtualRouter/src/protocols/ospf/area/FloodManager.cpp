@@ -1,14 +1,15 @@
 // FloodManager.cpp
 
-#include "FloodManager.h"
-#include "OspfArea.h"
-#include <OspfProcess.h>
 #include <TimeManager.h>
-#include <OspfInterface.h>
+
+#include "FloodManager.h"
+#include "Area.h"
+#include "ospf/OspfProcess.h"
+#include "ospf/interface/OspfInterface.h"
 
 namespace OSPF
 {
-FloodManager::FloodManager(OspfArea& area, ProcessQueue& sch)
+FloodManager::FloodManager(Area& area, ProcessQueue& sch)
     : area(area), scheduler(sch), fq(0)
 {}
 

@@ -6,11 +6,11 @@
 #include <string>
 #include <vector>
 #include <type_traits>
-#include <Command.hpp>
-#include <SubCommand.hpp>
-#include <Mode.hpp>
 #include <json.hpp>
 #include <memory_resource>
+
+#include "FixedString.hpp"
+#include "cli/modes/Mode.hpp"
 
 #define UNUSED(x) (void)(x)
 
@@ -59,7 +59,7 @@ public:
         {
             using CmdT = decltype(cmdType);
 
-            if (execute)
+            if (executed)
                 return;
 
             if constexpr (is_cli_mode_v<CmdT>)

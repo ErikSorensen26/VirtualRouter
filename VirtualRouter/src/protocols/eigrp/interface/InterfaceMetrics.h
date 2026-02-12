@@ -4,7 +4,6 @@
 #define EIGRP_INTERFACE_METRICS_H
 
 #include <cstdint>
-#include <cstddef>
 #include <chrono>
 
 enum class AddressFamily : uint8_t;

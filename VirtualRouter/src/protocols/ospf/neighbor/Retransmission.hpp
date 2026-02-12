@@ -3,9 +3,8 @@
 #ifndef RETRNASMISSION_HPP
 #define RETRNASMISSION_HPP
 
-#include <OspfPacket.hpp>
-#include <FloodTypes.hpp>
-#include <LSDB.hpp>
+#include "ospf/transmission/OspfPacket.hpp"
+#include "ospf/database/LSDB.hpp"
 #include "RetransmissionList.hpp"
 
 namespace OSPF

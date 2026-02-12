@@ -1,15 +1,12 @@
 // EigrpInterfaceTimerManager.cpp
 
-#include "TimerManager.h"
 #include <TimeManager.h>
-#include "ReliableTransport.h"
-#include <VirtualRouter.h>
-#include <Global.h>
-#include "ReliablePacket.hpp"
+
+#include "InterfaceTimers.h"
+#include "eigrp/topology/TimerManager.h"
 #include "EigrpInterface.h"
-#include <EigrpTypes.hpp>
-#include <Eigrp.h>
-#include <DuelEngine.h>
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/rtp/ReliableTransport.h"
 
 namespace Eigrp
 {

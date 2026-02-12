@@ -1,15 +1,12 @@
 // PacketDispatcher.cpp
 
 #include "PacketDispatcher.h"
-#include <OspfInterface.h>
-#include <OspfPacket.hpp>
-#include <OspfInterface.h>
-#include <OspfProcess.h>
-#include <OspfNeighbor.h>
-#include <OspfFletcher.hpp>
-
-#include <IPPacket.h>
-#include <PacketBuilder.hpp>
+#include "OspfPacket.hpp"
+#include "OspfFletcher.hpp"
+#include "ospf/interface/OspfInterface.h"
+#include "ospf/OspfProcess.h"
+#include "ospf/neighbor/Neighbor.h"
+#include "ospf/OspfTypes.hpp"
 
 #define SUPPORT_RESYNC false
 
@@ -17,6 +14,8 @@ namespace OSPF
 {
 PacketDispatcher::PacketDispatcher(OspfInterface& iface)
     : multicastLsus(iface.getProcess(), iface), iface(iface), ntable(iface.getNTable()), af(iface.getProcess().getAF()) {}
+
+PacketDispatcher::~PacketDispatcher() = default;
 
 uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& record)
 {
@@ -81,7 +80,7 @@ void PacketDispatcher::sendReliableLSRequest(Neighbor& nbr, const std::vector<Ls
 void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
 {
     bool filter = iface.getConfigs().get<Config::OspfInterface::DATABASE_FILTER>().load();
-    bool floodReduction = iface.floodReduction.load(std::memory_order_relaxed);
+    bool floodReduction = iface.floodReduction;
 
     if (nbr)
     {

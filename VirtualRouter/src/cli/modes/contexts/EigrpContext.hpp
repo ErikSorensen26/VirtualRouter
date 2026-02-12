@@ -3,7 +3,7 @@
 #ifndef EIGRP_CONTEXT_HPP
 #define EIGRP_CONTEXT_HPP
 
-#include <ContextBase.hpp>
+#include "ContextBase.hpp"
 
 #define EIGRP_PARAMS EigrpContext& ctx, const std::vector<std::string>& args
 

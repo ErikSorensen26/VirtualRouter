@@ -1,7 +1,7 @@
 // LsdbTable.cpp
 
 #include "LsdbTable.h"
-#include <OspfFlagManager.h>
+#include "ospf/area/FlagManager.h"
 
 namespace OSPF
 {
@@ -194,7 +194,7 @@ size_t LsdbTable::purgeExpired(uint16_t maxAge)
 bool LsdbTable::runDCIntegrityScan()
 {
     bool enabled = true;
-    forEach([&](const LsaKey& key, const LsaRecord& record) {
+    forEach([&](const LsaKey&, const LsaRecord& record) {
         if (!InterfaceFlagManager::getDemandCircuits(record.header.options))
             enabled = false;
     });

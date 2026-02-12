@@ -1,6 +1,5 @@
 // IngressPacket.cpp
 
-#include "IngressPacket.h"
 #include <arpa/inet.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -10,7 +9,9 @@
 #include <stdexcept>
 #include <iostream>
 #include <chrono>
-#include <Ifname.h>
+
+#include "IngressPacket.h"
+#include "hardware/Ifname.h"
 
 #ifndef HOT
 #define HOT __attribute__((hot))

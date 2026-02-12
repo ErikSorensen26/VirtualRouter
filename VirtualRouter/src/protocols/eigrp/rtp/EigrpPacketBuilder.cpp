@@ -1,24 +1,23 @@
 // EigrpPacketBuilder.cpp
 
 // TODO support uint32_t asn
-#include <EigrpPacketBuilder.h>
-#include <PacketBuilder.hpp>
-#include <EigrpTypes.hpp>
-#include <AuthHandler.h>
-#include <EigrpInterface.h>
-#include <EigrpConfig.h>
-#include <Eigrp.h>
+
+#include "EigrpPacketBuilder.h"
+#include "eigrp/core/Eigrp.h"
+#include "processing/PacketBuilder.hpp"
+#include "eigrp/core/EigrpConfig.h"
+#include "eigrp/EigrpTypes.hpp"
+#include "eigrp/interface/AuthHandler.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/topology/TopologyTable.h"
 #include "TLVBuilder.h"
 #include "Neighbor.h"
 
 namespace Eigrp
 {
 std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet,
-                               uint8_t opcode,
-                               uint32_t seq,
-                               uint32_t ack,
-                               uint16_t virId,
-                               uint16_t asn)
+    uint8_t opcode, uint32_t seq, uint32_t ack, uint16_t virId, uint16_t asn
+)
 {
     EigrpHeader e = packet.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
     if (!e.buffer) return std::nullopt;
@@ -38,7 +37,7 @@ std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet
 
 void EigrpPacketBuilder::appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& iface)
 {
-    if (!iface.configs->auth.fullyEnabled.load(std::memory_order_relaxed)) return;
+    if (!iface.configs.auth.fullyEnabled.load(std::memory_order_relaxed)) return;
     auto* buf = tlv.getNextValBuf(36);
     iface.getAuth().buildAuthTLV(buf);
     tlv.append(EIGRP_OPTION_AUTHENTICATION, 40, nullptr, 36);
@@ -78,13 +77,13 @@ bool EigrpPacketBuilder::appendParameterTLV(TLV16BufferManager& tlv, EigrpInterf
     if (iface.getRtp().pendingPeerTermination.load(std::memory_order_relaxed))
     {
         std::memset(val, 255, 6);
-        writeU16(val + 6, iface.configs->holdTime.load(std::memory_order_relaxed));
+        writeU16(val + 6, iface.configs.holdTime.load(std::memory_order_relaxed));
         iface.getRtp().pendingPeerTermination.store(false, std::memory_order_release);
     }
     else
     {
         EigrpConfigs::KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
-        TLVBuilder::calculateParameters(val, k, iface.configs->holdTime.load(std::memory_order_relaxed));
+        TLVBuilder::calculateParameters(val, k, iface.configs.holdTime.load(std::memory_order_relaxed));
     }
     return tlv.append(EIGRP_OPTION_PARAMETER, 12, nullptr, 8);
 }

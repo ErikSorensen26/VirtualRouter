@@ -1,11 +1,10 @@
 // EigrpConfigManager
 
-#include <EigrpConfig.h>
-#include <Eigrp.h>
 #include <AddressFamily.hpp>
-#include <VirtualRouter.h>
-#include <EigrpInterface.h>
 #include <Functions.h>
+
+#include "Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
 
 namespace Eigrp
 {

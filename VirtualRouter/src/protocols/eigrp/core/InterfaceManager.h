@@ -38,7 +38,7 @@ public:
     std::unordered_map<uint32_t, EigrpConfigs::InterfaceConfigs> eigrpInterfaceConfigList; ///< Map of EIGRP interface config by identifier.
     std::shared_mutex interfaceMutex;
 
-public:
+private:
     Eigrp& base;
 };
 }

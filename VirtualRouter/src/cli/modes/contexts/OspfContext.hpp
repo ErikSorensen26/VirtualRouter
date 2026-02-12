@@ -3,7 +3,7 @@
 #ifndef OSPF_CONTEXT_HPP
 #define OSPF_CONTEXT_HPP
 
-#include <ContextBase.hpp>
+#include "ContextBase.hpp"
 
 #define OSPF_PARAMS OspfContext& ctx, const std::vector<std::string>& args
 

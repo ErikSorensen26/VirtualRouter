@@ -3,12 +3,15 @@
 #ifndef OSPF_INTERFACE_REGISTRY_H
 #define OSPF_INTERFACE_REGISTRY_H
 
-#include <RegistryTemplate.hpp>
 #include <optional>
 #include <vector>
-#include <IPAddress.hpp>
-#include <AddressFamily.hpp>
-#include <HeaderHelpers.hpp>
+
+#include "IPAddress.hpp"
+#include "AddressFamily.hpp"
+#include "packet/HeaderHelpers.hpp"
+#include "configs/SubRegistry.hpp"
+#include "configs/RegistryTypes.hpp"
+#include "configs/RegistryReference.hpp"
 
 namespace OSPF
 {
@@ -176,7 +179,7 @@ enum class OspfInterfaceBase : uint8_t
     IPSEC,
     LLS,
     MESSAGE_DIGEST_KEYS,
-    MESSAGE_DIGEST_ENCRRYPT,
+    MESSAGE_DIGEST_ENCRYPT,
     PREFIX_SUPPRESSION,
     RESYNC_TIMEOUT,
     SHUTDOWN,
@@ -199,7 +202,7 @@ using OspfInterfaceBaseRegistry = SubRegistry<uint64_t, OspfInterfaceBase, OSPF:
     OptionalAtomicField<bool, OspfInterfaceBase::LLS>,
     ValueField<std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>, OspfInterfaceBase::MESSAGE_DIGEST_KEYS,
         OSPF::OspfInterface, OspfInterfaceBaseUpdateDigestKey>,
-    AtomicField<bool, false, OspfInterfaceBase::MESSAGE_DIGEST_ENCRRYPT>,
+    AtomicField<bool, false, OspfInterfaceBase::MESSAGE_DIGEST_ENCRYPT>,
     AtomicField<bool, false, OspfInterfaceBase::PREFIX_SUPPRESSION,
         OSPF::OspfInterface, OspfInterfaceBasePrefixSuppression>,
     AtomicField<uint16_t, 5, OspfInterfaceBase::RESYNC_TIMEOUT>, // TODO 

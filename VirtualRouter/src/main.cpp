@@ -1,13 +1,12 @@
 // Problem where enqueue is dequeueing and then eventually it stopes anqueueing and then the queue gets fu
 
-#include <CliEngine.h>
-#include <CliSession.h>
+#include "cli/runtime/CliEngine.h"
+#include "cli/runtime/CliSession.h"
 #include <Logger.h>
 #include <Global.h>
 #include <getopt.h>
 
-#include <WebConsole.hpp>
-#include <WebSessionManager.hpp>
+#include "web/WebSessionManager.hpp"
 #include <CrashHandler.hpp>
 #include <RCU.hpp>
 

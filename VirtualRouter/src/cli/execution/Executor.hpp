@@ -3,8 +3,8 @@
 #ifndef EXECUTOR_HPP
 #define EXECUTOR_HPP
 
-#include <CliModeParser.hpp>
-#include <ContextBase.hpp>
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/modes/contexts/ContextBase.hpp"
 
 template <typename... Parsers>
 class Executor

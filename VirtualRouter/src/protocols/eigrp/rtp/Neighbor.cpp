@@ -1,9 +1,9 @@
 // Neighbor.cpp
 
 #include "Neighbor.h"
-#include <InterfaceTimers.h>
-#include <EigrpInterface.h>
-#include <Eigrp.h>
+#include "eigrp/interface/InterfaceTimers.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/core/Eigrp.h"
 
 namespace Eigrp
 {
@@ -76,7 +76,6 @@ void Neighbor::clear()
     initComplete.store(false);
 
     lastSeqRecv.store(0);
-    lastHeard = std::chrono::steady_clock::time_point{};
 
     clearReliable();
 }
@@ -111,11 +110,6 @@ bool Neighbor::hasAck(uint32_t ack)
 {
     std::lock_guard<std::mutex> lock(ackMtx);
     return outstandingAcks.contains(ack);
-}
-
-void Neighbor::markHeard()
-{
-    lastHeard = std::chrono::steady_clock::now();
 }
 
 bool Neighbor::isActive() const noexcept

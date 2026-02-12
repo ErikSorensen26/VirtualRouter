@@ -1,12 +1,13 @@
 // GlobalAggregator.cpp
 
+#include <Functions.h>
+
 #include "GlobalAggregator.h"
 #include "InterfaceManager.h"
 #include "Eigrp.h"
-#include "EigrpTopology.h"
-#include <EigrpInterface.h>
-#include <Functions.h>
-#include <RouteAggregator.h>
+#include "Topology.h"
+#include "eigrp/interface/RouteAggregator.h"
+#include "eigrp/interface/EigrpInterface.h"
 
 namespace Eigrp
 {

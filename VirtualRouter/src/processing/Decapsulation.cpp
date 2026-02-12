@@ -1,6 +1,10 @@
-#include <Decapsulation.h>
+// Decapsulation.cpp
+
 #include <immintrin.h>
-#include <HeaderHelpers.hpp>
+
+#include "Decapsulation.h"
+#include "packet/PacketStructure.h"
+#include "packet/HeaderHelpers.hpp"
 
 inline void prefetch_header(const void* ptr) {
     _mm_prefetch(reinterpret_cast<const char*>(ptr), _MM_HINT_T0);

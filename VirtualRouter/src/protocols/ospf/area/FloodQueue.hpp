@@ -6,12 +6,11 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <new>
 #include <utility>
 #include <vector>
-#include <FloodTypes.hpp>
 
-#include <LSDB.hpp>
+#include "ospf/area/FloodTypes.hpp"
+#include "ospf/database/LSDB.hpp"
 
 namespace OSPF
 {

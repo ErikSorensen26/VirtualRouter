@@ -3,8 +3,6 @@
 #ifndef INTERFACE_COMMANDS_H
 #define INTERFACE_COMMANDS_H
 
-#include <CliModeParser.hpp>
-#include <InterfaceContext.hpp>
 #include "InterfaceIPCommands.h"
 #include "InterfaceIPv6Commands.h"
 #include "InterfaceOspfv3Commands.h"

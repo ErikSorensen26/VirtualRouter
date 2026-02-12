@@ -1,12 +1,13 @@
 // InterfaceOspfv3Commands.cpp
 
-#include "InterfaceOspfv3Commands.h"
-#include <Interface.h>
 #include <VirtualRouter.h>
-#include <OspfInterfaceRegistry.h>
 
-#include <CliSession.h>
-#include <Mode.hpp>
+#include "InterfaceOspfv3Commands.h"
+#include "interface/Interface.h"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "cli/runtime/CliSession.h"
+#include "ospf/OspfProcess.h"
+#include "ospf/interface/OspfInterface.h"
 
 namespace Cli
 {

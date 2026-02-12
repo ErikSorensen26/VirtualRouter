@@ -3,14 +3,10 @@
 #ifndef DECAPSULATION_H
 #define DECAPSULATION_H
 
-#include <pcap.h>
-#include <cstring>
+#include <cstdint>
+#include <cstddef>
 
-#include <Functions.h>
-#include <Logger.h>
-#include <Interface.h>
-#include <algorithm>
-#include "PacketStructure.h"
+struct PacketInfo;
 
 /**
  * @class Packet

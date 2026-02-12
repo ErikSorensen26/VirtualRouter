@@ -1,4 +1,4 @@
-#include "CommandProcessor.h"
+/*#include "CommandProcessor.h"
 #include <VirtualRouter.h>
 #include <CliEngine.h>
 #include <EigrpInterface.h>
@@ -6,7 +6,7 @@
 #include <InterfaceConfigs.h>
 #include <InterfaceType.hpp>
 
-/*bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
+bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>& commandStream)
 {
 	if (terminal.currentSubMode == "eigrp_classic" || terminal.currentSubMode == "eigrp_classic_vrf" || (terminal.currentSubMode == "eigrp_named" && terminal.modeConfig.currentMode == Mode::routerAddressFamilyTopology))
 	{

@@ -8,13 +8,7 @@
 #include <map>
 #include <atomic>
 
-#include <Ingress.h>
-#include <Egress.hpp>
-#include <InterfaceConfigs.h>
-#include <PacketStructure.h>
-#include <FIFOQueue.hpp>
-
-#include <Ingress.h>
+#include "configs/InterfaceConfigs.h"
 
 class EigrpTest; ///< Forward declaration of EigrpTest.
 class VirtualRouter; ///< Forward declaration of VirtualRouter.
@@ -338,7 +332,7 @@ public:
 
     // EIGRP INTERFACES
 
-    std::map<uint32_t, Eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
+    std::unordered_map<uint32_t, Eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
 
     /**
      * @brief Retrieve or allocate EIGRP per-interface config block.
@@ -352,7 +346,7 @@ public:
 
     // OSPF INTERFACES
     
-    std::map<uint32_t, OSPF::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
+    std::unordered_map<uint32_t, OSPF::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
 
     /**
      * @brief Retrieve or allocate OSPF per-interface config block.

@@ -102,7 +102,7 @@ public:
 
     const std::vector<std::string> globalCommandList{"?", "vk_tab"}; ///< List of globally valid commands independent of mode.
     size_t paginationCount = 10; ///< Maximum number of entries displayed before pagination is triggered.
-    DoTime timeManager;          ///< Shared time-management utility used for timestamping or delayed operations.
+    DoTime timeKeeper;          ///< Shared time-management utility used for timestamping or delayed operations.
 
     std::vector<CliSession*> sessions; ///< All active CLI session owned by the engine.
 

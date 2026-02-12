@@ -1,7 +1,5 @@
 // EgressPacket.cpp
 
-#include "EgressPacket.h"
-#include <TxQueueOpts.hpp>
 #include <arpa/inet.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -9,10 +7,14 @@
 #include <unistd.h>
 #include <cstring>
 #include <stdexcept>
-#include <PacketSlot.hpp>
-#include <HeaderHelpers.hpp>
 #include <iostream>
-#include <Ifname.h>
+#include <thread>
+
+#include "EgressPacket.h"
+#include "qos/egress/TxQueueOpts.hpp"
+#include "hardware/PacketSlot.hpp"
+#include "packet/HeaderHelpers.hpp"
+#include "hardware/Ifname.h"
 
 #ifndef HOT
 #define HOT __attribute__((hot))
@@ -45,7 +47,7 @@ void EgressPacket::dumpRing()
 }
 
 EgressPacket::EgressPacket(Interface& iface, const TxQueueOpts& opts)
-    : EgressBase(iface, opts), fd(-1), epfd(-1), ring(nullptr), kickBatch(16)
+    : EgressBase(iface, opts), kickBatch(16), fd(-1), epfd(-1), ring(nullptr)
 {
     setupSocket();
     setupRing();

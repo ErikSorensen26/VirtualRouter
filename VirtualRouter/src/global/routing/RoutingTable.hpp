@@ -4,9 +4,10 @@
 #define ROUTING_TABLE_HPP
 
 #include <cstdint>
-#include <Rib.hpp>
 #include <AddressFamily.hpp>
 #include <type_traits>
+
+#include "rib/Rib.hpp"
 
 class RoutingTable
 {

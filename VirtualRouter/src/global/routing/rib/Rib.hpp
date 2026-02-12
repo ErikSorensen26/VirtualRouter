@@ -6,7 +6,8 @@
 #include <unordered_map>
 #include <atomic>
 #include <mutex>
-#include "Fib.hpp"
+
+#include "routing/fib/Fib.hpp"
 #include "RibBucket.hpp"
 
 template <typename AddrType>
@@ -154,7 +155,7 @@ public:
                 if (rt) best = rt;
             }
 
-            bool dir = bitAt(a, n->bit);
+            bool dir = fib.bitAt(a, n->bit);
             n = dir ? n->right.load(std::memory_order_acquire)
                     : n->left.load(std::memory_order_acquire);
         }
@@ -164,7 +165,7 @@ public:
     RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, RouteSource source)
     {
         auto* n = fib.root.load(std::memory_order_acquire);
-        if (!n) return false;
+        if (!n) return nullptr;
 
         RibEntry<AddrType>* best = nullptr;
 
@@ -175,7 +176,7 @@ public:
             auto pit = table.find({n->prefix, n->length});
             if (pit == table.end()) continue;
 
-            RibBucket<AddrType>& bucket = pit.second;
+            RibBucket<AddrType>& bucket = *pit->second;
 
             AddrType pfx = mask(a, n->length);
             if (pfx == n->prefix)
@@ -184,7 +185,7 @@ public:
                 if (rt) best = rt;
             }
 
-            bool dir = bitAt(a, n->bit);
+            bool dir = fib.bitAt(a, n->bit);
             n = dir ? n->right.load(std::memory_order_acquire)
                     : n->left.load(std::memory_order_acquire);
         }

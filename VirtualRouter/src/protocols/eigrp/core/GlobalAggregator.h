@@ -3,11 +3,10 @@
 #ifndef EIGRP_GLOBAL_AGGREGATOR_H
 #define EIGRP_GLOBAL_AGGREGATOR_H
 
-#include "TopologyTable.h"
-
 namespace Eigrp
 {
-struct SummaryRoute;
+class Eigrp;
+struct TopologyEntry;
 
 class GlobalAggregator
 {

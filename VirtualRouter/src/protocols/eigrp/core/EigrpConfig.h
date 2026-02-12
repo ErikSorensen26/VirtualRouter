@@ -4,8 +4,9 @@
 #define EIGRP_CONFIG_H
 
 #include <cstdint>
-#include <EigrpTypes.hpp>
-#include <GlobalAggregator.h>
+
+#include "eigrp/EigrpTypes.hpp"
+#include "eigrp/core/GlobalAggregator.h"
 
 struct EigrpHeader;
 

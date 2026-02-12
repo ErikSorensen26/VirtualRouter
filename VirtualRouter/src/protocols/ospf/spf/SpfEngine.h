@@ -5,13 +5,14 @@
 
 #include <cstdint>
 #include <limits>
-#include <LSDB.hpp>
+#include <optional>
+
 #include "SpfTypes.hpp"
 #include "SpfTopology.h"
 
 namespace OSPF
 {
-class OspfArea;
+class Area;
 struct SpfResult;
 
 class SpfEngine

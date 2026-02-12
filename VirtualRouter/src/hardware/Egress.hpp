@@ -14,8 +14,9 @@
 #include <string>
 #include <errno.h>
 #include <stdexcept>
-#include <PacketSlot.hpp>
-#include <Ifname.h>
+
+#include "hardware/PacketSlot.hpp"
+#include "hardware/Ifname.h"
 
 class Egress
 {

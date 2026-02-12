@@ -4,7 +4,7 @@
 #define WEB_SESSION_MANAGER_HPP
 
 #include <Global.h>
-#include <Console.h>
+#include "cli/runtime/Console.h"
 #include "UnixApi.h"
 #include "WebConsole.hpp"
 

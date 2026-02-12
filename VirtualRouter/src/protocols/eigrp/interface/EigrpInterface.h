@@ -4,16 +4,16 @@
 #define EIGRP_INTERFACE_H
 
 #include <IPAddress.hpp>
-#include "AuthHandler.h"
-#include "InterfaceMetrics.h"
-#include "ReliableTransport.h"
-#include "RouteAggregator.h"
-#include "NeighborTable.h"
-#include "InterfaceTimers.h"
-#include "TopologyController.h"
-#include "AuthHandler.h"
 #include <unordered_map>
 #include <deque>
+
+#include "AuthHandler.h"
+#include "InterfaceMetrics.h"
+#include "InterfaceTimers.h"
+#include "RouteAggregator.h"
+#include "TopologyController.h"
+#include "eigrp/rtp/ReliableTransport.h"
+#include "eigrp/rtp/NeighborTable.h"
 
 class Internal_EigrpTest;
 class Interface;

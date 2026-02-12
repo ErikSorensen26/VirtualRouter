@@ -3,7 +3,7 @@
 #ifndef INTERFACE_IP_OSPF_COMMANDS_H
 #define INTERFACE_IP_OSPF_COMMANDS_H
 
-#include <InterfaceOspfCommands.h>
+#include "InterfaceOspfCommands.h"
 
 namespace Cli
 {

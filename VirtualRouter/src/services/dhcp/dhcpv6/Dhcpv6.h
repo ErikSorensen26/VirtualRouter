@@ -3,7 +3,7 @@
 #ifndef DHCPV6_H
 #define DHCPV6_H
 
-#include <DhcpInfo.hpp>
+#include "dhcp/DhcpInfo.hpp"
 
 enum class Dhcpv6StatusCode : uint16_t
 {

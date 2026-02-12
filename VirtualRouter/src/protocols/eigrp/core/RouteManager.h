@@ -6,11 +6,10 @@
 #include <vector>
 #include <cstdint>
 #include <IPAddress.hpp>
-#include <RoutingTable.hpp>
-#include <EigrpConfig.h>
-#include <EigrpTypes.hpp>
-#include <TopologyTable.h>
-#include <HeaderHelpers.hpp>
+
+#include "routing/RoutingTable.hpp"
+#include "eigrp/core/EigrpConfig.h"
+#include "eigrp/topology/TopologyTable.h"
 
 namespace Eigrp
 {
@@ -24,7 +23,6 @@ public:
     explicit RouteManager(Eigrp& process);
 
     void withdrawRoute(const IPPrefix withdraws);
-    void withdrawRoutes(const std::vector<IPPrefix>& withdraws); // no update sent
     void synchronizeRoutes(const std::vector<TopologyEntry*>& entry);
     void synchronizeRoute(const TopologyEntry& entry);
 
@@ -40,6 +38,7 @@ private:
     const RouteInfo* syncRoute(const TopologyEntry* entryPtr, uint8_t scale)
     {
         if (!entryPtr) return nullptr;
+        std::optional<bool> isExternal{std::nullopt};
         auto& entry = *entryPtr;
         auto bestIt = entry.routesBySource.find(entry.bestNeighbor);
         if (entry.successors.empty() || bestIt == entry.routesBySource.end())
@@ -54,6 +53,11 @@ private:
             auto it = entry.routesBySource.find(neighbor);
             if (it == entry.routesBySource.end()) continue;
 
+            if (!isExternal.has_value())
+            {
+                isExternal = it->second.routeInfo.routeType == RouteType::EXTERNAL;
+            }
+
             ribEntry.addNextHop(
                 af == AddressFamily::IPv4 ? neighbor.v4 : neighbor.v6,
                 it->second.routeInfo.originInterface,
@@ -65,7 +69,7 @@ private:
             ? readU32(bestIt->second.routeInfo.prefix.addr)
             : readU128(bestIt->second.routeInfo.prefix.addr);
         ribEntry.length = bestIt->second.routeInfo.prefix.prefixLength;
-        ribEntry.source = RouteSource::EIGRP;
+        ribEntry.source = *isExternal ? RouteSource::EIGRP_EXTERNAL : RouteSource::EIGRP_INTERNAL;
         ribEntry.processId = as;
         ribEntry.adminDistance = bestIt->second.routeInfo.adminDistance;
         ribEntry.metric = bestIt->second.routeInfo.feasibleDistance * scale;

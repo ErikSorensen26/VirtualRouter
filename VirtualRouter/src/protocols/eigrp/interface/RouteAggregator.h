@@ -3,13 +3,20 @@
 #ifndef EIGRP_ROUTE_AGGREGATOR_H
 #define EIGRP_ROUTE_AGGREGATOR_H
 
-#include <TopologyTable.h>
+#include <map>
 #include <set>
+#include <mutex>
+#include <IPAddress.hpp>
 
 struct IPAddress;
 
 namespace Eigrp
 {
+class EigrpInterface;
+
+struct TopologyEntry;
+struct RouteInfo;
+
 struct SummaryRoute
 {
     TopologyEntry* summaryEntry = nullptr;

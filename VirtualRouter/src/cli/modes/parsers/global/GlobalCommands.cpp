@@ -1,16 +1,16 @@
 // GlobalCommands.cpp
 
-#include "GlobalCommands.h"
 #include <shared_mutex>
-#include <Global.h>
 #include <VirtualRouter.h>
-#include <Arp.h>
-#include <InterfaceType.hpp>
-#include <CliSession.h>
-#include <PrivilegedExecContext.hpp>
-#include <InterfaceContext.hpp>
-#include <EigrpContext.hpp>
-#include <HardwareManager.h>
+#include <Global.h>
+
+#include "GlobalCommands.h"
+#include "infrastructure/Arp.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "cli/runtime/CliSession.h"
+#include "cli/modes/contexts/InterfaceContext.hpp"
+#include "eigrp/core/Eigrp.h"
+#include "hardware/HardwareManager.h"
 
 namespace Cli
 {

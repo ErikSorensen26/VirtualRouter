@@ -4,14 +4,13 @@
 #include <cstdint>
 #include <type_traits>
 #include <RCU.hpp>
-#include "RibEntry.hpp"
+
+#include "routing/rib/RibEntry.hpp"
 
 template<typename Addr>
 class Fib
 {
-    static_assert(std::is_unsigned_v<Addr>);
-    static constexpr uint8_t W = sizeof(Addr)*8;
-
+public:
     struct Node
     {
         Addr prefix;
@@ -26,6 +25,39 @@ class Fib
     };
 
     std::atomic<Node*> root{nullptr};
+
+    RibEntry<Addr>* lookup(Addr a) const
+    {
+        Node* n = root.load(std::memory_order_acquire);
+        if (!n) return nullptr;
+
+        RibEntry<Addr>* best = nullptr;
+
+        while (n)
+        {
+            RibEntry<Addr>* e = n->entry->load(std::memory_order_acquire);
+
+            Addr pfx = mask(a, n->length);
+            if (e && pfx == n->prefix)
+                best = e;
+            
+            bool dir = bitAt(a, n->bit);
+            n = dir ? n->right.load(std::memory_order_acquire)
+                    : n->left.load(std::memory_order_acquire);
+        }
+        return best;
+    }
+
+    static bool bitAt(Addr v, uint8_t i)
+    {
+        if (i >= W) return false;
+        uint8_t shift = W - 1 - i;
+        return (v >> shift) & 1;
+    }
+
+private:
+    static_assert(std::is_unsigned_v<Addr>);
+    static constexpr uint8_t W = sizeof(Addr)*8;
 
     static constexpr Addr mask(Addr p, uint8_t l)
     {
@@ -47,40 +79,10 @@ class Fib
         return W;
     }
 
-    static bool bitAt(Addr v, uint8_t i)
-    {
-        if (i >= W) return false;
-        uint8_t shift = W - 1 - i;
-        return (v >> shift) & 1;
-    }
-
     static void destroy(Node* n)
     {
         if (!n) return;
         delete n;
-    }
-
-public:
-    RibEntry<Addr>* lookup(Addr a) const
-    {
-        Node* n = root.load(std::memory_order_acquire);
-        if (!n) return nullptr;
-
-        RibEntry<Addr>* best = nullptr;
-
-        while (n)
-        {
-            RibEntry<Addr>* e = n->entry->load(std::memory_order_acquire);
-
-            Addr pfx = mask(a, n->length);
-            if (e && pfx == n->prefix)
-                best = e;
-            
-            bool dir = bitAt(a, n->bit);
-            n = dir ? n->right.load(std::memory_order_acquire)
-                    : n->left.load(std::memory_order_acquire);
-        }
-        return best;
     }
 
 private:

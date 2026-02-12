@@ -3,6 +3,7 @@
 #ifndef EIGRP_NEIGHBOR_TABLE_H
 #define EIGRP_NEIGHBOR_TABLE_H
 
+#include <unordered_set>
 #include <shared_mutex>
 #include <IPAddress.hpp>
 #include "Neighbor.h"

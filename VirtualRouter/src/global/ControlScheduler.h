@@ -15,7 +15,6 @@
 #include <vector>
 #include <cassert>
 #include <immintrin.h>
-
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
 
@@ -346,7 +345,6 @@ uint32_t ControlScheduler::schedule(ProcessQueueId id, uint32_t gen, std::option
         ds.gen = gen;
         ds.hasLabel = label.has_value();
         ds.label = label.value_or(Label{0});
-        ds.task.set(std::forward<F>(fn));
 
         timerId = timeManager.addTimer(expiration, [this](uint32_t firedId) noexcept {
             onTimerFired(firedId);
@@ -355,10 +353,15 @@ uint32_t ControlScheduler::schedule(ProcessQueueId id, uint32_t gen, std::option
         // If timerId is somehow 0, clean up and fail.
         if (timerId == 0)
         {
-            ds.task.cleanup();
             freeDelayedSlot(delayedIdx);
             return 0;
         }
+
+        ds.task.set(
+            [fn = std::forward<F>(fn), timerId]() mutable {
+                fn(timerId);
+            }
+        );
 
         timerToDelayedIndex.emplace(timerId, delayedIdx);
     }

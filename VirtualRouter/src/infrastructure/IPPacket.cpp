@@ -1,10 +1,12 @@
+// IPPacket.cpp
+
 #include "IPPacket.h"
 #include "Ethernet.h"
-#include <Interface.h>
-#include <PacketBuilder.hpp>
-#include <Ethernet.h>
-#include <Arp.h>
-#include <Ndp.h>
+#include "interface/Interface.h"
+#include "packet/PacketStructure.h"
+#include "processing/PacketBuilder.hpp"
+#include "Arp.h"
+#include "Ndp.h"
 
 namespace Protocol::IPPacket
 {
@@ -113,11 +115,11 @@ void buildIpv4(
         uint8_t mac[6];
         if (!getDestinationMac(mac, ipv4Build.iface, AddressFamily::IPv4, ipv4Build.destIp, ipv4Build.packetInfo))
             return; // ARP resolution in progress or failed
-        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destIp, mac, ETHERNET_IPV4);
+        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, mac, ETHERNET_IPV4);
     }
     else
     {
-        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destIp, ipv4Build.destMac, ETHERNET_IPV4);
+        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destMac, ETHERNET_IPV4);
     }
 }
 
@@ -202,11 +204,11 @@ void buildIpv6(
         uint8_t mac[6];
         if (!getDestinationMac(mac, ipv6Build.iface, AddressFamily::IPv6, ipv6Build.destIp, ipv6Build.packetInfo))
             return; // NDP resolution in progress or failed
-        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destIp, mac, ETHERNET_IPV6);
+        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, mac, ETHERNET_IPV6);
     }
     else
     {
-        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destIp, ipv6Build.destMac, ETHERNET_IPV6);
+        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destMac, ETHERNET_IPV6);
     }
 
     if (!ipv6Build.dontFragment)

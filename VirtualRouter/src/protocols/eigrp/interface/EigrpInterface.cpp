@@ -1,10 +1,11 @@
 // EigrpInterface.cpp
 
-#include "EigrpInterface.h"
-#include <Eigrp.h>
-#include <VirtualRouter.h>
-#include <Global.h>
 #include <iostream>
+#include <Global.h>
+#include <VirtualRouter.h>
+
+#include "EigrpInterface.h"
+#include "eigrp/core/Eigrp.h"
 
 namespace Eigrp
 {
@@ -17,10 +18,10 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     rtp(*this),
     topology(ntable, eigrpSystem.getTopology().duel, *this),
     ntable(*this),
-    auth(intConfigs, eigrpSystem.routingInstance->global.keyChainManager),
+    auth(intConfigs, eigrpSystem.routingInstance->getGlobal().keyChainManager),
     metrics(*this),
     aggregator(*this),
-    tmgr(*this, eigrpSystem.routingInstance->global.timeManager)
+    tmgr(*this, eigrpSystem.routingInstance->getGlobal().timeManager)
 {
     // Set local ip
     if (base.getAF() == AddressFamily::IPv4)

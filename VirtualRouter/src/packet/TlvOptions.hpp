@@ -6,14 +6,15 @@
 #include <likely.hpp>
 #include <cstdint>
 #include <cstring>
-#include <HeaderHelpers.hpp>
 #include <span>
+
+#include "HeaderHelpers.hpp"
 
 struct TLV8Option
 {
     uint8_t type;
     uint8_t length;
-    const uint8_t* value;
+    uint8_t* value;
     size_t valueSize;
 
     std::span<const uint8_t> asSpan() const {
@@ -25,7 +26,7 @@ struct TLV16Option
 {
     uint16_t type;
     uint16_t length;
-    const uint8_t* value;
+    uint8_t* value;
     size_t valueSize;
 
     std::span<const uint8_t> asSpan() const {

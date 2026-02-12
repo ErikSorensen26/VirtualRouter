@@ -7,8 +7,9 @@
 #include <unordered_set>
 #include <mutex>
 #include <atomic>
-#include <DhcpInfo.hpp>
-#include <queue>
+#include <deque>
+
+#include "dhcp/DhcpInfo.hpp"
 
 class TimeManager;
 class IPv4LeaseManager;

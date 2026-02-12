@@ -3,10 +3,13 @@
 #ifndef EIGRP_TYPES_HPP
 #define EIGRP_TYPES_HPP
 
-#include <shared_mutex>
 #include <unordered_set>
-#include <TimeManager.h>
-#include <TopologyTable.h>
+#include <IPAddress.hpp>
+#include <AddressFamily.hpp>
+#include <shared_mutex>
+#include <atomic>
+#include <string>
+#include <variant>
 
 namespace Authentication
 {

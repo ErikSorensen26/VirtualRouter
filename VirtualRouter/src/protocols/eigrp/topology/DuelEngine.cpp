@@ -1,16 +1,16 @@
 // TopologyTable.cpp
 
-#include "DuelEngine.h"
-#include <Eigrp.h>
-#include <EigrpInterface.h>
-#include <VirtualRouter.h>
 #include <Global.h>
-#include <TimeManager.h>
-#include <NeighborTable.h>
+#include <VirtualRouter.h>
+
+#include "DuelEngine.h"
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/rtp/NeighborTable.h"
 
 namespace Eigrp
 {
-DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.routingInstance->global.timeManager) {}
+DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.routingInstance->getGlobal().timeManager) {}
 
 bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
 {
@@ -429,7 +429,6 @@ void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
         {
             neighbor.getIface().getRtp().sendSIAQuery(neighbor, {&query});
             query.siaAttempts++;
-            query.lastHeard = std::chrono::steady_clock::now();
             tmgr.startSIATimer(query, neighbor);
             return;
         }

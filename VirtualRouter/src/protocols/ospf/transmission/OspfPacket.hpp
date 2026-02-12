@@ -5,8 +5,8 @@
 
 #include <cstring>
 #include <IPAddress.hpp>
-#include <StaticHeader.hpp>
-#include <LsaKey.hpp>
+
+#include "packet/StaticHeader.hpp"
 
 namespace OSPF
 {

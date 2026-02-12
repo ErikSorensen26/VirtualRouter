@@ -3,16 +3,12 @@
 #ifndef PROCESS_H
 #define PROCESS_H
 
-#include <PacketBuilder.hpp>
+#include <cstdint>
+#include <cstddef>
 
-/**
- * @file Process.h
- * @brief Defines the ProcessPacket class for processing captured network packets.
- */
-
-struct HeaderVisitor;
 class Interface;
 class VirtualRouter;
+struct PacketInfo;
 
 /**
  * @class ProcessPacket

@@ -3,8 +3,9 @@
 #ifndef PRIVILEGED_EXEC_COMMANDS_HPP
 #define PRIVILEGED_EXEC_COMMANDS_HPP
 
-#include <CliModeParser.hpp>
-#include <PrivilegedExecContext.hpp>
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/Command.hpp"
+#include "cli/modes/contexts/PrivilegedExecContext.hpp"
 
 #define PRIVILEGED_EXEC_PARAMS PrivilegedExecContext& ctx, const std::vector<std::string>& args
 

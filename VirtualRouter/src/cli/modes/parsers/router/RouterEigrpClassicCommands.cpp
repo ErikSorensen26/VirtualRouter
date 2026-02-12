@@ -1,15 +1,13 @@
 // RouterEigrpCommands.cpp
 
-#include "RouterEigrpClassicCommands.h"
-
-#include <Eigrp.h>
-#include <EigrpTypes.hpp>
-#include <CliSession.h>
 #include <Global.h>
 #include <VirtualRouter.h>
-#include <InterfaceType.hpp>
-#include <EigrpInterface.h>
-#include <string>
+
+#include "RouterEigrpClassicCommands.h"
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "cli/runtime/CliSession.h"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace Cli
 {

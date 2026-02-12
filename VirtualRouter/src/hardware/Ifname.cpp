@@ -1,7 +1,6 @@
 // Ifname.cpp
 
 #include <net/if.h>
-#include <stdexcept>
 #include "Ifname.h"
 
 unsigned int ifnametoindex(const char* ifname)

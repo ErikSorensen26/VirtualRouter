@@ -3,10 +3,10 @@
 #ifndef SPF_MANAGER_H
 #define SPF_MANAGER_H
 
-#include <Registry.hpp>
+#include <chrono>
 #include <cstdint>
 #include <atomic>
-#include <OspfTypes.hpp>
+
 #include "SpfTypes.hpp"
 #include "SpfEngine.h"
 
@@ -14,13 +14,13 @@ class ProcessQueue;
 
 namespace OSPF
 {
-class OspfArea;
+class Area;
 class OspfRib;
 
 class SpfManager
 {
 public:
-    explicit SpfManager(OspfArea& area, ProcessQueue& scheduler);
+    explicit SpfManager(Area& area, ProcessQueue& scheduler);
 
     template<typename Policy>
     void requestSpf();
@@ -41,7 +41,7 @@ private:
 private:
     SpfEngine engine;
 
-    OspfArea& area;
+    Area& area;
     ProcessQueue& scheduler;
     OspfRib& rib;
 

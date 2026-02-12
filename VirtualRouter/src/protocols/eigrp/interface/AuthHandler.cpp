@@ -1,13 +1,13 @@
 // EigrpInterfaceAuth.cpp
 
-#include "AuthHandler.h"
 #include <shared_mutex>
+
+#include "AuthHandler.h"
 #include "EigrpInterface.h"
-#include <EigrpTypes.hpp>
-#include <Encryption.hpp>
-#include <PacketStructure.h>
-#include <KeyChainManager.h>
-#include <KeyChain.h>
+#include "eigrp/EigrpTypes.hpp"
+#include "security/Encryption.hpp"
+#include "security/keys/KeyChainManager.h"
+#include "security/keys/KeyChain.h"
 
 namespace Eigrp
 {

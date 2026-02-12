@@ -1,11 +1,13 @@
-#include "CliEngine.h"
-#include <CliSession.h>
-#include <InterfaceConfigs.h>
-#include <InterfaceType.hpp>
-#include <HardwareManager.h>
+// CliEngine.cpp
+
 #include <sys/resource.h>
-#include <GlobalContext.hpp>
 #include <Global.h>
+
+#include "CliEngine.h"
+#include "CliSession.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "hardware/HardwareManager.h"
+#include "cli/modes/contexts/GlobalContext.hpp"
 
 CliEngine::CliEngine(Global& global, const StartupFiles& stfs, bool test) : Configs(), global(global)
 {
@@ -104,7 +106,7 @@ void CliEngine::initTree()
             {
                 size_t size = ifaces.size();
                 if (size != 0)
-                    vars[typeStr][0][COMMAND_NAME] = "<0-" + std::to_string(size - 1) + ">";
+                    vars[typeStr][0][CLI_JSON_COMMAND_NAME] = "<0-" + std::to_string(size - 1) + ">";
                 else
                     vars.erase(typeStr);
             }

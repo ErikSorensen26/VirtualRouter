@@ -6,7 +6,8 @@
 #include <atomic>
 #include <thread>
 #include <cstdint>
-#include <RxQueueOpts.hpp>
+
+#include "qos/ingress/RxQueueOpts.hpp"
 
 struct FrameView
 {

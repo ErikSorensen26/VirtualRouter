@@ -7,7 +7,8 @@
 #include <mutex>
 #include <cstdint>
 #include <TimeManager.h>
-#include <Dhcpv6.h>
+
+#include "Dhcpv6.h"
 
 class PrefixLeaseManager;
 namespace Protocol

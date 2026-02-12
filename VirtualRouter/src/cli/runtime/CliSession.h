@@ -6,19 +6,18 @@
 #include <string>
 #include <vector>
 #include <json.hpp>
-#include <Time.h>
-#include <Mode.hpp>
-#include "Console.h"
 
-#include <ExecutionContext.hpp>
+#include "Console.h"
+#include "cli/modes/Mode.hpp"
+#include "cli/execution/ExecutionContext.hpp"
 
 #define VARIABLE_OBJ "VARIABLES"
 
-#define SUBCOMMAND_ARRAY "subcommands"
-#define DESCRIPTION "description"
-#define SUPPORT_STATUS "support"
-#define COMMAND_NAME "name"
-#define COMMAND_PROPERTIES "properties"
+#define CLI_JSON_SUBCOMMAND_ARRAY "subcommands"
+#define CLI_JSON_DESCRIPTION "description"
+#define CLI_JSON_SUPPORT_STATUS "support"
+#define CLI_JSON_COMMAND_NAME "name"
+#define CLI_JSON_COMMAND_PROPERTIES "properties"
 
 enum class AddressFamily : uint8_t;
 class CommandProcessor;

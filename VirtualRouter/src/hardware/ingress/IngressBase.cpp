@@ -1,12 +1,13 @@
 // IngressBase.cpp
 
-#include "IngressBase.h"
 #include <sched.h>
 #include <pthread.h>
 #include <likely.hpp>
 #include <chrono>
 #include <RCU.hpp>
-#include <Interface.h>
+
+#include "IngressBase.h"
+#include "interface/Interface.h"
 
 thread_local std::array<uint32_t, 64> localBatch;
 thread_local size_t batchCount = 0;

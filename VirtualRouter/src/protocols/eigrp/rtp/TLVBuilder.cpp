@@ -1,7 +1,8 @@
 // EigrpInterfacePacketEngine.cpp
 
 #include "TLVBuilder.h"
-#include <EigrpInterface.h>
+#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/topology/TopologyTable.h"
 
 namespace Eigrp
 {
@@ -28,7 +29,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
 
     if (!wide)
     {
-        if (iface.configs->nextHopSelf.load(std::memory_order_relaxed))
+        if (iface.configs.nextHopSelf.load(std::memory_order_relaxed))
             std::memcpy(out, iface.ifaceAddress.raw, ipSize);
         else
             std::memcpy(out, route->routeInfo.nextHop.raw, ipSize);
@@ -49,7 +50,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
         }
         if (!encodeWideMetric(data, delay, bw)) return 0;
 
-        if (iface.configs->nextHopSelf.load(std::memory_order_relaxed))
+        if (iface.configs.nextHopSelf.load(std::memory_order_relaxed))
             std::memcpy(out, iface.ifaceAddress.raw, ipSize);
         else
             std::memcpy(out, route->routeInfo.nextHop.raw, ipSize);

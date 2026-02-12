@@ -3,11 +3,13 @@
 #ifndef EIGRP_NEIGHBOR_H
 #define EIGRP_NEIGHBOR_H
 
+#include <map>
+#include <chrono>
 #include <IPAddress.hpp>
 #include <atomic>
 #include <deque>
 #include <set>
-#include <EigrpTypes.hpp>
+
 #include "ReliablePacket.hpp"
 
 struct EigrpHeader; namespace Eigrp
@@ -47,7 +49,6 @@ public:
 
     // Control
     void clear();
-    void markHeard();
     bool isActive() const noexcept;
 
     EigrpInterface& getIface() const { return iface; }
@@ -64,7 +65,6 @@ public:
     std::atomic<bool> isStub{false};
     std::atomic<uint32_t> lastSeqRecv = 0;
     std::atomic<uint32_t> lastSeqAck = 0;
-    std::chrono::steady_clock::time_point lastHeard;
 
     Version version;
     const TLVType tlvType;

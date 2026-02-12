@@ -3,16 +3,16 @@
 #ifndef OSPF_REGISTRY_H
 #define OSPF_REGISTRY_H
 
-#include "OspfInterfaceRegistry.h"
-#include <RegistryTemplate.hpp>
-#include <tuple>
-#include <IPAddress.hpp>
 #include <string>
+
+#include "IPAddress.hpp"
+#include "OspfInterfaceRegistry.h"
+#include "configs/RegistryTypes.hpp"
 
 namespace OSPF
 {
 class OspfProcess;
-class OspfArea;
+class Area;
 
 enum class AreaType
 {
@@ -39,7 +39,7 @@ enum class OspfVirtualLink
     COUNT
 };
 
-using OspfVirtualLinkRegistry = SubRegistry<__uint128_t, OspfVirtualLink, OSPF::OspfArea>;
+using OspfVirtualLinkRegistry = SubRegistry<__uint128_t, OspfVirtualLink, OSPF::Area>;
 
 inline __uint128_t generateOspfAreaKey(__uint128_t topoKey, uint32_t areaId)
 {
@@ -68,15 +68,15 @@ enum class OspfArea
     COUNT
 };
 
-void OspfAreaTypeChange(OSPF::OspfArea& area);
-void OspfAreaSycnRanges(OSPF::OspfArea& area);
+void OspfAreaTypeChange(OSPF::Area& area);
+void OspfAreaSycnRanges(OSPF::Area& area);
 
-using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea, OSPF::OspfArea,
+using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea, OSPF::Area,
     AtomicField<OSPF::AuthType, OSPF::AuthType::NULL_AUTH, OspfArea::AUTHENTICATION_TYPE>,
     OptionalAtomicField<uint32_t, OspfArea::DEFAULT_COST>,
     OptionalAtomicField<std::nullptr_t, OspfArea::FILTER_LIST>, // TODO:
     AtomicField<OSPF::AreaType, OSPF::AreaType::NORMAL, OspfArea::AREA_TYPE,
-        OSPF::OspfArea, OspfAreaTypeChange>,
+        OSPF::Area, OspfAreaTypeChange>,
     AtomicField<bool, false, OspfArea::NSSA_DEFAULT_ORIGINATE>,
     AtomicField<uint32_t, 1, OspfArea::NSSA_DEFAULT_METRIC>,
     AtomicField<bool, true, OspfArea::NSSA_DEFAULT_METRIC_TYPE>,
@@ -86,7 +86,7 @@ using OspfAreaRegistry = SubRegistry<__uint128_t, OspfArea, OSPF::OspfArea,
     AtomicField<bool, false, OspfArea::NSSA_ALWAYS_TRANSLATE>,
     AtomicField<bool, false, OspfArea::NSSA_SUPPRESS_FA>,
     ValueField<std::vector<std::tuple<IPPrefix, bool, std::optional<uint32_t>>>, OspfArea::RANGE,
-        OSPF::OspfArea, OspfAreaSycnRanges>,
+        OSPF::Area, OspfAreaSycnRanges>,
     ValueField<std::vector<std::tuple<>>, OspfArea::VIRTUAL_LINKS> // TODO:
 >;
 
@@ -254,7 +254,7 @@ using OspfRegistry = SubRegistry<__uint128_t, Ospf, OSPF::OspfProcess,
     ValueField<std::vector<std::tuple<IPPrefix, uint32_t>>, Ospf::NETWORKS,
         OSPF::OspfProcess, OspfSyncNetworks>,
     ValueField<std::vector<std::tuple<
-        uint32_t,
+        IPAddress,
         std::optional<uint16_t>,
         std::optional<bool>,
         std::optional<uint16_t>,

@@ -6,11 +6,12 @@
 #include <string>
 #include <vector>
 #include <sstream>
-#include <CliEngine.h>
-#include <HardwareManager.h>
-#include <InterfaceType.hpp>
-#include <Mode.hpp>
-#include <Configs.h>           // Your Configs class header
+
+#include "cli/runtime/CliEngine.h"
+#include "hardware/HardwareManager.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "cli/modes/Mode.hpp"
+#include "cli/runtime/Configs.h"
 #include "MockFileSystem.hpp" // Mocked file system interface
 
 using json = nlohmann::ordered_json;

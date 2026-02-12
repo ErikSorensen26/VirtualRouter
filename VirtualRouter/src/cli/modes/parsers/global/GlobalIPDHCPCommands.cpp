@@ -1,10 +1,11 @@
 // GlobalIPDHCPCommands.cpp
 
-#include "GlobalIPDHCPCommands.h"
 #include <cstdint>
 #include <Global.h>
-#include <DhcpServer.h>
 #include <VirtualRouter.h>
+
+#include "GlobalIPDHCPCommands.h"
+#include "dhcp/dhcpv4/DhcpServer.h"
 
 namespace Cli
 {

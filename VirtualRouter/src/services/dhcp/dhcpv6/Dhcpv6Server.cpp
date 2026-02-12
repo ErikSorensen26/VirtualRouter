@@ -1,15 +1,12 @@
 //TODO echo unknown option & duid generation
 
-#include <Dhcpv6Server.h>
-#include <Interface.h>
-#include <InterfaceConfigs.h>
-#include <IPPacket.h>
-#include <Udp.h>
 #include <Functions.h>
-#include <PacketBuilder.hpp>
-#include <InterfaceConfigs.h>
-#include <IPPacket.h>
-#include <Configs.h>
+
+#include "Dhcpv6Server.h"
+#include "interface/Interface.h"
+#include "infrastructure/IPPacket.h"
+#include "udp/Udp.h"
+#include "processing/PacketBuilder.hpp"
 
 /*
  * oro cannot have:

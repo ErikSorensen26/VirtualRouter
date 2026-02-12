@@ -5,8 +5,6 @@
 
 #include "RegistryBucket.hpp"
 #include "RegistryTypes.hpp"
-#include <memory>
-#include <cassert>
 
 namespace Config
 {
@@ -16,9 +14,6 @@ concept IsSubRegistry = requires
         typename T::type;
         typename T::FieldTuple;
     };
-
-template <typename T, size_t N>
-using heapArray = std::unique_ptr<std::array<T, N>>;
 
 template <typename T>
 class Reference
@@ -123,15 +118,16 @@ public:
         if (state == MaskState::SET)
             return ref.has_value();
 
-        return base ? base->bound() : false;
+        return base != nullptr;
     }
 
     const Reference<T>& effective() const noexcept
     {
         if (base && state == MaskState::INHERIT)
-            return base->effective();
+            return *base;
 
-        assert(ref.has_value());
+        bool buh = ref.has_value();
+        assert(buh);
         return *ref;
     }
 
@@ -171,7 +167,7 @@ private:
 
     std::optional<Reference<T>> ref{std::nullopt};
     MaskState state{MaskState::INHERIT};
-    const Reference<T>* base{nullptr};
+    Reference<T>* base{nullptr};
 };
 }
 

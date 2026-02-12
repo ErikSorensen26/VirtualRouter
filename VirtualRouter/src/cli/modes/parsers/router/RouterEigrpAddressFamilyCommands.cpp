@@ -1,14 +1,14 @@
 // RouterEigrpAddressFamilyCommands.cpp
 
+#include <Functions.h>
+
 #include "RouterEigrpAddressFamilyCommands.h"
 
-#include <Eigrp.h>
-#include <CliSession.h>
-#include <InterfaceType.hpp>
-#include <Interface.h>
-#include <EigrpTypes.hpp>
-#include <EigrpInterface.h>
-#include <Functions.h>
+#include "eigrp/core/Eigrp.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "cli/runtime/CliSession.h"
+#include "interface/Interface.h"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace Cli
 {

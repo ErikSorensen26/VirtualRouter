@@ -1,16 +1,18 @@
 // OspfProcess.cpp
 
-#include <Registry.hpp>
-#include "OspfProcess.h"
-#include <OspfArea.h>
 #include <Global.h>
 #include <VirtualRouter.h>
-#include <OspfRouteManager.h>
+#include <ControlScheduler.h>
+
+#include "OspfProcess.h"
+#include "area/Area.h"
+#include "topology/RouteManager.h"
+#include "OspfTypes.hpp"
 
 namespace OSPF
 {
 OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRouter* vrf)
-    : isV3(isV3), routingInstance(vrf), rib(*this), exec(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
+    : isV3(isV3), routingInstance(vrf), rib(*this), scheduler(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
     configs([this, isV3]() {
         auto& registry = routingInstance->getGlobal().registry;
         auto key = Config::generateOspfKey(routingInstance->getInstanceId(), getProcId(), getAF(), isV3);
@@ -34,16 +36,23 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRo
             return registry.ensure(v2Base, key);
         }
     }())
-{}
+{
+    calculateRID();
+}
 
-OspfArea* OspfProcess::getArea(uint32_t areaId)
+bool OspfProcess::calculateRID()
+{
+    return routingInstance->calculateRID(rid);
+}
+
+Area* OspfProcess::getArea(uint32_t areaId)
 {
     auto it = areas.find(areaId);
     if (it == areas.end()) return nullptr;
     return &it->second;
 }
     
-OspfArea& OspfProcess::insureArea(uint32_t areaId)
+Area& OspfProcess::insureArea(uint32_t areaId)
 {
     if (!areas.contains(areaId))
     {
@@ -55,7 +64,7 @@ OspfArea& OspfProcess::insureArea(uint32_t areaId)
 
 void OspfProcess::setASBR(bool val)
 {
-    bool current = asbr.load(std::memory_order_relaxed);
+    bool current = asbr;
     if (current == val) return;
 
     // Refresh default routes
@@ -67,7 +76,7 @@ void OspfProcess::setASBR(bool val)
 
 void OspfProcess::setABR(bool val)
 {
-    bool current = abr.load(std::memory_order_relaxed);
+    bool current = abr;
     if (current == val) return;
 
     // Refresh ranges
@@ -81,12 +90,12 @@ void OspfProcess::setABR(bool val)
 
 bool OspfProcess::isASBR()
 {
-    return asbr.load(std::memory_order_relaxed);
+    return asbr;
 }
 
 bool OspfProcess::isABR()
 {
-    return abr.load(std::memory_order_relaxed);
+    return abr;
 }
 
 void OspfProcess::initiateReset()
@@ -130,7 +139,7 @@ void OspfProcess::addDefaultRoute(bool add)
 }
 
 template <typename Policy>
-void OspfProcess::distributeExternalLsa(const OspfArea& sourceArea, IncomingLsaContext& ctx, const LsaBody& body)
+void OspfProcess::distributeExternalLsa(const Area& sourceArea, IncomingLsaContext& ctx, const LsaBody& body)
 {
     bool expire = ctx.header.age == OSPF_MAX_AGE;
     {
@@ -539,7 +548,7 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
 }
 
 template <typename Policy>
-void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRouteChange>& pathList)
+void OspfProcess::reoriginateSummaries(Area& sourceArea, std::vector<OspfRouteChange>& pathList)
 {
     if (!isABR() || areas.size() == 1) return;
 
@@ -587,7 +596,7 @@ void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRou
     {
         uint32_t sourceAreaId = sourceArea.areaId;
 
-        auto processLsas = [&](OspfArea& a)
+        auto processLsas = [&](Area& a)
         {
             for (auto& [key, network] : networks)
                 a.getOriginator().originateLsa<Policy>(key, network, false);
@@ -611,7 +620,7 @@ void OspfProcess::reoriginateSummaries(OspfArea& sourceArea, std::vector<OspfRou
 }
 
 template <typename Policy>
-void OspfProcess::reoriginateSummary(OspfArea& sourceArea, OspfRouteChange& path)
+void OspfProcess::reoriginateSummary(Area& sourceArea, OspfRouteChange& path)
 {
     if (!isABR() || areas.size() == 1) return;
 
@@ -653,7 +662,7 @@ void OspfProcess::reoriginateSummary(OspfArea& sourceArea, OspfRouteChange& path
 
     uint32_t sourceAreaId = sourceArea.areaId;
 
-    auto processLsa = [&](OspfArea& a)
+    auto processLsa = [&](Area& a)
     {
         a.getOriginator().originateLsa<Policy>(key, summary, false);
     };
@@ -674,8 +683,8 @@ void OspfProcess::reoriginateSummary(OspfArea& sourceArea, OspfRouteChange& path
     }
 }
 
-template void OspfProcess::distributeExternalLsa<PolicyV2>(const OspfArea&, IncomingLsaContext&, const LsaBody&);
-template void OspfProcess::distributeExternalLsa<PolicyV3>(const OspfArea&, IncomingLsaContext&, const LsaBody&);
+template void OspfProcess::distributeExternalLsa<PolicyV2>(const Area&, IncomingLsaContext&, const LsaBody&);
+template void OspfProcess::distributeExternalLsa<PolicyV3>(const Area&, IncomingLsaContext&, const LsaBody&);
 
 template void OspfProcess::originateExternal<PolicyV2>(ExternalOriginateContext&, bool);
 template void OspfProcess::originateExternal<PolicyV3>(ExternalOriginateContext&, bool);
@@ -692,9 +701,9 @@ template void OspfProcess::buildExternalBody<PolicyV3>(ExternalOriginateContext&
 template void OspfProcess::syncSummarySuppression<PolicyV2>(std::unordered_map<IPPrefix, OspfSummaryAddress>&);
 template void OspfProcess::syncSummarySuppression<PolicyV3>(std::unordered_map<IPPrefix, OspfSummaryAddress>&);
 
-template void OspfProcess::reoriginateSummaries<PolicyV2>(OspfArea&, std::vector<OspfRouteChange>&);
-template void OspfProcess::reoriginateSummaries<PolicyV3>(OspfArea&, std::vector<OspfRouteChange>&);
+template void OspfProcess::reoriginateSummaries<PolicyV2>(Area&, std::vector<OspfRouteChange>&);
+template void OspfProcess::reoriginateSummaries<PolicyV3>(Area&, std::vector<OspfRouteChange>&);
 
-template void OspfProcess::reoriginateSummary<PolicyV2>(OspfArea&, OspfRouteChange&);
-template void OspfProcess::reoriginateSummary<PolicyV3>(OspfArea&, OspfRouteChange&);
+template void OspfProcess::reoriginateSummary<PolicyV2>(Area&, OspfRouteChange&);
+template void OspfProcess::reoriginateSummary<PolicyV3>(Area&, OspfRouteChange&);
 }

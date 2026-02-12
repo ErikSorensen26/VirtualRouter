@@ -1,0 +1,8 @@
+add ospfv3 ipv4
+add opache
+add ospfv3 lsa 8
+add policy stuff
+add lsdb checksum validation
+automatic deletion of areas
+deletion of neighbors
+

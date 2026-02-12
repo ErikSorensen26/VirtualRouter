@@ -1,9 +1,10 @@
 // SpfEngine.cpp
 
-#include "SpfEngine.h"
-#include <OspfArea.h>
-#include <OspfProcess.h>
 #include <queue>
+
+#include "SpfEngine.h"
+#include "ospf/area/Area.h"
+#include "ospf/OspfProcess.h"
 
 namespace OSPF
 {

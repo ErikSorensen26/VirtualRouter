@@ -3,8 +3,6 @@
 #ifndef ROUTER_EIGRP_CLASSIC_VRF_COMMANDS_H
 #define ROUTER_EIGRP_CLASSIC_VRF_COMMANDS_H
 
-#include <EigrpContext.hpp>
-#include <CliModeParser.hpp>
 #include "RouterEigrpTopologyCommands.h"
 
 namespace Cli

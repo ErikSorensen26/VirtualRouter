@@ -1,4 +1,4 @@
-#include "CommandProcessor.h"
+/*#include "CommandProcessor.h"
 #include <DhcpClient.h>
 #include <EigrpInterface.h>
 #include <Eigrp.h>
@@ -6,7 +6,7 @@
 #include <VirtualRouter.h>
 #include <CliEngine.h>
 
-/*bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::string>& commandStream)
+bool CommandProcessor::handleInterfaceConfiguration(const std::vector<std::string>& commandStream)
 {
 	// HELPER FUNCTIONS
 	auto refreshEigrpConfig = [&](uint32_t as, AddressFamily af, EigrpConfigs::InterfaceConfigs* config)

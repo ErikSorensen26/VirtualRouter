@@ -4,7 +4,6 @@
 #define OSPF_FLOOD_TYPES_HPP
 
 #include <cstdint>
-#include <LsaKey.hpp>
 
 namespace OSPF
 {

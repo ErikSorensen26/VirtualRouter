@@ -1,11 +1,11 @@
 // PrivilegedExecCommands.cpp    
 
-#include "PrivilegedExecCommands.h"
-#include <GlobalContext.hpp>
-#include <UserExecContext.hpp>
 #include <Global.h>
-#include <CliSession.h>
-#include <CliEngine.h>
+
+#include "PrivilegedExecCommands.h"
+#include "cli/modes/contexts/GlobalContext.hpp"
+#include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliEngine.h"
 
 namespace Cli
 {
@@ -40,7 +40,7 @@ bool PrivilegedExec_ShowHistory_Handler(PRIVILEGED_EXEC_PARAMS)
 bool PrivilegedExec_ShowClock_Handler(PRIVILEGED_EXEC_PARAMS)
 {
     UNUSED(args);
-    ctx.terminal.iConsole->print("\r\n" + ctx.terminal.engine.timeManager.getTime());
+    ctx.terminal.iConsole->print("\r\n" + ctx.terminal.engine.timeKeeper.getTime());
     return true;
 }
 

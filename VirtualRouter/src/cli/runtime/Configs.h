@@ -1,6 +1,8 @@
 #ifndef CONFIGS_H
 #define CONFIGS_H
 
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <cstdio>
 #include <cmath>
@@ -212,11 +214,45 @@ class FileSystem : public IFileSystem
 {
 public:
     virtual ~FileSystem() override = default;
+    bool readFile(const std::string& path, std::string& content) override
+    {
+        int fd = open(path.c_str(), O_RDONLY);
+        if (fd < 0) return false;
 
-    bool readFile(const std::string& path, std::string& content) override;
-    bool writeFile(const std::string& path, const std::string& content) override;
-    bool fileExists(const std::string& path) override;
-    void removeFile(const std::string& path) override;
+        struct stat st;
+        fstat(fd, &st);
+
+        void* data = mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (data == MAP_FAILED) return false;
+
+        content.assign((char*)data, st.st_size);
+        munmap(data, st.st_size);
+        close(fd);
+        return true;
+    }
+
+    bool writeFile(const std::string& path, const std::string& content) override
+    {
+        std::ofstream file(path, std::ios::out | std::ios::trunc);
+        if (!file.is_open())
+        {
+            return false; // Cannot open the file for writing
+        }
+
+        file << content;
+        file.close();
+        return true;
+    }
+
+    bool fileExists(const std::string& path) override
+    {
+        return std::filesystem::exists(path);
+    }
+
+    void removeFile(const std::string& path) override
+    {
+
+    }
 };
 
 /**
@@ -425,7 +461,7 @@ public:
      */
     std::string getVolatileValue(std::string& type,
                                  std::string& value,
-                                 nlohmann::ordered_json currentJson);
+                                 nlohmann::ordered_json& currentJson);
 
     /**
      * @brief Resolves volatile key names using already-observed volatile operands.

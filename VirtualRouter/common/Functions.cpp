@@ -1,9 +1,10 @@
-#include "Functions.h"
 #include <Logger.h>
 #include <random>
 #include <regex>
 #include <cstring>
-#include <HeaderHelpers.hpp>
+
+#include "Functions.h"
+#include "packet/HeaderHelpers.hpp"
 
 double secondsSinceEpoch()
 {
@@ -528,6 +529,20 @@ uint8_t* Functions::prefixToMask(uint8_t* out, uint8_t prefixLen, AddressFamily 
     if (remainingBits > 0 && fullBytes < outLen)
         out[fullBytes] = static_cast<uint8_t>(0xFF << (8 - remainingBits));
     return out;
+}
+
+uint32_t Functions::prefixTo32Mask(uint8_t prefixLength)
+{
+    if (prefixLength > 32)
+        prefixLength = 32;
+
+    if (prefixLength == 0)
+        return 0;
+
+    if (prefixLength == 32)
+        return 0xFFFFFFFFu;
+
+    return 0xFFFFFFFFu << (32 - prefixLength);
 }
 
 size_t Functions::getRandomBetween(size_t min, size_t max) {

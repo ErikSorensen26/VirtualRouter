@@ -2,10 +2,10 @@
 
 #include "InterfaceCommands.h"
 
-#include <CliSession.h>
-#include <Interface.h>
-#include <Mode.hpp>
-#include <CliEngine.h>
+#include "cli/runtime/CliSession.h"
+#include "interface/Interface.h"
+#include "cli/modes/Mode.hpp"
+#include "cli/runtime/CliEngine.h"
 
 namespace Cli
 {

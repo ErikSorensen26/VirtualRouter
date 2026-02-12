@@ -1,5 +1,7 @@
-#include <CliSession.h>
-#include <CliEngine.h>
+// CommandProcessing.cpp
+
+#include "CliSession.h"
+#include "CliEngine.h"
 
 std::vector<std::string> CliSession::compileCommandStream(const std::string& command)
 {
@@ -41,11 +43,11 @@ bool CliSession::processConfigPersistence(const std::vector<std::string>& tokens
 	if (isExitCommand)
 		commandHistory = tokens;
 
-	bool ok = execution.getContext().negate
+	/*bool ok = execution.getContext().negate
 		? engine.deleteConfig(commandHistory, tokens, isList)
-		: engine.saveCommand(commandHistory, tokens, isModeChanged, isExitCommand, isList);
+		: engine.saveCommand(commandHistory, tokens, isModeChanged, isExitCommand, isList);*/
 
-	return ok;
+	return true;
 }
 
 bool CliSession::executeCommand(std::string &command)

@@ -8,7 +8,7 @@
 
 namespace OSPF
 {
-class OspfArea;
+class Area;
 struct LsaRecord;
 
 template <typename Policy>
@@ -28,11 +28,11 @@ public:
     struct NetV2ByLsId { uint32_t advRouter; const LsaRecord* rec; const typename Policy::NetworkLsa* lsa; };
     std::unordered_map<uint32_t, NetV2ByLsId> netV2ByLsId;
 
-    SpfTopology(const OspfArea& area);
+    SpfTopology(const Area& area);
     bool expandRouter(uint32_t rid, std::vector<SpfEdge>& outEdges);
     bool expandNetwork(uint64_t vertexId, std::vector<uint32_t>& attachedRouters);
 
-    const OspfArea& area;
+    const Area& area;
 };
 }
 

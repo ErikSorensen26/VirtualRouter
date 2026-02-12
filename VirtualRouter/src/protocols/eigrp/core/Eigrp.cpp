@@ -1,12 +1,15 @@
+// Eigrp.cpp
+
 // Finish auth and hash stuff
-#include <Eigrp.h>
+
 #include <AddressFamily.hpp>
-#include <TopologyTable.h>
 #include <VirtualRouter.h>
-#include <Interface.h>
-#include <InterfaceType.hpp>
-#include <Neighbor.h>
-#include <EigrpInterface.h>
+
+#include "Eigrp.h"
+#include "eigrp/topology/TopologyTable.h"
+#include "eigrp/rtp/Neighbor.h"
+#include "eigrp/interface/EigrpInterface.h"
+#include "interface/Interface.h"
 
 namespace Eigrp
 {

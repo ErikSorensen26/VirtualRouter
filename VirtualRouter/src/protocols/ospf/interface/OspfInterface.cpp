@@ -1,15 +1,16 @@
 // OspfInterface.cpp
 
-#include "OspfInterface.h"
-#include <OspfProcess.h>
-#include <Interface.h>
-#include <OspfNeighbor.h>
-#include <OspfFlagManager.h>
 #include <VirtualRouter.h>
 
-#include <PacketDispatcher.h>
-#include <PacketDispatcherV2.h>
-#include <PacketDispatcherV3.h>
+#include "OspfInterface.h"
+#include "ospf/OspfProcess.h"
+#include "ospf/neighbor/Neighbor.h"
+#include "ospf/area/FlagManager.h"
+#include "ospf/transmission/PacketDispatcher.h"
+#include "ospf/ospfv2/transmission/PacketDispatcherV2.h"
+#include "ospf/ospfv3/transmission/PacketDispatcherV3.h"
+#include "interface/Interface.h"
+#include "ospf/OspfTypes.hpp"
 
 auto getIfaceAddr(Interface& iface, AddressFamily af) -> IPPrefix
 {
@@ -20,7 +21,7 @@ auto getIfaceAddr(Interface& iface, AddressFamily af) -> IPPrefix
 
 namespace OSPF
 {
-OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, OspfInterfaceId& id)
+OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id)
     : id(id),
       interfaceId(iface.configs.key),
       interfaceAddress(getIfaceAddr(iface, proc.getAF())),
@@ -34,12 +35,8 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Refere
       ntable(*this),
       tmgr(proc.getScheduler(), *this),
       iface(iface),
-    configs([]() -> Config::Reference<Config::OspfInterfaceRegistry> {
-        // TODO: implement once interface configs are done
-    }()),
-    baseConfigs([]() -> Config::Reference<Config::OspfInterfaceBaseRegistry> {
-        // TODO: implement once interface configs are done
-    }())
+      configs(configs->get<Config::OspfInterfaceBase::BASE>().local()),
+      baseConfigs(configs)
 {
     syncConfigs();
     calculateCost();
@@ -68,7 +65,7 @@ OspfInterface::~OspfInterface()
 
 void OspfInterface::calculateCost()
 {
-    uint16_t oldCost = cost.load(std::memory_order_relaxed);
+    uint16_t oldCost = cost;
     uint16_t newCost{0};
 
     auto& configuredCost = configs->get<Config::OspfInterface::COST>();
@@ -83,7 +80,7 @@ void OspfInterface::calculateCost()
         newCost = static_cast<uint16_t>(referenceBw / interfaceBw);
     }
     
-    cost.store(newCost, std::memory_order_release);
+    cost = newCost;
 
     if (oldCost != newCost)
     {
@@ -221,8 +218,8 @@ void OspfInterface::syncTimers()
 
     if (helloMultiplier.hasValue())
     {
-        helloTime.store(std::chrono::seconds(1) / helloMultiplier.load(), std::memory_order_release);
-        deadTime.store(std::chrono::seconds(1), std::memory_order_release);
+        helloTime = std::chrono::seconds(1) / helloMultiplier.load();
+        deadTime = std::chrono::seconds(1);
         return;
     }
     else
@@ -248,8 +245,8 @@ void OspfInterface::syncTimers()
         else
             dt = ht * 4;
 
-        helloTime.store(std::chrono::seconds(ht), std::memory_order_release);
-        deadTime.store(std::chrono::seconds(dt), std::memory_order_release);
+        helloTime = std::chrono::seconds(ht);
+        deadTime = std::chrono::seconds(dt);
     }
 }
 
@@ -309,7 +306,7 @@ void OspfInterface::setPassiveMode(bool passive)
     }
 }
 
-OspfArea& OspfInterface::getArea()
+Area& OspfInterface::getArea()
 {
     return area;
 }
