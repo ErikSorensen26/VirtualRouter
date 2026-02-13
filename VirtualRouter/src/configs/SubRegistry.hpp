@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <mutex>
 #include <optional>
-#include <type_traits>
 
 #include "RegistryTypes.hpp"
 
@@ -33,6 +32,7 @@ public:
 
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
 
+#if USE_CONFIG_INDEX
     static_assert(
         []<size_t... Is>(std::index_sequence<Is...>) constexpr
         {
@@ -44,6 +44,7 @@ public:
         }(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{}),
         "Tuple order must match enum field indicies"
     );
+#endif
 
     ContextProvider<Ctx>& context() noexcept { return ctxProvider; }
 
@@ -185,6 +186,7 @@ public:
 
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
 
+#if USE_CONFIG_INDEX
     static_assert(
         []<size_t... Is>(std::index_sequence<Is...>) constexpr
         {
@@ -196,6 +198,7 @@ public:
         }(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{}),
         "Tuple order must match enum field indicies"
     );
+#endif
 
     explicit SimpleSubRegistry() noexcept
         : fields(),

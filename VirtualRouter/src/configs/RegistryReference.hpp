@@ -91,13 +91,12 @@ private:
     friend class RegistryDatabase;
 };
 
-template <typename T, auto F>
+template <typename T CONFIG_INDEX_PARAM>
 class ReferenceContainer : public RefContainerFieldFlag
 {
 public:
     using type = T;
-    using fieldType = decltype(F);
-    static constexpr auto field = F;
+    CONFIG_INDEX_MEMBER
 
     ReferenceContainer() = default;
 
