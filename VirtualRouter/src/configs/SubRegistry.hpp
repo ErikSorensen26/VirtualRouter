@@ -241,7 +241,8 @@ private:
     {
         if constexpr (IsValueField<F> || IsOptionalValueField<F>)
             return std::forward_as_tuple(mu);
-        return std::tuple<>{};
+        else
+            return std::tuple<>{};
     }
 
     template <typename F>
@@ -249,7 +250,8 @@ private:
     {
         if constexpr (IsValueField<F> || IsOptionalValueField<F>)
             return std::forward_as_tuple(mu, parentField);
-        return std::forward_as_tuple(parentField);
+        else
+            return std::forward_as_tuple(parentField);
     }
 
     template <size_t... I>

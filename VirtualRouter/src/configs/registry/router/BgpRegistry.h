@@ -6,11 +6,10 @@
 #include <string>
 
 #include "IPAddress.hpp"
+#include "configs/SubRegistry.hpp"
 #include "configs/TupleSchema.hpp"
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryReference.hpp"
-
-struct buh {};
 
 namespace Config
 {
@@ -35,7 +34,7 @@ enum class BgpBase
     COUNT
 };
 
-using BgpBaseRegistry = SubRegistry<__uint128_t, BgpBase, buh,
+using BgpBaseRegistry = SimpleSubRegistry<__uint128_t, BgpBase,
     AtomicField<uint16_t, 60 CONFIG_INDEX_ARG(BgpBase::KEEPALIVE_INTERVAL)>,
     AtomicField<uint16_t, 180 CONFIG_INDEX_ARG(BgpBase::HOLDTIME)>,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpBase::MINIMUM_HOLDTIME)>,
@@ -132,7 +131,7 @@ enum class BgpNeighbor
     COUNT
 };
 
-using BgpNeighborRegistry = SubRegistry<__uint128_t, BgpNeighbor, buh,
+using BgpNeighborRegistry = SimpleSubRegistry<__uint128_t, BgpNeighbor,
     ReferenceContainer<BgpBaseRegistry CONFIG_INDEX_ARG(BgpNeighbor::BGP_BASE)>,
     AtomicField<bool, false CONFIG_INDEX_ARG(BgpNeighbor::ACTIVATE)>,
     AtomicField<bool, false CONFIG_INDEX_ARG(BgpNeighbor::ADDITIONAL_PATHS_RECEIVE)>,
@@ -338,7 +337,7 @@ enum class Bgp
 
 DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS)
 
-using BgpRegistry = SubRegistry<__uint128_t, Bgp, buh,
+using BgpRegistry = SimpleSubRegistry<__uint128_t, Bgp,
     ValueField<std::vector<BgpAggregateAddress::Tuple> CONFIG_INDEX_ARG(Bgp::AGGREGATE_ADDRESS)>,
     ReferenceContainer<BgpBaseRegistry CONFIG_INDEX_ARG(Bgp::BGP_BASE)>,
     AtomicField<bool, false CONFIG_INDEX_ARG(Bgp::BGP_ADDITIONAL_PATHS_INSTALL)>,
@@ -420,7 +419,7 @@ using BgpRegistry = SubRegistry<__uint128_t, Bgp, buh,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_UPDATE_DELAY)>,
     AtomicField<bool, false CONFIG_INDEX_ARG(Bgp::DEFAULT_ORIGINATE)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::DEFAULT_METRIC)>,
-    ValueField<std::vector<std::tuple<uint8_t, std::vector<IPPrefix, std::string>>> CONFIG_INDEX_ARG(Bgp::DISTANCE_RANGE)>,
+    ValueField<std::vector<std::tuple<uint8_t, std::vector<std::tuple<IPPrefix, std::string>>>> CONFIG_INDEX_ARG(Bgp::DISTANCE_RANGE)>,
     AtomicField<uint8_t, 20 CONFIG_INDEX_ARG(Bgp::DISTANCE_BGP_EXTERNAL)>,
     AtomicField<uint8_t, 200 CONFIG_INDEX_ARG(Bgp::DISTANCE_BGP_INTERNAL)>,
     AtomicField<uint8_t, 200 CONFIG_INDEX_ARG(Bgp::DISTANCE_BGP_LOCAL)>,
@@ -436,7 +435,7 @@ using BgpRegistry = SubRegistry<__uint128_t, Bgp, buh,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Bgp::DISTRIBUTE_LIST_GATEWAY)>,
     OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Bgp::MAXIMUM_PATHS_EBGP)>,
     OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(Bgp::MAXIMUM_PATHS_IBGP)>,
-    OwnedListField<BgpNeighborRegistry, __uint128_t CONFIG_INDEX_ARG(Bgp::NEIGHBOR)>,
+    OwnedListField<BgpNeighborRegistry, IPAddress CONFIG_INDEX_ARG(Bgp::NEIGHBOR)>,
     ValueField<std::vector<std::tuple<IPPrefix, bool, std::string>> CONFIG_INDEX_ARG(Bgp::NETWORK)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Bgp::ROUTE_SERVER_CONTEXT)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Bgp::TABLE_MAP)>,

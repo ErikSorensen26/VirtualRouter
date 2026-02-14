@@ -641,7 +641,7 @@ public:
         return children;
     }
 
-    const inline type::const_iterator find(K key) const noexcept
+    const inline type::const_iterator find(const K& key) const noexcept
     {
         return std::find_if(children.begin(), children.end(), [key](const auto& pair) { return pair.first == key; });
     }
@@ -661,6 +661,12 @@ public:
         if (base && state == MaskState::INHERIT)
             return base->get();
         return children;
+    }
+
+    inline void erase(const K& key) noexcept
+    {
+        children.erase(std::remove_if(children.begin(), children.end(),
+            [&](const std::pair<K, Reference<T>>& p) { return p.first == key; }));
     }
 
     inline void clear() noexcept

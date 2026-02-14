@@ -108,7 +108,7 @@ public:
 
 
     template <typename T, typename K CONFIG_INDEX_PARAM>
-    Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, uint32_t id, typename T::keyType key)
+    Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, const K& id, typename T::keyType key)
     {
         if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
             return it->second;
@@ -116,7 +116,7 @@ public:
     }
 
     template <typename T, typename K CONFIG_INDEX_PARAM>
-    Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, uint32_t id, const Reference<T>& parent, typename T::keyType key)
+    Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, const K& id, const Reference<T>& parent, typename T::keyType key)
     {
         if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
             return it.second;
