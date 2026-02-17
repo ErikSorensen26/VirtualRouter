@@ -8,6 +8,7 @@
 #include <shared_mutex>
 #include <AddressFamily.hpp>
 
+#include "tcp/Tcp.h"
 #include "configs/Registry.hpp"
 #include "routing/RoutingTable.hpp"
 
@@ -351,12 +352,15 @@ public:
     bool isDefault() { return defaulted; }
     Global& getGlobal() { return global; }
     RoutingTable& getRib() { return routingTable; }
+    TCP::Tcp& getTcp() { return tcpManager; }
     ControlScheduler& getControlScheduler();
     
 private:
     friend class Interface;
     uint32_t instanceId{0};
     const bool defaulted{false};
+
+    TCP::Tcp tcpManager;
 
     std::unordered_map<uint32_t, Eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
     std::unordered_map<std::string, Eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups.

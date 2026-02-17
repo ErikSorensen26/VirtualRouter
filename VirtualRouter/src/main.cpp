@@ -1,14 +1,16 @@
 // Problem where enqueue is dequeueing and then eventually it stopes anqueueing and then the queue gets fu
 
-#include "cli/runtime/CliEngine.h"
-#include "cli/runtime/CliSession.h"
 #include <Logger.h>
 #include <Global.h>
 #include <getopt.h>
-
-#include "web/WebSessionManager.hpp"
 #include <CrashHandler.hpp>
 #include <RCU.hpp>
+
+#include "cli/runtime/CliEngine.h"
+#include "cli/runtime/CliSession.h"
+#include "web/WebSessionManager.hpp"
+
+#include <VirtualRouter.h>
 
 struct StartupArgs
 {

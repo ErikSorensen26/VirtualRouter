@@ -99,7 +99,7 @@ public:
     template <typename T CONFIG_INDEX_PARAM>
     Reference<T> ensure(ReferenceContainer<T CONFIG_INDEX_ARG(F)>& container, Reference<T>& parent, typename T::keyType key)
     {
-        container.base = parent;
+        container.base = &parent;
         Reference<T> ref = create<T>(key, *container.base); // Masked Version
         container.unsetLocal();
         container.setLocal(ref);
@@ -110,17 +110,17 @@ public:
     template <typename T, typename K CONFIG_INDEX_PARAM>
     Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, const K& id, typename T::keyType key)
     {
-        if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
+        if (auto it = list.children.find(id); it != list.children.end())
             return it->second;
-        return list.getMutable().emplace_back(id, create<T>(key)).second;
+        return list.getMutable().emplace(id, create<T>(key)).first->second;
     }
 
     template <typename T, typename K CONFIG_INDEX_PARAM>
     Reference<T> emplaceBack(OwnedListField<T, K CONFIG_INDEX_ARG(F)>& list, const K& id, const Reference<T>& parent, typename T::keyType key)
     {
-        if (auto it = std::find_if(list.children.begin(), list.children.end(), [key](const auto& pair) { return pair.first == key; }); it != list.children.end())
-            return it.second;
-        return list.getMutable().emplace_back({id, create<T>(key, parent)}).second;
+        if (auto it = list.children.find(id); it != list.children.end())
+            return it->second;
+        return list.getMutable().emplace({id, create<T>(key, parent)}).first->second;
     }
 };
 }

@@ -1,0 +1,70 @@
+// Listener.h
+
+#ifndef TCP_LISTENER_H
+#define TCP_LISTENER_H
+
+#include "TcpTypes.hpp"
+
+namespace TCP
+{
+class Connection;
+class TcpEngine;
+
+struct ListenOptions final
+{
+    ListenOptions() {}
+    TcpSocketPolicy policy{};
+    TcpInterfaceBind bind{};
+    size_t backlog{128};
+
+    AcceptCallback onAccept{nullptr};
+    void* onAcceptUser{nullptr};
+
+    ConnCallback acceptConnCallback{nullptr};
+    void* acceptedConnUser{nullptr};
+
+    RecvCallback recvCallback{nullptr};
+    void* recvUser{nullptr};
+};
+
+class Listener final
+{
+public:
+    Listener() = default;
+    ~Listener();
+
+    Listener(const Listener& other);
+    Listener& operator=(const Listener& other);
+
+    Listener(const Listener&& other) noexcept;
+    Listener& operator=(Listener&& other) noexcept;
+
+    bool ok() const noexcept { return engine && id != 0; }
+    explicit operator bool() const noexcept { return ok(); }
+
+    ListenId getId() const noexcept { return id; }
+
+    TcpResult<Connection> accept();
+
+    TcpResult<void> close();
+
+    TcpResult<size_t> send(ConnId cid, std::span<const uint8_t> data);
+    TcpResult<size_t> recv(ConnId cid, std::span<uint8_t> out);
+    TcpResult<void> shutdown(ConnId cid, TcpShutdown how);
+
+    TcpResult<void> disconnect(ConnId cid);
+
+    TcpResult<Connection> connection(ConnId cid);
+
+private:
+    friend class Tcp;
+    friend class Connection;
+
+    Listener(TcpEngine* e, ListenId, bool, bool addRef);
+
+    TcpEngine* engine{nullptr};
+    ListenId id{0};
+};
+}
+
+#endif

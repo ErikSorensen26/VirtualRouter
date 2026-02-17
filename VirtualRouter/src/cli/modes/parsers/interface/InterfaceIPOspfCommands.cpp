@@ -33,7 +33,7 @@ bool InterfaceIPOspf_Area_Handler(INTERFACE_PARAMS)
 	auto* ospf = vrf->getOspf(static_cast<uint32_t>(std::stoi(args[0])));
 	if (!ospf || !ctx.currentInterface.configs.ipv4.hasPrimaryAddress()) return false;
 
-	auto& context = ifaceConfigs.context().get();
+	auto& context = *static_cast<OSPF::OspfInterface*>(ifaceConfigs.context().get());
 	if (context.getArea().process().getProcId() != static_cast<uint32_t>(std::stoi(args[0])) ||
 	    context.getArea().areaId != static_cast<uint32_t>(std::stoi(args[1])))
 	{

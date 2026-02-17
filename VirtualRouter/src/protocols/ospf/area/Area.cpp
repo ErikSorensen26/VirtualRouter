@@ -19,9 +19,10 @@ namespace OSPF
 {
 Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
     : mr(mr ? mr : std::pmr::get_default_resource()),
-      configs(base.getConfigs().get<Config::Ospf::AREA_CONFIGS>().getMutable().emplace_back(
-          areaId, base.routingInstance->getGlobal().registry.create<Config::OspfAreaRegistry>(
-              Config::generateOspfAreaKey(base.getConfigKey(), id))).second),
+      configs(base.routingInstance->getRegistry().emplaceBack(
+          base.getConfigs().get<Config::Ospf::AREA_CONFIGS>(),
+          id, Config::generateOspfAreaKey(base.getConfigKey(), id))
+      ),
       db(mr),
       base(base),
       spfMgr(*this, base.getScheduler()),
@@ -41,6 +42,7 @@ Area::~Area()
         base.getScheduler().cancel(ignoreTid);
     if (resetTid != 0)
         base.getScheduler().cancel(resetTid);
+    base.getConfigs().get<Config::Ospf::AREA_CONFIGS>().erase(areaId);
 }
 
 void Area::initializeReset()

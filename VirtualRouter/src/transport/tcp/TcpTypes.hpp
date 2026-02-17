@@ -6,14 +6,19 @@
 #include <cstdint>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <functional>
-
 #include <IPAddress.hpp>
 #include <AddressFamily.hpp>
 
 namespace TCP
 {
+class Connection;
+class Tcp;
+
 using TcpPort = uint16_t;
+using ConnId = uint64_t;
+using ListenId = uint64_t;
 
 enum class TcpState : uint8_t
 {
@@ -40,7 +45,7 @@ enum class TcpShutdown : uint8_t
 
 enum class TcpErrc : uint8_t
 {
-    OK = 0,
+    SUCCESS = 0,
 
     INVALID_ARGUMENT,
     NOT_FOUND,
@@ -68,19 +73,19 @@ enum class TcpErrc : uint8_t
 
 struct TcpError final
 {
-    TcpErrc code{TcpErrc::OK};
+    TcpErrc code{TcpErrc::SUCCESS};
     int osErrno{0};
 
-    constexpr bool ok() const noexcept { return code == TcpErrc::OK; }
+    constexpr bool ok() const noexcept { return code == TcpErrc::SUCCESS; }
 };
 
-template <typename T>
+/*template <typename T>
 struct TcpResult final
 {
     T value{};
     TcpError error{};
 
-    constexpr bool ok() const noexcept { return error.code == TcpErrc::OK; }
+    constexpr bool ok() const noexcept { return error.code == TcpErrc::SUCCESS; }
     constexpr explicit operator bool() const noexcept { return ok(); }
 };
 
@@ -88,9 +93,9 @@ template <>
 struct TcpResult<void> final
 {
     TcpError error{};
-    constexpr bool ok() const noexcept { return error.code == TcpErrc::OK; }
+    constexpr bool ok() const noexcept { return error.code == TcpErrc::SUCCESS; }
     constexpr explicit operator bool() const noexcept { return ok(); }
-};
+};*/
 
 struct TcpEndpoint final
 {
@@ -170,6 +175,84 @@ struct TcpEvent final
     TcpError error{};
 };
 
+struct ConnCallbackCtx
+{
+    void* user;
+    Tcp& tcp;
+    ConnId id;
+    const TcpEvent& ev;
+};
+
+struct AcceptCallbackCtx
+{
+    void* user;
+    Tcp& tcp;
+    ListenId lid;
+    Connection& newConn;
+    const TcpSocketKey& key;
+};
+
+struct RecvCallbackCtx
+{
+    void* user;
+    Tcp& tcp;
+    ConnId id;
+    std::span<const uint8_t> data;
+};
+
+using ConnCallback = void(*)(ConnCallbackCtx&) noexcept;
+using AcceptCallback = void(*)(AcceptCallbackCtx&) noexcept;
+using RecvCallback = void(*)(RecvCallbackCtx&) noexcept;
+
+struct PoolConfig final
+{
+    size_t blockSize = 4096;
+    size_t slabBlocks = 128;
+    size_t maxBlocks = 0;
+};
+
+struct Config final
+{
+    Config() {};
+    TcpPort ephemeralMin{49152};
+    TcpPort ephemeralMax{65535};
+    size_t maxConnections{4096};
+
+    PoolConfig poolConfigs;
+
+    TcpSocketPolicy defaults{};
+};
+
+struct ListenOptions final
+{
+    ListenOptions() {}
+    TcpSocketPolicy policy{};
+    TcpInterfaceBind bind{};
+    size_t backlog{128};
+
+    AcceptCallback onAccept{nullptr};
+    void* onAcceptUser{nullptr};
+
+    ConnCallback acceptConnCallback{nullptr};
+    void* acceptedConnUser{nullptr};
+
+    RecvCallback recvCallback{nullptr};
+    void* recvUser{nullptr};
+};
+
+struct ConnectOptions final
+{
+    ConnectOptions() {}
+    TcpSocketPolicy policy{};
+    TcpInterfaceBind bind{};
+
+    ConnCallback callback{nullptr};
+    void* callbackUser{nullptr};
+
+    RecvCallback recvCallback{nullptr};
+    void* recvUser{nullptr};
+};
+
 struct TcpIpAdapter final
 {
     static int af(const IPAddress& ip) noexcept
@@ -201,15 +284,17 @@ struct TcpIpAdapter final
             std::memcpy(ss, &sin, sizeof(sin));
             *socklenOut = sizeof(sockaddr_in);
         }
+        else
+        {
+            sockaddr_in6 sin6{};
+            sin6.sin6_family = AF_INET6;
+            sin6.sin6_port = htons(portIn);
 
-        sockaddr_in6 sin6{};
-        sin6.sin6_family = AF_INET6;
-        sin6.sin6_port = htons(portIn);
+            std::memcpy(&sin6.sin6_addr, ipIn.raw, 16);
 
-        std::memcpy(&sin6.sin6_addr, ipIn.raw, 16);
-
-        std::memcpy(ss, &sin6, sizeof(sin6));
-        *socklenOut = sizeof(sockaddr_in6);
+            std::memcpy(ss, &sin6, sizeof(sin6));
+            *socklenOut = sizeof(sockaddr_in6);
+        }
     }
 
     static void readSockaddr(const void* sockaddrIn, uint32_t socklenIn, IPAddress& ipOut, TcpPort& portOut) noexcept

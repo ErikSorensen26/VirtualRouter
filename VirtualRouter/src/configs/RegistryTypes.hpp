@@ -7,10 +7,10 @@
 #include <concepts>
 #include <cassert>
 #include <utility>
-#include <vector>
+#include <unordered_map>
 #include <algorithm>
 
-#define ENABLE_CONFIG_INDEX 1
+#define ENABLE_CONFIG_INDEX 0
 
 #if defined(NDEBUG)
     #define USE_CONFIG_INDEX 0
@@ -40,13 +40,12 @@ class RegistryDatabase;
 template <typename T>
 class Reference;
 
-template <typename KEY, typename ENUM, typename Ctx, typename... Fields>
+template <typename KEY, typename ENUM, typename... Fields>
 class SubRegistry;
 
 using ApplyKey = uint64_t;
 
-template <typename Ctx>
-using ApplyFn = void (*)(Ctx& ctx);
+using ApplyFn = void (*)(void* ctx);
 
 struct AtomicFieldFlag {};
 struct OptionalAtomicFieldFlag : AtomicFieldFlag {};
@@ -60,7 +59,6 @@ concept IsFieldBase =
     requires
     {
         typename T::type;
-        { T::field };
     };
 
 enum class MaskState : uint8_t
@@ -69,20 +67,19 @@ enum class MaskState : uint8_t
     SET
 };
 
-template <typename Ctx>
 struct ContextProvider
 {
     inline bool hasCtx() noexcept
     {
+        return ctx != nullptr;
+    }
+
+    inline void* get() noexcept
+    {
         return ctx;
     }
 
-    inline Ctx& get() noexcept
-    {
-        return *ctx;
-    }
-
-    void set(Ctx& c) noexcept
+    void set(void* c) noexcept
     {
         ctx = &c;
     }
@@ -93,26 +90,26 @@ struct ContextProvider
     }
 
 private:
-    Ctx* ctx{nullptr};
+    void* ctx{nullptr};
 };
 
-template <typename T, T D CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
+template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class AtomicField;
 
-template <typename T, T D CONFIG_INDEX_PARAM>
-class AtomicField<T, D CONFIG_INDEX_ARG(F), void, nullptr> : public AtomicFieldFlag
+template <typename T CONFIG_INDEX_PARAM>
+class AtomicField<T CONFIG_INDEX_ARG(F), nullptr> : public AtomicFieldFlag
 {
 public:
     using type = T;
-    static constexpr auto dValue = D;
     CONFIG_INDEX_MEMBER
 
     AtomicField() = default;
 
     AtomicField(const AtomicField& parent) noexcept
-        : value(D),
+        : value(T{}),
           state(MaskState::INHERIT),
-          base(&parent)
+          base(&parent),
+          defaultValue(parent.defaultValue)
     {}
 
     inline T load() const noexcept
@@ -131,7 +128,7 @@ public:
 
     inline void unset() noexcept
     {
-        value.store(dValue, std::memory_order_relaxed);
+        value.store(defaultValue, std::memory_order_relaxed);
         state.store(MaskState::INHERIT, std::memory_order_relaxed);
     }
 
@@ -140,30 +137,39 @@ public:
         return state.load(std::memory_order_relaxed) == MaskState::SET;
     }
 
+    void setDefault(T d) noexcept
+    {
+        defaultValue = d;
+    }
+
 private:
-    std::atomic<T> value{D};
+    std::atomic<T> value{T{}};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const AtomicField* base{nullptr};
+
+    T defaultValue{T{}};
 };
 
-template <typename T, T D CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
-class AtomicField<T, D CONFIG_INDEX_ARG(F), Ctx, H> : public AtomicFieldFlag
+template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
+class AtomicField<T CONFIG_INDEX_ARG(F), H> : public AtomicFieldFlag
 {
 public:
     using type = T;
-    static constexpr auto dValue = D;
-    static constexpr ApplyFn<Ctx> applier = H;
+    static constexpr ApplyFn applier = H;
     CONFIG_INDEX_MEMBER
 
-    AtomicField(ContextProvider<Ctx>& provider) noexcept
-        : provider(provider)
+    AtomicField(ContextProvider& p) noexcept
+        : provider(p),
+          value(T{}),
+          state(MaskState::INHERIT)
     {}
 
-    AtomicField(ContextProvider<Ctx>& provider, const AtomicField& parent) noexcept
-        : provider(provider),
-          value(D),
+    AtomicField(ContextProvider& p, const AtomicField& parent) noexcept
+        : provider(p),
+          value(T{}),
           state(MaskState::INHERIT),
-          base(&parent)
+          base(&parent),
+          defaultValue(parent.defaultValue)
     {}
 
     inline T load() const noexcept
@@ -184,7 +190,7 @@ public:
     inline void unset() noexcept
     {
         T old = load();
-        value.store(dValue, std::memory_order_relaxed);
+        value.store(defaultValue, std::memory_order_relaxed);
         state.store(MaskState::INHERIT, std::memory_order_relaxed);
         if (load() != old && provider.hasCtx()) applier(provider.get());
     }
@@ -194,18 +200,25 @@ public:
         return state.load(std::memory_order_relaxed) == MaskState::SET;
     }
 
+    void setDefault(T d) noexcept
+    {
+        defaultValue = d;
+    }
+
 private:
-    ContextProvider<Ctx>& provider;
-    std::atomic<T> value{D};
+    ContextProvider& provider;
+    std::atomic<T> value{T{}};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const AtomicField* base{nullptr};
+
+    T defaultValue{T{}};
 };
 
-template <typename T CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
+template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class OptionalAtomicField;
 
 template <typename T CONFIG_INDEX_PARAM>
-class OptionalAtomicField<T CONFIG_INDEX_ARG(F), void, nullptr> : public OptionalAtomicFieldFlag
+class OptionalAtomicField<T CONFIG_INDEX_ARG(F), nullptr> : public OptionalAtomicFieldFlag
 {
 public:
     using type = T;
@@ -264,19 +277,19 @@ private:
     const OptionalAtomicField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
-class OptionalAtomicField<T CONFIG_INDEX_ARG(F), Ctx, H> : public OptionalAtomicFieldFlag
+template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
+class OptionalAtomicField<T CONFIG_INDEX_ARG(F), H> : public OptionalAtomicFieldFlag
 {
 public:
     using type = T;
-    static constexpr ApplyFn<Ctx> applier = H;
+    static constexpr ApplyFn applier = H;
     CONFIG_INDEX_MEMBER
 
-    OptionalAtomicField(ContextProvider<Ctx>& provider)
+    OptionalAtomicField(ContextProvider& provider)
         : provider(provider)
     {}
 
-    explicit OptionalAtomicField(ContextProvider<Ctx>& provider, const OptionalAtomicField& parent) noexcept
+    explicit OptionalAtomicField(ContextProvider& provider, const OptionalAtomicField& parent) noexcept
         : provider(provider),
           value(),
           state(MaskState::INHERIT),
@@ -325,17 +338,17 @@ public:
     }
 
 private:
-    ContextProvider<Ctx>& provider;
+    ContextProvider& provider;
     std::atomic<T> value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const OptionalAtomicField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
+template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class ValueField;
 
 template <typename T CONFIG_INDEX_PARAM>
-class ValueField<T CONFIG_INDEX_ARG(F), void, nullptr> : public ValueFieldFlag
+class ValueField<T CONFIG_INDEX_ARG(F), nullptr> : public ValueFieldFlag
 {
 public:
     using type = T;
@@ -390,20 +403,20 @@ private:
     const ValueField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
-class ValueField<T CONFIG_INDEX_ARG(F), Ctx, H> : public ValueFieldFlag
+template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
+class ValueField<T CONFIG_INDEX_ARG(F), H> : public ValueFieldFlag
 {
 public:
     using type = T;
-    static constexpr ApplyFn<Ctx> applier = H;
+    static constexpr ApplyFn applier = H;
     CONFIG_INDEX_MEMBER
 
-    ValueField(ContextProvider<Ctx>& provider, std::mutex& m)
+    ValueField(ContextProvider& provider, std::mutex& m)
         : provider(provider),
           mu(m)
     {}
 
-    explicit ValueField(ContextProvider<Ctx>& provider, std::mutex& m, const ValueField& parent) noexcept
+    explicit ValueField(ContextProvider& provider, std::mutex& m, const ValueField& parent) noexcept
         : provider(provider),
           mu(m),
           value(),
@@ -466,17 +479,17 @@ public:
     std::mutex& mu;
 
 private:
-    ContextProvider<Ctx>& provider;
+    ContextProvider& provider;
     T value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const ValueField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX_PARAM, typename Ctx = void, auto H = nullptr>
+template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
 class OptionalValueField;
 
 template <typename T CONFIG_INDEX_PARAM>
-class OptionalValueField<T CONFIG_INDEX_ARG(F), void, nullptr> : public OptionalValueFieldFlag
+class OptionalValueField<T CONFIG_INDEX_ARG(F), nullptr> : public OptionalValueFieldFlag
 {
 public:
     using type = T;
@@ -543,20 +556,20 @@ private:
     const OptionalValueField* base{nullptr};
 };
 
-template <typename T CONFIG_INDEX_PARAM, typename Ctx, ApplyFn<Ctx> H>
-class OptionalValueField<T CONFIG_INDEX_ARG(F), Ctx, H> : public OptionalValueFieldFlag
+template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
+class OptionalValueField<T CONFIG_INDEX_ARG(F), H> : public OptionalValueFieldFlag
 {
 public:
     using type = T;
-    static constexpr ApplyFn<Ctx> applier = H;
+    static constexpr ApplyFn applier = H;
     CONFIG_INDEX_MEMBER
 
-    OptionalValueField(ContextProvider<Ctx>& provider, std::mutex& m)
+    OptionalValueField(ContextProvider& provider, std::mutex& m)
         : provider(provider),
           mu(m)
     {}
 
-    explicit OptionalValueField(ContextProvider<Ctx>& provider, std::mutex& m, const OptionalValueField& parent) noexcept
+    explicit OptionalValueField(ContextProvider& provider, std::mutex& m, const OptionalValueField& parent) noexcept
         : provider(provider),
           mu(m),
           value(),
@@ -613,7 +626,7 @@ public:
     std::mutex& mu;
 
 private:
-    ContextProvider<Ctx>& provider;
+    ContextProvider& provider;
     T value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
     const OptionalValueField* base{nullptr};
@@ -623,7 +636,7 @@ template <typename T, typename K CONFIG_INDEX_PARAM>
 class OwnedListField : public OwnedListFieldFlag
 {
 public:
-    using type = std::vector<std::pair<K, Reference<T>>>;
+    using type = std::unordered_map<K, Reference<T>>;
     using key = K;
     CONFIG_INDEX_MEMBER
 
@@ -665,8 +678,7 @@ public:
 
     inline void erase(const K& key) noexcept
     {
-        children.erase(std::remove_if(children.begin(), children.end(),
-            [&](const std::pair<K, Reference<T>>& p) { return p.first == key; }));
+        children.erase(key);
     }
 
     inline void clear() noexcept
