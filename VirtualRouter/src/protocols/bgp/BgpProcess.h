@@ -9,13 +9,14 @@
 #include "tcp/Listener.h"
 #include "configs/registry/router/BgpRegistry.h"
 #include "bgp/neighbor/NeighborTable.h"
+#include "bgp/transport/Transmission.h"
 
 class VirtualRouter;
 
 namespace BGP
 {
 class BgpNeighbor;
-class Connection;
+class Session;
 
 class BgpProcess
 {
@@ -25,20 +26,24 @@ public:
     VirtualRouter* routingInstance = nullptr;
 
     // Getters
-    Config::BgpRegistry& getConfigs() { return configs.get(); }
-    const Config::BgpRegistry& getConfigs() const { return configs.get(); }
-    NeighborTable& getNtable() { return ntable; }
-    const NeighborTable& getNtable() const { return ntable; }
+    inline Config::BgpRegistry& getConfigs() { return configs.get(); }
+    inline const Config::BgpRegistry& getConfigs() const { return configs.get(); }
+    inline NeighborTable& getNtable() { return ntable; }
+    inline const NeighborTable& getNtable() const { return ntable; }
+    inline Transmission& getTransmission() { return transmission; }
+    inline const Transmission& getTransmission() const { return transmission; }
+
+    const uint32_t asNumber;
 private:
 
     static void onConnect(TCP::ConnCallbackCtx& ctx) noexcept;
     static void onAccept(TCP::AcceptCallbackCtx& ctx) noexcept;
     static void onReceive(TCP::RecvCallbackCtx& ctx) noexcept;
 
-    const uint32_t asNumber;
 
     TCP::Listener listener;
-    std::unordered_map<TCP::TcpSocketKey, Connection> connections;
+    std::unordered_map<TCP::TcpSocketKey, Session> connections;
+    Transmission transmission;
 
     ProcessQueue scheduler;
 

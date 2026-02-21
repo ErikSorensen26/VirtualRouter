@@ -10,6 +10,7 @@ namespace BGP
 BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
     : routingInstance(vrf),
       asNumber(as),
+      transmission(*this),
       scheduler(vrf->getControlScheduler().create()),
       ntable(*this),
       configs(vrf->getRegistry().create<Config::BgpRegistry>(

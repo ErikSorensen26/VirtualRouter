@@ -5,4 +5,7 @@ add policy stuff
 add lsdb checksum validation
 automatic deletion of areas
 deletion of neighbors
-
+check initial checksum
+merge v2/v3 rx/tx
+graceful restart
+resync

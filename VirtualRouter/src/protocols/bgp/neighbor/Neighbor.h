@@ -18,6 +18,7 @@ public:
     const IPAddress neighborAddress;
 
     BgpProcess& getProcess() { return process; }
+    Config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
     const BgpProcess& getProcess() const { return process; }
 private:
 
