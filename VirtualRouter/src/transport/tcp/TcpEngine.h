@@ -6,8 +6,9 @@
 #include <sys/epoll.h>
 
 #include "TcpTypes.hpp"
-#include "TcpBuffer.h"
-#include "TcpBufferPool.h"
+#include "tcp/tx/TxBuffer.h"
+#include "tcp/tx/TxBufferPool.h"
+#include "tcp/rx/RxBuffer.h"
 
 class VirtualRouter;
 
@@ -57,6 +58,7 @@ private:
         TcpEndpoint local{};
         size_t backlog{0};
         TcpSocketPolicy policyApplied{};
+        size_t rxSize = 2048;
 
         AcceptCallback onAccept{nullptr};
         void* onAcceptUser{nullptr};
@@ -72,8 +74,8 @@ private:
 
     struct ConnectionState final
     {
-        ConnectionState(TcpBufferPool& pool)
-            : buffer(pool.acquire()) {}
+        ConnectionState(TxBufferPool& pool, size_t recvBufSiz)
+            : bufferTx(pool.acquire()), bufferRx(recvBufSiz) {}
 
         ConnId id{0};
         int fd{-1};
@@ -92,7 +94,8 @@ private:
         RecvCallback recvCb{nullptr};
         void* recvUser{nullptr};
 
-        TcpBuffer buffer;
+        TxBuffer bufferTx;
+        RxBuffer bufferRx;
     };
 
     static constexpr uint64_t kListenerTag = (1ull << 63);
@@ -127,7 +130,7 @@ private:
 private:
     VirtualRouter& vr;
     Config cfg;
-    TcpBufferPool bufferPool;
+    TxBufferPool bufferPool;
 
     int epfd{-1};
 

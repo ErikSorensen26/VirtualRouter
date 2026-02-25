@@ -4,13 +4,12 @@
 #define TCP_CONNECTION_H
 
 #include "TcpTypes.hpp"
-#include "TcpBuffer.h"
 
 namespace TCP
 {
 class Listener;
 class TcpEngine;
-class TcpBuffer;
+class TxBuffer;
 
 class Connection final
 {
@@ -35,13 +34,15 @@ public:
     std::optional<TcpSocketKey> socketKey() const noexcept;
 
 private:
+    friend class RxConsumer;
     friend class TcpEngine;
     friend class Listener;
 
-    Connection(TcpEngine* e, ConnId cid, TcpBuffer& buf)
-        : buffer(buf), engine(e), id(cid) {}
+    Connection(TcpEngine* e, ConnId cid, TxBuffer& bufTx)
+        : bufferTx(bufTx), engine(e), id(cid) {}
 
-    TcpBuffer& buffer;
+    TxBuffer& bufferTx;
+
     TcpEngine* engine{nullptr};
     ConnId id{0};
 };

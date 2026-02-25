@@ -7,58 +7,76 @@
 #include "packet/headers/embedded/bgp/BgpOpenHeader.hpp"
 #include "packet/TlvOptions.hpp"
 #include "bgp/session/Session.h"
+#include "tcp/rx/RxConsumer.h"
 #include "Transmission.h"
 
 namespace BGP
 {
-void Transmission::handleIncoming(Session& c, const std::span<uint8_t> data)
+void Transmission::handleIncoming(Session& s, TCP::RxConsumer& c)
 {
-    if (data.size() > 4096)
-        return; // Invalid size
+    const uint16_t maxLen = std::max<uint16_t>(kMaxMessageLen, 0);
 
-    for (size_t idx = 0; idx <= data.size();)
+    auto& buf = c.get();
+
+    Notification error;
+
+    while (true)
     {
+        if (buf.size() < BgpHeader::fixedSize) break;
+
         BgpHeader hdr;
-        hdr.setBuffer(data.data() + idx);
+        hdr.setBuffer(buf.data());
 
         if (std::memcmp(hdr.getMarker(), BGP_MARKER, 16) != 0)
         {
-            // XXX: Send notification
-            
+            error.code = BGP_NOTIFICATION_HEADER_CONNECTION_NOT_SYNCED;
             return;
         }
 
-        if (hdr.getLength() >= 19)
+        if (hdr.getLength() < 19)
         {
-            // XXX: send notification
+            error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
+            error.data.resize(2);
+            writeU16(error.data.data(), hdr.getLength());
             return;
         }
 
         hdr.setTrailSize(hdr.getLength() - BgpHeader::fixedSize);
+        
+        bool noError = true;
 
         switch (hdr.getType())
         {
             case BGP_TYPE_OPEN:
-                processOpen(c, hdr.getTrail());
+                noError = processOpen(s, hdr.getTrail(), error);
                 break;
             case BGP_TYPE_UPDATE:
-                processUdpate(c, hdr.getTrail());
+                noError = processUdpate(s, hdr.getTrail(), error);
                 break;
             case BGP_TYPE_NOTIFICATION:
-                processNotification(c, hdr.getTrail());
+                noError = processNotification(s, hdr.getTrail(), error);
                 break;
             case BGP_TYPE_KEEP_ALIVE:
-                processNotification(c, hdr.getTrail());
+                noError = processNotification(s, hdr.getTrail(), error);
                 break;
             case BGP_TYPE_ROUTE_REFRESH:
-                processRouteRefresh(c, hdr.getTrail());
+                noError = processRouteRefresh(s, hdr.getTrail(), error);
                 break;
             default:
             {
-                // XXX: send notification
+                error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_TYPE;
+                error.data.push_back(hdr.getType());
                 return;
             }
         }
+
+        if (!noError)
+        {
+            // TODO: handle error
+            return;
+        }
+
+        c.commit(hdr.getLength());
     }
 }
 

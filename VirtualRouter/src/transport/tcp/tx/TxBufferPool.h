@@ -1,26 +1,26 @@
-// TcpBuffer.h
+// TxBufferPool.h
 
-#ifndef TCP_BUFFER_POOL_H
-#define TCP_BUFFER_POOL_H
+#ifndef TCP_TX_BUFFER_POOL_H
+#define TCP_TX_BUFFER_POOL_H
 
 #include <atomic>
 #include <vector>
 
 namespace TCP
 {
-class TcpBuffer;
+class TxBuffer;
 struct PoolConfig;
 
-class TcpBufferPool final
+class TxBufferPool final
 {
 public:
-    explicit TcpBufferPool(PoolConfig& c) noexcept;
-    ~TcpBufferPool();
+    explicit TxBufferPool(PoolConfig& c) noexcept;
+    ~TxBufferPool();
 
-    TcpBufferPool(const TcpBufferPool&) = delete;
-    TcpBufferPool& operator=(const TcpBufferPool&) = delete;
+    TxBufferPool(const TxBufferPool&) = delete;
+    TxBufferPool& operator=(const TxBufferPool&) = delete;
 
-    TcpBuffer acquire() noexcept;
+    TxBuffer acquire() noexcept;
 
     size_t blockSize() const noexcept;
 
@@ -35,7 +35,7 @@ private:
         const uint8_t* data() const noexcept { return reinterpret_cast<const uint8_t*>(this + 1); }
     };
 
-    friend class TcpBuffer;
+    friend class TxBuffer;
 
     Block* pop() noexcept;
     void addRef(Block* b) noexcept;
@@ -55,4 +55,4 @@ private:
 };
 }
 
-#endif // TCP_BUFFER_POOL_H
+#endif // TCP_TX_BUFFER_POOL_H

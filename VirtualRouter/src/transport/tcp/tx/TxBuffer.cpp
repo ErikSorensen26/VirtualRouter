@@ -1,20 +1,19 @@
-// TcpBuffer.cpp
+// TxBuffer.cpp
 
 #include <cstring>
-#include <utility>
 
-#include "TcpBuffer.h"
-#include "TcpBufferPool.h"
+#include "TxBuffer.h"
+#include "TxBufferPool.h"
 
 namespace TCP
 {
-TcpBufferPool::Block* TcpBuffer::newBlock() noexcept
+TxBufferPool::Block* TxBuffer::newBlock() noexcept
 {
     if (!pool) return nullptr;
     return pool->pop();
 }
 
-void TcpBuffer::appendNewBlock() noexcept
+void TxBuffer::appendNewBlock() noexcept
 {
     auto* b = newBlock();
     if (!b) return;
@@ -32,13 +31,13 @@ void TcpBuffer::appendNewBlock() noexcept
     capacityBytes += pool->blockSize();
 }
 
-void TcpBuffer::ensureTail() noexcept
+void TxBuffer::ensureTail() noexcept
 {
     if (!tail)
         appendNewBlock();
 }
 
-std::span<uint8_t> TcpBuffer::reserveSpan(size_t minBytes) noexcept
+std::span<uint8_t> TxBuffer::reserveSpan(size_t minBytes) noexcept
 {
     if (!pool) return {};
 
@@ -62,7 +61,7 @@ std::span<uint8_t> TcpBuffer::reserveSpan(size_t minBytes) noexcept
     );
 }
 
-void TcpBuffer::commit(size_t n) noexcept
+void TxBuffer::commit(size_t n) noexcept
 {
     if (!pool || !tail || n == 0) return;
 
@@ -74,14 +73,14 @@ void TcpBuffer::commit(size_t n) noexcept
     sizeBytes += n;
 }
 
-std::span<const uint8_t> TcpBuffer::peek(size_t offset) const noexcept
+std::span<const uint8_t> TxBuffer::peek(size_t offset) const noexcept
 {
     if (!head) return {};
     if (offset >= sizeBytes) return {};
 
     size_t remaining = offset;
     
-    for (TcpBufferPool::Block* b = head; b; b = b->next)
+    for (TxBufferPool::Block* b = head; b; b = b->next)
     {
         size_t readable = b->wr - b->rd;
 
@@ -99,7 +98,7 @@ std::span<const uint8_t> TcpBuffer::peek(size_t offset) const noexcept
     return {};
 }
 
-size_t TcpBuffer::consume(size_t n) noexcept
+size_t TxBuffer::consume(size_t n) noexcept
 {
     if (!pool || !head || n == 0 || sizeBytes == 0) return 0;
 
@@ -111,7 +110,7 @@ size_t TcpBuffer::consume(size_t n) noexcept
         size_t avail = static_cast<size_t>(head->wr - head->rd);
         if (avail == 0)
         {
-            TcpBufferPool::Block* dead = head;
+            TxBufferPool::Block* dead = head;
             head = head->next;
             if (!head) tail = nullptr;
             capacityBytes -= pool->blockSize();
@@ -127,7 +126,7 @@ size_t TcpBuffer::consume(size_t n) noexcept
 
         if (head->rd == head->wr)
         {
-            TcpBufferPool::Block* dead = head;
+            TxBufferPool::Block* dead = head;
             head = head->next;
             if (!head) tail = nullptr;
             capacityBytes -= pool->blockSize();
@@ -138,7 +137,7 @@ size_t TcpBuffer::consume(size_t n) noexcept
     return consumed;
 }
 
-void TcpBuffer::spliceFrom(TcpBuffer* other) noexcept
+void TxBuffer::spliceFrom(TxBuffer* other) noexcept
 {
     if (!other || other == this) return;
     if (!other->head) return;
@@ -167,7 +166,7 @@ void TcpBuffer::spliceFrom(TcpBuffer* other) noexcept
     other->capacityBytes = 0;
 }
 
-void TcpBuffer::reset() noexcept
+void TxBuffer::reset() noexcept
 {
     if (!pool)
     {

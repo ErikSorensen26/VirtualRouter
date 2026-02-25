@@ -1,30 +1,30 @@
-// TcpBuffer.h
+// TxBuffer.h
 
-#ifndef TCP_BUFFER_H
-#define TCP_BUFFER_H
+#ifndef TCP_TX_BUFFER_H
+#define TCP_TX_BUFFER_H
 
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <sys/uio.h>
 
-#include "TcpBufferPool.h"
+#include "TxBufferPool.h"
 
 namespace TCP
 {
-class TcpBuffer;
+class TxBuffer;
 
-class TcpBuffer final
+class TxBuffer final
 {
 public:
-    TcpBuffer() noexcept = default;
-    ~TcpBuffer() { reset(); }
+    TxBuffer() noexcept = default;
+    ~TxBuffer() { reset(); }
 
-    TcpBuffer(const TcpBuffer&) = delete;
-    TcpBuffer& operator=(const TcpBuffer&) = delete;
+    TxBuffer(const TxBuffer&) = delete;
+    TxBuffer& operator=(const TxBuffer&) = delete;
 
-    TcpBuffer(TcpBuffer&& o) noexcept { moveFrom(o); }
-    TcpBuffer& operator=(TcpBuffer&& o) noexcept
+    TxBuffer(TxBuffer&& o) noexcept { moveFrom(o); }
+    TxBuffer& operator=(TxBuffer&& o) noexcept
     {
         if (this != &o)
         {
@@ -48,17 +48,17 @@ public:
     // Consume up to n bytes. Releases fully-consumed blocks back to pool.
     size_t consume(size_t n) noexcept;
 
-    void spliceFrom(TcpBuffer* other) noexcept;
+    void spliceFrom(TxBuffer* other) noexcept;
 
     // Release all blocks immediately (buffer becomes empty).
     void reset() noexcept;
 
 private:
-    friend class TcpBufferPool;
+    friend class TxBufferPool;
 
-    explicit TcpBuffer(TcpBufferPool* p) noexcept : pool(p) {}
+    explicit TxBuffer(TxBufferPool* p) noexcept : pool(p) {}
 
-    void moveFrom(TcpBuffer& o) noexcept
+    void moveFrom(TxBuffer& o) noexcept
     {
         pool          = o.pool;
         head          = o.head;
@@ -73,14 +73,14 @@ private:
         o.capacityBytes = 0;
     }
 
-    TcpBufferPool::Block* newBlock() noexcept;
+    TxBufferPool::Block* newBlock() noexcept;
     void appendNewBlock() noexcept;
     void ensureTail() noexcept;
 
-    TcpBufferPool* pool = nullptr;
+    TxBufferPool* pool = nullptr;
 
-    TcpBufferPool::Block* head = nullptr;
-    TcpBufferPool::Block* tail = nullptr;
+    TxBufferPool::Block* head = nullptr;
+    TxBufferPool::Block* tail = nullptr;
 
     size_t sizeBytes = 0;      // total readable bytes remaining across blocks
     size_t capacityBytes = 0;  // total committed capacity (blockCount * blockSize)
@@ -88,4 +88,4 @@ private:
 
 } // namespace TCP
 
-#endif // TCP_BUFFER_H
+#endif // TCP_TX_BUFFER_H

@@ -14,7 +14,7 @@ Session::Session(Neighbor& nbr, TCP::Connection& c) noexcept
       connection(std::move(c))
 {
     holdTime = base.get<Config::BgpBase::HOLDTIME>().load();
-    neighbor.getProcess().getTransmission().sendOpen();
+    neighbor.getProcess().getTransmission().sendOpen(*this);
 }
 
 Session::Session(Neighbor& nbr) noexcept
@@ -26,6 +26,6 @@ Session::Session(Neighbor& nbr) noexcept
       )
 {
     holdTime = base.get<Config::BgpBase::HOLDTIME>().load();
-    neighbor.getProcess().getTransmission().sendOpen();
+    neighbor.getProcess().getTransmission().sendOpen(*this);
 }
 }

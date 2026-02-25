@@ -1,47 +1,47 @@
-// TcpBufferPool.cpp
+// TxBufferPool.cpp
 
-#include "TcpBufferPool.h"
-#include "TcpBuffer.h"
-#include "TcpTypes.hpp"
+#include "TxBufferPool.h"
+#include "TxBuffer.h"
+#include "tcp/TcpTypes.hpp"
 
 namespace TCP
 {
-TcpBufferPool::TcpBufferPool(PoolConfig& c) noexcept : cfg(c)
+TxBufferPool::TxBufferPool(PoolConfig& c) noexcept : cfg(c)
 {
     if (cfg.blockSize < 256) cfg.blockSize = 256;
     if (cfg.slabBlocks == 0) cfg.slabBlocks = 1;
 }
 
-TcpBufferPool::~TcpBufferPool()
+TxBufferPool::~TxBufferPool()
 {
     for (void* p : slabs)
         ::operator delete(p, std::align_val_t{alignof(std::max_align_t)});
     slabs.clear();
 }
 
-TcpBuffer TcpBufferPool::acquire() noexcept
+TxBuffer TxBufferPool::acquire() noexcept
 {
-    TcpBuffer b(this);
+    TxBuffer b(this);
     return b;
 }
 
-size_t TcpBufferPool::blockSize() const noexcept { return cfg.blockSize; }
+size_t TxBufferPool::blockSize() const noexcept { return cfg.blockSize; }
 
-TcpBufferPool::Block* TcpBufferPool::atomicPop(std::atomic<TcpBufferPool::Block*>& head) noexcept
+TxBufferPool::Block* TxBufferPool::atomicPop(std::atomic<TxBufferPool::Block*>& head) noexcept
 {
-    TcpBufferPool::Block* h = head.load(std::memory_order_acquire);
+    TxBufferPool::Block* h = head.load(std::memory_order_acquire);
     while (h)
     {
-        TcpBufferPool::Block* next = h->next;
+        TxBufferPool::Block* next = h->next;
         if (head.compare_exchange_weak(h, next, std::memory_order_acq_rel, std::memory_order_acquire))
             return h;
     }
     return nullptr;
 }
 
-void TcpBufferPool::atomicPush(std::atomic<TcpBufferPool::Block*>& head, TcpBufferPool::Block* b) noexcept
+void TxBufferPool::atomicPush(std::atomic<TxBufferPool::Block*>& head, TxBufferPool::Block* b) noexcept
 {
-    TcpBufferPool::Block* h = head.load(std::memory_order_relaxed);
+    TxBufferPool::Block* h = head.load(std::memory_order_relaxed);
     do
     {
         b->next = h;
@@ -49,7 +49,7 @@ void TcpBufferPool::atomicPush(std::atomic<TcpBufferPool::Block*>& head, TcpBuff
     while (!head.compare_exchange_weak(h, b, std::memory_order_release, std::memory_order_relaxed));
 }
 
-void TcpBufferPool::grow(size_t blocks) noexcept
+void TxBufferPool::grow(size_t blocks) noexcept
 {
     if (blocks == 0) return;
 
@@ -85,7 +85,7 @@ void TcpBufferPool::grow(size_t blocks) noexcept
     totalBlocks.fetch_add(blocks, std::memory_order_relaxed);
 }
 
-TcpBufferPool::Block* TcpBufferPool::pop() noexcept
+TxBufferPool::Block* TxBufferPool::pop() noexcept
 {
     Block* b = atomicPop(freeList);
     if (!b)
@@ -102,13 +102,13 @@ TcpBufferPool::Block* TcpBufferPool::pop() noexcept
     return atomicPop(freeList);
 }
 
-void TcpBufferPool::addRef(Block* b) noexcept
+void TxBufferPool::addRef(Block* b) noexcept
 {
     if (!b) return;
     b->refs.fetch_add(1, std::memory_order_acq_rel);
 }
 
-void TcpBufferPool::release(Block* b) noexcept
+void TxBufferPool::release(Block* b) noexcept
 {
     if (!b) return;
 

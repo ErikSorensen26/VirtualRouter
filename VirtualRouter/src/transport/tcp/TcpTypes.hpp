@@ -14,6 +14,7 @@
 namespace TCP
 {
 class Connection;
+class RxConsumer;
 class Tcp;
 
 using TcpPort = uint16_t;
@@ -197,7 +198,7 @@ struct RecvCallbackCtx
     void* user;
     Tcp& tcp;
     ConnId id;
-    std::span<const uint8_t> data;
+    RxConsumer& consumer;
 };
 
 using ConnCallback = void(*)(ConnCallbackCtx&) noexcept;

@@ -16,6 +16,7 @@
 
 #include "Listener.h"
 #include "Connection.h"
+#include "tcp/rx/RxConsumer.h"
 
 namespace TCP
 {
@@ -155,8 +156,6 @@ TcpEngine::TcpEngine(VirtualRouter& v, const Config& c)
     connections.max_load_factor(0.70f);
 
     epScratch.reserve(256);
-
-    ioScratch.resize(8192);
 }
 
 TcpEngine::~TcpEngine()
@@ -433,7 +432,7 @@ Connection TcpEngine::createConnection(const TcpEndpoint& local, const TcpEndpoi
     if (epfd >= 0)
         epAdd(fd, packConn(cid), EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLERR | EPOLLET);
 
-    return Connection(this, cid, c.buffer);
+    return Connection(this, cid, c.bufferTx);
 }
 
 ConnId TcpEngine::adoptAcceptedSocket(ListenerState& lst, int cfd)
@@ -448,7 +447,7 @@ ConnId TcpEngine::adoptAcceptedSocket(ListenerState& lst, int cfd)
 
     ConnId cid = nextConnId++;
 
-    ConnectionState c(bufferPool);
+    ConnectionState c(bufferPool, lst.rxSize);
     c.id = cid;
     c.fd = cfd;
     c.ownerListener = lst.id;
@@ -504,7 +503,7 @@ size_t TcpEngine::acceptLoop(ListenerState& lst, Tcp* tcp, std::span<TcpEvent> a
             {
                 if (lst.onAccept)
                 {
-                    Connection conn = Connection{this, itc->second.id, itc->second.buffer};
+                    Connection conn = Connection{this, itc->second.id, itc->second.bufferTx};
                     AcceptCallbackCtx ctx{lst.onAcceptUser, *tcp, lst.id, conn, itc->second.key};
                     lst.onAccept(ctx);
                 }
@@ -549,9 +548,9 @@ size_t TcpEngine::flush(ConnId cid) noexcept
 
     size_t totalSent = 0;
 
-    while (!cs.buffer.empty())
+    while (!cs.bufferTx.empty())
     {
-        auto span = cs.buffer.peek(0);
+        auto span = cs.bufferTx.peek(0);
         if (span.empty()) break;
 
         ssize_t n = ::send(cs.fd, span.data(), span.size(), MSG_NOSIGNAL);
@@ -559,7 +558,7 @@ size_t TcpEngine::flush(ConnId cid) noexcept
         if (n > 0)
         {
             size_t sent = static_cast<size_t>(n);
-            cs.buffer.consume(sent);
+            cs.bufferTx.consume(sent);
             totalSent += sent;
             continue;
         }
@@ -862,8 +861,10 @@ size_t TcpEngine::pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept
                         break;
                     }
 
-                    std::span<const uint8_t> data(ioScratch.data(), static_cast<size_t>(rn));
-                    RecvCallbackCtx ctx{c.recvUser, tcp, cid, data};
+                    //std::span<const uint8_t> data(ioScratch.data(), static_cast<size_t>(rn));
+                    RxConsumer consumer = c.bufferRx.consume(ioScratch);
+                    RecvCallbackCtx ctx{c.recvUser, tcp, cid, consumer};
+
                     c.recvCb(ctx);
 
                     ++dispatched;

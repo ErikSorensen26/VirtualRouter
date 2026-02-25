@@ -12,7 +12,7 @@ Connection::~Connection()
 }
 
 Connection::Connection(Connection&& other) noexcept
-    : buffer(other.buffer), engine(other.engine), id(other.id)
+    : bufferTx(other.bufferTx), engine(other.engine), id(other.id)
 {
     other.engine = nullptr;
     other.id = 0;
