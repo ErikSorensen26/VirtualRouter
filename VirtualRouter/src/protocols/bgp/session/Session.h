@@ -5,8 +5,10 @@
 
 #include <span>
 #include <cstdint>
+#include <unordered_set>
 
 #include "tcp/Connection.h"
+#include "bgp/BgpTypes.hpp"
 #include "configs/registry/router/BgpRegistry.h"
 
 struct BgpHeader;
@@ -19,12 +21,7 @@ class BgpProcess;
 
 struct Capabilities
 {
-    struct MpFamily
-    {
-        uint16_t afi;
-        uint8_t safi;
-    };
-    std::vector<MpFamily> mpFamilies;
+    std::unordered_set<AfiSafi> families;
 
     bool routeRefresh = false;
     bool enhancedRouteRefresh = false;
@@ -34,8 +31,7 @@ struct Capabilities
 
     struct GracefulRestartFamily
     {
-        uint16_t afi;
-        uint8_t safi;
+        AfiSafi family;
         bool forwardingStatePreserved;
     };
 
@@ -46,8 +42,7 @@ struct Capabilities
 
     struct LlgrFamily
     {
-        uint16_t afi;
-        uint8_t safi;
+        AfiSafi family;
         uint32_t staleTime;
     };
 
@@ -56,8 +51,7 @@ struct Capabilities
 
     struct AddPathFamily
     {
-        uint16_t afi;
-        uint8_t safi;
+        AfiSafi family;
         uint8_t sendReceive;
     };
 
@@ -66,8 +60,7 @@ struct Capabilities
 
     struct OrfEntry
     {
-        uint16_t afi;
-        uint8_t safi;
+        AfiSafi family;
         uint8_t orfType;
         uint8_t sendReceive;
     };
@@ -77,40 +70,21 @@ struct Capabilities
 
     struct ExtendedNextHop
     {
-        uint16_t nlriAfi;
-        uint8_t nlriSafi;
+        AfiSafi family;
         uint16_t nextHopAfi;
     };
 
     bool extendedNextHop = false;
     std::vector<ExtendedNextHop> extendedNextHopEntries;
 
-    struct LabeledUnicastFamily
-    {
-        uint16_t afi;
-        uint8_t safi;
-    };
-
     bool multipleLabels = false;
-    std::vector<LabeledUnicastFamily> labeledFamilies;
-
-    struct RtConstraintFamily
-    {
-        uint16_t afi;
-        uint8_t safi;
-    };
+    std::vector<AfiSafi> labeledFamilies;
 
     bool routeTargetConstraint = false;
-    std::vector<RtConstraintFamily> RtConstraintFamily;
-
-    struct BgpsecFamily
-    {
-        uint16_t afi;
-        uint8_t safi;
-    };
+    std::vector<AfiSafi> RtConstraintFamily;
 
     bool bgpsec = false;
-    std::vector<BgpsecFamily> bgpsecFamilies;
+    std::vector<AfiSafi> bgpsecFamilies;
 };
 
 class Session
@@ -129,9 +103,13 @@ public:
 
     void handleIncoming(std::span<uint8_t> data);
 
+    bool established(); // TODO
+    void setRid(uint32_t rid); // TODO
+    uint32_t getRid(); // TODO
+    Capabilities& capabilities(); // TODO
+    bool isEbgp(); // TODO
+
     // Getters
-    Neighbor& getNeighbor() { return neighbor; }
-    const Neighbor& getNeighbor() const { return neighbor; }
     TCP::Connection& getConnection() { return connection; }
     const TCP::Connection& getConnection() const { return connection; }
     Config::BgpBaseRegistry& getConfigs() { return base; }
@@ -142,7 +120,6 @@ public:
 private:
 
     Config::BgpBaseRegistry& base;
-    Neighbor& neighbor;
     TCP::Connection connection;
 };
 }

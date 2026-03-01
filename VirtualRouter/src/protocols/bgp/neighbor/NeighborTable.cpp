@@ -71,4 +71,25 @@ void NeighborTable::cancelAllHoldTimers()
 {
     // TODO
 }
+
+bool NeighborTable::activatePeer(const IPAddress& nbr, uint32_t peer)
+{
+    auto nbrIt = neighbors.find(nbr);
+    if (nbrIt == neighbors.end())
+        return false;
+    if (peers.find(peer) == peers.end())
+        peers.emplace(peer, &nbrIt->second);
+    return true;
+}
+
+bool NeighborTable::deactivatePeer(uint32_t peer)
+{
+    auto nbrIt = peers.find(peer);
+    if (nbrIt != peers.end())
+    {
+        peers.erase(nbrIt);
+        return true;
+    }
+    return false;
+}
 }

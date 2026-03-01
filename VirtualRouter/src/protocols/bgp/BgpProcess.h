@@ -33,6 +33,8 @@ public:
     inline Transmission& getTransmission() { return transmission; }
     inline const Transmission& getTransmission() const { return transmission; }
 
+    std::unordered_map<TCP::TcpSocketKey, Session>& getSessions() { return sessions; }
+
     const uint32_t asNumber;
 private:
 
@@ -42,7 +44,7 @@ private:
 
 
     TCP::Listener listener;
-    std::unordered_map<TCP::TcpSocketKey, Session> connections;
+    std::unordered_map<TCP::TcpSocketKey, Session> sessions;
     Transmission transmission;
 
     ProcessQueue scheduler;

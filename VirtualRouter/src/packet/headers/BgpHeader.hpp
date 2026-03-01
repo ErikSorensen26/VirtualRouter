@@ -107,8 +107,8 @@
 #define BGP_NOTIFICATION_REFRESH_INVALID_AFI 0x0702
 #define BGP_NOTIFICATION_REFRESH_INVALID_SAFI 0x0703
 
-#define BGP_GET_NOTIFICATION_TYPE(val) (uint8_t)((val >> 8) & 0xFF)
-#define BGP_GET_NOTIFICATION_SUB_TYPE(val) (uint8_t)(val & 0xFF)
+#define BGP_GET_TYPE(val) (uint8_t)((val >> 8) & 0xFF)
+#define BGP_GET_SUB_TYPE(val) (uint8_t)(val & 0xFF)
 
 #define BGP_VERSION 0x04
 

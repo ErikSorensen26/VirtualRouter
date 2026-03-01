@@ -3,9 +3,7 @@
 #ifndef BGP_TYPES_HPP
 #define BGP_TYPES_HPP
 
-#include <chrono>
 #include <cstdint>
-#include <unordered_set>
 #include <vector>
 #include <IPAddress.hpp>
 
@@ -63,8 +61,39 @@ struct AfiSafi
     }
 };
 
-inline AddressFamily toAddressFamily(const AfiSafi& family) noexcept
+struct NeighborKey
 {
+    IPAddress ipAddr;
+    uint16_t afi;
+    uint8_t safi;
+
+    bool operator==(const NeighborKey& other) const noexcept
+    {
+        return ipAddr == other.ipAddr &&
+               afi == other.afi &&
+               safi == other.safi;
+    }
+};
+
+struct PeerKey
+{
+    PeerKey() = default;
+    PeerKey(const NeighborKey& key, uint32_t rid)
+        : rid(rid), afi(key.afi), safi(key.safi) {}
+
+    uint32_t rid;
+    uint16_t afi;
+    uint8_t safi;
+
+    bool operator==(const PeerKey& other) const noexcept
+    {
+        return rid == other.rid &&
+               afi == other.afi &&
+               safi == other.safi;
+    }
+};
+
+inline AddressFamily toAddressFamily(const AfiSafi& family) noexcept {
     if (family.afi == BGP_AFI_IPV4)
         return AddressFamily::IPv4;
     if (family.afi == BGP_AFI_IPV6)
@@ -82,6 +111,30 @@ struct hash<BGP::AfiSafi>
     {
         uint32_t v = (static_cast<uint32_t>(family.afi) << 8) | family.safi;
         return std::hash<uint32_t>{}(v);
+    }
+};
+
+template <>
+struct hash<BGP::NeighborKey>
+{
+    size_t operator()(const BGP::NeighborKey& k) const noexcept
+    {
+        size_t h1 = std::hash<IPAddress>{}(k.ipAddr);
+        size_t h2 = std::hash<uint32_t>{}((static_cast<uint32_t>(k.afi) << 8) | k.safi);
+
+        return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+    }
+};
+
+template <>
+struct hash<BGP::PeerKey>
+{
+    size_t operator()(const BGP::PeerKey& k) const noexcept
+    {
+        size_t h1 = std::hash<uint32_t>{}(k.rid);
+        size_t h2 = std::hash<uint32_t>{}((static_cast<uint32_t>(k.afi) << 8) | k.safi);
+
+        return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
     }
 };
 }

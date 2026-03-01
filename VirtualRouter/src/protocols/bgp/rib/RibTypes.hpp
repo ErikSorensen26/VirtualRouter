@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
+#include <chrono>
+#include <limits>
 
 #include <IPAddress.hpp>
 
@@ -44,11 +46,10 @@ template <typename N>
 struct MpUnreach
 {
     AfiSafi family;
-    std::vector<N> withdrawl;
+    std::vector<N> withdrawn;
 };
 
-template <typename N>
-struct PathAttribute
+struct PathAttributeBase
 {
     std::optional<uint8_t> origin;
     std::vector<AsPathSegment> asPath;
@@ -60,8 +61,6 @@ struct PathAttribute
     std::optional<Aggregator> aggregator;
     std::vector<AsPathSegment> as4Path;
     std::optional<Aggregator> as4Aggregator;
-    std::optional<MpReach<N>> mpReach;
-    std::optional<MpUnreach<N>> mpUnreach;
     std::vector<UnknownAttribute> unknownTransitive;
 
     size_t asPathLength() const noexcept
@@ -74,20 +73,21 @@ struct PathAttribute
 };
 
 template <typename N>
-struct ParsedUpdate
+struct PathAttribute : PathAttributeBase
 {
-    std::vector<N> withdrawn;
-    PathAttribute<N> attribute;
-    std::vector<N> nlri;
+    std::optional<MpReach<N>> mpReach;
+    std::optional<MpUnreach<N>> mpUnreach;
 };
 
 template <typename N>
-struct RouteCanidate
+struct ParsedUpdate
 {
-    AfiSafi family;
-    N nlri;
-    PathAttribute<N> attributes;
+    std::vector<N> withdrawn;
+    std::vector<std::pair<N, PathAttribute<N>>> announced;
+};
 
+struct RouteCanidateBase
+{
     IPAddress nextHop;
     uint32_t peerAs = 0;
     uint32_t neighborRouterId = 0;
@@ -99,30 +99,32 @@ struct RouteCanidate
 };
 
 template <typename N>
-struct RouteCanidateKey
+struct RouteCanidate : RouteCanidateBase
 {
-    AfiSafi family;
     N nlri;
+    PathAttribute<N> attributes;
 
-    bool operator==(const RouteCanidateKey<N>& other) const noexcept
+    bool operator==(const RouteCanidate<N>& other) const noexcept
     {
-        return family == other.family && nlri == other.nlri;
+        return nlri == other.nlri &&
+               nextHop == other.nextHop &&
+               peerAs == other.peerAs &&
+               neighborRouterId == other.neighborRouterId &&
+               neighborAddress == other.neighborAddress;
     }
 };
-}
 
-namespace std
-{
 template <typename N>
-struct hash<BGP::RouteCanidateKey<N>>
-{
-    size_t operator()(const BGP::RouteCanidateKey<N>& key) const noexcept
-    {
-        std::size_t h1 = std::hash<BGP::AfiSafi>{}(key.family);
-        std::size_t h2 = std::hash<N>{}(key.nlri);
-        return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
-    }
-};
+using PerPeerAdjTable = std::unordered_map<N, RouteCanidate<N>>;
+
+template <typename N>
+using AdjRibInTable = std::unordered_map<uint32_t, PerPeerAdjTable<N>>;
+
+template <typename N>
+using AdjRibOutTable = std::unordered_map<uint32_t, PerPeerAdjTable<N>>;
+
+template <typename N>
+using LocRibTable = std::unordered_map<N, RouteCanidate<N>>;
 }
 
 #endif // BGP_RIB_TYPES_HPP
