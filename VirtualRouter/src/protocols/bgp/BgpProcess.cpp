@@ -46,7 +46,7 @@ void BgpProcess::onAccept(TCP::AcceptCallbackCtx& ctx) noexcept
         bgp->routingInstance->getTcp().close(connId);
         return;
     }
-    bgp->connections.emplace(connId, *nbr, ctx.newConn);
+    bgp->sessions.emplace(connId, *nbr, ctx.newConn);
 }
 
 void BgpProcess::onReceive(TCP::RecvCallbackCtx& ctx) noexcept

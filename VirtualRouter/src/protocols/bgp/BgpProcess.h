@@ -8,7 +8,10 @@
 
 #include "tcp/Listener.h"
 #include "configs/registry/router/BgpRegistry.h"
+#include "bgp/BgpTypes.hpp"
+#include "bgp/af/AddressFamilyPolicy.hpp"
 #include "bgp/neighbor/NeighborTable.h"
+#include "bgp/session/Session.h"
 #include "bgp/transport/Transmission.h"
 
 class VirtualRouter;

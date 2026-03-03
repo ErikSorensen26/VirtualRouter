@@ -17,7 +17,7 @@ public:
 
     const IPAddress neighborAddress;
 
-    uint32_t rid;
+    uint32_t rid = 0;
 
     BgpProcess& getProcess() { return process; }
     Config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
@@ -27,7 +27,7 @@ private:
 
     BgpProcess& process;
 
-    Config::Reference<Config::BgpNeighborRegistry> configs;
+    Config::Reference<Config::BgpNeighborSessionRegistry> configs;
 };
 }
 

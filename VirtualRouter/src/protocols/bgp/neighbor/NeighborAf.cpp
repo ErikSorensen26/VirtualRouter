@@ -1,0 +1,1 @@
+// This will hold BgpNeighborRegistry for each af in the neighbor
