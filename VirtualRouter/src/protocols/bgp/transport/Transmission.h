@@ -34,14 +34,16 @@ public:
 
     void handleIncoming(Session& s, TCP::RxConsumer& c);
 
-    void sendOpen(Session& session); 
+    void buildOpen(Session& session); 
     template <typename N>
-    void sendUpdate(Session& session, const ParsedUpdate<N>& update);
-    void sendNotification(Session& session, const Notification& notification);
-    void sendKeepalive(Session& session);
-    void sendRouteRefresh(Session& session, const AfiSafi& family);
+    void buildUpdate(Session& session, const ParsedUpdate<N>& update);
+    void buildNotification(Session& session, const Notification& notification);
+    void buildKeepalive(Session& session);
+    void buildRouteRefresh(Session& session, const AfiSafi& family);
 
 private:
+    void buildUpdate(Session& session, const std::span<uint8_t> nlri, PathAttributeBase& attr);
+    
     bool dispatchMessage(Session& session, uint8_t type, std::span<const uint8_t> payload);
 
     bool processOpen(Session& c, std::span<uint8_t> data, Notification& notification);
@@ -69,6 +71,12 @@ private:
 private:
     BgpProcess& process;
 };
+
+template <typename N>
+void Transmission::buildUpdate(Session& session, const ParsedUpdate<N>& update)
+{
+
+}
 }
 
 #endif // BGP_TRANSMISSION_H
