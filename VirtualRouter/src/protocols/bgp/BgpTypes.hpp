@@ -19,6 +19,8 @@ constexpr uint32_t kAsTrans = 23456;
 enum class FsmState : uint8_t
 {
     IDLE,
+    CONNECT,
+    ACTIVE,
     OPEN_SENT,
     OPEN_CONFIRMED,
     ESTABLISHED,
@@ -26,17 +28,46 @@ enum class FsmState : uint8_t
 
 enum class FsmEvent : uint8_t
 {
-    ADMIN_START,
-    ADMIN_STOP,
-    TCP_UP,
-    TCP_DOWN,
-    RX_OPEN,
-    RX_KEEPALIVE,
-    RX_UPDATE,
-    RX_NOTIFICATION,
-    RX_ROUTE_REFRESH,
-    HOLD_TIMER_EXPIRED,
-    KEEPALIVE_TIMER_FIRE
+    // Administrative events (1–8)
+    ManualStart                                               = 1,
+    ManualStop                                                = 2,
+    AutomaticStart                                            = 3,
+    ManualStart_PassiveTcp                                    = 4,
+    AutomaticStart_PassiveTcp                                 = 5,
+    AutomaticStart_Damp                                       = 6,
+    AutomaticStart_DampPassiveTcp                             = 7,
+    AutomaticStop                                             = 8,
+
+    // Timer events (9–13)
+    ConnectRetryTimer_Expires                                 = 9,
+    HoldTimer_Expires                                         = 10,
+    KeepaliveTimer_Expires                                    = 11,
+    DelayOpenTimer_Expires                                    = 12,
+    IdleHoldTimer_Expires                                     = 13,
+
+    // TCP connection events (14–18)
+    TcpConnection_Valid                                       = 14,
+    Tcp_CR_Invalid                                            = 15,
+    Tcp_CR_Acked                                              = 16,
+    TcpConnectionConfirmed                                    = 17,
+    TcpConnectionFails                                        = 18,
+
+    // BGP message events (19–28)
+    BGPOpen                                                   = 19,
+    BGPOpen_DelayOpenTimer                                    = 20,
+    BGPHeaderErr                                              = 21,
+    BGPOpenMsgErr                                             = 22,
+    OpenCollisionDump                                         = 23,
+    NotifMsgVerErr                                            = 24,
+    NotifMsg                                                  = 25,
+    KeepAliveMsg                                              = 26,
+    UpdateMsg                                                 = 27,
+    UpdateMsgErr                                              = 28,
+
+    // Extension events (not in RFC 4271 but used here)
+    RouteRefresh                                              = 29,
+    BfdDown                                                   = 30,
+    BfdUp                                                     = 31,
 };
 
 struct Notification
@@ -99,6 +130,57 @@ inline AddressFamily toAddressFamily(const AfiSafi& family) noexcept {
     if (family.afi == BGP_AFI_IPV6)
         return AddressFamily::IPv6;
     return AddressFamily::NONE;
+}
+
+inline const char* fsmStateName(FsmState s) noexcept
+{
+    switch (s) {
+        case FsmState::IDLE:          return "Idle";
+        case FsmState::CONNECT:       return "Connect";
+        case FsmState::ACTIVE:        return "Active";
+        case FsmState::OPEN_SENT:     return "OpenSent";
+        case FsmState::OPEN_CONFIRMED: return "OpenConfirm";
+        case FsmState::ESTABLISHED:   return "Established";
+        default:                      return "Unknown";
+    }
+}
+
+inline const char* fsmEventName(FsmEvent e) noexcept
+{
+    switch (e) {
+        case FsmEvent::ManualStart:                  return "ManualStart";
+        case FsmEvent::ManualStop:                   return "ManualStop";
+        case FsmEvent::AutomaticStart:               return "AutomaticStart";
+        case FsmEvent::ManualStart_PassiveTcp:       return "ManualStart_PassiveTcp";
+        case FsmEvent::AutomaticStart_PassiveTcp:    return "AutomaticStart_PassiveTcp";
+        case FsmEvent::AutomaticStart_Damp:          return "AutomaticStart_Damp";
+        case FsmEvent::AutomaticStart_DampPassiveTcp: return "AutomaticStart_DampPassiveTcp";
+        case FsmEvent::AutomaticStop:                return "AutomaticStop";
+        case FsmEvent::ConnectRetryTimer_Expires:    return "ConnectRetryTimer_Expires";
+        case FsmEvent::HoldTimer_Expires:            return "HoldTimer_Expires";
+        case FsmEvent::KeepaliveTimer_Expires:       return "KeepaliveTimer_Expires";
+        case FsmEvent::DelayOpenTimer_Expires:       return "DelayOpenTimer_Expires";
+        case FsmEvent::IdleHoldTimer_Expires:        return "IdleHoldTimer_Expires";
+        case FsmEvent::TcpConnection_Valid:          return "TcpConnection_Valid";
+        case FsmEvent::Tcp_CR_Invalid:               return "Tcp_CR_Invalid";
+        case FsmEvent::Tcp_CR_Acked:                 return "Tcp_CR_Acked";
+        case FsmEvent::TcpConnectionConfirmed:       return "TcpConnectionConfirmed";
+        case FsmEvent::TcpConnectionFails:           return "TcpConnectionFails";
+        case FsmEvent::BGPOpen:                      return "BGPOpen";
+        case FsmEvent::BGPOpen_DelayOpenTimer:       return "BGPOpen_DelayOpenTimer";
+        case FsmEvent::BGPHeaderErr:                 return "BGPHeaderErr";
+        case FsmEvent::BGPOpenMsgErr:                return "BGPOpenMsgErr";
+        case FsmEvent::OpenCollisionDump:            return "OpenCollisionDump";
+        case FsmEvent::NotifMsgVerErr:               return "NotifMsgVerErr";
+        case FsmEvent::NotifMsg:                     return "NotifMsg";
+        case FsmEvent::KeepAliveMsg:                 return "KeepAliveMsg";
+        case FsmEvent::UpdateMsg:                    return "UpdateMsg";
+        case FsmEvent::UpdateMsgErr:                 return "UpdateMsgErr";
+        case FsmEvent::RouteRefresh:                 return "RouteRefresh";
+        case FsmEvent::BfdDown:                      return "BfdDown";
+        case FsmEvent::BfdUp:                        return "BfdUp";
+        default:                                     return "Unknown";
+    }
 }
 }
 
