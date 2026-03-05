@@ -5,7 +5,6 @@
 #include "bgp/BgpProcess.h"
 #include "packet/headers/BgpHeader.hpp"
 #include "packet/headers/embedded/bgp/BgpOpenHeader.hpp"
-#include "packet/TlvOptions.hpp"
 #include "bgp/session/Session.h"
 #include "bgp/neighbor/Neighbor.h"
 #include "tcp/rx/RxConsumer.h"
@@ -246,11 +245,8 @@ bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notificati
 
     session.holdTime = peerHold;
     session.setPeerRid(peerRid);
-
-    Notification negError;
-    session.negotiateCapabilities(negError);
-
-    session.onOpenReceived(payload, error);
+    session.negotiateCapabilities();
+    session.onOpenReceived();
     return true;
 }
 
@@ -263,7 +259,8 @@ bool BgpRx::processKeepalive(Session& session, std::span<uint8_t> payload, Notif
         writeU16(error.data.data(), static_cast<uint16_t>(BgpHeader::fixedSize));
         return false;
     }
-    return session.onKeepaliveReceived(payload, error);
+    session.onKeepaliveReceived();
+    return true;
 }
 
 bool BgpRx::processNotification(Session& session, std::span<uint8_t> payload, Notification& error)
@@ -273,7 +270,8 @@ bool BgpRx::processNotification(Session& session, std::span<uint8_t> payload, No
         error.code = BGP_NOTIFICATION_REFRESH_INVALID_LENGTH;
         return false;
     }
-    return session.onRouteRefreshReceived(payload, error);
+    session.onRouteRefreshReceived();
+    return true;
 }
 
 bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notification& error)
@@ -329,6 +327,10 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
 
     // Path attributes.
     PathAttribute<IPPrefix> attrs;
+
+    // TODO: FINISH
+
+    return false; // unfinished
 }
 
 void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
@@ -484,188 +486,5 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
     }
 }
 
-Capabilities BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
-{
-    Capabilities cc;
-    auto& capabilities = cc;
-
-    size_t idx = 0;
-
-    while (idx + 2 <= data.size())
-    {
-        uint8_t type = data[idx];
-        uint8_t size = data[idx + 1];
-
-        if (idx + 2 + size > data.size())
-            return;
-
-        const uint8_t* payload = data.data() + idx + 2;
-        
-        switch (type)
-        {
-            case BGP_CAPABILITY_MULTIPROTOCOL:
-                if (size == 4)
-                {
-                    uint16_t afi = readU16(payload);
-                    uint8_t safi = payload[3];
-
-                    capabilities.mpFamilies.push_back({ afi, safi });
-                }
-                break;
-            case BGP_CAPABILITY_ROUTE_REFRESH:
-                if (size == 0)
-                {
-                    capabilities.routeRefresh = true;
-                }
-                break;
-            case BGP_CAPABILITY_OUTBOUND_FILTER:
-                if (size >= 5)
-                {
-                    uint16_t afi = readU16(payload);
-                    uint8_t safi = payload[2];
-                    uint8_t count = payload[3];
-
-                    size_t pos = 4;
-
-                    for (uint8_t i = 0; i < count && pos + 2 <= size; ++i)
-                    {
-                        uint8_t orfType = payload[pos];
-                        uint8_t sendReceive = payload[pos + 1];
-
-                        capabilities.orfEntries.push_back({
-                            afi, safi, orfType, sendReceive
-                        });
-
-                        pos += 2;
-                    }
-
-                    capabilities.outboundRouteFiltering = true;
-                }
-                break;
-            case BGP_CAPABILITY_EXTENDED_NEXT_HOP:
-                if (size == 5)
-                {
-                    uint16_t nlriAfi = readU16(payload);
-                    uint8_t safi = payload[2];
-                    uint16_t nhAfi = readU16(payload + 3);
-
-                    capabilities.extendedNextHopEntries.push_back({
-                        nlriAfi, safi, nhAfi
-                    });
-
-                    capabilities.extendedNextHop = true;
-                }
-                break;
-            case BGP_CAPABILITY_EXTENDED_MESSAGE:
-                if (size == 0)
-                    capabilities.extendedMessage = true;
-                break;
-            case BGP_CAPABILITY_BGP_SEC:
-                if (size == 3)
-                {
-                    uint16_t afi = readU16(payload);
-                    uint8_t safi = payload[2];
-
-                    capabilities.bgpsecFamilies.push_back({ afi, safi });
-                    capabilities.bgpsec = true;
-                }
-                break;
-            case BGP_CAPABILITY_MULTIPLE_LABELS:
-                if (size == 4)
-                {
-                    uint16_t afi = readU16(payload);
-                    uint8_t safi = payload[3];
-
-                    capabilities.labeledFamilies.push_back({ afi, safi });
-                    capabilities.multipleLabels = true;
-                }
-                break;
-            case BGP_CAPABILITY_GRACEFUL_RESTART:
-                if (size >= 2)
-                {
-                    uint16_t flagsTime = readU16(payload);
-
-                    capabilities.gracefulRestart = true;
-                    capabilities.restarting = (flagsTime & 0x8000) != 0;
-                    capabilities.restartTime = flagsTime & 0x0FFF;
-
-                    size_t pos = 2;
-
-                    while (pos + 4 <= size)
-                    {
-                        uint16_t afi = readU16(payload + pos);
-                        uint8_t safi = payload[pos + 2];
-                        uint8_t flags = payload[pos + 3];
-
-                        capabilities.gracefulFamilies.push_back({
-                            afi, safi, (flags & 0x80) != 0
-                        });
-
-                        pos += 4;
-                    }
-                }
-                break;
-            case BGP_CAPABILITY_32_BIT_AS:
-                if (size == 4)
-                {
-                    capabilities.asn32bit = true;
-                    capabilities.asn = readU32(payload);
-                }
-                break;
-            case BGP_CAPABILITY_ADD_PATH:
-                if (size >= 4)
-                {
-                    size_t pos = 0;
-
-                    while (pos + 4 <= size)
-                    {
-                        uint16_t afi = readU16(payload + pos);
-                        uint8_t safi = payload[pos + 2];
-                        uint8_t mode = payload[pos + 3];
-
-                        capabilities.addPathFamilies.push_back({
-                            afi, safi, mode
-                        });
-
-                        pos += 4;
-                    }
-
-                    capabilities.addPath = true;
-                }
-                break;
-            case BGP_CAPABILITY_ENHANCED_ROUTE_REFRESH:
-                if (size == 0)
-                    capabilities.enhancedRouteRefresh = true;
-                break;
-            case BGP_CAPABILITY_LLGR:
-                if (size >= 7)
-                {
-                    size_t pos = 0;
-
-                    while (pos + 7 <= size)
-                    {
-                        uint16_t afi = readU16(payload + pos);
-                        uint8_t safi = payload[pos + 2];
-
-                        uint32_t staleTime = readU24(payload + pos + 3);
-
-                        capabilities.llgrFamilies.push_back({
-                            afi, safi, staleTime
-                        });
-
-                        pos += 7;
-                    }
-
-                    capabilities.llgr = true;
-                }
-                break;
-            default: break;
-        }
-
-        idx += 2 + size;
-    }
-}
-
-void extractPathAttributes
 }
 

@@ -8,7 +8,6 @@
 
 #include "tcp/Listener.h"
 #include "configs/registry/router/BgpRegistry.h"
-#include "bgp/BgpTypes.hpp"
 #include "bgp/af/AddressFamilyPolicy.hpp"
 #include "bgp/neighbor/NeighborTable.h"
 #include "bgp/session/Session.h"
@@ -33,8 +32,6 @@ public:
     inline const Config::BgpRegistry& getConfigs() const { return configs.get(); }
     inline NeighborTable& getNtable() { return ntable; }
     inline const NeighborTable& getNtable() const { return ntable; }
-    inline Transmission& getTransmission() { return transmission; }
-    inline const Transmission& getTransmission() const { return transmission; }
 
     std::unordered_map<TCP::TcpSocketKey, Session>& getSessions() { return sessions; }
 
@@ -49,7 +46,6 @@ private:
 
     TCP::Listener listener;
     std::unordered_map<TCP::TcpSocketKey, Session> sessions;
-    Transmission transmission;
 
     ProcessQueue scheduler;
 

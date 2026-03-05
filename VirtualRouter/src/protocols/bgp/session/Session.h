@@ -195,11 +195,11 @@ public:
     template <typename N>
     void sendUpdate(const ParsedUpdate<N>& update);
 
-    bool onOpenReceived(std::span<const uint8_t> data, Notification& error);
-    bool onKeepaliveReceived(std::span<const uint8_t> data, Notification& error);
-    bool onUpdateReceived(std::span<const uint8_t> data, Notification& error);
-    bool onNotificationReceived(std::span<const uint8_t> data, Notification& error);
-    bool onRouteRefreshReceived(std::span<const uint8_t> data, Notification& error);
+    void onOpenReceived();
+    void onKeepaliveReceived();
+    void onUpdateReceived();
+    void onRouteRefreshReceived();
+    void onNotificationReceived(std::span<const uint8_t> data);
 
     // Capability state
     Capabilities& getLocalCaps() noexcept { return localCaps; }
@@ -229,7 +229,7 @@ public:
     TCP::Connection* getPrimaryConnection() noexcept { return primaryConn; }
 
     bool resolveCollision(uint32_t incomingPeerRid);
-    bool negotiateCapabilities(Notification& error);
+    void negotiateCapabilities();
 
 private:
     // Open processing helpers

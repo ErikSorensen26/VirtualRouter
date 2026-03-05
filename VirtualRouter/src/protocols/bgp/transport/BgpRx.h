@@ -28,12 +28,7 @@ struct Capabilities;
 class BgpRx
 {
 public:
-    explicit BgpRx(BgpProcess& proc);
-
-    BgpRx(const BgpRx&) = delete;
-    BgpRx& operator=(const BgpRx&) = delete;
-    BgpRx(BgpRx&&) noexcept = delete;
-    BgpRx& operator=(BgpRx&&) noexcept = delete;
+    BgpRx() = delete;
 
     void handleIncoming(Session& s, TCP::RxConsumer& c);
 

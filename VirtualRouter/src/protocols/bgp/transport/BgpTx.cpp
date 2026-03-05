@@ -465,18 +465,15 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     return attrSize;
 }
 
-void BgpTx::buildOpen(Session& session)
+void BgpTx::buildOpen(TCP::Connection& connection, Session& session)
 {
-    TCP::Connection* c = session.getPrimaryConnection();
-    if (!c) return;
-
     const auto& caps = session.getLocalCaps();
     const auto& proc = session.getNeighbor().getProcess();
     const uint32_t localAs = proc.asNumber;
     const uint32_t rid = proc.rid;
 
     uint16_t openSize = BgpHeader::fixedSize + BgpOpenHeader::fixedSize;
-    std::span<uint8_t> buf = c->reserveSpan(openSize);
+    std::span<uint8_t> buf = connection.reserveSpan(openSize);
 
     BgpOpenHeader open;
     open.setBuffer(buf.data() + BgpHeader::fixedSize);
@@ -494,7 +491,7 @@ void BgpTx::buildOpen(Session& session)
     if (capSize >= 255)
     {
         open.setParameterLen(255);
-        auto ext = c->reserveSpan(2);
+        auto ext = connection.reserveSpan(2);
         writeU16(ext.data(), capSize);
     }
     else
@@ -502,49 +499,32 @@ void BgpTx::buildOpen(Session& session)
         open.setParameterLen(static_cast<uint8_t>(capSize));
     }
 
-    appendCapabilities(caps, *c);
+    appendCapabilities(caps, connection);
 
     buildHeader(BGP_TYPE_OPEN, openSize + capSize, buf.data());
 }
 
-void BgpTx::buildUpdate(Session& session, const std::span<uint8_t> nlri, PathAttributeBase& attr)
+void BgpTx::buildNotification(TCP::Connection& connection, const Notification& notification)
 {
-    TCP::Connection* c = session.getPrimaryConnection();
-    if (!c) return;
-    //BgpHeader bgp = buildHeader(BGP_TYPE_OPEN, *c);
-
-
-}
-
-void BgpTx::buildNotification(Session& session, const Notification& notification)
-{
-    TCP::Connection* c = session.getPrimaryConnection();
-    if (!c) return;
-
     uint16_t notifSize = static_cast<uint8_t>(2 + notification.data.size());
     uint16_t bgpSize = static_cast<uint16_t>(BgpHeader::fixedSize + notifSize);
-    std::span<uint8_t> buf = c->reserveSpan(bgpSize);
+    std::span<uint8_t> buf = connection.reserveSpan(bgpSize);
     uint8_t* notif = buf.data() + BgpHeader::fixedSize;
     writeU16(notif, notification.code);
     std::memcpy(notif + 2, notification.data.data(), notification.data.size());
     buildHeader(BGP_TYPE_NOTIFICATION, notifSize, buf.data());
 }
 
-void BgpTx::buildKeepalive(Session& session)
+void BgpTx::buildKeepalive(TCP::Connection& connection)
 {
-    TCP::Connection* c = session.getPrimaryConnection();
-    if (!c) return;
-    std::span<uint8_t> buf =  c->reserveSpan(BgpHeader::fixedSize);
+    std::span<uint8_t> buf =  connection.reserveSpan(BgpHeader::fixedSize);
     buildHeader(BGP_TYPE_KEEPALIVE, 0, buf.data());
 }
 
-void BgpTx::buildRouteRefresh(Session& session, const AfiSafi& family, uint8_t subType)
+void BgpTx::buildRouteRefresh(TCP::Connection& connection, const AfiSafi& family, uint8_t subType)
 {
-    TCP::Connection* c = session.getPrimaryConnection();
-    if (!c) return;
-
     const uint16_t totalLen = static_cast<uint16_t>(BgpHeader::fixedSize + 4);
-    auto buf = c->reserveSpan(totalLen);
+    auto buf = connection.reserveSpan(totalLen);
     buildHeader(BGP_TYPE_ROUTE_REFRESH, 4, buf.data());
     uint8_t* rr = buf.data() + BgpHeader::fixedSize;
     writeU16(rr, family.afi);

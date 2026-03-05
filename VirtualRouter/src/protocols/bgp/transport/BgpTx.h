@@ -11,8 +11,6 @@
 #include "bgp/rib/RibTypes.hpp"
 #include "bgp/session/Session.h"
 
-struct BgpHeader;
-class PacketBuilder;
 namespace TCP
 {
 class RxConsumer;
@@ -21,25 +19,19 @@ class Connection;
 
 namespace BGP
 {
-class Session;
 class BgpProcess;
 
 class BgpTx
 {
 public:
-    explicit BgpTx(BgpProcess& proc);
+    BgpTx() = delete;
 
-    BgpTx(const BgpTx&) = delete;
-    BgpTx& operator=(const BgpTx&) = delete;
-    BgpTx(BgpTx&&) noexcept = delete;
-    BgpTx& operator=(BgpTx&&) noexcept = delete;
-
-    void buildOpen(Session& session); 
+    static void buildOpen(TCP::Connection& connection, Session& session); 
     template <typename N>
-    void buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& update);
-    void buildNotification(Session& session, const Notification& notification);
-    void buildKeepalive(Session& session);
-    void buildRouteRefresh(Session& session, const AfiSafi& family, uint8_t subType);
+    static void buildUpdate(TCP::Connection& connection, Session& session, const ParsedUpdate<typename N::Nlri>& update);
+    static void buildNotification(TCP::Connection& connection, const Notification& notification);
+    static void buildKeepalive(TCP::Connection& connection);
+    static void buildRouteRefresh(TCP::Connection& connection, const AfiSafi& family, uint8_t subType);
 
 private:
     static void buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf);
@@ -48,8 +40,6 @@ private:
 
     template <typename N>
     static size_t appendPathAttrs(const Session& session, const PathAttribute<typename N::Nlri>& attrs, TCP::Connection& c);
-
-    void buildUpdate(Session& session, const std::span<uint8_t> nlri, PathAttributeBase& attr);
 };
 
 template <typename N>
@@ -150,11 +140,8 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute<typena
 }
 
 template <typename N>
-void BgpTx::buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& update)
+void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const ParsedUpdate<typename N::Nlri>& update)
 {
-    TCP::Connection* c = session.getPrimaryConnection(); 
-    if (!c) return;
-
     const auto& neg = session.getNegotiated();
     const AfiSafi ipv4uni { BGP_AFI_IPV4, BGP_SAFI_UNICAST };
 
@@ -166,6 +153,7 @@ void BgpTx::buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& 
     for (const auto& ap : neg.addPathFamilies)
         if (ap.family == ipv4uni) { addPathV4 = true; break; }
 
+    // TODO
     const size_t withdrawnBytes = computeNlriLen<N>(update.withdrawn, addPathV4);
 
     if (!update.withdrawn.empty())
@@ -186,14 +174,14 @@ void BgpTx::buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& 
                 ++i;
             }
 
-            auto hdrBuf = c->reserveSpan(BgpHeader::fixedSize);
-            auto withdrawLenBuf = c->reserveSpan(2);
+            auto hdrBuf = connection.reserveSpan(BgpHeader::fixedSize);
+            auto withdrawLenBuf = connection.reserveSpan(2);
 
             for (size_t j = batchStart; j < i; ++j)
             {
                 const size_t entrySize = (addPathV4 ? 4u : 0u)
                     + N::nlriEncodedSize(update.withdrawn[j]);
-                auto buf = c->reserveSpan(entrySize);
+                auto buf = connection.reserveSpan(entrySize);
                 if (addPathV4)
                 {
                     std::memset(buf.data(), 0, 3);
@@ -202,7 +190,7 @@ void BgpTx::buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& 
                 N::encodeNlri(buf.data() + (addPathV4 ? 4 : 0), update.withdrawn[j]);
             }
 
-            auto attrLenBuf = c->reserveSpan(2);
+            auto attrLenBuf = connection.reserveSpan(2);
 
             buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(batchBytes + 4), hdrBuf.data());
             writeU16(withdrawLenBuf.data(), static_cast<uint16_t>(batchBytes));
@@ -216,10 +204,10 @@ void BgpTx::buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& 
 
         if (!isLegacyV4)
         {
-            auto hdrBuf = c->reserveSpan(BgpHeader::fixedSize);
-            auto wdLenBuf = c->reserveSpan(2);
-            auto attrLenBuf = c->reserveSpan(2);
-            const size_t attrBytes = appendPathAttrs<N>(session, attrs, *c);
+            auto hdrBuf = connection.reserveSpan(BgpHeader::fixedSize);
+            auto wdLenBuf = connection.reserveSpan(2);
+            auto attrLenBuf = connection.reserveSpan(2);
+            const size_t attrBytes = appendPathAttrs<N>(session, attrs, connection);
 
             const uint16_t payloadLen = 4 + attrBytes;
             buildHeader(BGP_TYPE_UPDATE, payloadLen, hdrBuf.data());
@@ -231,10 +219,10 @@ void BgpTx::buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& 
         size_t i = 0;
         while (i < prefixes.size())
         {
-            auto hdrBuf = c->reserveSpan(BgpHeader::fixedSize);
-            auto wdLenBuf = c->reserveSpan(2);
-            auto attrLenBuf = c->reserveSpan(2);
-            const size_t attrBytes = appendPathAttrs<N>(session, attrs, *c);
+            auto hdrBuf = connection.reserveSpan(BgpHeader::fixedSize);
+            auto wdLenBuf = connection.reserveSpan(2);
+            auto attrLenBuf = connection.reserveSpan(2);
+            const size_t attrBytes = appendPathAttrs<N>(session, attrs, connection);
 
             const size_t roomForNlri = maxMsg - msgOverhead - attrBytes;
             size_t batchBytes = 0;
@@ -254,7 +242,7 @@ void BgpTx::buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& 
             {
                 const size_t entrySize = (addPathV4 ? 4u : 0u)
                     + N::nlriEncodedSize(prefixes[j]);
-                auto buf = c->reserveSpan(entrySize);
+                auto buf = connection.reserveSpan(entrySize);
                 if (addPathV4)
                 {
                     std::memset(buf.data(), 0, 3);
