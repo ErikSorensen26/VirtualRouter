@@ -11,7 +11,7 @@
 #define BGP_TYPE_OPEN         0x01
 #define BGP_TYPE_UPDATE       0x02
 #define BGP_TYPE_NOTIFICATION 0x03
-#define BGP_TYPE_KEEP_ALIVE   0x04
+#define BGP_TYPE_KEEPALIVE    0x04
 #define BGP_TYPE_ROUTE_REFRESH 0x05
 
 // BGP open optional parameter types

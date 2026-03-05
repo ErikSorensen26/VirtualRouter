@@ -15,6 +15,7 @@ class PacketBuilder;
 namespace TCP
 {
 class RxConsumer;
+class Connection;
 }
 
 namespace BGP
@@ -36,13 +37,22 @@ public:
 
     void buildOpen(Session& session); 
     template <typename N>
-    void buildUpdate(Session& session, const ParsedUpdate<N>& update);
+    void buildUpdate(Session& session, const ParsedUpdate<typename N::Nlri>& update);
     void buildNotification(Session& session, const Notification& notification);
     void buildKeepalive(Session& session);
     void buildRouteRefresh(Session& session, const AfiSafi& family);
 
 private:
+    static size_t computeNlriLen(const std::vector<std::span<uint8_t>>& nlri, bool addPath);
+    static void appendNlri(const std::vector<std::span<uint8_t>>& nlri, bool addPath, TCP::Connection& c);
+    static void appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, TCP::Connection& c);
+    static void appendNonNlriAttrs(const Session& session, const PathAttributeBase& attrs, TCP::Connection& c);
+
+    template <typename N>
+    static void appendPathAttrs(const Session& session, const PathAttribute<typename N::Nlri>& attrs, TCP::Connection& c);
+
     void buildUpdate(Session& session, const std::span<uint8_t> nlri, PathAttributeBase& attr);
+private:
     
     bool dispatchMessage(Session& session, uint8_t type, std::span<const uint8_t> payload);
 
@@ -52,8 +62,7 @@ private:
     bool processKeepalive(Session& c, std::span<uint8_t> data, Notification& notification);
     bool processRouteRefresh(Session& c, std::span<uint8_t> data, Notification& notification);
 
-    template <typename N>
-    bool parseNlriList(AddressFamily af, std::span<const uint8_t> data, std::vector<N>& out, Notification& error);
+    template <typename N> bool parseNlriList(AddressFamily af, std::span<const uint8_t> data, std::vector<N>& out, Notification& error);
     template <typename N>
     bool parsePathAttributes(Session& session, std::span<const uint8_t> data, PathAttribute<N> attrs, Notification& error);
 
@@ -71,6 +80,19 @@ private:
 private:
     BgpProcess& process;
 };
+
+template <typename N>
+void Transmission::appendPathAttrs(const Session& session, const PathAttribute<typename N::Nlri>& attrs, TCP::Connection& c)
+{
+    appendNonNlriAttrs(session, attrs, c);
+
+    // 
+    if (attrs.mpReach.has_value())
+    {
+        const MpReach<typename N::Nlri>& mp = *attrs.mpReach;
+        const bool isV6 = (mp.)
+    }
+}
 
 template <typename N>
 void Transmission::buildUpdate(Session& session, const ParsedUpdate<N>& update)

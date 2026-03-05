@@ -8,6 +8,7 @@
 #include <IPAddress.hpp>
 
 #include "bgp/BgpTypes.hpp"
+#include "bgp/BgpProcess.h"
 #include "bgp/neighbor/Neighbor.h"
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"

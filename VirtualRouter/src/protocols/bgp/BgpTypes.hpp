@@ -56,7 +56,7 @@ enum class FsmEvent : uint8_t
     BGP_OPEN                                                  = 19,
     BGP_OPEN_DELAY_OPEN_TIMER                                 = 20,
     BGP_HEADER_ERR                                            = 21,
-    BGP_OPNE_MSG_ERR                                          = 22,
+    BGP_OPEN_MSG_ERR                                          = 22,
     OPEN_COLLISION_DUMP                                       = 23,
     NOTIF_MSG_VER_ERR                                         = 24,
     NOTIF_MSG                                                 = 25,
@@ -169,7 +169,7 @@ inline const char* fsmEventName(FsmEvent e) noexcept
         case FsmEvent::BGP_OPEN:                          return "BGPOpen";
         case FsmEvent::BGP_OPEN_DELAY_OPEN_TIMER:         return "BGPOpen_DelayOpenTimer";
         case FsmEvent::BGP_HEADER_ERR:                    return "BGPHeaderErr";
-        case FsmEvent::BGP_OPNE_MSG_ERR:                  return "BGPOpenMsgErr";
+        case FsmEvent::BGP_OPEN_MSG_ERR:                  return "BGPOpenMsgErr";
         case FsmEvent::OPEN_COLLISION_DUMP:               return "OpenCollisionDump";
         case FsmEvent::NOTIF_MSG_VER_ERR:                 return "NotifMsgVerErr";
         case FsmEvent::NOTIF_MSG:                         return "NotifMsg";

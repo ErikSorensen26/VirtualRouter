@@ -20,7 +20,7 @@ public:
     uint32_t rid = 0;
 
     BgpProcess& getProcess() { return process; }
-    Config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
+    Config::BgpNeighborSessionRegistry& getConfigs() { return configs.get(); }
     const BgpProcess& getProcess() const { return process; }
     
 private:

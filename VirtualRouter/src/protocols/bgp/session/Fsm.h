@@ -18,7 +18,7 @@ public:
     Fsm(const Fsm&) = delete;
     Fsm& operator=(const Fsm&) = delete;
 
-    void setTransitionCallbacl(FsmTransitionCallback cb) noexcept
+    void setTransitionCallback(FsmTransitionCallback cb) noexcept
     {
         transitionCallback = std::move(cb);
     }

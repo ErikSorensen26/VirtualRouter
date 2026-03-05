@@ -39,6 +39,7 @@ struct MpReach
 {
     AfiSafi family;
     IPAddress nextHop;
+    std::optional<IPAddress> linkLocal;
     std::vector<N> nlri;
 };
 
@@ -55,13 +56,22 @@ struct PathAttributeBase
     std::vector<AsPathSegment> asPath;
     std::optional<IPAddress> nextHop;
     std::optional<uint32_t> localPref;
-    std::optional<uint32_t> med;
-    std::vector<uint32_t> communities;
     bool atomicAggregate = false;
+
+    std::optional<uint32_t> med;
     std::optional<Aggregator> aggregator;
-    std::vector<AsPathSegment> as4Path;
-    std::optional<Aggregator> as4Aggregator;
+    std::vector<uint32_t> communities;
+    std::vector<uint64_t> extendedCommunities;
+    std::vector<std::array<uint32_t, 3>> largeCommunities;
+
+    std::optional<uint32_t> originatorId;
+    std::vector<uint32_t> clusterList;
+
+    std::optional<uint64_t> aigp;
+
     std::vector<UnknownAttribute> unknownTransitive;
+
+    uint32_t weight = 0;
 
     size_t asPathLength() const noexcept
     {
@@ -69,6 +79,14 @@ struct PathAttributeBase
         for (const auto& seg : asPath)
             total += seg.asns.size();
         return total;
+    }
+
+    uint32_t firstAs() const noexcept
+    {
+        for (const auto& seg : asPath)
+            if (seg.segmentType == BGP_AS_SEQUENCE && !seg.asns.empty())
+                return seg.asns.front();
+        return 0;
     }
 };
 

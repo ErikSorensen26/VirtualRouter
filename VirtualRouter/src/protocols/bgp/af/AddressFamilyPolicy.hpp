@@ -18,6 +18,9 @@ public:
 
     using Nlri = N;
 
+    virtual size_t nlriEncodedSize(const N& nlri) const = 0;
+    virtual void encodeNlri(uint8_t* buf, const N& n) const = 0;
+
     virtual void installRoute(RouteCanidate<N>& nlri) = 0;
     virtual void withdrawRoute(const N& nlri) = 0;
      

@@ -12,7 +12,7 @@
 #include "bgp/af/AddressFamilyPolicy.hpp"
 #include "bgp/neighbor/NeighborTable.h"
 #include "bgp/session/Session.h"
-#include "bgp/transport/Transmission.h"
+#include "bgp/transport/BgpTx.h"
 
 class VirtualRouter;
 
@@ -39,6 +39,7 @@ public:
     std::unordered_map<TCP::TcpSocketKey, Session>& getSessions() { return sessions; }
 
     const uint32_t asNumber;
+    const uint32_t rid;
 private:
 
     static void onConnect(TCP::ConnCallbackCtx& ctx) noexcept;

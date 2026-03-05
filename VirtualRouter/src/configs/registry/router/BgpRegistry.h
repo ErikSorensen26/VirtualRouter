@@ -40,7 +40,7 @@ inline __uint128_t generateBgpKey(uint32_t vrf, uint32_t as, AddressFamily af)
 enum class BgpTransportBase
 {
     KEEPALIVE_INTERVAL,
-    HOLDTIME,
+    HOLDTIME, // XXX
     MINIMUM_HOLDTIME,
     TRANSPORT_PATH_MTU_DISCOVERY,
     COUNT

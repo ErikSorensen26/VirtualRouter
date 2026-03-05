@@ -3,24 +3,14 @@
 #include <vector>
 
 #include "packet/headers/embedded/bgp/BgpOpenHeader.hpp"
-#include "Transmission.h"
+#include "BgpTx.h"
 #include "tcp/Connection.h"
-#include "bgp/session/Session.h"
 #include "bgp/neighbor/Neighbor.h"
 #include "bgp/BgpProcess.h"
 
-/*
-    void buildOpen(Session& session); 
-    template <typename N>
-    void buildUpdate(Session& session, const ParsedUpdate<N>& update);
-    void buildNotification(Session& session, const Notification& notification);
-    void buildKeepalive(Session& session);
-    void buildRouteRefresh(Session& session, const AfiSafi& family);
-    */
-
 namespace BGP
 {
-static void buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf)
+void BgpTx::buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf)
 {
     BgpHeader hdr;
 
@@ -30,80 +20,105 @@ static void buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf)
     hdr.setLength(payloadSize + BgpHeader::fixedSize);
 }
 
-static size_t computeCapability(const Capabilities& caps)
-{
-    size_t total = 0;
-    size_t curUsed = 0;
-    bool paramOpen = false;
-
-    auto openParam = [&]()
-    {
-        total += 2;
-        curUsed = 0;
-        paramOpen = true;
-    };
-
-    auto ensureRoom = [&](size_t tlvBytes)
-    {
-        if (!paramOpen)
-            openParam();
-        else if (curUsed + tlvBytes > 255)
-            openParam();
-    };
-
-    auto addTlv = [&](size_t valueLen)
-    {
-        const size_t tlvBytes = 2 + valueLen;
-        ensureRoom(tlvBytes);
-        total += tlvBytes;
-        curUsed += tlvBytes;
-    };
-
-    // Multiprotocol Extension
-    for (size_t i = 0; i < caps.mpFamilies.size(); ++i)
-        addTlv(4);
-
-    // Route Refresh
-    if (caps.routeRefresh)
-        addTlv(0);
-
-    // ORF
-    for (size_t i = 0; i < caps.orfEntries.size(); ++i)
-        addTlv(7);
-
-    // Extended Next-Hop Encoding
-    if (!caps.extendedNextHopEntries.empty())
-        addTlv(caps.extendedNextHopEntries.size() * 6);
-
-    // Extended Message
-    if (caps.extendedMessage)
-        addTlv(0);
-
-    // Graceful Restart
-    if (caps.gracefulRestart)
-        addTlv(2 + caps.gracefulFamilies.size() * 4);
-
-    // 4-byte ASN
-    if (caps.enhancedRouteRefresh)
-        addTlv(0);
-
-    // LLGR
-    if (caps.llgr && !caps.llgrFamilies.empty())
-        addTlv(caps.llgrFamilies.size() * 7);
-
-    return total;
-}
-
-static uint16_t appendCapabilities(const Capabilities& caps, size_t outLen, TCP::Connection& c)
+static uint16_t computeCapabilityLen(const Capabilities& caps)
 {
     uint16_t capSize = 0;
 
+    auto addParam = [&](uint8_t dataSize)
+    {
+        capSize += 4 + dataSize; // type(1) + len(1) + code(1) + len(1) + data
+    };
+
+    auto getFragSize = [](uint8_t blockSize) -> uint8_t
+    {
+        return 253 / blockSize;
+    };
+
+    auto getFragments = [](uint8_t fragSize, size_t blockCount) -> size_t
+    {
+        return (blockCount + fragSize - 1) / fragSize;
+    };
+
+    // Multiprotocol Extensions
+    for (size_t i = 0; i < caps.mpFamilies.size(); ++i)
+        addParam(4);
+
+    // Route Refresh
+    if (caps.routeRefresh)
+        addParam(0);
+
+    // ORF
+    for (size_t i = 0; i < caps.orfEntries.size(); ++i)
+        addParam(7);
+
+    // Extended Next-Hop Encoding
+    if (!caps.extendedNextHopEntries.empty())
+    {
+        uint8_t fragSize = getFragSize(6);
+        size_t frags = getFragments(fragSize, caps.extendedNextHopEntries.size());
+        for (size_t f = 0; f < frags - 1; ++f)
+            addParam(fragSize * 6);
+        // last fragment may be smaller
+        size_t remainder = caps.extendedNextHopEntries.size() % fragSize;
+        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 6));
+    }
+
+    // Extended Message
+    if (caps.extendedMessage)
+        addParam(0);
+
+    // Graceful Restart
+    if (caps.gracefulRestart)
+    {
+        uint8_t fragSize = getFragSize(4);
+        const size_t totalEntries = caps.gracefulFamilies.size();
+        const size_t frags = getFragments(fragSize, totalEntries);
+        for (size_t f = 0; f < frags - 1; ++f)
+            addParam(2 + fragSize * 4); // flags/time only in first frag ideally
+        size_t remainder = totalEntries % fragSize;
+        addParam(static_cast<uint8_t>(2 + (remainder == 0 ? fragSize : remainder) * 4));
+    }
+
+    // 4-byte ASN
+    if (caps.asn32bit)
+        addParam(4);
+
+    // ADD-PATH
+    if (!caps.addPathFamilies.empty())
+    {
+        uint8_t fragSize = getFragSize(4);
+        size_t frags = getFragments(fragSize, caps.addPathFamilies.size());
+        for (size_t f = 0; f < frags - 1; ++f)
+            addParam(fragSize * 4);
+        size_t remainder = caps.addPathFamilies.size() % fragSize;
+        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 4));
+    }
+
+    // Enhanced Route Refresh
+    if (caps.enhancedRouteRefresh)
+        addParam(0);
+
+    // LLGR
+    if (caps.llgr && !caps.llgrFamilies.empty())
+    {
+        uint8_t fragSize = getFragSize(7);
+        size_t frags = getFragments(fragSize, caps.llgrFamilies.size());
+        for (size_t f = 0; f < frags - 1; ++f)
+            addParam(fragSize * 7);
+        size_t remainder = caps.llgrFamilies.size() % fragSize;
+        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 7));
+    }
+
+    return capSize;
+}
+
+static void appendCapabilities(const Capabilities& caps, TCP::Connection& c)
+{
     auto openParam = [&](uint8_t code, uint8_t dataSize) -> uint8_t*
     {
-        assert(dataSize + 2 <= 255);
+        assert(dataSize + 2 <= 253);
         uint8_t siz = dataSize + 4;
         std::span<uint8_t> buf = c.reserveSpan(siz);
-        capSize += siz;
         buf[0] = BGP_PARAMETER_CAPABILITY;
         buf[1] = dataSize + 2;
         buf[2] = code;
@@ -248,11 +263,209 @@ static uint16_t appendCapabilities(const Capabilities& caps, size_t outLen, TCP:
             idx += 7;
         }
     }
-
-    return capSize;
 }
 
-void Transmission::buildOpen(Session& session)
+void BgpTx::appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& attrsSize, TCP::Connection& c)
+{
+    attrsSize += valueLen;
+
+    if (valueLen > 255)
+    {
+        flags |= BGP_ATTR_FLAG_EXTENDED_LENGTH;
+        auto buf = c.reserveSpan(4);
+        attrsSize += 4;
+        buf[0] = flags;
+        buf[1] = type;
+        writeU16(buf.data() + 2, static_cast<uint16_t>(valueLen));
+    }
+    else
+    {
+        auto buf = c.reserveSpan(3);
+        attrsSize += 3;
+        buf[0] = flags;
+        buf[1] = type;
+        buf[2] = static_cast<uint8_t>(valueLen);
+    }
+};
+
+size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase& attrs, TCP::Connection& c)
+{
+    size_t attrSize = 0;
+
+    const bool use4 = session.getNegotiated().asn32bit;
+    const bool ebgp = session.isEbgp();
+
+    // ORIGIN
+    if (attrs.origin.has_value())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_ORIGIN, 1, attrSize, c);
+        auto buf = c.reserveSpan(1);
+        attrSize += 5;
+        buf[0] = *attrs.origin;
+    }
+
+    // AS PATH
+    if (!attrs.asPath.empty())
+    {
+        size_t asLen = 0;
+        for (const auto& seg : attrs.asPath)
+            asLen += 2 + seg.asns.size() * (use4 ? 4u : 2u);
+        appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AS_PATH, asLen, attrSize, c);
+        for (const auto& seg : attrs.asPath)
+        {
+            auto hdr = c.reserveSpan(2);
+            hdr[0] = seg.segmentType;
+            hdr[1] = static_cast<uint8_t>(seg.asns.size());
+
+            for (uint32_t asn : seg.asns)
+            {
+                if (use4)
+                {
+                    auto buf = c.reserveSpan(4);
+                    writeU32(buf.data(), asn);
+                }
+                else
+                {
+                    const uint16_t a2 = (asn > 65535)
+                        ? static_cast<uint16_t>(kAsTrans)
+                        : static_cast<uint16_t>(asn);
+                    auto buf = c.reserveSpan(2);
+                    writeU16(buf.data(), a2);
+                }
+            }
+        }
+    }
+
+    // NEXT HOP
+    if (attrs.nextHop.has_value())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_NEXT_HOP, 4, attrSize, c);
+        auto buf = c.reserveSpan(4);
+        std::memcpy(buf.data(), attrs.nextHop->raw, 4);
+    }
+
+    // MED
+    if (attrs.med.has_value())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_MULTI_EXIT_DISC, 4, attrSize, c);
+        auto buf = c.reserveSpan(4);
+        writeU32(buf.data(), *attrs.med);
+    }
+
+    // LOCAL PREF
+    if (attrs.localPref.has_value() && !ebgp)
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_LOCAL_PREF, 4, attrSize, c);
+        auto buf = c.reserveSpan(4);
+        writeU32(buf.data(), *attrs.localPref);
+    }
+
+    // ATOMIC AGGREGATE
+    if (attrs.atomicAggregate)
+        appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_ATOMIC_AGGREGATE, 0, attrSize, c);
+
+    // AGGREGATE
+    if (attrs.aggregator.has_value())
+    {
+        const auto& agg = *attrs.aggregator;
+        const size_t vlen = use4 ? 8u : 6u;
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AGGREGATOR, vlen, attrSize, c);
+
+        if (use4)
+        {
+            auto buf = c.reserveSpan(8);
+            writeU32(buf.data(), agg.asn);
+            std::memcpy(buf.data() + 4, agg.speaker.raw, 4);
+        }
+        else
+        {
+            const uint16_t a2 = (agg.asn > 65535)
+                ? static_cast<uint16_t>(kAsTrans)
+                : static_cast<uint16_t>(agg.asn);
+            auto buf = c.reserveSpan(6);
+            writeU16(buf.data(), a2);
+            std::memcpy(buf.data() + 2, agg.speaker.raw, 4);
+        }
+    }
+
+    // COMMUNITIES
+    if (!attrs.communities.empty())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_COMMUNITIES, attrs.communities.size() * 4, attrSize, c);
+        for (uint32_t comm : attrs.communities)
+        {
+            auto buf = c.reserveSpan(4);
+            writeU32(buf.data(), comm);
+        }
+    }
+
+    // ORIGINATOR ID
+    if (attrs.originatorId.has_value())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_ORIGINATOR_ID, 4, attrSize, c);
+        auto buf = c.reserveSpan(4);
+        writeU32(buf.data(), *attrs.originatorId);
+    }
+
+    // CLUSTER LIST
+    if (!attrs.clusterList.empty())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_CLUSTER_LIST, attrs.clusterList.size() * 4, attrSize, c);
+        for (uint32_t cid : attrs.clusterList)
+        {
+            auto buf = c.reserveSpan(4);
+            writeU32(buf.data(), cid);
+        }
+    }
+
+    // EXTENDED COMMUNITIES    
+    if (!attrs.extendedCommunities.empty())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE,
+                      BGP_ATTR_EXTENDED_COMMUNITIES, attrs.extendedCommunities.size() * 8, attrSize, c);
+        for (const auto& ec : attrs.extendedCommunities)
+        {
+            auto buf = c.reserveSpan(8);
+            writeU64(buf.data(), ec);
+        }
+    }
+
+    // AIGP
+    if (attrs.aigp.has_value())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_AIGP, 11, attrSize, c);
+        auto buf = c.reserveSpan(11);
+        buf[0] = 1;
+        writeU16(buf.data() + 1, 11);
+        writeU64(buf.data() + 3, *attrs.aigp);
+    }
+
+    // LARGE COMMUNITIES
+    if (!attrs.largeCommunities.empty())
+    {
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE,
+                      BGP_ATTR_LARGE_COMMUNITIES, attrs.largeCommunities.size() * 12, attrSize, c);
+        for (const auto& lc : attrs.largeCommunities)
+        {
+            auto buf = c.reserveSpan(12);
+            writeU32(buf.data(), lc[0]);
+            writeU32(buf.data() + 4, lc[1]);
+            writeU32(buf.data() + 8, lc[2]);
+        }
+    }
+
+    // UNKNOWN
+    for (const auto& ua : attrs.unknownTransitive)
+    {
+        appendAttrHdr(ua.flags | BGP_ATTR_FLAG_PARTIAL, ua.type, ua.value.size(), attrSize, c);
+        auto buf = c.reserveSpan(ua.value.size());
+        std::memcpy(buf.data(), ua.value.data(), ua.value.size());
+    }
+
+    return attrSize;
+}
+
+void BgpTx::buildOpen(Session& session)
 {
     TCP::Connection* c = session.getPrimaryConnection();
     if (!c) return;
@@ -277,22 +490,33 @@ void Transmission::buildOpen(Session& session)
     open.setHoldTime(session.holdTime);
     open.setIdentifier(rid);
 
-    uint8_t paramLen = appendCapabilities(caps, *c);
-    open.setParameterLen(paramLen);
+    uint16_t capSize = computeCapabilityLen(caps);
+    if (capSize >= 255)
+    {
+        open.setParameterLen(255);
+        auto ext = c->reserveSpan(2);
+        writeU16(ext.data(), capSize);
+    }
+    else
+    {
+        open.setParameterLen(static_cast<uint8_t>(capSize));
+    }
 
-    buildHeader(BGP_TYPE_OPEN, openSize + paramLen, buf.data());
+    appendCapabilities(caps, *c);
+
+    buildHeader(BGP_TYPE_OPEN, openSize + capSize, buf.data());
 }
 
-void buildUpdate(Session& session, const std::span<uint8_t> nlri, PathAttributeBase& attr)
+void BgpTx::buildUpdate(Session& session, const std::span<uint8_t> nlri, PathAttributeBase& attr)
 {
     TCP::Connection* c = session.getPrimaryConnection();
     if (!c) return;
-    BgpHeader bgp = buildHeader(BGP_TYPE_OPEN, *c);
+    //BgpHeader bgp = buildHeader(BGP_TYPE_OPEN, *c);
 
 
 }
 
-void Transmission::buildNotification(Session& session, const Notification& notification)
+void BgpTx::buildNotification(Session& session, const Notification& notification)
 {
     TCP::Connection* c = session.getPrimaryConnection();
     if (!c) return;
@@ -306,7 +530,7 @@ void Transmission::buildNotification(Session& session, const Notification& notif
     buildHeader(BGP_TYPE_NOTIFICATION, notifSize, buf.data());
 }
 
-void Transmission::buildKeepalive(Session& session)
+void BgpTx::buildKeepalive(Session& session)
 {
     TCP::Connection* c = session.getPrimaryConnection();
     if (!c) return;
@@ -314,11 +538,17 @@ void Transmission::buildKeepalive(Session& session)
     buildHeader(BGP_TYPE_KEEPALIVE, 0, buf.data());
 }
 
-void Transmission::buildRouteRefresh(Session& session, const AfiSafi& family)
+void BgpTx::buildRouteRefresh(Session& session, const AfiSafi& family, uint8_t subType)
 {
     TCP::Connection* c = session.getPrimaryConnection();
     if (!c) return;
-    BgpHeader bgp = buildHeader(BGP_TYPE_ROUTE_REFRESH, *c);
 
+    const uint16_t totalLen = static_cast<uint16_t>(BgpHeader::fixedSize + 4);
+    auto buf = c->reserveSpan(totalLen);
+    buildHeader(BGP_TYPE_ROUTE_REFRESH, 4, buf.data());
+    uint8_t* rr = buf.data() + BgpHeader::fixedSize;
+    writeU16(rr, family.afi);
+    rr[2] = subType;
+    rr[3] = family.safi;
 }
 }

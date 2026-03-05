@@ -27,6 +27,8 @@ public:
 
     ConnId getId() const noexcept { return id; }
 
+    std::span<uint8_t> reserveSpan(size_t minBytes) noexcept;
+
     size_t flush() noexcept;
 
     void disconnect() noexcept;

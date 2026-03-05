@@ -1,7 +1,10 @@
 // Connection.cpp
 
+#include <cstring>
+
 #include "Connection.h"
 #include "TcpEngine.h"
+#include "tx/TxBuffer.h"
 
 namespace TCP
 {
@@ -31,6 +34,11 @@ Connection& Connection::operator=(Connection&& other) noexcept
     other.engine = nullptr;
     other.engine = 0;
     return *this;
+}
+
+std::span<uint8_t> Connection::reserveSpan(size_t minBytes) noexcept
+{
+    return bufferTx.reserveSpan(minBytes);
 }
 
 size_t Connection::flush() noexcept

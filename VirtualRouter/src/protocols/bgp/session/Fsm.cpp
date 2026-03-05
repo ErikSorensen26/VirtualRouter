@@ -74,8 +74,12 @@ void Fsm::resetAndReconnect()
 
     auto count = session.getTimers().connectionRetryCount;
     auto base = kConnectRetryInterval;
-    auto interval = std::chrono::seconds(base.count() << std::min<uint32_t>(count - 1, 3));
-    if (interval > std::chrono::seconds(300)) interval = std::chrono::seconds(300);
+
+    uint32_t shift = std::min<uint32_t>(count, 3);
+    auto interval = std::chrono::seconds(base.count() << shift);
+
+    if (interval > std::chrono::seconds(300))
+        interval = std::chrono::seconds(300);
 
     session.getTimers().startConnectRetry(interval);
     if (!passiveMode)
@@ -158,7 +162,6 @@ void Fsm::handleConnect(FsmEvent event)
             // TCP established, send OPEN, start initial hold timer.
             session.getTimers().stopConnectRetry();
             session.sendOpen();
-            session.getTimers().startHoldTimer(kInitialHoldTime);
             transitionTo(FsmState::OPEN_SENT, event);
             break;
         }
@@ -172,7 +175,8 @@ void Fsm::handleConnect(FsmEvent event)
         }
         case FsmEvent::TCP_CONNECTION_VALID:
         {
-            break; // Stay in Connect.
+            // TODO: evaluate connection collision
+            break;
         }
         case FsmEvent::TCP_CR_INVALID:
         {
@@ -238,14 +242,13 @@ void Fsm::handleActive(FsmEvent event)
         {
             session.getTimers().stopConnectRetry();
             session.sendOpen();
-            session.getTimers().startHoldTimer(kInitialHoldTime);
             transitionTo(FsmState::OPEN_SENT, event);
             break;
         }
         case FsmEvent::TCP_CONNECTION_FAILS:
         {
-            session.getTimers().startConnectRetry(kConnectRetryInterval);
             session.closeAllConnections();
+            session.getTimers().startConnectRetry(kConnectRetryInterval);
             break;
         }
         case FsmEvent::BGP_HEADER_ERR:
@@ -318,6 +321,7 @@ void Fsm::handleOpenSent(FsmEvent event)
                 session.getTimers().stopKeepaliveTimer();
             }
             transitionTo(FsmState::OPEN_CONFIRMED, event);
+            break;
         }
         case FsmEvent::OPEN_COLLISION_DUMP:
         {
@@ -419,13 +423,18 @@ void Fsm::handleOpenConfirm(FsmEvent event)
         {
             if (session.holdTime != 0)
                 session.getTimers().restartHoldTimer();
+            session.getTimers().stopConnectRetry();
             transitionTo(FsmState::ESTABLISHED, event);
             break;
         }
         case FsmEvent::UPDATE_MSG:
-        case FsmEvent::UPDATE_MSG_ERR:
         {
             resetToIdle(true, BGP_NOTIFICATION_FSM_OPEN_CONFIRM);
+            break;
+        }
+        case FsmEvent::UPDATE_MSG_ERR:
+        {
+            resetToIdle(true, BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST);
             break;
         }
         default:
@@ -508,6 +517,7 @@ void Fsm::handleEstablished(FsmEvent event)
         }
         case FsmEvent::ROUTE_REFRESH:
         {
+            // TODO: handle route refresh
             break;
         }
         case FsmEvent::BFD_DOWN:
@@ -521,7 +531,6 @@ void Fsm::handleEstablished(FsmEvent event)
         }
         default:
         {
-            resetToIdle(true, BGP_NOTIFICATION_FSM_ESTABLISH);
             break;
         }
     }
