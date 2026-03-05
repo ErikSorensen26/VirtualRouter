@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <cstdint>
 
-#include "bgp/BgpTypes.hpp"
+#include "bgp/neighbor/Neighbor.h"
 
 struct IPAddress;
 
@@ -22,10 +22,13 @@ public:
 
     void syncNeighbors();
 
-    Neighbor* createNeighbor(const NeighborKey& key);
-    void deleteNeighbor(const NeighborKey& key);
-    Neighbor* lookup(const NeighborKey& key);
+    Neighbor* createNeighbor(const IPAddress& ipAddress);
+
+    void deleteNeighbor(const IPAddress& ipAddress);
+
+    Neighbor* lookup(const IPAddress& ipAddress);
     const Neighbor* lookup(const IPAddress& ipAddress) const;
+
     Neighbor* lookup(uint32_t rid);
     const Neighbor* lookup(uint32_t rid) const;
 
@@ -34,6 +37,33 @@ public:
 
     void cancelAllHoldTimers();
 
+    template <typename F>
+    void forEachNeighbor(F&& fn)
+    {
+        for (auto& [addr, nbr] : neighbors)
+            fn(nbr);
+    }
+
+    template <typename F>
+    void forEachNeighbor(F&& fn) const
+    {
+        for (const auto& [addr, nbr] : neighbors)
+            fn(nbr);
+    }
+
+    template <typename F>
+    void forEachPeer(F&& fn)
+    {
+        for (auto& [addr, nbr] : peers)
+            fn(*nbr);
+    }
+
+    template <typename F>
+    void forEachPeer(F&& fn) const
+    {
+        for (const auto& [addr, nbr] : peers)
+            fn(*nbr);
+    }
 
 private:
     std::unordered_map<IPAddress, Neighbor> neighbors;

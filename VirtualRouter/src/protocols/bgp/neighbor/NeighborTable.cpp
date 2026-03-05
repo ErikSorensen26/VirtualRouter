@@ -25,13 +25,13 @@ void NeighborTable::syncNeighbors()
     auto& neighborList = configs.get<Config::Bgp::NEIGHBOR>().get();
     for (const auto& [ip, _] : neighborList)
     {
-        if (!unseen.contains(ip))
+        if (unseen.contains(ip))
         {
-            createNeighbor(ip);
+            unseen.erase(ip);
         }
         else
         {
-            unseen.erase(ip);
+            createNeighbor(ip);
         }
     }
 
@@ -43,53 +43,78 @@ void NeighborTable::syncNeighbors()
 
 Neighbor* NeighborTable::createNeighbor(const IPAddress& ipAddress)
 {
-    // TODO 
+    if (neighbors.contains(ipAddress))
+        return &neighbors.at(ipAddress);
+
+    auto [it, ok] = neighbors.emplace(ipAddress, ipAddress, process);
+    return ok ? &it->second : nullptr;
 }
 
 void NeighborTable::deleteNeighbor(const IPAddress& ipAddress)
 {
-    // TODO
+    auto it = neighbors.find(ipAddress);
+    if (it == neighbors.end())
+        return;
+
+    const uint32_t rid = it->second.rid;
+    if (rid != 0)
+        peers.erase(rid);
+
+    neighbors.erase(it);
 }
 
 Neighbor* NeighborTable::lookup(const IPAddress& ipAddress)
 {
     auto it = neighbors.find(ipAddress);
-    if (it != neighbors.end())
-        return &it->second;
-    return nullptr;
+    return (it != neighbors.end()) ? &it->second : nullptr;
 }
 
 const Neighbor* NeighborTable::lookup(const IPAddress& ipAddress) const
 {
     auto it = neighbors.find(ipAddress);
-    if (it != neighbors.end())
-        return &it->second;
-    return nullptr;
+    return (it != neighbors.end()) ? &it->second : nullptr;
+}
+
+Neighbor* NeighborTable::lookup(uint32_t rid)
+{
+    auto it = peers.find(rid);
+    return (it != peers.end()) ? it->second : nullptr;
+}
+
+const Neighbor* NeighborTable::lookup(uint32_t rid) const
+{
+    auto it = peers.find(rid);
+    return (it != peers.end()) ? it->second : nullptr;
+}
+
+bool NeighborTable::activatePeer(const IPAddress& nbr, uint32_t rid)
+{
+    auto it = neighbors.find(nbr);
+    if (it == neighbors.end())
+        return false;
+
+    peers[rid] = &it->second;
+    it->second.rid = rid;
+    return true;
+}
+
+bool NeighborTable::deactivatePeer(uint32_t rid)
+{
+    auto it = peers.find(rid);
+    if (it == peers.end())
+        return false;
+
+    it->second->rid = 0;
+    peers.erase(it);
+    return true;
 }
 
 void NeighborTable::cancelAllHoldTimers()
 {
-    // TODO
-}
-
-bool NeighborTable::activatePeer(const IPAddress& nbr, uint32_t peer)
-{
-    auto nbrIt = neighbors.find(nbr);
-    if (nbrIt == neighbors.end())
-        return false;
-    if (peers.find(peer) == peers.end())
-        peers.emplace(peer, &nbrIt->second);
-    return true;
-}
-
-bool NeighborTable::deactivatePeer(uint32_t peer)
-{
-    auto nbrIt = peers.find(peer);
-    if (nbrIt != peers.end())
+    for (auto& [_, nbr] : neighbors)
     {
-        peers.erase(nbrIt);
-        return true;
+        if (nbr.session)
+            nbr.session->getTimers().cancelAll();
     }
-    return false;
 }
 }

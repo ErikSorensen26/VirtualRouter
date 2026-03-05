@@ -8,6 +8,7 @@
 namespace BGP
 {
 class BgpProcess;
+class Session;
 
 class Neighbor
 {
@@ -19,9 +20,12 @@ public:
 
     uint32_t rid = 0;
 
+    Session* session = nullptr;
     BgpProcess& getProcess() { return process; }
-    Config::BgpNeighborSessionRegistry& getConfigs() { return configs.get(); }
     const BgpProcess& getProcess() const { return process; }
+
+    Config::BgpNeighborSessionRegistry& getConfigs() { return configs.get(); }
+    const Config::BgpNeighborSessionRegistry& getConfigs() const { return configs.get(); }
     
 private:
 
