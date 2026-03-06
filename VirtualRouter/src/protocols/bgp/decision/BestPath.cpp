@@ -4,40 +4,40 @@
 
 namespace BGP
 {
-uint32_t localPrefOrDefault(const PathAttributeBase& a)
+uint32_t localPrefOrDefault(const PathAttribute& a)
 {
-    return a.localPref.value_or(100);
+    return a.attrs.localPref.value_or(100);
 }
 
-uint32_t medOrDefault(const PathAttributeBase& a)
+uint32_t medOrDefault(const PathAttribute& a)
 {
-    return a.med.value_or(0);
+    return a.attrs.med.value_or(0);
 }
 
-uint8_t originRank(const PathAttributeBase& a)
+uint8_t originRank(const PathAttribute& a)
 {
-    return static_cast<uint8_t>(a.origin.value_or(BGP_ORIGIN_INCOMPLETE));
+    return static_cast<uint8_t>(a.attrs.origin.value_or(BGP_ORIGIN_INCOMPLETE));
 }
 
 BestPathComparator::BestPathComparator(BestPathOptions opts)
     : options(opts) {}
 
-inline bool BestPathComparator::compareMed(const RouteCanidateBase& lhsRoute, const PathAttributeBase& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttributeBase& rhsAttr) const
+inline bool BestPathComparator::compareMed(const RouteCanidateBase& lhsRoute, const PathAttribute& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttribute& rhsAttr) const
 {
     if (!options.alwaysCompareMed && lhsRoute.peerAs != rhsRoute.peerAs)
         return false;
     return medOrDefault(lhsAttr) < medOrDefault(rhsAttr);
 }
 
-bool BestPathComparator::better(const RouteCanidateBase& lhsRoute, const PathAttributeBase& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttributeBase& rhsAttr) const
+bool BestPathComparator::better(const RouteCanidateBase& lhsRoute, const PathAttribute& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttribute& rhsAttr) const
 {
     // 1) Highest local-pref
     if (localPrefOrDefault(lhsAttr) != localPrefOrDefault(rhsAttr))
         return localPrefOrDefault(lhsAttr) > localPrefOrDefault(rhsAttr);
 
     // 2) Shortest AS_PATH
-    if (lhsAttr.asPathLength() != rhsAttr.asPathLength())
-        return lhsAttr.asPathLength() > rhsAttr.asPathLength();
+    if (lhsAttr.attrs.asPathLength() != rhsAttr.attrs.asPathLength())
+        return lhsAttr.attrs.asPathLength() > rhsAttr.attrs.asPathLength();
 
     // 3) Lowest ORIGIN code.
     if (originRank(lhsAttr) != originRank(rhsAttr))

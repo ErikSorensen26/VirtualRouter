@@ -4,109 +4,41 @@
 #define BGP_RIB_TYPES_HPP
 
 #include <cstdint>
-#include <optional>
 #include <vector>
 #include <chrono>
 #include <limits>
 
 #include <IPAddress.hpp>
 
-#include "bgp/BgpTypes.hpp"
+#include "bgp/attributes/AttributeTypes.hpp"
 
 namespace BGP
 {
-struct AsPathSegment
-{
-    uint8_t segmentType = 0;
-    std::vector<uint32_t> asns;
-};
-
-struct UnknownAttribute
-{
-    uint8_t flags = 0;
-    uint8_t type = 0;
-    std::vector<uint8_t> value;
-};
-
-struct Aggregator
-{
-    uint32_t asn = 0;
-    IPAddress speaker;
-};
-
 template <typename N>
-struct MpReach
+struct BuildUpdate
 {
-    AfiSafi family;
-    IPAddress nextHop;
-    std::optional<IPAddress> linkLocal;
-    std::vector<N> nlri;
-};
+    struct Announcement
+    {
+        PathAttribute attrs;
+        std::vector<N> nlri;
+    };
 
-template <typename N>
-struct MpUnreach
-{
-    AfiSafi family;
     std::vector<N> withdrawn;
-};
-
-struct PathAttributeBase
-{
-    std::optional<uint8_t> origin;
-    std::vector<AsPathSegment> asPath;
-    std::optional<IPAddress> nextHop;
-    std::optional<uint32_t> localPref;
-    bool atomicAggregate = false;
-
-    std::optional<uint32_t> med;
-    std::optional<Aggregator> aggregator;
-    std::vector<uint32_t> communities;
-    std::vector<uint64_t> extendedCommunities;
-    std::vector<std::array<uint32_t, 3>> largeCommunities;
-
-    std::optional<uint32_t> originatorId;
-    std::vector<uint32_t> clusterList;
-
-    std::optional<uint64_t> aigp;
-
-    std::vector<UnknownAttribute> unknownTransitive;
-
-    uint32_t weight = 0;
-
-    size_t asPathLength() const noexcept
-    {
-        size_t total = 0;
-        for (const auto& seg : asPath)
-            total += seg.asns.size();
-        return total;
-    }
-
-    uint32_t firstAs() const noexcept
-    {
-        for (const auto& seg : asPath)
-            if (seg.segmentType == BGP_AS_SEQUENCE && !seg.asns.empty())
-                return seg.asns.front();
-        return 0;
-    }
-};
-
-template <typename N>
-struct PathAttribute : PathAttributeBase
-{
-    std::optional<MpReach<N>> mpReach;
-    std::optional<MpUnreach<N>> mpUnreach;
+    std::vector<Announcement> announcements;
 };
 
 template <typename N>
 struct ParsedUpdate
 {
     std::vector<N> withdrawn;
-    std::vector<std::pair<N, PathAttribute<N>>> announced;
+    std::vector<N> announcements;
+    std::optional<PathAttribute> attrs;
 };
 
 struct RouteCanidateBase
 {
-    IPAddress nextHop;
+    Path path;
+    uint32_t attrId;
     uint32_t peerAs = 0;
     uint32_t neighborRouterId = 0;
     IPAddress neighborAddress;
@@ -120,12 +52,11 @@ template <typename N>
 struct RouteCanidate : RouteCanidateBase
 {
     N nlri;
-    PathAttribute<N> attributes;
 
     bool operator==(const RouteCanidate<N>& other) const noexcept
     {
         return nlri == other.nlri &&
-               nextHop == other.nextHop &&
+               path == other.path &&
                peerAs == other.peerAs &&
                neighborRouterId == other.neighborRouterId &&
                neighborAddress == other.neighborAddress;

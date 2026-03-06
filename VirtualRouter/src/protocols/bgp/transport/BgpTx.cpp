@@ -288,7 +288,7 @@ void BgpTx::appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& 
     }
 };
 
-size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase& attrs, TCP::Connection& c)
+size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, TCP::Connection& c)
 {
     size_t attrSize = 0;
 
@@ -296,22 +296,22 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     const bool ebgp = session.isEbgp();
 
     // ORIGIN
-    if (attrs.origin.has_value())
+    if (pa.attrs.origin.has_value())
     {
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_ORIGIN, 1, attrSize, c);
         auto buf = c.reserveSpan(1);
         attrSize += 5;
-        buf[0] = *attrs.origin;
+        buf[0] = *pa.attrs.origin;
     }
 
     // AS PATH
-    if (!attrs.asPath.empty())
+    if (!pa.attrs.asPath.empty())
     {
         size_t asLen = 0;
-        for (const auto& seg : attrs.asPath)
+        for (const auto& seg : pa.attrs.asPath)
             asLen += 2 + seg.asns.size() * (use4 ? 4u : 2u);
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AS_PATH, asLen, attrSize, c);
-        for (const auto& seg : attrs.asPath)
+        for (const auto& seg : pa.attrs.asPath)
         {
             auto hdr = c.reserveSpan(2);
             hdr[0] = seg.segmentType;
@@ -337,37 +337,36 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     }
 
     // NEXT HOP
-    if (attrs.nextHop.has_value())
     {
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_NEXT_HOP, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
-        std::memcpy(buf.data(), attrs.nextHop->raw, 4);
+        std::memcpy(buf.data(), pa.path.nextHop.raw, 4);
     }
 
     // MED
-    if (attrs.med.has_value())
+    if (pa.attrs.med.has_value())
     {
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_MULTI_EXIT_DISC, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
-        writeU32(buf.data(), *attrs.med);
+        writeU32(buf.data(), *pa.attrs.med);
     }
 
     // LOCAL PREF
-    if (attrs.localPref.has_value() && !ebgp)
+    if (pa.attrs.localPref.has_value() && !ebgp)
     {
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_LOCAL_PREF, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
-        writeU32(buf.data(), *attrs.localPref);
+        writeU32(buf.data(), *pa.attrs.localPref);
     }
 
     // ATOMIC AGGREGATE
-    if (attrs.atomicAggregate)
+    if (pa.attrs.atomicAggregate)
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_ATOMIC_AGGREGATE, 0, attrSize, c);
 
     // AGGREGATE
-    if (attrs.aggregator.has_value())
+    if (pa.attrs.aggregator.has_value())
     {
-        const auto& agg = *attrs.aggregator;
+        const auto& agg = *pa.attrs.aggregator;
         const size_t vlen = use4 ? 8u : 6u;
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AGGREGATOR, vlen, attrSize, c);
 
@@ -389,10 +388,10 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     }
 
     // COMMUNITIES
-    if (!attrs.communities.empty())
+    if (!pa.attrs.communities.empty())
     {
-        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_COMMUNITIES, attrs.communities.size() * 4, attrSize, c);
-        for (uint32_t comm : attrs.communities)
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_COMMUNITIES, pa.attrs.communities.size() * 4, attrSize, c);
+        for (uint32_t comm : pa.attrs.communities)
         {
             auto buf = c.reserveSpan(4);
             writeU32(buf.data(), comm);
@@ -400,18 +399,18 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     }
 
     // ORIGINATOR ID
-    if (attrs.originatorId.has_value())
+    if (pa.attrs.originatorId.has_value())
     {
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_ORIGINATOR_ID, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
-        writeU32(buf.data(), *attrs.originatorId);
+        writeU32(buf.data(), *pa.attrs.originatorId);
     }
 
     // CLUSTER LIST
-    if (!attrs.clusterList.empty())
+    if (!pa.attrs.clusterList.empty())
     {
-        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_CLUSTER_LIST, attrs.clusterList.size() * 4, attrSize, c);
-        for (uint32_t cid : attrs.clusterList)
+        appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_CLUSTER_LIST, pa.attrs.clusterList.size() * 4, attrSize, c);
+        for (uint32_t cid : pa.attrs.clusterList)
         {
             auto buf = c.reserveSpan(4);
             writeU32(buf.data(), cid);
@@ -419,11 +418,11 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     }
 
     // EXTENDED COMMUNITIES    
-    if (!attrs.extendedCommunities.empty())
+    if (!pa.attrs.extendedCommunities.empty())
     {
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE,
-                      BGP_ATTR_EXTENDED_COMMUNITIES, attrs.extendedCommunities.size() * 8, attrSize, c);
-        for (const auto& ec : attrs.extendedCommunities)
+                      BGP_ATTR_EXTENDED_COMMUNITIES, pa.attrs.extendedCommunities.size() * 8, attrSize, c);
+        for (const auto& ec : pa.attrs.extendedCommunities)
         {
             auto buf = c.reserveSpan(8);
             writeU64(buf.data(), ec);
@@ -431,21 +430,21 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     }
 
     // AIGP
-    if (attrs.aigp.has_value())
+    if (pa.attrs.aigp.has_value())
     {
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_AIGP, 11, attrSize, c);
         auto buf = c.reserveSpan(11);
         buf[0] = 1;
         writeU16(buf.data() + 1, 11);
-        writeU64(buf.data() + 3, *attrs.aigp);
+        writeU64(buf.data() + 3, *pa.attrs.aigp);
     }
 
     // LARGE COMMUNITIES
-    if (!attrs.largeCommunities.empty())
+    if (!pa.attrs.largeCommunities.empty())
     {
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE,
-                      BGP_ATTR_LARGE_COMMUNITIES, attrs.largeCommunities.size() * 12, attrSize, c);
-        for (const auto& lc : attrs.largeCommunities)
+                      BGP_ATTR_LARGE_COMMUNITIES, pa.attrs.largeCommunities.size() * 12, attrSize, c);
+        for (const auto& lc : pa.attrs.largeCommunities)
         {
             auto buf = c.reserveSpan(12);
             writeU32(buf.data(), lc[0]);
@@ -455,7 +454,7 @@ size_t BgpTx::appendNonNlriAttrs(const Session& session, const PathAttributeBase
     }
 
     // UNKNOWN
-    for (const auto& ua : attrs.unknownTransitive)
+    for (const auto& ua : pa.attrs.unknownTransitive)
     {
         appendAttrHdr(ua.flags | BGP_ATTR_FLAG_PARTIAL, ua.type, ua.value.size(), attrSize, c);
         auto buf = c.reserveSpan(ua.value.size());

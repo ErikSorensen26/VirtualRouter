@@ -18,6 +18,8 @@ Session::Session(Neighbor& nbr, ProcessQueueRef queue) noexcept
       fsm(*this),
       timers(*this, this->queue)
 {
+    neighbor.session = this;
+
     holdTime = base.get<Config::BgpTransportBase::HOLDTIME>().load();
     keepaliveInterval = holdTime / 3;
 
@@ -32,6 +34,7 @@ Session::Session(Neighbor& nbr, ProcessQueueRef queue) noexcept
 
 Session::~Session()
 {
+    neighbor.session = nullptr;
     timers.cancelAll();
     closeAllConnections();
 }

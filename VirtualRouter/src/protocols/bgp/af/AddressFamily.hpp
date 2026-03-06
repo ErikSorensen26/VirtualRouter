@@ -9,24 +9,39 @@
 
 #include "bgp/BgpTypes.hpp"
 #include "bgp/BgpProcess.h"
-#include "bgp/neighbor/Neighbor.h"
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"
 #include "bgp/decision/DecisionEngine.hpp"
 
 namespace BGP
 {
+/**
+ * class AddressFamily<N>
+ *
+ * N is a concrete subclass of AddressFamilyPolicy<SomeNlriType>.
+ * It provides:
+ *   - N::Nlri      — the NLRI type (e.g. IPPrefix)
+ *   - N::installRoute(RouteCandidate<Nlri>&) — install into the routing table
+ *   - N::withdrawRoute(const Nlri&)          — remove from the routing table
+ *
+ * Each AddressFamily<N> instance manages one AFI/SAFI:
+ *   - Adj-RIB-In  (per peer, per prefix)
+ *   - Loc-RIB     (per prefix, best route)
+ *   - Adj-RIB-Out (per peer, per prefix, post-policy)
+ */
 template <typename N>
 class AddressFamily
 {
 public:
+    using NlriT = typename N::NlriT;
     using IgpMetricResolver = std::function<uint64_t(const IPAddress&)>;
 
     AddressFamily(BgpProcess& proc, AfiSafi fam)
         : process(proc),
           family(fam),
-          nlriInfo(*proc.routingInstance),
-          igpMetricResolver([](const IPAddress&) { return std::numeric_limits<uint64_t>::max(); })
+          policy(*proc.routingInstance),
+          igpMetricResolver([](const IPAddress&)
+              { return std::numeric_limits<uint64_t>::max(); })
     {}
 
     AddressFamily(const AddressFamily&) = delete;
@@ -34,7 +49,6 @@ public:
     AddressFamily(AddressFamily&&) = delete;
     AddressFamily& operator=(AddressFamily&&) = delete;
 
-public:
     const AfiSafi& getFamily() const noexcept { return family; }
     
     void setIgpMetricResolver(IgpMetricResolver resolver)
@@ -44,11 +58,12 @@ public:
 
     void onUpdateFromPeer(Neighbor& peer, ParsedUpdate<typename N::Nlri>& update, const std::optional<IPAddress>& nextHopOverride)
     {
-        if (!process.getNtable().lookup(peer.rid)) return;
+        if (!process.getNtable().lookup(peer.rid))
+            return;
 
-        PerPeerAdjTable<typename N::Nlri>& peerIn = adjRibIn[peer];
+        PerPeerAdjTable<NlriT>& peerIn = adjRibIn[peer.rid];
 
-        std::vector<typename N::Nlri> touched;
+        std::vector<NlriT> touched;
         touched.reserve(update.announced.size() + update.withdrawn.size());
 
         for (const auto& n : update.withdrawn)
@@ -59,22 +74,25 @@ public:
             touched.push_back(n);
         }
 
-        for (const auto& [n, attr] : update.announced)
+        for (auto& [n, attr] : update.announced)
         {
-            RouteCanidate<typename N::Nlri> r{};
+            RouteCanidate<NlriT> r{};
             r.nlri = n;
-            r.attributes = attr;
+            r.attributes = std::move(attr);
 
             if (nextHopOverride.has_value())
                 r.nextHop = *nextHopOverride;
-            else
-                r.nextHop = r.attributes.nextHop;
-
+            else if (r.attributes.nextHop.has_value())
+                r.nextHop = *r.attributes.nextHop;
+    
             r.neighborRouterId = peer.rid;
             r.neighborAddress = peer.neighborAddress;
 
-            r.peerAs = peer.getConfigs().get<Config::BgpNeighbor::REMOTE_AS>().load();
-            r.ebgp = r.peerAs != process.asNumber;
+            // Obtain REMOTE_AS from session
+            auto& remAs = peer.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
+
+            r.peerAs = remAs.hasValue() ? remAs.load() : 0;
+            r.ebgp = (r.peerAs != 0) && (r.peerAs != process.asNumber);
 
             r.igpCost = resolveIgpMetric(r.nextHop);
 
@@ -136,8 +154,8 @@ private:
         {
             if (had)
             {
-                locRib.erase(lit);
                 withdrawLocRibRoute(nlri);
+                locRib.erase(lit);
                 recomputeAdjRibOut(nlri, std::nullopt);
             }
             return;
@@ -151,64 +169,67 @@ private:
         }
     }
 
-    void installLocRibRoute(const RouteCanidate<typename N::Nlri>& route)
+    void installToLocRib(RouteCanidate<NlriT>& route)
     {
-        nlriInfo.installRoute(route);
+        policy.installRoute(route);
     }
 
-    void withdrawLocRibRoute(const N& nlri)
+    void withdrawFromLocRib(const NlriT& nlri)
     {
-        nlriInfo.withdrawRoute(nlri);
+        policy.withdrawRoute(nlri);
     }
 
-    void recomputeAdjRibOut(const N& nlri, const std::optional<RouteCanidate<N>>& best)
+    void recomputeAdjRibOut(const NlriT& nlri, const std::optional<RouteCanidate<NlriT>>& best)
     {
-        auto& sessions = process.getSessions();
+        process.getNtable().forEachNeighbor([&](Neighbor& nbr) {
+            Session* session = nbr.session;
+            if (!session || !session->established())
+                return;
 
-        for (auto& [_, session] : sessions)
-        {
-            if (!session.established())
-                continue;
-
-            const uint32_t peer = session.getRid();
-            auto& peerOut = adjRibOut[peer];
+            const uint32_t peerRid = session->getPeerRid();
+            auto& peerOut = adjRibOut[peerRid];
             const bool had = (peerOut.find(nlri) != peerOut.end());
 
-            auto withdrawnFromPeer = [&]()
+            auto withdrawFromPeer = [&]()
             {
-                if (!had) return;
-
-                ParsedUpdate<N> withdraw;
-                buildWithdrawUpdate(withdraw, nlri);
-
-                process.getTransmission().sendUpdate(session, withdraw);
+                if (!had)
+                    return;
+                ParsedUpdate<NlriT> withdraw;
+                withdraw.withdrawn.push_back(nlri);
+                session->sendUpdate(withdraw);
                 peerOut.erase(nlri);
             };
 
             if (!best.has_value())
             {
-                withdrawnFromPeer();
-                continue;
+                withdrawFromPeer();
+                return;
             }
 
-            const bool familyNegotiated = session.capabilities().families.contains(family);
-            if (!familyNegotiated)
+            // Check that this AFI/SAFI was negotiated with this peer
+            const auto& negotiated = session->getNegotiated();
+            const bool familyOk = std::any_of(
+                negotiated.activeFamilies.begin(),
+                negotiated.activeFamilies.end(),
+                [&](const AfiSafi& f) { return f == family; });
+
+            if (!familyOk)
             {
-                withdrawnFromPeer();
-                continue;
+                withdrawFromPeer();
+                return;
             }
-        }
-    }
 
-    void rebuildMergedAdjRibForNlri(uint32_t rid, const N& nlri)
-    {
-        auto& inIt = adjRibIn.find(rid);
-        if (inIt == adjRibIn.end())
-            return;
+            // Don't reflect iBGP reoutes back to iBGP peers
+            const bool fromIbgp = !best->ebgp;
+            const bool toIbgp = !session->isEbgp();
+            if (fromIbgp && toIbgp && peerRid == best->neighborRouterId)
+                return;
 
-        RouteCanidate<N>& dst = inIt->second[nlri];
-
-        for ()
+            ParsedUpdate<NlriT> update;
+            update.announced.emplace_back(nlri, best->attributes);
+            session->sendUpdate(update);
+            peerOut[nlri] = *best;
+        });
     }
 
     uint64_t resolveIgpMetric(const IPAddress& nextHop) const
@@ -223,7 +244,7 @@ private:
     LocRibTable<N> locRib;
     AdjRibOutTable<N> adjRibOut;
 
-    N nlriInfo;
+    N policy;
 
     IgpMetricResolver igpMetricResolver;
 

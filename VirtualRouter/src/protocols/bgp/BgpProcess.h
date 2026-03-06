@@ -12,6 +12,7 @@
 #include "bgp/neighbor/NeighborTable.h"
 #include "bgp/session/Session.h"
 #include "bgp/transport/BgpTx.h"
+#include "bgp/attributes/AttributeManager.hpp"
 
 class VirtualRouter;
 
@@ -32,6 +33,8 @@ public:
     inline const Config::BgpRegistry& getConfigs() const { return configs.get(); }
     inline NeighborTable& getNtable() { return ntable; }
     inline const NeighborTable& getNtable() const { return ntable; }
+    inline AttributeManager& getAttrMgr() { return attrMgr; }
+    inline const AttributeManager& getAttrMgr() const { return attrMgr; }
 
     std::unordered_map<TCP::TcpSocketKey, Session>& getSessions() { return sessions; }
 
@@ -49,6 +52,7 @@ private:
 
     ProcessQueue scheduler;
 
+    AttributeManager attrMgr;
     NeighborTable ntable;
 
     Config::Reference<Config::BgpRegistry> configs;
