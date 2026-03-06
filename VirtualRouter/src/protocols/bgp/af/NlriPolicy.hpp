@@ -1,7 +1,7 @@
-// AddressFamilyPolicy.hpp
+// NlriPolicy.hpp
 
-#ifndef BGP_ADDRESS_FAMILY_POLICY_HPP
-#define BGP_ADDRESS_FAMILY_POLICY_HPP
+#ifndef BGP_NLRI_POLICY_HPP
+#define BGP_NLRI_POLICY_HPP
 
 #include "bgp/rib/RibTypes.hpp"
 
@@ -17,10 +17,10 @@ concept IsNlriCompatible = requires(const T obj, const N& cn, N& n, uint8_t* buf
 };
 
 template <typename N, AfiSafi A>
-class AddressFamilyPolicy
+class NlriPolicy
 {
 public:
-    AddressFamilyPolicy(VirtualRouter& v)
+    NlriPolicy(VirtualRouter& v)
         : vrf(v) {}
 
     using Nlri = N;
@@ -39,4 +39,4 @@ protected:
 };
 }
 
-#endif // BGP_ADDRESS_FAMILY_POLICY_HPP
+#endif // BGP_NLRI_POLICY_HPP

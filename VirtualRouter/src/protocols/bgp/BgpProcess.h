@@ -8,7 +8,7 @@
 
 #include "tcp/Listener.h"
 #include "configs/registry/router/BgpRegistry.h"
-#include "bgp/af/AddressFamilyPolicy.hpp"
+#include "bgp/af/NlriPolicy.hpp"
 #include "bgp/neighbor/NeighborTable.h"
 #include "bgp/session/Session.h"
 #include "bgp/transport/BgpTx.h"

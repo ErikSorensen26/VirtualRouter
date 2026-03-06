@@ -43,6 +43,9 @@ public:
 
     static void handleIncoming(Session& s, TCP::RxConsumer& c);
 
+    template <typename N>
+    static bool processUpdate(Session& c, IncomingUpdate& uinfo, ParsedUpdate<typename N::Nlri>& update, Notification& notification);
+
 private:
 
     static bool processOpen(Session& c, std::span<uint8_t> data, Notification& notification);
@@ -50,9 +53,6 @@ private:
     static bool processNotification(Session& c, std::span<uint8_t> data, Notification& notification);
     static bool processKeepalive(Session& c, std::span<uint8_t> data, Notification& notification);
     static bool processRouteRefresh(Session& c, std::span<uint8_t> data, Notification& notification);
-
-    template <typename N>
-    static bool processUpdate(Session& c, IncomingUpdate& uinfo, ParsedUpdate<typename N::Nlri>& update, Notification& notification);
 
     static void parseCapabilities(std::span<uint8_t> data, Capabilities& out);
     static bool parsePathAttributes(Session& session, std::span<uint8_t> data, IncomingUpdate& uinfo, Notification& error);
