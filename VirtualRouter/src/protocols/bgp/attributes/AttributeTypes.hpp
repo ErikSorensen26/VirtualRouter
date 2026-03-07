@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
+#include <array>
 
 #include <IPAddress.hpp>
 
@@ -17,6 +18,8 @@ struct AsPathSegment
 {
     uint8_t segmentType = 0;
     std::vector<uint32_t> asns;
+
+    inline bool operator==(const AsPathSegment&) const = default;
 };
 
 struct UnknownAttribute
@@ -24,6 +27,8 @@ struct UnknownAttribute
     uint8_t flags = 0;
     uint8_t type = 0;
     std::vector<uint8_t> value;
+
+    inline bool operator==(const UnknownAttribute&) const = default;
 };
 
 struct Aggregator
@@ -102,6 +107,8 @@ struct Attributes
     Attributes& operator=(const Attributes&) = default;
     Attributes(Attributes&&) noexcept = default;
     Attributes& operator=(Attributes&&) noexcept = default;
+
+    inline bool operator==(const Attributes&) const = default;
 };
 
 struct PathAttribute

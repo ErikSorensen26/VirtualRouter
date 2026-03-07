@@ -24,4 +24,9 @@ Config::BgpRegistry& AddressFamilyInstanceHelper::getConfigs(BgpProcess& proc)
 {
     return proc.getConfigs();
 }
+
+AttributeManager& AddressFamilyInstanceHelper::getAttrMgr(BgpProcess& proc)
+{
+    return proc.getAttrMgr();
+}
 }

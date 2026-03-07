@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <cstdint>
 #include <deque>
+#include <vector>
+#include <cassert>
 
 #include "AttributeTypes.hpp"
 
@@ -16,14 +18,11 @@ class AttributeManager
 public:
     uint32_t acquire(const Attributes& attrs, const Path& path)
     {
-        uint32_t attrId;
-
+        uint32_t attrId = 0;
         auto ait = attrToId.find(attrs);
-
         if (ait != attrToId.end())
         {
             attrId = ait->second;
-            idToAttr[attrId].refCount++;
         }
         else
         {
@@ -38,27 +37,27 @@ public:
                 idToAttr.emplace_back();
             }
 
-            AttrEntry& entry = idToAttr[attrId];
-            entry.attrs = attrs;
-            entry.refCount = 1;
-            entry.used = true;
+            AttrEntry& attrEntry = idToAttr[attrId];
+            attrEntry.attrs = attrs;
+            attrEntry.refCount = 0;
+            attrEntry.used = true;
 
-            attrToId.emplace(entry.attrs, attrId);
+            attrToId.emplace(attrEntry.attrs, attrId);
         }
 
         PathKey key{attrId, path};
-
         auto pit = pathToId.find(key);
-
         if (pit != pathToId.end())
         {
-            uint32_t id = pit->second;
-            idToPath[id].refCount++;
-            return id;
+            const uint32_t pathId = pit->second;
+            ++idToPath[pathId].refCount;
+            return pathId;
         }
 
-        uint32_t pathId;
+        AttrEntry& attrEntry = idToAttr[attrId];
+        ++attrEntry.refCount;
 
+        uint32_t pathId = 0;
         if (!freePathIds.empty())
         {
             pathId = freePathIds.back();
@@ -70,15 +69,28 @@ public:
             idToPath.emplace_back();
         }
 
-        PathEntry& entry = idToPath[pathId];
-        entry.path = path;
-        entry.attrId = attrId;
-        entry.refCount = 1;
-        entry.used = true;
+        PathEntry& pathEntry = idToPath[pathId];
+        pathEntry.path = path;
+        pathEntry.attrId = attrId;
+        pathEntry.refCount = 1;
+        pathEntry.used = true;
 
         pathToId.emplace(key, pathId);
 
         return pathId;
+    }
+
+    bool retain(uint32_t id)
+    {
+        if (id >= idToPath.size())
+            return false;
+
+        PathEntry& entry = idToPath[id];
+        if (!entry.used)
+            return false;
+
+        ++entry.refCount;
+        return true;
     }
 
     void release(uint32_t id)
@@ -89,6 +101,9 @@ public:
         PathEntry& entry = idToPath[id];
 
         if (!entry.used)
+            return;
+
+        if (entry.refCount == 0)
             return;
 
         if (--entry.refCount > 0)
@@ -106,12 +121,19 @@ public:
 
     const Attributes& getAttributes(uint32_t id) const
     {
-        return idToAttr[id].attrs;
+        assert(id < idToPath.size());
+        const PathEntry& pathEntry = idToPath[id];
+        assert(pathEntry.used);
+        assert(pathEntry.attrId < idToAttr.size());
+        return idToAttr[pathEntry.attrId].attrs;
     }
 
     const Path& getPath(uint32_t id) const 
     {
-        return idToPath[id].path;
+        assert(id < idToPath.size());
+        const PathEntry& pathEntry = idToPath[id];
+        assert(pathEntry.used);
+        return pathEntry.path;
     }
 
     void clear()
@@ -141,6 +163,9 @@ private:
         AttrEntry& entry = idToAttr[id];
 
         if (!entry.used)
+            return;
+
+        if (entry.refCount == 0)
             return;
 
         if (--entry.refCount > 0)

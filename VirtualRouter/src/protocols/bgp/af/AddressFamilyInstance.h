@@ -14,6 +14,7 @@
 #include "bgp/transport/BgpTx.h"
 #include "bgp/decision/DecisionEngine.hpp"
 #include "bgp/neighbor/NeighborTable.h"
+#include "bgp/attributes/AttributeManager.hpp"
 
 namespace BGP
 {
@@ -41,6 +42,7 @@ private:
     static NeighborTable& getNtable(BgpProcess& proc);
     static uint32_t getAsNum(BgpProcess& proc);
     static Config::BgpRegistry& getConfigs(BgpProcess& proc);
+    static AttributeManager& getAttrMgr(BgpProcess& proc);
 };
 
 
@@ -100,6 +102,10 @@ public:
 
     void invalidatePeer(uint32_t peer)
     {
+        auto out = adjRibOut.find(peer);
+        if (out != adjRibOut.end())
+            adjRibOut.erase(out);
+
         auto it = adjRibIn.find(peer);
         if (it == adjRibIn.end())
             return;
@@ -137,6 +143,8 @@ private:
 
         if (update.attrs.has_value())
         {
+            auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+
             // Obtain REMOTE_AS from session
             auto& remAs = peer.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
             const uint32_t peerAs = remAs.hasValue() ? remAs.load() : 0;
@@ -144,10 +152,9 @@ private:
 
             for (const auto& n : update.announcements)
             {
-                RouteCanidate<NlriT> r{};
+                RouteCanidate<NlriT> r(attrMgr);
                 r.nlri = n;
-                r.attrs = update.attrs->attrs;
-                r.path = update.attrs->path;
+                r.setPathAttributes(*update.attrs);
 
                 r.neighborRouterId = peer.rid;
                 r.neighborAddress = peer.neighborAddress;
@@ -264,7 +271,10 @@ private:
             const bool fromIbgp = !best->ebgp;
             const bool toIbgp = !session->isEbgp();
             if (fromIbgp && toIbgp)
+            {
+                withdrawFromPeer();
                 return;
+            }
 
             BuildUpdate<NlriT> update;
             typename BuildUpdate<NlriT>::Announcement ann;

@@ -52,10 +52,22 @@ void BgpProcess::onSessionDown(Session& session)
 {
     const uint32_t rid = session.getPeerRid();
     Neighbor& nbr = session.getNeighbor();
-    if (rid != 0)
-        ntable.deactivatePeer(rid);
-    nbr.rid = 0;
+
     nbr.session = nullptr;
+
+    if (rid != 0)
+    {
+        for (auto& [_, af] : addressFamilies)
+        {
+            std::visit([rid](auto& fam) {
+                fam.invalidatePeer(rid);
+            }, af);
+        }
+
+        ntable.deactivatePeer(rid);
+    }
+
+    nbr.rid = 0;
 }
 
 AddressFamilyVariant* BgpProcess::findAddressFamily(AfiSafi& afi)
