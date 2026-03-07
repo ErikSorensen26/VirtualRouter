@@ -1,20 +1,34 @@
-// AddressFamily.h
+// AddressFamilyInstance.h
 
-#ifndef BGP_ADDRESS_FAMILY_INSTANCE_HPP
-#define BGP_ADDRESS_FAMILY_INSTANCE_HPP
+#ifndef BGP_ADDRESS_FAMILY_INSTANCE_H
+#define BGP_ADDRESS_FAMILY_INSTANCE_H
 
 #include <functional>
 #include <IPAddress.hpp>
+#include <VirtualRouter.h>
 
 #include "bgp/BgpTypes.hpp"
-#include "bgp/BgpProcess.h"
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"
 #include "bgp/transport/BgpRx.h"
 #include "bgp/decision/DecisionEngine.hpp"
+#include "bgp/neighbor/NeighborTable.h"
 
 namespace BGP
 {
+class AddressFamilyInstanceHelper
+{
+private:
+    template <typename T>
+    friend class AddressFamilyInstance;
+
+    static VirtualRouter& getRoutingInstance(BgpProcess& proc);
+    static NeighborTable& getNtable(BgpProcess& proc);
+    static uint32_t getAsNum(BgpProcess& proc);
+    static Config::BgpRegistry& getConfigs(BgpProcess& proc);
+};
+
+
 /**
  * class AddressFamilyInstance<N>
  *
@@ -40,7 +54,7 @@ public:
     AddressFamilyInstance(BgpProcess& proc, AfiSafi fam)
         : process(proc),
           family(fam),
-          policy(*proc.routingInstance),
+          policy(AddressFamilyInstanceHelper::getRoutingInstance(proc)),
           igpMetricResolver([](const IPAddress&)
               { return std::numeric_limits<uint64_t>::max(); })
     {}
@@ -90,7 +104,7 @@ public:
 private:
     void onParsedUpdateFromPeer(Neighbor& peer, ParsedUpdate<typename N::Nlri>& update)
     {
-        if (!process.getNtable().lookup(peer.rid))
+        if (!AddressFamilyInstanceHelper::getNtable(process).lookup(peer.rid))
             return;
 
         PerPeerAdjTable<NlriT>& peerIn = adjRibIn[peer.rid];
@@ -119,7 +133,7 @@ private:
             auto& remAs = peer.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
 
             r.peerAs = remAs.hasValue() ? remAs.load() : 0;
-            r.ebgp = (r.peerAs != 0) && (r.peerAs != process.asNumber);
+            r.ebgp = (r.peerAs != 0) && (r.peerAs != AddressFamilyInstanceHelper::getAsNum(process));
 
             r.igpCost = resolveIgpMetric(r.nextHop);
 
@@ -147,7 +161,7 @@ private:
         }
 
         const bool alwaysCompareMed =
-            process.getConfigs().get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
+            AddressFamilyInstanceHelper::getConfigs(process).get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
 
         DecisionEngine decision(BestPathOptions{.alwaysCompareMed = alwaysCompareMed});
         std::optional<RouteCanidate<typename N::Nlri>> best;
@@ -189,7 +203,7 @@ private:
 
     void recomputeAdjRibOut(const NlriT& nlri, const std::optional<RouteCanidate<NlriT>>& best)
     {
-        process.getNtable().forEachNeighbor([&](Neighbor& nbr) {
+        AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
             Session* session = nbr.session;
             if (!session || !session->established())
                 return;
@@ -261,4 +275,4 @@ private:
 };
 }
 
-#endif // BGP_ADDRESS_FAMILY_HPP
+#endif // BGP_ADDRESS_FAMILY_H

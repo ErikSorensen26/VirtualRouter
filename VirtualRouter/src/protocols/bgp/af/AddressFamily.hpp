@@ -3,7 +3,7 @@
 #ifndef BGP_ADDRESS_FAMILY__HPP
 #define BGP_ADDRESS_FAMILY__HPP
 
-#include "AddressFamilyInstance.hpp"
+#include "AddressFamilyInstance.h"
 #include "Nlri.hpp"
 
 namespace BGP
@@ -43,15 +43,24 @@ bool hasAddressFamily(std::variant<Ts...>*)
 {
     return ((Ts::afi == AF) || ...);
 }
+
+template <typename... Ts>
+bool hasAddressFamily(AfiSafi& af, std::variant<Ts...>*)
+{
+    return ((Ts::afi == af) || ...);
+}
 }
 
-using AddressFamilyVariant = detail::AddressFamilyVariant<Nlri>;
+using AddressFamilyVariant = detail::AddressFamilyVariant<Nlri>::type;
 
 template <AfiSafi AF>
 using AddressFamily = typename detail::AddressFamily<AF, AddressFamily>::type;
 
 template <AfiSafi AF>
-inline constexpr bool hasAddressFamily = detail::hasAddressFamily<AF>((AddressFamilyVariant*)nullptr);
+inline constexpr bool hasAddressFamily()
+{
+    return detail::hasAddressFamily<AF>((AddressFamilyVariant*)nullptr);
+}
 }
 
 #endif // BGP_ADDRESS_FAMILY_TYPES_HPP

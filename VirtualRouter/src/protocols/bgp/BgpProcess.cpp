@@ -10,17 +10,17 @@ namespace BGP
 BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
     : routingInstance(vrf),
       asNumber(as),
-      transmission(*this),
       scheduler(vrf->getControlScheduler().create()),
       ntable(*this),
       configs(vrf->getRegistry().create<Config::BgpRegistry>(
-          Config::generateBgpKey(vrf->getInstanceId(), as, AddressFamily::NONE)
+          Config::generateBgpKey(vrf->getInstanceId(), as, ::AddressFamily::NONE)
       ))
 {
     TCP::ListenOptions opts;
-    opts.acceptConnCallback = onConnect;
-    opts.acceptedConnUser = this;
-    opts.recvCallback = onReceive;
+    opts.onAccept = BgpProcess::onAcceptCallback;
+    opts.onAcceptUser = this;
+    opts.recvCallback = BgpProcess::onReceiveCallback;
+    opts.recvUser = this;
 
     listener = vrf->getTcp().listen(
         TCP::TcpEndpoint{
@@ -31,26 +31,81 @@ BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
     );
 }
 
-void BgpProcess::onConnect(TCP::ConnCallbackCtx& ctx) noexcept
+BgpProcess::~BgpProcess() = default;
+
+Session* BgpProcess::findSession(TCP::ConnId cid)
 {
-    
+    auto it = sessions.find(cid);
+    return (it != sessions.end()) ? &it->second : nullptr;
 }
 
-void BgpProcess::onAccept(TCP::AcceptCallbackCtx& ctx) noexcept
+void BgpProcess::onSessionEstablished(Session& session)
+{
+    const uint32_t rid = session.getPeerRid();
+    Neighbor& nbr = session.getNeighbor();
+    ntable.activatePeer(nbr.neighborAddress, rid);
+    nbr.session = &session;
+}
+
+void BgpProcess::onSessionDown(Session& session)
+{
+    const uint32_t rid = session.getPeerRid();
+    if (rid != 0)
+        ntable.deactivatePeer(rid);
+    session.getNeighbor().session = nullptr;
+}
+
+AddressFamilyVariant* BgpProcess::findAddressFamily(AfiSafi& afi)
+{
+    auto it = addressFamilies.find(afi);
+    if (it == addressFamilies.end())
+        return nullptr;
+    return &it->second;
+}
+
+void BgpProcess::disableAddressFamily(AfiSafi& afi)
+{
+    addressFamilies.erase(afi);
+}
+
+void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
 {
     auto* bgp = static_cast<BgpProcess*>(ctx.user);
-    TCP::ConnId connId = ctx.newConn.getId();
+
+    // Look up the configured neighbor for the remote address.
     Neighbor* nbr = bgp->ntable.lookup(ctx.key.remote.address);
     if (!nbr)
     {
-        bgp->routingInstance->getTcp().close(connId);
+        ctx.newConn.disconnect();
         return;
     }
-    bgp->sessions.emplace(connId, *nbr, ctx.newConn);
+
+    TCP::ConnId cid = ctx.newConn.getId();
+
+    auto ses = bgp->sessions.emplace(cid, *nbr, bgp->scheduler.ref());
+    ses.first->second.acceptConnection(std::move(ctx.newConn));
 }
 
-void BgpProcess::onReceive(TCP::RecvCallbackCtx& ctx) noexcept
+void BgpProcess::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
 {
+    auto* bgp = static_cast<BgpProcess*>(ctx.user);
+    Session* session = bgp->findSession(ctx.id);
+    if (!session)
+        return;
 
+    if (ctx.ev.type == TCP::TcpEventType::CONNECTED)
+        session->postEvent(FsmEvent::TCP_CONNECTION_VALID);
+    else
+        session->postEvent(FsmEvent::TCP_CONNECTION_FAILS);
+}
+
+void BgpProcess::onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept
+{
+    auto* bgp = static_cast<BgpProcess*>(ctx.user);
+    Session* session = bgp->findSession(ctx.id);
+    if (!session)
+        return;
+
+    session->handleIncoming(ctx.consumer);
 }
 }

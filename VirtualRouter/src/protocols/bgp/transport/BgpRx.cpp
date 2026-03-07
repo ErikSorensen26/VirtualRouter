@@ -329,7 +329,18 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
     if (update.afi.afi == BGP_AFI_IPV4 && update.afi.safi == BGP_SAFI_UNICAST)
         update.nlriData = std::span<uint8_t>(payload.data() + offset, payload.size() - offset);
 
-    // TODO: run af nlri
+    // Check if 
+
+    AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(update.afi);
+    if (!af) // Af not enabled
+    {
+        error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
+        return false;
+    }
+
+    return std::visit([&](auto&& fam) -> bool {
+        fam.onUpdateFromPeer(session, update, error);
+    }, *af);
 }
 
 AfiSafi findMpAfiSafi(std::span<const uint8_t> attrData)
