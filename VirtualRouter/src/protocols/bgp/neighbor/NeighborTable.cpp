@@ -46,7 +46,7 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& ipAddress)
     if (neighbors.contains(ipAddress))
         return &neighbors.at(ipAddress);
 
-    auto [it, ok] = neighbors.emplace(ipAddress, ipAddress, process);
+    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, process);
     return ok ? &it->second : nullptr;
 }
 

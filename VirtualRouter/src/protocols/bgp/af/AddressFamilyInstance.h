@@ -11,8 +11,23 @@
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"
 #include "bgp/transport/BgpRx.h"
+#include "bgp/transport/BgpTx.h"
 #include "bgp/decision/DecisionEngine.hpp"
 #include "bgp/neighbor/NeighborTable.h"
+
+namespace BGP
+{
+// Definition of Session::sendUpdate<N> here, after both Session.h and BgpTx.h are visible
+template <typename N>
+inline void Session::sendUpdate(const BuildUpdate<typename N::Nlri>& update)
+{
+    if (primaryConn)
+    {
+        BgpTx::buildUpdate<N>(*primaryConn, *this, update);
+        primaryConn->flush();
+    }
+}
+}
 
 namespace BGP
 {
@@ -92,7 +107,7 @@ public:
         // Copy keys first because recompute can mutate them
         std::vector<typename N::Nlri> keys;
         keys.reserve(it->second.size());
-        for (const auto& [nlri, _] : it.second)
+        for (const auto& [nlri, _] : it->second)
             keys.push_back(nlri);
 
         adjRibIn.erase(it);
@@ -110,7 +125,7 @@ private:
         PerPeerAdjTable<NlriT>& peerIn = adjRibIn[peer.rid];
 
         std::vector<NlriT> touched;
-        touched.reserve(update.announced.size() + update.withdrawn.size());
+        touched.reserve(update.announcements.size() + update.withdrawn.size());
 
         for (const auto& n : update.withdrawn)
         {
@@ -120,25 +135,29 @@ private:
             touched.push_back(n);
         }
 
-        for (auto& [n, attr] : update.announced)
+        if (update.attrs.has_value())
         {
-            RouteCanidate<NlriT> r{};
-            r.nlri = n;
-            r.attributes = std::move(attr);
-    
-            r.neighborRouterId = peer.rid;
-            r.neighborAddress = peer.neighborAddress;
-
             // Obtain REMOTE_AS from session
             auto& remAs = peer.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
+            const uint32_t peerAs = remAs.hasValue() ? remAs.load() : 0;
+            const bool isEbgp = (peerAs != 0) && (peerAs != AddressFamilyInstanceHelper::getAsNum(process));
 
-            r.peerAs = remAs.hasValue() ? remAs.load() : 0;
-            r.ebgp = (r.peerAs != 0) && (r.peerAs != AddressFamilyInstanceHelper::getAsNum(process));
+            for (const auto& n : update.announcements)
+            {
+                RouteCanidate<NlriT> r{};
+                r.nlri = n;
+                r.attrs = update.attrs->attrs;
+                r.path = update.attrs->path;
 
-            r.igpCost = resolveIgpMetric(r.nextHop);
+                r.neighborRouterId = peer.rid;
+                r.neighborAddress = peer.neighborAddress;
+                r.peerAs = peerAs;
+                r.ebgp = isEbgp;
+                r.igpCost = resolveIgpMetric(r.path.nextHop);
 
-            peerIn[n] = std::move(r);
-            touched.push_back(n);
+                peerIn[n] = std::move(r);
+                touched.push_back(n);
+            }
         }
 
         for (const auto& n : touched)
@@ -147,7 +166,7 @@ private:
 
     void recomputeNlri(const typename N::Nlri& nlri)
     {
-        std::vector<RouteCanidate<typename N::Nlri>*> canidates;
+        std::vector<RouteCanidate<NlriT>> canidates;
         canidates.reserve(adjRibIn.size());
 
         for (auto& [peer, peerTable] : adjRibIn)
@@ -156,8 +175,8 @@ private:
             if (it == peerTable.end())
                 continue;
 
-            it.second.igpCost = resolveIgpMetric(it->second.nextHop);
-            canidates.push_back(&it->second);
+            it->second.igpCost = resolveIgpMetric(it->second.path.nextHop);
+            canidates.push_back(it->second);
         }
 
         const bool alwaysCompareMed =
@@ -176,7 +195,7 @@ private:
         {
             if (had)
             {
-                withdrawLocRibRoute(nlri);
+                withdrawFromLocRib(nlri);
                 locRib.erase(lit);
                 recomputeAdjRibOut(nlri, std::nullopt);
             }
@@ -186,7 +205,7 @@ private:
         if (!had || lit->second != best.value())
         {
             locRib[nlri] = best.value();
-            installLocRibRoute(best.value());
+            installToLocRib(best.value());
             recomputeAdjRibOut(nlri, best);
         }
     }
@@ -216,9 +235,9 @@ private:
             {
                 if (!had)
                     return;
-                ParsedUpdate<NlriT> withdraw;
+                BuildUpdate<NlriT> withdraw;
                 withdraw.withdrawn.push_back(nlri);
-                session->sendUpdate(withdraw);
+                session->sendUpdate<N>(withdraw);
                 peerOut.erase(nlri);
             };
 
@@ -241,15 +260,18 @@ private:
                 return;
             }
 
-            // Don't reflect iBGP reoutes back to iBGP peers
+            // Don't reflect iBGP routes back to iBGP peers (no route reflection)
             const bool fromIbgp = !best->ebgp;
             const bool toIbgp = !session->isEbgp();
-            if (fromIbgp && toIbgp && peerRid == best->neighborRouterId)
+            if (fromIbgp && toIbgp)
                 return;
 
-            ParsedUpdate<NlriT> update;
-            update.announced.emplace_back(nlri, best->attributes);
-            session->sendUpdate(update);
+            BuildUpdate<NlriT> update;
+            typename BuildUpdate<NlriT>::Announcement ann;
+            ann.attrs = PathAttribute{best->attrs, best->path};
+            ann.nlri.push_back(nlri);
+            update.announcements.push_back(std::move(ann));
+            session->sendUpdate<N>(update);
             peerOut[nlri] = *best;
         });
     }
@@ -262,9 +284,9 @@ private:
     }
 
 private:
-    AdjRibInTable<N> adjRibIn;
-    LocRibTable<N> locRib;
-    AdjRibOutTable<N> adjRibOut;
+    AdjRibInTable<NlriT> adjRibIn;
+    LocRibTable<NlriT> locRib;
+    AdjRibOutTable<NlriT> adjRibOut;
 
     N policy;
 

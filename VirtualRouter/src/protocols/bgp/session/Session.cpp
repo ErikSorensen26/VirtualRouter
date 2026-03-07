@@ -104,6 +104,18 @@ void Session::closeActiveConnection() noexcept
     primaryConn = passiveConn.has_value() ? &passiveConn.value() : nullptr;
 }
 
+void Session::closePassiveConnection() noexcept
+{
+    if (passiveConn.has_value())
+    {
+        auto& proc = neighbor.getProcess();
+        auto& tcp = proc.routingInstance->getTcp();
+        tcp.close(passiveConn->getId());
+        passiveConn.reset();
+    }
+    primaryConn = activeConn.has_value() ? &activeConn.value() : nullptr;
+}
+
 void Session::closeAllConnections() noexcept
 {
     auto& proc = neighbor.getProcess();
@@ -131,8 +143,7 @@ void Session::postEvent(FsmEvent event)
 
 void Session::handleIncoming(TCP::RxConsumer& consumer)
 {
-    auto& proc = neighbor.getProcess();
-    proc.getTransmission().handleIncoming(*this, consumer);
+    BgpRx::handleIncoming(*this, consumer);
 }
 
 void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
@@ -239,7 +250,7 @@ bool Session::isEbgp() const noexcept
 
 bool Session::resolveCollision(uint32_t incomingPeerRid)
 {
-    uint32_t localRid = neighbor.getProcess().rid;
+    uint32_t localRid = neighbor.getProcess().getRouterId();
     bool outgoing = activeConn.has_value();
 
     bool keep = CollisionDetector::shouldKeep(outgoing, localRid, incomingPeerRid);

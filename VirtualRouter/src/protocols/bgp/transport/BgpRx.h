@@ -1,8 +1,8 @@
 
 // BgpRx.h
 
-#ifndef BGP_TRANSMISSION_H
-#define BGP_TRANSMISSION_H
+#ifndef BGP_RX_H
+#define BGP_RX_H
 
 #include <span>
 #include <cstdint>
@@ -115,9 +115,9 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
         pos += consumed;
     }
 
-    // MP REACH
-    //if (attrs.mpReach.has_value)
+    update.attrs = PathAttribute{uinfo.attrs, uinfo.path};
+    return true;
 }
 }
 
-#endif // BGP_TRANSMISSION_H
+#endif // BGP_RX_H

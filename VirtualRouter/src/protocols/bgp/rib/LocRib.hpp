@@ -12,7 +12,7 @@
 
 namespace BGP
 {
-template <class KeyT, class BestT = std::hash<KeyT>, >
+template <class KeyT, class BestT = KeyT>
 class LocRib final
 {
 public:
@@ -55,8 +55,28 @@ public:
             return true;
         }
 
-        if (eq())
+        if (eq(it->second.best, best))
+            return false; // unchanged
+
+        it->second.best = std::move(best);
+        it->second.version = ++globalVersion;
+        return true;
     }
+
+    bool remove(const KeyT& k)
+    {
+        return rib.erase(k) != 0;
+    }
+
+    void forEach(auto&& fn) const
+    {
+        for (const auto& [k, e] : rib)
+            fn(k, e);
+    }
+
+private:
+    std::unordered_map<KeyT, Entry> rib;
+    uint64_t globalVersion = 0;
 };
 }
 

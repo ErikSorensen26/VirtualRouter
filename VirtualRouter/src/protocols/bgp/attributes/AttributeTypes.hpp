@@ -101,13 +101,13 @@ struct Attributes
     Attributes(const Attributes&) = default;
     Attributes& operator=(const Attributes&) = default;
     Attributes(Attributes&&) noexcept = default;
-    Attributes& operator=(Attributes& other) noexcept = default;
+    Attributes& operator=(Attributes&&) noexcept = default;
 };
 
 struct PathAttribute
 {
-    Attributes& attrs;
-    Path& path;
+    Attributes attrs;
+    Path path;
 };
 }
 
@@ -188,10 +188,10 @@ struct hash<BGP::Attributes>
             mix(c);
 
         // AGGREGATOR
-        if (a.aggregator)
+        if (a.asAggregator)
         {
-            mix(a.aggregator->asn);
-            mix(std::hash<IPAddress>{}(a.aggregator->speaker));
+            mix(a.asAggregator->asn);
+            mix(std::hash<IPAddress>{}(a.asAggregator->speaker));
         }
 
         // ORIGIN

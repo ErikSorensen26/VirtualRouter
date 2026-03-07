@@ -4,6 +4,7 @@
 #define BGP_PROCESS_H
 
 #include <cstdint>
+#include <memory>
 #include <ControlScheduler.h>
 
 #include "tcp/Listener.h"
@@ -55,7 +56,7 @@ public:
     template <AfiSafi AF>
     AddressFamily<AF>* findAddressFamily()
     {
-        static_assert(hasAddressFamily<AF>, "AddressFamily not supported");
+        static_assert(hasAddressFamily<AF>(), "AddressFamily not supported");
         if (auto it = addressFamilies.find(AF); it != addressFamilies.end())
             return &std::get<AddressFamily<AF>>(it->second);
         return nullptr;
@@ -64,11 +65,11 @@ public:
     template <AfiSafi AF>
     AddressFamily<AF>& enableAddressFamily()
     {
-        static_assert(hasAddressFamily<AF>, "AddressFamily not supported");
+        static_assert(hasAddressFamily<AF>(), "AddressFamily not supported");
         if (auto it = addressFamilies.find(AF); it != addressFamilies.end())
             return std::get<AddressFamily<AF>>(it->second);
-        auto af = addressFamilies.emplace(AF, AddressFamily<AF>{*this, AF});
-        return std::get<AddressFamily<AF>>(af.first->second);
+        auto [it, ok] = addressFamilies.try_emplace(AF, std::in_place_type<AddressFamily<AF>>, *this, AF);
+        return std::get<AddressFamily<AF>>(it->second);
     }
 
     const uint32_t asNumber;
@@ -80,7 +81,7 @@ public:
 private:
 
     TCP::Listener listener;
-    std::unordered_map<TCP::ConnId, Session> sessions;
+    std::unordered_map<TCP::ConnId, std::unique_ptr<Session>> sessions;
     std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;
 
     ProcessQueue scheduler;

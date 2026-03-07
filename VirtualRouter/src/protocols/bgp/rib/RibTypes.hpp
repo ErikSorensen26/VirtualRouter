@@ -38,7 +38,8 @@ struct ParsedUpdate
 struct RouteCanidateBase
 {
     Path path;
-    uint32_t attrId;
+    Attributes attrs;
+    uint32_t attrId = 0;
     uint32_t peerAs = 0;
     uint32_t neighborRouterId = 0;
     IPAddress neighborAddress;

@@ -250,7 +250,7 @@ static void appendCapabilities(const Capabilities& caps, TCP::Connection& c)
     // LLGR
     if (caps.llgr && !caps.llgrFamilies.empty())
     {
-        const uint8_t vlen = static_cast<uint8_t>(caps.llgrFamilies.size() * 4);
+        const uint8_t vlen = static_cast<uint8_t>(caps.llgrFamilies.size() * 7);
         uint8_t* buf = openParam(BGP_CAPABILITY_LLGR, vlen);
 
         size_t idx = 0;
@@ -300,7 +300,6 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
     {
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_ORIGIN, 1, attrSize, c);
         auto buf = c.reserveSpan(1);
-        attrSize += 5;
         buf[0] = *pa.attrs.origin;
     }
 
@@ -469,7 +468,7 @@ void BgpTx::buildOpen(TCP::Connection& connection, Session& session)
     const auto& caps = session.getLocalCaps();
     const auto& proc = session.getNeighbor().getProcess();
     const uint32_t localAs = proc.asNumber;
-    const uint32_t rid = proc.rid;
+    const uint32_t rid = proc.getRouterId();
 
     uint16_t openSize = BgpHeader::fixedSize + BgpOpenHeader::fixedSize;
     std::span<uint8_t> buf = connection.reserveSpan(openSize);
@@ -500,7 +499,10 @@ void BgpTx::buildOpen(TCP::Connection& connection, Session& session)
 
     appendCapabilities(caps, connection);
 
-    buildHeader(BGP_TYPE_OPEN, openSize + capSize, buf.data());
+    const uint16_t extLen = (capSize >= 255) ? 2 : 0;
+    buildHeader(BGP_TYPE_OPEN,
+                static_cast<uint16_t>(BgpOpenHeader::fixedSize + extLen + capSize),
+                buf.data());
 }
 
 void BgpTx::buildNotification(TCP::Connection& connection, const Notification& notification)

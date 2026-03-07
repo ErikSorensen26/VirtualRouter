@@ -39,13 +39,13 @@ struct AddressFamily<AF, std::variant<>>
 };
 
 template <AfiSafi AF, typename... Ts>
-bool hasAddressFamily(std::variant<Ts...>*)
+constexpr bool hasAddressFamily(std::variant<Ts...>*)
 {
     return ((Ts::afi == AF) || ...);
 }
 
 template <typename... Ts>
-bool hasAddressFamily(AfiSafi& af, std::variant<Ts...>*)
+constexpr bool hasAddressFamily(AfiSafi& af, std::variant<Ts...>*)
 {
     return ((Ts::afi == af) || ...);
 }
@@ -54,7 +54,7 @@ bool hasAddressFamily(AfiSafi& af, std::variant<Ts...>*)
 using AddressFamilyVariant = detail::AddressFamilyVariant<Nlri>::type;
 
 template <AfiSafi AF>
-using AddressFamily = typename detail::AddressFamily<AF, AddressFamily>::type;
+using AddressFamily = AddressFamilyInstance<typename detail::AddressFamily<AF, Nlri>::type>;
 
 template <AfiSafi AF>
 inline constexpr bool hasAddressFamily()

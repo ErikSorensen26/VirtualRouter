@@ -37,7 +37,7 @@ bool BestPathComparator::better(const RouteCanidateBase& lhsRoute, const PathAtt
 
     // 2) Shortest AS_PATH
     if (lhsAttr.attrs.asPathLength() != rhsAttr.attrs.asPathLength())
-        return lhsAttr.attrs.asPathLength() > rhsAttr.attrs.asPathLength();
+        return lhsAttr.attrs.asPathLength() < rhsAttr.attrs.asPathLength();
 
     // 3) Lowest ORIGIN code.
     if (originRank(lhsAttr) != originRank(rhsAttr))
@@ -46,7 +46,7 @@ bool BestPathComparator::better(const RouteCanidateBase& lhsRoute, const PathAtt
     // 4) Lowest MED (same neighboring AS unless always-compare-med).
     if (compareMed(lhsRoute, lhsAttr, rhsRoute, rhsAttr))
         return true;
-    if (compareMed(rhsRoute, rhsAttr, lhsRoute, rhsAttr))
+    if (compareMed(rhsRoute, rhsAttr, lhsRoute, lhsAttr))
         return false;
 
     // 5) eBGP preferred over iBGP

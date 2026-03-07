@@ -190,7 +190,7 @@ bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notificati
     // Parameter length boundary check.
     bool extendedParamLen = false;
     uint16_t paramLen = open.getParameterLen();
-    if (paramLen == 255 && payload.size() + 2 >= BgpOpenHeader::fixedSize)
+    if (paramLen == 255 && payload.size() >= BgpOpenHeader::fixedSize + 2)
     {
         paramLen = readU16(open.getTrailData());
         extendedParamLen = true;
@@ -263,14 +263,9 @@ bool BgpRx::processKeepalive(Session& session, std::span<uint8_t> payload, Notif
     return true;
 }
 
-bool BgpRx::processNotification(Session& session, std::span<uint8_t> payload, Notification& error)
+bool BgpRx::processNotification(Session& session, std::span<uint8_t> payload, Notification& /*error*/)
 {
-    if (payload.size() < 4)
-    {
-        error.code = BGP_NOTIFICATION_REFRESH_INVALID_LENGTH;
-        return false;
-    }
-    session.onRouteRefreshReceived();
+    session.onNotificationReceived(payload);
     return true;
 }
 
@@ -339,7 +334,7 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
     }
 
     return std::visit([&](auto&& fam) -> bool {
-        fam.onUpdateFromPeer(session, update, error);
+        return fam.onUpdateFromPeer(session, update, error);
     }, *af);
 }
 
@@ -365,7 +360,7 @@ AfiSafi findMpAfiSafi(std::span<const uint8_t> attrData)
             length = *ptr++;
         }
 
-        if (type == BGP_ATTR_MP_REACH_NLRI || BGP_ATTR_MP_UNREACH_NLRI)
+        if (type == BGP_ATTR_MP_REACH_NLRI || type == BGP_ATTR_MP_UNREACH_NLRI)
         {
             if (ptr + 3 <= end)
             {
@@ -545,6 +540,9 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
     bool sawAsPath = false;
     bool sawNextHop = false;
 
+    std::optional<AfiSafi> reachAfi;
+    std::optional<AfiSafi> unreachAfi;
+
     while (pos < data.size())
     {
         if (pos + 2 > data.size())
@@ -599,9 +597,6 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
             error.data.assign(val.begin(), val.end());
             return false;
         };
-
-        std::optional<AfiSafi> reachAfi;
-        std::optional<AfiSafi> unreachAfi;
 
         switch (type)
         {
@@ -693,12 +688,12 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
             case BGP_ATTR_LOCAL_PREF:
             {
                 if (optional || !transitive) return wellKnownFlagError();
-                if (attrLen != 0)
+                if (attrLen != 4)
                 {
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                attrs.atomicAggregate = true;
+                attrs.localPref = readU32(val.data());
                 break;
             }
 
@@ -783,7 +778,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 }
 
                 reachAfi = AfiSafi{afi, safi};
-                if (unreachAfi.has_value() && *unreachAfi != reachAfi)
+                if (unreachAfi.has_value() && *unreachAfi != *reachAfi)
                 {
                     error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                     return false;
@@ -804,19 +799,19 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                         IPAddress linkLocal;
                         std::memcpy(linkLocal.raw, val.data() + 20, 16);
                         path.linkLocal = linkLocal;
-                        sawAsPath = true;
+                        sawNextHop = true;
                     }
                 }
                 else if (nhLen == 4)
                 {
                     std::memcpy(path.nextHop.raw, val.data() + 4, 4);
-                    sawAsPath = true;
+                    sawNextHop = true;
                 }
                 else if (nhLen == 12)
                 {
                     path.rd = readU64(val.data() + 4);
                     std::memcpy(path.nextHop.raw, val.data() + 12, 4);
-                    sawAsPath = true;
+                    sawNextHop = true;
                 }
 
                 // SNPA (skip).
@@ -846,7 +841,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 uint8_t safi = val[2];
 
                 unreachAfi = AfiSafi{afi, safi};
-                if (reachAfi.has_value() && *reachAfi != unreachAfi)
+                if (reachAfi.has_value() && *reachAfi != *unreachAfi)
                 {
                     error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                     return false;
@@ -941,11 +936,15 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
             }
         }
 
-        if (unreachAfi.has_value() && reachAfi.has_value() && *unreachAfi == *reachAfi)
-            uinfo.afi = *reachAfi;
-        else
-            uinfo.afi = AfiSafi{ BGP_AFI_IPV4, BGP_SAFI_UNICAST };
     }
+
+    // Determine the address family after all attributes have been parsed
+    if (reachAfi.has_value())
+        uinfo.afi = *reachAfi;
+    else if (unreachAfi.has_value())
+        uinfo.afi = *unreachAfi;
+    else
+        uinfo.afi = AfiSafi{ BGP_AFI_IPV4, BGP_SAFI_UNICAST };
 
     (void)sawOrigin;
     (void)sawAsPath;

@@ -36,7 +36,7 @@ BgpProcess::~BgpProcess() = default;
 Session* BgpProcess::findSession(TCP::ConnId cid)
 {
     auto it = sessions.find(cid);
-    return (it != sessions.end()) ? &it->second : nullptr;
+    return (it != sessions.end()) ? it->second.get() : nullptr;
 }
 
 void BgpProcess::onSessionEstablished(Session& session)
@@ -44,15 +44,18 @@ void BgpProcess::onSessionEstablished(Session& session)
     const uint32_t rid = session.getPeerRid();
     Neighbor& nbr = session.getNeighbor();
     ntable.activatePeer(nbr.neighborAddress, rid);
+    nbr.rid = rid;
     nbr.session = &session;
 }
 
 void BgpProcess::onSessionDown(Session& session)
 {
     const uint32_t rid = session.getPeerRid();
+    Neighbor& nbr = session.getNeighbor();
     if (rid != 0)
         ntable.deactivatePeer(rid);
-    session.getNeighbor().session = nullptr;
+    nbr.rid = 0;
+    nbr.session = nullptr;
 }
 
 AddressFamilyVariant* BgpProcess::findAddressFamily(AfiSafi& afi)
@@ -82,8 +85,8 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
 
     TCP::ConnId cid = ctx.newConn.getId();
 
-    auto ses = bgp->sessions.emplace(cid, *nbr, bgp->scheduler.ref());
-    ses.first->second.acceptConnection(std::move(ctx.newConn));
+    auto [it, ok] = bgp->sessions.emplace(cid, std::make_unique<Session>(*nbr, bgp->scheduler.ref()));
+    it->second->acceptConnection(std::move(ctx.newConn));
 }
 
 void BgpProcess::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
@@ -94,7 +97,7 @@ void BgpProcess::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
         return;
 
     if (ctx.ev.type == TCP::TcpEventType::CONNECTED)
-        session->postEvent(FsmEvent::TCP_CONNECTION_VALID);
+        session->postEvent(FsmEvent::TCP_CR_ACKED);
     else
         session->postEvent(FsmEvent::TCP_CONNECTION_FAILS);
 }

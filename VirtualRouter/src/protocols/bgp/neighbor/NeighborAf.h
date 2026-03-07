@@ -23,7 +23,7 @@ public:
 
 private:
     Config::ReferenceContainer<Config::BgpNeighbor> configs;
-}
+};
 }
 
 #endif // BGP_NEIGHBOR_AF_H

@@ -22,10 +22,32 @@ void SessionTimers::startConnectRetry(std::chrono::seconds interval)
 
     auto expiry = std::chrono::steady_clock::now() + interval;
     uint32_t id = queue.postAfter(expiry, [this](uint32_t) {
-        connectionRetryCount++;
         session.postEvent(FsmEvent::CONNECTION_RETRY_TIMER_EXPIRES);
     });
     connectionRetryTimerId.store(id, std::memory_order_release);
+}
+
+void SessionTimers::restartConnectRetry(std::chrono::seconds interval)
+{
+    startConnectRetry(interval);
+}
+
+void SessionTimers::stopConnectRetry() noexcept
+{
+    cancel(connectionRetryTimerId);
+}
+
+void SessionTimers::startHoldTimer(std::chrono::seconds holdTime)
+{
+    lastHoldTime = holdTime;
+    cancel(holdTimerId);
+    if (holdTime.count() == 0) return;
+
+    auto expiry = std::chrono::steady_clock::now() + holdTime;
+    uint32_t id = queue.postAfter(expiry, [this](uint32_t) {
+        session.postEvent(FsmEvent::HOLD_TIMER_EXPIRES);
+    });
+    holdTimerId.store(id, std::memory_order_release);
 }
 
 void SessionTimers::restartHoldTimer() noexcept
@@ -61,6 +83,7 @@ void SessionTimers::startKeepaliveTimer(std::chrono::seconds interval)
 void SessionTimers::restartKeepaliveTimer() noexcept
 {
     if (lastKeepaliveInterval.count() == 0) return;
+    cancel(keepaliveTimerId);
     auto expiry = std::chrono::steady_clock::now() + lastKeepaliveInterval;
     uint32_t id = queue.postAfter(expiry, [this](uint32_t) {
         session.postEvent(FsmEvent::KEEPALIVE_TIMER_EXPIRES);

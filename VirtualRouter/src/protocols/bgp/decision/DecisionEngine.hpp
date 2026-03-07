@@ -24,7 +24,9 @@ public:
         for (size_t i = 1; i < canidates.size(); i++)
         {
             auto& canidate = canidates[i];
-            if (comparator.better(canidate, canidate.attributes, *best, best->attributes))
+            PathAttribute cpa{canidate.attrs, canidate.path};
+            PathAttribute bpa{best->attrs, best->path};
+            if (comparator.better(canidate, cpa, *best, bpa))
                 best = &canidates[i];
         }
 
@@ -34,9 +36,11 @@ public:
     template <typename N>
     bool equivalent(const RouteCanidate<N>& lhs, const RouteCanidate<N>& rhs) const
     {
-        if (comparator.better(lhs, lhs.attributes, rhs, rhs.attributes))
+        PathAttribute lpa{lhs.attrs, lhs.path};
+        PathAttribute rpa{rhs.attrs, rhs.path};
+        if (comparator.better(lhs, lpa, rhs, rpa))
             return false;
-        if (comparator.better(rhs, rhs.attributes, lhs, lhs.attributes))
+        if (comparator.better(rhs, rpa, lhs, lpa))
             return false;
         return true;
     }

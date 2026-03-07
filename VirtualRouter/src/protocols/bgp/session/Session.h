@@ -193,7 +193,7 @@ public:
     void sendRouteRefresh(const AfiSafi& family, uint8_t subtype = BGP_ROUTE_REFRESH_NORMAL);
 
     template <typename N>
-    void sendUpdate(const ParsedUpdate<N>& update);
+    void sendUpdate(const BuildUpdate<typename N::Nlri>& update);
 
     void onOpenReceived();
     void onKeepaliveReceived();
@@ -259,4 +259,4 @@ private:
 };
 }
 
-#endif // BGP_TRANSMISSION_H
+#endif // BGP_SESSION_H
