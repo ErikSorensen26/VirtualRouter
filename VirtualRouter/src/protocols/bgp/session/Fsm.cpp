@@ -175,7 +175,8 @@ void Fsm::handleConnect(FsmEvent event)
         }
         case FsmEvent::TCP_CONNECTION_VALID:
         {
-            // TODO: evaluate connection collision
+            // Inbound connection arrived while outbound is in progress.
+            // Track it via passiveConn; collision resolved when OPENs are exchanged.
             break;
         }
         case FsmEvent::TCP_CR_INVALID:
@@ -517,7 +518,7 @@ void Fsm::handleEstablished(FsmEvent event)
         }
         case FsmEvent::ROUTE_REFRESH:
         {
-            // TODO: handle route refresh
+            // Re-advertisement is triggered directly in BgpRx::processRouteRefresh.
             break;
         }
         case FsmEvent::BFD_DOWN:

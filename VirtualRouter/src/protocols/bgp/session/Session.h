@@ -209,7 +209,7 @@ public:
     NegotiatedCapabilities& getNegotiated() noexcept { return negotiated; }
     const NegotiatedCapabilities& getNegotiated() const noexcept { return negotiated; }
 
-    uint16_t holdTime = 180; // TODO: will add configured values here later
+    uint16_t holdTime = 180;
     uint16_t keepaliveInterval = 60;
 
     // Queries

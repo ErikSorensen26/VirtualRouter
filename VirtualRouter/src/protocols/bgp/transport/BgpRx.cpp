@@ -324,8 +324,6 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
     if (update.afi.afi == BGP_AFI_IPV4 && update.afi.safi == BGP_SAFI_UNICAST)
         update.nlriData = std::span<uint8_t>(payload.data() + offset, payload.size() - offset);
 
-    // Check if 
-
     AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(update.afi);
     if (!af) // Af not enabled
     {
@@ -527,6 +525,33 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
 
         idx += 2 + len;
     }
+}
+
+bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, Notification& error)
+{
+    // RFC 2918: 4-byte body — AFI (2), Reserved/Subtype (1), SAFI (1)
+    if (payload.size() < 4)
+    {
+        error.code = BGP_NOTIFICATION_HEADER_BAD_MESSAGE_LENGTH;
+        error.data.resize(2);
+        writeU16(error.data.data(), static_cast<uint16_t>(BgpHeader::fixedSize + payload.size()));
+        return false;
+    }
+
+    AfiSafi family;
+    family.afi = readU16(payload.data());
+    family.safi = payload[3];
+
+    AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
+    if (af)
+    {
+        std::visit([&](auto&& fam) {
+            fam.refreshPeer(session);
+        }, *af);
+    }
+
+    session.onRouteRefreshReceived();
+    return true;
 }
 
 bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, IncomingUpdate& uinfo, Notification& error)
@@ -936,6 +961,54 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
             }
         }
 
+    }
+
+    // AS4 path reconstruction (RFC 4893 §4.2.3)
+    // If the peer doesn't support 4-byte ASN but sent AS4_PATH, merge them.
+    if (!session.getNegotiated().asn32bit && !attrs.as4Path.empty())
+    {
+        // Count total effective AS hops in each path
+        auto countHops = [](const std::vector<AsPathSegment>& segs) -> size_t {
+            size_t n = 0;
+            for (const auto& s : segs)
+                n += (s.segmentType == BGP_AS_SET) ? (s.asns.empty() ? 0u : 1u) : s.asns.size();
+            return n;
+        };
+
+        const size_t asLen  = countHops(attrs.asPath);
+        const size_t as4Len = countHops(attrs.as4Path);
+
+        // Keep the leftmost (asLen - as4Len) hops from asPath (added by 2-byte AS speakers),
+        // then append the full as4Path for the 4-byte portion.
+        std::vector<AsPathSegment> merged;
+        size_t toKeep = (asLen > as4Len) ? (asLen - as4Len) : 0;
+
+        for (const auto& seg : attrs.asPath)
+        {
+            if (toKeep == 0) break;
+            size_t segHops = (seg.segmentType == BGP_AS_SET)
+                ? (seg.asns.empty() ? 0u : 1u)
+                : seg.asns.size();
+
+            if (segHops <= toKeep)
+            {
+                merged.push_back(seg);
+                toKeep -= segHops;
+            }
+            else
+            {
+                AsPathSegment partial = seg;
+                partial.asns.resize(toKeep);
+                merged.push_back(std::move(partial));
+                toKeep = 0;
+            }
+        }
+
+        for (const auto& seg : attrs.as4Path)
+            merged.push_back(seg);
+
+        attrs.asPath = std::move(merged);
+        attrs.as4Path.clear();
     }
 
     // Determine the address family after all attributes have been parsed

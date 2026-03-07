@@ -4,6 +4,7 @@
 #define BGP_ADDRESS_FAMILY_INSTANCE_H
 
 #include <functional>
+#include <unordered_map>
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
 
@@ -100,6 +101,41 @@ public:
         return true;
     }
 
+    void refreshPeer(Session& session)
+    {
+        const uint32_t peerRid = session.getPeerRid();
+        auto outIt = adjRibOut.find(peerRid);
+        if (outIt == adjRibOut.end())
+            return;
+
+        std::unordered_map<uint32_t, size_t> pathToAnn;
+        BuildUpdate<NlriT> update;
+
+        for (auto& [nlri, route] : outIt->second)
+        {
+            auto egressAttrs = applyEgressPolicy(route, session);
+            if (!egressAttrs.has_value())
+                continue;
+
+            auto ait = pathToAnn.find(route.pathId);
+            if (ait == pathToAnn.end())
+            {
+                pathToAnn[route.pathId] = update.announcements.size();
+                typename BuildUpdate<NlriT>::Announcement ann;
+                ann.attrs = std::move(*egressAttrs);
+                ann.nlri.push_back(nlri);
+                update.announcements.push_back(std::move(ann));
+            }
+            else
+            {
+                update.announcements[ait->second].nlri.push_back(nlri);
+            }
+        }
+
+        if (!update.announcements.empty())
+            session.sendUpdate<N>(update);
+    }
+
     void invalidatePeer(uint32_t peer)
     {
         auto out = adjRibOut.find(peer);
@@ -161,6 +197,9 @@ private:
                 r.peerAs = peerAs;
                 r.ebgp = isEbgp;
                 r.igpCost = resolveIgpMetric(r.path.nextHop);
+
+                if (applyIngressPolicy(r, peer))
+                    continue;
 
                 peerIn[n] = std::move(r);
                 touched.push_back(n);
@@ -227,6 +266,39 @@ private:
         policy.withdrawRoute(nlri);
     }
 
+    // Returns true if the route should be dropped (filtered out) before entering adj-rib-in.
+    // Add ingress route-map / prefix-list / community filter logic here.
+    bool applyIngressPolicy(const RouteCanidate<NlriT>& /*route*/, const Neighbor& /*peer*/)
+    {
+        // TODO: ingress policy (route-maps, prefix-lists, community filters, etc.)
+        return false; // false = accept
+    }
+
+    // Returns nullopt if the route should be suppressed for this peer (outbound policy drop).
+    // Returns the (possibly modified) PathAttribute to advertise otherwise.
+    // Add outbound route-map / prefix-list / community filter logic here.
+    std::optional<PathAttribute> applyEgressPolicy(const RouteCanidate<NlriT>& route, const Session& session)
+    {
+        PathAttribute pa{route.attrs, route.path};
+
+        if (session.isEbgp())
+        {
+            // Strip LOCAL_PREF — only meaningful within the local AS (RFC 4271 §5.1.5)
+            pa.attrs.localPref = std::nullopt;
+
+            // Prepend own AS to AS_PATH (RFC 4271 §5.1.2)
+            const uint32_t localAs = AddressFamilyInstanceHelper::getAsNum(process);
+            AsPathSegment seg;
+            seg.segmentType = BGP_AS_SEQUENCE;
+            seg.asns.push_back(localAs);
+            pa.attrs.asPath.insert(pa.attrs.asPath.begin(), std::move(seg));
+        }
+
+        // TODO: outbound route-map / prefix-list / community filter / MED setting etc.
+
+        return pa;
+    }
+
     void recomputeAdjRibOut(const NlriT& nlri, const std::optional<RouteCanidate<NlriT>>& best)
     {
         AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
@@ -276,9 +348,16 @@ private:
                 return;
             }
 
+            auto egressAttrs = applyEgressPolicy(*best, *session);
+            if (!egressAttrs.has_value())
+            {
+                withdrawFromPeer();
+                return;
+            }
+
             BuildUpdate<NlriT> update;
             typename BuildUpdate<NlriT>::Announcement ann;
-            ann.attrs = PathAttribute{best->attrs, best->path};
+            ann.attrs = std::move(*egressAttrs);
             ann.nlri.push_back(nlri);
             update.announcements.push_back(std::move(ann));
             session->sendUpdate<N>(update);

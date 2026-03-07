@@ -85,11 +85,15 @@ struct Attributes
 
     size_t asPathLength() const noexcept
     {
-        // TODO
-
         size_t total = 0;
         for (const auto& seg : asPath)
-            total += seg.asns.size();
+        {
+            // AS_SET (type 1) counts as 1 regardless of size (RFC 4271 §9.1.2.2)
+            if (seg.segmentType == 1)
+                total += seg.asns.empty() ? 0 : 1;
+            else
+                total += seg.asns.size();
+        }
         return total;
     }
 
