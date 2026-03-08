@@ -117,8 +117,8 @@ struct Attributes
 
 struct PathAttribute
 {
-    const Attributes& attrs;
-    const Path& path;
+    Attributes attrs;
+    Path path;
 };
 }
 

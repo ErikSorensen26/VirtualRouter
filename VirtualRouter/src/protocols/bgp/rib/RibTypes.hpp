@@ -23,7 +23,7 @@ struct BuildUpdate
 {
     struct Announcement
     {
-        PathAttribute& attrs;
+        PathAttribute attrs;
         std::vector<N> nlri;
     };
 
@@ -43,11 +43,10 @@ struct RouteBase
 {
     RouteBase() = default;
 
+    // Takes ownership of one reference already counted by the caller (via acquire or retain).
     RouteBase(AttributeManager& mgr, uint32_t id)
         : pathId(id), attrMgr(&mgr)
-    {
-        attrMgr->retain(id);
-    }
+    {}
 
     RouteBase(const RouteBase& other)
         : pathId(other.pathId),
@@ -132,7 +131,11 @@ struct InboundRouteBase : RouteBase
     InboundRouteBase(NeighborAf& nbr)
         : sourceNeighbor(nbr) {}
 
+    InboundRouteBase(NeighborAf& nbr, AttributeManager& mgr, uint32_t id)
+        : RouteBase(mgr, id), sourceNeighbor(nbr) {}
+
     NeighborAf& sourceNeighbor;
+    uint32_t neighborRouterId = 0;
     uint32_t peerAs = 0;
     bool ebgp = true;
     uint64_t igpCost = std::numeric_limits<uint64_t>::max();
@@ -145,6 +148,9 @@ template <typename N>
 struct InboundRoute : InboundRouteBase
 {
     InboundRoute(NeighborAf& nbr) : InboundRouteBase(nbr) {}
+
+    InboundRoute(NeighborAf& nbr, AttributeManager& mgr, uint32_t id, N n)
+        : InboundRouteBase(nbr, mgr, id), nlri(std::move(n)) {}
 
     N nlri;
 
@@ -171,7 +177,12 @@ struct LocalRoute
 template <typename N>
 struct OutboundRoute : RouteBase
 {
-    N nlri;
+    OutboundRoute() = default;
+
+    OutboundRoute(AttributeManager& mgr, uint32_t id, N n)
+        : RouteBase(mgr, id), nlri(std::move(n)) {}
+
+    N nlri{};
 
     bool operator==(const OutboundRoute& other) const noexcept
     {

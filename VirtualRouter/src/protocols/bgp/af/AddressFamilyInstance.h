@@ -19,7 +19,6 @@
 
 namespace BGP
 {
-// Definition of Session::sendUpdate<N> here, after both Session.h and BgpTx.h are visible
 template <typename N>
 inline void Session::sendUpdate(const BuildUpdate<typename N::Nlri>& update)
 {
@@ -51,16 +50,16 @@ private:
 /**
  * class AddressFamilyInstance<N>
  *
- * N is a concrete subclass of AddressFamilyPolicy<SomeNlriType>.
+ * N is a concrete subclass of NlriPolicy<SomeNlriType, AfiSafi>.
  * It provides:
  *   - N::Nlri      — the NLRI type (e.g. IPPrefix)
- *   - N::installRoute(RouteCandidate<Nlri>&) — install into the routing table
- *   - N::withdrawRoute(const Nlri&)          — remove from the routing table
+ *   - N::installRoute(LocalRoute<Nlri>&) — install into the routing table
+ *   - N::withdrawRoute(const Nlri&)      — remove from the routing table
  *
  * Each AddressFamilyInstance<N> instance manages one AFI/SAFI:
- *   - Adj-RIB-In  (per peer, per prefix)
- *   - Loc-RIB     (per prefix, best route)
- *   - Adj-RIB-Out (per peer, per prefix, post-policy)
+ *   - Adj-RIB-In  (per peer, per prefix) — InboundRoute<Nlri>
+ *   - Loc-RIB     (per prefix, best route) — LocalRoute<Nlri> pointing into Adj-RIB-In
+ *   - Adj-RIB-Out (per peer, per prefix, post-egress-policy) — OutboundRoute<Nlri>
  */
 template <typename N>
 class AddressFamilyInstance
@@ -84,7 +83,7 @@ public:
     AddressFamilyInstance& operator=(AddressFamilyInstance&&) = delete;
 
     const AfiSafi& getFamily() const noexcept { return family; }
-    
+
     void setIgpMetricResolver(IgpMetricResolver resolver)
     {
         igpMetricResolver = std::move(resolver);
@@ -109,19 +108,32 @@ public:
         if (outIt == adjRibOut.end())
             return;
 
+        auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+
+        // Group NLRIs by their stored egress pathId to batch into one Announcement per path.
+        std::unordered_map<uint32_t, size_t> pathToAnn;
         BuildUpdate<NlriT> update;
 
-        for (auto& [nlri, route] : outIt->second)
+        for (auto& [nlri, outRoute] : outIt->second)
         {
-            // TODO: group by pathId
-            auto egressAttrs = applyEgressPolicy(route, session);
-            if (!egressAttrs.has_value())
+            if (!outRoute.pathId.has_value())
                 continue;
 
-            typename BuildUpdate<NlriT>::Announcement ann;
-            ann.attrs = *egressAttrs;
-            ann.nlri.push_back(nlri);
-            update.announcements.push_back(std::move(ann));
+            PathAttribute pa = attrMgr.get(*outRoute.pathId);
+
+            auto ait = pathToAnn.find(*outRoute.pathId);
+            if (ait == pathToAnn.end())
+            {
+                pathToAnn[*outRoute.pathId] = update.announcements.size();
+                typename BuildUpdate<NlriT>::Announcement ann;
+                ann.attrs = std::move(pa);
+                ann.nlri.push_back(nlri);
+                update.announcements.push_back(std::move(ann));
+            }
+            else
+            {
+                update.announcements[ait->second].nlri.push_back(nlri);
+            }
         }
 
         if (!update.announcements.empty())
@@ -138,11 +150,15 @@ public:
         if (it == adjRibIn.end())
             return;
 
-        // Copy keys first because recompute can mutate them
-        std::vector<typename N::Nlri> keys;
+        std::vector<NlriT> keys;
         keys.reserve(it->second.size());
-        for (const auto& [nlri, _] : it->second)
+        for (const auto& [nlri, inRoute] : it->second)
+        {
             keys.push_back(nlri);
+            auto lit = locRib.find(nlri);
+            if (lit != locRib.end() && &lit->second.in == &inRoute)
+                locRib.erase(lit);
+        }
 
         adjRibIn.erase(it);
 
@@ -151,7 +167,7 @@ public:
     }
 
 private:
-    void onParsedUpdateFromPeer(Neighbor& peer, ParsedUpdate<typename N::Nlri>& update)
+    void onParsedUpdateFromPeer(Neighbor& peer, ParsedUpdate<NlriT>& update)
     {
         if (!AddressFamilyInstanceHelper::getNtable(process).lookup(peer.rid))
             return;
@@ -161,15 +177,16 @@ private:
         std::vector<NlriT> touched;
         touched.reserve(update.announcements.size() + update.withdrawn.size());
 
-        // Nodes kept to keep references valid in the locRib while routes recalculate
-        std::vector<typename PerPeerInTable<NlriT>::node_type> withdraws;
-        withdraws.reserve(update.withdrawn.size());
-
         for (const auto& n : update.withdrawn)
         {
             auto it = peerIn.find(n);
             if (it != peerIn.end())
-                withdraws.push_back(std::move(peerIn.extract(n)));
+            {
+                auto lit = locRib.find(n);
+                if (lit != locRib.end() && lit->second.in == &it->second)
+                    locRib.erase(lit);
+                peerIn.erase(it);
+            }
             touched.push_back(n);
         }
 
@@ -177,33 +194,45 @@ private:
         {
             auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
 
-            // Obtain REMOTE_AS from session
             auto& remAs = peer.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
             const uint32_t peerAs = remAs.hasValue() ? remAs.load() : 0;
-
             const uint32_t localAs = AddressFamilyInstanceHelper::getAsNum(process);
             const bool isEbgp = (peerAs != 0) && (peerAs != localAs);
 
+            uint32_t pid = attrMgr.acquire(update.attrs->attrs, update.attrs->path);
+
+            NeighborAf& naf = peer.getAfNeighbor(family);
+
+            bool first = true;
             for (const auto& n : update.announcements)
             {
-                InboundRoute<NlriT> r(attrMgr);
-                r.nlri = n;
+                if (!first)
+                    attrMgr.retain(pid);
+                first = false;
+
+                InboundRoute<NlriT> r(naf, attrMgr, pid, n);
                 r.neighborRouterId = peer.rid;
-                r.peerAs = peerAs;
-                r.ebgp = isEbgp;
-                r.igpCost = resolveIgpMetric(r.path.nextHop);
+                r.peerAs            = peerAs;
+                r.ebgp              = isEbgp;
+                r.igpCost           = resolveIgpMetric(update.attrs->path.nextHop);
 
-                if (!applyIngressPolicy(r, peer))
+                if (applyIngressPolicy(r))
                 {
-                    auto it = peerIn.find(n);
-                    if (it != peerIn.end())
-                        peerIn.erase(it);
-
-                    touched.push_back(n);
                     continue;
                 }
 
-                peerIn[n] = std::move(r);
+                // Nullify before erase in case this entry is the current locRib winner.
+                {
+                    auto existing = peerIn.find(n);
+                    if (existing != peerIn.end())
+                    {
+                        auto lit = locRib.find(n);
+                        if (lit != locRib.end() && lit->second.in == &existing->second)
+                            lit->second.in = nullptr;
+                        peerIn.erase(existing);
+                    }
+                }
+                peerIn.emplace(n, std::move(r));
                 touched.push_back(n);
             }
         }
@@ -212,10 +241,10 @@ private:
             recomputeNlri(n);
     }
 
-    void recomputeNlri(const typename N::Nlri& nlri)
+    void recomputeNlri(const NlriT& nlri)
     {
-        std::vector<LocalRoute<N>> canidates;
-        canidates.reserve(adjRibIn.size());
+        std::vector<InboundRoute<NlriT>*> candidates;
+        candidates.reserve(adjRibIn.size());
 
         for (auto& [peer, peerTable] : adjRibIn)
         {
@@ -223,47 +252,46 @@ private:
             if (it == peerTable.end())
                 continue;
 
-            it->second.igpCost = resolveIgpMetric(it->second.path.nextHop);
-            canidates.push_back(it->second);
+            // Refresh IGP cost before running best-path.
+            auto attrs = it->second.getPathAttributes();
+            if (attrs.has_value())
+                it->second.igpCost = resolveIgpMetric(attrs->path.nextHop);
+
+            candidates.push_back(&it->second);
         }
 
-        std::optional<LocalRoute<NlriT>> best;
+        const bool alwaysCompareMed =
+            AddressFamilyInstanceHelper::getConfigs(process).get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
 
-        if (canidates.empty())
-        {
-            const bool alwaysCompareMed =
-                AddressFamilyInstanceHelper::getConfigs(process).get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
-
-            DecisionEngine decision(BestPathOptions{
-                .alwaysCompareMed = alwaysCompareMed
-            });
-
-            best = decision.selectBest(canidates);
-        }
+        DecisionEngine decision(BestPathOptions{.alwaysCompareMed = alwaysCompareMed});
+        std::optional<LocalRoute<NlriT>> best = decision.selectBest(candidates);
 
         auto lit = locRib.find(nlri);
-        const bool hadBest = (lit != locRib.end());
+        const bool had = (lit != locRib.end());
 
         if (!best.has_value())
         {
-            if (hadBest)
+            if (had)
             {
                 withdrawFromRib(nlri);
                 locRib.erase(lit);
-                recomputeAdjRibOut(nlri, std::nullopt);
+                recomputeAdjRibOut(nlri, nullptr);
             }
             return;
         }
 
-        if (!hadBest)
+        if (!had || lit->second.in != best.in)
         {
-            locRib.empty(nlri, *best);
-            installToRib(best.value());
-            recomputeAdjRibOut(nlri, best);
+            if (had)
+                locRib.erase(lit);
+
+            locRib.emplace(nlri, *best);
+            installToRib(locRib.at(nlri));
+            recomputeAdjRibOut(nlri, best.in);
         }
     }
 
-    void installToRib(const InboundRoute<NlriT>& route)
+    void installToRib(LocalRoute<NlriT>& route)
     {
         policy.installRoute(route);
     }
@@ -273,68 +301,64 @@ private:
         policy.withdrawRoute(nlri);
     }
 
-    // Returns true if the route should be dropped (filtered out) before entering adj-rib-in.
+    // Returns true if the route should be dropped before entering Adj-RIB-In.
     // Add ingress route-map / prefix-list / community filter logic here.
-    bool applyIngressPolicy(InboundRoute<NlriT>& route, const PathAttribute& pathAttrs, const Neighbor& peer)
+    bool applyIngressPolicy(const InboundRoute<NlriT>& /*route*/)
     {
-        // TODO: drop logic
-
+        // TODO: decide if dropped
         // TODO: ingress policy (route-maps, prefix-lists, community filters, etc.)
-
-        // TODO: update attr manager and fill in pathId
-
         return false; // false = accept
     }
 
-    // Returns nullopt if the route should be suppressed for this peer (outbound policy drop).
+    // Returns nullopt if the route should be suppressed for this peer (outbound drop).
     // Returns the (possibly modified) PathAttribute to advertise otherwise.
     // Add outbound route-map / prefix-list / community filter logic here.
-    std::optional<uint32_t> applyEgressPolicy(const LocalRoute<NlriT>& route, const Session& session)
+    std::optional<PathAttribute> applyEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
     {
+        auto pa_opt = route.getPathAttributes();
+        if (!pa_opt.has_value())
+            return std::nullopt;
+
+        PathAttribute pa = *pa_opt;
+
         const NeighborAf& localNeighbor = session.getNeighbor().getAfNeighbor(family);
-        auto& configs = localNeighbor.getConfigs();
-
-
-        PathAttribute& pathAttr = route.getPathAttributes();
-
-        Path path = pathAttr.path;
-        Attributes attrs = pathAttr.attrs;
-
-        const uint32_t localAs = AddressFamilyInstanceHelper::getAsNum(process);
+        const auto& configs = localNeighbor.getConfigs();
 
         if (session.isEbgp())
         {
-            // Handle NextHopSelf
-            if (!configs.get<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||
-                configs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
-                path.nextHop = session.getNeighbor().neighborAddress;
-            attrs.localPref = std::nullopt;
+            pa.attrs.localPref = std::nullopt;
 
-            // Prepend own AS to AS_PATH (RFC 4271 §5.1.2)
+            // Prepend own AS to AS_PATH
+            const uint32_t localAs = AddressFamilyInstanceHelper::getAsNum(process);
             AsPathSegment seg;
             seg.segmentType = BGP_AS_SEQUENCE;
             seg.asns.push_back(localAs);
-            attrs.asPath.insert(attrs.asPath.begin(), std::move(seg));
+            pa.attrs.asPath.insert(pa.attrs.asPath.begin(), std::move(seg));
+
+            // next-hop-self for eBGP
+            if (!configs.get<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||
+                configs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
+                pa.path.nextHop = session.getNeighbor().neighborAddress;
         }
         else
         {
+            // next-hop-self for iBGP
             if ((configs.get<Config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
-                 route.in.neighborRouterId != AddressFamilyInstanceHelper::getRid(process)) ||
+                 route.neighborRouterId != AddressFamilyInstanceHelper::getRid(process)) ||
                 configs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
-                path.nextHop = session.getPrimaryConnection()->socketKey()->local.address;
+                pa.path.nextHop = session.getPrimaryConnection()->socketKey()->local.address;
         }
 
         // TODO: outbound route-map / prefix-list / community filter / MED setting etc.
 
-        // Update attr table 
-        AttributeManager& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
-        return attrMgr.acquire(attrs, path);
+        return pa;
     }
 
-    void recomputeAdjRibOut(const NlriT& nlri, const std::optional<LocalRoute<NlriT>>& best)
+    void recomputeAdjRibOut(const NlriT& nlri, InboundRoute<NlriT>* best)
     {
-        auto& ntable = AddressFamilyInstanceHelper::getNtable(process);
-        ntable.forEachPeer([&](Neighbor& nbr) {
+        auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+
+        AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
             Session* session = nbr.session;
             if (!session || !session->established())
                 return;
@@ -353,13 +377,13 @@ private:
                 peerOut.erase(nlri);
             };
 
-            if (!best.has_value())
+            if (!best)
             {
                 withdrawFromPeer();
                 return;
             }
 
-            // Check that this AFI/SAFI was negotiated with this peer
+            // Check that this AFI/SAFI was negotiated with this peer.
             const auto& negotiated = session->getNegotiated();
             const bool familyOk = std::any_of(
                 negotiated.activeFamilies.begin(),
@@ -372,50 +396,61 @@ private:
                 return;
             }
 
-            // Don't reflect iBGP routes back to iBGP peers (no route reflection)
+            // iBGP split-horizon with route-reflector awareness.
+            const bool fromIbgp = !best->ebgp;
+            const bool toIbgp   = !session->isEbgp();
+            if (fromIbgp && toIbgp)
             {
                 const bool targetIsClient = nbr.getAfNeighbor(family).getConfigs()
                     .get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
 
-                const bool fromIbgp = !best->ebgp;
-                const bool toIbgp = !session->isEbgp();
+                const bool senderIsClient = best->sourceNeighbor.getConfigs()
+                    .template get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
 
-                if (fromIbgp && toIbgp)
+                // Non-client route cannot be reflected to a non-client peer.
+                if (!senderIsClient && !targetIsClient)
                 {
-                    NeighborAf& srcNbr = best.value().sourceNeighbor;
-                    const bool senderIsClient = srcNbr.getConfigs()
-                        .get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
+                    withdrawFromPeer();
+                    return;
+                }
 
-                    // Route from NON-CLIENT, cannot send to NON-CLIENT
-                    if (!senderIsClient && !targetIsClient)
-                    {
-                        withdrawFromPeer();
-                        return;
-                    }
-
-                    // Do not reflect back to sender
-                    if (best->sourceNeighbor.globalNbr() == &nbr)
-                    {
-                        withdrawFromPeer();
-                        return;
-                    }
+                // Do not reflect back to the originating neighbor.
+                if (&best->sourceNeighbor.globalNbr() == &nbr)
+                {
+                    withdrawFromPeer();
+                    return;
                 }
             }
 
-            auto attrId = applyEgressPolicy(*best, *session);
-            if (!attrId.has_value())
+            auto egressAttrs = applyEgressPolicy(*best, *session);
+            if (!egressAttrs.has_value())
             {
                 withdrawFromPeer();
                 return;
             }
 
+            uint32_t oPid = attrMgr.acquire(egressAttrs->attrs, egressAttrs->path);
+
+            // Skip sending if the egress path is identical to what we already sent.
+            auto existing = peerOut.find(nlri);
+            if (existing != peerOut.end() && existing->second.pathId == oPid)
+            {
+                attrMgr.release(oPid);
+                return;
+            }
+
+            // Replace the outbound entry (destructor releases the old pathId).
+            peerOut.erase(nlri);
+            peerOut.emplace(std::piecewise_construct,
+                std::forward_as_tuple(nlri),
+                std::forward_as_tuple(attrMgr, oPid, nlri));
+
             BuildUpdate<NlriT> update;
             typename BuildUpdate<NlriT>::Announcement ann;
-            ann.attrs = *AddressFamilyInstanceHelper::getAttrMgr(process).getAttributes(attrId);
+            ann.attrs = *egressAttrs;
             ann.nlri.push_back(nlri);
             update.announcements.push_back(std::move(ann));
             session->sendUpdate<N>(update);
-            peerOut[nlri] = *best;
         });
     }
 
@@ -427,8 +462,8 @@ private:
     }
 
 private:
-    AdjRibInTable<NlriT> adjRibIn;
-    LocRibTable<NlriT> locRib;
+    AdjRibInTable<NlriT>  adjRibIn;
+    LocRibTable<NlriT>    locRib;
     AdjRibOutTable<NlriT> adjRibOut;
 
     N policy;
