@@ -136,6 +136,15 @@ public:
         return pathEntry.path;
     }
 
+    PathAttribute get(uint32_t id) const
+    {
+        assert(id < idToPath.size());
+        const PathEntry& pathEntry = idToPath[id];
+        assert(pathEntry.used);
+        assert(pathEntry.attrId < idToAttr.size());
+        return PathAttribute{ idToAttr[pathEntry.attrId].attrs, pathEntry.path };
+    }
+
     void clear()
     {
         attrToId.clear();

@@ -20,6 +20,11 @@ uint32_t AddressFamilyInstanceHelper::getAsNum(BgpProcess& proc)
     return proc.asNumber;
 }
 
+uint32_t AddressFamilyInstanceHelper::getRid(BgpProcess& proc)
+{
+    return proc.getRouterId();
+}
+
 Config::BgpRegistry& AddressFamilyInstanceHelper::getConfigs(BgpProcess& proc)
 {
     return proc.getConfigs();
@@ -28,5 +33,10 @@ Config::BgpRegistry& AddressFamilyInstanceHelper::getConfigs(BgpProcess& proc)
 AttributeManager& AddressFamilyInstanceHelper::getAttrMgr(BgpProcess& proc)
 {
     return proc.getAttrMgr();
+}
+
+static Neighbor& AddressFamilyInstanceHelper::getNeighbor(uint32_t rid)
+{
+
 }
 }

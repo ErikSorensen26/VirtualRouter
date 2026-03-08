@@ -227,6 +227,7 @@ public:
     const Config::BgpBaseRegistry& getBaseConfig() const noexcept { return base; }
 
     TCP::Connection* getPrimaryConnection() noexcept { return primaryConn; }
+    const TCP::Connection* getPrimaryConnection() const noexcept { return primaryConn; }
 
     bool resolveCollision(uint32_t incomingPeerRid);
     void negotiateCapabilities();
@@ -256,6 +257,8 @@ private:
 
     uint32_t peerRouterId = 0;
     std::vector<uint8_t> updateSentQueue;
+
+    Config::ReferenceContainer<Config::BgpNeighborSessionRegistry> configs;
 };
 }
 

@@ -13,19 +13,14 @@
 #include <unordered_map>
 #include <utility>
 
+#include "RegistryKey.hpp"
+
 namespace Config
 {
 template <typename T>
-concept Hashable =
-    requires(const T& v)
-    {
-        { std::hash<T>{}(v) } -> std::convertible_to<size_t>;
-    };
-
-template <typename T>
 class Bucket
 {
-    static_assert(Hashable<typename T::keyType>, "Key type must be hashable");
+    static_assert(isRegistryKey<typename T::keyType>::value, "KEY must be a RegisterKey<T, N>");
 public:
     using keyType = T::keyType;
 
@@ -69,7 +64,7 @@ private:
 
     std::deque<Slot> slots;
     std::vector<size_t> free;
-    std::unordered_map<keyType, Handle> keyIndex;
+    std::unordered_map<keyType, Handle, RegistryKeyHash<keyType::size>> keyIndex;
 
     void trimTail()
     {

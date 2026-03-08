@@ -16,13 +16,20 @@ class NeighborAf
 {
 public:
     NeighborAf(const AfiSafi& family, Neighbor& parent);
+    ~NeighborAf();
 
     const AfiSafi family;
+
+    Config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
+    const Config::BgpNeighborRegistry& getConfigs() const { return configs.get(); }
+    Neighbor& globalNbr() { return parent; }
+    const Neighbor& globalNbr() const { return parent; }
 
     bool mpNegotiated;
 
 private:
-    Config::ReferenceContainer<Config::BgpNeighbor> configs;
+    Neighbor& parent;
+    Config::Reference<Config::BgpNeighborRegistry> configs;
 };
 }
 

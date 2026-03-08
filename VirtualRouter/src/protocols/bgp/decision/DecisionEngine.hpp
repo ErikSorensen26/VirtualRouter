@@ -15,12 +15,12 @@ public:
         : comparator(opts) {}
 
     template <typename N>
-    std::optional<RouteCanidate<N>> selectBest(const std::vector<RouteCanidate<N>>& canidates) const
+    std::optional<LocalRoute<N>> selectBest(const std::vector<InboundRoute<N>>& canidates) const
     {
         if (canidates.empty())
             return std::nullopt;
 
-        const RouteCanidate<N>* best = &canidates.front();
+        const InboundRoute<N>* best = &canidates.front();
         for (size_t i = 1; i < canidates.size(); i++)
         {
             auto& canidate = canidates[i];
@@ -34,13 +34,11 @@ public:
     }
 
     template <typename N>
-    bool equivalent(const RouteCanidate<N>& lhs, const RouteCanidate<N>& rhs) const
+    bool equivalent(const InboundRouteBase& lhs, const IPAddress& lhsNbr, const InboundRouteBase& rhs, const IPAddress& rhsNbr)
     {
-        PathAttribute lpa{lhs.attrs, lhs.path};
-        PathAttribute rpa{rhs.attrs, rhs.path};
-        if (comparator.better(lhs, lpa, rhs, rpa))
+        if (comparator.better(lhs, lhsNbr, rhs, rhsNbr))
             return false;
-        if (comparator.better(rhs, rpa, lhs, lpa))
+        if (comparator.better(rhs, lhsNbr, lhs, rhsNbr))
             return false;
         return true;
     }

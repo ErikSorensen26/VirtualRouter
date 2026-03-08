@@ -17,9 +17,9 @@ class BestPathComparator
 public:
     explicit BestPathComparator(BestPathOptions opts = {});
 
-    bool better(const RouteCanidateBase& lhsRoute, const PathAttribute& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttribute& rhsAttr) const;
+    bool better(const InboundRouteBase& lhsRoute, const IPAddress& lhsNbr, const InboundRouteBase& rhsRoute, const IPAddress& rhsNbr) const;
 private:
-    inline bool compareMed(const RouteCanidateBase& lhsRoute, const PathAttribute& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttribute& rhsAttr) const;
+    inline bool compareMed(const InboundRouteBase& lhsRoute, const InboundRouteBase& rhsRoute) const;
 
     BestPathOptions options;
 };

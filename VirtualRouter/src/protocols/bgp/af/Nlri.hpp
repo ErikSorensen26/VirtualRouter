@@ -14,7 +14,7 @@ class ExampleNlri : public BGP::NlriPolicy<IPPrefix, BGP::AfiSafi{BGP_AFI_IPV4, 
 public:
     ExampleNlri(VirtualRouter& vrf) : NlriPolicy<IPPrefix, BGP::AfiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST}>(vrf) {}
 
-    void installRoute(BGP::RouteCanidate<IPPrefix>& nlri) override {}
+    void installRoute(BGP::LocalRoute<IPPrefix>& nlri) override {}
     void withdrawRoute(const IPPrefix& nlri) override {}
 
     static size_t nlriEncodedSize(const IPPrefix& n)

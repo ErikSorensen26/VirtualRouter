@@ -31,7 +31,7 @@ public:
     //static size_t decodeNlri(uint8_t* buf, N& n);
     //static AfiSafi afi();
 
-    virtual void installRoute(RouteCanidate<N>& nlri) = 0;
+    virtual void installRoute(LocalRoute<N>& nlri) = 0;
     virtual void withdrawRoute(const N& nlri) = 0;
      
 protected:

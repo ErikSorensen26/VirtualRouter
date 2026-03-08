@@ -117,7 +117,7 @@ void OspfInterfaceSyncNeighbors(void* iface);
 void OspfInterfaceSyncNetworkType(void* iface);
 void OspfInterfaceDemandCircuit(void* iface);
 
-using OspfInterfaceRegistry = SubRegistry<__uint128_t, OspfInterface,
+using OspfInterfaceRegistry = SubRegistry<RegistryKey<16>, OspfInterface,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::BFD)>, // TODO
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::COST)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DATABASE_FILTER)>,
@@ -158,7 +158,7 @@ enum class OspfInterfaceAddressFamily : uint8_t
     COUNT,
 };
 
-using OspfInterfaceAddressFamilyRegistry = SubRegistry<__uint128_t, OspfInterfaceAddressFamily,
+using OspfInterfaceAddressFamilyRegistry = SubRegistry<RegistryKey<16>, OspfInterfaceAddressFamily,
     ReferenceContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::BASE)>,
     ReferenceContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV4)>,
     ReferenceContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV6)>
@@ -174,7 +174,7 @@ enum class OspfInterfaceIPSec : uint8_t
     COUNT
 };
 
-using OspfInterfaceIPSecRegistry = SubRegistry<uint64_t, OspfInterfaceIPSec,
+using OspfInterfaceIPSecRegistry = SubRegistry<RegistryKey<8>, OspfInterfaceIPSec,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceIPSec::SPI)>, // TODO:
     OptionalAtomicField<OSPF::IPsecAuthType CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_TYPE)>, // TODO:
     ValueField<std::array<uint8_t, 40> CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_KEY)>, // TODO:
@@ -215,7 +215,7 @@ CONFIG_DEFAULT_TABLE(OSPF_INTERFACE_BASE_DEFAULTS)
 void OspfInterfaceBaseUpdateDigestKey(void* iface);
 void OspfInterfaceBasePrefixSuppression(void* iface);
 
-using OspfInterfaceBaseRegistry = SubRegistry<uint64_t, OspfInterfaceBase,
+using OspfInterfaceBaseRegistry = SubRegistry<RegistryKey<8>, OspfInterfaceBase,
     ReferenceContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::BASE)>,
     OwnedListField<OspfInterfaceAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(OspfInterfaceBase::PROCESS_CONFIGS)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterfaceBase::INSTANCE_ID)>,

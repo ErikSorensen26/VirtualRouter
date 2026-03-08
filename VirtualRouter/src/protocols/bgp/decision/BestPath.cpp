@@ -22,15 +22,18 @@ uint8_t originRank(const PathAttribute& a)
 BestPathComparator::BestPathComparator(BestPathOptions opts)
     : options(opts) {}
 
-inline bool BestPathComparator::compareMed(const RouteCanidateBase& lhsRoute, const PathAttribute& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttribute& rhsAttr) const
+inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const InboundRouteBase& rhs) const
 {
-    if (!options.alwaysCompareMed && lhsRoute.peerAs != rhsRoute.peerAs)
+    if (!options.alwaysCompareMed && lhs.peerAs != rhs.peerAs)
         return false;
-    return medOrDefault(lhsAttr) < medOrDefault(rhsAttr);
+    return medOrDefault(*lhs.getPathAttributes()) < medOrDefault(*rhs.getPathAttributes());
 }
 
-bool BestPathComparator::better(const RouteCanidateBase& lhsRoute, const PathAttribute& lhsAttr, const RouteCanidateBase& rhsRoute, const PathAttribute& rhsAttr) const
+bool BestPathComparator::better(const InboundRouteBase& lhs, const IPAddress& lhsNbr, const InboundRouteBase& rhs, const IPAddress& rhsNbr) const
 {
+    PathAttribute lhsAttr = *lhs.getPathAttributes();
+    PathAttribute rhsAttr = *rhs.getPathAttributes();
+
     // 1) Highest local-pref
     if (localPrefOrDefault(lhsAttr) != localPrefOrDefault(rhsAttr))
         return localPrefOrDefault(lhsAttr) > localPrefOrDefault(rhsAttr);
@@ -44,27 +47,27 @@ bool BestPathComparator::better(const RouteCanidateBase& lhsRoute, const PathAtt
         return originRank(lhsAttr) < originRank(rhsAttr);
 
     // 4) Lowest MED (same neighboring AS unless always-compare-med).
-    if (compareMed(lhsRoute, lhsAttr, rhsRoute, rhsAttr))
+    if (compareMed(lhs, rhs))
         return true;
-    if (compareMed(rhsRoute, rhsAttr, lhsRoute, lhsAttr))
+    if (compareMed(rhs, lhs))
         return false;
 
     // 5) eBGP preferred over iBGP
-    if (lhsRoute.ebgp != rhsRoute.ebgp)
-        return lhsRoute.ebgp;
+    if (lhs.ebgp != rhs.ebgp)
+        return rhs.ebgp;
 
     // 6) Lowest IGP metric to NEXT_HOP
-    if (lhsRoute.igpCost != rhsRoute.igpCost)
-        return lhsRoute.igpCost < rhsRoute.igpCost;
+    if (lhs.igpCost != rhs.igpCost)
+        return lhs.igpCost < rhs.igpCost;
 
     // 7) Oldest route.
-    if (lhsRoute.receivedTime != rhsRoute.receivedTime)
-        return lhsRoute.receivedTime < rhsRoute.receivedTime;
+    if (lhs.receivedTime != rhs.receivedTime)
+        return lhs.receivedTime < rhs.receivedTime;
 
     // 8) Lowest router-id, then neighbor address.
-    if (lhsRoute.neighborRouterId != rhsRoute.neighborRouterId)
-        return lhsRoute.neighborRouterId < rhsRoute.neighborRouterId;
+    if (lhs.neighborRouterId != rhs.neighborRouterId)
+        return lhs.neighborRouterId < rhs.neighborRouterId;
 
-    return lhsRoute.neighborAddress < rhsRoute.neighborAddress;
+    return lhsNbr < rhsNbr;
 }
 }

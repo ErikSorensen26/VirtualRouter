@@ -12,10 +12,10 @@ BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
       asNumber(as),
       scheduler(vrf->getControlScheduler().create()),
       ntable(*this),
-      configs(vrf->getRegistry().create<Config::BgpRegistry>(
-          Config::generateBgpKey(vrf->getInstanceId(), as, ::AddressFamily::NONE)
-      ))
+      configs(vrf->getRegistry().create<Config::BgpRegistry>(vrf->getInstanceId()))
 {
+    vrf->getRegistry().ensure(configs->get<Config::Bgp::BGP_BASE>(), configs.getKey());
+
     TCP::ListenOptions opts;
     opts.onAccept = BgpProcess::onAcceptCallback;
     opts.onAcceptUser = this;
@@ -36,7 +36,7 @@ BgpProcess::~BgpProcess() = default;
 Session* BgpProcess::findSession(TCP::ConnId cid)
 {
     auto it = sessions.find(cid);
-    return (it != sessions.end()) ? it->second.get() : nullptr;
+    return (it != sessions.end()) ? &it->second : nullptr;
 }
 
 void BgpProcess::onSessionEstablished(Session& session)
@@ -98,7 +98,7 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
     TCP::ConnId cid = ctx.newConn.getId();
 
     auto [it, ok] = bgp->sessions.emplace(cid, std::make_unique<Session>(*nbr, bgp->scheduler.ref()));
-    it->second->acceptConnection(std::move(ctx.newConn));
+    it->second.acceptConnection(std::move(ctx.newConn));
 }
 
 void BgpProcess::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept

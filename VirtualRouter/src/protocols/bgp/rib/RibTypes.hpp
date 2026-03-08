@@ -16,12 +16,14 @@
 
 namespace BGP
 {
+class NeighborAf;
+
 template <typename N>
 struct BuildUpdate
 {
     struct Announcement
     {
-        PathAttribute attrs;
+        PathAttribute& attrs;
         std::vector<N> nlri;
     };
 
@@ -37,202 +39,161 @@ struct ParsedUpdate
     std::optional<PathAttribute> attrs;
 };
 
-struct RouteCanidateBase
+struct RouteBase
 {
-    RouteCanidateBase() = default;
+    RouteBase() = default;
 
-    explicit RouteCanidateBase(AttributeManager& mgr)
-        : attrMgr(&mgr)
-    {}
-
-    RouteCanidateBase(AttributeManager& mgr, const Path& p, const Attributes& a)
-        : attrs(a),
-          path(p),
-          attrMgr(&mgr)
+    RouteBase(AttributeManager& mgr, uint32_t id)
+        : pathId(id), attrMgr(&mgr)
     {
-        acquirePathRef();
+        attrMgr->retain(id);
     }
 
-    RouteCanidateBase(const RouteCanidateBase& other)
-        : attrs(other.attrs),
-          path(other.path),
-          pathId(other.pathId),
-          hasPathRef(other.hasPathRef),
-          peerAs(other.peerAs),
-          neighborRouterId(other.neighborRouterId),
-          neighborAddress(other.neighborAddress),
-          ebgp(other.ebgp),
-          igpCost(other.igpCost),
-          receivedTime(other.receivedTime),
+    RouteBase(const RouteBase& other)
+        : pathId(other.pathId),
           attrMgr(other.attrMgr)
     {
         retainPathRef();
     }
 
-    RouteCanidateBase(RouteCanidateBase&& other) noexcept
-        : attrs(std::move(other.attrs)),
-          path(std::move(other.path)),
-          pathId(other.pathId),
-          hasPathRef(other.hasPathRef),
-          peerAs(other.peerAs),
-          neighborRouterId(other.neighborRouterId),
-          neighborAddress(std::move(other.neighborAddress)),
-          ebgp(other.ebgp),
-          igpCost(other.igpCost),
-          receivedTime(other.receivedTime),
+    RouteBase(RouteBase&& other) noexcept
+        : pathId(other.pathId),
           attrMgr(other.attrMgr)
     {
-        other.pathId = 0;
-        other.hasPathRef = false;
+        other.pathId = std::nullopt;
         other.attrMgr = nullptr;
     }
 
-    RouteCanidateBase& operator=(const RouteCanidateBase& other)
+    RouteBase& operator=(const RouteBase& other)
     {
         if (this == &other)
             return *this;
 
         releasePathRef();
 
-        attrs = other.attrs;
-        path = other.path;
         pathId = other.pathId;
-        hasPathRef = other.hasPathRef;
-        peerAs = other.peerAs;
-        neighborRouterId = other.neighborRouterId;
-        neighborAddress = other.neighborAddress;
-        ebgp = other.ebgp;
-        igpCost = other.igpCost;
-        receivedTime = other.receivedTime;
         attrMgr = other.attrMgr;
 
         retainPathRef();
         return *this;
     }
 
-    RouteCanidateBase& operator=(RouteCanidateBase&& other) noexcept
+    RouteBase& operator=(RouteBase&& other) noexcept
     {
         if (this == &other)
             return *this;
 
         releasePathRef();
 
-        attrs = std::move(other.attrs);
-        path = std::move(other.path);
         pathId = other.pathId;
-        hasPathRef = other.hasPathRef;
-        peerAs = other.peerAs;
-        neighborRouterId = other.neighborRouterId;
-        neighborAddress = std::move(other.neighborAddress);
-        ebgp = other.ebgp;
-        igpCost = other.igpCost;
-        receivedTime = other.receivedTime;
         attrMgr = other.attrMgr;
 
-        other.pathId = 0;
-        other.hasPathRef = false;
+        other.pathId = std::nullopt;
         other.attrMgr = nullptr;
 
         return *this;
     }
 
-    ~RouteCanidateBase()
+    ~RouteBase()
     {
         releasePathRef();
     }
 
-    void setPathAttributes(const PathAttribute& pa)
+    std::optional<PathAttribute> getPathAttributes() const
     {
-        releasePathRef();
-        attrs = pa.attrs;
-        path = pa.path;
-        acquirePathRef();
+        if (attrMgr && pathId)
+            return attrMgr->get(*pathId);
+        return std::nullopt;
     }
 
-    bool hasInternedPath() const noexcept
-    {
-        return hasPathRef;
-    }
+    std::optional<uint32_t> pathId{};
 
-    Attributes attrs{};
-    Path path{};
-    uint32_t pathId = 0;
-    bool hasPathRef = false;
-    uint32_t peerAs = 0;
-    uint32_t neighborRouterId = 0;
-    IPAddress neighborAddress;
-    bool ebgp = true;
-
-    uint64_t igpCost = std::numeric_limits<uint64_t>::max();
-    std::chrono::steady_clock::time_point receivedTime = std::chrono::steady_clock::now();
-
-private:
-    void acquirePathRef()
-    {
-        if (!attrMgr)
-            return;
-
-        pathId = attrMgr->acquire(attrs, path);
-        hasPathRef = true;
-    }
-
+protected:
     void retainPathRef()
     {
-        if (!attrMgr || !hasPathRef)
-            return;
-
-        if (!attrMgr->retain(pathId))
-            acquirePathRef();
+        if (attrMgr && pathId)
+            attrMgr->retain(*pathId);
     }
 
     void releasePathRef()
     {
-        if (attrMgr && hasPathRef)
-            attrMgr->release(pathId);
+        if (attrMgr && pathId)
+            attrMgr->release(*pathId);
 
-        pathId = 0;
-        hasPathRef = false;
+        pathId = std::nullopt;
     }
 
+private:
     AttributeManager* attrMgr = nullptr;
 };
 
-template <typename N>
-struct RouteCanidate : RouteCanidateBase
+struct InboundRouteBase : RouteBase
 {
+    InboundRouteBase(NeighborAf& nbr)
+        : sourceNeighbor(nbr) {}
+
+    NeighborAf& sourceNeighbor;
+    uint32_t peerAs = 0;
+    bool ebgp = true;
+    uint64_t igpCost = std::numeric_limits<uint64_t>::max();
+
+    std::chrono::steady_clock::time_point receivedTime =
+        std::chrono::steady_clock::now();
+};
+
+template <typename N>
+struct InboundRoute : InboundRouteBase
+{
+    InboundRoute(NeighborAf& nbr) : InboundRouteBase(nbr) {}
+
     N nlri;
 
-    RouteCanidate() = default;
-    explicit RouteCanidate(AttributeManager& mgr)
-        : RouteCanidateBase(mgr)
-    {}
+    InboundRoute(const InboundRoute&) = delete;
+    InboundRoute& operator=(const InboundRoute&) = delete;
 
-    RouteCanidate(AttributeManager& mgr, const N& n, const PathAttribute& pa)
-        : RouteCanidateBase(mgr, pa.path, pa.attrs),
-          nlri(n)
-    {}
+    InboundRoute(InboundRoute&&) noexcept = default;
+    InboundRoute& operator=(InboundRoute&&) noexcept = default;
 
-    bool operator==(const RouteCanidate<N>& other) const noexcept
+    bool operator==(const InboundRoute& other) const noexcept
     {
         return nlri == other.nlri &&
                pathId == other.pathId &&
-               peerAs == other.peerAs &&
-               neighborRouterId == other.neighborRouterId &&
-               neighborAddress == other.neighborAddress;
+               &sourceNeighbor == &other.sourceNeighbor;
     }
 };
 
 template <typename N>
-using PerPeerAdjTable = std::unordered_map<N, RouteCanidate<N>>;
+struct LocalRoute
+{
+    InboundRoute<N>& in;
+};
 
 template <typename N>
-using AdjRibInTable = std::unordered_map<uint32_t, PerPeerAdjTable<N>>;
+struct OutboundRoute : RouteBase
+{
+    N nlri;
+
+    bool operator==(const OutboundRoute& other) const noexcept
+    {
+        return nlri == other.nlri &&
+               pathId == other.pathId;
+    }
+};
 
 template <typename N>
-using AdjRibOutTable = std::unordered_map<uint32_t, PerPeerAdjTable<N>>;
+using PerPeerInTable = std::unordered_map<N, InboundRoute<N>>;
 
 template <typename N>
-using LocRibTable = std::unordered_map<N, RouteCanidate<N>>;
+using PerPeerOutTable = std::unordered_map<N, OutboundRoute<N>>;
+
+template <typename N>
+using AdjRibInTable = std::unordered_map<uint32_t, PerPeerInTable<N>>;
+
+template <typename N>
+using AdjRibOutTable = std::unordered_map<uint32_t, PerPeerOutTable<N>>;
+
+template <typename N>
+using LocRibTable = std::unordered_map<N, LocalRoute<N>>;
 }
 
 #endif // BGP_RIB_TYPES_HPP

@@ -4,7 +4,6 @@
 #define BGP_PROCESS_H
 
 #include <cstdint>
-#include <memory>
 #include <ControlScheduler.h>
 
 #include "tcp/Listener.h"
@@ -81,7 +80,7 @@ public:
 private:
 
     TCP::Listener listener;
-    std::unordered_map<TCP::ConnId, std::unique_ptr<Session>> sessions;
+    std::unordered_map<TCP::ConnId, Session> sessions;
     std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;
 
     ProcessQueue scheduler;

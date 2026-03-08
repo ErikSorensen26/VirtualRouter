@@ -9,6 +9,7 @@
 #include <mutex>
 #include <optional>
 
+#include "RegistryKey.hpp"
 #include "RegistryTypes.hpp"
 #include "RegistryDefaultTable.hpp"
 
@@ -31,6 +32,7 @@ public:
     using StorageTuple = std::tuple<std::optional<Fields>...>;
 
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
+    static_assert(isRegistryKey<KEY>::value, "KEY must be a RegisterKey<T, N>");
 
 #if USE_CONFIG_INDEX
     static_assert(
