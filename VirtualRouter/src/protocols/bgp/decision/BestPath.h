@@ -7,21 +7,18 @@
 
 namespace BGP
 {
-struct BestPathOptions
-{
-    bool alwaysCompareMed = false;
-};
+class BgpProcess;
 
 class BestPathComparator
 {
 public:
-    explicit BestPathComparator(BestPathOptions opts = {});
+    explicit BestPathComparator(BgpProcess& p);
 
     bool better(const InboundRouteBase& lhsRoute, const IPAddress& lhsNbr, const InboundRouteBase& rhsRoute, const IPAddress& rhsNbr) const;
 private:
     inline bool compareMed(const InboundRouteBase& lhsRoute, const InboundRouteBase& rhsRoute) const;
 
-    BestPathOptions options;
+    BgpProcess& proc;
 };
 }
 

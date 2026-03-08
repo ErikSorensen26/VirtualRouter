@@ -46,7 +46,15 @@ struct alignas(16) IPAddress
         if (isV6 != other.isV6)
             return isV6 < other.isV6;
 
-        return isV6 ? (v6 < other.v6) : (v4 < other.v4);
+        return std::memcmp(raw, other.raw, isV6 ? 16 : 4) < 0;
+    }
+
+    bool operator>(const IPAddress& other) const
+    {
+        if (isV6 != other.isV6)
+            return isV6 > other.isV6;
+
+        return std::memcmp(raw, other.raw, isV6 ? 16 : 4) > 0;
     }
 
     IPAddress(uint32_t addr)

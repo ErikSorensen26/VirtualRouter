@@ -81,6 +81,13 @@ struct AfiSafi
     uint16_t afi = 0;
     uint8_t safi = 0;
 
+    uint32_t flatten() const
+    {
+        uint32_t flat = afi;
+        flat |= uint32_t(safi) << 16;
+        return flat;
+    }
+
     bool operator==(const AfiSafi& other) const noexcept
     {
         return afi == other.afi && safi == other.safi;

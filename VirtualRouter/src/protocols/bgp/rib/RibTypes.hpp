@@ -128,14 +128,16 @@ private:
 
 struct InboundRouteBase : RouteBase
 {
-    InboundRouteBase(NeighborAf& nbr)
-        : sourceNeighbor(nbr) {}
+    bool locallyOriginated() { return sourceNeighbor == nullptr; }
 
-    InboundRouteBase(NeighborAf& nbr, AttributeManager& mgr, uint32_t id)
-        : RouteBase(mgr, id), sourceNeighbor(nbr) {}
+    InboundRouteBase(NeighborAf* nbr)
+        : sourceNeighbor(nbr), weigth(locallyOriginated() ? 32768 : 0) {}
 
-    NeighborAf& sourceNeighbor;
-    uint32_t neighborRouterId = 0;
+    InboundRouteBase(AttributeManager& mgr, uint32_t id, NeighborAf* nbr = nullptr)
+        : RouteBase(mgr, id), sourceNeighbor(nbr), weigth(locallyOriginated() ? 32768 : 0) {}
+
+    NeighborAf* sourceNeighbor = nullptr;
+    uint16_t weigth = 0;
     uint32_t peerAs = 0;
     bool ebgp = true;
     uint64_t igpCost = std::numeric_limits<uint64_t>::max();
@@ -147,10 +149,10 @@ struct InboundRouteBase : RouteBase
 template <typename N>
 struct InboundRoute : InboundRouteBase
 {
-    InboundRoute(NeighborAf& nbr) : InboundRouteBase(nbr) {}
+    InboundRoute(NeighborAf* nbr) : InboundRouteBase(nbr) {}
 
-    InboundRoute(NeighborAf& nbr, AttributeManager& mgr, uint32_t id, N n)
-        : InboundRouteBase(nbr, mgr, id), nlri(std::move(n)) {}
+    InboundRoute(AttributeManager& mgr, uint32_t id, N n, NeighborAf* nbr = nullptr)
+        : InboundRouteBase(mgr, id, nbr), nlri(std::move(n)) {}
 
     N nlri;
 
@@ -172,6 +174,7 @@ template <typename N>
 struct LocalRoute
 {
     InboundRoute<N>& in;
+    std::vector<InboundRoute<N>*> multipaths; // additional equal-cost paths (excludes `in`)
 };
 
 template <typename N>

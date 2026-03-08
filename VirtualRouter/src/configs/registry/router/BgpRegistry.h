@@ -129,7 +129,7 @@ enum class BgpNeighbor
     SOFT_RECONFIGURATION, // TODO
     TRANSLATE_UPDATE, // TODO
     UNSUPPRESS_MAP, // TODO
-    WEIGHT, // TODO
+    WEIGHT,
     COUNT
 };
 
@@ -164,8 +164,7 @@ enum class BgpNeighbor
     X(BgpNeighbor, SLOW_PEER_DETECTION, false) \
     X(BgpNeighbor, SLOW_PEER_DETECTION_THRESHOLD, 60) \
     X(BgpNeighbor, SOFT_RECONFIGURATION, false) \
-    X(BgpNeighbor, TRANSLATE_UPDATE, false) \
-    X(BgpNeighbor, WEIGHT, 0)
+    X(BgpNeighbor, TRANSLATE_UPDATE, false)
 
 CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_DEFAULTS);
 
@@ -224,7 +223,7 @@ using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SOFT_RECONFIGURATION)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::TRANSLATE_UPDATE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::UNSUPPRESS_MAP)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::WEIGHT)>
+    OptionalValueField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::WEIGHT)>
 >;
 
 enum class BgpNeighborSession
@@ -368,8 +367,8 @@ enum class BgpAddressFamily
     DISTRIBUTE_LIST_OUT_INTERFACE, // TODO
     DISTRIBUTE_LIST_OUT_PREFIX, // TODO
     DISTRIBUTE_LIST_GATEWAY, // TODO
-    MAXIMUM_PATHS_EBGP, // TODO
-    MAXIMUM_PATHS_IBGP, // TODO
+    MAXIMUM_PATHS_EBGP,
+    MAXIMUM_PATHS_IBGP,
     NETWORK, // TODO
     TABLE_MAP, // TODO
     TABLE_MAP_FILTER, // TODO
@@ -414,6 +413,8 @@ enum class BgpAddressFamily
     X(BgpAddressFamily, DISTANCE_MBGP_LOCAL, 200) \
     X(BgpAddressFamily, DISTRIBUTE_LIST_IN_PREFIX, false) \
     X(BgpAddressFamily, DISTRIBUTE_LIST_OUT_PREFIX, false) \
+    X(BgpAddressFamily, MAXIMUM_PATHS_EBGP, 1) \
+    X(BgpAddressFamily, MAXIMUM_PATHS_IBGP, 1) \
     X(BgpAddressFamily, TABLE_MAP_FILTER, false)
 
 CONFIG_DEFAULT_TABLE(BGP_ADDRESS_FAMILY_DEFAULTS);
@@ -483,8 +484,8 @@ using BgpAddressFamilyRegistry = SubRegistry<RegistryKey<8>, BgpAddressFamily,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_PREFIX)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_GATEWAY)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_EBGP)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_IBGP)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_EBGP)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_IBGP)>,
     ValueField<std::vector<std::tuple<IPPrefix, bool, std::string>> CONFIG_INDEX_ARG(BgpAddressFamily::NETWORK)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP_FILTER)>

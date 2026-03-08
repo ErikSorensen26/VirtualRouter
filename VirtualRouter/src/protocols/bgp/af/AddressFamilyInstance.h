@@ -74,7 +74,16 @@ public:
           family(fam),
           policy(AddressFamilyInstanceHelper::getRoutingInstance(proc)),
           igpMetricResolver([](const IPAddress&)
-              { return std::numeric_limits<uint64_t>::max(); })
+              { return std::numeric_limits<uint64_t>::max(); }),
+          configs([&proc, &fam]() {
+              auto& bgpConfigs = AddressFamilyInstanceHelper::getConfigs(proc);
+              auto& vrf = AddressFamilyInstanceHelper::getRoutingInstance(proc);
+              auto& registry = vrf.getRegistry();
+              return registry.emplaceBack(
+                  bgpConfigs.get<Config::Bgp::ADDRESS_FAMILIES>(), fam.flatten(),
+                  Config::generateBgpAfKey(vrf.getInstanceId(), fam.afi, fam.safi)
+              );
+          })
     {}
 
     AddressFamilyInstance(const AddressFamilyInstance&) = delete;
@@ -169,8 +178,8 @@ public:
 private:
     void onParsedUpdateFromPeer(Neighbor& peer, ParsedUpdate<NlriT>& update)
     {
-        if (!AddressFamilyInstanceHelper::getNtable(process).lookup(peer.rid))
-            return;
+        Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peer.rid);
+        if (!nbr) return;
 
         PerPeerInTable<NlriT>& peerIn = adjRibIn[peer.rid];
 
@@ -210,11 +219,14 @@ private:
                     attrMgr.retain(pid);
                 first = false;
 
-                InboundRoute<NlriT> r(naf, attrMgr, pid, n);
+                InboundRoute<NlriT> r(attrMgr, pid, n, &naf);
                 r.neighborRouterId = peer.rid;
                 r.peerAs            = peerAs;
                 r.ebgp              = isEbgp;
                 r.igpCost           = resolveIgpMetric(update.attrs->path.nextHop);
+
+                auto& weight = nbr->getAfNeighbor(family).getConfigs().get<Config::BgpNeighbor::WEIGHT>();
+                if (weight.hasValue()) r.weigth = weight.load();
 
                 if (applyIngressPolicy(r))
                 {
@@ -260,11 +272,12 @@ private:
             candidates.push_back(&it->second);
         }
 
-        const bool alwaysCompareMed =
-            AddressFamilyInstanceHelper::getConfigs(process).get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load();
-
-        DecisionEngine decision(BestPathOptions{.alwaysCompareMed = alwaysCompareMed});
-        std::optional<LocalRoute<NlriT>> best = decision.selectBest(candidates);
+        DecisionEngine decision(process);
+        std::optional<LocalRoute<NlriT>> best = decision.selectBest(
+            candidates,
+            configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_EBGP>().load(),
+            configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_IBGP>().load()
+        );
 
         auto lit = locRib.find(nlri);
         const bool had = (lit != locRib.end());
@@ -322,7 +335,7 @@ private:
         PathAttribute pa = *pa_opt;
 
         const NeighborAf& localNeighbor = session.getNeighbor().getAfNeighbor(family);
-        const auto& configs = localNeighbor.getConfigs();
+        const auto& cfgs = localNeighbor.getConfigs();
 
         if (session.isEbgp())
         {
@@ -336,16 +349,16 @@ private:
             pa.attrs.asPath.insert(pa.attrs.asPath.begin(), std::move(seg));
 
             // next-hop-self for eBGP
-            if (!configs.get<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||
-                configs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
+            if (!cfgs.get<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||
+                cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = session.getNeighbor().neighborAddress;
         }
         else
         {
             // next-hop-self for iBGP
-            if ((configs.get<Config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
+            if ((cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
                  route.neighborRouterId != AddressFamilyInstanceHelper::getRid(process)) ||
-                configs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
+                cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = session.getPrimaryConnection()->socketKey()->local.address;
         }
 
@@ -472,6 +485,8 @@ private:
 
     BgpProcess& process;
     AfiSafi family;
+
+    Config::Reference<Config::BgpAddressFamilyRegistry> configs;
 };
 }
 
