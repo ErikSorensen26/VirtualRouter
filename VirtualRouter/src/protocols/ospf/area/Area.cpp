@@ -25,16 +25,19 @@ Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
       ),
       db(mr),
       base(base),
-      spfMgr(*this, base.getScheduler()),
+      spfMgr(*this),
       flags(base.isV3),
-      floodMgr(*this, base.getScheduler()),
+      floodMgr(*this),
       originator(base.isV3
           ? *static_cast<Originator*>(new OriginatorV3(*this))
           : *static_cast<Originator*>(new OriginatorV2(*this))
       ),
+      scheduler(base.getScheduler()),
       type(configs->get<Config::OspfArea::AREA_TYPE>().load()),
       areaId(id)
-{}
+{
+    configs->context().set(this);
+}
 
 Area::~Area()
 {
@@ -47,7 +50,7 @@ Area::~Area()
 
 void Area::initializeReset()
 {
-    base.getScheduler().post([this] {
+    scheduler.post([this] {
         reset();
     });
 }
@@ -547,7 +550,7 @@ void Area::startIgnoreTimer()
     if (ignoreTid != 0) return;
     uint16_t timeout = base.getConfigs().get<Config::Ospf::MAX_LSA_IGNORE_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
-    ignoreTid = base.getScheduler().schedule(expirationTime, [this](uint32_t)
+    ignoreTid = scheduler.postAfter(expirationTime, [this](uint32_t)
     {
         startResetTimer();
     });
@@ -558,7 +561,7 @@ void Area::startResetTimer()
     if (resetTid != 0) return;
     uint16_t timeout = base.getConfigs().get<Config::Ospf::MAX_LSA_RESET_TIME>().load();
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::minutes(timeout);
-    resetTid = base.getScheduler().schedule(expirationTime, [this](uint32_t)
+    resetTid = scheduler.postAfter(expirationTime, [this](uint32_t)
     {
         base.initiateReset();
     });

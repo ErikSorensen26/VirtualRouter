@@ -46,6 +46,13 @@ private:
     static AttributeManager& getAttrMgr(BgpProcess& proc);
 };
 
+static AsPathSegment& getAsSegment(Attributes& attrs)
+{
+    if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_SEQUENCE)
+        return attrs.asPath[0];
+    attrs.asPath.insert(attrs.asPath.begin(), AsPathSegment{BGP_AS_SEQUENCE, {}});
+    return attrs.asPath.front();
+}
 
 /**
  * class AddressFamilyInstance<N>
@@ -314,13 +321,35 @@ private:
         policy.withdrawRoute(nlri);
     }
 
-    // Returns true if the route should be dropped before entering Adj-RIB-In.
+    // Returns true if the route is valid before entering Adj-RIB-In.
     // Add ingress route-map / prefix-list / community filter logic here.
-    bool applyIngressPolicy(const InboundRoute<NlriT>& /*route*/)
+    bool applyIngressPolicy(const InboundRoute<NlriT>& route)
     {
+        PathAttribute pathAttrs = AddressFamilyInstanceHelper::getAttrMgr(process).get(route.pathId);
+        uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+        auto& nbr = route.sourceNeighbor->globalNbr();
+
+        // AS-PATH loop prevention
+        if (!pathAttrs.attrs.asPath.empty() && pathAttrs.attrs.asPath[0].segmentType == BGP_AS_SEQUENCE)
+        {
+            Config::BgpNeighborSessionRegistry& nbrCfgs = nbr.getConfigs();
+            bool localAsEnabled = nbrCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load();
+            bool dualAs = nbrCfgs.get<Config::BgpNeighborSession::LOCAL_AS_DUAL_AS>().load();
+            auto& localAs = nbrCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
+
+            for (uint32_t asn : pathAttrs.attrs.asPath[0].asns)
+            {
+                // Always reject if our real AS appears
+                if (asn == routerAs)
+                    return false;
+                if (localAsEnabled && !dualAs && localAs.hasValue() && asn == localAs.load())
+                    return false;
+            }
+        }
+
         // TODO: decide if dropped
         // TODO: ingress policy (route-maps, prefix-lists, community filters, etc.)
-        return false; // false = accept
+        return true; // true = accept
     }
 
     // Returns nullopt if the route should be suppressed for this peer (outbound drop).
@@ -339,14 +368,25 @@ private:
 
         if (session.isEbgp())
         {
+            auto& sesCfgs = session.getNeighbor().getConfigs();
+
             pa.attrs.localPref = std::nullopt;
 
             // Prepend own AS to AS_PATH
-            const uint32_t localAs = AddressFamilyInstanceHelper::getAsNum(process);
-            AsPathSegment seg;
-            seg.segmentType = BGP_AS_SEQUENCE;
-            seg.asns.push_back(localAs);
-            pa.attrs.asPath.insert(pa.attrs.asPath.begin(), std::move(seg));
+            AsPathSegment& seg = getAsSegment(pa.attrs);
+            uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+            auto& localAs = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
+            if (!sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() || !localAs.hasValue())
+                seg.asns.insert(seg.asns.begin(), routerAs);
+            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
+                seg.asns.insert(seg.asns.begin(), localAs.load());
+            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
+                seg.asns.insert(seg.asns.begin(), routerAs);
+            else
+            {
+                seg.asns.insert(seg.asns.begin(), routerAs);
+                seg.asns.insert(seg.asns.begin(), localAs.load());
+            }
 
             // next-hop-self for eBGP
             if (!cfgs.get<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||

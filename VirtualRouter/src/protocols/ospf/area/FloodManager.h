@@ -17,7 +17,7 @@ class OspfRib;
 class FloodManager
 {
 public:
-    explicit FloodManager(Area& area, ProcessQueue& sch);
+    explicit FloodManager(Area& area);
 
     void enqueueFlood(LsaRecordRef& record, const FloodInfo& info);
     void enqueueFlood(LsaRecordRef&& record, const FloodInfo& info);
@@ -31,7 +31,6 @@ private:
 
 private:
     Area& area;
-    ProcessQueue& scheduler;
     FloodQueue fq;
 
     std::atomic<bool> timerActive{0};

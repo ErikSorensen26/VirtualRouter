@@ -77,6 +77,8 @@ public:
     static void onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept;
     static void onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept;
 
+    ProcessQueueRef getScheduler() { return scheduler.ref(); }
+
 private:
 
     TCP::Listener listener;

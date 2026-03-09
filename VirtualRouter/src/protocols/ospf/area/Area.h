@@ -93,6 +93,8 @@ public:
     const SpfManager& getSpfManager() const noexcept { return spfMgr; }
     FloodManager& getFloodManager() noexcept { return floodMgr; }
     Originator& getOriginator() { return originator; }
+    ProcessQueueRef& getScheduler() { return scheduler; }
+    const ProcessQueueRef& getScheduler() const { return scheduler; }
 
     // Flood
     void send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
@@ -193,6 +195,8 @@ private:
     bool compareLsaBody(const LsaBody& a, const LsaBody& b);
 
 public:
+    ProcessQueueRef scheduler;
+
     const AreaType type;
     const uint32_t areaId;
 

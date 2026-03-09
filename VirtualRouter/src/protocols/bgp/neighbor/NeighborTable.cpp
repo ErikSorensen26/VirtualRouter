@@ -117,4 +117,17 @@ void NeighborTable::cancelAllHoldTimers()
             nbr.session->getTimers().cancelAll();
     }
 }
+
+void NeighborTable::runDccCheck()
+{
+    for (auto& [_, nbr] : neighbors)
+    {
+        if (nbr.getConfigs().get<Config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load())
+        {
+            disableConnectionCheck = true;
+            return;
+        }
+    }
+    disableConnectionCheck = false;
+}
 }

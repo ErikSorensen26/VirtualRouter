@@ -5,9 +5,6 @@
 
 #include <span>
 #include <cstdint>
-#include <unordered_set>
-
-#include <ControlScheduler.h>
 
 #include "tcp/Connection.h"
 #include "bgp/BgpTypes.hpp"
@@ -163,7 +160,7 @@ struct NegotiatedCapabilities
 class Session
 {
 public:
-    Session(Neighbor& nbr, ProcessQueueRef queue) noexcept;
+    Session(Neighbor& nbr) noexcept;
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -239,7 +236,6 @@ private:
     // References
     Neighbor& neighbor;
     Config::BgpBaseRegistry& base;
-    ProcessQueueRef queue;
 
     // Protocol State
     Fsm fsm;

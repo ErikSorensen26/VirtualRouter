@@ -33,11 +33,14 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Refere
       flags(*this),
       lsaFlags(*this),
       ntable(*this),
-      tmgr(proc.getScheduler(), *this),
+      tmgr(*this),
       iface(iface),
       configs(configs->get<Config::OspfInterfaceBase::BASE>().local()),
       baseConfigs(configs)
 {
+    configs->context().set(this);
+    baseConfigs->context().set(this);
+
     syncConfigs();
     calculateCost();
     tmgr.startHello();

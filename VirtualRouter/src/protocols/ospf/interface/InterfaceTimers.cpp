@@ -8,8 +8,8 @@
 
 namespace OSPF
 {
-InterfaceTimers::InterfaceTimers(ProcessQueue& tm, OspfInterface& iface)
-    : scheduler(tm), iface(iface)
+InterfaceTimers::InterfaceTimers(OspfInterface& iface)
+    : scheduler(iface.getProcess().getScheduler()), iface(iface)
 {
     stopHello();
 }
@@ -28,7 +28,7 @@ void InterfaceTimers::scheduleHello()
 
         auto nextExpiration = std::chrono::steady_clock::now() + iface.helloTime;
 
-        uint32_t timerId = scheduler.schedule(nextExpiration, [this](uint32_t) {
+        uint32_t timerId = scheduler.postAfter(nextExpiration, [this](uint32_t) {
             helloTimerId.store(0, std::memory_order_release);
             startHello();
         });
@@ -71,7 +71,7 @@ void InterfaceTimers::startInactiveTimer(Neighbor& neighbor)
 {
     cancleInactiveTimer(neighbor);
     auto expirationTime = std::chrono::steady_clock::now() + iface.deadTime;
-    neighbor.inactivityTimerId.store(scheduler.schedule(expirationTime,
+    neighbor.inactivityTimerId.store(scheduler.postAfter(expirationTime,
         [this, nbr = &neighbor](uint32_t) {
             handleInactiveTimeExpire(*nbr);
         }), std::memory_order_release
@@ -100,7 +100,7 @@ void InterfaceTimers::startDbdRetransmissionTimer(Neighbor& nbr)
     if (tid != 0) scheduler.cancel(tid);
 
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
-    tid = scheduler.schedule(expirationTime, [this, &nbr](uint32_t)
+    tid = scheduler.postAfter(expirationTime, [this, &nbr](uint32_t)
     {
         iface.getDispatcher().onDbdRetransmissionTimer(nbr);
     });
@@ -114,7 +114,7 @@ void InterfaceTimers::startLsrRetransmissionTimer(Neighbor& nbr)
     if (tid != 0) scheduler.cancel(tid);
 
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
-    tid = scheduler.schedule(expirationTime, [this, &nbr](uint32_t)
+    tid = scheduler.postAfter(expirationTime, [this, &nbr](uint32_t)
     {
         iface.getDispatcher().onLsrRetransmissionTimer(nbr);
     });
@@ -128,7 +128,7 @@ void InterfaceTimers::startLsuRetransmissionTimer(Neighbor& nbr)
     if (tid != 0) scheduler.cancel(tid);
 
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(static_cast<int>(timeout));
-    tid = scheduler.schedule(expirationTime, [this, &nbr](uint32_t)
+    tid = scheduler.postAfter(expirationTime, [this, &nbr](uint32_t)
     {
         iface.getDispatcher().onLsuRetransmissionTimer(nbr);
     });
@@ -142,7 +142,7 @@ void InterfaceTimers::startLsrPacingTimer(Neighbor& nbr)
     if (tid != 0) scheduler.cancel(tid);
 
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout));
-    tid = scheduler.schedule(expirationTime, [this, &nbr](uint32_t)
+    tid = scheduler.postAfter(expirationTime, [this, &nbr](uint32_t)
     {
         iface.getDispatcher().onLsrPacingTimer(nbr);
     });
@@ -156,7 +156,7 @@ void InterfaceTimers::startLsuPacingTimer(Neighbor* nbr)
     if (tid != 0) scheduler.cancel(tid);
 
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(timeout));
-    tid = scheduler.schedule(expirationTime, [this, nbr](uint32_t)
+    tid = scheduler.postAfter(expirationTime, [this, nbr](uint32_t)
     {
         iface.getDispatcher().onLsuPacingTimer(nbr);
     });

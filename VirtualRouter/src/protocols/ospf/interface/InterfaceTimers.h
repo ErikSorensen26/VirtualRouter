@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <ControlScheduler.h>
 
 #include "ospf/transmission/OspfPacket.hpp"
 
@@ -17,7 +18,7 @@ class OspfInterface;
 class InterfaceTimers
 {
 public:
-    InterfaceTimers(ProcessQueue& pq, OspfInterface& iface);
+    InterfaceTimers(OspfInterface& iface);
 
     void scheduleHello(); 
     void startHello();
@@ -42,7 +43,8 @@ private:
 
     std::atomic<bool> runTimers = true;
 
-    ProcessQueue& scheduler;
+    ProcessQueueRef scheduler;
+
     OspfInterface& iface;
 };
 }

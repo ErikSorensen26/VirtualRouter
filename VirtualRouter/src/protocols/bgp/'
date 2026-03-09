@@ -92,21 +92,20 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
     Neighbor* nbr = bgp->ntable.lookup(nbrIp);
 
     // eBGP Neighbor IP must be in same subnet 
-    bool check = [&]() {
+    bool check = !nbr->isEbgp() || [&]() {
         auto& cfgs = nbr->getConfigs();
-        bool connectCheck = nbr->isEbgp() &&
-            !cfgs.get<Config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load() &&
-            !cfgs.get<Config::BgpNeighborSession::EBGP_MULTIHOP>().load();
-
+        if (cfgs.get<Config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load() ||
+            cfgs.get<Config::BgpNeighborSession::EBGP_MULTIHOP>().load()) 
+            return true;
         if (nbrIp.isV6)
         {
             auto* route = bgp->routingInstance->getRib().lookup(readU128(nbrIp.raw));
-            return route && connectCheck ? route->source == RouteSource::CONNECTED : true;
+            return route && route->source == RouteSource::CONNECTED;
         }
         else
         {
             auto* route = bgp->routingInstance->getRib().lookup(readU32(nbrIp.raw));
-            return route && connectCheck ? route->source == RouteSource::CONNECTED : true;
+            return route && route->source == RouteSource::CONNECTED;
         }
     }();
 

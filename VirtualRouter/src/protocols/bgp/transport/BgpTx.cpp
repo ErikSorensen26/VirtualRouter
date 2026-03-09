@@ -335,6 +335,48 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
         }
     }
 
+    // AS4 PATH
+    if (!use4)
+    {
+        std::vector<AsPathSegment> as4;
+        for (const auto& seg : pa.attrs.as4Path)
+        {
+            AsPathSegment newSeg;
+            newSeg.segmentType = seg.segmentType;
+
+            for (uint32_t asn : seg.asns)
+            {
+                if (asn > 65535)
+                    newSeg.asns.push_back(asn);
+            }
+
+            if (!newSeg.asns.empty())
+                as4.push_back(std::move(newSeg));
+        }
+
+        if (!as4.empty())
+        {
+            size_t as4Len = 0;
+            for (const auto& seg : as4)
+                as4Len += 2 + seg.asns.size() * 4u;
+
+            appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE | BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_AS4_PATH, as4Len, attrSize, c);
+
+            for (const auto& seg : as4)
+            {
+                auto hdr = c.reserveSpan(2);
+                hdr[0] = seg.segmentType;
+                hdr[1] = static_cast<uint8_t>(seg.asns.size());
+
+                for (uint32_t asn : seg.asns)
+                {
+                    auto buf = c.reserveSpan(4);
+                    writeU32(buf.data(), asn);
+                }
+            }
+        }
+    }
+
     // NEXT HOP
     {
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_NEXT_HOP, 4, attrSize, c);
@@ -363,9 +405,9 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_ATOMIC_AGGREGATE, 0, attrSize, c);
 
     // AGGREGATE
-    if (pa.attrs.aggregator.has_value())
+    if (pa.attrs.asAggregator.has_value())
     {
-        const auto& agg = *pa.attrs.aggregator;
+        const auto& agg = *pa.attrs.asAggregator;
         const size_t vlen = use4 ? 8u : 6u;
         appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AGGREGATOR, vlen, attrSize, c);
 
@@ -383,6 +425,15 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
             auto buf = c.reserveSpan(6);
             writeU16(buf.data(), a2);
             std::memcpy(buf.data() + 2, agg.speaker.raw, 4);
+
+            // AS4 AGGREGATOR
+            if (agg.asn > 65535)
+            {
+                appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AS4_AGGREGATOR, 8, attrSize, c);
+                auto buf4 = c.reserveSpan(8);
+                writeU32(buf4.data(), agg.asn);
+                std::memcpy(buf.data() + 4, agg.speaker.raw, 4);
+            }
         }
     }
 
@@ -467,7 +518,7 @@ void BgpTx::buildOpen(TCP::Connection& connection, Session& session)
 {
     const auto& caps = session.getLocalCaps();
     const auto& proc = session.getNeighbor().getProcess();
-    const uint32_t localAs = proc.asNumber;
+    const uint32_t localAs = caps.asn;
     const uint32_t rid = proc.getRouterId();
 
     uint16_t openSize = BgpHeader::fixedSize + BgpOpenHeader::fixedSize;
@@ -507,6 +558,7 @@ void BgpTx::buildOpen(TCP::Connection& connection, Session& session)
 
 void BgpTx::buildNotification(TCP::Connection& connection, const Notification& notification)
 {
+    if (notification.code == 0) return;
     uint16_t notifSize = static_cast<uint8_t>(2 + notification.data.size());
     uint16_t bgpSize = static_cast<uint16_t>(BgpHeader::fixedSize + notifSize);
     std::span<uint8_t> buf = connection.reserveSpan(bgpSize);

@@ -76,10 +76,10 @@ public:
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
     Config::OspfRegistry& getConfigs() { return configs.get(); }
-    __uint128_t getConfigKey() const { return configs.getKey(); }
+    __uint128_t getConfigKey() const { return readU128(configs.getKey().dataPtr()); }
     const Config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
     OspfRib& getRib() { return rib; }
-    ProcessQueue& getScheduler() { return scheduler; }
+    ProcessQueueRef getScheduler() { return scheduler.ref(); }
     const OspfRib& getRib() const { return rib; }
     uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const

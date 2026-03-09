@@ -228,25 +228,25 @@ using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
 
 enum class BgpNeighborSession
 {
-    BGP_BASE, // TODO
+    BGP_BASE,
     DESCRIPTION, // TODO
-    DISABLE_CONNECTION_CHECK, // TODO
-    EBGP_MULTIHOP, // TODO
-    EBGP_MAX_HOP_COUNT, // TODO
-    FALL_OVER, // TODO
+    DISABLE_CONNECTION_CHECK,
+    EBGP_MULTIHOP, // TODO: need tcp first
+    EBGP_MAX_HOP_COUNT, // TODO: need tcp first
+    FALL_OVER, // TODO: needs rib callbacks
     FALL_OVER_BFD_CHECK_CONTROL_PLANE_FAILURE, // TODO
     FALL_OVER_BFD_MULTI_HOP, // TODO
     FALL_OVER_BFD_SINGLE_HOP, // TODO
     FALL_OVER_ROUTE_MAP, // TODO
     HAMODE_GRACEFUL_RESTART, // TODO
     INHERIT_PEER_SESSION, // TODO
-    LOCAL_AS, // TODO
-    LOCAL_AS_AS, // TODO
-    LOCAL_AS_NO_PREPEND, // TODO
-    LOCAL_AS_REPLACE_AS, // TODO
-    LOCAL_AS_DUAL_AS, // TODO
+    LOCAL_AS,
+    LOCAL_AS_AS,
+    LOCAL_AS_NO_PREPEND,
+    LOCAL_AS_REPLACE_AS,
+    LOCAL_AS_DUAL_AS,
     PASSWORD, // TODO
-    PATH_ATTRIBUTE, // TODO
+    PATH_ATTRIBUTE,
     PEER_GROUP, // TODO
     REMOTE_AS,
     SHUTDOWN, // TODO
@@ -277,6 +277,8 @@ enum class BgpNeighborSession
 
 CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_SESSION_DEFAULTS);
 
+void BgpNeighborSessionPathAttribute(void*);
+
 using BgpNeighborSessionRegistry = SubRegistry<RegistryKey<20>, BgpNeighborSession,
     ReferenceContainer<BgpBaseRegistry CONFIG_INDEX_ARG(BgpNeighborSession::BGP_BASE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::DESCRIPTION)>,
@@ -298,7 +300,6 @@ using BgpNeighborSessionRegistry = SubRegistry<RegistryKey<20>, BgpNeighborSessi
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::PASSWORD)>,
     ValueField<std::vector<std::tuple<
         bool,    // true = discard, false = treat-as-withdraw
-        bool,    // isRanged
         uint8_t, // start
         uint8_t  // end
     >> CONFIG_INDEX_ARG(BgpNeighborSession::PATH_ATTRIBUTE)>,

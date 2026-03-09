@@ -37,6 +37,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRo
         }
     }())
 {
+    configs->context().set(this);
     calculateRID();
 }
 

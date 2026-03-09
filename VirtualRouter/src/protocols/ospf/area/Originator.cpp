@@ -15,7 +15,7 @@
 
 namespace OSPF
 {
-Originator::Originator(Area& a) : area(a), scheduler(area.process().getScheduler())
+Originator::Originator(Area& a) : area(a)
 {
     auto& configs = a.getConfigs();
     auto type = configs.get<Config::OspfArea::AREA_TYPE>().load();
@@ -35,7 +35,7 @@ void Originator::cancelGroupPacing()
     for (auto& b : refreshBuckets)
     {
         if (b.timerId != 0)
-            scheduler.cancel(b.timerId);
+            area.getScheduler().cancel(b.timerId);
         b.timerId = 0;
         b.keys.clear();
     }
@@ -93,7 +93,7 @@ void Originator::initGroupPacing()
     {
         auto firstFire = now + std::chrono::seconds(i * groupIntervalSec);
 
-        refreshBuckets[i].timerId = scheduler.schedule(firstFire, [this, i](uint32_t tid)
+        refreshBuckets[i].timerId = area.getScheduler().postAfter(firstFire, [this, i](uint32_t tid)
         {
             handleGroupPackingBucket<Policy>(tid, i);
         });
@@ -177,7 +177,7 @@ void Originator::handleGroupPackingBucket(uint32_t tid, uint32_t bucketIndex)
     auto period = std::chrono::seconds(bucketCount * groupIntervalSec);
 
     auto nextFire = std::chrono::steady_clock::now() + period;
-    bucket.timerId = scheduler.schedule(nextFire, [this, bucketIndex](uint32_t tid2)
+    bucket.timerId = area.getScheduler().postAfter(nextFire, [this, bucketIndex](uint32_t tid2)
     {
         handleGroupPackingBucket<Policy>(tid2, bucketIndex);
     });
@@ -307,7 +307,7 @@ void Originator::requestReorigination(const LsaKey& key)
     state.pending = true;
     state.nextFire = now + std::chrono::milliseconds(fireDelay);
 
-    state.timerId = scheduler.schedule(state.nextFire, [this, key](uint32_t)
+    state.timerId = area.getScheduler().postAfter(state.nextFire, [this, key](uint32_t)
     {
         this->runReorigination<Policy>(key);
     });

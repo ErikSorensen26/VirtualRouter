@@ -9,8 +9,8 @@
 
 namespace OSPF
 {
-FloodManager::FloodManager(Area& area, ProcessQueue& sch)
-    : area(area), scheduler(sch), fq(0)
+FloodManager::FloodManager(Area& area)
+    : area(area), fq(0)
 {}
 
 void FloodManager::enqueueFlood(LsaRecordRef& record, const FloodInfo& info)
@@ -40,7 +40,7 @@ void FloodManager::startFloodTimer()
 
     auto fireTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(pacingMs);
 
-    timerId = scheduler.schedule(fireTime, [this](uint32_t) {
+    timerId = area.getScheduler().postAfter(fireTime, [this](uint32_t) {
         onFloodTimer();
     });
 }

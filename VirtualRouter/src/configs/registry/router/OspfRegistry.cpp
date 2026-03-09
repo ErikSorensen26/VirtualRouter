@@ -6,36 +6,41 @@
 
 namespace Config
 {
-void OspfAreaTypeChange(OSPF::Area& area)
+void OspfAreaTypeChange(void* a)
 {
+    OSPF::Area& area = *static_cast<OSPF::Area*>(a);
     area.process().getScheduler().post([&area]{
         area.reset();
     });
 }
 
-void OspfAreaSycnRanges(OSPF::Area& area)
+void OspfAreaSycnRanges(void* a)
 {
+    OSPF::Area& area = *static_cast<OSPF::Area*>(a);
     area.process().getScheduler().post([&area] {
         area.syncRangeConfig();
     });
 }
 
-void OspfSyncNeighbors(OSPF::OspfProcess& base)
+void OspfSyncNeighbors(void* b)
 {
+    OSPF::OspfProcess& base = *static_cast<OSPF::OspfProcess*>(b);
     base.getScheduler().post([&base] {
         base.getIfaceMgr().syncNeighbors();
     });
 }
 
-void OspfSyncNetworks(OSPF::OspfProcess& base)
+void OspfSyncNetworks(void* b)
 {
+    OSPF::OspfProcess& base = *static_cast<OSPF::OspfProcess*>(b);
     base.getScheduler().post([&base] {
         base.getIfaceMgr().refreshInterfaceList();
     });
 }
 
-void OspfSyncSummaries(OSPF::OspfProcess& base)
+void OspfSyncSummaries(void* b)
 {
+    OSPF::OspfProcess& base = *static_cast<OSPF::OspfProcess*>(b);
     base.getScheduler().post([&base] {
         base.syncSummaryConfig();
     });

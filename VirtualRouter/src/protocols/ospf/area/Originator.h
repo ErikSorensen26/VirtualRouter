@@ -5,7 +5,7 @@
 
 #include "ospf/database/LSDB.hpp"
 
-class ProcessQueue;
+class ProcessQueueRef;
 
 namespace OSPF
 {
@@ -122,7 +122,6 @@ protected:
 protected:
 
     Area& area;
-    ProcessQueue& scheduler;
 };
 
 template <typename RouterLink>

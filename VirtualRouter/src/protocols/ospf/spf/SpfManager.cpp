@@ -10,8 +10,8 @@
 
 namespace OSPF
 {
-SpfManager::SpfManager(Area& area, ProcessQueue& scheduler)
-    : area(area), scheduler(scheduler), rib(area.process().getRib())
+SpfManager::SpfManager(Area& area)
+    : area(area), rib(area.process().getRib())
 {}
 
 template<typename Policy>
@@ -67,7 +67,7 @@ void SpfManager::scheduleSpf(uint32_t delayMs)
         return;
 
     auto delay = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
-    timerId = scheduler.schedule(delay, [this](uint32_t) {
+    timerId = area.getScheduler().postAfter(delay, [this](uint32_t) {
         this->onSpfTimer<Policy>();
     });
 }

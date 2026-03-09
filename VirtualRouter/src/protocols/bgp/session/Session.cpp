@@ -11,13 +11,13 @@
 
 namespace BGP
 {
-Session::Session(Neighbor& nbr, ProcessQueueRef queue) noexcept
+Session::Session(Neighbor& nbr) noexcept
     : neighbor(nbr),
       base(nbr.getConfigs().get<Config::BgpNeighborSession::BGP_BASE>().local().get()),
-      queue(std::move(queue)),
       fsm(*this),
-      timers(*this, this->queue)
+      timers(*this)
 {
+    neighbor.buildAttributeRanges();
     holdTime = base.get<Config::BgpTransportBase::HOLDTIME>().load();
     keepaliveInterval = holdTime / 3;
 
@@ -41,8 +41,14 @@ void Session::buildLocalCapabilities()
 {
     auto procCfg = neighbor.getProcess().getConfigs();
 
+    {
+        Config::BgpNeighborSessionRegistry& cfgs = neighbor.getConfigs();
+        auto& localAs = cfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
+        localCaps.asn = (cfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() && localAs.hasValue())
+            ? localAs.load() : neighbor.getProcess().asNumber;
+    }
+
     localCaps.asn32bit = true;
-    localCaps.asn = neighbor.getProcess().asNumber;
 
     localCaps.routeRefresh = true;
     localCaps.enhancedRouteRefresh = true;
@@ -136,7 +142,7 @@ void Session::closeAllConnections() noexcept
 
 void Session::postEvent(FsmEvent event)
 {
-    queue.post([this, event]() {
+    neighbor.getScheduler().post([this, event]() {
         fsm.processEvent(event);
     });
 }
@@ -243,9 +249,7 @@ void Session::onNotificationReceived(std::span<const uint8_t> data)
 
 bool Session::isEbgp() const noexcept
 {
-    auto& remAs = neighbor.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
-    if (!remAs.hasValue()) return false;
-    return remAs.load() != neighbor.getProcess().asNumber;
+    return neighbor.isEbgp();
 }
 
 bool Session::resolveCollision(uint32_t incomingPeerRid)

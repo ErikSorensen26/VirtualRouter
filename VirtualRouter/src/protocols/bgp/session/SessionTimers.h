@@ -29,7 +29,7 @@ class Session;
 class SessionTimers
 {
 public:
-    explicit SessionTimers(Session& session, ProcessQueueRef queue) noexcept;
+    explicit SessionTimers(Session& session) noexcept;
 
     SessionTimers(const SessionTimers&) = delete;
     SessionTimers& operator=(const SessionTimers&) = delete;
@@ -61,7 +61,7 @@ private:
     bool cancel(std::atomic<uint32_t>& timerId) noexcept;
 
     Session& session;
-    ProcessQueueRef queue;
+    ProcessQueueRef& scheduler;
 
     std::atomic<uint32_t> connectionRetryTimerId{0};
     std::atomic<uint32_t> holdTimerId{0};

@@ -3,6 +3,7 @@
 #ifndef SPF_MANAGER_H
 #define SPF_MANAGER_H
 
+#include <ControlScheduler.h>
 #include <chrono>
 #include <cstdint>
 #include <atomic>
@@ -20,7 +21,7 @@ class OspfRib;
 class SpfManager
 {
 public:
-    explicit SpfManager(Area& area, ProcessQueue& scheduler);
+    explicit SpfManager(Area& area);
 
     template<typename Policy>
     void requestSpf();
@@ -42,7 +43,6 @@ private:
     SpfEngine engine;
 
     Area& area;
-    ProcessQueue& scheduler;
     OspfRib& rib;
 
     std::atomic<bool> requested{false};

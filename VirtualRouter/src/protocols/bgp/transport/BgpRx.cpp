@@ -155,7 +155,7 @@ bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notificati
     // BGP Identifier: must not be 0 or multicast
     uint32_t peerRid = open.getIdentifier();
 
-    if (peerRid == 0 || Functions::isMulticast(open.getIdentifierBuf(), AddressFamily::IPv4))
+    if (peerRid == 0 || Functions::isMulticast(open.getIdentifierBuf(), ::AddressFamily::IPv4))
     {
         error.code = BGP_NOTIFICATION_OPEN_BAD_IDENTIFIER;
         return false;
@@ -316,7 +316,9 @@ bool BgpRx::processUpdate(Session& session, std::span<uint8_t> payload, Notifica
     if (attrLen != 0)
     {
         if (!parsePathAttributes(session, {payload.data() + offset, attrLen}, update, error))
-            return false;
+        {
+            return error.code == 0; // Do not invalide if there is no error
+        }
     }
     offset += attrLen;
 
@@ -615,6 +617,15 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
 
         std::span<uint8_t> val(data.data() + pos, attrLen);
         pos += attrLen;
+
+        {
+            // NOTE: 1,2,3,4,8,14,15,16 not allowed 
+            auto& attrRanges = session.getNeighbor().getAttrRanges();
+            if (attrRanges.discard.test(type))
+                continue;
+            if (attrRanges.withdraw.test(type))
+                return false;
+        }
 
         auto wellKnownFlagError = [&]() -> bool
         {
@@ -960,7 +971,6 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 break;
             }
         }
-
     }
 
     // AS4 path reconstruction (RFC 4893 §4.2.3)
