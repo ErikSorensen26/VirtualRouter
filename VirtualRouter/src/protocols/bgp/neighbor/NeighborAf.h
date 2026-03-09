@@ -4,13 +4,15 @@
 #define BGP_NEIGHBOR_AF_H
 
 #include "bgp/BgpTypes.hpp"
-#include "configs/registry/router/BgpRegistry.h"
+#include "NeighborAfConfigs.hpp"
 
 namespace BGP
 {
 
 class Neighbor;
 class BgpProcess;
+class PeerGroup;
+class PeerPolicyTemplate;
 
 class NeighborAf
 {
@@ -20,8 +22,8 @@ public:
 
     const AfiSafi family;
 
-    Config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
-    const Config::BgpNeighborRegistry& getConfigs() const { return configs.get(); }
+    NeighborAfConfigs& getConfigs() { return configs; }
+    const NeighborAfConfigs& getConfigs() const { return configs; }
     Neighbor& globalNbr() { return parent; }
     const Neighbor& globalNbr() const { return parent; }
 
@@ -29,7 +31,7 @@ public:
 
 private:
     Neighbor& parent;
-    Config::Reference<Config::BgpNeighborRegistry> configs;
+    NeighborAfConfigs configs;
 };
 }
 

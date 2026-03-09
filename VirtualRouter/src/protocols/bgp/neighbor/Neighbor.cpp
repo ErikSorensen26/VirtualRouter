@@ -1,10 +1,14 @@
 // Neighbor.cpp
 
+
+// TODO: fix peer groups, templates are good
+
 #include <VirtualRouter.h>
 
 #include "configs/Registry.hpp"
 #include "Neighbor.h"
 #include "NeighborAf.h"
+#include "PeerTemplate.h"
 #include "bgp/BgpProcess.h"
 
 namespace BGP
@@ -20,14 +24,21 @@ Neighbor::Neighbor(const IPAddress& ipAddress, BgpProcess& proc)
           return proc.routingInstance->getRegistry().emplaceBack(neighborConfigs, ipAddress, key);
       }())
 {
-    configs->context().set(this);
+    configs.getConfigs()->context().set(this);
 
-    // Mask base configs
-    proc.routingInstance->getRegistry().ensure(
-        configs->get<Config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<Config::Bgp::BGP_BASE>().local(),
-        configs.getKey()
-    );
+    // Resolve peer group
+    {
+        auto& pgField = configs.get<Config::BgpNeighborSession::PEER_GROUP>();
+        if (pgField.hasValue())
+            configs.setPeerGroup(proc.getNtable().lookupPeerGroup(pgField.load()));
+    }
+
+    // Resolve session-level peer template from INHERIT_PEER_SESSION.
+    {
+        auto& inhSessField = configs.get<Config::BgpNeighborSession::INHERIT_PEER_SESSION>();
+        if (inhSessField.hasValue())
+            configs.setPeerSessionTemplate(proc.getNtable().lookupPeerSessionTemplate(inhSessField.load()));
+    }
 }
 
 Neighbor::~Neighbor()
@@ -61,7 +72,7 @@ const NeighborAf& Neighbor::getAfNeighbor(AfiSafi& afi) const
 
 bool Neighbor::isEbgp() const noexcept
 {
-    auto& remAs = configs->get<Config::BgpNeighborSession::REMOTE_AS>();
+    auto& remAs = configs.get<Config::BgpNeighborSession::REMOTE_AS>();
     if (!remAs.hasValue()) return false;
     return remAs.load() != process.asNumber;
 }
@@ -71,7 +82,7 @@ void Neighbor::buildAttributeRanges()
     attrRanges.discard.reset();
     attrRanges.withdraw.reset();
 
-    configs->get<Config::BgpNeighborSession::PATH_ATTRIBUTE>().withRead([this](std::vector<std::tuple<bool, uint8_t, uint8_t>>& ranges) {
+    configs.get<Config::BgpNeighborSession::PATH_ATTRIBUTE>().withRead([this](std::vector<std::tuple<bool, uint8_t, uint8_t>>& ranges) {
         for (const auto& [disc, lo, hi] : ranges)
         {
             if (disc)

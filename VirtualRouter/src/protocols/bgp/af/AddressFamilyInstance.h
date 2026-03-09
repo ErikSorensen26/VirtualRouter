@@ -4,6 +4,7 @@
 #define BGP_ADDRESS_FAMILY_INSTANCE_H
 
 #include <functional>
+#include <map>
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
 
@@ -322,7 +323,6 @@ private:
     }
 
     // Returns true if the route is valid before entering Adj-RIB-In.
-    // Add ingress route-map / prefix-list / community filter logic here.
     bool applyIngressPolicy(const InboundRoute<NlriT>& route)
     {
         PathAttribute pathAttrs = AddressFamilyInstanceHelper::getAttrMgr(process).get(route.pathId);
@@ -352,10 +352,9 @@ private:
         return true; // true = accept
     }
 
-    // Returns nullopt if the route should be suppressed for this peer (outbound drop).
-    // Returns the (possibly modified) PathAttribute to advertise otherwise.
-    // Add outbound route-map / prefix-list / community filter logic here.
-    std::optional<PathAttribute> applyEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
+    // Group-level egress: strip LOCAL_PREF and prepend AS-path.
+    // Result is shared by all members of the same peer group + isEbgp combination.
+    std::optional<PathAttribute> applyGroupEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
     {
         auto pa_opt = route.getPathAttributes();
         if (!pa_opt.has_value())
@@ -363,16 +362,12 @@ private:
 
         PathAttribute pa = *pa_opt;
 
-        const NeighborAf& localNeighbor = session.getNeighbor().getAfNeighbor(family);
-        const auto& cfgs = localNeighbor.getConfigs();
-
         if (session.isEbgp())
         {
             auto& sesCfgs = session.getNeighbor().getConfigs();
 
             pa.attrs.localPref = std::nullopt;
 
-            // Prepend own AS to AS_PATH
             AsPathSegment& seg = getAsSegment(pa.attrs);
             uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
             auto& localAs = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
@@ -387,29 +382,57 @@ private:
                 seg.asns.insert(seg.asns.begin(), routerAs);
                 seg.asns.insert(seg.asns.begin(), localAs.load());
             }
+        }
 
-            // next-hop-self for eBGP
+        return pa;
+    }
+
+    // Per-member nexthop adjustment, applied after group-level policy.
+    void applyMemberNexthop(PathAttribute& pa, const InboundRoute<NlriT>& route,
+                            const NeighborAf& afNbr, const Session& session)
+    {
+        const auto& cfgs = afNbr.getConfigs();
+
+        if (session.isEbgp())
+        {
             if (!cfgs.get<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||
                 cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = session.getNeighbor().neighborAddress;
         }
         else
         {
-            // next-hop-self for iBGP
             if ((cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
                  route.neighborRouterId != AddressFamilyInstanceHelper::getRid(process)) ||
                 cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = session.getPrimaryConnection()->socketKey()->local.address;
         }
+    }
 
-        // TODO: outbound route-map / prefix-list / community filter / MED setting etc.
+    // Combined egress policy for ungrouped neighbors.
+    std::optional<PathAttribute> applyEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
+    {
+        auto pa = applyGroupEgressPolicy(route, session);
+        if (!pa.has_value())
+            return std::nullopt;
 
+        applyMemberNexthop(*pa, route, session.getNeighbor().getAfNeighbor(family), session);
         return pa;
     }
 
     void recomputeAdjRibOut(const NlriT& nlri, InboundRoute<NlriT>* best)
     {
         auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+
+        // Cache group-level egress attrs by (PeerGroup*, isEbgp) to avoid redundant work.
+        std::map<std::pair<PeerGroup*, bool>, std::optional<PathAttribute>> groupCache;
+        auto getGroupAttrs = [&](PeerGroup* pg, const InboundRoute<NlriT>& route,
+                                 const Session& session) -> const std::optional<PathAttribute>& {
+            auto key = std::make_pair(pg, session.isEbgp());
+            auto it = groupCache.find(key);
+            if (it == groupCache.end())
+                it = groupCache.emplace(key, applyGroupEgressPolicy(route, session)).first;
+            return it->second;
+        };
 
         AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
             Session* session = nbr.session;
@@ -457,34 +480,49 @@ private:
                 const bool targetIsClient = nbr.getAfNeighbor(family).getConfigs()
                     .get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
 
-                const bool senderIsClient = best->sourceNeighbor.getConfigs()
+                const bool senderIsClient = best->sourceNeighbor->getConfigs()
                     .template get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
 
-                // Non-client route cannot be reflected to a non-client peer.
                 if (!senderIsClient && !targetIsClient)
                 {
                     withdrawFromPeer();
                     return;
                 }
 
-                // Do not reflect back to the originating neighbor.
-                if (&best->sourceNeighbor.globalNbr() == &nbr)
+                if (&best->sourceNeighbor->globalNbr() == &nbr)
                 {
                     withdrawFromPeer();
                     return;
                 }
             }
 
-            auto egressAttrs = applyEgressPolicy(*best, *session);
-            if (!egressAttrs.has_value())
+            NeighborAf& afNbr = nbr.getAfNeighbor(family);
+            PeerGroup* pg = afNbr.getConfigs().getPeerGroup();
+
+            std::optional<PathAttribute> egressAttrs;
+            if (pg)
             {
-                withdrawFromPeer();
-                return;
+                const auto& groupAttrs = getGroupAttrs(pg, *best, *session);
+                if (!groupAttrs.has_value())
+                {
+                    withdrawFromPeer();
+                    return;
+                }
+                egressAttrs = *groupAttrs;
+                applyMemberNexthop(*egressAttrs, *best, afNbr, *session);
+            }
+            else
+            {
+                egressAttrs = applyEgressPolicy(*best, *session);
+                if (!egressAttrs.has_value())
+                {
+                    withdrawFromPeer();
+                    return;
+                }
             }
 
             uint32_t oPid = attrMgr.acquire(egressAttrs->attrs, egressAttrs->path);
 
-            // Skip sending if the egress path is identical to what we already sent.
             auto existing = peerOut.find(nlri);
             if (existing != peerOut.end() && existing->second.pathId == oPid)
             {
@@ -492,7 +530,6 @@ private:
                 return;
             }
 
-            // Replace the outbound entry (destructor releases the old pathId).
             peerOut.erase(nlri);
             peerOut.emplace(std::piecewise_construct,
                 std::forward_as_tuple(nlri),

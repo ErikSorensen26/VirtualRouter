@@ -6,8 +6,8 @@
 #include <bitset>
 #include <ControlScheduler.h>
 
-#include "configs/registry/router/BgpRegistry.h"
 #include "bgp/BgpTypes.hpp"
+#include "NeighborConfigs.hpp"
 
 namespace BGP
 {
@@ -26,6 +26,7 @@ public:
     uint32_t rid = 0;
 
     Session* session = nullptr;
+
     BgpProcess& getProcess() { return process; }
     const BgpProcess& getProcess() const { return process; }
 
@@ -35,9 +36,10 @@ public:
     void delAfNeighbor(AfiSafi& afi);
     NeighborAf& getAfNeighbor(AfiSafi& afi);
     const NeighborAf& getAfNeighbor(AfiSafi& afi) const;
+    std::unordered_map<AfiSafi, NeighborAf>& getAfNeighbors() { return afNeighbors; }
 
-    Config::BgpNeighborSessionRegistry& getConfigs() { return configs.get(); }
-    const Config::BgpNeighborSessionRegistry& getConfigs() const { return configs.get(); }
+    NeighborConfigs& getConfigs() { return configs; }
+    const NeighborConfigs& getConfigs() const { return configs; }
     ProcessQueueRef& getScheduler() { return scheduler; }
     const ProcessQueueRef& getScheduler() const { return scheduler; }
 
@@ -50,19 +52,21 @@ public:
 
     void buildAttributeRanges();
     const AttributeRanges& getAttrRanges() { return attrRanges; }
-    
+
 private:
     AttributeRanges attrRanges;
 
 private:
     friend NeighborAf;
 
+    PeerGroup* peerGroup = nullptr;
+
     BgpProcess& process;
     ProcessQueueRef scheduler;
 
     std::unordered_map<AfiSafi, NeighborAf> afNeighbors;
 
-    Config::Reference<Config::BgpNeighborSessionRegistry> configs;
+    NeighborConfigs configs;
 };
 }
 

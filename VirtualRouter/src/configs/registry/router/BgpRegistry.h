@@ -41,6 +41,30 @@ inline RegistryKey<20> generateBgpSessionKey(uint32_t bgp, const IPAddress& nbr)
     return data;
 }
 
+static RegistryKey<16> generatePeerGroupAfKey(uint32_t vrf, const std::string& name,
+                                                       uint16_t afi, uint8_t safi)
+{
+    Config::RegistryKey<16> key;
+    uint64_t h = static_cast<uint64_t>(std::hash<std::string>{}(name + "\xFF\x01peer_group_af"));
+    std::memcpy(key.dataPtr(), &h, 8);
+    writeU32(key.dataPtr() + 8, vrf);
+    writeU16(key.dataPtr() + 12, afi);
+    key[14] = safi;
+    key[15] = 0;
+    return key;
+}
+
+static RegistryKey<20> generatePeerGroupSessionKey(uint32_t vrf, const std::string& name)
+{
+    Config::RegistryKey<20> key;
+    uint64_t h1 = static_cast<uint64_t>(std::hash<std::string>{}(name));
+    uint64_t h2 = static_cast<uint64_t>(std::hash<std::string>{}(name + "\xFF\x00peer_group_salt"));
+    std::memcpy(key.dataPtr(), &h1, 8);
+    std::memcpy(key.dataPtr() + 8, &h2, 8);
+    writeU32(key.dataPtr() + 16, vrf);
+    return key;
+}
+
 inline RegistryKey<23> generateBgpNeighborKey(const RegistryKey<20>& sesKey, uint16_t afi, uint8_t safi)
 {
     RegistryKey<23> data(sesKey);
@@ -76,59 +100,60 @@ using BgpBaseRegistry = SubRegistry<RegistryKey<20>, BgpTransportBase,
 enum class BgpNeighbor
 {
     ACTIVATE, // TODO
-    ADDITIONAL_PATHS_RECEIVE, // TODO
-    ADDITIONAL_PATHS_SEND, // TODO
-    ADVERTISE_ADDITIONAL_PATHS_ALL, // TODO
-    ADVERTISE_ADDITIONAL_PATHS_BEST, // TODO
-    ADVERTISE_ADDITIONAL_GROUP_BEST, // TODO
-    ADVERTISE_BEST_EXTERNAL, // TODO
-    ADVERTISE_DIVERSE_PATH_BACKUP, // TODO
-    ADVERTISE_DIVERSE_PATH_MPATH, // TODO
-    ADVERTISE_MAP, // TODO
-    ADVERTISE_MAP_EXIST_CONDITION, // TODO
-    ADVERTISE_MAP_NON_EXIST_CONDITION, // TODO
+    ADDITIONAL_PATHS_RECEIVE, // TODO: peer
+    ADDITIONAL_PATHS_SEND, // TODO: peer
+    ADVERTISE_ADDITIONAL_PATHS_ALL, // TODO: peer
+    ADVERTISE_ADDITIONAL_PATHS_BEST, // TODO: peer
+    ADVERTISE_ADDITIONAL_GROUP_BEST, // TODO: peer
+    ADVERTISE_BEST_EXTERNAL, // TODO: peer
+    ADVERTISE_DIVERSE_PATH_BACKUP, // TODO: peer
+    ADVERTISE_DIVERSE_PATH_MPATH, // TODO: peer
+    ADVERTISE_MAP, // TODO: peer
+    ADVERTISE_MAP_EXIST_CONDITION, // TODO: peer
+    ADVERTISE_MAP_NON_EXIST_CONDITION, // TODO: peer
     ADVERTISE_INTERVAL, // TODO
     ALLOWAS_IN, // TODO
     ALLOWAS_IN_OCCURANCES, // TODO
-    ANNOUNCE_RPKI_STATE, // TODO
-    ORF_BOTH, // TODO
-    ORF_RECEIVE, // TODO
+    ANNOUNCE_RPKI_STATE, // TODO: peer
+    ORF_BOTH, // TODO: peer
+    ORF_RECEIVE, // TODO: peer
     ORF_SEND, // TODO
+    DEFAULT_ORIGINATE, // TODO
     ORIGINATE_ROUTE_MAP, // TODO
     DISTRIBUTE_LIST_IN, // TODO
     DISTRIBUTE_LIST_IN_INTERFACE, // TODO
-    DISTRIBUTE_LIST_OUT, // TODO
-    DISTRIBUTE_LIST_OUT_INTERFACE, // TODO
+    DISTRIBUTE_LIST_OUT, // TODO: peer
+    DISTRIBUTE_LIST_OUT_INTERFACE, // TODO: peer
     DMZLINK_BW, // TODO
     FILTER_LIST_IN, // TODO
-    FILTER_LIST_OUT, // TODO
-    INHERIT_PEER_POLICY, // TODO
+    FILTER_LIST_OUT, // TODO: peer
+    INHERIT_PEER_POLICY,
     MAXIMUM_PREFIX, // TODO
     MAXIMUM_PREFIX_THRESHOLD, // TODO
     MAXIMUM_PREFIX_RESTART, // TODO
     MAXIMUM_PREFIX_WARNING_ONLY, // TODO
-    NEXT_HOP_SELF,
-    NEXT_HOP_SELF_ALL,
-    NEXT_HOP_UNCHANGED,
+    NEXT_HOP_SELF, // peer
+    NEXT_HOP_SELF_ALL, // peer
+    NEXT_HOP_UNCHANGED, // peer
     PREFIX_LIST_IN, // TODO
-    PREFIX_LIST_OUT, // TODO
-    REMOVE_PRIVATE_AS, // TODO
-    REMOVE_PRIVATE_AS_ALL, // TODO
+    PREFIX_LIST_OUT, // TODO: peer       prefix/distribute list can not co-exist
+    REMOVE_PRIVATE_AS, // TODO: peer
+    REMOVE_PRIVATE_AS_ALL, // TODO: peer
     ROUTE_MAP_IN, // TODO
-    ROUTE_MAP_OUT, // TODO
-    ROUTE_REFLECTOR_CLIENT, // TODO
-    ROUTE_SERVER_CLIENT, // TODO
-    ROUTE_SERVER_CLIENT_CONTEXT, // TODO
-    SEND_COMMUNITY, // TODO
-    SEND_COMMUNITY_BOTH, // TODO
-    SEND_COMMUNITY_EXTENDED, // TODO
-    SEND_COMMUNITY_STANDARD, // TODO
+    ROUTE_MAP_OUT, // TODO: peer
+    ROUTE_REFLECTOR_CLIENT, // TODO: peer
+    ROUTE_SERVER_CLIENT, // TODO: peer
+    ROUTE_SERVER_CLIENT_CONTEXT, // TODO: peer
+    SEND_COMMUNITY, // TODO: peer
+    SEND_COMMUNITY_BOTH, // TODO: peer
+    SEND_COMMUNITY_EXTENDED, // TODO: peer
+    SEND_COMMUNITY_STANDARD, // TODO: peer
     SLOW_PEER_MODE, // TODO
     SLOW_PEER_DETECTION, // TODO
     SLOW_PEER_DETECTION_THRESHOLD, // TODO
     SOFT_RECONFIGURATION, // TODO
     TRANSLATE_UPDATE, // TODO
-    UNSUPPRESS_MAP, // TODO
+    UNSUPPRESS_MAP, // TODO: peer
     WEIGHT,
     COUNT
 };
@@ -148,6 +173,7 @@ enum class BgpNeighbor
     X(BgpNeighbor, ORF_BOTH, false) \
     X(BgpNeighbor, ORF_RECEIVE, false) \
     X(BgpNeighbor, ORF_SEND, false) \
+    X(BgpNeighbor, DEFAULT_ORIGINATE, false) \
     X(BgpNeighbor, DMZLINK_BW, false) \
     X(BgpNeighbor, MAXIMUM_PREFIX_WARNING_ONLY, false) \
     X(BgpNeighbor, NEXT_HOP_SELF, false) \
@@ -188,6 +214,7 @@ using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_BOTH)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_RECEIVE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_SEND)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::DEFAULT_ORIGINATE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ORIGINATE_ROUTE_MAP)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN_INTERFACE)>,
@@ -239,15 +266,15 @@ enum class BgpNeighborSession
     FALL_OVER_BFD_SINGLE_HOP, // TODO
     FALL_OVER_ROUTE_MAP, // TODO
     HAMODE_GRACEFUL_RESTART, // TODO
-    INHERIT_PEER_SESSION, // TODO
-    LOCAL_AS,
-    LOCAL_AS_AS,
-    LOCAL_AS_NO_PREPEND,
-    LOCAL_AS_REPLACE_AS,
-    LOCAL_AS_DUAL_AS,
+    INHERIT_PEER_SESSION, // TODO: peer
+    LOCAL_AS, // peer
+    LOCAL_AS_AS, // peer
+    LOCAL_AS_NO_PREPEND, // peer
+    LOCAL_AS_REPLACE_AS, // peer
+    LOCAL_AS_DUAL_AS, // peer
     PASSWORD, // TODO
-    PATH_ATTRIBUTE,
-    PEER_GROUP, // TODO
+    PATH_ATTRIBUTE, // peer
+    PEER_GROUP, // TODO: peer
     REMOTE_AS,
     SHUTDOWN, // TODO
     TRANSPORT_CONNECTION_MODE, // TODO

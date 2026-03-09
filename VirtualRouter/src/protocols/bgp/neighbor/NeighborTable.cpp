@@ -10,10 +10,14 @@
 namespace BGP
 {
 NeighborTable::NeighborTable(BgpProcess& proc)
-    : process(proc) {}
+    : process(proc),
+      peerTemplates(proc)
+{}
 
 void NeighborTable::syncNeighbors()
 {
+    syncPeerGroups();
+
     auto& configs = process.getConfigs();
 
     std::unordered_set<IPAddress> unseen;
@@ -39,6 +43,11 @@ void NeighborTable::syncNeighbors()
     {
         deleteNeighbor(nbr);
     }
+}
+
+void NeighborTable::syncPeerGroups()
+{
+    peerTemplates.sync();
 }
 
 Neighbor* NeighborTable::createNeighbor(const IPAddress& ipAddress)
@@ -129,5 +138,65 @@ void NeighborTable::runDccCheck()
         }
     }
     disableConnectionCheck = false;
+}
+
+PeerGroup& NeighborTable::createPeerGroup(const std::string& name)
+{
+    return peerTemplates.createPeerGroup(name);
+}
+
+void NeighborTable::removePeerGroup(const std::string& name)
+{
+    peerTemplates.removePeerGroup(name);
+}
+
+PeerSessionTemplate& NeighborTable::createPeerSessionTemplate(const std::string& name)
+{
+    return peerTemplates.createPeerSessionTemplate(name);
+}
+
+void NeighborTable::removePeerSessionTemplate(const std::string& name)
+{
+    peerTemplates.removePeerSessionTemplate(name);
+}
+
+PeerPolicyTemplate& NeighborTable::createPeerPolicyTemplate(const std::string& name)
+{
+    return peerTemplates.createPeerPolicyTemplate(name);
+}
+
+void NeighborTable::removePeerPolicyTemplate(const std::string& name)
+{
+    peerTemplates.removePeerPolicyTemplate(name);
+}
+
+PeerGroup* NeighborTable::lookupPeerGroup(const std::string& name)
+{
+    return peerTemplates.lookupPeerGroup(name);
+}
+
+const PeerGroup* NeighborTable::lookupPeerGroup(const std::string& name) const
+{
+    return peerTemplates.lookupPeerGroup(name);
+}
+
+PeerSessionTemplate* NeighborTable::lookupPeerSessionTemplate(const std::string& name)
+{
+    return peerTemplates.lookupPeerSessionTemplate(name);
+}
+
+const PeerSessionTemplate* NeighborTable::lookupPeerSessionTemplate(const std::string& name) const
+{
+    return peerTemplates.lookupPeerSessionTemplate(name);
+}
+
+PeerPolicyTemplate* NeighborTable::lookupPeerPolicyTemplate(const std::string& name)
+{
+    return peerTemplates.lookupPeerPolicyTemplate(name);
+}
+
+const PeerPolicyTemplate* NeighborTable::lookupPeerPolicyTemplate(const std::string& name) const
+{
+    return peerTemplates.lookupPeerPolicyTemplate(name);
 }
 }

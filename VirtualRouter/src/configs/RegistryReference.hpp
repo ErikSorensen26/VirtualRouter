@@ -9,13 +9,6 @@
 namespace Config
 {
 template <typename T>
-concept IsSubRegistry = requires
-    {
-        typename T::type;
-        typename T::FieldTuple;
-    };
-
-template <typename T>
 class Reference
 {
 public:

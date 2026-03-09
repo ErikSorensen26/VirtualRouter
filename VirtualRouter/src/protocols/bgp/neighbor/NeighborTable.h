@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "bgp/neighbor/Neighbor.h"
+#include "bgp/neighbor/PeerTemplate.h"
 
 struct IPAddress;
 
@@ -22,6 +23,8 @@ public:
 
     void syncNeighbors();
 
+    void syncPeerGroups();
+
     Neighbor* createNeighbor(const IPAddress& ipAddress);
 
     void deleteNeighbor(const IPAddress& ipAddress);
@@ -36,6 +39,26 @@ public:
     bool deactivatePeer(uint32_t peer);
 
     void cancelAllHoldTimers();
+
+    // Re-evaluate disableConnectionCheck from all neighbor configs.
+    void runDccCheck();
+
+    // Whether any neighbor has DISABLE_CONNECTION_CHECK enabled.
+    bool disableConnectionCheck = false;
+
+    PeerGroup& createPeerGroup(const std::string& name);
+    void removePeerGroup(const std::string& name);
+    PeerSessionTemplate& createPeerSessionTemplate(const std::string& name);
+    void removePeerSessionTemplate(const std::string& name);
+    PeerPolicyTemplate& createPeerPolicyTemplate(const std::string& name);
+    void removePeerPolicyTemplate(const std::string& name);
+
+    PeerGroup* lookupPeerGroup(const std::string& name);
+    const PeerGroup* lookupPeerGroup(const std::string& name) const;
+    PeerSessionTemplate* lookupPeerSessionTemplate(const std::string& name);
+    const PeerSessionTemplate* lookupPeerSessionTemplate(const std::string& name) const;
+    PeerPolicyTemplate* lookupPeerPolicyTemplate(const std::string& name);
+    const PeerPolicyTemplate* lookupPeerPolicyTemplate(const std::string& name) const;
 
     template <typename F>
     void forEachNeighbor(F&& fn)
@@ -70,6 +93,7 @@ private:
     std::unordered_map<uint32_t, Neighbor*> peers;
 
     BgpProcess& process;
+    PeerTemplateTable peerTemplates;
 };
 }
 

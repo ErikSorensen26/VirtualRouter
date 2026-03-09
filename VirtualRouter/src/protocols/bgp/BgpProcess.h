@@ -37,7 +37,6 @@ public:
     const NeighborTable& getNtable() const { return ntable; }
     AttributeManager& getAttrMgr() { return attrMgr; }
     const AttributeManager& getAttrMgr() const { return attrMgr; }
-
     uint32_t getRouterId() const noexcept
     {
         auto& rid = getConfigs().get<Config::Bgp::BGP_ROUTER_ID>();
