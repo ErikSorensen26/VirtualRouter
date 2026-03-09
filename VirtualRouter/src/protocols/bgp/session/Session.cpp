@@ -42,7 +42,7 @@ void Session::buildLocalCapabilities()
     auto procCfg = neighbor.getProcess().getConfigs();
 
     {
-        Config::BgpNeighborSessionRegistry& cfgs = neighbor.getConfigs();
+        auto& cfgs = neighbor.getConfigs();
         auto& localAs = cfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
         localCaps.asn = (cfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() && localAs.hasValue())
             ? localAs.load() : neighbor.getProcess().asNumber;
@@ -77,9 +77,9 @@ void Session::initiateConnection()
 
     TCP::ConnectOptions opts;
     opts.callback = BgpProcess::onConnectCallback;
-    opts.callbackUser = &proc;
+    opts.callbackUser = this;
     opts.recvCallback = BgpProcess::onReceiveCallback;
-    opts.recvUser = &proc;
+    opts.recvUser = this;
 
     activeConn.emplace(tcp.connect(
         TCP::TcpEndpoint{IPAddress{}, 0},

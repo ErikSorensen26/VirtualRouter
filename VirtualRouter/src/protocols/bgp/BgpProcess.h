@@ -45,6 +45,8 @@ public:
     }
 
     Session* findSession(TCP::ConnId cid);
+    void startActiveSession(Neighbor& nbr);
+    void startPassiveSession(Neighbor& nbr);
     void onSessionEstablished(Session& session);
     void onSessionDown(Session& session);
 

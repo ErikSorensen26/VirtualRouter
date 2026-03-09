@@ -39,6 +39,23 @@ Session* BgpProcess::findSession(TCP::ConnId cid)
     return (it != sessions.end()) ? &it->second : nullptr;
 }
 
+void BgpProcess::startActiveSession(Neighbor& nbr)
+{
+    auto tempKey = reinterpret_cast<TCP::ConnId>(&nbr);
+    auto [it, ok] = sessions.emplace(tempKey, nbr);
+    if (ok)
+        it->second.postEvent(FsmEvent::MANUAL_START);
+}
+
+void BgpProcess::startPassiveSession(Neighbor& nbr)
+{
+    auto tempKey = reinterpret_cast<TCP::ConnId>(&nbr);
+    auto [it, ok] = sessions.emplace(tempKey, nbr);
+    if (ok)
+        it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
+}
+
+
 void BgpProcess::onSessionEstablished(Session& session)
 {
     const uint32_t rid = session.getPeerRid();
@@ -91,8 +108,14 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
     const IPAddress& nbrIp = ctx.key.remote.address;
     Neighbor* nbr = bgp->ntable.lookup(nbrIp);
 
+    // Check if accepting a connection is allowed
+    auto allowPassive = [&]() {
+        auto& connMode = nbr->getConfigs().get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+        return !(connMode.hasValue() && connMode.load() /*active = true*/);
+    };
+
     // eBGP Neighbor IP must be in same subnet 
-    bool check = [&]() {
+    auto check = [&]() {
         auto& cfgs = nbr->getConfigs();
         bool connectCheck = nbr->isEbgp() &&
             !cfgs.get<Config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load() &&
@@ -108,9 +131,9 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
             auto* route = bgp->routingInstance->getRib().lookup(readU32(nbrIp.raw));
             return route && connectCheck ? route->source == RouteSource::CONNECTED : true;
         }
-    }();
+    };
 
-    if (!nbr || !check)
+    if (!nbr || !allowPassive() || !check())
     {
         ctx.newConn.disconnect();
         return;
@@ -118,7 +141,7 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
 
     TCP::ConnId cid = ctx.newConn.getId();
 
-    auto [it, ok] = bgp->sessions.emplace(cid, std::make_unique<Session>(*nbr, bgp->scheduler.ref()));
+    auto [it, ok] = bgp->sessions.emplace(cid, *nbr, bgp->scheduler.ref());
     it->second.acceptConnection(std::move(ctx.newConn));
 }
 
