@@ -2,7 +2,6 @@
 
 #include "BgpRegistry.h"
 #include "bgp/neighbor/Neighbor.h"
-#include "bgp/BgpProcess.h"
 
 namespace Config
 {

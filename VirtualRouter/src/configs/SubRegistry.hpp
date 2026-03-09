@@ -64,7 +64,9 @@ public:
           fields(),
           base(&parent)
     {
-        constructMaskedFields(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        applyMask(base);
     }
 
     template <ENUM F>
@@ -86,12 +88,14 @@ public:
         return base != nullptr;
     }
 
+    bool setMask(SubRegistry* parent)
+    {
+        applyMask(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
     std::mutex mu;
 
 private:
-    // -------------------------
-    // Field argument factories
-    // -------------------------
 
     template <typename F>
     auto createField()
@@ -125,10 +129,6 @@ private:
             return std::forward_as_tuple(parentField);
     }
 
-    // ------------------------------------
-    // In-place construction (NO moves/copies)
-    // ------------------------------------
-
     template <size_t... I>
     void constructFields(std::index_sequence<I...>) noexcept
     {
@@ -145,27 +145,6 @@ private:
                 opt.emplace(std::forward<decltype(args)>(args)...);
             },
             this->template createField<F>()
-        );
-    }
-
-    template <size_t... I>
-    void constructMaskedFields(const SubRegistry& parent, std::index_sequence<I...>) noexcept
-    {
-        (constructMaskedOne<I, std::tuple_element_t<I, FieldTuple>>(
-            *std::get<I>(parent.fields)
-        ), ...);
-    }
-
-    template <size_t I, typename F>
-    void constructMaskedOne(const F& parentField) noexcept
-    {
-        auto& opt = std::get<I>(fields); // std::optional<F>
-        std::apply(
-            [&](auto&&... args)
-            {
-                opt.emplace(std::forward<decltype(args)>(args)...);
-            },
-            createMaskedField(parentField)
         );
     }
 
@@ -193,9 +172,31 @@ private:
         }
     }
 
+    template <size_t... I>
+    void applyMask(SubRegistry* parent, std::index_sequence<I...>) noexcept
+    {
+        (applyMaskOne<I>(parent), ...);
+    }
+
+    template <size_t I>
+    void applyMaskOne(SubRegistry* parent) noexcept
+    {
+        using Field = std::tuple_element_t<I, FieldTuple>;
+
+        auto& local = *std::get<I>(fields);
+
+        if constexpr (requires(Field& f, const Field* p) { f.setMask(p); })
+        {
+            const Field* parentField =
+                parent ? std::get<I>(parent->fields).operator->() : nullptr;
+
+            local.setMask(parentField);
+        }
+    }
+
     ContextProvider ctxProvider;
     StorageTuple fields;
-    const SubRegistry* base{nullptr};
+    SubRegistry* base{nullptr};
 };
 }
 

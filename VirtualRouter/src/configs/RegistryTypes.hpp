@@ -103,15 +103,6 @@ public:
     using type = T;
     CONFIG_INDEX_MEMBER
 
-    AtomicField() = default;
-
-    AtomicField(const AtomicField& parent) noexcept
-        : value(T{}),
-          state(MaskState::INHERIT),
-          base(&parent),
-          defaultValue(parent.defaultValue)
-    {}
-
     inline T load() const noexcept
     {
         if (base && state.load(std::memory_order_relaxed) == MaskState::INHERIT)
@@ -128,7 +119,7 @@ public:
 
     inline void unset() noexcept
     {
-        value.store(defaultValue, std::memory_order_relaxed);
+        value.store(getDefault(), std::memory_order_relaxed);
         state.store(MaskState::INHERIT, std::memory_order_relaxed);
     }
 
@@ -143,9 +134,23 @@ public:
     }
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(const AtomicField* parent) noexcept
+    {
+        base = parent;
+    }
+
+    T getDefault() noexcept
+    {
+        if (base) return base->defaultValue;
+        else return defaultValue;
+    }
+
     std::atomic<T> value{T{}};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const AtomicField* base{nullptr};
+    AtomicField* base{nullptr};
 
     T defaultValue{T{}};
 };
@@ -159,17 +164,7 @@ public:
     CONFIG_INDEX_MEMBER
 
     AtomicField(ContextProvider& p) noexcept
-        : provider(p),
-          value(T{}),
-          state(MaskState::INHERIT)
-    {}
-
-    AtomicField(ContextProvider& p, const AtomicField& parent) noexcept
-        : provider(p),
-          value(T{}),
-          state(MaskState::INHERIT),
-          base(&parent),
-          defaultValue(parent.defaultValue)
+        : provider(p)
     {}
 
     inline T load() const noexcept
@@ -190,7 +185,7 @@ public:
     inline void unset() noexcept
     {
         T old = load();
-        value.store(defaultValue, std::memory_order_relaxed);
+        value.store(getDefault(), std::memory_order_relaxed);
         state.store(MaskState::INHERIT, std::memory_order_relaxed);
         if (load() != old && provider.hasCtx()) applier(provider.get());
     }
@@ -206,10 +201,24 @@ public:
     }
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(const AtomicField* parent) noexcept
+    {
+        base = parent;
+    }
+
+    T getDefault() noexcept
+    {
+        if (base) return base->defaultValue;
+        else return defaultValue;
+    }
+
     ContextProvider& provider;
     std::atomic<T> value{T{}};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const AtomicField* base{nullptr};
+    AtomicField* base{nullptr};
 
     T defaultValue{T{}};
 };
@@ -225,14 +234,6 @@ public:
 #if USE_CONFIG_INDEX
     static constexpr auto field = F;
 #endif
-
-    OptionalAtomicField() = default;
-
-    explicit OptionalAtomicField(const OptionalAtomicField& parent) noexcept
-        : value(),
-          state(MaskState::INHERIT),
-          base(&parent)
-    {}
 
     inline bool hasValue() const noexcept
     {
@@ -272,9 +273,17 @@ public:
     }
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(const OptionalAtomicField* parent) noexcept
+    {
+        base = parent;
+    }
+
     std::atomic<T> value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const OptionalAtomicField* base{nullptr};
+    OptionalAtomicField* base{nullptr};
 };
 
 template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
@@ -287,13 +296,6 @@ public:
 
     OptionalAtomicField(ContextProvider& provider)
         : provider(provider)
-    {}
-
-    explicit OptionalAtomicField(ContextProvider& provider, const OptionalAtomicField& parent) noexcept
-        : provider(provider),
-          value(),
-          state(MaskState::INHERIT),
-          base(&parent)
     {}
 
     inline bool hasValue() const noexcept
@@ -338,10 +340,18 @@ public:
     }
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(const OptionalAtomicField* parent) noexcept
+    {
+        base = parent;
+    }
+
     ContextProvider& provider;
     std::atomic<T> value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const OptionalAtomicField* base{nullptr};
+    OptionalAtomicField* base{nullptr};
 };
 
 template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
@@ -356,13 +366,6 @@ public:
 
     ValueField(std::mutex& m) noexcept
         : mu(m)
-    {}
-
-    explicit ValueField(std::mutex& m, const ValueField& parent) noexcept
-        : mu(m),
-          value(),
-          state(MaskState::SET),
-          base(&parent)
     {}
 
     template <typename Fn>
@@ -398,9 +401,17 @@ public:
     std::mutex& mu;
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(ValueField* parent)
+    {
+        base = parent;
+    }
+
     T value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const ValueField* base{nullptr};
+    ValueField* base{nullptr};
 };
 
 template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
@@ -414,14 +425,6 @@ public:
     ValueField(ContextProvider& provider, std::mutex& m)
         : provider(provider),
           mu(m)
-    {}
-
-    explicit ValueField(ContextProvider& provider, std::mutex& m, const ValueField& parent) noexcept
-        : provider(provider),
-          mu(m),
-          value(),
-          state(MaskState::SET),
-          base(&parent)
     {}
 
     void runApply()
@@ -479,10 +482,18 @@ public:
     std::mutex& mu;
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(ValueField* parent)
+    {
+        base = parent;
+    }
+
     ContextProvider& provider;
     T value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const ValueField* base{nullptr};
+    ValueField* base{nullptr};
 };
 
 template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>
@@ -497,13 +508,6 @@ public:
 
     OptionalValueField(std::mutex& m) noexcept
         : mu(m)
-    {}
-
-    explicit OptionalValueField(std::mutex& m, const OptionalValueField& parent) noexcept
-        : mu(m),
-          value(),
-          state(MaskState::SET),
-          base(&parent)
     {}
 
     inline bool hasValue() const noexcept
@@ -551,9 +555,17 @@ public:
     std::mutex& mu;
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(OptionalValueField* parent)
+    {
+        base = parent;
+    }
+
     T value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const OptionalValueField* base{nullptr};
+    OptionalValueField* base{nullptr};
 };
 
 template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
@@ -567,14 +579,6 @@ public:
     OptionalValueField(ContextProvider& provider, std::mutex& m)
         : provider(provider),
           mu(m)
-    {}
-
-    explicit OptionalValueField(ContextProvider& provider, std::mutex& m, const OptionalValueField& parent) noexcept
-        : provider(provider),
-          mu(m),
-          value(),
-          state(MaskState::SET),
-          base(&parent)
     {}
 
     inline bool hasValue() const noexcept
@@ -626,10 +630,18 @@ public:
     std::mutex& mu;
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
+
+    void setMask(OptionalValueField* parent)
+    {
+        base = parent;
+    }
+
     ContextProvider& provider;
     T value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    const OptionalValueField* base{nullptr};
+    OptionalValueField* base{nullptr};
 };
 
 template <typename T, typename K CONFIG_INDEX_PARAM>
@@ -639,14 +651,6 @@ public:
     using type = std::unordered_map<K, Reference<T>>;
     using key = K;
     CONFIG_INDEX_MEMBER
-
-    OwnedListField() = default;
-
-    explicit OwnedListField(const OwnedListField& parent) noexcept
-        : children(),
-          state(MaskState::INHERIT),
-          base(&parent)
-    {}
 
     inline type& getMutable() noexcept
     {
@@ -693,12 +697,19 @@ public:
     }
 
 private:
+    template <typename KEY, typename ENUM, typename... Fields>
+    friend class SubRegistry;
     template <typename...>
     friend class RegistryDatabase;
 
+    void setMask(OwnedListField* parent)
+    {
+        base = parent;
+    }
+
     type children{};
     MaskState state{MaskState::INHERIT};
-    const OwnedListField* base{nullptr};
+    OwnedListField* base{nullptr};
 };
 
 template <typename T>
