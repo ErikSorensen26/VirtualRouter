@@ -11,12 +11,46 @@ static void isValidPow2(uint32_t cap) noexcept
     assert(cap >= 2 && (cap & (cap - 1)) == 0);
 }
 
+static uint32_t ceilLog2NonZero(size_t v) noexcept
+{
+    if (v <= 1)
+        return 0;
+
+    uint32_t bits = 0;
+    size_t x = 1;
+    while (x < v)
+    {
+        x <<= 1;
+        ++bits;
+    }
+    return bits;
+}
+
+static uint32_t makeIndexMask(uint32_t bits) noexcept
+{
+    if (bits == 0)
+        return 0u;
+    if (bits >= 32)
+        return 0xFFFFFFFFu;
+    return (1u << bits) - 1u;
+}
+
+static uint32_t makeGenerationMask(uint32_t indexBits) noexcept
+{
+    if (indexBits == 0)
+        return 0xFFFFFFFFu;
+
+    return 0xFFFFFFFFu >> indexBits;
+}
+
 void ControlScheduler::SubQueue::init(uint32_t cap)
 {
     reset();
 
     isValidPow2(cap);
-    if (cap == 0) std::runtime_error("SubQueue capacity must be non-zero");
+
+    if (cap == 0)
+        throw std::runtime_error("SubQueue capacity must be non-zero");
 
     capacity = cap;
     mask = cap - 1;
@@ -27,7 +61,7 @@ void ControlScheduler::SubQueue::init(uint32_t cap)
         slots[i].seq.store(static_cast<uint64_t>(i), std::memory_order_relaxed);
 
     head.store(0, std::memory_order_relaxed);
-    head.store(0, std::memory_order_relaxed);
+    tail.store(0, std::memory_order_relaxed);
 }
 
 void ControlScheduler::SubQueue::reset() noexcept
@@ -59,7 +93,9 @@ bool ControlScheduler::SubQueue::tryConsumeOne(bool run) noexcept
         {
             if (tail.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed, std::memory_order_relaxed))
             {
-                if (run) s->task.run();
+                if (run)
+                    s->task.run();
+
                 s->task.cleanup();
                 s->seq.store(pos + capacity, std::memory_order_release);
                 return true;
@@ -87,12 +123,21 @@ bool ControlScheduler::SubQueue::hasItem() const noexcept
     return (dif == 0);
 }
 
-ControlScheduler::ControlScheduler(ThreadPool& pool, TimeManager& tmgr, size_t maxProcessQueues, size_t maxDelayedTimers)
-    : pool(pool),
+ControlScheduler::ControlScheduler(ThreadPool& externalPool,
+                                   TimeManager& tmgr,
+                                   size_t maxQueues,
+                                   size_t maxDelayed)
+    : pool(externalPool),
       timeManager(tmgr),
-      maxProcessQueues(maxProcessQueues),
-      maxDelayedTimers(maxDelayedTimers)
+      maxProcessQueues(maxQueues),
+      maxDelayedTimers(maxDelayed),
+      delayedIndexBits(ceilLog2NonZero(maxDelayed)),
+      delayedIndexMask(makeIndexMask(delayedIndexBits)),
+      delayedGenerationMask(makeGenerationMask(delayedIndexBits))
 {
+    if (maxDelayedTimers > 0 && delayedGenerationMask == 0)
+        throw std::runtime_error("maxDelayedTimers leaves no bits for generation in 32-bit timer handle");
+
     pqSlots = new ProcessQueueSlot[maxProcessQueues];
 
     pqFreeIds.reserve(maxProcessQueues);
@@ -103,20 +148,23 @@ ControlScheduler::ControlScheduler(ThreadPool& pool, TimeManager& tmgr, size_t m
 
     if (maxDelayedTimers > 0)
     {
-        delayedFreeHead = 0;
+        delayedFreeHead.store(0, std::memory_order_relaxed);
+
         for (uint32_t i = 0; i < static_cast<uint32_t>(maxDelayedTimers); ++i)
         {
-            delayedSlots[i].inUse = false;
-            delayedSlots[i].nextFree = (i + 1 < maxDelayedTimers) ? (i + 1) : kInvalidIndex;
+            delayedSlots[i].inUse.store(false, std::memory_order_relaxed);
+            delayedSlots[i].completed.store(false, std::memory_order_relaxed);
+            delayedSlots[i].generation.store(1, std::memory_order_relaxed);
+            delayedSlots[i].tmTimerId.store(0, std::memory_order_relaxed);
+            delayedSlots[i].nextFree.store((i + 1 < maxDelayedTimers) ? (i + 1) : kInvalidIndex, std::memory_order_relaxed);
+            delayedSlots[i].owner = nullptr;
+            delayedSlots[i].refNode = nullptr;
         }
     }
     else
     {
-        delayedFreeHead = kInvalidIndex;
+        delayedFreeHead.store(kInvalidIndex, std::memory_order_relaxed);
     }
-
-    timerToDelayedIndex.reserve(static_cast<size_t>(maxDelayedTimers) * 2);
-    timerToDelayedIndex.max_load_factor(0.70f);
 }
 
 ControlScheduler::~ControlScheduler()
@@ -129,35 +177,38 @@ ControlScheduler::~ControlScheduler()
     {
         timerInFlight.wait(v, std::memory_order_relaxed);
         v = timerInFlight.load(std::memory_order_acquire);
+        (void)v;
     }
-    
+
     for (ProcessQueueId i = 0; i < static_cast<ProcessQueueId>(maxProcessQueues); ++i)
     {
         if (pqSlots[i].active.load(std::memory_order_acquire))
         {
-            uint32_t gen = pqSlots[i].generation.load(std::memory_order_acquire);
+            const uint32_t gen = pqSlots[i].generation.load(std::memory_order_acquire);
             destroyProcessQueue(i, gen);
         }
     }
 
+    if (delayedSlots)
     {
-        std::lock_guard<std::mutex> g(delayedMtx);
-        timerToDelayedIndex.clear();
-
         for (uint32_t i = 0; i < static_cast<uint32_t>(maxDelayedTimers); ++i)
         {
-            if (delayedSlots[i].inUse)
+            if (delayedSlots[i].inUse.load(std::memory_order_acquire))
             {
                 delayedSlots[i].task.cleanup();
-                delayedSlots[i].inUse = false;
-                delayedSlots[i].nextFree = delayedFreeHead;
-                delayedFreeHead = i;
+
+                if (delayedSlots[i].refNode)
+                {
+                    delayedSlots[i].refNode->active.store(false, std::memory_order_release);
+                    delete delayedSlots[i].refNode;
+                    delayedSlots[i].refNode = nullptr;
+                }
             }
         }
-    }
 
-    delete[] delayedSlots;
-    delayedSlots = nullptr;
+        delete[] delayedSlots;
+        delayedSlots = nullptr;
+    }
 
     delete[] pqSlots;
     pqSlots = nullptr;
@@ -190,24 +241,22 @@ ProcessQueue ControlScheduler::create(uint32_t cap, std::initializer_list<SubQue
     gen = slot.generation.load(std::memory_order_relaxed);
 
     ProcessQueueState& st = slot.state;
-
     st.resetConfig();
 
     for (uint16_t i = 0; i < kMaxSubQueues; ++i)
         st.sub[i].reset();
 
-    // Init default SubQueue at index 0
     st.sub[0].init(cap);
     st.subCount = 1;
 
-    std::array<std::pair<uint16_t, uint32_t>, kMaxSubQueues - 1> tmp;
+    std::array<std::pair<uint16_t, uint32_t>, kMaxSubQueues - 1> tmp{};
     uint16_t tmpCount = 0;
 
     for (const auto& cfg : labeled)
         tmp[tmpCount++] = {cfg.label, cfg.capacity};
 
-    std::sort(tmp.begin(), tmp.end(),
-        [](const auto& a, const auto& b){ return a.first < b.first; });
+    std::sort(tmp.begin(), tmp.begin() + tmpCount,
+        [](const auto& a, const auto& b) { return a.first < b.first; });
 
     uint16_t subIndex = 1;
     for (uint16_t i = 0; i < tmpCount; ++i)
@@ -226,56 +275,153 @@ ProcessQueue ControlScheduler::create(uint32_t cap, std::initializer_list<SubQue
     return ProcessQueue(*this, id, gen);
 }
 
+uint32_t ControlScheduler::packDelayedHandle(uint32_t idx, uint32_t gen) const noexcept
+{
+    if (delayedIndexBits == 0)
+        return gen;
+
+    return ((gen & delayedGenerationMask) << delayedIndexBits) | (idx & delayedIndexMask);
+}
+
+uint32_t ControlScheduler::unpackDelayedIndex(uint32_t handle) const noexcept
+{
+    if (delayedIndexBits == 0)
+        return 0;
+
+    return handle & delayedIndexMask;
+}
+
+uint32_t ControlScheduler::unpackDelayedGeneration(uint32_t handle) const noexcept
+{
+    if (delayedIndexBits == 0)
+        return handle;
+
+    return (handle >> delayedIndexBits) & delayedGenerationMask;
+}
+
+uint32_t ControlScheduler::nextDelayedGeneration(uint32_t current) const noexcept
+{
+    uint32_t next = current + 1;
+
+    if (delayedIndexBits != 0)
+        next &= delayedGenerationMask;
+
+    if (next == 0)
+        next = 1;
+
+    return next;
+}
+
 uint32_t ControlScheduler::allocDelayedSlot() noexcept
 {
-    if (delayedFreeHead == kInvalidIndex)
-        return kInvalidIndex;
+    uint32_t head = delayedFreeHead.load(std::memory_order_acquire);
 
-    uint32_t idx = delayedFreeHead;
-    delayedFreeHead = delayedSlots[idx].nextFree;
+    while (head != kInvalidIndex)
+    {
+        DelayedSlot& ds = delayedSlots[head];
+        const uint32_t next = ds.nextFree.load(std::memory_order_relaxed);
 
-    delayedSlots[idx].inUse = true;
-    delayedSlots[idx].nextFree = kInvalidIndex;
-    return idx;
+        if (delayedFreeHead.compare_exchange_weak(
+                head,
+                next,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire))
+        {
+            ds.nextFree.store(kInvalidIndex, std::memory_order_relaxed);
+            ds.inUse.store(true, std::memory_order_release);
+            ds.completed.store(false, std::memory_order_release);
+            ds.tmTimerId.store(0, std::memory_order_release);
+            ds.owner = nullptr;
+            ds.refNode = nullptr;
+            return head;
+        }
+    }
+
+    return kInvalidIndex;
 }
 
 void ControlScheduler::freeDelayedSlot(uint32_t idx) noexcept
 {
-    if (idx == kInvalidIndex || idx >= maxDelayedTimers)
-        return;
-
-    // caller must hold delayedMtx
-    delayedSlots[idx].inUse = false;
-    delayedSlots[idx].nextFree = delayedFreeHead;
-    delayedFreeHead = idx;
-}
-
-void ControlScheduler::runDelayedByIndex(uint32_t idx) noexcept
-{
-    delayedSlots[idx].task.run();
-    delayedSlots[idx].task.cleanup();
-
-    {
-        std::lock_guard<std::mutex> g(delayedMtx);
-        if (idx < maxDelayedTimers && delayedSlots[idx].inUse)
-            freeDelayedSlot(idx);
-    }
-}
-
-void ControlScheduler::discardDelayedByIndex(uint32_t idx) noexcept
-{
-    std::lock_guard<std::mutex> g(delayedMtx);
     if (idx >= maxDelayedTimers)
         return;
 
-    if (!delayedSlots[idx].inUse)
+    DelayedSlot& ds = delayedSlots[idx];
+
+    ds.qid = 0;
+    ds.qgen = 0;
+    ds.hasLabel = false;
+    ds.label = Label{0};
+    ds.owner = nullptr;
+    ds.refNode = nullptr;
+    ds.tmTimerId.store(0, std::memory_order_relaxed);
+    ds.completed.store(false, std::memory_order_relaxed);
+
+    const uint32_t curGen = ds.generation.load(std::memory_order_relaxed);
+    ds.generation.store(nextDelayedGeneration(curGen), std::memory_order_release);
+    ds.inUse.store(false, std::memory_order_release);
+
+    uint32_t head = delayedFreeHead.load(std::memory_order_relaxed);
+    do
+    {
+        ds.nextFree.store(head, std::memory_order_relaxed);
+    }
+    while (!delayedFreeHead.compare_exchange_weak(
+        head,
+        idx,
+        std::memory_order_release,
+        std::memory_order_relaxed));
+}
+
+void ControlScheduler::runDelayedByIndex(uint32_t idx, uint32_t expectedGen) noexcept
+{
+    if (idx >= maxDelayedTimers)
         return;
 
-    delayedSlots[idx].task.cleanup();
+    DelayedSlot& ds = delayedSlots[idx];
+
+    if (!ds.inUse.load(std::memory_order_acquire))
+        return;
+
+    if (ds.generation.load(std::memory_order_acquire) != expectedGen)
+        return;
+
+    ds.task.run();
+    ds.task.cleanup();
+
+    if (ds.refNode)
+    {
+        ds.refNode->active.store(false, std::memory_order_release);
+        ds.refNode = nullptr;
+    }
+
     freeDelayedSlot(idx);
 }
 
-void ControlScheduler::onTimerFired(uint32_t timerId) noexcept
+void ControlScheduler::discardFiredDelayed(uint32_t idx, uint32_t expectedGen) noexcept
+{
+    if (idx >= maxDelayedTimers)
+        return;
+
+    DelayedSlot& ds = delayedSlots[idx];
+
+    if (!ds.inUse.load(std::memory_order_acquire))
+        return;
+
+    if (ds.generation.load(std::memory_order_acquire) != expectedGen)
+        return;
+
+    ds.task.cleanup();
+
+    if (ds.refNode)
+    {
+        ds.refNode->active.store(false, std::memory_order_release);
+        ds.refNode = nullptr;
+    }
+
+    freeDelayedSlot(idx);
+}
+
+void ControlScheduler::onTimerFired(uint32_t delayedIdx, uint32_t delayedGen) noexcept
 {
     timerInFlight.fetch_add(1, std::memory_order_acq_rel);
 
@@ -286,73 +432,147 @@ void ControlScheduler::onTimerFired(uint32_t timerId) noexcept
         {
             const uint32_t prev = self.timerInFlight.fetch_sub(1, std::memory_order_acq_rel);
             if (prev == 1)
-            {
                 self.timerInFlight.notify_all();
-            }
         }
     } guard{*this};
 
-    uint32_t idx = kInvalidIndex;
-    ProcessQueueId qid = 0;
-    uint32_t gen = 0;
-    std::optional<Label> label;
-
-    {
-        std::lock_guard<std::mutex> g(delayedMtx);
-        auto it = timerToDelayedIndex.find(timerId);
-        if (it == timerToDelayedIndex.end())
-            return;
-
-        idx = it->second;
-        timerToDelayedIndex.erase(it);
-
-        DelayedSlot& ds = delayedSlots[idx];
-        qid = ds.qid;
-        gen = ds.gen;
-        if (ds.hasLabel) label = ds.label;
-        else label.reset();
-    }
-
-    if (stopping.load(std::memory_order_acquire))
-    {
-        discardDelayedByIndex(idx);
+    if (delayedIdx >= maxDelayedTimers)
         return;
-    }
 
-    bool ok = post(qid, gen, label, [this, tok = DelayedToken{this, idx, false}]() mutable noexcept {
-        runDelayedByIndex(tok.delayedIndex);
-        tok.released = true;
-    });
+    DelayedSlot& ds = delayedSlots[delayedIdx];
+
+    if (!ds.inUse.load(std::memory_order_acquire))
+        return;
+
+    if (ds.generation.load(std::memory_order_acquire) != delayedGen)
+        return;
+
+    if (ds.completed.exchange(true, std::memory_order_acq_rel))
+        return;
+
+    if (ds.refNode)
+        ds.refNode->active.store(false, std::memory_order_release);
+
+    const ProcessQueueId qid = ds.qid;
+    const uint32_t qgen = ds.qgen;
+    std::optional<Label> label;
+    if (ds.hasLabel)
+        label = ds.label;
+
+    struct FiredDelayedToken
+    {
+        ControlScheduler* engine = nullptr;
+        uint32_t idx = 0;
+        uint32_t gen = 0;
+        bool released = false;
+
+        FiredDelayedToken() = default;
+
+        FiredDelayedToken(ControlScheduler* e, uint32_t i, uint32_t g) noexcept
+            : engine(e), idx(i), gen(g)
+        {}
+
+        FiredDelayedToken(const FiredDelayedToken&) = delete;
+        FiredDelayedToken& operator=(const FiredDelayedToken&) = delete;
+
+        FiredDelayedToken(FiredDelayedToken&& o) noexcept
+            : engine(o.engine), idx(o.idx), gen(o.gen), released(o.released)
+        {
+            o.engine = nullptr;
+            o.released = true;
+        }
+
+        FiredDelayedToken& operator=(FiredDelayedToken&& o) noexcept
+        {
+            if (this == &o)
+                return *this;
+
+            if (engine && !released)
+                engine->discardFiredDelayed(idx, gen);
+
+            engine = o.engine;
+            idx = o.idx;
+            gen = o.gen;
+            released = o.released;
+
+            o.engine = nullptr;
+            o.released = true;
+            return *this;
+        }
+
+        ~FiredDelayedToken() noexcept
+        {
+            if (engine && !released)
+                engine->discardFiredDelayed(idx, gen);
+        }
+    };
+
+    const bool ok = post(qid, qgen, label,
+        [this, delayedIdx, delayedGen, tok = FiredDelayedToken(this, delayedIdx, delayedGen)]() mutable noexcept
+        {
+            runDelayedByIndex(delayedIdx, delayedGen);
+            tok.released = true;
+        });
 
     if (!ok)
-    {
-        discardDelayedByIndex(idx);
-    }
+        discardFiredDelayed(delayedIdx, delayedGen);
 }
 
 bool ControlScheduler::cancelDelayed(uint32_t timerId) noexcept
 {
-    uint32_t idx = kInvalidIndex;
+    if (timerId == 0 || maxDelayedTimers == 0)
+        return false;
 
+    const uint32_t idx = unpackDelayedIndex(timerId);
+    const uint32_t gen = unpackDelayedGeneration(timerId);
+
+    if (idx >= maxDelayedTimers)
+        return false;
+
+    DelayedSlot& ds = delayedSlots[idx];
+
+    if (!ds.inUse.load(std::memory_order_acquire))
+        return false;
+
+    if (ds.generation.load(std::memory_order_acquire) != gen)
+        return false;
+
+    if (ds.completed.exchange(true, std::memory_order_acq_rel))
+        return false;
+
+    const uint32_t tmId = ds.tmTimerId.load(std::memory_order_acquire);
+    if (tmId != 0)
+        timeManager.cancelTimer(tmId);
+
+    ds.task.cleanup();
+
+    if (ds.refNode)
     {
-        std::lock_guard<std::mutex> g(delayedMtx);
-        auto it = timerToDelayedIndex.find(timerId);
-        if (it == timerToDelayedIndex.end())
-        {
-            return false;
-        }
-
-        idx = it->second;
-        timerToDelayedIndex.erase(it);
-
-        if (idx < maxDelayedTimers && delayedSlots[idx].inUse)
-        {
-            delayedSlots[idx].task.cleanup();
-            freeDelayedSlot(idx);
-        }
+        ds.refNode->active.store(false, std::memory_order_release);
+        ds.refNode = nullptr;
     }
 
-    return timeManager.cancelTimer(timerId);
+    freeDelayedSlot(idx);
+    return true;
+}
+
+void ControlScheduler::destroyRefState(ProcessQueueRefState* state) noexcept
+{
+    if (!state)
+        return;
+
+    RefTimerNode* head = state->timerHead.exchange(nullptr, std::memory_order_acq_rel);
+
+    while (head)
+    {
+        RefTimerNode* next = head->next.load(std::memory_order_relaxed);
+
+        if (head->active.load(std::memory_order_acquire))
+            cancelDelayed(head->handle);
+
+        delete head;
+        head = next;
+    }
 }
 
 void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexcept
@@ -364,6 +584,7 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
 
     if (!slot.active.load(std::memory_order_acquire))
         return;
+
     if (slot.generation.load(std::memory_order_acquire) != gen)
         return;
 
@@ -371,7 +592,6 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
 
     st.draining.store(true, std::memory_order_release);
     st.drainThreadMarker.store(&gcontrolEngineTlsMarker, std::memory_order_relaxed);
-
     st.waitCv.notify_all();
 
     uint16_t rr = 0;
@@ -394,6 +614,7 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
                     break;
                 }
             }
+
             if (!consumed)
             {
                 for (uint16_t idx = 0; idx < rr; ++idx)
@@ -433,13 +654,10 @@ void ControlScheduler::drainProcessQueue(ProcessQueueId id, uint32_t gen) noexce
 
     st.drainThreadMarker.store(nullptr, std::memory_order_release);
     st.draining.store(false, std::memory_order_release);
-
     st.waitCv.notify_all();
 
     if (st.deferDestroy.load(std::memory_order_acquire))
-    {
         finalizeDestroy(id, gen);
-    }
 }
 
 void ControlScheduler::destroyProcessQueue(ProcessQueueId id, uint32_t gen) noexcept
@@ -451,12 +669,12 @@ void ControlScheduler::destroyProcessQueue(ProcessQueueId id, uint32_t gen) noex
 
     if (!slot.active.load(std::memory_order_acquire))
         return;
+
     if (slot.generation.load(std::memory_order_acquire) != gen)
         return;
 
     ProcessQueueState& st = slot.state;
 
-    // Close
     st.closed.store(true, std::memory_order_release);
 
     if (st.drainThreadMarker.load(std::memory_order_acquire) == &gcontrolEngineTlsMarker)
@@ -504,6 +722,7 @@ void ControlScheduler::finalizeDestroy(ProcessQueueId id, uint32_t gen) noexcept
 
     if (!slot.active.load(std::memory_order_acquire))
         return;
+
     if (slot.generation.load(std::memory_order_acquire) != gen)
         return;
 
@@ -514,7 +733,6 @@ void ControlScheduler::finalizeDestroy(ProcessQueueId id, uint32_t gen) noexcept
 
     st.resetConfig();
 
-    // Invalidate all ProcessRef copies
     slot.generation.fetch_add(1, std::memory_order_release);
     slot.active.store(false, std::memory_order_release);
 

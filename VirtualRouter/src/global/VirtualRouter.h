@@ -352,6 +352,7 @@ public:
     bool isDefault() { return defaulted; }
     Global& getGlobal() { return global; }
     RoutingTable& getRib() { return routingTable; }
+    const RoutingTable& getRib() const { return routingTable; }
     TCP::Tcp& getTcp() { return tcpManager; }
     ControlScheduler& getControlScheduler();
     
