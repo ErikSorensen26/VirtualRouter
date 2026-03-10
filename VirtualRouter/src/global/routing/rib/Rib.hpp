@@ -9,6 +9,7 @@
 
 #include "routing/fib/Fib.hpp"
 #include "RibBucket.hpp"
+#include "routing/NextHopWatcher.hpp"
 
 template <typename AddrType>
 class Rib
@@ -50,6 +51,7 @@ class Rib
     std::unordered_map<PrefixKey, RibBucket<AddrType>*, PrefixHash> table;
     mutable std::mutex ribMtx;
     Fib<AddrType> fib;
+    NextHopWatcher<AddrType> nextHopWatcher;
 
 public:
     Rib() = default;
@@ -99,11 +101,22 @@ public:
         {
             table.erase(it);
             fib.erase(prefix, length);
+            nextHopWatcher.announcePrefixRemoved(prefix, length);
             RCU::retire([b]{ delete b; });
             return true;
         }
 
         return true;
+    }
+
+    uint32_t watchNextHop(AddrType hop, void* ctx, typename NextHopWatcher<AddrType>::Callback fn)
+    {
+        return nextHopWatcher.add(hop, ctx, fn);
+    }
+
+    void unwatchNextHop(uint32_t id)
+    {
+        nextHopWatcher.remove(id);
     }
 
     void clear() noexcept
@@ -117,6 +130,8 @@ public:
         }
 
         table.clear();
+
+        nextHopWatcher.announceAllGone();
     }
 
     RibEntry<AddrType>* lookup(const uint8_t* addr)
