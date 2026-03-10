@@ -44,7 +44,7 @@ public:
         return asNumber;
     }
 
-    Session* findSession(TCP::ConnId cid);
+    Session* findSession(const IPAddress& addr);
     void startActiveSession(Neighbor& nbr);
     void startPassiveSession(Neighbor& nbr);
     void onSessionEstablished(Session& session);
@@ -83,7 +83,7 @@ public:
 private:
 
     TCP::Listener listener;
-    std::unordered_map<TCP::ConnId, Session> sessions;
+    std::unordered_map<IPAddress, Session> sessions;
     std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;
 
     ProcessQueue scheduler;

@@ -18,6 +18,8 @@ public:
     void commit(size_t bytes);
     const std::span<uint8_t>& get() noexcept;
     ~RxConsumer();
+
+    uint64_t getId() const noexcept;
 private:
     friend class RxBuffer;
 

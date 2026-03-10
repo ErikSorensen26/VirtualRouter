@@ -124,6 +124,9 @@ public:
     const PeerPolicyTemplate* lookupPeerPolicyTemplate(const std::string& name) const;
 
 private:
+    void syncPeerGroups();
+    void syncPeerSessionTemplates();
+    void syncPeerPolicyTemplates();
 
     BgpProcess& process;
     std::unordered_map<std::string, PeerGroup> peerGroups;

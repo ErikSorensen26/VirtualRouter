@@ -5,6 +5,7 @@
 
 #include <span>
 #include <cstdint>
+#include <optional>
 
 #include "tcp/Connection.h"
 #include "bgp/BgpTypes.hpp"
@@ -12,6 +13,8 @@
 #include "bgp/session/Fsm.h"
 #include "bgp/session/SessionTimers.h"
 #include "configs/registry/router/BgpRegistry.h"
+#include "Capabilities.hpp"
+#include "MultiSession.h"
 
 struct BgpHeader;
 class PacketBuilder;
@@ -20,128 +23,7 @@ namespace BGP
 {
 class Neighbor;
 class BgpProcess;
-
-// Negotiated capability set
-struct Capabilities
-{
-    // Multiprotocol extensions
-    std::vector<AfiSafi> mpFamilies;
-
-    // Route refresh
-    bool routeRefresh = false;
-    bool enhancedRouteRefresh = false;
-
-    // 4-byte ASN
-    bool asn32bit = false;
-    uint32_t asn;
-
-    // Extended message size
-    bool extendedMessage = false;
-
-    // Graceful restart
-    struct GracefulRestartFamily
-    {
-        AfiSafi family;
-        bool forwardingStatePreserved;
-    };
-
-    bool gracefulRestart = false;
-    bool restarting = false;
-    uint16_t restartTime = 0;
-    std::vector<GracefulRestartFamily> gracefulFamilies;
-
-    // Long-lived graceful restart
-    struct LlgrFamily
-    {
-        AfiSafi family;
-        uint32_t staleTime;
-        uint8_t flags;
-    };
-
-    bool llgr = false;
-    std::vector<LlgrFamily> llgrFamilies;
-
-    // ADD-PATH
-    struct AddPathFamily
-    {
-        AfiSafi family;
-        uint8_t sendReceive;
-    };
-
-    bool addPath = false;
-    std::vector<AddPathFamily> addPathFamilies;
-
-    // Outbound route filtering
-    struct OrfEntry
-    {
-        AfiSafi family;
-        uint8_t orfType;
-        uint8_t sendReceive;
-    };
-
-    bool outboundRouteFiltering = false;
-    std::vector<OrfEntry> orfEntries;
-
-    // Extended next-hop encoding
-    struct ExtendedNextHop
-    {
-        AfiSafi family;
-        uint16_t nextHopAfi;
-    };
-
-    bool extendedNextHop = false;
-    std::vector<ExtendedNextHop> extendedNextHopEntries;
-
-    // Multiple labels
-    bool multipleLabels = false;
-    std::vector<AfiSafi> labeledFamilies;
-
-    // Route-target constraints
-    bool routeTargetConstraint = false;
-    std::vector<AfiSafi> RtConstraintFamily;
-
-    // BGPsec
-    bool bgpsec = false;
-    std::vector<AfiSafi> bgpsecFamilies;
-
-    // Helpers
-    bool supportsFamily(const AfiSafi& fam) const noexcept
-    {
-        for (const auto& f : mpFamilies)
-            if (f == fam) return true;
-        return false;
-    }
-
-    bool addPathSend(const AfiSafi& fam) const noexcept
-    {
-        for (const auto& ap : addPathFamilies)
-            if (ap.family == fam) return (ap.sendReceive & BGP_ADD_PATH_SEND) != 0;
-        return false;
-    }
-
-    bool addPathReceive(const AfiSafi& fam) const noexcept
-    {
-        for (const auto& ap : addPathFamilies)
-            if (ap.family == fam) return (ap.sendReceive & BGP_ADD_PATH_RECEIVE) != 0;
-        return false;
-    }
-};
-
-// Negotiated session result
-struct NegotiatedCapabilities
-{
-    bool asn32bit = false;
-    bool routeRefresh = false;
-    bool enhancedRR = false;
-    bool gracefulRestart = false;
-    bool llgr = false;
-    bool extendedMessage = false;
-    bool addpath = false;
-    std::vector<AfiSafi> activeFamilies;
-    std::vector<Capabilities::AddPathFamily> addPathFamilies;
-    std::vector<Capabilities::GracefulRestartFamily> grFamilies;
-    std::vector<Capabilities::LlgrFamily> llgrFamilies;
-};
+class MultiSession;
 
 /**
  * @class Session
@@ -161,6 +43,7 @@ class Session
 {
 public:
     Session(Neighbor& nbr) noexcept;
+    Session(Neighbor& nbr, const AfiSafi& afi) noexcept;
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -175,6 +58,12 @@ public:
     void closeActiveConnection() noexcept;
     void closePassiveConnection() noexcept;
     void closeAllConnections() noexcept;
+
+    // MultiSession
+    MultiSession* getMultiSession();
+    AfiSafi* getMultiSessionAfi();
+    void startActiveMultiSession(const AfiSafi& family);
+    void startPassiveMultiSession(const AfiSafi& family);
 
     void handleIncoming(TCP::RxConsumer& consumer);
 
@@ -226,8 +115,13 @@ public:
     TCP::Connection* getPrimaryConnection() noexcept { return primaryConn; }
     const TCP::Connection* getPrimaryConnection() const noexcept { return primaryConn; }
 
+    bool verifyConnection(uint64_t cid);
+
     bool resolveCollision(uint32_t incomingPeerRid);
     void negotiateCapabilities();
+
+    static void onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept;
+    static void onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept;
 
 private:
     // Open processing helpers
@@ -246,6 +140,8 @@ private:
     std::optional<TCP::Connection> passiveConn; // Inbound
     TCP::Connection* primaryConn = nullptr;
 
+    std::variant<AfiSafi, MultiSession> multiSession{std::in_place_type<MultiSession>};
+
     // Capability state
     Capabilities localCaps;
     Capabilities peerCaps;
@@ -253,8 +149,6 @@ private:
 
     uint32_t peerRouterId = 0;
     std::vector<uint8_t> updateSentQueue;
-
-    Config::ReferenceContainer<Config::BgpNeighborSessionRegistry> configs;
 };
 }
 

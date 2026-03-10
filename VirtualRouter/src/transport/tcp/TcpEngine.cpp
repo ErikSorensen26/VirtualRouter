@@ -406,10 +406,9 @@ Connection TcpEngine::createConnection(const TcpEndpoint& local, const TcpEndpoi
 
     ConnId cid = nextConnId++;
 
-    auto cit = connections.emplace(cid, bufferPool);
+    auto cit = connections.emplace(cid, cid, bufferPool);
     auto& c = cit.first->second;
 
-    c.id = cid;
     c.fd = fd;
     c.ownerListener = 0;
     c.connectPending = pending;
@@ -447,8 +446,7 @@ ConnId TcpEngine::adoptAcceptedSocket(ListenerState& lst, int cfd)
 
     ConnId cid = nextConnId++;
 
-    ConnectionState c(bufferPool, lst.rxSize);
-    c.id = cid;
+    ConnectionState c(cid, bufferPool, lst.rxSize);
     c.fd = cfd;
     c.ownerListener = lst.id;
     c.connectPending = false;
@@ -511,7 +509,7 @@ size_t TcpEngine::acceptLoop(ListenerState& lst, Tcp* tcp, std::span<TcpEvent> a
                 if (itc->second.cb)
                 {
                     TcpEvent ev{ TcpEventType::ACCEPTED, itc->second.id, {} };
-                    ConnCallbackCtx ctx{itc->second.cbUser, *tcp, itc->second.id, ev};
+                    ConnCallbackCtx ctx{itc->second.cbUser, *tcp, itc->second.id, ev, itc->second.key};
                     itc->second.cb(ctx);
                 }
             }
@@ -534,7 +532,7 @@ void TcpEngine::dispatchConnectEvent(Tcp& tcp, ConnId cid, TcpEventType t, TcpEr
     ev.id = cid;
     ev.error = e;
 
-    ConnCallbackCtx ctx{c.cbUser, tcp, cid, ev};
+    ConnCallbackCtx ctx{c.cbUser, tcp, cid, ev, c.key};
     c.cb(ctx);
 }
 
@@ -863,7 +861,7 @@ size_t TcpEngine::pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept
 
                     //std::span<const uint8_t> data(ioScratch.data(), static_cast<size_t>(rn));
                     RxConsumer consumer = c.bufferRx.consume(ioScratch);
-                    RecvCallbackCtx ctx{c.recvUser, tcp, cid, consumer};
+                    RecvCallbackCtx ctx{c.recvUser, tcp, cid, consumer, c.key};
 
                     c.recvCb(ctx);
 

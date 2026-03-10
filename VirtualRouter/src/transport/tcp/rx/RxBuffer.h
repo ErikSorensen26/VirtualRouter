@@ -14,7 +14,7 @@ class RxConsumer;
 class RxBuffer
 {
 public:
-    RxBuffer(size_t recvSiz);
+    RxBuffer(uint64_t cid, size_t recvSiz);
 
     enum class Mode
     {
@@ -25,6 +25,8 @@ public:
     RxConsumer consume(std::span<uint8_t> data);
     Mode getMode() const noexcept { return mode; };
     size_t size() const noexcept { return buf.size(); }
+
+    const uint64_t cid;
     
 private:
     friend RxConsumer;

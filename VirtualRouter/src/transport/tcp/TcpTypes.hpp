@@ -182,6 +182,7 @@ struct ConnCallbackCtx
     Tcp& tcp;
     ConnId id;
     const TcpEvent& ev;
+    const TcpSocketKey& key;
 };
 
 struct AcceptCallbackCtx
@@ -199,6 +200,7 @@ struct RecvCallbackCtx
     Tcp& tcp;
     ConnId id;
     RxConsumer& consumer;
+    const TcpSocketKey& key;
 };
 
 using ConnCallback = void(*)(ConnCallbackCtx&) noexcept;

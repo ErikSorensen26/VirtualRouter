@@ -1,5 +1,11 @@
 // BgpRx.cpp
 
+// TODO: finish multi session
+//
+//make temp list of connections using connection id
+//all neighbor af sessions will already be up because they go up once the base session goes up
+//if session is already established, assume its a temp cid, get af, apply it to the session
+
 #include <Functions.h>
 
 #include "bgp/BgpProcess.h"
@@ -74,7 +80,7 @@ void BgpRx::handleIncoming(Session& session, TCP::RxConsumer& consumer)
         {
             case BGP_TYPE_OPEN:
             {
-                ok = processOpen(session, payload, error);
+                ok = processOpen(session, consumer.getId(), payload, error);
                 if (!ok)
                 {
                     session.sendNotification(error);
@@ -131,7 +137,7 @@ void BgpRx::handleIncoming(Session& session, TCP::RxConsumer& consumer)
     }
 }
 
-bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notification& error)
+bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> payload, Notification& error)
 {
     if (payload.size() < BgpOpenHeader::fixedSize)
     {
@@ -155,7 +161,7 @@ bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notificati
     // BGP Identifier: must not be 0 or multicast
     uint32_t peerRid = open.getIdentifier();
 
-    if (peerRid == 0 || Functions::isMulticast(open.getIdentifierBuf(), ::AddressFamily::IPv4))
+    if (peerRid == 0 || peerRid == 0xFFFFFFFF || Functions::isMulticast(open.getIdentifierBuf(), ::AddressFamily::IPv4))
     {
         error.code = BGP_NOTIFICATION_OPEN_BAD_IDENTIFIER;
         return false;
@@ -202,11 +208,35 @@ bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notificati
         return false;
     }
 
-    // Parse optional parameters
-    auto& peerCaps = session.getPeerCaps();
+    uint8_t* params = payload.data() + BgpOpenHeader::fixedSize + (extendedParamLen ? 2 : 0);
+
+    // Resolve multi session before parsing capabilities
+    Session* curSession = &session; // Handles session swap.
+    if (auto* ms = session.getMultiSession(); ms && cid != session.getPrimaryConnection()->getId())
+    {
+        auto msAfi = resolveMultiSessionAf(std::span<uint8_t>{params, paramLen});
+        if (!msAfi)
+        {
+            ms->close(cid);
+            return false;
+        }
+
+        NegotiatedCapabilities& nc = session.getNegotiated();
+        
+        if (nc.multiSess && nc.multiSessionFamilies.contains(*msAfi) && nc.activeFamilies.contains(*msAfi))
+        {
+            curSession = ms->activateSession(cid, *msAfi);
+            if (!curSession)
+            {
+                ms->close(cid);
+                return false;
+            }
+        }
+    }
+
+    auto& peerCaps = curSession->getPeerCaps();
     peerCaps = {};
 
-    uint8_t* params = payload.data() + BgpOpenHeader::fixedSize + (extendedParamLen ? 2 : 0);
     size_t pos = 0;
     while (pos + 2 <= static_cast<size_t>(paramLen))
     {
@@ -224,14 +254,17 @@ bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notificati
         pos += 2 + pLen;
     }
 
+    if (!curSession || curSession->verifyConnection(cid))
+        return false;
+
     uint32_t resolvedAs = peerAs2;
-    if (peerCaps.asn32bit)
-        resolvedAs = peerCaps.asn;
+    if (curSession->getPeerCaps().asn32bit)
+        resolvedAs = curSession->getPeerCaps().asn;
     else if (peerAs2 == static_cast<uint16_t>(kAsTrans))
         resolvedAs = kAsTrans;
 
     // Validate remote AS matches configuration.
-    auto& sessCfg = session.getNeighbor().getConfigs();
+    auto& sessCfg = curSession->getNeighbor().getConfigs();
     auto& remAsOpt = sessCfg.get<Config::BgpNeighborSession::REMOTE_AS>();
     if (remAsOpt.hasValue())
     {
@@ -243,10 +276,10 @@ bool BgpRx::processOpen(Session& session, std::span<uint8_t> payload, Notificati
         }
     }
 
-    session.holdTime = peerHold;
-    session.setPeerRid(peerRid);
-    session.negotiateCapabilities();
-    session.onOpenReceived();
+    curSession->holdTime = peerHold;
+    curSession->setPeerRid(peerRid);
+    curSession->negotiateCapabilities();
+    curSession->onOpenReceived();
     return true;
 }
 
@@ -365,7 +398,7 @@ AfiSafi findMpAfiSafi(std::span<const uint8_t> attrData)
             if (ptr + 3 <= end)
             {
                 uint16_t afi = readU16(ptr);
-                uint8_t safi = ptr[2];
+                uint8_t safi = ptr[3];
                 return {afi, safi};
             }
         }
@@ -374,6 +407,78 @@ AfiSafi findMpAfiSafi(std::span<const uint8_t> attrData)
     }
 
     return {BGP_AFI_IPV4, BGP_SAFI_UNICAST};
+}
+
+std::optional<AfiSafi> BgpRx::resolveMultiSessionAf(std::span<uint8_t> data)
+{
+    size_t pos = 0;
+
+    std::optional<AfiSafi> multiProtocol;
+    std::optional<AfiSafi> multiSession;
+
+    while (pos + 2 <= static_cast<size_t>(data.size()))
+    {
+        uint8_t pType = data[pos];
+        uint8_t pLen = data[pos + 1];
+
+        if (pos + 2 + pLen > data.size())
+            return std::nullopt;
+
+        if (pType == BGP_PARAMETER_CAPABILITY)
+        {
+            size_t idx = 0;
+
+            while (idx + 2 <= data.size())
+            {
+                uint8_t type = data[idx];
+                uint8_t len = data[idx + 1];
+
+                if (idx + 2 + len > data.size())
+                    return std::nullopt;
+
+                const uint8_t* p = data.data() + idx + 2;
+
+                switch (type)
+                {
+                    case BGP_CAPABILITY_MULTIPROTOCOL:
+                    {
+                        if (len == 4)
+                        {
+                            uint16_t afi = readU16(p);
+                            uint8_t safi = p[3];
+                            if (multiProtocol.has_value())
+                                return std::nullopt;
+                            multiProtocol.emplace(afi, safi);
+                        }
+                        break;
+                    }
+                    case BGP_CAPABILITY_MULTI_SESSION:
+                    {
+                        for (size_t i = 0; i + 4 <= static_cast<size_t>(len); i += 4)
+                        {
+                            uint16_t afi = readU16(p + i);
+                            uint8_t safi = p[i + 2];
+                            if (multiSession.has_value())
+                                return std::nullopt;
+                            multiProtocol.emplace(afi, safi);
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        break;
+                    }
+                }
+
+                idx += 2 + len;
+            }
+        }
+        pos += 2 + pLen;
+    }
+
+    if (multiProtocol.has_value() && multiSession.has_value() && *multiProtocol == multiSession)
+        return *multiSession;
+    return std::nullopt;
 }
 
 void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
@@ -494,6 +599,17 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
                 }
                 break;
             }
+            case BGP_CAPABILITY_MULTI_SESSION:
+            {
+                for (size_t pos = 0; pos + 4 <= static_cast<size_t>(len); pos += 4)
+                {
+                    uint16_t afi = readU16(p + pos);
+                    uint8_t safi = p[pos + 2];
+                    out.multiSessionFamilies.push_back({afi, safi});
+                }
+                if (len >= 4) out.multiSess = true;
+                break;
+            }
             case BGP_CAPABILITY_ADD_PATH:
             {
                 for (size_t pos = 0; pos + 4 <= static_cast<size_t>(len); pos += 4)
@@ -517,6 +633,31 @@ void BgpRx::parseCapabilities(std::span<uint8_t> data, Capabilities& out)
                     out.llgrFamilies.push_back({{afi, safi}, staleTime, flags});
                 }
                 if (len >= 7) out.llgr = true;
+                break;
+            }
+            case BGP_CAPABILITY_FQDN:
+            {
+                if (len >= 1)
+                {
+                    uint8_t hnLen = p[0];
+                    if (1 + hnLen <= len)
+                    {
+                        out.hostname.assign(reinterpret_cast<const char*>(p + 1), hnLen);
+                        size_t domainOff = 1 + hnLen;
+                        if (domainOff + 1 <= static_cast<size_t>(len))
+                        {
+                            uint8_t domLen = p[domainOff];
+                            if (domainOff + 1 + domLen <= static_cast<size_t>(len))
+                                out.domain.assign(reinterpret_cast<const char*>(p + domainOff + 1), domLen);
+                        }
+                        out.fqdn = true;
+                    }
+                }
+                break;
+            }
+            case BGP_CAPABILITY_LINK_LOCAL_NEXT_HOP:
+            {
+                if (len == 0) out.linkLocalNextHop = true;
                 break;
             }
             default:

@@ -7,8 +7,8 @@
 
 namespace TCP
 {
-RxBuffer::RxBuffer(size_t recvSiz)
-    : buf(recvSiz) {}
+RxBuffer::RxBuffer(uint64_t c, size_t recvSiz)
+    : cid(c), buf(recvSiz) {}
 
 void RxBuffer::commit(size_t consumed)
 {

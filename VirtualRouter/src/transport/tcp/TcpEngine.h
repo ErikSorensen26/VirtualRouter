@@ -74,10 +74,10 @@ private:
 
     struct ConnectionState final
     {
-        ConnectionState(TxBufferPool& pool, size_t recvBufSiz)
-            : bufferTx(pool.acquire()), bufferRx(recvBufSiz) {}
+        ConnectionState(size_t cid, TxBufferPool& pool, size_t recvBufSiz)
+            : id(cid), bufferTx(pool.acquire()), bufferRx(cid, recvBufSiz) {}
 
-        ConnId id{0};
+        const ConnId id;
         int fd{-1};
 
         TcpSocketKey key{};

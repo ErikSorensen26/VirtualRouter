@@ -23,18 +23,61 @@ Session::Session(Neighbor& nbr) noexcept
 
     buildLocalCapabilities();
 
-    // Register FSM transition callback
     fsm.setTransitionCallback(
         [this](FsmState from, FsmState to, FsmEvent trigger) {
             this->onFsmTransition(from, to, trigger);
         });
 }
 
+Session::Session(Neighbor& nbr, const AfiSafi& family) noexcept
+    : Session(nbr)
+{
+    multiSession = family;
+    localCaps.multiSessionFamilies = {family};
+}
+
 Session::~Session()
 {
-    neighbor.session = nullptr;
+    if (std::holds_alternative<MultiSession>(multiSession))
+        neighbor.session = nullptr;
     timers.cancelAll();
     closeAllConnections();
+}
+
+MultiSession* Session::getMultiSession()
+{
+    if (!established() || !localCaps.multiSess) return nullptr;
+    return std::holds_alternative<MultiSession>(multiSession)
+        ? &std::get<MultiSession>(multiSession) : nullptr;
+}
+
+AfiSafi* Session::getMultiSessionAfi()
+{
+    if (!established() || !localCaps.multiSess) return nullptr;
+    return std::holds_alternative<AfiSafi>(multiSession)
+        ? &std::get<AfiSafi>(multiSession) : nullptr;
+}
+
+void Session::startActiveMultiSession(const AfiSafi& family)
+{
+    if (!std::holds_alternative<MultiSession>(multiSession) ||
+        !negotiated.multiSessionFamilies.contains(family))
+        return;
+
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.emplace(family, neighbor, family);
+    if (ok)
+        it->second.postEvent(FsmEvent::MANUAL_START);
+}
+
+void Session::startPassiveMultiSession(const AfiSafi& family)
+{
+    if (!std::holds_alternative<MultiSession>(multiSession) ||
+        !negotiated.multiSessionFamilies.contains(family))
+        return;
+    
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.emplace(family, neighbor, family);
+    if (ok)
+        it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
 }
 
 void Session::buildLocalCapabilities()
@@ -60,7 +103,9 @@ void Session::buildLocalCapabilities()
         localCaps.restartTime = procCfg.get<Config::Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME>().load();
     }
 
+    localCaps.multiSess = neighbor.getConfigs().get<Config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
     localCaps.extendedMessage = true;
+    localCaps.linkLocalNextHop = true;
 }
 
 void Session::acceptConnection(TCP::Connection&& conn)
@@ -76,10 +121,22 @@ void Session::initiateConnection()
     auto& tcp = proc.routingInstance->getTcp();
 
     TCP::ConnectOptions opts;
-    opts.callback = BgpProcess::onConnectCallback;
-    opts.callbackUser = this;
-    opts.recvCallback = BgpProcess::onReceiveCallback;
-    opts.recvUser = this;
+    if (std::holds_alternative<AfiSafi>(multiSession))
+    {
+        // Child session: callbacks route directly to this Session
+        opts.callback = Session::onConnectCallback;
+        opts.callbackUser = this;
+        opts.recvCallback = Session::onReceiveCallback;
+        opts.recvUser = this;
+    }
+    else
+    {
+        // Base session: callbacks route through BgpProcess by remote address
+        opts.callback = BgpProcess::onConnectCallback;
+        opts.callbackUser = &proc;
+        opts.recvCallback = BgpProcess::onReceiveCallback;
+        opts.recvUser = &proc;
+    }
 
     activeConn.emplace(tcp.connect(
         TCP::TcpEndpoint{IPAddress{}, 0},
@@ -155,11 +212,33 @@ void Session::handleIncoming(TCP::RxConsumer& consumer)
 void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
 {
     auto& proc = neighbor.getProcess();
+    const bool isChild = std::holds_alternative<AfiSafi>(multiSession);
 
     if (to == FsmState::ESTABLISHED)
-        proc.onSessionEstablished(*this);
+    {
+        if (!isChild)
+        {
+            proc.onSessionEstablished(*this);
+
+            if (negotiated.multiSess)
+            {
+                auto& connectionMode = neighbor.getConfigs().get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+                bool passive = connectionMode.hasValue() && !connectionMode.load();
+                for (const auto& fam : negotiated.multiSessionFamilies)
+                {
+                    if (passive)
+                        startPassiveMultiSession(fam);
+                    else
+                        startActiveMultiSession(fam);
+                }
+            }
+        }
+    }
     else if (from == FsmState::ESTABLISHED)
-        proc.onSessionDown(*this);
+    {
+        if (!isChild)
+            proc.onSessionDown(*this);
+    }
 }
 
 void Session::sendOpen()
@@ -182,6 +261,8 @@ void Session::sendKeepalive()
 
 void Session::sendNotification(const Notification& notif)
 {
+    if (notif.code == 0)
+        return;
     if (primaryConn)
     {
         BgpTx::buildNotification(*primaryConn, notif);
@@ -252,6 +333,12 @@ bool Session::isEbgp() const noexcept
     return neighbor.isEbgp();
 }
 
+bool Session::verifyConnection(uint64_t cid)
+{
+    return (activeConn.has_value() && activeConn->getId() == cid) ||
+           (passiveConn.has_value() && passiveConn->getId() == cid);
+}
+
 bool Session::resolveCollision(uint32_t incomingPeerRid)
 {
     uint32_t localRid = neighbor.getProcess().getRouterId();
@@ -276,6 +363,21 @@ bool Session::resolveCollision(uint32_t incomingPeerRid)
     return keep;
 }
 
+void Session::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
+{
+    auto* session = static_cast<Session*>(ctx.user);
+    if (ctx.ev.type == TCP::TcpEventType::CONNECTED)
+        session->postEvent(FsmEvent::TCP_CR_ACKED);
+    else
+        session->postEvent(FsmEvent::TCP_CONNECTION_FAILS);
+}
+
+void Session::onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept
+{
+    auto* session = static_cast<Session*>(ctx.user);
+    session->handleIncoming(ctx.consumer);
+}
+
 void Session::negotiateCapabilities()
 {
     negotiated = {};
@@ -297,7 +399,7 @@ void Session::negotiateCapabilities()
     for (const auto& lf : localCaps.mpFamilies)
     {
         if (peerCaps.supportsFamily(lf))
-            negotiated.activeFamilies.push_back(lf);
+            negotiated.activeFamilies.insert(lf);
     }
 
     // IPv4 unicast
@@ -308,7 +410,35 @@ void Session::negotiateCapabilities()
         for (const auto& f : negotiated.activeFamilies)
             if (f == ipv4uni) { found = true; break; }
         if (!found)
-            negotiated.activeFamilies.push_back(ipv4uni);
+            negotiated.activeFamilies.insert(ipv4uni);
+    }
+
+    // Link-local next hop
+    negotiated.linkLocalNextHop = localCaps.linkLocalNextHop && peerCaps.linkLocalNextHop;
+
+    // MULTI-SESSION
+    if (localCaps.multiSess)
+    {
+        for (const auto& lsf : localCaps.multiSessionFamilies)
+        {
+            for (const auto& psf : peerCaps.multiSessionFamilies)
+            {
+                if (lsf == psf)
+                {
+                    negotiated.multiSessionFamilies.insert(lsf);
+                    negotiated.multiSess = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Restrict active families to just this one
+    if (std::holds_alternative<AfiSafi>(multiSession))
+    {
+        negotiated.activeFamilies.clear();
+        if (peerCaps.supportsFamily(std::get<AfiSafi>(multiSession)))
+            negotiated.activeFamilies.insert(std::get<AfiSafi>(multiSession));
     }
 
     // ADD-PATH
@@ -326,6 +456,23 @@ void Session::negotiateCapabilities()
                     negotiated.addpath = true;
                 }
                 break;
+            }
+        }
+    }
+
+    // LLGR
+    if (localCaps.llgr && peerCaps.llgr)
+    {
+        for (const auto& llf : localCaps.llgrFamilies)
+        {
+            for (const auto& plf : peerCaps.llgrFamilies)
+            {
+                if (llf.family == plf.family)
+                {
+                    negotiated.llgrFamilies.push_back({llf.family, std::min(llf.staleTime, plf.staleTime), static_cast<uint8_t>(llf.flags & plf.flags)});
+                    negotiated.llgr = true;
+                    break;
+                }
             }
         }
     }

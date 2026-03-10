@@ -8,6 +8,7 @@
 
 #include "bgp/BgpTypes.hpp"
 #include "NeighborConfigs.hpp"
+#include "configs/registry/router/BgpRegistry.h"
 
 namespace BGP
 {
@@ -58,8 +59,6 @@ private:
 
 private:
     friend NeighborAf;
-
-    PeerGroup* peerGroup = nullptr;
 
     BgpProcess& process;
     ProcessQueueRef scheduler;

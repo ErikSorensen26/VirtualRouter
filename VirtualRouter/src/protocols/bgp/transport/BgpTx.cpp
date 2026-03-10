@@ -83,6 +83,17 @@ static uint16_t computeCapabilityLen(const Capabilities& caps)
     if (caps.asn32bit)
         addParam(4);
 
+    // MULTI-SESSION
+    if (!caps.multiSessionFamilies.empty())
+    {
+        uint8_t fragSize = getFragSize(4);
+        size_t frags = getFragments(fragSize, caps.multiSessionFamilies.size());
+        for (size_t f = 0; f < frags - 1; ++f)
+            addParam(fragSize * 4);
+        size_t remainder = caps.multiSessionFamilies.size() % fragSize;
+        addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 4));
+    }
+
     // ADD-PATH
     if (!caps.addPathFamilies.empty())
     {
@@ -108,6 +119,14 @@ static uint16_t computeCapabilityLen(const Capabilities& caps)
         size_t remainder = caps.llgrFamilies.size() % fragSize;
         addParam(static_cast<uint8_t>((remainder == 0 ? fragSize : remainder) * 7));
     }
+
+    // FQDN
+    if (caps.fqdn)
+        addParam(static_cast<uint8_t>(1 + caps.hostname.size() + 1 + caps.domain.size()));
+
+    // Link-local next hop
+    if (caps.linkLocalNextHop)
+        addParam(0);
 
     return capSize;
 }
@@ -217,6 +236,32 @@ static void appendCapabilities(const Capabilities& caps, TCP::Connection& c)
         writeU32(buf, caps.asn);
     }
 
+    // MULTI-SESSION
+    if (!caps.multiSessionFamilies.empty())
+    {
+        uint8_t fragSize = getFragSize(4);
+        const size_t totalEntries = caps.multiSessionFamilies.size();
+        const size_t totalFragments = getFragments(fragSize, totalEntries);
+
+        for (size_t f = 0; f < totalFragments; ++f)
+        {
+            size_t startIdx = f * fragSize;
+            size_t entriesInThisFrag = std::min<size_t>(fragSize, totalEntries - startIdx);
+
+            uint8_t* frag = openParam(BGP_CAPABILITY_MULTI_SESSION, static_cast<uint8_t>(entriesInThisFrag * 4));
+
+            for (size_t e = 0; e < entriesInThisFrag; ++e)
+            {
+                const auto& entry = caps.multiSessionFamilies[startIdx + e];
+                uint8_t* buf = frag + (e * 4);
+
+                writeU16(buf, entry.afi);
+                buf[2] = entry.safi;
+                buf[3] = 0;
+            }
+        }
+    }
+
     // ADD-PATH
     if (!caps.addPathFamilies.empty())
     {
@@ -263,6 +308,22 @@ static void appendCapabilities(const Capabilities& caps, TCP::Connection& c)
             idx += 7;
         }
     }
+
+    // FQDN
+    if (caps.fqdn)
+    {
+        uint8_t vlen = static_cast<uint8_t>(1 + caps.hostname.size() + 1 + caps.domain.size());
+        uint8_t* buf = openParam(BGP_CAPABILITY_FQDN, vlen);
+        buf[0] = static_cast<uint8_t>(caps.hostname.size());
+        std::memcpy(buf + 1, caps.hostname.data(), caps.hostname.size());
+        size_t off = 1 + caps.hostname.size();
+        buf[off] = static_cast<uint8_t>(caps.domain.size());
+        std::memcpy(buf + off + 1, caps.domain.data(), caps.domain.size());
+    }
+
+    // Link-local next hop
+    if (caps.linkLocalNextHop)
+        openParam(BGP_CAPABILITY_LINK_LOCAL_NEXT_HOP, 0);
 }
 
 void BgpTx::appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& attrsSize, TCP::Connection& c)

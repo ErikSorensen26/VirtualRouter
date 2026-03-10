@@ -33,28 +33,25 @@ BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
 
 BgpProcess::~BgpProcess() = default;
 
-Session* BgpProcess::findSession(TCP::ConnId cid)
+Session* BgpProcess::findSession(const IPAddress& addr)
 {
-    auto it = sessions.find(cid);
+    auto it = sessions.find(addr);
     return (it != sessions.end()) ? &it->second : nullptr;
 }
 
 void BgpProcess::startActiveSession(Neighbor& nbr)
 {
-    auto tempKey = reinterpret_cast<TCP::ConnId>(&nbr);
-    auto [it, ok] = sessions.emplace(tempKey, nbr);
+    auto [it, ok] = sessions.emplace(nbr.neighborAddress, nbr);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START);
 }
 
 void BgpProcess::startPassiveSession(Neighbor& nbr)
 {
-    auto tempKey = reinterpret_cast<TCP::ConnId>(&nbr);
-    auto [it, ok] = sessions.emplace(tempKey, nbr);
+    auto [it, ok] = sessions.emplace(nbr.neighborAddress, nbr);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
 }
-
 
 void BgpProcess::onSessionEstablished(Session& session)
 {
@@ -139,16 +136,28 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
         return;
     }
 
-    TCP::ConnId cid = ctx.newConn.getId();
+    // If the base session has established multisession, stage the connection
+    // until BgpRx parses the OPEN and calls activateSession with the family.
+    if (nbr->session && nbr->session->getNegotiated().multiSess)
+    {
+        MultiSession* ms = nbr->session->getMultiSession();
+        if (!ms)
+        {
+            ctx.newConn.disconnect();
+            return;
+        }
+        ms->connections.emplace(ctx.newConn.getId(), std::move(ctx.newConn));
+        return;
+    }
 
-    auto [it, ok] = bgp->sessions.emplace(cid, *nbr, bgp->scheduler.ref());
+    auto [it, ok] = bgp->sessions.emplace(nbrIp, *nbr);
     it->second.acceptConnection(std::move(ctx.newConn));
 }
 
 void BgpProcess::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
 {
     auto* bgp = static_cast<BgpProcess*>(ctx.user);
-    Session* session = bgp->findSession(ctx.id);
+    Session* session = bgp->findSession(ctx.key.remote.address);
     if (!session)
         return;
 
@@ -161,9 +170,19 @@ void BgpProcess::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
 void BgpProcess::onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept
 {
     auto* bgp = static_cast<BgpProcess*>(ctx.user);
-    Session* session = bgp->findSession(ctx.id);
+    Session* session = bgp->findSession(ctx.key.remote.address);
     if (!session)
         return;
+
+    // Multi-Session
+    if (auto* mg = session->getMultiSession(); mg)
+    {
+        if (auto* ses = mg->findMultiSession(ctx.id))
+        {
+            ses->handleIncoming(ctx.consumer);
+            return;
+        }
+    }
 
     session->handleIncoming(ctx.consumer);
 }

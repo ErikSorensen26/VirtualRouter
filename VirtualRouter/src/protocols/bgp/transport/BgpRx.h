@@ -48,7 +48,7 @@ public:
 
 private:
 
-    static bool processOpen(Session& c, std::span<uint8_t> data, Notification& notification);
+    static bool processOpen(Session& c, uint64_t cid, std::span<uint8_t> data, Notification& notification);
     static bool processUpdate(Session& c, std::span<uint8_t> data, Notification& notification);
     static bool processNotification(Session& c, std::span<uint8_t> data, Notification& notification);
     static bool processKeepalive(Session& c, std::span<uint8_t> data, Notification& notification);
@@ -56,6 +56,8 @@ private:
 
     static void parseCapabilities(std::span<uint8_t> data, Capabilities& out);
     static bool parsePathAttributes(Session& session, std::span<uint8_t> data, IncomingUpdate& uinfo, Notification& error);
+
+    static std::optional<AfiSafi> resolveMultiSessionAf(std::span<uint8_t> data);
 };
 
 template <typename N>

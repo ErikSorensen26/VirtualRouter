@@ -11,6 +11,11 @@ namespace TCP
 RxConsumer::RxConsumer(RxBuffer& buf, std::span<uint8_t> data)
     : bufferRx(data), rxView(data), buffer(buf) {}
 
+uint64_t RxConsumer::getId() const noexcept
+{
+    return buffer.cid;
+}
+
 void RxConsumer::commit(size_t bytes)
 {
     consumed += bytes;

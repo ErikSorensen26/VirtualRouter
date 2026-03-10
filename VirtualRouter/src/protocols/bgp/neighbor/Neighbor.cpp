@@ -1,8 +1,5 @@
 // Neighbor.cpp
 
-
-// TODO: fix peer groups, templates are good
-
 #include <VirtualRouter.h>
 
 #include "configs/Registry.hpp"

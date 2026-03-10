@@ -30,7 +30,7 @@ Config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi)
 {
     auto it = afConfigs.find(afi);
     if (it != afConfigs.end())
-        return &&it->second;
+        return &it->second.get();
 
     uint32_t vrf = process.routingInstance->getInstanceId();
     auto afKey = Config::generatePeerGroupAfKey(vrf, name, afi.afi, afi.safi);
@@ -44,7 +44,7 @@ const Config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi) c
 {
     auto it = afConfigs.find(afi);
     if (it != afConfigs.end())
-        return &&it->second;
+        return &it->second.get();
 
     return const_cast<PeerGroup*>(this)->getAfConfigs(afi);
 }
