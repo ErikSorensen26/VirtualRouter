@@ -41,6 +41,9 @@ Session* BgpProcess::findSession(const IPAddress& addr)
 
 void BgpProcess::startActiveSession(Neighbor& nbr)
 {
+    if (nbr.getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load())
+        return;
+
     auto [it, ok] = sessions.emplace(nbr.neighborAddress, nbr);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START);
@@ -48,6 +51,9 @@ void BgpProcess::startActiveSession(Neighbor& nbr)
 
 void BgpProcess::startPassiveSession(Neighbor& nbr)
 {
+    if (nbr.getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load())
+        return;
+
     auto [it, ok] = sessions.emplace(nbr.neighborAddress, nbr);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
@@ -130,7 +136,11 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
         }
     };
 
-    if (!nbr || !allowPassive() || !check())
+    auto isShutdown = [&]() {
+        return nbr->getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load();
+    };
+
+    if (!nbr || isShutdown() || !allowPassive() || !check())
     {
         ctx.newConn.disconnect();
         return;

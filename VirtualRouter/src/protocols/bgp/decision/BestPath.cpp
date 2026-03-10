@@ -1,5 +1,7 @@
 // BestPath.cpp
 
+#include <limits>
+
 #include "BestPath.h"
 #include "bgp/BgpProcess.h"
 
@@ -10,9 +12,11 @@ uint32_t localPrefOrDefault(const PathAttribute& a)
     return a.attrs.localPref.value_or(100);
 }
 
-uint32_t medOrDefault(const PathAttribute& a)
+uint32_t medOrDefault(const PathAttribute& a, bool missingAsWorst)
 {
-    return a.attrs.med.value_or(0);
+    if (!a.attrs.med.has_value())
+        return missingAsWorst ? std::numeric_limits<uint32_t>::max() : 0;
+    return *a.attrs.med;
 }
 
 uint8_t originRank(const PathAttribute& a)
@@ -20,14 +24,15 @@ uint8_t originRank(const PathAttribute& a)
     return static_cast<uint8_t>(a.attrs.origin.value_or(BGP_ORIGIN_INCOMPLETE));
 }
 
-BestPathComparator::BestPathComparator(BgpProcess& p)
-    : proc(p) {}
+BestPathComparator::BestPathComparator(BgpProcess& p, BestPathConfig cfg)
+    : proc(p), config(cfg) {}
 
 inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const InboundRouteBase& rhs) const
 {
     if (!proc.getConfigs().get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load() && lhs.peerAs != rhs.peerAs)
         return false;
-    return medOrDefault(*lhs.getPathAttributes()) < medOrDefault(*rhs.getPathAttributes());
+    return medOrDefault(*lhs.getPathAttributes(), config.medMissingAsWorst)
+         < medOrDefault(*rhs.getPathAttributes(), config.medMissingAsWorst);
 }
 
 bool BestPathComparator::better(const InboundRouteBase& lhs, const IPAddress& lhsNbr, const InboundRouteBase& rhs, const IPAddress& rhsNbr) const
@@ -66,20 +71,26 @@ bool BestPathComparator::better(const InboundRouteBase& lhs, const IPAddress& lh
         return rhs.ebgp;
 
     // 8) Lowest IGP metric to NEXT_HOP
-    if (lhs.igpCost != rhs.igpCost)
+    if (!config.ignoreIgpMetric && lhs.igpCost != rhs.igpCost)
         return lhs.igpCost < rhs.igpCost;
 
-    // 9) Oldest route.
-    if (lhs.receivedTime != rhs.receivedTime)
-        return lhs.receivedTime < rhs.receivedTime;
+    // 9/10) Oldest route (stability) vs lowest router-ID (deterministic), depending on config.
+    if (!config.compareRouterId)
+    {
+        // Without compare-routerid: prefer the older (stable) route; no router-ID step.
+        if (lhs.receivedTime != rhs.receivedTime)
+            return lhs.receivedTime < rhs.receivedTime;
+    }
+    else
+    {
+        // With compare-routerid: prefer lowest router-ID (deterministic, skip oldest-route step).
+        uint32_t lhsRid = lhs.sourceNeighbor ? lhs.sourceNeighbor->globalNbr().rid : proc.getRouterId();
+        uint32_t rhsRid = rhs.sourceNeighbor ? rhs.sourceNeighbor->globalNbr().rid : proc.getRouterId();
+        if (lhsRid != rhsRid)
+            return lhsRid < rhsRid;
+    }
 
-    // 10) Lowest router-id, then neighbor address.
-    uint32_t lhsRid = lhs.sourceNeighbor ? lhs.sourceNeighbor->globalNbr().rid : proc.getRouterId();
-    uint32_t rhsRid = rhs.sourceNeighbor ? rhs.sourceNeighbor->globalNbr().rid : proc.getRouterId();
-    if (lhsRid != rhsRid)
-        return lhsRid < rhsRid;
-
-    // 11) Lowest neighbor address
+    // Final) Lowest neighbor address
     return lhsNbr < rhsNbr;
 }
 }

@@ -68,6 +68,7 @@ enum class FsmEvent : uint8_t
     ROUTE_REFRESH                                             = 29,
     BFD_DOWN                                                  = 30,
     BFD_UP                                                    = 31,
+    MAX_PREFIX_REACHED                                        = 32,
 };
 
 struct Notification
@@ -186,6 +187,7 @@ inline const char* fsmEventName(FsmEvent e) noexcept
         case FsmEvent::ROUTE_REFRESH:                     return "RouteRefresh";
         case FsmEvent::BFD_DOWN:                          return "BfdDown";
         case FsmEvent::BFD_UP:                            return "BfdUp";
+        case FsmEvent::MAX_PREFIX_REACHED:                return "MaxPrefixReached";
         default:                                          return "Unknown";
     }
 }

@@ -3,6 +3,7 @@
 #ifndef BGP_ADDRESS_FAMILY_INSTANCE_H
 #define BGP_ADDRESS_FAMILY_INSTANCE_H
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <IPAddress.hpp>
@@ -257,6 +258,21 @@ private:
             }
         }
 
+        // MAXIMUM_PREFIX enforcement
+        {
+            auto& nbrAfCfgs = nbr->getAfNeighbor(family).getConfigs();
+            auto& maxPfxField = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX>();
+            if (maxPfxField.hasValue())
+            {
+                uint32_t maxPfx = maxPfxField.load();
+                uint32_t count = static_cast<uint32_t>(peerIn.size());
+                bool warningOnly = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX_WARNING_ONLY>().load();
+
+                if (count >= maxPfx && !warningOnly && peer.session)
+                    peer.session->postEvent(FsmEvent::MAX_PREFIX_REACHED);
+            }
+        }
+
         for (const auto& n : touched)
             recomputeNlri(n);
     }
@@ -280,7 +296,12 @@ private:
             candidates.push_back(&it->second);
         }
 
-        DecisionEngine decision(process);
+        BestPathConfig bpCfg;
+        bpCfg.compareRouterId   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
+        bpCfg.medMissingAsWorst = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
+        bpCfg.ignoreIgpMetric   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
+
+        DecisionEngine decision(process, bpCfg);
         std::optional<LocalRoute<NlriT>> best = decision.selectBest(
             candidates,
             configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_EBGP>().load(),
@@ -322,34 +343,53 @@ private:
         policy.withdrawRoute(nlri);
     }
 
-    // Returns true if the route is valid before entering Adj-RIB-In.
+    // Returns true if the route should be DROPPED (filtered out); false to accept into Adj-RIB-In.
     bool applyIngressPolicy(const InboundRoute<NlriT>& route)
     {
         PathAttribute pathAttrs = AddressFamilyInstanceHelper::getAttrMgr(process).get(route.pathId);
         uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
         auto& nbr = route.sourceNeighbor->globalNbr();
 
-        // AS-PATH loop prevention
-        if (!pathAttrs.attrs.asPath.empty() && pathAttrs.attrs.asPath[0].segmentType == BGP_AS_SEQUENCE)
+        // AS-PATH loop prevention (check all segments)
         {
-            Config::BgpNeighborSessionRegistry& nbrCfgs = nbr.getConfigs();
+            NeighborConfigs& nbrCfgs = nbr.getConfigs();
             bool localAsEnabled = nbrCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load();
             bool dualAs = nbrCfgs.get<Config::BgpNeighborSession::LOCAL_AS_DUAL_AS>().load();
-            auto& localAs = nbrCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
+            auto& localAsField = nbrCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
 
-            for (uint32_t asn : pathAttrs.attrs.asPath[0].asns)
+            NeighborAfConfigs& nbrAfCfgs = nbr.getAfNeighbor(family).getConfigs();
+            bool allowAsIn = nbrAfCfgs.get<Config::BgpNeighbor::ALLOWAS_IN>().load();
+            uint8_t maxOccurrences = 1;
+            if (allowAsIn)
             {
-                // Always reject if our real AS appears
-                if (asn == routerAs)
-                    return false;
-                if (localAsEnabled && !dualAs && localAs.hasValue() && asn == localAs.load())
-                    return false;
+                auto& occField = nbrAfCfgs.get<Config::BgpNeighbor::ALLOWAS_IN_OCCURANCES>();
+                if (occField.hasValue())
+                    maxOccurrences = occField.load();
             }
+
+            uint32_t ownAsCount = 0;
+            uint32_t localAsCount = 0;
+            for (const auto& seg : pathAttrs.attrs.asPath)
+            {
+                for (uint32_t asn : seg.asns)
+                {
+                    if (asn == routerAs)
+                        ownAsCount++;
+                    if (localAsEnabled && !dualAs && localAsField.hasValue() && asn == localAsField.load())
+                        localAsCount++;
+                }
+            }
+
+            if (!allowAsIn && ownAsCount > 0)
+                return true; // reject: AS-PATH loop
+            if (allowAsIn && ownAsCount > maxOccurrences)
+                return true; // reject: exceeds allowas-in limit
+            if (localAsCount > 0)
+                return true; // reject: local-as loop
         }
 
-        // TODO: decide if dropped
         // TODO: ingress policy (route-maps, prefix-lists, community filters, etc.)
-        return true; // true = accept
+        return false; // accept
     }
 
     // Group-level egress: strip LOCAL_PREF and prepend AS-path.
@@ -398,6 +438,39 @@ private:
             if (!cfgs.get<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>().load() ||
                 cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = session.getNeighbor().neighborAddress;
+
+            // SEND_COMMUNITY: strip communities for eBGP unless explicitly enabled.
+            bool sendStd = cfgs.get<Config::BgpNeighbor::SEND_COMMUNITY>().load()
+                        || cfgs.get<Config::BgpNeighbor::SEND_COMMUNITY_BOTH>().load()
+                        || cfgs.get<Config::BgpNeighbor::SEND_COMMUNITY_STANDARD>().load();
+            bool sendExt = cfgs.get<Config::BgpNeighbor::SEND_COMMUNITY_EXTENDED>().load()
+                        || cfgs.get<Config::BgpNeighbor::SEND_COMMUNITY_BOTH>().load();
+
+            if (!sendStd)
+                pa.attrs.communities.clear();
+            if (!sendExt)
+                pa.attrs.extendedCommunities.clear();
+            if (!sendStd && !sendExt)
+                pa.attrs.largeCommunities.clear();
+
+            // REMOVE_PRIVATE_AS: strip private ASNs from egress AS-PATH.
+            bool removePrivate = cfgs.get<Config::BgpNeighbor::REMOVE_PRIVATE_AS>().load();
+            bool removeAll     = cfgs.get<Config::BgpNeighbor::REMOVE_PRIVATE_AS_ALL>().load();
+            if (removePrivate || removeAll)
+            {
+                auto isPrivateAs = [](uint32_t asn) {
+                    return (asn >= 64512u && asn <= 65534u) ||
+                           (asn >= 4200000000u && asn <= 4294967294u);
+                };
+                for (auto& seg : pa.attrs.asPath)
+                {
+                    auto it = std::remove_if(seg.asns.begin(), seg.asns.end(), isPrivateAs);
+                    seg.asns.erase(it, seg.asns.end());
+                }
+                auto it = std::remove_if(pa.attrs.asPath.begin(), pa.attrs.asPath.end(),
+                    [](const AsPathSegment& s) { return s.asns.empty(); });
+                pa.attrs.asPath.erase(it, pa.attrs.asPath.end());
+            }
         }
         else
         {
@@ -497,6 +570,14 @@ private:
             }
 
             NeighborAf& afNbr = nbr.getAfNeighbor(family);
+
+            // ACTIVATE: only exchange routes when this AF is explicitly activated for the neighbor.
+            if (!afNbr.getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
+            {
+                withdrawFromPeer();
+                return;
+            }
+
             PeerGroup* pg = afNbr.getConfigs().getPeerGroup();
 
             std::optional<PathAttribute> egressAttrs;

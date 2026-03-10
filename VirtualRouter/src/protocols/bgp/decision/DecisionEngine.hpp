@@ -13,8 +13,8 @@ class BgpProcess;
 class DecisionEngine
 {
 public:
-    explicit DecisionEngine(BgpProcess& p)
-        : proc(p), comparator(p) {}
+    explicit DecisionEngine(BgpProcess& p, BestPathConfig cfg = {})
+        : proc(p), comparator(p, cfg) {}
 
     template <typename N>
     std::optional<LocalRoute<N>> selectBest(std::vector<InboundRoute<N>*>& canidates, size_t maxEPaths, size_t maxIPaths) const

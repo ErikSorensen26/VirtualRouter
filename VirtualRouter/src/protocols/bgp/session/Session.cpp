@@ -19,7 +19,8 @@ Session::Session(Neighbor& nbr) noexcept
 {
     neighbor.buildAttributeRanges();
     holdTime = base.get<Config::BgpTransportBase::HOLDTIME>().load();
-    keepaliveInterval = holdTime / 3;
+    uint16_t cfgKa = base.get<Config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
+    keepaliveInterval = (cfgKa > 0 && cfgKa < holdTime) ? cfgKa : holdTime / 3;
 
     buildLocalCapabilities();
 
