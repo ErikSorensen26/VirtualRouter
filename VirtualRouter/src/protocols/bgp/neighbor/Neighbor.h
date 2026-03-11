@@ -35,8 +35,8 @@ public:
 
     void addAfNeighbor(AfiSafi& afi);
     void delAfNeighbor(AfiSafi& afi);
-    NeighborAf& getAfNeighbor(AfiSafi& afi);
-    const NeighborAf& getAfNeighbor(AfiSafi& afi) const;
+    NeighborAf& getAfNeighbor(const AfiSafi& afi);
+    const NeighborAf& getAfNeighbor(const AfiSafi& afi) const;
     std::unordered_map<AfiSafi, NeighborAf>& getAfNeighbors() { return afNeighbors; }
 
     NeighborConfigs& getConfigs() { return configs; }

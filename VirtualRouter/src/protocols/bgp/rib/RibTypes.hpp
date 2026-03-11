@@ -19,23 +19,41 @@ namespace BGP
 class NeighborAf;
 
 template <typename N>
+struct NlriPath
+{
+    N nlri;
+    uint32_t pathId = 0;
+};
+
+template <typename N>
+struct NlriPathHash
+{
+    size_t operator()(const NlriPath<N>& k) const noexcept
+    {
+        size_t h = std::hash<N>{}(k.nlri);
+        h ^= std::hash<uint32_t>{}(k.pathId) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+template <typename N>
 struct BuildUpdate
 {
     struct Announcement
     {
         PathAttribute attrs;
-        std::vector<N> nlri;
+        std::vector<NlriPath<N>> nlri;
     };
 
-    std::vector<N> withdrawn;
+    std::vector<NlriPath<N>> withdrawn;
     std::vector<Announcement> announcements;
 };
 
 template <typename N>
 struct ParsedUpdate
 {
-    std::vector<N> withdrawn;
-    std::vector<N> announcements;
+    std::vector<NlriPath<N>> withdrawn;
+    std::vector<NlriPath<N>> announcements;
     std::optional<PathAttribute> attrs;
 };
 
@@ -195,10 +213,10 @@ struct OutboundRoute : RouteBase
 };
 
 template <typename N>
-using PerPeerInTable = std::unordered_map<N, InboundRoute<N>>;
+using PerPeerInTable = std::unordered_map<NlriPath<N>, InboundRoute<N>, NlriPathHash<N>>;
 
 template <typename N>
-using PerPeerOutTable = std::unordered_map<N, OutboundRoute<N>>;
+using PerPeerOutTable = std::unordered_multimap<N, std::pair<uint32_t, OutboundRoute<N>>>;
 
 template <typename N>
 using AdjRibInTable = std::unordered_map<uint32_t, PerPeerInTable<N>>;

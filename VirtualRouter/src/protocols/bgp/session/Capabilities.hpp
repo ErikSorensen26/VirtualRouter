@@ -5,6 +5,7 @@
 
 #include <string>
 #include <unordered_set>
+#include <algorithm>
 
 #include "bgp/BgpTypes.hpp"
 
@@ -144,6 +145,37 @@ struct NegotiatedCapabilities
     std::vector<Capabilities::LlgrFamily> llgrFamilies;
     std::unordered_set<AfiSafi> activeFamilies;
     std::unordered_set<AfiSafi> multiSessionFamilies;
+
+    bool addPathSend(const AfiSafi& fam) const noexcept
+    {
+        for (const auto& ap : addPathFamilies)
+            if (ap.family == fam) return (ap.sendReceive & BGP_ADD_PATH_SEND) != 0;
+        return false;
+    }
+
+    Capabilities::AddPathFamily* findAddPath(AfiSafi afi)
+    {
+        auto it = std::find_if(addPathFamilies.begin(), addPathFamilies.end(),
+            [&](const Capabilities::AddPathFamily& p) { return p.family == afi; });
+        return it == addPathFamilies.end()
+            ? nullptr : &*it;
+    }
+
+    Capabilities::GracefulRestartFamily* findGracefulRestart(AfiSafi afi)
+    {
+        auto it = std::find_if(grFamilies.begin(), grFamilies.end(),
+            [&](const Capabilities::GracefulRestartFamily& p) { return p.family == afi; });
+        return it == grFamilies.end()
+            ? nullptr : &*it;
+    }
+
+    Capabilities::LlgrFamily* findLlgr(AfiSafi afi)
+    {
+        auto it = std::find_if(llgrFamilies.begin(), llgrFamilies.end(),
+            [&](const Capabilities::LlgrFamily& p) { return p.family == afi; });
+        return it == llgrFamilies.end()
+            ? nullptr : &*it;
+    }
 };
 }
 

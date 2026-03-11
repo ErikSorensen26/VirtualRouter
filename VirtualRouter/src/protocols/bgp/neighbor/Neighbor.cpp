@@ -53,14 +53,14 @@ void Neighbor::delAfNeighbor(AfiSafi& afi)
     afNeighbors.erase(afi);
 }
 
-NeighborAf& Neighbor::getAfNeighbor(AfiSafi& afi)
+NeighborAf& Neighbor::getAfNeighbor(const AfiSafi& afi)
 {
     auto it = afNeighbors.find(afi);
     assert(it != afNeighbors.end());
     return  it->second;
 }
 
-const NeighborAf& Neighbor::getAfNeighbor(AfiSafi& afi) const
+const NeighborAf& Neighbor::getAfNeighbor(const AfiSafi& afi) const
 {
     auto it = afNeighbors.find(afi);
     assert(it != afNeighbors.end());

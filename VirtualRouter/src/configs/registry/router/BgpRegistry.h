@@ -100,8 +100,8 @@ using BgpBaseRegistry = SubRegistry<RegistryKey<20>, BgpTransportBase,
 enum class BgpNeighbor
 {
     ACTIVATE, // TODO
-    ADDITIONAL_PATHS_RECEIVE, // TODO
-    ADDITIONAL_PATHS_SEND, // TODO
+    ADDITIONAL_PATHS_RECEIVE,
+    ADDITIONAL_PATHS_SEND,
     ADVERTISE_ADDITIONAL_PATHS_ALL, // TODO
     ADVERTISE_ADDITIONAL_PATHS_BEST, // TODO
     ADVERTISE_ADDITIONAL_GROUP_BEST, // TODO
@@ -276,7 +276,7 @@ enum class BgpNeighborSession
     PATH_ATTRIBUTE,
     PEER_GROUP,
     REMOTE_AS,
-    SHUTDOWN, // TODO
+    SHUTDOWN,
     TRANSPORT_CONNECTION_MODE,
     TRANSPORT_MULTI_SESSION,
     TTL_SEC, // TODO
@@ -304,6 +304,7 @@ enum class BgpNeighborSession
 
 CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_SESSION_DEFAULTS);
 
+void BgpNeighborSessionShutdown(void*);
 void BgpNeighborSessionPathAttribute(void*);
 
 using BgpNeighborSessionRegistry = SubRegistry<RegistryKey<20>, BgpNeighborSession,
@@ -329,10 +330,10 @@ using BgpNeighborSessionRegistry = SubRegistry<RegistryKey<20>, BgpNeighborSessi
         bool,    // true = discard, false = treat-as-withdraw
         uint8_t, // start
         uint8_t  // end
-    >> CONFIG_INDEX_ARG(BgpNeighborSession::PATH_ATTRIBUTE)>,
+    >> CONFIG_INDEX_ARG(BgpNeighborSession::PATH_ATTRIBUTE), BgpNeighborSessionPathAttribute>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::PEER_GROUP)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighborSession::REMOTE_AS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::SHUTDOWN)>, // ad graceful
+    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::SHUTDOWN), BgpNeighborSessionShutdown>, // ad graceful
     OptionalAtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TRANSPORT_CONNECTION_MODE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TRANSPORT_MULTI_SESSION)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::TTL_SEC)>,

@@ -63,14 +63,13 @@ private:
 template <typename N>
 bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<typename N::Nlri>& update, Notification& error)
 {
-    const bool addPath = session.getNegotiated().addPathFamilies.end() !=
-        std::find_if(session.getNegotiated().addPathFamilies.begin(),
-                     session.getNegotiated().addPathFamilies.end(),
-                     [](const auto& ap) { return ap.family == N::afi; });
+    const bool addPath = session.getNegotiated().findAddPath(N::afi) != nullptr;
 
     // Withdrawn NLRI
     for (size_t pos = 0; pos < uinfo.withdrawnData.size();)
     {
+        uint32_t pathId = 0;
+
         if (addPath)
         {
             if (pos + 4 > uinfo.withdrawnData.size())
@@ -78,6 +77,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
                 error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                 return false;
             }
+            pathId = readU32(uinfo.withdrawnData.data() + pos);
             pos += 4;
         }
 
@@ -88,7 +88,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
             error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
             return false;
         }
-        update.withdrawn.push_back(nlri);
+        update.withdrawn.push_back({nlri, pathId});
         pos += consumed;
     }
 
@@ -96,6 +96,8 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
 
     for (size_t pos = 0; pos < uinfo.nlriData.size();)
     {
+        uint32_t pathId = 0;
+
         if (addPath)
         {
             if (pos + 4 > uinfo.nlriData.size())
@@ -103,6 +105,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
                 error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                 return false;
             }
+            pathId = readU32(uinfo.nlriData.data() + pos);
             pos += 4;
         }
 
@@ -113,7 +116,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
             error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
             return false;
         }
-        update.announcements.push_back(nlri);
+        update.announcements.push_back({nlri, pathId});
         pos += consumed;
     }
 

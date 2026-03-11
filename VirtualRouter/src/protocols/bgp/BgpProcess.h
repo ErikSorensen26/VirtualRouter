@@ -47,10 +47,19 @@ public:
     Session* findSession(const IPAddress& addr);
     void startActiveSession(Neighbor& nbr);
     void startPassiveSession(Neighbor& nbr);
+    void shutdownNeighbor(Neighbor& nbr);
+    void unshutdownNeighbor(Neighbor& nbr);
     void onSessionEstablished(Session& session);
     void onSessionDown(Session& session);
 
     AddressFamilyVariant* findAddressFamily(AfiSafi& afi);
+
+    template <typename F>
+    void forEachAf(F&& fn) const
+    {
+        for (const auto& [afi, afv] : addressFamilies)
+            fn(afi);
+    }
     void disableAddressFamily(AfiSafi& af);
 
     template <AfiSafi AF>

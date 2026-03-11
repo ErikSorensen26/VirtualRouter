@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <functional>
 #include <map>
+#include <unordered_set>
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
 
@@ -132,12 +133,14 @@ public:
         std::unordered_map<uint32_t, size_t> pathToAnn;
         BuildUpdate<NlriT> update;
 
-        for (auto& [nlri, outRoute] : outIt->second)
+        for (auto& [nlri, pathAndRoute] : outIt->second)
         {
+            auto& [addPathId, outRoute] = pathAndRoute;
             if (!outRoute.pathId.has_value())
                 continue;
 
             PathAttribute pa = attrMgr.get(*outRoute.pathId);
+            NlriPath<NlriT> nlriPath{nlri, addPathId};
 
             auto ait = pathToAnn.find(*outRoute.pathId);
             if (ait == pathToAnn.end())
@@ -145,12 +148,12 @@ public:
                 pathToAnn[*outRoute.pathId] = update.announcements.size();
                 typename BuildUpdate<NlriT>::Announcement ann;
                 ann.attrs = std::move(pa);
-                ann.nlri.push_back(nlri);
+                ann.nlri.push_back(nlriPath);
                 update.announcements.push_back(std::move(ann));
             }
             else
             {
-                update.announcements[ait->second].nlri.push_back(nlri);
+                update.announcements[ait->second].nlri.push_back(nlriPath);
             }
         }
 
@@ -160,20 +163,20 @@ public:
 
     void invalidatePeer(uint32_t peer)
     {
-        auto out = adjRibOut.find(peer);
-        if (out != adjRibOut.end())
-            adjRibOut.erase(out);
+        auto outIt = adjRibOut.find(peer);
+        if (outIt != adjRibOut.end())
+            adjRibOut.erase(outIt);
 
         auto it = adjRibIn.find(peer);
         if (it == adjRibIn.end())
             return;
 
-        std::vector<NlriT> keys;
+        std::unordered_set<NlriT> keys;
         keys.reserve(it->second.size());
-        for (const auto& [nlri, inRoute] : it->second)
+        for (const auto& [nlriPath, inRoute] : it->second)
         {
-            keys.push_back(nlri);
-            auto lit = locRib.find(nlri);
+            keys.insert(nlriPath.nlri);
+            auto lit = locRib.find(nlriPath.nlri);
             if (lit != locRib.end() && &lit->second.in == &inRoute)
                 locRib.erase(lit);
         }
@@ -192,20 +195,20 @@ private:
 
         PerPeerInTable<NlriT>& peerIn = adjRibIn[peer.rid];
 
-        std::vector<NlriT> touched;
-        touched.reserve(update.announcements.size() + update.withdrawn.size());
+        std::unordered_set<NlriT> touched;
 
+        // Withdrawn: n is NlriPath<NlriT>
         for (const auto& n : update.withdrawn)
         {
             auto it = peerIn.find(n);
             if (it != peerIn.end())
             {
-                auto lit = locRib.find(n);
-                if (lit != locRib.end() && lit->second.in == &it->second)
+                auto lit = locRib.find(n.nlri);
+                if (lit != locRib.end() && &lit->second.in == &it->second)
                     locRib.erase(lit);
                 peerIn.erase(it);
             }
-            touched.push_back(n);
+            touched.insert(n.nlri);
         }
 
         if (update.attrs.has_value())
@@ -228,7 +231,8 @@ private:
                     attrMgr.retain(pid);
                 first = false;
 
-                InboundRoute<NlriT> r(attrMgr, pid, n, &naf);
+                // n is NlriPath<NlriT>; pass n.nlri to InboundRoute constructor
+                InboundRoute<NlriT> r(attrMgr, pid, n.nlri, &naf);
                 r.neighborRouterId = peer.rid;
                 r.peerAs            = peerAs;
                 r.ebgp              = isEbgp;
@@ -238,23 +242,21 @@ private:
                 if (weight.hasValue()) r.weigth = weight.load();
 
                 if (applyIngressPolicy(r))
-                {
                     continue;
-                }
 
-                // Nullify before erase in case this entry is the current locRib winner.
+                // Erase old entry for this (nlri, pathId); clear locRib pointer if needed.
                 {
                     auto existing = peerIn.find(n);
                     if (existing != peerIn.end())
                     {
-                        auto lit = locRib.find(n);
-                        if (lit != locRib.end() && lit->second.in == &existing->second)
-                            lit->second.in = nullptr;
+                        auto lit = locRib.find(n.nlri);
+                        if (lit != locRib.end() && &lit->second.in == &existing->second)
+                            locRib.erase(lit);
                         peerIn.erase(existing);
                     }
                 }
                 peerIn.emplace(n, std::move(r));
-                touched.push_back(n);
+                touched.insert(n.nlri);
             }
         }
 
@@ -280,20 +282,19 @@ private:
     void recomputeNlri(const NlriT& nlri)
     {
         std::vector<InboundRoute<NlriT>*> candidates;
-        candidates.reserve(adjRibIn.size());
 
         for (auto& [peer, peerTable] : adjRibIn)
         {
-            auto it = peerTable.find(nlri);
-            if (it == peerTable.end())
-                continue;
-
-            // Refresh IGP cost before running best-path.
-            auto attrs = it->second.getPathAttributes();
-            if (attrs.has_value())
-                it->second.igpCost = resolveIgpMetric(attrs->path.nextHop);
-
-            candidates.push_back(&it->second);
+            for (auto& [key, route] : peerTable)
+            {
+                if (key.nlri != nlri)
+                    continue;
+                // Refresh IGP cost before running best-path.
+                auto attrs = route.getPathAttributes();
+                if (attrs.has_value())
+                    route.igpCost = resolveIgpMetric(attrs->path.nextHop);
+                candidates.push_back(&route);
+            }
         }
 
         BestPathConfig bpCfg;
@@ -322,14 +323,14 @@ private:
             return;
         }
 
-        if (!had || lit->second.in != best.in)
+        if (!had || &lit->second.in != &best->in)
         {
             if (had)
                 locRib.erase(lit);
 
             locRib.emplace(nlri, *best);
             installToRib(locRib.at(nlri));
-            recomputeAdjRibOut(nlri, best.in);
+            recomputeAdjRibOut(nlri, &locRib.at(nlri));
         }
     }
 
@@ -346,7 +347,7 @@ private:
     // Returns true if the route should be DROPPED (filtered out); false to accept into Adj-RIB-In.
     bool applyIngressPolicy(const InboundRoute<NlriT>& route)
     {
-        PathAttribute pathAttrs = AddressFamilyInstanceHelper::getAttrMgr(process).get(route.pathId);
+        PathAttribute pathAttrs = AddressFamilyInstanceHelper::getAttrMgr(process).get(*route.pathId);
         uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
         auto& nbr = route.sourceNeighbor->globalNbr();
 
@@ -492,20 +493,9 @@ private:
         return pa;
     }
 
-    void recomputeAdjRibOut(const NlriT& nlri, InboundRoute<NlriT>* best)
+    void recomputeAdjRibOut(const NlriT& nlri, LocalRoute<NlriT>* best)
     {
         auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
-
-        // Cache group-level egress attrs by (PeerGroup*, isEbgp) to avoid redundant work.
-        std::map<std::pair<PeerGroup*, bool>, std::optional<PathAttribute>> groupCache;
-        auto getGroupAttrs = [&](PeerGroup* pg, const InboundRoute<NlriT>& route,
-                                 const Session& session) -> const std::optional<PathAttribute>& {
-            auto key = std::make_pair(pg, session.isEbgp());
-            auto it = groupCache.find(key);
-            if (it == groupCache.end())
-                it = groupCache.emplace(key, applyGroupEgressPolicy(route, session)).first;
-            return it->second;
-        };
 
         AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
             Session* session = nbr.session;
@@ -513,17 +503,16 @@ private:
                 return;
 
             const uint32_t peerRid = session->getPeerRid();
-            auto& peerOut = adjRibOut[peerRid];
-            const bool had = (peerOut.find(nlri) != peerOut.end());
+            PerPeerOutTable<NlriT>& peerOut = adjRibOut[peerRid];
 
-            auto withdrawFromPeer = [&]()
-            {
-                if (!had)
-                    return;
+            auto withdrawFromPeer = [&]() {
+                auto [begin, end] = peerOut.equal_range(nlri);
+                if (begin == end) return;
                 BuildUpdate<NlriT> withdraw;
-                withdraw.withdrawn.push_back(nlri);
+                for (auto it = begin; it != end; ++it)
+                    withdraw.withdrawn.push_back({nlri, it->second.first});
+                peerOut.erase(begin, end);
                 session->sendUpdate<N>(withdraw);
-                peerOut.erase(nlri);
             };
 
             if (!best)
@@ -534,26 +523,20 @@ private:
 
             // Check that this AFI/SAFI was negotiated with this peer.
             const auto& negotiated = session->getNegotiated();
-            const bool familyOk = std::any_of(
-                negotiated.activeFamilies.begin(),
-                negotiated.activeFamilies.end(),
-                [&](const AfiSafi& f) { return f == family; });
-
-            if (!familyOk)
+            if (!negotiated.activeFamilies.count(family))
             {
                 withdrawFromPeer();
                 return;
             }
 
             // iBGP split-horizon with route-reflector awareness.
-            const bool fromIbgp = !best->ebgp;
+            const bool fromIbgp = !best->in.ebgp;
             const bool toIbgp   = !session->isEbgp();
             if (fromIbgp && toIbgp)
             {
                 const bool targetIsClient = nbr.getAfNeighbor(family).getConfigs()
                     .get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
-
-                const bool senderIsClient = best->sourceNeighbor->getConfigs()
+                const bool senderIsClient = best->in.sourceNeighbor->getConfigs()
                     .template get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
 
                 if (!senderIsClient && !targetIsClient)
@@ -561,8 +544,7 @@ private:
                     withdrawFromPeer();
                     return;
                 }
-
-                if (&best->sourceNeighbor->globalNbr() == &nbr)
+                if (&best->in.sourceNeighbor->globalNbr() == &nbr)
                 {
                     withdrawFromPeer();
                     return;
@@ -579,49 +561,88 @@ private:
             }
 
             PeerGroup* pg = afNbr.getConfigs().getPeerGroup();
+            const bool addPathSend = negotiated.addPathSend(family);
 
-            std::optional<PathAttribute> egressAttrs;
-            if (pg)
+            // Collect all paths to advertise: best + multipaths if ADD-PATH send is active.
+            std::vector<InboundRoute<NlriT>*> paths;
+            paths.push_back(&best->in);
+            if (addPathSend)
             {
-                const auto& groupAttrs = getGroupAttrs(pg, *best, *session);
-                if (!groupAttrs.has_value())
-                {
-                    withdrawFromPeer();
-                    return;
-                }
-                egressAttrs = *groupAttrs;
-                applyMemberNexthop(*egressAttrs, *best, afNbr, *session);
+                for (auto* mp : best->multipaths)
+                    paths.push_back(mp);
             }
-            else
-            {
-                egressAttrs = applyEgressPolicy(*best, *session);
-                if (!egressAttrs.has_value())
-                {
-                    withdrawFromPeer();
-                    return;
-                }
-            }
-
-            uint32_t oPid = attrMgr.acquire(egressAttrs->attrs, egressAttrs->path);
-
-            auto existing = peerOut.find(nlri);
-            if (existing != peerOut.end() && existing->second.pathId == oPid)
-            {
-                attrMgr.release(oPid);
-                return;
-            }
-
-            peerOut.erase(nlri);
-            peerOut.emplace(std::piecewise_construct,
-                std::forward_as_tuple(nlri),
-                std::forward_as_tuple(attrMgr, oPid, nlri));
 
             BuildUpdate<NlriT> update;
-            typename BuildUpdate<NlriT>::Announcement ann;
-            ann.attrs = *egressAttrs;
-            ann.nlri.push_back(nlri);
-            update.announcements.push_back(std::move(ann));
-            session->sendUpdate<N>(update);
+
+            // For ADD-PATH: remove out entries whose source path is no longer active.
+            if (addPathSend)
+            {
+                auto [begin, end] = peerOut.equal_range(nlri);
+                for (auto it = begin; it != end; )
+                {
+                    uint32_t apid = it->second.first;
+                    bool stillActive = false;
+                    for (auto* r : paths)
+                    {
+                        if (r->sourceNeighbor && r->sourceNeighbor->globalNbr().rid == apid)
+                        { stillActive = true; break; }
+                    }
+                    if (!stillActive)
+                    {
+                        update.withdrawn.push_back({nlri, apid});
+                        it = peerOut.erase(it);
+                    }
+                    else
+                        ++it;
+                }
+            }
+
+            for (auto* route : paths)
+            {
+                // For ADD-PATH peers, use source peer RID as path ID; otherwise 0.
+                uint32_t egressPathId = (addPathSend && route->sourceNeighbor)
+                    ? route->sourceNeighbor->globalNbr().rid : 0;
+
+                std::optional<PathAttribute> egressAttrs;
+                if (pg)
+                {
+                    auto groupAttrs = applyGroupEgressPolicy(*route, *session);
+                    if (!groupAttrs.has_value())
+                        continue;
+                    applyMemberNexthop(*groupAttrs, *route, afNbr, *session);
+                    egressAttrs = std::move(groupAttrs);
+                }
+                else
+                {
+                    egressAttrs = applyEgressPolicy(*route, *session);
+                    if (!egressAttrs.has_value())
+                        continue;
+                }
+
+                uint32_t oPid = attrMgr.acquire(egressAttrs->attrs, egressAttrs->path);
+
+                // Find any existing out entry for this (nlri, egressPathId).
+                auto [begin, end] = peerOut.equal_range(nlri);
+                auto existing = std::find_if(begin, end,
+                    [&](const auto& e) { return e.second.first == egressPathId; });
+                if (existing != end && existing->second.second.pathId == oPid)
+                {
+                    attrMgr.release(oPid);
+                    continue;
+                }
+                if (existing != end)
+                    peerOut.erase(existing);
+
+                peerOut.emplace(nlri, std::make_pair(egressPathId, OutboundRoute<NlriT>{attrMgr, oPid, nlri}));
+
+                typename BuildUpdate<NlriT>::Announcement ann;
+                ann.attrs = *egressAttrs;
+                ann.nlri.push_back({nlri, egressPathId});
+                update.announcements.push_back(std::move(ann));
+            }
+
+            if (!update.announcements.empty() || !update.withdrawn.empty())
+                session->sendUpdate<N>(update);
         });
     }
 

@@ -59,6 +59,34 @@ void BgpProcess::startPassiveSession(Neighbor& nbr)
         it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
 }
 
+void BgpProcess::shutdownNeighbor(Neighbor& nbr)
+{
+    Session* session = findSession(nbr.neighborAddress);
+    if (session)
+        session->postEvent(FsmEvent::MANUAL_STOP);
+}
+
+void BgpProcess::unshutdownNeighbor(Neighbor& nbr)
+{
+    auto& cfgs = nbr.getConfigs();
+    auto& connMode = cfgs.get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+    bool passive = connMode.hasValue() && !connMode.load();
+
+    // If a session already exists (likely in IDLE after being shut down), restart it in place.
+    auto it = sessions.find(nbr.neighborAddress);
+    if (it != sessions.end())
+    {
+        it->second.postEvent(passive ? FsmEvent::MANUAL_START_PASSIVE_TCP : FsmEvent::MANUAL_START);
+        return;
+    }
+
+    // No session yet — create one normally.
+    if (passive)
+        startPassiveSession(nbr);
+    else
+        startActiveSession(nbr);
+}
+
 void BgpProcess::onSessionEstablished(Session& session)
 {
     const uint32_t rid = session.getPeerRid();

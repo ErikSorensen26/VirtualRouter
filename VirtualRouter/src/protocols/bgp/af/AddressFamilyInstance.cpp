@@ -34,9 +34,4 @@ AttributeManager& AddressFamilyInstanceHelper::getAttrMgr(BgpProcess& proc)
 {
     return proc.getAttrMgr();
 }
-
-static Neighbor& AddressFamilyInstanceHelper::getNeighbor(uint32_t rid)
-{
-
-}
 }

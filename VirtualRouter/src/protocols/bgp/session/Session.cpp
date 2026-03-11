@@ -107,6 +107,21 @@ void Session::buildLocalCapabilities()
     localCaps.multiSess = neighbor.getConfigs().get<Config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
     localCaps.extendedMessage = true;
     localCaps.linkLocalNextHop = true;
+
+    // ADD-PATH: advertise per-AF send/receive capability based on neighbor AF config.
+    neighbor.getProcess().forEachAf([&](const AfiSafi& afi) {
+        auto& afNbrCfgs = neighbor.getAfNeighbor(afi).getConfigs();
+        bool rx = afNbrCfgs.get<Config::BgpNeighbor::ADDITIONAL_PATHS_RECEIVE>().load();
+        bool tx = afNbrCfgs.get<Config::BgpNeighbor::ADDITIONAL_PATHS_SEND>().load();
+        uint8_t sr = 0;
+        if (rx) sr |= BGP_ADD_PATH_RECEIVE;
+        if (tx) sr |= BGP_ADD_PATH_SEND;
+        if (sr)
+        {
+            localCaps.addPathFamilies.push_back({afi, sr});
+            localCaps.addPath = true;
+        }
+    });
 }
 
 void Session::acceptConnection(TCP::Connection&& conn)
@@ -442,15 +457,20 @@ void Session::negotiateCapabilities()
             negotiated.activeFamilies.insert(std::get<AfiSafi>(multiSession));
     }
 
-    // ADD-PATH
+    // ADD-PATH: local SEND + peer RECEIVE → we send path IDs; local RECEIVE + peer SEND → we accept them.
     for (const auto& lap : localCaps.addPathFamilies)
     {
         for (const auto& pap : peerCaps.addPathFamilies)
         {
             if (lap.family == pap.family)
             {
-                // Only enable ADD-PATH for a family if both sides agree
-                uint8_t agreed = lap.sendReceive & pap.sendReceive;
+                bool localSend = (lap.sendReceive & BGP_ADD_PATH_SEND) != 0;
+                bool localRecv = (lap.sendReceive & BGP_ADD_PATH_RECEIVE) != 0;
+                bool peerSend  = (pap.sendReceive & BGP_ADD_PATH_SEND) != 0;
+                bool peerRecv  = (pap.sendReceive & BGP_ADD_PATH_RECEIVE) != 0;
+                uint8_t agreed = 0;
+                if (localSend && peerRecv) agreed |= BGP_ADD_PATH_SEND;
+                if (localRecv && peerSend) agreed |= BGP_ADD_PATH_RECEIVE;
                 if (agreed)
                 {
                     negotiated.addPathFamilies.push_back({lap.family, agreed});
