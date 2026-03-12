@@ -8,7 +8,7 @@
 
 #include "bgp/BgpTypes.hpp"
 #include "NeighborConfigs.hpp"
-#include "configs/registry/router/BgpRegistry.h"
+#include "NeighborAf.h"
 
 namespace BGP
 {
@@ -37,7 +37,20 @@ public:
     void delAfNeighbor(AfiSafi& afi);
     NeighborAf& getAfNeighbor(const AfiSafi& afi);
     const NeighborAf& getAfNeighbor(const AfiSafi& afi) const;
-    std::unordered_map<AfiSafi, NeighborAf>& getAfNeighbors() { return afNeighbors; }
+
+    template <typename F>
+    void forEachAfNeighbor(F&& fn)
+    {
+        for (auto& [_, nbr] : afNeighbors)
+            fn(nbr);
+    }
+
+    template <typename F>
+    void forEachAfNeighbor(F&& fn) const
+    {
+        for (const auto& [_, nbr] : afNeighbors)
+            fn(nbr);
+    }
 
     NeighborConfigs& getConfigs() { return configs; }
     const NeighborConfigs& getConfigs() const { return configs; }

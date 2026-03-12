@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <map>
 #include <unordered_set>
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
@@ -49,7 +48,7 @@ private:
     static AttributeManager& getAttrMgr(BgpProcess& proc);
 };
 
-static AsPathSegment& getAsSegment(Attributes& attrs)
+inline static AsPathSegment& getAsSegment(Attributes& attrs)
 {
     if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_SEQUENCE)
         return attrs.asPath[0];
@@ -309,6 +308,71 @@ private:
             configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_IBGP>().load()
         );
 
+        // Build ADD-PATH candidate pool for additional-paths advertisement.
+        if (best.has_value())
+        {
+            bool selectAll       = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_ALL>().load();
+            bool selectBackup    = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
+            auto& selectBestFld  = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST>();
+            bool selectBestExt   = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
+            bool selectGroupBest = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_GROUP_BEST>().load();
+
+            if (selectAll || selectBackup || selectBestFld.hasValue() || selectBestExt || selectGroupBest)
+            {
+                std::unordered_set<InboundRoute<NlriT>*> excluded;
+                excluded.insert(&best->in);
+                for (auto* mp : best->multipaths)
+                    excluded.insert(mp);
+
+                std::vector<InboundRoute<NlriT>*> ranked = decision.rankCandidates(candidates);
+
+                std::vector<InboundRoute<NlriT>*> pool;
+                for (auto* r : ranked)
+                    if (!excluded.count(r))
+                        pool.push_back(r);
+
+                if (selectAll)
+                {
+                    best->additionalPaths = pool;
+                }
+                else
+                {
+                    std::unordered_set<InboundRoute<NlriT>*> added;
+                    auto tryAdd = [&](InboundRoute<NlriT>* r) {
+                        if (added.insert(r).second)
+                            best->additionalPaths.push_back(r);
+                    };
+
+                    if (selectBestFld.hasValue())
+                    {
+                        uint8_t n = selectBestFld.load();
+                        for (auto* r : pool) {
+                            if (best->additionalPaths.size() >= n) break;
+                            tryAdd(r);
+                        }
+                    }
+
+                    if (selectBackup && !pool.empty())
+                        tryAdd(pool[0]);
+
+                    if (selectBestExt)
+                        for (auto* r : pool)
+                            if (r->ebgp) { tryAdd(r); break; }
+
+                    if (selectGroupBest)
+                    {
+                        std::unordered_set<uint32_t> seenAs;
+                        seenAs.insert(best->in.peerAs);
+                        for (auto* mp : best->multipaths)
+                            seenAs.insert(mp->peerAs);
+                        for (auto* r : pool)
+                            if (seenAs.insert(r->peerAs).second)
+                                tryAdd(r);
+                    }
+                }
+            }
+        }
+
         auto lit = locRib.find(nlri);
         const bool had = (lit != locRib.end());
 
@@ -323,15 +387,17 @@ private:
             return;
         }
 
-        if (!had || &lit->second.in != &best->in)
-        {
-            if (had)
-                locRib.erase(lit);
+        const bool bestChanged = !had || &lit->second.in != &best->in;
 
-            locRib.emplace(nlri, *best);
+        // Always refresh the locRib entry so multipaths/additionalPaths stay current.
+        if (had)
+            locRib.erase(lit);
+        locRib.emplace(nlri, *best);
+
+        if (bestChanged)
             installToRib(locRib.at(nlri));
-            recomputeAdjRibOut(nlri, &locRib.at(nlri));
-        }
+
+        recomputeAdjRibOut(nlri, &locRib.at(nlri));
     }
 
     void installToRib(LocalRoute<NlriT>& route)
@@ -562,14 +628,66 @@ private:
 
             PeerGroup* pg = afNbr.getConfigs().getPeerGroup();
             const bool addPathSend = negotiated.addPathSend(family);
+            auto& nbrAfCfgs = afNbr.getConfigs();
 
-            // Collect all paths to advertise: best + multipaths if ADD-PATH send is active.
+            // Collect all paths to advertise based on per-neighbor ADVERTISE configs.
             std::vector<InboundRoute<NlriT>*> paths;
             paths.push_back(&best->in);
+
             if (addPathSend)
             {
-                for (auto* mp : best->multipaths)
-                    paths.push_back(mp);
+                if (nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH>().load())
+                    for (auto* mp : best->multipaths)
+                        paths.push_back(mp);
+
+                if (!best->additionalPaths.empty())
+                {
+                    bool advAll       = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
+                    auto& advBestFld  = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_BEST>();
+                    bool advGroupBest = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+                    bool advBestExt   = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_BEST_EXTERNAL>().load();
+                    bool advBackup    = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP>().load();
+
+                    if (advAll)
+                    {
+                        for (auto* r : best->additionalPaths)
+                            paths.push_back(r);
+                    }
+                    else if (advBestFld.hasValue() || advGroupBest || advBestExt || advBackup)
+                    {
+                        std::unordered_set<InboundRoute<NlriT>*> added;
+                        auto tryAdd = [&](InboundRoute<NlriT>* r) {
+                            if (added.insert(r).second)
+                                paths.push_back(r);
+                        };
+
+                        if (advBestFld.hasValue())
+                        {
+                            uint8_t n = advBestFld.load();
+                            for (auto* r : best->additionalPaths) {
+                                if (added.size() >= n) break;
+                                tryAdd(r);
+                            }
+                        }
+
+                        if (advBackup && !best->additionalPaths.empty())
+                            tryAdd(best->additionalPaths[0]);
+
+                        if (advBestExt)
+                            for (auto* r : best->additionalPaths)
+                                if (r->ebgp) { tryAdd(r); break; }
+
+                        if (advGroupBest)
+                        {
+                            std::unordered_set<uint32_t> seenAs;
+                            for (auto* r : paths)
+                                seenAs.insert(r->peerAs);
+                            for (auto* r : best->additionalPaths)
+                                if (seenAs.insert(r->peerAs).second)
+                                    tryAdd(r);
+                        }
+                    }
+                }
             }
 
             BuildUpdate<NlriT> update;

@@ -192,7 +192,9 @@ template <typename N>
 struct LocalRoute
 {
     InboundRoute<N>& in;
-    std::vector<InboundRoute<N>*> multipaths; // additional equal-cost paths (excludes `in`)
+    std::vector<InboundRoute<N>*> multipaths;      // equal-cost ECMP paths (excludes `in`)
+    std::vector<InboundRoute<N>*> additionalPaths; // ADD-PATH advertisement pool, ranked by
+                                                   // preference (excludes `in` and `multipaths`)
 };
 
 template <typename N>

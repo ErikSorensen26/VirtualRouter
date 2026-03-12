@@ -97,14 +97,16 @@ void PeerTemplateTable::syncPeerGroups()
         {
             auto* pg = lookupPeerGroup(pgField.load());
             nbr.getConfigs().setPeerGroup(pg);
-            for (auto& [_, afNbr] : nbr.getAfNeighbors())
+            nbr.forEachAfNeighbor([&pg](NeighborAf& afNbr) {
                 afNbr.getConfigs().setPeerGroup(pg);
+            });
         }
         else if (nbr.getConfigs().getPeerGroup())
         {
             nbr.getConfigs().setPeerGroup(nullptr);
-            for (auto& [_, afNbr] : nbr.getAfNeighbors())
+            nbr.forEachAfNeighbor([](NeighborAf& afNbr) {
                 afNbr.getConfigs().setPeerGroup(nullptr);
+            });
         }
     });
 }
@@ -130,19 +132,18 @@ void PeerTemplateTable::syncPeerPolicyTemplates()
 {
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        for (auto& [af, afNbr] : nbr.getAfNeighbors())
-        {
+        nbr.forEachAfNeighbor([this](NeighborAf& afNbr) {
             auto& f = afNbr.getConfigs().getConfigs().get<Config::BgpNeighbor::INHERIT_PEER_POLICY>();
             if (f.hasValue())
             {
                 auto* pp = lookupPeerPolicyTemplate(f.load());
                 afNbr.getConfigs().setPeerPolicyTemplate(pp);
             }
-            else if (afNbr.getConfigs().getPeerPolicyTemplate())
+            else
             {
                 afNbr.getConfigs().setPeerPolicyTemplate(nullptr);
             }
-        }
+        });
     });
 }
 

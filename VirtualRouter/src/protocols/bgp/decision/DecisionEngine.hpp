@@ -3,6 +3,7 @@
 #ifndef BGP_DECISION_ENGINE_H
 #define BGP_DECISION_ENGINE_H
 
+#include <algorithm>
 #include <optional>
 #include "BestPath.h"
 
@@ -59,6 +60,23 @@ public:
         }
 
         return result;
+    }
+
+    // Returns all candidates sorted best-first (stable, does not modify input).
+    template <typename N>
+    std::vector<InboundRoute<N>*> rankCandidates(std::vector<InboundRoute<N>*> candidates) const
+    {
+        static const IPAddress kEmpty{};
+        auto nbrAddr = [](const InboundRoute<N>* r) -> const IPAddress& {
+            return r->sourceNeighbor ? r->sourceNeighbor->globalNbr().neighborAddress : kEmpty;
+        };
+
+        std::stable_sort(candidates.begin(), candidates.end(),
+            [&](const InboundRoute<N>* a, const InboundRoute<N>* b) {
+                return comparator.better(*a, nbrAddr(a), *b, nbrAddr(b));
+            });
+
+        return candidates;
     }
 
     bool equivalent(const InboundRouteBase& lhs, const IPAddress& lhsNbr, const InboundRouteBase& rhs, const IPAddress& rhsNbr) const
