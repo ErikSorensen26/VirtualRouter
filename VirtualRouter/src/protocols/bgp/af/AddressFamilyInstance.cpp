@@ -34,4 +34,9 @@ AttributeManager& AddressFamilyInstanceHelper::getAttrMgr(BgpProcess& proc)
 {
     return proc.getAttrMgr();
 }
+
+ProcessQueueRef AddressFamilyInstanceHelper::getScheduler(BgpProcess& proc)
+{
+    return proc.getScheduler();
+}
 }

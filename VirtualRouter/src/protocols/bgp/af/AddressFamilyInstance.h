@@ -4,7 +4,9 @@
 #define BGP_ADDRESS_FAMILY_INSTANCE_H
 
 #include <algorithm>
+#include <chrono>
 #include <functional>
+#include <unordered_map>
 #include <unordered_set>
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
@@ -46,6 +48,7 @@ private:
     static uint32_t getRid(BgpProcess& proc);
     static Config::BgpRegistry& getConfigs(BgpProcess& proc);
     static AttributeManager& getAttrMgr(BgpProcess& proc);
+    static ProcessQueueRef getScheduler(BgpProcess& proc);
 };
 
 inline static AsPathSegment& getAsSegment(Attributes& attrs)
@@ -162,6 +165,14 @@ public:
 
     void invalidatePeer(uint32_t peer)
     {
+        auto mraiIt = mraiState.find(peer);
+        if (mraiIt != mraiState.end())
+        {
+            if (mraiIt->second.timerId != 0)
+                AddressFamilyInstanceHelper::getScheduler(process).cancel(mraiIt->second.timerId);
+            mraiState.erase(mraiIt);
+        }
+
         auto outIt = adjRibOut.find(peer);
         if (outIt != adjRibOut.end())
             adjRibOut.erase(outIt);
@@ -319,17 +330,13 @@ private:
 
             if (selectAll || selectBackup || selectBestFld.hasValue() || selectBestExt || selectGroupBest)
             {
-                std::unordered_set<InboundRoute<NlriT>*> excluded;
-                excluded.insert(&best->in);
-                for (auto* mp : best->multipaths)
-                    excluded.insert(mp);
-
-                std::vector<InboundRoute<NlriT>*> ranked = decision.rankCandidates(candidates);
-
                 std::vector<InboundRoute<NlriT>*> pool;
-                for (auto* r : ranked)
-                    if (!excluded.count(r))
-                        pool.push_back(r);
+                for (auto* r : decision.rankCandidates(candidates))
+                {
+                    if (r == &best->in) continue;
+                    if (std::find(best->multipaths.begin(), best->multipaths.end(), r) != best->multipaths.end()) continue;
+                    pool.push_back(r);
+                }
 
                 if (selectAll)
                 {
@@ -337,9 +344,8 @@ private:
                 }
                 else
                 {
-                    std::unordered_set<InboundRoute<NlriT>*> added;
                     auto tryAdd = [&](InboundRoute<NlriT>* r) {
-                        if (added.insert(r).second)
+                        if (std::find(best->additionalPaths.begin(), best->additionalPaths.end(), r) == best->additionalPaths.end())
                             best->additionalPaths.push_back(r);
                     };
 
@@ -559,6 +565,25 @@ private:
         return pa;
     }
 
+    // Called by the MRAI timer: bypasses the rate-limit check and recomputes for all deferred NLRIs.
+    void drainMraiPending(uint32_t peerRid)
+    {
+        auto it = mraiState.find(peerRid);
+        if (it == mraiState.end()) return;
+
+        std::unordered_set<NlriT> pending = std::move(it->second.pending);
+        it->second.timerId = 0;
+        it->second.lastSent = std::chrono::steady_clock::now();
+
+        mraiBypassPeer = peerRid;
+        for (const NlriT& nlri : pending)
+        {
+            auto lit = locRib.find(nlri);
+            recomputeAdjRibOut(nlri, lit != locRib.end() ? &lit->second : nullptr);
+        }
+        mraiBypassPeer = 0;
+    }
+
     void recomputeAdjRibOut(const NlriT& nlri, LocalRoute<NlriT>* best)
     {
         auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
@@ -585,6 +610,30 @@ private:
             {
                 withdrawFromPeer();
                 return;
+            }
+
+            // MRAI: rate-limit announcements. Withdrawals always bypass.
+            if (peerRid != mraiBypassPeer)
+            {
+                uint16_t mraiSecs = nbr.getAfNeighbor(family).getConfigs()
+                    .get<Config::BgpNeighbor::ADVERTISE_INTERVAL>().load();
+                if (mraiSecs > 0)
+                {
+                    auto& ms = mraiState[peerRid];
+                    auto now = std::chrono::steady_clock::now();
+                    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - ms.lastSent);
+                    if (elapsed.count() < mraiSecs)
+                    {
+                        ms.pending.insert(nlri);
+                        if (ms.timerId == 0)
+                        {
+                            auto expiry = ms.lastSent + std::chrono::seconds(mraiSecs);
+                            ms.timerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(expiry,
+                                [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
+                        }
+                        return;
+                    }
+                }
             }
 
             // Check that this AFI/SAFI was negotiated with this peer.
@@ -655,9 +704,9 @@ private:
                     }
                     else if (advBestFld.hasValue() || advGroupBest || advBestExt || advBackup)
                     {
-                        std::unordered_set<InboundRoute<NlriT>*> added;
+                        const size_t base = paths.size();
                         auto tryAdd = [&](InboundRoute<NlriT>* r) {
-                            if (added.insert(r).second)
+                            if (std::find(paths.begin() + base, paths.end(), r) == paths.end())
                                 paths.push_back(r);
                         };
 
@@ -665,7 +714,7 @@ private:
                         {
                             uint8_t n = advBestFld.load();
                             for (auto* r : best->additionalPaths) {
-                                if (added.size() >= n) break;
+                                if (paths.size() - base >= n) break;
                                 tryAdd(r);
                             }
                         }
@@ -761,6 +810,12 @@ private:
 
             if (!update.announcements.empty() || !update.withdrawn.empty())
                 session->sendUpdate<N>(update);
+
+            if (!update.announcements.empty())
+            {
+                mraiState[peerRid].lastSent = std::chrono::steady_clock::now();
+                mraiState[peerRid].pending.erase(nlri);
+            }
         });
     }
 
@@ -772,9 +827,18 @@ private:
     }
 
 private:
+    struct MraiState
+    {
+        std::chrono::steady_clock::time_point lastSent{};
+        std::unordered_set<NlriT> pending;
+        uint32_t timerId = 0;
+    };
+
     AdjRibInTable<NlriT>  adjRibIn;
     LocRibTable<NlriT>    locRib;
     AdjRibOutTable<NlriT> adjRibOut;
+    std::unordered_map<uint32_t, MraiState> mraiState;
+    uint32_t mraiBypassPeer = 0;
 
     N policy;
 
