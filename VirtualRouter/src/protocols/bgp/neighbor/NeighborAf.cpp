@@ -1,9 +1,13 @@
 // NeighborAf.cpp
 
+#include <VirtualRouter.h>
 #include <algorithm>
+
 #include "NeighborAf.h"
 #include "Neighbor.h"
 #include "PeerTemplate.h"
+#include "bgp/af/AddressFamily.hpp"
+#include "bgp/neighbor/Neighbor.h"
 
 #include "bgp/BgpProcess.h"
 
@@ -20,6 +24,8 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
           return p.getProcess().routingInstance->getRegistry().emplaceBack(neighborConfigs, id, key);
       }())
 {
+    configs.getConfigs().context().set(this);
+
     // Resolve peer group
     {
         auto& pgField = parent.getConfigs().get<Config::BgpNeighborSession::PEER_GROUP>();
@@ -59,6 +65,13 @@ void NeighborAf::updateOrfFilter(const std::vector<OrfPrefixEntry>& entries)
     }
     std::sort(orfFilter.begin(), orfFilter.end(),
         [](const OrfPrefixEntry& a, const OrfPrefixEntry& b) { return a.sequence < b.sequence; });
+}
+
+AddressFamilyVariant& NeighborAf::getAddressFamily()
+{
+    auto* af = parent.getProcess().findAddressFamily(family);
+    assert(af);
+    return *af;
 }
 
 NeighborAf::~NeighborAf()

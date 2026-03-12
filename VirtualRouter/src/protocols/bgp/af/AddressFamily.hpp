@@ -3,11 +3,13 @@
 #ifndef BGP_ADDRESS_FAMILY__HPP
 #define BGP_ADDRESS_FAMILY__HPP
 
-#include "AddressFamilyInstance.h"
 #include "Nlri.hpp"
 
 namespace BGP
 {
+template <typename T>
+class AddressFamilyInstance;
+
 namespace detail
 {
 template <typename Variant>

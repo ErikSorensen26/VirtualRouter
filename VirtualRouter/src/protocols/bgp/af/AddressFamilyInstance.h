@@ -123,52 +123,163 @@ public:
         return true;
     }
 
-    void refreshPeer(Session& session)
+    // Called on session establishment: advertises all current Loc-RIB routes to the new peer.
+    void onPeerEstablished(Session& session)
     {
-        const uint32_t peerRid = session.getPeerRid();
-        auto outIt = adjRibOut.find(peerRid);
-        if (outIt == adjRibOut.end())
-            return;
-
-        auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
-
-        // Group NLRIs by their stored egress pathId to batch into one Announcement per path.
-        std::unordered_map<uint32_t, size_t> pathToAnn;
-        BuildUpdate<NlriT> update;
-
-        for (auto& [nlri, pathAndRoute] : outIt->second)
-        {
-            auto& [addPathId, outRoute] = pathAndRoute;
-            if (!outRoute.pathId.has_value())
-                continue;
-
-            PathAttribute pa = attrMgr.get(*outRoute.pathId);
-            NlriPath<NlriT> nlriPath{nlri, addPathId};
-
-            auto ait = pathToAnn.find(*outRoute.pathId);
-            if (ait == pathToAnn.end())
-            {
-                pathToAnn[*outRoute.pathId] = update.announcements.size();
-                typename BuildUpdate<NlriT>::Announcement ann;
-                ann.attrs = std::move(pa);
-                ann.nlri.push_back(nlriPath);
-                update.announcements.push_back(std::move(ann));
-            }
-            else
-            {
-                update.announcements[ait->second].nlri.push_back(nlriPath);
-            }
-        }
-
         const bool enhancedRR = session.getNegotiated().enhancedRR;
         if (enhancedRR)
             session.sendRouteRefresh(family, RouteRefreshReason::Borr);
 
-        if (!update.announcements.empty())
-            session.sendUpdate<N>(update);
+        for (auto& [nlri, route] : locRib)
+            recomputeAdjRibOut(nlri, &route);
+
+        sendDefaultOriginate(session);
 
         if (enhancedRR)
             session.sendRouteRefresh(family, RouteRefreshReason::Eorr);
+    }
+
+    void refreshPeer(Session& session)
+    {
+        const uint32_t peerRid = session.getPeerRid();
+        const bool enhancedRR = session.getNegotiated().enhancedRR;
+
+        if (enhancedRR)
+            session.sendRouteRefresh(family, RouteRefreshReason::Borr);
+
+        auto outIt = adjRibOut.find(peerRid);
+        if (outIt != adjRibOut.end())
+        {
+            auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+
+            // Group NLRIs by their stored egress pathId to batch into one Announcement per path.
+            std::unordered_map<uint32_t, size_t> pathToAnn;
+            BuildUpdate<NlriT> update;
+
+            for (auto& [nlri, pathAndRoute] : outIt->second)
+            {
+                auto& [addPathId, outRoute] = pathAndRoute;
+                if (!outRoute.pathId.has_value())
+                    continue;
+
+                PathAttribute pa = attrMgr.get(*outRoute.pathId);
+                NlriPath<NlriT> nlriPath{nlri, addPathId};
+
+                auto ait = pathToAnn.find(*outRoute.pathId);
+                if (ait == pathToAnn.end())
+                {
+                    pathToAnn[*outRoute.pathId] = update.announcements.size();
+                    typename BuildUpdate<NlriT>::Announcement ann;
+                    ann.attrs = std::move(pa);
+                    ann.nlri.push_back(nlriPath);
+                    update.announcements.push_back(std::move(ann));
+                }
+                else
+                {
+                    update.announcements[ait->second].nlri.push_back(nlriPath);
+                }
+            }
+
+            if (!update.announcements.empty())
+                session.sendUpdate<N>(update);
+        }
+
+        sendDefaultOriginate(session);
+
+        if (enhancedRR)
+            session.sendRouteRefresh(family, RouteRefreshReason::Eorr);
+    }
+
+    void sendDefaultOriginate(Session& session)
+    {
+        if constexpr (!std::is_same_v<NlriT, IPPrefix>)
+            return;
+
+        Neighbor& nbr = session.getNeighbor();
+        NeighborAf& afNbr = nbr.getAfNeighbor(family);
+
+        if (!afNbr.getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
+            return;
+        if (!afNbr.getConfigs().get<Config::BgpNeighbor::DEFAULT_ORIGINATE>().load())
+            return;
+
+        // Build default NLRI: 0.0.0.0/0 or ::/0
+        NlriT defaultNlri{};
+        if constexpr (N::afi.afi == BGP_AFI_IPV6)
+            defaultNlri.af = ::AddressFamily::IPv6;
+        else
+            defaultNlri.af = ::AddressFamily::IPv4;
+
+        const bool isEbgp = session.isEbgp();
+        const uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+        auto& sesCfgs = nbr.getConfigs();
+
+        PathAttribute pa{};
+        pa.attrs.origin = BGP_ORIGIN_IGP;
+
+        if (isEbgp)
+        {
+            AsPathSegment seg;
+            seg.segmentType = BGP_AS_SEQUENCE;
+
+            bool localAsEnabled = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load();
+            auto& localAsField  = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
+
+            if (!localAsEnabled || !localAsField.hasValue())
+            {
+                seg.asns.push_back(routerAs);
+            }
+            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
+            {
+                seg.asns.push_back(localAsField.load());
+            }
+            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
+            {
+                seg.asns.push_back(routerAs);
+            }
+            else
+            {
+                seg.asns.push_back(localAsField.load());
+                seg.asns.push_back(routerAs);
+            }
+
+            pa.attrs.asPath.push_back(std::move(seg));
+        }
+        else
+        {
+            pa.attrs.localPref = 100;
+        }
+
+        if (auto* conn = session.getPrimaryConnection())
+            pa.path.nextHop = conn->socketKey()->local.address;
+
+        BuildUpdate<NlriT> update;
+        typename BuildUpdate<NlriT>::Announcement ann;
+        ann.attrs = std::move(pa);
+        ann.nlri.push_back({defaultNlri, 0});
+        update.announcements.push_back(std::move(ann));
+        session.sendUpdate<N>(update);
+        defaultOriginatedPeers.insert(session.getPeerRid());
+    }
+
+    void withdrawDefaultOriginate(Session& session)
+    {
+        if constexpr (!std::is_same_v<NlriT, IPPrefix>)
+            return;
+
+        const uint32_t peerRid = session.getPeerRid();
+        if (!defaultOriginatedPeers.erase(peerRid))
+            return;
+
+        NlriT defaultNlri{};
+        if constexpr (N::afi.afi == BGP_AFI_IPV6)
+            defaultNlri.af = ::AddressFamily::IPv6;
+        else
+            defaultNlri.af = ::AddressFamily::IPv4;
+
+        BuildUpdate<NlriT> withdraw;
+        withdraw.withdrawn.push_back({defaultNlri, 0});
+        session.sendUpdate<N>(withdraw);
     }
 
     void invalidatePeer(uint32_t peer)
@@ -183,6 +294,8 @@ public:
 
         if (Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peer))
             nbr->getAfNeighbor(family).orfFilter.clear();
+
+        defaultOriginatedPeers.erase(peer);
 
         auto outIt = adjRibOut.find(peer);
         if (outIt != adjRibOut.end())
@@ -844,8 +957,6 @@ private:
         return igpMetricResolver(nextHop);
     }
 
-    // Returns true if the NLRI passes the peer's ORF prefix-list filter (i.e. should be sent).
-    // An empty filter means permit-all. Only applicable when NlriT is IPPrefix.
     bool passesOrfFilter(const NlriT& nlri, const std::vector<OrfPrefixEntry>& filter) const
     {
         if constexpr (std::is_same_v<NlriT, IPPrefix>)
@@ -889,6 +1000,7 @@ private:
     AdjRibOutTable<NlriT> adjRibOut;
     std::unordered_map<uint32_t, MraiState> mraiState;
     uint32_t mraiBypassPeer = 0;
+    std::unordered_set<uint32_t> defaultOriginatedPeers; // RIDs that have received the synthetic default
 
     N policy;
 

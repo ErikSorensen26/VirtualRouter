@@ -108,18 +108,30 @@ void Session::buildLocalCapabilities()
     localCaps.extendedMessage = true;
     localCaps.linkLocalNextHop = true;
 
-    // ADD-PATH: advertise per-AF send/receive capability based on neighbor AF config.
+    // ADD-PATH and ORF: advertise per-AF capabilities based on neighbor AF config.
     neighbor.getProcess().forEachAf([&](const AfiSafi& afi) {
         auto& afNbrCfgs = neighbor.getAfNeighbor(afi).getConfigs();
+
         bool rx = afNbrCfgs.get<Config::BgpNeighbor::ADDITIONAL_PATHS_RECEIVE>().load();
         bool tx = afNbrCfgs.get<Config::BgpNeighbor::ADDITIONAL_PATHS_SEND>().load();
-        uint8_t sr = 0;
-        if (rx) sr |= BGP_ADD_PATH_RECEIVE;
-        if (tx) sr |= BGP_ADD_PATH_SEND;
-        if (sr)
+        uint8_t apSr = 0;
+        if (rx) apSr |= BGP_ADD_PATH_RECEIVE;
+        if (tx) apSr |= BGP_ADD_PATH_SEND;
+        if (apSr)
         {
-            localCaps.addPathFamilies.push_back({afi, sr});
+            localCaps.addPathFamilies.push_back({afi, apSr});
             localCaps.addPath = true;
+        }
+
+        bool orfBoth = afNbrCfgs.get<Config::BgpNeighbor::ORF_BOTH>().load();
+        bool orfRecv = afNbrCfgs.get<Config::BgpNeighbor::ORF_RECEIVE>().load();
+        bool orfSend = afNbrCfgs.get<Config::BgpNeighbor::ORF_SEND>().load();
+        uint8_t orfSr = orfBoth ? BGP_ORF_BOTH
+                      : ((orfRecv ? BGP_ORF_RECEIVE : 0) | (orfSend ? BGP_ORF_SEND : 0));
+        if (orfSr)
+        {
+            localCaps.orfEntries.push_back({afi, BGP_ORF_TYPE_PREFIX_LIST, orfSr});
+            localCaps.outboundRouteFiltering = true;
         }
     });
 }

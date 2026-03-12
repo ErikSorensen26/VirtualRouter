@@ -14,6 +14,7 @@
 #include "bgp/transport/BgpTx.h"
 #include "bgp/attributes/AttributeManager.hpp"
 #include "bgp/af/AddressFamily.hpp"
+#include "bgp/af/AddressFamilyInstance.h" // keep
 
 class VirtualRouter;
 
@@ -52,7 +53,7 @@ public:
     void onSessionEstablished(Session& session);
     void onSessionDown(Session& session);
 
-    AddressFamilyVariant* findAddressFamily(AfiSafi& afi);
+    AddressFamilyVariant* findAddressFamily(const AfiSafi& afi);
 
     template <typename F>
     void forEachAf(F&& fn) const

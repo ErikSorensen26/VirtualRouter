@@ -95,12 +95,11 @@ void BgpProcess::onSessionEstablished(Session& session)
     nbr.rid = rid;
     nbr.session = &session;
 
-    // Send the full Adj-RIB-Out for each active AF, wrapping with BORR/EORR if negotiated.
     for (auto& [afi, afVariant] : addressFamilies)
     {
         if (!session.getNegotiated().activeFamilies.count(afi))
             continue;
-        std::visit([&](auto& fam) { fam.refreshPeer(session); }, afVariant);
+        std::visit([&](auto& fam) { fam.onPeerEstablished(session); }, afVariant);
     }
 }
 
@@ -126,7 +125,7 @@ void BgpProcess::onSessionDown(Session& session)
     nbr.rid = 0;
 }
 
-AddressFamilyVariant* BgpProcess::findAddressFamily(AfiSafi& afi)
+AddressFamilyVariant* BgpProcess::findAddressFamily(const AfiSafi& afi)
 {
     auto it = addressFamilies.find(afi);
     if (it == addressFamilies.end())

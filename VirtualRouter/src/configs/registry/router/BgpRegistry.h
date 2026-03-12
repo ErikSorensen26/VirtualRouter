@@ -115,10 +115,10 @@ enum class BgpNeighbor
     ALLOWAS_IN,
     ALLOWAS_IN_OCCURANCES,
     ANNOUNCE_RPKI_STATE, // TODO
-    ORF_BOTH, // TODO
-    ORF_RECEIVE, // TODO
-    ORF_SEND, // TODO
-    DEFAULT_ORIGINATE, // TODO
+    ORF_BOTH,
+    ORF_RECEIVE,
+    ORF_SEND,
+    DEFAULT_ORIGINATE,
     ORIGINATE_ROUTE_MAP, // TODO
     DISTRIBUTE_LIST_IN, // TODO
     DISTRIBUTE_LIST_IN_INTERFACE, // TODO
@@ -141,7 +141,7 @@ enum class BgpNeighbor
     REMOVE_PRIVATE_AS_ALL,
     ROUTE_MAP_IN, // TODO
     ROUTE_MAP_OUT, // TODO
-    ROUTE_REFLECTOR_CLIENT, // TODO
+    ROUTE_REFLECTOR_CLIENT,
     ROUTE_SERVER_CLIENT, // TODO
     ROUTE_SERVER_CLIENT_CONTEXT, // TODO
     SEND_COMMUNITY,
@@ -193,6 +193,8 @@ enum class BgpNeighbor
     X(BgpNeighbor, TRANSLATE_UPDATE, false)
 
 CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_DEFAULTS);
+
+void BgpNeighborDefaultOriginate(void*);
 
 using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ACTIVATE)>,
