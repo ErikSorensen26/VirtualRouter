@@ -140,9 +140,11 @@ struct NegotiatedCapabilities
     bool addpath = false;
     bool multiSess = false;
     bool linkLocalNextHop = false;
+    bool orf = false;
     std::vector<Capabilities::AddPathFamily> addPathFamilies;
     std::vector<Capabilities::GracefulRestartFamily> grFamilies;
     std::vector<Capabilities::LlgrFamily> llgrFamilies;
+    std::vector<Capabilities::OrfEntry> orfEntries;
     std::unordered_set<AfiSafi> activeFamilies;
     std::unordered_set<AfiSafi> multiSessionFamilies;
 
@@ -175,6 +177,22 @@ struct NegotiatedCapabilities
             [&](const Capabilities::LlgrFamily& p) { return p.family == afi; });
         return it == llgrFamilies.end()
             ? nullptr : &*it;
+    }
+
+    bool canReceiveOrf(const AfiSafi& fam, uint8_t orfType) const noexcept
+    {
+        for (const auto& e : orfEntries)
+            if (e.family == fam && e.orfType == orfType)
+                return (e.sendReceive & BGP_ORF_RECEIVE) != 0;
+        return false;
+    }
+
+    bool canSendOrf(const AfiSafi& fam, uint8_t orfType) const noexcept
+    {
+        for (const auto& e : orfEntries)
+            if (e.family == fam && e.orfType == orfType)
+                return (e.sendReceive & BGP_ORF_SEND) != 0;
+        return false;
     }
 };
 }

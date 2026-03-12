@@ -293,13 +293,11 @@ void Session::sendNotification(uint16_t code)
     sendNotification(notif);
 }
 
-void Session::sendRouteRefresh(const AfiSafi& family, uint8_t subType)
+void Session::sendRouteRefresh(const AfiSafi& family, RouteRefreshReason reason)
 {
-    if (primaryConn)
-    {
-        BgpTx::buildRouteRefresh(*primaryConn, family, subType);
-        primaryConn->flush();
-    }
+    if (!primaryConn) return;
+    BgpTx::buildRouteRefresh(*primaryConn, *this, family, reason);
+    primaryConn->flush();
 }
 
 void Session::onOpenReceived()
@@ -478,6 +476,27 @@ void Session::negotiateCapabilities()
                 }
                 break;
             }
+        }
+    }
+
+    // ORF
+    for (const auto& loe : localCaps.orfEntries)
+    {
+        for (const auto& poe : peerCaps.orfEntries)
+        {
+            if (loe.family != poe.family || loe.orfType != poe.orfType)
+                continue;
+            uint8_t agreed = 0;
+            if ((loe.sendReceive & BGP_ORF_SEND) && (poe.sendReceive & BGP_ORF_RECEIVE))
+                agreed |= BGP_ORF_SEND;
+            if ((loe.sendReceive & BGP_ORF_RECEIVE) && (poe.sendReceive & BGP_ORF_SEND))
+                agreed |= BGP_ORF_RECEIVE;
+            if (agreed)
+            {
+                negotiated.orfEntries.push_back({loe.family, loe.orfType, agreed});
+                negotiated.orf = true;
+            }
+            break;
         }
     }
 

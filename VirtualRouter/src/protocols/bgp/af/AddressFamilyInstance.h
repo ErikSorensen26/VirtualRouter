@@ -11,6 +11,7 @@
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
 
+#include "Functions.h"
 #include "bgp/BgpTypes.hpp"
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"
@@ -159,8 +160,15 @@ public:
             }
         }
 
+        const bool enhancedRR = session.getNegotiated().enhancedRR;
+        if (enhancedRR)
+            session.sendRouteRefresh(family, RouteRefreshReason::Borr);
+
         if (!update.announcements.empty())
             session.sendUpdate<N>(update);
+
+        if (enhancedRR)
+            session.sendRouteRefresh(family, RouteRefreshReason::Eorr);
     }
 
     void invalidatePeer(uint32_t peer)
@@ -172,6 +180,9 @@ public:
                 AddressFamilyInstanceHelper::getScheduler(process).cancel(mraiIt->second.timerId);
             mraiState.erase(mraiIt);
         }
+
+        if (Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peer))
+            nbr->getAfNeighbor(family).orfFilter.clear();
 
         auto outIt = adjRibOut.find(peer);
         if (outIt != adjRibOut.end())
@@ -675,6 +686,13 @@ private:
                 return;
             }
 
+            // ORF: apply peer-specified prefix-list filter on our outbound.
+            if (!afNbr.orfFilter.empty() && !passesOrfFilter(nlri, afNbr.orfFilter))
+            {
+                withdrawFromPeer();
+                return;
+            }
+
             PeerGroup* pg = afNbr.getConfigs().getPeerGroup();
             const bool addPathSend = negotiated.addPathSend(family);
             auto& nbrAfCfgs = afNbr.getConfigs();
@@ -824,6 +842,38 @@ private:
         if (!igpMetricResolver)
             return std::numeric_limits<uint64_t>::max();
         return igpMetricResolver(nextHop);
+    }
+
+    // Returns true if the NLRI passes the peer's ORF prefix-list filter (i.e. should be sent).
+    // An empty filter means permit-all. Only applicable when NlriT is IPPrefix.
+    bool passesOrfFilter(const NlriT& nlri, const std::vector<OrfPrefixEntry>& filter) const
+    {
+        if constexpr (std::is_same_v<NlriT, IPPrefix>)
+        {
+            for (const auto& e : filter)
+            {
+                if (e.action != BGP_ORF_ACTION_ADD) continue;
+
+                uint8_t minLen = e.minLen;
+                uint8_t maxLen = e.maxLen;
+                if (minLen == 0 && maxLen == 0)
+                    minLen = maxLen = e.prefix.prefixLength;
+
+                if (nlri.prefixLength < minLen || nlri.prefixLength > maxLen)
+                    continue;
+
+                // Check if nlri is a subnet of e.prefix
+                if (!Functions::compareNetworkWithIp(e.prefix.addr, nlri.addr, e.prefix.prefixLength, e.prefix.af))
+                    continue;
+
+                return e.match == BGP_ORF_MATCH_PERMIT;
+            }
+            return false; // implicit deny when filter is non-empty and nothing matched
+        }
+        else
+        {
+            return true; // ORF prefix-list not applicable for this NLRI type
+        }
     }
 
 private:

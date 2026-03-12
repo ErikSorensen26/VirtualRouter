@@ -18,6 +18,17 @@ namespace BGP
 {
 class NeighborAf;
 
+// ORF prefix-list entry (RFC 5292, Address Prefix ORF type 64)
+struct OrfPrefixEntry
+{
+    uint8_t  action;    // BGP_ORF_ACTION_*
+    uint8_t  match;     // BGP_ORF_MATCH_*
+    uint32_t sequence;
+    uint8_t  minLen;
+    uint8_t  maxLen;
+    IPPrefix prefix;
+};
+
 template <typename N>
 struct NlriPath
 {

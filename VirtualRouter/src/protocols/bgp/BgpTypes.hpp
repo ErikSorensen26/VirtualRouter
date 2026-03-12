@@ -132,6 +132,14 @@ struct PeerKey
     }
 };
 
+// Subtype for a ROUTE_REFRESH message (RFC 7313).
+enum class RouteRefreshReason : uint8_t
+{
+    Normal = BGP_ROUTE_REFRESH_NORMAL,  // RFC 2918 plain route refresh
+    Borr   = BGP_ROUTE_REFRESH_BORR,    // begin-of-route-refresh
+    Eorr   = BGP_ROUTE_REFRESH_EORR,    // end-of-route-refresh
+};
+
 inline AddressFamily toAddressFamily(const AfiSafi& family) noexcept {
     if (family.afi == BGP_AFI_IPV4)
         return AddressFamily::IPv4;

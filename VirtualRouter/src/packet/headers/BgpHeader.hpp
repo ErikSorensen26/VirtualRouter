@@ -113,6 +113,25 @@
 #define BGP_ADD_PATH_SEND    0x02
 #define BGP_ADD_PATH_BOTH    0x03
 
+// ORF (Outbound Route Filtering) flags and types (RFC 5291/5292)
+#define BGP_ORF_RECEIVE          0x01
+#define BGP_ORF_SEND             0x02
+#define BGP_ORF_BOTH             0x03
+#define BGP_ORF_TYPE_PREFIX_LIST 64
+
+// ORF action values (top 2 bits of action/match byte)
+#define BGP_ORF_ACTION_ADD        0x00
+#define BGP_ORF_ACTION_REMOVE     0x01
+#define BGP_ORF_ACTION_REMOVE_ALL 0x02
+
+// ORF match values (bit 0 of action/match byte)
+#define BGP_ORF_MATCH_PERMIT 0x00
+#define BGP_ORF_MATCH_DENY   0x01
+
+// ORF when-to-refresh (byte 2 of ROUTE_REFRESH carrying ORF)
+#define BGP_ORF_WHEN_IMMEDIATE 0x00
+#define BGP_ORF_WHEN_DEFERRED  0x01
+
 // Notification error codes (high byte) and subcodes (low byte)
 #define BGP_NOTIFICATION_HEADER 0x01
 #define BGP_NOTIFICATION_OPEN   0x02

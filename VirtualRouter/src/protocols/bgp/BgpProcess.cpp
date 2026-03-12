@@ -94,6 +94,14 @@ void BgpProcess::onSessionEstablished(Session& session)
     ntable.activatePeer(nbr.neighborAddress, rid);
     nbr.rid = rid;
     nbr.session = &session;
+
+    // Send the full Adj-RIB-Out for each active AF, wrapping with BORR/EORR if negotiated.
+    for (auto& [afi, afVariant] : addressFamilies)
+    {
+        if (!session.getNegotiated().activeFamilies.count(afi))
+            continue;
+        std::visit([&](auto& fam) { fam.refreshPeer(session); }, afVariant);
+    }
 }
 
 void BgpProcess::onSessionDown(Session& session)

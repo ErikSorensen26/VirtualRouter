@@ -4,6 +4,7 @@
 #define BGP_NEIGHBOR_AF_H
 
 #include "bgp/BgpTypes.hpp"
+#include "bgp/rib/RibTypes.hpp"
 #include "NeighborAfConfigs.hpp"
 
 namespace BGP
@@ -28,6 +29,13 @@ public:
     const Neighbor& globalNbr() const { return parent; }
 
     bool mpNegotiated;
+
+    // ORF filter received FROM this peer — applied to our Adj-RIB-Out. Cleared on session reset.
+    std::vector<OrfPrefixEntry> orfFilter;
+    void updateOrfFilter(const std::vector<OrfPrefixEntry>& entries);
+
+    // ORF filter we advertise TO this peer — set from inbound prefix-list config.
+    std::vector<OrfPrefixEntry> orfOutbound;
 
 private:
     Neighbor& parent;

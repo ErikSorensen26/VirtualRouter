@@ -1,5 +1,6 @@
 // NeighborAf.cpp
 
+#include <algorithm>
 #include "NeighborAf.h"
 #include "Neighbor.h"
 #include "PeerTemplate.h"
@@ -32,6 +33,32 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
         if (inhPolField.hasValue())
             configs.setPeerPolicyTemplate(parent.getProcess().getNtable().lookupPeerPolicyTemplate(inhPolField.load()));
     }
+}
+
+void NeighborAf::updateOrfFilter(const std::vector<OrfPrefixEntry>& entries)
+{
+    for (const auto& e : entries)
+    {
+        if (e.action == BGP_ORF_ACTION_REMOVE_ALL)
+        {
+            orfFilter.clear();
+            continue;
+        }
+        auto it = std::find_if(orfFilter.begin(), orfFilter.end(),
+            [&](const OrfPrefixEntry& f) { return f.sequence == e.sequence; });
+        if (e.action == BGP_ORF_ACTION_REMOVE)
+        {
+            if (it != orfFilter.end()) orfFilter.erase(it);
+            continue;
+        }
+        // ADD
+        if (it != orfFilter.end())
+            *it = e;
+        else
+            orfFilter.push_back(e);
+    }
+    std::sort(orfFilter.begin(), orfFilter.end(),
+        [](const OrfPrefixEntry& a, const OrfPrefixEntry& b) { return a.sequence < b.sequence; });
 }
 
 NeighborAf::~NeighborAf()

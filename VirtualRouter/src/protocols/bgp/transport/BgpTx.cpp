@@ -635,14 +635,68 @@ void BgpTx::buildKeepalive(TCP::Connection& connection)
     buildHeader(BGP_TYPE_KEEPALIVE, 0, buf.data());
 }
 
-void BgpTx::buildRouteRefresh(TCP::Connection& connection, const AfiSafi& family, uint8_t subType)
+void BgpTx::buildRouteRefresh(TCP::Connection& connection, Session& session,
+    const AfiSafi& family, RouteRefreshReason reason)
 {
-    const uint16_t totalLen = static_cast<uint16_t>(BgpHeader::fixedSize + 4);
-    auto buf = connection.reserveSpan(totalLen);
+    const auto& neg = session.getNegotiated();
+
+    // Downgrade BORR/EORR to Normal if enhanced route refresh was not negotiated.
+    uint8_t subtype = static_cast<uint8_t>(reason);
+    if (!neg.enhancedRR && reason != RouteRefreshReason::Normal)
+        subtype = BGP_ROUTE_REFRESH_NORMAL;
+
+    // Append ORF TLV if we have an outbound filter and ORF is negotiated.
+    const auto& orfOutbound = session.getNeighbor().getAfNeighbor(family).orfOutbound;
+    const bool sendOrf = !orfOutbound.empty() && neg.canSendOrf(family, BGP_ORF_TYPE_PREFIX_LIST);
+
+    if (sendOrf)
+    {
+        uint16_t orfPayload = 0;
+        for (const auto& e : orfOutbound)
+            orfPayload += (e.action == BGP_ORF_ACTION_REMOVE_ALL)
+                ? 1u : static_cast<uint16_t>(8 + (e.prefix.prefixLength + 7) / 8);
+
+        auto hdrBuf = connection.reserveSpan(BgpHeader::fixedSize);
+        buildHeader(BGP_TYPE_ROUTE_REFRESH,
+            static_cast<uint16_t>(4 + 3 + orfPayload), hdrBuf.data());
+
+        {
+            auto buf = connection.reserveSpan(4);
+            writeU16(buf.data(), family.afi);
+            buf[2] = BGP_ORF_WHEN_IMMEDIATE;
+            buf[3] = family.safi;
+        }
+        {
+            auto buf = connection.reserveSpan(3);
+            buf[0] = BGP_ORF_TYPE_PREFIX_LIST;
+            writeU16(buf.data() + 1, orfPayload);
+        }
+        for (const auto& e : orfOutbound)
+        {
+            uint8_t am = static_cast<uint8_t>((e.action << 6) | (e.match & 0x01));
+            if (e.action == BGP_ORF_ACTION_REMOVE_ALL)
+            {
+                connection.reserveSpan(1)[0] = am;
+                continue;
+            }
+            uint8_t pfxBytes = static_cast<uint8_t>((e.prefix.prefixLength + 7) / 8);
+            auto buf = connection.reserveSpan(static_cast<size_t>(8 + pfxBytes));
+            buf[0] = am;
+            writeU32(buf.data() + 1, e.sequence);
+            buf[5] = e.minLen;
+            buf[6] = e.maxLen;
+            buf[7] = e.prefix.prefixLength;
+            if (pfxBytes > 0)
+                std::memcpy(buf.data() + 8, e.prefix.addr, pfxBytes);
+        }
+        return;
+    }
+
+    auto buf = connection.reserveSpan(BgpHeader::fixedSize + 4);
     buildHeader(BGP_TYPE_ROUTE_REFRESH, 4, buf.data());
     uint8_t* rr = buf.data() + BgpHeader::fixedSize;
     writeU16(rr, family.afi);
-    rr[2] = subType;
+    rr[2] = subtype;
     rr[3] = family.safi;
 }
 }

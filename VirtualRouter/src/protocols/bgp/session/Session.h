@@ -76,7 +76,7 @@ public:
     void sendKeepalive();
     void sendNotification(const Notification& notif);
     void sendNotification(uint16_t code);
-    void sendRouteRefresh(const AfiSafi& family, uint8_t subtype = BGP_ROUTE_REFRESH_NORMAL);
+    void sendRouteRefresh(const AfiSafi& family, RouteRefreshReason reason = RouteRefreshReason::Normal);
 
     template <typename N>
     void sendUpdate(const BuildUpdate<typename N::Nlri>& update);

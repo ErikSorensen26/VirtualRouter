@@ -682,15 +682,79 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
     }
 
     AfiSafi family;
-    family.afi = readU16(payload.data());
+    family.afi  = readU16(payload.data());
+    uint8_t subtype = payload[2]; // enhanced-RR subtype (BORR/EORR) or ORF when-to-refresh
     family.safi = payload[3];
 
-    AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
-    if (af)
+    // Parse ORF TLVs if present and negotiated (RFC 5291/5292)
+    std::vector<OrfPrefixEntry> orfEntries;
+    if (payload.size() > 4 && session.getNegotiated().canReceiveOrf(family, BGP_ORF_TYPE_PREFIX_LIST))
     {
-        std::visit([&](auto&& fam) {
-            fam.refreshPeer(session);
-        }, *af);
+        size_t pos = 4;
+        while (pos + 3 <= payload.size())
+        {
+            uint8_t  orfType = payload[pos];
+            uint16_t orfLen  = readU16(payload.data() + pos + 1);
+            pos += 3;
+            if (pos + orfLen > payload.size()) break;
+
+            if (orfType == BGP_ORF_TYPE_PREFIX_LIST)
+            {
+                size_t epos = 0;
+                while (epos < orfLen)
+                {
+                    uint8_t actionMatch = payload[pos + epos++];
+                    uint8_t action = (actionMatch >> 6) & 0x03;
+                    uint8_t match  = actionMatch & 0x01;
+
+                    OrfPrefixEntry e{};
+                    e.action = action;
+                    e.match  = match;
+
+                    if (action == BGP_ORF_ACTION_REMOVE_ALL)
+                    {
+                        orfEntries.push_back(e);
+                        continue;
+                    }
+
+                    if (epos + 6 > orfLen) break;
+                    e.sequence = readU32(payload.data() + pos + epos); epos += 4;
+                    e.minLen   = payload[pos + epos++];
+                    e.maxLen   = payload[pos + epos++];
+
+                    if (epos >= orfLen) break;
+                    uint8_t prefixLen   = payload[pos + epos++];
+                    uint8_t prefixBytes = static_cast<uint8_t>((prefixLen + 7) / 8);
+                    if (epos + prefixBytes > orfLen) break;
+
+                    e.prefix.prefixLength = prefixLen;
+                    e.prefix.af = (family.afi == BGP_AFI_IPV6)
+                        ? ::AddressFamily::IPv6 : ::AddressFamily::IPv4;
+                    std::memcpy(e.prefix.addr, payload.data() + pos + epos, prefixBytes);
+                    epos += prefixBytes;
+
+                    orfEntries.push_back(e);
+                }
+            }
+            pos += orfLen;
+        }
+    }
+
+    if (!orfEntries.empty())
+    {
+        session.getNeighbor().getAfNeighbor(family).updateOrfFilter(orfEntries);
+        if (subtype == BGP_ORF_WHEN_IMMEDIATE)
+        {
+            AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
+            if (af)
+                std::visit([&](auto&& fam) { fam.refreshPeer(session); }, *af);
+        }
+    }
+    else
+    {
+        AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
+        if (af)
+            std::visit([&](auto&& fam) { fam.refreshPeer(session); }, *af);
     }
 
     session.onRouteRefreshReceived();

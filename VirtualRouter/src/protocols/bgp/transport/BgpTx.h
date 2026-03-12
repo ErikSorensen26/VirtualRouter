@@ -6,6 +6,7 @@
 #include <span>
 #include <cstdint>
 
+#include <vector>
 #include "bgp/BgpTypes.hpp"
 #include "bgp/features/Capabilities.h"
 #include "bgp/rib/RibTypes.hpp"
@@ -31,7 +32,8 @@ public:
     static void buildUpdate(TCP::Connection& connection, Session& session, const BuildUpdate<typename N::Nlri>& update);
     static void buildNotification(TCP::Connection& connection, const Notification& notification);
     static void buildKeepalive(TCP::Connection& connection);
-    static void buildRouteRefresh(TCP::Connection& connection, const AfiSafi& family, uint8_t subType);
+    static void buildRouteRefresh(TCP::Connection& connection, Session& session,
+        const AfiSafi& family, RouteRefreshReason reason = RouteRefreshReason::Normal);
 
 private:
     static void buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf);
