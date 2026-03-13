@@ -2,6 +2,7 @@
 
 #include <VirtualRouter.h>
 #include <algorithm>
+#include <chrono>
 
 #include "NeighborAf.h"
 #include "Neighbor.h"
@@ -74,8 +75,28 @@ AddressFamilyVariant& NeighborAf::getAddressFamily()
     return *af;
 }
 
+void NeighborAf::scheduleRestart(uint16_t minutes)
+{
+    cancelRestart();
+    auto expiry = std::chrono::steady_clock::now() + std::chrono::minutes(minutes);
+    maxPfxRestartTimerId = parent.getScheduler().postAfter(expiry, [this](uint32_t) {
+        maxPfxRestartTimerId = 0;
+        parent.getProcess().unshutdownNeighbor(parent);
+    });
+}
+
+void NeighborAf::cancelRestart()
+{
+    if (maxPfxRestartTimerId != 0)
+    {
+        parent.getScheduler().cancel(maxPfxRestartTimerId);
+        maxPfxRestartTimerId = 0;
+    }
+}
+
 NeighborAf::~NeighborAf()
 {
+    cancelRestart();
     parent.getConfigs().get<Config::BgpNeighborSession::AF_NEIGHBOR>().erase(
         family.afi | uint32_t(family.afi << 16));
 }

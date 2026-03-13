@@ -42,7 +42,14 @@ public:
     // ORF filter we advertise TO this peer — set from inbound prefix-list config.
     std::vector<OrfPrefixEntry> orfOutbound;
 
+    // Maximum-prefix tracking. Reset on session reset.
+    bool maxPfxWarned = false;
+    void scheduleRestart(uint16_t minutes);
+    void cancelRestart();
+
 private:
+    uint32_t maxPfxRestartTimerId = 0;
+
     Neighbor& parent;
     NeighborAfConfigs configs;
 };

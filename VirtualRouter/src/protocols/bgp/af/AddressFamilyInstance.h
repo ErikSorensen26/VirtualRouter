@@ -293,7 +293,12 @@ public:
         }
 
         if (Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peer))
-            nbr->getAfNeighbor(family).orfFilter.clear();
+        {
+            NeighborAf& nbrAf = nbr->getAfNeighbor(family);
+            nbrAf.orfFilter.clear();
+            nbrAf.maxPfxWarned = false;
+            nbrAf.cancelRestart();
+        }
 
         defaultOriginatedPeers.erase(peer);
 
@@ -396,7 +401,8 @@ private:
 
         // MAXIMUM_PREFIX enforcement
         {
-            auto& nbrAfCfgs = nbr->getAfNeighbor(family).getConfigs();
+            NeighborAf& nbrAf = nbr->getAfNeighbor(family);
+            auto& nbrAfCfgs = nbrAf.getConfigs();
             auto& maxPfxField = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX>();
             if (maxPfxField.hasValue())
             {
@@ -404,8 +410,22 @@ private:
                 uint32_t count = static_cast<uint32_t>(peerIn.size());
                 bool warningOnly = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX_WARNING_ONLY>().load();
 
+                // Threshold warning: fire once per session when count reaches N% of limit.
+                auto& threshField = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX_THRESHOLD>();
+                uint8_t threshold = threshField.hasValue() ? threshField.load() : 75;
+                if (!nbrAf.maxPfxWarned && count >= maxPfx * threshold / 100)
+                {
+                    nbrAf.maxPfxWarned = true;
+                    // TODO: log warning
+                }
+
                 if (count >= maxPfx && !warningOnly && peer.session)
+                {
+                    auto& restartField = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX_RESTART>();
+                    if (restartField.hasValue())
+                        nbrAf.scheduleRestart(restartField.load());
                     peer.session->postEvent(FsmEvent::MAX_PREFIX_REACHED);
+                }
             }
         }
 
