@@ -17,8 +17,7 @@ Neighbor::Neighbor(const IPAddress& ipAddress, BgpProcess& proc)
       configs([&proc, &ipAddress]() {
           auto& procConfigs = proc.getConfigs();
           auto& neighborConfigs = procConfigs.get<Config::Bgp::NEIGHBOR>();
-          auto key = Config::generateBgpSessionKey(proc.routingInstance->getInstanceId(), ipAddress);
-          return proc.routingInstance->getRegistry().emplaceBack(neighborConfigs, ipAddress, key);
+          return proc.routingInstance->getRegistry().emplaceBack(neighborConfigs, ipAddress);
       }())
 {
     configs.getConfigs()->context().set(this);

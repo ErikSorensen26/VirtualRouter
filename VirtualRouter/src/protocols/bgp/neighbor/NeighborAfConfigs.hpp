@@ -13,7 +13,8 @@ namespace BGP
 struct NeighborAfConfigs
 {
     NeighborAfConfigs(const AfiSafi& fam, Config::Reference<Config::BgpNeighborRegistry>&& cfgs)
-        : family(fam), configs(cfgs) {}
+        : family(fam), configs(cfgs)
+    {}
 
     template <Config::BgpNeighbor F>
     decltype(auto) get()
@@ -23,6 +24,14 @@ struct NeighborAfConfigs
         return configs->get<F>();
     }
 
+    template <Config::BgpAfBase F>
+    decltype(auto) get()
+    {
+        if (peerGroup && peerOwnedBaseTable.test(Config::toIndex<F>))
+            return peerConfigs->get<Config::BgpNeighbor::AF_BASE>().local()->get<F>();
+        return peerConfigs->get<Config::BgpNeighbor::AF_BASE>().local()->get<F>();
+    }
+
     template <Config::BgpNeighbor F> decltype(auto) get() const
     {
         if (peerGroup && peerOwnedTable.test(Config::toIndex<F>))
@@ -30,15 +39,22 @@ struct NeighborAfConfigs
         return std::as_const(configs->get<F>());
     }
 
+    static constexpr std::bitset<Config::toIndex<Config::BgpAfBase::COUNT>> peerOwnedBaseTable = []{
+        std::bitset<Config::toIndex<Config::BgpAfBase::COUNT>> b;
+
+        b.set(Config::toIndex<Config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>);
+        b.set(Config::toIndex<Config::BgpAfBase::ADDITIONAL_PATHS_SEND>);
+        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>);
+        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>);
+        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>);
+        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_BEST_EXTERNAL>);
+
+        return b;
+    }();
+
     static constexpr std::bitset<Config::toIndex<Config::BgpNeighbor::COUNT>> peerOwnedTable = []{
         std::bitset<Config::toIndex<Config::BgpNeighbor::COUNT>> b;
 
-        b.set(Config::toIndex<Config::BgpNeighbor::ADDITIONAL_PATHS_RECEIVE>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADDITIONAL_PATHS_SEND>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_ALL>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_BEST>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_GROUP_BEST>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_BEST_EXTERNAL>);
         b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP>);
         b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH>);
         b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_MAP>);

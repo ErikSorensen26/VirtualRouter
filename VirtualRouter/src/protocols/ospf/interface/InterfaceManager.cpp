@@ -57,10 +57,9 @@ OspfInterface& InterfaceManager::createInterface(Interface& interface, const Osp
     uint32_t id = process.getProcId();
 
     // TODO make a real config creation mechanism
-    __uint128_t configKey = Config::generateOspfAfInterfaceKey(key.interfaceId, process.getProcId(), process.getAF(), process.isV3);
     Config::Reference<Config::OspfInterfaceBaseRegistry> configs =
-        process.routingInstance->getGlobal().registry.create<Config::OspfInterfaceBaseRegistry>(configKey);
-    process.routingInstance->getGlobal().registry.emplace(configs->get<Config::OspfInterfaceBase::BASE>(), configKey);
+        process.routingInstance->getGlobal().registry.create<Config::OspfInterfaceBaseRegistry>();
+    process.routingInstance->getGlobal().registry.emplace(configs->get<Config::OspfInterfaceBase::BASE>());
 
     if (!process.isV3)
     {

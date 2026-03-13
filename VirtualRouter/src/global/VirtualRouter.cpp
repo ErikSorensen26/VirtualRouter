@@ -232,7 +232,7 @@ OSPF::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, AddressFamily af)
 {
     if (ospfv3List.find(id) == ospfv3List.end())
     {
-        Config::Reference<Config::OspfAddressFamilyV3Registry> afConfigs = global.registry.create<Config::OspfAddressFamilyV3Registry>(Config::generateOspfKey(instanceId, id, AddressFamily::NONE, true));
+        Config::Reference<Config::OspfAddressFamilyV3Registry> afConfigs = global.registry.create<Config::OspfAddressFamilyV3Registry>();
         ospfv3List.emplace(id, afConfigs);
     }
     auto ospf = ospfv3List.at(id);

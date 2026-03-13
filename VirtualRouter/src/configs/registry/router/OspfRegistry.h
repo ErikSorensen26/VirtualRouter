@@ -28,28 +28,12 @@ enum class AreaType
 
 namespace Config
 {
-inline __uint128_t generateOspfVirtualLinkKey(__uint128_t areaKey, uint32_t ip)
-{
-    __uint128_t key = 0;
-    key |= __uint128_t(ip);
-    key |= (areaKey & maskU128Bits(96)) << 32;
-    return key;
-}
-
 enum class OspfVirtualLink
 {
     COUNT
 };
 
 using OspfVirtualLinkRegistry = SubRegistry<RegistryKey<16>, OspfVirtualLink>;
-
-inline __uint128_t generateOspfAreaKey(__uint128_t topoKey, uint32_t areaId)
-{
-    __uint128_t key = 0;
-    key |= __uint128_t(areaId);
-    key |= (topoKey & maskU128Bits(99)) << 32;
-    return key;
-}
 
 enum class OspfArea
 {
@@ -105,19 +89,6 @@ using OspfAreaRegistry = SubRegistry<RegistryKey<16>, OspfArea,
         OspfAreaSycnRanges>,
     ValueField<std::vector<std::tuple<>> CONFIG_INDEX_ARG(OspfArea::VIRTUAL_LINKS)> // TODO:
 >;
-
-inline __uint128_t generateOspfKey(uint32_t vrf, uint32_t procId, AddressFamily af /*uint8_t*/, bool isV3)
-{
-    uint8_t addressFamily = af == AddressFamily::NONE ? 0
-        : af == AddressFamily::IPv4 ? 1 : 2;
-
-    __uint128_t key = 0;
-    key |= __uint128_t(addressFamily) & maskU128Bits(2);
-    key |= __uint128_t(isV3 ? 1 : 0) << 2;
-    key |= __uint128_t(vrf) << 3;
-    key |= __uint128_t(procId) << 35;
-    return key;
-}
 
 enum class Ospf
 {

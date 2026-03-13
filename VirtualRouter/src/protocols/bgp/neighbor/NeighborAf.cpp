@@ -20,9 +20,8 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
       parent(p),
       configs(fam, [&p, &fam]() {
           auto& neighborConfigs = p.configs.get<Config::BgpNeighborSession::AF_NEIGHBOR>();
-          auto key = Config::generateBgpNeighborKey(p.configs.getConfigs().getKey(), fam.afi, fam.safi);
           uint32_t id = fam.afi | uint32_t(fam.afi) << 16;
-          return p.getProcess().routingInstance->getRegistry().emplaceBack(neighborConfigs, id, key);
+          return p.getProcess().routingInstance->getRegistry().emplaceBack(neighborConfigs, id);
       }())
 {
     configs.getConfigs().context().set(this);

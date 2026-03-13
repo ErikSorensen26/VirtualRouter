@@ -65,6 +65,12 @@ private:
     std::deque<Slot> slots;
     std::vector<size_t> free;
     std::unordered_map<keyType, Handle, RegistryKeyHash<keyType::size>> keyIndex;
+    uint64_t autoKeyCounter{0};
+
+    keyType makeAutoKey() noexcept
+    {
+        return keyType{++autoKeyCounter};
+    }
 
     void trimTail()
     {
@@ -124,6 +130,18 @@ public:
         Handle h{index, s.generation};
         keyIndex.emplace(key, h);
         return h;
+    }
+
+    template <typename... Args>
+    Handle createAuto(Args&&... args)
+    {
+        return create(makeAutoKey(), std::forward<Args>(args)...);
+    }
+
+    keyType slotKey(const Handle& h) const noexcept
+    {
+        assert(handleValid(h));
+        return slots[h.index].key;
     }
 
     bool find(keyType key, Handle& out) const noexcept

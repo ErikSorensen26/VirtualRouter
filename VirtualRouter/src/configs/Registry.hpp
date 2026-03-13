@@ -22,6 +22,7 @@ using Registry = RegistryDatabase<
     OspfInterfaceAddressFamilyRegistry,
     BgpRegistry,
     BgpBaseRegistry,
+    BgpAfBaseRegistry,
     BgpNeighborSessionRegistry,
     BgpNeighborRegistry
 >;

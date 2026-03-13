@@ -21,7 +21,7 @@ Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
     : mr(mr ? mr : std::pmr::get_default_resource()),
       configs(base.routingInstance->getRegistry().emplaceBack(
           base.getConfigs().get<Config::Ospf::AREA_CONFIGS>(),
-          id, Config::generateOspfAreaKey(base.getConfigKey(), id))
+          id)
       ),
       db(mr),
       base(base),

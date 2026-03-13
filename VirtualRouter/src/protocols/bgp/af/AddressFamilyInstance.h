@@ -50,6 +50,7 @@ private:
     static Config::BgpRegistry& getConfigs(BgpProcess& proc);
     static AttributeManager& getAttrMgr(BgpProcess& proc);
     static ProcessQueueRef getScheduler(BgpProcess& proc);
+    static void emplaceAfBase(Config::ReferenceContainer<Config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc);
 };
 
 inline static AsPathSegment& getAsSegment(Attributes& attrs)
@@ -93,11 +94,12 @@ public:
               auto& vrf = AddressFamilyInstanceHelper::getRoutingInstance(proc);
               auto& registry = vrf.getRegistry();
               return registry.emplaceBack(
-                  bgpConfigs.get<Config::Bgp::ADDRESS_FAMILIES>(), fam.flatten(),
-                  Config::generateBgpAfKey(vrf.getInstanceId(), fam.afi, fam.safi)
+                  bgpConfigs.get<Config::Bgp::ADDRESS_FAMILIES>(), fam.flatten()
               );
           })
-    {}
+    {
+        AddressFamilyInstanceHelper::emplaceAfBase(configs->get<Config::BgpAddressFamily::AF_BASE>(), process);
+    }
 
     AddressFamilyInstance(const AddressFamilyInstance&) = delete;
     AddressFamilyInstance& operator=(const AddressFamilyInstance&) = delete;
@@ -542,11 +544,12 @@ private:
         // Build ADD-PATH candidate pool for additional-paths advertisement.
         if (best.has_value())
         {
-            bool selectAll       = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_ALL>().load();
+            Config::Reference<Config::BgpAfBaseRegistry>& base = configs->get<Config::BgpAddressFamily::AF_BASE>().local();
             bool selectBackup    = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
-            auto& selectBestFld  = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST>();
             bool selectBestExt   = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
-            bool selectGroupBest = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_GROUP_BEST>().load();
+            bool selectAll       = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
+            auto& selectBestFld  = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
+            bool selectGroupBest = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
 
             if (selectAll || selectBackup || selectBestFld.hasValue() || selectBestExt || selectGroupBest)
             {
@@ -862,8 +865,8 @@ private:
 
                 // Slow peer: defer if STATIC mode or TX buffer is backed up past detection threshold.
                 {
-                    auto& spModeField = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_MODE>();
-                    bool isStatic = spModeField.hasValue() && spModeField.load() == SlowPeerMode::STATIC;
+                    auto& slowMode = nbrAfCfgs.get<Config::BgpAfBase::SLOW_PEER_MODE>();
+                    bool isStatic = slowMode.hasValue() && slowMode.load() == SlowPeerMode::STATIC;
 
                     bool backlogged = false;
                     if (!isStatic && afNbr.isSlowPeer)
@@ -873,10 +876,7 @@ private:
                         if (!backlogged)
                         {
                             // Recover unless DYNAMIC_PERMANENT (check config live).
-                            auto& afMode = configs->get<Config::BgpAddressFamily::SLOW_PEER_MODE>();
-                            bool permanent = spModeField.hasValue()
-                                ? spModeField.load() == SlowPeerMode::DYNAMIC_PERMANENT
-                                : (afMode.hasValue() && afMode.load() == SlowPeerMode::DYNAMIC_PERMANENT);
+                            bool permanent = slowMode.load() == SlowPeerMode::DYNAMIC_PERMANENT;
                             if (!permanent)
                             {
                                 afNbr.isSlowPeer = false;
@@ -891,9 +891,7 @@ private:
                         ms.pending.insert(nlri);
                         if (ms.timerId == 0)
                         {
-                            auto& intervalField = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_DETECTION_THRESHOLD>();
-                            uint16_t interval = intervalField.hasValue() ? intervalField.load()
-                                : configs->get<Config::BgpAddressFamily::SLOW_PEER_DETECTION_THRESHOLD>().load();
+                            uint16_t interval = nbrAfCfgs.get<Config::BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD>().load();
                             ms.timerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(
                                 std::chrono::steady_clock::now() + std::chrono::seconds(interval),
                                 [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
@@ -990,11 +988,12 @@ private:
 
                 if (!best->additionalPaths.empty())
                 {
-                    bool advAll       = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
-                    auto& advBestFld  = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_BEST>();
-                    bool advGroupBest = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
-                    bool advBestExt   = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_BEST_EXTERNAL>().load();
-                    bool advBackup    = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP>().load();
+                    Config::Reference<Config::BgpAfBaseRegistry>& baseCfg = configs->get<Config::BgpAddressFamily::AF_BASE>().local();
+                    bool advBackup    = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
+                    bool advBestExt   = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
+                    bool advAll       = baseCfg->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
+                    auto& advBestFld  = baseCfg->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
+                    bool advGroupBest = baseCfg->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
 
                     if (advAll)
                     {
@@ -1119,10 +1118,7 @@ private:
             // Slow peer detection (DYNAMIC / DYNAMIC_PERMANENT): update state from TX backlog.
             if (!afNbr.isSlowPeer)
             {
-                auto& detection = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_DETECTION>();
-                bool detectEnabled = detection.hasValue() ? detection.load()
-                    : configs->get<Config::BgpAddressFamily::SLOW_PEER_DETECTION>().load();
-
+                bool detectEnabled = nbrAfCfgs.get<Config::BgpAfBase::SLOW_PEER_DETECTION>().load();
                 if (detectEnabled)
                 {
                     auto* conn = session->getPrimaryConnection();
@@ -1132,10 +1128,7 @@ private:
                         if (afNbr.slowFirstSeen == std::chrono::steady_clock::time_point{})
                             afNbr.slowFirstSeen = now;
 
-                        auto& threshField = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_DETECTION_THRESHOLD>();
-                        uint16_t thresh = threshField.hasValue() ? threshField.load()
-                            : configs->get<Config::BgpAddressFamily::SLOW_PEER_DETECTION_THRESHOLD>().load();
-
+                        uint16_t thresh = nbrAfCfgs.get<Config::BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD>().load();
                         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - afNbr.slowFirstSeen);
                         if (elapsed.count() >= thresh)
                             afNbr.isSlowPeer = true;

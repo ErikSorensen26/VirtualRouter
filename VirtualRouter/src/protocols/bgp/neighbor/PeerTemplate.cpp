@@ -13,16 +13,11 @@ namespace BGP
 PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc)
     : name(groupName),
       process(proc),
-      sessionConfigs([&proc, &groupName]() {
-          uint32_t vrf = proc.routingInstance->getInstanceId();
-          auto key = Config::generatePeerGroupSessionKey(vrf, groupName);
-          return proc.routingInstance->getRegistry().create<Config::BgpNeighborSessionRegistry>(key);
-      }())
+      sessionConfigs(proc.routingInstance->getRegistry().create<Config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().ensure(
         sessionConfigs->get<Config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<Config::Bgp::BGP_BASE>().local(),
-        sessionConfigs.getKey()
+        proc.getConfigs().get<Config::Bgp::BGP_BASE>().local()
     );
 }
 
@@ -32,9 +27,7 @@ Config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi)
     if (it != afConfigs.end())
         return &it->second.get();
 
-    uint32_t vrf = process.routingInstance->getInstanceId();
-    auto afKey = Config::generatePeerGroupAfKey(vrf, name, afi.afi, afi.safi);
-    auto ref = process.routingInstance->getRegistry().create<Config::BgpNeighborRegistry>(afKey);
+    auto ref = process.routingInstance->getRegistry().create<Config::BgpNeighborRegistry>();
     auto [newIt, ok] = afConfigs.try_emplace(afi, std::move(ref));
     assert(ok);
     return ok ? &newIt->second.get() : nullptr;
@@ -51,26 +44,17 @@ const Config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi) c
 
 PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, BgpProcess& proc)
     : name(groupName),
-      configs([&proc, &groupName]() {
-          uint32_t vrf = proc.routingInstance->getInstanceId();
-          auto key = Config::generatePeerGroupSessionKey(vrf, groupName);
-          return proc.routingInstance->getRegistry().create<Config::BgpNeighborSessionRegistry>(key);
-      }())
+      configs(proc.routingInstance->getRegistry().create<Config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().ensure(
         configs->get<Config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<Config::Bgp::BGP_BASE>().local(),
-        configs.getKey()
+        proc.getConfigs().get<Config::Bgp::BGP_BASE>().local()
     );
 }
 
 PeerPolicyTemplate::PeerPolicyTemplate(const std::string& groupName, BgpProcess& proc)
     : name(groupName),
-      configs([&proc, &groupName]() {
-          uint32_t vrf = proc.routingInstance->getInstanceId();
-          auto key = Config::generatePeerGroupAfKey(vrf, groupName, 0, 0);
-          return proc.routingInstance->getRegistry().create<Config::BgpNeighborRegistry>(key);
-      }())
+      configs(proc.routingInstance->getRegistry().create<Config::BgpNeighborRegistry>())
 {}
 
 // ---------------------------------------------------------------------------

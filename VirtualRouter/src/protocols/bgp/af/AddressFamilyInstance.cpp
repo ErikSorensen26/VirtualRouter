@@ -39,4 +39,9 @@ ProcessQueueRef AddressFamilyInstanceHelper::getScheduler(BgpProcess& proc)
 {
     return proc.getScheduler();
 }
+
+void AddressFamilyInstanceHelper::emplaceAfBase(Config::ReferenceContainer<Config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc)
+{
+    proc.routingInstance->getRegistry().emplace(base);
+}
 }

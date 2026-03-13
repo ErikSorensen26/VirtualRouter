@@ -25,55 +25,6 @@ enum class SlowPeerMode
 
 namespace Config
 {
-inline uint64_t generateBgpAfKey(uint32_t vrf, uint16_t afi, uint8_t safi)
-{
-    uint64_t key = vrf;
-    key |= uint64_t(afi) << 32;
-    key |= uint64_t(safi) << 48;
-    return key;
-}
-
-inline RegistryKey<20> generateBgpSessionKey(uint32_t bgp, const IPAddress& nbr)
-{
-    RegistryKey<20> data;
-    std::memcpy(data.dataPtr(), nbr.raw, 16);
-    writeU32(data.dataPtr() + 16, bgp);
-    return data;
-}
-
-static RegistryKey<16> generatePeerGroupAfKey(uint32_t vrf, const std::string& name,
-                                                       uint16_t afi, uint8_t safi)
-{
-    Config::RegistryKey<16> key;
-    uint64_t h = static_cast<uint64_t>(std::hash<std::string>{}(name + "\xFF\x01peer_group_af"));
-    std::memcpy(key.dataPtr(), &h, 8);
-    writeU32(key.dataPtr() + 8, vrf);
-    writeU16(key.dataPtr() + 12, afi);
-    key[14] = safi;
-    key[15] = 0;
-    return key;
-}
-
-static RegistryKey<20> generatePeerGroupSessionKey(uint32_t vrf, const std::string& name)
-{
-    Config::RegistryKey<20> key;
-    uint64_t h1 = static_cast<uint64_t>(std::hash<std::string>{}(name));
-    uint64_t h2 = static_cast<uint64_t>(std::hash<std::string>{}(name + "\xFF\x00peer_group_salt"));
-    std::memcpy(key.dataPtr(), &h1, 8);
-    std::memcpy(key.dataPtr() + 8, &h2, 8);
-    writeU32(key.dataPtr() + 16, vrf);
-    return key;
-}
-
-inline RegistryKey<23> generateBgpNeighborKey(const RegistryKey<20>& sesKey, uint16_t afi, uint8_t safi)
-{
-    RegistryKey<23> data(sesKey);
-    std::memcpy(data.dataPtr(), sesKey.dataPtr(), 20);
-    writeU16(data.dataPtr() + 20, afi);
-    data[22] = safi;
-    return data;
-}
-
 enum class BgpTransportBase
 {
     KEEPALIVE_INTERVAL, // TODO
@@ -97,15 +48,47 @@ using BgpBaseRegistry = SubRegistry<RegistryKey<20>, BgpTransportBase,
     AtomicField<bool CONFIG_INDEX_ARG(BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY)>
 >;
 
-enum class BgpNeighbor
+enum class BgpAfBase
 {
-    ACTIVATE,
     ADDITIONAL_PATHS_RECEIVE,
     ADDITIONAL_PATHS_SEND,
     ADVERTISE_ADDITIONAL_PATHS_ALL,
     ADVERTISE_ADDITIONAL_PATHS_BEST,
     ADVERTISE_ADDITIONAL_GROUP_BEST,
     ADVERTISE_BEST_EXTERNAL,
+    SLOW_PEER_MODE,
+    SLOW_PEER_DETECTION,
+    SLOW_PEER_DETECTION_THRESHOLD,
+    COUNT
+};
+
+#define BGP_AF_BASE_DEFAULTS(X) \
+    X(BgpAfBase, ADDITIONAL_PATHS_RECEIVE, false) \
+    X(BgpAfBase, ADDITIONAL_PATHS_SEND, false) \
+    X(BgpAfBase, ADVERTISE_ADDITIONAL_PATHS_ALL, false) \
+    X(BgpAfBase, ADVERTISE_ADDITIONAL_GROUP_BEST, false) \
+    X(BgpAfBase, ADVERTISE_BEST_EXTERNAL, false) \
+    X(BgpAfBase, SLOW_PEER_DETECTION, false) \
+    X(BgpAfBase, SLOW_PEER_DETECTION_THRESHOLD, 300)
+
+CONFIG_DEFAULT_TABLE(BGP_AF_BASE_DEFAULTS);
+
+using BgpAfBaseRegistry = SubRegistry<RegistryKey<20>, BgpAfBase,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_RECEIVE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_SEND)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL)>,
+    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_BEST_EXTERNAL)>,
+    OptionalAtomicField<BGP::SlowPeerMode CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_MODE)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBaseRegistry::SLOW_PEER_DETECTION)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD)>
+>;
+
+enum class BgpNeighbor
+{
+    AF_BASE,
+    ACTIVATE,
     ADVERTISE_DIVERSE_PATH_BACKUP,
     ADVERTISE_DIVERSE_PATH_MPATH,
     ADVERTISE_MAP, // TODO
@@ -148,9 +131,6 @@ enum class BgpNeighbor
     SEND_COMMUNITY_BOTH,
     SEND_COMMUNITY_EXTENDED,
     SEND_COMMUNITY_STANDARD,
-    SLOW_PEER_MODE,
-    SLOW_PEER_DETECTION,
-    SLOW_PEER_DETECTION_THRESHOLD,
     SOFT_RECONFIGURATION,
     TRANSLATE_UPDATE, // TODO
     UNSUPPRESS_MAP, // TODO
@@ -160,11 +140,6 @@ enum class BgpNeighbor
 
 #define BGP_NEIGHBOR_DEFAULTS(X) \
     X(BgpNeighbor, ACTIVATE, false) \
-    X(BgpNeighbor, ADDITIONAL_PATHS_RECEIVE, false) \
-    X(BgpNeighbor, ADDITIONAL_PATHS_SEND, false) \
-    X(BgpNeighbor, ADVERTISE_ADDITIONAL_PATHS_ALL, false) \
-    X(BgpNeighbor, ADVERTISE_ADDITIONAL_GROUP_BEST, false) \
-    X(BgpNeighbor, ADVERTISE_BEST_EXTERNAL, false) \
     X(BgpNeighbor, ADVERTISE_DIVERSE_PATH_BACKUP, false) \
     X(BgpNeighbor, ADVERTISE_DIVERSE_PATH_MPATH, false) \
     X(BgpNeighbor, ADVERTISE_INTERVAL, 30) \
@@ -195,13 +170,8 @@ CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_DEFAULTS);
 void BgpNeighborDefaultOriginate(void*);
 
 using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
+    ReferenceContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpNeighbor::AF_BASE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ACTIVATE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADDITIONAL_PATHS_RECEIVE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADDITIONAL_PATHS_SEND)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_ALL)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_ADDITIONAL_PATHS_BEST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_ADDITIONAL_GROUP_BEST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_BEST_EXTERNAL)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_MAP)>,
@@ -244,9 +214,6 @@ using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_BOTH)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_EXTENDED)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_STANDARD)>,
-    OptionalAtomicField<BGP::SlowPeerMode CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_MODE)>,
-    OptionalAtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_DETECTION)>,
-    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_DETECTION_THRESHOLD)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SOFT_RECONFIGURATION)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::TRANSLATE_UPDATE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::UNSUPPRESS_MAP)>,
@@ -343,16 +310,12 @@ using BgpNeighborSessionRegistry = SubRegistry<RegistryKey<20>, BgpNeighborSessi
 
 enum class BgpAddressFamily
 {
+    AF_BASE,
     AGGREGATE_ADDRESS,
     BGP_ADDITIONAL_PATHS_INSTALL, // TODO
-    BGP_ADDITIONAL_PATHS_RECEIVE, // TODO
     BGP_ADDITIONAL_PATHS_SELECT, // TODO
-    BGP_ADDITIONAL_PATHS_SELECT_ALL, // TODO
-    BGP_ADDITIONAL_PATHS_SELECT_BACKUP, // TODO
-    BGP_ADDITIONAL_PATHS_SELECT_BEST, // uint8 // TODO
-    BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL, // TODO
-    BGP_ADDITIONAL_PATHS_SELECT_GROUP_BEST, // TODO
-    BGP_ADVERTISE_BEST_EXTERNAL, // TODO
+    BGP_ADDITIONAL_PATHS_SELECT_BACKUP,
+    BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL,
     BGP_AGGREGATE_TIMER,
     BGP_BEST_PATH_COMPARE_ROUTER_ID,
     BGP_BEST_PATH_COST_COMMUNITY_IGNORE, // TODO
@@ -376,9 +339,6 @@ enum class BgpAddressFamily
     BGP_RECURSIVE_HOST, // TODO
     BGP_REDISTRIBUTE_INTERNAL, // TODO
     BGP_ROUTE_MAP_PRIORITY, // TODO
-    SLOW_PEER_DETECTION,
-    SLOW_PEER_DETECTION_THRESHOLD,
-    SLOW_PEER_MODE,
     BGP_SOFT_RECONFIG_BACKUP, // TODO
     DEFAULT_ORIGINATE, // TODO
     DEFAULT_METRIC, // TODO
@@ -406,12 +366,8 @@ enum class BgpAddressFamily
 
 #define BGP_ADDRESS_FAMILY_DEFAULTS(X) \
     X(BgpAddressFamily, BGP_ADDITIONAL_PATHS_INSTALL, false) \
-    X(BgpAddressFamily, BGP_ADDITIONAL_PATHS_RECEIVE, false) \
-    X(BgpAddressFamily, BGP_ADDITIONAL_PATHS_SELECT_ALL, false) \
     X(BgpAddressFamily, BGP_ADDITIONAL_PATHS_SELECT_BACKUP, false) \
     X(BgpAddressFamily, BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL, false) \
-    X(BgpAddressFamily, BGP_ADDITIONAL_PATHS_SELECT_GROUP_BEST, false) \
-    X(BgpAddressFamily, BGP_ADVERTISE_BEST_EXTERNAL, false) \
     X(BgpAddressFamily, BGP_AGGREGATE_TIMER, 30) \
     X(BgpAddressFamily, BGP_BEST_PATH_COMPARE_ROUTER_ID, false) \
     X(BgpAddressFamily, BGP_BEST_PATH_COST_COMMUNITY_IGNORE, false) \
@@ -430,8 +386,6 @@ enum class BgpAddressFamily
     X(BgpAddressFamily, BGP_RECURSIVE_HOST, true) \
     X(BgpAddressFamily, BGP_REDISTRIBUTE_INTERNAL, false) \
     X(BgpAddressFamily, BGP_ROUTE_MAP_PRIORITY, false) \
-    X(BgpAddressFamily, SLOW_PEER_DETECTION, false) \
-    X(BgpAddressFamily, SLOW_PEER_DETECTION_THRESHOLD, 300) \
     X(BgpAddressFamily, BGP_SOFT_RECONFIG_BACKUP, false) \
     X(BgpAddressFamily, DEFAULT_ORIGINATE, false) \
     X(BgpAddressFamily, DISTANCE_BGP_EXTERNAL, 20) \
@@ -460,16 +414,12 @@ CONFIG_DEFAULT_TABLE(BGP_ADDRESS_FAMILY_DEFAULTS);
 DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS)
 
 using BgpAddressFamilyRegistry = SubRegistry<RegistryKey<8>, BgpAddressFamily,
+    ReferenceContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpAddressFamily::AF_BASE)>,
     ValueField<std::vector<BgpAggregateAddress::Tuple> CONFIG_INDEX_ARG(BgpAddressFamily::AGGREGATE_ADDRESS)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_INSTALL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_RECEIVE)>,
     OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_ALL)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP)>,
-    OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_GROUP_BEST)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADVERTISE_BEST_EXTERNAL)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_AGGREGATE_TIMER)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_BEST_PATH_COST_COMMUNITY_IGNORE)>,
@@ -493,9 +443,6 @@ using BgpAddressFamilyRegistry = SubRegistry<RegistryKey<8>, BgpAddressFamily,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_RECURSIVE_HOST)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_REDISTRIBUTE_INTERNAL)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ROUTE_MAP_PRIORITY)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::SLOW_PEER_DETECTION)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAddressFamily::SLOW_PEER_DETECTION_THRESHOLD)>,
-    OptionalAtomicField<BGP::SlowPeerMode CONFIG_INDEX_ARG(BgpAddressFamily::SLOW_PEER_MODE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DEFAULT_ORIGINATE)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DEFAULT_METRIC)>,

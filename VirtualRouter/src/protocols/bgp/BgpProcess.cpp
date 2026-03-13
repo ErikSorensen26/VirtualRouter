@@ -14,7 +14,7 @@ BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
       ntable(*this),
       configs(vrf->getRegistry().create<Config::BgpRegistry>(vrf->getInstanceId()))
 {
-    vrf->getRegistry().ensure(configs->get<Config::Bgp::BGP_BASE>(), configs.getKey());
+    vrf->getRegistry().ensure(configs->get<Config::Bgp::BGP_BASE>());
 
     TCP::ListenOptions opts;
     opts.onAccept = BgpProcess::onAcceptCallback;

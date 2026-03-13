@@ -54,27 +54,6 @@ enum class IPsecEncryptType : uint8_t
 
 namespace Config
 {
-inline uint64_t generateOspfInterfaceKey(uint32_t ifaceId, AddressFamily af, bool isV3) {
-    uint8_t addressFamily = af == AddressFamily::NONE ? 0
-        : af == AddressFamily::IPv4 ? 1 : 2;
-    uint64_t k = 0;    
-    k |= uint64_t(ifaceId) & maskU64Bits(32);
-    k |= (uint64_t(addressFamily) & maskU64Bits(2)) << 32;
-    k |= (uint64_t(isV3 ? 1u : 0u) & maskU64Bits(1)) << 34;
-    return k;
-}
-
-inline __uint128_t generateOspfAfInterfaceKey(uint32_t ifaceId, uint32_t procId, AddressFamily af, bool isV3) {
-    uint8_t addressFamily = af == AddressFamily::NONE ? 0
-        : af == AddressFamily::IPv4 ? 1 : 2;
-    uint64_t k = 0;    
-    k |= uint64_t(ifaceId) & maskU64Bits(32);
-    k |= (uint64_t(addressFamily) & maskU64Bits(2)) << 32;
-    k |= (uint64_t(isV3 ? 1u : 0u) & maskU64Bits(1)) < 34;
-    k |= (uint64_t(procId) & maskU64Bits(32)) << 35;
-    return k;
-}
-
 enum class OspfInterface : uint8_t
 {
     BFD,

@@ -15,25 +15,24 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRo
     : isV3(isV3), routingInstance(vrf), rib(*this), scheduler(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
     configs([this, isV3]() {
         auto& registry = routingInstance->getGlobal().registry;
-        auto key = Config::generateOspfKey(routingInstance->getInstanceId(), getProcId(), getAF(), isV3);
         if (isV3)
         {
             if (routingInstance->isDefault())
             {
                 // TODO: add address family v3 configs from elsewhere
                 auto& afCfgs = std::get<V3AfConfigs>(afConfigs);
-                return registry.ensure(afCfgs->get<Config::OspfAddressFamilyV3::BASE>(), key);
+                return registry.ensure(afCfgs->get<Config::OspfAddressFamilyV3::BASE>());
             }
             // OSPFv3 VRF mode does not support address families
-            return registry.create<Config::OspfRegistry>(key);
+            return registry.create<Config::OspfRegistry>();
         }
         else
         {
             // OSPFv2 AddressFamily
-            afConfigs.emplace<V2AfConfigs>(registry.create<Config::OspfAddressFamilyV2Registry>(key));
+            afConfigs.emplace<V2AfConfigs>(registry.create<Config::OspfAddressFamilyV2Registry>());
             auto& afCfgs = std::get<V2AfConfigs>(afConfigs);
             auto& v2Base = afCfgs->get<Config::OspfAddressFamilyV2::BASE>();
-            return registry.ensure(v2Base, key);
+            return registry.ensure(v2Base);
         }
     }())
 {
