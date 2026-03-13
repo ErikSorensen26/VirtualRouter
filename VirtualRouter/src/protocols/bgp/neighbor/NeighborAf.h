@@ -44,8 +44,12 @@ public:
 
     // Maximum-prefix tracking. Reset on session reset.
     bool maxPfxWarned = false;
-    void scheduleRestart(uint16_t minutes);
-    void cancelRestart();
+    void schedulePfxRestart(uint16_t minutes);
+    void cancelPfxRestart();
+
+    // Slow peer tracking. Reset on session reset.
+    bool isSlowPeer = false;
+    std::chrono::steady_clock::time_point slowFirstSeen{};
 
 private:
     uint32_t maxPfxRestartTimerId = 0;

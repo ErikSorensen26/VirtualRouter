@@ -99,7 +99,7 @@ using BgpBaseRegistry = SubRegistry<RegistryKey<20>, BgpTransportBase,
 
 enum class BgpNeighbor
 {
-    ACTIVATE, // TODO
+    ACTIVATE,
     ADDITIONAL_PATHS_RECEIVE,
     ADDITIONAL_PATHS_SEND,
     ADVERTISE_ADDITIONAL_PATHS_ALL,
@@ -129,8 +129,8 @@ enum class BgpNeighbor
     FILTER_LIST_OUT, // TODO
     INHERIT_PEER_POLICY,
     MAXIMUM_PREFIX,
-    MAXIMUM_PREFIX_THRESHOLD, // TODO
-    MAXIMUM_PREFIX_RESTART, // TODO
+    MAXIMUM_PREFIX_THRESHOLD,
+    MAXIMUM_PREFIX_RESTART,
     MAXIMUM_PREFIX_WARNING_ONLY,
     NEXT_HOP_SELF,
     NEXT_HOP_SELF_ALL,
@@ -148,10 +148,10 @@ enum class BgpNeighbor
     SEND_COMMUNITY_BOTH,
     SEND_COMMUNITY_EXTENDED,
     SEND_COMMUNITY_STANDARD,
-    SLOW_PEER_MODE, // TODO
-    SLOW_PEER_DETECTION, // TODO
-    SLOW_PEER_DETECTION_THRESHOLD, // TODO
-    SOFT_RECONFIGURATION, // TODO
+    SLOW_PEER_MODE,
+    SLOW_PEER_DETECTION,
+    SLOW_PEER_DETECTION_THRESHOLD,
+    SOFT_RECONFIGURATION,
     TRANSLATE_UPDATE, // TODO
     UNSUPPRESS_MAP, // TODO
     WEIGHT,
@@ -187,8 +187,6 @@ enum class BgpNeighbor
     X(BgpNeighbor, SEND_COMMUNITY_BOTH, false) \
     X(BgpNeighbor, SEND_COMMUNITY_EXTENDED, false) \
     X(BgpNeighbor, SEND_COMMUNITY_STANDARD, false) \
-    X(BgpNeighbor, SLOW_PEER_DETECTION, false) \
-    X(BgpNeighbor, SLOW_PEER_DETECTION_THRESHOLD, 60) \
     X(BgpNeighbor, SOFT_RECONFIGURATION, false) \
     X(BgpNeighbor, TRANSLATE_UPDATE, false)
 
@@ -247,8 +245,8 @@ using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_EXTENDED)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SEND_COMMUNITY_STANDARD)>,
     OptionalAtomicField<BGP::SlowPeerMode CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_MODE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_DETECTION)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_DETECTION_THRESHOLD)>,
+    OptionalAtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_DETECTION)>,
+    OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpNeighbor::SLOW_PEER_DETECTION_THRESHOLD)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::SOFT_RECONFIGURATION)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::TRANSLATE_UPDATE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::UNSUPPRESS_MAP)>,
@@ -378,9 +376,9 @@ enum class BgpAddressFamily
     BGP_RECURSIVE_HOST, // TODO
     BGP_REDISTRIBUTE_INTERNAL, // TODO
     BGP_ROUTE_MAP_PRIORITY, // TODO
-    SLOW_PEER_DETECTION, // TODO
-    SLOW_PEER_DETECTION_THRESHOLD, // TODO
-    SLOW_PEER_MODE, // TODO
+    SLOW_PEER_DETECTION,
+    SLOW_PEER_DETECTION_THRESHOLD,
+    SLOW_PEER_MODE,
     BGP_SOFT_RECONFIG_BACKUP, // TODO
     DEFAULT_ORIGINATE, // TODO
     DEFAULT_METRIC, // TODO
@@ -433,7 +431,7 @@ enum class BgpAddressFamily
     X(BgpAddressFamily, BGP_REDISTRIBUTE_INTERNAL, false) \
     X(BgpAddressFamily, BGP_ROUTE_MAP_PRIORITY, false) \
     X(BgpAddressFamily, SLOW_PEER_DETECTION, false) \
-    X(BgpAddressFamily, SLOW_PEER_DETECTION_THRESHOLD, 60) \
+    X(BgpAddressFamily, SLOW_PEER_DETECTION_THRESHOLD, 300) \
     X(BgpAddressFamily, BGP_SOFT_RECONFIG_BACKUP, false) \
     X(BgpAddressFamily, DEFAULT_ORIGINATE, false) \
     X(BgpAddressFamily, DISTANCE_BGP_EXTERNAL, 20) \

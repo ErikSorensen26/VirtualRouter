@@ -4,6 +4,7 @@
 #define TCP_CONNECTION_H
 
 #include "TcpTypes.hpp"
+#include "tx/TxBuffer.h"
 
 namespace TCP
 {
@@ -30,6 +31,7 @@ public:
     std::span<uint8_t> reserveSpan(size_t minBytes) noexcept;
 
     size_t flush() noexcept;
+    size_t pendingTxBytes() const noexcept { return bufferTx.size(); }
 
     void disconnect() noexcept;
 

@@ -75,9 +75,9 @@ AddressFamilyVariant& NeighborAf::getAddressFamily()
     return *af;
 }
 
-void NeighborAf::scheduleRestart(uint16_t minutes)
+void NeighborAf::schedulePfxRestart(uint16_t minutes)
 {
-    cancelRestart();
+    cancelPfxRestart();
     auto expiry = std::chrono::steady_clock::now() + std::chrono::minutes(minutes);
     maxPfxRestartTimerId = parent.getScheduler().postAfter(expiry, [this](uint32_t) {
         maxPfxRestartTimerId = 0;
@@ -85,7 +85,7 @@ void NeighborAf::scheduleRestart(uint16_t minutes)
     });
 }
 
-void NeighborAf::cancelRestart()
+void NeighborAf::cancelPfxRestart()
 {
     if (maxPfxRestartTimerId != 0)
     {
@@ -96,7 +96,7 @@ void NeighborAf::cancelRestart()
 
 NeighborAf::~NeighborAf()
 {
-    cancelRestart();
+    cancelPfxRestart();
     parent.getConfigs().get<Config::BgpNeighborSession::AF_NEIGHBOR>().erase(
         family.afi | uint32_t(family.afi << 16));
 }

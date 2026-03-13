@@ -8,6 +8,7 @@
 #include <chrono>
 #include <limits>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <IPAddress.hpp>
 
@@ -155,6 +156,21 @@ private:
     AttributeManager* attrMgr = nullptr;
 };
 
+template <typename N>
+struct MraiState
+{
+    std::chrono::steady_clock::time_point lastSent{};
+    std::unordered_set<N> pending;
+    uint32_t timerId = 0;
+};
+
+struct SoftPreEntry
+{
+    PathAttribute pa;
+    uint32_t peerAs;
+    bool ebgp;
+};
+
 struct InboundRouteBase : RouteBase
 {
     bool locallyOriginated() { return sourceNeighbor == nullptr; }
@@ -226,10 +242,16 @@ struct OutboundRoute : RouteBase
 };
 
 template <typename N>
+using PrePerPeerInTable = std::unordered_map<NlriPath<N>, SoftPreEntry, NlriPathHash<N>>;
+
+template <typename N>
 using PerPeerInTable = std::unordered_map<NlriPath<N>, InboundRoute<N>, NlriPathHash<N>>;
 
 template <typename N>
 using PerPeerOutTable = std::unordered_multimap<N, std::pair<uint32_t, OutboundRoute<N>>>;
+
+template <typename N>
+using PreAdjRibInTable = std::unordered_map<uint32_t, PrePerPeerInTable<N>>;
 
 template <typename N>
 using AdjRibInTable = std::unordered_map<uint32_t, PerPeerInTable<N>>;
@@ -239,6 +261,9 @@ using AdjRibOutTable = std::unordered_map<uint32_t, PerPeerOutTable<N>>;
 
 template <typename N>
 using LocRibTable = std::unordered_map<N, LocalRoute<N>>;
+
+template <typename N>
+using MraiTable = std::unordered_map<uint32_t, MraiState<N>>;
 }
 
 #endif // BGP_RIB_TYPES_HPP

@@ -282,6 +282,62 @@ public:
         session.sendUpdate<N>(withdraw);
     }
 
+    void softClearInbound(uint32_t peerRid)
+    {
+        auto preIt = preAdjRibIn.find(peerRid);
+        if (preIt == preAdjRibIn.end()) return;
+
+        Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peerRid);
+        if (!nbr) return;
+
+        auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+        NeighborAf& nbrAf = nbr->getAfNeighbor(family);
+
+        // Remove existing post-policy routes for this peer from locRib + adjRibIn.
+        std::unordered_set<NlriT> touched;
+        auto inIt = adjRibIn.find(peerRid);
+        if (inIt != adjRibIn.end())
+        {
+            for (const auto& [nlriPath, inRoute] : inIt->second)
+            {
+                auto lit = locRib.find(nlriPath.nlri);
+                if (lit != locRib.end() && &lit->second.in == &inRoute)
+                    locRib.erase(lit);
+                touched.insert(nlriPath.nlri);
+            }
+            inIt->second.clear();
+        }
+
+        // Re-apply ingress policy to each stored pre-policy route.
+        auto& peerIn = adjRibIn[peerRid];
+        for (auto& [nlriPath, entry] : preIt->second)
+        {
+            uint32_t pid = attrMgr.acquire(entry.pa.attrs, entry.pa.path);
+            InboundRoute<NlriT> r(attrMgr, pid, nlriPath.nlri, &nbrAf);
+            r.neighborRouterId = peerRid;
+            r.peerAs            = entry.peerAs;
+            r.ebgp              = entry.ebgp;
+            r.igpCost           = resolveIgpMetric(entry.pa.path.nextHop);
+
+            if (applyIngressPolicy(r))
+                continue;
+
+            auto existing = peerIn.find(nlriPath);
+            if (existing != peerIn.end())
+            {
+                auto lit = locRib.find(nlriPath.nlri);
+                if (lit != locRib.end() && &lit->second.in == &existing->second)
+                    locRib.erase(lit);
+                peerIn.erase(existing);
+            }
+            peerIn.emplace(nlriPath, std::move(r));
+            touched.insert(nlriPath.nlri);
+        }
+
+        for (const NlriT& nlri : touched)
+            recomputeNlri(nlri);
+    }
+
     void invalidatePeer(uint32_t peer)
     {
         auto mraiIt = mraiState.find(peer);
@@ -297,9 +353,12 @@ public:
             NeighborAf& nbrAf = nbr->getAfNeighbor(family);
             nbrAf.orfFilter.clear();
             nbrAf.maxPfxWarned = false;
-            nbrAf.cancelRestart();
+            nbrAf.cancelPfxRestart();
+            nbrAf.isSlowPeer = false;
+            nbrAf.slowFirstSeen = {};
         }
 
+        preAdjRibIn.erase(peer);
         defaultOriginatedPeers.erase(peer);
 
         auto outIt = adjRibOut.find(peer);
@@ -334,6 +393,11 @@ private:
 
         PerPeerInTable<NlriT>& peerIn = adjRibIn[peer.rid];
 
+        NeighborAf& nbrAf = nbr->getAfNeighbor(family);
+        auto& nbrAfCfgs = nbrAf.getConfigs();
+        bool softReconfig = nbrAfCfgs.get<Config::BgpNeighbor::SOFT_RECONFIGURATION>().load()
+                         || configs->get<Config::BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP>().load();
+
         std::unordered_set<NlriT> touched;
 
         // Withdrawn: n is NlriPath<NlriT>
@@ -346,6 +410,12 @@ private:
                 if (lit != locRib.end() && &lit->second.in == &it->second)
                     locRib.erase(lit);
                 peerIn.erase(it);
+            }
+            if (softReconfig)
+            {
+                auto preIt = preAdjRibIn.find(peer.rid);
+                if (preIt != preAdjRibIn.end())
+                    preIt->second.erase(n);
             }
             touched.insert(n.nlri);
         }
@@ -361,7 +431,13 @@ private:
 
             uint32_t pid = attrMgr.acquire(update.attrs->attrs, update.attrs->path);
 
-            NeighborAf& naf = peer.getAfNeighbor(family);
+            // Store pre-policy copy of all announced NLRIs for soft-reconfiguration.
+            if (softReconfig)
+            {
+                auto& preIn = preAdjRibIn[peer.rid];
+                for (const auto& n : update.announcements)
+                    preIn.insert_or_assign(n, SoftPreEntry{*update.attrs, peerAs, isEbgp});
+            }
 
             bool first = true;
             for (const auto& n : update.announcements)
@@ -371,7 +447,7 @@ private:
                 first = false;
 
                 // n is NlriPath<NlriT>; pass n.nlri to InboundRoute constructor
-                InboundRoute<NlriT> r(attrMgr, pid, n.nlri, &naf);
+                InboundRoute<NlriT> r(attrMgr, pid, n.nlri, &nbrAf);
                 r.neighborRouterId = peer.rid;
                 r.peerAs            = peerAs;
                 r.ebgp              = isEbgp;
@@ -401,8 +477,6 @@ private:
 
         // MAXIMUM_PREFIX enforcement
         {
-            NeighborAf& nbrAf = nbr->getAfNeighbor(family);
-            auto& nbrAfCfgs = nbrAf.getConfigs();
             auto& maxPfxField = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX>();
             if (maxPfxField.hasValue())
             {
@@ -423,7 +497,7 @@ private:
                 {
                     auto& restartField = nbrAfCfgs.get<Config::BgpNeighbor::MAXIMUM_PREFIX_RESTART>();
                     if (restartField.hasValue())
-                        nbrAf.scheduleRestart(restartField.load());
+                        nbrAf.schedulePfxRestart(restartField.load());
                     peer.session->postEvent(FsmEvent::MAX_PREFIX_REACHED);
                 }
             }
@@ -739,6 +813,8 @@ private:
 
             const uint32_t peerRid = session->getPeerRid();
             PerPeerOutTable<NlriT>& peerOut = adjRibOut[peerRid];
+            NeighborAf& afNbr = nbr.getAfNeighbor(family);
+            auto& nbrAfCfgs = afNbr.getConfigs();
 
             auto withdrawFromPeer = [&]() {
                 auto [begin, end] = peerOut.equal_range(nlri);
@@ -759,8 +835,7 @@ private:
             // MRAI: rate-limit announcements. Withdrawals always bypass.
             if (peerRid != mraiBypassPeer)
             {
-                uint16_t mraiSecs = nbr.getAfNeighbor(family).getConfigs()
-                    .get<Config::BgpNeighbor::ADVERTISE_INTERVAL>().load();
+                uint16_t mraiSecs = nbrAfCfgs.get<Config::BgpNeighbor::ADVERTISE_INTERVAL>().load();
                 if (mraiSecs > 0)
                 {
                     auto& ms = mraiState[peerRid];
@@ -773,6 +848,48 @@ private:
                         {
                             auto expiry = ms.lastSent + std::chrono::seconds(mraiSecs);
                             ms.timerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(expiry,
+                                [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
+                        }
+                        return;
+                    }
+                }
+
+                // Slow peer: defer if STATIC mode or TX buffer is backed up past detection threshold.
+                {
+                    auto& spModeField = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_MODE>();
+                    bool isStatic = spModeField.hasValue() && spModeField.load() == SlowPeerMode::STATIC;
+
+                    bool backlogged = false;
+                    if (!isStatic && afNbr.isSlowPeer)
+                    {
+                        auto* conn = session->getPrimaryConnection();
+                        backlogged = conn && conn->pendingTxBytes() > 0;
+                        if (!backlogged)
+                        {
+                            // Recover unless DYNAMIC_PERMANENT (check config live).
+                            auto& afMode = configs->get<Config::BgpAddressFamily::SLOW_PEER_MODE>();
+                            bool permanent = spModeField.hasValue()
+                                ? spModeField.load() == SlowPeerMode::DYNAMIC_PERMANENT
+                                : (afMode.hasValue() && afMode.load() == SlowPeerMode::DYNAMIC_PERMANENT);
+                            if (!permanent)
+                            {
+                                afNbr.isSlowPeer = false;
+                                afNbr.slowFirstSeen = {};
+                            }
+                        }
+                    }
+
+                    if (isStatic || backlogged)
+                    {
+                        auto& ms = mraiState[peerRid];
+                        ms.pending.insert(nlri);
+                        if (ms.timerId == 0)
+                        {
+                            auto& intervalField = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_DETECTION_THRESHOLD>();
+                            uint16_t interval = intervalField.hasValue() ? intervalField.load()
+                                : configs->get<Config::BgpAddressFamily::SLOW_PEER_DETECTION_THRESHOLD>().load();
+                            ms.timerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(
+                                std::chrono::steady_clock::now() + std::chrono::seconds(interval),
                                 [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
                         }
                         return;
@@ -810,8 +927,6 @@ private:
                 }
             }
 
-            NeighborAf& afNbr = nbr.getAfNeighbor(family);
-
             // ACTIVATE: only exchange routes when this AF is explicitly activated for the neighbor.
             if (!afNbr.getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
             {
@@ -826,9 +941,8 @@ private:
                 return;
             }
 
-            PeerGroup* pg = afNbr.getConfigs().getPeerGroup();
+            PeerGroup* pg = nbrAfCfgs.getPeerGroup();
             const bool addPathSend = negotiated.addPathSend(family);
-            auto& nbrAfCfgs = afNbr.getConfigs();
 
             // Collect all paths to advertise based on per-neighbor ADVERTISE configs.
             std::vector<InboundRoute<NlriT>*> paths;
@@ -967,6 +1081,37 @@ private:
                 mraiState[peerRid].lastSent = std::chrono::steady_clock::now();
                 mraiState[peerRid].pending.erase(nlri);
             }
+
+            // Slow peer detection (DYNAMIC / DYNAMIC_PERMANENT): update state from TX backlog.
+            if (!afNbr.isSlowPeer)
+            {
+                auto& detection = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_DETECTION>();
+                bool detectEnabled = detection.hasValue() ? detection.load()
+                    : configs->get<Config::BgpAddressFamily::SLOW_PEER_DETECTION>().load();
+
+                if (detectEnabled)
+                {
+                    auto* conn = session->getPrimaryConnection();
+                    auto now = std::chrono::steady_clock::now();
+                    if (conn && conn->pendingTxBytes() > 0)
+                    {
+                        if (afNbr.slowFirstSeen == std::chrono::steady_clock::time_point{})
+                            afNbr.slowFirstSeen = now;
+
+                        auto& threshField = nbrAfCfgs.get<Config::BgpNeighbor::SLOW_PEER_DETECTION_THRESHOLD>();
+                        uint16_t thresh = threshField.hasValue() ? threshField.load()
+                            : configs->get<Config::BgpAddressFamily::SLOW_PEER_DETECTION_THRESHOLD>().load();
+
+                        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - afNbr.slowFirstSeen);
+                        if (elapsed.count() >= thresh)
+                            afNbr.isSlowPeer = true;
+                    }
+                    else
+                    {
+                        afNbr.slowFirstSeen = {};
+                    }
+                }
+            }
         });
     }
 
@@ -1008,17 +1153,13 @@ private:
     }
 
 private:
-    struct MraiState
-    {
-        std::chrono::steady_clock::time_point lastSent{};
-        std::unordered_set<NlriT> pending;
-        uint32_t timerId = 0;
-    };
 
+    // Pre-policy Adj-RIB-In for soft-reconfiguration inbound.
+    PreAdjRibInTable<NlriT> preAdjRibIn;
     AdjRibInTable<NlriT>  adjRibIn;
     LocRibTable<NlriT>    locRib;
     AdjRibOutTable<NlriT> adjRibOut;
-    std::unordered_map<uint32_t, MraiState> mraiState;
+    MraiTable<NlriT> mraiState;
     uint32_t mraiBypassPeer = 0;
     std::unordered_set<uint32_t> defaultOriginatedPeers; // RIDs that have received the synthetic default
 
