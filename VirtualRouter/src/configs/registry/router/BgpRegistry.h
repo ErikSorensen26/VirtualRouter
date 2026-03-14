@@ -41,7 +41,7 @@ enum class BgpTransportBase
 
 CONFIG_DEFAULT_TABLE(BGP_TRANSPORT_BASE_DEFAULTS);
 
-using BgpBaseRegistry = SubRegistry<RegistryKey<20>, BgpTransportBase,
+using BgpBaseRegistry = SubRegistry<BgpTransportBase,
     AtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::KEEPALIVE_INTERVAL)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::HOLDTIME)>,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(BgpTransportBase::MINIMUM_HOLDTIME)>,
@@ -73,7 +73,7 @@ enum class BgpAfBase
 
 CONFIG_DEFAULT_TABLE(BGP_AF_BASE_DEFAULTS);
 
-using BgpAfBaseRegistry = SubRegistry<RegistryKey<20>, BgpAfBase,
+using BgpAfBaseRegistry = SubRegistry<BgpAfBase,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_RECEIVE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADDITIONAL_PATHS_SEND)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL)>,
@@ -169,7 +169,7 @@ CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_DEFAULTS);
 
 void BgpNeighborDefaultOriginate(void*);
 
-using BgpNeighborRegistry = SubRegistry<RegistryKey<16>, BgpNeighbor,
+using BgpNeighborRegistry = SubRegistry<BgpNeighbor,
     ReferenceContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpNeighbor::AF_BASE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ACTIVATE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP)>,
@@ -274,7 +274,7 @@ CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_SESSION_DEFAULTS);
 void BgpNeighborSessionShutdown(void*);
 void BgpNeighborSessionPathAttribute(void*);
 
-using BgpNeighborSessionRegistry = SubRegistry<RegistryKey<20>, BgpNeighborSession,
+using BgpNeighborSessionRegistry = SubRegistry<BgpNeighborSession,
     ReferenceContainer<BgpBaseRegistry CONFIG_INDEX_ARG(BgpNeighborSession::BGP_BASE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::DESCRIPTION)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::DISABLE_CONNECTION_CHECK)>,
@@ -413,7 +413,7 @@ CONFIG_DEFAULT_TABLE(BGP_ADDRESS_FAMILY_DEFAULTS);
 
 DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS)
 
-using BgpAddressFamilyRegistry = SubRegistry<RegistryKey<8>, BgpAddressFamily,
+using BgpAddressFamilyRegistry = SubRegistry<BgpAddressFamily,
     ReferenceContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpAddressFamily::AF_BASE)>,
     ValueField<std::vector<BgpAggregateAddress::Tuple> CONFIG_INDEX_ARG(BgpAddressFamily::AGGREGATE_ADDRESS)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_INSTALL)>,
@@ -541,7 +541,7 @@ enum class Bgp
 
 CONFIG_DEFAULT_TABLE(BGP_DEFAULTS);
 
-using BgpRegistry = SubRegistry<RegistryKey<4>, Bgp,
+using BgpRegistry = SubRegistry<Bgp,
     ReferenceContainer<BgpBaseRegistry CONFIG_INDEX_ARG(Bgp::BGP_BASE)>,
     OwnedListField<BgpAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(Bgp::ADDRESS_FAMILIES)>,
     AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ALWAYS_COMPARE_MED)>,

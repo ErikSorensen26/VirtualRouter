@@ -37,7 +37,7 @@ public:
     }
 
     template <typename T>
-    Reference<T> create(typename T::keyType key)
+    Reference<T> create(uint64_t key)
     {
         auto& b = bucket<T>();
         auto h = b.create(key);
@@ -45,7 +45,7 @@ public:
     }
 
     template <typename T>
-    Reference<T> create(typename T::keyType key, Reference<T>& parent)
+    Reference<T> create(uint64_t key, Reference<T>& parent)
     {
         auto& b = bucket<T>();
         auto h = b.create(key, parent.get());

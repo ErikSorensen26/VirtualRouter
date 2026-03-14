@@ -13,17 +13,12 @@
 #include <unordered_map>
 #include <utility>
 
-#include "RegistryKey.hpp"
-
 namespace Config
 {
 template <typename T>
 class Bucket
 {
-    static_assert(isRegistryKey<typename T::keyType>::value, "KEY must be a RegisterKey<T, N>");
 public:
-    using keyType = T::keyType;
-
     struct Handle
     {
         size_t index;
@@ -35,7 +30,6 @@ private:
     struct Slot
     {
         alignas(T) unsigned char storage[sizeof(T)];
-        keyType key{};
 
         uint32_t generation{0};
         uint32_t refCount{0};
@@ -64,12 +58,12 @@ private:
 
     std::deque<Slot> slots;
     std::vector<size_t> free;
-    std::unordered_map<keyType, Handle, RegistryKeyHash<keyType::size>> keyIndex;
+    std::unordered_map<uint64_t, Handle> keyIndex;
     uint64_t autoKeyCounter{0};
 
-    keyType makeAutoKey() noexcept
+    uint64_t makeAutoKey() noexcept
     {
-        return keyType{++autoKeyCounter};
+        return ++autoKeyCounter;
     }
 
     void trimTail()
@@ -102,7 +96,7 @@ public:
     Bucket& operator=(const Bucket&) = delete;
 
     template <typename... Args>
-    Handle create(keyType key, Args&&... args)
+    Handle create(uint64_t key, Args&&... args)
     {
         auto it = keyIndex.find(key);
         assert(it == keyIndex.end());
@@ -138,13 +132,13 @@ public:
         return create(makeAutoKey(), std::forward<Args>(args)...);
     }
 
-    keyType slotKey(const Handle& h) const noexcept
+    uint64_t slotKey(const Handle& h) const noexcept
     {
         assert(handleValid(h));
         return slots[h.index].key;
     }
 
-    bool find(keyType key, Handle& out) const noexcept
+    bool find(uint64_t key, Handle& out) const noexcept
     {
         auto it = keyIndex.find(key);
         if (it == keyIndex.end())
@@ -190,7 +184,7 @@ public:
 
             // Remove key mapping
             keyIndex.erase(s.key);
-            s.key = keyType{};
+            s.key = uint64_t{};
 
             free.push_back(h.index);
             trimTail();

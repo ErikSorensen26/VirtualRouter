@@ -9,7 +9,6 @@
 #include <mutex>
 #include <optional>
 
-#include "RegistryKey.hpp"
 #include "RegistryTypes.hpp"
 #include "RegistryDefaultTable.hpp"
 
@@ -18,11 +17,10 @@ namespace Config
 template <auto E>
 inline constexpr size_t toIndex = static_cast<size_t>(E);
 
-template <typename KEY, typename ENUM, typename... Fields>
+template <typename ENUM, typename... Fields>
 class SubRegistry
 {
 public:
-    using keyType = KEY;
     using type    = ENUM;
 
     // Meta tuple: used ONLY for compile-time checks / type indexing.
@@ -32,7 +30,6 @@ public:
     using StorageTuple = std::tuple<std::optional<Fields>...>;
 
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
-    static_assert(isRegistryKey<KEY>::value, "KEY must be a RegisterKey<T, N>");
 
 #if USE_CONFIG_INDEX
     static_assert(

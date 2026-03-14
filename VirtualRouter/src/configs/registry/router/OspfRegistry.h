@@ -33,7 +33,7 @@ enum class OspfVirtualLink
     COUNT
 };
 
-using OspfVirtualLinkRegistry = SubRegistry<RegistryKey<16>, OspfVirtualLink>;
+using OspfVirtualLinkRegistry = SubRegistry<OspfVirtualLink>;
 
 enum class OspfArea
 {
@@ -71,7 +71,7 @@ CONFIG_DEFAULT_TABLE(OSPF_AREA_DEFAULTS);
 void OspfAreaTypeChange(void* area);
 void OspfAreaSycnRanges(void* area);
 
-using OspfAreaRegistry = SubRegistry<RegistryKey<16>, OspfArea,
+using OspfAreaRegistry = SubRegistry<OspfArea,
     AtomicField<OSPF::AuthType CONFIG_INDEX_ARG(OspfArea::AUTHENTICATION_TYPE)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfArea::DEFAULT_COST)>,
     OptionalAtomicField<std::nullptr_t CONFIG_INDEX_ARG(OspfArea::FILTER_LIST)>, // TODO:
@@ -239,7 +239,7 @@ void OspfSyncNeighbors(void* base);
 void OspfSyncNetworks(void* base);
 void OspfSyncSummaries(void* base);
 
-using OspfRegistry = SubRegistry<RegistryKey<16>, Ospf,
+using OspfRegistry = SubRegistry<Ospf,
     OwnedListField<OspfAreaRegistry, uint32_t CONFIG_INDEX_ARG(Ospf::AREA_CONFIGS)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::REFERENCE_BANDWIDTH)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::BFD)>, // TODO:
@@ -342,7 +342,7 @@ enum class OspfAddressFamilyV3
     COUNT
 };
 
-using OspfAddressFamilyV3Registry = SubRegistry<RegistryKey<16>, OspfAddressFamilyV3,
+using OspfAddressFamilyV3Registry = SubRegistry<OspfAddressFamilyV3,
     ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::BASE)>,
     ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV4)>,
     ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV6)>
@@ -354,7 +354,7 @@ enum class OspfAddressFamilyV2
     COUNT
 };
 
-using OspfAddressFamilyV2Registry = SubRegistry<RegistryKey<16>, OspfAddressFamilyV2,
+using OspfAddressFamilyV2Registry = SubRegistry<OspfAddressFamilyV2,
     ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV2::BASE)>
 >;
 }

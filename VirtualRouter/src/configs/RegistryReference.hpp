@@ -12,8 +12,6 @@ template <typename T>
 class Reference
 {
 public:
-    using keyType = T::keyType;
-
     Reference(const Reference& other) noexcept
         : key(other.key),
           bucket(other.bucket),
@@ -40,7 +38,7 @@ public:
         bucket.releaseRef(handle);
     }
 
-    keyType getKey() const noexcept
+    uint64_t getKey() const noexcept
     {
         return key;
     }
@@ -66,7 +64,7 @@ public:
     }
 
 private:
-    Reference(Bucket<T>& b, T::keyType k, const typename Bucket<T>::Handle& h)
+    Reference(Bucket<T>& b, uint64_t k, const typename Bucket<T>::Handle& h)
         : key(k),
           bucket(b),
           handle(h),
@@ -75,7 +73,7 @@ private:
         bucket.addRef(handle);
     }
 
-    keyType key{};
+    uint64_t key{};
     Bucket<T>& bucket;
     typename Bucket<T>::Handle handle{};
     T& ref;

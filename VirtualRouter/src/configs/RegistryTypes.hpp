@@ -40,7 +40,7 @@ class RegistryDatabase;
 template <typename T>
 class Reference;
 
-template <typename KEY, typename ENUM, typename... Fields>
+template <typename ENUM, typename... Fields>
 class SubRegistry;
 
 using ApplyKey = uint64_t;
@@ -134,7 +134,7 @@ public:
     }
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(const AtomicField* parent) noexcept
@@ -201,7 +201,7 @@ public:
     }
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(const AtomicField* parent) noexcept
@@ -273,7 +273,7 @@ public:
     }
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(const OptionalAtomicField* parent) noexcept
@@ -340,7 +340,7 @@ public:
     }
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(const OptionalAtomicField* parent) noexcept
@@ -401,7 +401,7 @@ public:
     std::mutex& mu;
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(ValueField* parent)
@@ -482,7 +482,7 @@ public:
     std::mutex& mu;
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(ValueField* parent)
@@ -555,7 +555,7 @@ public:
     std::mutex& mu;
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(OptionalValueField* parent)
@@ -630,7 +630,7 @@ public:
     std::mutex& mu;
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
 
     void setMask(OptionalValueField* parent)
@@ -697,7 +697,7 @@ public:
     }
 
 private:
-    template <typename KEY, typename ENUM, typename... Fields>
+    template <typename ENUM, typename... Fields>
     friend class SubRegistry;
     template <typename...>
     friend class RegistryDatabase;
