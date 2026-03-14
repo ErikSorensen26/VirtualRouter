@@ -17,9 +17,11 @@ public:
     std::atomic<RibEntry<AddrType>*>* fibEntry = nullptr;
 
     RibBucket() noexcept
-        : fibEntry(new std::atomic<RibEntry<AddrType>*>) {}
+        : fibEntry(new std::atomic<RibEntry<AddrType>*>(nullptr)) {}
     ~RibBucket()
     {
+        RibEntry<AddrType>* val = fibEntry->exchange(nullptr, std::memory_order_acq_rel);
+        RCU::retire([val]{ delete val; });
         delete fibEntry;
     }
 
@@ -60,13 +62,13 @@ public:
     {
         RibEntry<AddrType>* best = nullptr;
 
-        for (const RibEntry<AddrType>& r : routes)
+        for (RibEntry<AddrType>& r : routes)
         {
             if (r.processId == pid)
             {
-                if (!best)
-                    best = &r;
-                else if (r.adminDistance < best->adminDistance || r.metric < best->metric)
+                if (!best ||
+                    r.adminDistance < best->adminDistance ||
+                    (r.adminDistance == best->adminDistance && r.metric < best->metric))
                     best = &r;
             }
         }
@@ -81,9 +83,9 @@ public:
         {
             if (r.source == src && r.processId == pid)
             {
-                if (!best)
-                    best = &r;
-                else if (r.adminDistance < best->adminDistance || r.metric < best->metric)
+                if (!best ||
+                    r.adminDistance < best->adminDistance ||
+                    (r.adminDistance == best->adminDistance && r.metric < best->metric))
                     best = &r;
             }
         }
@@ -94,23 +96,23 @@ public:
     {
         if (!fibEntry) return;
 
-        if (routes.empty())
+        RibEntry<AddrType>* newBest = nullptr;
+
+        if (!routes.empty())
         {
-            fibEntry->store(nullptr, std::memory_order_release);
-            return;
+            auto bestIt = std::min_element(routes.begin(), routes.end(),
+                [](const RibEntry<AddrType>& a, const RibEntry<AddrType>& b) {
+                    if (a.adminDistance != b.adminDistance)
+                        return a.adminDistance < b.adminDistance;
+                    return a.metric < b.metric;
+                });
+
+            if (bestIt != routes.end())
+                newBest = new RibEntry<AddrType>(*bestIt);
         }
 
-        auto bestIt = std::min_element(routes.begin(), routes.end(),
-            [](const RibEntry<AddrType>& a, const RibEntry<AddrType>& b) {
-                if (a.adminDistance != b.adminDistance)
-                    return a.adminDistance < b.adminDistance;
-                return a.metric < b.metric;
-            });
-
-        if (bestIt != routes.end())
-            fibEntry->store(&(*bestIt), std::memory_order_release);
-        else
-            fibEntry->store(nullptr, std::memory_order_release);
+        RibEntry<AddrType>* old = fibEntry->exchange(newBest, std::memory_order_acq_rel);
+        RCU::retire([old]{ delete old; });
     }
 
     bool empty() const noexcept
@@ -123,7 +125,10 @@ public:
     void clear()
     {
         if (fibEntry)
-            fibEntry->store(nullptr, std::memory_order_release);
+        {
+            RibEntry<AddrType>* old = fibEntry->exchange(nullptr, std::memory_order_acq_rel);
+            RCU::retire([old]{ delete old; });
+        }
         routes.clear();
     }
 };

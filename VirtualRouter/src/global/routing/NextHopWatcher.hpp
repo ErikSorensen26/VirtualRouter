@@ -234,7 +234,7 @@ private:
         if (r) forEachBucketInSubtree(r, fn);
     }
 
-    static void runAndDeleteCallbacks(Bucket* b) noexcept
+    void runAndDeleteCallbacks(Bucket* b) noexcept
     {
         CallbackNode* list = b->callbacks.exchange(nullptr, std::memory_order_acq_rel);
 
@@ -249,6 +249,11 @@ private:
             if (prev == Control::State::ACTIVE && list->fn)
                 list->fn(list->ctx);
 
+            {
+                std::lock_guard<std::mutex> lock(createMtx);
+                idMap.erase(list->control->id);
+            }
+            delete list->control;
             delete list;
             list = next;
         }
@@ -326,11 +331,21 @@ public:
     {
         for (auto& [_, b] : exactBuckets)
         {
-            deleteCallbackList(b->callbacks.exchange(nullptr, std::memory_order_acq_rel));
+            CallbackNode* list = b->callbacks.exchange(nullptr, std::memory_order_acq_rel);
+            while (list)
+            {
+                CallbackNode* next = list->next;
+                if (list->control->state.load(std::memory_order_relaxed) ==
+                        Control::State::CANCELED)
+                    delete list->control;
+                delete list;
+                list = next;
+            }
             delete b;
         }
         exactBuckets.clear();
 
+        // Free Controls for watches that are still active (bucket never fired).
         for (auto& [_, ctl] : idMap)
             delete ctl;
         idMap.clear();
@@ -408,23 +423,23 @@ public:
         if (id == 0)
             return false;
 
-        Control* ctl = nullptr;
+        std::lock_guard<std::mutex> lock(createMtx);
 
-        {
-            std::lock_guard<std::mutex> lock(createMtx);
+        auto it = idMap.find(id);
+        if (it == idMap.end())
+            return false;
 
-            auto it = idMap.find(id);
-            if (it == idMap.end())
-                return false;
-
-            ctl = it->second;
-        }
+        Control* ctl = it->second;
 
         typename Control::State expected = Control::State::ACTIVE;
-        return ctl->state.compare_exchange_strong(expected,
-                                                  Control::State::CANCELED,
-                                                  std::memory_order_acq_rel,
-                                                  std::memory_order_acquire);
+        bool ok = ctl->state.compare_exchange_strong(expected,
+                                                     Control::State::CANCELED,
+                                                     std::memory_order_acq_rel,
+                                                     std::memory_order_acquire);
+        if (ok)
+            idMap.erase(it);  // reclaim id; ctl freed by runAndDeleteCallbacks on bucket fire
+
+        return ok;
     }
 
     void announcePrefixRemoved(Addr prefix, uint8_t length) noexcept

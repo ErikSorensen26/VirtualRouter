@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <atomic>
 #include <mutex>
+#include <RadixTree.hpp>
 
 #include "routing/fib/Fib.hpp"
 #include "RibBucket.hpp"
@@ -68,15 +69,13 @@ public:
         std::lock_guard<std::mutex> lock(ribMtx);
         PrefixKey key{ mask(e.prefix, e.length), e.length };
 
-        RibBucket<AddrType>* b = nullptr;
-
         auto it = table.find(key);
         if (it == table.end())
         {
-            b = new RibBucket<AddrType>();
+            RibBucket<AddrType>* b = new RibBucket<AddrType>();
             b->addRoute(e);
-            fib.insert(e.prefix, e.length, b->fibEntry);
-            table[key] = b;
+            fib.insert(key.prefix, key.length, b->fibEntry);
+            table.emplace(key, b);
         }
         else
         {
@@ -92,7 +91,6 @@ public:
 
         auto it = table.find(key);
         if (it == table.end()) return false;
-        
 
         RibBucket<AddrType>* b = it->second;
         b->removeRoute(src, pid);
@@ -100,10 +98,9 @@ public:
         if (b->empty())
         {
             table.erase(it);
-            fib.erase(prefix, length);
-            nextHopWatcher.announcePrefixRemoved(prefix, length);
+            fib.erase(key.prefix, key.length);
+            nextHopWatcher.announcePrefixRemoved(key.prefix, key.length);
             RCU::retire([b]{ delete b; });
-            return true;
         }
 
         return true;
@@ -125,86 +122,21 @@ public:
 
         std::lock_guard<std::mutex> lock(ribMtx);
         for (auto& kv : table)
-        {
             delete kv.second;
-        }
 
         table.clear();
 
         nextHopWatcher.announceAllGone();
     }
 
-    RibEntry<AddrType>* lookup(const uint8_t* addr)
-    {
-        AddrType out = 0;
-        for (size_t i = 0; i < sizeof(AddrType); i++)
-            out = (out << 8) | addr[i];
-        return lookup(out);
-    }
-
-    RibEntry<AddrType>* lookup(AddrType addr)
+    RibEntry<AddrType>* lookup(const uint8_t* addr) const
     {
         return fib.lookup(addr);
     }
 
-    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId)
+    RibEntry<AddrType>* lookup(AddrType addr) const
     {
-        auto* n = fib.root.load(std::memory_order_acquire);
-        if (!n) return false;
-
-        RibEntry<AddrType>* best = nullptr;
-
-        std::lock_guard<std::mutex> lock(ribMtx);
-
-        while (n)
-        {
-            auto pit = table.find({n->prefix, n->length});
-            if (pit == table.end()) continue;
-
-            RibBucket<AddrType>& bucket = pit.second;
-
-            AddrType pfx = mask(a, n->length);
-            if (pfx == n->prefix)
-            {
-                auto* rt = bucket.getBestRoute(procId);
-                if (rt) best = rt;
-            }
-
-            bool dir = fib.bitAt(a, n->bit);
-            n = dir ? n->right.load(std::memory_order_acquire)
-                    : n->left.load(std::memory_order_acquire);
-        }
-        return best;
-    }
-
-    RibEntry<AddrType>* lookup(AddrType a, uint32_t procId, RouteSource source)
-    {
-        auto* n = fib.root.load(std::memory_order_acquire);
-        if (!n) return nullptr;
-
-        RibEntry<AddrType>* best = nullptr;
-
-        std::lock_guard<std::mutex> lock(ribMtx);
-
-        while (n)
-        {
-            auto pit = table.find({n->prefix, n->length});
-            if (pit == table.end()) continue;
-
-            RibBucket<AddrType>& bucket = *pit->second;
-
-            AddrType pfx = mask(a, n->length);
-            if (pfx == n->prefix)
-            {
-                auto* rt = bucket.getBestRoute(source, procId);
-                if (rt) best = rt;
-            }
-
-            bool dir = fib.bitAt(a, n->bit);
-            n = dir ? n->right.load(std::memory_order_acquire)
-                    : n->left.load(std::memory_order_acquire);
-        }
-        return best;
+        return fib.lookup(addr);
     }
 
     size_t size() const noexcept

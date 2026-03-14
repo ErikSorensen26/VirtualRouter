@@ -82,6 +82,7 @@ struct RibEntry
           processId(other.processId),
           adminDistance(other.adminDistance),
           metric(other.metric),
+          tag(other.tag),
           topInfo(other.topInfo),
           nextHopCount(other.nextHopCount)
     {
@@ -100,6 +101,7 @@ struct RibEntry
         processId = other.processId;
         adminDistance = other.adminDistance;
         metric = other.metric;
+        tag = other.tag;
         topInfo = other.topInfo;
 
         nextHopCount = other.nextHopCount;
