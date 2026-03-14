@@ -6,9 +6,7 @@
 #include <span>
 #include <cstdint>
 
-#include <vector>
 #include "bgp/BgpTypes.hpp"
-#include "bgp/features/Capabilities.h"
 #include "bgp/rib/RibTypes.hpp"
 #include "bgp/session/Session.h"
 

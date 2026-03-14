@@ -8,7 +8,6 @@
 #include <chrono>
 #include <limits>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <IPAddress.hpp>
 
@@ -156,14 +155,6 @@ private:
     AttributeManager* attrMgr = nullptr;
 };
 
-template <typename N>
-struct MraiState
-{
-    std::chrono::steady_clock::time_point lastSent{};
-    std::unordered_set<N> pending;
-    uint32_t timerId = 0;
-};
-
 struct SoftPreEntry
 {
     PathAttribute pa;
@@ -261,9 +252,6 @@ using AdjRibOutTable = std::unordered_map<uint32_t, PerPeerOutTable<N>>;
 
 template <typename N>
 using LocRibTable = std::unordered_map<N, LocalRoute<N>>; // TODO: upgrade to radix tree for better performance
-
-template <typename N>
-using MraiTable = std::unordered_map<uint32_t, MraiState<N>>;
 }
 
 #endif // BGP_RIB_TYPES_HPP

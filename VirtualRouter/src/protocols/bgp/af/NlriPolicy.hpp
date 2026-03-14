@@ -9,13 +9,6 @@ class VirtualRouter;
 
 namespace BGP
 {
-template<typename T, typename N>
-concept IsNlriCompatible = requires(const T obj, const N& cn, N& n, uint8_t* buf) {
-    { obj.nlriEncodedSize(cn) } -> std::same_as<std::size_t>;
-    { obj.encodeNlri(buf, cn) } -> std::same_as<void>;
-    { obj.decodeNlri(buf, n) } -> std::same_as<std::size_t>;
-};
-
 template <typename N, AfiSafi A>
 class NlriPolicy
 {

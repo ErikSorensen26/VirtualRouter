@@ -12,7 +12,7 @@
 class ExampleNlri : public BGP::NlriPolicy<IPPrefix, BGP::AfiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST}>
 {
 public:
-    ExampleNlri(VirtualRouter& vrf) : NlriPolicy<IPPrefix, BGP::AfiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST}>(vrf) {}
+    ExampleNlri(VirtualRouter& vrf) : BGP::NlriPolicy<IPPrefix, BGP::AfiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST}>(vrf) {}
 
     void installRoute(BGP::LocalRoute<IPPrefix>& nlri) override {}
     void withdrawRoute(const IPPrefix& nlri) override {}
@@ -42,25 +42,42 @@ public:
 
 namespace BGP
 {
-template <typename T>
-concept IsNlriPolicy =
-requires { typename T::Nlri; { T::afi };} &&
-std::derived_from<T, NlriPolicy<typename T::Nlri, T::afi>>;
-
 template <typename Variant>
-struct ValidateNlriVariant;
+struct VariantTypes;
 
 template <typename... Ts>
-struct ValidateNlriVariant<std::variant<Ts...>>
+struct VariantTypes<std::variant<Ts...>>
 {
-    static constexpr bool value = (IsNlriPolicy<Ts> && ...);
+    using Types = std::tuple<Ts...>;
 };
+
+template <typename T>
+consteval void validateNlriPolicy()
+{
+    static_assert(requires { typename T::Nlri; }, "NLRI policy must define 'using Nlri = ...'");
+    static_assert(requires { T::afi; }, "NLRI policy must define static member 'afi'");
+    
+    using N = typename T::Nlri;
+
+    static_assert(requires(const T& obj, const N& cn) { { obj.nlriEncodedSize(cn) } -> std::same_as<size_t>; },
+                  "Missing method size_t nlriEncodeSize(const N&)");
+    static_assert(requires(const T& obj, const N& cn, uint8_t* buf) { { obj.encodeNlri(buf, cn) } -> std::same_as<void>; },
+                  "Missing method: void encodeNlri(uint8_t*, const N&)");
+    static_assert(requires(const T& obj, const uint8_t* buf, N& n) { { obj.decodeNlri(buf, n) } -> std::same_as<size_t>; },
+                  "Missing method: size_t decodeNlri(uint8_t*, N&)");
+}
+
+template <typename... Ts>
+consteval void validateNlriVariant(std::variant<Ts...>*)
+{
+    (validateNlriPolicy<Ts>(), ...);
+}
 
 using Nlri = std::variant<
     ExampleNlri
 >;
 
-static_assert(ValidateNlriVariant<Nlri>::value, "All types in Nlri must publicly inherit from NlriPolicy");
+static_assert((validateNlriVariant((Nlri*)nullptr), true));
 }
 
 #endif // BGP_NLRI_HPP

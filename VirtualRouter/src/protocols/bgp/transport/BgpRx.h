@@ -9,7 +9,6 @@
 
 #include "bgp/BgpTypes.hpp"
 #include "bgp/session/Session.h"
-#include "bgp/features/Capabilities.h"
 #include "bgp/rib/RibTypes.hpp"
 
 struct BgpHeader;

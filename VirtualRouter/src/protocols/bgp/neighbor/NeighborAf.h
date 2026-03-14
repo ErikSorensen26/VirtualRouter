@@ -37,8 +37,6 @@ public:
     std::vector<OrfPrefixEntry> orfFilter;
     void updateOrfFilter(const std::vector<OrfPrefixEntry>& entries);
 
-    void sendDefaultOriginate();
-
     // ORF filter we advertise TO this peer — set from inbound prefix-list config.
     std::vector<OrfPrefixEntry> orfOutbound;
 

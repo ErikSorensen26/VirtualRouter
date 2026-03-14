@@ -4,11 +4,8 @@
 #define BGP_LOC_RIB_HPP
 
 #include <cstdint>
-#include <optional>
-#include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 
 namespace BGP
 {
@@ -16,7 +13,6 @@ template <class KeyT, class BestT = KeyT>
 class LocRib final
 {
 public:
-    using KeyType = KeyT;
     using BestType = BestT;
 
     struct Entry

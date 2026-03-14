@@ -11,7 +11,6 @@
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
 
-#include "Functions.h"
 #include "bgp/BgpTypes.hpp"
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"
@@ -21,6 +20,7 @@
 #include "bgp/neighbor/NeighborTable.h"
 #include "bgp/neighbor/NeighborAf.h"
 #include "bgp/attributes/AttributeManager.hpp"
+#include "bgp/features/Dampening.h"
 
 namespace BGP
 {
@@ -87,8 +87,7 @@ public:
         : process(proc),
           family(fam),
           policy(AddressFamilyInstanceHelper::getRoutingInstance(proc)),
-          igpMetricResolver([](const IPAddress&)
-              { return std::numeric_limits<uint64_t>::max(); }),
+          igpMetricResolver([](const IPAddress&) { return std::numeric_limits<uint64_t>::max(); }),
           configs([&proc, &fam]() {
               auto& bgpConfigs = AddressFamilyInstanceHelper::getConfigs(proc);
               auto& vrf = AddressFamilyInstanceHelper::getRoutingInstance(proc);
@@ -192,98 +191,6 @@ public:
 
         if (enhancedRR)
             session.sendRouteRefresh(family, RouteRefreshReason::Eorr);
-    }
-
-    void sendDefaultOriginate(Session& session)
-    {
-        if constexpr (!std::is_same_v<NlriT, IPPrefix>)
-            return;
-
-        Neighbor& nbr = session.getNeighbor();
-        NeighborAf& afNbr = nbr.getAfNeighbor(family);
-
-        if (!afNbr.getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
-            return;
-        if (!afNbr.getConfigs().get<Config::BgpNeighbor::DEFAULT_ORIGINATE>().load())
-            return;
-
-        // Build default NLRI: 0.0.0.0/0 or ::/0
-        NlriT defaultNlri{};
-        if constexpr (N::afi.afi == BGP_AFI_IPV6)
-            defaultNlri.af = ::AddressFamily::IPv6;
-        else
-            defaultNlri.af = ::AddressFamily::IPv4;
-
-        const bool isEbgp = session.isEbgp();
-        const uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
-        auto& sesCfgs = nbr.getConfigs();
-
-        PathAttribute pa{};
-        pa.attrs.origin = BGP_ORIGIN_IGP;
-
-        if (isEbgp)
-        {
-            AsPathSegment seg;
-            seg.segmentType = BGP_AS_SEQUENCE;
-
-            bool localAsEnabled = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load();
-            auto& localAsField  = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
-
-            if (!localAsEnabled || !localAsField.hasValue())
-            {
-                seg.asns.push_back(routerAs);
-            }
-            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
-            {
-                seg.asns.push_back(localAsField.load());
-            }
-            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
-            {
-                seg.asns.push_back(routerAs);
-            }
-            else
-            {
-                seg.asns.push_back(localAsField.load());
-                seg.asns.push_back(routerAs);
-            }
-
-            pa.attrs.asPath.push_back(std::move(seg));
-        }
-        else
-        {
-            pa.attrs.localPref = 100;
-        }
-
-        if (auto* conn = session.getPrimaryConnection())
-            pa.path.nextHop = conn->socketKey()->local.address;
-
-        BuildUpdate<NlriT> update;
-        typename BuildUpdate<NlriT>::Announcement ann;
-        ann.attrs = std::move(pa);
-        ann.nlri.push_back({defaultNlri, 0});
-        update.announcements.push_back(std::move(ann));
-        session.sendUpdate<N>(update);
-        defaultOriginatedPeers.insert(session.getPeerRid());
-    }
-
-    void withdrawDefaultOriginate(Session& session)
-    {
-        if constexpr (!std::is_same_v<NlriT, IPPrefix>)
-            return;
-
-        const uint32_t peerRid = session.getPeerRid();
-        if (!defaultOriginatedPeers.erase(peerRid))
-            return;
-
-        NlriT defaultNlri{};
-        if constexpr (N::afi.afi == BGP_AFI_IPV6)
-            defaultNlri.af = ::AddressFamily::IPv6;
-        else
-            defaultNlri.af = ::AddressFamily::IPv4;
-
-        BuildUpdate<NlriT> withdraw;
-        withdraw.withdrawn.push_back({defaultNlri, 0});
-        session.sendUpdate<N>(withdraw);
     }
 
     void softClearInbound(uint32_t peerRid)
@@ -605,6 +512,42 @@ private:
         auto lit = locRib.find(nlri);
         const bool had = (lit != locRib.end());
 
+        // BGP Route Dampening
+        if (configs->get<Config::BgpAddressFamily::BGP_DAMPENING>().load())
+        {
+            auto now    = std::chrono::steady_clock::now();
+            auto params = getDampenParams();
+            auto& state = dampenTable[nlri];
+
+            if (!best.has_value() && had)
+            {
+                // Prefix transitioning reachable → unreachable: penalise.
+                state.onWithdraw(params, now);
+                if (state.suppressed)
+                    startDampenReuseTimer();
+                // Fall through to normal withdrawal below.
+            }
+            else if (best.has_value() && !had)
+            {
+                if (state.pendingReuse)
+                {
+                    // Reuse timer un-suppressed this prefix; no additional penalty.
+                    state.pendingReuse = false;
+                }
+                else
+                {
+                    // Prefix transitioning unreachable → reachable: penalise re-announcement.
+                    bool suppress = state.onAnnounce(params, now);
+                    if (suppress)
+                    {
+                        startDampenReuseTimer();
+                        return; // hold suppressed: do not install into Loc-RIB
+                    }
+                }
+            }
+            // had && best: path-attribute change, not a reachability flap; no penalty.
+        }
+
         if (!best.has_value())
         {
             if (had)
@@ -612,7 +555,7 @@ private:
                 withdrawFromRib(nlri);
                 locRib.erase(lit);
                 recomputeAdjRibOut(nlri, nullptr);
-                if constexpr (std::is_same_v<NlriT, IPPrefix>)
+                if constexpr (isIpPrefix<NlriT>)
                     scheduleAggregateRecompute();
             }
             return;
@@ -629,7 +572,7 @@ private:
             installToRib(locRib.at(nlri));
 
         recomputeAdjRibOut(nlri, &locRib.at(nlri));
-        if constexpr (std::is_same_v<NlriT, IPPrefix>)
+        if constexpr (isIpPrefix<NlriT>)
             scheduleAggregateRecompute();
     }
 
@@ -792,6 +735,13 @@ private:
         return pa;
     }
 
+    struct MraiState
+    {
+        std::chrono::steady_clock::time_point lastSent{};
+        std::unordered_set<NlriT> pending;
+        uint32_t timerId = 0;
+    };
+
     // Called by the MRAI timer: bypasses the rate-limit check and recomputes for all deferred NLRIs.
     void drainMraiPending(uint32_t peerRid)
     {
@@ -939,27 +889,9 @@ private:
             }
 
             // Summary-only: suppress more-specifics covered by an active aggregate.
-            if constexpr (std::is_same_v<NlriT, IPPrefix>)
+            if constexpr (isIpPrefix<NlriT>)
             {
-                bool suppressed = false;
-                configs->get<Config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& aggCfgs) {
-                    for (const auto& aggCfg : aggCfgs)
-                    {
-                        if (!Config::BgpAggregateAddress::summaryOnly(aggCfg))
-                            continue;
-                        const NlriT& aggNlri = Config::BgpAggregateAddress::prefix(aggCfg);
-                        auto stateIt = aggregateStates.find(aggNlri);
-                        if (stateIt == aggregateStates.end() || !stateIt->second.active)
-                            continue;
-                        if (nlri.prefixLength > aggNlri.prefixLength &&
-                            Functions::compareNetworkWithIp(aggNlri.addr, nlri.addr, aggNlri.prefixLength, aggNlri.af))
-                        {
-                            suppressed = true;
-                            return;
-                        }
-                    }
-                });
-                if (suppressed)
+                if (aggregateSuppressed(nlri))
                 {
                     withdrawFromPeer();
                     return;
@@ -1142,11 +1074,169 @@ private:
         });
     }
 
+    uint64_t resolveIgpMetric(const IPAddress& nextHop) const
+    {
+        if (!igpMetricResolver)
+            return std::numeric_limits<uint64_t>::max();
+        return igpMetricResolver(nextHop);
+    }
+
+    bool passesOrfFilter(const NlriT& nlri, const std::vector<OrfPrefixEntry>& filter) const
+    {
+        if constexpr (std::is_same_v<NlriT, IPPrefix>)
+        {
+            for (const auto& e : filter)
+            {
+                if (e.action != BGP_ORF_ACTION_ADD) continue;
+
+                uint8_t minLen = e.minLen;
+                uint8_t maxLen = e.maxLen;
+                if (minLen == 0 && maxLen == 0)
+                    minLen = maxLen = e.prefix.prefixLength;
+
+                if (nlri.prefixLength < minLen || nlri.prefixLength > maxLen)
+                    continue;
+
+                // Check if nlri is a subnet of e.prefix
+                if (!e.prefix.contains(nlri))
+                    continue;
+
+                return e.match == BGP_ORF_MATCH_PERMIT;
+            }
+            return false; // implicit deny when filter is non-empty and nothing matched
+        }
+        else
+        {
+            return true; // ORF prefix-list not applicable for this NLRI type
+        }
+    }
+
     struct AggregateState
     {
         bool active = false;
         PathAttribute basePa;
     };
+
+    void sendDefaultOriginate(Session& session)
+    {
+        if constexpr (!isIpPrefix<NlriT>)
+            return;
+
+        Neighbor& nbr = session.getNeighbor();
+        NeighborAf& afNbr = nbr.getAfNeighbor(family);
+
+        if (!afNbr.getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
+            return;
+        if (!afNbr.getConfigs().get<Config::BgpNeighbor::DEFAULT_ORIGINATE>().load())
+            return;
+
+        NlriT defaultNlri{};
+        if constexpr (N::afi.afi == BGP_AFI_IPV6)
+            defaultNlri.af = ::AddressFamily::IPv6;
+        else
+            defaultNlri.af = ::AddressFamily::IPv4;
+
+        const bool isEbgp = session.isEbgp();
+        const uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+        auto& sesCfgs = nbr.getConfigs();
+
+        PathAttribute pa{};
+        pa.attrs.origin = BGP_ORIGIN_IGP;
+
+        if (isEbgp)
+        {
+            AsPathSegment seg;
+            seg.segmentType = BGP_AS_SEQUENCE;
+
+            bool localAsEnabled = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load();
+            auto& localAsField  = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
+
+            if (!localAsEnabled || !localAsField.hasValue())
+                seg.asns.push_back(routerAs);
+            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
+                seg.asns.push_back(localAsField.load());
+            else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
+                seg.asns.push_back(routerAs);
+            else
+            {
+                seg.asns.push_back(localAsField.load());
+                seg.asns.push_back(routerAs);
+            }
+
+            pa.attrs.asPath.push_back(std::move(seg));
+        }
+        else
+        {
+            pa.attrs.localPref = 100;
+        }
+
+        if (auto* conn = session.getPrimaryConnection())
+            pa.path.nextHop = conn->socketKey()->local.address;
+
+        BuildUpdate<NlriT> update;
+        typename BuildUpdate<NlriT>::Announcement ann;
+        ann.attrs = std::move(pa);
+        ann.nlri.push_back({defaultNlri, 0});
+        update.announcements.push_back(std::move(ann));
+        session.sendUpdate<N>(update);
+        defaultOriginatedPeers.insert(session.getPeerRid());
+    }
+
+    void withdrawDefaultOriginate(Session& session)
+    {
+        if constexpr (!isIpPrefix<NlriT>)
+            return;
+
+        const uint32_t peerRid = session.getPeerRid();
+        if (!defaultOriginatedPeers.erase(peerRid))
+            return;
+
+        NlriT defaultNlri{};
+        if constexpr (N::afi.afi == BGP_AFI_IPV6)
+            defaultNlri.af = ::AddressFamily::IPv6;
+        else
+            defaultNlri.af = ::AddressFamily::IPv4;
+
+        BuildUpdate<NlriT> withdraw;
+        withdraw.withdrawn.push_back({defaultNlri, 0});
+        session.sendUpdate<N>(withdraw);
+    }
+
+    void sendActiveAggregatesToPeer(Session& session)
+    {
+        if constexpr (!isIpPrefix<NlriT>)
+            return;
+        if (!session.getNegotiated().activeFamilies.count(family))
+            return;
+        if (!session.getNeighbor().getAfNeighbor(family).getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
+            return;
+
+        for (auto& [aggNlri, state] : aggregateStates)
+            if (state.active)
+                sendAggregateToPeer(aggNlri, state, session);
+    }
+
+    bool aggregateSuppressed(const NlriT& nlri)
+    {
+        bool suppressed = false;
+        configs->get<Config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& aggCfgs) {
+            for (const auto& aggCfg : aggCfgs)
+            {
+                if (!Config::BgpAggregateAddress::summaryOnly(aggCfg))
+                    continue;
+                const NlriT& aggNlri = Config::BgpAggregateAddress::prefix(aggCfg);
+                auto stateIt = aggregateStates.find(aggNlri);
+                if (stateIt == aggregateStates.end() || !stateIt->second.active)
+                    continue;
+                if (nlri.prefixLength > aggNlri.prefixLength && aggNlri.contains(nlri))
+                {
+                    suppressed = true;
+                    return;
+                }
+            }
+        });
+        return suppressed;
+    }
 
     void scheduleAggregateRecompute()
     {
@@ -1160,7 +1250,7 @@ private:
 
     void recomputeAllAggregates()
     {
-        if constexpr (!std::is_same_v<NlriT, IPPrefix>)
+        if constexpr (!isIpPrefix<NlriT>)
             return;
 
         std::vector<Config::BgpAggregateAddress::Tuple> cfgs;
@@ -1192,13 +1282,12 @@ private:
         const NlriT aggNlri = Config::BgpAggregateAddress::prefix(cfg);
         const bool buildAsSet = Config::BgpAggregateAddress::asConfedSet(cfg);
 
-        // Find contributing routes: locRib entries that are more-specific subnets.
         std::vector<const InboundRoute<NlriT>*> contributors;
         for (const auto& [nlri, route] : locRib)
         {
             if (nlri.prefixLength <= aggNlri.prefixLength)
                 continue;
-            if (!Functions::compareNetworkWithIp(aggNlri.addr, nlri.addr, aggNlri.prefixLength, aggNlri.af))
+            if (!aggNlri.contains(nlri))
                 continue;
             contributors.push_back(&route.in);
         }
@@ -1218,7 +1307,6 @@ private:
         PathAttribute pa{};
         pa.path.family = family;
 
-        // Origin: worst (most incomplete) across contributors.
         uint8_t worstOrigin = BGP_ORIGIN_IGP;
         for (auto* r : contributors)
         {
@@ -1254,7 +1342,6 @@ private:
             pa.attrs.atomicAggregate = true;
         }
 
-        // AGGREGATOR: {localAS, routerID as IPv4}.
         {
             Aggregator agg;
             agg.asn = AddressFamilyInstanceHelper::getAsNum(process);
@@ -1267,7 +1354,6 @@ private:
         state.active = true;
     }
 
-    // Apply egress transformations to a synthetic aggregate PathAttribute.
     void applyAggregateEgressPolicy(PathAttribute& pa, const Session& session)
     {
         auto& sesCfgs = session.getNeighbor().getConfigs();
@@ -1306,13 +1392,9 @@ private:
             Session* session = nbr.session;
             if (!session || !session->established())
                 return;
-
-            const auto& negotiated = session->getNegotiated();
-            if (!negotiated.activeFamilies.count(family))
+            if (!session->getNegotiated().activeFamilies.count(family))
                 return;
-
-            NeighborAf& afNbr = nbr.getAfNeighbor(family);
-            if (!afNbr.getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
+            if (!nbr.getAfNeighbor(family).getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
                 return;
 
             sendAggregateToPeer(aggNlri, state, *session);
@@ -1332,20 +1414,6 @@ private:
         session.sendUpdate<N>(update);
     }
 
-    void sendActiveAggregatesToPeer(Session& session)
-    {
-        if constexpr (!std::is_same_v<NlriT, IPPrefix>)
-            return;
-        if (!session.getNegotiated().activeFamilies.count(family))
-            return;
-        if (!session.getNeighbor().getAfNeighbor(family).getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
-            return;
-
-        for (auto& [aggNlri, state] : aggregateStates)
-            if (state.active)
-                sendAggregateToPeer(aggNlri, state, session);
-    }
-
     void withdrawAggregate(const NlriT& aggNlri)
     {
         AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
@@ -1361,41 +1429,58 @@ private:
         });
     }
 
-    uint64_t resolveIgpMetric(const IPAddress& nextHop) const
+    DampenParams getDampenParams() const
     {
-        if (!igpMetricResolver)
-            return std::numeric_limits<uint64_t>::max();
-        return igpMetricResolver(nextHop);
+        DampenParams p;
+        p.halfLifeSecs    = configs->get<Config::BgpAddressFamily::BGP_DAMPENING_HALF_LIFE>().load() * 60.0;
+        p.reuse           = configs->get<Config::BgpAddressFamily::BGP_DAMPENING_REUSE_THRESHOLD>().load();
+        p.suppress        = configs->get<Config::BgpAddressFamily::BGP_DAMPENING_SUPPRESS_THRESHOLD>().load();
+        p.maxSuppressSecs = configs->get<Config::BgpAddressFamily::BGP_DAMPENING_MAXIMUM_SUPPRESS_TIME>().load() * 60.0;
+        p.ceiling         = p.suppress * std::pow(2.0, p.maxSuppressSecs / p.halfLifeSecs);
+        return p;
     }
 
-    bool passesOrfFilter(const NlriT& nlri, const std::vector<OrfPrefixEntry>& filter) const
+    void startDampenReuseTimer()
     {
-        if constexpr (std::is_same_v<NlriT, IPPrefix>)
+        if (dampenReuseTimerId_ != 0)
+            return;
+        dampenReuseTimerId_ = AddressFamilyInstanceHelper::getScheduler(process).postAfter(
+            std::chrono::steady_clock::now() + std::chrono::seconds(5),
+            [this](uint32_t) { dampenReuseTimerId_ = 0; onDampenReuseTimer(); });
+    }
+
+    void onDampenReuseTimer()
+    {
+        auto params = getDampenParams();
+        auto now    = std::chrono::steady_clock::now();
+
+        bool anySuppressed = false;
+        std::vector<NlriT> toReuse;
+
+        for (auto it = dampenTable.begin(); it != dampenTable.end(); )
         {
-            for (const auto& e : filter)
+            auto& [nlri, state] = *it;
+
+            if (state.checkReuse(params, now))
             {
-                if (e.action != BGP_ORF_ACTION_ADD) continue;
-
-                uint8_t minLen = e.minLen;
-                uint8_t maxLen = e.maxLen;
-                if (minLen == 0 && maxLen == 0)
-                    minLen = maxLen = e.prefix.prefixLength;
-
-                if (nlri.prefixLength < minLen || nlri.prefixLength > maxLen)
-                    continue;
-
-                // Check if nlri is a subnet of e.prefix
-                if (!Functions::compareNetworkWithIp(e.prefix.addr, nlri.addr, e.prefix.prefixLength, e.prefix.af))
-                    continue;
-
-                return e.match == BGP_ORF_MATCH_PERMIT;
+                state.pendingReuse = true;
+                toReuse.push_back(nlri);
             }
-            return false; // implicit deny when filter is non-empty and nothing matched
+
+            if (state.suppressed)
+                anySuppressed = true;
+
+            if (state.isStale())
+                it = dampenTable.erase(it);
+            else
+                ++it;
         }
-        else
-        {
-            return true; // ORF prefix-list not applicable for this NLRI type
-        }
+
+        for (const NlriT& nlri : toReuse)
+            recomputeNlri(nlri);
+
+        if (anySuppressed)
+            startDampenReuseTimer();
     }
 
 private:
@@ -1405,16 +1490,19 @@ private:
     AdjRibInTable<NlriT>  adjRibIn;
     LocRibTable<NlriT>    locRib;
     AdjRibOutTable<NlriT> adjRibOut;
-    MraiTable<NlriT> mraiState;
+
+    std::unordered_map<uint32_t, MraiState> mraiState;
     uint32_t mraiBypassPeer = 0;
-    std::unordered_set<uint32_t> defaultOriginatedPeers; // RIDs that have received the synthetic default
+
+    std::unordered_map<NlriT, DampenState> dampenTable;
+    uint32_t dampenReuseTimerId_ = 0;
+
+    std::unordered_set<uint32_t> defaultOriginatedPeers;
     std::unordered_map<NlriT, AggregateState> aggregateStates;
     uint32_t aggregateTimerId = 0;
 
     N policy;
-
     IgpMetricResolver igpMetricResolver;
-
     BgpProcess& process;
     AfiSafi family;
 
