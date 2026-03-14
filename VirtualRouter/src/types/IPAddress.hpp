@@ -99,9 +99,7 @@ constexpr uint32_t v4Mask(uint8_t len)
 
 constexpr __uint128_t v6Mask(uint8_t len)
 {
-    if (len == 0)
-        return 0;
-
+    if (len == 0) return 0;
     return (__uint128_t(-1)) << (128 - len);
 }
 
@@ -197,39 +195,42 @@ struct alignas(16) IPPrefix
         }
     }
 
-    bool contains(const IPAddress& addr) const
+    bool contains(const IPAddress& other) const
     {
-        if (addr.isV6 && af != AddressFamily::IPv6)
-            return false;
+        if (other.isV6 && af != AddressFamily::IPv6) return false;
 
-        if (addr.isV6)
+        size_t fullBytes = prefixLength / 8;
+        uint8_t remainingBits = prefixLength % 8;
+
+        if (std::memcmp(addr, other.raw, fullBytes) != 0) return false;
+
+        if (remainingBits != 0)
         {
-            __uint128_t mask = v6Mask(prefixLength);
-            return (addr.v6 && mask) == (v6 & mask);
+            uint8_t mask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
+            if ((addr[fullBytes] & mask) != (other.raw[fullBytes] & mask)) return false;
         }
-        else
-        {
-            uint32_t mask = v4Mask(prefixLength);
-            return (addr.v4 & mask) == (v4 & mask);
-        }
+        return true;
     }
 
-    bool contains(const IPPrefix& addr) const
+    bool contains(const IPPrefix& other) const
     {
-        if (addr.af != af)
-            return false;
+        if (other.af != af) return false;
 
-        if (addr.af == AddressFamily::IPv6)
+        size_t fullBytes = prefixLength / 8;
+        uint8_t remainingBits = prefixLength % 8;
+
+        if (std::memcmp(addr, other.addr, fullBytes) != 0) return false;
+
+        if (remainingBits != 0)
         {
-            __uint128_t mask = v6Mask(prefixLength);
-            return (addr.v6 && mask) == (v6 & mask);
+            uint8_t mask = static_cast<uint8_t>(0xFF << (8 - remainingBits));
+            if ((addr[fullBytes] & mask) != (other.addr[fullBytes] & mask)) return false;
         }
-        else
-        {
-            uint32_t mask = v4Mask(prefixLength);
-            return (addr.v4 & mask) == (v4 & mask);
-        }
+        return true;
     }
+
+    bool contains(const IPv4Prefix& other) const;
+    bool contains(const IPv6Prefix& other) const;
 };
 
 inline IPAddress::IPAddress(const IPPrefix& prefix)
@@ -280,6 +281,26 @@ struct alignas(16) IPv4Prefix
 
         addr &= (~0u << (32 - newPrefixLen));
     }
+
+    bool contains(const IPv4Prefix& other) const
+    {
+        uint32_t mask = v4Mask(prefixLength);
+        return (addr & mask) == (other.addr & mask);
+    }
+
+    bool contains(const IPPrefix& other) const
+    {
+        if (other.af != AddressFamily::IPv4) return false;
+        uint32_t addrv4 = readU32(other.addr);
+        uint32_t mask = v4Mask(prefixLength);
+        return (addrv4 & mask) == (addr & mask);
+    }
+
+    bool contains(uint32_t ip) const
+    {
+        uint32_t mask = v4Mask(prefixLength);
+        return (ip & mask) == (addr & mask);
+    }
 };
 
 struct IPv6Prefix
@@ -313,8 +334,27 @@ struct IPv6Prefix
 
         addr &= (~(__uint128_t)0u << (128 - newPrefixLen));
     }
-};
 
+    bool contains(const IPv6Prefix& other) const
+    {
+        __uint128_t mask = v6Mask(prefixLength);
+        return (addr & mask) == (other.addr & mask);
+    }
+
+    bool contains(const IPPrefix& other) const
+    {
+        if (other.af != AddressFamily::IPv6) return false;
+        __uint128_t addrv6 = readU128(other.addr);
+        __uint128_t mask = v6Mask(prefixLength);
+        return (addrv6 & mask) == (addr & mask);
+    }
+
+    bool contains(__uint128_t ip) const
+    {
+        __uint128_t mask = v6Mask(prefixLength);
+        return (addr & mask) == (ip & mask);
+    }
+};
 
 inline IPPrefix::IPPrefix(const IPv4Prefix& prefix, bool maintainAddress)
     : af(AddressFamily::IPv4)
@@ -335,6 +375,35 @@ inline IPPrefix::IPPrefix(const IPv6Prefix& prefix, bool maintainAddress)
     else
         addPrefixLen(prefix.prefixLength);
 }
+
+inline bool IPPrefix::contains(const IPv4Prefix& other) const
+{
+    if (af != AddressFamily::IPv4) return false;
+    uint32_t addrv4 = readU32(addr);
+    uint32_t mask = v4Mask(prefixLength);
+    return (addrv4 & mask) == (other.addr & mask);
+}
+
+inline bool IPPrefix::contains(const IPv6Prefix& other) const
+{
+    if (af != AddressFamily::IPv6) return false;
+    __uint128_t addrv6 = readU128(addr);
+    __uint128_t mask = v6Mask(prefixLength);
+    return (addrv6 & mask) == (other.addr & mask);
+}
+
+template <typename T>
+struct IsIpPrefix : std::false_type {};
+
+template <>
+struct IsIpPrefix<IPPrefix> : std::true_type {};
+template <>
+struct IsIpPrefix<IPv6Prefix> : std::true_type {};
+template <>
+struct IsIpPrefix<IPv4Prefix> : std::true_type {};
+
+template <typename T>
+inline constexpr bool isIpPrefix = IsIpPrefix<T>::value;
 
 namespace std {
 

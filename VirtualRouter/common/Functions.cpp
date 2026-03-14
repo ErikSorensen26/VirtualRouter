@@ -175,26 +175,6 @@ std::string Functions::byteAddressToNumAddress(const uint8_t* ip) {
     return address.str();
 }
 
-bool Functions::compareNetworkWithIp(const uint8_t* networkAddress, const uint8_t* ipAddress, uint8_t mask, AddressFamily af)
-{
-    size_t maxLen = (af == AddressFamily::IPv4) ? 4 : 16;
-    if (mask > maxLen * 8) mask = maxLen * 8;
-    size_t fullBytes = mask / 8;
-    uint8_t remainingBits = mask % 8;
-    for (size_t i = 0; i < fullBytes; ++i)
-    {
-        if (networkAddress[i] != ipAddress[i])
-            return false;
-    }
-    if (remainingBits != 0)
-    {
-        uint8_t maskByte = static_cast<uint8_t>(0xFF << (8 - remainingBits));
-        if ((networkAddress[fullBytes] & maskByte) != (ipAddress[fullBytes] & maskByte))
-            return false;
-    }
-    return true;
-}
-
 size_t Functions::compactNetworkAddress(uint8_t* data, const uint8_t* network, uint8_t prefix, AddressFamily af)
 {
     size_t maxLen = (af == AddressFamily::IPv4) ? 4 : 16;

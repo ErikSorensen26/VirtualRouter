@@ -56,15 +56,6 @@ namespace Functions {
     std::string byteAddressToNumAddress(const uint8_t* ip);
 
     /**
-     * @brief Compares a network address with an IP address to check if they match.
-     * @param networkAddress The network address.
-     * @param ipAddress The IP address.
-     * @param mask The subnet mask in bits.
-     * @return True if they match, false otherwise.
-     */
-    bool compareNetworkWithIp(const uint8_t* networkAddress, const uint8_t* ipAddress, uint8_t mask, AddressFamily af);
-
-    /**
      * @brief Trims the network address based on the subnet mask, removing zeroed sections.
      * @param network The network address.
      * @param mask The subnet mask in bits.
