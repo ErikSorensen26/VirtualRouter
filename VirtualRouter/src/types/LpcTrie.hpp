@@ -315,6 +315,13 @@ public:
         }
     };
 
+    template <typename F>
+    void forEach(F&& fn) const noexcept
+    {
+        Node* r = root_.load(std::memory_order_acquire);
+        if (r) forEachNode(r, std::forward<F>(fn));
+    }
+
     T* lookup(const uint8_t* addr) const noexcept
     {
         Node* n    = root_.load(std::memory_order_acquire);
@@ -452,6 +459,27 @@ public:
     }
 
 private:
+    template <typename F>
+    static void forEachNode(Node* n, F&& fn) noexcept
+    {
+        const PrefixEntry* pb = n->prefixBegin();
+        const PrefixEntry* pe = n->prefixEnd();
+        for (const PrefixEntry* p = pb; p != pe; ++p)
+            fn(p->prefix, p->len, p->ptr);
+
+        if (!n->dense)
+        {
+            for (uint8_t i = 0; i < n->nChildren; ++i)
+                forEachNode(n->cs.sparse.slots[i].child, fn);
+        }
+        else
+        {
+            uint8_t count = static_cast<uint8_t>(__builtin_popcountll(n->cs.dense.bitmap));
+            for (uint8_t i = 0; i < count; ++i)
+                forEachNode(n->cs.dense.children[i], fn);
+        }
+    }
+
     static bool bitsMatch(const uint8_t* addr, const uint8_t* ref,
                           uint16_t off, uint8_t count) noexcept
     {

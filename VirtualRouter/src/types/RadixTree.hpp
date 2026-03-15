@@ -51,6 +51,12 @@ public:
         Node& operator=(const Node&) = delete;
     };
 
+    template <typename F>
+    void forEach(F&& fn) const noexcept
+    {
+        forEachNode(root.load(std::memory_order_acquire), std::forward<F>(fn));
+    }
+
     const T* lookup(const uint8_t* addr) const noexcept
     {
         Node*    n    = root.load(std::memory_order_acquire);
@@ -157,6 +163,15 @@ public:
     }
 
 private:
+    template <typename F>
+    static void forEachNode(Node* n, F&& fn) noexcept
+    {
+        if (!n) return;
+        fn(n->prefix, n->length, n->value);
+        forEachNode(n->left.load(std::memory_order_acquire), fn);
+        forEachNode(n->right.load(std::memory_order_acquire), fn);
+    }
+
     static bool prefixCovers(const uint8_t* addr,
                               const uint8_t* prefix,
                               uint8_t        len) noexcept
