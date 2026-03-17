@@ -105,6 +105,13 @@ public:
     AddressFamilyInstance(AddressFamilyInstance&&) = delete;
     AddressFamilyInstance& operator=(AddressFamilyInstance&&) = delete;
 
+    ~AddressFamilyInstance()
+    {
+        if (nhtTimerId != 0)
+            AddressFamilyInstanceHelper::getScheduler(process).cancel(nhtTimerId);
+        clearNhtWatches();
+    }
+
     const AfiSafi& getFamily() const noexcept { return family; }
 
     void setIgpMetricResolver(IgpMetricResolver resolver)
@@ -579,10 +586,14 @@ private:
     void installToRib(LocalRoute<NlriT>& route)
     {
         policy.installRoute(route);
+        auto pa = route.in.getPathAttributes();
+        if (pa.has_value())
+            registerNht(route.in.nlri, pa->path.nextHop);
     }
 
     void withdrawFromRib(const NlriT& nlri)
     {
+        unregisterNht(nlri);
         policy.withdrawRoute(nlri);
     }
 
@@ -1127,7 +1138,7 @@ private:
 
         if (!afNbr.getConfigs().get<Config::BgpNeighbor::ACTIVATE>().load())
             return;
-        if (!afNbr.getConfigs().get<Config::BgpNeighbor::DEFAULT_ORIGINATE>().load())
+        if (!afNbr.getConfigs().get<Config::BgpAfBase::DEFAULT_ORIGINATE>().load())
             return;
 
         NlriT defaultNlri{};
@@ -1483,6 +1494,128 @@ private:
             startDampenReuseTimer();
     }
 
+    struct NhtCtx
+    {
+        AddressFamilyInstance* self;
+        IPAddress              nextHop;
+        ProcessQueueRef        bgpSched;
+    };
+
+    struct NhtEntry
+    {
+        uint32_t                  watchId   = 0;
+        bool                      isV6      = false;
+        bool                      reachable = true;
+        std::unordered_set<NlriT> nlris;
+        NhtCtx                    ctx;
+    };
+
+    template <typename Addr>
+    static bool nhtCallback(RouteWatcher<Addr>::CallbackCtx& cctx)
+    {
+        auto* ntx     = static_cast<NhtCtx*>(cctx.ctx);
+        bool  reach   = (cctx.newBest != nullptr);
+        IPAddress nh  = ntx->nextHop;
+        ntx->bgpSched.post([self = ntx->self, nh, reach]() {
+            self->onNhtChange(nh, reach);
+        });
+        return false;
+    }
+
+    void registerNht(const NlriT& nlri, const IPAddress& nh)
+    {
+        if (!configs->get<Config::BgpAddressFamily::BGP_NEXT_HOP_TRACKING>().load())
+            return;
+
+        auto& rt = AddressFamilyInstanceHelper::getRoutingInstance(process).getRib();
+
+        auto [it, inserted] = nhtTable.emplace(nh, NhtEntry{});
+        NhtEntry& entry = it->second;
+        entry.nlris.insert(nlri);
+
+        if (inserted)
+        {
+            entry.isV6 = nh.isV6;
+            entry.ctx  = NhtCtx{this, nh, AddressFamilyInstanceHelper::getScheduler(process)};
+            if (nh.isV6)
+                entry.watchId = rt.watchAddress(nh.v6, &entry.ctx, nhtCallback<__uint128_t>);
+            else
+                entry.watchId = rt.watchAddress(nh.v4, &entry.ctx, nhtCallback<uint32_t>);
+        }
+
+        nlriToNextHop[nlri] = nh;
+    }
+
+    void unregisterNht(const NlriT& nlri)
+    {
+        auto nhIt = nlriToNextHop.find(nlri);
+        if (nhIt == nlriToNextHop.end()) return;
+
+        IPAddress nh = nhIt->second;
+        nlriToNextHop.erase(nhIt);
+
+        auto entIt = nhtTable.find(nh);
+        if (entIt == nhtTable.end()) return;
+
+        NhtEntry& entry = entIt->second;
+        entry.nlris.erase(nlri);
+
+        if (entry.nlris.empty())
+        {
+            if (entry.watchId)
+            {
+                auto& rt = AddressFamilyInstanceHelper::getRoutingInstance(process).getRib();
+                rt.unwatchAddress(entry.watchId, entry.isV6);
+            }
+            nhtTable.erase(entIt);
+        }
+    }
+
+    void clearNhtWatches()
+    {
+        if (nhtTable.empty()) return;
+        auto& rt = AddressFamilyInstanceHelper::getRoutingInstance(process).getRib();
+        for (auto& [nh, entry] : nhtTable)
+            if (entry.watchId)
+                rt.unwatchAddress(entry.watchId, entry.isV6);
+        nhtTable.clear();
+        nlriToNextHop.clear();
+    }
+
+    void onNhtChange(const IPAddress& nh, bool reachable)
+    {
+        auto it = nhtTable.find(nh);
+        if (it == nhtTable.end()) return;
+
+        NhtEntry& entry = it->second;
+        if (entry.reachable == reachable) return;
+        entry.reachable = reachable;
+
+        for (const NlriT& nlri : entry.nlris)
+            pendingNhtRecompute.insert(nlri);
+
+        scheduleNhtRecompute();
+    }
+
+    void scheduleNhtRecompute()
+    {
+        if (nhtTimerId != 0) return;
+
+        auto& delayField = configs->get<Config::BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY>();
+        uint16_t delaySecs = delayField.hasValue() ? delayField.load() : 5;
+
+        nhtTimerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(
+            std::chrono::steady_clock::now() + std::chrono::seconds(delaySecs),
+            [this](uint32_t) { nhtTimerId = 0; processNhtPending(); });
+    }
+
+    void processNhtPending()
+    {
+        std::unordered_set<NlriT> pending = std::move(pendingNhtRecompute);
+        for (const NlriT& nlri : pending)
+            recomputeNlri(nlri);
+    }
+
 private:
 
     // Pre-policy Adj-RIB-In for soft-reconfiguration inbound.
@@ -1500,6 +1633,11 @@ private:
     std::unordered_set<uint32_t> defaultOriginatedPeers;
     std::unordered_map<NlriT, AggregateState> aggregateStates;
     uint32_t aggregateTimerId = 0;
+
+    std::unordered_map<IPAddress, NhtEntry>  nhtTable;
+    std::unordered_map<NlriT,    IPAddress>  nlriToNextHop;
+    std::unordered_set<NlriT>                pendingNhtRecompute;
+    uint32_t                                 nhtTimerId = 0;
 
     N policy;
     IgpMetricResolver igpMetricResolver;
