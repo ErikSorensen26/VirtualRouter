@@ -1,8 +1,10 @@
 // Fib.hpp
-#pragma once
+
+#ifndef FIB_HPP
+#define FIB_HPP
+
 #include <atomic>
 #include <cstdint>
-#include <type_traits>
 #include <LpcTrie.hpp>
 
 #include "routing/rib/RibEntry.hpp"
@@ -65,3 +67,5 @@ private:
 
     LPCTrie<sizeof(Addr), FibEntry, 8, true> tree;
 };
+
+#endif // FIB_HPP

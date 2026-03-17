@@ -8,7 +8,7 @@
 #include "ospf/OspfProcess.h"
 
 VirtualRouter::VirtualRouter(Global& global, const std::string& name)
-    : defaulted(name == "default"), tcpManager(*this), global(global)
+    : defaulted(name == "default"), tcpManager(*this), routingTable(global.scheduler), global(global)
 {
     instanceName = name;
     enabledAddressFamilies.insert(AddressFamily::IPv4);

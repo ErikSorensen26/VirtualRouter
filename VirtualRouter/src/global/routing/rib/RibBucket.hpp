@@ -3,9 +3,11 @@
 #ifndef RIB_BUCKET_HPP
 #define RIB_BUCKET_HPP
 
-#include <vector>
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <vector>
+
 #include "RibEntry.hpp"
 #include <RCU.hpp>
 
@@ -14,17 +16,21 @@ class RibBucket
 {
 public:
     std::vector<RibEntry<AddrType>> routes;
-    std::atomic<RibEntry<AddrType>*>* fibEntry = nullptr;
 
-    RibBucket() noexcept
-        : fibEntry(new std::atomic<RibEntry<AddrType>*>(nullptr)) {}
+    RibEntry<AddrType>* bestEntry = nullptr;
+    RibEntry<AddrType>* prevBest  = nullptr;
+
+    std::atomic<RibEntry<AddrType>*> fibEntry{nullptr};
+
+    RibBucket() noexcept = default;
+
     ~RibBucket()
     {
-        RibEntry<AddrType>* val = fibEntry->exchange(nullptr, std::memory_order_acq_rel);
-        RCU::retire([val]{ delete val; });
-        delete fibEntry;
+        RibEntry<AddrType>* val = fibEntry.exchange(nullptr, std::memory_order_acq_rel);
+        if (val) RCU::retire([val]{ delete val; });
     }
 
+    // Returns true if the bucket's best route changed and the FIB was updated.
     bool addRoute(const RibEntry<AddrType>& e) noexcept
     {
         bool replaced = false;
@@ -33,7 +39,9 @@ public:
         {
             if (r.source == e.source && r.processId == e.processId)
             {
-                if (r.metric == e.metric && r.nextHopCount == e.nextHopCount && r.adminDistance == e.adminDistance)
+                if (r.metric        == e.metric        &&
+                    r.nextHopCount  == e.nextHopCount  &&
+                    r.adminDistance == e.adminDistance)
                     return false;
                 r = e;
                 replaced = true;
@@ -48,37 +56,22 @@ public:
         return true;
     }
 
-    void removeRoute(RouteSource src, uint32_t pid = 0) noexcept
+    void removeRoute(RouteSource src, uint64_t pid = 0) noexcept
     {
         routes.erase(
             std::remove_if(routes.begin(), routes.end(),
-                [src, pid](const RibEntry<AddrType>& r){ return r.source == src && r.processId == pid; }),
+                [src, pid](const RibEntry<AddrType>& r)
+                {
+                    return r.source == src && r.processId == pid;
+                }),
             routes.end());
         selectBest();
-        return;
     }
 
-    RibEntry<AddrType>* getBestRoute(uint32_t pid) noexcept
+    // Best route among all entries for a specific process instance.
+    RibEntry<AddrType>* getBestRoute(RouteSource src, uint64_t pid) noexcept
     {
         RibEntry<AddrType>* best = nullptr;
-
-        for (RibEntry<AddrType>& r : routes)
-        {
-            if (r.processId == pid)
-            {
-                if (!best ||
-                    r.adminDistance < best->adminDistance ||
-                    (r.adminDistance == best->adminDistance && r.metric < best->metric))
-                    best = &r;
-            }
-        }
-        return best;
-    }
-
-    RibEntry<AddrType>* getBestRoute(RouteSource src, uint32_t pid) noexcept
-    {
-        RibEntry<AddrType>* best = nullptr;
-
         for (RibEntry<AddrType>& r : routes)
         {
             if (r.source == src && r.processId == pid)
@@ -92,44 +85,77 @@ public:
         return best;
     }
 
+    // Best route among all entries for a specific process instance (any source).
+    RibEntry<AddrType>* getBestRoute(uint64_t pid) noexcept
+    {
+        RibEntry<AddrType>* best = nullptr;
+        for (RibEntry<AddrType>& r : routes)
+        {
+            if (r.processId == pid)
+            {
+                if (!best ||
+                    r.adminDistance < best->adminDistance ||
+                    (r.adminDistance == best->adminDistance && r.metric < best->metric))
+                    best = &r;
+            }
+        }
+        return best;
+    }
+
+    // Best route among all entries for a specific source type (any process).
+    RibEntry<AddrType>* getBestRoute(RouteSource src) noexcept
+    {
+        RibEntry<AddrType>* best = nullptr;
+        for (RibEntry<AddrType>& r : routes)
+        {
+            if (r.source == src)
+            {
+                if (!best ||
+                    r.adminDistance < best->adminDistance ||
+                    (r.adminDistance == best->adminDistance && r.metric < best->metric))
+                    best = &r;
+            }
+        }
+        return best;
+    }
+
+    RibEntry<AddrType>* getBestRoute() noexcept
+    {
+        return bestEntry;
+    }
+
     void selectBest() noexcept
     {
-        if (!fibEntry) return;
+        prevBest  = bestEntry;
+        bestEntry = nullptr;
 
-        RibEntry<AddrType>* newBest = nullptr;
-
-        if (!routes.empty())
+        for (RibEntry<AddrType>& r : routes)
         {
-            auto bestIt = std::min_element(routes.begin(), routes.end(),
-                [](const RibEntry<AddrType>& a, const RibEntry<AddrType>& b) {
-                    if (a.adminDistance != b.adminDistance)
-                        return a.adminDistance < b.adminDistance;
-                    return a.metric < b.metric;
-                });
-
-            if (bestIt != routes.end())
-                newBest = new RibEntry<AddrType>(*bestIt);
+            if (!bestEntry ||
+                r.adminDistance < bestEntry->adminDistance ||
+                (r.adminDistance == bestEntry->adminDistance && r.metric < bestEntry->metric))
+                bestEntry = &r;
         }
 
-        RibEntry<AddrType>* old = fibEntry->exchange(newBest, std::memory_order_acq_rel);
-        RCU::retire([old]{ delete old; });
+        // Always push a fresh heap copy into the FIB so RCU readers are never
+        // exposed to a pointer into the (potentially reallocating) routes vector.
+        RibEntry<AddrType>* copy = bestEntry ? new RibEntry<AddrType>(*bestEntry) : nullptr;
+        RibEntry<AddrType>* old  = fibEntry.exchange(copy, std::memory_order_acq_rel);
+        if (old) RCU::retire([old]{ delete old; });
     }
 
     bool empty() const noexcept
     {
-        return routes.empty() ||
-            !fibEntry ||
-            (fibEntry->load(std::memory_order_acquire) == nullptr);
+        return fibEntry.load(std::memory_order_acquire) == nullptr;
     }
 
-    void clear()
+    void clear() noexcept
     {
-        if (fibEntry)
-        {
-            RibEntry<AddrType>* old = fibEntry->exchange(nullptr, std::memory_order_acq_rel);
-            RCU::retire([old]{ delete old; });
-        }
+        RibEntry<AddrType>* old = fibEntry.exchange(nullptr, std::memory_order_acq_rel);
+        if (old) RCU::retire([old]{ delete old; });
         routes.clear();
+        bestEntry = nullptr;
+        prevBest  = nullptr;
     }
 };
 

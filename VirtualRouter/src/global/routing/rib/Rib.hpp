@@ -4,43 +4,17 @@
 #define RIB_HPP
 
 #include <unordered_map>
-#include <atomic>
-#include <mutex>
-#include <RadixTree.hpp>
+#include <ControlScheduler.h>
 
 #include "routing/fib/Fib.hpp"
 #include "RibBucket.hpp"
-#include "routing/NextHopWatcher.hpp"
+#include "routing/RouteWatcher.hpp"
 
 template <typename AddrType>
 class Rib
 {
     static_assert(std::is_unsigned_v<AddrType>, "AddrType must be unsigned integral");
     static constexpr uint8_t W = sizeof(AddrType)*8;
-
-    struct PrefixKey
-    {
-        AddrType prefix;
-        uint8_t length;
-
-        bool operator==(const PrefixKey& o) const noexcept
-        {
-            return prefix == o.prefix && length == o.length;
-        }
-    };
-
-    struct PrefixHash
-    {
-        size_t operator()(const PrefixKey& k) const noexcept
-        {
-            uint64_t h1 = std::hash<AddrType>{}(k.prefix);
-            uint64_t h2 = k.length;
-
-            uint64_t hash = h1;
-            hash ^= h2 + 0x9e3779b97f4a7c15 + (hash << 6) + (hash >> 2);
-            return static_cast<size_t>(hash);
-        }
-    };
 
     static AddrType mask(AddrType p, uint8_t l)
     {
@@ -49,13 +23,17 @@ class Rib
         return p & (~AddrType(0) << (W - l));
     }
 
-    std::unordered_map<PrefixKey, RibBucket<AddrType>*, PrefixHash> table;
-    mutable std::mutex ribMtx;
+    std::unordered_map<PrefixKey<AddrType>, RibBucket<AddrType>*, PrefixHash<AddrType>> table;
     Fib<AddrType> fib;
-    NextHopWatcher<AddrType> nextHopWatcher;
+    ProcessQueue scheduler;
+    RouteWatcher<AddrType> routeWatcher;
 
 public:
-    Rib() = default;
+    using WatchId     = typename RouteWatcher<AddrType>::WatchId;
+    using WatchFilter = typename RouteWatcher<AddrType>::WatchFilter;
+    using Callback    = typename RouteWatcher<AddrType>::Callback;
+
+    Rib(ProcessQueue&& s) : scheduler(std::move(s)), routeWatcher(fib, scheduler) {}
 
     Rib(const Rib&) = delete;
     Rib& operator=(const Rib&) = delete;
@@ -64,69 +42,78 @@ public:
 
     ~Rib() { clear(); }
 
-    bool addRoute(const RibEntry<AddrType>& e)
+    void addRoutes(std::vector<RibEntry<AddrType>*>& es)
     {
-        std::lock_guard<std::mutex> lock(ribMtx);
-        PrefixKey key{ mask(e.prefix, e.length), e.length };
-
-        auto it = table.find(key);
-        if (it == table.end())
-        {
-            RibBucket<AddrType>* b = new RibBucket<AddrType>();
-            b->addRoute(e);
-            fib.insert(key.prefix, key.length, b->fibEntry);
-            table.emplace(key, b);
-        }
-        else
-        {
-            return it->second->addRoute(e);
-        }
-        return true;
+        scheduler.post([this, routes = std::move(es)]() {
+            for (const auto* rt : routes)
+                installRoute(rt);
+        });
     }
 
-    bool removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint32_t pid = 0)
+    void addRoute(const RibEntry<AddrType>* e)
     {
-        std::lock_guard<std::mutex> lock(ribMtx);
-        PrefixKey key{ mask(prefix, length), length };
-
-        auto it = table.find(key);
-        if (it == table.end()) return false;
-
-        RibBucket<AddrType>* b = it->second;
-        b->removeRoute(src, pid);
-
-        if (b->empty())
-        {
-            table.erase(it);
-            fib.erase(key.prefix, key.length);
-            nextHopWatcher.announcePrefixRemoved(key.prefix, key.length);
-            RCU::retire([b]{ delete b; });
-        }
-
-        return true;
+        scheduler.post([this, e]() {
+            installRoute(e);
+        });
     }
 
-    uint32_t watchNextHop(AddrType hop, void* ctx, typename NextHopWatcher<AddrType>::Callback fn)
+    struct Withdraw
     {
-        return nextHopWatcher.add(hop, ctx, fn);
+        AddrType prefix;
+        uint8_t length;
+        RouteSource src;
+        uint64_t pid = 0;
+    };
+
+    void removeRoutes(const std::vector<Withdraw>& ws)
+    {
+        scheduler.post([this, routes = ws]() {
+            for (const auto& w : routes)
+                withdrawRoute(w.prefix, w.length, w.src, w.pid);
+        });
     }
 
-    void unwatchNextHop(uint32_t id)
+    void removeRoute(const Withdraw& w)
     {
-        nextHopWatcher.remove(id);
+        scheduler.post([this, w]() {
+            withdrawRoute(w.prefix, w.length, w.src, w.pid);
+        });
+    }
+
+    Fib<AddrType>& getFib() noexcept { return fib; }
+
+    WatchId watchRoute(AddrType prefix, uint8_t length, void* ctx, Callback fn, WatchFilter filter = {})
+    {
+        return routeWatcher.watchRoute(prefix, length, ctx, fn, filter);
+    }
+
+    WatchId watchAddress(AddrType addr, void* ctx, Callback fn, WatchFilter filter = {})
+    {
+        return routeWatcher.watchAddress(addr, ctx, fn, filter);
+    }
+
+    WatchId watchProtocol(RouteSource src, uint64_t pid, void* ctx, Callback fn)
+    {
+        return routeWatcher.watchProtocol(src, pid, ctx, fn);
+    }
+
+    bool unwatchRoute(WatchId id)
+    {
+        return routeWatcher.remove(id);
     }
 
     void clear() noexcept
     {
-        fib.clear();
+        scheduler.post([this]() {
+            fib.clear();
 
-        std::lock_guard<std::mutex> lock(ribMtx);
-        for (auto& kv : table)
-            delete kv.second;
+            for (auto& kv : table)
+                delete kv.second;
 
-        table.clear();
+            table.clear();
 
-        nextHopWatcher.announceAllGone();
+            routeWatcher.announceAllGone();
+        });
     }
 
     RibEntry<AddrType>* lookup(const uint8_t* addr) const
@@ -139,10 +126,51 @@ public:
         return fib.lookup(addr);
     }
 
-    size_t size() const noexcept
+private:
+    void installRoute(const RibEntry<AddrType>* e)
     {
-        std::lock_guard<std::mutex> lock(ribMtx);
-        return table.size();
+        PrefixKey key{ mask(e->prefix, e->length), e->length };
+
+        auto it = table.find(key);
+        if (it == table.end())
+        {
+            RibBucket<AddrType>* b = new RibBucket<AddrType>();
+            b->addRoute(*e);
+            fib.insert(key.prefix, key.length, &b->fibEntry);
+            table.emplace(key, b);
+            routeWatcher.announceRouteChange(key.prefix, key.length, *b);
+        }
+        else
+        {
+            RCU::Guard g;
+            if (it->second->addRoute(*e))
+                routeWatcher.announceRouteChange(key.prefix, key.length, *it->second);
+        }
+    }
+
+    void withdrawRoute(AddrType prefix, uint8_t length, RouteSource src, uint64_t pid = 0)
+    {
+        PrefixKey key{ mask(prefix, length), length };
+
+        auto it = table.find(key);
+        if (it == table.end()) return;
+
+        RibBucket<AddrType>* b = it->second;
+        b->removeRoute(src, pid);
+
+        RCU::Guard g;
+
+        if (b->empty())
+        {
+            table.erase(it);
+            fib.erase(key.prefix, key.length);
+            routeWatcher.announceRouteChange(key.prefix, key.length, *b);
+            RCU::retire([b]{ delete b; });
+        }
+        else
+        {
+            routeWatcher.announceRouteChange(key.prefix, key.length, *b);
+        }
     }
 };
 

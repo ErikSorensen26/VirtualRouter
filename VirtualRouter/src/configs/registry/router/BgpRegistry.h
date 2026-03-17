@@ -56,6 +56,7 @@ enum class BgpAfBase
     ADVERTISE_ADDITIONAL_PATHS_BEST,
     ADVERTISE_ADDITIONAL_GROUP_BEST,
     ADVERTISE_BEST_EXTERNAL,
+    DEFAULT_ORIGINATE,
     SLOW_PEER_MODE,
     SLOW_PEER_DETECTION,
     SLOW_PEER_DETECTION_THRESHOLD,
@@ -68,6 +69,7 @@ enum class BgpAfBase
     X(BgpAfBase, ADVERTISE_ADDITIONAL_PATHS_ALL, false) \
     X(BgpAfBase, ADVERTISE_ADDITIONAL_GROUP_BEST, false) \
     X(BgpAfBase, ADVERTISE_BEST_EXTERNAL, false) \
+    X(BgpAfBase, DEFAULT_ORIGINATE, false) \
     X(BgpAfBase, SLOW_PEER_DETECTION, false) \
     X(BgpAfBase, SLOW_PEER_DETECTION_THRESHOLD, 300)
 
@@ -80,6 +82,7 @@ using BgpAfBaseRegistry = SubRegistry<BgpAfBase,
     OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_BEST_EXTERNAL)>,
+    AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::DEFAULT_ORIGINATE)>,
     OptionalAtomicField<BGP::SlowPeerMode CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_MODE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBaseRegistry::SLOW_PEER_DETECTION)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD)>
@@ -101,7 +104,6 @@ enum class BgpNeighbor
     ORF_BOTH,
     ORF_RECEIVE,
     ORF_SEND,
-    DEFAULT_ORIGINATE,
     ORIGINATE_ROUTE_MAP, // TODO
     DISTRIBUTE_LIST_IN, // TODO
     DISTRIBUTE_LIST_IN_INTERFACE, // TODO
@@ -148,7 +150,6 @@ enum class BgpNeighbor
     X(BgpNeighbor, ORF_BOTH, false) \
     X(BgpNeighbor, ORF_RECEIVE, false) \
     X(BgpNeighbor, ORF_SEND, false) \
-    X(BgpNeighbor, DEFAULT_ORIGINATE, false) \
     X(BgpNeighbor, DMZLINK_BW, false) \
     X(BgpNeighbor, MAXIMUM_PREFIX_WARNING_ONLY, false) \
     X(BgpNeighbor, NEXT_HOP_SELF, false) \
@@ -184,7 +185,6 @@ using BgpNeighborRegistry = SubRegistry<BgpNeighbor,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_BOTH)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_RECEIVE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_SEND)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::DEFAULT_ORIGINATE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ORIGINATE_ROUTE_MAP)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN_INTERFACE)>,

@@ -15,7 +15,9 @@ class RoutingTable
     Rib<__uint128_t> rib6;
 
 public:
-    RoutingTable() = default;
+    RoutingTable(ControlScheduler& cs)
+        : rib4(cs.create()), rib6(cs.create())
+    {}
 
     ~RoutingTable()
     {
@@ -113,17 +115,6 @@ public:
         rib6.clear();
         RCU::synchronize();
         RCU::tryReclaim();
-    }
-
-    template <typename AddrType>
-    size_t size() const noexcept
-    {
-        if constexpr (std::is_same_v<AddrType, uint32_t>)
-            return rib4.size();
-        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
-            return rib6.size();
-        else
-            static_assert(always_false<AddrType>, "Unsupported Address Type");
     }
 
 private:
