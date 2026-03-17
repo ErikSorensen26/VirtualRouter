@@ -97,9 +97,9 @@ public:
         return routeWatcher.watchProtocol(src, pid, ctx, fn);
     }
 
-    bool unwatchRoute(WatchId id)
+    void unwatchRoute(WatchId id)
     {
-        return routeWatcher.remove(id);
+        routeWatcher.remove(id);
     }
 
     void clear() noexcept

@@ -8,7 +8,6 @@
 #include <cassert>
 #include <utility>
 #include <unordered_map>
-#include <algorithm>
 
 #define ENABLE_CONFIG_INDEX 0
 
@@ -660,7 +659,7 @@ public:
 
     const inline type::const_iterator find(const K& key) const noexcept
     {
-        return std::find_if(children.begin(), children.end(), [key](const auto& pair) { return pair.first == key; });
+        return children.find(key);
     }
 
     const inline type::const_iterator end() const noexcept

@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <new>
 #include <cassert>
-#include <algorithm>
 #include <unordered_map>
 #include <utility>
 
@@ -68,17 +67,18 @@ private:
 
     void trimTail()
     {
-        while (!slots.empty())
+        while (!slots.empty() && !slots.back().alive)
         {
-            Slot& s = slots.back();
-            if (s.alive)
-                break;
-
             auto idx = slots.size() - 1;
-            auto it = std::find(free.begin(), free.end(), idx);
-            if (it != free.end())
-                free.erase(it);
-
+            for (size_t i = 0; i < free.size(); ++i)
+            {
+                if (free[i] == idx)
+                {
+                    free[i] = free.back();
+                    free.pop_back();
+                    break;
+                }
+            }
             slots.pop_back();
         }
     }
