@@ -127,11 +127,10 @@ struct RouteBase
         releasePathRef();
     }
 
-    std::optional<PathAttribute> getPathAttributes() const
+    PathAttribute getPathAttributes() const
     {
-        if (attrMgr && pathId)
-            return attrMgr->get(*pathId);
-        return std::nullopt;
+        assert(attrMgr && pathId);
+        return attrMgr->get(*pathId);
     }
 
     std::optional<uint32_t> pathId{};
@@ -180,6 +179,11 @@ struct InboundRouteBase : RouteBase
 
     std::chrono::steady_clock::time_point receivedTime =
         std::chrono::steady_clock::now();
+
+    bool operator==(const InboundRouteBase& other) const noexcept
+    {
+        return pathId == other.pathId && &sourceNeighbor == &other.sourceNeighbor;
+    }
 };
 
 template <typename N>
@@ -209,7 +213,7 @@ struct InboundRoute : InboundRouteBase
 template <typename N>
 struct LocalRoute
 {
-    InboundRoute<N>& in;
+    InboundRoute<N>& route;
     std::vector<InboundRoute<N>*> multipaths;      // equal-cost ECMP paths (excludes `in`)
     std::vector<InboundRoute<N>*> additionalPaths; // ADD-PATH advertisement pool, ranked by
                                                    // preference (excludes `in` and `multipaths`)

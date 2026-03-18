@@ -318,13 +318,13 @@ public:
     template <typename F>
     void forEach(F&& fn) const noexcept
     {
-        Node* r = root_.load(std::memory_order_acquire);
+        const Node* r = root.load(std::memory_order_acquire);
         if (r) forEachNode(r, std::forward<F>(fn));
     }
 
     T* lookup(const uint8_t* addr) const noexcept
     {
-        Node* n    = root_.load(std::memory_order_acquire);
+        Node* n    = root.load(std::memory_order_acquire);
         T*    best = nullptr;
         uint16_t pos = 0;   // current bit position in addr
 
@@ -364,7 +364,7 @@ public:
         uint8_t masked[N];
         applyMask(pfx, len, masked);
 
-        Node* n   = root_.load(std::memory_order_acquire);
+        Node* n   = root.load(std::memory_order_acquire);
         uint16_t pos = 0;
 
         while (n)
@@ -396,16 +396,16 @@ public:
         applyMask(pfx, len, masked);
 
         // Ensure root
-        if (!root_.load(std::memory_order_acquire))
+        if (!root.load(std::memory_order_acquire))
         {
             Node* fresh = new Node();
             Node* expected = nullptr;
-            if (!root_.compare_exchange_strong(expected, fresh,
+            if (!root.compare_exchange_strong(expected, fresh,
                     std::memory_order_release, std::memory_order_acquire))
                 delete fresh;
         }
 
-        insertAt(root_.load(std::memory_order_acquire), masked, len, entry, 0);
+        insertAt(root.load(std::memory_order_acquire), masked, len, entry, 0);
         return true;
     }
 
@@ -416,7 +416,7 @@ public:
         uint8_t masked[N];
         applyMask(pfx, len, masked);
 
-        Node* r = root_.load(std::memory_order_acquire);
+        Node* r = root.load(std::memory_order_acquire);
         if (!r) return false;
 
         return eraseAt(r, nullptr, 0, masked, len, 0);
@@ -424,7 +424,7 @@ public:
 
     void clear()
     {
-        Node* old = root_.exchange(nullptr, std::memory_order_acq_rel);
+        Node* old = root.exchange(nullptr, std::memory_order_acq_rel);
         destroyAll(old);
     }
 
@@ -460,7 +460,7 @@ public:
 
 private:
     template <typename F>
-    static void forEachNode(Node* n, F&& fn) noexcept
+    static void forEachNode(const Node* n, F&& fn) noexcept
     {
         const PrefixEntry* pb = n->prefixBegin();
         const PrefixEntry* pe = n->prefixEnd();
@@ -720,5 +720,5 @@ private:
             destroyNode(n);
     }
 
-    std::atomic<Node*> root_{nullptr};
+    std::atomic<Node*> root{nullptr};
 };

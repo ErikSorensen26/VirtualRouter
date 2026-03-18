@@ -25,7 +25,7 @@ public:
     }
 
     template <typename AddrType>
-    bool addRoute(const RibEntry<AddrType>& entry)
+    bool addRoute(const RibEntry<AddrType>* entry)
     {
         if constexpr (std::is_same_v<AddrType, uint32_t>)
             return rib4.addRoute(entry);
@@ -37,20 +37,18 @@ public:
     }
 
     template <typename AddrType>
-    void addRoutes(const std::vector<RibEntry<AddrType>>& entries)
+    void addRoutes(const std::vector<RibEntry<AddrType>*>& entries)
     {
         if constexpr (std::is_same_v<AddrType, uint32_t>)
-            for (const auto& entry : entries)
-                rib4.addRoute(entry);
+            rib4.addRoutes(entries);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
-            for (const auto& entry : entries)
-                rib6.addRoute(entry);
+            rib6.addRoutes(entries);
         else
             static_assert(always_false<AddrType>, "Unsupported Address Type");
     }
 
     template <typename AddrType>
-    bool removeEntry(AddrType prefix, uint8_t length, RouteSource src, uint32_t pid)
+    bool removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint32_t pid)
     {
         if constexpr (std::is_same_v<AddrType, uint32_t>)
             return rib4.removeRoute(prefix, length, src, pid);
@@ -59,6 +57,17 @@ public:
         else
             static_assert(always_false<AddrType>, "Unsupported Address Type");
         return false;
+    }
+
+    template <typename AddrType>
+    void removeRoutes(std::vector<std::pair<AddrType, uint8_t>> withdraws, RouteSource src, uint32_t pid)
+    {
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            return rib4.removeRoutes(withdraws, src, pid);
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            return rib6.removeRoutes(withdraws, src, pid);
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
     }
 
     template <typename AddrType>

@@ -57,26 +57,18 @@ public:
         });
     }
 
-    struct Withdraw
+    void removeRoutes(std::vector<std::pair<AddrType, uint8_t>>& withdraws, RouteSource src, uint64_t pid = 0)
     {
-        AddrType prefix;
-        uint8_t length;
-        RouteSource src;
-        uint64_t pid = 0;
-    };
-
-    void removeRoutes(const std::vector<Withdraw>& ws)
-    {
-        scheduler.post([this, routes = ws]() {
-            for (const auto& w : routes)
-                withdrawRoute(w.prefix, w.length, w.src, w.pid);
+        scheduler.post([this, ws = std::move(withdraws), src, pid]() {
+            for (const auto& w : ws)
+                withdrawRoute(w.first, w.second, src, pid);
         });
     }
 
-    void removeRoute(const Withdraw& w)
+    void removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint64_t pid = 0)
     {
-        scheduler.post([this, w]() {
-            withdrawRoute(w.prefix, w.length, w.src, w.pid);
+        scheduler.post([this, prefix, length, src, pid]() {
+            withdrawRoute(prefix, length, src, pid);
         });
     }
 

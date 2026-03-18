@@ -334,21 +334,20 @@ enum class BgpAddressFamily
     BGP_INJECT_MAP_EXIST_MAP, // TODO
     BGP_INJECT_MAP_COPY_ATTRIBUTES, // TODO
     BGP_NEXT_HOP_ROUTE_MAP, // TODO
-    BGP_NEXT_HOP_TRIGGER_DELAY, // TODO
-    BGP_NEXT_HOP_TRACKING, // TODO
-    BGP_RECURSIVE_HOST, // TODO
+    BGP_NEXT_HOP_TRIGGER_DELAY,
+    BGP_NEXT_HOP_TRACKING,
+    BGP_RECURSIVE_HOST,
     BGP_REDISTRIBUTE_INTERNAL, // TODO
     BGP_ROUTE_MAP_PRIORITY, // TODO
     BGP_SOFT_RECONFIG_BACKUP, // TODO
-    DEFAULT_ORIGINATE, // TODO
-    DEFAULT_METRIC, // TODO
-    DISTANCE_RANGE, // TODO
-    DISTANCE_BGP_EXTERNAL, // TODO
-    DISTANCE_BGP_INTERNAL, // TODO
-    DISTANCE_BGP_LOCAL, // TODO
-    DISTANCE_MBGP_EXTERNAL, // TODO
-    DISTANCE_MBGP_INTERNAL, // TODO
-    DISTANCE_MBGP_LOCAL, // TODO
+    DEFAULT_METRIC,
+    DISTANCE_RANGE,
+    DISTANCE_BGP_EXTERNAL,
+    DISTANCE_BGP_INTERNAL,
+    DISTANCE_BGP_LOCAL,
+    DISTANCE_MBGP_EXTERNAL,
+    DISTANCE_MBGP_INTERNAL,
+    DISTANCE_MBGP_LOCAL,
     DISTRIBUTE_LIST_IN, // TODO
     DISTRIBUTE_LIST_IN_INTERFACE, // TODO
     DISTRIBUTE_LIST_IN_PREFIX, // TODO
@@ -358,7 +357,7 @@ enum class BgpAddressFamily
     DISTRIBUTE_LIST_GATEWAY, // TODO
     MAXIMUM_PATHS_EBGP,
     MAXIMUM_PATHS_IBGP,
-    NETWORK, // TODO
+    NETWORK,
     TABLE_MAP, // TODO
     TABLE_MAP_FILTER, // TODO
     COUNT
@@ -387,7 +386,6 @@ enum class BgpAddressFamily
     X(BgpAddressFamily, BGP_REDISTRIBUTE_INTERNAL, false) \
     X(BgpAddressFamily, BGP_ROUTE_MAP_PRIORITY, false) \
     X(BgpAddressFamily, BGP_SOFT_RECONFIG_BACKUP, false) \
-    X(BgpAddressFamily, DEFAULT_ORIGINATE, false) \
     X(BgpAddressFamily, DISTANCE_BGP_EXTERNAL, 20) \
     X(BgpAddressFamily, DISTANCE_BGP_INTERNAL, 200) \
     X(BgpAddressFamily, DISTANCE_BGP_LOCAL, 200) \
@@ -444,7 +442,6 @@ using BgpAddressFamilyRegistry = SubRegistry<BgpAddressFamily,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_REDISTRIBUTE_INTERNAL)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ROUTE_MAP_PRIORITY)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP)>,
-    AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DEFAULT_ORIGINATE)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DEFAULT_METRIC)>,
     ValueField<std::vector<std::tuple<uint8_t, std::vector<std::tuple<IPPrefix, std::string>>>> CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_RANGE)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_EXTERNAL)>,
@@ -596,3 +593,4 @@ using BgpRegistry = SubRegistry<Bgp,
 }
 
 #endif // BGP_REGISTRY_H
+

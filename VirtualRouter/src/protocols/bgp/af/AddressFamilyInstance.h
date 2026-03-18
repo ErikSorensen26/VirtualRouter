@@ -11,6 +11,7 @@
 #include <IPAddress.hpp>
 #include <VirtualRouter.h>
 
+#include "ProcessAccessor.h"
 #include "bgp/BgpTypes.hpp"
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"
@@ -37,22 +38,6 @@ inline void Session::sendUpdate(const BuildUpdate<typename N::Nlri>& update)
 
 namespace BGP
 {
-class AddressFamilyInstanceHelper
-{
-private:
-    template <typename T>
-    friend class AddressFamilyInstance;
-
-    static VirtualRouter& getRoutingInstance(BgpProcess& proc);
-    static NeighborTable& getNtable(BgpProcess& proc);
-    static uint32_t getAsNum(BgpProcess& proc);
-    static uint32_t getRid(BgpProcess& proc);
-    static Config::BgpRegistry& getConfigs(BgpProcess& proc);
-    static AttributeManager& getAttrMgr(BgpProcess& proc);
-    static ProcessQueueRef getScheduler(BgpProcess& proc);
-    static void emplaceAfBase(Config::ReferenceContainer<Config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc);
-};
-
 inline static AsPathSegment& getAsSegment(Attributes& attrs)
 {
     if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_SEQUENCE)
@@ -86,18 +71,19 @@ public:
     AddressFamilyInstance(BgpProcess& proc, AfiSafi fam)
         : process(proc),
           family(fam),
-          policy(AddressFamilyInstanceHelper::getRoutingInstance(proc)),
+          policy(ProcessAccessor::getRoutingInstance(proc)),
           igpMetricResolver([](const IPAddress&) { return std::numeric_limits<uint64_t>::max(); }),
           configs([&proc, &fam]() {
-              auto& bgpConfigs = AddressFamilyInstanceHelper::getConfigs(proc);
-              auto& vrf = AddressFamilyInstanceHelper::getRoutingInstance(proc);
+              auto& bgpConfigs = ProcessAccessor::getConfigs(proc);
+              auto& vrf = ProcessAccessor::getRoutingInstance(proc);
               auto& registry = vrf.getRegistry();
               return registry.emplaceBack(
                   bgpConfigs.get<Config::Bgp::ADDRESS_FAMILIES>(), fam.flatten()
               );
           })
     {
-        AddressFamilyInstanceHelper::emplaceAfBase(configs->get<Config::BgpAddressFamily::AF_BASE>(), process);
+        ProcessAccessor::emplaceAfBase(configs->get<Config::BgpAddressFamily::AF_BASE>(), process);
+        syncNetworkRoutes();
     }
 
     AddressFamilyInstance(const AddressFamilyInstance&) = delete;
@@ -108,7 +94,8 @@ public:
     ~AddressFamilyInstance()
     {
         if (nhtTimerId != 0)
-            AddressFamilyInstanceHelper::getScheduler(process).cancel(nhtTimerId);
+            ProcessAccessor::getScheduler(process).cancel(nhtTimerId);
+        clearNetworkWatches();
         clearNhtWatches();
     }
 
@@ -159,7 +146,7 @@ public:
         auto outIt = adjRibOut.find(peerRid);
         if (outIt != adjRibOut.end())
         {
-            auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+            auto& attrMgr = ProcessAccessor::getAttrMgr(process);
 
             // Group NLRIs by their stored egress pathId to batch into one Announcement per path.
             std::unordered_map<uint32_t, size_t> pathToAnn;
@@ -205,10 +192,10 @@ public:
         auto preIt = preAdjRibIn.find(peerRid);
         if (preIt == preAdjRibIn.end()) return;
 
-        Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peerRid);
+        Neighbor* nbr = ProcessAccessor::getNtable(process).lookup(peerRid);
         if (!nbr) return;
 
-        auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+        auto& attrMgr = ProcessAccessor::getAttrMgr(process);
         NeighborAf& nbrAf = nbr->getAfNeighbor(family);
 
         // Remove existing post-policy routes for this peer from locRib + adjRibIn.
@@ -219,7 +206,7 @@ public:
             for (const auto& [nlriPath, inRoute] : inIt->second)
             {
                 auto lit = locRib.find(nlriPath.nlri);
-                if (lit != locRib.end() && &lit->second.in == &inRoute)
+                if (lit != locRib.end() && &lit->second.route == &inRoute)
                     locRib.erase(lit);
                 touched.insert(nlriPath.nlri);
             }
@@ -244,7 +231,7 @@ public:
             if (existing != peerIn.end())
             {
                 auto lit = locRib.find(nlriPath.nlri);
-                if (lit != locRib.end() && &lit->second.in == &existing->second)
+                if (lit != locRib.end() && &lit->second.route == &existing->second)
                     locRib.erase(lit);
                 peerIn.erase(existing);
             }
@@ -262,11 +249,11 @@ public:
         if (mraiIt != mraiState.end())
         {
             if (mraiIt->second.timerId != 0)
-                AddressFamilyInstanceHelper::getScheduler(process).cancel(mraiIt->second.timerId);
+                ProcessAccessor::getScheduler(process).cancel(mraiIt->second.timerId);
             mraiState.erase(mraiIt);
         }
 
-        if (Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peer))
+        if (Neighbor* nbr = ProcessAccessor::getNtable(process).lookup(peer))
         {
             NeighborAf& nbrAf = nbr->getAfNeighbor(family);
             nbrAf.orfFilter.clear();
@@ -293,7 +280,7 @@ public:
         {
             keys.insert(nlriPath.nlri);
             auto lit = locRib.find(nlriPath.nlri);
-            if (lit != locRib.end() && &lit->second.in == &inRoute)
+            if (lit != locRib.end() && &lit->second.route == &inRoute)
                 locRib.erase(lit);
         }
 
@@ -306,7 +293,7 @@ public:
 private:
     void onParsedUpdateFromPeer(Neighbor& peer, ParsedUpdate<NlriT>& update)
     {
-        Neighbor* nbr = AddressFamilyInstanceHelper::getNtable(process).lookup(peer.rid);
+        Neighbor* nbr = ProcessAccessor::getNtable(process).lookup(peer.rid);
         if (!nbr) return;
 
         PerPeerInTable<NlriT>& peerIn = adjRibIn[peer.rid];
@@ -325,7 +312,7 @@ private:
             if (it != peerIn.end())
             {
                 auto lit = locRib.find(n.nlri);
-                if (lit != locRib.end() && &lit->second.in == &it->second)
+                if (lit != locRib.end() && &lit->second.route == &it->second)
                     locRib.erase(lit);
                 peerIn.erase(it);
             }
@@ -340,11 +327,11 @@ private:
 
         if (update.attrs.has_value())
         {
-            auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+            auto& attrMgr = ProcessAccessor::getAttrMgr(process);
 
             auto& remAs = peer.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
             const uint32_t peerAs = remAs.hasValue() ? remAs.load() : 0;
-            const uint32_t localAs = AddressFamilyInstanceHelper::getAsNum(process);
+            const uint32_t localAs = ProcessAccessor::getAsNum(process);
             const bool isEbgp = (peerAs != 0) && (peerAs != localAs);
 
             uint32_t pid = attrMgr.acquire(update.attrs->attrs, update.attrs->path);
@@ -383,7 +370,7 @@ private:
                     if (existing != peerIn.end())
                     {
                         auto lit = locRib.find(n.nlri);
-                        if (lit != locRib.end() && &lit->second.in == &existing->second)
+                        if (lit != locRib.end() && &lit->second.route == &existing->second)
                             locRib.erase(lit);
                         peerIn.erase(existing);
                     }
@@ -425,170 +412,194 @@ private:
             recomputeNlri(n);
     }
 
-    void recomputeNlri(const NlriT& nlri)
+    void recomputeNlri(const std::vector<NlriT> nlris)
     {
-        std::vector<InboundRoute<NlriT>*> candidates;
+        std::vector<LocalRoute<NlriT>*> installs;
+        installs.reserve(nlris);
 
-        for (auto& [peer, peerTable] : adjRibIn)
+        for (const auto& nlri : nlris)
         {
-            for (auto& [key, route] : peerTable)
+            std::vector<InboundRoute<NlriT>*> candidates;
+
+            for (auto& [peer, peerTable] : adjRibIn)
             {
-                if (key.nlri != nlri)
-                    continue;
-                // Refresh IGP cost before running best-path.
-                auto attrs = route.getPathAttributes();
-                if (attrs.has_value())
-                    route.igpCost = resolveIgpMetric(attrs->path.nextHop);
-                candidates.push_back(&route);
+                for (auto& [key, route] : peerTable)
+                {
+                    if (key.nlri != nlri)
+                        continue;
+                    // Refresh IGP cost before running best-path.
+                    auto attrs = route.getPathAttributes();
+                    if (attrs.has_value())
+                        route.igpCost = resolveIgpMetric(attrs->path.nextHop);
+                    candidates.push_back(&route);
+                }
             }
-        }
 
-        BestPathConfig bpCfg;
-        bpCfg.compareRouterId   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
-        bpCfg.medMissingAsWorst = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
-        bpCfg.ignoreIgpMetric   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
-
-        DecisionEngine decision(process, bpCfg);
-        std::optional<LocalRoute<NlriT>> best = decision.selectBest(
-            candidates,
-            configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_EBGP>().load(),
-            configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_IBGP>().load()
-        );
-
-        // Build ADD-PATH candidate pool for additional-paths advertisement.
-        if (best.has_value())
-        {
-            Config::Reference<Config::BgpAfBaseRegistry>& base = configs->get<Config::BgpAddressFamily::AF_BASE>().local();
-            bool selectBackup    = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
-            bool selectBestExt   = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
-            bool selectAll       = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
-            auto& selectBestFld  = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
-            bool selectGroupBest = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
-
-            if (selectAll || selectBackup || selectBestFld.hasValue() || selectBestExt || selectGroupBest)
+            // Network command: locally-originated routes count as candidates.
             {
-                std::vector<InboundRoute<NlriT>*> pool;
-                for (auto* r : decision.rankCandidates(candidates))
-                {
-                    if (r == &best->in) continue;
-                    if (std::find(best->multipaths.begin(), best->multipaths.end(), r) != best->multipaths.end()) continue;
-                    pool.push_back(r);
-                }
+                auto it = networkLocalRoutes.find(nlri);
+                if (it != networkLocalRoutes.end())
+                    candidates.push_back(&it->second);
+            }
 
-                if (selectAll)
-                {
-                    best->additionalPaths = pool;
-                }
-                else
-                {
-                    auto tryAdd = [&](InboundRoute<NlriT>* r) {
-                        if (std::find(best->additionalPaths.begin(), best->additionalPaths.end(), r) == best->additionalPaths.end())
-                            best->additionalPaths.push_back(r);
-                    };
+            BestPathConfig bpCfg;
+            bpCfg.compareRouterId   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
+            bpCfg.medMissingAsWorst = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
+            bpCfg.ignoreIgpMetric   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
 
-                    if (selectBestFld.hasValue())
+            DecisionEngine decision(process, bpCfg);
+            std::optional<LocalRoute<NlriT>> best = decision.selectBest(
+                candidates,
+                configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_EBGP>().load(),
+                configs->get<Config::BgpAddressFamily::MAXIMUM_PATHS_IBGP>().load()
+            );
+
+            // Build ADD-PATH candidate pool for additional-paths advertisement.
+            if (best.has_value())
+            {
+                Config::Reference<Config::BgpAfBaseRegistry>& base = configs->get<Config::BgpAddressFamily::AF_BASE>().local();
+                bool selectBackup    = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
+                bool selectBestExt   = configs->get<Config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
+                bool selectAll       = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
+                auto& selectBestFld  = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
+                bool selectGroupBest = base->get<Config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+
+                if (selectAll || selectBackup || selectBestFld.hasValue() || selectBestExt || selectGroupBest)
+                {
+                    std::vector<InboundRoute<NlriT>*> pool;
+                    for (auto* r : decision.rankCandidates(candidates))
                     {
-                        uint8_t n = selectBestFld.load();
-                        for (auto* r : pool) {
-                            if (best->additionalPaths.size() >= n) break;
-                            tryAdd(r);
+                        if (r == &best->in) continue;
+                        if (std::find(best->multipaths.begin(), best->multipaths.end(), r) != best->multipaths.end()) continue;
+                        pool.push_back(r);
+                    }
+
+                    if (selectAll)
+                    {
+                        best->additionalPaths = pool;
+                    }
+                    else
+                    {
+                        auto tryAdd = [&](InboundRoute<NlriT>* r) {
+                            if (std::find(best->additionalPaths.begin(), best->additionalPaths.end(), r) == best->additionalPaths.end())
+                                best->additionalPaths.push_back(r);
+                        };
+
+                        if (selectBestFld.hasValue())
+                        {
+                            uint8_t n = selectBestFld.load();
+                            for (auto* r : pool) {
+                                if (best->additionalPaths.size() >= n) break;
+                                tryAdd(r);
+                            }
+                        }
+
+                        if (selectBackup && !pool.empty())
+                            tryAdd(pool[0]);
+
+                        if (selectBestExt)
+                            for (auto* r : pool)
+                                if (r->ebgp) { tryAdd(r); break; }
+
+                        if (selectGroupBest)
+                        {
+                            std::unordered_set<uint32_t> seenAs;
+                            seenAs.insert(best->in.peerAs);
+                            for (auto* mp : best->multipaths)
+                                seenAs.insert(mp->peerAs);
+                            for (auto* r : pool)
+                                if (seenAs.insert(r->peerAs).second)
+                                    tryAdd(r);
                         }
                     }
-
-                    if (selectBackup && !pool.empty())
-                        tryAdd(pool[0]);
-
-                    if (selectBestExt)
-                        for (auto* r : pool)
-                            if (r->ebgp) { tryAdd(r); break; }
-
-                    if (selectGroupBest)
-                    {
-                        std::unordered_set<uint32_t> seenAs;
-                        seenAs.insert(best->in.peerAs);
-                        for (auto* mp : best->multipaths)
-                            seenAs.insert(mp->peerAs);
-                        for (auto* r : pool)
-                            if (seenAs.insert(r->peerAs).second)
-                                tryAdd(r);
-                    }
                 }
             }
-        }
 
-        auto lit = locRib.find(nlri);
-        const bool had = (lit != locRib.end());
+            auto lit = locRib.find(nlri);
+            const bool had = (lit != locRib.end());
 
-        // BGP Route Dampening
-        if (configs->get<Config::BgpAddressFamily::BGP_DAMPENING>().load())
-        {
-            auto now    = std::chrono::steady_clock::now();
-            auto params = getDampenParams();
-            auto& state = dampenTable[nlri];
-
-            if (!best.has_value() && had)
+            // BGP Route Dampening
+            if (configs->get<Config::BgpAddressFamily::BGP_DAMPENING>().load())
             {
-                // Prefix transitioning reachable → unreachable: penalise.
-                state.onWithdraw(params, now);
-                if (state.suppressed)
-                    startDampenReuseTimer();
-                // Fall through to normal withdrawal below.
-            }
-            else if (best.has_value() && !had)
-            {
-                if (state.pendingReuse)
+                auto now    = std::chrono::steady_clock::now();
+                auto params = getDampenParams();
+                auto& state = dampenTable[nlri];
+
+                if (!best.has_value() && had)
                 {
-                    // Reuse timer un-suppressed this prefix; no additional penalty.
-                    state.pendingReuse = false;
-                }
-                else
-                {
-                    // Prefix transitioning unreachable → reachable: penalise re-announcement.
-                    bool suppress = state.onAnnounce(params, now);
-                    if (suppress)
-                    {
+                    // Prefix transitioning reachable → unreachable: penalise.
+                    state.onWithdraw(params, now);
+                    if (state.suppressed)
                         startDampenReuseTimer();
-                        return; // hold suppressed: do not install into Loc-RIB
+                    // Fall through to normal withdrawal below.
+                }
+                else if (best.has_value() && !had)
+                {
+                    if (state.pendingReuse)
+                    {
+                        // Reuse timer un-suppressed this prefix; no additional penalty.
+                        state.pendingReuse = false;
+                    }
+                    else
+                    {
+                        // Prefix transitioning unreachable → reachable: penalise re-announcement.
+                        bool suppress = state.onAnnounce(params, now);
+                        if (suppress)
+                        {
+                            startDampenReuseTimer();
+                            return; // hold suppressed: do not install into Loc-RIB
+                        }
                     }
                 }
+                // had && best: path-attribute change, not a reachability flap; no penalty.
             }
-            // had && best: path-attribute change, not a reachability flap; no penalty.
-        }
 
-        if (!best.has_value())
-        {
-            if (had)
+            if (!best.has_value())
             {
-                withdrawFromRib(nlri);
-                locRib.erase(lit);
-                recomputeAdjRibOut(nlri, nullptr);
-                if constexpr (isIpPrefix<NlriT>)
-                    scheduleAggregateRecompute();
+                if (had)
+                {
+                    withdrawFromRib(nlri);
+                    locRib.erase(lit);
+                    recomputeAdjRibOut(nlri, nullptr);
+                    if constexpr (isIpPrefix<NlriT>)
+                        scheduleAggregateRecompute();
+                }
+                return;
             }
-            return;
+
+            const bool bestChanged = !had || &lit->second.route != &best->in;
+
+            // Always refresh the locRib entry so multipaths/additionalPaths stay current.
+            if (had)
+                locRib.erase(lit);
+            locRib.emplace(nlri, *best);
+
+            if (bestChanged)
+                installs.push_back(locRib)
+                installToRib(locRib.at(nlri));
+
+            recomputeAdjRibOut(nlri, &locRib.at(nlri));
+            if constexpr (isIpPrefix<NlriT>)
+                scheduleAggregateRecompute();
         }
-
-        const bool bestChanged = !had || &lit->second.in != &best->in;
-
-        // Always refresh the locRib entry so multipaths/additionalPaths stay current.
-        if (had)
-            locRib.erase(lit);
-        locRib.emplace(nlri, *best);
-
-        if (bestChanged)
-            installToRib(locRib.at(nlri));
-
-        recomputeAdjRibOut(nlri, &locRib.at(nlri));
-        if constexpr (isIpPrefix<NlriT>)
-            scheduleAggregateRecompute();
     }
 
     void installToRib(LocalRoute<NlriT>& route)
     {
-        policy.installRoute(route);
-        auto pa = route.in.getPathAttributes();
-        if (pa.has_value())
-            registerNht(route.in.nlri, pa->path.nextHop);
+        auto install = buildInstall(route);
+        policy.installRoute(install);
+        registerNht(route.route.nlri, install.attrs.path.nextHop);
+    }
+
+    void installToRib(std::vector<LocalRoute<NlriT>*>& routes)
+    {
+        std::vector<typename N::NlriInstall> installs;
+        installs.reserve(routes.size());
+        for (auto* route : routes)
+            installs.push_back(buildInstall(*route));
+        policy.installRoutes(installs);
+        for (auto& install : installs)
+            registerNht(install.route.route.nlri, install.attrs.path.nextHop);
     }
 
     void withdrawFromRib(const NlriT& nlri)
@@ -597,11 +608,18 @@ private:
         policy.withdrawRoute(nlri);
     }
 
+    void withdrawFromRib(const std::vector<NlriT>& nlri)
+    {
+        for (const auto& n : nlri)
+            unregisterNht(n);
+        policy.withdrawRoutes(nlri);
+    }
+
     // Returns true if the route should be DROPPED (filtered out); false to accept into Adj-RIB-In.
     bool applyIngressPolicy(const InboundRoute<NlriT>& route)
     {
-        PathAttribute pathAttrs = AddressFamilyInstanceHelper::getAttrMgr(process).get(*route.pathId);
-        uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+        PathAttribute pathAttrs = ProcessAccessor::getAttrMgr(process).get(*route.pathId);
+        uint32_t routerAs = ProcessAccessor::getAsNum(process);
         auto& nbr = route.sourceNeighbor->globalNbr();
 
         // AS-PATH loop prevention (check all segments)
@@ -663,7 +681,7 @@ private:
             pa.attrs.localPref = std::nullopt;
 
             AsPathSegment& seg = getAsSegment(pa.attrs);
-            uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+            uint32_t routerAs = ProcessAccessor::getAsNum(process);
             auto& localAs = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
             if (!sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() || !localAs.hasValue())
                 seg.asns.insert(seg.asns.begin(), routerAs);
@@ -729,7 +747,7 @@ private:
         else
         {
             if ((cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF>().load() &&
-                 route.neighborRouterId != AddressFamilyInstanceHelper::getRid(process)) ||
+                 route.neighborRouterId != ProcessAccessor::getRid(process)) ||
                 cfgs.get<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>().load())
                 pa.path.nextHop = session.getPrimaryConnection()->socketKey()->local.address;
         }
@@ -774,9 +792,9 @@ private:
 
     void recomputeAdjRibOut(const NlriT& nlri, LocalRoute<NlriT>* best)
     {
-        auto& attrMgr = AddressFamilyInstanceHelper::getAttrMgr(process);
+        auto& attrMgr = ProcessAccessor::getAttrMgr(process);
 
-        AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
+        ProcessAccessor::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
             Session* session = nbr.session;
             if (!session || !session->established())
                 return;
@@ -817,7 +835,7 @@ private:
                         if (ms.timerId == 0)
                         {
                             auto expiry = ms.lastSent + std::chrono::seconds(mraiSecs);
-                            ms.timerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(expiry,
+                            ms.timerId = ProcessAccessor::getScheduler(process).postAfter(expiry,
                                 [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
                         }
                         return;
@@ -853,7 +871,7 @@ private:
                         if (ms.timerId == 0)
                         {
                             uint16_t interval = nbrAfCfgs.get<Config::BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD>().load();
-                            ms.timerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(
+                            ms.timerId = ProcessAccessor::getScheduler(process).postAfter(
                                 std::chrono::steady_clock::now() + std::chrono::seconds(interval),
                                 [this, peerRid](uint32_t) { drainMraiPending(peerRid); });
                         }
@@ -1148,7 +1166,7 @@ private:
             defaultNlri.af = ::AddressFamily::IPv4;
 
         const bool isEbgp = session.isEbgp();
-        const uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+        const uint32_t routerAs = ProcessAccessor::getAsNum(process);
         auto& sesCfgs = nbr.getConfigs();
 
         PathAttribute pa{};
@@ -1255,7 +1273,7 @@ private:
             return;
         uint16_t delay = configs->get<Config::BgpAddressFamily::BGP_AGGREGATE_TIMER>().load();
         auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(delay);
-        aggregateTimerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(expiry,
+        aggregateTimerId = ProcessAccessor::getScheduler(process).postAfter(expiry,
             [this](uint32_t) { aggregateTimerId = 0; recomputeAllAggregates(); });
     }
 
@@ -1300,7 +1318,7 @@ private:
                 continue;
             if (!aggNlri.contains(nlri))
                 continue;
-            contributors.push_back(&route.in);
+            contributors.push_back(&route.route);
         }
 
         AggregateState& state = aggregateStates[aggNlri];
@@ -1329,7 +1347,7 @@ private:
 
         if (buildAsSet)
         {
-            const uint32_t localAs = AddressFamilyInstanceHelper::getAsNum(process);
+            const uint32_t localAs = ProcessAccessor::getAsNum(process);
             std::unordered_set<uint32_t> asns;
             for (auto* r : contributors)
             {
@@ -1355,8 +1373,8 @@ private:
 
         {
             Aggregator agg;
-            agg.asn = AddressFamilyInstanceHelper::getAsNum(process);
-            agg.speaker = IPAddress(AddressFamilyInstanceHelper::getRid(process));
+            agg.asn = ProcessAccessor::getAsNum(process);
+            agg.speaker = IPAddress(ProcessAccessor::getRid(process));
             pa.attrs.asAggregator = std::move(agg);
         }
 
@@ -1374,7 +1392,7 @@ private:
             pa.attrs.localPref = std::nullopt;
 
             AsPathSegment& seg = getAsSegment(pa.attrs);
-            const uint32_t routerAs = AddressFamilyInstanceHelper::getAsNum(process);
+            const uint32_t routerAs = ProcessAccessor::getAsNum(process);
             auto& localAsField = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
             if (!sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() || !localAsField.hasValue())
                 seg.asns.insert(seg.asns.begin(), routerAs);
@@ -1399,7 +1417,7 @@ private:
 
     void sendAggregateToAllPeers(const NlriT& aggNlri, AggregateState& state)
     {
-        AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
+        ProcessAccessor::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
             Session* session = nbr.session;
             if (!session || !session->established())
                 return;
@@ -1427,7 +1445,7 @@ private:
 
     void withdrawAggregate(const NlriT& aggNlri)
     {
-        AddressFamilyInstanceHelper::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
+        ProcessAccessor::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
             Session* session = nbr.session;
             if (!session || !session->established())
                 return;
@@ -1455,7 +1473,7 @@ private:
     {
         if (dampenReuseTimerId_ != 0)
             return;
-        dampenReuseTimerId_ = AddressFamilyInstanceHelper::getScheduler(process).postAfter(
+        dampenReuseTimerId_ = ProcessAccessor::getScheduler(process).postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(5),
             [this](uint32_t) { dampenReuseTimerId_ = 0; onDampenReuseTimer(); });
     }
@@ -1527,7 +1545,7 @@ private:
         if (!configs->get<Config::BgpAddressFamily::BGP_NEXT_HOP_TRACKING>().load())
             return;
 
-        auto& rt = AddressFamilyInstanceHelper::getRoutingInstance(process).getRib();
+        auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
 
         auto [it, inserted] = nhtTable.emplace(nh, NhtEntry{});
         NhtEntry& entry = it->second;
@@ -1536,7 +1554,7 @@ private:
         if (inserted)
         {
             entry.isV6 = nh.isV6;
-            entry.ctx  = NhtCtx{this, nh, AddressFamilyInstanceHelper::getScheduler(process)};
+            entry.ctx  = NhtCtx{this, nh, ProcessAccessor::getScheduler(process)};
             if (nh.isV6)
                 entry.watchId = rt.watchAddress(nh.v6, &entry.ctx, nhtCallback<__uint128_t>);
             else
@@ -1564,7 +1582,7 @@ private:
         {
             if (entry.watchId)
             {
-                auto& rt = AddressFamilyInstanceHelper::getRoutingInstance(process).getRib();
+                auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
                 rt.unwatchAddress(entry.watchId, entry.isV6);
             }
             nhtTable.erase(entIt);
@@ -1574,12 +1592,248 @@ private:
     void clearNhtWatches()
     {
         if (nhtTable.empty()) return;
-        auto& rt = AddressFamilyInstanceHelper::getRoutingInstance(process).getRib();
+        auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
         for (auto& [nh, entry] : nhtTable)
             if (entry.watchId)
                 rt.unwatchAddress(entry.watchId, entry.isV6);
         nhtTable.clear();
         nlriToNextHop.clear();
+    }
+
+    uint8_t computeAdminDistance(const InboundRouteBase& route, const NlriT& nlri) const
+    {
+        // MBGP = any AF other than IPv4 unicast.
+        constexpr bool isMbgp =
+            !(N::afi.afi == BGP_AFI_IPV4 && N::afi.safi == BGP_SAFI_UNICAST);
+
+        uint8_t dist;
+        if (route.sourceNeighbor == nullptr)
+        {
+            // Locally-originated (network command)
+            dist = isMbgp
+                ? configs->get<Config::BgpAddressFamily::DISTANCE_MBGP_LOCAL>().load()
+                : configs->get<Config::BgpAddressFamily::DISTANCE_BGP_LOCAL>().load();
+        }
+        else if (route.ebgp)
+        {
+            dist = isMbgp
+                ? configs->get<Config::BgpAddressFamily::DISTANCE_MBGP_EXTERNAL>().load()
+                : configs->get<Config::BgpAddressFamily::DISTANCE_BGP_EXTERNAL>().load();
+        }
+        else
+        {
+            dist = isMbgp
+                ? configs->get<Config::BgpAddressFamily::DISTANCE_MBGP_INTERNAL>().load()
+                : configs->get<Config::BgpAddressFamily::DISTANCE_BGP_INTERNAL>().load();
+        }
+
+        // DISTANCE_RANGE: per-prefix administrative distance override.
+        if constexpr (isIpPrefix<NlriT>)
+        {
+            configs->get<Config::BgpAddressFamily::DISTANCE_RANGE>().withRead(
+                [&](const auto& ranges)
+                {
+                    for (const auto& range : ranges)
+                    {
+                        uint8_t rangeDist       = std::get<0>(range);
+                        const auto& pfxList     = std::get<1>(range);
+                        for (const auto& [pfx, pfxListName] : pfxList)
+                        {
+                            if (pfx == nlri ||
+                                (pfx.prefixLength <= nlri.prefixLength && pfx.contains(nlri)))
+                            {
+                                dist = rangeDist;
+                                return;
+                            }
+                        }
+                    }
+                });
+        }
+
+        return dist;
+    }
+
+    typename N::NlriInstall buildInstall(LocalRoute<NlriT>& route)
+    {
+        auto pa = route.route.getPathAttributes();
+
+        typename N::NlriInstall install = {
+            .route = route,
+            .attrs = pa
+        };
+
+        const NlriT& nlri   = route.route.nlri;
+        install.distance = computeAdminDistance(route.route, nlri);
+        install.metric = 0;
+
+        if (pa->attrs.med.has_value())
+        {
+            install.metric = *pa->attrs.med;
+        }
+        else if (route.route.sourceNeighbor == nullptr)
+        {
+            // Locally-originated route: apply DEFAULT_METRIC when no MED is set.
+            auto& defMetricField = configs->get<Config::BgpAddressFamily::DEFAULT_METRIC>();
+            if (defMetricField.hasValue())
+                install.metric = defMetricField.load();
+        }
+
+        install.recursiveHost = configs->get<Config::BgpAddressFamily::BGP_RECURSIVE_HOST>().load();
+
+        return install;
+    }
+
+    void withdrawFromRibDirect(const NlriT& nlri)
+    {
+        if constexpr (!isIpPrefix<NlriT>)
+            return;
+
+        auto& rt           = ProcessAccessor::getRoutingInstance(process).getRib();
+        const uint32_t pid = ProcessAccessor::getAsNum(process);
+
+        if constexpr (N::afi.afi == BGP_AFI_IPV4)
+            rt.removeRoute(readU32(nlri.addr), nlri.prefixLength, RouteSource::BGP, pid);
+        else if constexpr (N::afi.afi == BGP_AFI_IPV6)
+            rt.removeRoute(readU128(nlri.addr), nlri.prefixLength, RouteSource::BGP, pid);
+    }
+
+    struct NetworkWatchCtx
+    {
+        AddressFamilyInstance* self;
+        NlriT                  nlri;
+        ProcessQueueRef        bgpSched;
+    };
+
+    struct NetworkWatchEntry
+    {
+        uint32_t        watchId = 0;
+        bool            isV6    = false;
+        NetworkWatchCtx ctx{};
+    };
+
+    template <typename Addr>
+    static bool networkWatchCallback(typename RouteWatcher<Addr>::CallbackCtx& cctx)
+    {
+        auto* ctx  = static_cast<NetworkWatchCtx*>(cctx.ctx);
+        bool reach = (cctx.newBest != nullptr);
+        NlriT nlri = ctx->nlri;
+        ctx->bgpSched.post([self = ctx->self, nlri, reach]() {
+            self->onNetworkRibChanged(nlri, reach);
+        });
+        return false; // keep watch alive
+    }
+
+    // Called on the BGP scheduler when a watched network prefix appears/disappears in the RIB.
+    void onNetworkRibChanged(const NlriT& nlri, bool reachable)
+    {
+        if (reachable)
+        {
+            auto& attrMgr = ProcessAccessor::getAttrMgr(process);
+
+            PathAttribute pa{};
+            pa.attrs.origin  = BGP_ORIGIN_IGP;
+            pa.path.family   = family;
+
+            // Apply DEFAULT_METRIC for locally-originated routes.
+            auto& defMetricField = configs->get<Config::BgpAddressFamily::DEFAULT_METRIC>();
+            if (defMetricField.hasValue())
+                pa.attrs.med = defMetricField.load();
+
+            uint32_t pid = attrMgr.acquire(pa.attrs, pa.path);
+
+            networkLocalRoutes.erase(nlri);
+            networkLocalRoutes.emplace(
+                std::piecewise_construct,
+                std::forward_as_tuple(nlri),
+                std::forward_as_tuple(attrMgr, pid, nlri, static_cast<NeighborAf*>(nullptr)));
+        }
+        else
+        {
+            networkLocalRoutes.erase(nlri);
+        }
+
+        recomputeNlri(nlri);
+    }
+
+    // Synchronise network-command watches with the current NETWORK config.
+    // Call once at construction and whenever the NETWORK config changes.
+    void syncNetworkRoutes()
+    {
+        if constexpr (!isIpPrefix<NlriT>)
+            return;
+
+        // Snapshot the currently configured prefixes.
+        std::vector<NlriT> configured;
+        configs->get<Config::BgpAddressFamily::NETWORK>().withRead(
+            [&](const auto& nets)
+            {
+                for (const auto& net : nets)
+                    configured.push_back(std::get<0>(net));
+            });
+
+        auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
+
+        // Remove watches for prefixes no longer in the config.
+        for (auto it = networkWatches.begin(); it != networkWatches.end(); )
+        {
+            bool found = std::any_of(configured.begin(), configured.end(),
+                [&](const NlriT& p) { return p == it->first; });
+            if (!found)
+            {
+                if (it->second.watchId)
+                    rt.unwatchAddress(it->second.watchId, it->second.isV6);
+                NlriT staleNlri = it->first;
+                it = networkWatches.erase(it);
+
+                if (networkLocalRoutes.erase(staleNlri))
+                    recomputeNlri(staleNlri);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        // Add watches for newly configured prefixes.
+        for (const NlriT& pfx : configured)
+        {
+            if (networkWatches.count(pfx))
+                continue;
+
+            auto [watchIt, inserted] = networkWatches.emplace(pfx, NetworkWatchEntry{});
+            if (!inserted)
+                continue;
+
+            NetworkWatchEntry& entry = watchIt->second;
+            entry.ctx = NetworkWatchCtx{this, pfx, ProcessAccessor::getScheduler(process)};
+
+            if constexpr (N::afi.afi == BGP_AFI_IPV6)
+            {
+                entry.isV6    = true;
+                entry.watchId = rt.watchRoute(readU128(pfx.addr), pfx.prefixLength,
+                                              &entry.ctx, networkWatchCallback<__uint128_t>);
+            }
+            else
+            {
+                entry.isV6    = false;
+                entry.watchId = rt.watchRoute(readU32(pfx.addr), pfx.prefixLength,
+                                              &entry.ctx, networkWatchCallback<uint32_t>);
+            }
+        }
+    }
+
+    void clearNetworkWatches()
+    {
+        if (networkWatches.empty())
+            return;
+
+        auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
+        for (auto& [nlri, entry] : networkWatches)
+            if (entry.watchId)
+                rt.unwatchAddress(entry.watchId, entry.isV6);
+
+        networkWatches.clear();
+        networkLocalRoutes.clear();
     }
 
     void onNhtChange(const IPAddress& nh, bool reachable)
@@ -1604,7 +1858,7 @@ private:
         auto& delayField = configs->get<Config::BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY>();
         uint16_t delaySecs = delayField.hasValue() ? delayField.load() : 5;
 
-        nhtTimerId = AddressFamilyInstanceHelper::getScheduler(process).postAfter(
+        nhtTimerId = ProcessAccessor::getScheduler(process).postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(delaySecs),
             [this](uint32_t) { nhtTimerId = 0; processNhtPending(); });
     }
@@ -1621,7 +1875,7 @@ private:
     // Pre-policy Adj-RIB-In for soft-reconfiguration inbound.
     PreAdjRibInTable<NlriT> preAdjRibIn;
     AdjRibInTable<NlriT>  adjRibIn;
-    LocRibTable<NlriT>    locRib;
+    N::LocRib locRib;
     AdjRibOutTable<NlriT> adjRibOut;
 
     std::unordered_map<uint32_t, MraiState> mraiState;
@@ -1638,6 +1892,10 @@ private:
     std::unordered_map<NlriT,    IPAddress>  nlriToNextHop;
     std::unordered_set<NlriT>                pendingNhtRecompute;
     uint32_t                                 nhtTimerId = 0;
+
+    // Network command: locally-originated route state.
+    std::unordered_map<NlriT, NetworkWatchEntry>     networkWatches;
+    std::unordered_map<NlriT, InboundRoute<NlriT>>   networkLocalRoutes;
 
     N policy;
     IgpMetricResolver igpMetricResolver;

@@ -30,7 +30,7 @@ static RouteSource deriveOspfType(OspfRouteType type)
 static bool isIntraRangeSuppressed(const IPPrefix& prefix, const std::unordered_set<IPPrefix>& ranges)
 {
     for (const auto& r : ranges)
-        if (Functions::compareNetworkWithIp(r.addr, prefix.addr, r.prefixLength, prefix.af))
+        if (r.contains(prefix))
             return true;
     return false;
 }
@@ -590,29 +590,29 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
 
         if (af == AddressFamily::IPv4)
         {
-            RibEntry<uint32_t> ribRoute;
-            ribRoute.prefix = readU32(prefix.addr);
-            ribRoute.length = prefix.prefixLength;
-            ribRoute.source = deriveOspfType(next.type);
-            ribRoute.adminDistance = next.adminDistance;
-            ribRoute.metric = next.cost;
+            RibEntry<uint32_t>* ribRoute = new RibEntry<uint32_t>;
+            ribRoute->prefix = readU32(prefix.addr);
+            ribRoute->length = prefix.prefixLength;
+            ribRoute->source = deriveOspfType(next.type);
+            ribRoute->adminDistance = next.adminDistance;
+            ribRoute->metric = next.cost;
 
             for (const auto& hop : merged)
-                ribRoute.addNextHop(readU32(hop.nextHop.raw), hop.interfaceId);
+                ribRoute->addNextHop(readU32(hop.nextHop.raw), hop.interfaceId);
 
             rib.addRoute(ribRoute);
         }
         else
         {
-            RibEntry<__uint128_t> ribRoute;
-            ribRoute.prefix = readU128(prefix.addr);
-            ribRoute.length = prefix.prefixLength;
-            ribRoute.source = deriveOspfType(next.type);
-            ribRoute.adminDistance = next.adminDistance;
-            ribRoute.metric = next.cost;
+            RibEntry<__uint128_t>* ribRoute = new RibEntry<__uint128_t>;
+            ribRoute->prefix = readU128(prefix.addr);
+            ribRoute->length = prefix.prefixLength;
+            ribRoute->source = deriveOspfType(next.type);
+            ribRoute->adminDistance = next.adminDistance;
+            ribRoute->metric = next.cost;
 
             for (const auto& hop : merged)
-                ribRoute.addNextHop(readU128(hop.nextHop.raw), hop.interfaceId);
+                ribRoute->addNextHop(readU128(hop.nextHop.raw), hop.interfaceId);
 
             rib.addRoute(ribRoute);
         }

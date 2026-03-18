@@ -31,17 +31,17 @@ public:
     }
 
     // Returns true if the bucket's best route changed and the FIB was updated.
-    bool addRoute(const RibEntry<AddrType>& e) noexcept
+    bool addRoute(const RibEntry<AddrType>* e) noexcept
     {
         bool replaced = false;
 
         for (RibEntry<AddrType>& r : routes)
         {
-            if (r.source == e.source && r.processId == e.processId)
+            if (r.source == e->source && r.processId == e->processId)
             {
-                if (r.metric        == e.metric        &&
-                    r.nextHopCount  == e.nextHopCount  &&
-                    r.adminDistance == e.adminDistance)
+                if (r.metric        == e->metric        &&
+                    r.nextHopCount  == e->nextHopCount  &&
+                    r.adminDistance == e->adminDistance)
                     return false;
                 r = e;
                 replaced = true;
@@ -51,6 +51,8 @@ public:
 
         if (!replaced)
             routes.push_back(e);
+        else
+            delete e;
 
         selectBest();
         return true;
