@@ -1,7 +1,6 @@
 // EigrpInterfaceSummary.cpp
 
 #include <mutex>
-#include <Functions.h>
 #include "RouteAggregator.h"
 #include "EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
@@ -41,7 +40,7 @@ SummaryRoute* RouteAggregator::isSummarized(const IPPrefix& prefix)
     for (auto& sum : summaryRoutes)
     {
         if (sum.first.prefixLength < prefix.prefixLength &&
-            Functions::compareNetworkWithIp(sum.first, IPAddress(prefix.addr, prefix.prefixLength)))
+            sum.first.contains(IPAddress(prefix.addr, prefix.prefixLength)))
         {
             return &sum.second;
         }
@@ -78,7 +77,7 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
                 for (auto& entry : iface.getTopController().getTopologies())
                 {
                     if (entry.second->prefix.prefixLength >= prefix.prefixLength &&
-                        Functions::compareNetworkWithIp(prefix, IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
+                        prefix.contains(IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
                     {
                         entry.second->suppression[iface.interfaceKey].summaries.insert(s);
                         s->summarizedRoutes.insert(entry.second->prefix);
@@ -120,7 +119,7 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
             for (auto& entry : iface.getTopController().getTopologies())
             {
                 if (entry.second->prefix.prefixLength >= prefix.prefixLength &&
-                    Functions::compareNetworkWithIp(prefix, IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
+                    prefix.contains(IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
                 {
                     entry.second->suppression[iface.interfaceKey].summaries.insert(&s);
                     s.summarizedRoutes.insert(entry.second->prefix);

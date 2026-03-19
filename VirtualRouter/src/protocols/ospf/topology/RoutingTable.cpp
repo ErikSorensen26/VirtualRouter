@@ -31,7 +31,7 @@ static bool isIntraRangeSuppressed(const IPPrefix& prefix, const std::unordered_
 {
     IPAddress prefixAddr(prefix.addr, prefix.prefixLength);
     for (const auto& r : ranges)
-        if (Functions::compareNetworkWithIp(r, prefixAddr))
+        if (r.contains(prefixAddr))
             return true;
     return false;
 }

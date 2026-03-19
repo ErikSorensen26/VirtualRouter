@@ -1,6 +1,5 @@
 // InterfaceManager.cpp
 
-#include <Functions.h>
 #include <VirtualRouter.h>
 #include <Global.h>
 
@@ -147,13 +146,13 @@ void InterfaceManager::refreshInterfaceList()
 
             if (!process.isV3)
             {
-                currentAddress = interface->configs.ipv4.getPrimaryPrefix();
+                { auto pfx = interface->configs.ipv4.getPrimaryPrefix(); currentAddress = IPPrefix(pfx.addr, pfx.prefixLength); }
                 auto area = isInNetworkRange(currentAddress.addr);
                 if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress().addr, area.value());
             }
             else
             {
-                currentAddress = interface->configs.ipv6.getLocalPrefix();
+                { auto pfx = interface->configs.ipv6.getLocalPrefix(); currentAddress = IPPrefix(pfx.addr, pfx.prefixLength); }
                 bool inRange = ipInfo.ospf.enabledProcesses.contains(procId) &&
                                  interface->getVRF() == process.routingInstance;
                 if (inRange) key.emplace(id, ipInfo.ospf.enabledProcesses[procId]);

@@ -11,7 +11,7 @@
 #include <cstring>
 #include <map>
 #include <unordered_set>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "packet/HeaderHelpers.hpp"

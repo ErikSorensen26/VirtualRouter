@@ -3,7 +3,7 @@
 #ifndef INTRA_AREA_PREFIX_HPP
 #define INTRA_AREA_PREFIX_HPP
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"

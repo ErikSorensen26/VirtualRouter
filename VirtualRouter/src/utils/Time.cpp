@@ -4,7 +4,6 @@
 #include <string> 
 #include <chrono> 
 #include <Time.h> 
-#include <Functions.h>
 
 DoTime::DoTime() // Default constructor for the DoTime class.
 {

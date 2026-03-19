@@ -11,6 +11,8 @@
 #include <memory_resource>
 #include <vector>
 #include <atomic>
+#include <chrono>
+#include <variant>
 
 #include "packet/headers/embedded/ospf/Ospfv2LSAHeader.hpp"
 #include "packet/headers/embedded/ospf/Ospfv3LSAHeader.hpp"

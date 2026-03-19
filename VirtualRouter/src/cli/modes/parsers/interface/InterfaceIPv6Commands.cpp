@@ -1,11 +1,11 @@
 // InterfaceIPv6Commands.cpp
 
-#include <Functions.h>
 #include <VirtualRouter.h>
 
 #include "InterfaceIPv6Commands.h"
 #include "InterfaceHelpers.hpp"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include <infrastructure/Ndp.h>
@@ -22,38 +22,39 @@ bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
 
     if (args.empty()) return false;
 
-    if (Functions::isIPv6Address(args[0]))
+    if (CliUtils::isIPv6Address(args[0]))
     {
-	IPv6Address ipv6Address = Functions::getIPv6Address(args[0]);
+	IPv6Address ipv6Address; CliUtils::extractIPv6Address(args[0], ipv6Address);
 	if (!ctx.negate)
 	{
-	    if (!Functions::isLocalLink(ipv6Address.addr))
+	    if (!ipv6Address.isLocalLink())
 	    {
 			ctx.terminal.iConsole->print(std::string("\r\n%") + std::string(" Invalid local-link address"));
 			return false;
 	    }
 
-	    ctx.currentInterface.setIPv6({ipv6Address, 64}, true);
+	    ctx.currentInterface.setIPv6(IPv6Prefix(ipv6Address.addr, 64), true);
 	}
 	else
 	{
 	    ctx.currentInterface.removeIPv6();
 	}
     }
-    else if (Functions::isIPv6AddressWithMask(args[0]))
+    else if (CliUtils::isIPv6AddressWithMask(args[0]))
     {
-	IPv6Address ipv6Address;
-	uint8_t mask;
-	if (Functions::splitSlashMiddle(args[0], ipv6Address, mask))
+	IPv6Prefix _pfx;
+	if (CliUtils::extractIPv6Prefix(args[0], _pfx))
 	{
+	    IPv6Address ipv6Address(_pfx.addr);
+	    uint8_t mask = _pfx.prefixLength;
 	    //TODO anycast
 	    if (!ctx.negate)
 	    {
-			ctx.currentInterface.setIPv6({ipv6Address, mask}, false);
+			ctx.currentInterface.setIPv6(_pfx, false);
 	    }
 	    else
 	    {
-			{ IPv6Prefix rmPfx{ipv6Address, mask}; ctx.currentInterface.removeIPv6(&rmPfx); }
+			ctx.currentInterface.removeIPv6(&_pfx);
 	    }
 	}
     }
@@ -320,10 +321,10 @@ bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
     if (args[0] == "eigrp")
     {
 	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	IPv6Address network;
-	uint8_t mask;
-	Functions::splitSlashMiddle(args[2], network, mask);
-	IPPrefix prefix(IPv6Prefix(network, mask));
+	IPv6Prefix _pfx; CliUtils::extractIPv6Prefix(args[2], _pfx);
+	IPv6Address network(_pfx.addr);
+	uint8_t mask = _pfx.prefixLength;
+	IPPrefix prefix(_pfx.addr, _pfx.prefixLength);
 	auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
 	if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv4)
 	{
@@ -346,7 +347,7 @@ bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
 		}
 		else
 		{
-		    eigrpConfig->pendingSummaryRoutes.push_back({network, mask});
+		    eigrpConfig->pendingSummaryRoutes.push_back(IPPrefix(_pfx.addr, _pfx.prefixLength));
 		}
 	    }
 	}

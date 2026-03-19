@@ -1,12 +1,12 @@
 // RouterEigrpTopologyCommands.cpp
 
-#include <Functions.h>
 #include <Global.h>
 #include <VirtualRouter.h>
 
 #include "RouterEigrpTopologyCommands.h"
 #include "eigrp/core/Eigrp.h"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 
 namespace Cli
 {
@@ -46,7 +46,7 @@ bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
 {
-    if (Functions::isNumber(args[0]))
+    if (CliUtils::isNumber(args[0]))
     {
         // XXX
     }
@@ -112,7 +112,7 @@ bool RouterEigrpTopology_ActiveTime_Handler(EIGRP_PARAMS)
     auto& configs = ctx.currentEigrp->getConfigs();
     if (!ctx.negate)
     {
-        if (Functions::isNumber(args[0]))
+        if (CliUtils::isNumber(args[0]))
         {
             configs.stuckInActiveTime.store(static_cast<uint16_t>(std::stoi(args[0]) / 2), std::memory_order_release);
             configs.activeDisabled.store(false, std::memory_order_release);

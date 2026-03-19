@@ -1,7 +1,6 @@
 // GlobalIPv6Commands.h
 
-#include <Functions.h>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <Global.h>
 #include <VirtualRouter.h>
 
@@ -10,6 +9,7 @@
 #include "interface/configs/InterfaceConfigs.h"
 #include "infrastructure/Ndp.h"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "cli/modes/contexts/EigrpContext.hpp"
 #include "eigrp/core/Eigrp.h"
 
@@ -17,15 +17,16 @@ namespace Cli
 {
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
 {
-    IPv6Address address = Functions::getIPv6Address(args[0]);
+    IPv6Address address; CliUtils::extractIPv6Address(args[0], address);
     if (!ctx.negate)
     {
         InterfaceType type = getInterfaceType(args[1]);
         float id = std::stof(args[2]);
         uint32_t intID = calculateInterfaceKey(type, id);
+        uint64_t _mac = 0; CliUtils::extractMacAddress(args[3], _mac);
         GlobalConfigs::Ndp::Neighbor entry{
                 intID,
-                Functions::macToInt(args[3])
+                _mac
         };
         ctx.global.configs.ndp.neighbors.emplace(
                 address,

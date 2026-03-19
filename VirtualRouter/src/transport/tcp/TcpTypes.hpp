@@ -8,7 +8,7 @@
 #include <optional>
 #include <functional>
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <AddressFamily.hpp>
 
 namespace TCP

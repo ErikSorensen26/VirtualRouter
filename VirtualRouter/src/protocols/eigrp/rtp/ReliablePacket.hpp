@@ -5,7 +5,7 @@
 
 #include <cstring>
 #include <chrono>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "packet/headers/EigrpHeader.hpp"
 #include "packet/StaticHeader.hpp"

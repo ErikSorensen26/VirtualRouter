@@ -5,7 +5,7 @@
 
 #include <vector>
 #include <cstdint>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "routing/RoutingTable.hpp"
 #include "eigrp/core/EigrpConfig.h"

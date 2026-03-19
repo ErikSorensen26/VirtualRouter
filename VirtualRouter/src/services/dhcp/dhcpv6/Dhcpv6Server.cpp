@@ -1,7 +1,5 @@
 //TODO echo unknown option & duid generation
 
-#include <Functions.h>
-
 #include "Dhcpv6Server.h"
 #include "interface/Interface.h"
 #include "infrastructure/IPPacket.h"
@@ -49,7 +47,7 @@ void Protocol::Dhcpv6Server::handlePacket(Dhcpv6Header& dhcp, Interface& iface, 
     handleDhcpPacket(receive, networkAddress);
 }
 
-bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packet, __uint128_t networkAddress)
+bool Protocol::Dhcpv6Server::handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& packet, IPv6Address networkAddress)
 {
     auto& dhcp = packet.dhcpHeader;
     auto& options = packet.options;
@@ -407,7 +405,7 @@ void Protocol::Dhcpv6Server::buildResponse(
         }
     }
 
-    auto addServerList = [&](uint16_t type, std::vector<__uint128_t>& servers)
+    auto addServerList = [&](uint16_t type, std::vector<IPv6Address>& servers)
     {
         if (!servers.empty())
         {
@@ -417,7 +415,7 @@ void Protocol::Dhcpv6Server::buildResponse(
             size_t offset = 0;
             for (const auto& dns : servers)
             {
-                writeU128(value + offset, dns);
+                writeU128(value + offset, dns.addr);
                 offset += 16;
             }
             tlv.append(type, size, nullptr, size);
@@ -1005,7 +1003,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
 
             for (auto& entry : block.addresses)
             {
-                if (entry.address == 0)
+                if (entry.address.isUnspecified())
                 {
                     entry.status = { Dhcpv6StatusCode::NoBinding };
                     continue;
@@ -1025,7 +1023,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
 
             for (auto& entry : block.addresses)
             {
-                if (entry.address == 0)
+                if (entry.address.isUnspecified())
                 {
                     entry.status = { Dhcpv6StatusCode::NoBinding };
                     continue;
@@ -1081,7 +1079,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
 
             for (auto& entry : block.addresses)
             {
-                if (entry.address == 0)
+                if (entry.address.isUnspecified())
                 {
                     entry.status = { Dhcpv6StatusCode::NoBinding };
                     continue;
@@ -1137,7 +1135,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
 
             for (auto& entry : block.addresses)
             {
-                if (entry.address == 0)
+                if (entry.address.isUnspecified())
                 {
                     entry.status = { Dhcpv6StatusCode::NoBinding };
                     continue;
@@ -1159,7 +1157,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processR
 
             for (auto& entry : block.addresses)
             {
-                if (entry.address == 0)
+                if (entry.address.isUnspecified())
                 {
                     entry.status = { Dhcpv6StatusCode::NoBinding };
                 }
@@ -1218,7 +1216,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processD
 
             for (auto& entry : block.addresses)
             {
-                if (entry.address == 0)
+                if (entry.address.isUnspecified())
                 {
                     entry.status = { Dhcpv6StatusCode::NoBinding };
                     continue;
@@ -1242,7 +1240,7 @@ std::optional<Protocol::Dhcpv6::Dhcpv6SendType> Protocol::Dhcpv6Server::processD
 
             for (auto& entry : block.addresses)
             {
-                if (entry.address == 0)
+                if (entry.address.isUnspecified())
                 {
                     entry.status = { Dhcpv6StatusCode::NoBinding };
                     continue;
@@ -1931,15 +1929,15 @@ std::optional<Protocol::Dhcpv6::IAPDBlock> Protocol::Dhcpv6Server::extractIA_PD(
     return std::nullopt;
 }
 
-bool Protocol::Dhcpv6Server::addServerUnicast(TLV16BufferManager& tlv, __uint128_t leasedIp, Interface& iface)
+bool Protocol::Dhcpv6Server::addServerUnicast(TLV16BufferManager& tlv, IPv6Address leasedIp, Interface& iface)
 {
     uint8_t ip[16];
     uint8_t* buf = nullptr;
-    if (Functions::isGlobalUnicast(leasedIp))
+    if (leasedIp.isGlobalUnicast())
     {
         buf = iface.configs.ipv6.getGlobalUnicast(ip);
     }
-    else if (Functions::isLocalUnicast(leasedIp))
+    else if (leasedIp.isLocalUnicast())
     {
         buf = iface.configs.ipv6.getLocalUnicast(ip);
     }
@@ -1951,7 +1949,7 @@ bool Protocol::Dhcpv6Server::addServerUnicast(TLV16BufferManager& tlv, __uint128
     return false;
 }
 
-Protocol::Dhcpv6::DhcpNetwork* Protocol::Dhcpv6Server::matchAddressToPool(const __uint128_t& addr, uint32_t interfaceKey)
+Protocol::Dhcpv6::DhcpNetwork* Protocol::Dhcpv6Server::matchAddressToPool(const IPv6Address& addr, uint32_t interfaceKey)
 {
     for (const auto& [prefix, pool] : prefixToPool)
     {

@@ -289,7 +289,7 @@ void OriginatorV2::addSecondaryLinks(LsaBody& router, const OspfInterface& iface
     {
         lsa.links.push_back(RouterLinkV2{
             .linkId = secondary.addr,
-            .linkData = Functions::prefixTo32Mask(secondary.prefixLength),
+            .linkData = v4Mask(secondary.prefixLength),
             .type = OSPFV2_LINK_STUB,
             .metric = iface.cost
         });
@@ -333,7 +333,7 @@ void OriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface, bool
         ? 0xFFFF : cost.hasValue() ? cost.load() : iface.cost;
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
         .linkId = iface.interfaceAddress.v4(),
-        .linkData = fullMask ? 0xFFFFFFFF : Functions::prefixTo32Mask(iface.interfaceAddress.prefixLength),
+        .linkData = fullMask ? 0xFFFFFFFF : v4Mask(iface.interfaceAddress.prefixLength),
         .type = OSPFV2_LINK_STUB,
         .metric = metric
     });

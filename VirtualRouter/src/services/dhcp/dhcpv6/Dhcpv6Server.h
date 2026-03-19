@@ -30,7 +30,7 @@ namespace Protocol
 
         struct InterfaceConfigs
         {
-            std::unordered_map<Duid, __uint128_t> clientReconfAccept;
+            std::unordered_map<Duid, IPv6Address> clientReconfAccept;
             std::atomic<bool> automatic = false;
             std::atomic<bool> rapidCommit = false;
             std::atomic<bool> requireReconfigureAccept = false; // Require reconfigure-accept
@@ -89,7 +89,7 @@ namespace Protocol
             };
 
             std::unordered_map<IALeaseKey, StaticConfigs> staticIANAConfigs;
-            std::unordered_map<IAKey, std::pair<__uint128_t, DhcpNetwork*>> staticNAs;
+            std::unordered_map<IAKey, std::pair<IPv6Address, DhcpNetwork*>> staticNAs;
             std::unordered_map<IAPrefixKey, StaticConfigs> staticIAPDConfigs;
             std::unordered_map<IAKey, std::pair<IAPrefixKey, PrefixPoolConfig*>> staticPDs;
         };
@@ -119,16 +119,16 @@ namespace Protocol
 
             std::string accountingList;
 
-            std::vector<__uint128_t> dnsServers;           ///< A list of DNS servers provided with this network.
+            std::vector<IPv6Address> dnsServers;           ///< A list of DNS servers provided with this network.
             std::vector<std::string> domainSearch;
-            std::vector<__uint128_t> ntpServers;           ///< A list of DNS servers provided with this network.
-            std::vector<__uint128_t> nisServers;
+            std::vector<IPv6Address> ntpServers;           ///< A list of DNS servers provided with this network.
+            std::vector<IPv6Address> nisServers;
             std::vector<std::string> nisDomainName;
-            std::vector<__uint128_t> nispServers;
+            std::vector<IPv6Address> nispServers;
             std::vector<std::string> nispDomainName;
-            std::vector<__uint128_t> sipServers;
+            std::vector<IPv6Address> sipServers;
             std::vector<std::string> sipDomainname;
-            std::vector<__uint128_t> sntpServers;
+            std::vector<IPv6Address> sntpServers;
 
             std::string fqdn;
 
@@ -174,7 +174,7 @@ namespace Protocol
             std::string hostname;
         private:
             std::atomic<uint8_t> linkPrefixLength;
-            std::atomic<__uint128_t> linkAddress;
+            std::atomic<IPv6Address> linkAddress;
 
             Configs& configs;
         };
@@ -253,7 +253,7 @@ namespace Protocol
             Dhcpv6StatusMessage status;
             struct IANAEntry
             {
-                __uint128_t address;
+                IPv6Address address;
                 Dhcpv6StatusMessage status;
                 uint32_t staticPreferred;
                 uint32_t staticValid;
@@ -270,7 +270,7 @@ namespace Protocol
             Dhcpv6StatusMessage status = { Dhcpv6StatusCode::None };
             struct IATAEntry
             {
-                __uint128_t address;
+                IPv6Address address;
                 Dhcpv6StatusMessage status;
             };
             std::vector<IATAEntry> addresses;
@@ -349,7 +349,7 @@ namespace Protocol
 
         struct ReconfigureAccepts
         {
-            __uint128_t clientAddress;
+            IPv6Address clientAddress;
             uint32_t interfaceKey;
         };
 
@@ -389,7 +389,7 @@ namespace Protocol
         ~Dhcpv6Server();
 
         void handlePacket(Dhcpv6Header& dhcp, Interface& iface, bool multicast, const uint8_t* clientIp);
-        bool handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& receive, __uint128_t networkAddress);
+        bool handleDhcpPacket(Dhcpv6::Dhcpv6PacketReceive& receive, IPv6Address networkAddress);
 
         void expireClient(const ClientID& clientID);
 
@@ -503,11 +503,11 @@ namespace Protocol
 
         void handleNoPool(Dhcpv6::Dhcpv6IAOptions& ia);
 
-        Dhcpv6::DhcpNetwork* matchAddressToPool(const __uint128_t& addr, uint32_t interfaceKey);
+        Dhcpv6::DhcpNetwork* matchAddressToPool(const IPv6Address& addr, uint32_t interfaceKey);
 
         Dhcpv6::PrefixPoolConfig* selectPrefixPool(const Dhcpv6::DhcpNetwork* network, const IPv6Prefix* requestedPrefix);
 
-        bool addServerUnicast(TLV16BufferManager& tlv, __uint128_t leasedIp, Interface& iface);
+        bool addServerUnicast(TLV16BufferManager& tlv, IPv6Address leasedIp, Interface& iface);
 
 
         bool addStaticLease(Dhcpv6::IANABlock& block, const IAKey& key);

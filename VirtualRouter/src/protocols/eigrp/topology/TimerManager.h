@@ -3,7 +3,7 @@
 #ifndef EIGRP_TIMER_MANAGER_H
 #define EIGRP_TIMER_MANAGER_H
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 class Global;
 class TimeManager;

@@ -1,7 +1,5 @@
 // GlobalAggregator.cpp
 
-#include <Functions.h>
-
 #include "GlobalAggregator.h"
 #include "InterfaceManager.h"
 #include "Eigrp.h"
@@ -62,8 +60,7 @@ void GlobalAggregator::enableAutoSummary(bool enable)
         {
             if (entry.second->successors.empty())
                 continue;
-            IPv4Prefix classful = Functions::findClassfullNetworkAndMask(IPv4Address(entry.first.v4()));
-            classfulGroups.insert(IPPrefix(classful));
+            classfulGroups.emplace(entry.first.v4(), entry.first.getDefaultMask());
         }
 
         std::shared_lock<std::shared_mutex> lock(ifmgr.interfaceMutex);

@@ -4,7 +4,7 @@
 #define CHECKSUMS_H
 
 #include <cstdint>
-#include <Functions.h>
+#include <cstddef>
 
 enum class HeaderType : uint8_t;
 

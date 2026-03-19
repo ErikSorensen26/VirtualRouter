@@ -6,7 +6,7 @@
 #include <map>
 #include <set>
 #include <mutex>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 struct IPAddress;
 

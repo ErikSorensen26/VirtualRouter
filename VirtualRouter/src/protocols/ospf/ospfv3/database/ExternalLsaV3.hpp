@@ -3,7 +3,7 @@
 #ifndef EXTERNAL_LSA_V3_HPP
 #define EXTERNAL_LSA_V3_HPP
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"

@@ -19,7 +19,7 @@
 #include "configs/Registry.hpp"
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
-#include "IPAddress.hpp"
+#include "IPAddress.h"
 
 #define DEFAULT_HOSTNAME "router"
 

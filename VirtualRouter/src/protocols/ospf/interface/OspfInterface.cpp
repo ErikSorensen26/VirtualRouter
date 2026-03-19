@@ -15,9 +15,15 @@
 auto getIfaceAddr(Interface& iface, AddressFamily af) -> IPPrefix
 {
     if (af == AddressFamily::IPv4)
-        return IPPrefix(iface.configs.ipv4.getPrimaryPrefix(), true);
+    {
+        auto pfx = iface.configs.ipv4.getPrimaryPrefix();
+        return IPPrefix(pfx.addr, pfx.prefixLength, true);
+    }
     else
-        return IPPrefix(iface.configs.ipv6.getLocalPrefix(), true);
+    {
+        auto pfx = iface.configs.ipv6.getLocalPrefix();
+        return IPPrefix(pfx.addr, pfx.prefixLength, true);
+    }
 }
 
 namespace OSPF

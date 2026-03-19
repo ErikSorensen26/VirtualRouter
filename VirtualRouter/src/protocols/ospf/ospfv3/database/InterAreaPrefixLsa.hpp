@@ -4,9 +4,8 @@
 #define INTER_AREA_PREFIX_LSA_HPP
 
 #include <cstdint>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
-#include <Functions.h>
 
 #include "ospf/transmission/OspfFletcher.hpp"
 #include "packet/HeaderHelpers.hpp"

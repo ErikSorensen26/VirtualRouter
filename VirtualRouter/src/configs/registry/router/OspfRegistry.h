@@ -5,7 +5,7 @@
 
 #include <string>
 
-#include "IPAddress.hpp"
+#include "IPAddress.h"
 #include "OspfInterfaceRegistry.h"
 #include "configs/RegistryTypes.hpp"
 

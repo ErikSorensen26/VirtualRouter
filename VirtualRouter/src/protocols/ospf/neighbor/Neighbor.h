@@ -5,7 +5,7 @@
 
 #include <atomic>
 #include <optional>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "ospf/transmission/OspfPacket.hpp"
 #include "ospf/database/LsaKey.hpp"

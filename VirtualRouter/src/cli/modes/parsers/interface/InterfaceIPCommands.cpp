@@ -1,10 +1,9 @@
 // InterfaceIPCommands.cpp
 
-#include <Functions.h>
-
 #include "InterfaceIPCommands.h"
 #include "InterfaceHelpers.hpp"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "dhcp/dhcpv4/DhcpClient.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
@@ -17,9 +16,10 @@ bool InterfaceIP_AddressSet_Handler(INTERFACE_PARAMS)
     {
 	if (args[0] != "dhcp")
 	{
-	    IPv4Address ipAddress = Functions::getIPv4Address(args[0]);
-	    uint8_t subnet = static_cast<uint8_t>(__builtin_popcount(Functions::getIPv4Address(args[1]).addr));
-	    ctx.currentInterface.setIPv4(IPv4Prefix{ipAddress, subnet});
+	    IPv4Address ipAddress; CliUtils::extractIPv4Address(args[0], ipAddress);
+	    IPv4Address _mask; CliUtils::extractIPv4Address(args[1], _mask);
+	    uint8_t subnet = static_cast<uint8_t>(__builtin_popcount(_mask.addr));
+	    ctx.currentInterface.setIPv4(IPv4Prefix(ipAddress.addr, subnet));
 	}
 	else
 	{
@@ -247,9 +247,9 @@ bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS)
     {
 	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
 	auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
-	IPv4Address network = Functions::getIPv4Address(args[2]);
-	uint8_t mask = Functions::prefixToPrefixLength(network.addr);
-	IPPrefix prefix = { network, mask };
+	IPv4Address network; CliUtils::extractIPv4Address(args[2], network);
+	uint8_t mask; CliUtils::extractSubnetMask(network.addr, mask);
+	IPPrefix prefix(network.addr, mask);
 	if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv4)
 	{
 	    if (ctx.negate)

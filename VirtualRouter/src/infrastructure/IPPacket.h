@@ -4,7 +4,7 @@
 #define IP_PACKET_H
 
 #include <cstdint>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 class Interface;

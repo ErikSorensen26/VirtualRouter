@@ -1,15 +1,15 @@
 // IPPacket.cpp
 
+#include <IPAddress.h>
+
 #include "IPPacket.h"
 #include "Ethernet.h"
-#include "IPAddress.hpp"
 #include "interface/Interface.h"
 #include "packet/PacketStructure.h"
 #include "packet/headers/EthernetHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "Arp.h"
 #include "Ndp.h"
-#include <Functions.h>
 
 namespace Protocol::IPPacket
 {
@@ -45,7 +45,7 @@ static bool getDestinationMac(uint64_t& outMac, Interface* iface, const IPAddres
 
     if (destIp.isIPv4())
     {
-        if (Functions::isMulticast(destIp))
+        if (destIp.isMulticast())
         {
             deriveMulticastMac(macBuf, destIp);
             outMac = readU48(macBuf);
@@ -68,7 +68,7 @@ static bool getDestinationMac(uint64_t& outMac, Interface* iface, const IPAddres
     }
     else
     {
-        if (Functions::isMulticast(destIp))
+        if (destIp.isMulticast())
         {
             deriveMulticastMac(macBuf, destIp);
             outMac = readU48(macBuf);

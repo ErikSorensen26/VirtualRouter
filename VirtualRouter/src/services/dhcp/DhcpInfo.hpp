@@ -4,7 +4,7 @@
 #define DHCP_INFO_HPP
 
 #include <vector>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <random>
 #include <atomic>
 #include <shared_mutex>
@@ -19,7 +19,13 @@
 // Forward declarations
 class Interface;
 
-struct ClientID {
+static inline double secondsSinceEpoch()
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+struct ClientID
+{
     uint8_t* data = nullptr;
     uint8_t size = 0;
     

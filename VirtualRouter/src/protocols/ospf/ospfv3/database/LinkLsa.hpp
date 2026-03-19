@@ -3,7 +3,7 @@
 #ifndef LINK_LSA_HPP
 #define LINK_LSA_HPP
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"

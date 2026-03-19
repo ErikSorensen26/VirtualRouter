@@ -1,11 +1,10 @@
 // RouterEigrpInterfaceCommands.cpp
 
-#include <Functions.h>
-
 #include "RouterEigrpInterfaceCommands.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "interface/Interface.h"
 
 namespace Cli
@@ -123,42 +122,19 @@ bool RouterEigrpInterface_SplitHorizon_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
 {
-    uint8_t size = 0;
-    IPAddress network;
-    uint8_t mask = 0;
+    uint8_t size = 1;
+    IPPrefix network;
     Eigrp::EigrpInterface* iface = nullptr;
     iface = ctx.currentEigrp->getIfaceMgr().getInterface(ctx.currentEigrpInterface->key);
 
     AddressFamily af = ctx.currentEigrp->getAF();
-    if (af == AddressFamily::IPv4)
+    bool extracted = CliUtils::extractIPPrefix(args[0], network);
+
+    if (!extracted && af == AddressFamily::IPv4)
     {
-        IPv4Address v4net;
-        if (!Functions::splitSlashMiddle(args[0], v4net, mask))
-        {
-            network = Functions::getAddress(args[0]);
-            mask = static_cast<uint8_t>(std::stoi(args[1]));
-            size = 2;
-        }
-        else
-        {
-            network = v4net;
-            size = 1;
-        }
-    }
-    else
-    {
-        IPv6Address v6net;
-        if (!Functions::splitSlashMiddle(args[0], v6net, mask))
-        {
-            network = Functions::getAddress(args[0]);
-            mask = static_cast<uint8_t>(std::stoi(args[1]));
-            size = 2;
-        }
-        else
-        {
-            network = v6net;
-            size = 1;
-        }
+        if (af != AddressFamily::IPv4 || !CliUtils::extractIPv4Prefix(args[0], args[1], network))
+            return false;
+        size = 2;
     }
 
     if (args.size() != size && args[size] == "leak-map")
@@ -166,13 +142,11 @@ bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
         // XXX
     }
 
-    IPPrefix prefix(network, mask);
-
     if (iface)
     {
         ctx.negate
-            ? iface->getAggregator().installSummary(prefix, false)
-            : iface->getAggregator().withdrawSummary(prefix);
+            ? iface->getAggregator().installSummary(network, false)
+            : iface->getAggregator().withdrawSummary(network);
     }
     else
     {
@@ -180,16 +154,16 @@ bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
         {
             std::shared_lock<std::shared_mutex> lock(ctx.currentEigrpInterface->configsMutex);
             if (!std::any_of(ctx.currentEigrpInterface->pendingSummaryRoutes.begin(), ctx.currentEigrpInterface->pendingSummaryRoutes.end(),
-                [&](IPPrefix& pfx) { return pfx == prefix; }))
+                [&](IPPrefix& pfx) { return pfx == network; }))
             {
-                ctx.currentEigrpInterface->pendingSummaryRoutes.push_back(prefix);
+                ctx.currentEigrpInterface->pendingSummaryRoutes.push_back(network);
             }
         }
         else
         {
             std::shared_lock<std::shared_mutex> lock(ctx.currentEigrpInterface->configsMutex);
             ctx.currentEigrpInterface->pendingSummaryRoutes.erase(std::remove(ctx.currentEigrpInterface->pendingSummaryRoutes.begin(),
-                ctx.currentEigrpInterface->pendingSummaryRoutes.end(), prefix), ctx.currentEigrpInterface->pendingSummaryRoutes.end());
+                ctx.currentEigrpInterface->pendingSummaryRoutes.end(), network), ctx.currentEigrpInterface->pendingSummaryRoutes.end());
         }
     }
     return true;

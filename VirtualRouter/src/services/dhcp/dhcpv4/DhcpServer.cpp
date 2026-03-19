@@ -805,8 +805,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
         Dhcp::appendTLV(tlv, DHCP_OPTION_REBINDING_TIME, lease->t2);
 
         // Mask
-        uint8_t buf[4];
-        Dhcp::appendTLV(tlv, DHCP_OPTION_MASK, 4, Functions::prefixToMask(buf, prefixLen, AddressFamily::IPv4));
+        Dhcp::appendTLV(tlv, DHCP_OPTION_MASK, v4Mask(prefixLen));
 
         // Router
         Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, iface.configs.ipv4.getPrimaryAddress().addr);
@@ -1582,7 +1581,7 @@ Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::matchingNetwork(const Interfa
         for (auto& [_, config] : networks)
         {
             auto network = config->configs.getNetworkID();
-            if (config->pool->init.load(std::memory_order_relaxed), Functions::compareNetworkWithIp(network.addr, ip, network.prefixLength))
+            if (config->pool->init.load(std::memory_order_relaxed) && network.contains(ip))
             {
                 return config;
             }

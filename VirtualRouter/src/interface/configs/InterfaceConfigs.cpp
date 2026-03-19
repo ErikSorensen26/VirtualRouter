@@ -1,6 +1,6 @@
 // InterfaceConfigs.cpp
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <TimeManager.h>
 
 #include "InterfaceConfigs.h"

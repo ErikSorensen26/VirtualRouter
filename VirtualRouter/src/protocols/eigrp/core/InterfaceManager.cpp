@@ -1,6 +1,5 @@
 // InterfaceTable.cpp
 
-#include <Functions.h>
 #include <VirtualRouter.h>
 
 #include "InterfaceManager.h"

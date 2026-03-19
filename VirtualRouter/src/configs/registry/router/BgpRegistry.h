@@ -4,8 +4,8 @@
 #define BGP_REGISTRY_H
 
 #include <string>
+#include <IPAddress.h>
 
-#include "IPAddress.hpp"
 #include "configs/TupleSchema.hpp"
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryReference.hpp"

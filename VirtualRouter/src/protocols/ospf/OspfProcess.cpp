@@ -339,7 +339,7 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
     {
         const auto& ext = std::get<typename Policy::ExternalLsa>(body);
         if constexpr (std::is_same_v<Policy, PolicyV3>)
-            return ext.prefix;
+            return IPPrefix(ext.prefix.addr, ext.prefix.prefixLength);
         else
             return IPPrefix(k.linkStateId, static_cast<uint8_t>(std::popcount(ext.networkMask)));
     };
@@ -407,7 +407,7 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
 
         for (auto& [sumPfx, s] : activeSummaries)
         {
-            if (!Functions::compareNetworkWithIp(sumPfx, IPAddress(pfx.addr, pfx.prefixLength)))
+            if (!sumPfx.contains(IPAddress(pfx.addr, pfx.prefixLength)))
                 continue;
 
             if (s.contributorCount == 0)
@@ -565,7 +565,7 @@ void OspfProcess::reoriginateSummaries(Area& sourceArea, std::vector<OspfRouteCh
 
         if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
         {
-            network.networkMask = Functions::prefixTo32Mask(path.prefix.prefixLength);
+            network.networkMask = v4Mask(path.prefix.prefixLength);
             network.metric = static_cast<uint32_t>(path.cost);
 
             key.advertisingRouter = getRouterId();
@@ -633,7 +633,7 @@ void OspfProcess::reoriginateSummary(Area& sourceArea, OspfRouteChange& path)
 
     if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
     {
-        network.networkMask = Functions::prefixTo32Mask(path.prefix.prefixLength);
+        network.networkMask = v4Mask(path.prefix.prefixLength);
         network.metric = static_cast<uint32_t>(path.cost);
 
         key.advertisingRouter = getRouterId();

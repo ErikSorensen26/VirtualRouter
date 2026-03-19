@@ -6,6 +6,7 @@
 #include "interface/Interface.h"
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "ospf/OspfProcess.h"
 #include "ospf/interface/OspfInterface.h"
 
@@ -213,7 +214,7 @@ bool InterfaceIPv6Ospf_Encryption_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6Ospf_Neighbor_Handler(INTERFACE_PARAMS)
 {
-    IPAddress nbrIp = Functions::getAddress(args[0]);
+    IPAddress nbrIp; CliUtils::extractIPAddress(args[0], nbrIp);
     std::optional<uint16_t> cost{std::nullopt};
     std::optional<bool> df{std::nullopt};
     std::optional<uint16_t> poll{std::nullopt};

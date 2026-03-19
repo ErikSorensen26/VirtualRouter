@@ -5,7 +5,7 @@
 
 #include <unordered_set>
 #include <shared_mutex>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include "Neighbor.h"
 
 namespace Eigrp

@@ -6,6 +6,7 @@
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/GlobalContext.hpp"
+#include "cli/runtime/CliUtils.h"
 
 namespace Cli
 {
@@ -209,16 +210,16 @@ using GlobalIPDHCPCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalC
                     uint16_t size = 1;
                     if (commandStream[4].find('-') != std::string::npos)
                     {
-                            auto pair = Functions::splitMiddle(commandStream[4], '-');
+                            auto pair = CliUtils::splitMiddle(commandStream[4], '-');
                             if (pair->first > pair->second) return false;
                             global.dhcpServer->configs.snooping.vlans[std::stoi(pair->first)].insert(std::stoi(pair->second) - std::stoi(pair->first) + 1);
                     }
                     else
                     {
-                            vlanStart = Functions::addressToIntv4(commandStream[4]);
+                            vlanStart = static_cast<uint16_t>(std::stoul(commandStream[4]));
                             if (commandStream.size() > 5)
                             {
-                                    uint32_t vlanEnd = Functions::addressToIntv4(commandStream[5]);
+                                    uint32_t vlanEnd = static_cast<uint32_t>(std::stoul(commandStream[5]));
                                     if (vlanEnd >= vlanStart)
                                     {
                                             size = (vlanEnd - vlanStart) + 1;

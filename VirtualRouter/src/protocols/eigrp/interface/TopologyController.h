@@ -5,7 +5,7 @@
 
 #include <cstdint>
 #include <vector>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <unordered_map>
 
 namespace Eigrp

@@ -3,7 +3,6 @@
 // TODO naglean
 // TODO nudigp
 
-#include <Functions.h>
 #include <Global.h>
 #include <VirtualRouter.h>
 
@@ -11,6 +10,20 @@
 #include "IPPacket.h"
 #include "processing/PacketBuilder.hpp"
 #include "Ethernet.h"
+
+static uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_t* mac)
+{
+    std::memcpy(out, prefix, 8);
+    out[8] = mac[0] ^ 0x02;
+    out[9]  = mac[1];
+    out[10] = mac[2];
+    out[11] = 0xFF;
+    out[12] = 0xFE;
+    out[13] = mac[3];
+    out[14] = mac[4];
+    out[15] = mac[5];
+    return out;
+}
 
 namespace Protocol
 {
@@ -940,7 +953,7 @@ namespace Protocol
         if (!ipv6) return;
 /*
         // Destination must not be multicast
-        if (Functions::isMulticast(ipHeader.destinationAddress) || Functions::isMulticast(ipHeader.sourceAddress))
+        if (ipHeader.destinationAddress.isMulticast() || ipHeader.sourceAddress.isMulticast())
             return;
 
         // Check if destination is already on-link (i.e., we know its mac from the same interface)
@@ -1050,7 +1063,7 @@ namespace Protocol
                     uint8_t mac[6];
                     uint8_t slac[16];
                     // TODO
-                    Functions::calculateEui64(slac, opt.value + 14, currentInterface->configs.getMac(mac));
+                    calculateEui64(slac, opt.value + 14, currentInterface->configs.getMac(mac));
                     slaacAddr->addr = readU128(slac);
 
                     {

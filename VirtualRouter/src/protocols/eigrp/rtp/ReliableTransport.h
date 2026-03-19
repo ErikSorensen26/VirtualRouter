@@ -4,7 +4,7 @@
 #define EIGRP_RELIABLE_TRANSPORT_H
 
 #include <map>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <atomic>
 
 #include "eigrp/EigrpTypes.hpp"

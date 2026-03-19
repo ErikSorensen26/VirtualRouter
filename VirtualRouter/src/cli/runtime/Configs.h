@@ -17,7 +17,6 @@
 
 #include <pugixml.hpp>
 #include <json.hpp>
-#include <Functions.h>
 
 #define COMMAND_TREE_BIN "./configs/Commands.bin"
 #define COMMAND_TREE "./configs/Commands.json"

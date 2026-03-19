@@ -5,10 +5,10 @@
 #include <Global.h>
 
 #include "GlobalCommands.h"
-#include "Functions.h"
 #include "infrastructure/Arp.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "cli/modes/contexts/InterfaceContext.hpp"
 #include "eigrp/core/Eigrp.h"
 #include "hardware/HardwareManager.h"
@@ -26,11 +26,12 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
     }
 
     std::shared_lock<std::shared_mutex> lock(ctx.global.configs.arp.neighborMutex);
-    if (ctx.negate && ctx.global.configs.arp.neighbors.count(vrfName) && ctx.global.configs.arp.neighbors[vrfName].count(Functions::getIPv4Address(args[offset + 1])))
+    IPv4Address _arpIp; CliUtils::extractIPv4Address(args[offset + 1], _arpIp);
+    if (ctx.negate && ctx.global.configs.arp.neighbors.count(vrfName) && ctx.global.configs.arp.neighbors[vrfName].count(_arpIp))
     {
-        GlobalConfigs::Arp::Neighbor entry = ctx.global.configs.arp.neighbors[vrfName][Functions::getIPv4Address(args[offset + 1])];
+        GlobalConfigs::Arp::Neighbor entry = ctx.global.configs.arp.neighbors[vrfName][_arpIp];
         auto* vrf = ctx.global.getRoutingInstance(vrfName, AddressFamily::IPv4);
-        IPv4Address addr = Functions::getIPv4Address(args[offset + 1]);
+        IPv4Address addr = _arpIp;
         if (auto iface = vrf ? ctx.vrf.getInterface(entry.interface) : nullptr)
         {
             if (iface->arp)
@@ -44,19 +45,17 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
     {
         uint32_t ifaceKey = calculateInterfaceKey(getInterfaceType(args[offset + 3]), std::stof(args[offset + 4]));
         GlobalConfigs::Arp::Neighbor entry;
-        Functions::macToInt(args[offset + 2]);
+        { uint64_t _mac = 0; CliUtils::extractMacAddress(args[offset + 2], _mac); (void)_mac; }
         entry.interface = ifaceKey;
         entry.proxy = args.size() == 5;
 
-        ctx.global.configs.arp.neighbors[vrfName].emplace(
-            Functions::getIPv4Address(args[offset + 1]), entry
-        );
+        ctx.global.configs.arp.neighbors[vrfName].emplace(_arpIp, entry);
         auto* vrf = ctx.global.getRoutingInstance(vrfName, AddressFamily::IPv4);
         if (auto iface = vrf ? vrf->getInterface(ifaceKey) : nullptr)
         {
             if (iface->arp)
             {
-                iface->arp->addArpEntry(Functions::getIPv4Address(args[0]), entry.mac, entry.proxy, true);
+                iface->arp->addArpEntry(_arpIp, entry.mac, entry.proxy, true);
             }
         }
     }
@@ -136,7 +135,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
     ctx.terminal.isList = true;
     std::string id = args[0];
 
-    if (Functions::isNumber(id))
+    if (CliUtils::isNumber(id))
     {
         uint16_t asNum = static_cast<uint16_t>(std::stoi(id));
         Eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);

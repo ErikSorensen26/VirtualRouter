@@ -6,7 +6,7 @@
 #include <optional>
 #include <vector>
 
-#include "IPAddress.hpp"
+#include "IPAddress.h"
 #include "AddressFamily.hpp"
 #include "packet/HeaderHelpers.hpp"
 #include "configs/SubRegistry.hpp"

@@ -5,10 +5,9 @@
 
 // Standard includes
 #include <mutex>
-#include <map>
 #include <atomic>
+#include <IPAddress.h>
 
-#include "IPAddress.hpp"
 #include "configs/InterfaceConfigs.h"
 
 class EigrpTest; ///< Forward declaration of EigrpTest.

@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <chrono>
 #include <atomic>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 class Global;
 class TimeManager;

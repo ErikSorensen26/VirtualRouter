@@ -73,16 +73,16 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
         {
             IPv4Address v4addr = interface->configs.ipv4.getPrimaryAddress();
             uint8_t mask = interface->configs.ipv4.getPrimaryMask();
-            IPPrefix prefix(v4addr, mask);
-            install(prefix);
+            IPPrefix prefix(v4addr.addr, mask);
+            install(IPPrefix(prefix.addr, prefix.prefixLength));
         }
     }
     else
     {
         for (const auto& prefix : interface->configs.ipv6.getGlobalPrefixList())
-            install(prefix);
+            install(IPPrefix(prefix.addr, prefix.prefixLength));
         for (const auto& prefix : interface->configs.ipv6.getLocalPrefixList())
-            install(prefix);
+            install(IPPrefix(prefix.addr, prefix.prefixLength));
     }
 
     // Remove left over routes

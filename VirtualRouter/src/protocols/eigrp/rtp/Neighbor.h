@@ -5,7 +5,7 @@
 
 #include <map>
 #include <chrono>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <atomic>
 #include <deque>
 #include <set>

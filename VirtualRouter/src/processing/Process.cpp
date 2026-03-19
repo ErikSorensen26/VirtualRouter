@@ -158,9 +158,9 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 if (it && iface != interface->eigrpInterfaceList.end()) 
                 {
                     if (addressFamily == AddressFamily::IPv4 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv4)
-                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, typedAddress, Functions::isMulticast(typedAddress));
+                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
                     else if (addressFamily == AddressFamily::IPv6 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv6)
-                        interface->eigrpInterfaceList[as].IPv6->getRtp().handleIncoming(ipStart, eigrp, typedAddress, Functions::isMulticast(typedAddress));
+                        interface->eigrpInterfaceList[as].IPv6->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
                 }
                 break;
             }
