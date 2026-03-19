@@ -17,7 +17,7 @@ namespace Cli
 {
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
 {
-    IPAddress address = Functions::getAddress(args[0]);
+    IPv6Address address = Functions::getIPv6Address(args[0]);
     if (!ctx.negate)
     {
         InterfaceType type = getInterfaceType(args[1]);
@@ -35,7 +35,7 @@ bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
         {
                 if (key == entry.interface)
                 {
-                        iface->ndp->addNdpEntry(address, entry.macAddress, false, true);
+                    iface->ndp->addNdpEntry(address, entry.macAddress, false, true);
                 }
         }
     }

@@ -26,12 +26,11 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     // Set local ip
     if (base.getAF() == AddressFamily::IPv4)
     {
-        ifaceAddress.v4 = interface.configs.ipv4.getPrimaryAddress();
+        ifaceAddress.setV4(interface.configs.ipv4.getPrimaryAddress().addr);
     }
     else
     {
-        ifaceAddress.v6 = interface.configs.ipv6.getLocalAddress();
-        ifaceAddress.isV6 = true;
+        ifaceAddress.setV6(interface.configs.ipv6.getLocalAddress().addr);
     }
 
     // Add pending summary routes if needed

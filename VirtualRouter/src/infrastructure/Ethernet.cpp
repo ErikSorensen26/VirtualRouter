@@ -6,7 +6,7 @@
 
 namespace Protocol::Ethernet
 {
-bool build(Interface* iface, PacketBuilder& packetInfo, const uint8_t* destMac, uint16_t type)
+bool build(Interface* iface, PacketBuilder& packetInfo, uint64_t destMac, uint16_t type)
 {
     // Create Header
     EthernetHeader ethernetHeader;

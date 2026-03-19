@@ -80,7 +80,7 @@ void OriginatorV2::addRouterLsa(std::optional<uint32_t> ifaceId, bool refresh, b
 void OriginatorV2::addNetworkLsa(const OspfInterface& iface, bool refresh)
 {
     uint32_t selfRid = area.process().getRouterId();
-    uint32_t addr = readU32(iface.interfaceAddress.addr);
+    uint32_t addr = iface.interfaceAddress.v4();
     LsaKey key(OSPFV2_LSA_NETWORK, addr, selfRid);
 
     auto& info = originationState[key];
@@ -302,7 +302,7 @@ void OriginatorV2::addTransitLink(LsaBody& router, const OspfInterface& iface, c
     auto& ifaceConfigs = iface.getBaseConfigs();
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
         .linkId = static_cast<uint32_t>(iface.dr.ip.load(std::memory_order_relaxed)),
-        .linkData = readU32(iface.interfaceAddress.addr),
+        .linkData = iface.interfaceAddress.v4(),
         .type = OSPFV2_LINK_TRANSIT,
         .metric = iface.cost
     });
@@ -316,7 +316,7 @@ void OriginatorV2::addP2PLink(LsaBody& router, const OspfInterface& iface, const
     auto& ifaceConfigs = iface.getBaseConfigs();
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
         .linkId = neighbor.routerID,
-        .linkData = readU32(iface.interfaceAddress.addr),
+        .linkData = iface.interfaceAddress.v4(),
         .type = OSPFV2_LINK_P2P,
         .metric = iface.cost
     });
@@ -332,7 +332,7 @@ void OriginatorV2::addStubLink(LsaBody& router, const OspfInterface& iface, bool
     uint16_t metric = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_INCLUDE_STUB>().load()
         ? 0xFFFF : cost.hasValue() ? cost.load() : iface.cost;
     std::get<RouterLsaV2>(router).links.push_back(RouterLinkV2{
-        .linkId = readU32(iface.interfaceAddress.addr),
+        .linkId = iface.interfaceAddress.v4(),
         .linkData = fullMask ? 0xFFFFFFFF : Functions::prefixTo32Mask(iface.interfaceAddress.prefixLength),
         .type = OSPFV2_LINK_STUB,
         .metric = metric

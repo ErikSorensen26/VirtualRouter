@@ -221,7 +221,7 @@ void OspfProcess::buildExternalBody(ExternalOriginateContext& ctx, Policy::Exter
 
     if constexpr (isExtV3)
     {
-        external.prefix = ctx.prefix;
+        external.prefix = IPv6Prefix(ctx.prefix.v6(), ctx.prefix.prefixLength, true);
         external.referencedLsType = 0;
         if (ctx.tag != 0)
             external.routeTag = ctx.tag;
@@ -252,9 +252,9 @@ void OspfProcess::originateExternal(ExternalOriginateContext& ctx, bool expire)
             auto& external = std::get<typename Policy::ExternalLsa>(lsa);
             bool faValid = area.isValidForwardAddress(ctx.nextHop.value());
             if constexpr (std::is_same_v<Policy, PolicyV2>)
-                external.forwardingAddress = faValid ? readU32(ctx.nextHop->raw) : 0;
+                external.forwardingAddress = faValid ? ctx.nextHop->v4() : uint32_t{0};
             else
-                external.forwardingAddress = faValid ? std::optional{ctx.nextHop.value()} : std::nullopt;
+                external.forwardingAddress = faValid ? std::optional<IPv6Address>{IPv6Address(ctx.nextHop->v6())} : std::nullopt;
         }
         area.getOriginator().originateLsa<Policy>(key, lsa, expire);
     }
@@ -282,9 +282,9 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
             {
                 bool faValid = area.isValidForwardAddress(ctx.nextHop.value());
                 if constexpr (std::is_same_v<Policy, PolicyV2>)
-                    external.forwardingAddress = faValid ? readU32(ctx.nextHop->raw) : 0;
+                    external.forwardingAddress = faValid ? ctx.nextHop->v4() : 0;
                 else
-                    external.forwardingAddress = faValid ? std::optional{ctx.nextHop.value()} : std::nullopt;
+                    external.forwardingAddress = faValid ? std::optional<IPv6Address>{IPv6Address(ctx.nextHop->v6())} : std::nullopt;
             }
 
             area.getOriginator().originateLsa<Policy>(key, body, expire);
@@ -407,7 +407,7 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
 
         for (auto& [sumPfx, s] : activeSummaries)
         {
-            if (!Functions::compareNetworkWithIp(sumPfx.addr, pfx.addr, sumPfx.prefixLength, pfx.af))
+            if (!Functions::compareNetworkWithIp(sumPfx, IPAddress(pfx.addr, pfx.prefixLength)))
                 continue;
 
             if (s.contributorCount == 0)
@@ -569,12 +569,12 @@ void OspfProcess::reoriginateSummaries(Area& sourceArea, std::vector<OspfRouteCh
             network.metric = static_cast<uint32_t>(path.cost);
 
             key.advertisingRouter = getRouterId();
-            key.linkStateId = readU32(path.prefix.addr);
+            key.linkStateId = path.prefix.v4();
             key.lsaType = OSPFV2_LSA_SUM_NET;
         }
         else
         {
-            network.prefix = path.prefix;
+            network.prefix = IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
             network.metric = static_cast<uint32_t>(path.cost);
             network.options = path.options;
 
@@ -637,12 +637,12 @@ void OspfProcess::reoriginateSummary(Area& sourceArea, OspfRouteChange& path)
         network.metric = static_cast<uint32_t>(path.cost);
 
         key.advertisingRouter = getRouterId();
-        key.linkStateId = readU32(path.prefix.addr);
+        key.linkStateId = path.prefix.v4();
         key.lsaType = OSPFV2_LSA_SUM_NET;
     }
     else
     {
-        network.prefix = path.prefix;
+        network.prefix = IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
         network.metric = static_cast<uint32_t>(path.cost);
         network.options = path.options;
 

@@ -45,7 +45,7 @@ void Protocol::Dhcpv6Server::handlePacket(Dhcpv6Header& dhcp, Interface& iface, 
         .dhcpHeader = dhcp,
         .send = send
     };
-    __uint128_t networkAddress = iface.configs.ipv6.getLocalAddress();
+    __uint128_t networkAddress = iface.configs.ipv6.getLocalAddress().addr;
     handleDhcpPacket(receive, networkAddress);
 }
 
@@ -1361,7 +1361,7 @@ bool Protocol::Dhcpv6Server::processRelayForward(const Dhcpv6RelayHeader& relay,
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = build.builder,
-        .destIp = relayIp,
+        .destIp = IPAddress(relayIp, AddressFamily::IPv6),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -1457,7 +1457,7 @@ bool Protocol::Dhcpv6Server::sendAdvertise(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
+        .destIp = send.clientAddress ? IPAddress(send.clientAddress, AddressFamily::IPv6) : IPAddress(DHCPV6_SERVER_TO_ALL, AddressFamily::IPv6),
         .hopLimit = 1,
         .protocolType = IP_UDP
     };
@@ -1484,7 +1484,7 @@ bool Protocol::Dhcpv6Server::sendReply(Dhcpv6::Dhcpv6PacketSend& send, Dhcpv6::D
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
+        .destIp = send.clientAddress ? IPAddress(send.clientAddress, AddressFamily::IPv6) : IPAddress(DHCPV6_SERVER_TO_ALL, AddressFamily::IPv6),
         .hopLimit = 1,
         .protocolType = IP_UDP
     };
@@ -1511,7 +1511,7 @@ bool Protocol::Dhcpv6Server::sendConfirmReply(Dhcpv6::Dhcpv6PacketSend& send, Dh
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
+        .destIp = send.clientAddress ? IPAddress(send.clientAddress, AddressFamily::IPv6) : IPAddress(DHCPV6_SERVER_TO_ALL, AddressFamily::IPv6),
         .hopLimit = 1,
         .protocolType = IP_UDP
     };
@@ -1543,7 +1543,7 @@ bool Protocol::Dhcpv6Server::sendReconfigure(Dhcpv6::Dhcpv6PacketSend& send, Dhc
     IPPacket::BuildIP ip = {
         .iface = interface,
         .packetInfo = send.build.builder,
-        .destIp = send.clientAddress ? send.clientAddress : DHCPV6_SERVER_TO_ALL,
+        .destIp = send.clientAddress ? IPAddress(send.clientAddress, AddressFamily::IPv6) : IPAddress(DHCPV6_SERVER_TO_ALL, AddressFamily::IPv6),
         .hopLimit = 1,
         .protocolType = IP_UDP
     };

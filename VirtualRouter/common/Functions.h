@@ -25,9 +25,9 @@ namespace Functions {
     std::string boolToString(bool bol);
     std::string lowerCase(std::string str);
     IPAddress getAddress(const std::string& address);
+    IPv4Address getIPv4Address(const std::string& address);
+    IPv6Address getIPv6Address(const std::string& address);
     uint8_t prefixToPrefixLength(uint32_t mask);
-    uint32_t addressToIntv4(const std::string& address);
-    __uint128_t addressToIntv6(const std::string& address);
     uint64_t macToInt(const std::string& mac);
     bool isNumber(const std::string& s);
     bool isHex(const std::string& s);
@@ -38,7 +38,8 @@ namespace Functions {
      * @param address Address that the seperated address will be set to.
      * @param mask Prefix mask that the mask will be set to.
      */
-    bool splitSlashMiddle(const std::string& maskAddress, IPAddress& address, uint8_t& mask);
+    bool splitSlashMiddle(const std::string& maskAddress, IPv4Address& address, uint8_t& mask);
+    bool splitSlashMiddle(const std::string& maskAddress, IPv6Address& address, uint8_t& mask);
 
     /**
      * @brief Computes the network address from an IP address and a subnet mask.
@@ -63,6 +64,9 @@ namespace Functions {
      * @return True if they match, false otherwise.
      */
     bool compareNetworkWithIp(const uint8_t* networkAddress, const uint8_t* ipAddress, uint8_t mask, AddressFamily af);
+    bool compareNetworkWithIp(IPv4Address networkAddress, IPv4Address ipAddress, uint8_t mask);
+    bool compareNetworkWithIp(IPv6Address networkAddress, IPv6Address ipAddress, uint8_t mask);
+    bool compareNetworkWithIp(const IPPrefix& network, const IPAddress& ip);
 
     /**
      * @brief Trims the network address based on the subnet mask, removing zeroed sections.
@@ -113,6 +117,7 @@ namespace Functions {
      * @return True if the subnet is within the summary, false otherwise.
      */
     bool isSubnetOf(const uint8_t* network, uint8_t mask, const uint8_t* summaryNetwork, uint8_t summaryMask, AddressFamily af);
+    bool isSubnetOf(const IPPrefix& subnet, const IPPrefix& summary);
 
     /**
      * @brief Finds the classful network address for an IP address.
@@ -122,6 +127,7 @@ namespace Functions {
     uint32_t findClassfullNetwork(uint32_t ip);
 
     uint8_t findClassfullNetworkAndMask(uint8_t* out, const uint8_t* ip);
+    IPv4Prefix findClassfullNetworkAndMask(IPv4Address ip);
 
     /**
      * @brief Gets the default subnet mask for a network.
@@ -144,6 +150,7 @@ namespace Functions {
      * @return True if the IP address is multicast, false otherwise.
      */
     bool isMulticast(const uint8_t* ip, AddressFamily af);
+    bool isMulticast(IPAddress ip);
 
     /**
      * @brief Expands an abbreviated IPv6 address to its full form.

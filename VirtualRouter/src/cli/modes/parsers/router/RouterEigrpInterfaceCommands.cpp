@@ -125,19 +125,40 @@ bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
 {
     uint8_t size = 0;
     IPAddress network;
-    uint8_t mask;
+    uint8_t mask = 0;
     Eigrp::EigrpInterface* iface = nullptr;
     iface = ctx.currentEigrp->getIfaceMgr().getInterface(ctx.currentEigrpInterface->key);
 
-    if (!Functions::splitSlashMiddle(args[0], network, mask))
+    AddressFamily af = ctx.currentEigrp->getAF();
+    if (af == AddressFamily::IPv4)
     {
-        network = Functions::getAddress(args[0]);
-        mask = static_cast<uint8_t>(std::stoi(args[1]));
-        size = 2;
+        IPv4Address v4net;
+        if (!Functions::splitSlashMiddle(args[0], v4net, mask))
+        {
+            network = Functions::getAddress(args[0]);
+            mask = static_cast<uint8_t>(std::stoi(args[1]));
+            size = 2;
+        }
+        else
+        {
+            network = v4net;
+            size = 1;
+        }
     }
     else
     {
-        size = 1;
+        IPv6Address v6net;
+        if (!Functions::splitSlashMiddle(args[0], v6net, mask))
+        {
+            network = Functions::getAddress(args[0]);
+            mask = static_cast<uint8_t>(std::stoi(args[1]));
+            size = 2;
+        }
+        else
+        {
+            network = v6net;
+            size = 1;
+        }
     }
 
     if (args.size() != size && args[size] == "leak-map")
@@ -145,7 +166,7 @@ bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
         // XXX
     }
 
-    IPPrefix prefix = { network.raw, mask, ctx.currentEigrp->getAF() };
+    IPPrefix prefix(network, mask);
 
     if (iface)
     {

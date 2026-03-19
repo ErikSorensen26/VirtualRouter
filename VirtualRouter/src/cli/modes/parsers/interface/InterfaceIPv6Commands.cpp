@@ -24,16 +24,16 @@ bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
 
     if (Functions::isIPv6Address(args[0]))
     {
-	IPAddress ipv6Address = Functions::getAddress(args[0]);
+	IPv6Address ipv6Address = Functions::getIPv6Address(args[0]);
 	if (!ctx.negate)
 	{
-	    if (!Functions::isLocalLink(ipv6Address.raw))
+	    if (!Functions::isLocalLink(ipv6Address.addr))
 	    {
-		ctx.terminal.iConsole->print(std::string("\r\n%") + std::string(" Invalid local-link address"));
-		return false;
+			ctx.terminal.iConsole->print(std::string("\r\n%") + std::string(" Invalid local-link address"));
+			return false;
 	    }
 
-	    ctx.currentInterface.setIPv6(ipv6Address.raw, true);
+	    ctx.currentInterface.setIPv6({ipv6Address, 64}, true);
 	}
 	else
 	{
@@ -42,19 +42,18 @@ bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
     }
     else if (Functions::isIPv6AddressWithMask(args[0]))
     {
-	IPAddress ipv6Address;
+	IPv6Address ipv6Address;
 	uint8_t mask;
 	if (Functions::splitSlashMiddle(args[0], ipv6Address, mask))
 	{
 	    //TODO anycast
 	    if (!ctx.negate)
 	    {
-		ctx.currentInterface.setIPv6(ipv6Address.raw, false, mask);
+			ctx.currentInterface.setIPv6({ipv6Address, mask}, false);
 	    }
 	    else
 	    {
-		IPv6Prefix ip(readU128(ipv6Address.raw), mask);
-		ctx.currentInterface.removeIPv6(&ip);
+			{ IPv6Prefix rmPfx{ipv6Address, mask}; ctx.currentInterface.removeIPv6(&rmPfx); }
 	    }
 	}
     }
@@ -321,10 +320,10 @@ bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
     if (args[0] == "eigrp")
     {
 	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	IPAddress network;
+	IPv6Address network;
 	uint8_t mask;
 	Functions::splitSlashMiddle(args[2], network, mask);
-	IPPrefix prefix = { network.raw, mask, AddressFamily::IPv6 };
+	IPPrefix prefix(IPv6Prefix(network, mask));
 	auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
 	if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv4)
 	{

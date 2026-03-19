@@ -40,7 +40,7 @@ Interface::~Interface()
     VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.removeInterface(*this);
     vrf->getGlobal().rxMgr.removeInterface(*this);
-    vrf->getGlobal().engine.hwManager->registerInterface(&configs.hwInfo, this);
+    vrf->getGlobal().engine.hwManager->unregisterInterface(&configs.hwInfo, this);
 }
 
 void Interface::cleanupInterface()
@@ -61,52 +61,51 @@ void Interface::cleanupInterface()
     }
 }
 
-void Interface::setIPv4(uint32_t ip, uint8_t subnet, bool secondary)
+void Interface::setIPv4(IPv4Prefix prefix, bool secondary)
 {
     if (!secondary)
     {
-        configs.ipv4.setPrimaryAddress(ip, subnet);
-        configs.ipv4.mask = subnet;
+        configs.ipv4.setPrimaryAddress(prefix);
+        configs.ipv4.mask = prefix.prefixLength;
         // Send gratuitous arps
         if (arp)
         {
-            uint8_t addr[4];
-            writeU32(addr, ip);
-            arp->sendReply(ETHERNET_MAC_BROADCAST, addr);
-            arp->sendReply(ETHERNET_MAC_BROADCAST, addr);
+            IPv4Address v4addr(prefix.addr);
+            arp->sendReply(readU48(ETHERNET_MAC_BROADCAST), v4addr);
+            arp->sendReply(readU48(ETHERNET_MAC_BROADCAST), v4addr);
         }
         stateChange(StateChange::IPCHANGE);
     }
     else
     {
-        configs.ipv4.addSecondaryAddress(ip, subnet);
+        configs.ipv4.addSecondaryAddress(prefix);
         stateChange(StateChange::IPCHANGE2);
     }
 }
 
-void Interface::setIPv6(const uint8_t* ip, bool localLink, uint8_t prefix, bool eui64)
+void Interface::setIPv6(const IPv6Prefix& addr, bool linkLocal, bool eui64)
 {
     InterfaceConfigs::IPv6State::IPv6Address* ipv6 = nullptr;
 
     {
-        if (localLink)
+        if (linkLocal)
         {
-            ipv6 = configs.ipv6.addAddress(ip, true, prefix);
+            ipv6 = configs.ipv6.addAddress(addr, true);
         }
-        else if (ip[0] == 0xFC && ip[1] == 0x00)
+        else if ((addr.addr >> 120) == 0xFC)
         {
-            ipv6 = configs.ipv6.addUniqueLocalAddress(ip, prefix);
+            ipv6 = configs.ipv6.addUniqueLocalAddress(addr);
         }
         else
         {
-            ipv6 = configs.ipv6.addAddress(ip, false, prefix);
+            ipv6 = configs.ipv6.addAddress(addr, false);
         }
     }
 
     // Run Duplicate Address Detection (dad) using NDP
     if (ipv6)
     {
-        ndp->duplicateAddressDetection(ipv6, localLink);
+        ndp->duplicateAddressDetection(*ipv6, linkLocal);
     }
     else 
     {
@@ -114,7 +113,7 @@ void Interface::setIPv6(const uint8_t* ip, bool localLink, uint8_t prefix, bool 
         return;
     }
 
-    if (localLink)
+    if (linkLocal)
         stateChangeV6(StateChange::IPCHANGE);
     else
         stateChangeV6(StateChange::IPCHANGE2);
@@ -162,7 +161,7 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
     if (!configs.ipv6.linkLocalAddress->valid && configs.ipv6.linkLocalAddress->tentative)
     {
         tentative.emplace_back();
-        std::copy(configs.ipv6.linkLocalAddress->ip, configs.ipv6.linkLocalAddress->ip + 16, tentative.back().begin());
+        writeU128(tentative.back().data(), configs.ipv6.linkLocalAddress->addr.addr);
     }
 
     // Global unicast
@@ -171,7 +170,7 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
         if (addr->tentative)
         {
             tentative.emplace_back();
-            std::copy(addr->ip, addr->ip + 16, tentative.back().begin());
+            writeU128(tentative.back().data(), addr->addr.addr);
         }
     }
 
@@ -181,20 +180,20 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
         if (addr->tentative)
         {
             tentative.emplace_back();
-            std::copy(addr->ip, addr->ip + 16, tentative.back().begin());
+            writeU128(tentative.back().data(), addr->addr.addr);
         }
     }
 
     return tentative;
 }
 
-void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
+void Interface::markAddressDuplicate(IPv6Address address, bool linkLocal)
 {
     std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
 
-    if (localLink && std::memcmp(configs.ipv6.linkLocalAddress->ip, addr, 16) == 0)
+    if (linkLocal && configs.ipv6.linkLocalAddress->addr.addr == address.addr)
     {
-        std::fill(configs.ipv6.linkLocalAddress->ip, configs.ipv6.linkLocalAddress->ip + 16, 0);
+        configs.ipv6.linkLocalAddress->addr = {};
         configs.ipv6.linkLocalAddress->valid = false;
     }
     else
@@ -202,7 +201,7 @@ void Interface::markAddressDuplicate(const uint8_t* addr, bool localLink)
         auto markInvalid = [&](std::vector<InterfaceConfigs::IPv6State::IPv6Address*>& list) {
             for (auto it = list.begin(); it != list.end(); ++it)
             {
-                if ((*it)->ip == addr)
+                if ((*it)->addr.addr == address.addr)
                 {
                     list.erase(it);
                     return;
@@ -240,23 +239,33 @@ void Interface::physicalShutdown(bool shut)
     shutdown(shut);
 }
 
-void Interface::enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac)
+void Interface::enqueuePacket(PacketBuilder& packetInfo, uint64_t mac)
 {
     if (!threadsRunning.load(std::memory_order_relaxed)) return;
 
     if (!encapsulate(packetInfo))
         return;
 
-    if (mac)
-    {
-        std::memcpy(packetInfo.getBuffer(), mac, 6);
-    }
+    writeU48(packetInfo.getBuffer(), mac);
 
     // Enqueue the serialized packet for sending
     if (packetInfo.frame.slot)
     {
         tx->push(packetInfo.frame.slot);
-        //packetOutQueue.enqueue(packetInfo.slot);
+    }
+}
+
+void Interface::enqueuePacket(PacketBuilder& packetInfo)
+{
+    if (!threadsRunning.load(std::memory_order_relaxed)) return;
+
+    if (!encapsulate(packetInfo))
+        return;
+
+    // Enqueue the serialized packet for sending
+    if (packetInfo.frame.slot)
+    {
+        tx->push(packetInfo.frame.slot);
     }
 }
 
@@ -397,7 +406,7 @@ void Interface::stateChangeV6(StateChange state)
                 for (auto& addr : configs.ipv6.globalAddresses)
                 {
                     if (addr->tentative)
-                        ndp->duplicateAddressDetection(addr, false);
+                        ndp->duplicateAddressDetection(*addr, false);
                 }
             }
             break;

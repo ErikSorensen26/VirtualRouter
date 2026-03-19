@@ -407,8 +407,8 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(O
     }
     else
     {
-        ext.prefix = extLsa.prefix;
-        ext.fwd = extLsa.forwardingAddress.has_value() ? extLsa.forwardingAddress.value() : uint32_t{0};
+        ext.prefix = IPPrefix(extLsa.prefix);
+        ext.fwd = extLsa.forwardingAddress.has_value() ? IPAddress(extLsa.forwardingAddress->addr) : IPAddress(__uint128_t{0});
         ext.metric = extLsa.metric;
         ext.isType2 = extLsa.isType2;
         ext.options = extLsa.options;
@@ -430,7 +430,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(O
     {
         if constexpr (std::is_same_v<EL, ExternalLsaV2>)
         {
-            const uint32_t fwdAddr = readU32(ext.fwd.raw);
+            const uint32_t fwdAddr = ext.fwd.v4();
             if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
             {
                 X = res->first;
@@ -440,7 +440,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(O
         }
         else
         {
-            const __uint128_t fwdAddr = readU128(ext.fwd.raw);
+            const __uint128_t fwdAddr = ext.fwd.v6();
             if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
             {
                 X = res->first;
@@ -508,8 +508,8 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
         }
         else
         {
-            ext.prefix = extLsa.prefix;
-            ext.fwd = extLsa.forwardingAddress.has_value() ? extLsa.forwardingAddress.value() : uint32_t{0};
+            ext.prefix = IPPrefix(extLsa.prefix);
+            ext.fwd = extLsa.forwardingAddress.has_value() ? IPAddress(extLsa.forwardingAddress->addr) : IPAddress(__uint128_t{0});
             ext.metric = extLsa.metric;
             ext.isType2 = extLsa.isType2;
             ext.options = extLsa.options;
@@ -524,7 +524,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
         {
             if constexpr (std::is_same_v<EL, ExternalLsaV2>)
             {
-                const uint32_t fwdAddr = readU32(ext.fwd.raw);
+                const uint32_t fwdAddr = ext.fwd.v4();
                 if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
                 {
                     X = res->first;
@@ -534,7 +534,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
             }
             else
             {
-                const __uint128_t fwdAddr = readU128(ext.fwd.raw);
+                const __uint128_t fwdAddr = ext.fwd.v6();
                 if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
                 {
                     X = res->first;

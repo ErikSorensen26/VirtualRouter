@@ -142,7 +142,7 @@ namespace EigrpConfigs
     struct Network 
     {
         Network(AddressFamily family) : af(family) {}
-        IPAddress ip;    ///< IP address of the network.
+        IPv4Address ip;    ///< IP address of the network.
         uint8_t mask;  ///< Subnet mask of the network.
         AddressFamily af;
 

@@ -62,9 +62,8 @@ void GlobalAggregator::enableAutoSummary(bool enable)
         {
             if (entry.second->successors.empty())
                 continue;
-            IPAddress major;
-            uint8_t mask = Functions::findClassfullNetworkAndMask(major.raw, entry.first.addr);
-            classfulGroups.insert({major, mask});
+            IPv4Prefix classful = Functions::findClassfullNetworkAndMask(IPv4Address(entry.first.v4()));
+            classfulGroups.insert(IPPrefix(classful));
         }
 
         std::shared_lock<std::shared_mutex> lock(ifmgr.interfaceMutex);

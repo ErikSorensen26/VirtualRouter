@@ -1,4 +1,5 @@
 #include <Logger.h>
+#include <cstdint>
 #include <random>
 #include <regex>
 #include <cstring>
@@ -31,30 +32,36 @@ uint8_t Functions::prefixToPrefixLength(uint32_t mask)
 
 IPAddress Functions::getAddress(const std::string& address)
 {
-    IPAddress result;
-
-    if (inet_pton(AF_INET, address.c_str(), result.raw) == 1)
+    uint8_t raw[16] = {};
+    if (inet_pton(AF_INET, address.c_str(), raw) == 1)
     {
-        return result;
+        return IPAddress(raw, AddressFamily::IPv4);
     }
-
-    if (inet_pton(AF_INET6, address.c_str(), result.raw) == 1)
+    else if (inet_pton(AF_INET6, address.c_str(), raw) == 1)
     {
-        result.isV6 = true;
-        return result;
+        return IPAddress(raw, AddressFamily::IPv6);
     }
-
-    return result;
+    return {};
 }
 
-uint32_t Functions::addressToIntv4(const std::string& address)
+IPv4Address Functions::getIPv4Address(const std::string& address)
 {
-    return readU32(getAddress(address).raw);
+    uint8_t raw[4] = {};
+    if (inet_pton(AF_INET, address.c_str(), raw) == 1)
+    {
+        return raw;
+    }
+    return {};
 }
 
-__uint128_t Functions::addressToIntv6(const std::string& address)
+IPv6Address Functions::getIPv6Address(const std::string& address)
 {
-    return readU128(getAddress(address).raw);
+    uint8_t raw[16] = {};
+    if (inet_pton(AF_INET6, address.c_str(), raw) == 1)
+    {
+        return raw;
+    }
+    return {};
 }
 
 uint64_t Functions::macToInt(const std::string& mac)
@@ -104,13 +111,27 @@ bool Functions::isHex(const std::string& s)
     return !s.empty() && std::all_of(s.begin(), s.end(), ::isxdigit);
 }
 
-bool Functions::splitSlashMiddle(const std::string& maskAddress, IPAddress& address, uint8_t& mask)
+bool Functions::splitSlashMiddle(const std::string& maskAddress, IPv4Address& address, uint8_t& mask)
 {
     size_t pos = maskAddress.find('/');
     // Check if the slash exists and is not at the start or end.
     if (pos != std::string::npos && pos != 0 && pos != maskAddress.size() - 1)
     {
-        address = Functions::getAddress(maskAddress.substr(0, pos));
+        address = Functions::getIPv4Address(maskAddress.substr(0, pos));
+        std::string maskString = maskAddress.substr(pos + 1);
+        mask = static_cast<uint8_t>(std::stoi(maskString));
+        return true;
+    }
+    return false;
+}
+
+bool Functions::splitSlashMiddle(const std::string& maskAddress, IPv6Address& address, uint8_t& mask)
+{
+    size_t pos = maskAddress.find('/');
+    // Check if the slash exists and is not at the start or end.
+    if (pos != std::string::npos && pos != 0 && pos != maskAddress.size() - 1)
+    {
+        address = Functions::getIPv6Address(maskAddress.substr(0, pos));
         std::string maskString = maskAddress.substr(pos + 1);
         mask = static_cast<uint8_t>(std::stoi(maskString));
         return true;
@@ -193,6 +214,31 @@ bool Functions::compareNetworkWithIp(const uint8_t* networkAddress, const uint8_
             return false;
     }
     return true;
+}
+
+bool Functions::compareNetworkWithIp(IPv4Address networkAddress, IPv4Address ipAddress, uint8_t mask)
+{
+    if (mask == 0) return true;
+    if (mask > 32) mask = 32;
+    uint32_t m = (mask == 32) ? 0xFFFFFFFFu : (0xFFFFFFFFu << (32 - mask));
+    return (networkAddress.addr & m) == (ipAddress.addr & m);
+}
+
+bool Functions::compareNetworkWithIp(IPv6Address networkAddress, IPv6Address ipAddress, uint8_t mask)
+{
+    if (mask == 0) return true;
+    if (mask > 128) mask = 128;
+    __uint128_t m = mask == 128 ? (__uint128_t)-1 : ((__uint128_t)(-1) << (128 - mask));
+    return (networkAddress.addr & m) == (ipAddress.addr & m);
+}
+
+bool Functions::compareNetworkWithIp(const IPPrefix& network, const IPAddress& ip)
+{
+    if (network.isIPv4() && ip.isIPv4())
+        return compareNetworkWithIp(IPv4Address(network.v4()), IPv4Address(ip.v4()), network.prefixLength);
+    if (network.isIPv6() && ip.isIPv6())
+        return compareNetworkWithIp(IPv6Address(network.v6()), IPv6Address(ip.v6()), network.prefixLength);
+    return false;
 }
 
 size_t Functions::compactNetworkAddress(uint8_t* data, const uint8_t* network, uint8_t prefix, AddressFamily af)
@@ -298,6 +344,25 @@ uint8_t Functions::findClassfullNetworkAndMask(uint8_t* out, const uint8_t* ip)
     }
 }
 
+IPv4Prefix Functions::findClassfullNetworkAndMask(IPv4Address ip)
+{
+    // addr is stored in network byte order in the uint32_t
+    // Extract first octet (most significant byte in network order)
+    uint8_t firstOctet = static_cast<uint8_t>(ip.addr >> 24);
+    if ((firstOctet & 0x80) == 0) {
+        // Class A: mask = /8 (Cisco "classful" masks are inverted: /8 prefix → 24 host bits)
+        return IPv4Prefix(ip.addr & 0xFF000000u, 8);
+    }
+    else if ((firstOctet & 0xC0) == 0x80) {
+        // Class B: mask = /16
+        return IPv4Prefix(ip.addr & 0xFFFF0000u, 16);
+    }
+    else {
+        // Class C: mask = /24
+        return IPv4Prefix(ip.addr & 0xFFFFFF00u, 24);
+    }
+}
+
 uint8_t Functions::getDefaultMask(uint32_t network)
 {
     if ((network & 0x80000000) == 0) // Class A
@@ -318,6 +383,16 @@ bool Functions::validateMacAddress(const uint8_t* mac, const uint8_t* currentMac
 {
     if (mac == currentMac) return true;
     return (mac[0] & 0x01) != 0;
+}
+
+bool Functions::isSubnetOf(const IPPrefix& subnet, const IPPrefix& summary)
+{
+    if (subnet.isIPv4() != summary.isIPv4()) return false;
+    if (summary.prefixLength > subnet.prefixLength) return false;
+    if (subnet.isIPv4())
+        return compareNetworkWithIp(IPv4Address(summary.v4()), IPv4Address(subnet.v4()), summary.prefixLength);
+    else
+        return compareNetworkWithIp(IPv6Address(summary.v6()), IPv6Address(subnet.v6()), summary.prefixLength);
 }
 
 bool Functions::isSubnetOf(const uint8_t* network, uint8_t mask, const uint8_t* summaryNetwork, uint8_t summaryMask, AddressFamily af)
@@ -351,6 +426,22 @@ bool Functions::isMulticast(const uint8_t* ip, AddressFamily af)
         return ip[0] == 0xFF;
     }
     return false;
+}
+
+bool Functions::isMulticast(IPAddress ip)
+{
+    if (ip.isIPv4())
+    {
+        // First octet of IPv4 address (most significant byte in network order)
+        uint8_t firstOctet = static_cast<uint8_t>(ip.v4() >> 24);
+        return (firstOctet & 0xE0) == 0xE0;
+    }
+    else
+    {
+        // First byte of IPv6 address (most significant byte)
+        uint8_t firstOctet = static_cast<uint8_t>(ip.v6() >> 120);
+        return firstOctet == 0xFF;
+    }
 }
 
 std::string Functions::expandIPv6Address(const std::string& ipv6Address) 

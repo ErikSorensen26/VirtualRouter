@@ -571,7 +571,7 @@ std::string Configs::getVolatileValueHelper(std::string& command, std::string& c
     // Parse IP address in "A.B.C.D" format
     if (command == "A.B.C.D") 
     {
-        uint32_t ip = Functions::addressToIntv4(com);
+        uint32_t ip = Functions::getIPv4Address(com).addr;
 
         auto isContiguous = [](uint32_t x) {
             return ((x | (x - 1)) == 0xFFFFFFFF);

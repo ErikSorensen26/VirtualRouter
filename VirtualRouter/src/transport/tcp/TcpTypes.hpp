@@ -174,7 +174,7 @@ struct TcpIpAdapter final
 {
     static int af(const IPAddress& ip) noexcept
     {
-        if (ip.isV6)
+        if (ip.isIPv6())
             return AF_INET6;
         else
             return AF_INET;
@@ -196,7 +196,7 @@ struct TcpIpAdapter final
             sin.sin_family = AF_INET;
             sin.sin_port = htons(portIn);
 
-            std::memcpy(&sin.sin_addr, ipIn.raw, 4);
+            sin.sin_addr.s_addr = ipIn.v4(); // v4() returns network-byte-order uint32_t
 
             std::memcpy(ss, &sin, sizeof(sin));
             *socklenOut = sizeof(sockaddr_in);
@@ -206,7 +206,12 @@ struct TcpIpAdapter final
         sin6.sin6_family = AF_INET6;
         sin6.sin6_port = htons(portIn);
 
-        std::memcpy(&sin6.sin6_addr, ipIn.raw, 16);
+        {
+            auto it = ipIn.v6raw().begin();
+            uint8_t* dst = reinterpret_cast<uint8_t*>(&sin6.sin6_addr);
+            for (size_t i = 0; i < 16; ++i, ++it)
+                dst[i] = *it;
+        }
 
         std::memcpy(ss, &sin6, sizeof(sin6));
         *socklenOut = sizeof(sockaddr_in6);
@@ -223,7 +228,7 @@ struct TcpIpAdapter final
             const auto* sin = reinterpret_cast<const sockaddr_in*>(sa);
             portOut = ntohs(sin->sin_port);
 
-            std::memcpy(ipOut.raw, &sin->sin_addr, 4);
+            ipOut.setV4(readU32(reinterpret_cast<const uint8_t*>(&sin->sin_addr)));
             return;
         }
 
@@ -232,8 +237,7 @@ struct TcpIpAdapter final
             const auto* sin6 = reinterpret_cast<const sockaddr_in6*>(sa);
             portOut = ntohs(sin6->sin6_port);
 
-            std::memcpy(ipOut.raw, &sin6->sin6_addr, 16);
-            ipOut.isV6 = true;
+            ipOut.setV6(readU128(reinterpret_cast<const uint8_t*>(&sin6->sin6_addr)));
             return;
         }
     }

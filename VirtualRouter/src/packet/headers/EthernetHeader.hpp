@@ -36,10 +36,10 @@ struct EthernetHeader
 {
     DEFINE_FIXED_HEADER(EthernetHeaderRaw);
 
-    void setSourceMac(const uint8_t* val) 
-        { std::memcpy(raw->sourceMac, val, 6); }
-    void setDestinationMac(const uint8_t* val)
-        { std::memcpy(raw->destinationMac, val, 6); }
+    void setSourceMac(uint64_t val)
+        { writeU48(raw->sourceMac, val); }
+    void setDestinationMac(uint64_t val)
+        { writeU48(raw->destinationMac, val); }
     void setType(const uint16_t val)
         { writeU16(raw->type, val); }
 };

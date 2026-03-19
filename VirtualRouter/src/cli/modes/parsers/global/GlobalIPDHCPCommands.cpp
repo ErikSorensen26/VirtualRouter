@@ -75,8 +75,8 @@ bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS)
     }
     if (!vrf) return false;
 
-    uint32_t ipStart = Functions::addressToIntv4(args[start]);
-    uint32_t ipEnd = Functions::addressToIntv4(args[start + 1]);
+    IPv4Address ipStart = Functions::getIPv4Address(args[start]);
+    IPv4Address ipEnd = Functions::getIPv4Address(args[start + 1]);
 
     {
         //TODO

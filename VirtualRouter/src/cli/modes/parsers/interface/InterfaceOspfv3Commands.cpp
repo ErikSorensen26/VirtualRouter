@@ -19,13 +19,13 @@ bool InterfaceOspfv3_Area_Handler(INTERFACE_PARAMS)
     auto* vrf = ctx.currentInterface.getVRF();
     if (ctx.negate)
     {
-	auto* ospf = vrf->getOspf(static_cast<uint32_t>(std::stoi(args[0])));
-	if (!ospf) return true;
-	ospf->getIfaceMgr().removeInterface({ctx.currentInterface.configs.ipv4.getPrimaryAddress(), static_cast<uint32_t>(std::stoi(args[2]))});
+		auto* ospf = vrf->getOspf(static_cast<uint32_t>(std::stoi(args[0])));
+		if (!ospf) return true;
+		ospf->getIfaceMgr().removeInterface({ctx.currentInterface.configs.id, static_cast<uint32_t>(std::stoi(args[2]))});
 
-	ifaceConfigs.get<Config::OspfInterfaceBase::PROCESS_ID>().unset();
-	ifaceConfigs.get<Config::OspfInterfaceBase::AREA_ID>().unset();
-	ifaceConfigs.get<Config::OspfInterfaceBase::INSTANCE_ID>().unset();
+		ifaceConfigs.get<Config::OspfInterfaceBase::PROCESS_ID>().unset();
+		ifaceConfigs.get<Config::OspfInterfaceBase::AREA_ID>().unset();
+		ifaceConfigs.get<Config::OspfInterfaceBase::INSTANCE_ID>().unset();
     }
     else if (ifaceConfigs.context().hasCtx())
     {
@@ -37,12 +37,12 @@ bool InterfaceOspfv3_Area_Handler(INTERFACE_PARAMS)
 	    context.getArea().areaId != static_cast<uint32_t>(std::stoi(args[1])))
 	{
 	    // Remove interface from other area
-	    context.getArea().process().getIfaceMgr().removeInterface(OSPF::OspfInterfaceId(ctx.currentInterface.configs.ipv4.getPrimaryAddress(), context.getArea().areaId));
+	    context.getArea().process().getIfaceMgr().removeInterface(OSPF::OspfInterfaceId(ctx.currentInterface.configs.id, context.getArea().areaId));
 	}
 
 	ifaceConfigs.context().clear();
 	uint32_t areaId = static_cast<uint32_t>(std::stoi(args[1]));
-	ospf->getIfaceMgr().createInterface(ctx.currentInterface, {ctx.currentInterface.configs.ipv4.getPrimaryAddress(), areaId});
+	ospf->getIfaceMgr().createInterface(ctx.currentInterface, {ctx.currentInterface.configs.id, areaId});
 
 	ifaceConfigs.get<Config::OspfInterfaceBase::PROCESS_ID>().set(ospf->getProcId());
 	ifaceConfigs.get<Config::OspfInterfaceBase::AREA_ID>().set(areaId);

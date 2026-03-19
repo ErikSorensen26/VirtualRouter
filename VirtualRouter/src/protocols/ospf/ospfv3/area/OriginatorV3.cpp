@@ -162,7 +162,7 @@ void OriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::optiona
     uint32_t selfRid = area.process().getRouterId();
     auto& ifaceMgr = area.process().getIfaceMgr();
 
-    std::unordered_map<uint32_t, std::unordered_map<IPPrefix, uint16_t>> prefixesByLsid;
+    std::unordered_map<uint32_t, std::unordered_map<IPv6Prefix, uint16_t>> prefixesByLsid;
 
     // Iterate Router-LSAs directly, this preserves LSID ownership
     for (auto& [key, expire] : routerLsas)
@@ -364,7 +364,7 @@ void OriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool refresh)
 
     uint32_t selfRid = area.process().getRouterId();
 
-    std::unordered_set<IPPrefix> prefixSet = iface.getIface().configs.ipv6.getRoutablePrefixSet();
+    std::unordered_set<IPv6Prefix> prefixSet = iface.getIface().configs.ipv6.getRoutablePrefixSet();
     uint32_t cost = iface.getConfigs().get<Config::OspfInterface::COST>().load();
 
     std::vector<std::pair<LsaKey, std::optional<bool>>> newLsas;
@@ -488,7 +488,7 @@ void OriginatorV3::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint3
 
     summary.metric = cost;
     summary.options = 0;
-    summary.prefix = prefix;
+    summary.prefix = IPv6Prefix(prefix.v6(), prefix.prefixLength, true);
 
     info.expire = expire;
 
@@ -497,7 +497,7 @@ void OriginatorV3::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint3
 
 void OriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody& body7, bool expire)
 {
-    if (std::get<ExternalLsaV3>(body7).prefix.prefixLength == 0 && std::get<ExternalLsaV3>(body7).prefix.v6 == 0 &&
+    if (std::get<ExternalLsaV3>(body7).prefix.prefixLength == 0 && std::get<ExternalLsaV3>(body7).prefix.addr == 0 &&
         !area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ONLY>().load())
         return;
 
@@ -506,19 +506,11 @@ void OriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody& bo
         auto& ext7 = std::get<ExternalLsaV3>(body7);
         auto& base = area.process();
 
-        IPAddress addr = (!ext7.forwardingAddress.has_value() || ext7.forwardingAddress->v6 == 0)
-            ? ext7.prefix : ext7.forwardingAddress.value();
+        __uint128_t lookupAddr = (!ext7.forwardingAddress.has_value() || ext7.forwardingAddress->addr == 0)
+            ? ext7.prefix.addr : ext7.forwardingAddress->addr;
 
-        if (ext7.prefix.af == AddressFamily::IPv4)
-        {
-            if (!base.routingInstance->getRib().lookup(readU32(addr.raw)))
-                return;
-        }
-        else
-        {
-            if (!base.routingInstance->getRib().lookup(readU128(addr.raw)))
-                return;
-        }
+        if (!base.routingInstance->getRib().lookup(lookupAddr))
+            return;
     }
 
     LsaKey key5;
@@ -571,7 +563,7 @@ void OriginatorV3::addStubDefaultRoute(bool add)
 
     summary.metric = area.getConfigs().get<Config::OspfArea::DEFAULT_COST>().load();
     summary.options = 0;
-    summary.prefix = IPPrefix{area.process().getAF()};
+    summary.prefix = IPv6Prefix{};
 
     info.expire = !add;
 

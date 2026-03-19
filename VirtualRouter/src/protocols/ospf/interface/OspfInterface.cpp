@@ -14,9 +14,10 @@
 
 auto getIfaceAddr(Interface& iface, AddressFamily af) -> IPPrefix
 {
-    return af == AddressFamily::IPv4
-        ? iface.configs.ipv4.getPrimaryPrefix()
-        : iface.configs.ipv6.getLocalPrefix();
+    if (af == AddressFamily::IPv4)
+        return IPPrefix(iface.configs.ipv4.getPrimaryPrefix(), true);
+    else
+        return IPPrefix(iface.configs.ipv6.getLocalPrefix(), true);
 }
 
 namespace OSPF
@@ -94,7 +95,7 @@ bool OspfInterface::setDr(uint32_t candDr)
     if (!nbr) return false;
 
     dr.rid.store(candDr, std::memory_order_release);
-    dr.ip.store(readU128(nbr->ipAddress.raw), std::memory_order_release);
+    dr.ip.store(nbr->ipAddress.raw, std::memory_order_release);
     return true;
 }
 
@@ -104,7 +105,7 @@ bool OspfInterface::setBdr(uint32_t candBdr)
     if (!nbr) return false;
 
     bdr.rid.store(candBdr, std::memory_order_release);
-    bdr.ip.store(readU128(nbr->ipAddress.raw), std::memory_order_release);
+    bdr.ip.store(nbr->ipAddress.raw, std::memory_order_release);
     return true;
 }
 

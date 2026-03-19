@@ -17,9 +17,9 @@ bool InterfaceIP_AddressSet_Handler(INTERFACE_PARAMS)
     {
 	if (args[0] != "dhcp")
 	{
-	    uint32_t ipAddress = Functions::addressToIntv4(args[0]);
-	    uint8_t subnet = static_cast<uint8_t>(__builtin_popcount(Functions::addressToIntv4(args[1])));
-	    ctx.currentInterface.setIPv4(ipAddress, subnet);
+	    IPv4Address ipAddress = Functions::getIPv4Address(args[0]);
+	    uint8_t subnet = static_cast<uint8_t>(__builtin_popcount(Functions::getIPv4Address(args[1]).addr));
+	    ctx.currentInterface.setIPv4(IPv4Prefix{ipAddress, subnet});
 	}
 	else
 	{
@@ -247,9 +247,9 @@ bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS)
     {
 	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
 	auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
-	IPAddress network = Functions::getAddress(args[2]);
-	uint8_t mask = Functions::prefixToPrefixLength(Functions::addressToIntv4(args[3]));
-	IPPrefix prefix = { network.raw, mask, AddressFamily::IPv4 };
+	IPv4Address network = Functions::getIPv4Address(args[2]);
+	uint8_t mask = Functions::prefixToPrefixLength(network.addr);
+	IPPrefix prefix = { network, mask };
 	if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv4)
 	{
 	    if (ctx.negate)

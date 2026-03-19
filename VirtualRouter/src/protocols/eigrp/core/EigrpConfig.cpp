@@ -51,13 +51,13 @@ void EigrpConfig::delNetworkRange(const EigrpConfigs::Network& newNetwork)
     base.getIfaceMgr().refreshInterfaceList();
 }
 
-bool EigrpConfig::isInNetworkRange(const uint8_t* testIp)
+bool EigrpConfig::isInNetworkRange(IPv4Address testIp)
 {
     {
         std::shared_lock<std::shared_mutex> configMutex(configs.configsMutex);
         for (const auto& network : configs.networks)
         {
-            if (Functions::compareNetworkWithIp(network.ip.raw, testIp, network.mask, base.getAF()))
+            if (Functions::compareNetworkWithIp(network.ip, testIp, network.mask))
             {
                 return true;
             }

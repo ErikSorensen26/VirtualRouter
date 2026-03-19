@@ -43,7 +43,7 @@ public:
     void onDbdRetransmissionTimer(Neighbor& nbr) override;
 
 private:
-    void transmit(PacketBuilder& pkt, const uint8_t* dest = nullptr) override;
+    void transmit(PacketBuilder& pkt, const IPAddress* dest = nullptr) override;
 
     bool processOptions(uint32_t options, Neighbor& nbr) override;
 

@@ -59,15 +59,21 @@ private:
             }
 
             ribEntry.addNextHop(
-                af == AddressFamily::IPv4 ? neighbor.v4 : neighbor.v6,
+                af == AddressFamily::IPv4 ? neighbor.v4() : neighbor.v6(),
                 it->second.routeInfo.originInterface,
                 1
             );
         }
 
-        ribEntry.prefix = af == AddressFamily::IPv4
-            ? readU32(bestIt->second.routeInfo.prefix.addr)
-            : readU128(bestIt->second.routeInfo.prefix.addr);
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+        {
+            ribEntry.prefix = bestIt->second.routeInfo.prefix.v4();
+        }
+        else
+        {
+            ribEntry.prefix = bestIt->second.routeInfo.prefix.v6();
+        }
+
         ribEntry.length = bestIt->second.routeInfo.prefix.prefixLength;
         ribEntry.source = *isExternal ? RouteSource::EIGRP_EXTERNAL : RouteSource::EIGRP_INTERNAL;
         ribEntry.processId = as;

@@ -33,7 +33,7 @@ void EigrpTopology::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 {
     const auto* interface = iface.getIface();
-    IPAddress connected = IPAddress(base.getAF());
+    IPAddress connected = (base.getAF() == AddressFamily::IPv4) ? IPAddress(uint32_t(0)) : IPAddress(__uint128_t(0));
 
     ReceivedRoute r;
     r.originInterface = iface.interfaceKey;
@@ -69,11 +69,11 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 
     if (base.getAF() == AddressFamily::IPv4)
     {
-        IPPrefix prefix;
-        if (interface->configs.ipv4.getPrimaryAddress(prefix.addr))
+        if (interface->configs.ipv4.hasPrimaryAddress())
         {
-            prefix.addPrefixLen(interface->configs.ipv4.getPrimaryMask());
-            prefix.af = AddressFamily::IPv4;
+            IPv4Address v4addr = interface->configs.ipv4.getPrimaryAddress();
+            uint8_t mask = interface->configs.ipv4.getPrimaryMask();
+            IPPrefix prefix(v4addr, mask);
             install(prefix);
         }
     }
@@ -102,7 +102,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 void EigrpTopology::clearConnected(EigrpInterface& iface)
 {
     std::vector<TopologyEntry*> updates;
-    IPAddress connected = IPAddress(base.getAF());
+    IPAddress connected = (base.getAF() == AddressFamily::IPv4) ? IPAddress(uint32_t(0)) : IPAddress(__uint128_t(0));
     for (auto it = iface.connectedRoutes.begin(); it != iface.connectedRoutes.end();)
     {
         if (auto* entry = duel.topologyTable.find(*it); entry)

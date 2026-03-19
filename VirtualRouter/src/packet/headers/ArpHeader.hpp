@@ -65,16 +65,12 @@ struct ArpHeader
         { raw->protocolSize = val; }
     void setOpcode(uint16_t val)
         { writeU16(raw->opcode, val); }
-    void setSenderHwAddr(const uint8_t* val)
-        { std::memcpy(raw->senderHardwareAddress, val, 6); }
-    void setSenderIpAddr(const uint8_t* val)
-        { std::memcpy(raw->senderIpAddress, val, 4); }
+    void setSenderHwAddr(uint64_t val)
+        { writeU48(raw->senderHardwareAddress, val); }
     void setSenderIpAddr(uint32_t val)
         { writeU32(raw->senderIpAddress, val); }
-    void setTargetHwAddr(const uint8_t* val)
-        { std::memcpy(raw->targetHardwareAddress, val, 6); }
-    void setTargetIpAddr(const uint8_t* val)
-        { std::memcpy(raw->targetIpAddress, val, 4); }
+    void setTargetHwAddr(uint64_t val)
+        { writeU48(raw->targetHardwareAddress, val); }
     void setTargetIpAddr(uint32_t val)
         { writeU32(raw->targetIpAddress, val); }
 };

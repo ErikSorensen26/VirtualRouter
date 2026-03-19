@@ -42,7 +42,7 @@ public:
 
     enum class Resync { NONE, INIT, REPLY };
 
-    void handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const uint8_t* neighborIp, bool multicast);
+    void handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const IPAddress& neighborIp, bool multicast);
 
     std::atomic<bool> pendingPeerTermination{false};
 
@@ -91,7 +91,7 @@ public:
 
 private:
 
-    void transmit(PacketBuilder& pkt, const uint8_t* dest = nullptr);
+    void transmit(PacketBuilder& pkt, const IPAddress* dest = nullptr);
     void transmitReliable(PacketBuilder& pkt, Neighbor* neighbor, EigrpHeader& header);
     void trackReliable(Neighbor* nbr, const IPAddress& ip, const PacketBuilder& pkt, uint32_t seq);
 

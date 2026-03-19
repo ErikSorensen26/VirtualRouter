@@ -95,7 +95,7 @@ bool RouterEigrpClassic_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 bool RouterEigrpClassic_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
     if (!ctx.negate)
-        ctx.currentEigrp->routerID(Functions::getAddress(args[0]).raw);
+        ctx.currentEigrp->routerID(Functions::getIPv4Address(args[0]).addr);
     else
         ctx.currentEigrp->clearRouterID();
     return true;
@@ -198,11 +198,11 @@ bool RouterEigrpClassic_Network_Handler(EIGRP_PARAMS)
 {
     ctx.terminal.isList = true;
     EigrpConfigs::Network network(AddressFamily::IPv4);
-    network.ip = Functions::getAddress(args[0]);
+    network.ip = Functions::getIPv4Address(args[0]);
     if (args.size() == 2)
-        network.mask = 32 - Functions::prefixToPrefixLength(Functions::addressToIntv4(args[1]));
+        network.mask = 32 - Functions::prefixToPrefixLength(Functions::getIPv4Address(args[1]).addr);
     else
-        network.mask = 32 - Functions::getDefaultMask(readU32(network.ip.raw));
+        network.mask = 32 - Functions::getDefaultMask(network.ip.addr);
 
     if (!ctx.negate)
     {

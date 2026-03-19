@@ -41,7 +41,7 @@ SummaryRoute* RouteAggregator::isSummarized(const IPPrefix& prefix)
     for (auto& sum : summaryRoutes)
     {
         if (sum.first.prefixLength < prefix.prefixLength &&
-            Functions::compareNetworkWithIp(sum.first.addr, prefix.addr, sum.first.prefixLength, iface.getBase().getAF()))
+            Functions::compareNetworkWithIp(sum.first, IPAddress(prefix.addr, prefix.prefixLength)))
         {
             return &sum.second;
         }
@@ -78,7 +78,7 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
                 for (auto& entry : iface.getTopController().getTopologies())
                 {
                     if (entry.second->prefix.prefixLength >= prefix.prefixLength &&
-                        Functions::compareNetworkWithIp(prefix.addr, entry.second->prefix.addr, prefix.prefixLength, iface.getBase().getAF()))
+                        Functions::compareNetworkWithIp(prefix, IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
                     {
                         entry.second->suppression[iface.interfaceKey].summaries.insert(s);
                         s->summarizedRoutes.insert(entry.second->prefix);
@@ -120,7 +120,7 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
             for (auto& entry : iface.getTopController().getTopologies())
             {
                 if (entry.second->prefix.prefixLength >= prefix.prefixLength &&
-                    Functions::compareNetworkWithIp(prefix.addr, entry.second->prefix.addr, prefix.prefixLength, iface.getBase().getAF()))
+                    Functions::compareNetworkWithIp(prefix, IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
                 {
                     entry.second->suppression[iface.interfaceKey].summaries.insert(&s);
                     s.summarizedRoutes.insert(entry.second->prefix);
@@ -164,12 +164,11 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
     auto& ifCfg = iface.getIfaceCfg();
     if (af == AddressFamily::IPv4)
     {
-        ifCfg.ipv4.getPrimaryAddress(r.nextHop.raw);
+        r.nextHop.setV4(ifCfg.ipv4.getPrimaryAddress().addr);
     }
     else
     {
-        ifCfg.ipv6.getLocalAddress(r.nextHop.raw);
-        r.nextHop.isV6 = true;
+        r.nextHop.setV6(ifCfg.ipv6.getLocalAddress().addr);
     }
 
     r.originInterface = iface.interfaceKey;

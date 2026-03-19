@@ -32,17 +32,21 @@ PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface, Config::Reference<C
     }())
 {}
 
-void PacketDispatcherV3::transmit(PacketBuilder& pkt, const uint8_t* dest)
+void PacketDispatcherV3::transmit(PacketBuilder& pkt, const IPAddress* dest)
 {
     auto* interface = &iface.getIface();
 
-    const uint8_t* destination = dest;
+    IPAddress destination;
     if (!dest)
     {
         if (iface.isDr.load(std::memory_order_relaxed))
-            destination = OSPFV3_ALL_SPF_ROUTERS;
+            destination = IPAddress(OSPFV3_ALL_SPF_ROUTERS, AddressFamily::IPv6);
         else
-            destination = OSPFV3_ALL_D_ROUTERS;
+            destination = IPAddress(OSPFV3_ALL_D_ROUTERS, AddressFamily::IPv6);
+    }
+    else
+    {
+        destination = *dest;
     }
 
     Protocol::IPPacket::BuildIP build = {
@@ -95,7 +99,7 @@ void PacketDispatcherV3::onDbdRetransmissionTimer(Neighbor& nbr)
     Protocol::IPPacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,
-        .destIp = nbr.ipAddress.raw,
+        .destIp = nbr.ipAddress,
         .protocolType = IP_OSPF
     };
 

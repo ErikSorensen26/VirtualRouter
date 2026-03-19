@@ -102,7 +102,7 @@ struct GlobalConfigs
             bool proxy = false; ///< Whether this entry is a proxy arp binding
         };
 
-        std::map<std::string, std::map<uint32_t, Neighbor>> neighbors; ///< Static ARP neighbor table.
+        std::map<std::string, std::map<IPv4Address, Neighbor>> neighbors; ///< Static ARP neighbor table.
         std::shared_mutex neighborMutex; ///< Syncronizes neighbor table access.
     } arp;
 
@@ -151,7 +151,7 @@ struct GlobalConfigs
             uint64_t macAddress; ///< MAC address associated with this IPv6 address.
         };
 
-        std::map<IPAddress, Neighbor> neighbors; ///< Static NDP neighbor table.
+        std::map<IPv6Address, Neighbor> neighbors; ///< Static NDP neighbor table.
         std::shared_mutex neighborMutex;         ///< Synchronizes static NDP table access.
     } ndp;
 };

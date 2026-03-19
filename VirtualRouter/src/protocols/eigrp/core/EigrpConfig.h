@@ -22,7 +22,7 @@ public:
         : base(base), aggregator(base) {}
     void addNetworkRange(const EigrpConfigs::Network& newNetwork);
     void delNetworkRange(const EigrpConfigs::Network& delNetwork);
-    bool isInNetworkRange(const uint8_t* testIp);
+    bool isInNetworkRange(IPv4Address testIp);
     void clearNetworks();
     void enableStub(bool isStub, bool advertiseConnected = true, bool advertiseLeakMap = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
     bool stubEnabled() const { return configs.stubConfig.isStub; }

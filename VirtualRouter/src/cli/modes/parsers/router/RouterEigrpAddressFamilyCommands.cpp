@@ -72,7 +72,7 @@ bool RouterEigrpAddressFamily_EigrpDefaultRouteTag_Handler(EIGRP_PARAMS)
         }
         else
         {
-            routeTag = Functions::addressToIntv4(args[0]);
+            routeTag = Functions::getIPv4Address(args[0]).addr;
         }
     }
     else
@@ -116,7 +116,7 @@ bool RouterEigrpAddressFamily_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
     if (!ctx.negate)
-        ctx.currentEigrp->routerID(Functions::getAddress(args[0]).raw);
+        ctx.currentEigrp->routerID(Functions::getIPv4Address(args[0]).addr);
     else
         ctx.currentEigrp->clearRouterID();
     return true;
@@ -295,14 +295,14 @@ bool RouterEigrpAddressFamily_Network_Handler(EIGRP_PARAMS)
 {
     ctx.terminal.isList = true;
     EigrpConfigs::Network network(AddressFamily::IPv4);
-    network.ip = Functions::getAddress(args[0]);
+    network.ip = Functions::getIPv4Address(args[0]);
     if (args.size() == 2)
     {
-        network.mask = Functions::prefixToPrefixLength(Functions::addressToIntv4(args[1]));
+        network.mask = Functions::prefixToPrefixLength(Functions::getIPv4Address(args[1]).addr);
     }
     else
     {
-        network.mask = Functions::getDefaultMask(readU32(network.ip.raw));
+        network.mask = Functions::getDefaultMask(network.ip.addr);
     }
 
     if (!ctx.negate)

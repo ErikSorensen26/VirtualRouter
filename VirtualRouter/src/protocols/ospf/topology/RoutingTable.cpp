@@ -29,8 +29,9 @@ static RouteSource deriveOspfType(OspfRouteType type)
 
 static bool isIntraRangeSuppressed(const IPPrefix& prefix, const std::unordered_set<IPPrefix>& ranges)
 {
+    IPAddress prefixAddr(prefix.addr, prefix.prefixLength);
     for (const auto& r : ranges)
-        if (Functions::compareNetworkWithIp(r.addr, prefix.addr, r.prefixLength, prefix.af))
+        if (Functions::compareNetworkWithIp(r, prefixAddr))
             return true;
     return false;
 }
@@ -456,9 +457,9 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         const RouteSource src = deriveOspfType(oldCopy.type);
 
         if (af == AddressFamily::IPv4)
-            rib.removeEntry(readU32(prefix.addr), prefix.prefixLength, src, procId);
+            rib.removeEntry(prefix.v4(), prefix.prefixLength, src, procId);
         else
-            rib.removeEntry(readU128(prefix.addr), prefix.prefixLength, src, procId);
+            rib.removeEntry(prefix.v6(), prefix.prefixLength, src, procId);
 
         st.hasSelected = false;
         prefixStates.erase(it);
@@ -576,9 +577,9 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         {
             const RouteSource oldSrc = deriveOspfType(oldCopy.type);
             if (af == AddressFamily::IPv4)
-                rib.removeEntry(readU32(prefix.addr), prefix.prefixLength, oldSrc, procId);
+                rib.removeEntry(prefix.v4(), prefix.prefixLength, oldSrc, procId);
             else
-                rib.removeEntry(readU128(prefix.addr), prefix.prefixLength, oldSrc, procId);
+                rib.removeEntry(prefix.v6(), prefix.prefixLength, oldSrc, procId);
         }
         
         auto merged = mergeEcmpNextHops(next.paths);
@@ -591,28 +592,28 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         if (af == AddressFamily::IPv4)
         {
             RibEntry<uint32_t> ribRoute;
-            ribRoute.prefix = readU32(prefix.addr);
+            ribRoute.prefix = prefix.v4();
             ribRoute.length = prefix.prefixLength;
             ribRoute.source = deriveOspfType(next.type);
             ribRoute.adminDistance = next.adminDistance;
             ribRoute.metric = next.cost;
 
             for (const auto& hop : merged)
-                ribRoute.addNextHop(readU32(hop.nextHop.raw), hop.interfaceId);
+                ribRoute.addNextHop(hop.nextHop.v4(), hop.interfaceId);
 
             rib.addRoute(ribRoute);
         }
         else
         {
             RibEntry<__uint128_t> ribRoute;
-            ribRoute.prefix = readU128(prefix.addr);
+            ribRoute.prefix = prefix.v6();
             ribRoute.length = prefix.prefixLength;
             ribRoute.source = deriveOspfType(next.type);
             ribRoute.adminDistance = next.adminDistance;
             ribRoute.metric = next.cost;
 
             for (const auto& hop : merged)
-                ribRoute.addNextHop(readU128(hop.nextHop.raw), hop.interfaceId);
+                ribRoute.addNextHop(hop.nextHop.v6(), hop.interfaceId);
 
             rib.addRoute(ribRoute);
         }
@@ -667,10 +668,10 @@ void OspfRib::recomputeLocked(const std::unordered_set<IPPrefix>& touched)
 
 bool OspfRib::globalRibContains(const IPPrefix& prefix) const
 {
-    if (prefix.af == AddressFamily::IPv4)
-        return rib.lookup(readU32(prefix.addr));
+    if (prefix.isIPv4())
+        return rib.lookup(prefix.v4());
     else
-        return rib.lookup(readU128(prefix.addr));
+        return rib.lookup(prefix.v6());
 }
 
 bool OspfRib::validateInterAreaSummaryEligibility(const IPPrefix& prefix) const

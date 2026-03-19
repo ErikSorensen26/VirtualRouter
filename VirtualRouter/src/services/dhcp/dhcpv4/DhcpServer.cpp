@@ -237,7 +237,7 @@ void Protocol::DhcpServer::sendOffer(
     tlv.tlv.append(DHCP_OPTION_TYPE, 1, &type, 1);
 
     // Server Identifier
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress()))
+    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr))
         return;
 
     // Lease Config
@@ -305,8 +305,8 @@ void Protocol::DhcpServer::sendOffer(
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = destination,
-        .destMac = chaddr,
+        .destIp = IPAddress(destination, AddressFamily::IPv4),
+        .destMac = readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -368,7 +368,7 @@ void Protocol::DhcpServer::sendAck(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
     // Lease config
     Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
@@ -448,8 +448,8 @@ void Protocol::DhcpServer::sendAck(
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = destination,
-        .destMac = chaddr,
+        .destIp = IPAddress(destination, AddressFamily::IPv4),
+        .destMac = readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -506,7 +506,7 @@ void Protocol::DhcpServer::sendNak(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
     // Echo relay option
     if (relayInfo)
@@ -525,15 +525,15 @@ void Protocol::DhcpServer::sendNak(
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    bool hasGiaddr = giaddr && std::memcmp(giaddr, IPV4_SOURCE, 4) != 0;
-    const uint8_t* destIP = hasGiaddr ? giaddr : IPV4_BROADCAST;
+    bool hasGiaddr = giaddr && readU32(giaddr) != 0;
+    IPAddress destIP = hasGiaddr ? IPAddress(giaddr, AddressFamily::IPv4) : IPAddress(IPV4_BROADCAST);
 
     Interface* currentInterface = &iface;
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
         .destIp = destIP,
-        .destMac = chaddr,
+        .destMac = readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -592,7 +592,7 @@ void Protocol::DhcpServer::sendInformReply(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
     Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net) return;
@@ -641,8 +641,8 @@ void Protocol::DhcpServer::sendInformReply(
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = destination,
-        .destMac = chaddr,
+        .destIp = IPAddress(destination, AddressFamily::IPv4),
+        .destMac = readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -701,7 +701,7 @@ void Protocol::DhcpServer::sendForceRenew(
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
     // Echo relay option
     if (relayInfo)
@@ -723,8 +723,8 @@ void Protocol::DhcpServer::sendForceRenew(
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = destination,
-        .destMac = chaddr,
+        .destIp = IPAddress(destination, AddressFamily::IPv4),
+        .destMac = readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -809,7 +809,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
         Dhcp::appendTLV(tlv, DHCP_OPTION_MASK, 4, Functions::prefixToMask(buf, prefixLen, AddressFamily::IPv4));
 
         // Router
-        Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, iface.configs.ipv4.getPrimaryAddress());
+        Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, iface.configs.ipv4.getPrimaryAddress().addr);
 
         // Timestamp
         Dhcp::appendTLV(tlv, DHCP_OPTION_TIMESTAMP, secondsSinceEpoch());
@@ -832,8 +832,8 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = giaddr,
-        .destMac = chaddr,
+        .destIp = IPAddress(giaddr, AddressFamily::IPv4),
+        .destMac = readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -1010,13 +1010,14 @@ void Protocol::DhcpServer::processDiscover(
         }
     };
 
+    static const uint8_t BROADCAST_BYTES[4] = {0xFF, 0xFF, 0xFF, 0xFF};
     const uint8_t* destination = nullptr;
-    bool hasRelay = std::memcmp(dhcp.getRelayAgentIP(), IPV4_SOURCE, 4);
+    bool hasRelay = readU32(dhcp.getRelayAgentIP()) != 0;
 
     if (hasRelay)
         destination = dhcp.getRelayAgentIP();
-    else if (broadcast || dhcp.getClientIP() == 0)
-        destination = IPV4_BROADCAST;
+    else if (broadcast || dhcp.getClientIP() == nullptr)
+        destination = BROADCAST_BYTES;
     else
         destination = dhcp.getClientIP();
 
@@ -1108,13 +1109,14 @@ void Protocol::DhcpServer::processRequest(
     if (msgType != DHCP_TYPE_REQUEST)
         return;
 
+    static const uint8_t BROADCAST_BYTES[4] = {0xFF, 0xFF, 0xFF, 0xFF};
     const uint8_t* destination = nullptr;
-    bool hasRelay = std::memcmp(dhcp.getRelayAgentIP(), IPV4_SOURCE, 4) != 0;
+    bool hasRelay = readU32(dhcp.getRelayAgentIP()) != 0;
 
-    if (hasRelay) 
+    if (hasRelay)
         destination = dhcp.getRelayAgentIP();
     else if (broadcast || dhcp.getClientIPInt() == 0)
-        destination = IPV4_BROADCAST;
+        destination = BROADCAST_BYTES;
     else
         destination = dhcp.getClientIP();
 
@@ -1294,13 +1296,14 @@ void Protocol::DhcpServer::processInform(
     if (dhcp.getClientIPInt() == 0)
         return;
 
+    static const uint8_t BROADCAST_BYTES[4] = {0xFF, 0xFF, 0xFF, 0xFF};
     const uint8_t* destination = nullptr;
-    bool hasRelay = std::memcmp(dhcp.getRelayAgentIP(), IPV4_SOURCE, 4) != 0;
+    bool hasRelay = readU32(dhcp.getRelayAgentIP()) != 0;
 
     if (hasRelay)
         destination = dhcp.getRelayAgentIP();
-    else if (dhcp.getClientIP() == 0)
-        destination = IPV4_BROADCAST;
+    else if (dhcp.getClientIP() == nullptr)
+        destination = BROADCAST_BYTES;
     else
         destination = dhcp.getClientIP();
 
@@ -1575,11 +1578,11 @@ void Protocol::DhcpServer::appendBootOptions(Dhcp::DhcpTLVManager& tlv, const Dh
 
 Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::matchingNetwork(const Interface& iface, const DhcpHeader& dhcp) const
 {
-    auto findMatchingNetworkAgainstIP([&](const uint8_t* ip) -> Dhcp::DhcpNetwork* {
+    auto findMatchingNetworkAgainstIP([&](IPv4Address ip) -> Dhcp::DhcpNetwork* {
         for (auto& [_, config] : networks)
         {
             auto network = config->configs.getNetworkID();
-            if (config->pool->init.load(std::memory_order_relaxed), Functions::compareNetworkWithIp(network.addr, ip, network.prefixLength, AddressFamily::IPv4))
+            if (config->pool->init.load(std::memory_order_relaxed), Functions::compareNetworkWithIp(network.addr, ip, network.prefixLength))
             {
                 return config;
             }
@@ -1588,14 +1591,14 @@ Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::matchingNetwork(const Interfa
     });
 
     // Match based on the relay agent IP (if present)
-    auto relayMatch = findMatchingNetworkAgainstIP(dhcp.getRelayAgentIP());
+    auto relayMatch = findMatchingNetworkAgainstIP(IPv4Address(dhcp.getRelayAgentIP()));
     if (relayMatch)
     {
         return relayMatch;
     }
 
     // Fall back to client IP matching
-    auto clientMatch = findMatchingNetworkAgainstIP(dhcp.getClientIP());
+    auto clientMatch = findMatchingNetworkAgainstIP(IPv4Address(dhcp.getClientIP()));
     if (clientMatch)
     {
         return clientMatch;

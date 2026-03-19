@@ -46,8 +46,8 @@
 #define ICMPV6_OPTION_NDP_DNS_SERVER    0x19    ///< DNS Server Option for NDP
 #define ICMPV6_OPTION_NDP_DNS_SEARCH    0x1F    ///< DNS Search Option for NDP
 
-inline constexpr uint8_t ICMPV6_SOLICIT_MULTICAST[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xFF, 0x00, 0x00, 0x00 };
-inline constexpr uint8_t ICMPV6_ALL_ROUTERS[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02 };
+inline constexpr __uint128_t ICMPV6_SOLICIT_MULTICAST = (__uint128_t{0xFF02000000000000} << 64) | 0x000000000001FF00000000ULL;
+inline constexpr __uint128_t ICMPV6_ALL_ROUTERS = (__uint128_t{0xFF02000000000000} << 64) | 0x0000000000000002ULL;
 
 #pragma pack(push, 1)
 struct Icmpv6HeaderRaw

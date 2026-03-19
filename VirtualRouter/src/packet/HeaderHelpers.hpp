@@ -3,15 +3,16 @@
 #include <cstring>
 #include <arpa/inet.h>
 #include <AddressFamily.hpp>
+#include <type_traits>
 #include <likely.hpp>
 
 #ifndef HEADER_HELPER_HPP
 #define HEADER_HELPER_HPP
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-constexpr bool is_little_endian = true;
+constexpr bool isLittleEndian = true;
 #else
-constexpr bool is_little_endian = false;
+constexpr bool isLittleEndian = false;
 #endif
 
 inline uint64_t byteSwap64(uint64_t val) {
@@ -152,7 +153,7 @@ inline static __uint128_t maskU128Bits(unsigned bits)
 
 inline static uint16_t readU16(const uint8_t* p)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         return (uint16_t(p[0]) << 8) | uint16_t(p[1]);
     }
@@ -166,7 +167,7 @@ inline static uint16_t readU16(const uint8_t* p)
 
 inline static uint32_t readU24(const uint8_t* p)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         return (uint32_t(p[0]) << 16) |
                (uint32_t(p[1]) << 8)  |
@@ -182,7 +183,7 @@ inline static uint32_t readU24(const uint8_t* p)
 
 inline static uint32_t readU32(const uint8_t* p)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         return (uint32_t(p[0]) << 24) |
                (uint32_t(p[1]) << 16) |
@@ -198,7 +199,7 @@ inline static uint32_t readU32(const uint8_t* p)
 }
 
 inline static uint64_t readU48(const uint8_t* p) {
-    if constexpr (is_little_endian) {
+    if constexpr (isLittleEndian) {
         return (uint64_t(p[0]) << 40) |
                (uint64_t(p[1]) << 32) |
                (uint64_t(p[2]) << 24) |
@@ -217,7 +218,7 @@ inline static uint64_t readU48(const uint8_t* p) {
 
 inline static uint64_t readU64(const uint8_t* p)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         return (uint64_t(p[0]) << 56) |
                (uint64_t(p[1]) << 48) |
@@ -238,7 +239,7 @@ inline static uint64_t readU64(const uint8_t* p)
 
 inline static __uint128_t readU128(const uint8_t* p)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         __uint128_t result = 0;
         for (size_t i = 0; i < 16; ++i)
@@ -255,9 +256,33 @@ inline static __uint128_t readU128(const uint8_t* p)
     }
 }
 
+template <typename T>
+inline static T readBytes(const uint8_t* p, size_t n)
+{
+    static_assert(std::is_unsigned_v<T>, "T must be unsigned");
+
+    T val = 0;
+    
+    if constexpr (isLittleEndian)
+    {
+        size_t shift = (sizeof(T) - 1) * 8;
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            val |= (T(p[i]) << shift);
+            shift -= 8;
+        }
+    }
+    else
+    {
+        std::memcpy(&val, p, n);
+    }
+    return val;
+}
+
 inline static uint8_t* writeU16(uint8_t* dest, uint16_t val)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         dest[0] = static_cast<uint8_t>((val >> 8) & 0xFF);
         dest[1] = static_cast<uint8_t>(val & 0xFF);
@@ -271,7 +296,7 @@ inline static uint8_t* writeU16(uint8_t* dest, uint16_t val)
 
 inline static uint8_t* writeU24(uint8_t* dest, uint32_t val)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         dest[0] = static_cast<uint8_t>((val >> 16) & 0xFF);
         dest[1] = static_cast<uint8_t>((val >> 8) & 0xFF);
@@ -286,7 +311,7 @@ inline static uint8_t* writeU24(uint8_t* dest, uint32_t val)
 
 inline static uint8_t* writeU32(uint8_t* dest, uint32_t val)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         dest[0] = static_cast<uint8_t>((val >> 24) & 0xFF);
         dest[1] = static_cast<uint8_t>((val >> 16) & 0xFF);
@@ -312,7 +337,7 @@ inline static uint8_t* writeU48(uint8_t* dest, uint64_t val) {
 
 inline static uint8_t* writeU64(uint8_t* dest, uint64_t val)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         dest[0] = static_cast<uint8_t>((val >> 56) & 0xFF);
         dest[1] = static_cast<uint8_t>((val >> 48) & 0xFF);
@@ -332,7 +357,7 @@ inline static uint8_t* writeU64(uint8_t* dest, uint64_t val)
 
 inline static uint8_t* writeU128(uint8_t* dest, __uint128_t val)
 {
-    if constexpr (is_little_endian)
+    if constexpr (isLittleEndian)
     {
         for (int i = 15; i >= 0; --i)
         {
@@ -343,6 +368,27 @@ inline static uint8_t* writeU128(uint8_t* dest, __uint128_t val)
     else
     {
         std::memcpy(dest, &val, sizeof(val));
+    }
+    return dest;
+}
+
+template <typename T>
+inline static uint8_t* writeBytes(uint8_t* dest, T val, size_t n)
+{
+    static_assert(std::is_unsigned_v<T>, "T must be unsigned");
+
+    if constexpr (isLittleEndian)
+    {
+        size_t shift = (sizeof(T) - 1) * 8;
+        for (size_t i = 0; i < n; ++i)
+        {
+            dest[i] = static_cast<uint8_t>((val >> shift) & 0xFF);
+            shift -= 8;
+        }
+    }
+    else
+    {
+        std::memcpy(dest, reinterpret_cast<const uint8_t*>(&val), n);
     }
     return dest;
 }

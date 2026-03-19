@@ -16,9 +16,9 @@ struct ExternalLsaV3
     uint32_t metric;
     uint8_t options;
     uint16_t referencedLsType;
-    IPPrefix prefix;
+    IPv6Prefix prefix;
     bool isType2;
-    std::optional<IPAddress> forwardingAddress;
+    std::optional<IPv6Address> forwardingAddress;
     std::optional<uint32_t> routeTag;
     std::optional<uint32_t> referencedLsId;
 
@@ -43,7 +43,7 @@ struct ExternalLsaV3
 
         if (off + prefixBytes > len) return std::nullopt;
 
-        std::memcpy(lsa.prefix.addr, buf + 8, prefixBytes);
+        lsa.prefix = IPv6Prefix(buf + 8, prefixLen);
         lsa.prefix.prefixLength = prefixLen;
 
         off += prefixBytes;
@@ -51,7 +51,7 @@ struct ExternalLsaV3
         if (exOpts & 0x02) // Forwarding flag
         {
             if (off + 16 > len) return std::nullopt;
-            lsa.forwardingAddress.emplace(buf + off, AddressFamily::IPv6);
+            lsa.forwardingAddress.emplace(buf + off);
             off += 16;
         }
         if (exOpts & 0x01) // Route Tag Flag
@@ -89,7 +89,7 @@ struct ExternalLsaV3
 
         if (off + prefixBytes > len) return false;
 
-        std::memcpy(buf + 8, prefix.addr, prefixBytes);
+        writeBytes(buf + 8, prefix.addr, prefixBytes);
 
         off += prefixBytes;
 
@@ -97,7 +97,7 @@ struct ExternalLsaV3
         {
             exOpts |= 0x02;
             if (off + 16 > len) return false;
-            std::memcpy(buf + off, forwardingAddress.value().raw, 16);
+            writeU128(buf + off, forwardingAddress.value().addr);
             off += 16;
         }
         if (routeTag.has_value())
@@ -140,10 +140,10 @@ struct ExternalLsaV3
         check.addU16(options);
 
         uint8_t prefixBytes = (prefix.prefixLength + 7) / 8;
-        check.addBytes(prefix.addr, prefixBytes);
+        check.addBytes(prefix.raw(), prefixBytes);
 
         if (extOpts & 0x02)
-            check.addBytes(forwardingAddress.value().raw, 16);
+            check.addBytes(forwardingAddress.value().raw(), 16);
         if (extOpts & 0x01)
             check.addU32(routeTag.value());
         if (referencedLsType != 0)
