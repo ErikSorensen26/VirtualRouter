@@ -4,7 +4,7 @@
 #define EIGRP_TYPES_HPP
 
 #include <unordered_set>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <AddressFamily.hpp>
 #include <shared_mutex>
 #include <atomic>
@@ -136,23 +136,6 @@ namespace EigrpConfigs
     };
 
     /**
-     * @struct Network
-     * @brief Represents a network with its IP address and subnet mask.
-     */
-    struct Network 
-    {
-        Network(AddressFamily family) : af(family) {}
-        IPAddress ip;    ///< IP address of the network.
-        uint8_t mask;  ///< Subnet mask of the network.
-        AddressFamily af;
-
-        bool operator==(const Network& other) const
-        {
-            return ip == other.ip && mask == other.mask;
-        }
-    };
-
-    /**
      * @struct EigrpConfigs
      * @brief Configuration settings for the EIGRP process.
      */
@@ -189,7 +172,7 @@ namespace EigrpConfigs
         std::atomic<bool> routingMulticast = false; ///< Indicates if multicast is being routed.
         std::atomic<bool> dampening = false; ///< Indicates that dampening is enabled.
         std::atomic<bool> dampeningWarnings = false; ///< Show warning when dampening limit is reached.
-        std::vector<Network> networks; ///< List of configured networks.
+        std::vector<IPv4Prefix> networks; ///< List of configured networks.
         std::unordered_set<uint32_t> passiveInterfaces; ///< List of all passive interfaces.
         std::unordered_map<uint32_t, std::unordered_set<IPAddress>> unicastNeighbors; ///< Manually defined unicast neighbors.
         std::atomic<TrafficShareMode> trafficShareMode = TrafficShareMode::Balanced; ///< Traffic sharing mode.

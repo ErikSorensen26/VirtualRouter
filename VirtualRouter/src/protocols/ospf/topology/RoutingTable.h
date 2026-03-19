@@ -4,7 +4,7 @@
 #define OSPF_ROUTING_TABLE_H
 
 #include <cstdint>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <unordered_set>
 #include "TopologyTypes.hpp"
 

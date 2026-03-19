@@ -1,6 +1,5 @@
 // InterfaceTable.cpp
 
-#include <Functions.h>
 #include <VirtualRouter.h>
 
 #include "InterfaceManager.h"
@@ -115,12 +114,10 @@ void InterfaceManager::refreshInterfaceList()
 
             if (base.getAF() == AddressFamily::IPv4)
             {
-                uint8_t ipAddress[4];
-                ipInfo.ipv4.getPrimaryAddress(ipAddress);
-                inRange = config.isInNetworkRange(ipAddress);
+                inRange = config.isInNetworkRange(ipInfo.ipv4.getPrimaryAddress());
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
-                    remake = inRange && !ipInfo.ipv4.comparePrimaryAddress(it->second.ifaceAddress.v4);
+                    remake = inRange && !ipInfo.ipv4.comparePrimaryAddress(IPv4Address(it->second.ifaceAddress.v4()));
             }
             else
             {
@@ -134,7 +131,7 @@ void InterfaceManager::refreshInterfaceList()
                 inRange = ipv6Contained;
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
-                    remake = inRange && ipInfo.ipv6.getLocalAddress() != it->second.ifaceAddress.v6;
+                    remake = inRange && ipInfo.ipv6.getLocalAddress().addr != it->second.ifaceAddress.v6();
             }
             
             if (remake)

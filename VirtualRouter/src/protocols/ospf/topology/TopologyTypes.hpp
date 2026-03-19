@@ -3,7 +3,7 @@
 #ifndef OSPF_TOPOLOGY_TYPES_HPP
 #define OSPF_TOPOLOGY_TYPES_HPP
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 namespace OSPF

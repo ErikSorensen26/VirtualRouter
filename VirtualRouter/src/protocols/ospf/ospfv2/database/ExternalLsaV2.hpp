@@ -4,7 +4,7 @@
 #define EXTERNAL_LSA_V2_HPP
 
 #include <cstdint>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"

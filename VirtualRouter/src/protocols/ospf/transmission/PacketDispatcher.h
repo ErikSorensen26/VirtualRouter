@@ -52,7 +52,7 @@ protected:
     virtual bool sendLSRequest(Neighbor& nbr) = 0;
     virtual bool sendLSUpdate(Neighbor* nbr) = 0;
 
-    virtual void transmit(PacketBuilder& pkt, const uint8_t* dest) = 0;
+    virtual void transmit(PacketBuilder& pkt, const IPAddress* dest) = 0;
 
     virtual bool processOptions(uint32_t options, Neighbor& nbr) = 0;
 

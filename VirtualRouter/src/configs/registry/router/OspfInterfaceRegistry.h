@@ -8,7 +8,8 @@
 
 #include "configs/RegistryTypes.hpp"
 
-#include "IPAddress.hpp"
+#include "IPAddress.h"
+#include "AddressFamily.hpp"
 #include "packet/HeaderHelpers.hpp"
 #include "configs/SubRegistry.hpp"
 #include "configs/RegistryReference.hpp"

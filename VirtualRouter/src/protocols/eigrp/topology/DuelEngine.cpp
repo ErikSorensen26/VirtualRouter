@@ -176,7 +176,7 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
-    IPAddress bestNeighbor = IPAddress(base.getAF());
+    IPAddress bestNeighbor = (base.getAF() == AddressFamily::IPv4) ? IPAddress(uint32_t(0)) : IPAddress(__uint128_t(0));
 
     for (auto& [nbr, route] : entry->routesBySource)
     {

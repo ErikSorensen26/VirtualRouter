@@ -11,7 +11,7 @@
 #include <cstring>
 #include <map>
 #include <unordered_set>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "packet/HeaderHelpers.hpp"
@@ -89,43 +89,41 @@ public:
         std::atomic<uint16_t> mtu{1500};
         std::atomic<bool> mtuLocal{false};
 
-        void setPrimaryAddress(uint32_t newAddress, uint8_t newMask);
-        void setPrimaryAddress(const uint8_t* newAddress, uint8_t newMask);
-        void addSecondaryAddress(uint32_t newAddress, uint8_t newMask);
-        void addSecondaryAddress(const uint8_t* newAddress, uint8_t newMask);
+        void setPrimaryAddress(IPv4Prefix prefix);
+        void addSecondaryAddress(IPv4Prefix prefix);
 
         void removePrimaryAddress();
-        void removeSecondaryAddress(const IPv4Prefix& prefix);
+        void removeSecondaryAddress(IPv4Prefix prefix);
+        
+        uint8_t* getPrimaryAddress(uint8_t* out) const;
+        uint8_t* getSecondaryAddress(uint8_t* out) const;
+
+        IPv4Address getPrimaryAddress() const;
+        std::optional<IPv4Address> getSecondaryAddress() const;
+
+        bool hasPrimaryAddress() const;
+        bool hasPrimaryAddress(IPv4Prefix prefix) const;
+        bool hasPrimaryAddress(const uint8_t* addr, uint8_t mask) const;
+        bool hasSecondaryAddress(IPv4Prefix prefix) const;
+        bool hasSecondaryAddress(const uint8_t* addr, uint8_t mask) const;
+
+        uint8_t getPrimaryPrefix(uint8_t* out) const;
+        std::optional<uint8_t> getSecondaryPrefix(uint8_t* out) const;
 
         IPv4Prefix getPrimaryPrefix() const;
         std::optional<IPv4Prefix> getSecondaryPrefix();
 
-        uint8_t* getPrimaryAddress(uint8_t* out) const;
-        uint8_t* getSecondaryAddress(uint8_t* out) const;
-
-        uint32_t getPrimaryAddress() const;
-        std::optional<uint32_t> getSecondaryAddress() const;
-
-        bool hasPrimaryAddress() const;
-        bool hasPrimaryAddress(uint32_t addr, uint8_t mask) const;
-        bool hasPrimaryAddress(const uint8_t* addr, uint8_t mask) const;
-        bool hasSecondaryAddress(uint32_t addr, uint8_t mask) const;
-        bool hasSecondaryAddress(const uint8_t* addr, uint8_t mask) const;
-
-        uint8_t getPrimaryPair(uint8_t* out) const;
-        std::optional<uint8_t> getSecondaryPair(uint8_t* out) const;
-
         uint8_t getPrimaryMask() const;
         std::optional<uint8_t> getSecondaryMask() const;
 
-        std::vector<uint32_t> getSecondaryList() const;
+        std::vector<IPv4Address> getSecondaryList() const;
         std::vector<IPv4Prefix> getSecondaryPrefixList(bool maintainAddress = false) const;
 
-        std::unordered_set<uint32_t> getSecondarySet() const;
+        std::unordered_set<IPv4Address> getSecondarySet() const;
         std::unordered_set<IPv4Prefix> getSecondaryPrefixSet(bool maintainAddress = false) const;
 
         bool comparePrimaryAddress(const uint8_t* ip);
-        bool comparePrimaryAddress(uint32_t ip);
+        bool comparePrimaryAddress(IPv4Address ip);
 
     private:
         mutable std::mutex ipMutex;
@@ -149,9 +147,8 @@ public:
 
         struct IPv6Address
         {
-            uint8_t ip[16];
-            __uint128_t ipInt;
-            uint8_t prefix = 0;
+            ::IPv6Address addr;
+            uint8_t length;
 
             bool tentative{false};
             bool valid{false};
@@ -171,9 +168,9 @@ public:
         bool hasRoutableAddress();
 
         // Add/Remove functions
-        IPv6Address* addAddress(const uint8_t* ip, bool local, uint8_t prefix);
-        IPv6Address* addUniqueLocalAddress(const uint8_t* ip, uint8_t prefixLen);
-        IPv6Address* addGlobalAddress(const uint8_t* ip, uint8_t prefixLen);
+        IPv6Address* addAddress(const IPv6Prefix& ip, bool local);
+        IPv6Address* addUniqueLocalAddress(const IPv6Prefix& ip);
+        IPv6Address* addGlobalAddress(const IPv6Prefix& ip);
         void removeLocalAddress();
         void removeAddress(const IPv6Prefix& prefix);
         void removeAllAddresses();
@@ -185,46 +182,48 @@ public:
         uint8_t* getGlobalUnicast(uint8_t* out) const;
         uint8_t* getLocalUnicast(uint8_t* out) const;
 
-        IPPrefix getLocalPrefix() const;
-
-        __uint128_t getLocalAddress() const;
-        __uint128_t getGlobalUnicast() const;
-        __uint128_t getLocalUnicast() const;
+        ::IPv6Address getLocalAddress() const;
+        ::IPv6Address getGlobalUnicast() const;
+        ::IPv6Address getLocalUnicast() const;
 
         bool hasAddress(const uint8_t* addr);
-        bool hasAddress(__uint128_t addr);
+        bool hasAddress(::IPv6Address addr);
 
         bool hasLocalAddress(const uint8_t* addr, uint8_t len) const;
         bool hasGlobalUnicast(const uint8_t* addr, uint8_t len) const;
         bool hasLocalUnicast(const uint8_t* addr, uint8_t len) const;
 
-        bool hasLocalAddress(__uint128_t addr, uint8_t len) const;
-        bool hasGlobalUnicast(__uint128_t addr, uint8_t len) const;
-        bool hasLocalUnicast(__uint128_t addr, uint8_t len) const;
+        bool hasLocalAddress(const IPv6Prefix& prefix) const;
+        bool hasGlobalUnicast(const IPv6Prefix& prefix) const;
+        bool hasLocalUnicast(const IPv6Prefix& prefix) const;
 
-        uint8_t getLocalPair(uint8_t* out) const;
-        uint8_t getGlobalUnicastPair(uint8_t* out) const;
-        uint8_t getLocalUnicastPair(uint8_t* out) const;
+        uint8_t getLocalPrefix(uint8_t* out) const;
+        uint8_t getGlobalUnicastPrefix(uint8_t* out) const;
+        uint8_t getLocalUnicastPrefix(uint8_t* out) const;
+
+        ::IPv6Prefix getLocalPrefix() const;
+        ::IPv6Prefix getGlobalUnicastPrefix() const;
+        ::IPv6Prefix getLocalUnicastPrefix() const;
 
         uint8_t getLocalMask() const;
         uint8_t getGlobalUnicastMask() const;
         uint8_t getLocalUnicastMask() const;
 
-        std::vector<IPAddress> getRoutableList() const;
-        std::vector<IPAddress> getGlobalList() const;
-        std::vector<IPAddress> getLocalList() const;
+        std::vector<::IPv6Address> getRoutableList() const;
+        std::vector<::IPv6Address> getGlobalList() const;
+        std::vector<::IPv6Address> getLocalList() const;
 
-        std::vector<IPPrefix> getRoutablePrefixList(bool maintainAddress = false) const;
-        std::vector<IPPrefix> getGlobalPrefixList(bool maintainAddress = false) const;
-        std::vector<IPPrefix> getLocalPrefixList(bool maintainAddress = false) const;
+        std::vector<::IPv6Prefix> getRoutablePrefixList(bool maintainAddress = false) const;
+        std::vector<::IPv6Prefix> getGlobalPrefixList(bool maintainAddress = false) const;
+        std::vector<::IPv6Prefix> getLocalPrefixList(bool maintainAddress = false) const;
 
-        std::unordered_set<IPAddress> getRoutableSet() const;
-        std::unordered_set<IPAddress> getGlobalSet() const;
-        std::unordered_set<IPAddress> getUniqueSet() const;
+        std::unordered_set<::IPv6Address> getRoutableSet() const;
+        std::unordered_set<::IPv6Address> getGlobalSet() const;
+        std::unordered_set<::IPv6Address> getUniqueSet() const;
 
-        std::unordered_set<IPPrefix> getRoutablePrefixSet(bool maintainAddress = false) const;
-        std::unordered_set<IPPrefix> getGlobalPrefixSet(bool maintainAddress = false) const;
-        std::unordered_set<IPPrefix> getUniquePrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<::IPv6Prefix> getRoutablePrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<::IPv6Prefix> getGlobalPrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<::IPv6Prefix> getUniquePrefixSet(bool maintainAddress = false) const;
 
 
         // Other IPv6 configurations

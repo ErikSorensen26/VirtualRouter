@@ -292,8 +292,12 @@ bool Protocol::DhcpClient::buildDhcpRelease(PacketBuilder& builder)
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
     if (configs.clientID.size > 0)
         Dhcp::appendTLV(tlv, DHCP_OPTION_CLIENT_ID, configs.clientID.size, configs.clientID.data);
-    if (configs.serverID.v4 != 0) 
-        Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, 4, configs.serverID.raw);
+    if (configs.serverID.v4() != 0)
+    {
+        const auto& sid = configs.serverID.v4raw();
+        uint8_t sidBuf[4] = { sid[0], sid[1], sid[2], sid[3] };
+        Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, 4, sidBuf);
+    }
 
     if (tlv.file)
     {
@@ -460,14 +464,11 @@ void Protocol::DhcpClient::sendDhcpRelease()
 
     if (!buildDhcpRelease(builder)) return;
 
-    uint8_t ip[4];
-    currentInterface->configs.ipv4.getPrimaryAddress(ip);
-
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = configs.serverID.raw,
-        .sourceIp = ip,
+        .destIp = configs.serverID,
+        .sourceIp = IPAddress(currentInterface->configs.ipv4.getPrimaryAddress().addr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -588,9 +589,9 @@ bool Protocol::DhcpClient::processDhcpAck(const DhcpHeader& dhcp, std::vector<TL
         return false;
     
     // Apply configs
-    currentInterface->setIPv4(readU32(dhcp.raw->yiaddr), std::popcount(subnetMask));
-    configs.router.v4 = gateway;
-    configs.serverID.v4 = serverId;
+    currentInterface->setIPv4(IPv4Prefix(readU32(dhcp.raw->yiaddr), static_cast<uint8_t>(std::popcount(subnetMask))));
+    configs.router.setV4(gateway);
+    configs.serverID.setV4(serverId);
     configs.leaseTime.store(leaseTime);
     configs.leaseStart.store(std::chrono::steady_clock::now());
 
@@ -629,8 +630,8 @@ bool Protocol::DhcpClient::processDhcpNak(const DhcpHeader& dhcp, std::vector<TL
 
     // Reset state
     currentInterface->removeIPv4();
-    configs.serverID.v4 = 0;
-    configs.router.v4 = 0;
+    configs.serverID.setV4(0);
+    configs.router.setV4(0);
     configs.leaseTime.store(0, std::memory_order_release);
     acked.store(false, std::memory_order_release);
     offered.store(false, std::memory_order_release);
@@ -798,7 +799,7 @@ void Protocol::DhcpClient::sendRenew()
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
     if (configs.clientID.size > 0)
         Dhcp::appendTLV(tlv, DHCP_OPTION_CLIENT_ID, configs.clientID.size, configs.clientID.data);
-    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getPrimaryAddress());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getPrimaryAddress().addr);
 
     if (tlv.file)
     {
@@ -812,13 +813,11 @@ void Protocol::DhcpClient::sendRenew()
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    uint8_t ip[4];
-
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = configs.serverID.raw,
-        .sourceIp = currentInterface->configs.ipv4.getPrimaryAddress(ip),
+        .destIp = configs.serverID,
+        .sourceIp = IPAddress(currentInterface->configs.ipv4.getPrimaryAddress().addr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -872,7 +871,7 @@ void Protocol::DhcpClient::sendRebind()
     uint8_t type = DHCP_TYPE_REQUEST;
     Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
     Dhcp::appendTLV(tlv, DHCP_OPTION_CLIENT_ID, 6, mac);
-    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getPrimaryAddress());
+    Dhcp::appendTLV(tlv, DHCP_OPTION_REQUEST_IP, currentInterface->configs.ipv4.getPrimaryAddress().addr);
 
     if (tlv.file)
     {
@@ -886,13 +885,11 @@ void Protocol::DhcpClient::sendRebind()
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    uint8_t ip[4];
-
     IPPacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
         .destIp = IPV4_BROADCAST,
-        .sourceIp = currentInterface->configs.ipv4.getPrimaryAddress(ip),
+        .sourceIp = IPAddress(currentInterface->configs.ipv4.getPrimaryAddress().addr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
@@ -908,8 +905,8 @@ void Protocol::DhcpClient::sendRebind()
 void Protocol::DhcpClient::expireLease()
 {
     currentInterface->removeIPv4();
-    configs.serverID.v4 = 0;
-    configs.router.v4 = 0;
+    configs.serverID.setV4(0);
+    configs.router.setV4(0);
     configs.leaseTime.store(0);
     configs.leaseStart.store({});
 

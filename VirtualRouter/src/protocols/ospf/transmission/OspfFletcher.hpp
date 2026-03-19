@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <NetworkSpan.hpp>
 
 namespace OSPF
 {
@@ -44,6 +45,15 @@ public:
     }
 
     inline void addBytes(const uint8_t* data, size_t len)
+    {
+        for (size_t i = 0; i < len; ++i)
+        {
+            add(data[i]);
+        }
+    }
+
+    template <typename N>
+    inline void addBytes(const NetworkSpan<N>& data, size_t len)
     {
         for (size_t i = 0; i < len; ++i)
         {

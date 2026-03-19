@@ -3,7 +3,7 @@
 #ifndef OSPF_INTERFACE_MANAGER_H
 #define OSPF_INTERFACE_MANAGER_H
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <map>
 
 #include "ospf/interface/InterfaceId.hpp"

@@ -3,7 +3,7 @@
 #ifndef EIGRP_TOPOLOGY_H
 #define EIGRP_TOPOLOGY_H
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "eigrp/topology/DuelEngine.h"
 

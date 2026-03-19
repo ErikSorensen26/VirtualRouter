@@ -14,7 +14,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
     const bool external = isExternal(type);
     const bool named = isNamed(type);
     data.offset = 0;
-    data.v6 = route->routeInfo.prefix.af == AddressFamily::IPv6;
+    data.v6 = route->routeInfo.prefix.isIPv6();
     data.value = out;
     data.valueSize = maxSize;
     const uint8_t ipSize = data.v6 ? 16 : 4;
@@ -27,12 +27,17 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
 
     const uint64_t bw = std::min(route->routeInfo.bandwidth, currentBandwidth);
 
+    auto writeIpAddr = [&](uint8_t* dst, const IPAddress& ip) {
+        if (data.v6) writeU128(dst, ip.v6());
+        else writeU32(dst, ip.v4());
+    };
+
     if (!wide)
     {
         if (iface.configs.nextHopSelf.load(std::memory_order_relaxed))
-            std::memcpy(out, iface.ifaceAddress.raw, ipSize);
+            writeIpAddr(out, iface.ifaceAddress);
         else
-            std::memcpy(out, route->routeInfo.nextHop.raw, ipSize);
+            writeIpAddr(out, route->routeInfo.nextHop);
 
         data.offset += ipSize;
         if (external)
@@ -51,9 +56,9 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
         if (!encodeWideMetric(data, delay, bw)) return 0;
 
         if (iface.configs.nextHopSelf.load(std::memory_order_relaxed))
-            std::memcpy(out, iface.ifaceAddress.raw, ipSize);
+            writeIpAddr(out, iface.ifaceAddress);
         else
-            std::memcpy(out, route->routeInfo.nextHop.raw, ipSize);
+            writeIpAddr(out, route->routeInfo.nextHop);
 
         data.offset += ipSize;
         if (external)
@@ -84,13 +89,14 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt
     const bool external = isExternal(static_cast<RouteType>(routeOpt.type));
     const bool named = isNamed(static_cast<RouteType>(routeOpt.type));
     data.v6 = af == AddressFamily::IPv6;
-    r.prefix.af = af;
+    // Set prefix AF marker via IPPrefix constructor
+    r.prefix = IPPrefix(af);
 
     const uint8_t ipSize = data.v6 ? 16 : 4;
 
     if (!wide)
     {
-        std::memcpy(r.nextHop.raw, value + data.offset, ipSize);
+        r.nextHop = IPAddress(value + data.offset, af);
         data.offset += ipSize;
         if (external)
             if (!decodeExternal(data)) return std::nullopt;
@@ -106,7 +112,7 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt
             r.wide.rid = readU32(value + data.offset); data.offset += 4;
         }
         if (!decodeWideMetric(data)) return std::nullopt;
-        std::memcpy(r.nextHop.raw, value + data.offset, ipSize);
+        r.nextHop = IPAddress(value + data.offset, af);
         data.offset += ipSize;
         if (external)
             if (!decodeExternal(data)) return std::nullopt;
@@ -237,8 +243,8 @@ bool TLVBuilder::decodeDestination(RouteData& data)
         ? (plen == 128) ? 16 : ((plen / 8) + 1)
         : ((plen - 1) / 8) + 1;
     if (data.offset + prefSize > data.valueSize) return false;
-    std::memcpy(data.r.prefix.addr, data.value + data.offset, prefSize);
-    data.r.prefix.prefixLength = plen;
+    AddressFamily af = data.v6 ? AddressFamily::IPv6 : AddressFamily::IPv4;
+    data.r.prefix = IPPrefix(data.value + data.offset, plen, af, true);
     data.offset += prefSize;
     return true;
 }
@@ -251,7 +257,10 @@ bool TLVBuilder::encodeDestination(RouteData& data)
         : ((plen - 1) / 8) + 1;
     if (data.offset + prefSize > data.valueSize) return false;
     data.value[data.offset] = plen; data.offset += 1;
-    std::memcpy(data.value + data.offset, data.r.prefix.addr, prefSize);
+    if (data.v6)
+        writeBytes(data.value + data.offset, data.r.prefix.v6(), prefSize);
+    else
+        writeBytes(data.value + data.offset, data.r.prefix.v4(), prefSize);
     data.offset += prefSize;
     return true;
 }

@@ -5,8 +5,8 @@
 
 // Standard includes
 #include <mutex>
-#include <map>
 #include <atomic>
+#include <IPAddress.h>
 
 #include "configs/InterfaceConfigs.h"
 
@@ -194,11 +194,11 @@ public:
      * - Gratuitous ARP broadcasts (two, per RFC behavior)
      * - EIGRP interface refresh events
      *
-     * @param ip        IPv4 address in host byte order.
+     * @param ip        IPv4 address.
      * @param subnet    Prefix length (0–32).
      * @param secondary Set the IP as a secondary address.
      */
-    virtual void setIPv4(uint32_t ip, uint8_t subnet, bool secondary = false);
+    virtual void setIPv4(IPv4Prefix prefix, bool secondary = false);
 
     /**
      * @brief Assign an IPv6 address to the interface.
@@ -208,19 +208,19 @@ public:
      * - Duplicate Address Detection (NDP)
      * - VRF-level EIGRP IPv6 refresh
      *
-     * @param ip        Pointer to 16-byte IPv6 address.
+     * @param addr      Reference to 16-byte IPv6 address.
      * @param linkLocal True if creating a link-local address.
      * @param prefix    Prefix length (default 64).
      * @param eui64     Whether EUI-64 formatting should apply.
      */
-    virtual void setIPv6(const uint8_t* ip, bool linkLocal = false, uint8_t subnet = 64, bool eui64 = false);
+    virtual void setIPv6(const IPv6Prefix& addr, bool linkLocal = false, bool eui64 = false);
 
     // IP MANAGEMENT
 
     /**
      * @brief Remove the interface's IPv4 configuration.
      */
-    void removeIPv4(const IPv4Prefix* ip = nullptr);
+    void removeIPv4(const IPv4Prefix* secondary = nullptr);
 
     /**
      * @brief Remove a specific IPv6 address or the link-local address.
@@ -251,7 +251,7 @@ public:
      * @param address The duplicate IPv6 address.
      * @param linkLocal True if matching against link-local address.
      */
-    void markAddressDuplicate(const uint8_t* address, bool linkLocal = false);
+    void markAddressDuplicate(IPv6Address address, bool linkLocal = false);
 
     // INTERFACE STATE
 
@@ -285,16 +285,29 @@ public:
      * @brief Enqueue a packet for transmission.
      *
      * @param packetInfo PacketBuilder containing L3/L4/L2 details.
-     * @param mac Optional destination MAC to overwrite into Ethernet header.
+     * @param mac Destination MAC to overwrite into Ethernet header.
      *
      * Steps:
      * - Encapsulate into full Ethernet frame
-     * - Apply MAC overwrite if provided
+     * - Apply MAC overwrite
      * - Push to TX queue
      *
      * No transmission occurs if thread subsystem is not running.
      */
-    virtual void enqueuePacket(PacketBuilder& packetInfo, const uint8_t* mac = nullptr);
+    virtual void enqueuePacket(PacketBuilder& packetInfo, uint64_t mac);
+
+    /**
+     * @brief Enqueue a packet for transmission.
+     *
+     * @param packetInfo PacketBuilder containing L3/L4/L2 details.
+     *
+     * Steps:
+     * - Encapsulate into full Ethernet frame
+     * - Push to TX queue
+     *
+     * No transmission occurs if thread subsystem is not running.
+     */
+    virtual void enqueuePacket(PacketBuilder& packetInfo);
 
     // VRF MANAGEMENT
 

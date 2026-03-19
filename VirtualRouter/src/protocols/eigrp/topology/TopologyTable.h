@@ -4,7 +4,7 @@
 #define EIGRP_TOPOLOGY_TABLE_H
 
 #include <cstdint>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <chrono>
 #include <mutex>
 #include <map>

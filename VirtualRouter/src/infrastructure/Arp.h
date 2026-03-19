@@ -6,7 +6,6 @@
 #define ARP_H
 
 #include <queue>
-#include <Functions.h>
 #include <mutex>
 #include <chrono>
 #include <unordered_map>
@@ -46,7 +45,7 @@ struct ArpCacheEntry
     ArpCacheStatus status = ArpCacheStatus::COMPLETE;
     uint32_t timerId = 0; ///< Timer id for the lifespan of the arp entry.
     uint8_t macAddress[6]; ///< MAC address associated with the IP.
-    int retries = 0;
+    uint32_t retries = 0;
     std::chrono::steady_clock::time_point expiryTime; ///< Expiration time for this cache entry.
 };
 
@@ -95,16 +94,16 @@ public:
      * @parap targetIp The target IP of the resolved arp entry.
      * @param mac The MAC of the resolved arp entry.
      */
-    void addArpEntry(uint32_t targetIp, uint64_t targetMac, bool proxy = false, bool isStatic = false);
+    void addArpEntry(IPv4Address targetIp, uint64_t targetMac, bool proxy = false, bool isStatic = false);
 
-    void removeArpEntry(uint32_t ip, bool isStatic = false);
+    void removeArpEntry(IPv4Address ip, bool isStatic = false);
 
     /**
      * @brief Expires an arp entry from the arp cache table
      *
      * @param targetIp The targetIp of the resolved arp entry.
      */
-    void expireArpEntry(uint32_t ip);
+    void expireArpEntry(IPv4Address ip);
 
     /**
      * @brief Resolves an IP address and enqueues a packet to send once resolved.
@@ -112,20 +111,20 @@ public:
      * @param targetIp The target IP address to resolve.
      * @param packetToSend The packet to be sent once the IP is resolved.
      */
-    void resolveAndSend(const uint8_t* targetIp, PacketBuilder& packetToSend);
+    void resolveAndSend(IPv4Address targetIp, PacketBuilder& packetToSend);
 
     /**
      * @brief Sends an ARP reply to a specified MAC and IP.
      * @param targetMac The recipient's MAC address.
      * @param targetIp The recipient's IP address.
      */
-    void sendReply(const uint8_t* targetMac, const uint8_t* targetIp);
+    void sendReply(uint64_t targetMac, const IPv4Address targetIp);
 
     /**
      * @brief Sends an ARP request for a given IP.
      * @param targetIp The target IP address to resolve.
      */
-    void sendRequest(uint32_t targetIp);
+    void sendRequest(IPv4Address targetIp);
 
     /**
      * @brief Processes a received ARP reply and updates the cache.
@@ -139,7 +138,7 @@ public:
      * @params request The arp header containing the request.
      * @params sourceMac The source mac of the router.
      */
-    void receiveRequest(const ArpHeader& request, const uint8_t* sourceMac);
+    void receiveRequest(const ArpHeader& request, uint64_t sourceMac);
 
     /**
      * @brief Retrieves the MAC address for a given IP address.
@@ -147,7 +146,7 @@ public:
      * @param ip The IP address to query.
      * @return True if mac was filled, otherwise false.
      */
-     bool getMac(uint8_t* out, const uint8_t* ip);
+     bool getMac(uint8_t* out, IPv4Address ip);
 
     /**
      * @brief Shuts down the ARP service, terminating all threads and cleaning up resources.
@@ -157,14 +156,14 @@ public:
 private:
     Interface* currentInterface; ///< Pointer to the associated network interface.
 
-    std::unordered_map<uint32_t, ArpCacheEntry> arpCache; ///< ARP cache mapping IPs to MAC addresses and expiration times.
-    std::unordered_map<uint32_t, ArpCacheEntry> staticArpCache; ///< Static ARP entries (never expire).
-    std::unordered_map<uint32_t, uint64_t> proxyEntries; ///< Proxy ARP entries (IP -> MAC).
-    std::deque<uint32_t> insertionOrder; ///< For tracking eviction order if interface cache limit is exceeded.
-    std::unordered_set<uint32_t> pendingRequests; ///< Tracks ongoing ARP requests.
-    std::unordered_map<uint32_t, std::atomic<bool>> replyStatus; ///< Tracks ARP reply statuses.
-    std::unordered_map<uint32_t, std::queue<PacketBuilder>> packetQueuePerIp; ///< Packets waiting for ARP resolution.
-    std::unordered_set<uint32_t> pendingIncompletes;
+    std::unordered_map<IPv4Address, ArpCacheEntry> arpCache; ///< ARP cache mapping IPs to MAC addresses and expiration times.
+    std::unordered_map<IPv4Address, ArpCacheEntry> staticArpCache; ///< Static ARP entries (never expire).
+    std::unordered_map<IPv4Address, uint64_t> proxyEntries; ///< Proxy ARP entries (IP -> MAC).
+    std::deque<IPv4Address> insertionOrder; ///< For tracking eviction order if interface cache limit is exceeded.
+    std::unordered_set<IPv4Address> pendingRequests; ///< Tracks ongoing ARP requests.
+    std::unordered_map<IPv4Address, std::atomic<bool>> replyStatus; ///< Tracks ARP reply statuses.
+    std::unordered_map<IPv4Address, std::queue<PacketBuilder>> packetQueuePerIp; ///< Packets waiting for ARP resolution.
+    std::unordered_set<IPv4Address> pendingIncompletes;
     std::atomic<uint32_t> incompletes = 0;
 
     mutable std::shared_mutex arpCacheMutex; ///< Mutex for thread-safe access to the ARP cache.
@@ -183,7 +182,7 @@ protected:
      * @param ip The sender's IP address.
      * @param targetIp The target IP address.
      */
-    void arpRequest(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* ip, const uint8_t* targetIp);
+    void arpRequest(PacketBuilder& packet, uint64_t currentMac, IPv4Address sourceIp, IPv4Address targetIp);
 
     /**
      * @brief Creates an ARP reply packet.
@@ -194,20 +193,20 @@ protected:
      * @param ip The sender's IP address.
      * @param targetIp The recipient's IP address.
      */
-    void arpReply(PacketBuilder& packet, const uint8_t* currentMac, const uint8_t* targetMac, const uint8_t* ip, const uint8_t* targetIp);
+    void arpReply(PacketBuilder& packet, uint64_t currentMac, uint64_t targetMac, IPv4Address sourceIp, IPv4Address targetIp);
 
     /**
      * @brief Processes queued packets for a resolved IP address and sends them to the resolved MAC address.
      * @param targetIp The resolved IP address.
      * @param macAddress The associated MAC address.
      */
-    void processQueuedPackets(const uint8_t* targetIp, uint32_t targetIpInt, const uint8_t* mac);
+    void processQueuedPackets(IPv4Address targetIp, uint64_t mac);
 
     /**
      * @brief Waits for an ARP reply for a given IP address within a timeout period.
      * @param targetIp The target IP address.
      */
-    void scheduleRequest(uint32_t targetIp, ArpCacheEntry& entry);
+    void scheduleRequest(IPv4Address targetIp, ArpCacheEntry& entry);
 
     Global& global;
 };

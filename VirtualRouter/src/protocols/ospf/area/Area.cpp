@@ -116,9 +116,9 @@ bool Area::isValidForwardAddress(const IPAddress& addr) const
 
     if (base.getConfigs().get<Config::Ospf::LRC_FORWARDING_ADDRESS>().load())
     {
-        return addr.isV6
-            ? base.routingInstance->getRib().lookup(readU128(addr.raw)) != nullptr
-            : base.routingInstance->getRib().lookup(readU32(addr.raw)) != nullptr;
+        return addr.isIPv6()
+            ? base.routingInstance->getRib().lookup(addr.v6()) != nullptr
+            : base.routingInstance->getRib().lookup(addr.v4()) != nullptr;
     }
     else
     {
@@ -252,7 +252,7 @@ void Area::syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& in
             {
                 const uint32_t lsid = base.isV3
                     ? base.monotonicIntraId.fetch_add(1, std::memory_order_release)
-                    : readU32(pfx.addr);
+                    : pfx.v4();
 
                 r.summary = lsid;
                 summaryActions.push_back({ lsid, pfx, metric, false });

@@ -196,7 +196,7 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                 auto prefixes = collectIntraAreaPrefixFragments(refKey);
                 for (const auto& pr : prefixes)
                 {
-                    out.emplace_back(pr.prefix, makePath(
+                    out.emplace_back(IPPrefix(pr.prefix.addr, pr.prefix.prefixLength), makePath(
                             area.areaId, pr.options,
                             adminDistance, node.dist + pr.metric,
                             nextHops, OspfRouteType::INTRA_AREA));
@@ -239,7 +239,7 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                 auto prefixes = collectIntraAreaPrefixFragments(refKey);
                 for (const auto& pr : prefixes)
                 {
-                    out.emplace_back(pr.prefix, makePath(
+                    out.emplace_back(IPPrefix(pr.prefix.addr, pr.prefix.prefixLength), makePath(
                             area.areaId, pr.options,
                             adminDistance, pr.metric,
                             nextHops, OspfRouteType::INTRA_AREA));
@@ -285,7 +285,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveInterAreaNetwor
     if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
         prefix = {key.linkStateId, static_cast<uint8_t>(std::popcount(summary.networkMask))};
     else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, InterAreaPrefixLsa>)
-        prefix = summary.prefix;
+        prefix = IPPrefix(summary.prefix.addr, summary.prefix.prefixLength);
 
     if (header.age == OSPF_MAX_AGE) return {prefix, std::nullopt};
 
@@ -341,7 +341,7 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
             out.emplace_back(IPPrefix{key.linkStateId, static_cast<uint8_t>(std::popcount(summary.networkMask))},
                 makePath(area.areaId, 0, adminDistance, distance, abrInfo->second, OspfRouteType::INTER_AREA));
         else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, InterAreaPrefixLsa>)
-            out.emplace_back(summary.prefix, makePath(area.areaId, summary.options, adminDistance, distance, abrInfo->second, OspfRouteType::INTER_AREA));
+            out.emplace_back(IPPrefix(summary.prefix.addr, summary.prefix.prefixLength), makePath(area.areaId, summary.options, adminDistance, distance, abrInfo->second, OspfRouteType::INTER_AREA));
     });
 
     std::vector<OspfRouter> asbrs;
@@ -407,8 +407,8 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(O
     }
     else
     {
-        ext.prefix = extLsa.prefix;
-        ext.fwd = extLsa.forwardingAddress.has_value() ? extLsa.forwardingAddress.value() : uint32_t{0};
+        ext.prefix = IPPrefix(extLsa.prefix.addr, extLsa.prefix.prefixLength);
+        ext.fwd = extLsa.forwardingAddress.has_value() ? IPAddress(extLsa.forwardingAddress->addr) : IPAddress(__uint128_t{0});
         ext.metric = extLsa.metric;
         ext.isType2 = extLsa.isType2;
         ext.options = extLsa.options;
@@ -430,7 +430,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(O
     {
         if constexpr (std::is_same_v<EL, ExternalLsaV2>)
         {
-            const uint32_t fwdAddr = readU32(ext.fwd.raw);
+            const uint32_t fwdAddr = ext.fwd.v4();
             if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
             {
                 X = res->first;
@@ -440,7 +440,7 @@ std::pair<IPPrefix, std::optional<OspfPath>> RouteManager::deriveExternalRoute(O
         }
         else
         {
-            const __uint128_t fwdAddr = readU128(ext.fwd.raw);
+            const __uint128_t fwdAddr = ext.fwd.v6();
             if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
             {
                 X = res->first;
@@ -508,8 +508,8 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
         }
         else
         {
-            ext.prefix = extLsa.prefix;
-            ext.fwd = extLsa.forwardingAddress.has_value() ? extLsa.forwardingAddress.value() : uint32_t{0};
+            ext.prefix = IPPrefix(extLsa.prefix.addr, extLsa.prefix.prefixLength);
+            ext.fwd = extLsa.forwardingAddress.has_value() ? IPAddress(extLsa.forwardingAddress->addr) : IPAddress(__uint128_t{0});
             ext.metric = extLsa.metric;
             ext.isType2 = extLsa.isType2;
             ext.options = extLsa.options;
@@ -524,7 +524,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
         {
             if constexpr (std::is_same_v<EL, ExternalLsaV2>)
             {
-                const uint32_t fwdAddr = readU32(ext.fwd.raw);
+                const uint32_t fwdAddr = ext.fwd.v4();
                 if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
                 {
                     X = res->first;
@@ -534,7 +534,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> RouteManager::deriveExternalRoutes(Os
             }
             else
             {
-                const __uint128_t fwdAddr = readU128(ext.fwd.raw);
+                const __uint128_t fwdAddr = ext.fwd.v6();
                 if (auto res = resolveInternalAddress(fwdAddr, process, globalRib); res.has_value())
                 {
                     X = res->first;

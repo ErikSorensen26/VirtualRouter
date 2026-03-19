@@ -25,23 +25,6 @@
 #include "packet/headers/BgpHeader.hpp"
 #include "packet/headers/SyslogHeader.hpp"
 
-// --- uint16_t ---
-constexpr uint16_t NET16(uint16_t val) {
-    return is_little_endian
-        ? static_cast<uint16_t>((val << 8) | (val >> 8))
-        : val;
-}
-
-// --- uint32_t ---
-constexpr uint32_t NET32(uint32_t val) {
-    return is_little_endian
-        ? ((val & 0x000000FFU) << 24) |
-          ((val & 0x0000FF00U) << 8) |
-          ((val & 0x00FF0000U) >> 8) |
-          ((val & 0xFF000000U) >> 24)
-        : val;
-}
-
 static constexpr int MaxHeaders = 16;
 
 /**

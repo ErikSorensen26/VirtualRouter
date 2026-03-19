@@ -12,7 +12,7 @@ namespace Protocol::Ethernet
 {
     // Constructs the Ethernet header in PacketInfo based on destination IP
     // Returns true of Ethernet Header was successfully set
-    bool build(Interface* iface, PacketBuilder& packetInfo, const uint8_t* destMac, uint16_t type);
+    bool build(Interface* iface, PacketBuilder& packetInfo, uint64_t destMac, uint16_t type);
 
     bool reserve(PacketBuilder& packetInfo);
 } // Namespace Protocol::Ethernet

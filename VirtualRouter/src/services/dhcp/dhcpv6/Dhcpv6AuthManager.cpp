@@ -1,7 +1,5 @@
 // Dhcpv6AuthManager.cpp
 
-#include <Functions.h>
-
 #include "packet/headers/Dhcpv6Header.hpp"
 #include "Dhcpv6AuthManager.h"
 #include "packet/TlvOptions.hpp"

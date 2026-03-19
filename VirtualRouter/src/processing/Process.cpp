@@ -28,6 +28,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
 {
     uint8_t* mac = nullptr;
     uint8_t* address = nullptr;
+    IPAddress typedAddress;
 
     const uint8_t* ipStart = nullptr;
     AddressFamily addressFamily = AddressFamily::NONE;
@@ -50,7 +51,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
             case HeaderType::ARP:
             {
                 GET_HEADER(arp, ArpHeader)
-                if (arp.getOpcode() == ARP_OPCODE_REQUEST) interface->arp->sendReply(arp.getSenderHwAddr(), arp.getSenderIpAddr());
+                if (arp.getOpcode() == ARP_OPCODE_REQUEST) interface->arp->sendReply(readU48(arp.getSenderHwAddr()), arp.getSenderIpAddr());
                 if (arp.getOpcode() == ARP_OPCODE_REPLY) interface->arp->receiveReply(arp);
                 break;
             }
@@ -63,6 +64,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 ipStart = data + entry.offset;
                 GET_HEADER_EXTENDED(ipv4, IPv4Header)
                 address = ipv4.getSourceAddress();
+                typedAddress = IPAddress(readU32(address));
                 addressFamily = AddressFamily::IPv4;
                 break;
             }
@@ -71,6 +73,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 ipStart = data + entry.offset;
                 GET_HEADER(ipv6, IPv6Header);
                 address = ipv6.getSourceAddress();
+                typedAddress = IPAddress(readU128(address));
                 addressFamily = AddressFamily::IPv6;
                 break;
             }
@@ -89,26 +92,25 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
             case HeaderType::ICMPV6:
             {
                 if (!interface || !interface->ndp) return;
-                uint8_t currentIp[16];
-                interface->configs.ipv6.getLocalAddress(currentIp);
+                auto currentAddr = interface->configs.ipv6.getLocalAddress();
                 GET_HEADER_EXTENDED(icmp, Icmpv6Header)
 
                 switch (icmp.getType())
                 {
                     case 0x85:
                     {
-                        if (std::memcmp(icmp.getTrail().data(), currentIp, 16) != 0) break;
-                        interface->ndp->sendRouteAdvertisement(mac, icmp.getTrail().data());
+                        if (IPv6Address{readU128(icmp.getTrail().data())}.addr != currentAddr.addr) break;
+                        interface->ndp->sendRouteAdvertisement(readU48(mac), IPv6Address{readU128(icmp.getTrail().data())});
                         break;
                     }
                     case 0x86:
                     {
-                        interface->ndp->receiveRouteAdvertisement(icmp, address, mac);
+                        interface->ndp->receiveRouteAdvertisement(icmp, IPv6Address{readU128(address)}, readU48(mac));
                         break;
                     }
                     case 0x87:
                     {
-                        if (std::memcmp(icmp.getTrail().data(), currentIp, 16) != 0) break;
+                        if (IPv6Address{readU128(icmp.getTrail().data())}.addr != currentAddr.addr) break;
                         uint8_t naMac[6];
                         std::vector<TLV8Option> options;
                         parseIcmpv6Options(icmp.getTrail().data(), icmp.getTrail().size(), options);
@@ -120,12 +122,12 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                                 break;
                             }
                         }
-                        interface->ndp->sendNeighborAdvertisement(mac, address);
+                        interface->ndp->sendNeighborAdvertisement(readU48(mac), IPv6Address{readU128(address)});
                         break;
                     }
                     case 0x88:
                     {
-                        interface->ndp->receiveNeighborAdvertisement(icmp, address);
+                        interface->ndp->receiveNeighborAdvertisement(icmp, IPv6Address{readU128(address)});
                         break;
                     }
                     default:
@@ -156,9 +158,9 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 if (it && iface != interface->eigrpInterfaceList.end()) 
                 {
                     if (addressFamily == AddressFamily::IPv4 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv4)
-                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, address, Functions::isMulticast(address, AddressFamily::IPv4));
+                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
                     else if (addressFamily == AddressFamily::IPv6 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv6)
-                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, address, Functions::isMulticast(address, AddressFamily::IPv6));
+                        interface->eigrpInterfaceList[as].IPv6->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
                 }
                 break;
             }

@@ -1,12 +1,11 @@
 // RouterEigrpAddressFamilyCommands.cpp
 
-#include <Functions.h>
-
 #include "RouterEigrpAddressFamilyCommands.h"
 
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
 
@@ -66,13 +65,14 @@ bool RouterEigrpAddressFamily_EigrpDefaultRouteTag_Handler(EIGRP_PARAMS)
     uint32_t routeTag;
     if (!ctx.negate)
     {
-        if (Functions::isNumber(args[0]))
+        if (CliUtils::isNumber(args[0]))
         {
             routeTag = static_cast<uint32_t>(std::stoi(args[0]));
         }
         else
         {
-            routeTag = Functions::addressToIntv4(args[0]);
+            IPv4Address _tmp; CliUtils::extractIPv4Address(args[0], _tmp);
+            routeTag = _tmp.addr;
         }
     }
     else
@@ -116,7 +116,7 @@ bool RouterEigrpAddressFamily_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
     if (!ctx.negate)
-        ctx.currentEigrp->routerID(Functions::getAddress(args[0]).raw);
+        { IPv4Address _tmp; CliUtils::extractIPv4Address(args[0], _tmp); ctx.currentEigrp->routerID(_tmp.addr); }
     else
         ctx.currentEigrp->clearRouterID();
     return true;
@@ -179,7 +179,7 @@ bool RouterEigrpAddressFamily_MaximumPrefix_Handler(EIGRP_PARAMS)
         {
             for (size_t i = 1; i < args.size(); i++)
             {
-                if (Functions::isNumber(args[i]))
+                if (CliUtils::isNumber(args[i]))
                 {
                     configs.dampeningInterval.store(static_cast<uint8_t>(std::stoul(args[i])));
                 }
@@ -226,7 +226,7 @@ bool RouterEigrpAddressFamily_MetricRibScale_Handler(EIGRP_PARAMS)
 {
     if (!ctx.negate)
     {
-        if (Functions::isNumber(args[0]))
+        if (CliUtils::isNumber(args[0]))
             ctx.currentEigrp->getConfigs().ribScale.store(static_cast<uint8_t>(std::stoi(args[0])), std::memory_order_release);
     }
     else
@@ -266,7 +266,7 @@ bool RouterEigrpAddressFamily_MetricWeights_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_Neighbor_Handler(EIGRP_PARAMS)
 {
     ctx.terminal.isList = true;
-    IPAddress neighborIp = Functions::getAddress(args[0]);
+    IPAddress neighborIp; CliUtils::extractIPAddress(args[0], neighborIp);
     InterfaceType type = getInterfaceType(args[1]);
     float interfaceId = std::stof(args[2]);
     uint32_t key = calculateInterfaceKey(type, interfaceId);
@@ -294,16 +294,18 @@ bool RouterEigrpAddressFamily_Neighbor_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_Network_Handler(EIGRP_PARAMS)
 {
     ctx.terminal.isList = true;
-    EigrpConfigs::Network network(AddressFamily::IPv4);
-    network.ip = Functions::getAddress(args[0]);
+    IPv4Address _ip; CliUtils::extractIPv4Address(args[0], _ip);
+    uint8_t _plen;
     if (args.size() == 2)
     {
-        network.mask = Functions::prefixToPrefixLength(Functions::addressToIntv4(args[1]));
+        IPv4Address _tmp; CliUtils::extractIPv4Address(args[1], _tmp);
+        CliUtils::extractSubnetMask(_tmp.addr, _plen);
     }
     else
     {
-        network.mask = Functions::getDefaultMask(readU32(network.ip.raw));
+        _plen = _ip.getDefaultMask();
     }
+    IPv4Prefix network(_ip.addr, _plen);
 
     if (!ctx.negate)
     {
@@ -316,14 +318,14 @@ bool RouterEigrpAddressFamily_Network_Handler(EIGRP_PARAMS)
         {
             std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
             auto& networks = configs.networks;
-            std::erase_if(networks, [&](const EigrpConfigs::Network& net) -> bool { return net.ip == network.ip; });
+            std::erase_if(networks, [&](const IPv4Prefix& net) -> bool { return net.addr == network.addr; });
         }
         else
         {
             std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
             auto& networks = configs.networks;
-            std::erase_if(networks, [&](EigrpConfigs::Network net) {
-                return net.ip == network.ip && (args.size() > 1 ? net.mask == network.mask : true);
+            std::erase_if(networks, [&](const IPv4Prefix& net) {
+                return net.addr == network.addr && (args.size() > 1 ? net.prefixLength == network.prefixLength : true);
             });
         }
 

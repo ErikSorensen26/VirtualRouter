@@ -5,12 +5,22 @@
 
 #include "CliSession.h"
 #include "CliEngine.h"
+#include "CliUtils.h"
 #include "cli/modes/Mode.hpp"
 #include "cli/modes/contexts/GlobalContext.hpp"
 
 // TODO Add new "subcommand_sequence" property, it should allow a recursive chain of commands
 // TODO add new "single_use" property that goes with subcommand_sequence
 // TODO add new "repeatable" property that goes with subcommand_sequence
+
+
+static std::string lowerCase(std::string str) 
+{
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) -> unsigned char {
+        return static_cast<unsigned char>(std::tolower(c));
+    });
+    return str;
+}
 
 CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), execution(*this), engine(engine)
 {
@@ -364,7 +374,7 @@ bool CliSession::attemptGlobalCommand(const std::string& inputCommand)
         currentMode != CliMode::UserExec &&
         currentMode != CliMode::PrivilegedExec &&
         !isHelpModeActive && 
-        Functions::lowerCase(inputCommand) != "exit")
+        lowerCase(inputCommand) != "exit")
     {
         attemptingGlobalCommand = true;
         // Backup
@@ -434,7 +444,7 @@ void CliSession::matchCommand(const std::string& inputCommand, const std::string
                std::string& formattedOldCommand, std::string& fullyFormattedCommand,
                std::string& volatileCommand, bool& isCommandDone)
 {
-    std::string word = Functions::lowerCase(uWord);
+    std::string word = lowerCase(uWord);
     // Build a list of commands that match the user-typed 'word'.
     std::vector<Com> matchingCommands;
     for (const auto& command : availableCommands)
@@ -446,7 +456,7 @@ void CliSession::matchCommand(const std::string& inputCommand, const std::string
         }
         // Or if the user-typed word is a prefix of the command name
         if (command.name.size() >= word.size() && 
-            std::equal(word.begin(), word.end(), Functions::lowerCase(command.name).begin()))
+            std::equal(word.begin(), word.end(), lowerCase(command.name).begin()))
         matchingCommands.push_back(command);
     }
 
@@ -678,7 +688,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     Com* previousCommand = previousCommands.empty() ? nullptr : &previousCommands.front();
 
     // Get lowercase input
-    std::string lowerUserInput = Functions::lowerCase(userInput);
+    std::string lowerUserInput = lowerCase(userInput);
 
     // Container for storing available commands
     std::vector<Com> availableCommands;
@@ -851,7 +861,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
             } 
             else if (!engine.isVolatile(commandName) && commandName.size() >= userInput.size())
             {
-                if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), Functions::lowerCase(commandName).begin()) && !isExactMatch) 
+                if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), lowerCase(commandName).begin()) && !isExactMatch) 
                 {
                     commandNode = command;
                     matchCount++;
@@ -859,7 +869,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                 if (commandName == lowerUserInput) 
                 {
                     isExactMatch = true;
-                    exactMatchCommand.name = Functions::lowerCase((*command)[CLI_JSON_COMMAND_NAME]);
+                    exactMatchCommand.name = lowerCase((*command)[CLI_JSON_COMMAND_NAME]);
                     exactMatchCommand.description = (*command)[CLI_JSON_DESCRIPTION];
                     if (command->contains(CLI_JSON_COMMAND_PROPERTIES))
                     {
@@ -913,7 +923,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     } 
     else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(execution.getContext().negate && userInput == "no"))
     {
-        endCommandString = Functions::lowerCase((*commandNode)[CLI_JSON_COMMAND_NAME]);
+        endCommandString = lowerCase((*commandNode)[CLI_JSON_COMMAND_NAME]);
         endOfCommand = true;
         return noSubCommands;
     }
@@ -1159,7 +1169,7 @@ bool CliSession::matchInputPattern(const std::string &userInput, const std::stri
 
     if (expectedPattern == "X:X:X:X::X")
     {
-        if (Functions::isIPv6Address(userInput))
+        if (CliUtils::isIPv6Address(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1169,7 +1179,7 @@ bool CliSession::matchInputPattern(const std::string &userInput, const std::stri
 
     if (expectedPattern == "X:X:X:X::X/<0-128>")
     {
-        if (Functions::isIPv6AddressWithMask(userInput))
+        if (CliUtils::isIPv6AddressWithMask(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1179,7 +1189,7 @@ bool CliSession::matchInputPattern(const std::string &userInput, const std::stri
 
     if (expectedPattern == "H.H.H")
     {
-        if (Functions::isMACAddress(userInput))
+        if (CliUtils::isMACAddress(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;

@@ -3,7 +3,7 @@
 #ifndef INTRA_AREA_PREFIX_HPP
 #define INTRA_AREA_PREFIX_HPP
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"
@@ -15,7 +15,7 @@ struct IntraAreaPrefix
 {
     uint8_t options;
     uint16_t metric;
-    IPPrefix prefix;
+    IPv6Prefix prefix;
 
     void setNoUnicast(bool val)
         { setBit(&options, 7, val); }
@@ -67,9 +67,7 @@ struct IntraAreaPrefixLsa
             uint8_t prefixBytes = (plen + 7) / 8;
             if (off + prefixBytes > len) return std::nullopt;
 
-            std::memcpy(prefix.prefix.addr, buf + off, prefixBytes);
-            prefix.prefix.af = AddressFamily::IPv6;
-            prefix.prefix.prefixLength = plen;
+            prefix.prefix = IPv6Prefix(buf + off, plen);
 
             lsa.prefixes.push_back(prefix);
         }
@@ -99,7 +97,7 @@ struct IntraAreaPrefixLsa
             uint8_t prefixBytes = (prefix.prefix.prefixLength + 7) / 8;
             if (off + prefixBytes > len) return false;
 
-            std::memcpy(buf + off, prefix.prefix.addr, prefixBytes);
+            writeBytes(buf + off, prefix.prefix.addr, prefixBytes);
         }
 
         return true;
@@ -129,7 +127,7 @@ struct IntraAreaPrefixLsa
             check.addU16(prefix.metric);
 
             uint8_t prefixBytes = (prefix.prefix.prefixLength + 7) / 8;
-            check.addBytes(prefix.prefix.addr, prefixBytes);
+            check.addBytes(prefix.prefix.raw(), prefixBytes);
         }
     }
 };

@@ -20,9 +20,9 @@ public:
 
     EigrpConfig(Eigrp& base)
         : base(base), aggregator(base) {}
-    void addNetworkRange(const EigrpConfigs::Network& newNetwork);
-    void delNetworkRange(const EigrpConfigs::Network& delNetwork);
-    bool isInNetworkRange(const uint8_t* testIp);
+    void addNetworkRange(const IPv4Prefix& newNetwork);
+    void delNetworkRange(const IPv4Prefix& delNetwork);
+    bool isInNetworkRange(IPv4Address testIp);
     void clearNetworks();
     void enableStub(bool isStub, bool advertiseConnected = true, bool advertiseLeakMap = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
     bool stubEnabled() const { return configs.stubConfig.isStub; }

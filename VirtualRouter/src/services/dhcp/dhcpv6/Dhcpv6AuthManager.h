@@ -58,7 +58,7 @@ namespace Protocol
         private:
             std::mutex mutex;
 
-            std::unordered_map<uint32_t, Key> delayedKeys;
+            std::unordered_map<uint64_t, Key> delayedKeys;
             std::unordered_map<ClientID, uint64_t> clientToKey; // Duid -> keyID
             std::unordered_map<ClientID, uint64_t> replayCounter; // Per-client DUID -> replay counter
 

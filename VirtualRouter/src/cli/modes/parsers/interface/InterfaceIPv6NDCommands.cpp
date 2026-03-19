@@ -6,6 +6,7 @@
 #include "InterfaceIPv6NDCommands.h"
 #include "interface/Interface.h"
 #include "infrastructure/Ndp.h"
+#include "cli/runtime/CliUtils.h"
 
 namespace Cli
 {
@@ -157,7 +158,7 @@ bool InterfaceIPv6ND_RaInterval_Handler(INTERFACE_PARAMS)
 	ctx.currentInterface.ndp->configs.raInterval = 600000;
 	ctx.currentInterface.ndp->configs.raIntervalMin = 3000;
     }
-    else if (Functions::isNumber(args[0]))
+    else if (CliUtils::isNumber(args[0]))
     {
 	std::unique_lock<std::shared_mutex> lock(ctx.currentInterface.ndp->configs.configMutex);
 	ctx.currentInterface.ndp->configs.raIntervalMS = false;

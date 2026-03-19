@@ -68,7 +68,7 @@ public:
     void restart();
     void runMaintenance();
     bool calculateRID();
-    bool isInNetworkRange(const uint8_t* testIp);
+    bool isInNetworkRange(IPv4Address testIp);
 
     void addGlobalNeighbor(const IPAddress& neighborIp, Neighbor* neighbor);
     void delGlobalNeighbor(const IPAddress& neighborIp);
@@ -94,6 +94,7 @@ public:
     inline uint16_t getVirtualRouterID() const { return virtualRouterID; }
     inline uint8_t* routerID(uint8_t* out) const { writeU32(out, rid.id); return out; }
     inline uint32_t routerID() const { return rid.id; }
+    inline void routerID(uint32_t id) { rid.id = id; rid.isStatic = true; }
 
     bool isNamed() const { return namedMode; }
     uint16_t getAS() const { return asNumber; }

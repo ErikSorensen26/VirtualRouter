@@ -89,7 +89,7 @@ void PacketDispatcherV2::sendHello()
     if (!buildHello(builder, lls)) return;
 
     finalizeHeader(*ospfHeader, builder, lls);
-    transmit(pkt, OSPFV2_ALL_SPF_ROUTERS);
+    transmit(pkt);
 }
 
 void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
@@ -109,7 +109,7 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
     if (!buildHello(builder, lls)) return;
 
     finalizeHeader(*ospfHeader, builder, lls);
-    transmit(pkt, nbr.ipAddress.raw);
+    transmit(pkt, &nbr.ipAddress);
 }
 
 void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
@@ -137,7 +137,7 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
     setupDbd(nbr, ospfHeader.value());
 
     finalizeHeader(*ospfHeader, builder, lls);
-    transmit(pkt, nbr.ipAddress.raw);
+    transmit(pkt, &nbr.ipAddress);
 }
 
 bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
@@ -167,7 +167,7 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
     setupDbd(nbr, ospfHeader.value());
 
     finalizeHeader(*ospfHeader, builder, lls);
-    transmit(pkt, nbr.ipAddress.raw);
+    transmit(pkt, &nbr.ipAddress);
 
     return true;
 }
@@ -199,7 +199,7 @@ bool PacketDispatcherV2::sendLSAck(Neighbor& nbr, std::vector<LsaRecordRef>& ack
     }
 
     for (auto& pkt : pkts)
-        transmit(pkt, nbr.ipAddress.raw);
+        transmit(pkt, &nbr.ipAddress);
 
     return true;
 }
@@ -208,7 +208,7 @@ bool PacketDispatcherV2::sendLSRequest(Neighbor& nbr)
 {
     auto request = buildLSRequest(nbr);
     if (!request.has_value()) return false;
-    transmit(request.value(), nbr.ipAddress.raw);
+    transmit(request.value(), &nbr.ipAddress);
     return true;
 }
 
@@ -220,17 +220,18 @@ bool PacketDispatcherV2::sendLSUpdate(Neighbor* nbr)
 
     if (nbr)
     {
-        transmit(pkt.value(), nbr->ipAddress.raw);
+        transmit(pkt.value(), &nbr->ipAddress);
     }
     else
     {
         if (iface.isDr.load(std::memory_order_relaxed))
         {
-            transmit(pkt.value(), OSPFV2_ALL_SPF_ROUTERS);
+            transmit(pkt.value());
         }
         else
         {
-            transmit(pkt.value(), OSPFV2_ALL_D_ROUTERS);
+            static const IPAddress allDRouters(OSPFV2_ALL_D_ROUTERS, AddressFamily::IPv4);
+            transmit(pkt.value(), &allDRouters);
         }
     }
 

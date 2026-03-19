@@ -3,7 +3,7 @@
 #ifndef EIGRP_INTERFACE_H
 #define EIGRP_INTERFACE_H
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <unordered_map>
 #include <deque>
 

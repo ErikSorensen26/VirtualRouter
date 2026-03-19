@@ -1,14 +1,13 @@
 // EigrpConfigManager
 
 #include <AddressFamily.hpp>
-#include <Functions.h>
 
 #include "Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 
 namespace Eigrp
 {
-void EigrpConfig::addNetworkRange(const EigrpConfigs::Network& newNetwork)
+void EigrpConfig::addNetworkRange(const IPv4Prefix& newNetwork)
 {
     if (base.getAF() != AddressFamily::IPv4) return;
 
@@ -17,7 +16,7 @@ void EigrpConfig::addNetworkRange(const EigrpConfigs::Network& newNetwork)
         std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
         for (auto network : configs.networks)
         {
-            if (network.ip == newNetwork.ip && network.mask == newNetwork.mask)
+            if (network == newNetwork)
             {
                 return; // Network already exists
             }
@@ -29,14 +28,14 @@ void EigrpConfig::addNetworkRange(const EigrpConfigs::Network& newNetwork)
     base.getIfaceMgr().refreshInterfaceList();
 }
 
-void EigrpConfig::delNetworkRange(const EigrpConfigs::Network& newNetwork)
+void EigrpConfig::delNetworkRange(const IPv4Prefix& newNetwork)
 {
     if (base.getAF() != AddressFamily::IPv4) return;
 
     // Check for duplicate
     {
         std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
-        std::vector<EigrpConfigs::Network>::iterator it = std::find(configs.networks.begin(), configs.networks.end(), newNetwork);
+        std::vector<IPv4Prefix>::iterator it = std::find(configs.networks.begin(), configs.networks.end(), newNetwork);
         if (it != configs.networks.end())
         {
             configs.networks.erase(it);
@@ -51,13 +50,13 @@ void EigrpConfig::delNetworkRange(const EigrpConfigs::Network& newNetwork)
     base.getIfaceMgr().refreshInterfaceList();
 }
 
-bool EigrpConfig::isInNetworkRange(const uint8_t* testIp)
+bool EigrpConfig::isInNetworkRange(IPv4Address testIp)
 {
     {
         std::shared_lock<std::shared_mutex> configMutex(configs.configsMutex);
         for (const auto& network : configs.networks)
         {
-            if (Functions::compareNetworkWithIp(network.ip.raw, testIp, network.mask, base.getAF()))
+            if (network.contains(testIp))
             {
                 return true;
             }

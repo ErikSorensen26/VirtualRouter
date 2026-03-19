@@ -7,7 +7,7 @@
 #include <atomic>
 #include <vector>
 #include <mutex>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <shared_mutex>
 #include <set>
 

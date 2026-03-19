@@ -4,6 +4,8 @@
 #define IP_PACKET_H
 
 #include <cstdint>
+#include <IPAddress.h>
+#include <optional>
 
 class Interface;
 class PacketBuilder;
@@ -15,14 +17,14 @@ void reserveIpv6(PacketBuilder& packetInfo);
 
 struct BuildIP
 {
-    Interface*& iface;
+    Interface* iface;
     PacketBuilder& packetInfo;
-    const uint8_t* destIp;
-    const uint8_t* sourceIp = nullptr;
-    const uint8_t* destMac = nullptr;
+    IPAddress destIp;
+    std::optional<IPAddress> sourceIp = std::nullopt;
+    std::optional<uint64_t> destMac = std::nullopt;
     uint8_t DSCP = 0;
     uint8_t hopLimit = 255;
-    const uint8_t& protocolType;
+    uint8_t protocolType;
     bool reserved = false;
     bool dontFragment = true;
     bool moreFragment = false;

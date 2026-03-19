@@ -1,11 +1,10 @@
 // RouterEigrpClassicVrfCommands.h
 
-#include <Functions.h>
-
 #include "RouterEigrpClassicVrfCommands.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliUtils.h"
 #include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
 
@@ -37,7 +36,7 @@ bool RouterEigrpClassicVrf_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 bool RouterEigrpClassicVrf_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
     if (!ctx.negate)
-        ctx.currentEigrp->routerID(Functions::getAddress(args[0]).raw);
+        { IPv4Address _tmp; CliUtils::extractIPv4Address(args[0], _tmp); ctx.currentEigrp->routerID(_tmp.addr); }
     else
         ctx.currentEigrp->clearRouterID();
     return true;
@@ -120,7 +119,7 @@ bool RouterEigrpClassicVrf_MetricWeights_Handler(EIGRP_PARAMS)
 bool RouterEigrpClassicVrf_Neighbor_Handler(EIGRP_PARAMS)
 {
     ctx.terminal.isList = true;
-    IPAddress neighborIp = Functions::getAddress(args[0]);
+    IPAddress neighborIp; CliUtils::extractIPAddress(args[0], neighborIp);
     InterfaceType type = getInterfaceType(args[1]);
     if (type != InterfaceType::UNDEFINED)
     {
@@ -139,12 +138,16 @@ bool RouterEigrpClassicVrf_Neighbor_Handler(EIGRP_PARAMS)
 bool RouterEigrpClassicVrf_Network_Handler(EIGRP_PARAMS)
 {
     ctx.terminal.isList = true;
-    EigrpConfigs::Network network(AddressFamily::IPv4);
-    network.ip = Functions::getAddress(args[0]);
+    IPv4Address _ip; CliUtils::extractIPv4Address(args[0], _ip);
+    uint8_t _plen;
     if (args.size() == 2)
-        network.mask = 32 - Functions::prefixToPrefixLength(Functions::addressToIntv4(args[1]));
+    {
+        IPv4Address _tmp; CliUtils::extractIPv4Address(args[1], _tmp);
+        CliUtils::extractSubnetMask(_tmp.addr, _plen);
+    }
     else
-        network.mask = 32 - Functions::getDefaultMask(readU32(network.ip.raw));
+        _plen = _ip.getDefaultMask();
+    IPv4Prefix network(_ip.addr, _plen);
 
     if (!ctx.negate)
     {

@@ -5,7 +5,7 @@
 
 #include <cstdint>
 #include <set>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <map>
 
 #include "eigrp/EigrpTypes.hpp"

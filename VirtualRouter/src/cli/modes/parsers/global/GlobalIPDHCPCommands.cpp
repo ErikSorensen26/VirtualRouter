@@ -5,6 +5,7 @@
 #include <VirtualRouter.h>
 
 #include "GlobalIPDHCPCommands.h"
+#include "cli/runtime/CliUtils.h"
 #include "dhcp/dhcpv4/DhcpServer.h"
 
 namespace Cli
@@ -75,8 +76,8 @@ bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS)
     }
     if (!vrf) return false;
 
-    uint32_t ipStart = Functions::addressToIntv4(args[start]);
-    uint32_t ipEnd = Functions::addressToIntv4(args[start + 1]);
+    IPv4Address ipStart; CliUtils::extractIPv4Address(args[start], ipStart);
+    IPv4Address ipEnd; CliUtils::extractIPv4Address(args[start + 1], ipEnd);
 
     {
         //TODO

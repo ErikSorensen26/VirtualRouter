@@ -2,7 +2,9 @@
 
 #include <iostream>
 
+#include <IPAddress.h>
 #include "Configs.h"
+#include "CliUtils.h"
 #include "hardware/HardwareManager.h"
 
 void Configs::printConfig() 
@@ -571,7 +573,8 @@ std::string Configs::getVolatileValueHelper(std::string& command, std::string& c
     // Parse IP address in "A.B.C.D" format
     if (command == "A.B.C.D") 
     {
-        uint32_t ip = Functions::addressToIntv4(com);
+        IPv4Address _tmp; CliUtils::extractIPv4Address(com, _tmp);
+        uint32_t ip = _tmp.addr;
 
         auto isContiguous = [](uint32_t x) {
             return ((x | (x - 1)) == 0xFFFFFFFF);

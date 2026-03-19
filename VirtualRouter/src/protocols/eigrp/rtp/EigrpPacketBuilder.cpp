@@ -101,7 +101,7 @@ size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std
 {
     if (neighbors.empty()) return 0;
 
-    const uint8_t ipSize = static_cast<uint8_t>(neighbors.front().isV6 ? 16 : 4);
+    const uint8_t ipSize = static_cast<uint8_t>(neighbors.front().isIPv6() ? 16 : 4);
     size_t maxFit = (tlv.maxSize() - tlv.size() - 13) / ipSize;
     size_t amount = std::min(maxFit, neighbors.size());
     if (amount == 0) return 0;
@@ -118,7 +118,11 @@ size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std
     for (int i = 0; i < amount; i++)
     {
         const auto& ip = neighbors[i];
-        std::memcpy(buf + offset, ip.raw, ipSize);
+        if (ip.isIPv4()) {
+            writeU32(buf + offset, ip.v4());
+        } else {
+            writeU128(buf + offset, ip.v6());
+        }
         offset += ipSize;
     }
     

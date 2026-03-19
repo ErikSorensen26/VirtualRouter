@@ -7,7 +7,7 @@
 
 #include "configs/RegistryDefaultTable.hpp"
 
-#include "IPAddress.hpp"
+#include "IPAddress.h"
 #include "OspfInterfaceRegistry.h"
 #include "configs/RegistryTypes.hpp"
 

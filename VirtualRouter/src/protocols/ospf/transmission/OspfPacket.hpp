@@ -4,7 +4,7 @@
 #define OSPF_PACKET_HPP
 
 #include <cstring>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "packet/StaticHeader.hpp"
 

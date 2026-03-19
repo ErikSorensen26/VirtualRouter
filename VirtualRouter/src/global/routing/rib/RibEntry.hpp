@@ -4,7 +4,7 @@
 #define RIB_ENTRY_HPP
 
 #include "RouteSource.hpp"
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #define MAX_NEXTHOP 8

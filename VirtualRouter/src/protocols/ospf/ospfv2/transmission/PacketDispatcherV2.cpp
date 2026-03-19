@@ -15,17 +15,21 @@ PacketDispatcherV2::PacketDispatcherV2(OspfInterface& iface, Config::Reference<C
       configs(baseConfigs->get<Config::OspfInterfaceBase::BASE>().get())
 {}
 
-void PacketDispatcherV2::transmit(PacketBuilder& pkt, const uint8_t* dest)
+void PacketDispatcherV2::transmit(PacketBuilder& pkt, const IPAddress* dest)
 {
     auto* interface = &iface.getIface();
 
-    const uint8_t* destination = dest;
+    IPAddress destination;
     if (!dest)
     {
         if (iface.isDr.load(std::memory_order_relaxed))
-            destination = OSPFV2_ALL_SPF_ROUTERS;
+            destination = IPAddress(OSPFV2_ALL_SPF_ROUTERS, AddressFamily::IPv4);
         else
-            destination = OSPFV2_ALL_D_ROUTERS;
+            destination = IPAddress(OSPFV2_ALL_D_ROUTERS, AddressFamily::IPv4);
+    }
+    else
+    {
+        destination = *dest;
     }
 
     Protocol::IPPacket::BuildIP build = {
@@ -78,7 +82,7 @@ void PacketDispatcherV2::onDbdRetransmissionTimer(Neighbor& nbr)
     Protocol::IPPacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,
-        .destIp = nbr.ipAddress.raw,
+        .destIp = nbr.ipAddress,
         .protocolType = IP_OSPF
     };
 

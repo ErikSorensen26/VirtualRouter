@@ -1,6 +1,5 @@
 // InterfaceManager.cpp
 
-#include <Functions.h>
 #include <VirtualRouter.h>
 #include <Global.h>
 
@@ -26,7 +25,7 @@ OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
 OspfInterface* InterfaceManager::getInterfaceByAddress(const IPAddress& addr)
 {
     for (auto& [id, iface] : ospfInterfaceList)
-        if (iface.interfaceAddress.v6 == addr.v6)
+        if (iface.interfaceAddress.addr == addr.raw)
             return &iface;
     return nullptr;
 }
@@ -117,14 +116,14 @@ void InterfaceManager::refreshInterfaceList()
 
         uint32_t procId = process.getProcId();
 
-        auto isInNetworkRange = [&](uint8_t* ip) -> std::optional<uint32_t>
+        auto isInNetworkRange = [&](IPv4Address ip) -> std::optional<uint32_t>
         {
             // Use first area defined that matches.
             std::optional<uint32_t> area{std::nullopt};
             process.getConfigs().get<Config::Ospf::NETWORKS>().withRead([&](const auto& networks) {
                 for (const auto& [prefix, a] : networks)
                 {
-                    if (Functions::compareNetworkWithIp(prefix.addr, ip, prefix.prefixLength, AddressFamily::IPv4))
+                    if (prefix.contains(ip))
                     {
                         area = a;
                         break;
@@ -146,13 +145,13 @@ void InterfaceManager::refreshInterfaceList()
 
             if (!process.isV3)
             {
-                currentAddress = interface->configs.ipv4.getPrimaryPrefix();
+                { auto pfx = interface->configs.ipv4.getPrimaryPrefix(); currentAddress = IPPrefix(pfx.addr, pfx.prefixLength); }
                 auto area = isInNetworkRange(currentAddress.addr);
-                if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress(), area.value());
+                if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress().addr, area.value());
             }
             else
             {
-                currentAddress = interface->configs.ipv6.getLocalPrefix();
+                { auto pfx = interface->configs.ipv6.getLocalPrefix(); currentAddress = IPPrefix(pfx.addr, pfx.prefixLength); }
                 bool inRange = ipInfo.ospf.enabledProcesses.contains(procId) &&
                                  interface->getVRF() == process.routingInstance;
                 if (inRange) key.emplace(id, ipInfo.ospf.enabledProcesses[procId]);

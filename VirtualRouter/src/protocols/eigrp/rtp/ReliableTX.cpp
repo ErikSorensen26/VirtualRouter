@@ -11,12 +11,16 @@
 
 namespace Eigrp
 {
-void ReliableTransport::transmit(PacketBuilder& pkt, const uint8_t* dest)
+void ReliableTransport::transmit(PacketBuilder& pkt, const IPAddress* dest)
 {
-    const uint8_t* target = dest ? dest :
-        af == AddressFamily::IPv4
-            ? EIGRP_MULTICAST_ADDRESS
-            : EIGRP_MULTICAST_ADDRESS_V6;
+    IPAddress target;
+    if (dest) {
+        target = *dest;
+    } else if (af == AddressFamily::IPv4) {
+        target = IPAddress(EIGRP_MULTICAST_ADDRESS, AddressFamily::IPv4);
+    } else {
+        target = IPAddress(EIGRP_MULTICAST_ADDRESS_V6, AddressFamily::IPv6);
+    }
 
     auto* interface = iface.getIface();
     Protocol::IPPacket::BuildIP build = {
@@ -51,7 +55,7 @@ void ReliableTransport::transmitReliable(PacketBuilder& pkt, Neighbor* neighbor,
                 if (neighbor->popAck(ack) && ack != 0)
                     header.setAck(ack);
             }
-            transmit(pkt, neighbor->ipAddress.raw);
+            transmit(pkt, &neighbor->ipAddress);
         }
     }
 }
@@ -110,7 +114,7 @@ void ReliableTransport::sendUnicastHello(const IPAddress& neighborIp)
     if (!createUnicastHello(pkt).has_value())
         return releaseFailedPacket(pkt);
 
-    transmit(pkt, neighborIp.raw);
+    transmit(pkt, &neighborIp);
 }
 
 void ReliableTransport::trackAck(Neighbor& neighbor, uint32_t seq)
@@ -139,7 +143,7 @@ void ReliableTransport::sendAck(Neighbor& neighbor, uint32_t seq)
     if (!createAck(pkt, seq).has_value())
         return releaseFailedPacket(pkt);
 
-    transmit(pkt, neighbor.ipAddress.raw);
+    transmit(pkt, &neighbor.ipAddress);
 }
 
 void ReliableTransport::sendNullUpdate(Neighbor& neighbor)

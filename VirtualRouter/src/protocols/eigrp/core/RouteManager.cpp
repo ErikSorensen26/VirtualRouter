@@ -24,13 +24,13 @@ void RouteManager::withdrawRoute(const IPPrefix withdraw)
 {
     if (af == AddressFamily::IPv4)
     {
-        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
-        rib.removeEntry<uint32_t>(readU32(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+        rib.removeEntry<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
+        rib.removeEntry<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
     }
     else
     {
-        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
-        rib.removeEntry<__uint128_t>(readU128(withdraw.addr), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+        rib.removeEntry<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
+        rib.removeEntry<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
     }
 }
 

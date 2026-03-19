@@ -3,6 +3,7 @@
 #ifndef IP_HEADER_HPP
 #define IP_HEADER_HPP
 
+#include <cstdint>
 #include <span>
 
 #include "packet/HeaderHelpers.hpp"
@@ -24,10 +25,10 @@
 #define IP_IPV4   0x04U ///< IP protocol number for IPv4 (4)
 #define IP_IPV6   0x29U ///< IP Protocol number for IPv6 (41)
 
-inline constexpr uint8_t IPV4_BROADCAST[4] = { 0xFF, 0xFF, 0xFF, 0xFF }; ///< Broadcast IPv4 address (255.255.255.255).
-inline constexpr uint8_t IPV4_SOURCE[4] = { 0x00, 0x00, 0x00, 0x00 };    ///< Placeholder source IPv4 address (0.0.0.0).
-inline constexpr uint8_t IPV6_MULTICAST[16] = {0xFF, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02};
-inline constexpr uint8_t IPV6_SOURCE[16] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+inline constexpr uint32_t IPV4_BROADCAST = 0xFFFFFFFF;
+inline constexpr uint32_t IPV4_SOURCE = 0;
+inline constexpr __uint128_t IPV6_MULTICAST = (__uint128_t{0xFF00200000000000ULL} << 64) | 0x0000000000000002ULL;
+inline constexpr __uint128_t IPV6_SOURCE = 0;
 
 /**
  * @struct IPv4HeaderRaw
@@ -100,8 +101,12 @@ struct IPv4Header
         { writeU16(raw->checksum, val); }
     void setSourceAddress(const uint8_t* addr)
         { std::memcpy(raw->sourceAddress, addr, 4); }
-    void setDestinationAddress(const uint8_t* addr) 
+    void setSourceAddress(uint32_t val)
+        { writeU32(raw->sourceAddress, val); }
+    void setDestinationAddress(const uint8_t* addr)
         { std::memcpy(raw->destinationAddress, addr, 4); }
+    void setDestinationAddress(uint32_t val)
+        { writeU32(raw->destinationAddress, val); }
 };
 
 /**
@@ -160,8 +165,12 @@ struct IPv6Header
         { raw->hopLimit = val; }
     void setSourceAddress(const uint8_t* addr)
         { std::memcpy(raw->sourceAddress, addr, 16); }
-    void setDestinationAddress(const uint8_t* addr) 
+    void setSourceAddress(__uint128_t val)
+        { writeU128(raw->sourceAddress, val); }
+    void setDestinationAddress(const uint8_t* addr)
         { std::memcpy(raw->destinationAddress, addr, 16); }
+    void setDestinationAddress(__uint128_t val)
+        { writeU128(raw->destinationAddress, val); }
 };
 
 #endif // IP_HEADER_HPP

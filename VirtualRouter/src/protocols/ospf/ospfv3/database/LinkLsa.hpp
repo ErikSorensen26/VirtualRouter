@@ -3,7 +3,7 @@
 #ifndef LINK_LSA_HPP
 #define LINK_LSA_HPP
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"
@@ -14,14 +14,14 @@ namespace OSPF
 struct LinkLsaPrefix
 {
     uint8_t options;
-    IPPrefix prefix;
+    IPv6Prefix prefix;
 };
 
 struct LinkLsa
 {
     uint8_t priority;
     uint32_t options;
-    IPAddress localLink;
+    IPv6Address localLink;
     std::vector<LinkLsaPrefix> prefixes;
 
     static std::optional<LinkLsa> build(const uint8_t* buf, uint16_t len)
@@ -32,8 +32,7 @@ struct LinkLsa
 
         lsa.priority = buf[0];
         lsa.options = readU24(buf + 1);
-        std::memcpy(lsa.localLink.raw, buf + 4, 16);
-        lsa.localLink.isV6 = true;
+        lsa.localLink = IPv6Address(buf + 4);
 
         uint8_t prefixList = buf[20];
         size_t off = 21;
@@ -46,9 +45,7 @@ struct LinkLsa
             uint8_t prefixBytes = (prefixLen + 7) / 8;
 
             if (off + prefixBytes > len) return std::nullopt;
-            std::memcpy(link.prefix.addr, buf + off, prefixBytes);
-            link.prefix.af = AddressFamily::IPv6;
-            link.prefix.prefixLength = prefixLen;
+            link.prefix = IPv6Prefix(buf + off, prefixLen);
             lsa.prefixes.push_back(link);
         }
 
@@ -61,7 +58,7 @@ struct LinkLsa
 
         buf[0] = priority;
         writeU24(buf + 1, options);
-        std::memcpy(buf + 4, localLink.raw, 16);
+        writeU128(buf + 4, localLink.addr);
 
         buf[20] = static_cast<uint8_t>(prefixes.size());
         size_t off = 21;
@@ -73,7 +70,7 @@ struct LinkLsa
             uint8_t prefixBytes = (link.prefix.prefixLength + 7) / 8;
 
             if (off + prefixBytes > len) return false;
-            std::memcpy(buf + off, link.prefix.addr, prefixBytes);
+            writeBytes(buf + off, link.prefix.addr, prefixBytes);
         }
 
         return true;
@@ -93,13 +90,13 @@ struct LinkLsa
     {
         check.add(priority);
         check.addU24(options);
-        check.addBytes(localLink.raw, 16);
+        check.addBytes(localLink.raw(), 16);
         for (const auto& link : prefixes)
         {
             check.add(link.prefix.prefixLength);
             check.add(link.options);
             uint8_t prefixBytes = (link.prefix.prefixLength + 7) / 8;
-            check.addBytes(link.prefix.addr, prefixBytes);
+            check.addBytes(link.prefix.raw(), prefixBytes);
         }
     }
 };

@@ -9,9 +9,9 @@
 
 namespace Eigrp
 {
-void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const uint8_t* neighborIp, bool multicast)
+void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const IPAddress& neighborIp, bool multicast)
 {
-    IPAddress neigIp(neighborIp, af);
+    const IPAddress& neigIp = neighborIp;
 
     // Check if passive
     if (iface.configs.isPassive.load(std::memory_order_relaxed))
@@ -181,7 +181,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             if (iface.getBase().getAF() == AddressFamily::IPv4)
                 iface.getIface()->configs.ipv4.getPrimaryAddress(ourAddr);
             else
-                writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress());
+                writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress().addr);
 
             for (size_t off = 0; off + addrLen <= listLen; off += addrLen)
             {
