@@ -31,14 +31,14 @@ inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const In
 {
     if (!proc.getConfigs().get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load() && lhs.peerAs != rhs.peerAs)
         return false;
-    return medOrDefault(*lhs.getPathAttributes(), config.medMissingAsWorst)
-         < medOrDefault(*rhs.getPathAttributes(), config.medMissingAsWorst);
+    return medOrDefault(lhs.getPathAttributes(), config.medMissingAsWorst)
+         < medOrDefault(rhs.getPathAttributes(), config.medMissingAsWorst);
 }
 
 bool BestPathComparator::better(const InboundRouteBase& lhs, const IPAddress& lhsNbr, const InboundRouteBase& rhs, const IPAddress& rhsNbr) const
 {
-    PathAttribute lhsAttr = *lhs.getPathAttributes();
-    PathAttribute rhsAttr = *rhs.getPathAttributes();
+    PathAttribute lhsAttr = lhs.getPathAttributes();
+    PathAttribute rhsAttr = rhs.getPathAttributes();
 
     // 1) Highest weight
     if (lhs.weigth != rhs.weigth)
@@ -66,9 +66,11 @@ bool BestPathComparator::better(const InboundRouteBase& lhs, const IPAddress& lh
     if (compareMed(rhs, lhs))
         return false;
 
-    // 7) eBGP preferred over iBGP
-    if (lhs.ebgp != rhs.ebgp)
-        return rhs.ebgp;
+    // 7) eBGP / confederation-eBGP preferred over iBGP (RFC 3065 §5).
+    const bool lhsExternal = lhs.ebgp || lhs.confedEbgp;
+    const bool rhsExternal = rhs.ebgp || rhs.confedEbgp;
+    if (lhsExternal != rhsExternal)
+        return lhsExternal;
 
     // 8) Lowest IGP metric to NEXT_HOP
     if (!config.ignoreIgpMetric && lhs.igpCost != rhs.igpCost)

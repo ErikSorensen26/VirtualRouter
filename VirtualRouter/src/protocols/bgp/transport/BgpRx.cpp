@@ -754,7 +754,14 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
     {
         AddressFamilyVariant* af = session.getNeighbor().getProcess().findAddressFamily(family);
         if (af)
-            std::visit([&](auto&& fam) { fam.refreshPeer(session); }, *af);
+        {
+            if (subtype == BGP_ROUTE_REFRESH_BORR)
+                std::visit([&](auto&& fam) { fam.onPeerBorr(session); }, *af);
+            else if (subtype == BGP_ROUTE_REFRESH_EORR)
+                std::visit([&](auto&& fam) { fam.onPeerEorr(session); }, *af);
+            else
+                std::visit([&](auto&& fam) { fam.refreshPeer(session); }, *af);
+        }
     }
 
     session.onRouteRefreshReceived();

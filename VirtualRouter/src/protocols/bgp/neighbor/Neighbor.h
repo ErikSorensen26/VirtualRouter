@@ -28,10 +28,15 @@ public:
 
     Session* session = nullptr;
 
+    // True for neighbors created dynamically via bgp listen range.
+    // Dynamic neighbors are passive-only and not owned by the static config.
+    bool dynamic = false;
+
     BgpProcess& getProcess() { return process; }
     const BgpProcess& getProcess() const { return process; }
 
     bool isEbgp() const noexcept;
+    bool isConfedEbgp() const noexcept;
 
     void addAfNeighbor(AfiSafi& afi);
     void delAfNeighbor(AfiSafi& afi);

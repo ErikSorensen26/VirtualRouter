@@ -70,7 +70,32 @@ bool Neighbor::isEbgp() const noexcept
 {
     auto& remAs = configs.get<Config::BgpNeighborSession::REMOTE_AS>();
     if (!remAs.hasValue()) return false;
-    return remAs.load() != process.asNumber;
+    uint32_t peerAs = remAs.load();
+    if (peerAs == process.asNumber) return false;
+
+    bool inConfed = false;
+    process.getConfigs().get<Config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
+        [&](const std::vector<uint32_t>& peers) {
+            for (uint32_t p : peers)
+                if (p == peerAs) { inConfed = true; break; }
+        });
+    return !inConfed;
+}
+
+bool Neighbor::isConfedEbgp() const noexcept
+{
+    auto& remAs = configs.get<Config::BgpNeighborSession::REMOTE_AS>();
+    if (!remAs.hasValue()) return false;
+    uint32_t peerAs = remAs.load();
+    if (peerAs == process.asNumber) return false;
+
+    bool inConfed = false;
+    process.getConfigs().get<Config::Bgp::BGP_CONFEDERATION_PEERS>().withRead(
+        [&](const std::vector<uint32_t>& peers) {
+            for (uint32_t p : peers)
+                if (p == peerAs) { inConfed = true; break; }
+        });
+    return inConfed;
 }
 
 void Neighbor::buildAttributeRanges()

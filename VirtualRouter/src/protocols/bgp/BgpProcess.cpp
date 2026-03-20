@@ -1,5 +1,6 @@
 // BgpProcess.cpp
 
+#include <chrono>
 #include <VirtualRouter.h>
 
 #include "BgpProcess.h"
@@ -15,8 +16,11 @@ BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
       configs(vrf->getRegistry().create<Config::BgpRegistry>(vrf->getInstanceId()))
 {
     vrf->getRegistry().ensure(configs->get<Config::Bgp::BGP_BASE>());
+    scheduleScan();
 
     TCP::ListenOptions opts;
+    opts.policy.pathMtuDiscovery = configs->get<Config::Bgp::BGP_BASE>().local().get()
+        .get<Config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
     opts.onAccept = BgpProcess::onAcceptCallback;
     opts.onAcceptUser = this;
     opts.recvCallback = BgpProcess::onReceiveCallback;
@@ -95,11 +99,29 @@ void BgpProcess::onSessionEstablished(Session& session)
     nbr.rid = rid;
     nbr.session = &session;
 
-    for (auto& [afi, afVariant] : addressFamilies)
+    auto doEstablish = [this](const IPAddress& peerAddr) {
+        Session* s = findSession(peerAddr);
+        if (!s || !s->established()) return;
+        for (auto& [afi, afVariant] : addressFamilies)
+        {
+            if (!s->getNegotiated().activeFamilies.count(afi))
+                continue;
+            std::visit([&](auto& fam) { fam.onPeerEstablished(*s); }, afVariant);
+        }
+    };
+
+    auto& delayField = getConfigs().get<Config::Bgp::BGP_UPDATE_DELAY>();
+    if (delayField.hasValue())
     {
-        if (!session.getNegotiated().activeFamilies.count(afi))
-            continue;
-        std::visit([&](auto& fam) { fam.onPeerEstablished(session); }, afVariant);
+        const IPAddress peerAddr = nbr.neighborAddress;
+        const uint16_t delaySecs = delayField.load();
+        scheduler.ref().postAfter(
+            std::chrono::steady_clock::now() + std::chrono::seconds(delaySecs),
+            [doEstablish, peerAddr](uint32_t) mutable { doEstablish(peerAddr); });
+    }
+    else
+    {
+        doEstablish(nbr.neighborAddress);
     }
 }
 
@@ -146,13 +168,36 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
     const IPAddress& nbrIp = ctx.key.remote.address;
     Neighbor* nbr = bgp->ntable.lookup(nbrIp);
 
+    if (!nbr && bgp->configs->get<Config::Bgp::BGP_LISTEN>().load() && nbrIp.isIPv4())
+    {
+        std::string matchedGroup;
+        bgp->configs->get<Config::Bgp::BGP_LISTEN_RANGE>().withRead(
+            [&](const std::vector<std::tuple<uint32_t, uint32_t, std::string>>& ranges)
+            {
+                uint32_t remoteV4 = nbrIp.v4();
+                for (const auto& [netAddr, prefixLen, pgName] : ranges)
+                {
+                    if (prefixLen > 32) continue;
+                    uint32_t mask = v4Mask(static_cast<uint8_t>(prefixLen));
+                    if ((remoteV4 & mask) == (netAddr & mask))
+                    {
+                        matchedGroup = pgName;
+                        break;
+                    }
+                }
+            });
+
+        if (!matchedGroup.empty())
+            nbr = bgp->ntable.createDynamicNeighbor(nbrIp, matchedGroup);
+    }
+
     // Check if accepting a connection is allowed
     auto allowPassive = [&]() {
         auto& connMode = nbr->getConfigs().get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
         return !(connMode.hasValue() && connMode.load() /*active = true*/);
     };
 
-    // eBGP Neighbor IP must be in same subnet 
+    // eBGP Neighbor IP must be in same subnet
     auto check = [&]() {
         auto& cfgs = nbr->getConfigs();
         bool connectCheck = nbr->isEbgp() &&
@@ -175,7 +220,13 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
         return nbr->getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load();
     };
 
-    if (!nbr || isShutdown() || !allowPassive() || !check())
+    // BGP_LISTEN_LIMIT caps the total number of concurrently accepted sessions.
+    auto overLimit = [&]() {
+        auto& limitField = bgp->configs->get<Config::Bgp::BGP_LISTEN_LIMIT>();
+        return limitField.hasValue() && bgp->sessions.size() >= limitField.load();
+    };
+
+    if (!nbr || isShutdown() || !allowPassive() || !check() || overLimit())
     {
         ctx.newConn.disconnect();
         return;
@@ -230,5 +281,17 @@ void BgpProcess::onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept
     }
 
     session->handleIncoming(ctx.consumer);
+}
+
+void BgpProcess::scheduleScan()
+{
+    uint8_t secs = configs->get<Config::Bgp::BGP_SCAN_TIME>().load();
+    scheduler.ref().postAfter(
+        std::chrono::steady_clock::now() + std::chrono::seconds(secs),
+        [this](uint32_t) {
+            for (auto& [afi, af] : addressFamilies)
+                std::visit([](auto& fam) { fam.scan(); }, af);
+            scheduleScan();
+        });
 }
 }

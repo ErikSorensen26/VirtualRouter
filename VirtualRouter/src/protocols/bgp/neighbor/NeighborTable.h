@@ -29,6 +29,10 @@ public:
 
     void deleteNeighbor(const IPAddress& ipAddress);
 
+    // Create a passive-only neighbor from a bgp listen range match.
+    // The neighbor inherits all config from the named peer-group.
+    Neighbor* createDynamicNeighbor(const IPAddress& ipAddress, const std::string& peerGroupName);
+
     Neighbor* lookup(const IPAddress& ipAddress);
     const Neighbor* lookup(const IPAddress& ipAddress) const;
 

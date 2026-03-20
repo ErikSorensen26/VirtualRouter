@@ -151,6 +151,7 @@ struct TcpSocketPolicy final
     std::optional<uint8_t> tos{};   // DSCP/ENC byte (TOS/TCLASS)
     bool lowLatency{false};         // minimize latency (NODELAY)
     bool keepAlive{false};          // keep alives
+    bool pathMtuDiscovery{false};   // set DF bit / IP_MTU_DISCOVER
 };
 
 struct TcpInterfaceBind final

@@ -80,7 +80,7 @@ struct ContextProvider
 
     void set(void* c) noexcept
     {
-        ctx = &c;
+        ctx = c;
     }
 
     void clear() noexcept
@@ -596,7 +596,7 @@ public:
         if (base && state.load(std::memory_order_relaxed) == MaskState::INHERIT)
         {
             assert(base->hasValue());
-            base->load();
+            return base->load();
         }
 
         std::lock_guard<std::mutex> lock(mu);

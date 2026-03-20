@@ -88,8 +88,12 @@ struct Attributes
         size_t total = 0;
         for (const auto& seg : asPath)
         {
+            // AS_CONFED_SEQUENCE (3) and AS_CONFED_SET (4) are excluded from path
+            if (seg.segmentType == BGP_AS_CONFED_SEQUENCE ||
+                seg.segmentType == BGP_AS_CONFED_SET)
+                continue;
             // AS_SET (type 1) counts as 1 regardless of size (RFC 4271 §9.1.2.2)
-            if (seg.segmentType == 1)
+            if (seg.segmentType == BGP_AS_SET)
                 total += seg.asns.empty() ? 0 : 1;
             else
                 total += seg.asns.size();

@@ -24,9 +24,7 @@ public:
     using type    = ENUM;
 
     // Meta tuple: used ONLY for compile-time checks / type indexing.
-    using FieldTuple = std::tuple<Fields...>;
-
-    // Storage tuple: holds non-movable fields without ever moving/copying them.
+    using FieldTuple = std::tuple<Fields...>; // Storage tuple: holds non-movable fields without ever moving/copying them.
     using StorageTuple = std::tuple<std::optional<Fields>...>;
 
     static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
@@ -63,7 +61,7 @@ public:
     {
         constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
-        applyMask(base);
+        applyMask(base, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
     template <ENUM F>
@@ -85,7 +83,7 @@ public:
         return base != nullptr;
     }
 
-    bool setMask(SubRegistry* parent)
+    void setMask(SubRegistry* parent)
     {
         applyMask(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
@@ -198,4 +196,3 @@ private:
 }
 
 #endif // SUB_REGISTRY_HPP
-

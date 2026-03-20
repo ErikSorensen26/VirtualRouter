@@ -1,7 +1,7 @@
 // OspfNeighborTable.cpp
 
 #include <unordered_set>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "Neighbor.h"
 #include "NeighborTable.h"
@@ -41,6 +41,10 @@ void NeighborTable::syncNeighbors()
 
     for (const auto& nbr : unseen)
     {
+        // Dynamic neighbors are not owned by the static config; skip them here.
+        auto it = neighbors.find(nbr);
+        if (it != neighbors.end() && it->second.dynamic)
+            continue;
         deleteNeighbor(nbr);
     }
 }
@@ -64,6 +68,26 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& ipAddress)
         process.startActiveSession(it->second);
     }
     return ok ? &it->second : nullptr;
+}
+
+Neighbor* NeighborTable::createDynamicNeighbor(const IPAddress& ipAddress, const std::string& peerGroupName)
+{
+    // Re-use an existing dynamic entry for the same address (reconnect case).
+    if (auto it = neighbors.find(ipAddress); it != neighbors.end())
+        return it->second.dynamic ? &it->second : nullptr;
+
+    auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, process);
+    if (!ok)
+        return nullptr;
+
+    it->second.dynamic = true;
+
+    // Attach the peer-group so REMOTE_AS, hold-time, etc. are inherited.
+    if (PeerGroup* pg = lookupPeerGroup(peerGroupName))
+        it->second.getConfigs().setPeerGroup(pg);
+
+    // Do NOT start an active session — dynamic neighbors are inbound-only.
+    return &it->second;
 }
 
 void NeighborTable::deleteNeighbor(const IPAddress& ipAddress)

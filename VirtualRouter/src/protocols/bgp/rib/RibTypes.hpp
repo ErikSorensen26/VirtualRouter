@@ -159,6 +159,7 @@ struct SoftPreEntry
     PathAttribute pa;
     uint32_t peerAs;
     bool ebgp;
+    bool confedEbgp = false;
 };
 
 struct InboundRouteBase : RouteBase
@@ -175,6 +176,7 @@ struct InboundRouteBase : RouteBase
     uint16_t weigth = 0;
     uint32_t peerAs = 0;
     bool ebgp = true;
+    bool confedEbgp = false;
     uint64_t igpCost = std::numeric_limits<uint64_t>::max();
 
     std::chrono::steady_clock::time_point receivedTime =

@@ -103,6 +103,7 @@ public:
     FsmState getFsmState() const noexcept { return fsm.getState(); }
     uint32_t getPeerRid() const noexcept { return peerRouterId; }
     bool isEbgp() const noexcept;
+    bool isConfedEbgp() const noexcept;
     bool isOutgoing() const noexcept { return activeConn.has_value(); }
 
     void setPeerRid(uint32_t rid) { peerRouterId = rid; }

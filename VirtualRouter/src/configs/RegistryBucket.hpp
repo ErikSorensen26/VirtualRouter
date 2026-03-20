@@ -30,6 +30,7 @@ private:
     {
         alignas(T) unsigned char storage[sizeof(T)];
 
+        uint64_t key{0};
         uint32_t generation{0};
         uint32_t refCount{0};
         bool alive{false};

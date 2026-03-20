@@ -46,6 +46,14 @@ inline static AsPathSegment& getAsSegment(Attributes& attrs)
     return attrs.asPath.front();
 }
 
+inline static AsPathSegment& getConfedAsSegment(Attributes& attrs)
+{
+    if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_CONFED_SEQUENCE)
+        return attrs.asPath[0];
+    attrs.asPath.insert(attrs.asPath.begin(), AsPathSegment{BGP_AS_CONFED_SEQUENCE, {}});
+    return attrs.asPath.front();
+}
+
 /**
  * class AddressFamilyInstance<N>
  *
@@ -93,8 +101,15 @@ public:
 
     ~AddressFamilyInstance()
     {
+        auto sched = ProcessAccessor::getScheduler(process);
         if (nhtTimerId != 0)
-            ProcessAccessor::getScheduler(process).cancel(nhtTimerId);
+            sched.cancel(nhtTimerId);
+        // Cancel all stale-path timers.
+        for (auto& [rid, ids] : staleTimers)
+        {
+            if (ids.stalepath) sched.cancel(ids.stalepath);
+            if (ids.maxEor)    sched.cancel(ids.maxEor);
+        }
         clearNetworkWatches();
         clearNhtWatches();
     }
@@ -187,6 +202,55 @@ public:
             session.sendRouteRefresh(family, RouteRefreshReason::Eorr);
     }
 
+    // Called when peer sends BORR (Enhanced Route Refresh begin): mark Adj-RIB-In stale
+    // and start STALEPATH / MAX-EOR timers (RFC 7313).
+    void onPeerBorr(Session& session)
+    {
+        const uint32_t peerRid = session.getPeerRid();
+
+        // Cancel any in-flight stale timers from a previous BORR cycle.
+        cancelStaleTimers(peerRid);
+
+        // Mark all current inbound routes from this peer as stale.
+        auto inIt = adjRibIn.find(peerRid);
+        if (inIt != adjRibIn.end())
+        {
+            auto& stale = stalePeerNlris[peerRid];
+            for (const auto& [nlriPath, route] : inIt->second)
+                stale.insert(nlriPath.nlri);
+        }
+
+        auto& sched = ProcessAccessor::getScheduler(process);
+        auto& procCfgs = ProcessAccessor::getConfigs(process);
+
+        auto& sti = staleTimers[peerRid];
+
+        uint16_t staleSecs = procCfgs.get<Config::Bgp::BGP_REFRESH_STALEPATH_TIME>().load();
+        sti.stalepath = sched.postAfter(
+            std::chrono::steady_clock::now() + std::chrono::seconds(staleSecs),
+            [this, peerRid](uint32_t) { staleTimers[peerRid].stalepath = 0; purgeStalePeer(peerRid); });
+
+        uint16_t maxEorSecs = procCfgs.get<Config::Bgp::BGP_REFRESH_MAX_EOR_TIME>().load();
+        sti.maxEor = sched.postAfter(
+            std::chrono::steady_clock::now() + std::chrono::seconds(maxEorSecs),
+            [this, peerRid](uint32_t) { staleTimers[peerRid].maxEor = 0; purgeStalePeer(peerRid); });
+    }
+
+    // Called when peer sends EORR (Enhanced Route Refresh end): purge stale paths.
+    void onPeerEorr(Session& session)
+    {
+        const uint32_t peerRid = session.getPeerRid();
+        cancelStaleTimers(peerRid);
+        purgeStalePeer(peerRid);
+    }
+
+    // Called by BGP_SCAN_TIME periodic timer to re-evaluate all active routes.
+    void scan()
+    {
+        for (auto& [nlri, route] : locRib)
+            recomputeAdjRibOut(nlri, &route);
+    }
+
     void softClearInbound(uint32_t peerRid)
     {
         auto preIt = preAdjRibIn.find(peerRid);
@@ -222,6 +286,7 @@ public:
             r.neighborRouterId = peerRid;
             r.peerAs            = entry.peerAs;
             r.ebgp              = entry.ebgp;
+            r.confedEbgp        = entry.confedEbgp;
             r.igpCost           = resolveIgpMetric(entry.pa.path.nextHop);
 
             if (applyIngressPolicy(r))
@@ -263,6 +328,7 @@ public:
             nbrAf.slowFirstSeen = {};
         }
 
+        cancelStaleTimers(peer);
         preAdjRibIn.erase(peer);
         defaultOriginatedPeers.erase(peer);
 
@@ -322,6 +388,12 @@ private:
                 if (preIt != preAdjRibIn.end())
                     preIt->second.erase(n);
             }
+            // Peer withdrew this NLRI explicitly; remove from stale set.
+            {
+                auto stIt = stalePeerNlris.find(peer.rid);
+                if (stIt != stalePeerNlris.end())
+                    stIt->second.erase(n.nlri);
+            }
             touched.insert(n.nlri);
         }
 
@@ -331,8 +403,8 @@ private:
 
             auto& remAs = peer.getConfigs().get<Config::BgpNeighborSession::REMOTE_AS>();
             const uint32_t peerAs = remAs.hasValue() ? remAs.load() : 0;
-            const uint32_t localAs = ProcessAccessor::getAsNum(process);
-            const bool isEbgp = (peerAs != 0) && (peerAs != localAs);
+            const bool isEbgp     = nbr->isEbgp();
+            const bool isConfed   = nbr->isConfedEbgp();
 
             uint32_t pid = attrMgr.acquire(update.attrs->attrs, update.attrs->path);
 
@@ -341,7 +413,7 @@ private:
             {
                 auto& preIn = preAdjRibIn[peer.rid];
                 for (const auto& n : update.announcements)
-                    preIn.insert_or_assign(n, SoftPreEntry{*update.attrs, peerAs, isEbgp});
+                    preIn.insert_or_assign(n, SoftPreEntry{*update.attrs, peerAs, isEbgp, isConfed});
             }
 
             bool first = true;
@@ -354,8 +426,9 @@ private:
                 // n is NlriPath<NlriT>; pass n.nlri to InboundRoute constructor
                 InboundRoute<NlriT> r(attrMgr, pid, n.nlri, &nbrAf);
                 r.neighborRouterId = peer.rid;
-                r.peerAs            = peerAs;
-                r.ebgp              = isEbgp;
+                r.peerAs           = peerAs;
+                r.ebgp             = isEbgp;
+                r.confedEbgp       = isConfed;
                 r.igpCost           = resolveIgpMetric(update.attrs->path.nextHop);
 
                 auto& weight = nbr->getAfNeighbor(family).getConfigs().get<Config::BgpNeighbor::WEIGHT>();
@@ -376,6 +449,12 @@ private:
                     }
                 }
                 peerIn.emplace(n, std::move(r));
+                // Peer re-advertised this NLRI; it is no longer stale.
+                {
+                    auto stIt = stalePeerNlris.find(peer.rid);
+                    if (stIt != stalePeerNlris.end())
+                        stIt->second.erase(n.nlri);
+                }
                 touched.insert(n.nlri);
             }
         }
@@ -446,6 +525,43 @@ private:
             bpCfg.compareRouterId   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
             bpCfg.medMissingAsWorst = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
             bpCfg.ignoreIgpMetric   = configs->get<Config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
+
+            if (ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_DETERMINISTIC_MED>().load())
+            {
+                static const IPAddress kDetEmpty{};
+                auto detNbr = [](const InboundRoute<NlriT>* r) -> const IPAddress& {
+                    return r->sourceNeighbor ? r->sourceNeighbor->globalNbr().neighborAddress : kDetEmpty;
+                };
+                BestPathComparator detCmp(process, bpCfg);
+
+                std::unordered_map<uint32_t, InboundRoute<NlriT>*> groupBest;
+                for (auto* r : candidates)
+                {
+                    uint32_t groupAs;
+                    if (!r->sourceNeighbor)
+                    {
+                        groupAs = 0; // locally-originated: own group (AS 0 is never valid)
+                    }
+                    else if (r->ebgp)
+                    {
+                        auto pa = r->getPathAttributes();
+                        uint32_t fa = pa.attrs.firstAs();
+                        groupAs = (fa != 0) ? fa : r->peerAs;
+                    }
+                    else
+                    {
+                        groupAs = r->peerAs; // iBGP / confed: group by peer AS
+                    }
+
+                    auto& gb = groupBest[groupAs];
+                    if (!gb || detCmp.better(*r, detNbr(r), *gb, detNbr(gb)))
+                        gb = r;
+                }
+
+                candidates.clear();
+                for (auto& [_, gr] : groupBest)
+                    candidates.push_back(gr);
+            }
 
             DecisionEngine decision(process, bpCfg);
             std::optional<LocalRoute<NlriT>> best = decision.selectBest(
@@ -623,6 +739,21 @@ private:
         uint32_t routerAs = ProcessAccessor::getAsNum(process);
         auto& nbr = route.sourceNeighbor->globalNbr();
 
+        // Route Reflector loop prevention (RFC 4456 §8): only for iBGP (not confed-eBGP).
+        if (!route.ebgp && !route.confedEbgp)
+        {
+            const uint32_t ourRid       = ProcessAccessor::getRid(process);
+            const uint32_t ourClusterId = getClusterId();
+
+            if (pathAttrs.attrs.originatorId.has_value() &&
+                *pathAttrs.attrs.originatorId == ourRid)
+                return true; // ORIGINATOR_ID loop
+
+            for (uint32_t cid : pathAttrs.attrs.clusterList)
+                if (cid == ourClusterId)
+                    return true; // CLUSTER_LIST loop
+        }
+
         // AS-PATH loop prevention (check all segments)
         {
             NeighborConfigs& nbrCfgs = nbr.getConfigs();
@@ -640,6 +771,9 @@ private:
                     maxOccurrences = occField.load();
             }
 
+            const uint32_t confedId = getConfedId();
+            const bool inConfed     = (confedId != routerAs);
+
             uint32_t ownAsCount = 0;
             uint32_t localAsCount = 0;
             for (const auto& seg : pathAttrs.attrs.asPath)
@@ -647,6 +781,10 @@ private:
                 for (uint32_t asn : seg.asns)
                 {
                     if (asn == routerAs)
+                        ownAsCount++;
+                    // Also count confederation identifier occurrences in regular segments.
+                    if (inConfed && asn == confedId &&
+                        (seg.segmentType == BGP_AS_SEQUENCE || seg.segmentType == BGP_AS_SET))
                         ownAsCount++;
                     if (localAsEnabled && !dualAs && localAsField.hasValue() && asn == localAsField.load())
                         localAsCount++;
@@ -659,6 +797,36 @@ private:
                 return true; // reject: exceeds allowas-in limit
             if (localAsCount > 0)
                 return true; // reject: local-as loop
+        }
+
+        // the peer's configured remote AS.  Protects against misconfigured or spoofed updates.
+        if (route.ebgp &&
+            ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_ENFORCE_FIRST_AS>().load())
+        {
+            uint32_t fa = pathAttrs.attrs.firstAs();
+            if (fa != 0 && fa != route.peerAs)
+                return true; // reject: first-AS mismatch
+        }
+
+        // Max AS-PATH length: drop routes with an AS_PATH longer than the configured limit.
+        {
+            auto& maxAsField = ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_MAX_AS_LIMIT>();
+            if (maxAsField.hasValue() && pathAttrs.attrs.asPathLength() > maxAsField.load())
+                return true;
+        }
+
+        // Max community count: drop routes that carry too many standard communities.
+        {
+            auto& maxComField = ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_MAX_COMMUNITY_LIMIT>();
+            if (maxComField.hasValue() && pathAttrs.attrs.communities.size() > maxComField.load())
+                return true;
+        }
+
+        // Max extended community count.
+        {
+            auto& maxExtField = ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT>();
+            if (maxExtField.hasValue() && pathAttrs.attrs.extendedCommunities.size() > maxExtField.load())
+                return true;
         }
 
         // TODO: ingress policy (route-maps, prefix-lists, community filters, etc.)
@@ -679,22 +847,39 @@ private:
         {
             auto& sesCfgs = session.getNeighbor().getConfigs();
 
-            pa.attrs.localPref = std::nullopt;
+            pa.attrs.localPref    = std::nullopt;
+            pa.attrs.originatorId = std::nullopt;
+            pa.attrs.clusterList.clear();
+
+            pa.attrs.asPath.erase(
+                std::remove_if(pa.attrs.asPath.begin(), pa.attrs.asPath.end(),
+                    [](const AsPathSegment& s) {
+                        return s.segmentType == BGP_AS_CONFED_SEQUENCE ||
+                               s.segmentType == BGP_AS_CONFED_SET;
+                    }),
+                pa.attrs.asPath.end());
 
             AsPathSegment& seg = getAsSegment(pa.attrs);
-            uint32_t routerAs = ProcessAccessor::getAsNum(process);
+            const uint32_t confedId = getConfedId();
             auto& localAs = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
             if (!sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() || !localAs.hasValue())
-                seg.asns.insert(seg.asns.begin(), routerAs);
+                seg.asns.insert(seg.asns.begin(), confedId);
             else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
                 seg.asns.insert(seg.asns.begin(), localAs.load());
             else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
-                seg.asns.insert(seg.asns.begin(), routerAs);
+                seg.asns.insert(seg.asns.begin(), confedId);
             else
             {
-                seg.asns.insert(seg.asns.begin(), routerAs);
+                seg.asns.insert(seg.asns.begin(), confedId);
                 seg.asns.insert(seg.asns.begin(), localAs.load());
             }
+        }
+        else if (session.isConfedEbgp())
+        {
+            // RR attributes; prepend local member AS as a new AS_CONFED_SEQUENCE entry.
+            AsPathSegment& seg = getConfedAsSegment(pa.attrs);
+            const uint32_t routerAs = ProcessAccessor::getAsNum(process);
+            seg.asns.insert(seg.asns.begin(), routerAs);
         }
 
         return pa;
@@ -821,6 +1006,21 @@ private:
                 return;
             }
 
+            // BGP_SUPPRESS_INACTIVE: suppress routes whose next-hop is not reachable via NHT.
+            if (ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_SUPPRESS_INACTIVE>().load())
+            {
+                auto paOpt = best->route.getPathAttributes();
+                if (paOpt.has_value() && best->route.sourceNeighbor != nullptr)
+                {
+                    auto entIt = nhtTable.find(paOpt->path.nextHop);
+                    if (entIt != nhtTable.end() && !entIt->second.reachable)
+                    {
+                        withdrawFromPeer();
+                        return;
+                    }
+                }
+            }
+
             // MRAI: rate-limit announcements. Withdrawals always bypass.
             if (peerRid != mraiBypassPeer)
             {
@@ -889,25 +1089,43 @@ private:
                 return;
             }
 
-            // iBGP split-horizon with route-reflector awareness.
-            const bool fromIbgp = !best->in.ebgp;
-            const bool toIbgp   = !session->isEbgp();
+            const bool fromIbgp = !best->in.ebgp && !best->in.confedEbgp;
+            const bool toIbgp   = !session->isEbgp() && !session->isConfedEbgp();
+            bool isReflecting = false;
             if (fromIbgp && toIbgp)
             {
-                const bool targetIsClient = nbr.getAfNeighbor(family).getConfigs()
-                    .get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
-                const bool senderIsClient = best->in.sourceNeighbor->getConfigs()
-                    .template get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
+                const bool locallyOriginated = (best->in.sourceNeighbor == nullptr);
+                if (!locallyOriginated)
+                {
+                    const bool targetIsClient = nbrAfCfgs
+                        .get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
+                    const bool senderIsClient = best->in.sourceNeighbor->getConfigs()
+                        .template get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
 
-                if (!senderIsClient && !targetIsClient)
-                {
-                    withdrawFromPeer();
-                    return;
-                }
-                if (&best->in.sourceNeighbor->globalNbr() == &nbr)
-                {
-                    withdrawFromPeer();
-                    return;
+                    // Standard iBGP split-horizon: non-client to non-client.
+                    if (!senderIsClient && !targetIsClient)
+                    {
+                        withdrawFromPeer();
+                        return;
+                    }
+
+                    // Never reflect back to the originating client.
+                    if (&best->in.sourceNeighbor->globalNbr() == &nbr)
+                    {
+                        withdrawFromPeer();
+                        return;
+                    }
+
+                    // Client-to-client reflection: honour the global toggle.
+                    if (senderIsClient && targetIsClient &&
+                        !ProcessAccessor::getConfigs(process)
+                            .get<Config::Bgp::BGP_CLIENT_TO_CLIENT_REFLECTION>().load())
+                    {
+                        withdrawFromPeer();
+                        return;
+                    }
+
+                    isReflecting = true;
                 }
             }
 
@@ -1046,6 +1264,15 @@ private:
                         continue;
                 }
 
+                // Route Reflector (RFC 4456 §8): stamp ORIGINATOR_ID and prepend CLUSTER_LIST.
+                if (isReflecting)
+                {
+                    if (!egressAttrs->attrs.originatorId.has_value())
+                        egressAttrs->attrs.originatorId = route->neighborRouterId;
+                    egressAttrs->attrs.clusterList.insert(
+                        egressAttrs->attrs.clusterList.begin(), getClusterId());
+                }
+
                 uint32_t oPid = attrMgr.acquire(egressAttrs->attrs, egressAttrs->path);
 
                 // Find any existing out entry for this (nlri, egressPathId).
@@ -1111,6 +1338,18 @@ private:
         return igpMetricResolver(nextHop);
     }
 
+    uint32_t getClusterId() const
+    {
+        auto& cidField = ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_CLUSTER_ID>();
+        return cidField.hasValue() ? cidField.load() : ProcessAccessor::getRid(process);
+    }
+
+    uint32_t getConfedId() const
+    {
+        auto& cidField = ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_CONFEDERATION_IDENTIFIER>();
+        return cidField.hasValue() ? cidField.load() : ProcessAccessor::getAsNum(process);
+    }
+
     bool passesOrfFilter(const NlriT& nlri, const std::vector<OrfPrefixEntry>& filter) const
     {
         if constexpr (std::is_same_v<NlriT, IPPrefix>)
@@ -1166,7 +1405,8 @@ private:
         else
             defaultNlri.af = ::AddressFamily::IPv4;
 
-        const bool isEbgp = session.isEbgp();
+        const bool isEbgp     = session.isEbgp();
+        const bool isConfedEbgp = session.isConfedEbgp();
         const uint32_t routerAs = ProcessAccessor::getAsNum(process);
         auto& sesCfgs = nbr.getConfigs();
 
@@ -1180,20 +1420,30 @@ private:
 
             bool localAsEnabled = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load();
             auto& localAsField  = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
+            const uint32_t confedId = getConfedId();
 
             if (!localAsEnabled || !localAsField.hasValue())
-                seg.asns.push_back(routerAs);
+                seg.asns.push_back(confedId);
             else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
                 seg.asns.push_back(localAsField.load());
             else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
-                seg.asns.push_back(routerAs);
+                seg.asns.push_back(confedId);
             else
             {
                 seg.asns.push_back(localAsField.load());
-                seg.asns.push_back(routerAs);
+                seg.asns.push_back(confedId);
             }
 
             pa.attrs.asPath.push_back(std::move(seg));
+        }
+        else if (isConfedEbgp)
+        {
+            // Default-originate to a confederation peer: AS_CONFED_SEQUENCE with member AS.
+            AsPathSegment seg;
+            seg.segmentType = BGP_AS_CONFED_SEQUENCE;
+            seg.asns.push_back(routerAs);
+            pa.attrs.asPath.push_back(std::move(seg));
+            pa.attrs.localPref = 100;
         }
         else
         {
@@ -1390,22 +1640,40 @@ private:
 
         if (session.isEbgp())
         {
-            pa.attrs.localPref = std::nullopt;
+            pa.attrs.localPref    = std::nullopt;
+            pa.attrs.originatorId = std::nullopt;
+            pa.attrs.clusterList.clear();
+
+            // Strip CONFED segments before advertising to real eBGP.
+            pa.attrs.asPath.erase(
+                std::remove_if(pa.attrs.asPath.begin(), pa.attrs.asPath.end(),
+                    [](const AsPathSegment& s) {
+                        return s.segmentType == BGP_AS_CONFED_SEQUENCE ||
+                               s.segmentType == BGP_AS_CONFED_SET;
+                    }),
+                pa.attrs.asPath.end());
 
             AsPathSegment& seg = getAsSegment(pa.attrs);
-            const uint32_t routerAs = ProcessAccessor::getAsNum(process);
+            const uint32_t confedId = getConfedId();
             auto& localAsField = sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
             if (!sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() || !localAsField.hasValue())
-                seg.asns.insert(seg.asns.begin(), routerAs);
+                seg.asns.insert(seg.asns.begin(), confedId);
             else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>().load())
                 seg.asns.insert(seg.asns.begin(), localAsField.load());
             else if (sesCfgs.get<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>().load())
-                seg.asns.insert(seg.asns.begin(), routerAs);
+                seg.asns.insert(seg.asns.begin(), confedId);
             else
             {
-                seg.asns.insert(seg.asns.begin(), routerAs);
+                seg.asns.insert(seg.asns.begin(), confedId);
                 seg.asns.insert(seg.asns.begin(), localAsField.load());
             }
+        }
+        else if (session.isConfedEbgp())
+        {
+            // Prepend member AS as AS_CONFED_SEQUENCE; keep LOCAL_PREF.
+            AsPathSegment& seg = getConfedAsSegment(pa.attrs);
+            seg.asns.insert(seg.asns.begin(), ProcessAccessor::getAsNum(process));
+            pa.attrs.localPref = 100;
         }
         else
         {
@@ -1871,6 +2139,48 @@ private:
             recomputeNlri(nlri);
     }
 
+    // Purge routes from Adj-RIB-In that are still in the stale set after BORR/EORR.
+    void purgeStalePeer(uint32_t peerRid)
+    {
+        auto staleIt = stalePeerNlris.find(peerRid);
+        if (staleIt == stalePeerNlris.end() || staleIt->second.empty())
+            return;
+
+        auto inIt = adjRibIn.find(peerRid);
+        if (inIt != adjRibIn.end())
+        {
+            for (auto it = inIt->second.begin(); it != inIt->second.end(); )
+            {
+                if (staleIt->second.count(it->first.nlri))
+                {
+                    auto locIt = locRib.find(it->first.nlri);
+                    if (locIt != locRib.end() && &locIt->second.route == &it->second)
+                        locRib.erase(locIt);
+                    it = inIt->second.erase(it);
+                }
+                else
+                    ++it;
+            }
+        }
+
+        std::unordered_set<NlriT> touched = std::move(staleIt->second);
+        stalePeerNlris.erase(staleIt);
+        for (const NlriT& nlri : touched)
+            recomputeNlri(nlri);
+    }
+
+    void cancelStaleTimers(uint32_t peerRid)
+    {
+        auto it = staleTimers.find(peerRid);
+        if (it == staleTimers.end()) return;
+
+        auto sched = ProcessAccessor::getScheduler(process);
+        if (it->second.stalepath) sched.cancel(it->second.stalepath);
+        if (it->second.maxEor)    sched.cancel(it->second.maxEor);
+        staleTimers.erase(it);
+        stalePeerNlris.erase(peerRid);
+    }
+
 private:
 
     // Pre-policy Adj-RIB-In for soft-reconfiguration inbound.
@@ -1897,6 +2207,11 @@ private:
     // Network command: locally-originated route state.
     std::unordered_map<NlriT, NetworkWatchEntry>     networkWatches;
     std::unordered_map<NlriT, InboundRoute<NlriT>>   networkLocalRoutes;
+
+    // Enhanced Route Refresh (RFC 7313) stale-path tracking.
+    struct StaleTimerIds { uint32_t stalepath = 0; uint32_t maxEor = 0; };
+    std::unordered_map<uint32_t, StaleTimerIds>              staleTimers;
+    std::unordered_map<uint32_t, std::unordered_set<NlriT>>  stalePeerNlris;
 
     N policy;
     IgpMetricResolver igpMetricResolver;

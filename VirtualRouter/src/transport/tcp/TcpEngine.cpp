@@ -115,6 +115,19 @@ static void applyPolicy(int fd, int af, const TcpSocketPolicy& p)
         }
         else throw std::runtime_error("Tcp Invalid Arguments");
     }
+
+    if (af == AF_INET)
+    {
+        int v = p.pathMtuDiscovery ? IP_PMTUDISC_DO : IP_PMTUDISC_DONT;
+        if (setsockopt(fd, IPPROTO_IP, IP_MTU_DISCOVER, &v, sizeof(v)) != 0)
+            throw std::runtime_error("Tcp Socket Error");
+    }
+    else if (af == AF_INET6)
+    {
+        int v = p.pathMtuDiscovery ? IPV6_PMTUDISC_DO : IPV6_PMTUDISC_DONT;
+        if (setsockopt(fd, IPPROTO_IPV6, IPV6_MTU_DISCOVER, &v, sizeof(v)) != 0)
+            throw std::runtime_error("Tcp Socket Error");
+    }
 }
 
 static TcpSocketPolicy mergePolicy(const TcpSocketPolicy& defaults, const TcpSocketPolicy& overrides) noexcept
@@ -122,8 +135,9 @@ static TcpSocketPolicy mergePolicy(const TcpSocketPolicy& defaults, const TcpSoc
     TcpSocketPolicy out = defaults;
     if (overrides.ttl.has_value()) out.ttl = overrides.ttl;
     if (overrides.tos.has_value()) out.tos = overrides.tos;
-    out.lowLatency = overrides.lowLatency || defaults.lowLatency;
-    out.keepAlive  = overrides.keepAlive  || defaults.keepAlive;
+    out.lowLatency        = overrides.lowLatency        || defaults.lowLatency;
+    out.keepAlive         = overrides.keepAlive         || defaults.keepAlive;
+    out.pathMtuDiscovery  = overrides.pathMtuDiscovery  || defaults.pathMtuDiscovery;
     return out;
 }
 

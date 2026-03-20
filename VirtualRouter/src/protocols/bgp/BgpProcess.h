@@ -92,6 +92,8 @@ public:
 
 private:
 
+    void scheduleScan();
+
     TCP::Listener listener;
     std::unordered_map<IPAddress, Session> sessions;
     std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;

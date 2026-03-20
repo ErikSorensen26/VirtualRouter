@@ -149,6 +149,9 @@ void Session::initiateConnection()
     auto& tcp = proc.routingInstance->getTcp();
 
     TCP::ConnectOptions opts;
+    opts.policy.pathMtuDiscovery =
+        base.get<Config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
+
     if (std::holds_alternative<AfiSafi>(multiSession))
     {
         // Child session: callbacks route directly to this Session
@@ -357,6 +360,11 @@ void Session::onNotificationReceived(std::span<const uint8_t> data)
 bool Session::isEbgp() const noexcept
 {
     return neighbor.isEbgp();
+}
+
+bool Session::isConfedEbgp() const noexcept
+{
+    return neighbor.isConfedEbgp();
 }
 
 bool Session::verifyConnection(uint64_t cid)
