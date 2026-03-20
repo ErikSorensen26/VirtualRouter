@@ -3,6 +3,7 @@
 #ifndef REGISTRY_REFERENCE_HPP
 #define REGISTRY_REFERENCE_HPP
 
+#include <optional>
 #include "RegistryBucket.hpp"
 #include "RegistryTypes.hpp"
 

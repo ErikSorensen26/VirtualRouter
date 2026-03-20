@@ -16,9 +16,9 @@ public:
     using FibEntry = std::atomic<RibEntry<Addr>*>;
 
     // byte-array API (network order)
-    RibEntry<Addr>* lookup(const uint8_t* a) const
+    RibEntry<Addr>* lookup(const NetworkSpan<Addr>& addr) const
     {
-        FibEntry* fe = tree.lookup(a);
+        FibEntry* fe = tree.lookup(addr);
         return fe ? fe->load(std::memory_order_relaxed) : nullptr;
     }
 

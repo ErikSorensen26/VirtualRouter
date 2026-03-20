@@ -36,7 +36,7 @@ class LocRib<N, LocRibType::LPC_TRIE>
 
     const LocalRoute<N>& at(const uint8_t* nlri, uint8_t plen)
     {
-        return locRib.lookupExact
+        return locRib.lookupExact(nlri, plen);
     }
 
     template <typename F>

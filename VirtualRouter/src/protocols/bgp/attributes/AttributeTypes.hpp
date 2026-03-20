@@ -8,7 +8,7 @@
 #include <vector>
 #include <array>
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "bgp/BgpTypes.hpp"
 

@@ -295,6 +295,15 @@ struct alignas(16) IPv6Prefix
     bool operator>=(const IPv6Prefix& o) const;
 };
 
+template <typename T>
+constexpr bool isIpPrefix()
+{
+    using U = std::remove_cv_t<std::remove_reference_t<T>> ;
+    return std::is_same_v<U, IPPrefix> ||
+           std::is_same_v<U, IPv4Prefix> ||
+           std::is_same_v<U, IPv6Prefix>;
+}
+
 namespace std {
 
 template <>

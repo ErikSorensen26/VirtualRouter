@@ -9,7 +9,7 @@
 #include <limits>
 #include <unordered_map>
 
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 
 #include "bgp/attributes/AttributeTypes.hpp"
 #include "bgp/attributes/AttributeManager.hpp"

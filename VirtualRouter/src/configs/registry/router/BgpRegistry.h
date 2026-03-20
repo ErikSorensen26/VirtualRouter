@@ -9,6 +9,9 @@
 #include "configs/TupleSchema.hpp"
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryReference.hpp"
+#include "configs/RegistryDefaultTable.hpp"
+#include "configs/SubRegistry.hpp"
+
 
 namespace BGP
 {
@@ -465,7 +468,7 @@ enum class Bgp
 {
     BGP_BASE, // base // TODO
     ADDRESS_FAMILIES, // TODO
-    BGP_ALWAYS_COMPARE_MED, // DONE // base // TODO
+    BGP_ALWAYS_COMPARE_MED,
     BGP_AS_DOT_NOTATION, // base // TODO
     BGP_CLIENT_TO_CLIENT_REFLECTION, // base // TODO
     BGP_CLUSTER_ID, // base // TODO

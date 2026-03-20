@@ -3,9 +3,11 @@
 #include <atomic>
 #include <algorithm>
 #include <cassert>
+#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <RCU.hpp>
+#include <NetworkSpan.hpp>
 
 template<uint8_t N, typename T, uint8_t S = 8, bool useRCU = false>
 class LPCTrie
@@ -322,8 +324,10 @@ public:
         if (r) forEachNode(r, std::forward<F>(fn));
     }
 
-    T* lookup(const uint8_t* addr) const noexcept
+    template<std::unsigned_integral AddrT>
+    T* lookup(const NetworkSpan<AddrT>& addr) const noexcept
     {
+        static_assert(sizeof(AddrT) == N, "address type size must match trie byte width N");
         Node* n    = root.load(std::memory_order_acquire);
         T*    best = nullptr;
         uint16_t pos = 0;   // current bit position in addr
@@ -440,6 +444,19 @@ public:
         return result;
     }
 
+    template<std::unsigned_integral AddrT>
+    static uint8_t extractBits(const NetworkSpan<AddrT>& addr, uint16_t off, uint8_t count) noexcept
+    {
+        uint8_t result = 0;
+        for (uint8_t i = 0; i < count; ++i)
+        {
+            uint16_t bitIdx = off + i;
+            uint8_t  b      = (addr[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
+            result = static_cast<uint8_t>((result << 1) | b);
+        }
+        return result;
+    }
+
     // Write pfx masked to len bits into out.
     static void applyMask(const uint8_t* pfx, uint8_t len, uint8_t* out) noexcept
     {
@@ -493,6 +510,20 @@ private:
         return true;
     }
 
+    template<std::unsigned_integral AddrT>
+    static bool bitsMatch(const NetworkSpan<AddrT>& addr, const uint8_t* ref,
+                          uint16_t off, uint8_t count) noexcept
+    {
+        for (uint8_t i = 0; i < count; ++i)
+        {
+            uint16_t bitIdx = off + i;
+            uint8_t  a = (addr[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
+            uint8_t  r = (ref [bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
+            if (a != r) return false;
+        }
+        return true;
+    }
+
     static bool prefixCovers(const uint8_t* addr,
                               const uint8_t* prefix,
                               uint8_t        len) noexcept
@@ -501,6 +532,24 @@ private:
         uint8_t full = len >> 3;
         uint8_t rem  = len & 7;
         if (full && std::memcmp(addr, prefix, full) != 0) return false;
+        if (rem)
+        {
+            uint8_t m = static_cast<uint8_t>(0xFF00u >> rem);
+            if ((addr[full] & m) != prefix[full]) return false;
+        }
+        return true;
+    }
+
+    template<std::unsigned_integral AddrT>
+    static bool prefixCovers(const NetworkSpan<AddrT>& addr,
+                              const uint8_t* prefix,
+                              uint8_t        len) noexcept
+    {
+        if (len == 0) return true;
+        uint8_t full = len >> 3;
+        uint8_t rem  = len & 7;
+        for (uint8_t i = 0; i < full; ++i)
+            if (addr[i] != prefix[i]) return false;
         if (rem)
         {
             uint8_t m = static_cast<uint8_t>(0xFF00u >> rem);

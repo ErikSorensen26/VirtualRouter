@@ -8,7 +8,7 @@
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <VirtualRouter.h>
 
 #include "ProcessAccessor.h"
@@ -575,13 +575,14 @@ private:
             locRib.emplace(nlri, *best);
 
             if (bestChanged)
-                installs.push_back(locRib)
-                installToRib(locRib.at(nlri));
+                installs.push_back(locRib);
 
             recomputeAdjRibOut(nlri, &locRib.at(nlri));
             if constexpr (isIpPrefix<NlriT>)
                 scheduleAggregateRecompute();
         }
+
+        installToRib(installs);
     }
 
     void installToRib(LocalRoute<NlriT>& route)
@@ -1553,12 +1554,12 @@ private:
 
         if (inserted)
         {
-            entry.isV6 = nh.isV6;
+            entry.isV6 = nh.isIPv6();
             entry.ctx  = NhtCtx{this, nh, ProcessAccessor::getScheduler(process)};
-            if (nh.isV6)
-                entry.watchId = rt.watchAddress(nh.v6, &entry.ctx, nhtCallback<__uint128_t>);
+            if (nh.isIPv6())
+                entry.watchId = rt.watchAddress(nh.v6(), &entry.ctx, nhtCallback<__uint128_t>);
             else
-                entry.watchId = rt.watchAddress(nh.v4, &entry.ctx, nhtCallback<uint32_t>);
+                entry.watchId = rt.watchAddress(nh.v4(), &entry.ctx, nhtCallback<uint32_t>);
         }
 
         nlriToNextHop[nlri] = nh;

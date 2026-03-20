@@ -4,7 +4,7 @@
 #define BGP_NLRI_HPP
 
 #include <variant>
-#include <IPAddress.hpp>
+#include <IPAddress.h>
 #include <LpcTrie.hpp>
 #include <VirtualRouter.h>
 

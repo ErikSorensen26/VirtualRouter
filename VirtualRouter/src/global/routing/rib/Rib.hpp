@@ -108,12 +108,7 @@ public:
         });
     }
 
-    RibEntry<AddrType>* lookup(const uint8_t* addr) const
-    {
-        return fib.lookup(addr);
-    }
-
-    RibEntry<AddrType>* lookup(AddrType addr) const
+    RibEntry<AddrType>* lookup(const NetworkSpan<AddrType>& addr) const
     {
         return fib.lookup(addr);
     }

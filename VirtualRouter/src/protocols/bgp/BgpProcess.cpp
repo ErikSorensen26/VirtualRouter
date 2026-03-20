@@ -159,14 +159,14 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
             !cfgs.get<Config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load() &&
             !cfgs.get<Config::BgpNeighborSession::EBGP_MULTIHOP>().load();
 
-        if (nbrIp.isV6)
+        if (nbrIp.isIPv6())
         {
-            auto* route = bgp->routingInstance->getRib().lookup(readU128(nbrIp.raw));
+            auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v6raw());
             return route && connectCheck ? route->source == RouteSource::CONNECTED : true;
         }
         else
         {
-            auto* route = bgp->routingInstance->getRib().lookup(readU32(nbrIp.raw));
+            auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v4raw());
             return route && connectCheck ? route->source == RouteSource::CONNECTED : true;
         }
     };
