@@ -1,7 +1,5 @@
 // EigrpPacketBuilder.cpp
 
-// TODO support uint32_t asn
-
 #include "EigrpPacketBuilder.h"
 #include "eigrp/core/Eigrp.h"
 #include "processing/PacketBuilder.hpp"
@@ -16,7 +14,7 @@
 namespace EIGRP
 {
 std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet,
-    uint8_t opcode, uint32_t seq, uint32_t ack, uint16_t virId, uint16_t asn
+    uint8_t opcode, uint32_t seq, uint32_t ack, uint16_t virId, uint32_t asn
 )
 {
     EigrpHeader e = packet.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
@@ -38,9 +36,11 @@ std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet
 void EigrpPacketBuilder::appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& iface)
 {
     if (!iface.isAuthEnabled()) return;
-    auto* buf = tlv.getNextValBuf(36);
-    iface.getAuth().buildAuthTLV(buf);
-    tlv.append(EIGRP_OPTION_AUTHENTICATION, 40, nullptr, 36);
+    auto* buf = tlv.getNextValBuf(52); // max: SHA256 (20 + 32)
+    if (!buf) return;
+    uint16_t valSize = iface.getAuth().buildAuthTLV(buf);
+    if (valSize == 0) return;
+    tlv.append(EIGRP_OPTION_AUTHENTICATION, static_cast<uint16_t>(valSize + 4), nullptr, valSize);
 }
 
 bool EigrpPacketBuilder::appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg)
@@ -76,7 +76,7 @@ bool EigrpPacketBuilder::appendParameterTLV(TLV16BufferManager& tlv, EigrpInterf
     if (!val) return false;
     if (iface.getRtp().pendingPeerTermination.load(std::memory_order_relaxed))
     {
-        std::memset(val, 255, 6);
+        std::memset(val, 0, 6);
         writeU16(val + 6, iface.configs.get<Config::EigrpInterface::HOLD_TIME>().load());
         iface.getRtp().pendingPeerTermination.store(false, std::memory_order_release);
     }
@@ -115,7 +115,7 @@ size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std
     buf[0] = ipSize;
 
     size_t offset = 1;
-    for (int i = 0; i < amount; i++)
+    for (size_t i = 0; i < amount; i++)
     {
         const auto& ip = neighbors[i];
         if (ip.isIPv4()) {

@@ -84,12 +84,12 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const TL
             key.size(),
             Authentication::HmacType::SHA256
         );
-        return std::memcmp(digestIdx, computed, SHA256_DIGEST_LENGTH) == 0;
+        return std::memcmp(digest, computed, SHA256_DIGEST_LENGTH) == 0;
     }
     return false;
 }
 
-bool AuthHandler::appendAuthHMAC(Global& global, uint8_t* packetStart, size_t size)
+bool AuthHandler::appendAuthHMAC(Global& global, const std::string& chainName, uint8_t* packetStart, size_t size)
 {
     const uint8_t* ipHeader = packetStart;
     uint8_t ipHeaderLen = (ipHeader[0] & 0x0F) * 4;
@@ -122,7 +122,6 @@ bool AuthHandler::appendAuthHMAC(Global& global, uint8_t* packetStart, size_t si
                 std::memcpy(pass, authTLV + 20, 32);
                 size_t len = 0;
                 while (len < 32 && pass[len] != 0) ++len;
-                std::memset(pass, 0, 32);
 
                 Authentication::generateHMAC(
                     authTLV + 20,
@@ -132,13 +131,14 @@ bool AuthHandler::appendAuthHMAC(Global& global, uint8_t* packetStart, size_t si
                     len,
                     Authentication::HmacType::SHA256
                 );
+                std::memset(pass, 0, 32);
             }
             else
             {
-                uint16_t chainId = readU16(authTLV + 20);
                 std::memset(authTLV + 20, 0, 2);
-                Authentication::KeyChain chain(""); // TODO key chain manager get by id
-                auto key = chain.getCurrentSendKey();
+                const auto* chain = global.keyChainManager.lookup(chainName);
+                if (!chain) return false;
+                auto key = chain->getCurrentSendKey();
                 if (!key.has_value()) return false;
                 writeU32(authTLV + 4, key.value().keyId);
 

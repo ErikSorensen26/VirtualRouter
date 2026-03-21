@@ -66,7 +66,6 @@ public:
     bool setupUnicastReliable(Neighbor& neighbor, EigrpHeader& info);
     bool setupMulticastReliable(EigrpHeader& info);
 
-
     void startMulticastReliable(MulticastReliablePacket& pkt, uint32_t seq);
     void startUnicastReliable(Neighbor& nbr, UnicastReliablePacket& pkt, uint32_t seq);
     void sendRetransmission(Neighbor& neighbor, StaticHeader& header);
@@ -78,6 +77,8 @@ public:
 
     // Multicast Reliable
     std::map<uint32_t, MulticastReliablePacket> reliablePackets;
+
+
 
     struct PktInfo
     {
@@ -92,8 +93,6 @@ private:
 
     void transmit(PacketBuilder& pkt, const IPAddress* dest = nullptr);
     void transmitReliable(PacketBuilder& pkt, Neighbor* neighbor, EigrpHeader& header);
-    void trackReliable(Neighbor* nbr, const IPAddress& ip, const PacketBuilder& pkt, uint32_t seq);
-
     void releaseFailedPacket(PacketBuilder& builder);
     void createPacket(PacketBuilder& builder);
 
@@ -121,7 +120,6 @@ private:
 
     void checkInit(Neighbor& neighbor);
 
-    void parseEigrpOptionHelper(const EigrpHeader& hdr, std::vector<TLV16Option>& options);
     bool verifyNeighborAS(const EigrpHeader& header);
     uint16_t getMtu();
 

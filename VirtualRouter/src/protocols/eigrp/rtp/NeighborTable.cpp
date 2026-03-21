@@ -71,11 +71,13 @@ void NeighborTable::removeAllMulticast()
     {
         if (!it->second.unicast)
         {
+            auto next = std::next(it);
             onDown(it->second);
+            it = next;
         }
         else
         {
-            it++;
+            ++it;
         }
     }
 }
@@ -87,6 +89,7 @@ void NeighborTable::deleteNeighbor(const IPAddress& neighborIp, bool isUnicast)
     if (neighborIt != neighbors.end())
     {
         if (isUnicast != neighborIt->second.unicast) return;
+        iface.getBase().delGlobalNeighbor(neighborIp);
         neighbors.erase(neighborIt->second.ipAddress);
         if (isUnicast)
         {
@@ -136,6 +139,8 @@ void NeighborTable::cancelAllHoldTimers()
 
 void NeighborTable::onDown(Neighbor& neighbor)
 {
+    iface.getBase().delGlobalNeighbor(neighbor.ipAddress);
+    unicast.erase(neighbor.ipAddress);
     neighbors.erase(neighbor.ipAddress);
     if (neighbors.empty())
     {

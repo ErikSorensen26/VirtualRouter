@@ -1,7 +1,5 @@
 // RouteManager.cpp
 
-// TODO add external route capability for adding to rib
-
 #include <VirtualRouter.h>
 
 #include "RouteManager.h"

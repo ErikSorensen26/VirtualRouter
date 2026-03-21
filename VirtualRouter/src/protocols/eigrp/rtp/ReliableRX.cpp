@@ -11,8 +11,6 @@ namespace EIGRP
 {
 void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const IPAddress& neighborIp, bool multicast)
 {
-    const IPAddress& neigIp = neighborIp;
-
     // Check if passive
     if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return;
@@ -21,7 +19,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     if (eigrpPacket.raw->version != 0x02)
         return; // Version not valid
 
-    RTPInfo hdrInfo(eigrpPacket, neigIp);
+    RTPInfo hdrInfo(eigrpPacket, neighborIp);
     parseEigrpOptions(eigrpPacket.getTrail().data(), eigrpPacket.getTrail().size(), hdrInfo.opts);
 
     const TLV16Option* authOpt = nullptr;
@@ -35,10 +33,11 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     }
 
     size_t size = (eigrpPacket.buffer + EigrpHeader::fixedSize + eigrpPacket.getTrail().size()) - ipStart;
-    if (!iface.getAuth().validateAuth(ipStart, size, authOpt));
+    if (!iface.getAuth().validateAuth(ipStart, size, authOpt))
+        return;
 
-    // Check for valid neighbor 
-    Neighbor* neighbor = ntable->lookup(neigIp);
+    // Check for valid neighbor
+    Neighbor* neighbor = ntable->lookup(neighborIp);
     hdrInfo.neighbor = neighbor;
 
     if (eigrpPacket.getOpcode() == EIGRP_TYPE_HELLO)
@@ -240,6 +239,7 @@ void ReliableTransport::checkInit(Neighbor& neighbor)
     if (ourNullAcked && theirNullSeen && !neighbor.fullSent.load(std::memory_order_relaxed))
     {
         neighbor.setState(Neighbor::State::UP);
+        neighbor.initComplete.store(true, std::memory_order_release);
     }
 }
 
@@ -276,12 +276,6 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     if (!validateSeqNum(info, recvSeq))
         return;
 
-    std::vector<TLV16Option> routeOpts;
-    for (const auto& opt : info.opts)
-    {
-        routeOpts.push_back(opt);
-    }
-
     bool resync = update.getFlagRestart() && update.getFlagInit() &&
         info.neighbor && state == Neighbor::State::UP;
     if (resync)
@@ -302,8 +296,8 @@ void ReliableTransport::processUpdate(RTPInfo& info)
     if (state == Neighbor::State::UP)
     {
         std::vector<ReceivedRoute> routeBuffer;
-        routeBuffer.reserve(routeOpts.size());
-        for (const auto& opt : routeOpts)
+        routeBuffer.reserve(info.opts.size());
+        for (const auto& opt : info.opts)
         {
             if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)
             {
@@ -388,10 +382,10 @@ void ReliableTransport::processAck(Neighbor& neighbor, const uint32_t seq)
         }
     }
 
-    if (seq == neighbor.sentInitSeq.load(std::memory_order_release) && neighbor.initComplete)
-        sendFullTopology(neighbor);
-
     checkInit(neighbor);
+
+    if (seq == neighbor.sentInitSeq.load(std::memory_order_relaxed) && neighbor.initComplete.load(std::memory_order_relaxed))
+        sendFullTopology(neighbor);
 }
 
 void ReliableTransport::processQuery(RTPInfo& info)
@@ -426,7 +420,7 @@ void ReliableTransport::processQuery(RTPInfo& info)
 void ReliableTransport::processSIAQuery(RTPInfo& info)
 {
     Neighbor* nbr = info.neighbor;
-    if (!nbr || nbr->getState() == Neighbor::State::UP) return;
+    if (!nbr || nbr->getState() != Neighbor::State::UP) return;
 
     const uint32_t seq = info.eigrp.getSequence();
     if (!validateSeqNum(info, seq))

@@ -1,7 +1,5 @@
 // Eigrp.cpp
 
-// Finish auth and hash stuff
-
 #include <AddressFamily.hpp>
 #include <VirtualRouter.h>
 
@@ -58,13 +56,13 @@ void Eigrp::start()
 
 void Eigrp::shutdown()
 {
-    //TODO
+    ifaceMgr.deactivateAll();
 }
 
 void Eigrp::restart()
 {
-    // Shutdown current state
     shutdown();
+    start();
 }
 
 void Eigrp::runMaintenance()
@@ -75,6 +73,43 @@ void Eigrp::runMaintenance()
 bool Eigrp::calculateRID()
 {
     return routingInstance->calculateRID(rid.id);
+}
+
+bool Eigrp::isInNetworkRange(IPv4Address testIp)
+{
+    return configMgr.isInNetworkRange(testIp);
+}
+
+void ClassicEigrp::initializeEigrp()
+{
+    start();
+}
+
+void ClassicEigrp::shutdown()
+{
+    Eigrp::shutdown();
+}
+
+NamedEigrp::NamedEigrp(uint32_t& as, AddressFamily af, const std::string& name, VirtualRouter* vrf, bool /*multicast*/)
+    : Eigrp(as, af, vrf, true), processName(name)
+{
+}
+
+void NamedEigrp::initializeEigrp()
+{
+    start();
+}
+
+void NamedEigrp::shutdown()
+{
+    Eigrp::shutdown();
+}
+
+void NamedEigrp::configureInterface(uint32_t interfaceId)
+{
+    auto* iface = routingInstance->getInterface(interfaceId);
+    if (iface)
+        getIfaceMgr().createInterface(iface);
 }
 
 void Eigrp::addGlobalNeighbor(const IPAddress& neighborIp, Neighbor* neighbor)

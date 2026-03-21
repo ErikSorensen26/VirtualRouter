@@ -1,16 +1,12 @@
 // Eigrp.h
 
-// TODO:
-// Add multi-topology to eigrp
-//     create topolies in global-topology mode, attach interfaces and all to it
-// Test address family mode for eigrp
-
 #ifndef EIGRP_CORE_H
 #define EIGRP_CORE_H
 
 #include <utility>
 #include <cstdint>
 #include <cstring>
+#include <string>
 
 #include <ControlScheduler.h>
 
@@ -98,7 +94,7 @@ public:
     ProcessQueue& getScheduler() { return scheduler; }
 
     bool isNamed() const { return namedMode; }
-    uint16_t getAS() const { return asNumber; }
+    uint32_t getAS() const { return asNumber; }
     AddressFamily getAF() const { return addressFamily; }
 
     void clearRouterID() { rid.isStatic = false; calculateRID(); }
@@ -106,7 +102,7 @@ public:
     VirtualRouter* routingInstance; ///< Routing instance coorsponding with the current process.
 
 private:
-    const uint16_t asNumber; ///< Autonomous System number.
+    const uint32_t asNumber; ///< Autonomous System number.
     const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
 
     EigrpTopology topology;

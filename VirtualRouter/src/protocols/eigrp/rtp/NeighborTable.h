@@ -16,7 +16,6 @@ class NeighborTable
 public:
     NeighborTable(EigrpInterface& iface);
 
-    void setState(Neighbor& neighbor, Neighbor::State newState);
     Neighbor* createNeighbor(const IPAddress& ipAddress, Neighbor::Version v = Neighbor::Version::UNKNOWN, bool unicast = false);
     void deleteNeighbor(const IPAddress& neighborIp, bool unicast);
     Neighbor* lookup(const IPAddress& neighborIp);
@@ -27,7 +26,7 @@ public:
     void startGracefulRestart(Neighbor& neighbor);
     void cancelAllHoldTimers();
     bool validatePTP(const IPAddress& neighborIp);
-    void removeAllMulticast(); // TODO
+    void removeAllMulticast();
     void enableMulticast();
     void disableMulticast();
     

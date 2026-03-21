@@ -15,7 +15,7 @@ void EigrpTopology::pruneStaleRoutes()
     duel.topologyTable.pruneExpired();
 }
 
-std::unordered_map<IPPrefix, TopologyEntry*>& EigrpTopology::entries()
+std::unordered_map<IPPrefix, TopologyEntry>& EigrpTopology::entries()
 {
     return duel.topologyTable.entries();
 }
@@ -35,7 +35,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     const auto* interface = iface.getIface();
     IPAddress connected = (base.getAF() == AddressFamily::IPv4) ? IPAddress(uint32_t(0)) : IPAddress(__uint128_t(0));
 
-    ReceivedRoute r;
+    ReceivedRoute r{};
     r.originInterface = iface.interfaceKey;
     r.bandwidth = base.isNamed()
         ? interface->configs.hwInfo.bandwidth

@@ -71,6 +71,7 @@ bool ReliableTransport::setupMulticastReliable(EigrpHeader& builder)
     std::vector<IPAddress> conditions;
     for (auto& [ip, nbr] : ntable->neighbors)
     {
+        if (nbr.unicast) continue;
         if (nbr.currentReliable.load(std::memory_order_relaxed) != 0)
         {
             conditions.push_back(nbr.ipAddress);
@@ -86,6 +87,7 @@ bool ReliableTransport::setupMulticastReliable(EigrpHeader& builder)
     std::unordered_map<Neighbor*, ReliableInfo> reliableMap;
     for (auto& [ip, nbr] : ntable->neighbors)
     {
+        if (nbr.unicast) continue;
         auto it = reliableMap.emplace(&nbr, ReliableInfo{});
         it.first->second.sequence = seqNum;
     }
@@ -201,7 +203,7 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, UnicastReliable
     sendRetransmission(*neighbor, pkt.packet);
 
     // Increment retransmission timer safely
-    neighbor->rto = std::min(neighbor->rto * 2.0, 60.0);
+    neighbor->rto.store(std::min(neighbor->rto.load(std::memory_order_relaxed) * 2.0, 60.0), std::memory_order_release);
     pkt.info.retransmissionCount++;
     pkt.info.sendTime = std::chrono::steady_clock::now();
     iface.getTimers().startRetransmissionTimer(neighbor, pkt, seq);
@@ -220,12 +222,6 @@ uint32_t ReliableTransport::incrementSequenceNumber()
     if (seq == std::numeric_limits<uint32_t>::max())
         nextSeq.store(1, std::memory_order_relaxed);
     return seq;
-}
-
-void ReliableTransport::parseEigrpOptionHelper(const EigrpHeader& hdr, std::vector<TLV16Option>& options)
-{
-    auto trail = hdr.getTrail();
-    parseEigrpOptions(trail.data(), trail.size(), options);
 }
 
 bool ReliableTransport::verifyNeighborAS(const EigrpHeader& hdr)

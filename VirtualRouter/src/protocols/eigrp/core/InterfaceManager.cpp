@@ -22,10 +22,12 @@ EigrpInterface* InterfaceManager::getInterface(uint32_t key)
 
 EigrpInterface* InterfaceManager::createInterface(Interface* interface)
 {
+    if (!interface)
+        return nullptr;
+
     if (auto it = eigrpInterfaceList.find(interface->configs.key); it != eigrpInterfaceList.end())
         return &it->second;
 
-    if (interface)
     {
         // Add the interface to eigrp even if its down
         AddressFamily af = base.getAF();
@@ -143,11 +145,10 @@ void InterfaceManager::refreshInterfaceList()
                 else
                     interfacesToProcess.push_back({false, interface});
             }
-            else if (!exists)
+            else if (exists)
             {
                 auto node = eigrpInterfaceList.extract(it);
                 interfacesToRemove.push_back(std::move(node));
-                it = eigrpInterfaceList.find(id);
             }
         }
     }

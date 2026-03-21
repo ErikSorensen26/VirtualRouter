@@ -61,8 +61,8 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
                 {
                     if (auto eit = entries.find(r); eit != entries.end())
                     {
-                        eit->second->suppression[iface.interfaceKey].summaries.erase(s);
-                        changedRoutes.push_back(eit->second);
+                        eit->second.suppression[iface.interfaceKey].summaries.erase(s);
+                        changedRoutes.push_back(&eit->second);
                     }
                 }
                 s->summarizedRoutes.clear();
@@ -72,12 +72,12 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
                 IPPrefix prefix = s->summaryEntry->prefix;
                 for (auto& entry : iface.getTopController().getTopologies())
                 {
-                    if (entry.second->prefix.prefixLength >= prefix.prefixLength &&
-                        prefix.contains(IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
+                    if (entry.second.prefix.prefixLength >= prefix.prefixLength &&
+                        prefix.contains(IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
                     {
-                        entry.second->suppression[iface.interfaceKey].summaries.insert(s);
-                        s->summarizedRoutes.insert(entry.second->prefix);
-                        changedRoutes.push_back(entry.second);
+                        entry.second.suppression[iface.interfaceKey].summaries.insert(s);
+                        s->summarizedRoutes.insert(entry.second.prefix);
+                        changedRoutes.push_back(&entry.second);
                     }
                 }
             }
@@ -103,8 +103,8 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
             {
                 if (auto eit = entries.find(r); eit != entries.end())
                 {
-                    eit->second->suppression[iface.interfaceKey].summaries.erase(&s);
-                    changedRoutes.push_back(eit->second);
+                    eit->second.suppression[iface.interfaceKey].summaries.erase(&s);
+                    changedRoutes.push_back(&eit->second);
                 }
             }
             s.summarizedRoutes.clear();
@@ -114,12 +114,12 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
             IPPrefix prefix = s.summaryEntry->prefix;
             for (auto& entry : iface.getTopController().getTopologies())
             {
-                if (entry.second->prefix.prefixLength >= prefix.prefixLength &&
-                    prefix.contains(IPAddress(entry.second->prefix.addr, entry.second->prefix.prefixLength)))
+                if (entry.second.prefix.prefixLength >= prefix.prefixLength &&
+                    prefix.contains(IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
                 {
-                    entry.second->suppression[iface.interfaceKey].summaries.insert(&s);
-                    s.summarizedRoutes.insert(entry.second->prefix);
-                    changedRoutes.push_back(entry.second);
+                    entry.second.suppression[iface.interfaceKey].summaries.insert(&s);
+                    s.summarizedRoutes.insert(entry.second.prefix);
+                    changedRoutes.push_back(&entry.second);
                 }
             }
         }
@@ -142,13 +142,13 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
 
     for (auto& [_, entry] : entries)
     {
-        if (s.summarizedRoutes.contains(entry->prefix))
+        if (s.summarizedRoutes.contains(entry.prefix))
         {
-            auto it = entry->routesBySource.find(entry->bestNeighbor);
-            if (it != entry->routesBySource.end())
+            auto it = entry.routesBySource.find(entry.bestNeighbor);
+            if (it != entry.routesBySource.end())
             {
                 const auto& rt = it->second.routeInfo;
-                if (!bestRoute || (bestRoute && bestRoute->feasibleDistance > rt.feasibleDistance))
+                if (!bestRoute || bestRoute->feasibleDistance > rt.feasibleDistance)
                     bestRoute = &rt;
             }
         }
@@ -263,7 +263,6 @@ void RouteAggregator::withdrawSummary(const IPPrefix& prefix)
     auto it = summaryRoutes.find(prefix);
     if (it == summaryRoutes.end()) return;
 
-    std::vector<TopologyEntry*> changedRoutes;
     SummaryRoute& s = it->second;
 
     iface.getTopController().markRouteUnreachable(*s.summaryRoute, iface.ifaceAddress, *s.summaryEntry);

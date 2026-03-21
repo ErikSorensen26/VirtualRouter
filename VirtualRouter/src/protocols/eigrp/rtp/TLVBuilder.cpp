@@ -81,7 +81,6 @@ std::optional<ReceivedRoute> TLVBuilder::decodeRoute(const TLV16Option& routeOpt
     data.valueSize = routeOpt.valueSize;
 
     // Determine route characteristics
-    const uint16_t tlvType = routeOpt.type;
     const uint8_t* value = routeOpt.value;
 
     // Deduce wide/classic, internal/external, and v6
@@ -154,7 +153,7 @@ bool TLVBuilder::encodeClassicMetric(RouteData& data, const uint64_t& delay, con
     data.offset += 4;
     writeU24(data.value + data.offset, data.r.mtu);
     data.offset += 3;
-    data.value[data.offset] = data.r.hopCount += 1;
+    data.value[data.offset] = static_cast<uint8_t>(data.r.hopCount + 1);
     data.value[data.offset + 1] = data.r.reliability;
     data.value[data.offset + 2] = data.r.load;
     data.value[data.offset + 3] = static_cast<uint8_t>(data.r.tag);
@@ -197,7 +196,7 @@ bool TLVBuilder::encodeWideMetric(RouteData& data, const uint64_t& delay, const 
     data.value[data.offset++] = data.r.reliability;
     data.value[data.offset++] = data.r.load;
     writeU24(data.value + data.offset, data.r.mtu); data.offset += 3;
-    data.value[data.offset++] = data.r.hopCount += 1;
+    data.value[data.offset++] = static_cast<uint8_t>(data.r.hopCount + 1);
     writeU48(data.value + data.offset, delay); data.offset += 6;
     writeU48(data.value + data.offset, bw); data.offset += 6;
     writeU16(data.value + data.offset, 0); data.offset += 2; // reserved
@@ -239,9 +238,7 @@ bool TLVBuilder::encodeExternal(RouteData& data)
 bool TLVBuilder::decodeDestination(RouteData& data)
 {
     uint8_t plen = data.value[data.offset++];
-    uint8_t prefSize = data.v6
-        ? (plen == 128) ? 16 : ((plen / 8) + 1)
-        : ((plen - 1) / 8) + 1;
+    uint8_t prefSize = (plen + 7) / 8;
     if (data.offset + prefSize > data.valueSize) return false;
     AddressFamily af = data.v6 ? AddressFamily::IPv6 : AddressFamily::IPv4;
     data.r.prefix = IPPrefix(data.value + data.offset, plen, af, true);
@@ -252,9 +249,7 @@ bool TLVBuilder::decodeDestination(RouteData& data)
 bool TLVBuilder::encodeDestination(RouteData& data)
 {
     uint8_t plen = data.r.prefix.prefixLength;
-    uint8_t prefSize = data.v6
-        ? (plen == 128) ? 16 : ((plen / 8) + 1)
-        : ((plen - 1) / 8) + 1;
+    uint8_t prefSize = (plen + 7) / 8;
     if (data.offset + prefSize > data.valueSize) return false;
     data.value[data.offset] = plen; data.offset += 1;
     if (data.v6)

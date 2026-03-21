@@ -1,6 +1,5 @@
 // ReliableTX.cpp
 
-//TODO add int32 support for eigrp
 #include "ReliableTransport.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "EigrpPacketBuilder.h"
@@ -159,7 +158,8 @@ void ReliableTransport::sendNullUpdate(Neighbor& neighbor)
 
 void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
 {
-    bool unicast = firstFullSend.exchange(true, std::memory_order_release);
+    bool unicast = !iface.multicastEnabledFlag.load(std::memory_order_relaxed)
+               || firstFullSend.exchange(true, std::memory_order_release);
 
     if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return;
@@ -169,9 +169,8 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
     auto* interface = iface.getIface();
 
     auto& topology = iface.getTopController();
-    std::vector<const RouteInfo*> allRoutes = topology.filterAdvertisableRoutes(topology.getAllRoutes());
-    bool empty = allRoutes.empty();
-    if (empty)
+    std::vector<const RouteInfo*> allRoutes = topology.getAdvertisableRoutes();
+    if (allRoutes.empty())
         return;
     
     PktInfo info;
@@ -448,8 +447,8 @@ std::optional<EigrpHeader> ReliableTransport::createConditionalHello(PacketBuild
     EigrpPacketBuilder::appendStubTLV(opts, iface.getBase().getGlobalConfigMgr());
     EigrpPacketBuilder::appendVersionTLV(opts);
 
-    const std::vector<IPAddress> availableNeighbors = std::vector<IPAddress>(neighbors.begin() + static_cast<int>(info.sent), neighbors.end());
-    info.sent += EigrpPacketBuilder::appendSequenceTLVs(opts, neighbors);
+    const std::vector<IPAddress> availableNeighbors(neighbors.begin() + static_cast<int>(info.sent), neighbors.end());
+    info.sent += EigrpPacketBuilder::appendSequenceTLVs(opts, availableNeighbors);
     
     EigrpPacketBuilder::appendMulticastSeqTLV(opts, seq);
     builder.addTLVSize(opts.size());

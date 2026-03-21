@@ -60,8 +60,6 @@ public:
 
     bool isDampenExpired() { return std::chrono::steady_clock::now() >= suppressedUntil; }
 
-    static bool validateProcess(const std::string& vrfname, uint32_t as, const AddressFamily& af, Global* global);
-
 private:
 
     // Hello timer

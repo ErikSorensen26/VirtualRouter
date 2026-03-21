@@ -4,6 +4,7 @@
 #define EIGRP_AUTH_HANDLER_H
 
 #include <cstdint>
+#include <string>
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
 class PacketBuilder;
@@ -29,7 +30,7 @@ public:
 
     bool validateAuth(const uint8_t* packetStart, size_t size, const TLV16Option* authOpt);
 
-    static bool appendAuthHMAC(Global& global, uint8_t* packetStart, size_t size);
+    static bool appendAuthHMAC(Global& global, const std::string& chainName, uint8_t* packetStart, size_t size);
 
 private:
     Config::EigrpInterfaceRegistry& configs;

@@ -26,9 +26,8 @@ void GlobalAggregator::addSummary(TopologyEntry& top)
 void GlobalAggregator::updateSummary(TopologyEntry& top)
 {
     if (top.suppression.empty()) return;
+    if (top.successors.empty()) return;
     auto& interfaces = base.getIfaceMgr().eigrpInterfaceList;
-    auto bestRt = top.successors.begin();
-    if (bestRt == top.successors.end()) return;
     for (auto& [id, info] : top.suppression)
     {
         if (auto ifaceIt = interfaces.find(id); ifaceIt != interfaces.end())
@@ -54,11 +53,11 @@ void GlobalAggregator::enableAutoSummary(bool enable)
     {
         std::set<IPPrefix> classfulGroups;
 
-        for (auto entry : base.getTopology().entries())
+        for (auto& [prefix, top] : base.getTopology().entries())
         {
-            if (entry.second->successors.empty())
+            if (top.successors.empty())
                 continue;
-            classfulGroups.emplace(entry.first.v4(), entry.first.getDefaultMask());
+            classfulGroups.emplace(prefix.v4(), prefix.getDefaultMask());
         }
 
         for (auto& [_, iface] : ifmgr.eigrpInterfaceList)

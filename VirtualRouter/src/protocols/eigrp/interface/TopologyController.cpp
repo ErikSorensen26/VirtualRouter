@@ -11,17 +11,61 @@ namespace EIGRP
 {
 TopologyController::TopologyController(NeighborTable& ntable, DuelEngine& duel, EigrpInterface& iface) : ntable(ntable), duel(duel), iface(iface) {}
 
-std::vector<const RouteInfo*> TopologyController::getAllRoutes()
+uint64_t TopologyController::getLocalMetric()
 {
-    return duel.topologyTable.getAllRoutes();
+    return iface.localMetric.load(std::memory_order_relaxed);
 }
 
-std::unordered_map<IPPrefix, TopologyEntry*>& TopologyController::getTopologies()
+std::unordered_map<IPPrefix, TopologyEntry>& TopologyController::getTopologies()
 {
     return duel.topologyTable.entries();
 }
 
-std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const std::vector<const RouteInfo*> routes)
+std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
+{
+    std::vector<const RouteInfo*> routes;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load())
+        return routes;
+
+    auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
+    const auto& stubCfg = cfgMgr.getStubConfig();
+    const bool splitHorizon = iface.configs.get<Config::EigrpInterface::SPLIT_HORIZON>().load();
+
+    for (const auto& [_, entry] : duel.topologyTable.entries())
+    {
+        if (entry.isSuppressed(iface.interfaceKey) || entry.state == TopologyEntry::State::ACTIVE)
+            continue;
+
+        auto it = entry.routesBySource.find(entry.bestNeighbor);
+        if (it == entry.routesBySource.end())
+            continue;
+
+        const RouteInfo* route = &it->second;
+
+        if (splitHorizon && route->routeInfo.originInterface == iface.interfaceKey
+            && route->routeInfo.routeType != RouteType::SUMMARY)
+            continue;
+
+        if (stubCfg.isStub)
+        {
+            bool allow = true;
+            switch (route->routeInfo.routeType)
+            {
+                case RouteType::CONNECTED: allow = stubCfg.advertiseConnected; break;
+                case RouteType::STATIC:    allow = stubCfg.advertiseStatic; break;
+                case RouteType::EXTERNAL:  allow = stubCfg.advertiseRedistributed; break;
+                case RouteType::SUMMARY:   allow = stubCfg.advertiseSummary; break;
+                default: break;
+            }
+            if (!allow) continue;
+        }
+
+        routes.push_back(route);
+    }
+    return routes;
+}
+
+std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const std::vector<const RouteInfo*>& routes)
 {
     std::vector<const RouteInfo*> filtered;
     if (routes.empty() || iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return filtered;
@@ -74,25 +118,13 @@ void TopologyController::onNeighborDown(Neighbor& neighbor)
 {
     const IPAddress& neighborIp = neighbor.ipAddress;
 
-    // Collect affected routes
-    std::vector<std::pair<TopologyEntry*, RouteInfo*>> affectedRoutes;
-    for (auto& [destination, entry] : duel.topologyTable.entries())
-    {
-        // If this neighbor was advertising the route
-        if (auto it = entry->routesBySource.find(neighborIp); it != entry->routesBySource.end())
-        {
-            affectedRoutes.push_back({entry, &it->second});
-        }
-    }
-
-    // Trigger Active for routes with no feasible successor
     std::vector<TopologyEntry*> affectedTopologies;
-    for (const auto& [top, route] : affectedRoutes)
+    for (auto& [_, entry] : duel.topologyTable.entries())
     {
-        if (top && route)
+        if (auto it = entry.routesBySource.find(neighborIp); it != entry.routesBySource.end())
         {
-            duel.topologyTable.markRouteUnreachable(*route, neighborIp, *top);
-            affectedTopologies.push_back(top);
+            duel.topologyTable.markRouteUnreachable(it->second, neighborIp, entry);
+            affectedTopologies.push_back(&entry);
         }
     }
 

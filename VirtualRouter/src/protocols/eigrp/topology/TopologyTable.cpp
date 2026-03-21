@@ -11,38 +11,6 @@ TopologyTable::TopologyTable(Eigrp& process) : eigrpProcess(process) {}
 
 TopologyTable::~TopologyTable() {}
 
-std::vector<const RouteInfo*> TopologyTable::getSuccessors(const IPPrefix& prefix)
-{
-    auto* entry = find(prefix);
-    if (!entry) return {};
-
-    std::vector<const RouteInfo*> successors;
-    for (const auto& [_, route] : entry->routesBySource)
-        if (route.isSuccessor)
-            successors.push_back(&route);
-    return successors;
-}
-
-std::vector<const RouteInfo*> TopologyTable::getAllRoutes()
-{
-    std::vector<const RouteInfo*> routesToSend;
-
-    for (const auto& [prefix, entryPtr] : topologyEntries)
-    {
-        if (!entryPtr)
-            continue;
-
-        const IPAddress& bestNeighbor = entryPtr->bestNeighbor;
-        auto it = entryPtr->routesBySource.find(bestNeighbor);
-        if (it == entryPtr->routesBySource.end())
-            continue;
-
-        const RouteInfo& route = it->second;
-        routesToSend.push_back(&route);
-    }
-    return routesToSend;
-}
-
 RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighbor, TopologyEntry& entry)
 {
     // Create or update the topology table entry
@@ -75,28 +43,26 @@ RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neigh
 std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const IPPrefix& prefix, const IPAddress& neighbor)
 {
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
-        if (auto rit = it->second->routesBySource.find(neighbor); rit != it->second->routesBySource.end())
-            return {it->second, &rit->second};
+        if (auto rit = it->second.routesBySource.find(neighbor); rit != it->second.routesBySource.end())
+            return {&it->second, &rit->second};
     return {nullptr, nullptr};
 }
 
 TopologyEntry& TopologyTable::ensure(const IPPrefix& prefix)
 {
-    if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
-        return *it->second;
-    TopologyEntry* entry = new TopologyEntry();
-    entry->prefix = prefix;
-    eigrpProcess.getAggregator().addSummary(*entry);
-    topologyEntries[prefix] = entry;
-    return *entry;
+    auto [it, inserted] = topologyEntries.emplace(prefix, TopologyEntry{});
+    if (inserted)
+    {
+        it->second.prefix = prefix;
+        eigrpProcess.getAggregator().addSummary(it->second);
+    }
+    return it->second;
 }
 
 TopologyEntry* TopologyTable::find(const IPPrefix& prefix)
 {
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
-    {
-        return it->second;
-    }
+        return &it->second;
     return nullptr;
 }
 
@@ -124,7 +90,7 @@ void TopologyTable::pruneExpired()
     auto now = std::chrono::steady_clock::now();
     for (auto it = topologyEntries.begin(); it != topologyEntries.end();)
     {
-        if (it->second->valid && it->second->valid < now)
+        if (it->second.valid && it->second.valid < now)
             it = topologyEntries.erase(it);
         else
             it++;
@@ -133,18 +99,17 @@ void TopologyTable::pruneExpired()
 
 void TopologyTable::pruneNeighbor(const IPAddress& neighborIp)
 {
+    for (auto& [_, entry] : topologyEntries)
     {
-        for (auto& [_, entry] : topologyEntries)
+        if (auto it = entry.routesBySource.find(neighborIp); it != entry.routesBySource.end())
         {
-            if (auto it = entry->routesBySource.find(neighborIp); it != entry->routesBySource.end())
-            {
-                entry->feasibleSuccessors.erase(
-                    std::remove(entry->feasibleSuccessors.begin(), entry->feasibleSuccessors.end(), neighborIp),
-                    entry->feasibleSuccessors.end());
-                entry->successors.erase(
-                    std::remove(entry->successors.begin(), entry->successors.end(), neighborIp),
-                    entry->successors.end());
-            }
+            entry.feasibleSuccessors.erase(
+                std::remove(entry.feasibleSuccessors.begin(), entry.feasibleSuccessors.end(), neighborIp),
+                entry.feasibleSuccessors.end());
+            entry.successors.erase(
+                std::remove(entry.successors.begin(), entry.successors.end(), neighborIp),
+                entry.successors.end());
+            entry.routesBySource.erase(it);
         }
     }
 

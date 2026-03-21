@@ -12,6 +12,13 @@ namespace EIGRP
 {
 DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
 
+bool DuelEngine::isRouteAdvertised(const uint8_t* network, uint8_t mask)
+{
+    IPPrefix prefix(network, mask, base.getAF(), true);
+    auto* entry = topologyTable.find(prefix);
+    return entry != nullptr && !entry->successors.empty();
+}
+
 bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
 {
     auto it = entry->suppression.find(key);
@@ -28,7 +35,7 @@ bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
 void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpInterface* iface)
 {
     updateSuccessors(entries);
-    bool resync;
+    bool resync = false;
 
     // Check for restart (Non active routes need to be withdrawn)
     for (auto& entry : entries)
@@ -43,17 +50,6 @@ void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpI
     }
 }
 
-std::vector<const RouteInfo*> DuelEngine::findBestRoutes(const IPPrefix& prefix)
-{
-    auto* entry = topologyTable.find(prefix);
-    if (!entry || entry->routesBySource.empty()) return {};
-
-    std::vector<const RouteInfo*> routes;
-    for (const auto& neighbor : entry->successors)
-        routes.push_back(&entry->routesBySource.at(neighbor));
-    return routes;
-}
-
 const RouteInfo* DuelEngine::findBestRoute(const IPPrefix& prefix)
 {
     auto* entry = topologyTable.find(prefix);
@@ -66,11 +62,8 @@ const RouteInfo* DuelEngine::findBestRoute(const IPPrefix& prefix)
 
 void DuelEngine::recalculateAllRoutes()
 {
-    for (auto [_, top] : topologyTable.entries())
-    {
-        if (!top) continue;
-        recalculateSuccessors(top);
-    }
+    for (auto& [_, top] : topologyTable.entries())
+        recalculateSuccessors(&top);
 }
 
 void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
@@ -146,8 +139,8 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
             entry->successors.push_back(nbr);
     }
 
-    for (auto route : entry->routesBySource)
-        route.second.routeInfo.clearFlag(ReceivedRoute::RouteFlags::ACTIVE);
+    for (auto& [_, route] : entry->routesBySource)
+        route.routeInfo.clearFlag(ReceivedRoute::RouteFlags::ACTIVE);
 
     if (entry->successors.empty())
     {
@@ -178,7 +171,7 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
         route.routeInfo.feasibleDistance = route.routeInfo.reportedDistance + localMetric;
 
         if (route.routeInfo.feasibleDistance < bestFD ||
-            (route.routeInfo.feasibleDistance == bestFD && route.routeInfo.adminDistance < bestFD))
+            (route.routeInfo.feasibleDistance == bestFD && route.routeInfo.adminDistance < bestAD))
         {
             bestFD = route.routeInfo.feasibleDistance;
             bestAD = route.routeInfo.adminDistance;
@@ -221,7 +214,7 @@ void DuelEngine::processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, co
     }
 
     if (!reversePoisens.empty())
-        neighbor.getIface().getRtp().sendPoisenedUpdate(nullptr, reversePoisens); //TODO
+        neighbor.getIface().getRtp().sendPoisenedUpdate(nullptr, reversePoisens);
 
     updateSuccessors(updates);
 }
@@ -308,7 +301,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
         }
     }
 
-    if (activeRoutes.empty())
+    if (routes.empty())
         return;
 
     std::unordered_map<EigrpInterface*, std::vector<ActiveRoute*>> multicastBuckets;
@@ -453,12 +446,23 @@ void DuelEngine::concludeActive(ActiveRoute& activeRoute)
     else
         entry->state = TopologyEntry::State::PASSIVE;
 
-    for (const auto& src : activeRoute.remoteSources)
+    if (!activeRoute.remoteSources.empty())
     {
-        auto it = base.allNeighbors.find(src.first);
-        if (it == base.allNeighbors.end()) continue;
-        auto feasibleRoutes = findBestRoutes(activeRoute.activePrefix);
-        it->second->getIface().getRtp().sendReply(*it->second, feasibleRoutes);
+        std::vector<const RouteInfo*> replies;
+        if (auto* replyEntry = topologyTable.find(activeRoute.activePrefix))
+        {
+            for (const auto& neighbor : replyEntry->successors)
+            {
+                if (auto rit = replyEntry->routesBySource.find(neighbor); rit != replyEntry->routesBySource.end())
+                    replies.push_back(&rit->second);
+            }
+        }
+        for (const auto& src : activeRoute.remoteSources)
+        {
+            auto it = base.allNeighbors.find(src.first);
+            if (it == base.allNeighbors.end()) continue;
+            it->second->getIface().getRtp().sendReply(*it->second, replies);
+        }
     }
 
     activeRoutes.erase(activeRoute.activePrefix);

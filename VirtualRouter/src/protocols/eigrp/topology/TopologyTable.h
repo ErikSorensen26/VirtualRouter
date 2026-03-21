@@ -161,13 +161,10 @@ public:
     std::pair<TopologyEntry*, RouteInfo*> findPair(const IPPrefix& prefix, const IPAddress& neighbor);
     TopologyEntry& ensure(const IPPrefix& prefix);
     TopologyEntry* find(const IPPrefix& prefix);
-    std::vector<const RouteInfo*> getSuccessors(const IPPrefix& prefix);
-    std::vector<const RouteInfo*> getAllRoutes();
-
-    std::unordered_map<IPPrefix, TopologyEntry*>& entries() { return topologyEntries; }
+    std::unordered_map<IPPrefix, TopologyEntry>& entries() { return topologyEntries; }
 
 private:
-    std::unordered_map<IPPrefix, TopologyEntry*> topologyEntries;
+    std::unordered_map<IPPrefix, TopologyEntry> topologyEntries;
 
     Eigrp& eigrpProcess;
 };

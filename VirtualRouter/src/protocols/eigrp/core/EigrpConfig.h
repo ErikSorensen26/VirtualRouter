@@ -26,7 +26,7 @@ public:
     void delNetworkRange(const IPv4Prefix& delNetwork);
     bool isInNetworkRange(IPv4Address testIp) const;
     void clearNetworks();
-    void enableStub(bool isStub, bool advertiseConnected = true, bool advertiseLeakMap = false, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
+    void enableStub(bool isStub, bool advertiseConnected = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
     void setPassiveInterface(uint32_t key, bool add = true);
     void enableUnicastPeer(const IPAddress& neighborIp, uint32_t key);
     void disableUnicastPeer(const IPAddress& neighborIp, uint32_t key);

@@ -1,6 +1,5 @@
 // EigrpInterface.cpp
 
-#include <iostream>
 #include <Global.h>
 #include <VirtualRouter.h>
 
@@ -139,7 +138,7 @@ void EigrpInterface::setMulticast(bool state)
 
 const uint8_t* EigrpInterface::multicastEnabled()
 {
-    return multicastEnabledFlag.load(std::memory_order_release)
+    return multicastEnabledFlag.load(std::memory_order_relaxed)
         ? (base.getAF() == AddressFamily::IPv4)
             ? EIGRP_MULTICAST_ADDRESS
             : EIGRP_MULTICAST_ADDRESS_V6
@@ -174,9 +173,7 @@ void EigrpInterface::triggerDampeningOnRouteChange()
     uint32_t maxPrefix = cfg.getMaximumPrefixes();
     if (maxPrefix == 0) return;
 
-    prefixCount.fetch_add(1, std::memory_order_acquire);
-    uint32_t count = prefixCount.load(std::memory_order_relaxed);
-    //TODO use count
+    prefixCount.fetch_add(1, std::memory_order_relaxed);
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefix) * 100.0;
     double triggerPercent = configs.get<Config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
@@ -185,9 +182,6 @@ void EigrpInterface::triggerDampeningOnRouteChange()
     {
         isSupressed.store(true, std::memory_order_release);
         restartCounter++;
-
-        if (cfg.getDampeningWarning())
-            std::cout << ""; // TODO
 
         tmgr.restartDampeningResetTimer();
     }
@@ -203,9 +197,6 @@ void EigrpInterface::checkDampeningStatus()
     isSupressed.store(false, std::memory_order_release);
     routeChangeTimes.clear();
     prefixCount.store(0, std::memory_order_release);
-
-    if (cfg.getDampeningWarning())
-        std::cout << ""; // TODO
 
     if (!reachedLimit)
         tmgr.restartDampeningRestartTimer();
@@ -240,9 +231,6 @@ void EigrpInterface::onDampeningIntervalExpire()
     {
         isSupressed.store(true, std::memory_order_release);
         ++restartCounter;
-
-        if (cfg.getDampeningWarning())
-            std::cout << ""; // TODO: warning output
 
         tmgr.restartDampeningResetTimer();
     }

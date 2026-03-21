@@ -26,7 +26,7 @@ public:
     void synchronizeConnected(EigrpInterface& iface);
     void clearConnected(EigrpInterface& iface);
     void handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor);
-    std::unordered_map<IPPrefix, TopologyEntry*>& entries();
+    std::unordered_map<IPPrefix, TopologyEntry>& entries();
 
     Eigrp& getBase() { return base; }
 

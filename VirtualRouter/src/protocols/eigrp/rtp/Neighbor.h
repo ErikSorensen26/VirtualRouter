@@ -20,9 +20,8 @@ class EigrpInterface;
 enum class TLVType : uint16_t
 {
     LEGACY_V4 = 0x0100,
-    WIDE_V4 = 0x0600,
     LEGACY_V6 = 0x0400,
-    WIDE_V6 = 0x0600
+    WIDE     = 0x0600,
 };
 
 class Neighbor

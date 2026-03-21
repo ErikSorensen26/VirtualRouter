@@ -19,7 +19,9 @@ void EigrpConfig::addNetworkRange(const IPv4Prefix& newNetwork)
     if (base.getAF() != AddressFamily::IPv4) return;
 
     uint32_t addr = newNetwork.addr;
-    uint32_t wildcard = (newNetwork.prefixLength == 0) ? 0xFFFFFFFF : (~0u >> newNetwork.prefixLength);
+    uint32_t wildcard = (newNetwork.prefixLength == 0) ? 0xFFFFFFFF
+                      : (newNetwork.prefixLength >= 32) ? 0u
+                      : (~0u >> newNetwork.prefixLength);
 
     bool added = false;
     configs->get<Config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
@@ -38,7 +40,9 @@ void EigrpConfig::delNetworkRange(const IPv4Prefix& delNetwork)
     if (base.getAF() != AddressFamily::IPv4) return;
 
     uint32_t addr = delNetwork.addr;
-    uint32_t wildcard = (delNetwork.prefixLength == 0) ? 0xFFFFFFFF : (~0u >> delNetwork.prefixLength);
+    uint32_t wildcard = (delNetwork.prefixLength == 0) ? 0xFFFFFFFF
+                      : (delNetwork.prefixLength >= 32) ? 0u
+                      : (~0u >> delNetwork.prefixLength);
 
     bool removed = false;
     configs->get<Config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
@@ -77,7 +81,7 @@ void EigrpConfig::clearNetworks()
     base.getIfaceMgr().refreshInterfaceList();
 }
 
-void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertiseLeakMap, bool advertiseStatic, bool advertiseSummary, bool advertiseRedistributed)
+void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertiseStatic, bool advertiseSummary, bool advertiseRedistributed)
 {
     auto& reg = configs.get();
     reg.get<Config::Eigrp::STUB>().set(isStub);

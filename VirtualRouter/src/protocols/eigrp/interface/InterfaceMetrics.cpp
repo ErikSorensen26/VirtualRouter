@@ -24,10 +24,7 @@ void InterfaceMetrics::addRouteMetrics(std::vector<ReceivedRoute>& routes)
         else
         {
             route.reportedDistance = calculateCompositeMetric(route.load, route.reliability, route.delay, route.bandwidth);
-            if (local != 0)
-                route.feasibleDistance = route.reportedDistance + local;
-            else
-                route.feasibleDistance = route.reportedDistance + getLocalMetric();
+            route.feasibleDistance = route.reportedDistance + local;
         }
     }
 }
@@ -88,7 +85,7 @@ uint64_t InterfaceMetrics::calculateCompositeMetric(uint8_t load, uint8_t reliab
     return finalMetric;
 }
 
-double InterfaceMetrics::calculateRTT(Neighbor& neighbor, std::chrono::steady_clock::time_point& sendTime, uint32_t seq)
+double InterfaceMetrics::calculateRTT(Neighbor& neighbor, std::chrono::steady_clock::time_point& sendTime)
 {
     auto now = std::chrono::steady_clock::now();
     double rttSample = std::chrono::duration<double>(now - sendTime).count();
@@ -102,9 +99,9 @@ double InterfaceMetrics::calculateRTT(Neighbor& neighbor, std::chrono::steady_cl
     return rttSample;
 }
 
-void InterfaceMetrics::updateRTTEstimate(Neighbor& neighbor, std::chrono::steady_clock::time_point& sendTime, uint32_t seq)
+void InterfaceMetrics::updateRTTEstimate(Neighbor& neighbor, std::chrono::steady_clock::time_point& sendTime)
 {
-    double rttSample = calculateRTT(neighbor, sendTime, seq);
+    double rttSample = calculateRTT(neighbor, sendTime);
 
     // Update srtt and rttvar using standard algorithms
     double alpha = 1.0 / 8.0;

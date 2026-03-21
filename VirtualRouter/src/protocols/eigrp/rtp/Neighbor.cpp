@@ -19,14 +19,12 @@ inline TLVType getTLVType(EigrpInterface& iface, Neighbor::Version v)
     }
     else if (base.isNamed())
     {
-        return isV6
-            ? TLVType::WIDE_V6
-            : TLVType::WIDE_V4;
+        return TLVType::WIDE;
     }
     else
     {
         return isV6
-            ? TLVType::WIDE_V6
+            ? TLVType::WIDE
             : TLVType::LEGACY_V4;
     }
 }
