@@ -7,7 +7,6 @@
 #include <IPAddress.h>
 #include <atomic>
 
-#include "eigrp/EigrpTypes.hpp"
 #include "packet/TlvOptions.hpp"
 #include "eigrp/rtp/Neighbor.h"
 
@@ -16,12 +15,13 @@
 class Internal_EigrpTest;
 class PacketBuilder;
 
-namespace Eigrp
+namespace EIGRP
 {
 class NeighborTable;
 
 struct OutgoingQuery;
 struct ActiveRoute;
+struct RouteInfo;
 
 class ReliableTransport
 {

@@ -4,7 +4,6 @@
 #define EIGRP_NEIGHBOR_H
 
 #include <map>
-#include <chrono>
 #include <IPAddress.h>
 #include <atomic>
 #include <deque>
@@ -12,7 +11,7 @@
 
 #include "ReliablePacket.hpp"
 
-struct EigrpHeader; namespace Eigrp
+struct EigrpHeader; namespace EIGRP
 {
 class InterfaceTimers;
 struct EigrpHeaderInfo;

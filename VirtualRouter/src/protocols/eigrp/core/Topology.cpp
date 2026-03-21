@@ -6,7 +6,7 @@
 #include "interface/Interface.h"
 #include "hardware/HardwareManager.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 EigrpTopology::EigrpTopology(Eigrp& base) : duel(base), base(base) {}
 

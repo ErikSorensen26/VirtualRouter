@@ -3,8 +3,8 @@
 #ifndef EIGRP_AUTH_HANDLER_H
 #define EIGRP_AUTH_HANDLER_H
 
-#include <string>
 #include <cstdint>
+#include "configs/registry/router/EigrpInterfaceRegistry.h"
 
 class PacketBuilder;
 class Global;
@@ -13,21 +13,17 @@ namespace Authentication
 {
 class KeyChainManager;
 }
-namespace EigrpConfigs
+
+namespace EIGRP
 {
 enum class AuthType : uint16_t;
-struct InterfaceConfigs;
-}
-
-namespace Eigrp
-{
 class EigrpInterface;
 
 class AuthHandler
 {
 public:
 
-    AuthHandler(EigrpConfigs::InterfaceConfigs& iface, Authentication::KeyChainManager& keyMgr);
+    AuthHandler(Config::EigrpInterfaceRegistry& iface, Authentication::KeyChainManager& keyMgr);
 
     uint16_t buildAuthTLV(uint8_t* out);
 
@@ -36,7 +32,7 @@ public:
     static bool appendAuthHMAC(Global& global, uint8_t* packetStart, size_t size);
 
 private:
-    EigrpConfigs::InterfaceConfigs& configs;
+    Config::EigrpInterfaceRegistry& configs;
     Authentication::KeyChainManager& keyMgr;
 };
 }

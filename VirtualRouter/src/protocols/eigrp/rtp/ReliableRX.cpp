@@ -7,14 +7,14 @@
 #include "eigrp/core/Eigrp.h"
 #include "interface/Interface.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const IPAddress& neighborIp, bool multicast)
 {
     const IPAddress& neigIp = neighborIp;
 
     // Check if passive
-    if (iface.configs.isPassive.load(std::memory_order_relaxed))
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return;
 
     // Validate packet version

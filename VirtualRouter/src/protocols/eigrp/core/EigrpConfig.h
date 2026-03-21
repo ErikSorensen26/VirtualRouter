@@ -4,13 +4,16 @@
 #define EIGRP_CONFIG_H
 
 #include <cstdint>
+#include <unordered_set>
+#include <IPAddress.h>
 
 #include "eigrp/EigrpTypes.hpp"
-#include "eigrp/core/GlobalAggregator.h"
+#include "configs/registry/router/EigrpRegistry.h"
+#include "configs/RegistryReference.hpp"
 
 struct EigrpHeader;
 
-namespace Eigrp
+namespace EIGRP
 {
 class Eigrp;
 
@@ -18,54 +21,59 @@ class EigrpConfig
 {
 public:
 
-    EigrpConfig(Eigrp& base)
-        : base(base), aggregator(base) {}
+    EigrpConfig(Eigrp& base);
     void addNetworkRange(const IPv4Prefix& newNetwork);
     void delNetworkRange(const IPv4Prefix& delNetwork);
-    bool isInNetworkRange(IPv4Address testIp);
+    bool isInNetworkRange(IPv4Address testIp) const;
     void clearNetworks();
-    void enableStub(bool isStub, bool advertiseConnected = true, bool advertiseLeakMap = true, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
-    bool stubEnabled() const { return configs.stubConfig.isStub; }
+    void enableStub(bool isStub, bool advertiseConnected = true, bool advertiseLeakMap = false, bool advertiseStatic = true, bool advertiseSummary = true, bool advertiseRedistributed = true);
     void setPassiveInterface(uint32_t key, bool add = true);
     void enableUnicastPeer(const IPAddress& neighborIp, uint32_t key);
     void disableUnicastPeer(const IPAddress& neighborIp, uint32_t key);
 
-    EigrpConfigs::EigrpConfigs& getConfigs() { return configs; }
+    Config::EigrpRegistry& getConfigs() { return configs.get(); }
 
-public:
-    inline uint8_t getVariance() { return configs.variance.load(std::memory_order_relaxed); }
-    inline uint8_t getAD() { return configs.adminDistance.load(std::memory_order_relaxed); }
-    inline uint8_t getExternalAD() { return configs.externalAdminDistance.load(std::memory_order_relaxed); }
-    inline uint8_t getMaxHops() { return configs.maxHops.load(std::memory_order_relaxed); }
-    inline uint8_t getRibScale() { return configs.ribScale.load(std::memory_order_relaxed); }
-    inline uint16_t getDelTimer() { return configs.routeDelTimer.load(std::memory_order_relaxed); }
-    inline uint16_t getSIATime() { return configs.stuckInActiveTime.load(std::memory_order_relaxed); }
-    inline uint32_t getPurgeTime() { return configs.purgeTime.load(std::memory_order_relaxed); }
-    inline uint32_t getWideMetrics() { return configs.wideMetric.load(std::memory_order_relaxed); }
-    inline uint32_t getMaximumPrefixes() { return configs.maximumPrefix.load(std::memory_order_relaxed); }
-    inline uint16_t getDampeningRestart() { return configs.dampeningRestart.load(std::memory_order_relaxed); }
-    inline uint16_t getDampeningInterval() { return configs.dampeningInterval.load(std::memory_order_relaxed); }
-    inline uint16_t getDampeningResetTime() { return configs.dampeningResetTime.load(std::memory_order_relaxed); }
-    inline uint16_t getDampeningRestartCount() { return configs.dampeningRestartCount.load(std::memory_order_relaxed); }
-    inline EigrpConfigs::StubConfig getStubConfig() { std::shared_lock<std::shared_mutex> lock(configs.configsMutex); return configs.stubConfig; }
-    inline EigrpConfigs::KValue getKValues() { std::shared_lock<std::shared_mutex> lock(configs.configsMutex); return configs.kvalue; }
-    inline bool getDampeningWarning() { return configs.dampeningWarnings.load(std::memory_order_relaxed); }
-    inline bool isNonStopForwarding() { return configs.nonStopForwarding.load(std::memory_order_relaxed); }
-    inline bool getDampening() { return configs.dampening.load(std::memory_order_relaxed); }
-    inline bool isPassive(uint32_t key) { std::shared_lock<std::shared_mutex> lock(configs.configsMutex); return configs.passiveInterfaces.contains(key); }
-    inline bool isAutoSummarized() { return configs.autoSummarizationEnabled.load(std::memory_order_relaxed); }
-    inline EigrpConfigs::TrafficShareMode getTrafficMode() { return configs.trafficShareMode.load(std::memory_order_relaxed); }
-    inline std::unordered_set<IPAddress> getUnicastNeighbors(uint32_t key) { std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
-        if (auto it = configs.unicastNeighbors.find(key); it != configs.unicastNeighbors.end()) return it->second; else return {}; }
+    // Process-level config accessors
+    bool stubEnabled() const { return configs->get<Config::Eigrp::STUB>().load(); }
+    StubConfig getStubConfig() const;
+    KValue getKValues() const;
 
-    inline void setAutoSummary(bool autoSummary) { configs.autoSummarizationEnabled.store(autoSummary, std::memory_order_release); }
-    inline void setVariance(uint8_t variance) { configs.variance.store(variance, std::memory_order_release); }
+    bool isPassive(uint32_t key) const;
+    std::unordered_set<IPAddress> getUnicastNeighbors(uint32_t key) const;
+
+    bool getDampening() const          { return configs->get<Config::Eigrp::DAMPENING>().load(); }
+    bool getDampeningWarning() const   { return configs->get<Config::Eigrp::DAMPENING_WARNINGS>().load(); }
+    uint8_t getDampeningInterval() const  { return configs->get<Config::Eigrp::DAMPENING_INTERVAL>().load(); }
+    uint16_t getDampeningResetTime() const { return configs->get<Config::Eigrp::DAMPENING_RESET_TIME>().load(); }
+    uint16_t getDampeningRestart() const   { return configs->get<Config::Eigrp::DAMPENING_RESTART>().load(); }
+    uint16_t getDampeningRestartCount() const { return configs->get<Config::Eigrp::DAMPENING_RESTART_COUNT>().load(); }
+
+    uint32_t getMaximumPrefixes() const { return configs->get<Config::Eigrp::MAXIMUM_PREFIX>().load(); }
+    uint8_t getRibScale() const         { return configs->get<Config::Eigrp::RIB_SCALE>().load(); }
+    uint8_t getAD() const               { return configs->get<Config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load(); }
+    uint8_t getExternalAD() const       { return configs->get<Config::Eigrp::EXTERNAL_ADMIN_DISTANCE>().load(); }
+    uint8_t getMaxPaths() const         { return configs->get<Config::Eigrp::MAX_PATHS>().load(); }
+    uint8_t getMaxHops() const          { return configs->get<Config::Eigrp::MAX_HOPS>().load(); }
+    uint8_t getVariance() const         { return configs->get<Config::Eigrp::VARIANCE>().load(); }
+    TrafficShareMode getTrafficMode() const { return configs->get<Config::Eigrp::TRAFFIC_SHARE>().load(); }
+
+    bool isNonStopForwarding() const { return configs->get<Config::Eigrp::NON_STOP_FORWARDING>().load(); }
+    uint16_t getPurgeTime() const    { return configs->get<Config::Eigrp::GRACEFUL_PURGE_TIME>().load(); }
+    bool isAutoSummarized() const    { return configs->get<Config::Eigrp::AUTO_SUMMARIZATION>().load(); }
+    void setAutoSummary(bool enable) { configs->get<Config::Eigrp::AUTO_SUMMARIZATION>().set(enable); }
+
+    uint16_t getSIATime() const
+    {
+        auto& field = configs->get<Config::Eigrp::ACTIVE_TIME>();
+        return field.hasValue() ? field.load() : 90;
+    }
+
+    uint16_t getDelTimer() const { return 120; }
 
 private:
 
     Eigrp& base;
-    GlobalAggregator aggregator;
-    EigrpConfigs::EigrpConfigs configs; ///< Configuration settings for EIGRP.
+    Config::Reference<Config::EigrpRegistry> configs;
 };
 }
 

@@ -7,7 +7,7 @@
 #include <IPAddress.h>
 #include "Neighbor.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 

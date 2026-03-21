@@ -5,7 +5,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 inline TLVType getTLVType(EigrpInterface& iface, Neighbor::Version v)
 {
@@ -51,11 +51,6 @@ Neighbor::~Neighbor()
     iface.getBase().delGlobalNeighbor(ipAddress);
     iface.getTopController().onNeighborDown(*this);
     
-    if (unicast)
-    {
-        auto& base = iface.getBase();
-        base.getConfigs().unicastNeighbors[iface.interfaceKey].insert(ipAddress);
-    }
 }
 
 void Neighbor::clear()

@@ -8,7 +8,7 @@
 class Global;
 class ProcessQueue;
 
-namespace Eigrp
+namespace EIGRP
 {
 struct OutgoingQuery;
 class DuelEngine;

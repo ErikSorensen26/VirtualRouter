@@ -8,7 +8,7 @@
 
 enum class AddressFamily : uint8_t;
 
-namespace Eigrp
+namespace EIGRP
 {
 class Neighbor;
 class EigrpInterface;

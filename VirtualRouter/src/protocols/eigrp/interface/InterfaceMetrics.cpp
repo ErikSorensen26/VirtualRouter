@@ -8,7 +8,7 @@
 #include "eigrp/EigrpTypes.hpp"
 #include "eigrp/rtp/Neighbor.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 InterfaceMetrics::InterfaceMetrics(EigrpInterface& iface) : iface(iface) {}
 

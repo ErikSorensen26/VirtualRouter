@@ -1,20 +1,15 @@
 // EigrpInterfaceNeighborManager.cpp
 
 #include "NeighborTable.h"
-#include "eigrp/EigrpTypes.hpp"
 #include "ReliableTransport.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
 
-namespace Eigrp
+namespace EIGRP
 {
-NeighborTable::NeighborTable(EigrpInterface& iface) : iface(iface)
-{
-    auto& configs = iface.getBase().getConfigs();
-    if (auto it = configs.unicastNeighbors.find(iface.interfaceKey); it != configs.unicastNeighbors.end())
-        for (auto& ip : it->second)
-            createNeighbor(ip, Neighbor::Version::UNKNOWN, true);
-}
+NeighborTable::NeighborTable(EigrpInterface& iface)
+    : iface(iface)
+{}
 
 Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::Version v, bool isUnicast)
 {
@@ -23,7 +18,6 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::V
 
     if (isUnicast)
     {
-        base.getConfigs().unicastNeighbors[iface.interfaceKey].insert(neighborIp);
         unicast.insert(neighborIp);
     }
 
@@ -43,7 +37,7 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::V
         auto* neighbor = &neighborIt.first->second;
         base.addGlobalNeighbor(neighborIp, neighbor);
 
-        if (isUnicast && iface.configs.multicastEnabled.load(std::memory_order_relaxed))
+        if (isUnicast && iface.multicastEnabledFlag.load(std::memory_order_relaxed))
         {
             disableMulticast();
         }
@@ -56,18 +50,18 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::V
 
 void NeighborTable::enableMulticast()
 {
-    if (!iface.configs.multicastEnabled.load(std::memory_order_relaxed))
+    if (!iface.multicastEnabledFlag.load(std::memory_order_relaxed))
     {
-        iface.configs.multicastEnabled.store(true, std::memory_order_release);
+        iface.multicastEnabledFlag.store(true, std::memory_order_release);
     }
 }
 
 void NeighborTable::disableMulticast()
 {
     // Check if multicast is already disabled
-    if (!iface.configs.multicastEnabled.load(std::memory_order_relaxed)) return;
+    if (!iface.multicastEnabledFlag.load(std::memory_order_relaxed)) return;
 
-    iface.configs.multicastEnabled.store(false, std::memory_order_release);
+    iface.multicastEnabledFlag.store(false, std::memory_order_release);
     removeAllMulticast();
 }
 
@@ -173,7 +167,7 @@ void NeighborTable::startGracefulRestart(Neighbor& neighbor)
 
 bool NeighborTable::validatePTP(const IPAddress& neighborIp)
 {
-    if (iface.configs.interfaceMode.load(std::memory_order_relaxed) == EigrpConfigs::Mode::POINT_TO_POINT)
+    if (iface.isPointToPoint)
     {
         // If no neighbors yet, allow.
         if (neighbors.empty())

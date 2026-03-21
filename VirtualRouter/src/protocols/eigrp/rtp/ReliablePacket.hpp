@@ -10,7 +10,7 @@
 #include "packet/headers/EigrpHeader.hpp"
 #include "packet/StaticHeader.hpp"
 
-namespace Eigrp
+namespace EIGRP
 {
 class Neighbor;
 struct ReliableInfo

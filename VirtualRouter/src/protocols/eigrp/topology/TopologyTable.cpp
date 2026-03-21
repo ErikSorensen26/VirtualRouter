@@ -5,7 +5,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "DuelEngine.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 TopologyTable::TopologyTable(Eigrp& process) : eigrpProcess(process) {}
 

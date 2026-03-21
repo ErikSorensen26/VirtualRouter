@@ -6,6 +6,8 @@
 #include <IPAddress.h>
 #include <unordered_map>
 #include <deque>
+#include <atomic>
+#include <vector>
 
 #include "AuthHandler.h"
 #include "InterfaceMetrics.h"
@@ -14,32 +16,25 @@
 #include "TopologyController.h"
 #include "eigrp/rtp/ReliableTransport.h"
 #include "eigrp/rtp/NeighborTable.h"
+#include "configs/registry/router/EigrpInterfaceRegistry.h"
 
 class Internal_EigrpTest;
 class Interface;
 class InterfaceConfigs;
-namespace EigrpConfigs
-{
-struct InterfaceConfigs;
-}
 
-namespace Eigrp
+namespace EIGRP
 {
 class Eigrp;
 
 /**
  * @class EigrpInterface
  * @brief Represents an interface participating in the EIGRP process.
- *
- * The EigrpInterface class manages EIGRP operations specific to a network interface,
- * including sending and receiving EIGRP packets, maintaining neighbor relationships,
- * handling routing updates, and managing timers and retransmissions.
  */
 class EigrpInterface
 {
 public:
     friend class ::Internal_EigrpTest;
-    EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfigs& intConfigs, Interface& interface);
+    EigrpInterface(Eigrp& eigrpSystem, Config::EigrpInterfaceRegistry& ifaceReg, Interface& interface);
     ~EigrpInterface();
 
     EigrpInterface(const EigrpInterface&) = delete;
@@ -54,7 +49,6 @@ public:
 
     void notifyRoutingChange(const std::vector<const RouteInfo*>& changedRoutes);
 
-    // Get the ip address of the interaface
     void startDampening();
     void triggerDampeningOnRouteChange();
     void checkDampeningStatus();
@@ -63,7 +57,19 @@ public:
     void onDampeningRestartExpire();
     void onDampeningIntervalExpire();
 
-    EigrpConfigs::InterfaceConfigs& configs; ///< Configuration settings for the interface.
+    bool isAuthEnabled() const
+    {
+        return configs.get<Config::EigrpInterface::AUTHENTICATION_MODE>().load() != AuthType::NONE;
+    }
+
+    Config::EigrpInterfaceRegistry& configs; ///< Registry-backed configuration for this interface.
+
+    // Runtime state (not persisted in registry)
+    std::atomic<bool> multicastEnabledFlag{true};
+    std::atomic<uint64_t> localMetric{0};
+    std::atomic<uint8_t> DSCP{0};
+    std::vector<IPPrefix> pendingSummaryRoutes;
+    bool isPointToPoint{false};
 
     ReliableTransport& getRtp() { return rtp; }
     InterfaceMetrics& getMetrics() { return metrics; }
@@ -87,7 +93,7 @@ public:
     std::set<IPPrefix> connectedRoutes;
 
     uint32_t interfaceKey;
-    
+
     IPAddress ifaceAddress;
 
 private:

@@ -9,7 +9,7 @@
 #include "infrastructure/IPPacket.h"
 #include "processing/PacketBuilder.hpp"
 
-namespace Eigrp
+namespace EIGRP
 {
 void ReliableTransport::transmit(PacketBuilder& pkt, const IPAddress* dest)
 {
@@ -27,7 +27,7 @@ void ReliableTransport::transmit(PacketBuilder& pkt, const IPAddress* dest)
         .iface = interface,
         .packetInfo = pkt,
         .destIp = target,
-        .DSCP = iface.configs.DSCP.load(std::memory_order_relaxed),
+        .DSCP = iface.DSCP.load(std::memory_order_relaxed),
         .protocolType = IP_EIGRP
     };
 
@@ -74,7 +74,7 @@ void ReliableTransport::createPacket(PacketBuilder& pkt)
 
 void ReliableTransport::sendHello()
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     PacketBuilder pkt(iface.getIface());
     createPacket(pkt);
@@ -86,7 +86,7 @@ void ReliableTransport::sendHello()
 
 void ReliableTransport::sendConditionalHello(const std::vector<IPAddress>& neighbors, uint32_t seq)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     PktInfo info;
     info.mtu = getMtu();
@@ -107,7 +107,7 @@ void ReliableTransport::sendConditionalHello(const std::vector<IPAddress>& neigh
 
 void ReliableTransport::sendUnicastHello(const IPAddress& neighborIp)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     PacketBuilder pkt(iface.getIface());
     createPacket(pkt);
@@ -144,7 +144,7 @@ void ReliableTransport::sendAck(Neighbor& neighbor, uint32_t seq)
 
 void ReliableTransport::sendNullUpdate(Neighbor& neighbor)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     PacketBuilder pkt(iface.getIface());
     createPacket(pkt);
@@ -161,7 +161,7 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
 {
     bool unicast = firstFullSend.exchange(true, std::memory_order_release);
 
-    if (iface.configs.isPassive.load(std::memory_order_relaxed))
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return;
     if (neighbor.fullSent.exchange(true, std::memory_order_acq_rel))
         return; // Full top already sent
@@ -215,7 +215,7 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
 
 void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& inputRoutes)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed) || iface.getNTable().size() == 0) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
     auto routes = iface.getTopController().filterAdvertisableRoutes(inputRoutes);
     if (routes.empty()) return;
 
@@ -257,7 +257,7 @@ void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const R
 
 void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& inputRoutes)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed) || iface.getNTable().size() == 0) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
 
     auto* interface = iface.getIface();
 
@@ -297,7 +297,7 @@ void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector
 
 void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
@@ -328,7 +328,7 @@ void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
 
 void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
@@ -356,7 +356,7 @@ void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<O
 
 void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const RouteInfo*>& replies)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
@@ -378,7 +378,7 @@ void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const Ro
 
 void ReliableTransport::sendSIAQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
@@ -400,7 +400,7 @@ void ReliableTransport::sendSIAQuery(Neighbor& neighbor, const std::vector<Outgo
 
 void ReliableTransport::sendSIAReply(Neighbor& neighbor)
 {
-    if (iface.configs.isPassive.load(std::memory_order_relaxed)) return;
+    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     auto* interface = iface.getIface();
     PacketBuilder eigrpPacket(interface);

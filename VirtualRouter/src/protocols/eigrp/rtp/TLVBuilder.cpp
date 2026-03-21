@@ -4,7 +4,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/topology/TopologyTable.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 
 uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_t maxSize, const RouteInfo* route, uint64_t currentBandwidth, uint64_t currentDelay, RouteType type)
@@ -34,7 +34,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
 
     if (!wide)
     {
-        if (iface.configs.nextHopSelf.load(std::memory_order_relaxed))
+        if (iface.configs.get<Config::EigrpInterface::NEXT_HOP_SELF>().load())
             writeIpAddr(out, iface.ifaceAddress);
         else
             writeIpAddr(out, route->routeInfo.nextHop);
@@ -55,7 +55,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
         }
         if (!encodeWideMetric(data, delay, bw)) return 0;
 
-        if (iface.configs.nextHopSelf.load(std::memory_order_relaxed))
+        if (iface.configs.get<Config::EigrpInterface::NEXT_HOP_SELF>().load())
             writeIpAddr(out, iface.ifaceAddress);
         else
             writeIpAddr(out, route->routeInfo.nextHop);
@@ -265,7 +265,7 @@ bool TLVBuilder::encodeDestination(RouteData& data)
     return true;
 }
 
-uint8_t* TLVBuilder::encodeStubOption(uint8_t* out, const EigrpConfigs::StubConfig& stub)
+uint8_t* TLVBuilder::encodeStubOption(uint8_t* out, const EIGRP::StubConfig& stub)
 {
     uint16_t flags = 0;
     if (stub.advertiseConnected) flags |= 0x0001;
@@ -278,7 +278,7 @@ uint8_t* TLVBuilder::encodeStubOption(uint8_t* out, const EigrpConfigs::StubConf
     return out;
 }
 
-uint8_t* TLVBuilder::calculateParameters(uint8_t* out, const EigrpConfigs::KValue& kvalue, uint16_t holdTime)
+uint8_t* TLVBuilder::calculateParameters(uint8_t* out, const EIGRP::KValue& kvalue, uint16_t holdTime)
 {
     out[0] = kvalue.k1_Bandwidth;
     out[1] = kvalue.k2_Load;

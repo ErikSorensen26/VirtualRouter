@@ -7,7 +7,7 @@
 #include "eigrp/interface/RouteAggregator.h"
 #include "eigrp/interface/EigrpInterface.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 GlobalAggregator::GlobalAggregator(Eigrp& base) : base(base) {}
 

@@ -13,7 +13,7 @@
 #include "TLVBuilder.h"
 #include "Neighbor.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet,
     uint8_t opcode, uint32_t seq, uint32_t ack, uint16_t virId, uint16_t asn
@@ -37,7 +37,7 @@ std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet
 
 void EigrpPacketBuilder::appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& iface)
 {
-    if (!iface.configs.auth.fullyEnabled.load(std::memory_order_relaxed)) return;
+    if (!iface.isAuthEnabled()) return;
     auto* buf = tlv.getNextValBuf(36);
     iface.getAuth().buildAuthTLV(buf);
     tlv.append(EIGRP_OPTION_AUTHENTICATION, 40, nullptr, 36);
@@ -77,13 +77,13 @@ bool EigrpPacketBuilder::appendParameterTLV(TLV16BufferManager& tlv, EigrpInterf
     if (iface.getRtp().pendingPeerTermination.load(std::memory_order_relaxed))
     {
         std::memset(val, 255, 6);
-        writeU16(val + 6, iface.configs.holdTime.load(std::memory_order_relaxed));
+        writeU16(val + 6, iface.configs.get<Config::EigrpInterface::HOLD_TIME>().load());
         iface.getRtp().pendingPeerTermination.store(false, std::memory_order_release);
     }
     else
     {
-        EigrpConfigs::KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
-        TLVBuilder::calculateParameters(val, k, iface.configs.holdTime.load(std::memory_order_relaxed));
+        KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
+        TLVBuilder::calculateParameters(val, k, iface.configs.get<Config::EigrpInterface::HOLD_TIME>().load());
     }
     return tlv.append(EIGRP_OPTION_PARAMETER, 12, nullptr, 8);
 }

@@ -11,7 +11,7 @@
 #include "eigrp/core/EigrpConfig.h"
 #include "eigrp/topology/TopologyTable.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 class Eigrp;
 struct RouteInfo;

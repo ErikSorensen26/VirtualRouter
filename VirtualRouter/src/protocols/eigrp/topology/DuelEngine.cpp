@@ -8,7 +8,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/rtp/NeighborTable.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
 
@@ -97,7 +97,7 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
 bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
 {
     if (entry->routesBySource.empty()) return false;
-    EigrpConfigs::TrafficShareMode trafMode = base.getGlobalConfigMgr().getTrafficMode();
+    EIGRP::TrafficShareMode trafMode = base.getGlobalConfigMgr().getTrafficMode();
     uint8_t variance = base.getGlobalConfigMgr().getVariance();
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
@@ -155,7 +155,7 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
         return false;
     }
 
-    if (trafMode == EigrpConfigs::TrafficShareMode::Minimum && !entry->successors.empty())
+    if (trafMode == EIGRP::TrafficShareMode::MINIMUM && !entry->successors.empty())
         entry->successors = {entry->successors.front()};
 
     entry->state = TopologyEntry::State::PASSIVE;

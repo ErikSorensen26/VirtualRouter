@@ -8,7 +8,7 @@
 #include <IPAddress.h>
 #include <unordered_map>
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 class DuelEngine;

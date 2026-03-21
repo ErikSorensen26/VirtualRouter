@@ -1,47 +1,26 @@
 // EigrpInterfaceAuth.cpp
 
-#include <shared_mutex>
-
 #include "AuthHandler.h"
 #include "EigrpInterface.h"
-#include "eigrp/EigrpTypes.hpp"
 #include "security/Encryption.hpp"
 #include "security/keys/KeyChainManager.h"
 #include "security/keys/KeyChain.h"
 
-namespace Eigrp
+namespace EIGRP
 {
-AuthHandler::AuthHandler(EigrpConfigs::InterfaceConfigs& configs, Authentication::KeyChainManager& keyMgr) : configs(configs), keyMgr(keyMgr) {}
+AuthHandler::AuthHandler(Config::EigrpInterfaceRegistry& configs, Authentication::KeyChainManager& keyMgr) : configs(configs), keyMgr(keyMgr) {}
 
 uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
 {
-    if (!configs.auth.fullyEnabled.load(std::memory_order_release))
+    EIGRP::AuthType authType = configs.get<Config::EigrpInterface::AUTHENTICATION_MODE>().load();
+    if (authType == EIGRP::AuthType::NONE)
         return 0;
-
-    EigrpConfigs::AuthType authType;
-    std::string keyPayload;
-    {
-        std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
-        authType = configs.auth.authType;
-        if (authType == EigrpConfigs::AuthType::MD5 && std::holds_alternative<uint32_t>(configs.auth.key))
-        {
-            uint8_t key[4];
-            writeU32(key, std::get<uint32_t>(configs.auth.key));
-            keyPayload = {reinterpret_cast<const char*>(key), 4};
-        }
-        else if (authType == EigrpConfigs::AuthType::SHA256 && std::holds_alternative<std::string>(configs.auth.key))
-        {
-            keyPayload = std::get<std::string>(configs.auth.key);
-            if (keyPayload.empty() || keyPayload.size() > 32)
-                return 0;
-        }
-    }
 
     uint16_t digestLen = 0;
     switch (authType)
     {
-        case EigrpConfigs::AuthType::MD5: digestLen = MD5_DIGEST_LENGTH; break;
-        case EigrpConfigs::AuthType::SHA256: digestLen = SHA256_DIGEST_LENGTH; break;
+        case EIGRP::AuthType::MD5: digestLen = MD5_DIGEST_LENGTH; break;
+        case EIGRP::AuthType::SHA256: digestLen = SHA256_DIGEST_LENGTH; break;
         default: return 0;
     }
 
@@ -49,26 +28,32 @@ uint16_t AuthHandler::buildAuthTLV(uint8_t* out)
     writeU16(out + 2, digestLen);
     std::memset(out + 4, 0, 16 + digestLen);
 
-    std::memcpy(out + 20, keyPayload.data(), keyPayload.size());
+    if (authType == EIGRP::AuthType::SHA256 && configs.get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().hasValue())
+    {
+        std::string keyPayload = configs.get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
+        if (keyPayload.empty() || keyPayload.size() > 32)
+            return 0;
+        std::memcpy(out + 20, keyPayload.data(), keyPayload.size());
+    }
 
     return 20 + digestLen;
 }
 
 bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const TLV16Option* authOpt)
 {
-    if (!configs.auth.fullyEnabled.load(std::memory_order_relaxed))
+    if (configs.get<Config::EigrpInterface::AUTHENTICATION_MODE>().load() == EIGRP::AuthType::NONE)
         return true;
     if (!authOpt)
         return false;
 
-    EigrpConfigs::AuthType authType = static_cast<EigrpConfigs::AuthType>(readU16(authOpt->value));
+    EIGRP::AuthType authType = static_cast<EIGRP::AuthType>(readU16(authOpt->value));
     uint16_t digestLen = readU16(authOpt->value + 2);
 
-    if (authType != configs.auth.authType)
+    if (authType != configs.get<Config::EigrpInterface::AUTHENTICATION_MODE>().load())
         return false;
-    if (authType == EigrpConfigs::AuthType::MD5 && (authOpt->valueSize != 36 || digestLen != 16))
+    if (authType == EIGRP::AuthType::MD5 && (authOpt->valueSize != 36 || digestLen != 16))
         return false;
-    if (authType == EigrpConfigs::AuthType::SHA256 && (authOpt->valueSize != 52 || digestLen != 32))
+    if (authType == EIGRP::AuthType::SHA256 && (authOpt->valueSize != 52 || digestLen != 32))
         return false;
 
     uint8_t* digestIdx = const_cast<uint8_t*>(authOpt->value) + 20;
@@ -76,17 +61,21 @@ bool AuthHandler::validateAuth(const uint8_t* packetStart, size_t size, const TL
     std::memcpy(digest, digestIdx, digestLen);
     std::memset(digestIdx, 0, digestLen);
 
-    if (authType == EigrpConfigs::AuthType::MD5 && std::holds_alternative<uint32_t>(configs.auth.key))
+    bool hasKeychain = configs.get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().hasValue();
+
+    if (authType == EIGRP::AuthType::MD5 && hasKeychain)
     {
-        const auto* key = keyMgr.lookup(std::get<uint32_t>(configs.auth.key));
+        std::string chainName = configs.get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
+        const auto* key = keyMgr.lookup(chainName);
+        if (!key) return false;
         uint8_t computed[MD5_DIGEST_LENGTH];
         uint32_t keyId = readU32(authOpt->value + 4);
         return key->validate(digest, computed, keyId, packetStart, size, Authentication::HmacType::MD5);
     }
-    else if (authType == EigrpConfigs::AuthType::SHA256 && std::holds_alternative<std::string>(configs.auth.key))
+    else if (authType == EIGRP::AuthType::SHA256 && hasKeychain)
     {
         uint8_t computed[SHA256_DIGEST_LENGTH];
-        std::string key = std::get<std::string>(configs.auth.key);
+        std::string key = configs.get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().load();
         Authentication::generateHMAC(
             computed,
             packetStart,
@@ -118,15 +107,15 @@ bool AuthHandler::appendAuthHMAC(Global& global, uint8_t* packetStart, size_t si
         if (type == EIGRP_OPTION_AUTHENTICATION)
         {
             authTLV = cursor + 4;
-            EigrpConfigs::AuthType authType = static_cast<EigrpConfigs::AuthType>(readU16(authTLV));
+            EIGRP::AuthType authType = static_cast<EIGRP::AuthType>(readU16(authTLV));
             uint16_t digestLen = readU16(authTLV + 2);
 
-            if (authType == EigrpConfigs::AuthType::MD5 && (length != 36 || digestLen != 16))
+            if (authType == EIGRP::AuthType::MD5 && (length != 36 || digestLen != 16))
                 return false;
-            if (authType == EigrpConfigs::AuthType::SHA256 && (length != 52 || digestLen != 32))
+            if (authType == EIGRP::AuthType::SHA256 && (length != 52 || digestLen != 32))
                 return false;
 
-            if (authType == EigrpConfigs::AuthType::SHA256)
+            if (authType == EIGRP::AuthType::SHA256)
             {
                 if (authTLV[20] == 0x00) return false;
                 uint8_t pass[32] = {0};

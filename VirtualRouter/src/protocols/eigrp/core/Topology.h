@@ -9,7 +9,7 @@
 
 class Internal_EigrpTest;
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 class Eigrp;

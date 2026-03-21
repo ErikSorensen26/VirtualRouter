@@ -8,13 +8,12 @@
 #include <IPAddress.h>
 #include <map>
 
-#include "eigrp/EigrpTypes.hpp"
 #include "TopologyTable.h"
 #include "TimerManager.h"
 
 class Internal_EigrpTest;
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 class Eigrp;

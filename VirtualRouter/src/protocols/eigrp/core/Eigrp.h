@@ -15,7 +15,7 @@
 #include <ControlScheduler.h>
 
 #include "packet/HeaderHelpers.hpp"
-#include "eigrp/core/EigrpConfig.h"
+#include "GlobalAggregator.h"
 #include "EigrpConfig.h"
 #include "InterfaceManager.h"
 #include "Topology.h"
@@ -27,7 +27,7 @@ class VirtualRouter;
 enum class InterfaceType : uint8_t;
 enum class AddressFamily : uint8_t;
 
-namespace Eigrp
+namespace EIGRP
 {
 struct EigrpAutonomousSystem
 {
@@ -82,8 +82,6 @@ public:
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     GlobalAggregator& getAggregator() { return aggregator; }
     EigrpTopology& getTopology() { return topology; }
-
-    EigrpConfigs::EigrpConfigs& getConfigs() { return configMgr.getConfigs(); }
 
 public:
     struct RouterID
@@ -145,7 +143,7 @@ public:
     NamedEigrp(uint32_t& as, AddressFamily af, const std::string& name, VirtualRouter* vrf, bool multicast);
     void initializeEigrp();
     void shutdown();
-    void configureInterface(uint32_t interfaceId, const EigrpConfigs::InterfaceConfigs& configs);
+    void configureInterface(uint32_t interfaceId);
 };
 }
 

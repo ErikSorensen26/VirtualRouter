@@ -12,12 +12,12 @@ class Global;
 class ProcessQueue;
 class Internal_EigrpTest;
 struct StaticHeader;
-namespace EigrpConfigs
+namespace EIGRP
 {
 struct OutgoingQuery;
 }
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 class Neighbor;

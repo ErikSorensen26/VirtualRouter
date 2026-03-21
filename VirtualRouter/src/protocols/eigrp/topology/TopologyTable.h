@@ -9,7 +9,7 @@
 #include <map>
 #include <unordered_set>
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 class Eigrp;

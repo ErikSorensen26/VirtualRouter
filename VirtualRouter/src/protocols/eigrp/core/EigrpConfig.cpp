@@ -1,153 +1,178 @@
 // EigrpConfigManager
 
+#include <algorithm>
 #include <AddressFamily.hpp>
+#include <VirtualRouter.h>
 
 #include "Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 
-namespace Eigrp
+namespace EIGRP
 {
+EigrpConfig::EigrpConfig(Eigrp& base)
+    : base(base),
+    configs(base.routingInstance->getRegistry().create<Config::EigrpRegistry>())
+{}
+
 void EigrpConfig::addNetworkRange(const IPv4Prefix& newNetwork)
 {
     if (base.getAF() != AddressFamily::IPv4) return;
 
-    // Check for duplicate
-    {
-        std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
-        for (auto network : configs.networks)
-        {
-            if (network == newNetwork)
-            {
-                return; // Network already exists
-            }
-        }
-        configs.networks.push_back(std::move(newNetwork));
-    }
+    uint32_t addr = newNetwork.addr;
+    uint32_t wildcard = (newNetwork.prefixLength == 0) ? 0xFFFFFFFF : (~0u >> newNetwork.prefixLength);
 
-    // Update interfaces and routing table after adding the network
-    base.getIfaceMgr().refreshInterfaceList();
+    bool added = false;
+    configs->get<Config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+        for (const auto& [a, w] : v)
+            if (a == addr && w == wildcard) return;
+        v.emplace_back(addr, wildcard);
+        added = true;
+    });
+
+    if (added)
+        base.getIfaceMgr().refreshInterfaceList();
 }
 
-void EigrpConfig::delNetworkRange(const IPv4Prefix& newNetwork)
+void EigrpConfig::delNetworkRange(const IPv4Prefix& delNetwork)
 {
     if (base.getAF() != AddressFamily::IPv4) return;
 
-    // Check for duplicate
-    {
-        std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
-        std::vector<IPv4Prefix>::iterator it = std::find(configs.networks.begin(), configs.networks.end(), newNetwork);
-        if (it != configs.networks.end())
-        {
-            configs.networks.erase(it);
-        }
-        else
-        {
-            return; // Network does not exist
-        }
-    }
+    uint32_t addr = delNetwork.addr;
+    uint32_t wildcard = (delNetwork.prefixLength == 0) ? 0xFFFFFFFF : (~0u >> delNetwork.prefixLength);
 
-    // Update interfaces and routing table after adding the network
-    base.getIfaceMgr().refreshInterfaceList();
+    bool removed = false;
+    configs->get<Config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+        auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
+            return std::get<0>(t) == addr && std::get<1>(t) == wildcard;
+        });
+        if (it != v.end()) {
+            v.erase(it);
+            removed = true;
+        }
+    });
+
+    if (removed)
+        base.getIfaceMgr().refreshInterfaceList();
 }
 
-bool EigrpConfig::isInNetworkRange(IPv4Address testIp)
+bool EigrpConfig::isInNetworkRange(IPv4Address testIp) const
 {
-    {
-        std::shared_lock<std::shared_mutex> configMutex(configs.configsMutex);
-        for (const auto& network : configs.networks)
-        {
-            if (network.contains(testIp))
-            {
-                return true;
+    bool found = false;
+    configs->get<Config::Eigrp::NETWORK>().withRead([&](const std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+        for (const auto& [addr, wildcard] : v) {
+            if ((testIp.addr & ~wildcard) == (addr & ~wildcard)) {
+                found = true;
+                return;
             }
         }
-    }
-
-    return false; // No matches found
+    });
+    return found;
 }
 
 void EigrpConfig::clearNetworks()
 {
-    {
-        std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
-        configs.networks.clear();
-    }
-
-    // Update interfaces and routing table after clearing networks
+    configs->get<Config::Eigrp::NETWORK>().withWrite([](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+        v.clear();
+    });
     base.getIfaceMgr().refreshInterfaceList();
 }
 
 void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertiseLeakMap, bool advertiseStatic, bool advertiseSummary, bool advertiseRedistributed)
 {
-    {
-        std::unique_lock<std::shared_mutex> configsLock(configs.configsMutex);
-        configs.stubConfig.isStub = isStub;
-        configs.stubConfig.advertiseConnected = advertiseConnected;
-        configs.stubConfig.advertiseLeakMap = advertiseLeakMap;
-        configs.stubConfig.advertiseStatic = advertiseStatic;
-        configs.stubConfig.advertiseSummary = advertiseSummary;
-        configs.stubConfig.advertiseRedistributed = advertiseRedistributed;
-    }
+    auto& reg = configs.get();
+    reg.get<Config::Eigrp::STUB>().set(isStub);
+    reg.get<Config::Eigrp::STUB_CONNECTED>().set(advertiseConnected);
+    reg.get<Config::Eigrp::STUB_STATIC>().set(advertiseStatic);
+    reg.get<Config::Eigrp::STUB_SUMMARY>().set(advertiseSummary);
+    reg.get<Config::Eigrp::STUB_REDISTRIBUTED>().set(advertiseRedistributed);
 }
 
 void EigrpConfig::setPassiveInterface(uint32_t key, bool add)
 {
-    {
-        std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
-        if (add)
-        {
-            configs.passiveInterfaces.insert(key);
+    configs->get<Config::Eigrp::PASSIVE_INTERFACES>().withWrite([&](std::vector<uint32_t>& v) {
+        if (add) {
+            if (std::find(v.begin(), v.end(), key) == v.end())
+                v.push_back(key);
+        } else {
+            v.erase(std::remove(v.begin(), v.end(), key), v.end());
         }
-        else
-        {
-            configs.passiveInterfaces.erase(key);
-        }
-    }
+    });
 
-    // Make the interface passive if it already exists
-    auto& ifmgr = base.getIfaceMgr();
-    auto intIt = ifmgr.eigrpInterfaceList.find(key);
-    if (intIt != ifmgr.eigrpInterfaceList.end())
-    {
-        intIt->second.setPassiveMode(add);
-    }
+    auto* eigrpIface = base.getIfaceMgr().getInterface(key);
+    if (eigrpIface)
+        eigrpIface->setPassiveMode(add);
 }
 
 void EigrpConfig::enableUnicastPeer(const IPAddress& neighborIp, uint32_t key)
 {
-    // Add unicast neighbor to the unicast neighbor list
-    {
-        std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
-        configs.unicastNeighbors[key].emplace(neighborIp);
-    }
+    configs->get<Config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<IPAddress, uint32_t>>& v) {
+        for (const auto& [ip, k] : v)
+            if (ip == neighborIp && k == key) return;
+        v.emplace_back(neighborIp, key);
+    });
 
-    // Find the interface to add the neighbor
-    {
-        auto& iface = base.getIfaceMgr();
-        auto intIt = iface.eigrpInterfaceList.find(key);
-        if (intIt != iface.eigrpInterfaceList.end())
-        {
-            intIt->second.getNTable().createNeighbor(neighborIp, Neighbor::Version::UNKNOWN, true);
-        }
-    }
+    auto* iface = base.getIfaceMgr().getInterface(key);
+    if (iface)
+        iface->getNTable().createNeighbor(neighborIp, Neighbor::Version::UNKNOWN, true);
 }
 
 void EigrpConfig::disableUnicastPeer(const IPAddress& neighborIp, uint32_t key)
 {
-    // Remove unicast neighbor from the unicast neighbor list
-    {
-        std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
-        configs.unicastNeighbors[key].erase(neighborIp);
-    }
+    configs->get<Config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<IPAddress, uint32_t>>& v) {
+        v.erase(std::remove_if(v.begin(), v.end(), [&](const auto& t) {
+            return std::get<0>(t) == neighborIp && std::get<1>(t) == key;
+        }), v.end());
+    });
 
-    // Find the interface to remove the neighbor from
-    {
-        auto& iface = base.getIfaceMgr();
-        auto intIt = iface.eigrpInterfaceList.find(key);
-        if (intIt != iface.eigrpInterfaceList.end())
-        {
-            intIt->second.getNTable().deleteNeighbor(neighborIp, true);
-        }
-    }
+    auto* iface = base.getIfaceMgr().getInterface(key);
+    if (iface)
+        iface->getNTable().deleteNeighbor(neighborIp, true);
+}
+
+bool EigrpConfig::isPassive(uint32_t key) const
+{
+    bool found = false;
+    configs->get<Config::Eigrp::PASSIVE_INTERFACES>().withRead([&](const std::vector<uint32_t>& v) {
+        found = std::find(v.begin(), v.end(), key) != v.end();
+    });
+    return found;
+}
+
+std::unordered_set<IPAddress> EigrpConfig::getUnicastNeighbors(uint32_t key) const
+{
+    std::unordered_set<IPAddress> result;
+    configs->get<Config::Eigrp::NEIGHBOR>().withRead([&](const std::vector<std::tuple<IPAddress, uint32_t>>& v) {
+        for (const auto& [ip, ifaceKey] : v)
+            if (ifaceKey == key)
+                result.insert(ip);
+    });
+    return result;
+}
+
+StubConfig EigrpConfig::getStubConfig() const
+{
+    StubConfig s;
+    auto& reg = configs.get();
+    s.isStub               = reg.get<Config::Eigrp::STUB>().load();
+    s.advertiseConnected   = reg.get<Config::Eigrp::STUB_CONNECTED>().load();
+    s.advertiseStatic      = reg.get<Config::Eigrp::STUB_STATIC>().load();
+    s.advertiseSummary     = reg.get<Config::Eigrp::STUB_SUMMARY>().load();
+    s.advertiseRedistributed = reg.get<Config::Eigrp::STUB_REDISTRIBUTED>().load();
+    s.receiveOnly          = reg.get<Config::Eigrp::STUB_RECEIVE_ONLY>().load();
+    auto& leakMap = reg.get<Config::Eigrp::STUB_LEAK_MAP>();
+    s.advertiseLeakMap     = leakMap.hasValue();
+    return s;
+}
+
+KValue EigrpConfig::getKValues() const
+{
+    auto& reg = configs.get();
+    return KValue(
+        reg.get<Config::Eigrp::WEIGTH_K1>().load(),
+        reg.get<Config::Eigrp::WEIGHT_K2>().load(),
+        reg.get<Config::Eigrp::WEIGHT_K3>().load(),
+        reg.get<Config::Eigrp::WEIGHT_k4>().load(),
+        reg.get<Config::Eigrp::WEIGHT_k5>().load()
+    );
 }
 }

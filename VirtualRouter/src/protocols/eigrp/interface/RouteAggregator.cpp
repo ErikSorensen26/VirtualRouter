@@ -2,21 +2,20 @@
 
 #include "RouteAggregator.h"
 #include "EigrpInterface.h"
-#include "eigrp/core/Eigrp.h"
 #include "interface/configs/InterfaceConfigs.h"
+#include "eigrp/core/Eigrp.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 RouteAggregator::RouteAggregator(EigrpInterface& iface)
     : iface(iface) {}
 
 RouteAggregator::~RouteAggregator()
 {
-    std::shared_lock<std::shared_mutex> lock(iface.configs.configsMutex);
     for (const auto& [prefix, sr] : summaryRoutes)
     {
         if (!sr.isAuto)
-            iface.configs.pendingSummaryRoutes.emplace_back(prefix);
+            iface.pendingSummaryRoutes.emplace_back(prefix);
     }
     clearAutoSummaries();
     summaryRoutes.clear();

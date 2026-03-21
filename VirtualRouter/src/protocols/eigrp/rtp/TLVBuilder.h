@@ -12,10 +12,11 @@
 struct IPAddress;
 struct EigrpHeader;
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 struct ReceivedRoute;
+struct RouteInfo;
 
 class TLVBuilder
 {
@@ -44,9 +45,9 @@ public:
         { return (static_cast<uint16_t>(t) & 0xFF00) == 0x0600; }
 
     static uint8_t encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_t maxSize, const RouteInfo* route, uint64_t currentBandwidth, uint64_t currentDelay, RouteType type);
-    static uint8_t* encodeStubOption(uint8_t* out, const EigrpConfigs::StubConfig& stub);
+    static uint8_t* encodeStubOption(uint8_t* out, const EIGRP::StubConfig& stub);
     static std::optional<ReceivedRoute> decodeRoute(const TLV16Option& routeOpt, uint32_t ifaceLearned, AddressFamily af);
-    static uint8_t* calculateParameters(uint8_t* out, const EigrpConfigs::KValue& kvalue, uint16_t holdTime = 0);
+    static uint8_t* calculateParameters(uint8_t* out, const EIGRP::KValue& kvalue, uint16_t holdTime = 0);
 
 private:
 

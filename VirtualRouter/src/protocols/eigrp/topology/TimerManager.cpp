@@ -6,7 +6,7 @@
 #include "eigrp/core/Eigrp.h"
 #include "DuelEngine.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 TimerManager::TimerManager(Eigrp& base, ProcessQueue& scheduler)
     : base(base), scheduler(scheduler)

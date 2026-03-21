@@ -5,10 +5,9 @@
 #include "InterfaceManager.h"
 #include "Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
-#include "eigrp/EigrpTypes.hpp"
 #include "interface/Interface.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 InterfaceManager::InterfaceManager(Eigrp& base) : base(base) {}
 
@@ -31,26 +30,23 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
         // Add the interface to eigrp even if its down
         AddressFamily af = base.getAF();
         uint32_t as = base.getAS();
+        uint32_t key = interface->configs.key;
 
-        EigrpConfigs::InterfaceConfigs* intConfig;
-        if (base.isNamed())
+        // Get or create registry entry for this interface
+        auto regIt = ifaceRegistryList.find(key);
+        if (regIt == ifaceRegistryList.end())
         {
-            auto configIt = eigrpInterfaceConfigList.find(interface->configs.key);
-            if (configIt == eigrpInterfaceConfigList.end())
-            {
-                auto newConfig = eigrpInterfaceConfigList.emplace(interface->configs.key, interface->configs.key);
-                intConfig = &newConfig.first->second;
-            }
-            else intConfig = &configIt->second;
+            auto inserted = ifaceRegistryList.emplace(
+                key,
+                base.routingInstance->getRegistry().create<Config::EigrpInterfaceRegistry>()
+            );
+            regIt = inserted.first;
         }
-        else
-        {
-            intConfig = interface->getEigrpConfig(as, af, false);
-        }
+        Config::EigrpInterfaceRegistry& ifaceReg = regIt->second.get();
 
         if (af == AddressFamily::IPv4)
         {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(interface->configs.key, base, *intConfig, *interface);
+            auto ifaceIt = eigrpInterfaceList.try_emplace(key, base, ifaceReg, *interface);
             EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
             base.getTopology().synchronizeConnected(*eigrpIfacePtr);
             interface->eigrpInterfaceList[as].IPv4 = eigrpIfacePtr;
@@ -58,7 +54,7 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
         }
         else if (af == AddressFamily::IPv6)
         {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(interface->configs.key, base, *intConfig, *interface);
+            auto ifaceIt = eigrpInterfaceList.try_emplace(key, base, ifaceReg, *interface);
             EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
             base.getTopology().synchronizeConnected(*eigrpIfacePtr);
             interface->eigrpInterfaceList[as].IPv6 = eigrpIfacePtr;
@@ -118,8 +114,11 @@ void InterfaceManager::refreshInterfaceList()
             {
                 bool ipv6Contained = false;
                 if (isNamed)
-                    ipv6Contained = eigrpInterfaceConfigList.contains(ipInfo.key) &&
-                                    !eigrpInterfaceConfigList.at(ipInfo.key).shutdown;
+                {
+                    auto regIt = ifaceRegistryList.find(ipInfo.key);
+                    ipv6Contained = regIt != ifaceRegistryList.end() &&
+                                    !regIt->second.get().get<Config::EigrpInterface::SHUTDOWN>().load();
+                }
                 if (!ipv6Contained)
                     ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&
                                     interface->getVRF() == base.routingInstance;
@@ -128,7 +127,7 @@ void InterfaceManager::refreshInterfaceList()
                 if (it != eigrpInterfaceList.end())
                     remake = inRange && ipInfo.ipv6.getLocalAddress().addr != it->second.ifaceAddress.v6();
             }
-            
+
             if (remake)
             {
                 auto node = eigrpInterfaceList.extract(it);

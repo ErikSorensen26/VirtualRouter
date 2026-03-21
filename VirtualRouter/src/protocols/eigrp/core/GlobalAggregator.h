@@ -3,7 +3,7 @@
 #ifndef EIGRP_GLOBAL_AGGREGATOR_H
 #define EIGRP_GLOBAL_AGGREGATOR_H
 
-namespace Eigrp
+namespace EIGRP
 {
 class Eigrp;
 struct TopologyEntry;

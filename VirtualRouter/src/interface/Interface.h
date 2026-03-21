@@ -19,7 +19,7 @@ struct HwIfaceInfo; ///< Forward declaration of HwIfaceInfo.
 
 enum class InterfaceType : uint8_t; ///< Forward declaration of InterfaceType.
 
-namespace Eigrp
+namespace EIGRP
 {
 struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
 }
@@ -345,7 +345,7 @@ public:
 
     // EIGRP INTERFACES
 
-    std::unordered_map<uint32_t, Eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
+    std::unordered_map<uint32_t, EIGRP::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
 
     /**
      * @brief Retrieve or allocate EIGRP per-interface config block.

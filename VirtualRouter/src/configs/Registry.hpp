@@ -3,6 +3,8 @@
 #ifndef REGISTRY_HPP
 #define REGISTRY_HPP
 
+#include "registry/router/EigrpInterfaceRegistry.h"
+#include "registry/router/EigrpRegistry.h"
 #include "registry/router/OspfInterfaceRegistry.h"
 #include "registry/router/OspfRegistry.h"
 #include "registry/router/BgpRegistry.h"
@@ -12,6 +14,8 @@
 namespace Config
 {
 using Registry = RegistryDatabase<
+    EigrpRegistry,
+    EigrpInterfaceRegistry,
     OspfRegistry,
     OspfAreaRegistry,
     OspfAddressFamilyV2Registry,

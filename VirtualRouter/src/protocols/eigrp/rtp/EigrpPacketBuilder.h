@@ -12,7 +12,7 @@ class TLV16BufferManager;
 class PacketBuilder;
 struct IPAddress;
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 class EigrpConfig;

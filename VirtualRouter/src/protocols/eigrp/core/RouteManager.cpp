@@ -10,7 +10,7 @@
 #include "routing/RoutingTable.hpp"
 #include "interface/Interface.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 
 RouteManager::RouteManager(Eigrp& process)
@@ -24,13 +24,13 @@ void RouteManager::withdrawRoute(const IPPrefix withdraw)
 {
     if (af == AddressFamily::IPv4)
     {
-        rib.removeEntry<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
-        rib.removeEntry<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+        rib.removeRoute<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
+        rib.removeRoute<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
     }
     else
     {
-        rib.removeEntry<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
-        rib.removeEntry<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+        rib.removeRoute<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
+        rib.removeRoute<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
     }
 }
 

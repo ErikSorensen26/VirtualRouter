@@ -11,7 +11,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/Interface.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 Eigrp::Eigrp(uint32_t as, AddressFamily af, VirtualRouter* vrf, bool named)
   : routingInstance(vrf),

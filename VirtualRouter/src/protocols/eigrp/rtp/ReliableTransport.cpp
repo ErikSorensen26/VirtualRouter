@@ -21,7 +21,7 @@
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
 
-namespace Eigrp
+namespace EIGRP
 {
 ReliableTransport::ReliableTransport(EigrpInterface& iface) : iface(iface)
 {
@@ -140,7 +140,7 @@ void ReliableTransport::sendRetransmission(Neighbor& neighbor, StaticHeader& hea
         .iface = interface,
         .packetInfo = retransmissionPacket,
         .destIp = neighbor.ipAddress.raw,
-        .DSCP = iface.configs.DSCP.load(std::memory_order_relaxed),
+        .DSCP = iface.DSCP.load(std::memory_order_relaxed),
         .protocolType = IP_EIGRP
     };
 

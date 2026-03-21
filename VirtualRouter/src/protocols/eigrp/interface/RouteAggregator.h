@@ -5,11 +5,12 @@
 
 #include <map>
 #include <set>
+#include <limits>
 #include <IPAddress.h>
 
 struct IPAddress;
 
-namespace Eigrp
+namespace EIGRP
 {
 class EigrpInterface;
 
