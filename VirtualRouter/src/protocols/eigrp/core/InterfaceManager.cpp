@@ -16,7 +16,6 @@ InterfaceManager::~InterfaceManager() {}
 
 EigrpInterface* InterfaceManager::getInterface(uint32_t key)
 {
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     if (auto it = eigrpInterfaceList.find(key); it != eigrpInterfaceList.end())
         return &it->second;
     return nullptr;
@@ -78,10 +77,6 @@ void InterfaceManager::refreshInterfaceList()
 
     {
         std::vector<std::map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
-
-        // Lock global interface state
-        std::shared_lock<std::shared_mutex> sysLock(base.routingInstance->interfaceMutex);
-        std::unique_lock<std::shared_mutex> lock(interfaceMutex);
 
         // Remove shutdown interfaces
         for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)
@@ -169,7 +164,6 @@ void InterfaceManager::refreshInterfaceList()
 
 void InterfaceManager::deactivateAll()
 {
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     eigrpInterfaceList.clear();
 }
 }

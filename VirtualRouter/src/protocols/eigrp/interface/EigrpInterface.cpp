@@ -21,7 +21,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, EigrpConfigs::InterfaceConfig
     auth(intConfigs, eigrpSystem.routingInstance->getGlobal().keyChainManager),
     metrics(*this),
     aggregator(*this),
-    tmgr(*this, eigrpSystem.routingInstance->getGlobal().timeManager)
+    tmgr(*this, eigrpSystem.getScheduler())
 {
     // Set local ip
     if (base.getAF() == AddressFamily::IPv4)
@@ -108,7 +108,6 @@ void EigrpInterface::setPassiveMode(bool passive)
     configs.isPassive.store(passive, std::memory_order_release);
     if (passive)
     {
-        std::shared_lock<std::shared_mutex> lock(ntable.neighborMutex);
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
         {
             tmgr.cancelHoldTimer(it->second);

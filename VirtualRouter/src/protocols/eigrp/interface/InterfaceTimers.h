@@ -9,7 +9,7 @@
 #include <IPAddress.h>
 
 class Global;
-class TimeManager;
+class ProcessQueue;
 class Internal_EigrpTest;
 struct StaticHeader;
 namespace EigrpConfigs
@@ -31,7 +31,7 @@ class InterfaceTimers
 {
 public:
     friend class ::Internal_EigrpTest;
-    InterfaceTimers(EigrpInterface& iface, TimeManager& tmgr);
+    InterfaceTimers(EigrpInterface& iface, ProcessQueue& scheduler);
     ~InterfaceTimers();
 
     // Hello
@@ -65,7 +65,6 @@ public:
 private:
 
     // Hello timer
-    std::mutex helloTimerMutex;
     std::atomic<uint32_t> helloTimerId = 0; ///< Timer ID for the Hello timer.
     std::chrono::steady_clock::time_point helloStartTime; ///< Start time for the Hello timer.
 
@@ -77,7 +76,7 @@ private:
 
     Eigrp* base;
     EigrpInterface& iface;
-    TimeManager& tmgr;
+    ProcessQueue& scheduler;
 };
 }
 

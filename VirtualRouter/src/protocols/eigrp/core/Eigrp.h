@@ -10,8 +10,9 @@
 
 #include <utility>
 #include <cstdint>
-#include <mutex>
 #include <cstring>
+
+#include <ControlScheduler.h>
 
 #include "packet/HeaderHelpers.hpp"
 #include "eigrp/core/EigrpConfig.h"
@@ -96,6 +97,8 @@ public:
     inline uint32_t routerID() const { return rid.id; }
     inline void routerID(uint32_t id) { rid.id = id; rid.isStatic = true; }
 
+    ProcessQueue& getScheduler() { return scheduler; }
+
     bool isNamed() const { return namedMode; }
     uint16_t getAS() const { return asNumber; }
     AddressFamily getAF() const { return addressFamily; }
@@ -117,10 +120,11 @@ private:
     RouterID rid; ///< Router ID configuration.
     uint16_t virtualRouterID = 0x0000; ///< Virtual Router ID.
 
+    ProcessQueue scheduler;
+
 public:
     RouteManager routeManager;
     std::unordered_map<IPAddress, Neighbor*> allNeighbors;
-    std::mutex neighborMutex;
 
 };
 

@@ -90,9 +90,6 @@ public:
     std::map<uint32_t, UnicastReliablePacket> reliablePackets;
     std::set<uint32_t> activeConditions;
     std::unordered_map<uint32_t, bool> receivedConditions;
-    mutable std::mutex reliableMtx;
-
-    std::mutex ackMtx;
 
 private:
     // Internal state

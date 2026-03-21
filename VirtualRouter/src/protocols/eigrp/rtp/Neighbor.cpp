@@ -54,7 +54,6 @@ Neighbor::~Neighbor()
     if (unicast)
     {
         auto& base = iface.getBase();
-        std::unique_lock<std::shared_mutex> lock(base.getConfigs().configsMutex);
         base.getConfigs().unicastNeighbors[iface.interfaceKey].insert(ipAddress);
     }
 }
@@ -82,7 +81,6 @@ void Neighbor::clear()
 
 bool Neighbor::pushAck(uint32_t ack)
 {
-    std::lock_guard<std::mutex> lock(ackMtx);
     if (outstandingAcks.contains(ack)) return false;
     ackQueue.push_back(ack);
     outstandingAcks.insert(ack);
@@ -91,7 +89,6 @@ bool Neighbor::pushAck(uint32_t ack)
 
 bool Neighbor::popAck(uint32_t& ack)
 {
-    std::lock_guard<std::mutex> lock(ackMtx);
     if (ackQueue.empty()) return false;
     ack = ackQueue.front();
     ackQueue.pop_front();
@@ -101,14 +98,12 @@ bool Neighbor::popAck(uint32_t& ack)
 
 void Neighbor::removeAck(uint32_t ack)
 {
-    std::lock_guard<std::mutex> lock(ackMtx);
     std::erase(ackQueue, ack);
     outstandingAcks.erase(ack);
 }
 
 bool Neighbor::hasAck(uint32_t ack)
 {
-    std::lock_guard<std::mutex> lock(ackMtx);
     return outstandingAcks.contains(ack);
 }
 
@@ -120,7 +115,6 @@ bool Neighbor::isActive() const noexcept
 void Neighbor::clearReliable()
 {
     auto& rtp = iface.getRtp();
-    std::lock_guard<std::mutex> relock(rtp.reliableMtx);
     uint32_t current = currentReliable.load(std::memory_order_relaxed);
     currentReliable.store(0, std::memory_order_release);
     if (current != 0)
@@ -136,7 +130,6 @@ void Neighbor::clearReliable()
                 rtp.reliablePackets.erase(current);
         }
     }
-    std::lock_guard<std::mutex> lock(reliableMtx);
     if (!activeConditions.empty())
     {
         for (const auto& condition : activeConditions)

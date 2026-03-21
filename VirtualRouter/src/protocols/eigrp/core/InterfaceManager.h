@@ -5,7 +5,6 @@
 
 #include <unordered_map>
 #include <map>
-#include <shared_mutex>
 
 namespace EigrpConfigs
 {
@@ -36,7 +35,6 @@ public:
     // Lists
     std::map<uint32_t, EigrpInterface> eigrpInterfaceList; ///< Map of EIGRP interfaces by identifier.
     std::unordered_map<uint32_t, EigrpConfigs::InterfaceConfigs> eigrpInterfaceConfigList; ///< Map of EIGRP interface config by identifier.
-    std::shared_mutex interfaceMutex;
 
 private:
     Eigrp& base;

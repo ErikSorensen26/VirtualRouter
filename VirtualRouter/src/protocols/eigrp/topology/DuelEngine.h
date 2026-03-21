@@ -87,7 +87,6 @@ private:
     // Lists
     std::set<std::pair<IPAddress, TopologyEntry*>> pendingUpdates;
     std::map<IPPrefix, ActiveRoute> activeRoutes; ///< Map of outstanding query IDs to neighbor IPs and timer IDs.
-    std::mutex activeMutex;
 };
 }
 

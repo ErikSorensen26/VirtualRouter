@@ -13,8 +13,6 @@ TopologyTable::~TopologyTable() {}
 
 std::vector<const RouteInfo*> TopologyTable::getSuccessors(const IPPrefix& prefix)
 {
-    std::lock_guard<std::mutex> lock(tableMutex);
-    
     auto* entry = find(prefix);
     if (!entry) return {};
 
@@ -28,13 +26,11 @@ std::vector<const RouteInfo*> TopologyTable::getSuccessors(const IPPrefix& prefi
 std::vector<const RouteInfo*> TopologyTable::getAllRoutes()
 {
     std::vector<const RouteInfo*> routesToSend;
-    std::lock_guard<std::mutex> lock(tableMutex);
 
     for (const auto& [prefix, entryPtr] : topologyEntries)
     {
         if (!entryPtr)
             continue;
-        std::lock_guard<std::mutex> entryLock(entryPtr->entryMutex);
 
         const IPAddress& bestNeighbor = entryPtr->bestNeighbor;
         auto it = entryPtr->routesBySource.find(bestNeighbor);
@@ -49,8 +45,6 @@ std::vector<const RouteInfo*> TopologyTable::getAllRoutes()
 
 RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighbor, TopologyEntry& entry)
 {
-    std::lock_guard<std::mutex> lock(tableMutex);
-
     // Create or update the topology table entry
     IPAddress neighborIp = neighbor ? neighbor->ipAddress : route.nextHop;
     auto it = entry.routesBySource.find(neighborIp);
@@ -80,7 +74,6 @@ RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neigh
 
 std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const IPPrefix& prefix, const IPAddress& neighbor)
 {
-    std::lock_guard<std::mutex> lock(tableMutex);
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
         if (auto rit = it->second->routesBySource.find(neighbor); rit != it->second->routesBySource.end())
             return {it->second, &rit->second};
@@ -89,8 +82,6 @@ std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const IPPrefix& pr
 
 TopologyEntry& TopologyTable::ensure(const IPPrefix& prefix)
 {
-    std::lock_guard<std::mutex> lock(tableMutex);
-
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
         return *it->second;
     TopologyEntry* entry = new TopologyEntry();
@@ -102,8 +93,6 @@ TopologyEntry& TopologyTable::ensure(const IPPrefix& prefix)
 
 TopologyEntry* TopologyTable::find(const IPPrefix& prefix)
 {
-    std::lock_guard<std::mutex> lock(tableMutex);
-
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
     {
         return it->second;
@@ -113,8 +102,6 @@ TopologyEntry* TopologyTable::find(const IPPrefix& prefix)
 
 void TopologyTable::markRouteUnreachable(RouteInfo& route, const IPAddress& neighborIp, TopologyEntry& entry)
 {
-    std::lock_guard<std::mutex> lock(entry.entryMutex);
-
     route.routeInfo.feasibleDistance = std::numeric_limits<uint64_t>::max();
     route.routeInfo.delay = std::numeric_limits<uint64_t>::max();
     route.isFeasibleSuccessor = false;
@@ -134,7 +121,6 @@ void TopologyTable::markRouteUnreachable(RouteInfo& route, const IPAddress& neig
 
 void TopologyTable::pruneExpired()
 {
-    std::lock_guard<std::mutex> lock(tableMutex);
     auto now = std::chrono::steady_clock::now();
     for (auto it = topologyEntries.begin(); it != topologyEntries.end();)
     {
@@ -148,8 +134,6 @@ void TopologyTable::pruneExpired()
 void TopologyTable::pruneNeighbor(const IPAddress& neighborIp)
 {
     {
-        std::lock_guard<std::mutex> lock(tableMutex);
-
         for (auto& [_, entry] : topologyEntries)
         {
             if (auto it = entry->routesBySource.find(neighborIp); it != entry->routesBySource.end())

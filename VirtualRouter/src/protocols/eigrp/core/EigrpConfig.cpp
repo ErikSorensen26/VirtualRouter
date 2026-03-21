@@ -106,7 +106,6 @@ void EigrpConfig::setPassiveInterface(uint32_t key, bool add)
 
     // Make the interface passive if it already exists
     auto& ifmgr = base.getIfaceMgr();
-    std::shared_lock<std::shared_mutex> lock(ifmgr.interfaceMutex);
     auto intIt = ifmgr.eigrpInterfaceList.find(key);
     if (intIt != ifmgr.eigrpInterfaceList.end())
     {
@@ -125,7 +124,6 @@ void EigrpConfig::enableUnicastPeer(const IPAddress& neighborIp, uint32_t key)
     // Find the interface to add the neighbor
     {
         auto& iface = base.getIfaceMgr();
-        std::shared_lock<std::shared_mutex> intLock(iface.interfaceMutex);
         auto intIt = iface.eigrpInterfaceList.find(key);
         if (intIt != iface.eigrpInterfaceList.end())
         {
@@ -145,7 +143,6 @@ void EigrpConfig::disableUnicastPeer(const IPAddress& neighborIp, uint32_t key)
     // Find the interface to remove the neighbor from
     {
         auto& iface = base.getIfaceMgr();
-        std::shared_lock<std::shared_mutex> intLock(iface.interfaceMutex);
         auto intIt = iface.eigrpInterfaceList.find(key);
         if (intIt != iface.eigrpInterfaceList.end())
         {

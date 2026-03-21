@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <IPAddress.h>
 #include <chrono>
-#include <mutex>
 #include <map>
 #include <unordered_set>
 
@@ -130,7 +129,6 @@ struct SuppressionInfo
 
 struct TopologyEntry
 {
-    std::mutex entryMutex;
     enum class State { ACTIVE, PASSIVE, POISENED };
     IPPrefix prefix;
     std::map<IPAddress, RouteInfo> routesBySource; ///< Routes learned from each neighbor.
@@ -166,9 +164,7 @@ public:
     std::vector<const RouteInfo*> getSuccessors(const IPPrefix& prefix);
     std::vector<const RouteInfo*> getAllRoutes();
 
-    std::unordered_map<IPPrefix, TopologyEntry*>& entries() { std::lock_guard<std::mutex> lock(tableMutex); return topologyEntries; }
-
-    std::mutex tableMutex;
+    std::unordered_map<IPPrefix, TopologyEntry*>& entries() { return topologyEntries; }
 
 private:
     std::unordered_map<IPPrefix, TopologyEntry*> topologyEntries;

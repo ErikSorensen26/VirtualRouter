@@ -22,6 +22,7 @@ Eigrp::Eigrp(uint32_t as, AddressFamily af, VirtualRouter* vrf, bool named)
     configMgr(*this),
     aggregator(*this),
     namedMode(named),
+    scheduler(vrf->getControlScheduler().create()),
     routeManager(*this)
 {
     start();
@@ -42,7 +43,6 @@ void Eigrp::broadcastRouteChanges(const std::vector<const RouteInfo*>& changedRo
     if (changedRoutes.empty())
         return;
 
-    std::shared_lock<std::shared_mutex> lock(ifaceMgr.interfaceMutex);
     for (auto& [_, iface] : ifaceMgr.eigrpInterfaceList)
     {
         iface.notifyRoutingChange(changedRoutes);
@@ -79,13 +79,11 @@ bool Eigrp::calculateRID()
 
 void Eigrp::addGlobalNeighbor(const IPAddress& neighborIp, Neighbor* neighbor)
 {
-    std::lock_guard<std::mutex> globalLock(neighborMutex);
     allNeighbors[neighborIp] = neighbor;
 }
 
 void Eigrp::delGlobalNeighbor(const IPAddress& neighborIp)
 {
-    std::lock_guard<std::mutex> globalLock(neighborMutex);
     allNeighbors.erase(neighborIp);
 }
 }

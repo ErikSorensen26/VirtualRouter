@@ -131,11 +131,7 @@ void ReliableTransport::attemptSendAck(Neighbor& neighbor, uint32_t seq)
 void ReliableTransport::sendAck(Neighbor& neighbor, uint32_t seq)
 {
     neighbor.removeAck(seq);
-
-    {
-        std::lock_guard<std::mutex> lock(neighbor.reliableMtx);
-        neighbor.receivedConditions.erase(seq);
-    }
+    neighbor.receivedConditions.erase(seq);
 
     PacketBuilder pkt(iface.getIface());
     createPacket(pkt);

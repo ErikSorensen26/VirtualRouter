@@ -4,7 +4,6 @@
 #define EIGRP_NEIGHBOR_TABLE_H
 
 #include <unordered_set>
-#include <shared_mutex>
 #include <IPAddress.h>
 #include "Neighbor.h"
 
@@ -33,7 +32,6 @@ public:
     void disableMulticast();
     
     // Neighbor management
-    std::shared_mutex neighborMutex; ///< Shared mutex for neighbor operations.
     std::map<IPAddress, Neighbor> neighbors; ///< Map of neighbor IPs to their information.
     std::unordered_set<IPAddress> unicast;
 

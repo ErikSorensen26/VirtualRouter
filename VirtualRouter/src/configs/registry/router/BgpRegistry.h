@@ -12,7 +12,6 @@
 #include "configs/RegistryDefaultTable.hpp"
 #include "configs/SubRegistry.hpp"
 
-
 namespace BGP
 {
 enum class SlowPeerMode

@@ -11,7 +11,6 @@ namespace Eigrp
 NeighborTable::NeighborTable(EigrpInterface& iface) : iface(iface)
 {
     auto& configs = iface.getBase().getConfigs();
-    std::shared_lock<std::shared_mutex> lock(configs.configsMutex);
     if (auto it = configs.unicastNeighbors.find(iface.interfaceKey); it != configs.unicastNeighbors.end())
         for (auto& ip : it->second)
             createNeighbor(ip, Neighbor::Version::UNKNOWN, true);
@@ -20,13 +19,10 @@ NeighborTable::NeighborTable(EigrpInterface& iface) : iface(iface)
 Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::Version v, bool isUnicast)
 {
     // Add neighbor only if it doesn't already exist
-    std::unique_lock<std::shared_mutex> intLock(neighborMutex);
-
     auto& base = iface.getBase();
 
     if (isUnicast)
     {
-        std::unique_lock<std::shared_mutex> lock(base.getConfigs().configsMutex);
         base.getConfigs().unicastNeighbors[iface.interfaceKey].insert(neighborIp);
         unicast.insert(neighborIp);
     }
@@ -93,7 +89,6 @@ void NeighborTable::removeAllMulticast()
 void NeighborTable::deleteNeighbor(const IPAddress& neighborIp, bool isUnicast)
 {
     // Find the neighbor and remove it if present
-    std::unique_lock<std::shared_mutex> lock(neighborMutex);
     auto neighborIt = neighbors.find(neighborIp);
     if (neighborIt != neighbors.end())
     {
@@ -113,7 +108,6 @@ void NeighborTable::deleteNeighbor(const IPAddress& neighborIp, bool isUnicast)
 std::vector<Neighbor*> NeighborTable::lookupUnicast()
 {
     std::vector<Neighbor*> unicastNeighbors;
-    std::shared_lock<std::shared_mutex> lock(neighborMutex);
     for (auto& [_, neighbor] : neighbors)
     {
         if (neighbor.unicast)
@@ -124,13 +118,11 @@ std::vector<Neighbor*> NeighborTable::lookupUnicast()
 
 size_t NeighborTable::size()
 {
-    std::shared_lock<std::shared_mutex> lock(neighborMutex);
     return neighbors.size();
 }
 
 Neighbor* NeighborTable::lookup(const IPAddress& neighborIp)
 {
-    std::shared_lock<std::shared_mutex> lock(neighborMutex);
     auto it = neighbors.find(neighborIp);
     if (it != neighbors.end())
     {
@@ -142,7 +134,6 @@ Neighbor* NeighborTable::lookup(const IPAddress& neighborIp)
 void NeighborTable::cancelAllHoldTimers()
 {
     auto& timeMgr = iface.getTimers();
-    std::shared_lock<std::shared_mutex> lock(neighborMutex);
     for (auto& [_, neighbor] : neighbors)
     {
         timeMgr.cancelHoldTimer(neighbor);
@@ -151,7 +142,6 @@ void NeighborTable::cancelAllHoldTimers()
 
 void NeighborTable::onDown(Neighbor& neighbor)
 {
-    std::unique_lock<std::shared_mutex> lock(neighborMutex);
     neighbors.erase(neighbor.ipAddress);
     if (neighbors.empty())
     {
@@ -161,7 +151,6 @@ void NeighborTable::onDown(Neighbor& neighbor)
 
 void NeighborTable::resync()
 {
-    std::unique_lock<std::shared_mutex> lock(neighborMutex);
     for (auto it = neighbors.begin(); it != neighbors.end();)
     {
         if ((static_cast<uint16_t>(it->second.tlvType) & 0xFF00) == 0x0600)

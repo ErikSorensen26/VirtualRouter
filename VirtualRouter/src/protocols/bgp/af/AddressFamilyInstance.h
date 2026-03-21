@@ -220,7 +220,7 @@ public:
                 stale.insert(nlriPath.nlri);
         }
 
-        auto& sched = ProcessAccessor::getScheduler(process);
+        auto sched = ProcessAccessor::getScheduler(process);
         auto& procCfgs = ProcessAccessor::getConfigs(process);
 
         auto& sti = staleTimers[peerRid];

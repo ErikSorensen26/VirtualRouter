@@ -10,7 +10,7 @@
 
 namespace Eigrp
 {
-DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.routingInstance->getGlobal().timeManager) {}
+DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
 
 bool DuelEngine::setSuppression(TopologyEntry* entry, uint32_t key)
 {
@@ -46,7 +46,6 @@ void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpI
 std::vector<const RouteInfo*> DuelEngine::findBestRoutes(const IPPrefix& prefix)
 {
     auto* entry = topologyTable.find(prefix);
-    std::lock_guard<std::mutex> lock(topologyTable.tableMutex);
     if (!entry || entry->routesBySource.empty()) return {};
 
     std::vector<const RouteInfo*> routes;
@@ -58,7 +57,6 @@ std::vector<const RouteInfo*> DuelEngine::findBestRoutes(const IPPrefix& prefix)
 const RouteInfo* DuelEngine::findBestRoute(const IPPrefix& prefix)
 {
     auto* entry = topologyTable.find(prefix);
-    std::lock_guard<std::mutex> lock(topologyTable.tableMutex);
     if (!entry || entry->routesBySource.empty() || entry->successors.empty()) return nullptr;
 
     auto it = entry->routesBySource.find(entry->successors[0]);
@@ -71,7 +69,6 @@ void DuelEngine::recalculateAllRoutes()
     for (auto [_, top] : topologyTable.entries())
     {
         if (!top) continue;
-        std::lock_guard<std::mutex> lock(top->entryMutex);
         recalculateSuccessors(top);
     }
 }
@@ -82,7 +79,6 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
 
     for (auto& entry : entries)
     {
-        std::lock_guard<std::mutex> lock(entry->entryMutex);
         if (!recalculateSuccessors(entry))
         {
             activeEntries.push_back(entry);
@@ -171,7 +167,6 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
 {
     if (!entry) return false;
 
-    std::lock_guard<std::mutex> lock(entry->entryMutex);
     bool changed = false;
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
@@ -276,7 +271,6 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
 {
     std::vector<ActiveRoute*> routes = {};
     {
-        std::lock_guard<std::mutex> lock(activeMutex);
         for (auto& entry : entries)
         {
             if (entry->routesBySource.count(entry->bestNeighbor) == 0 ||
@@ -390,7 +384,6 @@ void DuelEngine::processReceivedActiveRoute(const ReceivedRoute& recvRoute, cons
 
 void DuelEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
 {
-    std::lock_guard<std::mutex> lock(activeMutex);
     for (auto& [_, route] : activeRoutes)
     {
         if (auto it = route.pendingQueries.find(neighbor.ipAddress); it != route.pendingQueries.end())
@@ -406,7 +399,6 @@ void DuelEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
 
 void DuelEngine::removeActiveNeighbor(const IPAddress& neighborIp)
 {
-    std::lock_guard<std::mutex> lock(activeMutex);
     for (auto it = activeRoutes.begin(); it != activeRoutes.end();)
     {
         auto next = std::next(it);
@@ -424,7 +416,6 @@ void DuelEngine::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
     ActiveRoute* route = nullptr;
     bool empty = false;
     {
-        std::lock_guard<std::mutex> lock(activeMutex);
         if (query.siaAttempts < 4)
         {
             neighbor.getIface().getRtp().sendSIAQuery(neighbor, {&query});

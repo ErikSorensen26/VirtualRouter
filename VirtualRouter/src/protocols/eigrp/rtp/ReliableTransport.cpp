@@ -48,17 +48,13 @@ bool ReliableTransport::setupUnicastReliable(Neighbor& neighbor, EigrpHeader& bu
         return false;
 
     uint32_t current = 0;
-    std::_Rb_tree_iterator<std::pair<const uint32_t, UnicastReliablePacket>> it;
+    auto it = neighbor.reliablePackets.emplace(seqNum, UnicastReliablePacket{builder, neighbor.ipAddress}).first;
+    it->second.info.sequence = seqNum;
+    current = neighbor.currentReliable.load(std::memory_order_relaxed);
+    if (current != 0)
     {
-        std::lock_guard<std::mutex> lock(neighbor.reliableMtx);
-        it = neighbor.reliablePackets.emplace(seqNum, UnicastReliablePacket{builder, neighbor.ipAddress}).first;
-        it->second.info.sequence = seqNum;
-        current = neighbor.currentReliable.load(std::memory_order_relaxed);
-        if (current != 0)
-        {
-            neighbor.reliableQueue.push_back({seqNum, false});
-            return false;
-        }
+        neighbor.reliableQueue.push_back({seqNum, false});
+        return false;
     }
 
     neighbor.currentReliable.store(seqNum, std::memory_order_release);
@@ -73,14 +69,11 @@ bool ReliableTransport::setupMulticastReliable(EigrpHeader& builder)
         return false;
 
     std::vector<IPAddress> conditions;
-    std::shared_lock<std::shared_mutex> lock(ntable->neighborMutex);
     for (auto& [ip, nbr] : ntable->neighbors)
     {
         if (nbr.currentReliable.load(std::memory_order_relaxed) != 0)
         {
             conditions.push_back(nbr.ipAddress);
-            std::lock_guard<std::mutex> relock(nbr.reliableMtx);
-
             nbr.activeConditions.insert(seqNum);
             nbr.reliableQueue.push_back({seqNum, true});
         }
@@ -91,8 +84,6 @@ bool ReliableTransport::setupMulticastReliable(EigrpHeader& builder)
     }
 
     std::unordered_map<Neighbor*, ReliableInfo> reliableMap;
-    std::lock_guard<std::mutex> relock(reliableMtx);
-
     for (auto& [ip, nbr] : ntable->neighbors)
     {
         auto it = reliableMap.emplace(&nbr, ReliableInfo{});

@@ -77,7 +77,6 @@ public:
     uint32_t getSeq() { return nextSeq.load(std::memory_order_relaxed); }
 
     // Multicast Reliable
-    std::mutex reliableMtx;
     std::map<uint32_t, MulticastReliablePacket> reliablePackets;
 
     struct PktInfo
@@ -134,7 +133,6 @@ private:
 
     NeighborTable* ntable = nullptr;
     EigrpInterface& iface;
-    std::mutex bufferMutex;
 };
 }
 

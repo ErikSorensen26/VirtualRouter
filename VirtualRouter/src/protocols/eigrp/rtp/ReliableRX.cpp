@@ -234,7 +234,6 @@ void ReliableTransport::checkInit(Neighbor& neighbor)
     const uint32_t recvInit = neighbor.recvInitSeq.load(std::memory_order_relaxed);
     const uint32_t sendInit = neighbor.sentInitSeq.load(std::memory_order_relaxed);
 
-    std::lock_guard<std::mutex> lock(reliableMtx);
     const bool ourNullAcked = (sendInit != 0) && !reliablePackets.contains(sendInit);
     const bool theirNullSeen = (recvInit != 0);
 

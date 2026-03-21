@@ -5,7 +5,6 @@
 
 #include <map>
 #include <set>
-#include <mutex>
 #include <IPAddress.h>
 
 struct IPAddress;
@@ -45,7 +44,6 @@ public:
 
 private:
     EigrpInterface& iface;
-    std::mutex mtx;
     std::map<IPPrefix, SummaryRoute> summaryRoutes;
 };
 }

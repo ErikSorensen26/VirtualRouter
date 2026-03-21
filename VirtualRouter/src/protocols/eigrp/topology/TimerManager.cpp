@@ -1,6 +1,6 @@
 // TimerManager.cpp
 
-#include <TimeManager.h>
+#include <ControlScheduler.h>
 
 #include "TimerManager.h"
 #include "eigrp/core/Eigrp.h"
@@ -8,8 +8,8 @@
 
 namespace Eigrp
 {
-TimerManager::TimerManager(Eigrp& base, TimeManager& tmgr)
-    : base(base), tmgr(tmgr)
+TimerManager::TimerManager(Eigrp& base, ProcessQueue& scheduler)
+    : base(base), scheduler(scheduler)
 {}
 
 void TimerManager::startSIATimer(OutgoingQuery& query, Neighbor& neighbor)
@@ -17,7 +17,7 @@ void TimerManager::startSIATimer(OutgoingQuery& query, Neighbor& neighbor)
     auto expirationTime = std::chrono::steady_clock::now() + std::chrono::seconds(base.getGlobalConfigMgr().getSIATime());
 
     // Schedule SIA-Query timer
-    query.siaTimerId = tmgr.addTimer(expirationTime, [
+    query.siaTimerId = scheduler.schedule(expirationTime, [
         this, queryPtr = &query, neighborPtr = &neighbor
     ](uint32_t){
         base.getTopology().handleSIATimeout(*queryPtr, *neighborPtr);
@@ -28,7 +28,7 @@ void TimerManager::cancelSIATimer(OutgoingQuery& query)
 {
     if (query.siaTimerId != 0)
     {
-        tmgr.cancelTimer(query.siaTimerId);
+        scheduler.cancel(query.siaTimerId);
         query.siaTimerId = 0;
     }
 }

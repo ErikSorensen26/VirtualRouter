@@ -1,6 +1,5 @@
 // EigrpInterfaceSummary.cpp
 
-#include <mutex>
 #include "RouteAggregator.h"
 #include "EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
@@ -25,8 +24,6 @@ RouteAggregator::~RouteAggregator()
 
 void RouteAggregator::clearAutoSummaries()
 {
-    std::lock_guard<std::mutex> lock(mtx);
-    
     std::vector<IPPrefix> withdraws;
     for (auto route : summaryRoutes)
         if (route.second.isAuto)
@@ -215,10 +212,7 @@ void RouteAggregator::updateAllSummaryRoutes(bool isAuto)
 
 void RouteAggregator::installSummaries(const std::set<IPPrefix>& prefixes, bool isAuto)
 {
-    std::lock_guard<std::mutex> lock(mtx);
-
     auto createSumRoute = [&](TopologyEntry& top, ReceivedRoute& r) -> RouteInfo* {
-        std::lock_guard<std::mutex>  toplock(top.entryMutex);
         auto it = top.routesBySource.emplace(iface.ifaceAddress, RouteInfo{r});
         return &it.first->second;
     };
@@ -246,8 +240,6 @@ void RouteAggregator::installSummaries(const std::set<IPPrefix>& prefixes, bool 
 
 void RouteAggregator::installSummary(const IPPrefix& prefix, bool isAuto)
 {
-    std::lock_guard<std::mutex> lock(mtx);
-
     if (summaryRoutes.contains(prefix)) return;
     auto sit = summaryRoutes.emplace(prefix, SummaryRoute{ .isAuto = isAuto });
     SummaryRoute& s = sit.first->second;
@@ -257,7 +249,6 @@ void RouteAggregator::installSummary(const IPPrefix& prefix, bool isAuto)
 
     auto& top = iface.getTopController().ensure(prefix);
     auto createSumRoute = [&](TopologyEntry& top) -> RouteInfo* {
-        std::lock_guard<std::mutex>  toplock(top.entryMutex);
         auto it = top.routesBySource.emplace(iface.ifaceAddress, RouteInfo{r});
         return &it.first->second;
     };

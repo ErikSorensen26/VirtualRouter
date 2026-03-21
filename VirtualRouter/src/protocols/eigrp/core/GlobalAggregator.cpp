@@ -13,7 +13,6 @@ GlobalAggregator::GlobalAggregator(Eigrp& base) : base(base) {}
 
 void GlobalAggregator::addSummary(TopologyEntry& top)
 {
-    std::shared_lock<std::shared_mutex> lock(base.getIfaceMgr().interfaceMutex);
     for (auto& [id, iface] : base.getIfaceMgr().eigrpInterfaceList)
     {
         if (auto* sum = iface.getAggregator().isSummarized(top.prefix); sum)
@@ -27,7 +26,6 @@ void GlobalAggregator::addSummary(TopologyEntry& top)
 void GlobalAggregator::updateSummary(TopologyEntry& top)
 {
     if (top.suppression.empty()) return;
-    std::shared_lock<std::shared_mutex> lock(base.getIfaceMgr().interfaceMutex);
     auto& interfaces = base.getIfaceMgr().eigrpInterfaceList;
     auto bestRt = top.successors.begin();
     if (bestRt == top.successors.end()) return;
@@ -63,7 +61,6 @@ void GlobalAggregator::enableAutoSummary(bool enable)
             classfulGroups.emplace(entry.first.v4(), entry.first.getDefaultMask());
         }
 
-        std::shared_lock<std::shared_mutex> lock(ifmgr.interfaceMutex);
         for (auto& [_, iface] : ifmgr.eigrpInterfaceList)
         {
             iface.getAggregator().installSummaries(classfulGroups, true);
@@ -71,7 +68,6 @@ void GlobalAggregator::enableAutoSummary(bool enable)
     }
     else
     {
-        std::shared_lock<std::shared_mutex> lock(ifmgr.interfaceMutex);
         for (auto& [_, iface] : ifmgr.eigrpInterfaceList)
         {
             iface.getAggregator().clearAutoSummaries();
@@ -82,7 +78,6 @@ void GlobalAggregator::enableAutoSummary(bool enable)
 void GlobalAggregator::recomputeAutoSummaries()
 {
     auto& ifmgr = base.getIfaceMgr();
-    std::shared_lock<std::shared_mutex> lock(ifmgr.interfaceMutex);
     for (auto& [_, iface] : ifmgr.eigrpInterfaceList)
     {
         iface.getAggregator().updateAllSummaryRoutes(true);

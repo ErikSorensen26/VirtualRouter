@@ -6,7 +6,7 @@
 #include <IPAddress.h>
 
 class Global;
-class TimeManager;
+class ProcessQueue;
 
 namespace Eigrp
 {
@@ -19,7 +19,7 @@ class Neighbor;
 class TimerManager
 {
 public:
-    TimerManager(Eigrp& base, TimeManager& tmgr);
+    TimerManager(Eigrp& base, ProcessQueue& scheduler);
 
     void startSIATimer(OutgoingQuery& entry, Neighbor& neighbor);
     void cancelSIATimer(OutgoingQuery& entry);
@@ -27,7 +27,7 @@ public:
 private:
 
     Eigrp& base;
-    TimeManager& tmgr;
+    ProcessQueue& scheduler;
 };
 }
 
