@@ -25,7 +25,7 @@ set(VR_PUBLIC_INCLUDE_ROOTS
 set(VR_PUBLIC_INCLUDE_DIRS
     global
     utils
-    protocols
+    routing
     services
     transport
     types

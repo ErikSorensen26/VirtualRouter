@@ -148,7 +148,7 @@ VirtualRouter/src/
 ├── global/                     Per-VRF system objects: VirtualRouter, RoutingTable
 │   └── routing/                RIB, FIB, RouteWatcher, RibBucket
 │
-├── protocols/
+├── routing/
 │   ├── bgp/                    Full RFC 4271 BGP implementation
 │   │   ├── af/                 AddressFamily template system + per-AF instance
 │   │   ├── decision/           BestPath comparator + DecisionEngine
