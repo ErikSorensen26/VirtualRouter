@@ -121,14 +121,14 @@ bool VirtualRouter::removeInterface(uint32_t key)
 }
 
 // Eigrp Autonomous Systems
-Eigrp::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
+EIGRP::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
 {
     if (eigrpList.contains(id))
         return nullptr;
     return &eigrpList[id];
 }
 
-Eigrp::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
+EIGRP::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
 {
     if (auto it = eigrpList.find(id); it != eigrpList.end())
         return &it->second;
@@ -146,12 +146,12 @@ bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
 }
 
 // Eigrp Named Systems
-Eigrp::EigrpNamed& VirtualRouter::addEigrpNamed(const std::string& name)
+EIGRP::EigrpNamed& VirtualRouter::addEigrpNamed(const std::string& name)
 {
     return namedEigrpList[name];
 }
 
-Eigrp::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
+EIGRP::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
 {
     if (auto it = namedEigrpList.find(name); it != namedEigrpList.end())
         return &it->second;
@@ -188,7 +188,6 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
                     removeEigrpAutonomousSystem(as);
                 }
             }
-
         }
         namedEigrpList.erase(name);
         return true;

@@ -16,6 +16,7 @@
 #include "TopologyController.h"
 #include "eigrp/rtp/ReliableTransport.h"
 #include "eigrp/rtp/NeighborTable.h"
+#include "configs/RegistryReference.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
 class Internal_EigrpTest;
@@ -34,7 +35,7 @@ class EigrpInterface
 {
 public:
     friend class ::Internal_EigrpTest;
-    EigrpInterface(Eigrp& eigrpSystem, Config::EigrpInterfaceRegistry& ifaceReg, Interface& interface);
+    EigrpInterface(Eigrp& eigrpSystem, Config::Reference<Config::EigrpInterfaceRegistry>& ifaceReg, Interface& interface);
     ~EigrpInterface();
 
     EigrpInterface(const EigrpInterface&) = delete;
@@ -59,10 +60,10 @@ public:
 
     bool isAuthEnabled() const
     {
-        return configs.get<Config::EigrpInterface::AUTHENTICATION_MODE>().load() != AuthType::NONE;
+        return configs->get<Config::EigrpInterface::AUTHENTICATION_MODE>().load() != AuthType::NONE;
     }
 
-    Config::EigrpInterfaceRegistry& configs; ///< Registry-backed configuration for this interface.
+    Config::Reference<Config::EigrpInterfaceRegistry> configs; ///< Registry-backed configuration for this interface.
 
     // Runtime state (not persisted in registry)
     std::atomic<bool> multicastEnabledFlag{true};

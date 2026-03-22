@@ -491,10 +491,15 @@ private:
             recomputeNlri(n);
     }
 
+    void recomputeNlri(const NlriT& nlri)
+    {
+        recomputeNlri(std::vector<NlriT>{nlri});
+    }
+
     void recomputeNlri(const std::vector<NlriT> nlris)
     {
         std::vector<LocalRoute<NlriT>*> installs;
-        installs.reserve(nlris);
+        installs.reserve(nlris.size());
 
         for (const auto& nlri : nlris)
         {
@@ -507,9 +512,10 @@ private:
                     if (key.nlri != nlri)
                         continue;
                     // Refresh IGP cost before running best-path.
-                    auto attrs = route.getPathAttributes();
-                    if (attrs.has_value())
-                        route.igpCost = resolveIgpMetric(attrs->path.nextHop);
+                    if (route.pathId.has_value()) {
+                        auto attrs = route.getPathAttributes();
+                        route.igpCost = resolveIgpMetric(attrs.path.nextHop);
+                    }
                     candidates.push_back(&route);
                 }
             }
@@ -585,7 +591,7 @@ private:
                     std::vector<InboundRoute<NlriT>*> pool;
                     for (auto* r : decision.rankCandidates(candidates))
                     {
-                        if (r == &best->in) continue;
+                        if (r == &best->route) continue;
                         if (std::find(best->multipaths.begin(), best->multipaths.end(), r) != best->multipaths.end()) continue;
                         pool.push_back(r);
                     }
@@ -620,7 +626,7 @@ private:
                         if (selectGroupBest)
                         {
                             std::unordered_set<uint32_t> seenAs;
-                            seenAs.insert(best->in.peerAs);
+                            seenAs.insert(best->route.peerAs);
                             for (auto* mp : best->multipaths)
                                 seenAs.insert(mp->peerAs);
                             for (auto* r : pool)
@@ -683,7 +689,7 @@ private:
                 return;
             }
 
-            const bool bestChanged = !had || &lit->second.route != &best->in;
+            const bool bestChanged = !had || &lit->second.route != &best->route;
 
             // Always refresh the locRib entry so multipaths/additionalPaths stay current.
             if (had)
@@ -691,7 +697,7 @@ private:
             locRib.emplace(nlri, *best);
 
             if (bestChanged)
-                installs.push_back(locRib);
+                installs.push_back(&locRib.at(nlri));
 
             recomputeAdjRibOut(nlri, &locRib.at(nlri));
             if constexpr (isIpPrefix<NlriT>)
@@ -837,11 +843,10 @@ private:
     // Result is shared by all members of the same peer group + isEbgp combination.
     std::optional<PathAttribute> applyGroupEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
     {
-        auto pa_opt = route.getPathAttributes();
-        if (!pa_opt.has_value())
+        if (!route.pathId.has_value())
             return std::nullopt;
 
-        PathAttribute pa = *pa_opt;
+        PathAttribute pa = route.getPathAttributes();
 
         if (session.isEbgp())
         {
@@ -1009,10 +1014,10 @@ private:
             // BGP_SUPPRESS_INACTIVE: suppress routes whose next-hop is not reachable via NHT.
             if (ProcessAccessor::getConfigs(process).get<Config::Bgp::BGP_SUPPRESS_INACTIVE>().load())
             {
-                auto paOpt = best->route.getPathAttributes();
-                if (paOpt.has_value() && best->route.sourceNeighbor != nullptr)
+                if (best->route.pathId.has_value() && best->route.sourceNeighbor != nullptr)
                 {
-                    auto entIt = nhtTable.find(paOpt->path.nextHop);
+                    auto paOpt = best->route.getPathAttributes();
+                    auto entIt = nhtTable.find(paOpt.path.nextHop);
                     if (entIt != nhtTable.end() && !entIt->second.reachable)
                     {
                         withdrawFromPeer();
@@ -1089,17 +1094,17 @@ private:
                 return;
             }
 
-            const bool fromIbgp = !best->in.ebgp && !best->in.confedEbgp;
+            const bool fromIbgp = !best->route.ebgp && !best->route.confedEbgp;
             const bool toIbgp   = !session->isEbgp() && !session->isConfedEbgp();
             bool isReflecting = false;
             if (fromIbgp && toIbgp)
             {
-                const bool locallyOriginated = (best->in.sourceNeighbor == nullptr);
+                const bool locallyOriginated = (best->route.sourceNeighbor == nullptr);
                 if (!locallyOriginated)
                 {
                     const bool targetIsClient = nbrAfCfgs
                         .get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
-                    const bool senderIsClient = best->in.sourceNeighbor->getConfigs()
+                    const bool senderIsClient = best->route.sourceNeighbor->getConfigs()
                         .template get<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>().load();
 
                     // Standard iBGP split-horizon: non-client to non-client.
@@ -1110,7 +1115,7 @@ private:
                     }
 
                     // Never reflect back to the originating client.
-                    if (&best->in.sourceNeighbor->globalNbr() == &nbr)
+                    if (&best->route.sourceNeighbor->globalNbr() == &nbr)
                     {
                         withdrawFromPeer();
                         return;
@@ -1158,7 +1163,7 @@ private:
 
             // Collect all paths to advertise based on per-neighbor ADVERTISE configs.
             std::vector<InboundRoute<NlriT>*> paths;
-            paths.push_back(&best->in);
+            paths.push_back(&best->route);
 
             if (addPathSend)
             {
@@ -1386,6 +1391,7 @@ private:
         PathAttribute basePa;
     };
 
+public:
     void sendDefaultOriginate(Session& session)
     {
         if constexpr (!isIpPrefix<NlriT>)
@@ -1400,10 +1406,13 @@ private:
             return;
 
         NlriT defaultNlri{};
-        if constexpr (N::afi.afi == BGP_AFI_IPV6)
-            defaultNlri.af = ::AddressFamily::IPv6;
-        else
-            defaultNlri.af = ::AddressFamily::IPv4;
+        if constexpr (requires { defaultNlri.af; })
+        {
+            if constexpr (N::afi.afi == BGP_AFI_IPV6)
+                defaultNlri.af = ::AddressFamily::IPv6;
+            else
+                defaultNlri.af = ::AddressFamily::IPv4;
+        }
 
         const bool isEbgp     = session.isEbgp();
         const bool isConfedEbgp = session.isConfedEbgp();
@@ -1472,16 +1481,20 @@ private:
             return;
 
         NlriT defaultNlri{};
-        if constexpr (N::afi.afi == BGP_AFI_IPV6)
-            defaultNlri.af = ::AddressFamily::IPv6;
-        else
-            defaultNlri.af = ::AddressFamily::IPv4;
+        if constexpr (requires { defaultNlri.af; })
+        {
+            if constexpr (N::afi.afi == BGP_AFI_IPV6)
+                defaultNlri.af = ::AddressFamily::IPv6;
+            else
+                defaultNlri.af = ::AddressFamily::IPv4;
+        }
 
         BuildUpdate<NlriT> withdraw;
         withdraw.withdrawn.push_back({defaultNlri, 0});
         session.sendUpdate<N>(withdraw);
     }
 
+private:
     void sendActiveAggregatesToPeer(Session& session)
     {
         if constexpr (!isIpPrefix<NlriT>)
@@ -1504,7 +1517,7 @@ private:
             {
                 if (!Config::BgpAggregateAddress::summaryOnly(aggCfg))
                     continue;
-                const NlriT& aggNlri = Config::BgpAggregateAddress::prefix(aggCfg);
+                const NlriT aggNlri = Config::BgpAggregateAddress::prefix(aggCfg);
                 auto stateIt = aggregateStates.find(aggNlri);
                 if (stateIt == aggregateStates.end() || !stateIt->second.active)
                     continue;
@@ -1590,9 +1603,10 @@ private:
         uint8_t worstOrigin = BGP_ORIGIN_IGP;
         for (auto* r : contributors)
         {
+            if (!r->pathId.has_value()) continue;
             auto rpa = r->getPathAttributes();
-            if (rpa && rpa->attrs.origin.has_value() && *rpa->attrs.origin > worstOrigin)
-                worstOrigin = *rpa->attrs.origin;
+            if (rpa.attrs.origin.has_value() && *rpa.attrs.origin > worstOrigin)
+                worstOrigin = *rpa.attrs.origin;
         }
         pa.attrs.origin = worstOrigin;
 
@@ -1602,9 +1616,9 @@ private:
             std::unordered_set<uint32_t> asns;
             for (auto* r : contributors)
             {
+                if (!r->pathId.has_value()) continue;
                 auto rpa = r->getPathAttributes();
-                if (!rpa) continue;
-                for (const auto& seg : rpa->attrs.asPath)
+                for (const auto& seg : rpa.attrs.asPath)
                     for (uint32_t asn : seg.asns)
                         if (asn != localAs)
                             asns.insert(asn);
@@ -1794,7 +1808,7 @@ private:
         bool                      isV6      = false;
         bool                      reachable = true;
         std::unordered_set<NlriT> nlris;
-        NhtCtx                    ctx;
+        std::optional<NhtCtx>     ctx;
     };
 
     template <typename Addr>
@@ -1823,11 +1837,11 @@ private:
         if (inserted)
         {
             entry.isV6 = nh.isIPv6();
-            entry.ctx  = NhtCtx{this, nh, ProcessAccessor::getScheduler(process)};
+            entry.ctx.emplace(NhtCtx{this, nh, ProcessAccessor::getScheduler(process)});
             if (nh.isIPv6())
-                entry.watchId = rt.watchAddress(nh.v6(), &entry.ctx, nhtCallback<__uint128_t>);
+                entry.watchId = rt.watchAddress(nh.v6(), &entry.ctx.value(), nhtCallback<__uint128_t>);
             else
-                entry.watchId = rt.watchAddress(nh.v4(), &entry.ctx, nhtCallback<uint32_t>);
+                entry.watchId = rt.watchAddress(nh.v4(), &entry.ctx.value(), nhtCallback<uint32_t>);
         }
 
         nlriToNextHop[nlri] = nh;
@@ -1906,10 +1920,11 @@ private:
                     {
                         uint8_t rangeDist       = std::get<0>(range);
                         const auto& pfxList     = std::get<1>(range);
+                        IPPrefix nlriAsPfx(nlri.addr, nlri.prefixLength);
                         for (const auto& [pfx, pfxListName] : pfxList)
                         {
-                            if (pfx == nlri ||
-                                (pfx.prefixLength <= nlri.prefixLength && pfx.contains(nlri)))
+                            if (pfx == nlriAsPfx ||
+                                (pfx.prefixLength <= nlri.prefixLength && pfx.contains(nlriAsPfx)))
                             {
                                 dist = rangeDist;
                                 return;
@@ -1935,9 +1950,9 @@ private:
         install.distance = computeAdminDistance(route.route, nlri);
         install.metric = 0;
 
-        if (pa->attrs.med.has_value())
+        if (pa.attrs.med.has_value())
         {
-            install.metric = *pa->attrs.med;
+            install.metric = *pa.attrs.med;
         }
         else if (route.route.sourceNeighbor == nullptr)
         {
@@ -1975,9 +1990,9 @@ private:
 
     struct NetworkWatchEntry
     {
-        uint32_t        watchId = 0;
-        bool            isV6    = false;
-        NetworkWatchCtx ctx{};
+        uint32_t                   watchId = 0;
+        bool                       isV6    = false;
+        std::optional<NetworkWatchCtx> ctx;
     };
 
     template <typename Addr>
@@ -2074,19 +2089,19 @@ private:
                 continue;
 
             NetworkWatchEntry& entry = watchIt->second;
-            entry.ctx = NetworkWatchCtx{this, pfx, ProcessAccessor::getScheduler(process)};
+            entry.ctx.emplace(NetworkWatchCtx{this, pfx, ProcessAccessor::getScheduler(process)});
 
             if constexpr (N::afi.afi == BGP_AFI_IPV6)
             {
                 entry.isV6    = true;
                 entry.watchId = rt.watchRoute(readU128(pfx.addr), pfx.prefixLength,
-                                              &entry.ctx, networkWatchCallback<__uint128_t>);
+                                              &entry.ctx.value(), networkWatchCallback<__uint128_t>);
             }
             else
             {
                 entry.isV6    = false;
                 entry.watchId = rt.watchRoute(readU32(pfx.addr), pfx.prefixLength,
-                                              &entry.ctx, networkWatchCallback<uint32_t>);
+                                              &entry.ctx.value(), networkWatchCallback<uint32_t>);
             }
         }
     }

@@ -2,74 +2,90 @@
 
 #include "RouterEigrpInterfaceCommands.h"
 #include "eigrp/core/Eigrp.h"
-#include "eigrp/interface/EigrpInterface.h"
+#include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/runtime/CliUtils.h"
-#include "interface/Interface.h"
 
 namespace Cli
 {
 bool RouterEigrpInterface_AuthenticationKeyChain_Handler(EIGRP_PARAMS)
 {
-    std::string keychain = args[0];
-    if (ctx.negate)
+    if (!ctx.negate)
     {
-        ctx.currentEigrpInterface->auth.fullyEnabled.store(false, std::memory_order_relaxed);
-        ctx.currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::NONE;
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(args[0]);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::MD5);
     }
     else
     {
-        ctx.currentEigrpInterface->auth.fullyEnabled.store(false, std::memory_order_relaxed);
-        ctx.currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::MD5;
-        if (std::holds_alternative<std::string>(ctx.currentEigrpInterface->auth.key) && !std::get<std::string>(ctx.currentEigrpInterface->auth.key).empty())
-        {
-            ctx.currentEigrpInterface->auth.fullyEnabled.store(true, std::memory_order_release);
-        }
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::NONE);
     }
     return true;
 }
 
 bool RouterEigrpInterface_AuthenticationMode_Handler(EIGRP_PARAMS)
 {
+    if (ctx.negate)
+    {
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::NONE);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
+        return true;
+    }
+
     if (args[0] == "hmac-sha-256")
     {
-        ctx.currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::SHA256;
-        if (args[1].size() > 32)
+        std::string key = args[1];
+        if (key.size() > 32)
         {
-            //TODO
-            ctx.terminal.iConsole->print(std::string("\r\n%EIGRP: HMAC-SHA-256 password accepted but truncated, max length is 32 characters"));
-            ctx.currentEigrpInterface->auth.key = std::string(args[1].substr(0, 32));
+            ctx.terminal.iConsole->print("\r\n%EIGRP: HMAC-SHA-256 password truncated to 32 characters");
+            key = key.substr(0, 32);
         }
-        ctx.currentEigrpInterface->auth.key = std::string(args[1]);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::SHA256);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(key);
     }
     else if (args[0] == "md5")
     {
-        ctx.currentEigrpInterface->auth.authType = EigrpConfigs::AuthType::MD5;
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::MD5);
     }
     return true;
 }
 
 bool RouterEigrpInterface_BandwidthPercentage_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-        ? ctx.currentEigrpInterface->bandwidthPercentage.store(50, std::memory_order_release)
-        : ctx.currentEigrpInterface->bandwidthPercentage.store(static_cast<uint32_t>(std::stoi(args[0])), std::memory_order_release);
+    ctx.currentEigrpInterface->get<Config::EigrpInterface::BANDWIDTH_PERCENTAGE>().set(
+        ctx.negate ? 50u : static_cast<uint32_t>(std::stoul(args[0])));
     return true;
 }
 
 bool RouterEigrpInterface_DampeningChange_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-        ? ctx.currentEigrpInterface->dampeningChange.store(0, std::memory_order_release)
-        : ctx.currentEigrpInterface->dampeningChange.store(static_cast<uint8_t>(std::stoi(args[0])), std::memory_order_release);
+    if (ctx.negate)
+    {
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_CHANGE>().set(false);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(1);
+    }
+    else
+    {
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_CHANGE>().set(true);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(
+            static_cast<uint8_t>(std::stoul(args[0])));
+    }
     return true;
 }
 
 bool RouterEigrpInterface_DampeningInterval_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-        ? ctx.currentEigrpInterface->dampeningInterval.store(5, std::memory_order_release)
-        : ctx.currentEigrpInterface->dampeningInterval.store(static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
+    if (ctx.negate)
+    {
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_INTERVAL>().set(false);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(5);
+    }
+    else
+    {
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_INTERVAL>().set(true);
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(
+            static_cast<uint16_t>(std::stoul(args[0])));
+    }
     return true;
 }
 
@@ -85,87 +101,73 @@ bool RouterEigrpInterface_Exit_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpInterface_HelloInterval_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-      ? ctx.currentEigrpInterface->helloTime.store(5, std::memory_order_release)
-      : ctx.currentEigrpInterface->helloTime.store(static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
+    ctx.currentEigrpInterface->get<Config::EigrpInterface::HELLO_INTERVAL>().set(
+        ctx.negate ? 5 : static_cast<uint16_t>(std::stoul(args[0])));
     return true;
 }
 
 bool RouterEigrpInterface_HoldTime_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-        ? ctx.currentEigrpInterface->holdTime.store(15, std::memory_order_release)
-        : ctx.currentEigrpInterface->holdTime.store(static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
+    ctx.currentEigrpInterface->get<Config::EigrpInterface::HOLD_TIME>().set(
+        ctx.negate ? 15 : static_cast<uint16_t>(std::stoul(args[0])));
     return true;
 }
 
 bool RouterEigrpInterface_NextHopSelf_Handler(EIGRP_PARAMS)
 {
     UNUSED(args);
-    ctx.currentEigrpInterface->nextHopSelf.store(!ctx.negate, std::memory_order_release);
+    ctx.currentEigrpInterface->get<Config::EigrpInterface::NEXT_HOP_SELF>().set(!ctx.negate);
     return true;
 }
 
 bool RouterEigrpInterface_PassiveInterface_Handler(EIGRP_PARAMS)
 {
     UNUSED(args);
-    ctx.currentEigrp->getGlobalConfigMgr().setPassiveInterface(ctx.currentEigrpInterface->key, !ctx.negate);
+    ctx.currentEigrpInterface->get<Config::EigrpInterface::PASSIVE_INTERFACE>().set(!ctx.negate);
     return true;
 }
 
 bool RouterEigrpInterface_SplitHorizon_Handler(EIGRP_PARAMS)
 {
     UNUSED(args);
-    ctx.currentEigrpInterface->splitHorizon.store(!ctx.negate, std::memory_order_release);
+    ctx.currentEigrpInterface->get<Config::EigrpInterface::SPLIT_HORIZON>().set(!ctx.negate);
     return true;
 }
 
 bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
 {
-    uint8_t size = 1;
     IPPrefix network;
-    Eigrp::EigrpInterface* iface = nullptr;
-    iface = ctx.currentEigrp->getIfaceMgr().getInterface(ctx.currentEigrpInterface->key);
-
     AddressFamily af = ctx.currentEigrp->getAF();
-    bool extracted = CliUtils::extractIPPrefix(args[0], network);
 
+    bool extracted = CliUtils::extractIPPrefix(args[0], network);
     if (!extracted && af == AddressFamily::IPv4)
     {
-        if (af != AddressFamily::IPv4 || !CliUtils::extractIPv4Prefix(args[0], args[1], network))
+        if (!CliUtils::extractIPv4Prefix(args[0], args[1], network))
+        {
+            ctx.terminal.iConsole->print("\r\n%EIGRP: Invalid summary address");
             return false;
-        size = 2;
+        }
     }
 
-    if (args.size() != size && args[size] == "leak-map")
-    {
-        // XXX
-    }
+    IPAddress netAddr = network; // uses operator IPAddress() for the network address
+    uint8_t plen = network.prefixLength;
 
-    if (iface)
-    {
-        ctx.negate
-            ? iface->getAggregator().installSummary(network, false)
-            : iface->getAggregator().withdrawSummary(network);
-    }
-    else
-    {
-        if (!ctx.negate)
-        {
-            std::shared_lock<std::shared_mutex> lock(ctx.currentEigrpInterface->configsMutex);
-            if (!std::any_of(ctx.currentEigrpInterface->pendingSummaryRoutes.begin(), ctx.currentEigrpInterface->pendingSummaryRoutes.end(),
-                [&](IPPrefix& pfx) { return pfx == network; }))
+    ctx.currentEigrpInterface->get<Config::EigrpInterface::SUMMARY_ADDRESS>().withWrite(
+        [&](std::vector<std::tuple<IPAddress, uint8_t>>& v) {
+            auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
+                return std::get<0>(t) == netAddr && std::get<1>(t) == plen;
+            });
+            if (!ctx.negate)
             {
-                ctx.currentEigrpInterface->pendingSummaryRoutes.push_back(network);
+                if (it == v.end())
+                    v.emplace_back(netAddr, plen);
             }
-        }
-        else
-        {
-            std::shared_lock<std::shared_mutex> lock(ctx.currentEigrpInterface->configsMutex);
-            ctx.currentEigrpInterface->pendingSummaryRoutes.erase(std::remove(ctx.currentEigrpInterface->pendingSummaryRoutes.begin(),
-                ctx.currentEigrpInterface->pendingSummaryRoutes.end(), network), ctx.currentEigrpInterface->pendingSummaryRoutes.end());
-        }
-    }
+            else
+            {
+                if (it != v.end())
+                    v.erase(it);
+            }
+        });
     return true;
 }
 }

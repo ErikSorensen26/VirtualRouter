@@ -1,6 +1,7 @@
 // EigrpInterfaceAuth.cpp
 
 #include "AuthHandler.h"
+#include "global/Global.h"
 #include "EigrpInterface.h"
 #include "security/Encryption.hpp"
 #include "security/keys/KeyChainManager.h"

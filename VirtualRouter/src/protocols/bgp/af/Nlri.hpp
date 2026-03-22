@@ -95,9 +95,9 @@ private:
         {
             auto attrs = r.getPathAttributes();
             auto& nh = attrs.path.nextHop;
-            if (!nh.isV6) return false;
-            uint32_t addr = readU32(nh.raw);
-            const RibEntry<uint32_t>* nhEntry = rib.lookup(addr);
+            if (!nh.isIPv4()) return false;
+            uint32_t addr = nh.v4();
+            const RibEntry<uint32_t>* nhEntry = rib.lookup(nh.v4raw());
             if (!nhEntry)
                 return false;
             if (!install.recursiveHost && nhEntry->length == 32)

@@ -21,7 +21,7 @@ InterfaceConfigs::InterfaceConfigs(TimeManager& timeManager, InterfaceType type,
 
 InterfaceConfigs::~InterfaceConfigs()
 {
-    eigrp.eigrpInterfaceConfigList.clear();
+    eigrp.eigrpIfaceConfigs.clear();
 }
 
 uint8_t* InterfaceConfigs::getMac(uint8_t* mac)

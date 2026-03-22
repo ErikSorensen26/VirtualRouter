@@ -16,6 +16,7 @@
 
 #include "packet/HeaderHelpers.hpp"
 #include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "configs/registry/router/EigrpInterfaceRegistry.h"
 
 // Forward declarations
 class Global;
@@ -25,11 +26,6 @@ class Internal_NdpTest;
 struct HwIfaceInfo;
 enum class AddressFamily : uint8_t;
 enum class InterfaceType : uint8_t;
-
-namespace EigrpConfigs
-{
-    struct InterfaceConfigs;
-}
 
 namespace Protocol
 {
@@ -251,7 +247,7 @@ public:
     struct Eigrp
     {
         std::unordered_set<uint32_t> ipv6AutonomousSystems; ///< Enabled ipv6 autonomous system list
-        std::map<std::pair<uint32_t, AddressFamily>, EigrpConfigs::InterfaceConfigs> eigrpInterfaceConfigList; ///< As number to configuration
+        std::unordered_map<uint32_t, Config::Reference<Config::EigrpInterfaceRegistry>> eigrpIfaceConfigs; ///< Per-AS interface configs
     } eigrp;
 
     /**
@@ -262,7 +258,6 @@ public:
     {
         std::unordered_map<uint32_t, uint32_t> enabledProcesses;
         std::optional<Config::Reference<Config::OspfInterfaceBaseRegistry>> ospfInterfaceConfigs = std::nullopt;
-        std::map<std::pair<uint32_t, AddressFamily>, Config::Reference<Config::OspfInterfaceAddressFamilyRegistry>> ospfInterfaceConfigList;
     } ospf;
 
     /**

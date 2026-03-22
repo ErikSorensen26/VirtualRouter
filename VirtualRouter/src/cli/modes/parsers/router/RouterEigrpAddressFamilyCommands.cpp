@@ -3,11 +3,12 @@
 #include "RouterEigrpAddressFamilyCommands.h"
 
 #include "eigrp/core/Eigrp.h"
-#include "eigrp/interface/EigrpInterface.h"
+#include "eigrp/core/EigrpConfig.h"
+#include "configs/registry/router/EigrpRegistry.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/runtime/CliUtils.h"
-#include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
+#include "interface/configs/InterfaceConfigs.h"
 
 namespace Cli
 {
@@ -18,23 +19,12 @@ bool RouterEigrpAddressFamily_AfInterface_Handler(EIGRP_PARAMS)
     InterfaceType type = getInterfaceType(args[0]);
     float interfaceId = std::stof(args[1]);
     uint32_t key = calculateInterfaceKey(type, interfaceId);
-    
-    auto& ifaceMgr = ctx.currentEigrp->getIfaceMgr();
-    std::unique_lock<std::shared_mutex> lock(ifaceMgr.interfaceMutex);
-    auto intIt = ifaceMgr.eigrpInterfaceConfigList.find(key);
+
+    auto ref = ctx.currentEigrp->getIfaceMgr().getRegistryByKey(key);
+    ctx.currentEigrpInterface = &ref.get();
 
     if (!ctx.negate)
     {
-        if (intIt != ifaceMgr.eigrpInterfaceConfigList.end())
-        {
-            ctx.currentEigrpInterface = &intIt->second;
-            ctx.currentEigrpInterface->userMade = true;
-        }
-        else
-        {
-            auto it = ifaceMgr.eigrpInterfaceConfigList.emplace(key, key);
-            it.first->second.userMade = true;
-        }
         if (ctx.currentEigrp->getAF() == AddressFamily::IPv4)
             ctx.terminal.changeMode<CliMode::RouterEigrpInterfaceV4>(ctx.currentEigrp, ctx.currentEigrpNamed, ctx.currentEigrpInterface);
         else
@@ -42,118 +32,87 @@ bool RouterEigrpAddressFamily_AfInterface_Handler(EIGRP_PARAMS)
     }
     else
     {
-        if (intIt != ifaceMgr.eigrpInterfaceConfigList.end())
-        {
-            ctx.currentEigrpInterface = &intIt->second;
-            if (ctx.currentEigrpInterface->userMade)
-            {
-                ifaceMgr.eigrpInterfaceConfigList.erase(key);
-            }
-            else return true;
-        }
-        else
-        {
-            return true;
-        }
+        // Mark the interface as shutdown so refreshInterfaceList removes it
+        ctx.currentEigrpInterface->get<Config::EigrpInterface::SHUTDOWN>().set(true);
+        ctx.currentEigrp->refreshInterfaceList();
     }
-    ctx.currentEigrp->refreshInterfaceList();
     return true;
 }
 
 bool RouterEigrpAddressFamily_EigrpDefaultRouteTag_Handler(EIGRP_PARAMS)
 {
-    uint32_t routeTag;
-    if (!ctx.negate)
-    {
-        if (CliUtils::isNumber(args[0]))
-        {
-            routeTag = static_cast<uint32_t>(std::stoi(args[0]));
-        }
-        else
-        {
-            IPv4Address _tmp; CliUtils::extractIPv4Address(args[0], _tmp);
-            routeTag = _tmp.addr;
-        }
-    }
-    else
-    {
-
-    }
-    // TODO set the route tag
+    // TODO: ROUTE_TAG not yet in registry
+    UNUSED(args);
     return false;
 }
 
 bool RouterEigrpAddressFamily_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentEigrp->getConfigs().eventLogSize.store(ctx.negate ? 500 : static_cast<uint32_t>(std::stoi(args[0])), std::memory_order_release); 
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::MAX_EVENT_LOG_SIZE>().set(
+        ctx.negate ? 500u : static_cast<uint32_t>(std::stoul(args[0])));
     return true;
 }
 
 bool RouterEigrpAddressFamily_EigrpLogNeighborChanges_Handler(EIGRP_PARAMS)
 {
     UNUSED(args);
-    ctx.currentEigrp->getConfigs().logNeighborChanges.store(!ctx.negate, std::memory_order_release);
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::LOG_NEIGHBOR_CHANGES>().set(!ctx.negate);
     return true;
 }
 
 bool RouterEigrpAddressFamily_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
 {
+    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
     if (!ctx.negate)
     {
-        ctx.currentEigrp->getConfigs().logNeighborWarnings.store(true, std::memory_order_release); 
-        if (args.size() > 0)
-            ctx.currentEigrp->getConfigs().warningInterval.store(static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
+        cfg.get<Config::Eigrp::LOG_NEIGHBOR_WARNINGS>().set(true);
+        if (!args.empty())
+            cfg.get<Config::Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL>().set(static_cast<uint16_t>(std::stoul(args[0])));
     }
     else
     {
-        ctx.currentEigrp->getConfigs().logNeighborWarnings.store(false, std::memory_order_release); 
-        ctx.currentEigrp->getConfigs().warningInterval.store(10, std::memory_order_release);
+        cfg.get<Config::Eigrp::LOG_NEIGHBOR_WARNINGS>().set(false);
+        cfg.get<Config::Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL>().set(10);
     }
     return true;
 }
 
 bool RouterEigrpAddressFamily_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
+    auto& ridField = ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::ROUTER_ID>();
     if (!ctx.negate)
-        { IPv4Address _tmp; CliUtils::extractIPv4Address(args[0], _tmp); ctx.currentEigrp->routerID(_tmp.addr); }
+    {
+        IPv4Address _tmp; CliUtils::extractIPv4Address(args[0], _tmp);
+        ridField.set(_tmp.addr);
+    }
     else
-        ctx.currentEigrp->clearRouterID();
+    {
+        ridField.unset();
+    }
     return true;
 }
 
 bool RouterEigrpAddressFamily_EigrpStub_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
-    std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
     if (!ctx.negate)
     {
-        bool connected = false;
-        bool leakMap = false;
-        bool redistributed = false;
-        bool stat = false;
-        bool summary = false;
-        for (size_t i = 0; i <= args.size(); i++)
+        bool connected = false, redistributed = false, stat = false, summary = false;
+        std::string leakMap;
+        for (size_t i = 0; i < args.size(); i++)
         {
-            if (args[i] == "connected")
-                { connected = true; }
-            else if (args[i] == "leak-map")
-                { leakMap = true; }
-            else if (args[i] == "redistrubuted")
-                { redistributed = true; }
-            else if (args[i] == "static")
-                { stat = true; }
-            else if (args[i] == "summary") 
-                { summary = true; }
+            if (args[i] == "connected")          connected = true;
+            else if (args[i] == "redistributed") redistributed = true;
+            else if (args[i] == "static")        stat = true;
+            else if (args[i] == "summary")       summary = true;
+            else if (args[i] == "leak-map" && i + 1 < args.size())
+                leakMap = args[++i];
         }
-        ctx.currentEigrp->getGlobalConfigMgr().enableStub(
-            true,
-            connected,
-            leakMap,
-            stat,
-            summary,
-            redistributed
-        );
+        auto& cfgMgr = ctx.currentEigrp->getGlobalConfigMgr();
+        cfgMgr.enableStub(true, connected, stat, summary, redistributed);
+        if (!leakMap.empty())
+            cfgMgr.getConfigs().get<Config::Eigrp::STUB_LEAK_MAP>().set(leakMap);
+        else
+            cfgMgr.getConfigs().get<Config::Eigrp::STUB_LEAK_MAP>().unset();
     }
     else
     {
@@ -171,95 +130,67 @@ bool RouterEigrpAddressFamily_Exit_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpAddressFamily_MaximumPrefix_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
+    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
     if (!ctx.negate)
     {
-        configs.maximumPrefix.store(static_cast<uint32_t>(std::stoi(args[0])), std::memory_order_release);
-        if (args.size() > 1)
+        cfg.get<Config::Eigrp::MAXIMUM_PREFIX>().set(static_cast<uint32_t>(std::stoul(args[0])));
+        for (size_t i = 1; i < args.size(); i++)
         {
-            for (size_t i = 1; i < args.size(); i++)
-            {
-                if (CliUtils::isNumber(args[i]))
-                {
-                    configs.dampeningInterval.store(static_cast<uint8_t>(std::stoul(args[i])));
-                }
-                else if (args[i] == "dampened")
-                {
-                    configs.dampening.store(true, std::memory_order_release);
-                }
-                else if (args[i] == "reset-time")
-                {
-                    configs.dampeningResetTime.store(static_cast<uint8_t>(std::stoul(args[i + 1]), std::memory_order_release));
-                    i++;
-                }
-                else if (args[i] == "restart")
-                {
-                    configs.dampeningRestart.store(static_cast<uint8_t>(std::stoul(args[i + 1]), std::memory_order_release));
-                    i++;
-                }
-                else if (args[i] == "restart-count")
-                {
-                    configs.dampeningRestartCount.store(static_cast<uint8_t>(std::stoul(args[i + 1]), std::memory_order_release));
-                    i++;
-                }
-                else if (args[i] == "warning-only")
-                {
-                    configs.dampeningWarnings.store(true, std::memory_order_release);
-                }
-            }
+            if (CliUtils::isNumber(args[i]))
+                cfg.get<Config::Eigrp::DAMPENING_INTERVAL>().set(static_cast<uint8_t>(std::stoul(args[i])));
+            else if (args[i] == "dampened")
+                cfg.get<Config::Eigrp::DAMPENING>().set(true);
+            else if (args[i] == "reset-time" && i + 1 < args.size())
+                cfg.get<Config::Eigrp::DAMPENING_RESET_TIME>().set(static_cast<uint16_t>(std::stoul(args[++i])));
+            else if (args[i] == "restart" && i + 1 < args.size())
+                cfg.get<Config::Eigrp::DAMPENING_RESTART>().set(static_cast<uint16_t>(std::stoul(args[++i])));
+            else if (args[i] == "restart-count" && i + 1 < args.size())
+                cfg.get<Config::Eigrp::DAMPENING_RESTART_COUNT>().set(static_cast<uint16_t>(std::stoul(args[++i])));
+            else if (args[i] == "warning-only")
+                cfg.get<Config::Eigrp::DAMPENING_WARNINGS>().set(true);
         }
     }
     else
     {
-        configs.maximumPrefix.store(0, std::memory_order_relaxed);
-        configs.dampeningInterval.store(75, std::memory_order_release);
-        configs.dampening.store(false, std::memory_order_release);
-        configs.dampeningResetTime.store(0, std::memory_order_release);
-        configs.dampeningRestart.store(0, std::memory_order_release);
-        configs.dampeningRestartCount.store(1, std::memory_order_release);
-        configs.dampeningWarnings.store(false, std::memory_order_release);
+        cfg.get<Config::Eigrp::MAXIMUM_PREFIX>().set(0u);
+        cfg.get<Config::Eigrp::DAMPENING_INTERVAL>().set(75);
+        cfg.get<Config::Eigrp::DAMPENING>().set(false);
+        cfg.get<Config::Eigrp::DAMPENING_RESET_TIME>().set(0);
+        cfg.get<Config::Eigrp::DAMPENING_RESTART>().set(0);
+        cfg.get<Config::Eigrp::DAMPENING_RESTART_COUNT>().set(1);
+        cfg.get<Config::Eigrp::DAMPENING_WARNINGS>().set(false);
     }
     return true;
 }
 
 bool RouterEigrpAddressFamily_MetricRibScale_Handler(EIGRP_PARAMS)
 {
-    if (!ctx.negate)
-    {
-        if (CliUtils::isNumber(args[0]))
-            ctx.currentEigrp->getConfigs().ribScale.store(static_cast<uint8_t>(std::stoi(args[0])), std::memory_order_release);
-    }
-    else
-    {
-        ctx.currentEigrp->getConfigs().ribScale.store(128, std::memory_order_release);
-    }
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::RIB_SCALE>().set(
+        ctx.negate ? 128 : static_cast<uint8_t>(std::stoul(args[0])));
     return true;
 }
 
 bool RouterEigrpAddressFamily_MetricWeights_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
-    EigrpConfigs::KValue kvalue;
+    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
     if (!ctx.negate)
     {
-        configs.TOS.store(static_cast<uint8_t>(std::stoi(args[0])), std::memory_order_release);
-        kvalue.k1_Bandwidth = static_cast<uint8_t>(std::stoi(args[1]));
-        kvalue.k3_Delay = static_cast<uint8_t>(std::stoi(args[2]));
-        kvalue.k4_Reliability = static_cast<uint8_t>(std::stoi(args[3]));
-        kvalue.k2_Load = static_cast<uint8_t>(std::stoi(args[4]));
-        kvalue.k5_MTU = static_cast<uint8_t>(std::stoi(args[5]));
+        cfg.get<Config::Eigrp::WEIGHT_TOS>().set(static_cast<uint8_t>(std::stoul(args[0])));
+        cfg.get<Config::Eigrp::WEIGTH_K1>().set(static_cast<uint8_t>(std::stoul(args[1])));
+        cfg.get<Config::Eigrp::WEIGHT_K3>().set(static_cast<uint8_t>(std::stoul(args[2])));
+        cfg.get<Config::Eigrp::WEIGHT_k4>().set(static_cast<uint8_t>(std::stoul(args[3])));
+        cfg.get<Config::Eigrp::WEIGHT_K2>().set(static_cast<uint8_t>(std::stoul(args[4])));
+        cfg.get<Config::Eigrp::WEIGHT_k5>().set(static_cast<uint8_t>(std::stoul(args[5])));
     }
     else
     {
-        configs.TOS.store(0, std::memory_order_release);
-        kvalue.k1_Bandwidth = 1;
-        kvalue.k3_Delay = 0;
-        kvalue.k4_Reliability = 1;
-        kvalue.k2_Load = 0;
-        kvalue.k5_MTU = 0;
+        cfg.get<Config::Eigrp::WEIGHT_TOS>().set(0);
+        cfg.get<Config::Eigrp::WEIGTH_K1>().set(1);
+        cfg.get<Config::Eigrp::WEIGHT_K3>().set(1);
+        cfg.get<Config::Eigrp::WEIGHT_k4>().set(0);
+        cfg.get<Config::Eigrp::WEIGHT_K2>().set(0);
+        cfg.get<Config::Eigrp::WEIGHT_k5>().set(0);
     }
-    std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
-    configs.kvalue = kvalue;
     return true;
 }
 
@@ -268,26 +199,16 @@ bool RouterEigrpAddressFamily_Neighbor_Handler(EIGRP_PARAMS)
     ctx.terminal.isList = true;
     IPAddress neighborIp; CliUtils::extractIPAddress(args[0], neighborIp);
     InterfaceType type = getInterfaceType(args[1]);
-    float interfaceId = std::stof(args[2]);
-    uint32_t key = calculateInterfaceKey(type, interfaceId);
-    auto* iface = ctx.currentEigrp->getIfaceMgr().getInterface(key);
-
-    if (iface)
+    if (type == InterfaceType::UNDEFINED)
     {
-        if (!ctx.negate)
-            iface->getNTable().createNeighbor(neighborIp, Eigrp::Neighbor::Version::UNKNOWN, true);
-        else
-            iface->getNTable().deleteNeighbor(neighborIp, true);
+        ctx.terminal.iConsole->print("\r\n%EIGRP: Unknown interface type");
+        return false;
     }
+    uint32_t key = calculateInterfaceKey(type, std::stof(args[2]));
+    if (!ctx.negate)
+        ctx.currentEigrp->getGlobalConfigMgr().enableUnicastPeer(neighborIp, key);
     else
-    {
-        auto& configs = ctx.currentEigrp->getConfigs();
-        std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
-        if (ctx.negate)
-            configs.unicastNeighbors[key].erase(neighborIp);
-        else
-            configs.unicastNeighbors[key].insert(neighborIp);
-    }
+        ctx.currentEigrp->getGlobalConfigMgr().disableUnicastPeer(neighborIp, key);
     return true;
 }
 
@@ -308,44 +229,23 @@ bool RouterEigrpAddressFamily_Network_Handler(EIGRP_PARAMS)
     IPv4Prefix network(_ip.addr, _plen);
 
     if (!ctx.negate)
-    {
         ctx.currentEigrp->getGlobalConfigMgr().addNetworkRange(network);
-    }
     else
-    {
-        auto& configs = ctx.currentEigrp->getConfigs();
-        if (args.size() == 1)
-        {
-            std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
-            auto& networks = configs.networks;
-            std::erase_if(networks, [&](const IPv4Prefix& net) -> bool { return net.addr == network.addr; });
-        }
-        else
-        {
-            std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
-            auto& networks = configs.networks;
-            std::erase_if(networks, [&](const IPv4Prefix& net) {
-                return net.addr == network.addr && (args.size() > 1 ? net.prefixLength == network.prefixLength : true);
-            });
-        }
-
-        ctx.currentEigrp->refreshInterfaceList();
-    }
+        ctx.currentEigrp->getGlobalConfigMgr().delNetworkRange(network);
     return true;
 }
 
 bool RouterEigrpAddressFamily_SoftSia_Handler(EIGRP_PARAMS)
 {
     UNUSED(args);
-    ctx.currentEigrp->getConfigs().nonStopForwarding.store(!ctx.negate, std::memory_order_release);
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::NON_STOP_FORWARDING>().set(!ctx.negate);
     return true;
 }
 
 bool RouterEigrpAddressFamily_TimersGracefulRestart_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-      ? ctx.currentEigrp->getConfigs().purgeTime.store(240, std::memory_order_release)
-      : ctx.currentEigrp->getConfigs().purgeTime.store(static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::GRACEFUL_PURGE_TIME>().set(
+        ctx.negate ? 240 : static_cast<uint16_t>(std::stoul(args[0])));
     return true;
 }
 

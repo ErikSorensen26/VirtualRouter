@@ -43,16 +43,15 @@ public:
                     r.nextHopCount  == e->nextHopCount  &&
                     r.adminDistance == e->adminDistance)
                     return false;
-                r = e;
+                r = *e;
                 replaced = true;
                 break;
             }
         }
 
         if (!replaced)
-            routes.push_back(e);
-        else
-            delete e;
+            routes.push_back(*e);
+        delete e;
 
         selectBest();
         return true;

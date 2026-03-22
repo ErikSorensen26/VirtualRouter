@@ -46,7 +46,7 @@ private:
             withdrawRoute(entry.prefix);
             return nullptr;
         }
-        RibEntry<AddrType> ribEntry = new RibEntry<AddrType>;
+        RibEntry<AddrType>* ribEntry = new RibEntry<AddrType>;
 
         for (const auto& neighbor : entry.successors)
         {
@@ -58,7 +58,7 @@ private:
                 isExternal = it->second.routeInfo.routeType == RouteType::EXTERNAL;
             }
 
-            ribEntry.addNextHop(
+            ribEntry->addNextHop(
                 af == AddressFamily::IPv4 ? neighbor.v4() : neighbor.v6(),
                 it->second.routeInfo.originInterface,
                 1
@@ -80,9 +80,8 @@ private:
         ribEntry->adminDistance = bestIt->second.routeInfo.adminDistance;
         ribEntry->metric = bestIt->second.routeInfo.feasibleDistance * scale;
 
-        return rib.addRoute<AddrType>(ribEntry)
-            ? &bestIt->second
-            : nullptr;
+        rib.addRoute<AddrType>(ribEntry);
+        return &bestIt->second;
     }
 };
 }

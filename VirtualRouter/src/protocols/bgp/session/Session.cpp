@@ -65,7 +65,7 @@ void Session::startActiveMultiSession(const AfiSafi& family)
         !negotiated.multiSessionFamilies.contains(family))
         return;
 
-    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.emplace(family, neighbor, family);
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START);
 }
@@ -76,7 +76,7 @@ void Session::startPassiveMultiSession(const AfiSafi& family)
         !negotiated.multiSessionFamilies.contains(family))
         return;
     
-    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.emplace(family, neighbor, family);
+    auto [it, ok] = std::get<MultiSession>(multiSession).sessions.try_emplace(family, neighbor, family);
     if (ok)
         it->second.postEvent(FsmEvent::MANUAL_START_PASSIVE_TCP);
 }
@@ -112,8 +112,8 @@ void Session::buildLocalCapabilities()
     neighbor.getProcess().forEachAf([&](const AfiSafi& afi) {
         auto& afNbrCfgs = neighbor.getAfNeighbor(afi).getConfigs();
 
-        bool rx = afNbrCfgs.get<Config::BgpNeighbor::ADDITIONAL_PATHS_RECEIVE>().load();
-        bool tx = afNbrCfgs.get<Config::BgpNeighbor::ADDITIONAL_PATHS_SEND>().load();
+        bool rx = afNbrCfgs.get<Config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>().load();
+        bool tx = afNbrCfgs.get<Config::BgpAfBase::ADDITIONAL_PATHS_SEND>().load();
         uint8_t apSr = 0;
         if (rx) apSr |= BGP_ADD_PATH_RECEIVE;
         if (tx) apSr |= BGP_ADD_PATH_SEND;

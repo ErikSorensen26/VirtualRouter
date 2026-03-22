@@ -442,7 +442,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
     {
         appendAttrHdr(BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_NEXT_HOP, 4, attrSize, c);
         auto buf = c.reserveSpan(4);
-        std::memcpy(buf.data(), pa.path.nextHop.raw, 4);
+        writeU32(buf.data(), pa.path.nextHop.v4());
     }
 
     // MED
@@ -476,7 +476,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
         {
             auto buf = c.reserveSpan(8);
             writeU32(buf.data(), agg.asn);
-            std::memcpy(buf.data() + 4, agg.speaker.raw, 4);
+            writeU32(buf.data() + 4, agg.speaker.v4());
         }
         else
         {
@@ -485,7 +485,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
                 : static_cast<uint16_t>(agg.asn);
             auto buf = c.reserveSpan(6);
             writeU16(buf.data(), a2);
-            std::memcpy(buf.data() + 2, agg.speaker.raw, 4);
+            writeU32(buf.data() + 2, agg.speaker.v4());
 
             // AS4 AGGREGATOR
             if (agg.asn > 65535)
@@ -493,7 +493,7 @@ size_t BgpTx::appendPathAttrs(const Session& session, const PathAttribute& pa, T
                 appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL | BGP_ATTR_FLAG_TRANSITIVE, BGP_ATTR_AS4_AGGREGATOR, 8, attrSize, c);
                 auto buf4 = c.reserveSpan(8);
                 writeU32(buf4.data(), agg.asn);
-                std::memcpy(buf.data() + 4, agg.speaker.raw, 4);
+                writeU32(buf4.data() + 4, agg.speaker.v4());
             }
         }
     }
@@ -686,8 +686,12 @@ void BgpTx::buildRouteRefresh(TCP::Connection& connection, Session& session,
             buf[5] = e.minLen;
             buf[6] = e.maxLen;
             buf[7] = e.prefix.prefixLength;
-            if (pfxBytes > 0)
-                std::memcpy(buf.data() + 8, e.prefix.addr, pfxBytes);
+            if (pfxBytes > 0) {
+                if (e.prefix.isIPv4())
+                    writeBytes(buf.data() + 8, e.prefix.v4(), pfxBytes);
+                else
+                    writeBytes(buf.data() + 8, e.prefix.v6(), pfxBytes);
+            }
         }
         return;
     }

@@ -420,7 +420,7 @@ Connection TcpEngine::createConnection(const TcpEndpoint& local, const TcpEndpoi
 
     ConnId cid = nextConnId++;
 
-    auto cit = connections.emplace(cid, cid, bufferPool);
+    auto cit = connections.try_emplace(cid, cid, bufferPool, size_t{2048});
     auto& c = cit.first->second;
 
     c.fd = fd;

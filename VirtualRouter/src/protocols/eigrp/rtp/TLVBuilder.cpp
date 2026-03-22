@@ -34,7 +34,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
 
     if (!wide)
     {
-        if (iface.configs.get<Config::EigrpInterface::NEXT_HOP_SELF>().load())
+        if (iface.configs->get<Config::EigrpInterface::NEXT_HOP_SELF>().load())
             writeIpAddr(out, iface.ifaceAddress);
         else
             writeIpAddr(out, route->routeInfo.nextHop);
@@ -55,7 +55,7 @@ uint8_t TLVBuilder::encodeRouteOption(EigrpInterface& iface, uint8_t* out, size_
         }
         if (!encodeWideMetric(data, delay, bw)) return 0;
 
-        if (iface.configs.get<Config::EigrpInterface::NEXT_HOP_SELF>().load())
+        if (iface.configs->get<Config::EigrpInterface::NEXT_HOP_SELF>().load())
             writeIpAddr(out, iface.ifaceAddress);
         else
             writeIpAddr(out, route->routeInfo.nextHop);

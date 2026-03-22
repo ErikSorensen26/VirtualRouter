@@ -48,7 +48,7 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
     uint16_t asNum = static_cast<uint16_t>(std::stoi(args[0]));
     if (!ctx.negate)
     {
-        Eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
+        EIGRP::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
         if (as)
         {
             if (as->ipv6Named)
@@ -63,13 +63,13 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
         }
         if (!as->ipv6)
         {
-            as->ipv6 = new Eigrp::Eigrp(asNum, AddressFamily::IPv6, &ctx.vrf);
+            as->ipv6 = new EIGRP::Eigrp(asNum, AddressFamily::IPv6, &ctx.vrf);
         }
         ctx.terminal.changeMode<CliMode::RouterEigrpClassicV6>(as->ipv6, nullptr, nullptr);
     }
     else
     {
-        Eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum); if (as)
+        EIGRP::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum); if (as)
         {
             if (!as->ipv6Named && as->ipv6)
             {

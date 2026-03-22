@@ -6,6 +6,7 @@
 #include "Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/Interface.h"
+#include "configs/registry/router/EigrpRegistry.h"
 
 namespace EIGRP
 {
@@ -18,6 +19,29 @@ EigrpInterface* InterfaceManager::getInterface(uint32_t key)
     if (auto it = eigrpInterfaceList.find(key); it != eigrpInterfaceList.end())
         return &it->second;
     return nullptr;
+}
+
+Config::Reference<Config::EigrpInterfaceRegistry> InterfaceManager::getRegistryByKey(uint32_t key)
+{
+    auto& registry = base.routingInstance->getRegistry();
+    auto& configList = base.getGlobalConfigMgr().getConfigs().get<Config::Eigrp::AF_INTERFACE>();
+    return registry.emplaceBack(configList, key);
+}
+
+Config::Reference<Config::EigrpInterfaceRegistry> InterfaceManager::getRegistry(Interface& iface)
+{
+    uint32_t key = iface.configs.key;
+    auto& registry = base.routingInstance->getRegistry();
+
+    if (base.isNamed())
+    {
+        auto& configList = base.getGlobalConfigMgr().getConfigs().get<Config::Eigrp::AF_INTERFACE>();
+        return registry.emplaceBack(configList, key);
+    }
+    else
+    {
+        return iface.getEigrpConfig(base.getAS());
+    }
 }
 
 EigrpInterface* InterfaceManager::createInterface(Interface* interface)
@@ -35,16 +59,7 @@ EigrpInterface* InterfaceManager::createInterface(Interface* interface)
         uint32_t key = interface->configs.key;
 
         // Get or create registry entry for this interface
-        auto regIt = ifaceRegistryList.find(key);
-        if (regIt == ifaceRegistryList.end())
-        {
-            auto inserted = ifaceRegistryList.emplace(
-                key,
-                base.routingInstance->getRegistry().create<Config::EigrpInterfaceRegistry>()
-            );
-            regIt = inserted.first;
-        }
-        Config::EigrpInterfaceRegistry& ifaceReg = regIt->second.get();
+        Config::Reference<Config::EigrpInterfaceRegistry> ifaceReg = getRegistry(*interface);
 
         if (af == AddressFamily::IPv4)
         {
@@ -74,7 +89,7 @@ void InterfaceManager::refreshInterfaceList()
         if (!base.calculateRID()) return; // No valid RID
 
     {
-        std::vector<std::map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
+        std::vector<std::unordered_map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
 
         // Remove shutdown interfaces
         for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)
@@ -117,8 +132,9 @@ void InterfaceManager::refreshInterfaceList()
                 bool ipv6Contained = false;
                 if (isNamed)
                 {
-                    auto regIt = ifaceRegistryList.find(ipInfo.key);
-                    ipv6Contained = regIt != ifaceRegistryList.end() &&
+                    auto& afIfaces = base.getGlobalConfigMgr().getConfigs().get<Config::Eigrp::AF_INTERFACE>();
+                    auto regIt = afIfaces.find(ipInfo.key);
+                    ipv6Contained = regIt != afIfaces.end() &&
                                     !regIt->second.get().get<Config::EigrpInterface::SHUTDOWN>().load();
                 }
                 if (!ipv6Contained)

@@ -23,7 +23,7 @@ public:
         using InvokeFn  = void(*)(void*);
         using DestroyFn = void(*)(void*);
 
-        alignas(64) unsigned char storage[64];
+        alignas(64) unsigned char storage[128];
         InvokeFn  invoke  = nullptr;
         DestroyFn destroy = nullptr;
 

@@ -35,9 +35,7 @@ public:
     // integer API — converts to network-order bytes internally
     RibEntry<Addr>* lookup(Addr a) const
     {
-        uint8_t bytes[sizeof(Addr)];
-        toBytes(a, bytes);
-        return lookup(bytes);
+        return lookup(reinterpret_cast<const NetworkSpan<Addr>&>(a));
     }
 
     bool insert(Addr pfx, uint8_t len, FibEntry* ribEntry)

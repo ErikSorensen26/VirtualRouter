@@ -12,7 +12,9 @@ namespace EIGRP
 EigrpConfig::EigrpConfig(Eigrp& base)
     : base(base),
     configs(base.routingInstance->getRegistry().create<Config::EigrpRegistry>())
-{}
+{
+    configs->context().set(&base);
+}
 
 void EigrpConfig::addNetworkRange(const IPv4Prefix& newNetwork)
 {

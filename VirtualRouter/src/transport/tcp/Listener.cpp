@@ -38,7 +38,8 @@ Listener& Listener::operator=(Listener&& other) noexcept
 
 size_t Listener::send(ConnId cid, std::span<const uint8_t>& data) noexcept
 {
-    return engine->listenerSend(id, cid, data);
+    (void)cid; (void)data;
+    return 0;
 }
 
 void Listener::shutdown() noexcept

@@ -138,7 +138,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
     if (CliUtils::isNumber(id))
     {
         uint16_t asNum = static_cast<uint16_t>(std::stoi(id));
-        Eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
+        EIGRP::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
         if (!ctx.negate)
         {
             if (as)
@@ -155,7 +155,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
             }
             if (!as->ipv4)
             {
-                as->ipv4 = new Eigrp::Eigrp(asNum, AddressFamily::IPv4, ctx.global.getRoutingInstance("default"));
+                as->ipv4 = new EIGRP::Eigrp(asNum, AddressFamily::IPv4, ctx.global.getRoutingInstance("default"));
             }
             ctx.terminal.changeMode<CliMode::RouterEigrpClassicV4>(as->ipv4, nullptr, nullptr);
         }

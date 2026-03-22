@@ -471,32 +471,19 @@ bool Interface::setVRF(VirtualRouter* vrf)
     return true;
 }
 
-EigrpConfigs::InterfaceConfigs* Interface::getEigrpConfig(uint32_t as, AddressFamily af, bool negate)
+Config::Reference<Config::EigrpInterfaceRegistry> Interface::getEigrpConfig(uint32_t as)
 {
-    std::pair<uint32_t, AddressFamily> key = {as, af};
-    auto configIt = configs.eigrp.eigrpInterfaceConfigList.find(key);
-    if (configIt == configs.eigrp.eigrpInterfaceConfigList.end())
+    auto it = configs.eigrp.eigrpIfaceConfigs.find(as);
+    if (it == configs.eigrp.eigrpIfaceConfigs.end())
     {
-        if (negate) return nullptr;
-        auto newConfig = configs.eigrp.eigrpInterfaceConfigList.emplace(key, configs.key);
-        return &newConfig.first->second;
+        auto* vrf = routingInstance.load(std::memory_order_relaxed);
+        auto [ins, ok] = configs.eigrp.eigrpIfaceConfigs.emplace(as, vrf->getRegistry().create<Config::EigrpInterfaceRegistry>());
+        return ins->second;
     }
-    return &configs.eigrp.eigrpInterfaceConfigList.at(key);
+    return it->second;
 }
 
-Config::OspfInterfaceAddressFamilyRegistry& Interface::getOspfv3Config(uint32_t id, AddressFamily af)
-{
-    std::pair<uint32_t, AddressFamily> key = { id, af };
-    auto configIt = configs.ospf.ospfInterfaceConfigList.find(key);
-    if (configIt == configs.ospf.ospfInterfaceConfigList.end())
-    {
-        auto newConfig = configs.ospf.ospfInterfaceConfigList.try_emplace(key, routingInstance.load(std::memory_order_relaxed)->getGlobal().registry.create<Config::OspfInterfaceAddressFamilyRegistry>());
-        return newConfig.first->second.get();
-    }
-    return configs.ospf.ospfInterfaceConfigList.at(key).get();
-}
-
-Config::OspfInterfaceBaseRegistry& Interface::getOspfConfig()
+Config::Reference<Config::OspfInterfaceBaseRegistry> Interface::getOspfConfig()
 {
     if (!configs.ospf.ospfInterfaceConfigs.has_value())
     {
@@ -504,5 +491,5 @@ Config::OspfInterfaceBaseRegistry& Interface::getOspfConfig()
         configs.ospf.ospfInterfaceConfigs.emplace(vrf->getRegistry().create<Config::OspfInterfaceBaseRegistry>());
         vrf->getRegistry().emplace(configs.ospf.ospfInterfaceConfigs.value()->get<Config::OspfInterfaceBase::BASE>());
     }
-    return configs.ospf.ospfInterfaceConfigs.value().get();
+    return configs.ospf.ospfInterfaceConfigs.value();
 }

@@ -3,11 +3,12 @@
 #include <VirtualRouter.h>
 
 #include "InterfaceIPv6Commands.h"
-#include "InterfaceHelpers.hpp"
 #include "cli/runtime/CliSession.h"
 #include "cli/runtime/CliUtils.h"
 #include "eigrp/core/Eigrp.h"
 #include "eigrp/interface/EigrpInterface.h"
+#include "interface/Interface.h"
+#include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include <infrastructure/Ndp.h>
 
 namespace Cli
@@ -76,23 +77,18 @@ bool InterfaceIPv6_AuthenticationKeyChain_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	auto* eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (eigrpConfig)
-	{
-	    if (ctx.negate)
-	    {
-		eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_release);
-		eigrpConfig->auth.key = uint32_t{};
-		refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv4, eigrpConfig);
-	    }
-	    else
-	    {
-		eigrpConfig->auth.key = args[2];
-		if (eigrpConfig->auth.authType != EigrpConfigs::AuthType::NONE)
-		    eigrpConfig->auth.fullyEnabled.store(true, std::memory_order_release);
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        auto cfg = ctx.currentInterface.getEigrpConfig(as);
+        if (ctx.negate)
+        {
+            cfg->get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
+            cfg->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::NONE);
+        }
+        else
+        {
+            cfg->get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(args[2]);
+            cfg->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::MD5);
+        }
     }
     return true;
 }
@@ -101,26 +97,17 @@ bool InterfaceIPv6_AuthenticationMode_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoi(args[1]));
-	auto* eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (eigrpConfig)
-	{
-	    if (ctx.negate)
-	    {
-		eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_relaxed);
-		eigrpConfig->auth.authType = EigrpConfigs::AuthType::NONE;
-		refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-	    }
-	    else
-	    {
-		eigrpConfig->auth.fullyEnabled.store(false, std::memory_order_relaxed);
-		eigrpConfig->auth.authType = EigrpConfigs::AuthType::MD5;
-		if (std::holds_alternative<std::string>(eigrpConfig->auth.key) && !std::get<std::string>(eigrpConfig->auth.key).empty())
-		{
-		    eigrpConfig->auth.fullyEnabled.store(true, std::memory_order_release);
-		}
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        auto cfg = ctx.currentInterface.getEigrpConfig(as);
+        if (ctx.negate)
+        {
+            cfg->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::NONE);
+            cfg->get<Config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
+        }
+        else
+        {
+            cfg->get<Config::EigrpInterface::AUTHENTICATION_MODE>().set(EIGRP::AuthType::MD5);
+        }
     }
     return true;
 }
@@ -129,17 +116,9 @@ bool InterfaceIPv6_BandwidthPercent_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	auto* eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (ctx.negate)
-	{
-	    eigrpConfig->bandwidthPercentage.store(50, std::memory_order_release);
-	    refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-	}
-	else
-	{
-	    eigrpConfig->bandwidthPercentage.store(static_cast<uint32_t>(std::stoul(args[2]), std::memory_order_release));
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        ctx.currentInterface.getEigrpConfig(as)->get<Config::EigrpInterface::BANDWIDTH_PERCENTAGE>().set(
+            ctx.negate ? 50u : static_cast<uint32_t>(std::stoul(args[2])));
     }
     return true;
 }
@@ -148,20 +127,19 @@ bool InterfaceIPv6_DampeningChange_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	auto eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (eigrpConfig)
-	{
-	    if (ctx.negate)
-	    {
-		eigrpConfig->dampeningChange.store(1, std::memory_order_release);
-		refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-	    }
-	    else
-	    {
-		eigrpConfig->dampeningChange.store(static_cast<uint32_t>(std::stoul(args[2]), std::memory_order_relaxed));
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        auto cfg = ctx.currentInterface.getEigrpConfig(as);
+        if (ctx.negate)
+        {
+            cfg->get<Config::EigrpInterface::DAMPENING_CHANGE>().set(false);
+            cfg->get<Config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(static_cast<uint8_t>(1));
+        }
+        else
+        {
+            cfg->get<Config::EigrpInterface::DAMPENING_CHANGE>().set(true);
+            cfg->get<Config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(
+                static_cast<uint8_t>(std::stoul(args[2])));
+        }
     }
     return true;
 }
@@ -170,20 +148,19 @@ bool InterfaceIPv6_DampeningInterval_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	auto eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (eigrpConfig)
-	{
-	    if (ctx.negate)
-	    {
-		eigrpConfig->dampeningInterval.store(5, std::memory_order_release);
-		refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-	    }
-	    else
-	    {
-		eigrpConfig->dampeningInterval.store(static_cast<uint32_t>(std::stoul(args[2]), std::memory_order_relaxed));
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        auto cfg = ctx.currentInterface.getEigrpConfig(as);
+        if (ctx.negate)
+        {
+            cfg->get<Config::EigrpInterface::DAMPENING_INTERVAL>().set(false);
+            cfg->get<Config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(static_cast<uint16_t>(5));
+        }
+        else
+        {
+            cfg->get<Config::EigrpInterface::DAMPENING_INTERVAL>().set(true);
+            cfg->get<Config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(
+                static_cast<uint16_t>(std::stoul(args[2])));
+        }
     }
     return true;
 }
@@ -220,20 +197,9 @@ bool InterfaceIPv6_HelloInterval_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	auto eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (eigrpConfig)
-	{
-	    if (ctx.negate)
-	    {
-		eigrpConfig->helloTime.store(5, std::memory_order_release);
-		refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-	    }
-	    else
-	    {
-		eigrpConfig->helloTime.store(static_cast<uint32_t>(std::stoul(args[2]), std::memory_order_relaxed));
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        ctx.currentInterface.getEigrpConfig(as)->get<Config::EigrpInterface::HELLO_INTERVAL>().set(
+            ctx.negate ? static_cast<uint16_t>(5) : static_cast<uint16_t>(std::stoul(args[2])));
     }
     return true;
 }
@@ -242,20 +208,9 @@ bool InterfaceIPv6_HoldTime_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	auto eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (eigrpConfig)
-	{
-	    if (ctx.negate)
-	    {
-		eigrpConfig->holdTime.store(15, std::memory_order_release);
-		refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-	    }
-	    else
-	    {
-		eigrpConfig->holdTime.store(static_cast<uint32_t>(std::stoul(args[2]), std::memory_order_relaxed));
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        ctx.currentInterface.getEigrpConfig(as)->get<Config::EigrpInterface::HOLD_TIME>().set(
+            ctx.negate ? static_cast<uint16_t>(15) : static_cast<uint16_t>(std::stoul(args[2])));
     }
     return true;
 }
@@ -270,23 +225,8 @@ bool InterfaceIPv6_NextHopSelf_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoi(args[1]));
-	bool disableEcmp = args.size() == 3 && args[2] == "no-ecmp-mode";
-	{
-	    auto* eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	    if (eigrpConfig)
-	    {
-		eigrpConfig->nextHopSelf.store(!ctx.negate, std::memory_order_release);
-		if (args.size() == 2 || ctx.negate)
-		{
-		    eigrpConfig->noEcmpMode.store(ctx.negate ? disableEcmp : false, std::memory_order_release);
-		}
-		if (ctx.negate)
-		{
-		    refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-		}
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        ctx.currentInterface.getEigrpConfig(as)->get<Config::EigrpInterface::NEXT_HOP_SELF>().set(!ctx.negate);
     }
     return true;
 }
@@ -302,16 +242,8 @@ bool InterfaceIPv6_SplitHorizon_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoi(args[1]));
-	auto* eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	if (eigrpConfig)
-	{
-	    eigrpConfig->splitHorizon.store(!ctx.negate, std::memory_order_relaxed);
-	    if (ctx.negate)
-	    {
-		refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        ctx.currentInterface.getEigrpConfig(as)->get<Config::EigrpInterface::SPLIT_HORIZON>().set(!ctx.negate);
     }
     return true;
 }
@@ -320,37 +252,30 @@ bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
 {
     if (args[0] == "eigrp")
     {
-	uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-	IPv6Prefix _pfx; CliUtils::extractIPv6Prefix(args[2], _pfx);
-	IPv6Address network(_pfx.addr);
-	uint8_t mask = _pfx.prefixLength;
-	IPPrefix prefix(_pfx.addr, _pfx.prefixLength);
-	auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
-	if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv4)
-	{
-	    if (ctx.negate)
-		ifaceIt->second.IPv4->getAggregator().withdrawSummary(prefix);
-	    else
-		ifaceIt->second.IPv4->getAggregator().installSummary(prefix);
-	}
-	else
-	{
-	    auto eigrpConfig = ctx.currentInterface.getEigrpConfig(as, AddressFamily::IPv6, ctx.negate);
-	    if (eigrpConfig)
-	    {
-		if (ctx.negate)
-		{
-		    std::erase_if(
-			eigrpConfig->pendingSummaryRoutes,
-			[&](const IPPrefix& net) -> bool { return net == prefix; });
-		    refreshEigrpConfig(ctx.currentInterface, as, AddressFamily::IPv6, eigrpConfig);
-		}
-		else
-		{
-		    eigrpConfig->pendingSummaryRoutes.push_back(IPPrefix(_pfx.addr, _pfx.prefixLength));
-		}
-	    }
-	}
+        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
+        IPv6Prefix _pfx; CliUtils::extractIPv6Prefix(args[2], _pfx);
+        IPPrefix prefix(_pfx.addr, _pfx.prefixLength);
+        auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
+        if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv6)
+        {
+            if (ctx.negate)
+                ifaceIt->second.IPv6->getAggregator().withdrawSummary(prefix);
+            else
+                ifaceIt->second.IPv6->getAggregator().installSummary(prefix);
+        }
+        else
+        {
+            IPAddress netAddr = prefix;
+            uint8_t plen = prefix.prefixLength;
+            ctx.currentInterface.getEigrpConfig(as)->get<Config::EigrpInterface::SUMMARY_ADDRESS>().withWrite(
+                [&](std::vector<std::tuple<IPAddress, uint8_t>>& v) {
+                    auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
+                        return std::get<0>(t) == netAddr && std::get<1>(t) == plen;
+                    });
+                    if (!ctx.negate) { if (it == v.end()) v.emplace_back(netAddr, plen); }
+                    else { if (it != v.end()) v.erase(it); }
+                });
+        }
     }
     return true;
 }

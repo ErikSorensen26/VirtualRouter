@@ -44,11 +44,11 @@ private:
 
     template <typename N>
     static size_t appendMpUnreach(const Session& session, size_t& attrSize, size_t withdrawIdx, size_t maxMsg,
-        const MpUnreach& unreach, std::span<NlriPath<typename N::Nlri>> withdraws, TCP::Connection& c);
+        const MpUnreach& unreach, std::span<const NlriPath<typename N::Nlri>> withdraws, TCP::Connection& c);
 };
 
 template <typename N>
-static std::pair<size_t, size_t> computeNlriLen(const std::span<NlriPath<typename N::Nlri>>& nlri, bool addPath, size_t maxNlriSize)
+static std::pair<size_t, size_t> computeNlriLen(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, size_t maxNlriSize)
 {
     size_t nlriSize = 0;
     size_t total = 0;
@@ -67,7 +67,7 @@ static std::pair<size_t, size_t> computeNlriLen(const std::span<NlriPath<typenam
 }
 
 template <typename N>
-void appendNlri(const std::span<NlriPath<typename N::Nlri>>& nlri, bool addPath, TCP::Connection& c)
+void appendNlri(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, TCP::Connection& c)
 {
     for (const NlriPath<typename N::Nlri>& n : nlri)
     {
@@ -85,7 +85,7 @@ size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlr
 {
     // MP REACH NLRI
     {
-        std::span<NlriPath<typename N::Nlri>> nlri = {update.nlri.data() + nlriIdx, update.nlri.size() - nlriIdx};
+        std::span<const NlriPath<typename N::Nlri>> nlri(update.nlri.data() + nlriIdx, update.nlri.size() - nlriIdx);
 
         const IPAddress& nextHop = update.attrs.path.nextHop;
         const auto& linkLocal = update.attrs.path.linkLocal;
@@ -142,7 +142,7 @@ size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlr
 
 template <typename N>
 size_t BgpTx::appendMpUnreach(const Session& session, size_t& attrSize, size_t withdrawIdx, size_t maxMsg,
-    const MpUnreach& mp, std::span<NlriPath<typename N::Nlri>> withdrawn, TCP::Connection& c)
+    const MpUnreach& mp, std::span<const NlriPath<typename N::Nlri>> withdrawn, TCP::Connection& c)
 {
     // MP UNREACH NLRI
     std::span<NlriPath<typename N::Nlri>> nlri = {withdrawn.data() + withdrawIdx, withdrawn.size() - withdrawIdx};
@@ -207,7 +207,7 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
                 if (withdrawIdx < update.withdrawn.size())
                 {
                     MpUnreach mp{N::afi};
-                    std::span<NlriPath<typename N::Nlri>> wdSpan{update.withdrawn.data(), update.withdrawn.size()};
+                    std::span<const NlriPath<typename N::Nlri>> wdSpan(update.withdrawn.data(), update.withdrawn.size());
                     withdrawnAdded = appendMpUnreach<N>(session, attrBytes,
                         withdrawIdx, maxMsg, mp, wdSpan, connection);
                     withdrawIdx += withdrawnAdded;
@@ -227,19 +227,19 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
             else
             {
                 size_t wdBudget = maxMsg - BgpHeader::fixedSize - 4 - attrBytes;
-                std::span<NlriPath<typename N::Nlri>> wdSpan = {
+                std::span<const NlriPath<typename N::Nlri>> wdSpan(
                     update.withdrawn.data() + withdrawIdx,
                     update.withdrawn.size() - withdrawIdx
-                };
+                );
                 auto [wdEntries, wdBytes] = computeNlriLen<N>(wdSpan, addPath, wdBudget);
                 appendNlri<N>(wdSpan.subspan(0, wdEntries), addPath, connection);
                 withdrawIdx += wdEntries;
 
                 size_t nlriBudget = maxMsg - BgpHeader::fixedSize - 4 - attrBytes - wdBytes;
-                std::span<NlriPath<typename N::Nlri>> nlriSpan = {
+                std::span<const NlriPath<typename N::Nlri>> nlriSpan(
                     a.nlri.data() + nlriIdx,
                     a.nlri.size() - nlriIdx
-                };
+                );
                 auto [nlriEntries, nlriBytes] = computeNlriLen<N>(nlriSpan, addPath, nlriBudget);
                 appendNlri<N>(nlriSpan.subspan(0, nlriEntries), addPath, connection);
                 nlriIdx += nlriEntries;
@@ -274,10 +274,10 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
         else
         {
             size_t wdBudget = maxMsg - BgpHeader::fixedSize - 4;
-            std::span<NlriPath<typename N::Nlri>> wdSpan = {
+            std::span<const NlriPath<typename N::Nlri>> wdSpan(
                 update.withdrawn.data() + withdrawIdx,
                 update.withdrawn.size() - withdrawIdx
-            };
+            );
             auto [wdEntries, wdBytes] = computeNlriLen<N>(wdSpan, addPath, wdBudget);
             appendNlri<N>(wdSpan.subspan(0, wdEntries), addPath, connection);
             withdrawIdx += wdEntries;

@@ -149,7 +149,7 @@ private:
 
     std::atomic<T> value{T{}};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    AtomicField* base{nullptr};
+    const AtomicField* base{nullptr};
 
     T defaultValue{T{}};
 };
@@ -217,7 +217,7 @@ private:
     ContextProvider& provider;
     std::atomic<T> value{T{}};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    AtomicField* base{nullptr};
+    const AtomicField* base{nullptr};
 
     T defaultValue{T{}};
 };
@@ -282,7 +282,7 @@ private:
 
     std::atomic<T> value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    OptionalAtomicField* base{nullptr};
+    const OptionalAtomicField* base{nullptr};
 };
 
 template <typename T CONFIG_INDEX_PARAM, ApplyFn H>
@@ -350,7 +350,7 @@ private:
     ContextProvider& provider;
     std::atomic<T> value{};
     std::atomic<MaskState> state{MaskState::INHERIT};
-    OptionalAtomicField* base{nullptr};
+    const OptionalAtomicField* base{nullptr};
 };
 
 template <typename T CONFIG_INDEX_PARAM, auto H = nullptr>

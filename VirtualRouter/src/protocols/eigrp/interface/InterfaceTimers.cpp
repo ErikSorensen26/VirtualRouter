@@ -22,12 +22,12 @@ InterfaceTimers::~InterfaceTimers()
 
 void InterfaceTimers::scheduleHello()
 {
-    if (iface.configs.get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs->get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     // Mark hello as active
     if (helloTimerId.load(std::memory_order_relaxed) != 0)
         return; // Timer already active
     
-    auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(iface.configs.get<Config::EigrpInterface::HELLO_INTERVAL>().load());
+    auto nextExpiration = std::chrono::steady_clock::now() + std::chrono::seconds(iface.configs->get<Config::EigrpInterface::HELLO_INTERVAL>().load());
 
     uint32_t helloId = scheduler.schedule(nextExpiration, [this](uint32_t){
         helloTimerId.store(0, std::memory_order_release);
@@ -176,8 +176,8 @@ void InterfaceTimers::startDampeningIntervalTimer()
     if (auto id = dampeningIntervalId.load(std::memory_order_relaxed); id != 0)
         scheduler.cancel(id);
 
-    auto dampeningTime = iface.configs.get<Config::EigrpInterface::DAMPENING_INTERVAL>().load()
-        ? iface.configs.get<Config::EigrpInterface::DAMPENING_INTERVAL_TIME>().load()
+    auto dampeningTime = iface.configs->get<Config::EigrpInterface::DAMPENING_INTERVAL>().load()
+        ? iface.configs->get<Config::EigrpInterface::DAMPENING_INTERVAL_TIME>().load()
         : iface.getBase().getGlobalConfigMgr().getDampeningInterval();
     dampeningIntervalId.store(scheduler.schedule(
         std::chrono::steady_clock::now() + std::chrono::seconds(dampeningTime),

@@ -59,6 +59,10 @@ enum class EigrpInterface
 
 CONFIG_DEFAULT_TABLE(EIGRP_INTERFACE_DEFAULTS);
 
+void EigrpIfacePassive(void* i);
+void EigrpIfaceShutdown(void* i);
+void EigrpIfaceSummary(void* i);
+
 using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
     OptionalValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
     AtomicField<EIGRP::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
@@ -71,10 +75,10 @@ using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
     AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HELLO_INTERVAL)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HOLD_TIME)>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::NEXT_HOP_SELF)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN)>,
+    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE), EigrpIfacePassive>,
+    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN), EigrpIfaceShutdown>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SPLIT_HORIZON)>,
-    ValueField<std::vector<std::tuple<IPAddress, uint8_t>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS)>
+    ValueField<std::vector<std::tuple<IPAddress, uint8_t>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
 >;
 
 }

@@ -27,7 +27,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS)
     }
 
     VirtualRouter* vrf = ctx.terminal.engine.global.getRoutingInstance("default");
-    Eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
 
     if (!eigrpAs && !ctx.negate)
     {
@@ -50,7 +50,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv4)
     {
-        eigrpAs->ipv4 = new Eigrp::Eigrp(asNum, AddressFamily::IPv4, vrf, true);
+        eigrpAs->ipv4 = new EIGRP::Eigrp(asNum, AddressFamily::IPv4, vrf, true);
         eigrpAs->ipv4Named = true;
         ctx.currentEigrpNamed->ipv4 = eigrpAs->ipv4;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV4>(eigrpAs->ipv4, ctx.currentEigrpNamed, nullptr);
@@ -85,7 +85,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS)
         return false;
     }
 
-    Eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
 
     if (!eigrpAs && !ctx.negate)
     {
@@ -108,7 +108,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv4)
     {
-        eigrpAs->ipv4 = new Eigrp::Eigrp(asNum, AddressFamily::IPv4, vrf, true);
+        eigrpAs->ipv4 = new EIGRP::Eigrp(asNum, AddressFamily::IPv4, vrf, true);
         eigrpAs->ipv4Named = true;
         ctx.currentEigrpNamed->ipv4 = eigrpAs->ipv4;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV4>(eigrpAs->ipv4, ctx.currentEigrpNamed, nullptr);
@@ -142,7 +142,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS)
     }
 
     VirtualRouter* vrf = ctx.terminal.engine.global.getRoutingInstance("default");
-    Eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
     if (!eigrpAs && !ctx.negate)
     {
         eigrpAs = vrf->addEigrpAutonomousSystem(asNum);
@@ -165,7 +165,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv6)
     {
-        eigrpAs->ipv6 = new Eigrp::Eigrp(asNum, AddressFamily::IPv6, vrf, true);
+        eigrpAs->ipv6 = new EIGRP::Eigrp(asNum, AddressFamily::IPv6, vrf, true);
         eigrpAs->ipv6Named = true;
         ctx.currentEigrpNamed->ipv6 = eigrpAs->ipv6;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV6>(eigrpAs->ipv6, ctx.currentEigrpNamed, nullptr);
@@ -200,7 +200,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS)
         return false;
     }
 
-    Eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
 
     if (!eigrpAs && !ctx.negate)
     {
@@ -224,7 +224,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv6)
     {
-        eigrpAs->ipv6 = new Eigrp::Eigrp(asNum, AddressFamily::IPv6, vrf, true);
+        eigrpAs->ipv6 = new EIGRP::Eigrp(asNum, AddressFamily::IPv6, vrf, true);
         eigrpAs->ipv6Named = true;
         ctx.currentEigrpNamed->ipv6 = eigrpAs->ipv6;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV6>(eigrpAs->ipv6, ctx.currentEigrpNamed, nullptr);

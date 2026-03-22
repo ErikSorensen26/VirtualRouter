@@ -208,7 +208,7 @@ private:
         if (!routesEqual(old, cur))
         {
             state->lastUserRoute = cur;
-            CallbackCtx ucctx{state->userCtx, old, cur};
+            CallbackCtx ucctx{state->userCtx, state->addrId, old, cur};
             if (state->userFn(ucctx))
                 removeAddrWatch = true;
         }
@@ -364,11 +364,8 @@ private:
                 fireNodes(it->second,
                     [&](WatchNode& n){ return computeBestForPrefix(bucket, n.filter); },
                     prefixIdMap);
-                if (it->second.empty()) 
-                {
-                    availableIds.push(it->first);
+                if (it->second.empty())
                     prefixWatchTable.erase(it);
-                }
             }
         }
 

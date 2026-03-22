@@ -14,7 +14,7 @@ void BgpNeighborDefaultOriginate(void* n)
         return;
     nbr.globalNbr().getScheduler().post([&nbr]() {
         std::visit([&nbr](auto& af){
-            if (nbr.getConfigs().get<Config::BgpNeighbor::DEFAULT_ORIGINATE>().load())
+            if (nbr.getConfigs().get<Config::BgpAfBase::DEFAULT_ORIGINATE>().load())
                 af.sendDefaultOriginate(*nbr.globalNbr().session);
             else
                 af.withdrawDefaultOriginate(*nbr.globalNbr().session);

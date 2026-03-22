@@ -89,12 +89,12 @@ struct AfiSafi
         return flat;
     }
 
-    bool operator==(const AfiSafi& other) const noexcept
+    constexpr bool operator==(const AfiSafi& other) const noexcept
     {
         return afi == other.afi && safi == other.safi;
     }
 
-    bool operator!=(const AfiSafi& other) const noexcept
+    constexpr bool operator!=(const AfiSafi& other) const noexcept
     {
         return !(*this == other);
     }

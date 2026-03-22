@@ -14,7 +14,7 @@ namespace Cli
 {
 bool InterfaceIPv6Ospf_Area_Handler(INTERFACE_PARAMS)
 {
-    auto& ifaceConfigs = ctx.currentInterface.getOspfConfig();
+    auto& ifaceConfigs = ctx.currentInterface.getOspfConfig().get();
 
     // TODO: add to process queue
     auto* vrf = ctx.currentInterface.getVRF();
@@ -57,7 +57,7 @@ bool InterfaceIPv6Ospf_Area_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6Ospf_Authentication_Handler(INTERFACE_PARAMS)
 {
-    auto& configs = ctx.currentInterface.getOspfConfig().get<Config::OspfInterfaceBase::IPSEC>().local();
+    auto& configs = ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::IPSEC>().local();
     auto& authSpi = configs->get<Config::OspfInterfaceIPSec::SPI>();
     auto& authType = configs->get<Config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     auto& authKey = configs->get<Config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
@@ -111,7 +111,7 @@ bool InterfaceIPv6Ospf_Authentication_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6Ospf_Encryption_Handler(INTERFACE_PARAMS)
 {
-    auto& configs = ctx.currentInterface.getOspfConfig().get<Config::OspfInterfaceBase::IPSEC>().local();
+    auto& configs = ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::IPSEC>().local();
     auto& espSpi = configs->get<Config::OspfInterfaceIPSec::SPI>();
     auto& authType = configs->get<Config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     auto& authKey = configs->get<Config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
@@ -242,7 +242,7 @@ bool InterfaceIPv6Ospf_Neighbor_Handler(INTERFACE_PARAMS)
 		}
     }
 
-    ctx.currentInterface.getOspfConfig().get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::NEIGHBOR>().withWrite([&](auto& nbrs)
+    ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::NEIGHBOR>().withWrite([&](auto& nbrs)
     {
 		if (ctx.negate)
 		{

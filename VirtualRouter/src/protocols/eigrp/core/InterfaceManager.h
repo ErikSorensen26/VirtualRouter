@@ -4,7 +4,7 @@
 #define EIGRP_INTERFACE_MANAGER_H
 
 #include <cstdint>
-#include <map>
+#include <unordered_map>
 
 #include "configs/RegistryReference.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
@@ -29,13 +29,13 @@ public:
     void deactivateAll();
 
     EigrpInterface* getInterface(uint32_t key);
+    Config::Reference<Config::EigrpInterfaceRegistry> getRegistry(Interface& iface);
+    Config::Reference<Config::EigrpInterfaceRegistry> getRegistryByKey(uint32_t key);
 
     // Lists
-    std::map<uint32_t, EigrpInterface> eigrpInterfaceList; ///< Map of EIGRP interfaces by identifier.
+    std::unordered_map<uint32_t, EigrpInterface> eigrpInterfaceList; ///< Map of EIGRP interfaces by identifier.
 
 private:
-    // Per-interface registry storage (for named mode or when not provided by interface)
-    std::map<uint32_t, Config::Reference<Config::EigrpInterfaceRegistry>> ifaceRegistryList;
 
     Eigrp& base;
 };

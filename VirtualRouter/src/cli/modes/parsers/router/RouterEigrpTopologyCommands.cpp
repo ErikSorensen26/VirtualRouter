@@ -1,10 +1,9 @@
 // RouterEigrpTopologyCommands.cpp
 
-#include <Global.h>
-#include <VirtualRouter.h>
-
 #include "RouterEigrpTopologyCommands.h"
 #include "eigrp/core/Eigrp.h"
+#include "eigrp/core/EigrpConfig.h"
+#include "configs/registry/router/EigrpRegistry.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/runtime/CliUtils.h"
 
@@ -13,55 +12,44 @@ namespace Cli
 bool RouterEigrpTopology_AutoSummary_Handler(EIGRP_PARAMS)
 {
     UNUSED(args);
-    ctx.currentEigrp->getAggregator().enableAutoSummary(!ctx.negate);
+    ctx.currentEigrp->getGlobalConfigMgr().setAutoSummary(!ctx.negate);
     return true;
 }
 
 bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
+    auto& field = ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::DEFAULT_METRICS>();
     if (!ctx.negate)
     {
-        std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
-        auto& defaultMetric = configs.defaultMetrics;
-        defaultMetric.k1_Bandwidth = static_cast<uint8_t>(std::stoi(args[0]));
-        defaultMetric.k3_Delay = static_cast<uint8_t>(std::stoi(args[1]));
-        defaultMetric.k4_Reliability = static_cast<uint8_t>(std::stoi(args[2]));
-        defaultMetric.k2_Load = static_cast<uint8_t>(std::stoi(args[3]));
-        defaultMetric.k5_MTU = static_cast<uint8_t>(std::stoi(args[4]));
+        field.set(std::make_tuple(
+            static_cast<uint32_t>(std::stoul(args[0])),
+            static_cast<uint32_t>(std::stoul(args[1])),
+            static_cast<uint8_t>(std::stoul(args[2])),
+            static_cast<uint8_t>(std::stoul(args[3])),
+            static_cast<uint16_t>(std::stoul(args[4]))
+        ));
     }
     else
     {
-        std::unique_lock<std::shared_mutex> lock(configs.configsMutex);
-        auto& defaultMetric = configs.defaultMetrics;
-        defaultMetric.k1_Bandwidth = 1;
-        defaultMetric.k2_Load = 0;
-        defaultMetric.k3_Delay = 1;
-        defaultMetric.k4_Reliability = 0;
-        defaultMetric.k5_MTU = 0;
-        defaultMetric.k6_Power = 0;
+        field.unset();
     }
     return true;
 }
 
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
 {
-    if (CliUtils::isNumber(args[0]))
+    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
+    if (args[0] == "eigrp")
     {
-        // XXX
-    }
-    else if (args[0] == "eigrp")
-    {
-        auto& configs = ctx.currentEigrp->getConfigs();
         if (!ctx.negate)
         {
-            configs.adminDistance.store(static_cast<uint8_t>(std::stoi(args[1])), std::memory_order_release);
-            configs.externalAdminDistance.store(static_cast<uint8_t>(std::stoi(args[2])), std::memory_order_release);
+            cfg.get<Config::Eigrp::INTERNAL_ADMIN_DISTANCE>().set(static_cast<uint8_t>(std::stoul(args[1])));
+            cfg.get<Config::Eigrp::EXTERNAL_ADMIN_DISTANCE>().set(static_cast<uint8_t>(std::stoul(args[2])));
         }
         else
         {
-            configs.adminDistance.store(90, std::memory_order_release);
-            configs.externalAdminDistance.store(170, std::memory_order_release);
+            cfg.get<Config::Eigrp::INTERNAL_ADMIN_DISTANCE>().set(90);
+            cfg.get<Config::Eigrp::EXTERNAL_ADMIN_DISTANCE>().set(170);
         }
     }
     return true;
@@ -69,9 +57,8 @@ bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-        ? ctx.currentEigrp->getConfigs().eventLogSize.store(500, std::memory_order_release)
-        : ctx.currentEigrp->getConfigs().eventLogSize.store(static_cast<uint32_t>(std::stoi(args[0])), std::memory_order_release);
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::MAX_EVENT_LOG_SIZE>().set(
+        ctx.negate ? 500u : static_cast<uint32_t>(std::stoul(args[0])));
     return true;
 }
 
@@ -87,78 +74,67 @@ bool RouterEigrpTopology_Exit_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_MaximumPaths_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
-    if (!ctx.negate)
-    {
-        configs.maxPaths.store(static_cast<uint8_t>(std::stoi(args[0])));
-    }
-    else
-    {
-        configs.maxPaths.store(static_cast<uint8_t>(4));
-    }
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::MAX_PATHS>().set(
+        ctx.negate ? 4 : static_cast<uint8_t>(std::stoul(args[0])));
     return true;
 }
 
 bool RouterEigrpTopology_MetricMaximumHops_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-        ? ctx.currentEigrp->getConfigs().maxHops.store(100, std::memory_order_release)
-        : ctx.currentEigrp->getConfigs().maxHops.store(static_cast<uint8_t>(std::stoi(args[0])), std::memory_order_release);
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::MAX_HOPS>().set(
+        ctx.negate ? 100 : static_cast<uint8_t>(std::stoul(args[0])));
     return true;
 }
 
 bool RouterEigrpTopology_ActiveTime_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
+    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
     if (!ctx.negate)
     {
-        if (CliUtils::isNumber(args[0]))
+        if (args[0] == "disabled")
         {
-            configs.stuckInActiveTime.store(static_cast<uint16_t>(std::stoi(args[0]) / 2), std::memory_order_release);
-            configs.activeDisabled.store(false, std::memory_order_release);
+            cfg.get<Config::Eigrp::ACTIVE_DISABLED>().set(true);
         }
-        else if (args[0] == "disabled")
+        else
         {
-            configs.activeDisabled.store(true, std::memory_order_release);
+            cfg.get<Config::Eigrp::ACTIVE_TIME>().set(static_cast<uint16_t>(std::stoul(args[0])));
+            cfg.get<Config::Eigrp::ACTIVE_DISABLED>().set(false);
         }
     }
     else
     {
-        configs.stuckInActiveTime.store(90, std::memory_order_relaxed);
-        configs.activeDisabled.store(false, std::memory_order_release);
+        cfg.get<Config::Eigrp::ACTIVE_TIME>().unset();
+        cfg.get<Config::Eigrp::ACTIVE_DISABLED>().set(false);
     }
     return true;
 }
 
 bool RouterEigrpTopology_TrafficShare_Handler(EIGRP_PARAMS)
 {
-    auto& configs = ctx.currentEigrp->getConfigs();
+    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
     if (!ctx.negate)
     {
         if (args[0] == "balanced")
-        {
-            configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Balanced, std::memory_order_release);
-        }
+            cfg.get<Config::Eigrp::TRAFFIC_SHARE>().set(EIGRP::TrafficShareMode::BALENCED);
         else if (args[0] == "min")
         {
             if (args.size() == 2 && args[1] == "across-interfaces")
-                configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::MinimumAcrossInterfaces, std::memory_order_release);
+                cfg.get<Config::Eigrp::TRAFFIC_SHARE>().set(EIGRP::TrafficShareMode::MINIMUM_ACROSS_INTERFACE);
             else
-                configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Minimum, std::memory_order_release);
+                cfg.get<Config::Eigrp::TRAFFIC_SHARE>().set(EIGRP::TrafficShareMode::MINIMUM);
         }
     }
     else
     {
-        configs.trafficShareMode.store(EigrpConfigs::TrafficShareMode::Balanced, std::memory_order_release);
+        cfg.get<Config::Eigrp::TRAFFIC_SHARE>().set(EIGRP::TrafficShareMode::BALENCED);
     }
     return true;
 }
 
 bool RouterEigrpTopology_Variance_Handler(EIGRP_PARAMS)
 {
-    ctx.negate
-      ? ctx.currentEigrp->getGlobalConfigMgr().setVariance(1)
-      : ctx.currentEigrp->getGlobalConfigMgr().setVariance(static_cast<uint8_t>(std::stoul(args[0])));
+    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<Config::Eigrp::VARIANCE>().set(
+        ctx.negate ? 1 : static_cast<uint8_t>(std::stoul(args[0])));
     return true;
 }
 }

@@ -122,7 +122,7 @@ private:
         if (it == table.end())
         {
             RibBucket<AddrType>* b = new RibBucket<AddrType>();
-            b->addRoute(*e);
+            b->addRoute(e);
             fib.insert(key.prefix, key.length, &b->fibEntry);
             table.emplace(key, b);
             routeWatcher.announceRouteChange(key.prefix, key.length, *b);
@@ -130,7 +130,7 @@ private:
         else
         {
             RCU::Guard g;
-            if (it->second->addRoute(*e))
+            if (it->second->addRoute(e))
                 routeWatcher.announceRouteChange(key.prefix, key.length, *it->second);
         }
     }

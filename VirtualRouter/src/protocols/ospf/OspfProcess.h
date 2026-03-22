@@ -76,7 +76,7 @@ public:
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
     Config::OspfRegistry& getConfigs() { return configs.get(); }
-    __uint128_t getConfigKey() const { return readU128(configs.getKey().dataPtr()); }
+    uint64_t getConfigKey() const { return configs.getKey(); }
     const Config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
     OspfRib& getRib() { return rib; }
     ProcessQueueRef getScheduler() { return scheduler.ref(); }

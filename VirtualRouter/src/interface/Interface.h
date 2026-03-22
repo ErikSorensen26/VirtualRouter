@@ -348,34 +348,23 @@ public:
     std::unordered_map<uint32_t, EIGRP::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
 
     /**
-     * @brief Retrieve or allocate EIGRP per-interface config block.
+     * @brief Retrieve or lazily allocate the EIGRP per-interface config registry for a given AS.
      *
-     * @param as Autonomous System number.
-     * @param af Address Family (IPv4 or IPv6).
-     * @param negate If true, returns nullptr instead of allocating if it does not yet exist.
-     * @return Pointer to EIGRP interface config block.
+     * @param as Autonomous system number.
+     * @return Reference to the EIGRP interface config registry for that AS.
      */
-    EigrpConfigs::InterfaceConfigs* getEigrpConfig(uint32_t as, AddressFamily af, bool negate);
+    Config::Reference<Config::EigrpInterfaceRegistry> getEigrpConfig(uint32_t as);
 
     // OSPF INTERFACES
     
     std::unordered_map<uint32_t, OSPF::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
 
     /**
-     * @brief Retrieve or allocate OSPF per-interface config block.
+     * @brief Retrieves or allocates OSPF per-interface config block.
      *
-     * @param id Process ID number.
-     * @param negate If true, returns a nullptr instead of allicating if it does not yet exist.
-     * @return Pointer to OSPF interface config block.
+     * @return Reference wrapper to the OSPF interface config registry.
      */
-    Config::OspfInterfaceAddressFamilyRegistry& getOspfv3Config(uint32_t id, AddressFamily af);
-
-    /**
-     * @brief Retreives or allocates OSPF per-interface config block.
-     *
-     * @return Pointer to OSPF interface config block.
-     */
-    Config::OspfInterfaceBaseRegistry& getOspfConfig();
+    Config::Reference<Config::OspfInterfaceBaseRegistry> getOspfConfig();
 
     // DHCP CLIENT STATE
 

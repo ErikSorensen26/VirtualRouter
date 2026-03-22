@@ -44,7 +44,7 @@ Neighbor::~Neighbor()
 
 void Neighbor::addAfNeighbor(AfiSafi& afi)
 {
-    afNeighbors.emplace(afi, afi, *this);
+    afNeighbors.try_emplace(afi, afi, *this);
 }
 
 void Neighbor::delAfNeighbor(AfiSafi& afi)
@@ -103,7 +103,7 @@ void Neighbor::buildAttributeRanges()
     attrRanges.discard.reset();
     attrRanges.withdraw.reset();
 
-    configs.get<Config::BgpNeighborSession::PATH_ATTRIBUTE>().withRead([this](std::vector<std::tuple<bool, uint8_t, uint8_t>>& ranges) {
+    configs.get<Config::BgpNeighborSession::PATH_ATTRIBUTE>().withRead([this](const std::vector<std::tuple<bool, uint8_t, uint8_t>>& ranges) {
         for (const auto& [disc, lo, hi] : ranges)
         {
             if (disc)

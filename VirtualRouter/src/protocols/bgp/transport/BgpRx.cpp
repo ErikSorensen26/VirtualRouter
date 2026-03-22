@@ -6,8 +6,6 @@
 //all neighbor af sessions will already be up because they go up once the base session goes up
 //if session is already established, assume its a temp cid, get af, apply it to the session
 
-#include <Functions.h>
-
 #include "bgp/BgpProcess.h"
 #include "packet/headers/BgpHeader.hpp"
 #include "packet/headers/embedded/bgp/BgpOpenHeader.hpp"
@@ -161,7 +159,8 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
     // BGP Identifier: must not be 0 or multicast
     uint32_t peerRid = open.getIdentifier();
 
-    if (peerRid == 0 || peerRid == 0xFFFFFFFF || Functions::isMulticast(open.getIdentifierBuf(), ::AddressFamily::IPv4))
+    uint8_t ridFirstOctet = static_cast<uint8_t>(peerRid >> 24);
+    if (peerRid == 0 || peerRid == 0xFFFFFFFF || (ridFirstOctet >= 224 && ridFirstOctet <= 239))
     {
         error.code = BGP_NOTIFICATION_OPEN_BAD_IDENTIFIER;
         return false;
@@ -728,9 +727,11 @@ bool BgpRx::processRouteRefresh(Session& session, std::span<uint8_t> payload, No
                     if (epos + prefixBytes > orfLen) break;
 
                     e.prefix.prefixLength = prefixLen;
-                    e.prefix.af = (family.afi == BGP_AFI_IPV6)
-                        ? ::AddressFamily::IPv6 : ::AddressFamily::IPv4;
-                    std::memcpy(e.prefix.addr, payload.data() + pos + epos, prefixBytes);
+                    if (family.afi == BGP_AFI_IPV6) {
+                        e.prefix.setV6(readBytes<__uint128_t>(payload.data() + pos + epos, prefixBytes));
+                    } else {
+                        e.prefix.setV4(readBytes<uint32_t>(payload.data() + pos + epos, prefixBytes));
+                    }
                     epos += prefixBytes;
 
                     orfEntries.push_back(e);
@@ -912,10 +913,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                     error.code = BGP_NOTIFICATION_UPDATE_ATTR_LENGTH;
                     return false;
                 }
-                IPAddress nh;
-                std::memcpy(nh.raw, val.data(), 4);
-                nh.isV6 = false;
-                path.nextHop = nh;
+                path.nextHop = IPAddress(readU32(val.data()));
                 sawNextHop = true;
                 break;
             }
@@ -959,12 +957,12 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 if (use4byte)
                 {
                     agg.asn = readU32(val.data());
-                    std::memcpy(agg.speaker.raw, val.data() + 4, 4);
+                    agg.speaker = IPAddress(readU32(val.data() + 4));
                 }
                 else
                 {
                     agg.asn = readU16(val.data());
-                    std::memcpy(agg.speaker.raw, val.data() + 2, 4);
+                    agg.speaker = IPAddress(readU32(val.data() + 2));
                 }
                 attrs.asAggregator = std::move(agg);
                 break;
@@ -1036,29 +1034,27 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 {
                     if (nhLen == 16)
                     {
-                        std::memcpy(path.nextHop.raw, val.data() + 4, 16);
-                        path.nextHop.isV6 = true;
+                        std::memcpy(&path.nextHop.raw, val.data() + 4, 16);
                         sawNextHop = true;
                     }
                     else if (nhLen == 32)
                     {
-                        std::memcpy(path.nextHop.raw, val.data() + 4, 16);
-                        path.nextHop.isV6 = true;
+                        std::memcpy(&path.nextHop.raw, val.data() + 4, 16);
                         IPAddress linkLocal;
-                        std::memcpy(linkLocal.raw, val.data() + 20, 16);
+                        std::memcpy(&linkLocal.raw, val.data() + 20, 16);
                         path.linkLocal = linkLocal;
                         sawNextHop = true;
                     }
                 }
                 else if (nhLen == 4)
                 {
-                    std::memcpy(path.nextHop.raw, val.data() + 4, 4);
+                    path.nextHop = IPAddress(readU32(val.data() + 4));
                     sawNextHop = true;
                 }
                 else if (nhLen == 12)
                 {
                     path.rd = readU64(val.data() + 4);
-                    std::memcpy(path.nextHop.raw, val.data() + 12, 4);
+                    path.nextHop = IPAddress(readU32(val.data() + 12));
                     sawNextHop = true;
                 }
 
@@ -1129,7 +1125,7 @@ bool BgpRx::parsePathAttributes(Session& session, std::span<uint8_t> data, Incom
                 }
                 Aggregator agg;
                 agg.asn = readU32(val.data());
-                std::memcpy(agg.speaker.raw, val.data() + 4, 4);
+                agg.speaker = IPAddress(readU32(val.data() + 4));
                 attrs.as4Aggregator = agg;
                 break;
             }

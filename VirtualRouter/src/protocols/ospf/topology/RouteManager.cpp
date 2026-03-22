@@ -366,8 +366,7 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
 template <typename AddrT>
 static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress(AddrT addr, OspfProcess& process, RoutingTable& globalRib)
 {
-    RibEntry<AddrT>* r = globalRib.lookup<AddrT>(addr, process.getProcId(), RouteSource::OSPF_INTRA);
-    if (!r) r = globalRib.lookup<AddrT>(addr, process.getProcId(), RouteSource::OSPF_INTER);
+    RibEntry<AddrT>* r = globalRib.lookup<AddrT>(addr);
     if (!r || r->nextHopCount == 0) return std::nullopt;
 
     std::vector<OspfNextHop> hops;

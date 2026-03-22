@@ -160,6 +160,14 @@ enum class Eigrp
 
 CONFIG_DEFAULT_TABLE(EIGRP_DEFAULTS);
 
+void EigrpSyncNetworks(void* e);
+void EigrpShutdown(void* e);
+void EigrpSyncVariance(void* e);
+void EigrpSyncKValues(void* e);
+void EigrpSyncNeighbors(void* e);
+void EigrpSyncPassive(void* e);
+void EigrpSyncRouterId(void* e);
+
 using EigrpRegistry = SubRegistry<Eigrp,
     AtomicField<bool CONFIG_INDEX_ARG(Eigrp::AUTO_SUMMARIZATION)>,
     OwnedListField<Config::EigrpInterfaceRegistry, uint32_t CONFIG_INDEX_ARG(Eigrp::AF_INTERFACE)>,
@@ -185,7 +193,7 @@ using EigrpRegistry = SubRegistry<Eigrp,
     AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_CHANGES)>,
     AtomicField<bool CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::LOG_NEIGHBOR_WARNINGS_INTERVAL)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::ROUTER_ID)>,
+    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::ROUTER_ID), EigrpSyncRouterId>,
     AtomicField<bool CONFIG_INDEX_ARG(Eigrp::STUB)>,
     AtomicField<bool CONFIG_INDEX_ARG(Eigrp::STUB_CONNECTED)>,
     AtomicField<bool CONFIG_INDEX_ARG(Eigrp::STUB_RECEIVE_ONLY)>,
@@ -203,21 +211,21 @@ using EigrpRegistry = SubRegistry<Eigrp,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_PATHS)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::MAX_HOPS)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_TOS)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGTH_K1)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K2)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K3)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_k4)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_k5)>,
-    ValueField<std::vector<std::tuple<IPAddress, uint32_t>> CONFIG_INDEX_ARG(Eigrp::NEIGHBOR)>,
-    ValueField<std::vector<std::tuple<uint32_t, uint32_t>> CONFIG_INDEX_ARG(Eigrp::NETWORK)>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGTH_K1), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K2), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_K3), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_k4), EigrpSyncKValues>,
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::WEIGHT_k5), EigrpSyncKValues>,
+    ValueField<std::vector<std::tuple<IPAddress, uint32_t>> CONFIG_INDEX_ARG(Eigrp::NEIGHBOR), EigrpSyncNeighbors>,
+    ValueField<std::vector<std::tuple<uint32_t, uint32_t>> CONFIG_INDEX_ARG(Eigrp::NETWORK), EigrpSyncNetworks>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_OFFSET)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_IN_INTERFACE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_OFFSET)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::OFFSET_LIST_OUT_INTERFACE)>,
-    ValueField<std::vector<uint32_t> CONFIG_INDEX_ARG(Eigrp::PASSIVE_INTERFACES)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::SHUTDOWN)>,
+    ValueField<std::vector<uint32_t> CONFIG_INDEX_ARG(Eigrp::PASSIVE_INTERFACES), EigrpSyncPassive>,
+    AtomicField<bool CONFIG_INDEX_ARG(Eigrp::SHUTDOWN), EigrpShutdown>,
     ValueField<std::vector<std::tuple<IPAddress, uint8_t, uint32_t, uint32_t, uint8_t, uint8_t, uint16_t, uint8_t>> CONFIG_INDEX_ARG(Eigrp::SUMMARY_METRIC)>,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::ACTIVE_TIME)>,
     AtomicField<bool CONFIG_INDEX_ARG(Eigrp::ACTIVE_DISABLED)>, AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::GRACEFUL_PURGE_TIME)>,
@@ -232,7 +240,7 @@ using EigrpRegistry = SubRegistry<Eigrp,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::DAMPENING_RESTART_COUNT)>,
     AtomicField<EIGRP::TrafficShareMode CONFIG_INDEX_ARG(Eigrp::TRAFFIC_SHARE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::VARIANCE)>
+    AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::VARIANCE), EigrpSyncVariance>
 >;
 
 }

@@ -15,7 +15,7 @@
 class Interface; ///< Forward declaration of Interface.
 class Global;    ///< Forward declaration of Global.
 class ControlScheduler;
-namespace Eigrp
+namespace EIGRP
 {
     struct EigrpAutonomousSystem; ///< Forward declaration of Eigrp Autonomous System.
     struct EigrpNamed;            ///< Forward declaration of Eigrp Named.
@@ -208,7 +208,7 @@ public:
      * - IPv6 EIGRP instance (optional)
      * - Metrics, K-values, timers, bandwidth/delay policies
      */
-    Eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
+    EIGRP::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
 
     /**
      * @brief Look up an existing EIGRP Autonomous System by number.
@@ -216,7 +216,7 @@ public:
      * @param id AS number.
      * @return Pointer to AS instance or nullptr if not found.
      */
-    Eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
+    EIGRP::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
 
     /**
      * @brief Remove and delete an EIGRP Autonomous System.
@@ -240,7 +240,7 @@ public:
      * @param name The EIGRP instance name.
      * @return Pointer to the newly created named instance, or nullptr if name exists.
      */
-    Eigrp::EigrpNamed& addEigrpNamed(const std::string& name);
+    EIGRP::EigrpNamed& addEigrpNamed(const std::string& name);
 
     /**
      * @brief Retrieve a named EIGRP instance.
@@ -248,7 +248,7 @@ public:
      * @param name The named EIGRP configuration identifier.
      * @return Pointer to instance or nullptr if missing.
      */
-    Eigrp::EigrpNamed* getEigrpNamed(const std::string& name);
+    EIGRP::EigrpNamed* getEigrpNamed(const std::string& name);
 
     /**
      * @brief Remove a named EIGRP configuration.
@@ -363,8 +363,8 @@ private:
 
     TCP::Tcp tcpManager;
 
-    std::unordered_map<uint32_t, Eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
-    std::unordered_map<std::string, Eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups.
+    std::unordered_map<uint32_t, EIGRP::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
+    std::unordered_map<std::string, EIGRP::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups.
 
     std::unordered_map<uint32_t, OSPF::OspfProcess> ospfList;
     std::unordered_map<uint32_t, OSPF::OspfV3Instance> ospfv3List;

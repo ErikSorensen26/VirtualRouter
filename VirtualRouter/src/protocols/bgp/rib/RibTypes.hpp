@@ -34,6 +34,8 @@ struct NlriPath
 {
     N nlri;
     uint32_t pathId = 0;
+
+    bool operator==(const NlriPath& o) const noexcept { return nlri == o.nlri && pathId == o.pathId; }
 };
 
 template <typename N>

@@ -457,9 +457,9 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         const RouteSource src = deriveOspfType(oldCopy.type);
 
         if (af == AddressFamily::IPv4)
-            rib.removeEntry(prefix.v4(), prefix.prefixLength, src, procId);
+            rib.removeRoute(prefix.v4(), prefix.prefixLength, src, procId);
         else
-            rib.removeEntry(prefix.v6(), prefix.prefixLength, src, procId);
+            rib.removeRoute(prefix.v6(), prefix.prefixLength, src, procId);
 
         st.hasSelected = false;
         prefixStates.erase(it);
@@ -577,9 +577,9 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         {
             const RouteSource oldSrc = deriveOspfType(oldCopy.type);
             if (af == AddressFamily::IPv4)
-                rib.removeEntry(prefix.v4(), prefix.prefixLength, oldSrc, procId);
+                rib.removeRoute(prefix.v4(), prefix.prefixLength, oldSrc, procId);
             else
-                rib.removeEntry(prefix.v6(), prefix.prefixLength, oldSrc, procId);
+                rib.removeRoute(prefix.v6(), prefix.prefixLength, oldSrc, procId);
         }
         
         auto merged = mergeEcmpNextHops(next.paths);
