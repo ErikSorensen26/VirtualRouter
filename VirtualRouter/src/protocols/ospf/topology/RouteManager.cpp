@@ -134,18 +134,20 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
 
     auto ranges = area.getRanges();
 
-    auto collectIntraAreaPrefixFragments = [&](const LsaKey& refKey) -> std::vector<IntraAreaPrefix>
+    auto collectIntraAreaPrefixFragments = [&](uint32_t advRouter, uint16_t expectedRefType, uint32_t expectedRefLsId) -> std::vector<IntraAreaPrefix>
     {
         std::vector<IntraAreaPrefix> prefixes;
 
-        lsdb.forEachInAdv(refKey, [&](uint32_t, const LsaRecord& record)
+        const LsaAdvKey searchKey{OSPFV3_LSA_INTRA_AREA_PREFIX, advRouter};
+        lsdb.forEachInAdv(searchKey, [&](uint32_t, const LsaRecord& record)
         {
             if (!std::holds_alternative<IntraAreaPrefixLsa>(record.body)) return;
 
             const IntraAreaPrefixLsa& frag = std::get<IntraAreaPrefixLsa>(record.body);
 
-            if (frag.referencedAdvRouter != refKey.advertisingRouter) return;
-            if (frag.referencedLsaType != refKey.lsaType) return;
+            if (frag.referencedAdvRouter != advRouter) return;
+            if (frag.referencedLsaType != expectedRefType) return;
+            if (frag.referencedLinkStateId != expectedRefLsId) return;
 
             prefixes.insert(prefixes.end(), frag.prefixes.begin(), frag.prefixes.end());
         });
@@ -174,7 +176,7 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                 const LsaKey key = networkLsaKey(v.id, lsaType);
 
                 auto* routerLsa = lsdb.find(key);
-                if (!routerLsa || !std::holds_alternative<typename Policy::RouterLsa>(routerLsa->body))
+                if (!routerLsa || !std::holds_alternative<typename Policy::NetworkLsa>(routerLsa->body))
                     continue;
 
                 const auto& body = std::get<NetworkLsaV2>(routerLsa->body);
@@ -190,10 +192,8 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
             }
             else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::NetworkLsa>, NetworkLsaV3>)
             {
-                const uint16_t refType = OSPFV3_LSA_INTRA_AREA_PREFIX;
-                const LsaKey& refKey = networkLsaKey(v.id, refType);
-
-                auto prefixes = collectIntraAreaPrefixFragments(refKey);
+                auto prefixes = collectIntraAreaPrefixFragments(
+                    networkAdvRouter(v.id), OSPFV3_LSA_NETWORK, networkLsId(v.id));
                 for (const auto& pr : prefixes)
                 {
                     out.emplace_back(IPPrefix(pr.prefix.addr, pr.prefix.prefixLength), makePath(
@@ -227,21 +227,19 @@ void RouteManager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::
                     
                     out.emplace_back(prefix, makePath(
                             area.areaId, 0,
-                            adminDistance, link.metric,
+                            adminDistance, node.dist + link.metric,
                             nextHops, OspfRouteType::INTRA_AREA));
                 }
             }
             else if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::RouterLsa>, RouterLsaV3>)
             {
-                const uint16_t refType = OSPFV3_LSA_INTRA_AREA_PREFIX;
-                const LsaKey refKey(refType, static_cast<uint32_t>(v.id), static_cast<uint32_t>(v.id));
-
-                auto prefixes = collectIntraAreaPrefixFragments(refKey);
+                auto prefixes = collectIntraAreaPrefixFragments(
+                    static_cast<uint32_t>(v.id), OSPFV3_LSA_ROUTER, 0);
                 for (const auto& pr : prefixes)
                 {
                     out.emplace_back(IPPrefix(pr.prefix.addr, pr.prefix.prefixLength), makePath(
                             area.areaId, pr.options,
-                            adminDistance, pr.metric,
+                            adminDistance, node.dist + pr.metric,
                             nextHops, OspfRouteType::INTRA_AREA));
                 }
             }
@@ -304,6 +302,7 @@ void RouteManager::deriveInterAreaRouter(Area& area, const LsaKey& key, const Ls
     const bool remove = header.age == OSPF_MAX_AGE;
 
     auto abrInfo = resolveToAbrs(area.process(), key.advertisingRouter);
+    if (!abrInfo.has_value()) return;
 
     const typename Policy::InterRouterLsa& asbr = std::get<typename Policy::InterRouterLsa>(body);
     uint64_t distance = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
@@ -348,9 +347,10 @@ void RouteManager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
 
     lsdb.forEachInType(routerType, [&](const LsaKey& key, const LsaRecord& record)
     {
-        if (!std::holds_alternative<typename Policy::InterNetworkLsa>(record.body) || record.header.age == OSPF_MAX_AGE) return;
+        if (!std::holds_alternative<typename Policy::InterRouterLsa>(record.body) || record.header.age == OSPF_MAX_AGE) return;
 
         auto abrInfo = resolveToAbr(area, spf, key.advertisingRouter, nhCache);
+        if (!abrInfo.has_value()) return;
 
         const typename Policy::InterRouterLsa& asbr = std::get<typename Policy::InterRouterLsa>(record.body);
         const uint64_t distance = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()

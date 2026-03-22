@@ -89,17 +89,31 @@ void NeighborTable::syncUnicast()
 
 void NeighborTable::clearUnicast()
 {
-    // TODO
+    unicast.clear();
+    for (auto it = neighbors.begin(); it != neighbors.end();)
+    {
+        if (it->second.unicast)
+            it = neighbors.erase(it);
+        else
+            ++it;
+    }
 }
 
-Neighbor* NeighborTable::createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool unicast)
+Neighbor* NeighborTable::createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool isUnicast)
 {
-    // TODO 
+    auto it = neighbors.find(rid);
+    if (it != neighbors.end())
+        return &it->second;
+
+    // Neighbor constructor takes IPAddress& (non-const), so make a mutable copy
+    IPAddress ip = ipAddress;
+    auto [ins, ok] = neighbors.try_emplace(rid, iface, iface.getTimers(), rid, ip, isUnicast);
+    return &ins->second;
 }
 
-void NeighborTable::deleteNeighbor(uint32_t rid, bool unicast)
+void NeighborTable::deleteNeighbor(uint32_t rid, bool /*unicast*/)
 {
-    // TODO
+    neighbors.erase(rid);
 }
 
 Neighbor* NeighborTable::lookup(uint32_t rid)

@@ -30,6 +30,14 @@ void OriginatorV3::fullRefresh()
 {
     addRouterLsa(std::nullopt, true, true);
 
+    // Originate Link LSAs for all interfaces in this area
+    auto& ifmgr = area.process().getIfaceMgr();
+    for (auto& [id, iface] : ifmgr.ospfInterfaceList)
+    {
+        if (id.area == area.areaId)
+            addLinkLsa(iface, true);
+    }
+
     if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
         nssaDefaultOriginate(area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load());
     else
@@ -38,7 +46,7 @@ void OriginatorV3::fullRefresh()
         addStubDefaultRoute(true);
     else
         addStubDefaultRoute(false);
-    
+
     if (area.type == AreaType::NORMAL)
         for (const auto& asbr : asbrLsas)
             addAsbrLsa(asbr.first, true);
@@ -47,6 +55,49 @@ void OriginatorV3::fullRefresh()
 void OriginatorV3::updateInterface(uint32_t ifaceId)
 {
     addRouterLsa(ifaceId, false);
+
+    // Refresh the Link LSA for this specific interface
+    auto& ifmgr = area.process().getIfaceMgr();
+    for (auto& [id, iface] : ifmgr.ospfInterfaceList)
+    {
+        if (id.area == area.areaId && id.interfaceId == ifaceId)
+        {
+            addLinkLsa(iface, false);
+            break;
+        }
+    }
+}
+
+void OriginatorV3::addLinkLsa(const OspfInterface& iface, bool refresh)
+{
+    // Link LSA is link-local scoped (type 0x0008), one per interface
+    uint32_t selfRid = area.process().getRouterId();
+
+    LsaKey key{OSPFV3_LSA_LINK, iface.interfaceId, selfRid};
+
+    // Build Link LSA body
+    LinkLsa lsa;
+    lsa.priority = iface.getConfigs().get<Config::OspfInterface::PRIORITY>().load();
+    lsa.options = area.getFlags().getFlags();
+
+    // Use the interface's link-local IPv6 address
+    const IPPrefix& ifAddr = iface.interfaceAddress;
+    lsa.localLink = IPv6Address(ifAddr.v6());
+
+    // Add all prefixes associated with this interface
+    auto& ifcConfigs = iface.getIface().configs.ipv6;
+    uint8_t pfxBuf[16];
+    uint8_t pfxLen = ifcConfigs.getGlobalUnicastPrefix(pfxBuf);
+    if (pfxLen > 0)
+    {
+        LinkLsaPrefix entry;
+        entry.options = 0;
+        entry.prefix = IPv6Prefix(pfxBuf, pfxLen);
+        lsa.prefixes.push_back(entry);
+    }
+
+    LsaBody body = lsa;
+    originateLsa<PolicyV3>(key, body, false);
 }
 
 void OriginatorV3::addRouterLsa(std::optional<uint32_t> ifaceId, bool refresh, bool fullRefresh)
@@ -549,7 +600,7 @@ void OriginatorV3::addStubDefaultRoute(bool add)
     if (!stubDefaultRoute.has_value())
     {
         LsaKey key;
-        key.lsaType = OSPFV3_LSA_INTER_AREA_ROUTER;
+        key.lsaType = OSPFV3_LSA_INTER_AREA_PREFIX;
         key.linkStateId = 0;
         key.advertisingRouter = area.process().getRouterId();
         stubDefaultRoute = key;

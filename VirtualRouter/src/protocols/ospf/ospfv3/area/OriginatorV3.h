@@ -45,6 +45,7 @@ protected:
 
     void addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::optional<bool>>>& routerLsas, bool refresh);
     void addNetworkPrefixLsa(const OspfInterface& iface, bool refresh);
+    void addLinkLsa(const OspfInterface& iface, bool refresh);
 
     void addTransitLink(LsaBody& router, const OspfInterface& iface, const Neighbor* nbr = nullptr) override;
     void addP2PLink(LsaBody& router, const OspfInterface& iface, const Neighbor& neighbor) override;

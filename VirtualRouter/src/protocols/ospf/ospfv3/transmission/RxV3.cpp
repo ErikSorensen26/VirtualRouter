@@ -13,8 +13,20 @@
 #include "packet/headers/embedded/ospf/Ospfv3LSAHeader.hpp"
 #include "packet/headers/embedded/ospf/Ospfv3LSRHeader.hpp"
 
+#include "ospf/ospfv2/database/OpaqueLsaV2.hpp"
+#include "ospf/ospfv3/database/IntraAreaPrefixLsa.hpp"
+#include "ospf/transmission/OspfFletcher.hpp"
+
 namespace OSPF
 {
+
+static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
+{
+    if (len < 20) return false;
+    ChecksumFletcher check;
+    check.addBytes(lsa + 2, len - 2);
+    return check.finalize() == 0;
+}
 Config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getBaseConfigs()
 {
     return baseConfigs.get();
@@ -118,32 +130,35 @@ void PacketDispatcherV3::processHello(PacketDispatcher::HeaderInfo& info, bool u
     if (info.offset > info.payloadSize)
         return;
 
-    // Validate timers
+    // Validate timers — if mismatch, tear down an existing neighbor; for unknown neighbors just drop
     if (hdr.getHelloInterval() != ifaceConfigs.get<Config::OspfInterface::HELLO_INTERVAL>().load() ||
         hdr.getDeadInterval() != ifaceConfigs.get<Config::OspfInterface::DEAD_INTERVAL>().load())
     {
-        info.neighbor->setState(Neighbor::State::DOWN);
-        return;
-    }
-
-    if (info.neighbor->getState() != Neighbor::State::FULL && !processOptions(static_cast<uint32_t>(hdr.getOptions()), *info.neighbor))
-    {
-        info.neighbor->setState(Neighbor::State::DOWN);
+        if (info.neighbor)
+            info.neighbor->setState(Neighbor::State::DOWN);
         return;
     }
 
     auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
     bool multiAccess = ntype == NetworkType::BROADCAST || ntype == NetworkType::NON_BROADCAST;
 
+    // Create neighbor if first Hello from this router
     if (!info.neighbor)
     {
-        info.neighbor = ntable.createNeighbor(info.rid, info.neighborIp);
+        info.neighbor = ntable.createNeighbor(info.rid, info.neighborIp, unicast);
     }
-    else if (unicast && info.neighbor)
+    else if (unicast)
     {
         auto state = info.neighbor->getState();
         if (state == Neighbor::State::DOWN || state == Neighbor::State::ATTEMPT)
             info.neighbor->setState(Neighbor::State::INIT);
+    }
+
+    // Validate options — neighbor is guaranteed non-null from here on
+    if (info.neighbor->getState() != Neighbor::State::FULL && !processOptions(static_cast<uint32_t>(hdr.getOptions()), *info.neighbor))
+    {
+        info.neighbor->setState(Neighbor::State::DOWN);
+        return;
     }
 
     if (ntype == NetworkType::BROADCAST || ntype == NetworkType::NON_BROADCAST)
@@ -421,20 +436,20 @@ void PacketDispatcherV3::processLSUpdate(PacketDispatcher::HeaderInfo& info)
             lsaHdr.getAge(),
         };
 
-        uint16_t bodyLen = hdr.length - Ospfv3LSAHeader::fixedSize;
-        auto body = buildLsaBody(static_cast<uint8_t>(key.lsaType), info.payload + off, bodyLen);
-
         if (hdr.length < Ospfv3LSAHeader::fixedSize)
             return;
         if (info.offset + hdr.length > info.payloadSize)
             return;
 
+        // Validate raw wire Fletcher checksum (RFC 5340 §A.3) before parsing body
+        bool checksumValid = verifyOspfFletcher(info.payload + info.offset, hdr.length);
+
         info.offset += hdr.length;
 
-        if (!body.has_value()) continue;
+        uint16_t bodyLen = hdr.length - Ospfv3LSAHeader::fixedSize;
+        auto body = buildLsaBody(key.lsaType, info.payload + off, bodyLen);
 
-        auto calc = runLsaCalculations<PolicyV3>(hdr, key, body.value());
-        bool checksumValid = calc.checksum == hdr.checksum;
+        if (!body.has_value()) continue;
 
         IncomingLsaContext context{
             key,
@@ -496,6 +511,7 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
                 if (!parseExtensionTLV(size))
                     return;
                 break;
+            default:
                 if (offset + size > llsLen)
                     return;
                 offset += size;
@@ -508,10 +524,11 @@ void PacketDispatcherV3::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     if (check.finalize() != readU16(llsBase))
         return;
 
-    // TODO: process extension
+    // Trigger DC integrity scan so flood-reduction state stays current
+    iface.getArea().runDCIntegrityScan();
 }
 
-std::optional<LsaBody> PacketDispatcherV3::buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len)
+std::optional<LsaBody> PacketDispatcherV3::buildLsaBody(uint16_t type, const uint8_t* buf, uint16_t len)
 {
     switch (type)
     {
@@ -525,11 +542,22 @@ std::optional<LsaBody> PacketDispatcherV3::buildLsaBody(uint8_t type, const uint
             return InterAreaRouterLsa::build(buf, len);
         case OSPFV3_LSA_LINK:
             return LinkLsa::build(buf, len);
+        case OSPFV3_LSA_INTRA_AREA_PREFIX:
+            return IntraAreaPrefixLsa::build(buf, len);
         case OSPFV3_LSA_AS_EXTERNAL:
         case OSPFV3_LSA_NSSA_EXTERNAL:
             return ExternalLsaV3::build(buf, len);
         default:
+        {
+            // RFC 5340: if U-bit (bit 15) is set, store and flood as unknown
+            // using the scope indicated by bits 14-13. Otherwise discard.
+            if (type & 0x8000)
+            {
+                // Store as raw opaque payload — reuse OpaqueLsaV2 for unknown V3 LSAs
+                return OpaqueLsaV2::build(type, buf, len);
+            }
             return std::nullopt;
+        }
     }
     return std::nullopt;
 }

@@ -130,6 +130,10 @@ public:
     void releaseMemory();
     void runDCIntegrityScan();
     void setFloodReduction(OspfInterface& iface);
+    void flushNeighborLsas(uint32_t neighborRid);
+
+    void startAgingTimer();
+    void onAgingTick();
 
     static LsaRecordFlags makeFlags(const IncomingLsaContext& ctx) noexcept;
 
@@ -141,6 +145,7 @@ protected:
     size_t ignoreSize{0};
     uint32_t ignoreTid{0};
     uint32_t resetTid{0};
+    uint32_t agingTimerId{0};
 
     Config::Reference<Config::OspfAreaRegistry> configs;
 

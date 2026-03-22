@@ -322,9 +322,14 @@ void Originator::runReorigination(const LsaKey& key)
 
     processReoriginatedLsa<Policy>(key, it->second);
 
-    auto& info = it->second.throttleInfo;
-    info.lastOriginate = std::chrono::steady_clock::now();
-    info.pending.store(false, std::memory_order_release);
+    // Re-lookup: processReoriginatedLsa may have erased the entry (expire or rollover)
+    it = originationState.find(key);
+    if (it == originationState.end())
+        return;
+
+    auto& throttle = it->second.throttleInfo;
+    throttle.lastOriginate = std::chrono::steady_clock::now();
+    throttle.pending.store(false, std::memory_order_release);
 }
 
 template <typename Policy>
@@ -347,11 +352,39 @@ void Originator::processReoriginatedLsa(const LsaKey& key, const OriginationInfo
         ctx.header.options = static_cast<uint8_t>(options);
     }
     ctx.selfOriginatedKey = true;
+    ctx.checksumValid = true; // We compute the checksum ourselves; it is always valid
+
+    // RFC 2328 §12.1.6: detect sequence number rollover before normal processing
+    if (!info.expire && existing && existing->header.sequence == OSPF_MAX_SEQUENCE)
+    {
+        // Flush with MaxSequenceNumber, then schedule a full refresh to restart
+        ctx.header.age      = OSPF_MAX_AGE;
+        ctx.header.sequence = OSPF_MAX_SEQUENCE;
+        ctx.info            = {.reason = FloodReason::FLUSH};
+        LsaBody flushBody   = info.body;
+
+        auto results = runLsaCalculations<Policy>(ctx.header, key, flushBody);
+        ctx.header.length   = results.size;
+        ctx.header.checksum = results.checksum;
+        (void)area.processLsa<Policy>(ctx, flushBody);
+
+        unscheduleForGroupPacing(key);
+        originationState.erase(key);
+
+        // Re-originate after a short delay; the LSDB will have no existing entry
+        // so the new instance starts from InitialSequenceNumber.
+        area.getScheduler().postAfter(
+            std::chrono::steady_clock::now() + std::chrono::seconds(5),
+            [this](uint32_t) { this->fullRefresh(); }
+        );
+        return;
+    }
+
     ctx.header.age = info.expire ? OSPF_MAX_AGE : 0;
     FloodReason reason = info.expire ? FloodReason::FLUSH : info.refresh ? FloodReason::REFRESH : FloodReason::UPDATE;
     ctx.info = {.reason = reason};
     ctx.header.sequence = existing
-        ? existing->header.sequence + 1 : 0;
+        ? existing->header.sequence + 1 : OSPF_INITIAL_SEQUENCE;
 
     auto results = runLsaCalculations<Policy>(ctx.header, key, info.body);
 

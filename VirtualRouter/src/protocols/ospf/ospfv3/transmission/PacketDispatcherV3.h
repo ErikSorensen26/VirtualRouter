@@ -80,7 +80,7 @@ private:
 
     void processLLSDataBlock(PacketDispatcher::HeaderInfo& info);
 
-    std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len);
+    std::optional<LsaBody> buildLsaBody(uint16_t type, const uint8_t* buf, uint16_t len);
 
     Config::Reference<Config::OspfInterfaceBaseRegistry> baseConfigs;
     Config::Reference<Config::OspfInterfaceRegistry> configs;

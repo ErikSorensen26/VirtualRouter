@@ -37,6 +37,7 @@ Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
       areaId(id)
 {
     configs->context().set(this);
+    startAgingTimer();
 }
 
 Area::~Area()
@@ -45,6 +46,8 @@ Area::~Area()
         base.getScheduler().cancel(ignoreTid);
     if (resetTid != 0)
         base.getScheduler().cancel(resetTid);
+    if (agingTimerId != 0)
+        base.getScheduler().cancel(agingTimerId);
     base.getConfigs().get<Config::Ospf::AREA_CONFIGS>().erase(areaId);
 }
 
@@ -57,7 +60,97 @@ void Area::initializeReset()
 
 void Area::reset()
 {
-    // TODO
+    // Reset all neighbors on all interfaces in this area
+    auto& ifaceMgr = base.getIfaceMgr();
+    for (auto& [ifId, iface] : ifaceMgr.ospfInterfaceList)
+    {
+        if (iface.getAreaId() != areaId) continue;
+        for (auto& [rid, nbr] : iface.getNTable().neighbors)
+            nbr.setState(Neighbor::State::DOWN);
+    }
+
+    // Flush and clear LSDB
+    // MaxAge-flood all LSAs so neighbors know we're resetting
+    for (auto& [key, record] : db.getIterableLSDB())
+    {
+        record.header.age = OSPF_MAX_AGE;
+        FloodInfo info{FloodReason::FLUSH};
+        floodMgr.enqueueFlood(LsaRecordRef{key, record}, info);
+    }
+    db.clear();
+
+    // Re-originate all self-originated LSAs
+    originator.fullRefresh();
+}
+
+void Area::startAgingTimer()
+{
+    agingTimerId = 0;
+    auto nextFire = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    agingTimerId = scheduler.postAfter(nextFire, [this](uint32_t) {
+        agingTimerId = 0;
+        onAgingTick();
+    });
+}
+
+void Area::onAgingTick()
+{
+    // Increment all LSA ages by 1 second, find how many hit MaxAge
+    size_t expired = db.ageAll(1, OSPF_MAX_AGE, false);
+
+    if (expired > 0)
+    {
+        // Collect MaxAge LSAs, flood them, then purge
+        std::vector<std::pair<LsaKey, LsaRecord*>> maxAgeLsas;
+        for (auto& [key, record] : db.getIterableLSDB())
+        {
+            if (record.header.age >= OSPF_MAX_AGE)
+                maxAgeLsas.push_back({key, &record});
+        }
+
+        for (auto& [key, record] : maxAgeLsas)
+        {
+            FloodInfo info{FloodReason::FLUSH};
+            floodMgr.enqueueFlood(LsaRecordRef{key, *record}, info);
+        }
+
+        db.purgeExpired(OSPF_MAX_AGE);
+
+        if (base.isV3)
+            spfMgr.requestSpf<PolicyV3>();
+        else
+            spfMgr.requestSpf<PolicyV2>();
+    }
+
+    startAgingTimer();
+}
+
+void Area::flushNeighborLsas(uint32_t neighborRid)
+{
+    // Collect all LSA keys originated by this neighbor
+    std::vector<LsaKey> toFlush;
+    db.forEach([&](const LsaKey& key, const LsaRecord&) {
+        if (key.advertisingRouter == neighborRid)
+            toFlush.push_back(key);
+    });
+
+    for (const auto& key : toFlush)
+    {
+        LsaRecord* record = db.find(key);
+        if (!record) continue;
+
+        record->header.age = OSPF_MAX_AGE;
+        FloodInfo info{FloodReason::FLUSH};
+        floodMgr.enqueueFlood(LsaRecordRef{key, *record}, info);
+    }
+
+    if (!toFlush.empty())
+    {
+        if (base.isV3)
+            spfMgr.requestSpf<PolicyV3>();
+        else
+            spfMgr.requestSpf<PolicyV2>();
+    }
 }
 
 void Area::clear()
@@ -407,6 +500,13 @@ void Area::postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& b
         result.decision.action != InstallAction::IGNORE_OLDER &&
         result.decision.topologyChanged)
     {
+        // Router and Network LSAs carry the DC options bit; re-check DC compatibility
+        if (std::holds_alternative<typename Policy::RouterLsa>(body) ||
+            std::holds_alternative<typename Policy::NetworkLsa>(body))
+        {
+            runDCIntegrityScan();
+        }
+
         if (std::holds_alternative<typename Policy::ExternalLsa>(body))
         {
             base.distributeExternalLsa<Policy>(*this, ctx, body);
@@ -623,19 +723,13 @@ bool Area::compareLSASummary(const LsaHeader& hdr, const LsaKey& key) const
 {
     const LsaRecord* existing = db.find(key);
 
-    // Check if LSA is missing
+    // We don't have this LSA at all — need to request it
     if (!existing)
-    {
-        return false;
-    }
+        return true;
 
+    // Neighbor has a newer version — need to request it
     const LsaCompareResult cmp = compareLsaHeaders(hdr, existing->header);
-    if (cmp == LsaCompareResult::NEWER)
-    {
-        return false;
-    }
-
-    return true;
+    return cmp == LsaCompareResult::NEWER;
 }
 
 LsaRecordFlags Area::makeFlags(const IncomingLsaContext& ctx) noexcept
@@ -650,9 +744,23 @@ InstallResult Area::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaCo
 {
     InstallResult out{};
 
-    // RouterLsa, NetworkLsa, SummaryLsa, AsbrLsa
-    out.affectsSpfGraph = ctx.key.lsaType >= 1 && ctx.key.lsaType <= 4;
-        
+    // Determine which LSA types affect the SPF graph topology
+    if (base.isV3)
+    {
+        const uint16_t t = ctx.key.lsaType;
+        out.affectsSpfGraph = (t == OSPFV3_LSA_ROUTER ||
+                               t == OSPFV3_LSA_NETWORK ||
+                               t == OSPFV3_LSA_INTER_AREA_PREFIX ||
+                               t == OSPFV3_LSA_INTER_AREA_ROUTER ||
+                               t == OSPFV3_LSA_INTRA_AREA_PREFIX ||
+                               t == OSPFV3_LSA_LINK);
+    }
+    else
+    {
+        // V2: Router(1), Network(2), SummaryNet(3), SummaryASBR(4)
+        out.affectsSpfGraph = ctx.key.lsaType >= 1 && ctx.key.lsaType <= 4;
+    }
+
     if (!ctx.checksumValid)
     {
         out.shouldAck = false;
@@ -660,26 +768,17 @@ InstallResult Area::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaCo
         return out;
     }
 
-    // Missing -> accept unless it is a pur flush
+    // Missing -> install unless it is a MaxAge flush with no existing entry
     if (!existing)
     {
         out.newLsa = true;
 
-        // Missing + MaxAge -> ACK only (not a flush)
+        // Missing + MaxAge -> flood and ACK (RFC 2328 §13 step 4)
         if (isMaxAge(ctx.header, OSPF_MAX_AGE))
         {
             out.action = InstallAction::FLUSH_MAX_AGE;
             out.shouldFlood = true;
             out.shouldStoreReplace = true;
-            return out;
-        }
-
-        auto minArrival = existing->lastRefreshTime + std::chrono::milliseconds(base.getConfigs().get<Config::Ospf::LSA_ARRIVAL>().load());
-        if (std::chrono::steady_clock::now() < minArrival)
-        {
-            out.action = InstallAction::IGNORE_DUPLICATE;
-            out.shouldAck = true;
-            out.shouldFlood = false;
             return out;
         }
 
@@ -705,6 +804,17 @@ InstallResult Area::evaluateIncomingLsa(const LsaRecord* existing, IncomingLsaCo
             return out;
         case LsaCompareResult::NEWER:
         {
+            // MinLSArrival check (RFC 2328 §13 step 5b) — rate-limit acceptance
+            auto minArrivalMs = base.getConfigs().get<Config::Ospf::LSA_ARRIVAL>().load();
+            auto minArrival = existing->lastRefreshTime + std::chrono::milliseconds(minArrivalMs);
+            if (std::chrono::steady_clock::now() < minArrival)
+            {
+                out.action = InstallAction::IGNORE_DUPLICATE;
+                out.shouldAck = true;
+                out.shouldFlood = false;
+                return out;
+            }
+
             if (ctx.header.age == OSPF_MAX_AGE)
             {
                 out.action = InstallAction::FLUSH_MAX_AGE;

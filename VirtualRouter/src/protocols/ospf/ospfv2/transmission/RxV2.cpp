@@ -13,10 +13,24 @@
 #include "packet/headers/embedded/ospf/Ospfv2LSAHeader.hpp"
 #include "packet/headers/embedded/ospf/Ospfv2LSRHeader.hpp"
 
+#include "ospf/ospfv2/database/OpaqueLsaV2.hpp"
+
 #include "security/Encryption.hpp"
+#include "ospf/transmission/OspfFletcher.hpp"
 
 namespace OSPF
 {
+
+// Validates the OSPF LSA Fletcher checksum against raw wire bytes (RFC 2328 §C.4).
+// Covers bytes 2 through (len-1) of the LSA (skipping the 2-byte Age field).
+// Returns true if the included checksum bytes cause the Fletcher sum to reach zero.
+static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
+{
+    if (len < 20) return false;
+    ChecksumFletcher check;
+    check.addBytes(lsa + 2, len - 2);
+    return check.finalize() == 0;
+}
 Config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getBaseConfigs()
 {
     return baseConfigs.get();
@@ -114,7 +128,8 @@ bool PacketDispatcherV2::processOptions(uint32_t options, Neighbor& nbr)
         else
             iface.demandCircuit = OspfInterface::DcDecision::DISABLED;
     }
-    if (iface.opaqueEnabled.load(std::memory_order_relaxed) && AreaFlagManager::getOpaque(options))
+    // Disable opaque if neighbor does not advertise O-bit support
+    if (iface.opaqueEnabled.load(std::memory_order_relaxed) && !AreaFlagManager::getOpaque(options))
         iface.opaqueEnabled.store(false, std::memory_order_relaxed);
     if (areaFlags.getExternalRouting() != AreaFlagManager::getExternalRouting(options))
         return false;
@@ -136,18 +151,12 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
     if (info.offset > info.payloadSize)
         return;
 
-    // Validate timers
+    // Validate timers — if mismatch, tear down an existing neighbor; for unknown neighbors just drop
     if (hdr.getHelloInterval() != ifaceConfigs.get<Config::OspfInterface::HELLO_INTERVAL>().load() ||
         hdr.getDeadInterval() != ifaceConfigs.get<Config::OspfInterface::DEAD_INTERVAL>().load())
     {
-        info.neighbor->setState(Neighbor::State::DOWN);
-        return;
-    }
-
-    // Store options
-    if (info.neighbor->getState() != Neighbor::State::FULL && !processOptions(static_cast<uint32_t>(hdr.getOptions()), *info.neighbor))
-    {
-        info.neighbor->setState(Neighbor::State::DOWN);
+        if (info.neighbor)
+            info.neighbor->setState(Neighbor::State::DOWN);
         return;
     }
 
@@ -158,20 +167,29 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
     {
         if (hdr.getMask() != iface.interfaceAddress.getMask())
         {
-            info.neighbor->setState(Neighbor::State::DOWN);
+            if (info.neighbor)
+                info.neighbor->setState(Neighbor::State::DOWN);
             return;
         }
     }
 
+    // Create neighbor if first Hello from this router
     if (!info.neighbor)
     {
-        info.neighbor = ntable.createNeighbor(info.rid, info.neighborIp);
+        info.neighbor = ntable.createNeighbor(info.rid, info.neighborIp, unicast);
     }
-    else if (unicast && info.neighbor)
+    else if (unicast)
     {
         auto state = info.neighbor->getState();
         if (state == Neighbor::State::DOWN || state == Neighbor::State::ATTEMPT)
             info.neighbor->setState(Neighbor::State::INIT);
+    }
+
+    // Validate options — neighbor is guaranteed non-null from here on
+    if (info.neighbor->getState() != Neighbor::State::FULL && !processOptions(static_cast<uint32_t>(hdr.getOptions()), *info.neighbor))
+    {
+        info.neighbor->setState(Neighbor::State::DOWN);
+        return;
     }
 
     if (ntype == NetworkType::BROADCAST || ntype == NetworkType::NON_BROADCAST)
@@ -451,20 +469,20 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
                 lsaHdr.getOptions()
         };
 
-        uint16_t bodyLen = hdr.length - Ospfv2LSAHeader::fixedSize;
-        auto body = buildLsaBody(static_cast<uint8_t>(key.lsaType), info.payload + off, bodyLen);
-
         if (hdr.length < Ospfv2LSAHeader::fixedSize)
             return;
         if (info.offset + hdr.length > info.payloadSize)
             return;
 
+        // Validate raw wire Fletcher checksum (RFC 2328 §C.4) before parsing body
+        bool checksumValid = verifyOspfFletcher(info.payload + info.offset, hdr.length);
+
         info.offset += hdr.length;
 
-        if (!body.has_value()) continue;
+        uint16_t bodyLen = hdr.length - Ospfv2LSAHeader::fixedSize;
+        auto body = buildLsaBody(static_cast<uint8_t>(key.lsaType), info.payload + off, bodyLen, key.linkStateId);
 
-        auto calc = runLsaCalculations<PolicyV2>(hdr, key, body.value());
-        bool checksumValid = calc.checksum == hdr.checksum;
+        if (!body.has_value()) continue;
 
         IncomingLsaContext context{
             key,
@@ -571,7 +589,8 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
             return;
     }
 
-    // TODO: process extension
+    // Trigger DC integrity scan so flood-reduction state stays current
+    iface.getArea().runDCIntegrityScan();
 }
 
 bool PacketDispatcherV2::processOspfSimpleAuthentication(const Ospfv2Header& hdr)
@@ -612,7 +631,7 @@ bool PacketDispatcherV2::processOspfCryptoAuthentication(HeaderInfo& info, const
     return std::memcmp(authDigest, hdr.buffer + hdr.getPacketLen(), 16) == 0;
 }
 
-std::optional<LsaBody> PacketDispatcherV2::buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len)
+std::optional<LsaBody> PacketDispatcherV2::buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len, uint32_t lsId)
 {
     switch (type)
     {
@@ -628,20 +647,13 @@ std::optional<LsaBody> PacketDispatcherV2::buildLsaBody(uint8_t type, const uint
         case OSPFV2_LSA_NSSA:
             return ExternalLsaV2::build(buf, len);
         case OSPFV2_LSA_OPAQUE_LINK:
-        {
-
-        }
         case OSPFV2_LSA_OPAQUE_AREA:
-        {
-
-        }
         case OSPFV2_LSA_OPAQUE_AS:
-        {
-
-        }
+            if (!iface.opaqueEnabled.load(std::memory_order_relaxed))
+                return std::nullopt;
+            return OpaqueLsaV2::build(lsId, buf, len);
         default:
             return std::nullopt;
     }
-    return std::nullopt;
 }
 }

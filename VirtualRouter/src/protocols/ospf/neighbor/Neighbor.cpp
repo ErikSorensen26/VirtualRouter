@@ -7,6 +7,7 @@
 #include "ospf/interface/OspfInterface.h"
 #include "ospf/interface/InterfaceTimers.h"
 #include "ospf/transmission/PacketDispatcher.h"
+#include "ospf/area/Area.h"
 #include "interface/Interface.h"
 
 static uint32_t generateInitialDDSequence()
@@ -57,7 +58,12 @@ bool Neighbor::setState(Neighbor::State s)
     {
         case State::DOWN:
         {
-            // TODO: clear routes out of lsdb
+            // Clear retransmission lists
+            rtr.lsus().clear();
+            rtr.lsrs().clear();
+
+            // Flush all LSAs originated by this neighbor from the area LSDB
+            iface.getArea().flushNeighborLsas(routerID);
         }
         case State::ATTEMPT:
         case State::INIT:

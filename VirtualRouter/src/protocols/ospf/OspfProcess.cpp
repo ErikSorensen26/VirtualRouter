@@ -100,7 +100,10 @@ bool OspfProcess::isABR()
 
 void OspfProcess::initiateReset()
 {
-    // TODO: completely reset ospf process
+    scheduler.post([this] {
+        for (auto& [id, area] : areas)
+            area.reset();
+    });
 }
 
 void OspfProcess::addDefaultRoute(bool add)
@@ -172,7 +175,7 @@ void OspfProcess::distributeExternalLsa(const Area& sourceArea, IncomingLsaConte
         if (existingIt != externalDb.end())
             seq = existingIt->second.first.sequence;
             
-        if (!seq.has_value() || seq.value() < ctx.header.sequence)
+        if (seq.has_value() && seq.value() >= ctx.header.sequence)
             return;
 
         auto& rec = externalDb[ctx.key];

@@ -301,8 +301,6 @@ std::vector<std::pair<IPPrefix, OspfPath>> OspfRib::getIntraAreaRoutes(uint32_t 
         if (!state.hasSelected)
             continue;
 
-        const OspfPath* bestPath = nullptr;
-
         if (state.selected.type != OspfRouteType::INTRA_AREA)
             continue;
         if (!state.selected.area.has_value() || state.selected.area.value() != area)
@@ -310,7 +308,7 @@ std::vector<std::pair<IPPrefix, OspfPath>> OspfRib::getIntraAreaRoutes(uint32_t 
         if (state.selected.suppressed)
             continue;
 
-        areaRoutes.push_back({prefix, *bestPath});
+        areaRoutes.push_back({prefix, state.selected});
     }
 
     return areaRoutes;
@@ -534,7 +532,7 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         {
             ctx->intraChange.prefix = prefix;
 
-            if (oldInterEffective && !newInterEffective)
+            if (oldIntraEffective && !newIntraEffective)
             {
                 ctx->intraChange.options = oldCopy.options;
                 ctx->intraChange.cost = oldCopy.cost;
@@ -622,7 +620,7 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
     st.selected = std::move(next);
     st.hasSelected = true;
 
-    return ctx ? (routeChanged || ecmpChanged || (oldInterEffective != newInterEffective) || (oldInterEffective != newInterEffective))
+    return ctx ? (routeChanged || ecmpChanged || (oldIntraEffective != newIntraEffective) || (oldInterEffective != newInterEffective))
                : (routeChanged || ecmpChanged);
 }
 
@@ -647,8 +645,8 @@ std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<I
         recomputeLocked(prefix, af, procId, &ctx);
 
         if (ctx.intraChanged && validateInterAreaSummaryEligibility(prefix))
-            changes.push_back(std::move(ctx.interChange));
-        if (ctx.interChanged && areaId == 0)
+            changes.push_back(std::move(ctx.intraChange));
+        if (ctx.interChanged)
             changes.push_back(std::move(ctx.interChange));
     }
 

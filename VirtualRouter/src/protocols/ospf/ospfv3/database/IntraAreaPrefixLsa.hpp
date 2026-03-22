@@ -43,7 +43,7 @@ struct IntraAreaPrefixLsa
 
     static std::optional<IntraAreaPrefixLsa> build(const uint8_t* buf, uint16_t len)
     {
-        if (len > 12) return std::nullopt;
+        if (len < 12) return std::nullopt;
 
         uint16_t prefixes = readU16(buf);
 
@@ -77,7 +77,7 @@ struct IntraAreaPrefixLsa
 
     bool buildBody(uint8_t* buf, uint16_t len) const
     {
-        if (len > 12) return false;
+        if (len < 12) return false;
 
         writeU16(buf, static_cast<uint16_t>(prefixes.size()));
         writeU16(buf + 2, referencedLsaType);

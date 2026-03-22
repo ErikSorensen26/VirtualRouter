@@ -161,7 +161,7 @@ using LsaBody = std::variant<
     SummaryNetworkLsa,
     SummaryRouterLsa,
     ExternalLsaV2,
-    //OpaqueLsaV2,
+    OpaqueLsaV2,
     RouterLsaV3,
     NetworkLsaV3,
     InterAreaPrefixLsa,

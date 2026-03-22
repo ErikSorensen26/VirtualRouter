@@ -26,7 +26,7 @@ struct LinkLsa
 
     static std::optional<LinkLsa> build(const uint8_t* buf, uint16_t len)
     {
-        if (len < 20) return std::nullopt;
+        if (len < 21) return std::nullopt;
 
         LinkLsa lsa;
 

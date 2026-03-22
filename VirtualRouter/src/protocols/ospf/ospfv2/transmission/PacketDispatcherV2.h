@@ -87,7 +87,7 @@ private:
     bool processOspfSimpleAuthentication(const Ospfv2Header& hdr);
     bool processOspfCryptoAuthentication(HeaderInfo& info, const Ospfv2Header& hdr);
 
-    std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len);
+    std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len, uint32_t lsId = 0);
 
     Config::Reference<Config::OspfInterfaceBaseRegistry> baseConfigs;
     Config::Reference<Config::OspfInterfaceRegistry> configs;
