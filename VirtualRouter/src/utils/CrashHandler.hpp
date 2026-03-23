@@ -10,7 +10,10 @@
 #include <stdlib.h>
 #include <filesystem>
 
-#define LOG_DIR "/var/VirtualRouter/log"
+namespace utils
+{
+
+#define LOG_DIR "/var/core::VirtualRouter/log"
 
 static void crash_handler(int sig)
 {
@@ -69,3 +72,5 @@ inline void setupCrashLogging()
     signal(SIGFPE, crash_handler);
     signal(SIGILL, crash_handler);
 }
+
+} // namespace utils

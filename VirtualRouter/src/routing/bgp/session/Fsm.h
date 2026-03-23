@@ -5,7 +5,7 @@
 
 #include "bgp/BgpTypes.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 using FsmTransitionCallback = std::function<void(FsmState from, FsmState to, FsmEvent trigger)>;
 class Session;
@@ -55,6 +55,7 @@ private:
 
     Session& session;
 };
-}
+} // namespace routing
 
 #endif // BGP_FSM_H
+

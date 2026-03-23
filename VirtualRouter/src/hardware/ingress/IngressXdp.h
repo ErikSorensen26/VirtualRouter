@@ -6,10 +6,13 @@
 #include "IngressBase.h"
 #include <linux/if_xdp.h>
 
+namespace hardware::ingress
+{
+
 class IngressXdp : public IngressBase
 {
 public:
-    IngressXdp(const char* ifname, Interface& iface, uint32_t qid,
+    IngressXdp(const char* ifname, interface::Interface& iface, uint32_t qid,
                uint32_t frameCount, uint32_t frameSize);
     ~IngressXdp() override;
 
@@ -97,4 +100,7 @@ private:
     std::atomic<bool> stopping = false;
 };
 
+} // namespace hardware
+
 #endif // INGRESS_XDP_H*/
+

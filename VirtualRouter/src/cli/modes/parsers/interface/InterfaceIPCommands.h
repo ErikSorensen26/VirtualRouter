@@ -6,7 +6,7 @@
 #include "cli/parser/SubCommand.hpp"
 #include "InterfaceIPOspfCommands.h"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceIP_AddressSet_Handler(INTERFACE_PARAMS);
 using InterfaceIP_AddressSet = commandAdder<InterfaceContext,

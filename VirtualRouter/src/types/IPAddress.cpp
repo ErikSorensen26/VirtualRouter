@@ -2,6 +2,9 @@
 
 #include "IPAddress.h"
 
+namespace types
+{
+
 IPAddress::IPAddress(const IPAddress& other, uint8_t plen)
     : IPAddress(other.raw, plen)
 {}
@@ -34,12 +37,12 @@ IPAddress::IPAddress(const uint8_t* bytes, AddressFamily af)
 {
     if (af == AddressFamily::IPv4)
     {
-        uint32_t ipv4 = readU32(bytes);
+        uint32_t ipv4 = utils::readU32(bytes);
         raw = (static_cast<__uint128_t>(ipv4)) | (__uint128_t{0xFFFF} << 32);
     }
     else if (af == AddressFamily::IPv6)
     {
-        raw = readU128(bytes);
+        raw = utils::readU128(bytes);
     }
     else
     {
@@ -128,7 +131,7 @@ uint8_t IPAddress::getDefaultMask() const
 
 NetworkSpan<uint32_t>& IPAddress::v4raw()
 {
-    if constexpr (isLittleEndian)
+    if constexpr (utils::isLittleEndian)
         return *reinterpret_cast<NetworkSpan<uint32_t>*>(&raw);
     else
         return *reinterpret_cast<NetworkSpan<uint32_t>*>(reinterpret_cast<uint32_t*>(&raw) + 3);
@@ -136,7 +139,7 @@ NetworkSpan<uint32_t>& IPAddress::v4raw()
 
 const NetworkSpan<uint32_t>& IPAddress::v4raw() const
 {
-    if constexpr (isLittleEndian)
+    if constexpr (utils::isLittleEndian)
         return *reinterpret_cast<const NetworkSpan<uint32_t>*>(&raw);
     else
         return *reinterpret_cast<const NetworkSpan<uint32_t>*>(reinterpret_cast<const uint32_t*>(&raw) + 3);
@@ -152,6 +155,96 @@ const NetworkSpan<__uint128_t>& IPAddress::v6raw() const
     return *reinterpret_cast<const NetworkSpan<__uint128_t>*>(&raw);
 }
 
+bool IPAddress::operator==(const IPAddress& o) const
+{
+    return raw == o.raw;
+}
+
+bool IPAddress::operator!=(const IPAddress& o) const
+{
+    return raw != o.raw;
+}
+
+bool IPAddress::operator<(const IPAddress& o) const
+{
+    return raw < o.raw;
+}
+
+bool IPAddress::operator>(const IPAddress& o) const
+{
+    return raw > o.raw;
+}
+
+bool IPAddress::operator<=(const IPAddress& o) const
+{
+    return raw <= o.raw;
+}
+
+bool IPAddress::operator>=(const IPAddress& o) const
+{
+    return raw >= o.raw;
+}
+
+bool IPAddress::operator==(const IPv4Address& o) const
+{
+    return v4() == o.addr;
+}
+
+bool IPAddress::operator!=(const IPv4Address& o) const
+{
+    return v4() != o.addr;
+}
+
+bool IPAddress::operator<(const IPv4Address& o) const
+{
+    return v4() < o.addr;
+}
+
+bool IPAddress::operator>(const IPv4Address& o) const
+{
+    return v4() > o.addr;
+}
+
+bool IPAddress::operator<=(const IPv4Address& o) const
+{
+    return v4() <= o.addr;
+}
+
+bool IPAddress::operator>=(const IPv4Address& o) const
+{
+    return v4() >= o.addr;
+}
+
+bool IPAddress::operator==(const IPv6Address& o) const
+{
+    return raw == o.addr;
+}
+
+bool IPAddress::operator!=(const IPv6Address& o) const
+{
+    return raw != o.addr;
+}
+
+bool IPAddress::operator<(const IPv6Address& o) const
+{
+    return raw < o.addr;
+}
+
+bool IPAddress::operator>(const IPv6Address& o) const
+{
+    return raw > o.addr;
+}
+
+bool IPAddress::operator<=(const IPv6Address& o) const
+{
+    return raw <= o.addr;
+}
+
+bool IPAddress::operator>=(const IPv6Address& o) const
+{
+    return raw >= o.addr;
+}
+
 IPv4Address::IPv4Address(uint32_t a)
     : addr(a)
 {}
@@ -163,11 +256,11 @@ IPv4Address::IPv4Address(uint32_t a, uint8_t plen)
 }
 
 IPv4Address::IPv4Address(const uint8_t* bytes)
-    : addr(readU32(bytes))
+    : addr(utils::readU32(bytes))
 {}
 
 IPv4Address::IPv4Address(const uint8_t* bytes, uint8_t plen)
-    : addr(readU32(bytes))
+    : addr(utils::readU32(bytes))
 {
     addPrefixLen(plen);
 }
@@ -222,11 +315,11 @@ IPv6Address::IPv6Address(__uint128_t a, uint8_t plen)
 }
 
 IPv6Address::IPv6Address(const uint8_t* bytes)
-    : addr(readU128(bytes))
+    : addr(utils::readU128(bytes))
 {}
 
 IPv6Address::IPv6Address(const uint8_t* bytes, uint8_t plen)
-    : addr(readU128(bytes))
+    : addr(utils::readU128(bytes))
 {
     addPrefixLen(plen);
 }
@@ -311,12 +404,12 @@ IPPrefix::IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool
     {
         if (family == AddressFamily::IPv4)
         {
-            addr = static_cast<__uint128_t>(readU32(ip)) | (__uint128_t{0xFFFF} << 32);
+            addr = static_cast<__uint128_t>(utils::readU32(ip)) | (__uint128_t{0xFFFF} << 32);
             prefixLength = prefix;
         }
         else
         {
-            addr = readU128(ip);
+            addr = utils::readU128(ip);
             prefixLength = prefix;
         }
     }
@@ -324,12 +417,12 @@ IPPrefix::IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool
     {
         if (family == AddressFamily::IPv4)
         {
-            addr = readBytes<uint32_t>(ip, ((prefix + 7) / 8) * 8) | (__uint128_t{0xFFFF} << 32);
+            addr = utils::readBytes<uint32_t>(ip, ((prefix + 7) / 8) * 8) | (__uint128_t{0xFFFF} << 32);
             addPrefixLen(prefix);
         }
         else
         {
-            addr = readBytes<__uint128_t>(ip, ((prefix + 7) / 8) * 8);
+            addr = utils::readBytes<__uint128_t>(ip, ((prefix + 7) / 8) * 8);
             addPrefixLen(prefix);
         }
     }
@@ -337,7 +430,7 @@ IPPrefix::IPPrefix(const uint8_t* ip, uint8_t prefix, AddressFamily family, bool
 
 NetworkSpan<uint32_t>& IPPrefix::v4raw()
 {
-    if constexpr (isLittleEndian)
+    if constexpr (utils::isLittleEndian)
         return *reinterpret_cast<NetworkSpan<uint32_t>*>(&addr);
     else
         return *reinterpret_cast<NetworkSpan<uint32_t>*>(reinterpret_cast<uint32_t*>(&addr) + 3);
@@ -345,7 +438,7 @@ NetworkSpan<uint32_t>& IPPrefix::v4raw()
 
 const NetworkSpan<uint32_t>& IPPrefix::v4raw() const
 {
-    if constexpr (isLittleEndian)
+    if constexpr (utils::isLittleEndian)
         return *reinterpret_cast<const NetworkSpan<uint32_t>*>(&addr);
     else
         return *reinterpret_cast<const NetworkSpan<uint32_t>*>(reinterpret_cast<const uint32_t*>(&addr) + 3);
@@ -479,6 +572,74 @@ bool IPPrefix::operator>=(const IPPrefix& o) const
     return *this > o;
 }
 
+bool IPPrefix::operator==(const IPv4Prefix& o) const
+{
+    return v4() == o.addr && prefixLength == o.prefixLength;
+}
+
+bool IPPrefix::operator!=(const IPv4Prefix& o) const
+{
+    return v4() != o.addr || prefixLength != o.prefixLength;
+}
+
+bool IPPrefix::operator< (const IPv4Prefix& o) const
+{
+    if (v4() != o.addr) return v4() < o.addr;
+    return prefixLength < o.prefixLength;
+}
+
+bool IPPrefix::operator> (const IPv4Prefix& o) const
+{
+    if (v4() != o.addr) return v4() > o.addr;
+    return prefixLength > o.prefixLength;
+}
+
+bool IPPrefix::operator<=(const IPv4Prefix& o) const
+{
+    if (*this == o) return true;
+    return *this < o;
+}
+
+bool IPPrefix::operator>=(const IPv4Prefix& o) const
+{
+    if (*this == o) return true;
+    return *this > o;
+}
+
+bool IPPrefix::operator==(const IPv6Prefix& o) const
+{
+    return addr == o.addr && prefixLength == o.prefixLength;
+}
+
+bool IPPrefix::operator!=(const IPv6Prefix& o) const
+{
+    return addr != o.addr || prefixLength != o.prefixLength;
+}
+
+bool IPPrefix::operator< (const IPv6Prefix& o) const
+{
+    if (addr == o.addr) return addr < o.addr;
+    return prefixLength < o.addr;
+}
+
+bool IPPrefix::operator> (const IPv6Prefix& o) const
+{
+    if (addr == o.addr) return addr > o.addr;
+    return prefixLength > o.prefixLength;
+}
+
+bool IPPrefix::operator<=(const IPv6Prefix& o) const
+{
+    if (*this == o) return true;
+    return *this < o;
+}
+
+bool IPPrefix::operator>=(const IPv6Prefix& o) const
+{
+    if (*this == o) return true;
+    return *this > o;
+}
+
 IPv4Prefix::IPv4Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress)
     : addr(ip.v4())
 {
@@ -488,25 +649,34 @@ IPv4Prefix::IPv4Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress
         prefixLength = prefix;
 }
 
+IPv4Prefix::IPv4Prefix(const IPPrefix& prefix, bool maintainAddress)
+    : addr(prefix.v4())
+{
+    if (!maintainAddress) 
+        addPrefixLen(prefix.prefixLength);
+    else
+        prefixLength = prefix.prefixLength;
+}
+
 IPv4Prefix::IPv4Prefix(uint32_t ip, uint8_t prefix, bool maintainAddress)
     : addr(ip)
 {
-    if (maintainAddress)
-        prefixLength = prefix;
-    else
+    if (!maintainAddress)
         addPrefixLen(prefix);
+    else
+        prefixLength = prefix;
 }
 
 IPv4Prefix::IPv4Prefix(const uint8_t* bytes, uint8_t prefix, bool maintainAddress)
 {
     if (maintainAddress)
     {
-        addr = readU32(bytes);
+        addr = utils::readU32(bytes);
         prefixLength = prefix;
     }
     else
     {
-        addr = readBytes<uint32_t>(bytes, ((prefix + 7) / 8) * 8);
+        addr = utils::readBytes<uint32_t>(bytes, ((prefix + 7) / 8) * 8);
         addPrefixLen(prefix);
     }
 }
@@ -605,6 +775,49 @@ bool IPv4Prefix::operator>=(const IPv4Prefix& o) const
     return *this > o;
 }
 
+bool IPv4Prefix::operator==(const IPPrefix& o) const
+{
+    return addr == o.v4() && prefixLength == o.prefixLength;
+}
+
+bool IPv4Prefix::operator!=(const IPPrefix& o) const
+{
+    return addr != o.v4() || prefixLength != o.prefixLength;
+}
+
+bool IPv4Prefix::operator<(const IPPrefix& o) const
+{
+    if (addr != o.v4()) return addr < o.v4();
+    return prefixLength < o.prefixLength;
+}
+
+bool IPv4Prefix::operator>(const IPPrefix& o) const
+{
+    if (addr != o.v4()) return addr > o.v4();
+    return prefixLength > o.prefixLength;
+}
+
+bool IPv4Prefix::operator<=(const IPPrefix& o) const
+{
+    if (*this == o) return true;
+    return *this < o;
+}
+
+bool IPv4Prefix::operator>=(const IPPrefix& o) const
+{
+    if (*this == o) return true;
+    return *this > o;
+}
+
+IPv6Prefix::IPv6Prefix(const IPPrefix& prefix, bool maintainAddress)
+    : addr(prefix.v6())
+{
+    if (!maintainAddress)
+        addPrefixLen(prefix.prefixLength);
+    else
+        prefixLength = prefix.prefixLength;
+}
+
 IPv6Prefix::IPv6Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress)
     : addr(ip.raw)
 {
@@ -627,12 +840,12 @@ IPv6Prefix::IPv6Prefix(const uint8_t* bytes, uint8_t prefix, bool maintainAddres
 {
     if (maintainAddress)
     {
-        addr = readU128(bytes);
+        addr = utils::readU128(bytes);
         prefixLength = prefix;
     }
     else
     {
-        addr = readBytes<__uint128_t>(bytes, ((prefix + 7) / 8) * 8);
+        addr = utils::readBytes<__uint128_t>(bytes, ((prefix + 7) / 8) * 8);
         addPrefixLen(prefix);
     }
 }
@@ -700,3 +913,38 @@ bool IPv6Prefix::operator>=(const IPv6Prefix& o) const
     if (*this == o) return true;
     return *this > o;
 }
+
+bool IPv6Prefix::operator==(const IPPrefix& o) const
+{
+    return addr == o.addr && prefixLength == o.prefixLength;
+}
+
+bool IPv6Prefix::operator!=(const IPPrefix& o) const
+{
+    return addr != o.addr || prefixLength != o.prefixLength;
+}
+
+bool IPv6Prefix::operator<(const IPPrefix& o) const
+{
+    if (addr != o.addr) return addr < o.addr;
+    return prefixLength < o.prefixLength;
+}
+
+bool IPv6Prefix::operator>(const IPPrefix& o) const
+{
+    if (addr != o.addr) return addr > o.addr;
+    return prefixLength > o.prefixLength;
+}
+
+bool IPv6Prefix::operator<=(const IPPrefix& o) const
+{
+    if (*this == o) return true;
+    return *this < o;
+}
+
+bool IPv6Prefix::operator>=(const IPPrefix& o) const
+{
+    if (*this == o) return true;
+    return *this > o;
+}
+} // namespace types

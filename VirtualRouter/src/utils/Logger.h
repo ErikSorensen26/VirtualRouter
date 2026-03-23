@@ -12,6 +12,9 @@
 #include <iostream>
 #include <sstream>
 
+namespace utils
+{
+
 class LogStream;
 
 /**
@@ -237,4 +240,7 @@ private:
     std::ostringstream stream_; ///< Stream to collect message parts.
 };
 
+} // namespace utils
+
 #endif // LOGGER_H
+

@@ -9,14 +9,14 @@
 #include "ospf/OspfProcess.h"
 #include "interface/Interface.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 OriginatorV3::OriginatorV3(Area& area) : Originator(area)
 {
     initGroupPacing<PolicyV3>();
     auto& configs = area.getConfigs();
-    auto type = configs.get<Config::OspfArea::AREA_TYPE>().load();
-    if (type == AreaType::TOTALLY_STUB || type == AreaType::TOTALLY_STUB)
+    auto type = configs.get<config::OspfArea::AREA_TYPE>().load();
+    if (type == config::ospf::AreaType::TOTALLY_STUB || type == config::ospf::AreaType::TOTALLY_STUB)
         addStubDefaultRoute(true);
     fullRefresh();
 }
@@ -38,16 +38,16 @@ void OriginatorV3::fullRefresh()
             addLinkLsa(iface, true);
     }
 
-    if (area.type == AreaType::NSSA || area.type == AreaType::TOTALLY_NSSA)
-        nssaDefaultOriginate(area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load());
+    if (area.type == config::ospf::AreaType::NSSA || area.type == config::ospf::AreaType::TOTALLY_NSSA)
+        nssaDefaultOriginate(area.getConfigs().get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load());
     else
         nssaDefaultOriginate(false);
-    if (area.type == AreaType::STUB || area.type == AreaType::TOTALLY_STUB)
+    if (area.type == config::ospf::AreaType::STUB || area.type == config::ospf::AreaType::TOTALLY_STUB)
         addStubDefaultRoute(true);
     else
         addStubDefaultRoute(false);
 
-    if (area.type == AreaType::NORMAL)
+    if (area.type == config::ospf::AreaType::NORMAL)
         for (const auto& asbr : asbrLsas)
             addAsbrLsa(asbr.first, true);
 }
@@ -77,12 +77,12 @@ void OriginatorV3::addLinkLsa(const OspfInterface& iface, bool refresh)
 
     // Build Link LSA body
     LinkLsa lsa;
-    lsa.priority = iface.getConfigs().get<Config::OspfInterface::PRIORITY>().load();
+    lsa.priority = iface.getConfigs().get<config::OspfInterface::PRIORITY>().load();
     lsa.options = area.getFlags().getFlags();
 
     // Use the interface's link-local IPv6 address
-    const IPPrefix& ifAddr = iface.interfaceAddress;
-    lsa.localLink = IPv6Address(ifAddr.v6());
+    const types::IPPrefix& ifAddr = iface.interfaceAddress;
+    lsa.localLink = types::IPv6Address(ifAddr.v6());
 
     // Add all prefixes associated with this interface
     auto& ifcConfigs = iface.getIface().configs.ipv6;
@@ -92,7 +92,7 @@ void OriginatorV3::addLinkLsa(const OspfInterface& iface, bool refresh)
     {
         LinkLsaPrefix entry;
         entry.options = 0;
-        entry.prefix = IPv6Prefix(pfxBuf, pfxLen);
+        entry.prefix = types::IPv6Prefix(pfxBuf, pfxLen);
         lsa.prefixes.push_back(entry);
     }
 
@@ -213,7 +213,7 @@ void OriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::optiona
     uint32_t selfRid = area.process().getRouterId();
     auto& ifaceMgr = area.process().getIfaceMgr();
 
-    std::unordered_map<uint32_t, std::unordered_map<IPv6Prefix, uint16_t>> prefixesByLsid;
+    std::unordered_map<uint32_t, std::unordered_map<types::IPv6Prefix, uint16_t>> prefixesByLsid;
 
     // Iterate Router-LSAs directly, this preserves LSID ownership
     for (auto& [key, expire] : routerLsas)
@@ -231,14 +231,14 @@ void OriginatorV3::addRouterPrefixLsa(std::vector<std::pair<LsaKey, std::optiona
             OspfInterfaceId ifaceId(link.interfaceId, area.areaId);
 
             auto it = ifaceMgr.ospfInterfaceList.find(ifaceId);
-            if (it == ifaceMgr.ospfInterfaceList.end() || it->second.getBaseConfigs().get<Config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load())
+            if (it == ifaceMgr.ospfInterfaceList.end() || it->second.getBaseConfigs().get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load())
                 continue;
 
             auto& config = it->second.getConfigs();
 
-            bool isP2MP = config.get<Config::OspfInterface::NETWORK>().load() == NetworkType::POINT_TO_MULTIPOINT;
+            bool isP2MP = config.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_MULTIPOINT;
 
-            uint16_t cost = config.get<Config::OspfInterface::COST>().load();
+            uint16_t cost = config.get<config::OspfInterface::COST>().load();
             auto prefixes = it->second.getIface().configs.ipv6.getRoutablePrefixSet(true);
 
             out.reserve(prefixes.size());
@@ -415,8 +415,8 @@ void OriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool refresh)
 
     uint32_t selfRid = area.process().getRouterId();
 
-    std::unordered_set<IPv6Prefix> prefixSet = iface.getIface().configs.ipv6.getRoutablePrefixSet();
-    uint32_t cost = iface.getConfigs().get<Config::OspfInterface::COST>().load();
+    std::unordered_set<types::IPv6Prefix> prefixSet = iface.getIface().configs.ipv6.getRoutablePrefixSet();
+    uint32_t cost = iface.getConfigs().get<config::OspfInterface::COST>().load();
 
     std::vector<std::pair<LsaKey, std::optional<bool>>> newLsas;
     newLsas.reserve(lastNetworkPrefixes.size() + 4);
@@ -425,7 +425,7 @@ void OriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool refresh)
     auto lastIt = std::find_if(lastNetworkPrefixes.begin(), lastNetworkPrefixes.end(),
         [&](const std::pair<uint32_t, std::vector<LsaKey>>& p) { return p.first == iface.id.interfaceId; });
 
-    bool prefixSuppression = iface.getBaseConfigs().get<Config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load();
+    bool prefixSuppression = iface.getBaseConfigs().get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load();
 
     if (lastIt == lastNetworkPrefixes.end())
     {
@@ -434,7 +434,7 @@ void OriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool refresh)
         lastIt = std::prev(lastNetworkPrefixes.end());
     }
 
-    if (iface.getBaseConfigs().get<Config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load())
+    if (iface.getBaseConfigs().get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load())
     {
         for (auto& k : lastIt->second)
             expire(k);
@@ -524,7 +524,7 @@ void OriginatorV3::addNetworkPrefixLsa(const OspfInterface& iface, bool refresh)
             lastIt->second.push_back(k);
 }
 
-void OriginatorV3::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire)
+void OriginatorV3::originateSummary(uint32_t lsid, const types::IPPrefix& prefix, uint32_t cost, bool expire)
 {
     LsaKey key;
 
@@ -539,7 +539,7 @@ void OriginatorV3::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint3
 
     summary.metric = cost;
     summary.options = 0;
-    summary.prefix = IPv6Prefix(prefix.v6(), prefix.prefixLength, true);
+    summary.prefix = types::IPv6Prefix(prefix.v6(), prefix.prefixLength, true);
 
     info.expire = expire;
 
@@ -549,10 +549,10 @@ void OriginatorV3::originateSummary(uint32_t lsid, const IPPrefix& prefix, uint3
 void OriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody& body7, bool expire)
 {
     if (std::get<ExternalLsaV3>(body7).prefix.prefixLength == 0 && std::get<ExternalLsaV3>(body7).prefix.addr == 0 &&
-        !area.getConfigs().get<Config::OspfArea::NSSA_DEFAULT_ONLY>().load())
+        !area.getConfigs().get<config::OspfArea::NSSA_DEFAULT_ONLY>().load())
         return;
 
-    if (area.process().getConfigs().get<Config::Ospf::LRC_NSSA_TRANSLATION>().load())
+    if (area.process().getConfigs().get<config::Ospf::LRC_NSSA_TRANSLATION>().load())
     {
         auto& ext7 = std::get<ExternalLsaV3>(body7);
         auto& base = area.process();
@@ -586,7 +586,7 @@ void OriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody& bo
 
 void OriginatorV3::addStubDefaultRoute(bool add)
 {
-    if (area.type != AreaType::STUB && area.type != AreaType::TOTALLY_STUB)
+    if (area.type != config::ospf::AreaType::STUB && area.type != config::ospf::AreaType::TOTALLY_STUB)
         return;
     if (stubDefaultRoute.has_value() == add)
         return;
@@ -612,9 +612,9 @@ void OriginatorV3::addStubDefaultRoute(bool add)
 
     auto& summary = std::get<InterAreaPrefixLsa>(body);
 
-    summary.metric = area.getConfigs().get<Config::OspfArea::DEFAULT_COST>().load();
+    summary.metric = area.getConfigs().get<config::OspfArea::DEFAULT_COST>().load();
     summary.options = 0;
-    summary.prefix = IPv6Prefix{};
+    summary.prefix = types::IPv6Prefix{};
 
     info.expire = !add;
 
@@ -727,8 +727,8 @@ void OriginatorV3::addP2PLink(LsaBody& router, const OspfInterface& iface, const
 void OriginatorV3::addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask)
 {
     if (fullMask) return; // Full mask is only a v2 feature
-    auto& cost = iface.getConfigs().get<Config::OspfInterface::COST>();
-    uint16_t metric = area.process().getConfigs().get<Config::Ospf::MAX_METRIC_INCLUDE_STUB>().load()
+    auto& cost = iface.getConfigs().get<config::OspfInterface::COST>();
+    uint16_t metric = area.process().getConfigs().get<config::Ospf::MAX_METRIC_INCLUDE_STUB>().load()
         ? 0xFFFF : cost.hasValue() ? cost.load() : iface.cost;
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_STUB,
@@ -749,4 +749,4 @@ void OriginatorV3::addVirtualLink(LsaBody& router, const OspfInterface& iface, c
         .neighborRouterId = vNbr.routerID
     });
 }
-}
+} // namespace routing

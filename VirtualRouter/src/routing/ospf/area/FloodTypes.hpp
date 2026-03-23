@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace OSPF
+namespace routing::ospf
 {
 enum class FloodReason
 {
@@ -56,6 +56,7 @@ struct InstallResult final
     bool shouldFlood{false};         // enqueue flooding of THIS incoming instance (or flush)
     bool shouldFightBack{false};     // originate newer self instance (caller triggers)
 };
-}
+} // namespace routing
 
 #endif // OSPF_FLOOD_TYPES_HPP
+

@@ -5,7 +5,7 @@
 #include "RxBuffer.h"
 #include "RxConsumer.h"
 
-namespace TCP
+namespace transport::tcp
 {
 RxBuffer::RxBuffer(uint64_t c, size_t recvSiz)
     : cid(c), buf(recvSiz) {}
@@ -45,4 +45,4 @@ RxConsumer RxBuffer::consume(std::span<uint8_t> data)
         return RxConsumer(*this, std::span<uint8_t>(buf));
     }
 }
-}
+} // namespace transport::tcp

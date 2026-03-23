@@ -4,7 +4,7 @@
 #define EIGRP_HEADER_HPP
 
 #include <vector>
-
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 #include "packet/TlvOptions.hpp"
 
@@ -65,6 +65,8 @@
 inline constexpr uint8_t EIGRP_MULTICAST_ADDRESS[4] = { 0xE0, 0x00, 0x00, 0x0A }; ///< EIGRP Multicast IPv4 Address.
 inline constexpr uint8_t EIGRP_MULTICAST_ADDRESS_V6[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A }; ///< EIGRP Multicast IPv6 Address.
 
+namespace packet
+{
 /**
  * @struct EigrpHeaderRaw
  */
@@ -92,10 +94,10 @@ struct EigrpHeader
 
     uint8_t getVersion() const             { return raw->version; }
     uint8_t getOpcode() const              { return raw->opcode; }
-    uint32_t getSequence() const           { return readU32(raw->sequence); }
-    uint32_t getAck() const                { return readU32(raw->ack); }
-    uint16_t getVirtualRouterID() const    { return readU16(raw->virtualRouterId); }
-    uint16_t getAutonomousSystem() const   { return readU16(raw->autonomousSystem); }
+    uint32_t getSequence() const           { return utils::readU32(raw->sequence); }
+    uint32_t getAck() const                { return utils::readU32(raw->ack); }
+    uint16_t getVirtualRouterID() const    { return utils::readU16(raw->virtualRouterId); }
+    uint16_t getAutonomousSystem() const   { return utils::readU16(raw->autonomousSystem); }
 
     bool getFlagInit() const               { return raw->flags[3] & 0x01; }
     bool getFlagCondRecv() const           { return raw->flags[3] & 0x02; }
@@ -107,22 +109,22 @@ struct EigrpHeader
     void setOpcode(uint8_t val) 
         { raw->opcode = val; }
     void setSequence(uint32_t val) 
-        { writeU32(raw->sequence, val); }
+        { utils::writeU32(raw->sequence, val); }
     void setAck(uint32_t val)
-        { writeU32(raw->ack, val); }
+        { utils::writeU32(raw->ack, val); }
     void setVirtualRouterId(uint16_t val)
-        { writeU16(raw->virtualRouterId, val); }
+        { utils::writeU16(raw->virtualRouterId, val); }
     void setAutonomousSystem(uint16_t val)
-        { writeU16(raw->autonomousSystem, val); }
+        { utils::writeU16(raw->autonomousSystem, val); }
 
     void setFlagInit(bool val)
-        { setBit(raw->flags, 31, val); }
+        { utils::setBit(raw->flags, 31, val); }
     void setFlagCondRecv(bool val)
-        { setBit(raw->flags, 30, val); }
+        { utils::setBit(raw->flags, 30, val); }
     void setFlagRestart(bool val)
-        { setBit(raw->flags, 29, val); }
+        { utils::setBit(raw->flags, 29, val); }
     void setFlagEndOfTable(bool val)
-        { setBit(raw->flags, 28, val); }
+        { utils::setBit(raw->flags, 28, val); }
 };
 
 inline bool parseEigrpOptions(const uint8_t* data, size_t size, std::vector<TLV16Option>& outOptions)
@@ -130,8 +132,8 @@ inline bool parseEigrpOptions(const uint8_t* data, size_t size, std::vector<TLV1
     size_t offset = 0;
     while (offset + 4 <= size)
     {
-        const uint16_t type = readU16(data + offset);
-        const uint16_t length = readU16(data + offset + 2);
+        const uint16_t type = utils::readU16(data + offset);
+        const uint16_t length = utils::readU16(data + offset + 2);
         if (length < 4 || offset + length > size) return false;
 
         uint8_t* value = const_cast<uint8_t*>(data) + offset + 4;
@@ -144,4 +146,7 @@ inline bool parseEigrpOptions(const uint8_t* data, size_t size, std::vector<TLV1
     return offset == size;
 }
 
+} // namespace packet
+
 #endif // EIGRP_HEADER_HPP
+

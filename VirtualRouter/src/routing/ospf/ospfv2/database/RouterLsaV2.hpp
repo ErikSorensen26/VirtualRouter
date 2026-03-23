@@ -8,11 +8,11 @@
 #include <optional>
 #include <algorithm>
 #include <numeric>
+#include <ByteUtils.hpp>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct RouterLinkV2
 {
@@ -49,7 +49,7 @@ struct RouterLsaV2
         RouterLsaV2 lsa;
 
         lsa.flags = buf[0];
-        uint16_t linkNum = readU16(buf + 2);
+        uint16_t linkNum = utils::readU16(buf + 2);
 
         size_t offset = 4;
 
@@ -58,13 +58,13 @@ struct RouterLsaV2
             if (offset + 12 > len) return std::nullopt;
 
             RouterLinkV2 link;
-            link.linkId = readU32(buf + offset); offset += 4;
-            link.linkData = readU16(buf + offset); offset += 4;
+            link.linkId = utils::readU32(buf + offset); offset += 4;
+            link.linkData = utils::readU16(buf + offset); offset += 4;
 
             link.type = buf[offset++];
             uint8_t tosCount = buf[offset++];
 
-            link.metric = readU16(buf + offset); offset += 2;
+            link.metric = utils::readU16(buf + offset); offset += 2;
 
             size_t tosBytes = static_cast<size_t>(tosCount) * 4;
             if (offset + tosBytes > len) return std::nullopt;
@@ -83,16 +83,16 @@ struct RouterLsaV2
 
         buf[0] = flags;
         buf[1] = 0;
-        writeU16(buf + 2, static_cast<uint16_t>(links.size()));
+        utils::writeU16(buf + 2, static_cast<uint16_t>(links.size()));
 
         size_t off = 4;
         for (auto& link : links)
         {
-            writeU32(buf + off, link.linkId);
-            writeU32(buf + off + 4, link.linkData);
+            utils::writeU32(buf + off, link.linkId);
+            utils::writeU32(buf + off + 4, link.linkData);
             buf[off++] = link.type;
             buf[off++] = 0;
-            writeU16(buf + off, link.metric);
+            utils::writeU16(buf + off, link.metric);
             off += 12;
         }
         return true;
@@ -138,6 +138,7 @@ struct RouterLsaV2
         return true;
     }
 };
-}
+} // namespace routing
 
 #endif // ROUTER_LSA_V2_HPP
+

@@ -7,15 +7,10 @@
 #include "ospf/database/LSDB.hpp"
 #include "ospf/neighbor/RetransmissionList.hpp"
 
-struct IPAddress;
-class PacketBuilder;
+namespace processing { class PacketBuilder; }
+namespace types { struct IPAddress; }
 
-struct Ospfv2HelloHeader;
-struct Ospfv2DBDHeader;
-struct Ospfv2LSRHeader;
-struct Ospfv2LSAHeader;
-
-namespace OSPF
+namespace routing::ospf
 {
 class UnicastPacket;
 class OspfInterface;
@@ -28,7 +23,7 @@ public:
     PacketDispatcher(OspfInterface& iface);
     virtual ~PacketDispatcher();
 
-    virtual Config::OspfInterfaceBaseRegistry& getBaseConfigs() = 0;
+    virtual config::OspfInterfaceBaseRegistry& getBaseConfigs() = 0;
 
     virtual void sendHello() = 0;
     virtual void sendUnicastHello(Neighbor& nbr) = 0;
@@ -52,7 +47,7 @@ protected:
     virtual bool sendLSRequest(Neighbor& nbr) = 0;
     virtual bool sendLSUpdate(Neighbor* nbr) = 0;
 
-    virtual void transmit(PacketBuilder& pkt, const IPAddress* dest) = 0;
+    virtual void transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest) = 0;
 
     virtual bool processOptions(uint32_t options, Neighbor& nbr) = 0;
 
@@ -62,7 +57,7 @@ protected:
 
     struct OspfBuilder
     {
-        PacketBuilder& pkt;
+        processing::PacketBuilder& pkt;
         uint8_t* buf = nullptr;
         size_t offset;
         size_t maxSize;
@@ -75,7 +70,7 @@ protected:
 
     struct HeaderInfo
     {
-        HeaderInfo(uint8_t* pload, size_t psize, uint16_t len, uint8_t authType, const IPAddress& neighborIp, const uint32_t rid)
+        HeaderInfo(uint8_t* pload, size_t psize, uint16_t len, uint8_t authType, const types::IPAddress& neighborIp, const uint32_t rid)
             : rid(rid), packetSize(psize), payloadSize(len), payload(pload), authType(authType), neighborIp(neighborIp) {}
 
         uint32_t rid;
@@ -86,7 +81,7 @@ protected:
         uint8_t authType{0};            ///< Auth type.
         uint8_t authSize{0};            ///< Size of auth for LLS to use.
 
-        const IPAddress& neighborIp;    ///< Sender IP.
+        const types::IPAddress& neighborIp;    ///< Sender IP.
         Neighbor* neighbor = nullptr;   ///< Neighbor object.
     };
 
@@ -94,8 +89,9 @@ protected:
 
     OspfInterface& iface;
     NeighborTable& ntable;
-    AddressFamily af;
+    types::AddressFamily af;
 };
-}
+} // namespace routing
 
 #endif // PACKET_DISPATCHER_H
+

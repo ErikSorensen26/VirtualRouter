@@ -7,7 +7,7 @@
 #include <IPAddress.h>
 #include "Neighbor.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class EigrpInterface;
 
@@ -16,26 +16,26 @@ class NeighborTable
 public:
     NeighborTable(EigrpInterface& iface);
 
-    Neighbor* createNeighbor(const IPAddress& ipAddress, Neighbor::Version v = Neighbor::Version::UNKNOWN, bool unicast = false);
-    void deleteNeighbor(const IPAddress& neighborIp, bool unicast);
-    Neighbor* lookup(const IPAddress& neighborIp);
+    Neighbor* createNeighbor(const types::IPAddress& ipAddress, Neighbor::Version v = Neighbor::Version::UNKNOWN, bool unicast = false);
+    void deleteNeighbor(const types::IPAddress& neighborIp, bool unicast);
+    Neighbor* lookup(const types::IPAddress& neighborIp);
     std::vector<Neighbor*> lookupUnicast();
     size_t size();
     void onDown(Neighbor& neighbor);
     void resync();
     void startGracefulRestart(Neighbor& neighbor);
     void cancelAllHoldTimers();
-    bool validatePTP(const IPAddress& neighborIp);
+    bool validatePTP(const types::IPAddress& neighborIp);
     void removeAllMulticast();
     void enableMulticast();
     void disableMulticast();
     
     // Neighbor management
-    std::map<IPAddress, Neighbor> neighbors; ///< Map of neighbor IPs to their information.
-    std::unordered_set<IPAddress> unicast;
+    std::map<types::IPAddress, Neighbor> neighbors; ///< Map of neighbor IPs to their information.
+    std::unordered_set<types::IPAddress> unicast;
 
     EigrpInterface& iface;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_NEIGHBOR_TABLE

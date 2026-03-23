@@ -9,7 +9,7 @@
 
 #include <ControlScheduler.h>
 
-namespace BGP
+namespace routing::bgp
 {
 class Session;
 
@@ -61,7 +61,7 @@ private:
     bool cancel(std::atomic<uint32_t>& timerId) noexcept;
 
     Session& session;
-    ProcessQueueRef& scheduler;
+    core::ProcessQueueRef& scheduler;
 
     std::atomic<uint32_t> connectionRetryTimerId{0};
     std::atomic<uint32_t> holdTimerId{0};
@@ -71,6 +71,7 @@ private:
     std::chrono::seconds lastHoldTime{0};
     std::chrono::seconds lastKeepaliveInterval{0};
 };
-}
+} // namespace routing::bgp
 
 #endif // BGP_SESSION_TIMERS_H
+

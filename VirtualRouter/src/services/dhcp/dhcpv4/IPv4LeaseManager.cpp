@@ -4,7 +4,10 @@
 #include "IPv4LeaseManager.h"
 #include "DhcpServer.h"
 
-IPv4LeaseManager::IPv4LeaseManager(IPv4Pool& pool, Protocol::Dhcp::Configs& cgs)
+namespace services::dhcp
+{
+
+IPv4LeaseManager::IPv4LeaseManager(IPv4Pool& pool, Configs& cgs)
     : pool(pool), timeManager(pool.timeManager), configs(cgs) {}
 
 bool IPv4LeaseManager::createLeaseFromTemp(const ClientID& clientId, uint32_t tempIp, uint32_t leaseTime, uint32_t t1, uint32_t t2)
@@ -156,3 +159,5 @@ std::optional<IPv4LeaseManager::Lease> IPv4LeaseManager::getLease(const ClientID
     if (it == leases.end() || it->second.ip != ip) return std::nullopt;
     return it->second;
 }
+
+} // namespace services

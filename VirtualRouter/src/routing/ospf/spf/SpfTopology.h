@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include "SpfTypes.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 class Area;
 struct LsaRecord;
@@ -34,7 +34,8 @@ public:
 
     const Area& area;
 };
-}
+} // namespace routing
 
 #endif // SPF_TOPOLOGY_H
+
 

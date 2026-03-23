@@ -11,6 +11,7 @@
 
 #include "EgressSend.h"
 #include "hardware/Ifname.h"
+#include "hardware/PacketSlot.hpp"
 #include "interface/Interface.h"
 #include "qos/egress/TxQueueOpts.hpp"
 
@@ -18,12 +19,15 @@
 #define MSG_NOSIGNAL 0
 #endif
 
+namespace hardware::egress
+{
+
 static inline size_t alignUp(size_t v, size_t align)
 {
     return (v + align - 1) & ~(align - 1);
 }
 
-EgressSend::EgressSend(Interface& iface, const TxQueueOpts& opts)
+EgressSend::EgressSend(interface::Interface& iface, const qos::egress::TxQueueOpts& opts)
     : EgressBase(iface, opts)
 {
     uint32_t ifindex = ifnametoindex(opts.ifname.c_str());
@@ -143,3 +147,5 @@ void EgressSend::cancel(uint32_t index)
     if (index < frameCount)
         pushFree(index);
 }
+
+} // namespace hardware

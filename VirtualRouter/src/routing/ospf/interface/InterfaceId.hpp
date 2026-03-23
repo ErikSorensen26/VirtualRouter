@@ -6,7 +6,7 @@
 #include <functional>
 #include <cstdint>
 
-namespace OSPF
+namespace routing::ospf
 {
 struct OspfInterfaceId
 {
@@ -21,14 +21,14 @@ struct OspfInterfaceId
         return interfaceId == other.interfaceId && area == other.area;
     }
 };
-}
+} // namespace routing
 
 namespace std
 {
 template <>
-struct hash<OSPF::OspfInterfaceId>
+struct hash<routing::ospf::OspfInterfaceId>
 {
-    size_t operator()(const OSPF::OspfInterfaceId& k) const
+    size_t operator()(const routing::ospf::OspfInterfaceId& k) const
     {
         return hash<uint32_t>{}(k.interfaceId) ^ (hash<uint32_t>{}(k.area));
     }
@@ -36,3 +36,4 @@ struct hash<OSPF::OspfInterfaceId>
 }
 
 #endif // OSPF_INTERFACE_ID_HPP
+

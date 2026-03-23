@@ -9,9 +9,9 @@
 
 #include "ospf/transmission/OspfPacket.hpp"
 
-class ProcessQueue;
+namespace core {class ProcessQueue; }
 
-namespace OSPF
+namespace routing::ospf
 {
 class Neighbor;
 class OspfInterface;
@@ -43,10 +43,11 @@ private:
 
     std::atomic<bool> runTimers = true;
 
-    ProcessQueueRef scheduler;
+    core::ProcessQueueRef scheduler;
 
     OspfInterface& iface;
 };
-}
+} // namespace routing::ospf
 
 #endif // OSPF_INTERFACE_TIMERS_H
+

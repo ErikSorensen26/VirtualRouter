@@ -15,7 +15,10 @@
 #include <iostream>
 #include <chrono>
 #include <algorithm>
-#include <likely.hpp>
+#include <Likely.hpp>
+
+namespace hardware::ingress
+{
 
 static inline void xsk_kick(int fd)
 {
@@ -28,7 +31,7 @@ static int ifindex_or_throw(const char* ifname)
     return idx;
 }
 
-IngressXdp::IngressXdp(const char* ifname, Interface& iface, uint32_t qid, uint32_t frameCount, uint32_t frameSize)
+IngressXdp::IngressXdp(const char* ifname, interface::Interface& iface, uint32_t qid, uint32_t frameCount, uint32_t frameSize)
     : IngressBase(ifname, iface, qid), frameCount(frameCount), frameMask(frameCount - 1), frameSize(frameSize), umemSize(uint64_t(frameCount) * frameSize)
 {
     if ((frameSize * frameCount) % 4096 != 0)

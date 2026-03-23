@@ -7,33 +7,32 @@
 #include "bgp/BgpProcess.h"
 #include "configs/Registry.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
-
 PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc)
     : name(groupName),
       process(proc),
-      sessionConfigs(proc.routingInstance->getRegistry().create<Config::BgpNeighborSessionRegistry>())
+      sessionConfigs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().ensure(
-        sessionConfigs->get<Config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<Config::Bgp::BGP_BASE>().local()
+        sessionConfigs->get<config::BgpNeighborSession::BGP_BASE>(),
+        proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
     );
 }
 
-Config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi)
+config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi)
 {
     auto it = afConfigs.find(afi);
     if (it != afConfigs.end())
         return &it->second.get();
 
-    auto ref = process.routingInstance->getRegistry().create<Config::BgpNeighborRegistry>();
+    auto ref = process.routingInstance->getRegistry().create<config::BgpNeighborRegistry>();
     auto [newIt, ok] = afConfigs.try_emplace(afi, std::move(ref));
     assert(ok);
     return ok ? &newIt->second.get() : nullptr;
 }
 
-const Config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi) const
+const config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi) const
 {
     auto it = afConfigs.find(afi);
     if (it != afConfigs.end())
@@ -44,17 +43,17 @@ const Config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi) c
 
 PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, BgpProcess& proc)
     : name(groupName),
-      configs(proc.routingInstance->getRegistry().create<Config::BgpNeighborSessionRegistry>())
+      configs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().ensure(
-        configs->get<Config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<Config::Bgp::BGP_BASE>().local()
+        configs->get<config::BgpNeighborSession::BGP_BASE>(),
+        proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
     );
 }
 
 PeerPolicyTemplate::PeerPolicyTemplate(const std::string& groupName, BgpProcess& proc)
     : name(groupName),
-      configs(proc.routingInstance->getRegistry().create<Config::BgpNeighborRegistry>())
+      configs(proc.routingInstance->getRegistry().create<config::BgpNeighborRegistry>())
 {}
 
 // ---------------------------------------------------------------------------
@@ -76,7 +75,7 @@ void PeerTemplateTable::syncPeerGroups()
 {
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto& pgField = nbr.getConfigs().getConfigs()->get<Config::BgpNeighborSession::PEER_GROUP>();
+        auto& pgField = nbr.getConfigs().getConfigs()->get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
         {
             auto* pg = lookupPeerGroup(pgField.load());
@@ -99,7 +98,7 @@ void PeerTemplateTable::syncPeerSessionTemplates()
 {
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto& f = nbr.getConfigs().getConfigs()->get<Config::BgpNeighborSession::INHERIT_PEER_SESSION>();
+        auto& f = nbr.getConfigs().getConfigs()->get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
         if (f.hasValue())
         {
             auto* ps = lookupPeerSessionTemplate(f.load());
@@ -117,7 +116,7 @@ void PeerTemplateTable::syncPeerPolicyTemplates()
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
         nbr.forEachAfNeighbor([this](NeighborAf& afNbr) {
-            auto& f = afNbr.getConfigs().getConfigs().get<Config::BgpNeighbor::INHERIT_PEER_POLICY>();
+            auto& f = afNbr.getConfigs().getConfigs().get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
             if (f.hasValue())
             {
                 auto* pp = lookupPeerPolicyTemplate(f.load());
@@ -202,5 +201,4 @@ const PeerPolicyTemplate* PeerTemplateTable::lookupPeerPolicyTemplate(const std:
     auto it = peerPolicyTemplates.find(name);
     return (it != peerPolicyTemplates.end()) ? &it->second : nullptr;
 }
-
-} // namespace BGP
+} // namespace routing::bgp

@@ -13,6 +13,9 @@
 
 #include "RxQueueManager.h"
 
+namespace qos::ingress
+{
+
 RxQueueManager::RxQueueManager() {}
 RxQueueManager::~RxQueueManager() { shutdown(); }
 
@@ -36,7 +39,7 @@ uint16_t RxQueueManager::assignFanoutGroup()
     return g ? g : 1;
 }
 
-void RxQueueManager::addInterface(Interface& iface, const std::string& ifname, const IfacePolicy& policy)
+void RxQueueManager::addInterface(interface::Interface& iface, const std::string& ifname, const IfacePolicy& policy)
 {
     std::lock_guard<std::mutex> lk(mu);
     if (ifs.count(&iface)) return;
@@ -55,7 +58,7 @@ void RxQueueManager::addInterface(Interface& iface, const std::string& ifname, c
     reoptimize();
 }
 
-void RxQueueManager::removeInterface(Interface& iface)
+void RxQueueManager::removeInterface(interface::Interface& iface)
 {
     std::lock_guard<std::mutex> lk(mu);
     auto it = ifs.find(&iface);
@@ -66,7 +69,7 @@ void RxQueueManager::removeInterface(Interface& iface)
     reoptimize();
 }
 
-void RxQueueManager::updateInterfacePolicy(Interface& iface, const IfacePolicy& policy)
+void RxQueueManager::updateInterfacePolicy(interface::Interface& iface, const IfacePolicy& policy)
 {
     std::lock_guard<std::mutex> lk(mu);
     auto it = ifs.find(&iface);
@@ -207,7 +210,7 @@ void RxQueueManager::startOne(IfState& st, RxQueueOpts qopts)
 {
     QueueState qs;
     qs.opts = qopts;
-    qs.ingress = IngressFactory::create(st.iface, qs.opts);
+    qs.ingress = hardware::ingress::create(st.iface, qs.opts);
     if (!qs.ingress) throw std::runtime_error("ingress factory returned null");
     st.queues.push_back(qs);
 }
@@ -241,7 +244,7 @@ void RxQueueManager::shutdown()
     ifs.clear();
 }
 
-void RxQueueManager::start(Interface* iface)
+void RxQueueManager::start(interface::Interface* iface)
 {
     std::lock_guard<std::mutex> lk(mu);
     auto it = ifs.find(iface);
@@ -252,7 +255,7 @@ void RxQueueManager::start(Interface* iface)
     }
 }
 
-void RxQueueManager::stop(Interface* iface)
+void RxQueueManager::stop(interface::Interface* iface)
 {
     std::lock_guard<std::mutex> lk(mu);
     auto it = ifs.find(iface);
@@ -262,3 +265,5 @@ void RxQueueManager::stop(Interface* iface)
         q.ingress->stop();
     }
 }
+
+} // namespace qos

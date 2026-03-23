@@ -10,7 +10,7 @@
 #include "NeighborConfigs.hpp"
 #include "NeighborAf.h"
 
-namespace BGP
+namespace routing::bgp
 {
 class BgpProcess;
 class Session;
@@ -19,10 +19,10 @@ class NeighborAf;
 class Neighbor
 {
 public:
-    Neighbor(const IPAddress& ipAddress, BgpProcess& proc);
+    Neighbor(const types::IPAddress& ipAddress, BgpProcess& proc);
     ~Neighbor();
 
-    const IPAddress neighborAddress;
+    const types::IPAddress neighborAddress;
 
     uint32_t rid = 0;
 
@@ -59,8 +59,8 @@ public:
 
     NeighborConfigs& getConfigs() { return configs; }
     const NeighborConfigs& getConfigs() const { return configs; }
-    ProcessQueueRef& getScheduler() { return scheduler; }
-    const ProcessQueueRef& getScheduler() const { return scheduler; }
+    core::ProcessQueueRef& getScheduler() { return scheduler; }
+    const core::ProcessQueueRef& getScheduler() const { return scheduler; }
 
     // Attribute ranges
     struct AttributeRanges
@@ -79,12 +79,13 @@ private:
     friend NeighborAf;
 
     BgpProcess& process;
-    ProcessQueueRef scheduler;
+    core::ProcessQueueRef scheduler;
 
     std::unordered_map<AfiSafi, NeighborAf> afNeighbors;
 
     NeighborConfigs configs;
 };
-}
+} // namespace routing
 
 #endif // BGP_NEIGHBOR_H
+

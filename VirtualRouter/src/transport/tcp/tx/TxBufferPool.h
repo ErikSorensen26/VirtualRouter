@@ -6,7 +6,7 @@
 #include <atomic>
 #include <vector>
 
-namespace TCP
+namespace transport::tcp
 {
 class TxBuffer;
 struct PoolConfig;
@@ -53,6 +53,7 @@ private:
     std::mutex growMtx;
     std::vector<void*> slabs;
 };
-}
+} // namespace transport::tcp
 
 #endif // TCP_TX_BUFFER_POOL_H
+

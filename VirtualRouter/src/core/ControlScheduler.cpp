@@ -4,6 +4,9 @@
 
 #include "ControlScheduler.h"
 
+namespace core
+{
+
 static thread_local int gcontrolEngineTlsMarker = 0;
 
 static void isValidPow2(uint32_t cap) noexcept
@@ -123,8 +126,8 @@ bool ControlScheduler::SubQueue::hasItem() const noexcept
     return (dif == 0);
 }
 
-ControlScheduler::ControlScheduler(ThreadPool& externalPool,
-                                   TimeManager& tmgr,
+ControlScheduler::ControlScheduler(core::ThreadPool& externalPool,
+                                   core::TimeManager& tmgr,
                                    size_t maxQueues,
                                    size_t maxDelayed)
     : pool(externalPool),
@@ -741,3 +744,5 @@ void ControlScheduler::finalizeDestroy(ProcessQueueId id, uint32_t gen) noexcept
         pqFreeIds.push_back(id);
     }
 }
+
+} // namespace core

@@ -7,6 +7,9 @@
 #include <cstring>
 #include <cstdlib>
 
+namespace packet
+{
+
 struct StaticHeader
 {
     uint8_t* buffer = nullptr;
@@ -99,4 +102,7 @@ struct StaticHeader
     }
 };
 
+} // namespace packet
+
 #endif
+

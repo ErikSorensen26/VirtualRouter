@@ -11,9 +11,7 @@
 #include "SpfTypes.hpp"
 #include "SpfEngine.h"
 
-class ProcessQueue;
-
-namespace OSPF
+namespace routing::ospf
 {
 class Area;
 class OspfRib;
@@ -55,6 +53,7 @@ private:
     std::atomic<uint32_t> currentDelayMs{0};
     uint32_t timerId;
 };
-}
+} // namespace routing
 
 #endif // SPF_MANAGER_H
+

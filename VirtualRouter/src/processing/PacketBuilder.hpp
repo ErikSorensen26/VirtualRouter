@@ -14,14 +14,17 @@
 #include "packet/StaticHeader.hpp"
 #include "packet/PacketStructure.h"
 
+namespace processing
+{
+
 constexpr size_t MaxPacketSize = 2048;
 
 struct BuildEntry
 {
-    HeaderType type;
+    packet::HeaderType type;
     uint8_t* buffer;
     size_t length;
-    HeaderType next = HeaderType::NONE;
+    packet::HeaderType next = packet::HeaderType::NONE;
 };
 
 class StaticPacket;
@@ -31,22 +34,22 @@ class PacketBuilder
 public:
     PacketBuilder() = default;
 
-    PacketBuilder(Interface* iface) : bufferOffset(0), buildIndex(0), headerCount(0)
+    PacketBuilder(interface::Interface* iface) : bufferOffset(0), buildIndex(0), headerCount(0)
     {
         if (!iface->tx->getFrame(frame)) throw std::runtime_error("Full queue unhandled");
     }
 
-    PacketBuilder(FrameHandle& frame)
+    PacketBuilder(hardware::FrameHandle& frame)
         : frame(frame) {}
 
-    PacketBuilder(Interface* iface, const StaticPacket& saved);
+    PacketBuilder(interface::Interface* iface, const StaticPacket& saved);
 
     ~PacketBuilder() = default;
 
     // Reserve space for a new header from the start of the buffer
-    BuildEntry* reserveHeader(HeaderType type, size_t size)
+    BuildEntry* reserveHeader(packet::HeaderType type, size_t size)
     {
-        if (headerCount >= MaxHeaders || bufferOffset + size > MaxPacketSize)
+        if (headerCount >= packet::MaxHeaders || bufferOffset + size > MaxPacketSize)
             return nullptr;
 
         if (headerCount != 0) {
@@ -64,7 +67,7 @@ public:
     }
 
     template <typename T>
-    T reserveAndBuildHeader(HeaderType type)
+    T reserveAndBuildHeader(packet::HeaderType type)
     {
         constexpr size_t size = T::fixedSize;
 
@@ -77,7 +80,7 @@ public:
         return hdr;
     }
 
-    BuildEntry* getHeader(HeaderType type)
+    BuildEntry* getHeader(packet::HeaderType type)
     {
         for (auto& header : headers)
         {
@@ -88,13 +91,13 @@ public:
     }
 
     template <typename T>
-    T getHeader(HeaderType type)
+    T getHeader(packet::HeaderType type)
     {
         BuildEntry* entry = getHeader(type);
         return extractHeader<T>(entry);
     }
 
-    BuildEntry* addHeader(const StaticHeader& saved, HeaderType type)
+    BuildEntry* addHeader(const packet::StaticHeader& saved, packet::HeaderType type)
     {
         if (!saved.buffer || saved.totalLen == 0)
             return nullptr;
@@ -119,7 +122,7 @@ public:
     size_t getMaxHeaderSize(size_t mtu)
     {
         if (auto next = previewNextBuildHeader())
-            return mtu - bufferOffset - getHeaderSize(next->type);
+            return mtu - bufferOffset - packet::getHeaderSize(next->type);
         return mtu;
     }
 
@@ -177,7 +180,7 @@ public:
     size_t getHeaderCount() const { return headerCount; }
     uint8_t* getBuffer() const { return frame.payload; }
 
-    FrameHandle frame;
+    hardware::FrameHandle frame;
     size_t bufferOffset = 0;
 
 private:
@@ -200,7 +203,7 @@ private:
         return hdr;
     }
 
-    BuildEntry headers[MaxHeaders];
+    BuildEntry headers[packet::MaxHeaders];
     size_t buildIndex = 0;
     size_t headerCount = 0;
 };
@@ -282,10 +285,10 @@ private:
     size_t headerCount = 0;
     size_t buildIndex = 0;
 
-    BuildEntry headers[MaxHeaders];
+    BuildEntry headers[packet::MaxHeaders];
 };
 
-inline PacketBuilder::PacketBuilder(Interface* iface, const StaticPacket& saved)
+inline PacketBuilder::PacketBuilder(interface::Interface* iface, const StaticPacket& saved)
 {
     if (!iface->tx->getFrame(frame)) throw std::runtime_error("Full TX queue when rebuilding from StaticPacket");
 
@@ -307,5 +310,8 @@ inline PacketBuilder::PacketBuilder(Interface* iface, const StaticPacket& saved)
     }
 }
 
+} // namespace processing
+
 #endif // PACKET_BUILDER_HPP
+
 

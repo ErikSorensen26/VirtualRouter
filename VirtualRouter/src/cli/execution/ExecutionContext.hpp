@@ -17,9 +17,9 @@
 #include "cli/modes/parsers/router/RouterEigrpInterfaceCommands.h"
 #include "cli/modes/parsers/router/RouterEigrpTopologyCommands.h"
 
-namespace Cli
+namespace cli
 {
-using ExecutionManager = ::Executor<
+using ExecutionManager = cli::Executor<
     UserExecCommands,
     PrivilegedExecCommands,
     GlobalCommands,

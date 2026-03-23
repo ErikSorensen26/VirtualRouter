@@ -8,7 +8,7 @@
 #include "NeighborAfConfigs.hpp"
 #include "bgp/af/AddressFamily.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 class Neighbor;
 class BgpProcess;
@@ -55,6 +55,7 @@ private:
     Neighbor& parent;
     NeighborAfConfigs configs;
 };
-}
+} // namespace routing
 
 #endif // BGP_NEIGHBOR_AF_H
+

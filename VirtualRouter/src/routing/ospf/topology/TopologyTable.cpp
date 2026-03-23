@@ -5,7 +5,7 @@
 #include "TopologyTable.h"
 #include "ospf/spf/SpfTypes.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 static void dedupe(std::vector<OspfNextHop>& nh)
 {
@@ -29,7 +29,7 @@ static std::vector<OspfNextHop> extractNextHops(const SptNode& node)
 
         out.push_back(OspfNextHop{
             .interfaceId = p.firstHopIfid,
-            .nextHop = IPAddress{}
+            .nextHop = types::IPAddress{}
         });
     }
 
@@ -178,4 +178,4 @@ bool TopologyTable::mergeCanidates(uint32_t area, const std::vector<OspfRouter>&
 
     return change;
 }
-}
+} // namespace routing

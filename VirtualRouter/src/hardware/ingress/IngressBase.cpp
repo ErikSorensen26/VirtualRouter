@@ -2,19 +2,22 @@
 
 #include <sched.h>
 #include <pthread.h>
-#include <likely.hpp>
+#include <Likely.hpp>
 #include <chrono>
 #include <RCU.hpp>
 
 #include "IngressBase.h"
 #include "interface/Interface.h"
 
+namespace hardware::ingress
+{
+
 thread_local std::array<uint32_t, 64> localBatch;
 thread_local size_t batchCount = 0;
 
 static inline void cpu_relax() { asm volatile("pause" ::: "memory"); }
 
-IngressBase::IngressBase(Interface& iface, const RxQueueOpts& opts)
+IngressBase::IngressBase(interface::Interface& iface, const qos::ingress::RxQueueOpts& opts)
     : opts(opts), iface(iface), qid((static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)))
 {
     for (uint32_t i = 0; i < RETURN_RING_CAP; ++i)
@@ -30,14 +33,14 @@ void IngressBase::start()
 {
     running.store(true, std::memory_order_release);
     ingressThread = std::thread([this]{
-        RCU::registerThread();
+        utils::RCU::registerThread();
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(qid, &cpuset);
         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 
         runLoop();
-        RCU::unregisterThread();
+        utils::RCU::unregisterThread();
     });
 }
 
@@ -159,3 +162,4 @@ void IngressBase::runLoop()
     waitUntilAllFramesReleased();
 }
 
+} // namespace hardware

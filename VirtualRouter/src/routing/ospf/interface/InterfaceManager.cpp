@@ -9,7 +9,7 @@
 #include "ospf/OspfProcess.h"
 #include "interface/Interface.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 InterfaceManager::InterfaceManager(OspfProcess& p) : process(p) {}
 
@@ -22,7 +22,7 @@ OspfInterface* InterfaceManager::getInterface(const OspfInterfaceId& id)
     return nullptr;
 }
 
-OspfInterface* InterfaceManager::getInterfaceByAddress(const IPAddress& addr)
+OspfInterface* InterfaceManager::getInterfaceByAddress(const types::IPAddress& addr)
 {
     for (auto& [id, iface] : ospfInterfaceList)
         if (iface.interfaceAddress.addr == addr.raw)
@@ -30,9 +30,9 @@ OspfInterface* InterfaceManager::getInterfaceByAddress(const IPAddress& addr)
     return nullptr;
 }
 
-std::vector<IPAddress> InterfaceManager::getReachableInterfaces(uint32_t area)
+std::vector<types::IPAddress> InterfaceManager::getReachableInterfaces(uint32_t area)
 {
-    std::vector<IPAddress> addrs;
+    std::vector<types::IPAddress> addrs;
     for (auto& [id, iface] : ospfInterfaceList)
         if (id.area == area)
             addrs.push_back(iface.interfaceAddress);
@@ -47,16 +47,16 @@ bool InterfaceManager::isInterfaceReachable(uint32_t area, uint32_t ifaceId)
     return false;
 }
 
-OspfInterface& InterfaceManager::createInterface(Interface& interface, const OspfInterfaceId& key)
+OspfInterface& InterfaceManager::createInterface(interface::Interface& interface, const OspfInterfaceId& key)
 {
     if (auto it = ospfInterfaceList.find(key); it != ospfInterfaceList.end())
         return it->second;
 
-    AddressFamily af = process.getAF();
+    types::AddressFamily af = process.getAF();
     uint32_t id = process.getProcId();
 
     // TODO make a real config creation mechanism
-    Config::Reference<Config::OspfInterfaceBaseRegistry> configs = interface.getOspfConfig();
+    config::Reference<config::OspfInterfaceBaseRegistry> configs = interface.getOspfConfig();
 
     if (!process.isV3)
     {
@@ -71,7 +71,7 @@ OspfInterface& InterfaceManager::createInterface(Interface& interface, const Osp
         auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, configs, key);
         OspfInterface& ospfIface = ifaceIt.first->second;
         ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
-        if (af == AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4)
             interface.ospfInterfaceList[id].IPv4 = &ospfIface;
         else
             interface.ospfInterfaceList[id].IPv6 = &ospfIface;
@@ -114,11 +114,11 @@ void InterfaceManager::refreshInterfaceList()
 
         uint32_t procId = process.getProcId();
 
-        auto isInNetworkRange = [&](IPv4Address ip) -> std::optional<uint32_t>
+        auto isInNetworkRange = [&](types::IPv4Address ip) -> std::optional<uint32_t>
         {
             // Use first area defined that matches.
             std::optional<uint32_t> area{std::nullopt};
-            process.getConfigs().get<Config::Ospf::NETWORKS>().withRead([&](const auto& networks) {
+            process.getConfigs().get<config::Ospf::NETWORKS>().withRead([&](const auto& networks) {
                 for (const auto& [prefix, a] : networks)
                 {
                     if (prefix.contains(ip))
@@ -138,18 +138,18 @@ void InterfaceManager::refreshInterfaceList()
 
             auto& ipInfo = interface->configs;
 
-            IPPrefix currentAddress;
+            types::IPPrefix currentAddress;
             std::optional<OspfInterfaceId> key;
 
             if (!process.isV3)
             {
-                { auto pfx = interface->configs.ipv4.getPrimaryPrefix(); currentAddress = IPPrefix(pfx.addr, pfx.prefixLength); }
+                { auto pfx = interface->configs.ipv4.getPrimaryPrefix(); currentAddress = types::IPPrefix(pfx.addr, pfx.prefixLength); }
                 auto area = isInNetworkRange(currentAddress.addr);
                 if (area.has_value()) key.emplace(interface->configs.ipv4.getPrimaryAddress().addr, area.value());
             }
             else
             {
-                { auto pfx = interface->configs.ipv6.getLocalPrefix(); currentAddress = IPPrefix(pfx.addr, pfx.prefixLength); }
+                { auto pfx = interface->configs.ipv6.getLocalPrefix(); currentAddress = types::IPPrefix(pfx.addr, pfx.prefixLength); }
                 bool inRange = ipInfo.ospf.enabledProcesses.contains(procId) &&
                                  interface->getVRF() == process.routingInstance;
                 if (inRange) key.emplace(id, ipInfo.ospf.enabledProcesses[procId]);
@@ -186,7 +186,7 @@ void InterfaceManager::refreshInterfaceList()
             iface->getArea().getOriginator().updateInterface(iface->id.interfaceId);
         }
         else
-            createInterface(*static_cast<Interface*>(interface), key);
+            createInterface(*static_cast<interface::Interface*>(interface), key);
     }
 }
 
@@ -202,4 +202,4 @@ void InterfaceManager::syncNeighbors()
         iface.getNTable().syncUnicast();
     }
 }
-}
+} // namespace routing

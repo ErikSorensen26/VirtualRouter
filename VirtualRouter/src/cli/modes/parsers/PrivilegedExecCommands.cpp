@@ -7,7 +7,7 @@
 #include "cli/runtime/CliSession.h"
 #include "cli/runtime/CliEngine.h"
 
-namespace Cli
+namespace cli
 {
 bool PrivilegedExec_ConfigureTerm_Handler(PRIVILEGED_EXEC_PARAMS)
 {

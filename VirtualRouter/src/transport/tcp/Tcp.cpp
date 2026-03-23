@@ -3,9 +3,9 @@
 #include "Tcp.h"
 #include "TcpEngine.h"
 
-namespace TCP
+namespace transport::tcp
 {
-Tcp::Tcp(VirtualRouter& vrf, Config cfg)
+Tcp::Tcp(core::VirtualRouter& vrf, Config cfg)
 {
     engine = new TcpEngine(vrf, cfg);
 }
@@ -46,4 +46,4 @@ void Tcp::input(const TcpSegment&)
     // TODO
 }
 
-} // namespace TCP
+} // namespace transport::tcp

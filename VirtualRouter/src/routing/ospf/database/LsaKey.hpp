@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <functional>
 
-namespace OSPF
+namespace routing::ospf
 {
 using RouterId = uint32_t;
 using AreaId = uint32_t;
@@ -84,14 +84,14 @@ struct LsaTypeKey
                advRouter == o.advRouter;
     }
 };
-}
+} // namespace routing::ospf
 
 namespace std
 {
 template <>
-struct hash<OSPF::LsaAdvKey>
+struct hash<routing::ospf::LsaAdvKey>
 {
-    size_t operator()(const OSPF::LsaAdvKey& k) const noexcept
+    size_t operator()(const routing::ospf::LsaAdvKey& k) const noexcept
     {
         uint64_t x = 0;
         x ^= static_cast<uint64_t>(k.lsaType) << 32;
@@ -101,9 +101,9 @@ struct hash<OSPF::LsaAdvKey>
 };
 
 template <>
-struct hash<OSPF::LsaKey>
+struct hash<routing::ospf::LsaKey>
 {
-    size_t operator()(const OSPF::LsaKey& k) const noexcept
+    size_t operator()(const routing::ospf::LsaKey& k) const noexcept
     {
         uint64_t x = 0;
         x ^= static_cast<uint64_t>(k.lsaType) << 32;
@@ -114,9 +114,9 @@ struct hash<OSPF::LsaKey>
 };
 
 template <>
-struct hash<OSPF::LsaTypeKey>
+struct hash<routing::ospf::LsaTypeKey>
 {
-    size_t operator()(const OSPF::LsaTypeKey& k) const noexcept
+    size_t operator()(const routing::ospf::LsaTypeKey& k) const noexcept
     {
         uint64_t x = 0;
         x ^= static_cast<uint64_t>(k.linkStateId) << 32;
@@ -127,3 +127,4 @@ struct hash<OSPF::LsaTypeKey>
 }
 
 #endif // OSPF_LSA_KEY_HPP
+

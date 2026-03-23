@@ -5,7 +5,7 @@
 
 #include "TcpTypes.hpp"
 
-namespace TCP
+namespace transport::tcp
 {
 class Connection;
 class TcpEngine;
@@ -43,6 +43,7 @@ private:
     TcpEngine* engine{nullptr};
     ListenId id{0};
 };
-}
+} // namespace transport::tcp
 
 #endif
+

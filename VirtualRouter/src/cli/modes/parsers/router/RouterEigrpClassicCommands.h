@@ -5,7 +5,7 @@
 
 #include "cli/modes/parsers/router/RouterEigrpTopologyCommands.h"
 
-namespace Cli
+namespace cli
 {
 bool RouterEigrpClassic_AddressFamilyVrf_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_AddressFamilyVrf = commandAdder<EigrpContext,

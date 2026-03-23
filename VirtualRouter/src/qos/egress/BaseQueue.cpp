@@ -4,6 +4,9 @@
 #include "hardware/egress/EgressBase.h"
 #include <RCU.hpp>
 
+namespace qos::egress
+{
+
 void BaseQueue::start()
 {
     running.store(true, std::memory_order_release);
@@ -23,7 +26,7 @@ void BaseQueue::stop()
         runThread.join();
 }
 
-void BaseQueue::enqueue(PacketSlot* pkt)
+void BaseQueue::enqueue(hardware::PacketSlot* pkt)
 {
     uint32_t backoff = 1;
     while (true)
@@ -33,7 +36,7 @@ void BaseQueue::enqueue(PacketSlot* pkt)
             break;
 
         for (uint32_t i = 0; i < backoff; i++)
-            cpuRelax();
+            hardware::cpuRelax();
         backoff = std::min(backoff * 2, 256u);
     }
 
@@ -54,7 +57,7 @@ void BaseQueue::enqueue(PacketSlot* pkt)
 
 void BaseQueue::runLoop()
 {
-    RCU::registerThread();
+    utils::RCU::registerThread();
     while(running.load(std::memory_order_acquire))
     {
         while(!isEmpty())
@@ -66,7 +69,7 @@ void BaseQueue::runLoop()
 
         while (!isEmpty()) dequeueOne();
     }
-    RCU::unregisterThread();
+    utils::RCU::unregisterThread();
 }
 
 void BaseQueue::dequeue(uint32_t frame, uint32_t length)
@@ -103,3 +106,5 @@ void BaseQueue::futex_wake(std::atomic<uint32_t>* addr, int count)
 {
     syscall(SYS_futex, addr, FUTEX_WAKE | FUTEX_PRIVATE_FLAG, count, nullptr, nullptr, 0);
 }
+
+} // namespace qos

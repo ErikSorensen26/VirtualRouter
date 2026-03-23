@@ -11,9 +11,12 @@
 #include "TopologyTable.h"
 #include "TimerManager.h"
 
+namespace routing
+{
+
 class Internal_EigrpTest;
 
-namespace EIGRP
+namespace eigrp
 {
 class EigrpInterface;
 class Eigrp;
@@ -33,28 +36,28 @@ struct OutgoingQuery
 
 struct ActiveRoute
 {
-    IPPrefix activePrefix;
-    std::map<IPAddress, OutgoingQuery> pendingQueries;
-    std::vector<std::pair<IPAddress, ReceivedRoute>> possibleRoutes;
-    std::set<std::pair<IPAddress, uint32_t>> remoteSources;
+    types::IPPrefix activePrefix;
+    std::map<types::IPAddress, OutgoingQuery> pendingQueries;
+    std::vector<std::pair<types::IPAddress, ReceivedRoute>> possibleRoutes;
+    std::set<std::pair<types::IPAddress, uint32_t>> remoteSources;
     RouteInfo* originRoute = nullptr;
-    IPAddress originNeighbor;
+    types::IPAddress originNeighbor;
 };
 
 class DuelEngine
 {
 public:
-    friend class ::Internal_EigrpTest;
+    friend class Internal_EigrpTest;
     DuelEngine(Eigrp& process);
 
     bool isRouteAdvertised(const uint8_t* network, uint8_t mask);
     bool setSuppression(TopologyEntry* entry, uint32_t intKey);
-    const RouteInfo* findBestRoute(const IPPrefix& prefix);
+    const RouteInfo* findBestRoute(const types::IPPrefix& prefix);
 
     void setActive(std::vector<TopologyEntry*>& entries, const uint32_t* seq = nullptr);
     void concludeActive(ActiveRoute& route);
 
-    void removeActiveNeighbor(const IPAddress& neighborIp);
+    void removeActiveNeighbor(const types::IPAddress& neighborIp);
     void handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor);
     void processSIAReply(Neighbor& neighbor, uint32_t seqNum);
     void processReceivedRoutes(std::vector<ReceivedRoute>& newRoutes, const Neighbor& neighbor);
@@ -77,8 +80,11 @@ private:
     bool recalculateDistances(TopologyEntry* entry, uint64_t localMetric);
     bool recalculateSuccessors(TopologyEntry* entry);
 
-    std::map<IPPrefix, ActiveRoute> activeRoutes; ///< Map of outstanding query IDs to neighbor IPs and timer IDs.
+    std::map<types::IPPrefix, ActiveRoute> activeRoutes; ///< Map of outstanding query IDs to neighbor IPs and timer IDs.
 };
 }
 
+} // namespace routing
+
 #endif // DUEL_ENGINE_H
+

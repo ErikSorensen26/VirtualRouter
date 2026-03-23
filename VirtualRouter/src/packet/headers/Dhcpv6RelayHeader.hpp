@@ -4,9 +4,10 @@
 #define DHCPV6_RELAY_HEADER_HPP
 
 #include <span>
-
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
 /*
  * @brief DHCPv6 raw relay header
  */
@@ -42,4 +43,7 @@ struct Dhcpv6RelayHeader
         { std::memcpy(raw->peerAddress, val, 16); }
 };
 
+} // namespace packet
+
 #endif // DHCPV6_RELAY_HEADER_HPP
+

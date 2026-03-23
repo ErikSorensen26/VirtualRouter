@@ -4,7 +4,7 @@
 #include "bgp/session/Session.h"
 #include "bgp/neighbor/Neighbor.h"
 
-namespace BGP
+namespace routing::bgp
 {
 SessionTimers::SessionTimers(Session& session) noexcept
     : session(session), scheduler(session.getNeighbor().getScheduler())
@@ -125,4 +125,4 @@ void SessionTimers::cancelAll() noexcept
     cancel(keepaliveTimerId);
     cancel(idleHoldTimerId);
 }
-}
+} // namespace routing

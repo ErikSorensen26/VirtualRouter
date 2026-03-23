@@ -12,7 +12,7 @@
 
 #include "bgp/BgpTypes.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 struct AsPathSegment
 {
@@ -34,7 +34,7 @@ struct UnknownAttribute
 struct Aggregator
 {
     uint32_t asn = 0;
-    IPAddress speaker;
+    types::IPAddress speaker;
 
     inline bool operator==(const Aggregator&) const = default;
 };
@@ -42,8 +42,8 @@ struct Aggregator
 struct MpReach
 {
     AfiSafi family;
-    IPAddress nextHop;
-    std::optional<IPAddress> linkLocal;
+    types::IPAddress nextHop;
+    std::optional<types::IPAddress> linkLocal;
 };
 
 struct MpUnreach
@@ -54,8 +54,8 @@ struct MpUnreach
 struct Path
 {
     AfiSafi family;
-    IPAddress nextHop;
-    std::optional<IPAddress> linkLocal;
+    types::IPAddress nextHop;
+    std::optional<types::IPAddress> linkLocal;
     std::optional<uint64_t> rd;
 
     inline bool operator==(const Path&) const = default;
@@ -124,14 +124,14 @@ struct PathAttribute
     Attributes attrs;
     Path path;
 };
-}
+} // namespace routing
 
 namespace std
 {
 template <>
-struct hash<BGP::Path>
+struct hash<routing::bgp::Path>
 {
-    inline size_t operator()(const BGP::Path& p) const noexcept
+    inline size_t operator()(const routing::bgp::Path& p) const noexcept
     {
         uint64_t h =  0x9e3779b97f4a7c15ULL;
 
@@ -142,19 +142,19 @@ struct hash<BGP::Path>
 
         mix(static_cast<uint64_t>(p.family.afi));
         mix(static_cast<uint64_t>(p.family.safi));
-        mix(std::hash<IPAddress>{}(p.nextHop));
+        mix(std::hash<types::IPAddress>{}(p.nextHop));
 
         if (p.linkLocal)
-            mix(std::hash<IPAddress>{}(*p.linkLocal));
+            mix(std::hash<types::IPAddress>{}(*p.linkLocal));
 
         return static_cast<size_t>(h);
     }
 };
 
 template <>
-struct hash<BGP::Attributes>
+struct hash<routing::bgp::Attributes>
 {
-    inline size_t operator()(const BGP::Attributes& a) const noexcept
+    inline size_t operator()(const routing::bgp::Attributes& a) const noexcept
     {
         uint64_t h = 0x9e3779b97f4a7c15ULL;
         
@@ -206,7 +206,7 @@ struct hash<BGP::Attributes>
         if (a.asAggregator)
         {
             mix(a.asAggregator->asn);
-            mix(std::hash<IPAddress>{}(a.asAggregator->speaker));
+            mix(std::hash<types::IPAddress>{}(a.asAggregator->speaker));
         }
 
         // ORIGIN
@@ -235,3 +235,4 @@ struct hash<BGP::Attributes>
 }
 
 #endif // BGP_ATTRIBUTE_TYPES_HPP
+

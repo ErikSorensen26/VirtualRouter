@@ -21,7 +21,7 @@
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 ReliableTransport::ReliableTransport(EigrpInterface& iface) : iface(iface)
 {
@@ -41,7 +41,7 @@ ReliableTransport::~ReliableTransport()
     }
 }
 
-bool ReliableTransport::setupUnicastReliable(Neighbor& neighbor, EigrpHeader& builder)
+bool ReliableTransport::setupUnicastReliable(Neighbor& neighbor, packet::EigrpHeader& builder)
 {
     uint32_t seqNum = builder.getSequence();
     if (seqNum == 0)
@@ -62,13 +62,13 @@ bool ReliableTransport::setupUnicastReliable(Neighbor& neighbor, EigrpHeader& bu
     return true;
 }
 
-bool ReliableTransport::setupMulticastReliable(EigrpHeader& builder)
+bool ReliableTransport::setupMulticastReliable(packet::EigrpHeader& builder)
 {
     uint32_t seqNum = builder.getSequence();
     if (seqNum == 0)
         return false;
 
-    std::vector<IPAddress> conditions;
+    std::vector<types::IPAddress> conditions;
     for (auto& [ip, nbr] : ntable->neighbors)
     {
         if (nbr.unicast) continue;
@@ -125,20 +125,20 @@ void ReliableTransport::startUnicastReliable(Neighbor& neighbor, UnicastReliable
     iface.getTimers().startRetransmissionTimer(&neighbor, pkt, seq);
 }
 
-void ReliableTransport::sendRetransmission(Neighbor& neighbor, StaticHeader& header)
+void ReliableTransport::sendRetransmission(Neighbor& neighbor, packet::StaticHeader& header)
 {
     // Construct and send the retransmission packet
-    PacketBuilder retransmissionPacket(iface.getIface());
-    af == AddressFamily::IPv4
-        ? Protocol::IPPacket::reserveIpv4(retransmissionPacket)
-        : Protocol::IPPacket::reserveIpv6(retransmissionPacket);
-    auto* hdr = retransmissionPacket.addHeader(header, HeaderType::EIGRP);
-    EigrpHeader eigrp;
+    processing::PacketBuilder retransmissionPacket(iface.getIface());
+    af == types::AddressFamily::IPv4
+        ? infrastructure::ippacket::reserveIpv4(retransmissionPacket)
+        : infrastructure::ippacket::reserveIpv6(retransmissionPacket);
+    auto* hdr = retransmissionPacket.addHeader(header, packet::HeaderType::EIGRP);
+    packet::EigrpHeader eigrp;
     eigrp.setBuffer(hdr->buffer);
     eigrp.setFlagCondRecv(false);
 
     auto* interface = iface.getIface();
-    Protocol::IPPacket::BuildIP build = {
+    infrastructure::ippacket::BuildIP build = {
         .iface = interface,
         .packetInfo = retransmissionPacket,
         .destIp = neighbor.ipAddress.raw,
@@ -146,9 +146,9 @@ void ReliableTransport::sendRetransmission(Neighbor& neighbor, StaticHeader& hea
         .protocolType = IP_EIGRP
     };
 
-    af == AddressFamily::IPv4
-        ? Protocol::IPPacket::buildIpv4(build)
-        : Protocol::IPPacket::buildIpv6(build);
+    af == types::AddressFamily::IPv4
+        ? infrastructure::ippacket::buildIpv4(build)
+        : infrastructure::ippacket::buildIpv6(build);
 }
 
 void ReliableTransport::handleRetransmission(Neighbor* neighbor, MulticastReliablePacket& pkt, ReliableInfo& info, uint32_t seq)
@@ -211,7 +211,7 @@ void ReliableTransport::handleRetransmission(Neighbor* neighbor, UnicastReliable
 
 uint16_t ReliableTransport::getMtu()
 {
-    return af == AddressFamily::IPv4
+    return af == types::AddressFamily::IPv4
         ? iface.getIface()->configs.ipv4.mtu.load(std::memory_order_relaxed)
         : iface.getIface()->configs.ipv6.mtu.load(std::memory_order_relaxed);
 }
@@ -224,8 +224,8 @@ uint32_t ReliableTransport::incrementSequenceNumber()
     return seq;
 }
 
-bool ReliableTransport::verifyNeighborAS(const EigrpHeader& hdr)
+bool ReliableTransport::verifyNeighborAS(const packet::EigrpHeader& hdr)
 {
     return hdr.getAutonomousSystem() == as;
 }
-}
+} // namespace routing

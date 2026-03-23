@@ -31,7 +31,7 @@
     #define CONFIG_INDEX_MEMBER
 #endif
 
-namespace Config
+namespace config
 {
 template <typename...>
 class RegistryDatabase;

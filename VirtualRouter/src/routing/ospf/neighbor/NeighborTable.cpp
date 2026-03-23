@@ -4,7 +4,7 @@
 #include "NeighborTable.h"
 #include "ospf/interface/OspfInterface.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 NeighborTable::NeighborTable(OspfInterface& iface)
     : iface(iface) {}
@@ -12,17 +12,17 @@ NeighborTable::NeighborTable(OspfInterface& iface)
 void NeighborTable::syncUnicast()
 {
     auto& ifaceConfigs = iface.getConfigs();
-    auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
+    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
 
-    if (ntype == NetworkType::POINT_TO_MULTIPOINT || ntype == NetworkType::NON_BROADCAST)
+    if (ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT || ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
-        std::unordered_set<IPAddress> unicastNbrs;
+        std::unordered_set<types::IPAddress> unicastNbrs;
 
         // Snap shot of all current neighbors
         for (const auto& [ip, _] : unicast)
             unicastNbrs.insert(ip);
 
-        using NeighborEntry = std::tuple<IPAddress, std::optional<uint16_t>, std::optional<bool>, std::optional<uint16_t>, std::optional<uint8_t>>;
+        using NeighborEntry = std::tuple<types::IPAddress, std::optional<uint16_t>, std::optional<bool>, std::optional<uint16_t>, std::optional<uint8_t>>;
 
         // Update configs of all unicast neighbors
         auto updateNeighbors = [&](const std::vector<NeighborEntry>& nbrs)
@@ -42,11 +42,11 @@ void NeighborTable::syncUnicast()
             }
         };
 
-        ifaceConfigs.get<Config::OspfInterface::NEIGHBOR>().withRead([&](const std::vector<NeighborEntry>& nbrs) {
+        ifaceConfigs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const std::vector<NeighborEntry>& nbrs) {
             updateNeighbors(nbrs);
         });
 
-        iface.getArea().process().getConfigs().get<Config::Ospf::NEIGHBORS>().withRead([&](const std::vector<NeighborEntry>& nbrs) {
+        iface.getArea().process().getConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const std::vector<NeighborEntry>& nbrs) {
             updateNeighbors(nbrs);
         });
 
@@ -99,14 +99,14 @@ void NeighborTable::clearUnicast()
     }
 }
 
-Neighbor* NeighborTable::createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool isUnicast)
+Neighbor* NeighborTable::createNeighbor(uint32_t rid, const types::IPAddress& ipAddress, bool isUnicast)
 {
     auto it = neighbors.find(rid);
     if (it != neighbors.end())
         return &it->second;
 
-    // Neighbor constructor takes IPAddress& (non-const), so make a mutable copy
-    IPAddress ip = ipAddress;
+    // Neighbor constructor takes types::IPAddress& (non-const), so make a mutable copy
+    types::IPAddress ip = ipAddress;
     auto [ins, ok] = neighbors.try_emplace(rid, iface, iface.getTimers(), rid, ip, isUnicast);
     return &ins->second;
 }
@@ -139,7 +139,7 @@ std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSiz
     size_t off = 0;
     for (auto& [rid, _] : neighbors)
     {
-        writeU32(buf + off, rid);
+        utils::writeU32(buf + off, rid);
         off += 4;
     }
     return off;
@@ -150,4 +150,4 @@ void NeighborTable::cancelAllInactiveTimers()
     for (auto& [_, nbr] : neighbors)
         iface.getTimers().cancleInactiveTimer(nbr);
 }
-}
+} // namespace routing

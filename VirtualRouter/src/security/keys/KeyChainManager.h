@@ -7,7 +7,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace Authentication
+namespace security::authentication
 {
 class KeyChain;
 enum class HmacType : int;
@@ -18,7 +18,7 @@ public:
     KeyChainManager() = default;
     ~KeyChainManager();
 
-    bool validate(const uint8_t* hmac, uint8_t* computed, uint32_t keyId, const uint8_t* data, size_t size, const Authentication::HmacType& type) const;
+    bool validate(const uint8_t* hmac, uint8_t* computed, uint32_t keyId, const uint8_t* data, size_t size, const HmacType& type) const;
     KeyChain* create(const std::string& name);
 
     KeyChain* lookup(uint32_t id) const noexcept;
@@ -31,6 +31,8 @@ private:
 
     std::vector<KeyChain*> chains;
 };
-}
+
+} // namespace security::authentication
 
 #endif // KEY_CHAIN_MANAGER_H
+

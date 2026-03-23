@@ -7,7 +7,7 @@
 #include <span>
 #include <cstdint>
 
-namespace TCP
+namespace transport::tcp
 {
 class RxConsumer;
 
@@ -37,6 +37,7 @@ private:
     std::span<uint8_t> raw{};
     std::vector<uint8_t> buf{};
 };
-}
+} // namespace transport::tcp
 
 #endif // TCP_RX_BUFFER_H
+

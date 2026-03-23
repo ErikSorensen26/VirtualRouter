@@ -4,7 +4,7 @@
 #define DHCPV6_HEADER_HPP
 
 #include <vector>
-
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 #include "packet/TlvOptions.hpp"
 
@@ -37,7 +37,7 @@
 #define DHCPV6_OPTION_RAPID_COMMIT          0x000EU ///< DHCPv6 Option for Rapid Commit (14)
 #define DHCPV6_OPTION_VENDOR_OPTS           0x0010U ///< DHCPv6 Option for Vendor Options (16)
 #define DHCPV6_OPTION_VENDOR_CLASS_ID       0x0011U ///< DHCPv6 Option for Vendor Class ID (17)
-#define DHCPV6_OPTION_INTERFACE_ID          0x0012U ///< DHCPv6 Option for Interface ID (18)
+#define DHCPV6_OPTION_INTERFACE_ID          0x0012U ///< DHCPv6 Option for interface::Interface ID (18)
 #define DHCPV6_OPTION_RECONFIG_MESSAGE      0x0013U ///< DHCPv6 Option for Reconfigure Message (19)
 #define DHCPV6_OPTION_RECONFIG_ACCEPT       0x0014U ///< DHCPv6 Option for Reconfigure Accept (20)
 #define DHCPV6_OPTION_DNS_SERVERS           0x0017U ///< DHCPv6 Option for DNS Servers (23)
@@ -84,6 +84,9 @@ inline constexpr uint8_t DHCPV6_CLIENT_TO_SERVER[16] = { 0xFF, 0x05, 0x00, 0x00,
 inline constexpr uint8_t DHCPV6_RELAY_TO_SERVER[16] = { 0xFF, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03 };
 inline constexpr uint8_t DHCPV6_SERVER_TO_ALL[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
 
+namespace packet
+{
+
 /**
  * @struct Dhcpv6HeaderRaw
  * @brief Represents a raw DHCPv6 header.
@@ -120,8 +123,8 @@ inline bool parseDhcpv6Options(const uint8_t* data, size_t size, std::vector<TLV
     size_t offset = 0;
     while (offset + 4 <= size)
     {
-        uint16_t code = readU16(data + offset);
-        uint16_t length = readU16(data + offset + 2);
+        uint16_t code = utils::readU16(data + offset);
+        uint16_t length = utils::readU16(data + offset + 2);
 
         if (offset + 4 + length > size) return false;
 
@@ -133,4 +136,7 @@ inline bool parseDhcpv6Options(const uint8_t* data, size_t size, std::vector<TLV
     return offset == size;
 }
 
+} // namespace packet
+
 #endif // DHCPV6_HEADER_HPP
+

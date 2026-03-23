@@ -5,7 +5,7 @@
 
 #include "ContextBase.hpp"
 
-namespace Cli
+namespace cli
 {
 struct PrivilegedExecContext : ContextBase
 {

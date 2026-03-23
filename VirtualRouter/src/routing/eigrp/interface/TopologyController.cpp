@@ -7,7 +7,7 @@
 #include "EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 TopologyController::TopologyController(NeighborTable& ntable, DuelEngine& duel, EigrpInterface& iface) : ntable(ntable), duel(duel), iface(iface) {}
 
@@ -16,7 +16,7 @@ uint64_t TopologyController::getLocalMetric()
     return iface.localMetric.load(std::memory_order_relaxed);
 }
 
-std::unordered_map<IPPrefix, TopologyEntry>& TopologyController::getTopologies()
+std::unordered_map<types::IPPrefix, TopologyEntry>& TopologyController::getTopologies()
 {
     return duel.topologyTable.entries();
 }
@@ -24,12 +24,12 @@ std::unordered_map<IPPrefix, TopologyEntry>& TopologyController::getTopologies()
 std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
 {
     std::vector<const RouteInfo*> routes;
-    if (iface.configs->get<Config::EigrpInterface::PASSIVE_INTERFACE>().load())
+    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return routes;
 
     auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
     const auto& stubCfg = cfgMgr.getStubConfig();
-    const bool splitHorizon = iface.configs->get<Config::EigrpInterface::SPLIT_HORIZON>().load();
+    const bool splitHorizon = iface.configs->get<config::EigrpInterface::SPLIT_HORIZON>().load();
 
     for (const auto& [_, entry] : duel.topologyTable.entries())
     {
@@ -68,11 +68,11 @@ std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
 std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const std::vector<const RouteInfo*>& routes)
 {
     std::vector<const RouteInfo*> filtered;
-    if (routes.empty() || iface.configs->get<Config::EigrpInterface::PASSIVE_INTERFACE>().load()) return filtered;
+    if (routes.empty() || iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return filtered;
 
     auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
     const auto& stubCfg = cfgMgr.getStubConfig();
-    const bool splitHorizon = iface.configs->get<Config::EigrpInterface::SPLIT_HORIZON>().load();
+    const bool splitHorizon = iface.configs->get<config::EigrpInterface::SPLIT_HORIZON>().load();
 
     for (const auto* route : routes)
     {
@@ -116,7 +116,7 @@ std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const
 
 void TopologyController::onNeighborDown(Neighbor& neighbor)
 {
-    const IPAddress& neighborIp = neighbor.ipAddress;
+    const types::IPAddress& neighborIp = neighbor.ipAddress;
 
     std::vector<TopologyEntry*> affectedTopologies;
     for (auto& [_, entry] : duel.topologyTable.entries())
@@ -165,18 +165,18 @@ void TopologyController::processSIAReply(Neighbor& neighbor, uint32_t seq)
     duel.processSIAReply(neighbor, seq);
 }
 
-void TopologyController::markRouteUnreachable(RouteInfo& route, const IPAddress& neighborIp, TopologyEntry& entry)
+void TopologyController::markRouteUnreachable(RouteInfo& route, const types::IPAddress& neighborIp, TopologyEntry& entry)
 {
     duel.topologyTable.markRouteUnreachable(route, neighborIp, entry);
 }
 
-TopologyEntry* TopologyController::findEntry(const IPPrefix& prefix)
+TopologyEntry* TopologyController::findEntry(const types::IPPrefix& prefix)
 {
     return duel.topologyTable.find(prefix);
 }
 
-TopologyEntry& TopologyController::ensure(const IPPrefix& prefix)
+TopologyEntry& TopologyController::ensure(const types::IPPrefix& prefix)
 {
     return duel.topologyTable.ensure(prefix);
 }
-}
+} // namespace routing

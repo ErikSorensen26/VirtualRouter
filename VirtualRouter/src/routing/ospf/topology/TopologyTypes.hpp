@@ -6,7 +6,7 @@
 #include <IPAddress.h>
 #include <optional>
 
-namespace OSPF
+namespace routing::ospf
 {
 enum class OspfRouteType : uint8_t
 {
@@ -19,7 +19,7 @@ enum class OspfRouteType : uint8_t
 struct OspfNextHop
 {
     uint32_t interfaceId{};
-    IPAddress nextHop{};
+    types::IPAddress nextHop{};
 
     bool operator==(const OspfNextHop& o) const
     {
@@ -69,7 +69,7 @@ struct OspfPath
 
 struct OspfRoute
 {
-    IPPrefix prefix{};
+    types::IPPrefix prefix{};
     uint8_t options{};
     uint64_t cost{};
     uint8_t adminDistance{};
@@ -100,7 +100,7 @@ struct OspfRoute
 
 struct OspfRouteChange
 {
-    IPPrefix prefix{};
+    types::IPPrefix prefix{};
     uint8_t options{};
     uint64_t cost{};
     bool isRemoval{false};
@@ -109,12 +109,13 @@ struct OspfRouteChange
 struct ExternalOriginateContext
 {
     uint32_t lsId;
-    IPPrefix prefix;
+    types::IPPrefix prefix;
     uint32_t metric;
     uint32_t tag;
-    std::optional<IPAddress> nextHop;
+    std::optional<types::IPAddress> nextHop;
     bool metricIsE2; // false = E1, true = E2
 };
-}
+} // namespace routing
 
 #endif // OSPF_TOPOLOGY_TYPES_HPP
+

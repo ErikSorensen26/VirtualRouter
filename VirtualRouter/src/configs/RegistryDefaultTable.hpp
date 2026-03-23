@@ -5,7 +5,7 @@
 
 #include <type_traits>
 
-namespace Config
+namespace config
 {
 template <typename ENUM, ENUM E>
 struct Entry

@@ -3,10 +3,11 @@
 #ifndef CONTEXT_BASE_HPP
 #define CONTEXT_BASE_HPP
 
+
+namespace cli
+{
 class CliSession;
 
-namespace Cli
-{
 struct ContextBase
 {
     ContextBase(CliSession& term) : terminal(term) {}

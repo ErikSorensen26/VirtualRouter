@@ -10,6 +10,9 @@
 #include "ospf/area/Area.h"
 #include "interface/Interface.h"
 
+namespace routing
+{
+
 static uint32_t generateInitialDDSequence()
 {
     std::random_device rd;
@@ -18,7 +21,7 @@ static uint32_t generateInitialDDSequence()
     return dis(gen);
 }
 
-static uint16_t getMtu(bool isV6, OSPF::OspfInterface& iface)
+static uint16_t getMtu(bool isV6, ospf::OspfInterface& iface)
 {
     if (isV6)
         return iface.getIface().configs.ipv6.mtu.load(std::memory_order_relaxed);
@@ -26,9 +29,9 @@ static uint16_t getMtu(bool isV6, OSPF::OspfInterface& iface)
         return iface.getIface().configs.ipv4.mtu.load(std::memory_order_relaxed);
 }
 
-namespace OSPF
+namespace ospf
 {
-Neighbor::Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, IPAddress& neighborIp, bool unicast)
+Neighbor::Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, types::IPAddress& neighborIp, bool unicast)
     : ipAddress(neighborIp),
       unicast(unicast),
       routerID(rid),
@@ -74,9 +77,9 @@ bool Neighbor::setState(Neighbor::State s)
         {
             state = s;
             
-            auto ntype = iface.getConfigs().get<Config::OspfInterface::NETWORK>().load();
-            if (ntype == NetworkType::BROADCAST ||
-                ntype == NetworkType::NON_BROADCAST)
+            auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
+            if (ntype == config::ospf::NetworkType::BROADCAST ||
+                ntype == config::ospf::NetworkType::NON_BROADCAST)
             {
                 if (!isDr() && !isBdr())
                     break;
@@ -141,3 +144,5 @@ bool Neighbor::setState(Neighbor::State s)
     return getState() != oldState;
 }
 }
+
+} // namespace routing

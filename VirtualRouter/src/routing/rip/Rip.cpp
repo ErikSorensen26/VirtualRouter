@@ -1,5 +1,8 @@
 #include "Rip.h"
 
-namespace Protocol {
+namespace routing::rip
+{
+
 Rip::Rip() {}
-}
+
+} // namespace routing::rip

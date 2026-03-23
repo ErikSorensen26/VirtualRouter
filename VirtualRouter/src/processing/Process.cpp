@@ -13,106 +13,108 @@
 #include "infrastructure/Ndp.h"
 #include "packet/PacketStructure.h"
 
-#define GET_HEADER(HdrVar, HeaderType)                              \
-    uint8_t* base = const_cast<uint8_t*>(data) + entry.offset;      \
-    HeaderType HdrVar;                                              \
+#define GET_HEADER(HdrVar, HdrType)                                         \
+    uint8_t* base = const_cast<uint8_t*>(data) + entry.offset;             \
+    HdrType HdrVar;                                                         \
     HdrVar.setBuffer(base);
 
-#define GET_HEADER_EXTENDED(HdrVar, HeaderType)                     \
-    GET_HEADER(HdrVar, HeaderType)                                  \
-    size_t trail = entry.size - HeaderType::fixedSize;              \
-    if (trail != 0)                                                 \
-        HdrVar.setTrail(base + HeaderType::fixedSize, trail);
+#define GET_HEADER_EXTENDED(HdrVar, HdrType)                                \
+    GET_HEADER(HdrVar, HdrType)                                             \
+    size_t trail = entry.size - HdrType::fixedSize;                        \
+    if (trail != 0)                                                         \
+        HdrVar.setTrail(base + HdrType::fixedSize, trail);
 
-void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualRouter* vrf, Interface* interface)
+namespace processing
+{
+void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::VirtualRouter* vrf, interface::Interface* interface)
 {
     uint8_t* mac = nullptr;
     uint8_t* address = nullptr;
-    IPAddress typedAddress;
+    types::IPAddress typedAddress;
 
     const uint8_t* ipStart = nullptr;
-    AddressFamily addressFamily = AddressFamily::NONE;
+    types::AddressFamily addressFamily = types::AddressFamily::NONE;
     
     uint32_t destinationPort = 0;
     uint32_t sourcePort = 0;
 
     for (uint8_t i = 0; i < packet.count; ++i)
     {
-        const HeaderEntry& entry = packet.headers[i];
+        const packet::HeaderEntry& entry = packet.headers[i];
 
         switch (entry.type)
         {
-            case HeaderType::ETHERNET:
+            case packet::HeaderType::ETHERNET:
             {
-                GET_HEADER(eth, EthernetHeader)
+                GET_HEADER(eth, packet::EthernetHeader)
                 mac = eth.raw->sourceMac;
                 break;
             }
-            case HeaderType::ARP:
+            case packet::HeaderType::ARP:
             {
-                GET_HEADER(arp, ArpHeader)
-                if (arp.getOpcode() == ARP_OPCODE_REQUEST) interface->arp->sendReply(readU48(arp.getSenderHwAddr()), arp.getSenderIpAddr());
+                GET_HEADER(arp, packet::ArpHeader)
+                if (arp.getOpcode() == ARP_OPCODE_REQUEST) interface->arp->sendReply(utils::readU48(arp.getSenderHwAddr()), arp.getSenderIpAddr());
                 if (arp.getOpcode() == ARP_OPCODE_REPLY) interface->arp->receiveReply(arp);
                 break;
             }
-            case HeaderType::MPLS:
+            case packet::HeaderType::MPLS:
             {
                 break;
             }
-            case HeaderType::IPV4:
+            case packet::HeaderType::IPV4:
             {
                 ipStart = data + entry.offset;
-                GET_HEADER_EXTENDED(ipv4, IPv4Header)
+                GET_HEADER_EXTENDED(ipv4, packet::IPv4Header)
                 address = ipv4.getSourceAddress();
-                typedAddress = IPAddress(readU32(address));
-                addressFamily = AddressFamily::IPv4;
+                typedAddress = types::IPAddress(utils::readU32(address));
+                addressFamily = types::AddressFamily::IPv4;
                 break;
             }
-            case HeaderType::IPV6:
+            case packet::HeaderType::IPV6:
             {
                 ipStart = data + entry.offset;
-                GET_HEADER(ipv6, IPv6Header);
+                GET_HEADER(ipv6, packet::IPv6Header);
                 address = ipv6.getSourceAddress();
-                typedAddress = IPAddress(readU128(address));
-                addressFamily = AddressFamily::IPv6;
+                typedAddress = types::IPAddress(utils::readU128(address));
+                addressFamily = types::AddressFamily::IPv6;
                 break;
             }
-            case HeaderType::AH:
+            case packet::HeaderType::AH:
             {
                 break;
             }
-            case HeaderType::ESP:
+            case packet::HeaderType::ESP:
             {
                 break;
             }
-            case HeaderType::ICMP:
+            case packet::HeaderType::ICMP:
             {
                 break;
             }
-            case HeaderType::ICMPV6:
+            case packet::HeaderType::ICMPV6:
             {
                 if (!interface || !interface->ndp) return;
                 auto currentAddr = interface->configs.ipv6.getLocalAddress();
-                GET_HEADER_EXTENDED(icmp, Icmpv6Header)
+                GET_HEADER_EXTENDED(icmp, packet::Icmpv6Header)
 
                 switch (icmp.getType())
                 {
                     case 0x85:
                     {
-                        if (IPv6Address{readU128(icmp.getTrail().data())}.addr != currentAddr.addr) break;
-                        interface->ndp->sendRouteAdvertisement(readU48(mac), IPv6Address{readU128(icmp.getTrail().data())});
+                        if (types::IPv6Address{utils::readU128(icmp.getTrail().data())}.addr != currentAddr.addr) break;
+                        interface->ndp->sendRouteAdvertisement(utils::readU48(mac), types::IPv6Address{utils::readU128(icmp.getTrail().data())});
                         break;
                     }
                     case 0x86:
                     {
-                        interface->ndp->receiveRouteAdvertisement(icmp, IPv6Address{readU128(address)}, readU48(mac));
+                        interface->ndp->receiveRouteAdvertisement(icmp, types::IPv6Address{utils::readU128(address)}, utils::readU48(mac));
                         break;
                     }
                     case 0x87:
                     {
-                        if (IPv6Address{readU128(icmp.getTrail().data())}.addr != currentAddr.addr) break;
+                        if (types::IPv6Address{utils::readU128(icmp.getTrail().data())}.addr != currentAddr.addr) break;
                         uint8_t naMac[6];
-                        std::vector<TLV8Option> options;
+                        std::vector<packet::TLV8Option> options;
                         parseIcmpv6Options(icmp.getTrail().data(), icmp.getTrail().size(), options);
                         for (auto& opt : options)
                         {
@@ -122,12 +124,12 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                                 break;
                             }
                         }
-                        interface->ndp->sendNeighborAdvertisement(readU48(mac), IPv6Address{readU128(address)});
+                        interface->ndp->sendNeighborAdvertisement(utils::readU48(mac), types::IPv6Address{utils::readU128(address)});
                         break;
                     }
                     case 0x88:
                     {
-                        interface->ndp->receiveNeighborAdvertisement(icmp, IPv6Address{readU128(address)});
+                        interface->ndp->receiveNeighborAdvertisement(icmp, types::IPv6Address{utils::readU128(address)});
                         break;
                     }
                     default:
@@ -137,36 +139,36 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 }
                 break;
             }
-            case HeaderType::TCP:
+            case packet::HeaderType::TCP:
             {
                 break;
             }
-            case HeaderType::UDP:
+            case packet::HeaderType::UDP:
             {
-                GET_HEADER(udp, UdpHeader)
+                GET_HEADER(udp, packet::UdpHeader)
                 sourcePort = udp.getSourcePort();
                 destinationPort = udp.getDestinationPort();
                 break;
             }
-            case HeaderType::EIGRP:
+            case packet::HeaderType::EIGRP:
             {
                 if (!ipStart) break;
-                GET_HEADER_EXTENDED(eigrp, EigrpHeader)
+                GET_HEADER_EXTENDED(eigrp, packet::EigrpHeader)
                 uint32_t as = eigrp.getAutonomousSystem();
                 auto* it = vrf->getEigrpAutonomousSystem(as);
                 auto iface = interface->eigrpInterfaceList.find(as);
                 if (it && iface != interface->eigrpInterfaceList.end()) 
                 {
-                    if (addressFamily == AddressFamily::IPv4 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv4)
+                    if (addressFamily == types::AddressFamily::IPv4 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv4)
                         interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
-                    else if (addressFamily == AddressFamily::IPv6 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv6)
+                    else if (addressFamily == types::AddressFamily::IPv6 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv6)
                         interface->eigrpInterfaceList[as].IPv6->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
                 }
                 break;
             }
-            case HeaderType::DHCP:
+            case packet::HeaderType::DHCP:
             {
-                GET_HEADER_EXTENDED(dhcp, DhcpHeader)
+                GET_HEADER_EXTENDED(dhcp, packet::DhcpHeader)
                 if (sourcePort == UDP_DHCP_SERVER && destinationPort == UDP_DHCP_CLIENT)
                 {
                     interface->dhcp->handleDhcpPacket(dhcp);
@@ -177,19 +179,19 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
                 }
                 break;
             }
-            case HeaderType::DHCPV6:
+            case packet::HeaderType::DHCPV6:
             {
                 break;
             }
-            case HeaderType::DHCPV6_RELAY:
+            case packet::HeaderType::DHCPV6_RELAY:
             {
                 break;
             }
-            case HeaderType::ENCAPSULATE:
+            case packet::HeaderType::ENCAPSULATE:
             {
                 break;
             }
-            case HeaderType::NONE:
+            case packet::HeaderType::NONE:
                 break;
             default:
                 break;
@@ -197,3 +199,5 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, VirtualR
     }
 }
 // FIXME DHCP server packets need to replace the relay field with its own ip address if its empty
+
+} // namespace processing

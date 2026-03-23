@@ -8,7 +8,7 @@
 
 #include "RibTypes.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 enum class LocRibType
 {
@@ -48,7 +48,7 @@ class LocRib<N, LocRibType::LPC_TRIE>
     }
 
 private:
-    LPCTrie<sizeof(N), LocalRoute<N>> locRib;
+    types::LPCTrie<sizeof(N), LocalRoute<N>> locRib;
 };
 
 template <typename N>
@@ -77,6 +77,7 @@ class LocRib<N, LocRibType::HASH_MAP>
 private:
     std::unordered_map<N, LocalRoute<N>> locRib;
 };
-}
+} // namespace routing
 
 #endif // BGP_LOC_RIB_HPP
+

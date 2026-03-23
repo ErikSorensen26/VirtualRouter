@@ -6,17 +6,19 @@
 #include <ByteString.hpp>
 #include <PacketStructure.h>
 
-// Forward declarations
-class Interface;
+namespace interface { class Interface; }
 
-namespace Protocol
+namespace services::dhcp
 {
-    /**
-     * @brief Represents a DHCPv6 relay agent.
-     *
-     * Forwards DHCPv6 packet between clients and servers.
-     */
-    class DhcpRelayV6
+
+// Forward declarations
+
+/**
+ * @brief Represents a DHCPv6 relay agent.
+ *
+ * Forwards DHCPv6 packet between clients and servers.
+ */
+class DhcpRelayV6
     {
     public:
         /**
@@ -24,7 +26,7 @@ namespace Protocol
          *
          * @param interface Pointer to the associated network interface.
          */
-        explicit DhcpRelayV6(Interface* interface);
+        explicit DhcpRelayV6(interface::Interface* interface);
 
         /**
          * @brief Destructor.
@@ -60,7 +62,7 @@ namespace Protocol
         void handleServerResponse(PacketInfo& packet);
 
     private:
-        Interface* associatedInterface;         ///< Associated network interface.
+        interface::Interface* associatedInterface;         ///< Associated network interface.
         std::vector<ByteString> helperAddress;  ///< DHCPv6 helper address.
         std::mutex relayMutex;                  ///< Mutex for synchronizing access.
 
@@ -84,7 +86,9 @@ namespace Protocol
          * @param packet The packet to forward.
          */
         ByteString extractAddress(PacketInfo& packet) const;
-   };
-}
+};
+
+} // namespace services::dhcp
 
 #endif //DHCPV6_RELAY_H
+

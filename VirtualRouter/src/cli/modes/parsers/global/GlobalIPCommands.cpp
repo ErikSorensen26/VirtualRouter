@@ -2,6 +2,6 @@
 
 #include "GlobalIPCommands.h"
 
-namespace Cli
+namespace cli
 {
 }

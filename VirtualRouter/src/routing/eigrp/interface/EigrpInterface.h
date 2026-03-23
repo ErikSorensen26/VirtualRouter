@@ -19,11 +19,11 @@
 #include "configs/RegistryReference.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
-class Internal_EigrpTest;
-class Interface;
-class InterfaceConfigs;
+namespace interface { class Interface; class InterfaceConfigs; }
 
-namespace EIGRP
+class Internal_EigrpTest;
+
+namespace routing::eigrp
 {
 class Eigrp;
 
@@ -34,8 +34,8 @@ class Eigrp;
 class EigrpInterface
 {
 public:
-    friend class ::Internal_EigrpTest;
-    EigrpInterface(Eigrp& eigrpSystem, Config::Reference<Config::EigrpInterfaceRegistry>& ifaceReg, Interface& interface);
+    friend class Internal_EigrpTest;
+    EigrpInterface(Eigrp& eigrpSystem, config::Reference<config::EigrpInterfaceRegistry>& ifaceReg, interface::Interface& interface);
     ~EigrpInterface();
 
     EigrpInterface(const EigrpInterface&) = delete;
@@ -60,16 +60,16 @@ public:
 
     bool isAuthEnabled() const
     {
-        return configs->get<Config::EigrpInterface::AUTHENTICATION_MODE>().load() != AuthType::NONE;
+        return configs->get<config::EigrpInterface::AUTHENTICATION_MODE>().load() != config::eigrp::AuthType::NONE;
     }
 
-    Config::Reference<Config::EigrpInterfaceRegistry> configs; ///< Registry-backed configuration for this interface.
+    config::Reference<config::EigrpInterfaceRegistry> configs; ///< Registry-backed configuration for this interface.
 
     // Runtime state (not persisted in registry)
     std::atomic<bool> multicastEnabledFlag{true};
     std::atomic<uint64_t> localMetric{0};
     std::atomic<uint8_t> DSCP{0};
-    std::vector<IPPrefix> pendingSummaryRoutes;
+    std::vector<types::IPPrefix> pendingSummaryRoutes;
     bool isPointToPoint{false};
 
     ReliableTransport& getRtp() { return rtp; }
@@ -80,8 +80,8 @@ public:
     RouteAggregator& getAggregator() { return aggregator; }
     Eigrp& getBase() const { return base; }
     AuthHandler& getAuth() { return auth; }
-    Interface* getIface() const { return currentInterface; }
-    InterfaceConfigs& getIfaceCfg() { return *currentInterfaceInfo; }
+    interface::Interface* getIface() const { return currentInterface; }
+    interface::InterfaceConfigs& getIfaceCfg() { return *currentInterfaceInfo; }
 
     double penalty = 0;
     std::atomic<uint32_t> prefixCount = 0;
@@ -89,19 +89,19 @@ public:
     std::atomic<bool> isSupressed = false;
     std::deque<std::chrono::steady_clock::time_point> routeChangeTimes;
 
-    std::unordered_map<TLVType, std::unordered_set<IPAddress>> tlvTypes;
+    std::unordered_map<TLVType, std::unordered_set<types::IPAddress>> tlvTypes;
 
-    std::set<IPPrefix> connectedRoutes;
+    std::set<types::IPPrefix> connectedRoutes;
 
     uint32_t interfaceKey;
 
-    IPAddress ifaceAddress;
+    types::IPAddress ifaceAddress;
 
 private:
     Eigrp& base;
 
-    Interface* currentInterface; ///< Pointer to the current network interface.
-    InterfaceConfigs* currentInterfaceInfo; ///< Pointer to the current interface's IP information.
+    interface::Interface* currentInterface; ///< Pointer to the current network interface.
+    interface::InterfaceConfigs* currentInterfaceInfo; ///< Pointer to the current interface's IP information.
 
     ReliableTransport rtp;
     TopologyController topology;
@@ -111,6 +111,6 @@ private:
     RouteAggregator aggregator;
     InterfaceTimers tmgr;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_INTERFACE_H

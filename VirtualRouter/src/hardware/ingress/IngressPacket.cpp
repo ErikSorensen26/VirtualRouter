@@ -20,6 +20,9 @@
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
 
+namespace hardware::ingress
+{
+
 static ALWAYS_INLINE bool blockReadyV3(tpacket_block_desc* bd)
 {
     return (__atomic_load_n(&bd->hdr.bh1.block_status, __ATOMIC_ACQUIRE) & TP_STATUS_USER) != 0;
@@ -38,7 +41,7 @@ static inline void set_nonblock(int fd)
         throw std::runtime_error("fcntl(F_SETFL O_NONBLOCK): " + std::string(std::strerror(errno)));
 }
 
-IngressPacket::IngressPacket(Interface& iface, const RxQueueOpts& opts)
+IngressPacket::IngressPacket(interface::Interface& iface, const qos::ingress::RxQueueOpts& opts)
     : IngressBase(iface, opts)
 {
     setupSocket();
@@ -310,3 +313,5 @@ void IngressPacket::waitUntilAllFramesReleased()
         std::this_thread::sleep_for(1ms);
     }
 }
+
+} // namespace hardware

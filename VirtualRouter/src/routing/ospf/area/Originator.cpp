@@ -13,15 +13,15 @@
 #include "interface/configs/InterfaceType.hpp"
 #include "ospf/OspfTypes.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 Originator::Originator(Area& a) : area(a)
 {
     auto& configs = a.getConfigs();
-    auto type = configs.get<Config::OspfArea::AREA_TYPE>().load();
+    auto type = configs.get<config::OspfArea::AREA_TYPE>().load();
 
-    if (type == AreaType::NSSA || type == AreaType::TOTALLY_NSSA)
-        nssaDefaultOriginate(configs.get<Config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load());
+    if (type == config::ospf::AreaType::NSSA || type == config::ospf::AreaType::TOTALLY_NSSA)
+        nssaDefaultOriginate(configs.get<config::OspfArea::NSSA_DEFAULT_ORIGINATE>().load());
 }
 
 Originator::~Originator()
@@ -80,7 +80,7 @@ void Originator::initGroupPacing()
 {
     cancelGroupPacing();
 
-    uint32_t groupIntervalSec = area.process().getConfigs().get<Config::Ospf::LSA_GROUP_PACING>().load();
+    uint32_t groupIntervalSec = area.process().getConfigs().get<config::Ospf::LSA_GROUP_PACING>().load();
     uint32_t bucketCount = (OSPF_REFRESH_AGE + groupIntervalSec - 1) / groupIntervalSec;
 
     if (bucketCount == 0) bucketCount = 1;
@@ -172,7 +172,7 @@ void Originator::handleGroupPackingBucket(uint32_t tid, uint32_t bucketIndex)
     if (needsRouterRefresh)
         addRouterLsa(std::nullopt, true, true);
 
-    uint32_t groupIntervalSec = area.process().getConfigs().get<Config::Ospf::LSA_GROUP_PACING>().load();
+    uint32_t groupIntervalSec = area.process().getConfigs().get<config::Ospf::LSA_GROUP_PACING>().load();
     uint32_t bucketCount = static_cast<uint32_t>(refreshBuckets.size());
     auto period = std::chrono::seconds(bucketCount * groupIntervalSec);
 
@@ -189,18 +189,18 @@ void Originator::addRouterLink(LsaBody& router, const OspfInterface& iface, bool
 
     auto& ifaceConfigs = iface.getConfigs();
 
-    bool prefixSuppression = iface.getBaseConfigs().get<Config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load();
-    auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
+    bool prefixSuppression = iface.getBaseConfigs().get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().load();
+    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
     const auto& ntable = iface.getNTable();
 
-    if (ifaceConfigs.get<Config::OspfInterface::PASSIVE>().load() ||
-        iface.getIface().configs.interfaceType == InterfaceType::LOOPBACK)
+    if (ifaceConfigs.get<config::OspfInterface::PASSIVE>().load() ||
+        iface.getIface().configs.interfaceType == interface::InterfaceType::LOOPBACK)
     {
         addStubLink(router, iface);
         return;
     }
 
-    if (ntype == NetworkType::POINT_TO_POINT)
+    if (ntype == config::ospf::NetworkType::POINT_TO_POINT)
     {
         bool isVirtual = iface.isVirtual.load(std::memory_order_relaxed);
         for (auto& [rid, nbr] : ntable.neighbors)
@@ -220,7 +220,7 @@ void Originator::addRouterLink(LsaBody& router, const OspfInterface& iface, bool
         return;
     }
 
-    if (ntype == NetworkType::POINT_TO_MULTIPOINT)
+    if (ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT)
     {
         for (auto& [rid, nbr] : ntable.neighbors)
         {
@@ -233,8 +233,8 @@ void Originator::addRouterLink(LsaBody& router, const OspfInterface& iface, bool
         }
     }
 
-    if (ntype == NetworkType::BROADCAST ||
-        ntype == NetworkType::NON_BROADCAST)
+    if (ntype == config::ospf::NetworkType::BROADCAST ||
+        ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
         bool isDr = iface.isDr.load(std::memory_order_relaxed);
         bool haveDr = isDr;
@@ -272,9 +272,9 @@ void Originator::requestReorigination(const LsaKey& key)
     auto& info = originationState[key];
     auto& state = info.throttleInfo;
 
-    uint32_t delayMs = cfgs.get<Config::Ospf::LSA_THROTTLE_DELAY>().load();
-    uint32_t holdMs = cfgs.get<Config::Ospf::LSA_THROTTLE_HOLD>().load();
-    uint32_t maxMs = cfgs.get<Config::Ospf::LSA_THROTTLE_MAX>().load();
+    uint32_t delayMs = cfgs.get<config::Ospf::LSA_THROTTLE_DELAY>().load();
+    uint32_t holdMs = cfgs.get<config::Ospf::LSA_THROTTLE_HOLD>().load();
+    uint32_t maxMs = cfgs.get<config::Ospf::LSA_THROTTLE_MAX>().load();
 
     auto now = std::chrono::steady_clock::now();
 
@@ -419,7 +419,7 @@ void Originator::processOriginatedLsa(const LsaKey& key)
 
 void Originator::nssaDefaultOriginate(bool add)
 {
-    if (area.type != AreaType::NSSA && area.type != AreaType::TOTALLY_NSSA)
+    if (area.type != config::ospf::AreaType::NSSA && area.type != config::ospf::AreaType::TOTALLY_NSSA)
         return;
     if (nssaDefaultRoute.has_value() == add)
         return;
@@ -437,11 +437,11 @@ void Originator::nssaDefaultOriginate(bool add)
 
     ExternalOriginateContext ctx = {
         .lsId = nssaDefaultRoute.value(),
-        .prefix = IPPrefix(area.process().getAF()),
-        .metric = configs.get<Config::OspfArea::NSSA_DEFAULT_METRIC>().load(),
+        .prefix = types::IPPrefix(area.process().getAF()),
+        .metric = configs.get<config::OspfArea::NSSA_DEFAULT_METRIC>().load(),
         .tag = 0,
         .nextHop = std::nullopt,
-        .metricIsE2 = configs.get<Config::OspfArea::NSSA_DEFAULT_METRIC_TYPE>().load()
+        .metricIsE2 = configs.get<config::OspfArea::NSSA_DEFAULT_METRIC_TYPE>().load()
     };
 
     auto& process = area.process();
@@ -487,4 +487,4 @@ template void Originator::originateLsa<PolicyV3>(const LsaKey&, const LsaBody&, 
 
 template void Originator::processOriginatedLsa<PolicyV2>(const LsaKey&);
 template void Originator::processOriginatedLsa<PolicyV3>(const LsaKey&);
-}
+} // namespace routing

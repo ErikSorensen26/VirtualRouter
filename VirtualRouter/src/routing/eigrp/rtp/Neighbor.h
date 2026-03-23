@@ -10,8 +10,9 @@
 #include <set>
 
 #include "ReliablePacket.hpp"
+#include "packet/headers/EigrpHeader.hpp"
 
-struct EigrpHeader; namespace EIGRP
+namespace routing::eigrp
 {
 class InterfaceTimers;
 struct EigrpHeaderInfo;
@@ -30,7 +31,7 @@ public:
     enum class State { DOWN, PENDING, UP };
     enum class Version : uint16_t { LEGACY = 0x0102, WIDE = 0x0200, UNKNOWN = 0x0000 };
 
-    explicit Neighbor(EigrpInterface& iface, InterfaceTimers& tmgr, const IPAddress& neighborIp, Version version, bool unicast = false);
+    explicit Neighbor(EigrpInterface& iface, InterfaceTimers& tmgr, const types::IPAddress& neighborIp, Version version, bool unicast = false);
     ~Neighbor();
 
     Neighbor(const Neighbor&) = delete;
@@ -54,7 +55,7 @@ public:
 public:
 
     // Public Fields
-    const IPAddress ipAddress;
+    const types::IPAddress ipAddress;
     const bool unicast{false};
     std::atomic<bool> fullSent = false;
     std::atomic<bool> initComplete{false};
@@ -99,6 +100,7 @@ private:
     EigrpInterface& iface;
     InterfaceTimers& tmgr;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_NEIGHBOR_H
+

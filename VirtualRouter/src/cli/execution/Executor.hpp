@@ -6,11 +6,13 @@
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/ContextBase.hpp"
 
+namespace cli
+{
 template <typename... Parsers>
 class Executor
 {
     static_assert(
-        (Cli::is_cli_mode_v<Parsers> && ...),
+        (cli::is_cli_mode_v<Parsers> && ...),
         "All entries must be CliModeParser types"
     );
 
@@ -68,13 +70,13 @@ public:
 
     template <typename Parser>
     static bool executeThunk(
-        Cli::ContextBase& ctx,
+        cli::ContextBase& ctx,
         std::vector<std::string>::const_iterator b,
         std::vector<std::string>::const_iterator e)
     {
         using Ctx = typename Parser::ContextType;
-        static_assert(std::is_base_of_v<Cli::ContextBase, Ctx>,
-                      "Parser::ContextType must derive from Cli::ContextBase");
+        static_assert(std::is_base_of_v<cli::ContextBase, Ctx>,
+                      "Parser::ContextType must derive from cli::ContextBase");
         return Parser::execute(static_cast<Ctx&>(ctx), b, e);
     }
     
@@ -107,7 +109,7 @@ public:
         return currentMode[head];
     }
 
-    Cli::ContextBase& getContext()
+    cli::ContextBase& getContext()
     {
         return *modeConfig[head];
     }
@@ -129,7 +131,7 @@ public:
 private:
 
     using ExecuteFn = bool (*)(
-        Cli::ContextBase&,
+        cli::ContextBase&,
         std::vector<std::string>::const_iterator,
         std::vector<std::string>::const_iterator
     );
@@ -139,8 +141,9 @@ private:
 
     CliSession& session;
     CliMode currentMode[2];
-    std::unique_ptr<Cli::ContextBase> modeConfig[2];
+    std::unique_ptr<cli::ContextBase> modeConfig[2];
     ExecuteFn executeFn[2] = {};
 };
+}
 
 #endif // EXECUTOR_HPP

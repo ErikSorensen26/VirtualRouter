@@ -10,7 +10,7 @@
 #include "ospf/OspfProcess.h"
 #include "ospf/interface/OspfInterface.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 template <typename Key, typename Record>
 class RetransmissionList
@@ -165,9 +165,9 @@ public:
 private:
     uint8_t getMaxRetransmission()
     {
-        return iface.getConfigs().get<Config::OspfInterface::DEMAND_CIRCUIT>().load()
-            ? process.getConfigs().get<Config::Ospf::RETRANSMISSION_DC_LIMIT>().load()
-            : process.getConfigs().get<Config::Ospf::RETRANSMISSION_NON_DC_LIMIT>().load();
+        return iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT>().load()
+            ? process.getConfigs().get<config::Ospf::RETRANSMISSION_DC_LIMIT>().load()
+            : process.getConfigs().get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT>().load();
     }
 
     // Reliability
@@ -187,6 +187,7 @@ private:
     OspfProcess& process;
     OspfInterface& iface;
 };
-}
+} // namespace routing
 
 #endif // RETRNASMISSION_LIST_HPP
+

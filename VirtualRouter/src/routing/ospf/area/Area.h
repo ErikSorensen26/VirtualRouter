@@ -13,7 +13,7 @@
 #include "Originator.h"
 #include "FloodManager.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct OspfPath;
 class OspfProcess;
@@ -86,15 +86,15 @@ public:
     const LsdbTable& lsdb() const noexcept { return db; }
     const OspfProcess& process() const noexcept { return base; }
     OspfProcess& process() { return base; }
-    Config::OspfAreaRegistry& getConfigs() { return configs.get(); }
-    const Config::OspfAreaRegistry& getConfigs() const noexcept { return configs.get(); }
+    config::OspfAreaRegistry& getConfigs() { return configs.get(); }
+    const config::OspfAreaRegistry& getConfigs() const noexcept { return configs.get(); }
     AreaFlagManager& getFlags() { return flags; }
     const AreaFlagManager& getFlags() const noexcept { return flags; }
     const SpfManager& getSpfManager() const noexcept { return spfMgr; }
     FloodManager& getFloodManager() noexcept { return floodMgr; }
     Originator& getOriginator() { return originator; }
-    ProcessQueueRef& getScheduler() { return scheduler; }
-    const ProcessQueueRef& getScheduler() const { return scheduler; }
+    core::ProcessQueueRef& getScheduler() { return scheduler; }
+    const core::ProcessQueueRef& getScheduler() const { return scheduler; }
 
     // Flood
     void send(OspfInterface& iface, std::vector<std::pair<FloodInfo, LsaRecordRef>>& records);
@@ -116,12 +116,12 @@ public:
 
     // Range
     void syncRangeConfig();
-    void syncRangeRuntime(const std::vector<std::pair<IPPrefix, OspfPath>>& pathList, bool abrChange = false);
-    void syncRangeSuppression(const std::unordered_set<IPPrefix>& ranges, bool abrChange = false);
-    void suppressInterAreaPrefix(const IPPrefix& prefix) const;
-    const std::unordered_set<IPPrefix>& getRanges() const;
+    void syncRangeRuntime(const std::vector<std::pair<types::IPPrefix, OspfPath>>& pathList, bool abrChange = false);
+    void syncRangeSuppression(const std::unordered_set<types::IPPrefix>& ranges, bool abrChange = false);
+    void suppressInterAreaPrefix(const types::IPPrefix& prefix) const;
+    const std::unordered_set<types::IPPrefix>& getRanges() const;
 
-    bool isValidForwardAddress(const IPAddress& h) const;
+    bool isValidForwardAddress(const types::IPAddress& h) const;
 
     // Other
     void initializeReset();
@@ -147,7 +147,7 @@ protected:
     uint32_t resetTid{0};
     uint32_t agingTimerId{0};
 
-    Config::Reference<Config::OspfAreaRegistry> configs;
+    config::Reference<config::OspfAreaRegistry> configs;
 
     struct AreaRange
     {
@@ -163,8 +163,8 @@ protected:
         bool discardPresent = false;
     };
 
-    std::unordered_map<IPPrefix, AreaRange> ranges;
-    std::unordered_set<IPPrefix> rangePrefixes;
+    std::unordered_map<types::IPPrefix, AreaRange> ranges;
+    std::unordered_set<types::IPPrefix> rangePrefixes;
 
     LsdbTable db;
     OspfProcess& base;
@@ -189,7 +189,7 @@ private:
     void postProcess(Result& result, IncomingLsaContext& ctx, const LsaBody& body);
 
     // Ranges
-    std::unordered_map<IPPrefix, std::pair<uint32_t, uint32_t>> computeRangeContributors(const std::vector<std::pair<IPPrefix, OspfPath>>& intraAreaRoutes, const std::unordered_map<IPPrefix, AreaRange>& ranges);
+    std::unordered_map<types::IPPrefix, std::pair<uint32_t, uint32_t>> computeRangeContributors(const std::vector<std::pair<types::IPPrefix, OspfPath>>& intraAreaRoutes, const std::unordered_map<types::IPPrefix, AreaRange>& ranges);
     template <typename Policy>
     void applyRange(AreaRange& r);
     template <typename Policy>
@@ -200,13 +200,14 @@ private:
     bool compareLsaBody(const LsaBody& a, const LsaBody& b);
 
 public:
-    ProcessQueueRef scheduler;
+    core::ProcessQueueRef scheduler;
 
-    const AreaType type;
+    const config::ospf::AreaType type;
     const uint32_t areaId;
 
     std::atomic<bool> dcCompatible{true};
 };
-}
+} // namespace routing
 
 #endif // OSPF_LSA_FLOODING_ENGINE_H
+

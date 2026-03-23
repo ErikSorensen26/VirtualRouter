@@ -12,7 +12,7 @@
 #include "RegistryTypes.hpp"
 #include "RegistryDefaultTable.hpp"
 
-namespace Config
+namespace config
 {
 template <auto E>
 inline constexpr size_t toIndex = static_cast<size_t>(E);
@@ -27,7 +27,7 @@ public:
     using FieldTuple = std::tuple<Fields...>; // Storage tuple: holds non-movable fields without ever moving/copying them.
     using StorageTuple = std::tuple<std::optional<Fields>...>;
 
-    static_assert(sizeof...(Fields) == Config::toIndex<ENUM::COUNT>);
+    static_assert(sizeof...(Fields) == config::toIndex<ENUM::COUNT>);
 
 #if USE_CONFIG_INDEX
     static_assert(
@@ -67,14 +67,14 @@ public:
     template <ENUM F>
     decltype(auto) get() noexcept
     {
-        constexpr size_t I = Config::toIndex<F>;
+        constexpr size_t I = config::toIndex<F>;
         return (*std::get<I>(fields));
     }
 
     template <ENUM F>
     decltype(auto) get() const noexcept
     {
-        constexpr size_t I = Config::toIndex<F>;
+        constexpr size_t I = config::toIndex<F>;
         return (*std::get<I>(fields));
     }
 
@@ -154,7 +154,7 @@ private:
     {
         using Field = std::tuple_element_t<I, FieldTuple>;
 
-        if constexpr (Config::IsAtomicField<Field>)
+        if constexpr (config::IsAtomicField<Field>)
         {
             constexpr ENUM E = static_cast<ENUM>(I);
 

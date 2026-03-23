@@ -9,7 +9,7 @@
 #include <cstddef>
 #include <iterator>
 
-namespace Cli
+namespace cli
 {
 struct ArgTag {};
 inline constexpr ArgTag ARG{};

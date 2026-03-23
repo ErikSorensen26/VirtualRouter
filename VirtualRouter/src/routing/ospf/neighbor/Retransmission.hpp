@@ -7,7 +7,7 @@
 #include "ospf/database/LSDB.hpp"
 #include "RetransmissionList.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 class Neighbor;
 class UnicastPacket;
@@ -35,6 +35,7 @@ private:
     RetransmissionList<LsaKey, LsaRecordRef> outboundLsus;
     RetransmissionList<LsaKey, LsaKey> outboundLsrs;
 };
-}
+} // namespace routing
 
 #endif // RETRNASMISSION_HPP
+

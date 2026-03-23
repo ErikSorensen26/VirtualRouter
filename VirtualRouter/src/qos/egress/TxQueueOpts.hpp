@@ -7,6 +7,9 @@
 #include <string>
 #include <optional>
 
+namespace qos::egress
+{
+
 struct TxQueueOpts
 {
     std::string ifname;
@@ -24,4 +27,7 @@ struct TxQueueOpts
     int cpuId = -1;
 };
 
+} // namespace qos
+
 #endif  // RX_QUEUE_OPTS_HPP
+

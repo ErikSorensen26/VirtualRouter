@@ -37,6 +37,8 @@
     X(RouterEigrpTopologyV6,            "(config-router-af-topology)#", "eigrp", "ipv6") \
 /*Ospf*/ \
 
+namespace cli
+{
 /**
  * @struct Mode
  * @brief Represents various operational modes of the terminal with corresponding command-line prompts.
@@ -49,8 +51,6 @@ enum class CliMode
     Count
 };
 
-namespace Cli
-{
 template <typename... Ts>
 constexpr auto makePath(Ts&&... xs)
 {
@@ -74,16 +74,16 @@ static constexpr std::array<ModePath, static_cast<size_t>(CliMode::Count)> CliMo
     CLI_MODE_TABLE
 #undef X
 };
-}
 
 constexpr std::string_view getPrompt(CliMode mode)
 {
-    return Cli::CliModePaths[static_cast<size_t>(mode)][0];
+    return cli::CliModePaths[static_cast<size_t>(mode)][0];
 }
 
-constexpr Cli::ModePath getPath(CliMode mode)
+constexpr cli::ModePath getPath(CliMode mode)
 {
-    return Cli::CliModePaths[static_cast<size_t>(mode)];
+    return cli::CliModePaths[static_cast<size_t>(mode)];
+}
 }
 
 #endif // MODE_HPP

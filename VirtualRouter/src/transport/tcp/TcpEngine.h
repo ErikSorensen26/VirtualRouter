@@ -10,9 +10,9 @@
 #include "tcp/tx/TxBufferPool.h"
 #include "tcp/rx/RxBuffer.h"
 
-class VirtualRouter;
+namespace core { class VirtualRouter; }
 
-namespace TCP
+namespace transport::tcp
 {
 class TcpBuffer;
 class Listener;
@@ -21,7 +21,7 @@ class Connection;
 class TcpEngine final
 {
 public:
-    explicit TcpEngine(VirtualRouter& v, const Config& c = {});
+    explicit TcpEngine(core::VirtualRouter& v, const Config& c = {});
     ~TcpEngine();
 
     TcpEngine(const TcpEngine&) = delete;
@@ -128,7 +128,7 @@ private:
     void closeConnectionInternal(ConnId cid) noexcept;
 
 private:
-    VirtualRouter& vr;
+    core::VirtualRouter& vr;
     Config cfg;
     TxBufferPool bufferPool;
 
@@ -144,6 +144,7 @@ private:
     std::vector<epoll_event> epScratch;
     std::vector<uint8_t> ioScratch;
 };
-}
+} // namespace transport::tcp
 
 #endif // TCP_ENGINE_H
+

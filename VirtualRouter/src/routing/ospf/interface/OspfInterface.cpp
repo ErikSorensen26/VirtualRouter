@@ -12,23 +12,26 @@
 #include "interface/Interface.h"
 #include "ospf/OspfTypes.hpp"
 
-auto getIfaceAddr(Interface& iface, AddressFamily af) -> IPPrefix
+namespace routing
 {
-    if (af == AddressFamily::IPv4)
+
+auto getIfaceAddr(interface::Interface& iface, types::AddressFamily af) -> types::IPPrefix
+{
+    if (af == types::AddressFamily::IPv4)
     {
         auto pfx = iface.configs.ipv4.getPrimaryPrefix();
-        return IPPrefix(pfx.addr, pfx.prefixLength, true);
+        return types::IPPrefix(pfx.addr, pfx.prefixLength, true);
     }
     else
     {
         auto pfx = iface.configs.ipv6.getLocalPrefix();
-        return IPPrefix(pfx.addr, pfx.prefixLength, true);
+        return types::IPPrefix(pfx.addr, pfx.prefixLength, true);
     }
 }
 
-namespace OSPF
+namespace ospf
 {
-OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id)
+OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id)
     : id(id),
       interfaceId(iface.configs.key),
       interfaceAddress(getIfaceAddr(iface, proc.getAF())),
@@ -42,7 +45,7 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Refere
       ntable(*this),
       tmgr(*this),
       iface(iface),
-      configs(configs->get<Config::OspfInterfaceBase::BASE>().local()),
+      configs(configs->get<config::OspfInterfaceBase::BASE>().local()),
       baseConfigs(configs)
 {
     configs->context().set(this);
@@ -56,7 +59,7 @@ OspfInterface::OspfInterface(OspfProcess& proc, Interface& iface, Config::Refere
 OspfInterface::~OspfInterface()
 {
     uint32_t pid = process.getProcId();
-    AddressFamily af = process.getAF();
+    types::AddressFamily af = process.getAF();
 
     // Tear down all neighbors and expire originated LSAs
     tmgr.stopHello();
@@ -69,9 +72,9 @@ OspfInterface::~OspfInterface()
 
     if (iface.ospfInterfaceList.find(pid) != iface.ospfInterfaceList.end())
     {
-        if (af == AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4)
             iface.ospfInterfaceList[pid].IPv4 = nullptr;
-        else if (af == AddressFamily::IPv6)
+        else if (af == types::AddressFamily::IPv6)
             iface.ospfInterfaceList[pid].IPv6 = nullptr;
         if (!iface.ospfInterfaceList[pid].IPv4 && !iface.ospfInterfaceList[pid].IPv6)
             iface.ospfInterfaceList.erase(pid);
@@ -85,14 +88,14 @@ void OspfInterface::calculateCost()
     uint16_t oldCost = cost;
     uint16_t newCost{0};
 
-    auto& configuredCost = configs->get<Config::OspfInterface::COST>();
+    auto& configuredCost = configs->get<config::OspfInterface::COST>();
     if (configuredCost.hasValue())
     {
         newCost = configuredCost.load();
     }
     else
     {
-        uint32_t referenceBw = process.getConfigs().get<Config::Ospf::REFERENCE_BANDWIDTH>().load();
+        uint32_t referenceBw = process.getConfigs().get<config::Ospf::REFERENCE_BANDWIDTH>().load();
         uint32_t interfaceBw = iface.configs.bandwidth.load(std::memory_order_relaxed);
         newCost = static_cast<uint16_t>(referenceBw / interfaceBw);
     }
@@ -131,7 +134,7 @@ void OspfInterface::election()
     struct Candidate { uint32_t rid; uint8_t priority; uint32_t claimedDr; uint32_t claimedBdr; };
 
     uint32_t selfRid  = getArea().process().getRouterId();
-    uint8_t  selfPrio = configs->get<Config::OspfInterface::PRIORITY>().load();
+    uint8_t  selfPrio = configs->get<config::OspfInterface::PRIORITY>().load();
 
     // Build candidate list: self + all >= 2-way neighbors with priority > 0
     std::vector<Candidate> eligible;
@@ -265,9 +268,9 @@ void OspfInterface::syncConfigs()
 
 void OspfInterface::syncTimers()
 {
-    auto& helloTimer = configs->get<Config::OspfInterface::HELLO_INTERVAL>();
-    auto& helloMultiplier = configs->get<Config::OspfInterface::HELLO_MULTIPLIER>();
-    auto& deadTimer = configs->get<Config::OspfInterface::DEAD_INTERVAL>();
+    auto& helloTimer = configs->get<config::OspfInterface::HELLO_INTERVAL>();
+    auto& helloMultiplier = configs->get<config::OspfInterface::HELLO_MULTIPLIER>();
+    auto& deadTimer = configs->get<config::OspfInterface::DEAD_INTERVAL>();
 
     if (helloMultiplier.hasValue())
     {
@@ -286,8 +289,8 @@ void OspfInterface::syncTimers()
         }
         else
         {
-            auto net = configs->get<Config::OspfInterface::NETWORK>().load();
-            if (net == NetworkType::NON_BROADCAST || net == NetworkType::POINT_TO_MULTIPOINT_BROADCAST || net == NetworkType::POINT_TO_MULTIPOINT)
+            auto net = configs->get<config::OspfInterface::NETWORK>().load();
+            if (net == config::ospf::NetworkType::NON_BROADCAST || net == config::ospf::NetworkType::POINT_TO_MULTIPOINT_BROADCAST || net == config::ospf::NetworkType::POINT_TO_MULTIPOINT)
                 ht = OSPF_MU_HELLO_TIME;
             else
                 ht = OSPF_HELLO_TIME;
@@ -305,13 +308,13 @@ void OspfInterface::syncTimers()
 
 void OspfInterface::syncNetworkType()
 {
-    auto ntype = getConfigs().get<Config::OspfInterface::NETWORK>().load();
+    auto ntype = getConfigs().get<config::OspfInterface::NETWORK>().load();
 
     syncTimers();
     isMulticast.store(
-        ntype == NetworkType::BROADCAST ||
-        ntype == NetworkType::POINT_TO_MULTIPOINT_BROADCAST ||
-        ntype == NetworkType::POINT_TO_POINT,
+        ntype == config::ospf::NetworkType::BROADCAST ||
+        ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT_BROADCAST ||
+        ntype == config::ospf::NetworkType::POINT_TO_POINT,
         std::memory_order_release
     );
     getNTable().syncUnicast();
@@ -319,7 +322,7 @@ void OspfInterface::syncNetworkType()
 
 void OspfInterface::syncDigestKey()
 {
-    baseConfigs->get<Config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>& keys)
+    baseConfigs->get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>& keys)
     {
         auto it = std::max_element(keys.begin(), keys.end(), [](const auto& a, const auto& b) {
             return std::get<2>(a) < std::get<2>(b);
@@ -327,7 +330,7 @@ void OspfInterface::syncDigestKey()
 
         if (it != keys.end())
         {
-            authKey = readU128(std::get<1>(*it).data());
+            authKey = utils::readU128(std::get<1>(*it).data());
             authKeyId = std::get<0>(*it);
         }
         else
@@ -340,7 +343,7 @@ void OspfInterface::syncDigestKey()
 
 void OspfInterface::setPassiveMode(bool passive)
 {
-    configs->get<Config::OspfInterface::PASSIVE>().load();
+    configs->get<config::OspfInterface::PASSIVE>().load();
     if (passive)
     {
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
@@ -364,3 +367,5 @@ Area& OspfInterface::getArea()
     return area;
 }
 }
+
+} // namespace routing

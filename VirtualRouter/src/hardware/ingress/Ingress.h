@@ -5,15 +5,13 @@
 
 #include "IngressBase.h"
 
+namespace hardware::ingress
+{
 class IngressXdp;
 class IngressPacket;
 
-struct RxQueueOpts;
-
-class IngressFactory
-{
-public:
-    static IngressBase* create(Interface* iface, const RxQueueOpts& opts);
-};
+inline static IngressBase* create(interface::Interface* iface, const qos::ingress::RxQueueOpts& opts);
+} // namespace hardware
 
 #endif
+

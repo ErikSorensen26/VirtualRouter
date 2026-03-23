@@ -7,7 +7,7 @@
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/GlobalContext.hpp"
 
-namespace Cli
+namespace cli
 {
 bool GlobalIPv6ND_CacheExpire_Handler(GLOBAL_PARAMS);
 using GlobalIPv6ND_CacheExpire = commandAdder<GlobalContext,

@@ -6,10 +6,9 @@
 #include <cstdint>
 #include <vector>
 
-#include "packet/HeaderHelpers.hpp"
 #include "ospf/transmission/OspfFletcher.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct OpaqueLsaV2
 {
@@ -44,7 +43,7 @@ struct OpaqueLsaV2
         check.addBytes(payload.data(), payload.size());
     }
 };
-}
-
+} // namespace routing
 
 #endif // OPAQUE_LSA_V2_HPP
+

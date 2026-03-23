@@ -10,8 +10,10 @@
 #include <condition_variable>
 #include "Configs.h"
 
-enum class InterfaceType: uint8_t; ///< Forward declaration of InterfaceType.
-class Interface; ///< Forward declaration of Interface.
+namespace interface { class Interface; enum class InterfaceType : uint8_t; }
+
+namespace cli
+{
 class CliSession; ///< Forward declaration of CliSession.
 class CommandProcessor; ///< Forward declaration of CommandProcessor.
 class IConsole; ///< Forward declaration of IConsole.
@@ -102,11 +104,11 @@ public:
 
     const std::vector<std::string> globalCommandList{"?", "vk_tab"}; ///< List of globally valid commands independent of mode.
     size_t paginationCount = 10; ///< Maximum number of entries displayed before pagination is triggered.
-    DoTime timeKeeper;          ///< Shared time-management utility used for timestamping or delayed operations.
+    ::utils::DoTime timeKeeper;          ///< Shared time-management utility used for timestamping or delayed operations.
 
     std::vector<CliSession*> sessions; ///< All active CLI session owned by the engine.
 
-    Global& global; ///< Reference to the system wide global instance.
+    core::Global& global; ///< Reference to the system wide global instance.
 
     /**
      * @brief Constructs a CLI engine bound to a given router global context.
@@ -120,7 +122,7 @@ public:
      * @param stfs   Startup file descriptors required for configuration/bootstrap.
      * @param test   If true, bypasses certain initialization and load steps for deterministic testing.
      */
-    CliEngine(Global& global, const StartupFiles& stfs, bool test = false);
+    CliEngine(core::Global& global, const StartupFiles& stfs, bool test = false);
 
     /**
      * @brief Constructs the CLI engine with a custom filesystem backend.
@@ -139,7 +141,7 @@ public:
      * @param fs     Custom file-system interface used for all CLI-related persistence.
      * @param test   Disable initialization logic when true.
      */
-    CliEngine(Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test = false);
+    CliEngine(core::Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test = false);
 
     /**
      * @brief Destroys the CLI engine and all active sessions.
@@ -317,5 +319,6 @@ private:
     nlohmann::ordered_json commandTree; ///< Loaded command tree (CBOR or JSON) describing full CLI grammar.
     std::condition_variable stateCondition; ///< Condition variable reserved for future synchronization.
 };
+}
 
 #endif // CLI_ENGINE_H

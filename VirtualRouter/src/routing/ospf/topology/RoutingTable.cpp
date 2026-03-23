@@ -8,28 +8,27 @@
 #include "ospf/OspfProcess.h"
 #include "routing/RoutingTable.hpp"
 
-
-namespace OSPF
+namespace routing::ospf
 {
-static RouteSource deriveOspfType(OspfRouteType type)
+static core::RouteSource deriveOspfType(OspfRouteType type)
 {
     switch (type)
     {
         case OspfRouteType::INTRA_AREA:
-            return RouteSource::OSPF_INTRA;
+            return core::RouteSource::OSPF_INTRA;
         case OspfRouteType::INTER_AREA:
-            return RouteSource::OSPF_INTER;
+            return core::RouteSource::OSPF_INTER;
         case OspfRouteType::EXTERNAL:
-            return RouteSource::OSPF_EXTERNAL;
+            return core::RouteSource::OSPF_EXTERNAL;
         case OspfRouteType::NSSA:
-            return RouteSource::OSPF_NSSA;
+            return core::RouteSource::OSPF_NSSA;
     }
     __builtin_unreachable();
 }
 
-static bool isIntraRangeSuppressed(const IPPrefix& prefix, const std::unordered_set<IPPrefix>& ranges)
+static bool isIntraRangeSuppressed(const types::IPPrefix& prefix, const std::unordered_set<types::IPPrefix>& ranges)
 {
-    IPAddress prefixAddr(prefix.addr, prefix.prefixLength);
+    types::IPAddress prefixAddr(prefix.addr, prefix.prefixLength);
     for (const auto& r : ranges)
         if (r.contains(prefixAddr))
             return true;
@@ -87,7 +86,7 @@ static std::vector<OspfNextHop> mergeEcmpNextHops(const std::vector<OspfPath>& b
 OspfRib::OspfRib(OspfProcess& p)
     : process(p), rib(process.routingInstance->getRib()) {}
 
-const OspfRoute* OspfRib::lookup(const IPPrefix& prefix) const
+const OspfRoute* OspfRib::lookup(const types::IPPrefix& prefix) const
 {
     auto it = prefixStates.find(prefix);
     if (it == prefixStates.end() || !it->second.hasSelected)
@@ -96,13 +95,13 @@ const OspfRoute* OspfRib::lookup(const IPPrefix& prefix) const
     return &it->second.selected;
 }
 
-bool OspfRib::lpmLookup(const IPAddress& addr, uint32_t area) const
+bool OspfRib::lpmLookup(const types::IPAddress& addr, uint32_t area) const
 {
     auto it = areaIndex.find(area);
     if (it == areaIndex.end())
         return false;
 
-    for (const IPPrefix& prefix : it->second)
+    for (const types::IPPrefix& prefix : it->second)
     {
         if (prefix.contains(addr))
             return true;
@@ -110,18 +109,18 @@ bool OspfRib::lpmLookup(const IPAddress& addr, uint32_t area) const
     return false;
 }
 
-std::vector<OspfRouteChange> OspfRib::replaceArea(Area& area, const std::vector<std::pair<IPPrefix, OspfPath>>& paths)
+std::vector<OspfRouteChange> OspfRib::replaceArea(Area& area, const std::vector<std::pair<types::IPPrefix, OspfPath>>& paths)
 {
     const uint32_t areaId = area.areaId;
 
     // Snapshot suppressed ranges ONCE (avoid per-prefix area locks)
-    const std::unordered_set<IPPrefix> suppressedRanges = area.getRanges();
+    const std::unordered_set<types::IPPrefix> suppressedRanges = area.getRanges();
 
-    std::unordered_set<IPPrefix> touched;
+    std::unordered_set<types::IPPrefix> touched;
     touched.reserve(paths.size());
 
     // Snapshot the previously indexed prefixes for this area (if any).
-    std::vector<IPPrefix> oldPrefixes;
+    std::vector<types::IPPrefix> oldPrefixes;
     if (auto idxIt = areaIndex.find(areaId); idxIt != areaIndex.end())
     {
         oldPrefixes.reserve(idxIt->second.size());
@@ -179,7 +178,7 @@ std::vector<OspfRouteChange> OspfRib::replaceArea(Area& area, const std::vector<
     return recomputeLocked(touched, area.areaId, suppressedRanges);
 }
 
-std::vector<OspfRouteChange> OspfRib::replaceRoute(Area& area, const std::pair<IPPrefix, std::optional<OspfPath>>& path)
+std::vector<OspfRouteChange> OspfRib::replaceRoute(Area& area, const std::pair<types::IPPrefix, std::optional<OspfPath>>& path)
 {
     uint32_t areaId = area.areaId;
 
@@ -207,7 +206,7 @@ std::vector<OspfRouteChange> OspfRib::replaceRoute(Area& area, const std::pair<I
         OspfPath p = path.second.value();
         if (p.type == OspfRouteType::INTER_AREA && p.area.has_value() && p.area.value() == areaId)
         {
-            const std::unordered_set<IPPrefix>& ranges = area.getRanges();
+            const std::unordered_set<types::IPPrefix>& ranges = area.getRanges();
             p.suppressed = isIntraRangeSuppressed(path.first, ranges);
         }
 
@@ -233,9 +232,9 @@ std::vector<OspfRouteChange> OspfRib::replaceRoute(Area& area, const std::pair<I
     return changes;
 }
 
-void OspfRib::replaceExternals(const std::vector<std::pair<IPPrefix, OspfPath>>& paths)
+void OspfRib::replaceExternals(const std::vector<std::pair<types::IPPrefix, OspfPath>>& paths)
 {
-    std::unordered_set<IPPrefix> touched;
+    std::unordered_set<types::IPPrefix> touched;
     touched.reserve(paths.size());
 
     for (const auto& prefix : processWide)
@@ -266,7 +265,7 @@ void OspfRib::replaceExternals(const std::vector<std::pair<IPPrefix, OspfPath>>&
     recomputeLocked(touched);
 }
 
-void OspfRib::replaceExternal(const std::pair<IPPrefix, std::optional<OspfPath>>& path)
+void OspfRib::replaceExternal(const std::pair<types::IPPrefix, std::optional<OspfPath>>& path)
 {
     auto psIt = prefixStates.find(path.first);
     if (psIt != prefixStates.end())
@@ -292,9 +291,9 @@ void OspfRib::replaceExternal(const std::pair<IPPrefix, std::optional<OspfPath>>
     recomputeLocked(path.first, process.getAF(), process.getProcId());
 }
 
-std::vector<std::pair<IPPrefix, OspfPath>> OspfRib::getIntraAreaRoutes(uint32_t area)
+std::vector<std::pair<types::IPPrefix, OspfPath>> OspfRib::getIntraAreaRoutes(uint32_t area)
 {
-    std::vector<std::pair<IPPrefix, OspfPath>> areaRoutes;
+    std::vector<std::pair<types::IPPrefix, OspfPath>> areaRoutes;
 
     for (const auto& [prefix, state] : prefixStates)
     {
@@ -364,9 +363,9 @@ void OspfRib::withdrawDiscardRoute(const OspfDiscardKey& key)
     recomputeLocked(key.prefix, process.getAF(), process.getProcId());
 }
 
-std::vector<OspfRouteChange> OspfRib::refreshIntraRangeSuppression(uint32_t areaId, const std::unordered_set<IPPrefix>& ranges)
+std::vector<OspfRouteChange> OspfRib::refreshIntraRangeSuppression(uint32_t areaId, const std::unordered_set<types::IPPrefix>& ranges)
 {
-    std::unordered_set<IPPrefix> touched;
+    std::unordered_set<types::IPPrefix> touched;
 
     auto idxIt = areaIndex.find(areaId);
     if (idxIt == areaIndex.end())
@@ -412,7 +411,7 @@ std::vector<OspfRouteChange> OspfRib::refreshIntraRangeSuppression(uint32_t area
     return recomputeLocked(touched, areaId, ranges);
 }
 
-bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t procId, RecomputeCtx* ctx)
+bool OspfRib::recomputeLocked(const types::IPPrefix& prefix, types::AddressFamily af, uint32_t procId, RecomputeCtx* ctx)
 {
     auto it = prefixStates.find(prefix);
     if (it == prefixStates.end())
@@ -452,9 +451,9 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
             return false;
         }
 
-        const RouteSource src = deriveOspfType(oldCopy.type);
+        const core::RouteSource src = deriveOspfType(oldCopy.type);
 
-        if (af == AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4)
             rib.removeRoute(prefix.v4(), prefix.prefixLength, src, procId);
         else
             rib.removeRoute(prefix.v6(), prefix.prefixLength, src, procId);
@@ -573,8 +572,8 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
     {
         if (hadOld)
         {
-            const RouteSource oldSrc = deriveOspfType(oldCopy.type);
-            if (af == AddressFamily::IPv4)
+            const core::RouteSource oldSrc = deriveOspfType(oldCopy.type);
+            if (af == types::AddressFamily::IPv4)
                 rib.removeRoute(prefix.v4(), prefix.prefixLength, oldSrc, procId);
             else
                 rib.removeRoute(prefix.v6(), prefix.prefixLength, oldSrc, procId);
@@ -583,13 +582,13 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         auto merged = mergeEcmpNextHops(next.paths);
         addTrafficShare(
             merged,
-            process.getConfigs().get<Config::Ospf::MAXIMUM_PATHS>().load(),
-            process.getConfigs().get<Config::Ospf::TRAFFIC_SHARE_MIN>().load()
+            process.getConfigs().get<config::Ospf::MAXIMUM_PATHS>().load(),
+            process.getConfigs().get<config::Ospf::TRAFFIC_SHARE_MIN>().load()
         );
 
-        if (af == AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4)
         {
-            RibEntry<uint32_t>* ribRoute = new RibEntry<uint32_t>;
+            core::RibEntry<uint32_t>* ribRoute = new core::RibEntry<uint32_t>;
             ribRoute->prefix = prefix.v4();
             ribRoute->length = prefix.prefixLength;
             ribRoute->source = deriveOspfType(next.type);
@@ -603,7 +602,7 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
         }
         else
         {
-            RibEntry<__uint128_t>* ribRoute = new RibEntry<__uint128_t>;
+            core::RibEntry<__uint128_t>* ribRoute = new core::RibEntry<__uint128_t>;
             ribRoute->prefix = prefix.v6();
             ribRoute->length = prefix.prefixLength;
             ribRoute->source = deriveOspfType(next.type);
@@ -624,9 +623,9 @@ bool OspfRib::recomputeLocked(const IPPrefix& prefix, AddressFamily af, uint32_t
                : (routeChanged || ecmpChanged);
 }
 
-std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<IPPrefix>& touched, uint32_t areaId, const std::unordered_set<IPPrefix>& ranges)
+std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<types::IPPrefix>& touched, uint32_t areaId, const std::unordered_set<types::IPPrefix>& ranges)
 {
-    AddressFamily af = process.getAF();
+    types::AddressFamily af = process.getAF();
     uint32_t procId = process.getProcId();
 
     std::vector<OspfRouteChange> changes;
@@ -653,9 +652,9 @@ std::vector<OspfRouteChange> OspfRib::recomputeLocked(const std::unordered_set<I
     return changes;
 }
 
-void OspfRib::recomputeLocked(const std::unordered_set<IPPrefix>& touched)
+void OspfRib::recomputeLocked(const std::unordered_set<types::IPPrefix>& touched)
 {
-    AddressFamily af = process.getAF();
+    types::AddressFamily af = process.getAF();
     uint32_t procId = process.getProcId();
 
     for (const auto& prefix : touched)
@@ -664,7 +663,7 @@ void OspfRib::recomputeLocked(const std::unordered_set<IPPrefix>& touched)
     }
 }
 
-bool OspfRib::globalRibContains(const IPPrefix& prefix) const
+bool OspfRib::globalRibContains(const types::IPPrefix& prefix) const
 {
     if (prefix.isIPv4())
         return rib.lookup(prefix.v4());
@@ -672,9 +671,9 @@ bool OspfRib::globalRibContains(const IPPrefix& prefix) const
         return rib.lookup(prefix.v6());
 }
 
-bool OspfRib::validateInterAreaSummaryEligibility(const IPPrefix& prefix) const
+bool OspfRib::validateInterAreaSummaryEligibility(const types::IPPrefix& prefix) const
 {
-    const bool useLocal = process.getConfigs().get<Config::Ospf::LRC_INTER_AREA_SUMMARY>().load();
+    const bool useLocal = process.getConfigs().get<config::Ospf::LRC_INTER_AREA_SUMMARY>().load();
 
     if (useLocal)
     {
@@ -683,4 +682,4 @@ bool OspfRib::validateInterAreaSummaryEligibility(const IPPrefix& prefix) const
 
     return globalRibContains(prefix);
 }
-}
+} // namespace routing

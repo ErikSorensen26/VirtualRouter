@@ -5,7 +5,7 @@
 #include "GlobalIPv6NDCommands.h"
 #include "infrastructure/Ndp.h"
 
-namespace Cli
+namespace cli
 {
 bool GlobalIPv6ND_CacheExpire_Handler(GLOBAL_PARAMS)
 {

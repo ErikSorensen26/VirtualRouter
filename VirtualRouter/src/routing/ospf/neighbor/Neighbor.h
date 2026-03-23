@@ -11,7 +11,7 @@
 #include "ospf/database/LsaKey.hpp"
 #include "ospf/neighbor/Retransmission.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct LsaKey;
 class Retransmission;
@@ -24,7 +24,7 @@ public:
     enum class State { DOWN, ATTEMPT, INIT, TWOWAY, EXSTART, EXCHANGE, LOADING, FULL };
     enum class Role { SLAVE, MASTER, NONE };
 
-    explicit Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, IPAddress& neighborIp, bool unicast = false);
+    explicit Neighbor(OspfInterface& iface, InterfaceTimers& tmgr, uint32_t rid, types::IPAddress& neighborIp, bool unicast = false);
     ~Neighbor();
 
     Neighbor(const Neighbor&) = delete;
@@ -54,7 +54,7 @@ public:
 
     std::optional<LsaKey> currentDbd = std::nullopt;
 
-    const IPAddress ipAddress;
+    const types::IPAddress ipAddress;
     const bool unicast{false};
     const uint32_t routerID;
     const uint16_t mtu;
@@ -81,6 +81,7 @@ private:
     OspfInterface& iface;
     InterfaceTimers& tmgr;
 };
-}
+} // namespace routing
 
 #endif // OSPF_NEIGHBOR_H
+

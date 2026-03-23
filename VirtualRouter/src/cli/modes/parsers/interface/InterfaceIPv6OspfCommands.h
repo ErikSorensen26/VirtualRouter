@@ -5,7 +5,7 @@
 
 #include "InterfaceOspfCommands.h"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceIPv6Ospf_Area_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6Ospf_Area = commandAdder<InterfaceContext,

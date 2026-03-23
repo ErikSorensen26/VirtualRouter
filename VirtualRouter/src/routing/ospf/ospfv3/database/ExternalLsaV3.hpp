@@ -7,18 +7,17 @@
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct ExternalLsaV3
 {
     uint32_t metric;
     uint8_t options;
     uint16_t referencedLsType;
-    IPv6Prefix prefix;
+    types::IPv6Prefix prefix;
     bool isType2;
-    std::optional<IPv6Address> forwardingAddress;
+    std::optional<types::IPv6Address> forwardingAddress;
     std::optional<uint32_t> routeTag;
     std::optional<uint32_t> referencedLsId;
 
@@ -30,11 +29,11 @@ struct ExternalLsaV3
 
         uint8_t exOpts = buf[0];
         lsa.isType2 = (exOpts & 0x04) != 0;
-        lsa.metric = readU24(buf + 1);
+        lsa.metric = utils::readU24(buf + 1);
 
         uint8_t prefixLen = buf[4];
         lsa.options = buf[5];
-        lsa.referencedLsType = readU16(buf + 6);
+        lsa.referencedLsType = utils::readU16(buf + 6);
 
         if (prefixLen > 128) return std::nullopt;
 
@@ -43,7 +42,7 @@ struct ExternalLsaV3
 
         if (off + prefixBytes > len) return std::nullopt;
 
-        lsa.prefix = IPv6Prefix(buf + 8, prefixLen);
+        lsa.prefix = types::IPv6Prefix(buf + 8, prefixLen);
         lsa.prefix.prefixLength = prefixLen;
 
         off += prefixBytes;
@@ -57,13 +56,13 @@ struct ExternalLsaV3
         if (exOpts & 0x01) // Route Tag Flag
         {
             if (off + 4 > len) return std::nullopt;
-            lsa.routeTag = readU32(buf + off);
+            lsa.routeTag = utils::readU32(buf + off);
             off += 4;
         }
         if (lsa.referencedLsType != 0)
         {
             if (off + 4 > len) return std::nullopt;
-            lsa.referencedLsId = readU32(buf + off);
+            lsa.referencedLsId = utils::readU32(buf + off);
             off += 4;
         }
 
@@ -78,18 +77,18 @@ struct ExternalLsaV3
 
         uint8_t& exOpts = buf[0];
         if (isType2) exOpts |= 0x04;
-        writeU24(buf + 1, metric);
+        utils::writeU24(buf + 1, metric);
 
         buf[4] = prefix.prefixLength;
         buf[5] = options;
-        writeU16(buf + 6, referencedLsType);
+        utils::writeU16(buf + 6, referencedLsType);
 
         uint8_t prefixBytes = (prefix.prefixLength + 7) / 8;
         uint16_t off = 8;
 
         if (off + prefixBytes > len) return false;
 
-        writeBytes(buf + 8, prefix.addr, prefixBytes);
+        utils::writeBytes(buf + 8, prefix.addr, prefixBytes);
 
         off += prefixBytes;
 
@@ -97,20 +96,20 @@ struct ExternalLsaV3
         {
             exOpts |= 0x02;
             if (off + 16 > len) return false;
-            writeU128(buf + off, forwardingAddress.value().addr);
+            utils::writeU128(buf + off, forwardingAddress.value().addr);
             off += 16;
         }
         if (routeTag.has_value())
         {
             exOpts |= 0x01;
             if (off + 4 > len) return false;
-            writeU32(buf + off, routeTag.value());
+            utils::writeU32(buf + off, routeTag.value());
             off += 4;
         }
         if (referencedLsType != 0)
         {
             if (off + 4 > len || !referencedLsId.has_value()) return false;
-            writeU32(buf + off, referencedLsId.value());
+            utils::writeU32(buf + off, referencedLsId.value());
         }
 
         return true;
@@ -125,7 +124,7 @@ struct ExternalLsaV3
             len += 4;
         if (referencedLsId.has_value())
             len += 4;
-        return len;
+        return static_cast<uint16_t>(len);
     }
 
     void appendChecksum(ChecksumFletcher& check) const
@@ -150,6 +149,7 @@ struct ExternalLsaV3
             check.addU32(referencedLsId.value());
     }
 };
-}
+} // namespace routing
 
 #endif // EXTERNAL_LSA_V3_HPP
+

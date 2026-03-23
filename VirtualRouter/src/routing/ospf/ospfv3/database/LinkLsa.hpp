@@ -9,19 +9,19 @@
 #include "ospf/transmission/OspfFletcher.hpp"
 #include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct LinkLsaPrefix
 {
     uint8_t options;
-    IPv6Prefix prefix;
+    types::IPv6Prefix prefix;
 };
 
 struct LinkLsa
 {
     uint8_t priority;
     uint32_t options;
-    IPv6Address localLink;
+    types::IPv6Address localLink;
     std::vector<LinkLsaPrefix> prefixes;
 
     static std::optional<LinkLsa> build(const uint8_t* buf, uint16_t len)
@@ -31,8 +31,8 @@ struct LinkLsa
         LinkLsa lsa;
 
         lsa.priority = buf[0];
-        lsa.options = readU24(buf + 1);
-        lsa.localLink = IPv6Address(buf + 4);
+        lsa.options = utils::readU24(buf + 1);
+        lsa.localLink = types::IPv6Address(buf + 4);
 
         uint8_t prefixList = buf[20];
         size_t off = 21;
@@ -45,7 +45,7 @@ struct LinkLsa
             uint8_t prefixBytes = (prefixLen + 7) / 8;
 
             if (off + prefixBytes > len) return std::nullopt;
-            link.prefix = IPv6Prefix(buf + off, prefixLen);
+            link.prefix = types::IPv6Prefix(buf + off, prefixLen);
             lsa.prefixes.push_back(link);
         }
 
@@ -57,8 +57,8 @@ struct LinkLsa
         if (len < 20) return false;
 
         buf[0] = priority;
-        writeU24(buf + 1, options);
-        writeU128(buf + 4, localLink.addr);
+        utils::writeU24(buf + 1, options);
+        utils::writeU128(buf + 4, localLink.addr);
 
         buf[20] = static_cast<uint8_t>(prefixes.size());
         size_t off = 21;
@@ -70,7 +70,7 @@ struct LinkLsa
             uint8_t prefixBytes = (link.prefix.prefixLength + 7) / 8;
 
             if (off + prefixBytes > len) return false;
-            writeBytes(buf + off, link.prefix.addr, prefixBytes);
+            utils::writeBytes(buf + off, link.prefix.addr, prefixBytes);
         }
 
         return true;
@@ -100,6 +100,7 @@ struct LinkLsa
         }
     }
 };
-}
+} // namespace routing
 
 #endif // LINK_LSA_HPP
+

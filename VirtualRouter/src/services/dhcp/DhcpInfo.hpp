@@ -13,12 +13,12 @@
 #include <stdexcept>
 #include <string>
 #include <optional>
+#include <ByteUtils.hpp>
 
-#include "packet/HeaderHelpers.hpp"
+namespace interface { class Interface; }
 
-// Forward declarations
-class Interface;
-
+namespace services::dhcp
+{
 static inline double secondsSinceEpoch()
 {
     return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -68,10 +68,79 @@ struct ClientID
     }
 };
 
+// Initialize a static random generator for transaction IDs
+inline static std::mt19937& getTransidGenerator()
+{
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    return gen;
+}
+
+// Generates a random DHCP transaction ID
+inline static uint8_t* generateDhcpTransid(uint8_t* out)
+{
+    static std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX);
+    uint32_t transId = dis(getTransidGenerator());
+    utils::writeU32(out, transId);
+    return out;
+}
+/**
+ * @struct Dhcp
+ * @brief Stores DHCP configuration information.
+ */
+struct DhcpInfo 
+{
+    std::shared_mutex configMutex;
+
+    types::IPAddress broadcast{};         ///< Broadcast address
+    types::IPAddress serverID{};          ///< Server ID
+    types::IPAddress router{};            ///< Router address
+    std::vector<types::IPAddress> dnsServers{}; ///< List of DNS servers
+
+    std::atomic<std::chrono::steady_clock::time_point> leaseStart;
+    std::atomic<uint32_t> leaseTime{};         ///< Lease time for DHCP
+    std::atomic<uint32_t> renewalTime{};       ///< Renewal time for DHCP
+    std::atomic<uint32_t> rebindingTime{};     ///< Rebinding time for DHCP
+    std::atomic<uint8_t> subnetMask{};         ///< Subnet mask
+
+    std::atomic<uint16_t> maxSize = 512;
+    std::vector<types::IPAddress> helperAddresses; ///< List of DHCP helper addresses (relay agents)
+
+    std::optional<std::string> authKey = std::nullopt;
+    std::string* getAuthKey() { return authKey.has_value() ? &authKey.value() : nullptr; }
+    std::atomic<uint64_t> lastReplayCounter = 0;
+
+    std::string hostname;
+    std::string domainName;   ///< Domain name provided by the DHCP server
+
+    ClientID clientID;    ///< Client Identifier option (e.g., MAC address or custom ID)
+
+    types::IPAddress requestedIpAddress{};             ///< IP address requested by the client
+    types::IPAddress serverIdentifier{};               ///< Server Identifier from the DHCP server
+
+    std::vector<types::IPAddress> ntpServers{};    ///< List of NTP (Network Time Protocol) servers
+
+    std::atomic<uint16_t> mtu{};                     ///< Maximum Transmission Unit (MTU) size
+    types::IPAddress tftpServer{};             ///< TFTP server for booting (commonly used in PXE environments)
+    std::string bootFile{};             ///< Boot file name (commonly used in PXE environments)
+
+    std::vector<types::IPAddress> staticRoutes{};  ///< List of static routes provided by the DHCP server
+
+    std::atomic<uint32_t> arpTimeout{};                  ///< ARP timeout value (if provided by the DHCP server)
+
+    std::vector<types::IPAddress> winsServers{};    ///< List of WINS servers
+
+    uint8_t vendorSpecificOptions[255];  ///< Vendor-specific options (Option 43 in DHCP)
+
+    types::IPAddress clientIpAddress{};        ///< The client’s IP address (set if the client has already obtained a lease)
+    types::IPAddress nextServerIp{};           ///< The next server IP address (used in booting scenarios)
+};
+} // namespace services
+
 namespace std {
     template <>
-    struct hash<ClientID> {
-        size_t operator()(const ClientID& id) const {
+    struct hash<services::dhcp::ClientID> {
+        size_t operator()(const services::dhcp::ClientID& id) const {
             const uint8_t* data = id.data;
             size_t size = id.size;
 
@@ -89,75 +158,5 @@ namespace std {
     };
 }
 
-namespace Protocol 
-{
-    // Initialize a static random generator for transaction IDs
-    inline static std::mt19937& getTransidGenerator()
-    {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        return gen;
-    }
-
-    // Generates a random DHCP transaction ID
-    inline static uint8_t* generateDhcpTransid(uint8_t* out)
-    {
-        static std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX);
-        uint32_t transId = dis(getTransidGenerator());
-        writeU32(out, transId);
-        return out;
-    }
-    /**
-     * @struct Dhcp
-     * @brief Stores DHCP configuration information.
-     */
-    struct DhcpInfo 
-    {
-        std::shared_mutex configMutex;
-
-        IPAddress broadcast{};         ///< Broadcast address
-        IPAddress serverID{};          ///< Server ID
-        IPAddress router{};            ///< Router address
-        std::vector<IPAddress> dnsServers{}; ///< List of DNS servers
-
-        std::atomic<std::chrono::steady_clock::time_point> leaseStart;
-        std::atomic<uint32_t> leaseTime{};         ///< Lease time for DHCP
-        std::atomic<uint32_t> renewalTime{};       ///< Renewal time for DHCP
-        std::atomic<uint32_t> rebindingTime{};     ///< Rebinding time for DHCP
-        std::atomic<uint8_t> subnetMask{};         ///< Subnet mask
-
-        std::atomic<uint16_t> maxSize = 512;
-        std::vector<IPAddress> helperAddresses; ///< List of DHCP helper addresses (relay agents)
-
-        std::optional<std::string> authKey = std::nullopt;
-        std::string* getAuthKey() { return authKey.has_value() ? &authKey.value() : nullptr; }
-        std::atomic<uint64_t> lastReplayCounter = 0;
-
-        std::string hostname;
-        std::string domainName;   ///< Domain name provided by the DHCP server
-
-        ClientID clientID;    ///< Client Identifier option (e.g., MAC address or custom ID)
-
-        IPAddress requestedIpAddress{};             ///< IP address requested by the client
-        IPAddress serverIdentifier{};               ///< Server Identifier from the DHCP server
-
-        std::vector<IPAddress> ntpServers{};    ///< List of NTP (Network Time Protocol) servers
-
-        std::atomic<uint16_t> mtu{};                     ///< Maximum Transmission Unit (MTU) size
-        IPAddress tftpServer{};             ///< TFTP server for booting (commonly used in PXE environments)
-        std::string bootFile{};             ///< Boot file name (commonly used in PXE environments)
-
-        std::vector<IPAddress> staticRoutes{};  ///< List of static routes provided by the DHCP server
-
-        std::atomic<uint32_t> arpTimeout{};                  ///< ARP timeout value (if provided by the DHCP server)
-
-        std::vector<IPAddress> winsServers{};    ///< List of WINS servers
-
-        uint8_t vendorSpecificOptions[255];  ///< Vendor-specific options (Option 43 in DHCP)
-
-        IPAddress clientIpAddress{};        ///< The client’s IP address (set if the client has already obtained a lease)
-        IPAddress nextServerIp{};           ///< The next server IP address (used in booting scenarios)
-    };
-}
-
 #endif //DHCP_INFO_HPP
+

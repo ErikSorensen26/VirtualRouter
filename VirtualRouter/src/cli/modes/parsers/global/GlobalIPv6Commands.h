@@ -9,7 +9,7 @@
 #include "cli/modes/contexts/GlobalContext.hpp"
 #include "GlobalIPv6NDCommands.h"
 
-namespace Cli
+namespace cli
 {
 using GlobalIPv6_ND = subAdder<GlobalContext,
     GlobalIPv6NDCommands,

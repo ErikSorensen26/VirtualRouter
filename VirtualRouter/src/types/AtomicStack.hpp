@@ -5,6 +5,9 @@
 
 #include <atomic>
 
+namespace types
+{
+
 template<typename T>
 class AtomicStack {
 private:
@@ -34,4 +37,7 @@ public:
     }
 };
 
+} // namespace types
+
 #endif // ATOMIC_STACK_HPP
+

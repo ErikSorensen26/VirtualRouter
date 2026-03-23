@@ -9,12 +9,12 @@
 #include "configs/RegistryTypes.hpp"
 
 #include "IPAddress.h"
-#include "AddressFamily.hpp"
-#include "packet/HeaderHelpers.hpp"
 #include "configs/SubRegistry.hpp"
 #include "configs/RegistryReference.hpp"
 
-namespace OSPF
+namespace config
+{
+namespace ospf
 {
 class OspfInterface;
 
@@ -52,8 +52,6 @@ enum class IPsecEncryptType : uint8_t
 };
 }
 
-namespace Config
-{
 enum class OspfInterface : uint8_t
 {
     BFD,
@@ -82,7 +80,7 @@ enum class OspfInterface : uint8_t
     X(OspfInterface, DEMAND_CIRCUIT, false) \
     X(OspfInterface, FLOOD_REDUCTION, false) \
     X(OspfInterface, MTU_IGNORE, false) \
-    X(OspfInterface, NETWORK, OSPF::NetworkType::BROADCAST) \
+    X(OspfInterface, NETWORK, ospf::NetworkType::BROADCAST) \
     X(OspfInterface, PRIORITY, 1) \
     X(OspfInterface, PASSIVE, false) \
     X(OspfInterface, RETRANSMIT_INTERVAL, 5) \
@@ -112,14 +110,14 @@ using OspfInterfaceRegistry = SubRegistry<OspfInterface,
         OspfInterfaceSyncTimers>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::MTU_IGNORE)>,
     ValueField<std::vector<std::tuple<
-        IPAddress,
+        types::IPAddress,
         std::optional<uint16_t>,
         std::optional<bool>,
         std::optional<uint16_t>,
         std::optional<uint8_t>
     >> CONFIG_INDEX_ARG(OspfInterface::NEIGHBOR),
         OspfInterfaceSyncNeighbors>,
-    AtomicField<OSPF::NetworkType CONFIG_INDEX_ARG(OspfInterface::NETWORK),
+    AtomicField<ospf::NetworkType CONFIG_INDEX_ARG(OspfInterface::NETWORK),
         OspfInterfaceSyncNetworkType>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::PRIORITY)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::PASSIVE)>,
@@ -155,9 +153,9 @@ enum class OspfInterfaceIPSec : uint8_t
 
 using OspfInterfaceIPSecRegistry = SubRegistry<OspfInterfaceIPSec,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceIPSec::SPI)>, // TODO:
-    OptionalAtomicField<OSPF::IPsecAuthType CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_TYPE)>, // TODO:
+    OptionalAtomicField<ospf::IPsecAuthType CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_TYPE)>, // TODO:
     ValueField<std::array<uint8_t, 40> CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_KEY)>, // TODO:
-    OptionalAtomicField<OSPF::IPsecEncryptType CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_TYPE)>, // TODO:
+    OptionalAtomicField<ospf::IPsecEncryptType CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_TYPE)>, // TODO:
     ValueField<std::array<uint8_t, 64> CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_KEY)> // TODO:
 >;
 
@@ -201,7 +199,7 @@ using OspfInterfaceBaseRegistry = SubRegistry<OspfInterfaceBase,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterfaceBase::PROCESS_ID)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceBase::AREA_ID)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::INCLUDE_SECONDARIES)>,
-    OptionalAtomicField<OSPF::AuthType CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_TYPE)>,
+    OptionalAtomicField<ospf::AuthType CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_TYPE)>,
     OptionalAtomicField<uint64_t CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_KEY)>,
     ReferenceContainer<OspfInterfaceIPSecRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::IPSEC)>,
     OptionalAtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::LLS)>,

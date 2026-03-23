@@ -9,9 +9,9 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/Interface.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
-Eigrp::Eigrp(uint32_t as, AddressFamily af, VirtualRouter* vrf, bool named)
+Eigrp::Eigrp(uint32_t as, types::AddressFamily af, core::VirtualRouter* vrf, bool named)
   : routingInstance(vrf),
     asNumber(as),
     addressFamily(af),
@@ -75,7 +75,7 @@ bool Eigrp::calculateRID()
     return routingInstance->calculateRID(rid.id);
 }
 
-bool Eigrp::isInNetworkRange(IPv4Address testIp)
+bool Eigrp::isInNetworkRange(types::IPv4Address testIp)
 {
     return configMgr.isInNetworkRange(testIp);
 }
@@ -90,7 +90,7 @@ void ClassicEigrp::shutdown()
     Eigrp::shutdown();
 }
 
-NamedEigrp::NamedEigrp(uint32_t& as, AddressFamily af, const std::string& name, VirtualRouter* vrf, bool /*multicast*/)
+NamedEigrp::NamedEigrp(uint32_t& as, types::AddressFamily af, const std::string& name, core::VirtualRouter* vrf, bool /*multicast*/)
     : Eigrp(as, af, vrf, true), processName(name)
 {
 }
@@ -112,14 +112,13 @@ void NamedEigrp::configureInterface(uint32_t interfaceId)
         getIfaceMgr().createInterface(iface);
 }
 
-void Eigrp::addGlobalNeighbor(const IPAddress& neighborIp, Neighbor* neighbor)
+void Eigrp::addGlobalNeighbor(const types::IPAddress& neighborIp, Neighbor* neighbor)
 {
     allNeighbors[neighborIp] = neighbor;
 }
 
-void Eigrp::delGlobalNeighbor(const IPAddress& neighborIp)
+void Eigrp::delGlobalNeighbor(const types::IPAddress& neighborIp)
 {
     allNeighbors.erase(neighborIp);
 }
-}
-
+} // namespace routing

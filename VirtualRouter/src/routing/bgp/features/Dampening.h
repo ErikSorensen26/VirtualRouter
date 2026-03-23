@@ -5,7 +5,7 @@
 #include <chrono>
 #include <cmath>
 
-namespace BGP
+namespace routing::bgp
 {
 
 struct DampenParams
@@ -59,4 +59,4 @@ struct DampenState
     bool isStale() const noexcept { return !suppressed && penalty < 1.0; }
 };
 
-} // namespace BGP
+} // namespace routing::bgp

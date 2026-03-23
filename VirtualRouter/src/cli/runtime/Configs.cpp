@@ -7,6 +7,8 @@
 #include "CliUtils.h"
 #include "hardware/HardwareManager.h"
 
+namespace cli
+{
 void Configs::printConfig() 
 {
     //std::cout << root.dump(4) << std::endl;
@@ -19,7 +21,7 @@ void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
     // Reset all variables before
     root.clear();
 
-    hwManager = new HardwareManager(stfs.hwConfigFile, *fileSystem, enableDummies);
+    hwManager = new hardware::HardwareManager(stfs.hwConfigFile, *fileSystem, enableDummies);
 
     /*if (configSchema.is_null() || !configSchema.is_object())
     {
@@ -573,7 +575,7 @@ std::string Configs::getVolatileValueHelper(std::string& command, std::string& c
     // Parse IP address in "A.B.C.D" format
     if (command == "A.B.C.D") 
     {
-        IPv4Address _tmp; CliUtils::extractIPv4Address(com, _tmp);
+        types::IPv4Address _tmp; cli::utils::extractIPv4Address(com, _tmp);
         uint32_t ip = _tmp.addr;
 
         auto isContiguous = [](uint32_t x) {
@@ -617,4 +619,5 @@ std::string Configs::getVolatileValueHelper(std::string& command, std::string& c
     }
     
     return ""; // Return empty string for unknown commands
+}
 }

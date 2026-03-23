@@ -9,9 +9,9 @@
 
 #include "packet/headers/BgpHeader.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
-constexpr uint16_t kMinMessageLen = BgpHeader::fixedSize;
+constexpr uint16_t kMinMessageLen = packet::BgpHeader::fixedSize;
 constexpr uint16_t kMaxMessageLen = 4096;
 constexpr uint16_t kExtendedMessageLen = 65535;
 constexpr uint32_t kAsTrans = 23456;
@@ -102,7 +102,7 @@ struct AfiSafi
 
 struct NeighborKey
 {
-    IPAddress ipAddr;
+    types::IPAddress ipAddr;
     uint16_t afi;
     uint8_t safi;
 
@@ -140,12 +140,12 @@ enum class RouteRefreshReason : uint8_t
     Eorr   = BGP_ROUTE_REFRESH_EORR,    // end-of-route-refresh
 };
 
-inline AddressFamily toAddressFamily(const AfiSafi& family) noexcept {
+inline types::AddressFamily toAddressFamily(const AfiSafi& family) noexcept {
     if (family.afi == BGP_AFI_IPV4)
-        return AddressFamily::IPv4;
+        return types::AddressFamily::IPv4;
     if (family.afi == BGP_AFI_IPV6)
-        return AddressFamily::IPv6;
-    return AddressFamily::NONE;
+        return types::AddressFamily::IPv6;
+    return types::AddressFamily::NONE;
 }
 
 inline const char* fsmStateName(FsmState s) noexcept
@@ -199,14 +199,14 @@ inline const char* fsmEventName(FsmEvent e) noexcept
         default:                                          return "Unknown";
     }
 }
-}
+} // namespace routing
 
 namespace std
 {
 template <>
-struct hash<BGP::AfiSafi>
+struct hash<routing::bgp::AfiSafi>
 {
-    size_t operator()(const BGP::AfiSafi& family) const noexcept
+    size_t operator()(const routing::bgp::AfiSafi& family) const noexcept
     {
         uint32_t v = (static_cast<uint32_t>(family.afi) << 8) | family.safi;
         return std::hash<uint32_t>{}(v);
@@ -214,11 +214,11 @@ struct hash<BGP::AfiSafi>
 };
 
 template <>
-struct hash<BGP::NeighborKey>
+struct hash<routing::bgp::NeighborKey>
 {
-    size_t operator()(const BGP::NeighborKey& k) const noexcept
+    size_t operator()(const routing::bgp::NeighborKey& k) const noexcept
     {
-        size_t h1 = std::hash<IPAddress>{}(k.ipAddr);
+        size_t h1 = std::hash<types::IPAddress>{}(k.ipAddr);
         size_t h2 = std::hash<uint32_t>{}((static_cast<uint32_t>(k.afi) << 8) | k.safi);
 
         return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
@@ -226,9 +226,9 @@ struct hash<BGP::NeighborKey>
 };
 
 template <>
-struct hash<BGP::PeerKey>
+struct hash<routing::bgp::PeerKey>
 {
-    size_t operator()(const BGP::PeerKey& k) const noexcept
+    size_t operator()(const routing::bgp::PeerKey& k) const noexcept
     {
         size_t h1 = std::hash<uint32_t>{}(k.rid);
         size_t h2 = std::hash<uint32_t>{}((static_cast<uint32_t>(k.afi) << 8) | k.safi);
@@ -239,3 +239,4 @@ struct hash<BGP::PeerKey>
 }
 
 #endif // BGP_TYPES_HPP
+

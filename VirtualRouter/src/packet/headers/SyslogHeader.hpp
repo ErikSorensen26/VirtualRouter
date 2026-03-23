@@ -7,6 +7,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 /**
  * @struct SyslogHeaderRaw
  * @brief Represents a raw Syslog header.
@@ -26,4 +29,7 @@ struct SyslogHeader {
     DEFINE_PACKET_HEADER(SyslogHeaderRaw);
 };
 
+} // namespace packet
+
 #endif // SYSLOG_HEADER_HPP
+

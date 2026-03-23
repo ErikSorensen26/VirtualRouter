@@ -11,6 +11,9 @@
 #include "cli/modes/Mode.hpp"
 #include "cli/execution/ExecutionContext.hpp"
 
+namespace core { class VirtualRouter; }
+namespace interface { class Interface; }
+
 #define VARIABLE_OBJ "VARIABLES"
 
 #define CLI_JSON_SUBCOMMAND_ARRAY "subcommands"
@@ -19,27 +22,16 @@
 #define CLI_JSON_COMMAND_NAME "name"
 #define CLI_JSON_COMMAND_PROPERTIES "properties"
 
-enum class AddressFamily : uint8_t;
+namespace types { enum class AddressFamily : uint8_t; }
+namespace routing { namespace eigrp { class Eigrp; class EigrpNamed; class EigrpInterface; } }
+namespace services { namespace protocol { namespace dhcp { struct DhcpNetworkConfig; } } }
+
+namespace cli
+{
 class CommandProcessor;
 class CliEngine;
-class VirtualRouter;
-class Interface;
 class Configs;
 struct Com;
-namespace Eigrp
-{
-class Eigrp;                ///< Forward declaration of Eigrp::Eigrp
-class EigrpNamed;          ///< Forward declaration of Eigrp::EigrpNamed
-class EigrpInterface;       ///< Forward declaration of Eigrp::EigrpInterface
-}
-
-namespace Protocol
-{
-    namespace Dhcp
-    {
-        struct DhcpNetworkConfig;
-    }
-}
 
 /**
  * @class Terminal
@@ -420,7 +412,7 @@ private:
     bool setCommandDirectory(std::span<const std::string_view>& dir);
     CliMode getMode();
 
-    Cli::ExecutionManager execution;
+    cli::ExecutionManager execution;
 
     std::vector<std::string> commandHistory;    ///< History of previous entered commands
 
@@ -482,6 +474,6 @@ bool CliSession::changeMode(Args&&... args)
     execution.changeMode<T>(std::forward<Args>(args)...);
     return true;
 }
+}
 
 #endif // CLI_SESSION_H
-

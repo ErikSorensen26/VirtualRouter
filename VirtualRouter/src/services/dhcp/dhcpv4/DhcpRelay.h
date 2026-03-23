@@ -7,11 +7,15 @@
 #include <ByteString.hpp>
 #include <PacketStructure.h>
 
+namespace interface { class Interface; }
+
+namespace services
+{
+
 // Forward declarations
 class DhcpRelayTest;
-class Interface;
 
-namespace Protocol
+namespace protocol
 {
     /**
      * @brief Represents a dhcp relay agent
@@ -19,13 +23,13 @@ namespace Protocol
     class DhcpRelay
     {
     public:
-        friend class ::DhcpRelayTest;
+        friend class DhcpRelayTest;
 
         /**
          * @brief Constructor for DHCP relay.
          * @param interface Reference to the associated interface.
          */
-        explicit DhcpRelay(Interface* interface);
+        explicit DhcpRelay(interface::Interface* interface);
 
         /**
          * @brief Destructor for DHCP Relay.
@@ -61,7 +65,7 @@ namespace Protocol
         void handleServerResponse(PacketInfo& packet);
 
     private:
-        Interface* associatedInterface; ///< Reference to the associated interface.
+        interface::Interface* associatedInterface; ///< Reference to the associated interface.
         std::vector<ByteString> helperAddresses; ///< List of helper addresses for this relay.
         std::mutex relayMutex; ///< Mutex for synchronizing access to helper addresses.
 
@@ -97,4 +101,8 @@ namespace Protocol
 }
 
 #endif // DHCP_RELAY_H
+
+} // namespace services
+
 #endif
+

@@ -8,7 +8,7 @@
 #include "ospf/area/Area.h"
 #include "ospf/OspfProcess.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 SpfManager::SpfManager(Area& area)
     : area(area), rib(area.process().getRib())
@@ -80,11 +80,11 @@ void SpfManager::runSpf()
     // Run Dijkstra on graph
     SpfResult spfRes = engine.run<Policy>(topo);
 
-    std::vector<std::pair<IPPrefix, OspfPath>> pathList;
+    std::vector<std::pair<types::IPPrefix, OspfPath>> pathList;
 
     // Look up networks from Dikjstra results
-    RouteManager::deriveIntraAreaRoutes<Policy>(spfRes, pathList, area);
-    RouteManager::deriveInterAreaRoutes<Policy>(spfRes, pathList, area);
+    routemanager::deriveIntraAreaRoutes<Policy>(spfRes, pathList, area);
+    routemanager::deriveInterAreaRoutes<Policy>(spfRes, pathList, area);
 
     auto summaryChanges = rib.replaceArea(area, pathList);
 
@@ -105,9 +105,9 @@ void SpfManager::runSpf()
 uint32_t SpfManager::computeNextDelay()
 {
     auto& cfgs = area.process().getConfigs();
-    uint32_t initDelayMs = cfgs.get<Config::Ospf::SPF_THROTTLE_DELAY>().load();
-    uint32_t holdTimeMs = cfgs.get<Config::Ospf::SPF_THROTTLE_HOLD>().load();
-    uint32_t maxHoldTimeMs = cfgs.get<Config::Ospf::SPF_THROTTLE_MAX>().load();
+    uint32_t initDelayMs = cfgs.get<config::Ospf::SPF_THROTTLE_DELAY>().load();
+    uint32_t holdTimeMs = cfgs.get<config::Ospf::SPF_THROTTLE_HOLD>().load();
+    uint32_t maxHoldTimeMs = cfgs.get<config::Ospf::SPF_THROTTLE_MAX>().load();
 
     uint32_t prev = currentDelayMs.load(std::memory_order_relaxed);
     uint32_t backoff;
@@ -145,4 +145,4 @@ template void SpfManager::scheduleSpf<PolicyV3>(uint32_t);
 
 template void SpfManager::runSpf<PolicyV2>();
 template void SpfManager::runSpf<PolicyV3>();
-}
+} // namespace routing

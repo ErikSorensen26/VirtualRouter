@@ -9,14 +9,16 @@
 #include "hardware/HardwareManager.h"
 #include "cli/modes/contexts/GlobalContext.hpp"
 
-CliEngine::CliEngine(Global& global, const StartupFiles& stfs, bool test) : Configs(), global(global)
+namespace cli
+{
+CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, bool test) : Configs(), global(global)
 {
     // Set debug mode based on the input parameter
     std::string name = "default";
     global.addRoutingInstance(name);
 }
 
-CliEngine::CliEngine(Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test) : Configs(fs), global(global)
+CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test) : Configs(fs), global(global)
 {
     // Set debug mode based on the input parameter
     global.addRoutingInstance("default");
@@ -101,7 +103,7 @@ void CliEngine::initTree()
 
         for (const auto& [type, ifaces] : hwManager->getPhysicalInterfaces())
         {
-            std::string typeStr = getInterfaceType(type);
+            std::string typeStr = interface::getInterfaceType(type);
             if (vars.contains(typeStr) && vars[typeStr].is_array())
             {
                 size_t size = ifaces.size();
@@ -142,7 +144,7 @@ void CliEngine::recoverState()
 	CliSession recoverSession(*this);
 
     // Set initial mode for command recovery
-    recoverSession.changeModeConfig(new Cli::GlobalContext(*recoverSession.modeConfig.modeConfig, global, *global.getRoutingInstance("default")));
+    recoverSession.changeModeConfig(new cli::GlobalContext(*recoverSession.modeConfig.modeConfig, global, *global.getRoutingInstance("default")));
     recoverSession.changeMode(CliMode::GlobalConfiguration, true);
 
     // Execute each saved command to restore the terminal's state
@@ -186,4 +188,5 @@ std::string CliEngine::maskInput(const std::string& prefix, std::string original
     std::copy(prefix.begin(), prefix.end(), original.begin());
 
     return original;
+}
 }

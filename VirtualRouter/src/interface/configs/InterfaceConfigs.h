@@ -9,33 +9,26 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <cstring>
-#include <map>
 #include <unordered_set>
 #include <IPAddress.h>
 #include <optional>
 
-#include "packet/HeaderHelpers.hpp"
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
-// Forward declarations
-class Global;
-class TimeManager;
+namespace core { class Global; class TimeManager; }
+namespace hardware { struct HwIfaceInfo; }
+namespace infrastructure { class Ndp; }
+namespace services::dhcp { struct InterfaceConfigs; struct DhcpNetwork; }
+
 class MockInterface;
 class Internal_NdpTest;
-struct HwIfaceInfo;
-enum class AddressFamily : uint8_t;
-enum class InterfaceType : uint8_t;
 
-namespace Protocol
+namespace interface
 {
-    namespace Dhcpv6
-    {
-        struct InterfaceConfigs;
-        struct DhcpNetwork;
-    }
-    class Ndp;
-}
+
+// Forward declarations
+enum class InterfaceType : uint8_t;
 
 inline uint32_t calculateInterfaceKey(InterfaceType type, float id)
 {
@@ -49,7 +42,7 @@ inline uint32_t calculateInterfaceKey(InterfaceType type, float id)
 class InterfaceConfigs
 {
 public:
-    InterfaceConfigs(TimeManager& timeManager, InterfaceType type, float id, const HwIfaceInfo& info);
+    InterfaceConfigs(core::TimeManager& timeManager, InterfaceType type, float id, const hardware::HwIfaceInfo& info);
 
     ~InterfaceConfigs();
 
@@ -64,7 +57,7 @@ public:
     InterfaceType interfaceType;    ///< Type of interface.
     uint32_t key;                   ///< Interface ID for global identification.
 
-    const HwIfaceInfo& hwInfo;
+    const hardware::HwIfaceInfo& hwInfo;
 
     std::atomic<uint8_t> tid = 0;        ///< Topology ID (default to tid 0)
     std::atomic<uint16_t> vlan = 1;              ///< Interface VLAN (defaulted to vlan 1)
@@ -85,48 +78,48 @@ public:
         std::atomic<uint16_t> mtu{1500};
         std::atomic<bool> mtuLocal{false};
 
-        void setPrimaryAddress(IPv4Prefix prefix);
-        void addSecondaryAddress(IPv4Prefix prefix);
+        void setPrimaryAddress(types::IPv4Prefix prefix);
+        void addSecondaryAddress(types::IPv4Prefix prefix);
 
         void removePrimaryAddress();
-        void removeSecondaryAddress(IPv4Prefix prefix);
+        void removeSecondaryAddress(types::IPv4Prefix prefix);
         
         uint8_t* getPrimaryAddress(uint8_t* out) const;
         uint8_t* getSecondaryAddress(uint8_t* out) const;
 
-        IPv4Address getPrimaryAddress() const;
-        std::optional<IPv4Address> getSecondaryAddress() const;
+        types::IPv4Address getPrimaryAddress() const;
+        std::optional<types::IPv4Address> getSecondaryAddress() const;
 
         bool hasPrimaryAddress() const;
-        bool hasPrimaryAddress(IPv4Prefix prefix) const;
+        bool hasPrimaryAddress(types::IPv4Prefix prefix) const;
         bool hasPrimaryAddress(const uint8_t* addr, uint8_t mask) const;
-        bool hasSecondaryAddress(IPv4Prefix prefix) const;
+        bool hasSecondaryAddress(types::IPv4Prefix prefix) const;
         bool hasSecondaryAddress(const uint8_t* addr, uint8_t mask) const;
 
         uint8_t getPrimaryPrefix(uint8_t* out) const;
         std::optional<uint8_t> getSecondaryPrefix(uint8_t* out) const;
 
-        IPv4Prefix getPrimaryPrefix() const;
-        std::optional<IPv4Prefix> getSecondaryPrefix();
+        types::IPv4Prefix getPrimaryPrefix() const;
+        std::optional<types::IPv4Prefix> getSecondaryPrefix();
 
         uint8_t getPrimaryMask() const;
         std::optional<uint8_t> getSecondaryMask() const;
 
-        std::vector<IPv4Address> getSecondaryList() const;
-        std::vector<IPv4Prefix> getSecondaryPrefixList(bool maintainAddress = false) const;
+        std::vector<types::IPv4Address> getSecondaryList() const;
+        std::vector<types::IPv4Prefix> getSecondaryPrefixList(bool maintainAddress = false) const;
 
-        std::unordered_set<IPv4Address> getSecondarySet() const;
-        std::unordered_set<IPv4Prefix> getSecondaryPrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<types::IPv4Address> getSecondarySet() const;
+        std::unordered_set<types::IPv4Prefix> getSecondaryPrefixSet(bool maintainAddress = false) const;
 
         bool comparePrimaryAddress(const uint8_t* ip);
-        bool comparePrimaryAddress(IPv4Address ip);
+        bool comparePrimaryAddress(types::IPv4Address ip);
 
     private:
         mutable std::mutex ipMutex;
         std::atomic<uint8_t> mask{0};            ///< Subnet mask.
         std::atomic<uint32_t> address;
 
-        std::vector<IPv4Prefix> secondary;
+        std::vector<types::IPv4Prefix> secondary;
 
         friend class MockInterface;
         friend class Interface;
@@ -138,12 +131,12 @@ public:
      */
     struct IPv6State
     {
-        explicit IPv6State(TimeManager& time);
+        explicit IPv6State(core::TimeManager& time);
         ~IPv6State();
 
         struct IPv6Address
         {
-            ::IPv6Address addr;
+            types::IPv6Address addr;
             uint8_t length;
 
             bool tentative{false};
@@ -158,17 +151,17 @@ public:
             void validateAddress(bool local = false);
 
             friend class MockInterface;
-            friend class ::Internal_NdpTest;
+            friend class Internal_NdpTest;
         };
 
         bool hasRoutableAddress();
 
         // Add/Remove functions
-        IPv6Address* addAddress(const IPv6Prefix& ip, bool local);
-        IPv6Address* addUniqueLocalAddress(const IPv6Prefix& ip);
-        IPv6Address* addGlobalAddress(const IPv6Prefix& ip);
+        IPv6Address* addAddress(const types::IPv6Prefix& ip, bool local);
+        IPv6Address* addUniqueLocalAddress(const types::IPv6Prefix& ip);
+        IPv6Address* addGlobalAddress(const types::IPv6Prefix& ip);
         void removeLocalAddress();
-        void removeAddress(const IPv6Prefix& prefix);
+        void removeAddress(const types::IPv6Prefix& prefix);
         void removeAllAddresses();
 
         void validateGlobalAddresses();
@@ -178,48 +171,48 @@ public:
         uint8_t* getGlobalUnicast(uint8_t* out) const;
         uint8_t* getLocalUnicast(uint8_t* out) const;
 
-        ::IPv6Address getLocalAddress() const;
-        ::IPv6Address getGlobalUnicast() const;
-        ::IPv6Address getLocalUnicast() const;
+        types::IPv6Address getLocalAddress() const;
+        types::IPv6Address getGlobalUnicast() const;
+        types::IPv6Address getLocalUnicast() const;
 
         bool hasAddress(const uint8_t* addr);
-        bool hasAddress(::IPv6Address addr);
+        bool hasAddress(types::IPv6Address addr);
 
         bool hasLocalAddress(const uint8_t* addr, uint8_t len) const;
         bool hasGlobalUnicast(const uint8_t* addr, uint8_t len) const;
         bool hasLocalUnicast(const uint8_t* addr, uint8_t len) const;
 
-        bool hasLocalAddress(const IPv6Prefix& prefix) const;
-        bool hasGlobalUnicast(const IPv6Prefix& prefix) const;
-        bool hasLocalUnicast(const IPv6Prefix& prefix) const;
+        bool hasLocalAddress(const types::IPv6Prefix& prefix) const;
+        bool hasGlobalUnicast(const types::IPv6Prefix& prefix) const;
+        bool hasLocalUnicast(const types::IPv6Prefix& prefix) const;
 
         uint8_t getLocalPrefix(uint8_t* out) const;
         uint8_t getGlobalUnicastPrefix(uint8_t* out) const;
         uint8_t getLocalUnicastPrefix(uint8_t* out) const;
 
-        ::IPv6Prefix getLocalPrefix() const;
-        ::IPv6Prefix getGlobalUnicastPrefix() const;
-        ::IPv6Prefix getLocalUnicastPrefix() const;
+        types::IPv6Prefix getLocalPrefix() const;
+        types::IPv6Prefix getGlobalUnicastPrefix() const;
+        types::IPv6Prefix getLocalUnicastPrefix() const;
 
         uint8_t getLocalMask() const;
         uint8_t getGlobalUnicastMask() const;
         uint8_t getLocalUnicastMask() const;
 
-        std::vector<::IPv6Address> getRoutableList() const;
-        std::vector<::IPv6Address> getGlobalList() const;
-        std::vector<::IPv6Address> getLocalList() const;
+        std::vector<types::IPv6Address> getRoutableList() const;
+        std::vector<types::IPv6Address> getGlobalList() const;
+        std::vector<types::IPv6Address> getLocalList() const;
 
-        std::vector<::IPv6Prefix> getRoutablePrefixList(bool maintainAddress = false) const;
-        std::vector<::IPv6Prefix> getGlobalPrefixList(bool maintainAddress = false) const;
-        std::vector<::IPv6Prefix> getLocalPrefixList(bool maintainAddress = false) const;
+        std::vector<types::IPv6Prefix> getRoutablePrefixList(bool maintainAddress = false) const;
+        std::vector<types::IPv6Prefix> getGlobalPrefixList(bool maintainAddress = false) const;
+        std::vector<types::IPv6Prefix> getLocalPrefixList(bool maintainAddress = false) const;
 
-        std::unordered_set<::IPv6Address> getRoutableSet() const;
-        std::unordered_set<::IPv6Address> getGlobalSet() const;
-        std::unordered_set<::IPv6Address> getUniqueSet() const;
+        std::unordered_set<types::IPv6Address> getRoutableSet() const;
+        std::unordered_set<types::IPv6Address> getGlobalSet() const;
+        std::unordered_set<types::IPv6Address> getUniqueSet() const;
 
-        std::unordered_set<::IPv6Prefix> getRoutablePrefixSet(bool maintainAddress = false) const;
-        std::unordered_set<::IPv6Prefix> getGlobalPrefixSet(bool maintainAddress = false) const;
-        std::unordered_set<::IPv6Prefix> getUniquePrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<types::IPv6Prefix> getRoutablePrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<types::IPv6Prefix> getGlobalPrefixSet(bool maintainAddress = false) const;
+        std::unordered_set<types::IPv6Prefix> getUniquePrefixSet(bool maintainAddress = false) const;
 
 
         // Other IPv6 configurations
@@ -227,17 +220,17 @@ public:
         std::atomic<bool> mtuLocal{false};
 
     private:
-        TimeManager& timeManager;
+        core::TimeManager& timeManager;
         mutable std::shared_mutex ipMutex;
         IPv6Address* linkLocalAddress = nullptr;
-        std::vector<IPv6Address*> globalAddresses; ///< Global IPv6 addresses.
+        std::vector<IPv6Address*> globalAddresses; ///< core::Global IPv6 addresses.
         std::vector<IPv6Address*> uniqueLocalAddresses{}; ///< Unique Local Addresses.
         void cancelTimers(IPv6Address& addr);
 
         friend class MockInterface;
         friend class Interface;
-        friend class Protocol::Ndp;
-        friend class ::Internal_NdpTest;
+        friend class infrastructure::Ndp;
+        friend class Internal_NdpTest;
     }  ipv6;
 
     /**
@@ -247,7 +240,7 @@ public:
     struct Eigrp
     {
         std::unordered_set<uint32_t> ipv6AutonomousSystems; ///< Enabled ipv6 autonomous system list
-        std::unordered_map<uint32_t, Config::Reference<Config::EigrpInterfaceRegistry>> eigrpIfaceConfigs; ///< Per-AS interface configs
+        std::unordered_map<uint32_t, config::Reference<config::EigrpInterfaceRegistry>> eigrpIfaceConfigs; ///< Per-AS interface configs
     } eigrp;
 
     /**
@@ -257,7 +250,7 @@ public:
     struct Ospf
     {
         std::unordered_map<uint32_t, uint32_t> enabledProcesses;
-        std::optional<Config::Reference<Config::OspfInterfaceBaseRegistry>> ospfInterfaceConfigs = std::nullopt;
+        std::optional<config::Reference<config::OspfInterfaceBaseRegistry>> ospfInterfaceConfigs = std::nullopt;
     } ospf;
 
     /**
@@ -266,12 +259,15 @@ public:
      */
     struct Dhcpv6
     {
-        Protocol::Dhcpv6::InterfaceConfigs* configs = nullptr;
-        std::vector<Protocol::Dhcpv6::DhcpNetwork*> dhcpNetworks;
+        services::dhcp::InterfaceConfigs* configs = nullptr;
+        std::vector<services::dhcp::DhcpNetwork*> dhcpNetworks;
     } dhcpv6;
 
 private:
     std::atomic<uint64_t> macAddress;  ///< MAC address associated with the interface.
 };
 
+} // namespace interface
+
 #endif // INTERFACE_CONFIGS_H
+

@@ -12,14 +12,14 @@
 
 #include "bgp/BgpProcess.h"
 
-namespace BGP
+namespace routing::bgp
 {
 NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
     : family(fam),
       mpNegotiated(false),
       parent(p),
       configs(fam, [&p, &fam]() {
-          auto& neighborConfigs = p.configs.get<Config::BgpNeighborSession::AF_NEIGHBOR>();
+          auto& neighborConfigs = p.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>();
           uint32_t id = fam.afi | uint32_t(fam.afi) << 16;
           return p.getProcess().routingInstance->getRegistry().emplaceBack(neighborConfigs, id);
       }())
@@ -28,14 +28,14 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
 
     // Resolve peer group
     {
-        auto& pgField = parent.getConfigs().get<Config::BgpNeighborSession::PEER_GROUP>();
+        auto& pgField = parent.getConfigs().get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
             configs.setPeerGroup(parent.getProcess().getNtable().lookupPeerGroup(pgField.load()));
     }
 
     // Resolve session-level peer template from INHERIT_PEER_SESSION.
     {
-        auto& inhPolField = configs.get<Config::BgpNeighbor::INHERIT_PEER_POLICY>();
+        auto& inhPolField = configs.get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
         if (inhPolField.hasValue())
             configs.setPeerPolicyTemplate(parent.getProcess().getNtable().lookupPeerPolicyTemplate(inhPolField.load()));
     }
@@ -96,7 +96,7 @@ void NeighborAf::cancelPfxRestart()
 NeighborAf::~NeighborAf()
 {
     cancelPfxRestart();
-    parent.getConfigs().get<Config::BgpNeighborSession::AF_NEIGHBOR>().erase(
+    parent.getConfigs().get<config::BgpNeighborSession::AF_NEIGHBOR>().erase(
         family.afi | uint32_t(family.afi << 16));
 }
-}
+} // namespace routing

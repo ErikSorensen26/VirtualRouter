@@ -17,6 +17,9 @@
 #include "TxQueue.hpp"
 #include "TxDistributor.h"
 
+namespace qos::egress
+{
+
 TxQueueManager::TxQueueManager() {}
 TxQueueManager::~TxQueueManager()
 {
@@ -45,7 +48,7 @@ void TxQueueManager::setTxCoreBias(double bias)
     reoptimize();
 }
 
-void TxQueueManager::addInterface(Interface& iface, const std::string& ifname, const TxIfacePolicy& policy)
+void TxQueueManager::addInterface(interface::Interface& iface, const std::string& ifname, const TxIfacePolicy& policy)
 {
     std::lock_guard<std::mutex> lk(mu);
     if (ifs.count(&iface)) return;
@@ -65,7 +68,7 @@ void TxQueueManager::addInterface(Interface& iface, const std::string& ifname, c
     reoptimize();
 }
 
-void TxQueueManager::removeInterface(Interface& iface)
+void TxQueueManager::removeInterface(interface::Interface& iface)
 {
     std::lock_guard<std::mutex> lk(mu);
 
@@ -89,7 +92,7 @@ void TxQueueManager::removeInterface(Interface& iface)
     reoptimize();
 }
 
-void TxQueueManager::updateInterfacePolicy(Interface& iface, const TxIfacePolicy& policy)
+void TxQueueManager::updateInterfacePolicy(interface::Interface& iface, const TxIfacePolicy& policy)
 {
     std::lock_guard<std::mutex> lk(mu);
     auto it = ifs.find(&iface);
@@ -226,9 +229,9 @@ void TxQueueManager::startOne(IfState& st, TxQueueOpts qopts)
     int idx = (int)st.queueAmount;
     auto* qs = new QueueState{};
     qs->opts = qopts;
-    qs->egress = EgressFactory::create(st.iface, qs->opts);
+    qs->egress = hardware::egress::create(st.iface, qs->opts);
     if (!qs->egress) { delete qs; throw std::runtime_error("egress factory returned null"); }
-    qs->queue = TxQueueFactory::create(TxQueueType::FIFO, qopts.frameCount, *qs->egress);
+    qs->queue = txqueuefactory::create(TxQueueType::FIFO, qopts.frameCount, *qs->egress);
     if (!qs->queue) { delete qs->egress; delete qs; throw std::runtime_error("queue factory returned null"); }
 
     st.queues[idx] = qs;
@@ -289,7 +292,7 @@ void TxQueueManager::shutdown()
     ifs.clear();
 }
 
-void TxQueueManager::start(Interface* iface)
+void TxQueueManager::start(interface::Interface* iface)
 {
     std::lock_guard<std::mutex> lk(mu);
     auto it = ifs.find(iface);
@@ -300,7 +303,7 @@ void TxQueueManager::start(Interface* iface)
     }
 }
 
-void TxQueueManager::stop(Interface* iface)
+void TxQueueManager::stop(interface::Interface* iface)
 {
     std::lock_guard<std::mutex> lk(mu);
     auto it = ifs.find(iface);
@@ -310,3 +313,5 @@ void TxQueueManager::stop(Interface* iface)
         it->second.queues[i]->queue->stop();
     }
 }
+
+} // namespace qos

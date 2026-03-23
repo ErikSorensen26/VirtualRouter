@@ -8,9 +8,9 @@
 #include <optional>
 #include <chrono>
 
-static uint32_t KEY_CHAIN_ID = 0;
+namespace security { static uint32_t KEY_CHAIN_ID = 0; }
 
-namespace Authentication
+namespace security::authentication
 {
 enum class HmacType : int;
 
@@ -55,7 +55,7 @@ public:
     const uint32_t chainID;
 
     explicit KeyChain(std::string name)
-        : name(std::move(name)), chainID(KEY_CHAIN_ID)
+        : name(std::move(name)), chainID(security::KEY_CHAIN_ID)
     {}
 
     void addKey(const Key& key)
@@ -87,8 +87,10 @@ public:
             [&](const Key& k) { return k.lifetime.isExpired(now); }), keys.end());
     }
 
-    bool validate(const uint8_t* hmac, uint8_t* computed, uint32_t keyId, const uint8_t* data, size_t size, const Authentication::HmacType) const;
+    bool validate(const uint8_t* hmac, uint8_t* computed, uint32_t keyId, const uint8_t* data, size_t size, const HmacType) const;
 };
-}
+
+} // namespace security::authentication
 
 #endif // KEY_CHAIN_H
+

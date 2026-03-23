@@ -14,7 +14,7 @@
 #include "bgp/attributes/AttributeTypes.hpp"
 #include "bgp/attributes/AttributeManager.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 class NeighborAf;
 
@@ -26,7 +26,7 @@ struct OrfPrefixEntry
     uint32_t sequence;
     uint8_t  minLen;
     uint8_t  maxLen;
-    IPPrefix prefix;
+    types::IPPrefix prefix;
 };
 
 template <typename N>
@@ -260,6 +260,7 @@ using AdjRibOutTable = std::unordered_map<uint32_t, PerPeerOutTable<N>>;
 
 template <typename N>
 using LocRibTable = std::unordered_map<N, LocalRoute<N>>; // TODO: upgrade to radix tree for better performance
-}
+} // namespace routing
 
 #endif // BGP_RIB_TYPES_HPP
+

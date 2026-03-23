@@ -18,7 +18,7 @@
 #include "Connection.h"
 #include "tcp/rx/RxConsumer.h"
 
-namespace TCP
+namespace transport::tcp
 {
 static TcpError mapErrno(int e) noexcept
 {
@@ -160,7 +160,7 @@ static TcpState mapLinuxTcpState(uint8_t s) noexcept
     }
 }
 
-TcpEngine::TcpEngine(VirtualRouter& v, const Config& c)
+TcpEngine::TcpEngine(core::VirtualRouter& v, const Config& c)
     : vr(v), cfg(c), bufferPool(cfg.poolConfigs)
 {
     epfd = epoll_create1(EPOLL_CLOEXEC);
@@ -241,7 +241,7 @@ bool TcpEngine::getLiveKey(int fd, TcpSocketKey& out) const noexcept
     if (::getsockname(fd, reinterpret_cast<sockaddr*>(&lss), &llen) != 0)
         return false;
 
-    IPAddress lip{};
+    types::IPAddress lip{};
     TcpPort lport{};
     TcpIpAdapter::readSockaddr(&lss, static_cast<uint32_t>(llen), lip, lport);
     out.local = TcpEndpoint{lip, lport};
@@ -256,7 +256,7 @@ bool TcpEngine::getLiveKey(int fd, TcpSocketKey& out) const noexcept
         return false;
     }
 
-    IPAddress rip{};
+    types::IPAddress rip{};
     TcpPort rport{};
     TcpIpAdapter::readSockaddr(&rss, static_cast<uint32_t>(rlen), rip, rport);
     out.remote = TcpEndpoint{rip, rport};
@@ -918,4 +918,4 @@ size_t TcpEngine::pump(Tcp& tcp, uint32_t timeoutMs, size_t maxEvents) noexcept
 
     return dispatched;
 }
-} // namespace TCP
+} // namespace transport::tcp

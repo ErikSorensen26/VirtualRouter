@@ -4,7 +4,7 @@
 #define BGP_HEADER_HPP
 
 #include <span>
-
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 
 // BGP message types
@@ -211,6 +211,9 @@ constexpr uint8_t BGP_MARKER[16] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
+namespace packet
+{
+
 #pragma pack(push, 1)
 struct BgpHeaderRaw
 {
@@ -229,12 +232,15 @@ struct BgpHeader
     DEFINE_PACKET_HEADER(BgpHeaderRaw);
 
     uint8_t* getMarker() const { return raw->marker; }
-    uint16_t getLength() const { return readU16(raw->length); }
+    uint16_t getLength() const { return utils::readU16(raw->length); }
     uint8_t  getType()   const { return raw->type; }
 
     void setMarker()             { std::memset(raw->marker, 0xff, sizeof(raw->marker)); }
-    void setLength(uint16_t val) { writeU16(raw->length, val); }
+    void setLength(uint16_t val) { utils::writeU16(raw->length, val); }
     void setType(uint8_t val)    { raw->type = val; }
 };
 
+} // namespace packet
+
 #endif // BGP_HEADER_HPP
+

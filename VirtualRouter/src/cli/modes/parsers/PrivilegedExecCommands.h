@@ -9,7 +9,7 @@
 
 #define PRIVILEGED_EXEC_PARAMS PrivilegedExecContext& ctx, const std::vector<std::string>& args
 
-namespace Cli
+namespace cli
 {
 bool PrivilegedExec_ConfigureTerm_Handler(PRIVILEGED_EXEC_PARAMS);
 using PrivilegedExec_ConfigureTerm = commandAdder<PrivilegedExecContext,

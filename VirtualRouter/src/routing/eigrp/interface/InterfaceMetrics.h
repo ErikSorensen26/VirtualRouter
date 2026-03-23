@@ -6,9 +6,7 @@
 #include <cstdint>
 #include <chrono>
 
-enum class AddressFamily : uint8_t;
-
-namespace EIGRP
+namespace routing::eigrp
 {
 class Neighbor;
 class EigrpInterface;
@@ -30,6 +28,7 @@ public:
 private:
     EigrpInterface& iface;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_INTERFACE_METRICS_H
+

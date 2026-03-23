@@ -11,7 +11,7 @@
 
 #include "AttributeTypes.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 class AttributeManager
 {
@@ -228,6 +228,7 @@ private:
     std::vector<PathEntry> idToPath;
     std::deque<uint32_t> freePathIds;
 };
-}
+} // namespace routing
 
 #endif // BGP_ATTRIBUTE_MANAGER_HPP
+

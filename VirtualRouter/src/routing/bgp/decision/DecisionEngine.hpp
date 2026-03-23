@@ -7,7 +7,7 @@
 #include <optional>
 #include "BestPath.h"
 
-namespace BGP
+namespace routing::bgp
 {
 class BgpProcess;
 
@@ -23,8 +23,8 @@ public:
         if (canidates.empty())
             return std::nullopt;
 
-        static const IPAddress kEmpty{};
-        auto nbrAddr = [](const InboundRoute<N>* r) -> const IPAddress& {
+        static const types::IPAddress kEmpty{};
+        auto nbrAddr = [](const InboundRoute<N>* r) -> const types::IPAddress& {
             return r->sourceNeighbor ? r->sourceNeighbor->globalNbr().neighborAddress : kEmpty;
         };
 
@@ -43,12 +43,12 @@ public:
 
         if (maxPaths > 1)
         {
-            const IPAddress& bestNbr = nbrAddr(best);
+            const types::IPAddress& bestNbr = nbrAddr(best);
             for (InboundRoute<N>* cand : canidates)
             {
                 if (cand == best)
                     continue;
-                const IPAddress& candNbr = nbrAddr(cand);
+                const types::IPAddress& candNbr = nbrAddr(cand);
                 if (!comparator.better(*best, bestNbr, *cand, candNbr) &&
                     !comparator.better(*cand, candNbr, *best, bestNbr))
                 {
@@ -66,8 +66,8 @@ public:
     template <typename N>
     std::vector<InboundRoute<N>*> rankCandidates(std::vector<InboundRoute<N>*> candidates) const
     {
-        static const IPAddress kEmpty{};
-        auto nbrAddr = [](const InboundRoute<N>* r) -> const IPAddress& {
+        static const types::IPAddress kEmpty{};
+        auto nbrAddr = [](const InboundRoute<N>* r) -> const types::IPAddress& {
             return r->sourceNeighbor ? r->sourceNeighbor->globalNbr().neighborAddress : kEmpty;
         };
 
@@ -79,7 +79,7 @@ public:
         return candidates;
     }
 
-    bool equivalent(const InboundRouteBase& lhs, const IPAddress& lhsNbr, const InboundRouteBase& rhs, const IPAddress& rhsNbr) const
+    bool equivalent(const InboundRouteBase& lhs, const types::IPAddress& lhsNbr, const InboundRouteBase& rhs, const types::IPAddress& rhsNbr) const
     {
         if (comparator.better(lhs, lhsNbr, rhs, rhsNbr))
             return false;
@@ -92,6 +92,7 @@ private:
     BgpProcess& proc;
     BestPathComparator comparator;
 };
-}
+} // namespace routing
 
 #endif // BGP_DECISION_ENGINE_H
+

@@ -4,7 +4,7 @@
 #define DHCP_HEADER_HPP
 
 #include <vector>
-
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 #include "packet/TlvOptions.hpp"
 
@@ -65,6 +65,8 @@ inline constexpr uint8_t DHCP_SERVER_HOSTNAME[64] = {0x00, 0x00, 0x00, 0x00, 0x0
 inline constexpr uint8_t DHCP_BOOT_FILE[128] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; ///< Bootfile Name.
 inline constexpr uint8_t DHCP_END_PADDING[25] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; ///< Padding after DHCP options.
 
+namespace packet
+{
 /**
  * @struct DhcpHeaderRaw
  * @brief Represents a raw DHCP header
@@ -104,17 +106,17 @@ struct DhcpHeader
     uint8_t getHLen() const { return raw->hLen; }
     uint8_t getHops() const { return raw->hops; }
     const uint8_t* getXid() const { return raw->xId; }
-    uint16_t getSecs() const { return readU16(raw->secs); }
-    uint16_t getFlags() const { return readU16(raw->flags); }
+    uint16_t getSecs() const { return utils::readU16(raw->secs); }
+    uint16_t getFlags() const { return utils::readU16(raw->flags); }
     const uint8_t* getClientIP() const { return raw->ciaddr; }
-    uint32_t getClientIPInt() const { return readU32(raw->ciaddr); }
+    uint32_t getClientIPInt() const { return utils::readU32(raw->ciaddr); }
     const uint8_t* getYourIP() const { return raw->yiaddr; }
     const uint8_t* getNextServerIP() const { return raw->siaddr; }
     const uint8_t* getRelayAgentIP() const { return raw->giaddr; }
     const uint8_t* getClientMac() const { return raw->chaddr; }
     const uint8_t* getServerName() const { return raw->serverName; }
     const uint8_t* getBootFile() const { return raw->file; }
-    uint32_t getMagicCookie() const { return readU32(raw->magicCookie); }
+    uint32_t getMagicCookie() const { return utils::readU32(raw->magicCookie); }
 
     void setOpcode(uint8_t val)
         { raw->opcode = val; }
@@ -125,11 +127,11 @@ struct DhcpHeader
     void setHops(uint8_t val)
         { raw->hops = val; }
     void setXid(uint32_t val)
-        { writeU32(raw->xId, val); }
+        { utils::writeU32(raw->xId, val); }
     void setXid(const uint8_t* val)
         { std::memcpy(raw->xId, val, 4); }
     void setSecs(uint16_t val)
-        { writeU16(raw->secs, val); }
+        { utils::writeU16(raw->secs, val); }
     void setFlags(const uint8_t* val)
         { std::memcpy(raw->flags, val, 2); }
     void setClientIp(const uint8_t* val)
@@ -147,7 +149,7 @@ struct DhcpHeader
     void setBootFile(const uint8_t* val)
         { std::memcpy(raw->file, val, 128); }
     void setMagicCookie(uint32_t val)
-        { writeU32(raw->magicCookie, val); }
+        { utils::writeU32(raw->magicCookie, val); }
 };
 
 inline bool parseDhcpOptions(const uint8_t* data, size_t size, std::vector<TLV8Option>& outOptions, bool overload = false)
@@ -169,4 +171,7 @@ inline bool parseDhcpOptions(const uint8_t* data, size_t size, std::vector<TLV8O
     return offset == size;
 }
 
+} // namespace packet
+
 #endif // DHCP_HEADER_HPP
+

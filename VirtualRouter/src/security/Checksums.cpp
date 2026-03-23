@@ -5,8 +5,11 @@
 #include "Checksums.h"
 #include "packet/HeaderHelpers.hpp"
 
+namespace security
+{
+
 // Calculates the CRC32 checksum of the given string data
-/*bool Checksum::crc32(uint8_t* out, const uint8_t* data, size_t dataSize)
+/*bool checksum::crc32(uint8_t* out, const uint8_t* data, size_t dataSize)
 {
     // Predefined CRC32 table for fast calculations
     static const unsigned long crcTable[256] = {
@@ -69,7 +72,7 @@
     return byteString;
 }*/
 
-void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t checksumStartIndex, size_t checksumSize, const uint8_t* pseudoHeader, size_t pseudoHeaderSize, bool swap)
+void checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t checksumStartIndex, size_t checksumSize, const uint8_t* pseudoHeader, size_t pseudoHeaderSize, bool swap)
 {
     std::memset(packet + checksumStartIndex, 0, checksumSize);
 
@@ -92,7 +95,7 @@ void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             size_t i = 0;
             while (i + 1 < pseudoHeaderSize)
             {
-                sum += readU16(pseudoHeader + i);
+                sum += utils::readU16(pseudoHeader + i);
                 i += 2;
             }
             if (i < pseudoHeaderSize)
@@ -101,7 +104,7 @@ void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             while (i + 1 < headerSize)
             {
                 if (i < checksumStartIndex || i >= checksumStartIndex + 2)
-                    sum += readU16(packet + i);
+                    sum += utils::readU16(packet + i);
                 i += 2;
             }
             if (i < headerSize && (i < checksumStartIndex || i >= checksumStartIndex + 2))
@@ -110,7 +113,7 @@ void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
                 sum = (sum & 0xFFFF) + (sum >> 16);
             uint16_t checksum = ~static_cast<uint16_t>(sum);
             if (swap) std::swap(((uint8_t*)&checksum)[0], ((uint8_t*)&checksum)[1]);
-            writeU16(packet + checksumStartIndex, checksum);
+            utils::writeU16(packet + checksumStartIndex, checksum);
             break;
         }
         case 4:
@@ -119,7 +122,7 @@ void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             size_t i = 0;
             while (i + 3 < pseudoHeaderSize) 
             {
-                sum += readU32(pseudoHeader + i);
+                sum += utils::readU32(pseudoHeader + i);
                 i += 4;
             }
             if (i < pseudoHeaderSize) 
@@ -134,7 +137,7 @@ void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             while (i + 3 < headerSize) 
             {
                 if (i < checksumStartIndex || i >= checksumStartIndex + 4)
-                    sum += readU32(packet + i);
+                    sum += utils::readU32(packet + i);
                 i += 4;
             }
             if (i < headerSize && (i < checksumStartIndex || i >= checksumStartIndex + 4))
@@ -157,7 +160,7 @@ void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             }
             else
             {
-                writeU32(packet + checksumStartIndex, checksum);
+                utils::writeU32(packet + checksumStartIndex, checksum);
             }
             break;
         }
@@ -166,3 +169,5 @@ void Checksum::calculateChecksum(uint8_t* packet, size_t headerSize, size_t chec
             break;
     }
 }
+
+} // namespace security

@@ -5,9 +5,9 @@
 
 #include "ospf/database/LSDB.hpp"
 
-class ProcessQueueRef;
+namespace core { class ProcessQueueRef; }
 
-namespace OSPF
+namespace routing::ospf
 {
 struct OspfInterfaceId;
 class Area;
@@ -27,7 +27,7 @@ public:
     virtual void addExternal(uint32_t asbr, uint32_t lsid, bool expire) = 0;
     virtual void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa, bool expire) = 0;
     virtual void addStubDefaultRoute(bool add) = 0;
-    virtual void originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire = false) = 0;
+    virtual void originateSummary(uint32_t lsid, const types::IPPrefix& prefix, uint32_t cost, bool expire = false) = 0;
 
     template <typename Policy>
     void originateLsa(const LsaKey& key, const LsaBody& body, bool expire);
@@ -129,6 +129,7 @@ void Originator::uniqueLinks(std::vector<RouterLink>& links)
 {
     links.erase(std::unique(links.begin(), links.end()), links.end());
 }
-}
+} // namespace routing
 
 #endif
+

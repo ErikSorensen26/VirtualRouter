@@ -5,7 +5,7 @@
 #include "TxBuffer.h"
 #include "TxBufferPool.h"
 
-namespace TCP
+namespace transport::tcp
 {
 TxBufferPool::Block* TxBuffer::newBlock() noexcept
 {
@@ -189,4 +189,4 @@ void TxBuffer::reset() noexcept
     sizeBytes = 0;
     capacityBytes = 0;
 }
-}
+} // namespace transport::tcp

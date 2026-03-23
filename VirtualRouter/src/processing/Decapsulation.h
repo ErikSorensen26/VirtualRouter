@@ -6,7 +6,12 @@
 #include <cstdint>
 #include <cstddef>
 
-struct PacketInfo;
+#include "packet/PacketStructure.h"
+
+namespace processing
+{
+
+using PacketInfo = packet::PacketInfo;
 
 /**
  * @class Packet
@@ -22,4 +27,7 @@ struct PacketInfo;
 bool inspect(PacketInfo& packet, uint8_t* data, size_t len);
 bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len);
 
+} // namespace processing
+
 #endif // DECAPSULATION_H
+

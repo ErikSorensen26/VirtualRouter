@@ -7,9 +7,9 @@
 #include <optional>
 #include <unordered_map>
 
-struct IPAddress;
+namespace types { struct IPAddress; }
 
-namespace OSPF
+namespace routing::ospf
 {
 class OspfInterface;
 class Neighbor;
@@ -21,7 +21,7 @@ public:
     void syncUnicast();
     void clearUnicast();
 
-    Neighbor* createNeighbor(uint32_t rid, const IPAddress& ipAddress, bool unicast = false);
+    Neighbor* createNeighbor(uint32_t rid, const types::IPAddress& ipAddress, bool unicast = false);
     void deleteNeighbor(uint32_t rid, bool unicast);
     Neighbor* lookup(uint32_t rid);
     const Neighbor* lookup(uint32_t rid) const;
@@ -40,9 +40,9 @@ public:
     };
 
 private:
-    std::unordered_map<IPAddress, UnicastConfigs> unicast;
+    std::unordered_map<types::IPAddress, UnicastConfigs> unicast;
     OspfInterface& iface;
 };
-}
+} // namespace routing
 
 #endif // OSPF_NEIGHBOR_TABLE_H

@@ -3,12 +3,13 @@
 #ifndef TLV_OPTIONS_HPP
 #define TLV_OPTIONS_HPP
 
-#include <likely.hpp>
+#include <Likely.hpp>
 #include <cstdint>
 #include <cstring>
 #include <span>
 
-#include "HeaderHelpers.hpp"
+namespace packet
+{
 
 struct TLV8Option
 {
@@ -141,4 +142,7 @@ public:
     size_t maxSize() const { return len; }
 };
 
+} // namespace packet
+
 #endif // TLV_OPTIONS_HPP
+

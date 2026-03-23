@@ -13,6 +13,9 @@
 #include "hardware/ingress/Ingress.h"
 #include "RxQueueOpts.hpp"
 
+namespace qos::ingress
+{
+
 class RxQueueManager
 {
 public:
@@ -32,12 +35,12 @@ public:
     void setCorePool(std::vector<int> cpuIds);
     void setCpuPolicy(CpuPolicy p);
 
-    void start(Interface* iface);
-    void stop(Interface* iface);
+    void start(interface::Interface* iface);
+    void stop(interface::Interface* iface);
 
-    void addInterface(Interface& iface, const std::string& ifname, const IfacePolicy& policy);
-    void removeInterface(Interface& iface);
-    void updateInterfacePolicy(Interface& iface, const IfacePolicy& policy);
+    void addInterface(interface::Interface& iface, const std::string& ifname, const IfacePolicy& policy);
+    void removeInterface(interface::Interface& iface);
+    void updateInterfacePolicy(interface::Interface& iface, const IfacePolicy& policy);
 
     void shutdown();
 
@@ -45,11 +48,11 @@ private:
     struct QueueState
     {
         RxQueueOpts opts;
-        IngressBase* ingress = nullptr;
+        hardware::ingress::IngressBase* ingress = nullptr;
     };
     struct  IfState
     {
-        Interface* iface = nullptr;
+        interface::Interface* iface = nullptr;
         std::string ifname;
         IfacePolicy policy;
         uint16_t fanoutGroup = 0;
@@ -66,7 +69,7 @@ private:
     std::vector<int> cores;
     CpuPolicy cpuPolicy = CpuPolicy::EqualShare;
 
-    std::unordered_map<Interface*, IfState> ifs;
+    std::unordered_map<interface::Interface*, IfState> ifs;
     std::mutex mu;
     std::atomic<uint32_t> fanoutSeed = 0xCAFE;
 
@@ -84,4 +87,7 @@ private:
     std::vector<int> buildCoreOrder(const IfState& st) const;
 };
 
+} // namespace qos
+
 #endif // RX_QUEUE_MANAGER_H
+

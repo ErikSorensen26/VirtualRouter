@@ -11,7 +11,7 @@
 #include "eigrp/core/EigrpConfig.h"
 #include "eigrp/topology/TopologyTable.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class Eigrp;
 struct RouteInfo;
@@ -22,7 +22,7 @@ class RouteManager
 public:
     explicit RouteManager(Eigrp& process);
 
-    void withdrawRoute(const IPPrefix withdraws);
+    void withdrawRoute(const types::IPPrefix withdraws);
     void synchronizeRoutes(const std::vector<TopologyEntry*>& entry);
     void synchronizeRoute(const TopologyEntry& entry);
 
@@ -30,8 +30,8 @@ public:
 private:
 
     Eigrp& base;
-    RoutingTable& rib;
-    AddressFamily af;
+    core::RoutingTable& rib;
+    types::AddressFamily af;
     uint32_t as;
 
     template <typename AddrType>
@@ -46,7 +46,7 @@ private:
             withdrawRoute(entry.prefix);
             return nullptr;
         }
-        RibEntry<AddrType>* ribEntry = new RibEntry<AddrType>;
+        core::RibEntry<AddrType>* ribEntry = new core::RibEntry<AddrType>;
 
         for (const auto& neighbor : entry.successors)
         {
@@ -59,7 +59,7 @@ private:
             }
 
             ribEntry->addNextHop(
-                af == AddressFamily::IPv4 ? neighbor.v4() : neighbor.v6(),
+                af == types::AddressFamily::IPv4 ? neighbor.v4() : neighbor.v6(),
                 it->second.routeInfo.originInterface,
                 1
             );
@@ -75,7 +75,7 @@ private:
         }
 
         ribEntry->length = bestIt->second.routeInfo.prefix.prefixLength;
-        ribEntry->source = *isExternal ? RouteSource::EIGRP_EXTERNAL : RouteSource::EIGRP_INTERNAL;
+        ribEntry->source = *isExternal ? core::RouteSource::EIGRP_EXTERNAL : core::RouteSource::EIGRP_INTERNAL;
         ribEntry->processId = as;
         ribEntry->adminDistance = bestIt->second.routeInfo.adminDistance;
         ribEntry->metric = bestIt->second.routeInfo.feasibleDistance * scale;
@@ -84,7 +84,7 @@ private:
         return &bestIt->second;
     }
 };
-}
-
+} // namespace routing
 
 #endif // EIGRP_ROUTE_MANAGER_H
+

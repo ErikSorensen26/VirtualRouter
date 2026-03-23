@@ -7,11 +7,11 @@
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "cli/runtime/CliSession.h"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceOspf_BFD_Handler(INTERFACE_PARAMS)
 {
-    auto& bfd = ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::BFD>();
+    auto& bfd = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::BFD>();
     bfd.set(ctx.negate || args.size() == 1);
     return true;
 }
@@ -19,38 +19,38 @@ bool InterfaceOspf_BFD_Handler(INTERFACE_PARAMS)
 bool InterfaceOspf_Cost_Handler(INTERFACE_PARAMS)
 {
     if (ctx.negate)
-	ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::COST>().unset();
+	ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::COST>().unset();
     else
-	ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::COST>().set(static_cast<uint16_t>(std::stoi(args[0])));
+	ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::COST>().set(static_cast<uint16_t>(std::stoi(args[0])));
     return true;
 }
 
 bool InterfaceOspf_DatabaseFilter_Handler(INTERFACE_PARAMS)
 {
     UNUSED(args);
-    ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::DATABASE_FILTER>().set(!ctx.negate);
+    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::DATABASE_FILTER>().set(!ctx.negate);
     return true;
 }
 
 bool InterfaceOspf_DeadInterval_Handler(INTERFACE_PARAMS)
 {
     auto& configs = ctx.currentInterface.getOspfConfig().get();
-    auto& base = configs.get<Config::OspfInterfaceBase::BASE>().local().get();
+    auto& base = configs.get<config::OspfInterfaceBase::BASE>().local().get();
 
     if (ctx.negate)
     {
-	base.get<Config::OspfInterface::DEAD_INTERVAL>().unset();
-	base.get<Config::OspfInterface::HELLO_MULTIPLIER>().unset();
+	base.get<config::OspfInterface::DEAD_INTERVAL>().unset();
+	base.get<config::OspfInterface::HELLO_MULTIPLIER>().unset();
     }
 
     if (args[0] == "minimal")
     {
-	base.get<Config::OspfInterface::DEAD_INTERVAL>().set(1);
-	base.get<Config::OspfInterface::HELLO_MULTIPLIER>().set(static_cast<uint8_t>(std::stoi(args[2])));
+	base.get<config::OspfInterface::DEAD_INTERVAL>().set(1);
+	base.get<config::OspfInterface::HELLO_MULTIPLIER>().set(static_cast<uint8_t>(std::stoi(args[2])));
     }
     else
     {
-	base.get<Config::OspfInterface::DEAD_INTERVAL>().set(static_cast<uint16_t>(std::stoi(args[0])));
+	base.get<config::OspfInterface::DEAD_INTERVAL>().set(static_cast<uint16_t>(std::stoi(args[0])));
     }
     return true;
 }
@@ -58,54 +58,54 @@ bool InterfaceOspf_DeadInterval_Handler(INTERFACE_PARAMS)
 bool InterfaceOspf_DemandCircuit_Handler(INTERFACE_PARAMS)
 {
     UNUSED(args);
-    ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::DEMAND_CIRCUIT>().set(!ctx.negate);
+    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::DEMAND_CIRCUIT>().set(!ctx.negate);
     return true;
 }
 
 bool InterfaceOspf_FloodReduction_Handler(INTERFACE_PARAMS)
 {
     UNUSED(args);
-    ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::FLOOD_REDUCTION>().set(!ctx.negate);
+    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::FLOOD_REDUCTION>().set(!ctx.negate);
     return true;
 }
 
 bool InterfaceOspf_HelloInterval_Handler(INTERFACE_PARAMS)
 {
-    ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::HELLO_INTERVAL>().set(static_cast<uint16_t>(std::stoi(args[0])));
+    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::HELLO_INTERVAL>().set(static_cast<uint16_t>(std::stoi(args[0])));
     return true;
 }
 
 bool InterfaceOspf_MtuIgnore_Handler(INTERFACE_PARAMS)
 {
     UNUSED(args);
-    ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::MTU_IGNORE>().set(!ctx.negate);
+    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::MTU_IGNORE>().set(!ctx.negate);
     return true;
 }
 
 bool InterfaceOspf_Network_Handler(INTERFACE_PARAMS)
 {
-    auto& ntype = ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::NETWORK>();
+    auto& ntype = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::NETWORK>();
     if (ctx.negate) ntype.unset();
 
     if (args[0] == "broadcast")
-	ntype.set(OSPF::NetworkType::BROADCAST);
+	ntype.set(config::ospf::NetworkType::BROADCAST);
     else if (args[0] == "non-broadcast")
-	ntype.set(OSPF::NetworkType::NON_BROADCAST);
+	ntype.set(config::ospf::NetworkType::NON_BROADCAST);
     else if (args[0] == "point-to-point")
-	ntype.set(OSPF::NetworkType::POINT_TO_POINT);
+	ntype.set(config::ospf::NetworkType::POINT_TO_POINT);
     else
     {
 	if (args.size() == 2)
-	    ntype.set(OSPF::NetworkType::POINT_TO_MULTIPOINT);
+	    ntype.set(config::ospf::NetworkType::POINT_TO_MULTIPOINT);
 	else
-	    ntype.set(OSPF::NetworkType::POINT_TO_MULTIPOINT_BROADCAST);
+	    ntype.set(config::ospf::NetworkType::POINT_TO_MULTIPOINT_BROADCAST);
     }
     return true;
 }
 
 bool InterfaceOspf_Priority_Handler(INTERFACE_PARAMS)
 {
-    auto& priority = ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::PRIORITY>();
+    auto& priority = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::PRIORITY>();
     if (ctx.negate)
     {
 	priority.unset();
@@ -118,7 +118,7 @@ bool InterfaceOspf_Priority_Handler(INTERFACE_PARAMS)
 
 bool InterfaceOspf_RetransmitInterval_Handler(INTERFACE_PARAMS)
 {
-    auto& retrans = ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::RETRANSMIT_INTERVAL>();
+    auto& retrans = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::RETRANSMIT_INTERVAL>();
     if (ctx.negate)
     {
 	retrans.unset();
@@ -131,7 +131,7 @@ bool InterfaceOspf_RetransmitInterval_Handler(INTERFACE_PARAMS)
 
 bool InterfaceOspf_TransmitDelay_Handler(INTERFACE_PARAMS)
 {
-    auto& delay = ctx.currentInterface.getOspfConfig()->get<Config::OspfInterfaceBase::BASE>().local()->get<Config::OspfInterface::TRANSMIT_DELAY>();
+    auto& delay = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local()->get<config::OspfInterface::TRANSMIT_DELAY>();
     if (ctx.negate)
     {
 	delay.unset();

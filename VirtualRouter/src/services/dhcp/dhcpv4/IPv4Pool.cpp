@@ -1,11 +1,16 @@
 // IPv4Pool.cpp
 
+#include <TimeManager.h>
+
 #include "IPv4Pool.h"
 #include "IPv4LeaseManager.h"
 
+namespace services::dhcp
+{
+
 //TODO add mac tracking
 
-IPv4Pool::IPv4Pool(TimeManager& timeManager)
+IPv4Pool::IPv4Pool(core::TimeManager& timeManager)
     : timeManager(timeManager)
 {}
 
@@ -388,3 +393,5 @@ bool IPv4Pool::isAllocatedOrExcluded(uint32_t ip) const
 {
     return allocated.count(ip) || excluded.count(ip) || bad.find(ip) != bad.end() || quarantined.find(ip) != quarantined.end();
 }
+
+} // namespace services

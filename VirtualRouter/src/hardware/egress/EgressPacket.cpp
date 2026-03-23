@@ -9,11 +9,11 @@
 #include <stdexcept>
 #include <iostream>
 #include <thread>
+#include <ByteUtils.hpp>
 
 #include "EgressPacket.h"
 #include "qos/egress/TxQueueOpts.hpp"
 #include "hardware/PacketSlot.hpp"
-#include "packet/HeaderHelpers.hpp"
 #include "hardware/Ifname.h"
 
 #ifndef HOT
@@ -22,6 +22,9 @@
 #ifndef ALWAYS_INLINE
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
+
+namespace hardware::egress
+{
 
 static inline size_t roundUp(size_t v, size_t a) { return (v + a - 1) & ~(a - 1); }
 
@@ -46,7 +49,7 @@ void EgressPacket::dumpRing()
     }
 }
 
-EgressPacket::EgressPacket(Interface& iface, const TxQueueOpts& opts)
+EgressPacket::EgressPacket(interface::Interface& iface, const qos::egress::TxQueueOpts& opts)
     : EgressBase(iface, opts), kickBatch(16), fd(-1), epfd(-1), ring(nullptr)
 {
     setupSocket();
@@ -75,7 +78,7 @@ EgressPacket::EgressPacket(Interface& iface, const TxQueueOpts& opts)
         auto* h = reinterpret_cast<tpacket2_hdr*>(base);
         h->tp_status = TP_STATUS_AVAILABLE;
 
-        writeU32(base + TPACKET2_HDRLEN + packetSize + MTU_PADDING, i);
+        utils::writeU32(base + TPACKET2_HDRLEN + packetSize + MTU_PADDING, i);
     }
 
     reclaimCursor = 0;
@@ -365,3 +368,5 @@ ALWAYS_INLINE HOT void EgressPacket::cancel(uint32_t index)
         pushFree(index);
     }
 }
+
+} // namespace hardware

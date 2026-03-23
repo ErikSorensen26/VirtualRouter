@@ -9,7 +9,7 @@
 #include <map>
 #include <unordered_set>
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class EigrpInterface;
 class Eigrp;
@@ -21,8 +21,8 @@ enum class RouteType { INTERNAL, EXTERNAL, SUMMARY, CONNECTED, STATIC, WITHDRAW 
 
 struct ReceivedRoute
 {
-    IPPrefix prefix;
-    IPAddress nextHop;
+    types::IPPrefix prefix;
+    types::IPAddress nextHop;
     uint32_t originInterface;
     uint64_t reportedDistance;
     uint64_t feasibleDistance;
@@ -130,15 +130,15 @@ struct SuppressionInfo
 struct TopologyEntry
 {
     enum class State { ACTIVE, PASSIVE, POISENED };
-    IPPrefix prefix;
-    std::map<IPAddress, RouteInfo> routesBySource; ///< Routes learned from each neighbor.
+    types::IPPrefix prefix;
+    std::map<types::IPAddress, RouteInfo> routesBySource; ///< Routes learned from each neighbor.
 
-    std::vector<IPAddress> feasibleSuccessors; ///< List of feasible successor neighbors.
-    std::vector<IPAddress> successors; ///< List of successor neighbors.
+    std::vector<types::IPAddress> feasibleSuccessors; ///< List of feasible successor neighbors.
+    std::vector<types::IPAddress> successors; ///< List of successor neighbors.
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
-    IPAddress bestNeighbor = {};
+    types::IPAddress bestNeighbor = {};
 
     std::map<uint32_t, SuppressionInfo> suppression;
     bool isSuppressed(uint32_t key) const
@@ -155,19 +155,20 @@ public:
     TopologyTable(Eigrp& process);
     ~TopologyTable();
     RouteInfo& addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighborIp, TopologyEntry& entry);
-    void markRouteUnreachable(RouteInfo& route, const IPAddress& neighborIp, TopologyEntry& entry);
+    void markRouteUnreachable(RouteInfo& route, const types::IPAddress& neighborIp, TopologyEntry& entry);
     void pruneExpired();
-    void pruneNeighbor(const IPAddress& neighborIp);
-    std::pair<TopologyEntry*, RouteInfo*> findPair(const IPPrefix& prefix, const IPAddress& neighbor);
-    TopologyEntry& ensure(const IPPrefix& prefix);
-    TopologyEntry* find(const IPPrefix& prefix);
-    std::unordered_map<IPPrefix, TopologyEntry>& entries() { return topologyEntries; }
+    void pruneNeighbor(const types::IPAddress& neighborIp);
+    std::pair<TopologyEntry*, RouteInfo*> findPair(const types::IPPrefix& prefix, const types::IPAddress& neighbor);
+    TopologyEntry& ensure(const types::IPPrefix& prefix);
+    TopologyEntry* find(const types::IPPrefix& prefix);
+    std::unordered_map<types::IPPrefix, TopologyEntry>& entries() { return topologyEntries; }
 
 private:
-    std::unordered_map<IPPrefix, TopologyEntry> topologyEntries;
+    std::unordered_map<types::IPPrefix, TopologyEntry> topologyEntries;
 
     Eigrp& eigrpProcess;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_TOPOLOGY_TABLE_H
+

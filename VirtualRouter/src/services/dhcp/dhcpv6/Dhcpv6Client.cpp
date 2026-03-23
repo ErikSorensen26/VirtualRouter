@@ -3,127 +3,130 @@
 #include "Dhcpv6Client.h"
 #include "interface/Interface.h"
 
-void Protocol::Dhcpv6Client::initiate()
+namespace services::dhcp
+{
+
+void Dhcpv6Client::initiate()
 {
 
 }
 
-void Protocol::Dhcpv6Client::shutdown()
+void Dhcpv6Client::shutdown()
 {
  
 }
 
-void Protocol::Dhcpv6Client::confirm(uint32_t iaid)
+void Dhcpv6Client::confirm(uint32_t iaid)
 {
 
 }
 
-void Protocol::Dhcpv6Client::renew(uint32_t iaid)
+void Dhcpv6Client::renew(uint32_t iaid)
 {
 
 }
 
-void Protocol::Dhcpv6Client::rebind(uint32_t iaid)
+void Dhcpv6Client::rebind(uint32_t iaid)
 {
 
 }
 
-void Protocol::Dhcpv6Client::release(uint32_t iaid)
+void Dhcpv6Client::release(uint32_t iaid)
 {
 
 }
 
-void Protocol::Dhcpv6Client::decline(uint32_t iaid, const __uint128_t addr)
+void Dhcpv6Client::decline(uint32_t iaid, const __uint128_t addr)
 {
 
 }
 
-void Protocol::Dhcpv6Client::informationRequest(const std::vector<uint16_t>& oroOverride)
+void Dhcpv6Client::informationRequest(const std::vector<uint16_t>& oroOverride)
 {
 
 }
 
-void Protocol::Dhcpv6Client::setDuid(ClientID& duid)
+void Dhcpv6Client::setDuid(ClientID& duid)
 {
 
 }
 
-const ClientID& Protocol::Dhcpv6Client::getDuid() const
+const ClientID& Dhcpv6Client::getDuid() const
 {
 
 }
 
-void Protocol::Dhcpv6Client::request(
+void Dhcpv6Client::request(
     uint32_t iaid,
-    const std::vector<Protocol::Dhcpv6::IAAddrRequest>& na,
-    const std::vector<Protocol::Dhcpv6::IAAddrRequest>& ta,
-    const std::vector<Protocol::Dhcpv6::IAPrefixRequest>& pd
+    const std::vector<IAAddrRequest>& na,
+    const std::vector<IAAddrRequest>& ta,
+    const std::vector<IAPrefixRequest>& pd
 )
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendSolicit(const Dhcpv6::IAOptions& ia)
+void Dhcpv6Client::sendSolicit(const IAOptions& ia)
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendRequest(const Dhcpv6::IAOptions& ia)
+void Dhcpv6Client::sendRequest(const IAOptions& ia)
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendRenew(uint32_t iaid)
+void Dhcpv6Client::sendRenew(uint32_t iaid)
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendRebind(uint32_t iaid)
+void Dhcpv6Client::sendRebind(uint32_t iaid)
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendConfirm(uint32_t)
+void Dhcpv6Client::sendConfirm(uint32_t)
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendDecline(uint32_t iaid, __uint128_t addr)
+void Dhcpv6Client::sendDecline(uint32_t iaid, __uint128_t addr)
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendRelease(uint32_t iaid)
+void Dhcpv6Client::sendRelease(uint32_t iaid)
 {
 
 }
 
-void Protocol::Dhcpv6Client::sendInformationRequest(const std::vector<uint16_t>& oro)
+void Dhcpv6Client::sendInformationRequest(const std::vector<uint16_t>& oro)
 {
 
 }
 
-void processAdvertisement(const Dhcpv6Header& dhcp, const TLV16BufferManager& options)
+void processAdvertisement(const packet::Dhcpv6Header& dhcp, const packet::TLV16BufferManager& options)
 {
 
 }
 
-void processReply(const Dhcpv6Header& dhcp, const TLV16BufferManager& options)
+void processReply(const packet::Dhcpv6Header& dhcp, const packet::TLV16BufferManager& options)
 {
 
 }
 
-void handleReconfigure(const Dhcpv6Header& dhcp, const TLV16BufferManager& options)
+void handleReconfigure(const packet::Dhcpv6Header& dhcp, const packet::TLV16BufferManager& options)
 {
 
 }
 
-void verifyAuth(Dhcpv6Header& dhcp, TLV16Option* auth)
+void verifyAuth(packet::Dhcpv6Header& dhcp, packet::TLV16Option* auth)
 {
 
 }
 
-void buildAuthOption(Dhcpv6Header& dhcp, TLV16BufferManager& tlv)
+void buildAuthOption(packet::Dhcpv6Header& dhcp, packet::TLV16BufferManager& tlv)
 {
 
 }
@@ -142,3 +145,5 @@ void cancelTimers(uint32_t iaid)
 {
 
 }
+
+} // namespace services::dhcp

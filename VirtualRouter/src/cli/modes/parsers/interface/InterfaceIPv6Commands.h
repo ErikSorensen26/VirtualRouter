@@ -8,7 +8,7 @@
 #include "InterfaceIPv6NDCommands.h"
 #include "InterfaceIPv6OspfCommands.h"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_AddressSet = commandAdder<InterfaceContext,

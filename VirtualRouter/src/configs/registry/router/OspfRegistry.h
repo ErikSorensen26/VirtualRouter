@@ -11,11 +11,12 @@
 #include "OspfInterfaceRegistry.h"
 #include "configs/RegistryTypes.hpp"
 
-namespace OSPF
-{
-class OspfProcess;
-class Area;
+namespace routing::ospf { class OspfProcess; class Area; }
 
+namespace config
+{
+namespace ospf
+{
 enum class AreaType
 {
     NORMAL,
@@ -26,8 +27,6 @@ enum class AreaType
 };
 }
 
-namespace Config
-{
 enum class OspfVirtualLink
 {
     COUNT
@@ -55,8 +54,8 @@ enum class OspfArea
 };
 
 #define OSPF_AREA_DEFAULTS(X) \
-    X(OspfArea, AUTHENTICATION_TYPE, OSPF::AuthType::NULL_AUTH) \
-    X(OspfArea, AREA_TYPE, OSPF::AreaType::NORMAL) \
+    X(OspfArea, AUTHENTICATION_TYPE, ospf::AuthType::NULL_AUTH) \
+    X(OspfArea, AREA_TYPE, ospf::AreaType::NORMAL) \
     X(OspfArea, NSSA_DEFAULT_ORIGINATE, false) \
     X(OspfArea, NSSA_DEFAULT_METRIC, 1) \
     X(OspfArea, NSSA_DEFAULT_METRIC_TYPE, true) \
@@ -72,10 +71,10 @@ void OspfAreaTypeChange(void* area);
 void OspfAreaSycnRanges(void* area);
 
 using OspfAreaRegistry = SubRegistry<OspfArea,
-    AtomicField<OSPF::AuthType CONFIG_INDEX_ARG(OspfArea::AUTHENTICATION_TYPE)>,
+    AtomicField<ospf::AuthType CONFIG_INDEX_ARG(OspfArea::AUTHENTICATION_TYPE)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfArea::DEFAULT_COST)>,
     OptionalAtomicField<std::nullptr_t CONFIG_INDEX_ARG(OspfArea::FILTER_LIST)>, // TODO:
-    AtomicField<OSPF::AreaType CONFIG_INDEX_ARG(OspfArea::AREA_TYPE),
+    AtomicField<ospf::AreaType CONFIG_INDEX_ARG(OspfArea::AREA_TYPE),
         OspfAreaTypeChange>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_DEFAULT_ORIGINATE)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(OspfArea::NSSA_DEFAULT_METRIC)>,
@@ -85,7 +84,7 @@ using OspfAreaRegistry = SubRegistry<OspfArea,
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_NO_REDISTRIBUTION)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_ALWAYS_TRANSLATE)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_SUPPRESS_FA)>,
-    ValueField<std::vector<std::tuple<IPPrefix, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(OspfArea::RANGE),
+    ValueField<std::vector<std::tuple<types::IPPrefix, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(OspfArea::RANGE),
         OspfAreaSycnRanges>,
     ValueField<std::vector<std::tuple<>> CONFIG_INDEX_ARG(OspfArea::VIRTUAL_LINKS)> // TODO:
 >;
@@ -295,10 +294,10 @@ using OspfRegistry = SubRegistry<Ospf,
     ValueField<std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_MESH_GROUP)>, // TODO:
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_MULTICAST_INACT)>, // TODO:
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_ROUTER_ID)>, // TODO:
-    ValueField<std::vector<std::tuple<IPPrefix, uint32_t>> CONFIG_INDEX_ARG(Ospf::NETWORKS),
+    ValueField<std::vector<std::tuple<types::IPPrefix, uint32_t>> CONFIG_INDEX_ARG(Ospf::NETWORKS),
         OspfSyncNetworks>,
     ValueField<std::vector<std::tuple<
-        IPAddress,
+        types::IPAddress,
         std::optional<uint16_t>,
         std::optional<bool>,
         std::optional<uint16_t>,
@@ -321,7 +320,7 @@ using OspfRegistry = SubRegistry<Ospf,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Ospf::PRIORITY)>,
     OptionalAtomicField<std::nullptr_t CONFIG_INDEX_ARG(Ospf::REDISTRIBUTE)>, // TODO:
     OptionalAtomicField<std::nullptr_t CONFIG_INDEX_ARG(Ospf::SNMP)>, // TODO:
-    ValueField<std::vector<std::tuple<IPPrefix, bool, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(Ospf::SUMMARY_ADDRESS),
+    ValueField<std::vector<std::tuple<types::IPPrefix, bool, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(Ospf::SUMMARY_ADDRESS),
         OspfSyncSummaries>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::LSA_THROTTLE_DELAY)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::LSA_THROTTLE_HOLD)>,

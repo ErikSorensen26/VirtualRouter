@@ -5,9 +5,9 @@
 
 #include "bgp/rib/RibTypes.hpp"
 
-class VirtualRouter;
+namespace core { class VirtualRouter; }
 
-namespace BGP
+namespace routing::bgp
 {
 enum class LocRibType;
 template <typename N, LocRibType T>
@@ -18,7 +18,7 @@ template <typename N, LocRibType LR, AfiSafi A>
 class NlriPolicy
 {
 public:
-    NlriPolicy(VirtualRouter& v, BgpProcess& proc)
+    NlriPolicy(core::VirtualRouter& v, BgpProcess& proc)
         : vrf(v), process(proc) {}
 
     using LocRib = LocRib<N, LR>;
@@ -27,8 +27,8 @@ public:
 
     struct NlriInstall
     {
-        BGP::LocalRoute<N>& route;
-        BGP::PathAttribute attrs;
+        bgp::LocalRoute<N>& route;
+        bgp::PathAttribute attrs;
         uint64_t metric;
         uint8_t distance;
         bool recursiveHost;
@@ -46,9 +46,10 @@ public:
     virtual void withdrawRoutes(const std::vector<N>& nlri) = 0;
      
 protected:
-    VirtualRouter& vrf;
+    core::VirtualRouter& vrf;
     BgpProcess& process;
 };
-}
+} // namespace routing
 
 #endif // BGP_NLRI_POLICY_HPP
+

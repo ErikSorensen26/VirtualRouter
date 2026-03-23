@@ -3,6 +3,9 @@
 #include <net/if.h>
 #include "Ifname.h"
 
+namespace hardware
+{
+
 unsigned int ifnametoindex(const char* ifname)
 {
     unsigned int idx = if_nametoindex(ifname);
@@ -16,3 +19,5 @@ std::string indextoifname(unsigned int ifIndex)
         return std::string(nameBuf);
     return {};
 }
+
+} // namespace hardware

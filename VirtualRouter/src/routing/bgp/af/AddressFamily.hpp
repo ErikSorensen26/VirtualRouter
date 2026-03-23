@@ -5,7 +5,7 @@
 
 #include "Nlri.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 template <typename T>
 class AddressFamilyInstance;
@@ -30,7 +30,7 @@ struct AddressFamily<AF, std::variant<T, Rest...>>
     using type = std::conditional_t<
         (T::afi == AF),
         T,
-        typename AddressFamily<AF, std::variant<Rest...>>::type
+        typename detail::AddressFamily<AF, std::variant<Rest...>>::type
     >;
 };
 
@@ -63,6 +63,7 @@ inline constexpr bool hasAddressFamily()
 {
     return detail::hasAddressFamily<AF>((AddressFamilyVariant*)nullptr);
 }
-}
+} // namespace routing::bgp
 
 #endif // BGP_ADDRESS_FAMILY_TYPES_HPP
+

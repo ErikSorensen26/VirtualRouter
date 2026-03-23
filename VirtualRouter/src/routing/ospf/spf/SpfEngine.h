@@ -10,7 +10,7 @@
 #include "SpfTypes.hpp"
 #include "SpfTopology.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 class Area;
 struct SpfResult;
@@ -59,6 +59,7 @@ private:
 
     void invalidateForIncreasesAndRemovals(SpfResult& res, const SpfDelta& delta);
 };
-}
+} // namespace routing
 
 #endif // SPF_ENGINE_H
+

@@ -10,6 +10,9 @@
 #include <cstring>
 #include <atomic>
 
+namespace utils
+{
+
 // Define CONFIG_FILE if not already defined
 #ifndef CONFIG_FILE
 #define CONFIG_FILE "./configs/Configs.json"
@@ -322,3 +325,5 @@ LogStream Logger::error(bool isolate)
     }
     return LogStream(*this, LogLevel::ERROR);
 }
+
+} // namespace utils

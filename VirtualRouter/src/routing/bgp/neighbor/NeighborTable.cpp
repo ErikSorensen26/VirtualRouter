@@ -7,7 +7,7 @@
 #include "NeighborTable.h"
 #include "bgp/BgpProcess.h"
 
-namespace BGP
+namespace routing::bgp
 {
 NeighborTable::NeighborTable(BgpProcess& proc)
     : process(proc),
@@ -20,13 +20,13 @@ void NeighborTable::syncNeighbors()
 
     auto& configs = process.getConfigs();
 
-    std::unordered_set<IPAddress> unseen;
+    std::unordered_set<types::IPAddress> unseen;
 
     // Fill unseen with all current neighbors
     for (const auto& [addr, _] : neighbors)
         unseen.insert(addr);
 
-    auto& neighborList = configs.get<Config::Bgp::NEIGHBOR>().get();
+    auto& neighborList = configs.get<config::Bgp::NEIGHBOR>().get();
     for (const auto& [ip, _] : neighborList)
     {
         if (unseen.contains(ip))
@@ -54,7 +54,7 @@ void NeighborTable::syncPeerGroups()
     peerTemplates.sync();
 }
 
-Neighbor* NeighborTable::createNeighbor(const IPAddress& ipAddress)
+Neighbor* NeighborTable::createNeighbor(const types::IPAddress& ipAddress)
 {
     if (neighbors.contains(ipAddress))
         return &neighbors.at(ipAddress);
@@ -62,7 +62,7 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& ipAddress)
     auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, process);
     if (ok)
     {
-        auto& connectionMode = it->second.getConfigs().get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+        auto& connectionMode = it->second.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
         if (connectionMode.hasValue() && !connectionMode.load() /*active = true*/)
             process.startPassiveSession(it->second);
         process.startActiveSession(it->second);
@@ -70,7 +70,7 @@ Neighbor* NeighborTable::createNeighbor(const IPAddress& ipAddress)
     return ok ? &it->second : nullptr;
 }
 
-Neighbor* NeighborTable::createDynamicNeighbor(const IPAddress& ipAddress, const std::string& peerGroupName)
+Neighbor* NeighborTable::createDynamicNeighbor(const types::IPAddress& ipAddress, const std::string& peerGroupName)
 {
     // Re-use an existing dynamic entry for the same address (reconnect case).
     if (auto it = neighbors.find(ipAddress); it != neighbors.end())
@@ -90,7 +90,7 @@ Neighbor* NeighborTable::createDynamicNeighbor(const IPAddress& ipAddress, const
     return &it->second;
 }
 
-void NeighborTable::deleteNeighbor(const IPAddress& ipAddress)
+void NeighborTable::deleteNeighbor(const types::IPAddress& ipAddress)
 {
     auto it = neighbors.find(ipAddress);
     if (it == neighbors.end())
@@ -103,13 +103,13 @@ void NeighborTable::deleteNeighbor(const IPAddress& ipAddress)
     neighbors.erase(it);
 }
 
-Neighbor* NeighborTable::lookup(const IPAddress& ipAddress)
+Neighbor* NeighborTable::lookup(const types::IPAddress& ipAddress)
 {
     auto it = neighbors.find(ipAddress);
     return (it != neighbors.end()) ? &it->second : nullptr;
 }
 
-const Neighbor* NeighborTable::lookup(const IPAddress& ipAddress) const
+const Neighbor* NeighborTable::lookup(const types::IPAddress& ipAddress) const
 {
     auto it = neighbors.find(ipAddress);
     return (it != neighbors.end()) ? &it->second : nullptr;
@@ -127,7 +127,7 @@ const Neighbor* NeighborTable::lookup(uint32_t rid) const
     return (it != peers.end()) ? it->second : nullptr;
 }
 
-bool NeighborTable::activatePeer(const IPAddress& nbr, uint32_t rid)
+bool NeighborTable::activatePeer(const types::IPAddress& nbr, uint32_t rid)
 {
     auto it = neighbors.find(nbr);
     if (it == neighbors.end())
@@ -162,7 +162,7 @@ void NeighborTable::runDccCheck()
 {
     for (auto& [_, nbr] : neighbors)
     {
-        if (nbr.getConfigs().get<Config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load())
+        if (nbr.getConfigs().get<config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load())
         {
             disableConnectionCheck = true;
             return;
@@ -230,4 +230,4 @@ const PeerPolicyTemplate* NeighborTable::lookupPeerPolicyTemplate(const std::str
 {
     return peerTemplates.lookupPeerPolicyTemplate(name);
 }
-}
+} // namespace routing

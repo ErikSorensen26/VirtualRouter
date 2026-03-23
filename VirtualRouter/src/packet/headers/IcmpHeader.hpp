@@ -3,8 +3,11 @@
 #ifndef ICMP_HEADER_HPP
 #define ICMP_HEADER_HPP
 
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
 /**
  * @struct IcmpHeaderRaw
  * @brief Represents a raw ICMP header.
@@ -37,9 +40,9 @@ struct IcmpHeader
     const uint8_t* getChecksum() const
         { return raw->checksum; }
     uint16_t getIdentifier() const
-        { return readU16(raw->identifier); }
+        { return utils::readU16(raw->identifier); }
     uint16_t getSequenceNumber() const
-        { return readU16(raw->sequenceNumber); }
+        { return utils::readU16(raw->sequenceNumber); }
 
     // Setters
     void setType(uint8_t val)
@@ -47,11 +50,14 @@ struct IcmpHeader
     void setCode(uint8_t val)
         { raw->code = val; }
     void setChecksum(uint16_t val)
-        { writeU16(raw->checksum, val); }
+        { utils::writeU16(raw->checksum, val); }
     void setIdentifier(uint16_t val)
-        { writeU16(raw->identifier, val); }
+        { utils::writeU16(raw->identifier, val); }
     void setSequenceNumber(uint16_t val)
-        { writeU16(raw->sequenceNumber, val); }
+        { utils::writeU16(raw->sequenceNumber, val); }
 };
 
+} // namespace packet
+
 #endif // ICMP_HEADER_HPP
+

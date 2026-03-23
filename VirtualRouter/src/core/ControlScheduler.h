@@ -20,6 +20,9 @@
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
 
+namespace core
+{
+
 class ProcessQueueRef;
 class ProcessQueue;
 
@@ -101,8 +104,8 @@ public:
         uint32_t capacity;
     };
 
-    explicit ControlScheduler(ThreadPool& externalPool,
-                              TimeManager& tmgr,
+    explicit ControlScheduler(core::ThreadPool& externalPool,
+                              core::TimeManager& tmgr,
                               size_t maxQueues = 4096,
                               size_t maxDelayedTimers = 4096);
 
@@ -111,7 +114,7 @@ public:
     ControlScheduler(const ControlScheduler&) = delete;
     ControlScheduler& operator=(const ControlScheduler&) = delete;
 
-    TimeManager& timers() noexcept { return timeManager; }
+    core::TimeManager& timers() noexcept { return timeManager; }
 
     ProcessQueue create(uint32_t capacity = 4096,
                         std::initializer_list<SubQueueConfig> labeled = {});
@@ -124,7 +127,7 @@ private:
         struct Slot
         {
             std::atomic<uint64_t> seq;
-            ThreadPool::Task task;
+            core::ThreadPool::Task task;
         };
 
         SubQueue() = default;
@@ -265,7 +268,7 @@ private:
 
     struct DelayedSlot
     {
-        ThreadPool::Task task;
+        core::ThreadPool::Task task;
 
         ProcessQueueId qid = 0;
         uint32_t qgen = 0;
@@ -329,8 +332,8 @@ private:
 private:
     std::atomic<bool> stopping{false};
 
-    ThreadPool& pool;
-    TimeManager& timeManager;
+    core::ThreadPool& pool;
+    core::TimeManager& timeManager;
 
     const size_t maxProcessQueues;
     ProcessQueueSlot* pqSlots = nullptr;
@@ -792,4 +795,7 @@ private:
     uint32_t gen = 0;
 };
 
+} // namespace core
+
 #endif // CONTROL_ENGINE_H
+

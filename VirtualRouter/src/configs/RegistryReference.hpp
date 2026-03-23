@@ -7,7 +7,7 @@
 #include "RegistryBucket.hpp"
 #include "RegistryTypes.hpp"
 
-namespace Config
+namespace config
 {
 template <typename T>
 class Reference

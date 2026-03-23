@@ -3,7 +3,7 @@
 #include "Collision.h"
 #include "packet/headers/BgpHeader.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 bool CollisionDetector::shouldKeep(bool isOutgoing, uint32_t localRid, uint32_t peerRid) noexcept
 {
@@ -20,4 +20,4 @@ uint16_t CollisionDetector::collisionNotificationCode() noexcept
 {
     return BGP_NOTIFICATION_CEASE_COLLISION_RESOLUTION;
 }
-}
+} // namespace routing

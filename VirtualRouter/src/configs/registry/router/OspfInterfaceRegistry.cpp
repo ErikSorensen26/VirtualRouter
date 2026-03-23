@@ -5,11 +5,11 @@
 #include "ospf/area/Area.h"
 #include "ospf/OspfProcess.h"
 
-namespace Config
+namespace config
 {
 void OspfInterfaceSyncTimers(void* ifacePtr)
 {
-    auto& iface = *static_cast<OSPF::OspfInterface*>(ifacePtr);
+    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.getProcess().getScheduler().post([&iface] {
         iface.syncTimers();
     });
@@ -17,7 +17,7 @@ void OspfInterfaceSyncTimers(void* ifacePtr)
 
 void OspfInterfaceSyncNeighbors(void* ifacePtr)
 {
-    auto& iface = *static_cast<OSPF::OspfInterface*>(ifacePtr);
+    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.getProcess().getScheduler().post([&iface] {
         iface.getNTable().syncUnicast();
     });
@@ -25,7 +25,7 @@ void OspfInterfaceSyncNeighbors(void* ifacePtr)
 
 void OspfInterfaceSyncNetworkType(void* ifacePtr)
 {
-    auto& iface = *static_cast<OSPF::OspfInterface*>(ifacePtr);
+    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.getProcess().getScheduler().post([&iface] {
         iface.syncNetworkType();
     });
@@ -33,7 +33,7 @@ void OspfInterfaceSyncNetworkType(void* ifacePtr)
 
 void OspfInterfaceDemandCircuit(void* ifacePtr)
 {
-    auto& iface = *static_cast<OSPF::OspfInterface*>(ifacePtr);
+    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.getProcess().getScheduler().post([&iface] {
         iface.getArea().runDCIntegrityScan();
     });
@@ -41,7 +41,7 @@ void OspfInterfaceDemandCircuit(void* ifacePtr)
 
 void OspfInterfaceBaseUpdateDigestKey(void* ifacePtr)
 {
-    auto& iface = *static_cast<OSPF::OspfInterface*>(ifacePtr);
+    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.getProcess().getScheduler().post([&iface] {
         iface.syncDigestKey();
     });
@@ -49,7 +49,7 @@ void OspfInterfaceBaseUpdateDigestKey(void* ifacePtr)
 
 void OspfInterfaceBasePrefixSuppression(void* ifacePtr)
 {
-    auto& iface = *static_cast<OSPF::OspfInterface*>(ifacePtr);
+    auto& iface = *static_cast<routing::ospf::OspfInterface*>(ifacePtr);
     iface.getProcess().getScheduler().post([&iface] {
         iface.getArea().getOriginator().updateInterface(iface.id.interfaceId);
     });

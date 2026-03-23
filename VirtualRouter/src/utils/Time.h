@@ -5,6 +5,9 @@
 
 #include <string>
 
+namespace utils
+{
+
 // Class to handle time formatting and retrieval.
 class DoTime 
 {
@@ -21,4 +24,7 @@ private:
     bool ntp = false; // Indicates if Network Time Protocol is used.
 };
 
+} // namespace utils
+
 #endif // TIME_H
+

@@ -8,37 +8,37 @@
 #include "configs/registry/router/BgpRegistry.h"
 #include "bgp/neighbor/PeerTemplate.h"
 
-namespace BGP
+namespace routing::bgp
 {
 struct NeighborConfigs
 {
-    NeighborConfigs(Config::Reference<Config::BgpNeighborSessionRegistry>&& cfgs)
+    NeighborConfigs(config::Reference<config::BgpNeighborSessionRegistry>&& cfgs)
         : configs(cfgs) {}
 
-    template <Config::BgpNeighborSession F>
+    template <config::BgpNeighborSession F>
     decltype(auto) get()
     {
-        if (peerGroup && peerOwnedTable.test(Config::toIndex<F>))
+        if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
             return peerGroup->getSessionConfigs().get<F>();
         return configs->get<F>();
     }
 
-    template <Config::BgpNeighborSession F>
+    template <config::BgpNeighborSession F>
     decltype(auto) get() const
     {
-        if (peerGroup && peerOwnedTable.test(Config::toIndex<F>))
+        if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
             return std::as_const(peerGroup->getSessionConfigs().get<F>());
         return std::as_const(configs->get<F>());
     }
 
-    static constexpr std::bitset<Config::toIndex<Config::BgpNeighborSession::COUNT>> peerOwnedTable = []{
-        std::bitset<Config::toIndex<Config::BgpNeighborSession::COUNT>> b;
+    static constexpr std::bitset<config::toIndex<config::BgpNeighborSession::COUNT>> peerOwnedTable = []{
+        std::bitset<config::toIndex<config::BgpNeighborSession::COUNT>> b;
 
-        b.set(Config::toIndex<Config::BgpNeighborSession::LOCAL_AS>);
-        b.set(Config::toIndex<Config::BgpNeighborSession::LOCAL_AS_AS>);
-        b.set(Config::toIndex<Config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>);
-        b.set(Config::toIndex<Config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>);
-        b.set(Config::toIndex<Config::BgpNeighborSession::LOCAL_AS_DUAL_AS>);
+        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS>);
+        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_AS>);
+        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_NO_PREPEND>);
+        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_REPLACE_AS>);
+        b.set(config::toIndex<config::BgpNeighborSession::LOCAL_AS_DUAL_AS>);
 
         return b;
     }();
@@ -61,8 +61,8 @@ struct NeighborConfigs
         return true;
     }
 
-    Config::Reference<Config::BgpNeighborSessionRegistry>& getConfigs() { return configs; }
-    const Config::Reference<Config::BgpNeighborSessionRegistry>& getConfigs() const { return configs; }
+    config::Reference<config::BgpNeighborSessionRegistry>& getConfigs() { return configs; }
+    const config::Reference<config::BgpNeighborSessionRegistry>& getConfigs() const { return configs; }
     PeerGroup* getPeerGroup() { return peerGroup; }
     const PeerGroup* getPeerGroup() const { return peerGroup; }
     PeerSessionTemplate* getPeerSessionTemplate() { return peerSession; }
@@ -71,8 +71,9 @@ struct NeighborConfigs
 private:
     PeerGroup* peerGroup = nullptr;
     PeerSessionTemplate* peerSession = nullptr;
-    Config::Reference<Config::BgpNeighborSessionRegistry> configs;
+    config::Reference<config::BgpNeighborSessionRegistry> configs;
 };
-}
+} // namespace routing
 
 #endif // BGP_NEIGHBOR_CONFIGS_HPP
+

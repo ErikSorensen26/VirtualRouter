@@ -9,6 +9,9 @@
 #include <RCU.hpp>
 #include <NetworkSpan.hpp>
 
+namespace types
+{
+
 template<uint8_t N, typename T, uint8_t S = 8, bool useRCU = false>
 class LPCTrie
 {
@@ -764,10 +767,12 @@ private:
     {
         if (!n) return;
         if constexpr (useRCU)
-            RCU::retire([n]{ destroyNode(n); });
+            utils::RCU::retire([n]{ destroyNode(n); });
         else
             destroyNode(n);
     }
 
     std::atomic<Node*> root{nullptr};
 };
+
+} // namespace types

@@ -10,6 +10,9 @@
 #include "BaseQueue.h"
 #include "hardware/PacketSlot.hpp"
 
+namespace qos::egress
+{
+
 class FIFOQueue : public BaseQueue
 {
 public:
@@ -24,8 +27,8 @@ public:
         if ((capacity & (capacity - 1)) != 0)
             throw std::runtime_error("FIFOQueue capacity must be a power of 2");
 
-        buffer = new PacketSlot*[capacity];
-        size_t size = sizeof(PacketSlot*) * capacity;
+        buffer = new hardware::PacketSlot*[capacity];
+        size_t size = sizeof(hardware::PacketSlot*) * capacity;
         std::memset(buffer, 0, size);
     }
 
@@ -36,7 +39,7 @@ public:
 
 protected:
     // Called by BaseQueue inside spinlock
-    void atomicEnqueue(PacketSlot* pkt) override
+    void atomicEnqueue(hardware::PacketSlot* pkt) override
     {
         if (size.load(std::memory_order_acquire) >= capacity)
         {
@@ -59,7 +62,7 @@ protected:
     void dequeueOne() override
     {
         uint32_t t = tail.load(std::memory_order_relaxed);
-        PacketSlot* pkt = buffer[t & mask];
+        hardware::PacketSlot* pkt = buffer[t & mask];
         if (!pkt) return;
 
         dequeue(pkt->index, pkt->len);
@@ -75,7 +78,10 @@ private:
     std::atomic<uint32_t> head;
     std::atomic<uint32_t> tail;
     std::atomic<uint32_t> size;
-    PacketSlot** buffer;
+    hardware::PacketSlot** buffer;
 };
 
+} // namespace qos
+
 #endif // FIFO_QUEUE_HPP
+

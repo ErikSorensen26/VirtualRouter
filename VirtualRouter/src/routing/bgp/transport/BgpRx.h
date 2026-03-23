@@ -11,15 +11,9 @@
 #include "bgp/session/Session.h"
 #include "bgp/rib/RibTypes.hpp"
 
-struct BgpHeader;
-class PacketBuilder;
-namespace TCP
-{
-class RxConsumer;
-class Connection;
-}
+namespace transport::tcp { class RxConsumer; class Connection; }
 
-namespace BGP
+namespace routing::bgp
 {
 class Session;
 class BgpProcess;
@@ -40,7 +34,7 @@ class BgpRx
 public:
     BgpRx() = delete;
 
-    static void handleIncoming(Session& s, TCP::RxConsumer& c);
+    static void handleIncoming(Session& s, transport::tcp::RxConsumer& c);
 
     template <typename N>
     static bool processUpdate(Session& c, IncomingUpdate& uinfo, ParsedUpdate<typename N::Nlri>& update, Notification& notification);
@@ -76,7 +70,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
                 error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                 return false;
             }
-            pathId = readU32(uinfo.withdrawnData.data() + pos);
+            pathId = utils::readU32(uinfo.withdrawnData.data() + pos);
             pos += 4;
         }
 
@@ -104,7 +98,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
                 error.code = BGP_NOTIFICATION_UPDATE_MALFORMED_ATTR_LIST;
                 return false;
             }
-            pathId = readU32(uinfo.nlriData.data() + pos);
+            pathId = utils::readU32(uinfo.nlriData.data() + pos);
             pos += 4;
         }
 
@@ -122,6 +116,7 @@ bool BgpRx::processUpdate(Session& session, IncomingUpdate& uinfo, ParsedUpdate<
     update.attrs = PathAttribute{uinfo.attrs, uinfo.path};
     return true;
 }
-}
+} // namespace routing::bgp
 
 #endif // BGP_RX_H
+

@@ -3,7 +3,7 @@
 #ifndef EIGRP_GLOBAL_AGGREGATOR_H
 #define EIGRP_GLOBAL_AGGREGATOR_H
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class Eigrp;
 struct TopologyEntry;
@@ -21,7 +21,7 @@ public:
 private:
     Eigrp& base;
 };
-}
-
+} // namespace routing
 
 #endif // GLOBAL_AGGREGATOR_H
+

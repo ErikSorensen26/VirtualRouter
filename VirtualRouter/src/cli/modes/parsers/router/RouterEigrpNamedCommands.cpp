@@ -8,7 +8,7 @@
 #include "eigrp/core/Eigrp.h"
 #include "cli/runtime/CliSession.h"
 
-namespace Cli
+namespace cli
 {
 bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS)
 {
@@ -26,8 +26,8 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS)
         ctx.currentEigrp = ctx.currentEigrpNamed->ipv4;
     }
 
-    VirtualRouter* vrf = ctx.terminal.engine.global.getRoutingInstance("default");
-    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    core::VirtualRouter* vrf = ctx.terminal.engine.global.getRoutingInstance("default");
+    routing::eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
 
     if (!eigrpAs && !ctx.negate)
     {
@@ -50,7 +50,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv4)
     {
-        eigrpAs->ipv4 = new EIGRP::Eigrp(asNum, AddressFamily::IPv4, vrf, true);
+        eigrpAs->ipv4 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv4, vrf, true);
         eigrpAs->ipv4Named = true;
         ctx.currentEigrpNamed->ipv4 = eigrpAs->ipv4;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV4>(eigrpAs->ipv4, ctx.currentEigrpNamed, nullptr);
@@ -79,13 +79,13 @@ bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS)
         ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " does not exist or is not enabled for IPv4");
         return false;
     }
-    if (!vrf->enabledAddressFamilies.contains(AddressFamily::IPv4))
+    if (!vrf->enabledAddressFamilies.contains(types::AddressFamily::IPv4))
     {
         ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " exists but is not enalbed for IPv4");
         return false;
     }
 
-    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    routing::eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
 
     if (!eigrpAs && !ctx.negate)
     {
@@ -108,7 +108,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv4)
     {
-        eigrpAs->ipv4 = new EIGRP::Eigrp(asNum, AddressFamily::IPv4, vrf, true);
+        eigrpAs->ipv4 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv4, vrf, true);
         eigrpAs->ipv4Named = true;
         ctx.currentEigrpNamed->ipv4 = eigrpAs->ipv4;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV4>(eigrpAs->ipv4, ctx.currentEigrpNamed, nullptr);
@@ -141,8 +141,8 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS)
         ctx.currentEigrp = ctx.currentEigrpNamed->ipv6;
     }
 
-    VirtualRouter* vrf = ctx.terminal.engine.global.getRoutingInstance("default");
-    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    core::VirtualRouter* vrf = ctx.terminal.engine.global.getRoutingInstance("default");
+    routing::eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
     if (!eigrpAs && !ctx.negate)
     {
         eigrpAs = vrf->addEigrpAutonomousSystem(asNum);
@@ -165,7 +165,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv6)
     {
-        eigrpAs->ipv6 = new EIGRP::Eigrp(asNum, AddressFamily::IPv6, vrf, true);
+        eigrpAs->ipv6 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv6, vrf, true);
         eigrpAs->ipv6Named = true;
         ctx.currentEigrpNamed->ipv6 = eigrpAs->ipv6;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV6>(eigrpAs->ipv6, ctx.currentEigrpNamed, nullptr);
@@ -194,13 +194,13 @@ bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS)
         ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " does not exist or is not enabled for IPv6");
         return false;
     }
-    if (!vrf->enabledAddressFamilies.contains(AddressFamily::IPv6))
+    if (!vrf->enabledAddressFamilies.contains(types::AddressFamily::IPv6))
     {
         ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " exists but is not enalbed for IPv6");
         return false;
     }
 
-    EIGRP::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
+    routing::eigrp::EigrpAutonomousSystem* eigrpAs = vrf->getEigrpAutonomousSystem(asNum);
 
     if (!eigrpAs && !ctx.negate)
     {
@@ -224,7 +224,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS)
     }
     else if (!eigrpAs->ipv6)
     {
-        eigrpAs->ipv6 = new EIGRP::Eigrp(asNum, AddressFamily::IPv6, vrf, true);
+        eigrpAs->ipv6 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv6, vrf, true);
         eigrpAs->ipv6Named = true;
         ctx.currentEigrpNamed->ipv6 = eigrpAs->ipv6;
         ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV6>(eigrpAs->ipv6, ctx.currentEigrpNamed, nullptr);

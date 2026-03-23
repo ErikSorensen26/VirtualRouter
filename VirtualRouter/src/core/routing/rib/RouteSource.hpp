@@ -5,6 +5,9 @@
 
 #include <cstdint>
 
+namespace core
+{
+
 enum class RouteSource : uint8_t
 {
     CONNECTED,
@@ -20,4 +23,7 @@ enum class RouteSource : uint8_t
     UNKNOWN
 };
 
+} // namespace core
+
 #endif // RIB_SOURCE_HPP
+

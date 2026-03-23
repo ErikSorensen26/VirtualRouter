@@ -23,6 +23,9 @@
 #include "eigrp/core/Eigrp.h"
 #include "ospf/OspfProcess.h"
 
+namespace interface
+{
+
 Interface::Interface(const InterfaceCreation& cfgs)
   : configs(cfgs.vrf.getGlobal().timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
     routingInstance(&cfgs.vrf),
@@ -37,7 +40,7 @@ Interface::Interface(const InterfaceCreation& cfgs)
 Interface::~Interface()
 {
     cleanupInterface();
-    VirtualRouter* vrf = getVRF();
+    core::VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.removeInterface(*this);
     vrf->getGlobal().rxMgr.removeInterface(*this);
     vrf->getGlobal().engine.hwManager->unregisterInterface(&configs.hwInfo, this);
@@ -46,7 +49,7 @@ Interface::~Interface()
 void Interface::cleanupInterface()
 {
     shutdown(true);
-    VirtualRouter* vrf = getVRF();
+    core::VirtualRouter* vrf = getVRF();
     if (auto dhcpv6Server = vrf->getGlobal().dhcpv6Server)
     {
         //dhcpv6Server->removeInterface(this);
@@ -61,7 +64,7 @@ void Interface::cleanupInterface()
     }
 }
 
-void Interface::setIPv4(IPv4Prefix prefix, bool secondary)
+void Interface::setIPv4(types::IPv4Prefix prefix, bool secondary)
 {
     if (!secondary)
     {
@@ -70,9 +73,9 @@ void Interface::setIPv4(IPv4Prefix prefix, bool secondary)
         // Send gratuitous arps
         if (arp)
         {
-            IPv4Address v4addr(prefix.addr);
-            arp->sendReply(readU48(ETHERNET_MAC_BROADCAST), v4addr);
-            arp->sendReply(readU48(ETHERNET_MAC_BROADCAST), v4addr);
+            types::IPv4Address v4addr(prefix.addr);
+            arp->sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
+            arp->sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
         }
         stateChange(StateChange::IPCHANGE);
     }
@@ -83,7 +86,7 @@ void Interface::setIPv4(IPv4Prefix prefix, bool secondary)
     }
 }
 
-void Interface::setIPv6(const IPv6Prefix& addr, bool linkLocal, bool eui64)
+void Interface::setIPv6(const types::IPv6Prefix& addr, bool linkLocal, bool eui64)
 {
     InterfaceConfigs::IPv6State::IPv6Address* ipv6 = nullptr;
 
@@ -119,7 +122,7 @@ void Interface::setIPv6(const IPv6Prefix& addr, bool linkLocal, bool eui64)
         stateChangeV6(StateChange::IPCHANGE2);
 }
 
-void Interface::removeIPv4(const IPv4Prefix* prefix)
+void Interface::removeIPv4(const types::IPv4Prefix* prefix)
 {
     if (!prefix)
     {
@@ -132,7 +135,7 @@ void Interface::removeIPv4(const IPv4Prefix* prefix)
     }
 }
 
-void Interface::removeIPv6(const IPv6Prefix* prefix)
+void Interface::removeIPv6(const types::IPv6Prefix* prefix)
 {
     if (prefix)
     {
@@ -161,16 +164,16 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
     if (!configs.ipv6.linkLocalAddress->valid && configs.ipv6.linkLocalAddress->tentative)
     {
         tentative.emplace_back();
-        writeU128(tentative.back().data(), configs.ipv6.linkLocalAddress->addr.addr);
+        utils::writeU128(tentative.back().data(), configs.ipv6.linkLocalAddress->addr.addr);
     }
 
-    // Global unicast
+    // core::Global unicast
     for (const auto& addr : configs.ipv6.globalAddresses)
     {
         if (addr->tentative)
         {
             tentative.emplace_back();
-            writeU128(tentative.back().data(), addr->addr.addr);
+            utils::writeU128(tentative.back().data(), addr->addr.addr);
         }
     }
 
@@ -180,14 +183,14 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
         if (addr->tentative)
         {
             tentative.emplace_back();
-            writeU128(tentative.back().data(), addr->addr.addr);
+            utils::writeU128(tentative.back().data(), addr->addr.addr);
         }
     }
 
     return tentative;
 }
 
-void Interface::markAddressDuplicate(IPv6Address address, bool linkLocal)
+void Interface::markAddressDuplicate(types::IPv6Address address, bool linkLocal)
 {
     std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
 
@@ -239,14 +242,14 @@ void Interface::physicalShutdown(bool shut)
     shutdown(shut);
 }
 
-void Interface::enqueuePacket(PacketBuilder& packetInfo, uint64_t mac)
+void Interface::enqueuePacket(processing::PacketBuilder& packetInfo, uint64_t mac)
 {
     if (!threadsRunning.load(std::memory_order_relaxed)) return;
 
     if (!encapsulate(packetInfo))
         return;
 
-    writeU48(packetInfo.getBuffer(), mac);
+    utils::writeU48(packetInfo.getBuffer(), mac);
 
     // Enqueue the serialized packet for sending
     if (packetInfo.frame.slot)
@@ -255,7 +258,7 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo, uint64_t mac)
     }
 }
 
-void Interface::enqueuePacket(PacketBuilder& packetInfo)
+void Interface::enqueuePacket(processing::PacketBuilder& packetInfo)
 {
     if (!threadsRunning.load(std::memory_order_relaxed)) return;
 
@@ -271,16 +274,16 @@ void Interface::enqueuePacket(PacketBuilder& packetInfo)
 
 void Interface::processIngress(uint8_t* packet, size_t size) 
 {
-    PacketInfo packetInfo;
-    inspect(packetInfo, packet, size);
-    decapsulate(packetInfo, packet, size);
-    processPacket(packet, size, packetInfo, routingInstance, this);
+    processing::PacketInfo packetInfo;
+    processing::inspect(packetInfo, packet, size);
+    processing::decapsulate(packetInfo, packet, size);
+    processing::processPacket(packet, size, packetInfo, routingInstance, this);
 }
 
 void Interface::startThreads() 
 {
     // Add the interface to the TX Queue manager
-    VirtualRouter* vrf = getVRF();
+    core::VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.start(this);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     vrf->getGlobal().rxMgr.start(this);
@@ -289,9 +292,9 @@ void Interface::startThreads()
 
     // Initialize shared pointers for Protocol objects
     if (!arp)
-        arp = new Protocol::Arp(*this);
+        arp = new infrastructure::Arp(*this);
     if (!ndp)
-        ndp = new Protocol::Ndp(*this);
+        ndp = new infrastructure::Ndp(*this);
 
     threadsRunning = true;
 
@@ -313,7 +316,7 @@ void Interface::stopThreads()
     }
         
     // Add the interface to the TX Queue manager
-    VirtualRouter* vrf = getVRF();
+    core::VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.stop(this);
     vrf->getGlobal().rxMgr.stop(this);
     threadsRunning.store(false, std::memory_order_release); 
@@ -322,7 +325,7 @@ void Interface::stopThreads()
 void Interface::stateChange(StateChange state)
 {
     // Eigrp Updates
-    VirtualRouter* vrf = getVRF();
+    core::VirtualRouter* vrf = getVRF();
     if (vrf)
     {
         for (const auto& [_, eigrpPtr] : vrf->eigrpList)
@@ -380,7 +383,7 @@ void Interface::stateChange(StateChange state)
 void Interface::stateChangeV6(StateChange state)
 {
     // Eigrp Updates
-    VirtualRouter* vrf = getVRF();
+    core::VirtualRouter* vrf = getVRF();
     if (routingInstance)
     {
         for (const auto& [_, eigrpPtr] : vrf->eigrpList)
@@ -442,14 +445,14 @@ void Interface::stateChangeV6(StateChange state)
     }
 }
 
-VirtualRouter* Interface::getVRF()
+core::VirtualRouter* Interface::getVRF()
 {
     return routingInstance.load(std::memory_order_relaxed);
 }
 
-bool Interface::setVRF(VirtualRouter* vrf)
+bool Interface::setVRF(core::VirtualRouter* vrf)
 {
-    VirtualRouter* oldVrf = getVRF();
+    core::VirtualRouter* oldVrf = getVRF();
     if (oldVrf == vrf)
         return false;
 
@@ -471,25 +474,27 @@ bool Interface::setVRF(VirtualRouter* vrf)
     return true;
 }
 
-Config::Reference<Config::EigrpInterfaceRegistry> Interface::getEigrpConfig(uint32_t as)
+config::Reference<config::EigrpInterfaceRegistry> Interface::getEigrpConfig(uint32_t as)
 {
     auto it = configs.eigrp.eigrpIfaceConfigs.find(as);
     if (it == configs.eigrp.eigrpIfaceConfigs.end())
     {
         auto* vrf = routingInstance.load(std::memory_order_relaxed);
-        auto [ins, ok] = configs.eigrp.eigrpIfaceConfigs.emplace(as, vrf->getRegistry().create<Config::EigrpInterfaceRegistry>());
+        auto [ins, ok] = configs.eigrp.eigrpIfaceConfigs.emplace(as, vrf->getRegistry().create<config::EigrpInterfaceRegistry>());
         return ins->second;
     }
     return it->second;
 }
 
-Config::Reference<Config::OspfInterfaceBaseRegistry> Interface::getOspfConfig()
+config::Reference<config::OspfInterfaceBaseRegistry> Interface::getOspfConfig()
 {
     if (!configs.ospf.ospfInterfaceConfigs.has_value())
     {
         auto* vrf = routingInstance.load(std::memory_order_relaxed);
-        configs.ospf.ospfInterfaceConfigs.emplace(vrf->getRegistry().create<Config::OspfInterfaceBaseRegistry>());
-        vrf->getRegistry().emplace(configs.ospf.ospfInterfaceConfigs.value()->get<Config::OspfInterfaceBase::BASE>());
+        configs.ospf.ospfInterfaceConfigs.emplace(vrf->getRegistry().create<config::OspfInterfaceBaseRegistry>());
+        vrf->getRegistry().emplace(configs.ospf.ospfInterfaceConfigs.value()->get<config::OspfInterfaceBase::BASE>());
     }
     return configs.ospf.ospfInterfaceConfigs.value();
 }
+
+} // namespace interface

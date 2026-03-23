@@ -18,6 +18,8 @@
 #include "hardware/PacketSlot.hpp"
 #include "hardware/Ifname.h"
 
+namespace hardware::egress
+{
 class Egress
 {
 public:
@@ -273,4 +275,7 @@ private:
     }
 };
 
+} // namespace hardware
+
 #endif // EGRESS_HPP
+

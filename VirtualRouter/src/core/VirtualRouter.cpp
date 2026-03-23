@@ -7,17 +7,20 @@
 #include "eigrp/core/Eigrp.h"
 #include "ospf/OspfProcess.h"
 
+namespace core
+{
+
 VirtualRouter::VirtualRouter(Global& global, const std::string& name)
     : defaulted(name == "default"), tcpManager(*this), routingTable(global.scheduler), global(global)
 {
     instanceName = name;
-    enabledAddressFamilies.insert(AddressFamily::IPv4);
+    enabledAddressFamilies.insert(types::AddressFamily::IPv4);
 }
 
 // Destructor
 VirtualRouter::~VirtualRouter()
 {
-    std::unordered_map<uint32_t, Interface*> interfaceListCopy;
+    std::unordered_map<uint32_t, interface::Interface*> interfaceListCopy;
     {
         // Move out interfaces so any callbacks during destruction
         // do not see stale pointers in the shared map.
@@ -52,7 +55,7 @@ bool VirtualRouter::calculateRID(uint32_t& rid)
     uint32_t highestIP = 0;
     uint32_t tempIp;
 
-    auto processID = [&](Interface* interface)
+    auto processID = [&](interface::Interface* interface)
     {
         if (interface->shutdownFlag.load(std::memory_order_relaxed)) return;
         auto& interfaceInfo = interface->configs;
@@ -66,7 +69,7 @@ bool VirtualRouter::calculateRID(uint32_t& rid)
         std::shared_lock<std::shared_mutex> lock(interfaceMutex);
         for (const auto& [id, interface] : interfaceList)
         {
-            if (interface->configs.interfaceType != InterfaceType::LOOPBACK) continue;
+            if (interface->configs.interfaceType != interface::InterfaceType::LOOPBACK) continue;
             processID(interface);
         }
         if (highestIP == 0)
@@ -82,7 +85,7 @@ bool VirtualRouter::calculateRID(uint32_t& rid)
 }
 
 // Interfaces
-Interface* VirtualRouter::addInterface(Interface* interface, uint32_t key)
+interface::Interface* VirtualRouter::addInterface(interface::Interface* interface, uint32_t key)
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     if (interfaceList.find(key) != interfaceList.end())
@@ -93,7 +96,7 @@ Interface* VirtualRouter::addInterface(Interface* interface, uint32_t key)
     return interfaceList[key];
 }
 
-Interface* VirtualRouter::getInterface(uint32_t key)
+interface::Interface* VirtualRouter::getInterface(uint32_t key)
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     if (interfaceList.find(key) != interfaceList.end())
@@ -103,7 +106,7 @@ Interface* VirtualRouter::getInterface(uint32_t key)
     return nullptr;
 }
 
-std::unordered_map<uint32_t, Interface*> VirtualRouter::getinterfaceList()
+std::unordered_map<uint32_t, interface::Interface*> VirtualRouter::getinterfaceList()
 {
     std::shared_lock<std::shared_mutex> lock(interfaceMutex);
     return interfaceList;
@@ -121,14 +124,14 @@ bool VirtualRouter::removeInterface(uint32_t key)
 }
 
 // Eigrp Autonomous Systems
-EIGRP::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
+routing::eigrp::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
 {
     if (eigrpList.contains(id))
         return nullptr;
     return &eigrpList[id];
 }
 
-EIGRP::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
+routing::eigrp::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
 {
     if (auto it = eigrpList.find(id); it != eigrpList.end())
         return &it->second;
@@ -146,12 +149,12 @@ bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
 }
 
 // Eigrp Named Systems
-EIGRP::EigrpNamed& VirtualRouter::addEigrpNamed(const std::string& name)
+routing::eigrp::EigrpNamed& VirtualRouter::addEigrpNamed(const std::string& name)
 {
     return namedEigrpList[name];
 }
 
-EIGRP::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
+routing::eigrp::EigrpNamed* VirtualRouter::getEigrpNamed(const std::string& name)
 {
     if (auto it = namedEigrpList.find(name); it != namedEigrpList.end())
         return &it->second;
@@ -195,17 +198,17 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
     return false;
 }
 
-OSPF::OspfProcess& VirtualRouter::addOspf(uint16_t id)
+routing::ospf::OspfProcess& VirtualRouter::addOspf(uint16_t id)
 {
     if (auto it = ospfList.find(id); it == ospfList.end())
     {
-        ospfList.try_emplace(id, false, id, AddressFamily::IPv4, this);
+        ospfList.try_emplace(id, false, id, types::AddressFamily::IPv4, this);
         return it->second;
     }
     return ospfList.at(id);
 }
 
-OSPF::OspfProcess* VirtualRouter::getOspf(uint16_t id)
+routing::ospf::OspfProcess* VirtualRouter::getOspf(uint16_t id)
 {
     if (auto it = ospfList.find(id); it != ospfList.end())
         return &it->second;
@@ -222,35 +225,35 @@ bool VirtualRouter::removeOspf(uint16_t id)
     return false;
 }
 
-OSPF::OspfV3Instance& VirtualRouter::addOspfv3(uint16_t id)
+routing::ospf::OspfV3Instance& VirtualRouter::addOspfv3(uint16_t id)
 {
     return ospfv3List.at(id);
 }
 
-OSPF::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, AddressFamily af)
+routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::AddressFamily af)
 {
     if (ospfv3List.find(id) == ospfv3List.end())
     {
-        Config::Reference<Config::OspfAddressFamilyV3Registry> afConfigs = global.registry.create<Config::OspfAddressFamilyV3Registry>();
+        config::Reference<config::OspfAddressFamilyV3Registry> afConfigs = global.registry.create<config::OspfAddressFamilyV3Registry>();
         ospfv3List.emplace(id, afConfigs);
     }
     auto ospf = ospfv3List.at(id);
 
-    if (af == AddressFamily::IPv4)
+    if (af == types::AddressFamily::IPv4)
     {
         if (!ospf.ipv4)
-            ospf.ipv4 = new OSPF::OspfProcess(true, id, af, this);
+            ospf.ipv4 = new routing::ospf::OspfProcess(true, id, af, this);
         return *ospf.ipv4;
     }
     else
     {
         if (!ospf.ipv6)
-            ospf.ipv6 = new OSPF::OspfProcess(true, id, af, this);
+            ospf.ipv6 = new routing::ospf::OspfProcess(true, id, af, this);
         return *ospf.ipv6;
     }
 }
 
-OSPF::OspfV3Instance* VirtualRouter::getOspfv3(uint16_t id)
+routing::ospf::OspfV3Instance* VirtualRouter::getOspfv3(uint16_t id)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
         return &it->second;
@@ -278,12 +281,12 @@ bool VirtualRouter::removeOspfv3(uint16_t id)
     return false;
 }
 
-bool VirtualRouter::removeOspfv3(uint16_t id, AddressFamily af)
+bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
 {
     if (auto it = ospfv3List.find(id); it != ospfv3List.end())
     {
         auto& ospf = it->second;
-        if (af == AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4)
         {
             if (ospf.ipv4)
             {
@@ -307,7 +310,7 @@ bool VirtualRouter::removeOspfv3(uint16_t id, AddressFamily af)
     return false;
 }
 
-Config::Registry& VirtualRouter::getRegistry()
+config::Registry& VirtualRouter::getRegistry()
 {
     return global.registry;
 }
@@ -316,3 +319,5 @@ ControlScheduler& VirtualRouter::getControlScheduler()
 {
     return global.scheduler;
 }
+
+} // namespace core

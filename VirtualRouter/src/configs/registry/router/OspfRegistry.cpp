@@ -4,11 +4,11 @@
 #include "ospf/OspfProcess.h"
 #include "ospf/area/Area.h"
 
-namespace Config
+namespace config
 {
 void OspfAreaTypeChange(void* a)
 {
-    OSPF::Area& area = *static_cast<OSPF::Area*>(a);
+    routing::ospf::Area& area = *static_cast<routing::ospf::Area*>(a);
     area.process().getScheduler().post([&area]{
         area.reset();
     });
@@ -16,7 +16,7 @@ void OspfAreaTypeChange(void* a)
 
 void OspfAreaSycnRanges(void* a)
 {
-    OSPF::Area& area = *static_cast<OSPF::Area*>(a);
+    routing::ospf::Area& area = *static_cast<routing::ospf::Area*>(a);
     area.process().getScheduler().post([&area] {
         area.syncRangeConfig();
     });
@@ -24,7 +24,7 @@ void OspfAreaSycnRanges(void* a)
 
 void OspfSyncNeighbors(void* b)
 {
-    OSPF::OspfProcess& base = *static_cast<OSPF::OspfProcess*>(b);
+    routing::ospf::OspfProcess& base = *static_cast<routing::ospf::OspfProcess*>(b);
     base.getScheduler().post([&base] {
         base.getIfaceMgr().syncNeighbors();
     });
@@ -32,7 +32,7 @@ void OspfSyncNeighbors(void* b)
 
 void OspfSyncNetworks(void* b)
 {
-    OSPF::OspfProcess& base = *static_cast<OSPF::OspfProcess*>(b);
+    routing::ospf::OspfProcess& base = *static_cast<routing::ospf::OspfProcess*>(b);
     base.getScheduler().post([&base] {
         base.getIfaceMgr().refreshInterfaceList();
     });
@@ -40,7 +40,7 @@ void OspfSyncNetworks(void* b)
 
 void OspfSyncSummaries(void* b)
 {
-    OSPF::OspfProcess& base = *static_cast<OSPF::OspfProcess*>(b);
+    routing::ospf::OspfProcess& base = *static_cast<routing::ospf::OspfProcess*>(b);
     base.getScheduler().post([&base] {
         base.syncSummaryConfig();
     });

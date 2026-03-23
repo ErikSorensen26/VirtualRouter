@@ -3,7 +3,7 @@
 #include "KeyChain.h"
 #include "KeyChainManager.h"
 
-namespace Authentication
+namespace security::authentication
 {
 KeyChainManager::~KeyChainManager()
 {
@@ -11,7 +11,7 @@ KeyChainManager::~KeyChainManager()
         delete kc;
 }
 
-bool KeyChainManager::validate(const uint8_t* hmac, uint8_t* computed, uint32_t keyId, const uint8_t* data, size_t size, const Authentication::HmacType& type) const
+bool KeyChainManager::validate(const uint8_t* hmac, uint8_t* computed, uint32_t keyId, const uint8_t* data, size_t size, const HmacType& type) const
 {
     for (const auto& key : chains)
     {
@@ -67,4 +67,4 @@ void KeyChainManager::remove(const std::string& name)
     delete *it;
     chains.erase(it);
 }
-}
+} // namespace security::authentication

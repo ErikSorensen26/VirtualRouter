@@ -8,9 +8,8 @@
 
 #include "LSDB.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
-
 class LsdbTable final
 {
 public:
@@ -180,7 +179,7 @@ inline size_t LsdbTable::purgeIf(Pred&& pred)
     }
     return removed;
 }
-
-} // namespace OSPF
+} // namespace routing::ospf
 
 #endif // OSPF_LSDB_TABLE_H
+

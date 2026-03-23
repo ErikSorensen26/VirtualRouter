@@ -6,7 +6,7 @@
 #include "interface/Interface.h"
 #include "hardware/HardwareManager.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 EigrpTopology::EigrpTopology(Eigrp& base) : duel(base), base(base) {}
 
@@ -15,7 +15,7 @@ void EigrpTopology::pruneStaleRoutes()
     duel.topologyTable.pruneExpired();
 }
 
-std::unordered_map<IPPrefix, TopologyEntry>& EigrpTopology::entries()
+std::unordered_map<types::IPPrefix, TopologyEntry>& EigrpTopology::entries()
 {
     return duel.topologyTable.entries();
 }
@@ -33,7 +33,7 @@ void EigrpTopology::handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor)
 void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 {
     const auto* interface = iface.getIface();
-    IPAddress connected = (base.getAF() == AddressFamily::IPv4) ? IPAddress(uint32_t(0)) : IPAddress(__uint128_t(0));
+    types::IPAddress connected = (base.getAF() == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
 
     ReceivedRoute r{};
     r.originInterface = iface.interfaceKey;
@@ -44,18 +44,18 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
     r.load = interface->configs.load.load(std::memory_order_relaxed);
     r.reliability = interface->configs.reliability.load(std::memory_order_relaxed);
     r.hopCount = 0;
-    r.mtu = base.getAF() == AddressFamily::IPv4
+    r.mtu = base.getAF() == types::AddressFamily::IPv4
         ? interface->configs.ipv4.mtu.load(std::memory_order_relaxed)
         : interface->configs.ipv6.mtu.load(std::memory_order_relaxed);
     r.routeType = RouteType::CONNECTED;
     r.adminDistance = base.getGlobalConfigMgr().getAD();
     r.nextHop = connected; // Self originated
 
-    std::set<IPPrefix> withdraws = iface.connectedRoutes;
+    std::set<types::IPPrefix> withdraws = iface.connectedRoutes;
     iface.connectedRoutes.clear();
     std::vector<TopologyEntry*> updates;
 
-    auto install = [&](IPPrefix prefix)
+    auto install = [&](types::IPPrefix prefix)
     {
         ReceivedRoute newRoute = r;
         newRoute.prefix = prefix;
@@ -67,22 +67,22 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
         updates.push_back(&entry);
     };
 
-    if (base.getAF() == AddressFamily::IPv4)
+    if (base.getAF() == types::AddressFamily::IPv4)
     {
         if (interface->configs.ipv4.hasPrimaryAddress())
         {
-            IPv4Address v4addr = interface->configs.ipv4.getPrimaryAddress();
+            types::IPv4Address v4addr = interface->configs.ipv4.getPrimaryAddress();
             uint8_t mask = interface->configs.ipv4.getPrimaryMask();
-            IPPrefix prefix(v4addr.addr, mask);
-            install(IPPrefix(prefix.addr, prefix.prefixLength));
+            types::IPPrefix prefix(v4addr.addr, mask);
+            install(types::IPPrefix(prefix.addr, prefix.prefixLength));
         }
     }
     else
     {
         for (const auto& prefix : interface->configs.ipv6.getGlobalPrefixList())
-            install(IPPrefix(prefix.addr, prefix.prefixLength));
+            install(types::IPPrefix(prefix.addr, prefix.prefixLength));
         for (const auto& prefix : interface->configs.ipv6.getLocalPrefixList())
-            install(IPPrefix(prefix.addr, prefix.prefixLength));
+            install(types::IPPrefix(prefix.addr, prefix.prefixLength));
     }
 
     // Remove left over routes
@@ -102,7 +102,7 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 void EigrpTopology::clearConnected(EigrpInterface& iface)
 {
     std::vector<TopologyEntry*> updates;
-    IPAddress connected = (base.getAF() == AddressFamily::IPv4) ? IPAddress(uint32_t(0)) : IPAddress(__uint128_t(0));
+    types::IPAddress connected = (base.getAF() == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
     for (auto it = iface.connectedRoutes.begin(); it != iface.connectedRoutes.end();)
     {
         if (auto* entry = duel.topologyTable.find(*it); entry)
@@ -119,4 +119,4 @@ void EigrpTopology::clearConnected(EigrpInterface& iface)
     duel.updateSuccessors(updates);
     base.routeManager.synchronizeRoutes(updates);
 }
-}
+} // namespace routing

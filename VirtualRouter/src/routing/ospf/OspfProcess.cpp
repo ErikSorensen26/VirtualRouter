@@ -9,9 +9,9 @@
 #include "topology/RouteManager.h"
 #include "OspfTypes.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
-OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRouter* vrf)
+OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf)
     : isV3(isV3), routingInstance(vrf), rib(*this), scheduler(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
     configs([this, isV3]() {
         auto& registry = routingInstance->getGlobal().registry;
@@ -21,17 +21,17 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRo
             {
                 // TODO: add address family v3 configs from elsewhere
                 auto& afCfgs = std::get<V3AfConfigs>(afConfigs);
-                return registry.ensure(afCfgs->get<Config::OspfAddressFamilyV3::BASE>());
+                return registry.ensure(afCfgs->get<config::OspfAddressFamilyV3::BASE>());
             }
             // OSPFv3 VRF mode does not support address families
-            return registry.create<Config::OspfRegistry>();
+            return registry.create<config::OspfRegistry>();
         }
         else
         {
-            // OSPFv2 AddressFamily
-            afConfigs.emplace<V2AfConfigs>(registry.create<Config::OspfAddressFamilyV2Registry>());
+            // OSPFv2 types::AddressFamily
+            afConfigs.emplace<V2AfConfigs>(registry.create<config::OspfAddressFamilyV2Registry>());
             auto& afCfgs = std::get<V2AfConfigs>(afConfigs);
-            auto& v2Base = afCfgs->get<Config::OspfAddressFamilyV2::BASE>();
+            auto& v2Base = afCfgs->get<config::OspfAddressFamilyV2::BASE>();
             return registry.ensure(v2Base);
         }
     }())
@@ -83,7 +83,7 @@ void OspfProcess::setABR(bool val)
     for (auto& [id, area] : areas)
     {
         // Ranges only need to be specified when they are in use.
-        std::unordered_set<IPPrefix> ranges = val ? area.getRanges() : std::unordered_set<IPPrefix>{};
+        std::unordered_set<types::IPPrefix> ranges = val ? area.getRanges() : std::unordered_set<types::IPPrefix>{};
         area.syncRangeSuppression(area.getRanges(), true);
     }
 }
@@ -108,12 +108,12 @@ void OspfProcess::initiateReset()
 
 void OspfProcess::addDefaultRoute(bool add)
 {
-    bool always = configs->get<Config::Ospf::DEFAULT_ORIGINATE_ALWAYS>().load();
+    bool always = configs->get<config::Ospf::DEFAULT_ORIGINATE_ALWAYS>().load();
 
     if (!always)
     {
         auto& globalRib = routingInstance->getRib();
-        if (af == AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4)
         {
             if (!globalRib.lookup<uint32_t>(0)) return;
         }
@@ -128,11 +128,11 @@ void OspfProcess::addDefaultRoute(bool add)
 
     ExternalOriginateContext ctx = {
         .lsId = defaultRoute.value(),
-        .prefix = IPPrefix(af),
-        .metric = configs->get<Config::Ospf::DEFAULT_ORIGINATE_METRIC>().load(),
+        .prefix = types::IPPrefix(af),
+        .metric = configs->get<config::Ospf::DEFAULT_ORIGINATE_METRIC>().load(),
         .tag = 0,
         .nextHop = std::nullopt,
-        .metricIsE2 = configs->get<Config::Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>().load()
+        .metricIsE2 = configs->get<config::Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>().load()
     };
 
     isV3 ? originateExternal<PolicyV3>(ctx, !add)
@@ -152,22 +152,22 @@ void OspfProcess::distributeExternalLsa(const Area& sourceArea, IncomingLsaConte
                 continue;
 
             if (ctx.key.lsaType == Policy::NssaType &&
-                (sourceArea.type == AreaType::NSSA ||
-                 sourceArea.type == AreaType::TOTALLY_NSSA) &&
-                targetArea.type == AreaType::NORMAL)
+                (sourceArea.type == config::ospf::AreaType::NSSA ||
+                 sourceArea.type == config::ospf::AreaType::TOTALLY_NSSA) &&
+                targetArea.type == config::ospf::AreaType::NORMAL)
             {
                 targetArea.getOriginator().translateNssaToExternal(ctx.key, body, expire);
                 continue;
             }
 
-            if (ctx.key.lsaType == Policy::ExternalType && sourceArea.type == AreaType::NORMAL)
+            if (ctx.key.lsaType == Policy::ExternalType && sourceArea.type == config::ospf::AreaType::NORMAL)
             {
                 targetArea.processExternalLsa<Policy>(ctx, body);
             }
         }
     }
 
-    std::pair<IPPrefix, std::optional<OspfPath>> result;
+    std::pair<types::IPPrefix, std::optional<OspfPath>> result;
     {
         auto existingIt = externalDb.find(ctx.key);
         std::optional<uint32_t> seq{std::nullopt};
@@ -182,12 +182,12 @@ void OspfProcess::distributeExternalLsa(const Area& sourceArea, IncomingLsaConte
         rec.first = ctx.header;
         rec.second = body;
 
-        result = RouteManager::deriveExternalRoute<Policy>(*this, ctx.key, rec);
+        result = routemanager::deriveExternalRoute<Policy>(*this, ctx.key, rec);
     }
 
     rib.replaceExternal(result);
 
-    std::unordered_map<IPPrefix, OspfSummaryAddress> activeSummaries;
+    std::unordered_map<types::IPPrefix, OspfSummaryAddress> activeSummaries;
     {
         if (summaries.empty()) return;
         activeSummaries = summaries;
@@ -224,7 +224,7 @@ void OspfProcess::buildExternalBody(ExternalOriginateContext& ctx, Policy::Exter
 
     if constexpr (isExtV3)
     {
-        external.prefix = IPv6Prefix(ctx.prefix.v6(), ctx.prefix.prefixLength, true);
+        external.prefix = types::IPv6Prefix(ctx.prefix.v6(), ctx.prefix.prefixLength, true);
         external.referencedLsType = 0;
         if (ctx.tag != 0)
             external.routeTag = ctx.tag;
@@ -247,7 +247,7 @@ void OspfProcess::originateExternal(ExternalOriginateContext& ctx, bool expire)
 
     for (auto& [id, area] : areas)
     {
-        if (area.type != AreaType::NORMAL)
+        if (area.type != config::ospf::AreaType::NORMAL)
             continue;
 
         if (ctx.nextHop.has_value())
@@ -257,7 +257,7 @@ void OspfProcess::originateExternal(ExternalOriginateContext& ctx, bool expire)
             if constexpr (std::is_same_v<Policy, PolicyV2>)
                 external.forwardingAddress = faValid ? ctx.nextHop->v4() : uint32_t{0};
             else
-                external.forwardingAddress = faValid ? std::optional<IPv6Address>{IPv6Address(ctx.nextHop->v6())} : std::nullopt;
+                external.forwardingAddress = faValid ? std::optional<types::IPv6Address>{types::IPv6Address(ctx.nextHop->v6())} : std::nullopt;
         }
         area.getOriginator().originateLsa<Policy>(key, lsa, expire);
     }
@@ -278,7 +278,7 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
 
         for (auto& [id, area] : areas)
         {
-            if (area.type != AreaType::NORMAL)
+            if (area.type != config::ospf::AreaType::NORMAL)
                 continue;
 
             if (ctx.nextHop.has_value())
@@ -287,7 +287,7 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
                 if constexpr (std::is_same_v<Policy, PolicyV2>)
                     external.forwardingAddress = faValid ? ctx.nextHop->v4() : 0;
                 else
-                    external.forwardingAddress = faValid ? std::optional<IPv6Address>{IPv6Address(ctx.nextHop->v6())} : std::nullopt;
+                    external.forwardingAddress = faValid ? std::optional<types::IPv6Address>{types::IPv6Address(ctx.nextHop->v6())} : std::nullopt;
             }
 
             area.getOriginator().originateLsa<Policy>(key, body, expire);
@@ -297,11 +297,11 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
 
 void OspfProcess::syncSummaryConfig()
 {
-    auto& cfg = configs->get<Config::Ospf::SUMMARY_ADDRESS>();
+    auto& cfg = configs->get<config::Ospf::SUMMARY_ADDRESS>();
 
-    std::unordered_map<IPPrefix, OspfSummaryAddress> active = summaries;
+    std::unordered_map<types::IPPrefix, OspfSummaryAddress> active = summaries;
 
-    std::unordered_set<IPPrefix> seen;
+    std::unordered_set<types::IPPrefix> seen;
 
     cfg.withRead([&](const auto& ts) {
         for (const auto& [pfx, noAdv, nssaOnly, tag] : ts)
@@ -328,7 +328,7 @@ void OspfProcess::syncSummaryConfig()
 }
 
 template <typename Policy>
-void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummaryAddress>& activeSummaries)
+void OspfProcess::syncSummarySuppression(std::unordered_map<types::IPPrefix, OspfSummaryAddress>& activeSummaries)
 {
     for (auto& [_, s] : activeSummaries)
     {
@@ -342,9 +342,9 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
     {
         const auto& ext = std::get<typename Policy::ExternalLsa>(body);
         if constexpr (std::is_same_v<Policy, PolicyV3>)
-            return IPPrefix(ext.prefix.addr, ext.prefix.prefixLength);
+            return types::IPPrefix(ext.prefix.addr, ext.prefix.prefixLength);
         else
-            return IPPrefix(k.linkStateId, static_cast<uint8_t>(std::popcount(ext.networkMask)));
+            return types::IPPrefix(k.linkStateId, static_cast<uint8_t>(std::popcount(ext.networkMask)));
     };
 
     auto metricOf = [&](const LsaBody& b)
@@ -369,7 +369,7 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
     struct SpecificState
     {
         uint32_t lsId;
-        IPPrefix prefix;
+        types::IPPrefix prefix;
         uint32_t originalMetric;
         uint32_t originalTag;
         bool originalIsE2;
@@ -404,13 +404,13 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
             continue;
         }
 
-        const IPPrefix pfx = entryPrefix(k, body);
+        const types::IPPrefix pfx = entryPrefix(k, body);
 
         bool coveredByValidSummary = false;
 
         for (auto& [sumPfx, s] : activeSummaries)
         {
-            if (!sumPfx.contains(IPAddress(pfx.addr, pfx.prefixLength)))
+            if (!sumPfx.contains(types::IPAddress(pfx.addr, pfx.prefixLength)))
                 continue;
 
             if (s.contributorCount == 0)
@@ -520,9 +520,9 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummar
         }
     }
 
-    if (configs->get<Config::Ospf::DISCARD_EXTERNAL>().load())
+    if (configs->get<config::Ospf::DISCARD_EXTERNAL>().load())
     {
-        const uint8_t ad = configs->get<Config::Ospf::DISCARD_EXTERNAL_DISTANCE>().load();
+        const uint8_t ad = configs->get<config::Ospf::DISCARD_EXTERNAL_DISTANCE>().load();
 
         for (const auto& [sumPfx, s] : activeSummaries)
         {
@@ -568,7 +568,7 @@ void OspfProcess::reoriginateSummaries(Area& sourceArea, std::vector<OspfRouteCh
 
         if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
         {
-            network.networkMask = v4Mask(path.prefix.prefixLength);
+            network.networkMask = types::v4Mask(path.prefix.prefixLength);
             network.metric = static_cast<uint32_t>(path.cost);
 
             key.advertisingRouter = getRouterId();
@@ -577,7 +577,7 @@ void OspfProcess::reoriginateSummaries(Area& sourceArea, std::vector<OspfRouteCh
         }
         else
         {
-            network.prefix = IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
+            network.prefix = types::IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
             network.metric = static_cast<uint32_t>(path.cost);
             network.options = path.options;
 
@@ -636,7 +636,7 @@ void OspfProcess::reoriginateSummary(Area& sourceArea, OspfRouteChange& path)
 
     if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
     {
-        network.networkMask = v4Mask(path.prefix.prefixLength);
+        network.networkMask = types::v4Mask(path.prefix.prefixLength);
         network.metric = static_cast<uint32_t>(path.cost);
 
         key.advertisingRouter = getRouterId();
@@ -645,7 +645,7 @@ void OspfProcess::reoriginateSummary(Area& sourceArea, OspfRouteChange& path)
     }
     else
     {
-        network.prefix = IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
+        network.prefix = types::IPv6Prefix(path.prefix.v6(), path.prefix.prefixLength, true);
         network.metric = static_cast<uint32_t>(path.cost);
         network.options = path.options;
 
@@ -701,12 +701,12 @@ template LsaKey OspfProcess::buildExternalKey<PolicyV3>(ExternalOriginateContext
 template void OspfProcess::buildExternalBody<PolicyV2>(ExternalOriginateContext&, PolicyV2::ExternalLsa&, bool);
 template void OspfProcess::buildExternalBody<PolicyV3>(ExternalOriginateContext&, PolicyV3::ExternalLsa&, bool);
 
-template void OspfProcess::syncSummarySuppression<PolicyV2>(std::unordered_map<IPPrefix, OspfSummaryAddress>&);
-template void OspfProcess::syncSummarySuppression<PolicyV3>(std::unordered_map<IPPrefix, OspfSummaryAddress>&);
+template void OspfProcess::syncSummarySuppression<PolicyV2>(std::unordered_map<types::IPPrefix, OspfSummaryAddress>&);
+template void OspfProcess::syncSummarySuppression<PolicyV3>(std::unordered_map<types::IPPrefix, OspfSummaryAddress>&);
 
 template void OspfProcess::reoriginateSummaries<PolicyV2>(Area&, std::vector<OspfRouteChange>&);
 template void OspfProcess::reoriginateSummaries<PolicyV3>(Area&, std::vector<OspfRouteChange>&);
 
 template void OspfProcess::reoriginateSummary<PolicyV2>(Area&, OspfRouteChange&);
 template void OspfProcess::reoriginateSummary<PolicyV3>(Area&, OspfRouteChange&);
-}
+} // namespace routing

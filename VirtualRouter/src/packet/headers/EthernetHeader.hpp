@@ -3,6 +3,7 @@
 #ifndef ETHERNET_HEADER_HPP
 #define ETHERNET_HEADER_HPP
 
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 
 #define ETHERNET_ARP    0x0806      ///< EtherType for ARP
@@ -14,7 +15,9 @@
 
 inline constexpr uint8_t ETHERNET_MAC_BROADCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; ///< Broadcast MAC address (FF:FF:FF:FF:FF:FF).
 inline constexpr uint8_t ETHERNET_MAC_SOURCE[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};    ///< Placeholder source MAC address (00:00:00:00:00:00).
-
+                                                                                                                   ///
+namespace packet
+{
 /**
  * @struct EthernetHeaderRaw
  * @brief Represents a raw Ethernet header.
@@ -37,11 +40,14 @@ struct EthernetHeader
     DEFINE_FIXED_HEADER(EthernetHeaderRaw);
 
     void setSourceMac(uint64_t val)
-        { writeU48(raw->sourceMac, val); }
+        { utils::writeU48(raw->sourceMac, val); }
     void setDestinationMac(uint64_t val)
-        { writeU48(raw->destinationMac, val); }
+        { utils::writeU48(raw->destinationMac, val); }
     void setType(const uint16_t val)
-        { writeU16(raw->type, val); }
+        { utils::writeU16(raw->type, val); }
 };
 
+} // namespace packet
+
 #endif // ETHERNET_HEADER_HPP
+

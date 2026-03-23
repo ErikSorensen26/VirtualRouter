@@ -7,7 +7,7 @@
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/EigrpContext.hpp"
 
-namespace Cli
+namespace cli
 {
 bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS);
 using RouterEigrpNamed_AddressFamilyIPv4 = commandAdder<EigrpContext,

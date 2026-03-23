@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <NetworkSpan.hpp>
 
-namespace OSPF
+namespace routing::ospf
 {
 class ChecksumFletcher
 {
@@ -53,7 +53,7 @@ public:
     }
 
     template <typename N>
-    inline void addBytes(const NetworkSpan<N>& data, size_t len)
+    inline void addBytes(const types::NetworkSpan<N>& data, size_t len)
     {
         for (size_t i = 0; i < len; ++i)
         {
@@ -66,6 +66,7 @@ public:
         return static_cast<uint16_t>((c1 << 8) | c0);
     }
 };
-}
+} // namespace routing
 
 #endif
+

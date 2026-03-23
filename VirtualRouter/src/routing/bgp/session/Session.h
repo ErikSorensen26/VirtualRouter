@@ -16,10 +16,9 @@
 #include "Capabilities.hpp"
 #include "MultiSession.h"
 
-struct BgpHeader;
-class PacketBuilder;
+namespace processing { class PacketBuilder; }
 
-namespace BGP
+namespace routing::bgp
 {
 class Neighbor;
 class BgpProcess;
@@ -53,7 +52,7 @@ public:
     ~Session();
 
     // TCP management
-    void acceptConnection(TCP::Connection&& conn);
+    void acceptConnection(transport::tcp::Connection&& conn);
     void initiateConnection();
     void closeActiveConnection() noexcept;
     void closePassiveConnection() noexcept;
@@ -65,7 +64,7 @@ public:
     void startActiveMultiSession(const AfiSafi& family);
     void startPassiveMultiSession(const AfiSafi& family);
 
-    void handleIncoming(TCP::RxConsumer& consumer);
+    void handleIncoming(transport::tcp::RxConsumer& consumer);
 
     void postEvent(FsmEvent event);
 
@@ -111,18 +110,18 @@ public:
     Neighbor& getNeighbor() noexcept { return neighbor; }
     const Neighbor& getNeighbor() const noexcept { return neighbor; }
     SessionTimers& getTimers() noexcept { return timers; }
-    const Config::BgpBaseRegistry& getBaseConfig() const noexcept { return base; }
+    const config::BgpBaseRegistry& getBaseConfig() const noexcept { return base; }
 
-    TCP::Connection* getPrimaryConnection() noexcept { return primaryConn; }
-    const TCP::Connection* getPrimaryConnection() const noexcept { return primaryConn; }
+    transport::tcp::Connection* getPrimaryConnection() noexcept { return primaryConn; }
+    const transport::tcp::Connection* getPrimaryConnection() const noexcept { return primaryConn; }
 
     bool verifyConnection(uint64_t cid);
 
     bool resolveCollision(uint32_t incomingPeerRid);
     void negotiateCapabilities();
 
-    static void onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept;
-    static void onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept;
+    static void onConnectCallback(transport::tcp::ConnCallbackCtx& ctx) noexcept;
+    static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
 
 private:
     // Open processing helpers
@@ -130,16 +129,16 @@ private:
 
     // References
     Neighbor& neighbor;
-    Config::BgpBaseRegistry& base;
+    config::BgpBaseRegistry& base;
 
     // Protocol State
     Fsm fsm;
     SessionTimers timers;
 
     // TCP connections
-    std::optional<TCP::Connection> activeConn; // Outbound
-    std::optional<TCP::Connection> passiveConn; // Inbound
-    TCP::Connection* primaryConn = nullptr;
+    std::optional<transport::tcp::Connection> activeConn; // Outbound
+    std::optional<transport::tcp::Connection> passiveConn; // Inbound
+    transport::tcp::Connection* primaryConn = nullptr;
 
     std::variant<AfiSafi, MultiSession> multiSession{std::in_place_type<MultiSession>};
 
@@ -151,6 +150,7 @@ private:
     uint32_t peerRouterId = 0;
     std::vector<uint8_t> updateSentQueue;
 };
-}
+} // namespace routing
 
 #endif // BGP_SESSION_H
+

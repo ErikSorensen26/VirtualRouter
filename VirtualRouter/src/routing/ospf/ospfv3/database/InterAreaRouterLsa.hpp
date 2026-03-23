@@ -5,11 +5,11 @@
 
 #include <cstdint>
 #include <optional>
+#include <ByteUtils.hpp>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct InterAreaRouterLsa
 {
@@ -24,12 +24,12 @@ struct InterAreaRouterLsa
         InterAreaRouterLsa lsa;
 
         if (buf[0] != 0) return std::nullopt;
-        lsa.options = readU24(buf + 1);
+        lsa.options = utils::readU24(buf + 1);
 
         if (buf[4] != 0) return std::nullopt;
-        lsa.metric = readU24(buf + 5);
+        lsa.metric = utils::readU24(buf + 5);
 
-        lsa.destinationRouterId = readU32(buf + 8);
+        lsa.destinationRouterId = utils::readU32(buf + 8);
 
         return lsa;
     }
@@ -39,10 +39,10 @@ struct InterAreaRouterLsa
         if (len != 12) return false;
         
         buf[0] = 0;
-        writeU24(buf + 1, options);
+        utils::writeU24(buf + 1, options);
         buf[4] = 0;
-        writeU24(buf + 5, metric);
-        writeU32(buf + 8, destinationRouterId);
+        utils::writeU24(buf + 5, metric);
+        utils::writeU32(buf + 8, destinationRouterId);
 
         return true;
     }
@@ -64,6 +64,7 @@ struct InterAreaRouterLsa
         return metric == rhs.metric && destinationRouterId == rhs.destinationRouterId;
     }
 };
-}
+} // namespace routing
 
 #endif // INTER_AREA_ROUTER_LSA_HPP
+

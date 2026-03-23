@@ -11,13 +11,13 @@
 #include "TLVBuilder.h"
 #include "Neighbor.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
-std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet,
+std::optional<packet::EigrpHeader> EigrpPacketBuilder::buildHeader(processing::PacketBuilder& packet,
     uint8_t opcode, uint32_t seq, uint32_t ack, uint16_t virId, uint32_t asn
 )
 {
-    EigrpHeader e = packet.reserveAndBuildHeader<EigrpHeader>(HeaderType::EIGRP);
+    packet::EigrpHeader e = packet.reserveAndBuildHeader<packet::EigrpHeader>(packet::HeaderType::EIGRP);
     if (!e.buffer) return std::nullopt;
 
     e.setVersion(2);
@@ -33,7 +33,7 @@ std::optional<EigrpHeader> EigrpPacketBuilder::buildHeader(PacketBuilder& packet
     return e;
 }
 
-void EigrpPacketBuilder::appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& iface)
+void EigrpPacketBuilder::appendAuthTLV(packet::TLV16BufferManager& tlv, EigrpInterface& iface)
 {
     if (!iface.isAuthEnabled()) return;
     auto* buf = tlv.getNextValBuf(52); // max: SHA256 (20 + 32)
@@ -43,7 +43,7 @@ void EigrpPacketBuilder::appendAuthTLV(TLV16BufferManager& tlv, EigrpInterface& 
     tlv.append(EIGRP_OPTION_AUTHENTICATION, static_cast<uint16_t>(valSize + 4), nullptr, valSize);
 }
 
-bool EigrpPacketBuilder::appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg)
+bool EigrpPacketBuilder::appendStubTLV(packet::TLV16BufferManager& tlv, EigrpConfig& cfg)
 {
     if (!cfg.stubEnabled()) return false;
     TLVBuilder::encodeStubOption(tlv.getNextValBuf(), cfg.getStubConfig());
@@ -51,7 +51,7 @@ bool EigrpPacketBuilder::appendStubTLV(TLV16BufferManager& tlv, EigrpConfig& cfg
     return true;
 }
 
-size_t EigrpPacketBuilder::appendRoutes(EigrpInterface& iface, TLV16BufferManager& tlv, const std::vector<const RouteInfo*>& routes, uint64_t bw, uint64_t delay, TLVType tlvVersion)
+size_t EigrpPacketBuilder::appendRoutes(EigrpInterface& iface, packet::TLV16BufferManager& tlv, const std::vector<const RouteInfo*>& routes, uint64_t bw, uint64_t delay, TLVType tlvVersion)
 {
     size_t appended = 0;
     for (auto* r : routes)
@@ -70,34 +70,34 @@ size_t EigrpPacketBuilder::appendRoutes(EigrpInterface& iface, TLV16BufferManage
     return appended;
 }
 
-bool EigrpPacketBuilder::appendParameterTLV(TLV16BufferManager& tlv, EigrpInterface& iface)
+bool EigrpPacketBuilder::appendParameterTLV(packet::TLV16BufferManager& tlv, EigrpInterface& iface)
 {
     uint8_t* val = tlv.getNextValBuf(8);
     if (!val) return false;
     if (iface.getRtp().pendingPeerTermination.load(std::memory_order_relaxed))
     {
         std::memset(val, 0, 6);
-        writeU16(val + 6, iface.configs->get<Config::EigrpInterface::HOLD_TIME>().load());
+        utils::writeU16(val + 6, iface.configs->get<config::EigrpInterface::HOLD_TIME>().load());
         iface.getRtp().pendingPeerTermination.store(false, std::memory_order_release);
     }
     else
     {
         KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
-        TLVBuilder::calculateParameters(val, k, iface.configs->get<Config::EigrpInterface::HOLD_TIME>().load());
+        TLVBuilder::calculateParameters(val, k, iface.configs->get<config::EigrpInterface::HOLD_TIME>().load());
     }
     return tlv.append(EIGRP_OPTION_PARAMETER, 12, nullptr, 8);
 }
 
-bool EigrpPacketBuilder::appendVersionTLV(TLV16BufferManager& tlv)
+bool EigrpPacketBuilder::appendVersionTLV(packet::TLV16BufferManager& tlv)
 {
     uint8_t* val = tlv.getNextValBuf(4);
     if (!val) return false;
-    writeU16(val, EIGRP_VERSION_RELEASE);
-    writeU16(val + 2, EIGRP_VERSION_TLS);
+    utils::writeU16(val, EIGRP_VERSION_RELEASE);
+    utils::writeU16(val + 2, EIGRP_VERSION_TLS);
     return tlv.append(EIGRP_OPTION_VERSION, 8, nullptr, 4);
 }
 
-size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std::vector<IPAddress>& neighbors)
+size_t EigrpPacketBuilder::appendSequenceTLVs(packet::TLV16BufferManager& tlv, const std::vector<types::IPAddress>& neighbors)
 {
     if (neighbors.empty()) return 0;
 
@@ -119,9 +119,9 @@ size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std
     {
         const auto& ip = neighbors[i];
         if (ip.isIPv4()) {
-            writeU32(buf + offset, ip.v4());
+            utils::writeU32(buf + offset, ip.v4());
         } else {
-            writeU128(buf + offset, ip.v6());
+            utils::writeU128(buf + offset, ip.v6());
         }
         offset += ipSize;
     }
@@ -130,11 +130,11 @@ size_t EigrpPacketBuilder::appendSequenceTLVs(TLV16BufferManager& tlv, const std
     return amount;
 }
 
-bool EigrpPacketBuilder::appendMulticastSeqTLV(TLV16BufferManager& tlv, uint32_t seq)
+bool EigrpPacketBuilder::appendMulticastSeqTLV(packet::TLV16BufferManager& tlv, uint32_t seq)
 {
     uint8_t* val = tlv.getNextValBuf(4);
     if (!val) return false;
-    writeU32(val, seq);
+    utils::writeU32(val, seq);
     return tlv.append(EIGRP_OPTION_MULTICAST_SEQUENCE, 8, nullptr, 4);
 }
-}
+} // namespace routing

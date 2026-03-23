@@ -11,7 +11,10 @@
 
 #include "dhcp/DhcpInfo.hpp"
 
-class TimeManager;
+namespace core { class TimeManager; }
+
+namespace services::dhcp
+{
 class IPv4LeaseManager;
 
 enum class IPState : uint8_t
@@ -35,7 +38,7 @@ class IPv4Pool
 {
 public:
 
-    IPv4Pool(TimeManager& timeManager);
+    IPv4Pool(core::TimeManager& timeManager);
     ~IPv4Pool();
     
     friend class IPv4LeaseManager;
@@ -96,7 +99,10 @@ private:
     std::deque<uint32_t> release;
 
     IPv4LeaseManager* leaseManager = nullptr;
-    TimeManager& timeManager;
+    core::TimeManager& timeManager;
 };
 
+} // namespace services
+
 #endif // IPV4_POOL_H
+

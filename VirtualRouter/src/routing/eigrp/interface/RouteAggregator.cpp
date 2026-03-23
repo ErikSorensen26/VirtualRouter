@@ -5,7 +5,7 @@
 #include "interface/configs/InterfaceConfigs.h"
 #include "eigrp/core/Eigrp.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 RouteAggregator::RouteAggregator(EigrpInterface& iface)
     : iface(iface) {}
@@ -23,7 +23,7 @@ RouteAggregator::~RouteAggregator()
 
 void RouteAggregator::clearAutoSummaries()
 {
-    std::vector<IPPrefix> withdraws;
+    std::vector<types::IPPrefix> withdraws;
     for (auto route : summaryRoutes)
         if (route.second.isAuto)
             withdraws.push_back(route.first);
@@ -31,12 +31,12 @@ void RouteAggregator::clearAutoSummaries()
         withdrawSummary(pref);
 }
 
-SummaryRoute* RouteAggregator::isSummarized(const IPPrefix& prefix)
+SummaryRoute* RouteAggregator::isSummarized(const types::IPPrefix& prefix)
 {
     for (auto& sum : summaryRoutes)
     {
         if (sum.first.prefixLength < prefix.prefixLength &&
-            sum.first.contains(IPAddress(prefix.addr, prefix.prefixLength)))
+            sum.first.contains(types::IPAddress(prefix.addr, prefix.prefixLength)))
         {
             return &sum.second;
         }
@@ -69,11 +69,11 @@ void RouteAggregator::updateSummaryRoutes(std::vector<SummaryRoute*>& ss)
             }
             else
             {
-                IPPrefix prefix = s->summaryEntry->prefix;
+                types::IPPrefix prefix = s->summaryEntry->prefix;
                 for (auto& entry : iface.getTopController().getTopologies())
                 {
                     if (entry.second.prefix.prefixLength >= prefix.prefixLength &&
-                        prefix.contains(IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
+                        prefix.contains(types::IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
                     {
                         entry.second.suppression[iface.interfaceKey].summaries.insert(s);
                         s->summarizedRoutes.insert(entry.second.prefix);
@@ -111,11 +111,11 @@ void RouteAggregator::updateSummaryRoute(SummaryRoute& s)
         }
         else
         {
-            IPPrefix prefix = s.summaryEntry->prefix;
+            types::IPPrefix prefix = s.summaryEntry->prefix;
             for (auto& entry : iface.getTopController().getTopologies())
             {
                 if (entry.second.prefix.prefixLength >= prefix.prefixLength &&
-                    prefix.contains(IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
+                    prefix.contains(types::IPAddress(entry.second.prefix.addr, entry.second.prefix.prefixLength)))
                 {
                     entry.second.suppression[iface.interfaceKey].summaries.insert(&s);
                     s.summarizedRoutes.insert(entry.second.prefix);
@@ -154,10 +154,10 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
         }
     }
 
-    AddressFamily af = iface.getBase().getAF();
+    types::AddressFamily af = iface.getBase().getAF();
 
     auto& ifCfg = iface.getIfaceCfg();
-    if (af == AddressFamily::IPv4)
+    if (af == types::AddressFamily::IPv4)
     {
         r.nextHop.setV4(ifCfg.ipv4.getPrimaryAddress().addr);
     }
@@ -176,7 +176,7 @@ std::pair<bool, bool> RouteAggregator::calculateSummary(SummaryRoute& s)
     
     r.wide.isWide = true;
     r.wide.topology = 0;
-    r.wide.afi = (base.getAF() == AddressFamily::IPv6) ? 2 : 1;
+    r.wide.afi = (base.getAF() == types::AddressFamily::IPv6) ? 2 : 1;
     r.wide.rid = base.routerID();
     r.wide.priority = 0;
 
@@ -209,7 +209,7 @@ void RouteAggregator::updateAllSummaryRoutes(bool isAuto)
     updateSummaryRoutes(updatedRoutes);
 }
 
-void RouteAggregator::installSummaries(const std::set<IPPrefix>& prefixes, bool isAuto)
+void RouteAggregator::installSummaries(const std::set<types::IPPrefix>& prefixes, bool isAuto)
 {
     auto createSumRoute = [&](TopologyEntry& top, ReceivedRoute& r) -> RouteInfo* {
         auto it = top.routesBySource.emplace(iface.ifaceAddress, RouteInfo{r});
@@ -237,7 +237,7 @@ void RouteAggregator::installSummaries(const std::set<IPPrefix>& prefixes, bool 
     updateSummaryRoutes(newSummaries);
 }
 
-void RouteAggregator::installSummary(const IPPrefix& prefix, bool isAuto)
+void RouteAggregator::installSummary(const types::IPPrefix& prefix, bool isAuto)
 {
     if (summaryRoutes.contains(prefix)) return;
     auto sit = summaryRoutes.emplace(prefix, SummaryRoute{ .isAuto = isAuto });
@@ -258,7 +258,7 @@ void RouteAggregator::installSummary(const IPPrefix& prefix, bool isAuto)
     updateSummaryRoute(s);
 }
 
-void RouteAggregator::withdrawSummary(const IPPrefix& prefix)
+void RouteAggregator::withdrawSummary(const types::IPPrefix& prefix)
 {
     auto it = summaryRoutes.find(prefix);
     if (it == summaryRoutes.end()) return;
@@ -270,4 +270,4 @@ void RouteAggregator::withdrawSummary(const IPPrefix& prefix)
     updateSummaryRoute(s);
     summaryRoutes.erase(it);
 }
-}
+} // namespace routing

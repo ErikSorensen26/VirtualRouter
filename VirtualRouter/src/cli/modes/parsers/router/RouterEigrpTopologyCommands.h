@@ -7,7 +7,7 @@
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/EigrpContext.hpp"
 
-namespace Cli
+namespace cli
 {
 bool RouterEigrpTopology_AutoSummary_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_AutoSummary = commandAdder<EigrpContext,

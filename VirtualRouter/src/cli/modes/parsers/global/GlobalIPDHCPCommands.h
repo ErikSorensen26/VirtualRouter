@@ -6,9 +6,8 @@
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/GlobalContext.hpp"
-#include "cli/runtime/CliUtils.h"
 
-namespace Cli
+namespace cli
 {
 bool GlobalIPDHCP_Binding_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_Binding = commandAdder<GlobalContext,
@@ -210,7 +209,7 @@ using GlobalIPDHCPCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalC
                     uint16_t size = 1;
                     if (commandStream[4].find('-') != std::string::npos)
                     {
-                            auto pair = CliUtils::splitMiddle(commandStream[4], '-');
+                            auto pair = utils::splitMiddle(commandStream[4], '-');
                             if (pair->first > pair->second) return false;
                             global.dhcpServer->configs.snooping.vlans[std::stoi(pair->first)].insert(std::stoi(pair->second) - std::stoi(pair->first) + 1);
                     }

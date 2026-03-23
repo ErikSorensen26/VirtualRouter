@@ -10,7 +10,7 @@
 #include "configs/registry/router/BgpRegistry.h"
 #include "bgp/BgpTypes.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 class BgpProcess;
 
@@ -27,24 +27,24 @@ public:
 
     const std::string name;
 
-    Config::BgpNeighborSessionRegistry& getSessionConfigs()
+    config::BgpNeighborSessionRegistry& getSessionConfigs()
     {
         return sessionConfigs.get();
     }
 
-    const Config::BgpNeighborSessionRegistry& getSessionConfigs() const
+    const config::BgpNeighborSessionRegistry& getSessionConfigs() const
     {
         return sessionConfigs.get();
     }
 
     // Get or lazily create per-AF config for this peer group.
-    Config::BgpNeighborRegistry* getAfConfigs(const AfiSafi& afi);
-    const Config::BgpNeighborRegistry* getAfConfigs(const AfiSafi& afi) const;
+    config::BgpNeighborRegistry* getAfConfigs(const AfiSafi& afi);
+    const config::BgpNeighborRegistry* getAfConfigs(const AfiSafi& afi) const;
 
 private:
     BgpProcess& process;
-    Config::Reference<Config::BgpNeighborSessionRegistry> sessionConfigs;
-    mutable std::unordered_map<AfiSafi, Config::Reference<Config::BgpNeighborRegistry>> afConfigs;
+    config::Reference<config::BgpNeighborSessionRegistry> sessionConfigs;
+    mutable std::unordered_map<AfiSafi, config::Reference<config::BgpNeighborRegistry>> afConfigs;
 };
 
 class PeerSessionTemplate
@@ -60,18 +60,18 @@ public:
 
     const std::string name;
 
-    Config::BgpNeighborSessionRegistry& getConfigs()
+    config::BgpNeighborSessionRegistry& getConfigs()
     {
         return configs.get();
     }
 
-    const Config::BgpNeighborSessionRegistry& getConfigs() const
+    const config::BgpNeighborSessionRegistry& getConfigs() const
     {
         return configs.get();
     }
 
 private:
-    Config::Reference<Config::BgpNeighborSessionRegistry> configs;
+    config::Reference<config::BgpNeighborSessionRegistry> configs;
 };
 
 class PeerPolicyTemplate
@@ -87,18 +87,18 @@ public:
 
     const std::string name;
 
-    Config::BgpNeighborRegistry& getConfigs()
+    config::BgpNeighborRegistry& getConfigs()
     {
         return configs.get();
     }
 
-    const Config::BgpNeighborRegistry& getConfigs() const
+    const config::BgpNeighborRegistry& getConfigs() const
     {
         return configs.get();
     }
 
 private:
-    Config::Reference<Config::BgpNeighborRegistry> configs;
+    config::Reference<config::BgpNeighborRegistry> configs;
 };
 
 class PeerTemplateTable
@@ -133,7 +133,7 @@ private:
     std::unordered_map<std::string, PeerSessionTemplate> peerSessionTemplates;
     std::unordered_map<std::string, PeerPolicyTemplate> peerPolicyTemplates;
 };
-
-} // namespace BGP
+} // namespace routing::bgp
 
 #endif // BGP_PEER_TEMPLATE_H
+

@@ -7,11 +7,11 @@
 #include <vector>
 #include <optional>
 #include <algorithm>
+#include <ByteUtils.hpp>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct NetworkLsaV3
 {
@@ -24,14 +24,14 @@ struct NetworkLsaV3
 
         NetworkLsaV3 lsa;
 
-        lsa.options = readU24(buf + 1);
+        lsa.options = utils::readU24(buf + 1);
         size_t off = 4;
 
         if ((len - off) % 4 != 0) return std::nullopt;
 
         while (off < len)
         {
-            lsa.attachedRouters.push_back(readU32(buf + off));
+            lsa.attachedRouters.push_back(utils::readU32(buf + off));
             off += 4;
         }
 
@@ -42,14 +42,14 @@ struct NetworkLsaV3
     {
         if (len < 4) return false;
 
-        writeU24(buf + 1, options);
+        utils::writeU24(buf + 1, options);
         size_t off = 4;
         
         if (4 + (4 * attachedRouters.size()) != len) return false;
 
         for (const auto& router : attachedRouters)
         {
-            writeU32(buf + off, router);
+            utils::writeU32(buf + off, router);
             off += 4;
         }
 
@@ -81,6 +81,7 @@ struct NetworkLsaV3
         return a == b;
     }
 };
-}
+} // namespace routing
 
 #endif // NETWORK_LSA_V3_HPP
+

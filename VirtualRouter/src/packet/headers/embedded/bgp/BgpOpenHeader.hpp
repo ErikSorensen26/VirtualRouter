@@ -9,6 +9,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 #pragma pack(push, 1)
 struct BgpOpenHeaderRaw
 {
@@ -29,20 +32,20 @@ struct BgpOpenHeader
     DEFINE_PACKET_HEADER(BgpOpenHeaderRaw);
 
     uint8_t getVersion() const { return raw->version; }
-    uint16_t getAsNumber() const { return readU16(raw->asNumber); }
-    uint16_t getHoldTime() const { return readU16(raw->holdTime); }
-    uint32_t getIdentifier() const { return readU32(raw->identifier); }
+    uint16_t getAsNumber() const { return utils::readU16(raw->asNumber); }
+    uint16_t getHoldTime() const { return utils::readU16(raw->holdTime); }
+    uint32_t getIdentifier() const { return utils::readU32(raw->identifier); }
     const uint8_t* getIdentifierBuf() const { return raw->identifier; }
     uint8_t getParameterLen() const { return raw->parameterLen; }
 
     void setVersion(uint8_t val)
         { raw->version = val; }
     void setAsNumber(uint16_t val)
-        { writeU16(raw->asNumber, val); }
+        { utils::writeU16(raw->asNumber, val); }
     void setHoldTime(uint16_t val)
-        { writeU16(raw->holdTime, val); }
+        { utils::writeU16(raw->holdTime, val); }
     void setIdentifier(uint32_t val)
-        { writeU32(raw->identifier, val); }
+        { utils::writeU32(raw->identifier, val); }
     void setParameterLen(uint8_t val)
         { raw->parameterLen = val; }
 };
@@ -65,4 +68,7 @@ inline bool parseBgpOpenParameters(const uint8_t* data, size_t size, std::vector
     return offset == size;
 }
 
+} // namespace packet
+
 #endif // BGP_HEADER_HPP
+

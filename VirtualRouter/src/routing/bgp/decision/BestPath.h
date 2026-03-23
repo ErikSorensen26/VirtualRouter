@@ -5,7 +5,7 @@
 
 #include "bgp/rib/RibTypes.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 class BgpProcess;
 
@@ -21,13 +21,14 @@ class BestPathComparator
 public:
     explicit BestPathComparator(BgpProcess& p, BestPathConfig cfg = {});
 
-    bool better(const InboundRouteBase& lhsRoute, const IPAddress& lhsNbr, const InboundRouteBase& rhsRoute, const IPAddress& rhsNbr) const;
+    bool better(const InboundRouteBase& lhsRoute, const types::IPAddress& lhsNbr, const InboundRouteBase& rhsRoute, const types::IPAddress& rhsNbr) const;
 private:
     inline bool compareMed(const InboundRouteBase& lhsRoute, const InboundRouteBase& rhsRoute) const;
 
     BgpProcess& proc;
     BestPathConfig config;
 };
-}
+} // namespace routing
 
 #endif //BGP_BEST_PATH_H
+

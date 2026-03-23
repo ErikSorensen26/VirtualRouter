@@ -5,15 +5,15 @@
 
 #include "EgressBase.h"
 
+namespace qos::egress { struct TxQueueOpts; }
+
+namespace hardware::egress
+{
 class EgressXdp;
 class EgressPacket;
 
-struct TxQueueOpts;
-
-class EgressFactory
-{
-public:
-    static EgressBase* create(Interface* iface, const TxQueueOpts& opts);
-};
+inline static EgressBase* create(interface::Interface* iface, const qos::egress::TxQueueOpts& opts);
+} // namespace hardware
 
 #endif
+

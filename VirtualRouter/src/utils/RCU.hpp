@@ -7,6 +7,9 @@
 #include <thread>
 #include <functional>
 
+namespace utils
+{
+
 class RCU
 {
 public:
@@ -162,4 +165,7 @@ public:
     }
 };
 
+} // namespace types
+
 #endif // RCU_HPP
+

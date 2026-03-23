@@ -11,8 +11,12 @@
 
 #include <IPAddress.h>
 #include <AddressFamily.hpp>
+#include <ByteUtils.hpp>
 
-namespace TCP
+namespace transport
+{
+
+namespace tcp
 {
 class Connection;
 class RxConsumer;
@@ -101,7 +105,7 @@ struct TcpResult<void> final
 
 struct TcpEndpoint final
 {
-    IPAddress address{};
+    types::IPAddress address{};
     TcpPort port{0};
 
     bool isWildcardAddress() const noexcept
@@ -260,7 +264,7 @@ struct ConnectOptions final
 
 struct TcpIpAdapter final
 {
-    static int af(const IPAddress& ip) noexcept
+    static int af(const types::IPAddress& ip) noexcept
     {
         if (ip.isIPv6())
             return AF_INET6;
@@ -268,12 +272,12 @@ struct TcpIpAdapter final
             return AF_INET;
     }
 
-    static bool unspecified(const IPAddress& ip) noexcept
+    static bool unspecified(const types::IPAddress& ip) noexcept
     {
         return ip.isUnspecified();
     }
 
-    static void writeSocketaddr(const IPAddress& ipIn, TcpPort portIn, void* sockaddrOut, uint32_t* socklenOut) noexcept
+    static void writeSocketaddr(const types::IPAddress& ipIn, TcpPort portIn, void* sockaddrOut, uint32_t* socklenOut) noexcept
     {
         auto* ss = reinterpret_cast<sockaddr_storage*>(sockaddrOut);
         std::memset(ss, 0, sizeof(*ss));
@@ -307,7 +311,7 @@ struct TcpIpAdapter final
         }
     }
 
-    static void readSockaddr(const void* sockaddrIn, uint32_t socklenIn, IPAddress& ipOut, TcpPort& portOut) noexcept
+    static void readSockaddr(const void* sockaddrIn, uint32_t socklenIn, types::IPAddress& ipOut, TcpPort& portOut) noexcept
     {
         (void)socklenIn;
 
@@ -318,7 +322,7 @@ struct TcpIpAdapter final
             const auto* sin = reinterpret_cast<const sockaddr_in*>(sa);
             portOut = ntohs(sin->sin_port);
 
-            ipOut.setV4(readU32(reinterpret_cast<const uint8_t*>(&sin->sin_addr)));
+            ipOut.setV4(utils::readU32(reinterpret_cast<const uint8_t*>(&sin->sin_addr)));
             return;
         }
 
@@ -327,21 +331,23 @@ struct TcpIpAdapter final
             const auto* sin6 = reinterpret_cast<const sockaddr_in6*>(sa);
             portOut = ntohs(sin6->sin6_port);
 
-            ipOut.setV6(readU128(reinterpret_cast<const uint8_t*>(&sin6->sin6_addr)));
+            ipOut.setV6(utils::readU128(reinterpret_cast<const uint8_t*>(&sin6->sin6_addr)));
             return;
         }
     }
 };
 }
 
+} // namespace transport
+
 namespace std
 {
 template <>
-struct hash<TCP::TcpEndpoint>
+struct hash<transport::tcp::TcpEndpoint>
 {
-    size_t operator()(const TCP::TcpEndpoint& k) const noexcept
+    size_t operator()(const transport::tcp::TcpEndpoint& k) const noexcept
     {
-        size_t h = std::hash<IPAddress>{}(k.address);
+        size_t h = std::hash<types::IPAddress>{}(k.address);
         size_t p = static_cast<size_t>(k.port);
 
         p ^= h + 0x9e3779b7f4a7c15ull + (p << 6) + (p >> 2);
@@ -350,12 +356,12 @@ struct hash<TCP::TcpEndpoint>
 };
 
 template <>
-struct hash<TCP::TcpSocketKey>
+struct hash<transport::tcp::TcpSocketKey>
 {
-    size_t operator()(const TCP::TcpSocketKey& k) const noexcept
+    size_t operator()(const transport::tcp::TcpSocketKey& k) const noexcept
     {
-        size_t h1 = std::hash<TCP::TcpEndpoint>{}(k.local);
-        size_t h2 = std::hash<TCP::TcpEndpoint>{}(k.remote);
+        size_t h1 = std::hash<transport::tcp::TcpEndpoint>{}(k.local);
+        size_t h2 = std::hash<transport::tcp::TcpEndpoint>{}(k.remote);
 
         h2 ^= h1 + 0x9e3779b7f4a7c15ull + (h2 << 6) + (h2 >> 2);
         return h2;
@@ -364,3 +370,4 @@ struct hash<TCP::TcpSocketKey>
 }
 
 #endif // TCP_TYPES_HPP
+

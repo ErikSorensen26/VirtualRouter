@@ -8,9 +8,9 @@
 #include <limits>
 #include <IPAddress.h>
 
-struct IPAddress;
+namespace types { struct IPAddress; }
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class EigrpInterface;
 
@@ -22,7 +22,7 @@ struct SummaryRoute
     TopologyEntry* summaryEntry = nullptr;
     RouteInfo* summaryRoute = nullptr;
     bool isAuto = false;
-    std::set<IPPrefix> summarizedRoutes = {};
+    std::set<types::IPPrefix> summarizedRoutes = {};
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
 };
 
@@ -37,16 +37,17 @@ public:
     void updateSummaryRoutes(std::vector<SummaryRoute*>& r);
     std::pair<bool, bool> calculateSummary(SummaryRoute& r);
     void updateAllSummaryRoutes(bool isAuto = false);
-    void installSummary(const IPPrefix& prefix, bool isAuto = false);
-    void installSummaries(const std::set<IPPrefix>& prefixes, bool isAuto = false);
-    void withdrawSummary(const IPPrefix& prefix);
+    void installSummary(const types::IPPrefix& prefix, bool isAuto = false);
+    void installSummaries(const std::set<types::IPPrefix>& prefixes, bool isAuto = false);
+    void withdrawSummary(const types::IPPrefix& prefix);
 
-    SummaryRoute* isSummarized(const IPPrefix& prefix);
+    SummaryRoute* isSummarized(const types::IPPrefix& prefix);
 
 private:
     EigrpInterface& iface;
-    std::map<IPPrefix, SummaryRoute> summaryRoutes;
+    std::map<types::IPPrefix, SummaryRoute> summaryRoutes;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_ROUTE_AGGREGATOR_H
+

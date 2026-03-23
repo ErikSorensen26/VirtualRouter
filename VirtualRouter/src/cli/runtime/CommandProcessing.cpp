@@ -3,6 +3,8 @@
 #include "CliSession.h"
 #include "CliEngine.h"
 
+namespace cli
+{
 std::vector<std::string> CliSession::compileCommandStream(const std::string& command)
 {
 	std::vector<std::string> rawTokens = splitIntoWords(command);
@@ -82,4 +84,5 @@ bool CliSession::executeCommand(std::string &command)
 	bool configSuccess = processConfigPersistence(tokens, preMode);
 
 	return configSuccess || isCommandValid || isCommandExecutionSuccessful;
+}
 }

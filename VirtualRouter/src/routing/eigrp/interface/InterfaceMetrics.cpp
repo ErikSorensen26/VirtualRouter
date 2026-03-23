@@ -8,7 +8,7 @@
 #include "eigrp/EigrpTypes.hpp"
 #include "eigrp/rtp/Neighbor.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 InterfaceMetrics::InterfaceMetrics(EigrpInterface& iface) : iface(iface) {}
 
@@ -120,5 +120,4 @@ void InterfaceMetrics::updateRTTEstimate(Neighbor& neighbor, std::chrono::steady
     neighbor.srtt.store(srtt, std::memory_order_release);
     neighbor.rto.store(rto, std::memory_order_release);
 }
-}
-
+} // namespace routing

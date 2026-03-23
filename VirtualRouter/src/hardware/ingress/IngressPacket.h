@@ -9,10 +9,13 @@
 #include <sys/epoll.h>
 #include <atomic>
 
+namespace hardware::ingress
+{
+
 class IngressPacket : public IngressBase
 {
 public:
-    IngressPacket(Interface& iface, const RxQueueOpts& opts);
+    IngressPacket(interface::Interface& iface, const qos::ingress::RxQueueOpts& opts);
     ~IngressPacket();
 
 protected:
@@ -51,4 +54,7 @@ private:
     uint64_t* blkSeq = nullptr;
 };
 
+} // namespace hardware
+
 #endif
+

@@ -10,23 +10,23 @@
 
 #include "Dhcpv6.h"
 
-class TimeManager;
-class IPv6LeaseManager;
-namespace Protocol
+namespace core { class TimeManager; }
+
+namespace services::dhcp
 {
-    class Dhcpv6Server;
-}
+class IPv6LeaseManager;
+class Dhcpv6Server;
 
 class IPv6Pool
 {
 public:
     enum class IAType{ IATA, IANA };
 
-    IPv6Pool(TimeManager& timeManager);
+    IPv6Pool(core::TimeManager& timeManager);
     ~IPv6Pool();
 
     friend class IPv6LeaseManager;
-    friend class Protocol::Dhcpv6Server;
+    friend class Dhcpv6Server;
 
     bool adjustPool(__uint128_t network, uint8_t prefixLen);
     void setLeaseManager(IPv6LeaseManager* leaseMgr);
@@ -70,7 +70,7 @@ private:
     static constexpr size_t MAX_GENERATION_ATTEMPTS = 10000;
 
     IPv6LeaseManager* leaseManager = nullptr;
-    TimeManager& timeManager;
+    core::TimeManager& timeManager;
 
     std::unordered_set<__uint128_t> allocated;
 
@@ -90,4 +90,7 @@ private:
     bool isEUI64(__uint128_t ip) const;
 };
 
+} // namespace services::dhcp
+
 #endif // IPV6_POOL_H
+

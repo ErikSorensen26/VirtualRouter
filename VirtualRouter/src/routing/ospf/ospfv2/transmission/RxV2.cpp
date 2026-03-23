@@ -18,7 +18,7 @@
 #include "security/Encryption.hpp"
 #include "ospf/transmission/OspfFletcher.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 
 // Validates the OSPF LSA Fletcher checksum against raw wire bytes (RFC 2328 §C.4).
@@ -31,18 +31,18 @@ static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
     check.addBytes(lsa + 2, len - 2);
     return check.finalize() == 0;
 }
-Config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getBaseConfigs()
+config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getBaseConfigs()
 {
     return baseConfigs.get();
 }
 
-void PacketDispatcherV2::handleIncoming(const Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
+void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
 {
-    IPAddress neigIp(neighborIp, iface.getProcess().getAF());
+    types::IPAddress neigIp(neighborIp, iface.getProcess().getAF());
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check passive
-    if (iface.getConfigs().get<Config::OspfInterface::PASSIVE>().load())
+    if (iface.getConfigs().get<config::OspfInterface::PASSIVE>().load())
         return;
 
     // Validate version
@@ -53,23 +53,23 @@ void PacketDispatcherV2::handleIncoming(const Ospfv2Header& ospfHeader, const ui
         return;
 
     // Validate size
-    size_t packetSize = Ospfv2Header::fixedSize + ospfHeader.getTrail().size();
+    size_t packetSize = packet::Ospfv2Header::fixedSize + ospfHeader.getTrail().size();
     if (ospfHeader.getPacketLen() > packetSize) return;
 
-    auto& interfaceAuth = baseConfigs->get<Config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    auto& interfaceAuth = baseConfigs->get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
     auto authType = interfaceAuth.hasValue() ? interfaceAuth.load()
-        : iface.getArea().getConfigs().get<Config::OspfArea::AUTHENTICATION_TYPE>().load();
+        : iface.getArea().getConfigs().get<config::OspfArea::AUTHENTICATION_TYPE>().load();
 
     HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), static_cast<uint8_t>(authType), neigIp, rid);
     info.neighbor = iface.getNTable().lookup(rid);
 
     switch (authType)
     {
-        case AuthType::CRYPTO:
+        case config::ospf::AuthType::CRYPTO:
             if (!processOspfCryptoAuthentication(info, ospfHeader))
                 return;
             break; // Break to skip checksum (crypto covers checkum).
-        case AuthType::SIMPLE:
+        case config::ospf::AuthType::SIMPLE:
             if (!processOspfSimpleAuthentication(ospfHeader))
                 return;
             // Simple still requires checksum so no break.
@@ -123,7 +123,7 @@ bool PacketDispatcherV2::processOptions(uint32_t options, Neighbor& nbr)
     if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED)
     {
         if (InterfaceFlagManager::getDemandCircuits(options) && flags.getDemandCircuits() &&
-            iface.getConfigs().get<Config::OspfInterface::NETWORK>().load() == NetworkType::POINT_TO_POINT)
+            iface.getConfigs().get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_POINT)
             iface.demandCircuit = OspfInterface::DcDecision::ENABLED;
         else
             iface.demandCircuit = OspfInterface::DcDecision::DISABLED;
@@ -135,33 +135,33 @@ bool PacketDispatcherV2::processOptions(uint32_t options, Neighbor& nbr)
         return false;
     if (areaFlags.getNssa() != AreaFlagManager::getNssa(options))
         return false;
-    if (areaFlags.getAddressFamilySupport() != AreaFlagManager::getAddressFamilySupport(options) && iface.getProcess().getAF() == AddressFamily::IPv4)
+    if (areaFlags.getAddressFamilySupport() != AreaFlagManager::getAddressFamilySupport(options) && iface.getProcess().getAF() == types::AddressFamily::IPv4)
         return false;
     return true;
 }
 
 void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool unicast)
 {
-    Ospfv2HelloHeader hdr;
+    packet::Ospfv2HelloHeader hdr;
     hdr.setBuffer(info.payload);
 
     auto& ifaceConfigs = iface.getConfigs();
 
-    info.offset += Ospfv2HelloHeader::fixedSize;
+    info.offset += packet::Ospfv2HelloHeader::fixedSize;
     if (info.offset > info.payloadSize)
         return;
 
     // Validate timers — if mismatch, tear down an existing neighbor; for unknown neighbors just drop
-    if (hdr.getHelloInterval() != ifaceConfigs.get<Config::OspfInterface::HELLO_INTERVAL>().load() ||
-        hdr.getDeadInterval() != ifaceConfigs.get<Config::OspfInterface::DEAD_INTERVAL>().load())
+    if (hdr.getHelloInterval() != ifaceConfigs.get<config::OspfInterface::HELLO_INTERVAL>().load() ||
+        hdr.getDeadInterval() != ifaceConfigs.get<config::OspfInterface::DEAD_INTERVAL>().load())
     {
         if (info.neighbor)
             info.neighbor->setState(Neighbor::State::DOWN);
         return;
     }
 
-    auto ntype = ifaceConfigs.get<Config::OspfInterface::NETWORK>().load();
-    bool multiAccess = ntype == NetworkType::BROADCAST || ntype == NetworkType::NON_BROADCAST;
+    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
+    bool multiAccess = ntype == config::ospf::NetworkType::BROADCAST || ntype == config::ospf::NetworkType::NON_BROADCAST;
 
     if (multiAccess)
     {
@@ -192,17 +192,17 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         return;
     }
 
-    if (ntype == NetworkType::BROADCAST || ntype == NetworkType::NON_BROADCAST)
+    if (ntype == config::ospf::NetworkType::BROADCAST || ntype == config::ospf::NetworkType::NON_BROADCAST)
     {
-        uint8_t* neighborList = info.payload + Ospfv2HelloHeader::fixedSize;
-        size_t listSize = info.payloadSize - Ospfv2HelloHeader::fixedSize;
+        uint8_t* neighborList = info.payload + packet::Ospfv2HelloHeader::fixedSize;
+        size_t listSize = info.payloadSize - packet::Ospfv2HelloHeader::fixedSize;
         if (listSize % 4 != 0) return;
 
         // Find RID
         bool ridFound = false;
         for (size_t i = 0; i < listSize; i += 4)
         {
-            if (readU32(neighborList + i) == iface.getProcess().getRouterId())
+            if (utils::readU32(neighborList + i) == iface.getProcess().getRouterId())
             {
                 ridFound = true;
                 break;
@@ -259,10 +259,10 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
     auto state = info.neighbor->getState();
     if (state < Neighbor::State::EXSTART) return;
 
-    Ospfv2DBDHeader hdr;
+    packet::Ospfv2DBDHeader hdr;
     hdr.setBuffer(info.payload);
 
-    info.offset += Ospfv2DBDHeader::fixedSize;
+    info.offset += packet::Ospfv2DBDHeader::fixedSize;
     if (info.offset > info.payloadSize) 
         return;
 
@@ -278,7 +278,7 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
     }
 
     // Verify MTU
-    if (iface.getConfigs().get<Config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
+    if (iface.getConfigs().get<config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;
@@ -327,10 +327,10 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
         auto& rtr = info.neighbor->getRtr();
         while (info.offset < info.payloadSize)
         {
-            Ospfv2LSAHeader lsaHdr;
+            packet::Ospfv2LSAHeader lsaHdr;
             lsaHdr.setBuffer(info.payload + info.offset);
 
-            info.offset += Ospfv2LSAHeader::fixedSize;
+            info.offset += packet::Ospfv2LSAHeader::fixedSize;
             if (info.offset > info.payloadSize) 
                 return;
 
@@ -371,10 +371,10 @@ void PacketDispatcherV2::processLSAck(HeaderInfo& info)
     auto& rtr = info.neighbor->getRtr();
     while (info.offset < info.payloadSize)
     {
-        Ospfv2LSAHeader lsaHdr;
+        packet::Ospfv2LSAHeader lsaHdr;
         lsaHdr.setBuffer(info.payload + info.offset);
 
-        info.offset += Ospfv2LSAHeader::fixedSize;
+        info.offset += packet::Ospfv2LSAHeader::fixedSize;
         if (info.offset > info.payloadSize) 
             return;
 
@@ -397,7 +397,7 @@ void PacketDispatcherV2::processLSAck(HeaderInfo& info)
 
 void PacketDispatcherV2::processLSRequest(PacketDispatcher::HeaderInfo& info)
 {
-    Ospfv2LSRHeader hdr;
+    packet::Ospfv2LSRHeader hdr;
     hdr.setBuffer(info.payload);
 
     // Varify only 12 byte lsa blocks exist
@@ -409,10 +409,10 @@ void PacketDispatcherV2::processLSRequest(PacketDispatcher::HeaderInfo& info)
     auto& lsdb = iface.getArea().lsdb();
     while (info.offset < info.payloadSize)
     {
-        Ospfv2LSRHeader lsrHdr;
+        packet::Ospfv2LSRHeader lsrHdr;
         lsrHdr.setBuffer(info.payload + info.offset);
 
-        info.offset += Ospfv2LSRHeader::fixedSize;
+        info.offset += packet::Ospfv2LSRHeader::fixedSize;
         if (info.offset > info.payloadSize) 
             return;
 
@@ -436,7 +436,7 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
     if (info.neighbor->getState() < Neighbor::State::EXCHANGE)
         return;
 
-    uint32_t lsuSize = readU32(info.payload);
+    uint32_t lsuSize = utils::readU32(info.payload);
     uint32_t routerId = iface.getProcess().getRouterId();
 
     info.offset += 4;
@@ -445,12 +445,12 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 
     for (int i = 0; i < static_cast<int>(lsuSize); i++)
     {
-        Ospfv2LSAHeader lsaHdr;
+        packet::Ospfv2LSAHeader lsaHdr;
         lsaHdr.setBuffer(info.payload + info.offset);
 
         size_t off = info.offset;
 
-        off += Ospfv2LSAHeader::fixedSize;
+        off += packet::Ospfv2LSAHeader::fixedSize;
         if (off > info.payloadSize) 
             return;
 
@@ -469,7 +469,7 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
                 lsaHdr.getOptions()
         };
 
-        if (hdr.length < Ospfv2LSAHeader::fixedSize)
+        if (hdr.length < packet::Ospfv2LSAHeader::fixedSize)
             return;
         if (info.offset + hdr.length > info.payloadSize)
             return;
@@ -479,7 +479,7 @@ void PacketDispatcherV2::processLSUpdate(PacketDispatcher::HeaderInfo& info)
 
         info.offset += hdr.length;
 
-        uint16_t bodyLen = hdr.length - Ospfv2LSAHeader::fixedSize;
+        uint16_t bodyLen = hdr.length - packet::Ospfv2LSAHeader::fixedSize;
         auto body = buildLsaBody(static_cast<uint8_t>(key.lsaType), info.payload + off, bodyLen, key.linkStateId);
 
         if (!body.has_value()) continue;
@@ -515,11 +515,11 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     if (info.packetSize < info.offset + 4)
         return;
 
-    uint16_t llsLen = readU16(llsBase + 2);
+    uint16_t llsLen = utils::readU16(llsBase + 2);
     if (llsLen < 4 || info.offset + llsLen > info.packetSize)
         return;
 
-    bool authEnabled = info.authType == static_cast<uint8_t>(AuthType::CRYPTO) &&
+    bool authEnabled = info.authType == static_cast<uint8_t>(config::ospf::AuthType::CRYPTO) &&
         iface.authKey.has_value() && iface.authKeyId.has_value();
 
     uint32_t extension{0};
@@ -530,7 +530,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         if (size != 4 || offset + 4 > llsLen) 
             return false;
 
-        extension = readU32(llsBase + offset);
+        extension = utils::readU32(llsBase + offset);
         offset += 4;
         return true;
     };
@@ -540,15 +540,15 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
         if (!authEnabled || size != 20 || offset + 20 > llsLen)
             return false;
 
-        const uint32_t seq = readU32(llsBase + offset);
+        const uint32_t seq = utils::readU32(llsBase + offset);
         if (info.neighbor->lastAuthSeq.load(std::memory_order_relaxed) > seq)
             return false;
 
         uint8_t key[16]{};
-        writeU128(key, iface.authKey.value());
+        utils::writeU128(key, iface.authKey.value());
 
         uint8_t digest[16]{};
-        Authentication::generateHMAC(digest, llsBase, llsLen - 16, key, 16, Authentication::HmacType::MD5);
+        security::authentication::generateHMAC(digest, llsBase, llsLen - 16, key, 16, security::authentication::HmacType::MD5);
 
         if (std::memcmp(digest, llsBase + llsLen - 16, 16) != 0)
             return false;
@@ -559,8 +559,8 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
 
     while (offset + 4 < llsLen)
     {
-        uint16_t type = readU16(llsBase + offset);
-        uint16_t size = readU16(llsBase + offset + 2);
+        uint16_t type = utils::readU16(llsBase + offset);
+        uint16_t size = utils::readU16(llsBase + offset + 2);
         offset += 4;
 
         switch (type)
@@ -585,7 +585,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     {
         ChecksumFletcher check;
         check.addBytes(llsBase + 2, llsLen - 2);
-        if (check.finalize() != readU16(llsBase))
+        if (check.finalize() != utils::readU16(llsBase))
             return;
     }
 
@@ -593,18 +593,18 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
     iface.getArea().runDCIntegrityScan();
 }
 
-bool PacketDispatcherV2::processOspfSimpleAuthentication(const Ospfv2Header& hdr)
+bool PacketDispatcherV2::processOspfSimpleAuthentication(const packet::Ospfv2Header& hdr)
 {
-    auto& secretVal = baseConfigs->get<Config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+    auto& secretVal = baseConfigs->get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
     if (!secretVal.hasValue()) return true; // Auth not fully enabled.
-    if (hdr.getAuthType() != static_cast<uint16_t>(AuthType::SIMPLE))
+    if (hdr.getAuthType() != static_cast<uint16_t>(config::ospf::AuthType::SIMPLE))
         return false;
     uint8_t secret[8] = {};
-    writeU64(secret, secretVal.load());
+    utils::writeU64(secret, secretVal.load());
     return std::memcmp(hdr.getAuthentication(), secret, 8) == 0;
 }
 
-bool PacketDispatcherV2::processOspfCryptoAuthentication(HeaderInfo& info, const Ospfv2Header& hdr)
+bool PacketDispatcherV2::processOspfCryptoAuthentication(HeaderInfo& info, const packet::Ospfv2Header& hdr)
 {
     auto& id = iface.authKeyId;
     auto& key = iface.authKey;
@@ -612,21 +612,21 @@ bool PacketDispatcherV2::processOspfCryptoAuthentication(HeaderInfo& info, const
         return true; // Auth not fully enabled
     if (info.packetSize < hdr.getPacketLen() + 16)
         return false; // No size for proper auth.
-    if (hdr.getAuthType() != static_cast<uint16_t>(AuthType::CRYPTO))
+    if (hdr.getAuthType() != static_cast<uint16_t>(config::ospf::AuthType::CRYPTO))
         return false;
     uint8_t* auth = hdr.getAuthentication();
     if (auth[2] != key.value())
         return false;
     if (auth[3] != 16)
         return false;
-    if (uint32_t seq = readU32(auth + 4); seq > info.neighbor->lastAuthSeq.load(std::memory_order_relaxed))
+    if (uint32_t seq = utils::readU32(auth + 4); seq > info.neighbor->lastAuthSeq.load(std::memory_order_relaxed))
         info.neighbor->lastAuthSeq.store(seq, std::memory_order_release);
     else return false;
     
     uint8_t authSecret[16];
-    writeU128(authSecret, key.value());
+    utils::writeU128(authSecret, key.value());
     uint8_t authDigest[16];
-    Authentication::generateHMAC(authDigest, hdr.buffer, hdr.getPacketLen(), authSecret, 16, Authentication::HmacType::MD5);
+    security::authentication::generateHMAC(authDigest, hdr.buffer, hdr.getPacketLen(), authSecret, 16, security::authentication::HmacType::MD5);
     info.authSize = 16;
     return std::memcmp(authDigest, hdr.buffer + hdr.getPacketLen(), 16) == 0;
 }
@@ -656,4 +656,5 @@ std::optional<LsaBody> PacketDispatcherV2::buildLsaBody(uint8_t type, const uint
             return std::nullopt;
     }
 }
-}
+
+} // namespace routing::ospf

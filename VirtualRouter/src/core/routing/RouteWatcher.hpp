@@ -15,6 +15,9 @@
 #include "rib/RibBucket.hpp"
 #include "rib/RouteSource.hpp"
 
+namespace core
+{
+
 template <typename Addr>
 class Rib;
 
@@ -98,7 +101,7 @@ private:
     Fib<Addr>& fib;
     ProcessQueueRef scheduler;
     std::atomic<WatchId> nextId{1};
-    AtomicStack<uint32_t> availableIds;
+    types::AtomicStack<uint32_t> availableIds;
 
     static Addr maskAddr(Addr p, uint8_t l) noexcept
     {
@@ -267,7 +270,7 @@ public:
 
         // Quick reachability check before allocating an ID.
         {
-            RCU::Guard g;
+            utils::RCU::Guard g;
             if (!applyFilter(fib.lookup(addr), filter)) return 0;
         }
 
@@ -275,7 +278,7 @@ public:
         if (!addrId) return 0;
 
         scheduler.post([this, addr, addrId, ctx, fn, filter]() {
-            RCU::Guard g;
+            utils::RCU::Guard g;
             const RibEntry<Addr>* raw = fib.lookup(addr);
             const RibEntry<Addr>* cur = applyFilter(raw, filter);
 
@@ -454,4 +457,7 @@ private:
     }
 };
 
+} // namespace core
+
 #endif // ROUTE_WATCHER_HPP
+

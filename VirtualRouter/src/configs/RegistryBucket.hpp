@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace Config
+namespace config
 {
 template <typename T>
 class Bucket

@@ -22,6 +22,9 @@
 #include <cstdio>
 #include <future>
 
+namespace web
+{
+
 struct WebSession
 {
     std::promise<bool> promise;
@@ -35,7 +38,7 @@ struct WebSession
 class WebSessionManager
 {
 public:
-    explicit WebSessionManager(Global& g, std::string uds)
+    explicit WebSessionManager(core::Global& g, std::string uds)
         : global(g), api(), udsPath(std::move(uds))
     {
         api.setHandler([this](int fd, const nlohmann::json& msg, const UnixApi&) {
@@ -72,7 +75,7 @@ public:
     }
 
 private:
-    Global& global;
+    core::Global& global;
     UnixApi api;
     
     std::string udsPath;
@@ -204,4 +207,7 @@ private:
     }
 };
 
+} // namespace web
+
 #endif // WEB_SESSION_MANAGER_HPP
+

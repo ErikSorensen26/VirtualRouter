@@ -11,7 +11,7 @@
 #include "GlobalIPCommands.h"
 #include "GlobalIPv6Commands.h"
 
-namespace Cli
+namespace cli
 {
 bool Global_Arp_Handler(GLOBAL_PARAMS);
 using Global_Arp = commandAdder<GlobalContext,

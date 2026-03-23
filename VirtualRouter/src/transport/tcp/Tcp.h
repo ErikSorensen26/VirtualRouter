@@ -10,17 +10,18 @@
 #include "Listener.h"
 #include "Connection.h"
 
-class VirtualRouter;
-class TcpSegment;
+namespace core { class VirtualRouter; }
 
-namespace TCP
+namespace transport { class TcpSegment; }
+
+namespace transport::tcp
 {
 class TcpEngine;
 
 class Tcp
 {
 public:
-    explicit Tcp(VirtualRouter& vrf, Config cfg = {});
+    explicit Tcp(core::VirtualRouter& vrf, Config cfg = {});
     ~Tcp();
 
     Tcp(const Tcp&) = delete;
@@ -47,6 +48,7 @@ private:
     TcpEngine* engine{nullptr};
 };
 
-} // namespace TCP
+} // namespace transport::tcp
 
 #endif // TCP_H
+

@@ -7,7 +7,7 @@
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/EigrpContext.hpp"
 
-namespace Cli
+namespace cli
 {
 bool RouterEigrpAddressFamily_AfInterface_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_AfInterface = commandAdder<EigrpContext,

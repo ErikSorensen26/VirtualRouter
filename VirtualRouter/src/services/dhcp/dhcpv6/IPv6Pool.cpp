@@ -3,9 +3,12 @@
 #include "IPv6Pool.h"
 #include <TimeManager.h>
 
+namespace services::dhcp
+{
+
 thread_local std::minstd_rand IPv6Pool::rng{std::random_device{}()};
 
-IPv6Pool::IPv6Pool(TimeManager& timeManager) : timeManager(timeManager) {}
+IPv6Pool::IPv6Pool(core::TimeManager& timeManager) : timeManager(timeManager) {}
 
 IPv6Pool::~IPv6Pool()
 {
@@ -307,3 +310,5 @@ __uint128_t IPv6Pool::generateRandomIP()
     offset = SLAAC_SAFE_OFFSET + 1 + (offset % (size - SLAAC_SAFE_OFFSET - 2));
     return base + offset;
 }
+
+} // namespace services::dhcp

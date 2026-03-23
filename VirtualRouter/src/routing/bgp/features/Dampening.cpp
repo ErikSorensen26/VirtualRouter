@@ -2,7 +2,7 @@
 
 #include "Dampening.h"
 
-namespace BGP
+namespace routing::bgp
 {
 
 static double decayFactor(double halfLifeSecs, double elapsedSecs) noexcept
@@ -86,4 +86,4 @@ bool DampenState::checkReuse(const DampenParams& p, std::chrono::steady_clock::t
     return false;
 }
 
-} // namespace BGP
+} // namespace routing::bgp

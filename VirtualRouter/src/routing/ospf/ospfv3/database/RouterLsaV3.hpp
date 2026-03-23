@@ -8,11 +8,11 @@
 #include <optional>
 #include <algorithm>
 #include <numeric>
+#include <ByteUtils.hpp>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct RouterLinkV3
 {
@@ -49,7 +49,7 @@ struct RouterLsaV3
 
         RouterLsaV3 lsa;
 
-        lsa.options = readU32(buf);
+        lsa.options = utils::readU32(buf);
 
         size_t off = 4;
 
@@ -57,10 +57,10 @@ struct RouterLsaV3
         {
             RouterLinkV3 link;
             link.type = buf[off];
-            link.metric = readU16(buf + off + 2);
-            link.interfaceId = readU32(buf + off + 4);
-            link.neighborInterfaceId = readU32(buf + off + 8);
-            link.neighborRouterId = readU32(buf + off + 12);
+            link.metric = utils::readU16(buf + off + 2);
+            link.interfaceId = utils::readU32(buf + off + 4);
+            link.neighborInterfaceId = utils::readU32(buf + off + 8);
+            link.neighborRouterId = utils::readU32(buf + off + 12);
             lsa.links.push_back(link);
             off += 16;
         }
@@ -73,17 +73,17 @@ struct RouterLsaV3
     {
         if (len != (4 + (16 * links.size()))) return false;
 
-        writeU32(buf, options);
+        utils::writeU32(buf, options);
 
         size_t off = 4;
         for (const auto& link : links)
         {
             buf[off++] = link.type; 
             buf[off++] = 0;
-            writeU16(buf + off, link.metric); off += 2;
-            writeU32(buf + off, link.interfaceId); off += 4;
-            writeU32(buf + off, link.neighborInterfaceId); off += 4;
-            writeU32(buf + off, link.neighborRouterId); off += 4;
+            utils::writeU16(buf + off, link.metric); off += 2;
+            utils::writeU32(buf + off, link.interfaceId); off += 4;
+            utils::writeU32(buf + off, link.neighborInterfaceId); off += 4;
+            utils::writeU32(buf + off, link.neighborRouterId); off += 4;
         }
 
         return true;
@@ -127,6 +127,7 @@ struct RouterLsaV3
         return true;
     }
 };
-}
+} // namespace routing
 
 #endif // ROUTER_LSA_V3_HPP
+

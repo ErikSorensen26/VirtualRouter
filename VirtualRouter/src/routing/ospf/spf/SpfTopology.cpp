@@ -5,7 +5,7 @@
 #include "ospf/OspfProcess.h"
 #include "ospf/OspfTypes.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 template <typename Policy>
 SpfTopology<Policy>::SpfTopology(const Area& area)
@@ -284,4 +284,4 @@ bool SpfTopology<Policy>::expandNetwork(uint64_t vertexId, std::vector<uint32_t>
 
 template class SpfTopology<PolicyV2>;
 template class SpfTopology<PolicyV3>;
-}
+} // namespace routing

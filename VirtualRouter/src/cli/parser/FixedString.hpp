@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <string_view>
 
-namespace Cli
+namespace cli
 {
 template <std::size_t N>
 struct FixedString

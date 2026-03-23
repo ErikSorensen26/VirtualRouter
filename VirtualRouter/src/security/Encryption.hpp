@@ -11,8 +11,10 @@
 #include <openssl/evp.h>      // Updated API for cryptographic operations
 #include <cstring>
 
+namespace security
+{
 
-namespace Authentication 
+namespace authentication 
 {
     enum class HmacType : int
     {
@@ -144,4 +146,7 @@ namespace Authentication
     }
 }
 
+} // namespace security
+
 #endif // ENCRYPTION_HPP
+

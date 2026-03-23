@@ -6,12 +6,15 @@
 #include "BaseQueue.h"
 #include "FIFOQueue.hpp"
 
+namespace qos::egress
+{
+
 enum class TxQueueType
 {
     FIFO
 };
 
-namespace TxQueueFactory
+namespace txqueuefactory
 {
     inline static BaseQueue* create(TxQueueType type, uint32_t capacity, EgressBase& eg)
     {
@@ -26,4 +29,7 @@ namespace TxQueueFactory
     }
 };
 
+} // namespace qos
+
 #endif // TX_QUEUE_HPP
+

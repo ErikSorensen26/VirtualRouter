@@ -8,79 +8,79 @@
 #include "configs/registry/router/BgpRegistry.h"
 #include "bgp/neighbor/PeerTemplate.h"
 
-namespace BGP
+namespace routing::bgp
 {
 struct NeighborAfConfigs
 {
-    NeighborAfConfigs(const AfiSafi& fam, Config::Reference<Config::BgpNeighborRegistry>&& cfgs)
+    NeighborAfConfigs(const AfiSafi& fam, config::Reference<config::BgpNeighborRegistry>&& cfgs)
         : family(fam), configs(cfgs)
     {}
 
-    template <Config::BgpNeighbor F>
+    template <config::BgpNeighbor F>
     decltype(auto) get()
     {
-        if (peerGroup && peerOwnedTable.test(Config::toIndex<F>))
+        if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
             return peerConfigs->get<F>();
         return configs->get<F>();
     }
 
-    template <Config::BgpAfBase F>
+    template <config::BgpAfBase F>
     decltype(auto) get()
     {
-        if (peerGroup && peerOwnedBaseTable.test(Config::toIndex<F>))
-            return peerConfigs->get<Config::BgpNeighbor::AF_BASE>().local()->get<F>();
-        return peerConfigs->get<Config::BgpNeighbor::AF_BASE>().local()->get<F>();
+        if (peerGroup && peerOwnedBaseTable.test(config::toIndex<F>))
+            return peerConfigs->get<config::BgpNeighbor::AF_BASE>().local()->get<F>();
+        return peerConfigs->get<config::BgpNeighbor::AF_BASE>().local()->get<F>();
     }
 
-    template <Config::BgpNeighbor F> decltype(auto) get() const
+    template <config::BgpNeighbor F> decltype(auto) get() const
     {
-        if (peerGroup && peerOwnedTable.test(Config::toIndex<F>))
+        if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
             return std::as_const(peerConfigs->get<F>());
         return std::as_const(configs->get<F>());
     }
 
-    static constexpr std::bitset<Config::toIndex<Config::BgpAfBase::COUNT>> peerOwnedBaseTable = []{
-        std::bitset<Config::toIndex<Config::BgpAfBase::COUNT>> b;
+    static constexpr std::bitset<config::toIndex<config::BgpAfBase::COUNT>> peerOwnedBaseTable = []{
+        std::bitset<config::toIndex<config::BgpAfBase::COUNT>> b;
 
-        b.set(Config::toIndex<Config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>);
-        b.set(Config::toIndex<Config::BgpAfBase::ADDITIONAL_PATHS_SEND>);
-        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>);
-        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>);
-        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>);
-        b.set(Config::toIndex<Config::BgpAfBase::ADVERTISE_BEST_EXTERNAL>);
+        b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>);
+        b.set(config::toIndex<config::BgpAfBase::ADDITIONAL_PATHS_SEND>);
+        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>);
+        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>);
+        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>);
+        b.set(config::toIndex<config::BgpAfBase::ADVERTISE_BEST_EXTERNAL>);
 
         return b;
     }();
 
-    static constexpr std::bitset<Config::toIndex<Config::BgpNeighbor::COUNT>> peerOwnedTable = []{
-        std::bitset<Config::toIndex<Config::BgpNeighbor::COUNT>> b;
+    static constexpr std::bitset<config::toIndex<config::BgpNeighbor::COUNT>> peerOwnedTable = []{
+        std::bitset<config::toIndex<config::BgpNeighbor::COUNT>> b;
 
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_MAP>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_MAP_EXIST_CONDITION>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ADVERTISE_MAP_NON_EXIST_CONDITION>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ANNOUNCE_RPKI_STATE>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ORF_BOTH>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ORF_RECEIVE>);
-        b.set(Config::toIndex<Config::BgpNeighbor::DISTRIBUTE_LIST_OUT>);
-        b.set(Config::toIndex<Config::BgpNeighbor::DISTRIBUTE_LIST_OUT_INTERFACE>);
-        b.set(Config::toIndex<Config::BgpNeighbor::FILTER_LIST_OUT>);
-        b.set(Config::toIndex<Config::BgpNeighbor::NEXT_HOP_SELF>);
-        b.set(Config::toIndex<Config::BgpNeighbor::NEXT_HOP_SELF_ALL>);
-        b.set(Config::toIndex<Config::BgpNeighbor::NEXT_HOP_UNCHANGED>);
-        b.set(Config::toIndex<Config::BgpNeighbor::PREFIX_LIST_OUT>);
-        b.set(Config::toIndex<Config::BgpNeighbor::REMOVE_PRIVATE_AS>);
-        b.set(Config::toIndex<Config::BgpNeighbor::REMOVE_PRIVATE_AS_ALL>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ROUTE_MAP_OUT>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ROUTE_SERVER_CLIENT>);
-        b.set(Config::toIndex<Config::BgpNeighbor::ROUTE_SERVER_CLIENT_CONTEXT>);
-        b.set(Config::toIndex<Config::BgpNeighbor::SEND_COMMUNITY>);
-        b.set(Config::toIndex<Config::BgpNeighbor::SEND_COMMUNITY_BOTH>);
-        b.set(Config::toIndex<Config::BgpNeighbor::SEND_COMMUNITY_EXTENDED>);
-        b.set(Config::toIndex<Config::BgpNeighbor::SEND_COMMUNITY_STANDARD>);
-        b.set(Config::toIndex<Config::BgpNeighbor::UNSUPPRESS_MAP>);
+        b.set(config::toIndex<config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP>);
+        b.set(config::toIndex<config::BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH>);
+        b.set(config::toIndex<config::BgpNeighbor::ADVERTISE_MAP>);
+        b.set(config::toIndex<config::BgpNeighbor::ADVERTISE_MAP_EXIST_CONDITION>);
+        b.set(config::toIndex<config::BgpNeighbor::ADVERTISE_MAP_NON_EXIST_CONDITION>);
+        b.set(config::toIndex<config::BgpNeighbor::ANNOUNCE_RPKI_STATE>);
+        b.set(config::toIndex<config::BgpNeighbor::ORF_BOTH>);
+        b.set(config::toIndex<config::BgpNeighbor::ORF_RECEIVE>);
+        b.set(config::toIndex<config::BgpNeighbor::DISTRIBUTE_LIST_OUT>);
+        b.set(config::toIndex<config::BgpNeighbor::DISTRIBUTE_LIST_OUT_INTERFACE>);
+        b.set(config::toIndex<config::BgpNeighbor::FILTER_LIST_OUT>);
+        b.set(config::toIndex<config::BgpNeighbor::NEXT_HOP_SELF>);
+        b.set(config::toIndex<config::BgpNeighbor::NEXT_HOP_SELF_ALL>);
+        b.set(config::toIndex<config::BgpNeighbor::NEXT_HOP_UNCHANGED>);
+        b.set(config::toIndex<config::BgpNeighbor::PREFIX_LIST_OUT>);
+        b.set(config::toIndex<config::BgpNeighbor::REMOVE_PRIVATE_AS>);
+        b.set(config::toIndex<config::BgpNeighbor::REMOVE_PRIVATE_AS_ALL>);
+        b.set(config::toIndex<config::BgpNeighbor::ROUTE_MAP_OUT>);
+        b.set(config::toIndex<config::BgpNeighbor::ROUTE_REFLECTOR_CLIENT>);
+        b.set(config::toIndex<config::BgpNeighbor::ROUTE_SERVER_CLIENT>);
+        b.set(config::toIndex<config::BgpNeighbor::ROUTE_SERVER_CLIENT_CONTEXT>);
+        b.set(config::toIndex<config::BgpNeighbor::SEND_COMMUNITY>);
+        b.set(config::toIndex<config::BgpNeighbor::SEND_COMMUNITY_BOTH>);
+        b.set(config::toIndex<config::BgpNeighbor::SEND_COMMUNITY_EXTENDED>);
+        b.set(config::toIndex<config::BgpNeighbor::SEND_COMMUNITY_STANDARD>);
+        b.set(config::toIndex<config::BgpNeighbor::UNSUPPRESS_MAP>);
 
         return b;
     }();
@@ -105,8 +105,8 @@ struct NeighborAfConfigs
         return true;
     }
 
-    Config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
-    const Config::BgpNeighborRegistry& getConfigs() const { return configs.get(); }
+    config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
+    const config::BgpNeighborRegistry& getConfigs() const { return configs.get(); }
     PeerGroup* getPeerGroup() { return peerGroup; }
     const PeerGroup* getPeerGroup() const { return peerGroup; }
     PeerPolicyTemplate* getPeerPolicyTemplate() { return peerPolicy; }
@@ -116,11 +116,12 @@ private:
     AfiSafi family;
 
     PeerGroup* peerGroup = nullptr;
-    Config::BgpNeighborRegistry* peerConfigs = nullptr;
+    config::BgpNeighborRegistry* peerConfigs = nullptr;
 
     PeerPolicyTemplate* peerPolicy = nullptr;
-    Config::Reference<Config::BgpNeighborRegistry> configs;
+    config::Reference<config::BgpNeighborRegistry> configs;
 };
-}
+} // namespace routing
 
 #endif // BGP_NEIGHBOR_AF_CONFIGS_HPP
+

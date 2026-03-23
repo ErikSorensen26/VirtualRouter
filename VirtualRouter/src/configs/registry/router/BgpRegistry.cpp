@@ -5,16 +5,16 @@
 #include "bgp/neighbor/NeighborAf.h"
 #include "bgp/BgpProcess.h"
 
-namespace Config
+namespace config
 {
 void BgpNeighborDefaultOriginate(void* n)
 {
-    auto& nbr = *static_cast<BGP::NeighborAf*>(n);
+    auto& nbr = *static_cast<routing::bgp::NeighborAf*>(n);
     if (!nbr.globalNbr().session || !nbr.globalNbr().session->established())
         return;
     nbr.globalNbr().getScheduler().post([&nbr]() {
         std::visit([&nbr](auto& af){
-            if (nbr.getConfigs().get<Config::BgpAfBase::DEFAULT_ORIGINATE>().load())
+            if (nbr.getConfigs().get<config::BgpAfBase::DEFAULT_ORIGINATE>().load())
                 af.sendDefaultOriginate(*nbr.globalNbr().session);
             else
                 af.withdrawDefaultOriginate(*nbr.globalNbr().session);
@@ -24,9 +24,9 @@ void BgpNeighborDefaultOriginate(void* n)
 
 void BgpNeighborSessionShutdown(void* n)
 {
-    auto& nbr = *static_cast<BGP::Neighbor*>(n);
+    auto& nbr = *static_cast<routing::bgp::Neighbor*>(n);
     nbr.getScheduler().post([&nbr]() {
-        if (nbr.getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load())
+        if (nbr.getConfigs().get<config::BgpNeighborSession::SHUTDOWN>().load())
             nbr.getProcess().shutdownNeighbor(nbr);
         else
             nbr.getProcess().unshutdownNeighbor(nbr);
@@ -35,7 +35,7 @@ void BgpNeighborSessionShutdown(void* n)
 
 void BgpNeighborSessionPathAttribute(void* n)
 {
-    auto& nbr = *static_cast<BGP::Neighbor*>(n);
+    auto& nbr = *static_cast<routing::bgp::Neighbor*>(n);
     nbr.getScheduler().post([&nbr]() {
         nbr.buildAttributeRanges();
     });

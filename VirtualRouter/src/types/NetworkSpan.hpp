@@ -9,6 +9,9 @@
 #include <bit>
 #include <iterator>
 
+namespace types
+{
+
 template<std::unsigned_integral T>
 class NetworkSpan
 {
@@ -135,4 +138,7 @@ private:
     }
 };
 
+} // namespace types
+
 #endif // NETWORK_SPAN_HPP
+

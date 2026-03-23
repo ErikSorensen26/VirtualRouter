@@ -12,18 +12,23 @@
 #include "configs/RegistryDefaultTable.hpp"
 #include "configs/SubRegistry.hpp"
 
-namespace BGP
+ // namespace bgp
+
+
+namespace config
 {
+namespace bgp
+{
+
 enum class SlowPeerMode
 {
     STATIC,
     DYNAMIC,
     DYNAMIC_PERMANENT
 };
+
 }
 
-namespace Config
-{
 enum class BgpTransportBase
 {
     KEEPALIVE_INTERVAL,
@@ -82,7 +87,7 @@ using BgpAfBaseRegistry = SubRegistry<BgpAfBase,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::ADVERTISE_BEST_EXTERNAL)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::DEFAULT_ORIGINATE)>,
-    OptionalAtomicField<BGP::SlowPeerMode CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_MODE)>,
+    OptionalAtomicField<config::bgp::SlowPeerMode CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_MODE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(BgpAfBase::SLOW_PEER_DETECTION_THRESHOLD)>
 >;
@@ -400,7 +405,7 @@ enum class BgpAddressFamily
 CONFIG_DEFAULT_TABLE(BGP_ADDRESS_FAMILY_DEFAULTS);
 
 #define BGP_AGGREGATE_ADDRESS_FIELDS(X) \
-    X(IPPrefix,    prefix) \
+    X(types::IPPrefix,    prefix) \
     X(std::string, advertiseMap) \
     X(bool,        asConfedSet) \
     X(std::string, attributeMap) \
@@ -442,7 +447,7 @@ using BgpAddressFamilyRegistry = SubRegistry<BgpAddressFamily,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ROUTE_MAP_PRIORITY)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DEFAULT_METRIC)>,
-    ValueField<std::vector<std::tuple<uint8_t, std::vector<std::tuple<IPPrefix, std::string>>>> CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_RANGE)>,
+    ValueField<std::vector<std::tuple<uint8_t, std::vector<std::tuple<types::IPPrefix, std::string>>>> CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_RANGE)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_EXTERNAL)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_INTERNAL)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_BGP_LOCAL)>,
@@ -458,7 +463,7 @@ using BgpAddressFamilyRegistry = SubRegistry<BgpAddressFamily,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_GATEWAY)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_EBGP)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_IBGP)>,
-    ValueField<std::vector<std::tuple<IPPrefix, bool, std::string>> CONFIG_INDEX_ARG(BgpAddressFamily::NETWORK)>,
+    ValueField<std::vector<std::tuple<types::IPPrefix, bool, std::string>> CONFIG_INDEX_ARG(BgpAddressFamily::NETWORK)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::TABLE_MAP_FILTER)>
 >;
@@ -575,7 +580,7 @@ using BgpRegistry = SubRegistry<Bgp,
     AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_REGEX_DETERMINISTIC)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Bgp::BGP_ROUTER_ID)>,
     ValueField<std::vector<std::tuple<
-        IPAddress,
+        types::IPAddress,
         uint16_t, // port
         uint16_t, // refresh time
         std::string, // ssh username
@@ -584,7 +589,7 @@ using BgpRegistry = SubRegistry<Bgp,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Bgp::BGP_SCAN_TIME)>,
     AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_SUPPRESS_INACTIVE)>,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Bgp::BGP_UPDATE_DELAY)>,
-    OwnedListField<BgpNeighborSessionRegistry, IPAddress CONFIG_INDEX_ARG(Bgp::NEIGHBOR)>,
+    OwnedListField<BgpNeighborSessionRegistry, types::IPAddress CONFIG_INDEX_ARG(Bgp::NEIGHBOR)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Bgp::ROUTE_SERVER_CONTEXT)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Bgp::TEMPLATE_PEER_POLICY)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(Bgp::TEMPLATE_PEER_SESSION)>

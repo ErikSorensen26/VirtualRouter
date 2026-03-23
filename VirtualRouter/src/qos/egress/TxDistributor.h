@@ -7,9 +7,10 @@
 #include <atomic>
 #include <cstring>
 
-class EgressBase;
-struct PacketSlot;
-struct FrameHandle;
+namespace hardware { struct PacketSlot; struct FrameHandle; }
+namespace qos::egress
+{
+
 struct QueueState;
 
 enum class TxDistPolicy
@@ -25,11 +26,11 @@ class TxDistributor
 public:
     TxDistributor(QueueState** queue, uint32_t size);
 
-    bool getFrame(FrameHandle& frame, TxDistPolicy policy = TxDistPolicy::BEST_EFFORT, uint32_t flowHash = 0);
+    bool getFrame(hardware::FrameHandle& frame, TxDistPolicy policy = TxDistPolicy::BEST_EFFORT, uint32_t flowHash = 0);
     void setWeights(const uint16_t* w) { weights = w; }
-    void push(PacketSlot* pkt, TxDistPolicy policy = TxDistPolicy::FLOW_HASH);
-    void pushTo(uint32_t qid, PacketSlot* pkt);
-    void release(FrameHandle& frame);
+    void push(hardware::PacketSlot* pkt, TxDistPolicy policy = TxDistPolicy::FLOW_HASH);
+    void pushTo(uint32_t qid, hardware::PacketSlot* pkt);
+    void release(hardware::FrameHandle& frame);
 
     void appendQueue();
     void popQueue();
@@ -44,4 +45,7 @@ private:
     inline uint32_t pickWeighted();
 };
 
+} // namespace qos
+
 #endif // TX_DISTRIBUTOR_H
+

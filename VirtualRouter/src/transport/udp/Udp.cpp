@@ -5,38 +5,38 @@
 #include "infrastructure/IPPacket.h"
 #include "processing/PacketBuilder.hpp"
 
-namespace Protocol::UDP
+namespace transport::udp
 {
-void reserveUDP(PacketBuilder& packetInfo, AddressFamily af)
+void reserveUDP(processing::PacketBuilder& packetInfo, types::AddressFamily af)
 {
-    af == AddressFamily::IPv4 ? IPPacket::reserveIpv4(packetInfo)
-        : IPPacket::reserveIpv6(packetInfo);
+    af == types::AddressFamily::IPv4 ? infrastructure::ippacket::reserveIpv4(packetInfo)
+        : infrastructure::ippacket::reserveIpv6(packetInfo);
 
-    packetInfo.reserveHeader(HeaderType::UDP, sizeof(UdpHeader));
+    packetInfo.reserveHeader(packet::HeaderType::UDP, sizeof(packet::UdpHeader));
 }
 
 // Sets the UPD header in PacketInfo
 void buildUdp(
-    AddressFamily af,
-    IPPacket::BuildIP& ipBuild,
+    types::AddressFamily af,
+    infrastructure::ippacket::BuildIP& ipBuild,
     uint16_t sourcePort,
     uint16_t destinationPort,
     uint16_t fragmentOffset
 )
 {
-    BuildEntry* nextHeader = ipBuild.packetInfo.nextBuildHeader();
-    if (!nextHeader || nextHeader->type != HeaderType::IPV6)
+    processing::BuildEntry* nextHeader = ipBuild.packetInfo.nextBuildHeader();
+    if (!nextHeader || nextHeader->type != packet::HeaderType::IPV6)
         return; // Drop Packet
 
-    UdpHeader udp;
+    packet::UdpHeader udp;
     udp.setBuffer(nextHeader->buffer);
     udp.setChecksum(0);
     udp.setSourcePort(sourcePort);
     udp.setDestinationPort(destinationPort);
 
-    if (af == AddressFamily::IPv4)
-        IPPacket::buildIpv4(ipBuild);
+    if (af == types::AddressFamily::IPv4)
+        infrastructure::ippacket::buildIpv4(ipBuild);
     else
-        IPPacket::buildIpv6(ipBuild);
+        infrastructure::ippacket::buildIpv6(ipBuild);
 }
-} // Namespace Protocol::UDP
+} // namespace transport::udp

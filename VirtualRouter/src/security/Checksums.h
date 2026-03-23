@@ -6,16 +6,16 @@
 #include <cstdint>
 #include <cstddef>
 
-enum class HeaderType : uint8_t;
+namespace security { enum class HeaderType : uint8_t; }
 
 /**
- * @namespace Checksum
+ * @namespace checksum
  * @brief Provides functions for checksum calculations and related utilities.
  *
  * The Checksum namespace encapsulates various functions used to calculate different types of checksums,
  * convert data formats, and handle protocol-specific checksum operations.
  */
-namespace Checksum
+namespace security::checksum
 {
 
     /**
@@ -41,6 +41,7 @@ namespace Checksum
      * @return A new ByteString representing the header with the checksum inserted.
      */
     void calculateChecksum(uint8_t* packet, size_t headerSize, size_t checksumStartIndex, size_t checksumSize, const uint8_t* pseudoHeader = nullptr, size_t pseudoHeaderSize = 0, bool swap = false);
-}
+} // namespace security::checksum
 
 #endif // CHECKSUMS_H
+

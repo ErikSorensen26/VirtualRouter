@@ -9,6 +9,9 @@
 
 #include "routing/rib/RibEntry.hpp"
 
+namespace core
+{
+
 template<typename Addr>
 class Fib
 {
@@ -16,7 +19,7 @@ public:
     using FibEntry = std::atomic<RibEntry<Addr>*>;
 
     // byte-array API (network order)
-    RibEntry<Addr>* lookup(const NetworkSpan<Addr>& addr) const
+    RibEntry<Addr>* lookup(const types::NetworkSpan<Addr>& addr) const
     {
         FibEntry* fe = tree.lookup(addr);
         return fe ? fe->load(std::memory_order_relaxed) : nullptr;
@@ -35,7 +38,7 @@ public:
     // integer API — converts to network-order bytes internally
     RibEntry<Addr>* lookup(Addr a) const
     {
-        return lookup(reinterpret_cast<const NetworkSpan<Addr>&>(a));
+        return lookup(reinterpret_cast<const types::NetworkSpan<Addr>&>(a));
     }
 
     bool insert(Addr pfx, uint8_t len, FibEntry* ribEntry)
@@ -63,7 +66,10 @@ public:
 private:
     static constexpr uint8_t W = sizeof(Addr)*8;
 
-    LPCTrie<sizeof(Addr), FibEntry, 8, true> tree;
+    types::LPCTrie<sizeof(Addr), FibEntry, 8, true> tree;
 };
 
+} // namespace core
+
 #endif // FIB_HPP
+

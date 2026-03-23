@@ -1,6 +1,7 @@
 // GlobalIPDHCPCommands.cpp
 
 #include <cstdint>
+
 #include <Global.h>
 #include <VirtualRouter.h>
 
@@ -8,7 +9,7 @@
 #include "cli/runtime/CliUtils.h"
 #include "dhcp/dhcpv4/DhcpServer.h"
 
-namespace Cli
+namespace cli
 {
 bool GlobalIPDHCP_Binding_Handler(GLOBAL_PARAMS)
 {
@@ -68,7 +69,7 @@ bool GlobalIPDHCP_Debug_Handler(GLOBAL_PARAMS)
 bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS)
 {
     size_t start = 0;
-    VirtualRouter* vrf = &ctx.vrf;
+    core::VirtualRouter* vrf = &ctx.vrf;
     if (args[0] == "vrf")
     {
         vrf = ctx.global.getRoutingInstance(args[1]);
@@ -76,8 +77,8 @@ bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS)
     }
     if (!vrf) return false;
 
-    IPv4Address ipStart; CliUtils::extractIPv4Address(args[start], ipStart);
-    IPv4Address ipEnd; CliUtils::extractIPv4Address(args[start + 1], ipEnd);
+    types::IPv4Address ipStart; cli::utils::extractIPv4Address(args[start], ipStart);
+    types::IPv4Address ipEnd; cli::utils::extractIPv4Address(args[start + 1], ipEnd);
 
     {
         //TODO

@@ -14,29 +14,32 @@
 #include "bgp/rib/RibTypes.hpp"
 #include "bgp/rib/LocRib.hpp"
 
-using ExampleNlriType = BGP::NlriPolicy<IPv4Prefix, BGP::LocRibType::LPC_TRIE, BGP::AfiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST}>;
+namespace routing
+{
+
+using ExampleNlriType = bgp::NlriPolicy<types::IPv4Prefix, bgp::LocRibType::LPC_TRIE, bgp::AfiSafi{BGP_AFI_IPV4, BGP_SAFI_UNICAST}>;
 
 class ExampleNlri : public ExampleNlriType
 {
 public:
-    ExampleNlri(VirtualRouter& vrf, BGP::BgpProcess& proc) : ExampleNlriType(vrf, proc),
+    ExampleNlri(core::VirtualRouter& vrf, bgp::BgpProcess& proc) : ExampleNlriType(vrf, proc),
         rib(vrf.getRib()) {}
 
     void installRoute(const NlriInstall& install) override
     {
-        RibEntry<uint32_t>* route = buildRoute(install);
+        core::RibEntry<uint32_t>* route = buildRoute(install);
         if (!route) return;
         rib.addRoute(route);
     }
 
     void installRoutes(const std::vector<NlriInstall>& installs) override
     {
-        std::vector<RibEntry<uint32_t>*> entries;
+        std::vector<core::RibEntry<uint32_t>*> entries;
         entries.reserve(installs.size());
         
         for (const auto& install : installs)
         {
-            RibEntry<uint32_t>* route = buildRoute(install);
+            core::RibEntry<uint32_t>* route = buildRoute(install);
             if (!route) continue;
             entries.push_back(route);
         }
@@ -46,9 +49,9 @@ public:
         rib.addRoutes(entries);
     }
 
-    void withdrawRoute(const IPv4Prefix& nlri) override
+    void withdrawRoute(const types::IPv4Prefix& nlri) override
     {
-        rib.removeRoute(nlri.addr, nlri.prefixLength, RouteSource::BGP, BGP::ProcessAccessor::getAsNum(process));
+        rib.removeRoute(nlri.addr, nlri.prefixLength, core::RouteSource::BGP, bgp::ProcessAccessor::getAsNum(process));
     }
 
     void withdrawRoutes(const std::vector<Nlri>& nlri) override
@@ -57,47 +60,47 @@ public:
         withdraws.reserve(nlri.size());
         for (const auto& n : nlri)
             withdraws.push_back({n.addr, n.prefixLength});
-        rib.removeRoutes(withdraws, RouteSource::BGP, BGP::ProcessAccessor::getAsNum(process));
+        rib.removeRoutes(withdraws, core::RouteSource::BGP, bgp::ProcessAccessor::getAsNum(process));
     }
 
-    static size_t nlriEncodedSize(const IPv4Prefix& n)
+    static size_t nlriEncodedSize(const types::IPv4Prefix& n)
     {
         return 1u + (static_cast<size_t>(n.prefixLength) + 7u) / 8u;
     }
 
-    static void encodeNlri(uint8_t* buf, const IPv4Prefix& n)
+    static void encodeNlri(uint8_t* buf, const types::IPv4Prefix& n)
     {
         buf[0] = n.prefixLength;
         size_t bytes = (static_cast<size_t>(n.prefixLength) + 7u) / 8u;
-        writeBytes(buf + 1, n.addr, bytes);
+        utils::writeBytes(buf + 1, n.addr, bytes);
     }
 
-    static size_t decodeNlri(const uint8_t* buf, IPv4Prefix& n)
+    static size_t decodeNlri(const uint8_t* buf, types::IPv4Prefix& n)
     {
         n.prefixLength = buf[0];
         size_t bytes = (static_cast<size_t>(n.prefixLength) + 7u) / 8u;
-        n.addr = readBytes<uint32_t>(buf, bytes);
+        n.addr = utils::readBytes<uint32_t>(buf, bytes);
         return 1u + bytes;
     }
 
 private:
-    RibEntry<uint32_t>* buildRoute(const NlriInstall& install)
+    core::RibEntry<uint32_t>* buildRoute(const NlriInstall& install)
     {
-        RibEntry<uint32_t>* entry = new RibEntry<uint32_t>;
+        core::RibEntry<uint32_t>* entry = new core::RibEntry<uint32_t>;
         entry->prefix        = install.route.route.nlri.addr;
         entry->length        = install.route.route.nlri.prefixLength;
-        entry->source        = RouteSource::BGP;
-        entry->processId     = BGP::ProcessAccessor::getAsNum(process);
+        entry->source        = core::RouteSource::BGP;
+        entry->processId     = bgp::ProcessAccessor::getAsNum(process);
         entry->adminDistance = install.distance;
         entry->metric        = install.metric;
 
-        auto addHop = [&](const BGP::InboundRoute<IPv4Prefix>& r) -> bool
+        auto addHop = [&](const bgp::InboundRoute<types::IPv4Prefix>& r) -> bool
         {
             auto attrs = r.getPathAttributes();
             auto& nh = attrs.path.nextHop;
             if (!nh.isIPv4()) return false;
             uint32_t addr = nh.v4();
-            const RibEntry<uint32_t>* nhEntry = rib.lookup(nh.v4raw());
+            const core::RibEntry<uint32_t>* nhEntry = rib.lookup(nh.v4raw());
             if (!nhEntry)
                 return false;
             if (!install.recursiveHost && nhEntry->length == 32)
@@ -117,10 +120,10 @@ private:
         return entry;
     }
 
-    RoutingTable& rib;
+    core::RoutingTable& rib;
 };
 
-namespace BGP
+namespace bgp
 {
 template <typename Variant>
 struct VariantTypes;
@@ -161,4 +164,7 @@ using Nlri = std::variant<
 static_assert((validateNlriVariant((Nlri*)nullptr), true));
 }
 
+} // namespace routing
+
 #endif // BGP_NLRI_HPP
+

@@ -6,6 +6,9 @@
 #include <string>
 #include <cstdint>
 
+namespace interface
+{
+
 /**
  * @enum InterfaceType
  * @brief Enunerates the various types of network interfaces supported
@@ -65,4 +68,7 @@ inline static std::string getInterfaceType(const InterfaceType type)
     }
 }
 
+} // namespace interface
+
 #endif // INTERFACE_TYPE_HPP
+

@@ -10,20 +10,18 @@
 
 #include <ControlScheduler.h>
 
-#include "packet/HeaderHelpers.hpp"
+#include <ByteUtils.hpp>
 #include "GlobalAggregator.h"
 #include "EigrpConfig.h"
 #include "InterfaceManager.h"
 #include "Topology.h"
 #include "RouteManager.h"
 
+namespace core { class VirtualRouter; }
+namespace interface { enum class InterfaceType : uint8_t; }
 class Internal_EigrpTest;
-class VirtualRouter;
 
-enum class InterfaceType : uint8_t;
-enum class AddressFamily : uint8_t;
-
-namespace EIGRP
+namespace routing::eigrp
 {
 struct EigrpAutonomousSystem
 {
@@ -56,19 +54,19 @@ struct EigrpInterfaceInstance
 class Eigrp
 {
 public:
-    using InterfaceKey = std::pair<InterfaceType, float>;
-    friend class ::Internal_EigrpTest;
-    Eigrp(uint32_t as, AddressFamily af, VirtualRouter* vrf, bool named = false);
+    using InterfaceKey = std::pair<interface::InterfaceType, float>;
+    friend class Internal_EigrpTest;
+    Eigrp(uint32_t as, types::AddressFamily af, core::VirtualRouter* vrf, bool named = false);
     virtual ~Eigrp();
     virtual void start();
     virtual void shutdown();
     void restart();
     void runMaintenance();
     bool calculateRID();
-    bool isInNetworkRange(IPv4Address testIp);
+    bool isInNetworkRange(types::IPv4Address testIp);
 
-    void addGlobalNeighbor(const IPAddress& neighborIp, Neighbor* neighbor);
-    void delGlobalNeighbor(const IPAddress& neighborIp);
+    void addGlobalNeighbor(const types::IPAddress& neighborIp, Neighbor* neighbor);
+    void delGlobalNeighbor(const types::IPAddress& neighborIp);
     size_t totalNeighbors() { return allNeighbors.size(); }
     void broadcastRouteChanges(const std::vector<const RouteInfo*>& changedRoutes);
 
@@ -87,23 +85,23 @@ public:
     };
 
     inline uint16_t getVirtualRouterID() const { return virtualRouterID; }
-    inline uint8_t* routerID(uint8_t* out) const { writeU32(out, rid.id); return out; }
+    inline uint8_t* routerID(uint8_t* out) const { utils::writeU32(out, rid.id); return out; }
     inline uint32_t routerID() const { return rid.id; }
     inline void routerID(uint32_t id) { rid.id = id; rid.isStatic = true; }
 
-    ProcessQueue& getScheduler() { return scheduler; }
+    core::ProcessQueue& getScheduler() { return scheduler; }
 
     bool isNamed() const { return namedMode; }
     uint32_t getAS() const { return asNumber; }
-    AddressFamily getAF() const { return addressFamily; }
+    types::AddressFamily getAF() const { return addressFamily; }
 
     void clearRouterID() { rid.isStatic = false; calculateRID(); }
 
-    VirtualRouter* routingInstance; ///< Routing instance coorsponding with the current process.
+    core::VirtualRouter* routingInstance; ///< Routing instance coorsponding with the current process.
 
 private:
     const uint32_t asNumber; ///< Autonomous System number.
-    const AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
+    const types::AddressFamily addressFamily; ///< Address family (IPv4/IPv6).
 
     EigrpTopology topology;
     InterfaceManager ifaceMgr;
@@ -114,18 +112,18 @@ private:
     RouterID rid; ///< Router ID configuration.
     uint16_t virtualRouterID = 0x0000; ///< Virtual Router ID.
 
-    ProcessQueue scheduler;
+    core::ProcessQueue scheduler;
 
 public:
     RouteManager routeManager;
-    std::unordered_map<IPAddress, Neighbor*> allNeighbors;
+    std::unordered_map<types::IPAddress, Neighbor*> allNeighbors;
 
 };
 
 class ClassicEigrp : public Eigrp
 {
 public:
-    ClassicEigrp(uint32_t& as, AddressFamily af, VirtualRouter* vrf) : Eigrp(as, af, vrf) {}
+    ClassicEigrp(uint32_t& as, types::AddressFamily af, core::VirtualRouter* vrf) : Eigrp(as, af, vrf) {}
     void initializeEigrp();
     void shutdown();
 };
@@ -136,11 +134,12 @@ private:
     std::string processName; ///< Name of the Named EIGRP process.
 
 public:
-    NamedEigrp(uint32_t& as, AddressFamily af, const std::string& name, VirtualRouter* vrf, bool multicast);
+    NamedEigrp(uint32_t& as, types::AddressFamily af, const std::string& name, core::VirtualRouter* vrf, bool multicast);
     void initializeEigrp();
     void shutdown();
     void configureInterface(uint32_t interfaceId);
 };
-}
+} // namespace routing
 
 #endif // EIGRP_CORE_H
+

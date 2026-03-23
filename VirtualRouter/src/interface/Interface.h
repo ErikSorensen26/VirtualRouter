@@ -10,37 +10,22 @@
 
 #include "configs/InterfaceConfigs.h"
 
+namespace core { class VirtualRouter; }
+namespace processing { class PacketBuilder; }
+namespace qos::egress { class TxDistributor; }
+namespace hardware { struct HwIfaceInfo; }
+namespace routing::eigrp { struct EigrpInterfaceInstance; }
+namespace routing::ospf { struct OspfInterfaceInstance; struct InterfaceConfigs; }
+namespace infrastructure { class Arp; class Ndp; }
+namespace services::dhcp { class DhcpClient; class Dhcpv6Client; }
+
 class EigrpTest; ///< Forward declaration of EigrpTest.
-class VirtualRouter; ///< Forward declaration of VirtualRouter.
 class MockInterface; ///< Forward declaration of MockInterface.
-class PacketBuilder; ///< Forward declaration of PacketBuilder.
-class TxDistributor; ///< Forward declaration of TxDistributor.
-struct HwIfaceInfo; ///< Forward declaration of HwIfaceInfo.
+
+namespace interface
+{
 
 enum class InterfaceType : uint8_t; ///< Forward declaration of InterfaceType.
-
-namespace EIGRP
-{
-struct EigrpInterfaceInstance;  ///< Forward declaration of EigrpInterfaceInstance struct.
-}
-namespace OSPF
-{
-struct OspfInterfaceInstance;
-struct InterfaceConfigs;
-}
-
-namespace Protocol 
-{
-class DhcpClient; ///< Forward declaration of DHCPv4 Client.
-class Dhcpv6Client; ///< Forward declaration of DHCPv6 Client.
-class Arp; ///< Forward declaration of ARP.
-class Ndp; ///< Forward declaration of NDP.
-}
-
-namespace EigrpConfigs 
-{
-struct InterfaceConfigs; ///< Forward declaration of InterfaceConfigs.
-}
 
 /**
  * @enum StateChange
@@ -72,17 +57,17 @@ struct InterfaceCreation
 {
     InterfaceType interfaceType;    ///< Type of interface.
     float interfaceId;              ///< ID of interface (user input).
-    VirtualRouter& vrf;             ///< VRF that the interface will be initialized in.
-    const HwIfaceInfo& info;        ///< Hardware information of the NIC.
+    core::VirtualRouter& vrf;             ///< VRF that the interface will be initialized in.
+    const hardware::HwIfaceInfo& info;        ///< Hardware information of the NIC.
     bool debug;                     ///< Debug mode for testing.
 };
 
 /**
  * @class Interface
- * @brief Represents a fully functional L2/L3 interface within a VirtualRouter (VRF).
+ * @brief Represents a fully functional L2/L3 interface within a core::VirtualRouter (VRF).
  *
  * The Interface class integrates:
- * - Hardware bring-up/bring-down (via TxQueueManager, RxQueueManager, and HwManager)
+ * - Hardware bring-up/bring-down (via qos::TxQueueManager, RxQueueManager, and HwManager)
  * - L2 neighbor discovery (ARP for IPv4, NDP for IPv6)
  * - IP configuration management for IPv4 and IPv6
  * - Packet ingress and egress pipelines
@@ -92,7 +77,7 @@ struct InterfaceCreation
  *
  * ## Architectural Role
  * An Interface is the primary binding between:
- * - **Hardware NICs** (via TxDistributor / Rx queues)
+ * - **Hardware NICs** (via qos::TxDistributor / Rx queues)
  * - **VRF control plane** (routing protocols, timers, forwarding logic)
  * - **Neighbor discovery processes** (ARP/NDP)
  * - **Address assignment subsystems** (DHCPv4/DHCPv6)
@@ -118,7 +103,7 @@ struct InterfaceCreation
  *
  * Egress path:
  * ```
- * enqueuePacket() → encapsulate() → TxDistributor → NIC driver
+ * enqueuePacket() → encapsulate() → qos::TxDistributor → NIC driver
  * ```
  *
  * ## State Machine
@@ -138,20 +123,20 @@ struct InterfaceCreation
  *
  * Interface does **not** own:
  * - The VRF it belongs to
- * - PacketBuilder buffers (owned by the caller)
- * - Hardware queues (owned by TxQueueManager/RxQueueManager)
+ * - processing::PacketBuilder buffers (owned by the caller)
+ * - Hardware queues (owned by qos::TxQueueManager/RxQueueManager)
  */
 class Interface
 {
 public:
-    friend class ::MockInterface; ///< Test harness access for controlled interface testing.
-    friend class ::EigrpTest; ///< Test harness access for controlled EIGRP testing.
+    friend class MockInterface; ///< Test harness access for controlled interface testing.
+    friend class EigrpTest; ///< Test harness access for controlled EIGRP testing.
 
     /**
      * @brief Construct a new Interface object.
      *
      * Performs initial hardware registration:
-     * - Registers the interface with TxQueueManager and RxQueueManager
+     * - Registers the interface with qos::TxQueueManager and RxQueueManager
      * - Registers with the HwManager (allows link up/down control)
      * - Initializes configuration structures
      *
@@ -198,7 +183,7 @@ public:
      * @param subnet    Prefix length (0–32).
      * @param secondary Set the IP as a secondary address.
      */
-    virtual void setIPv4(IPv4Prefix prefix, bool secondary = false);
+    virtual void setIPv4(types::IPv4Prefix prefix, bool secondary = false);
 
     /**
      * @brief Assign an IPv6 address to the interface.
@@ -213,21 +198,21 @@ public:
      * @param prefix    Prefix length (default 64).
      * @param eui64     Whether EUI-64 formatting should apply.
      */
-    virtual void setIPv6(const IPv6Prefix& addr, bool linkLocal = false, bool eui64 = false);
+    virtual void setIPv6(const types::IPv6Prefix& addr, bool linkLocal = false, bool eui64 = false);
 
     // IP MANAGEMENT
 
     /**
      * @brief Remove the interface's IPv4 configuration.
      */
-    void removeIPv4(const IPv4Prefix* secondary = nullptr);
+    void removeIPv4(const types::IPv4Prefix* secondary = nullptr);
 
     /**
      * @brief Remove a specific IPv6 address or the link-local address.
      *
      * @param ip Optional IPv6 address; if null, removes the link-local.
      */
-    void removeIPv6(const IPv6Prefix* ip = nullptr);
+    void removeIPv6(const types::IPv6Prefix* ip = nullptr);
 
     /**
      * @brief Remove all IPv6 addresses from this interface.
@@ -251,7 +236,7 @@ public:
      * @param address The duplicate IPv6 address.
      * @param linkLocal True if matching against link-local address.
      */
-    void markAddressDuplicate(IPv6Address address, bool linkLocal = false);
+    void markAddressDuplicate(types::IPv6Address address, bool linkLocal = false);
 
     // INTERFACE STATE
 
@@ -284,7 +269,7 @@ public:
     /**
      * @brief Enqueue a packet for transmission.
      *
-     * @param packetInfo PacketBuilder containing L3/L4/L2 details.
+     * @param packetInfo processing::PacketBuilder containing L3/L4/L2 details.
      * @param mac Destination MAC to overwrite into Ethernet header.
      *
      * Steps:
@@ -294,12 +279,12 @@ public:
      *
      * No transmission occurs if thread subsystem is not running.
      */
-    virtual void enqueuePacket(PacketBuilder& packetInfo, uint64_t mac);
+    virtual void enqueuePacket(processing::PacketBuilder& packetInfo, uint64_t mac);
 
     /**
      * @brief Enqueue a packet for transmission.
      *
-     * @param packetInfo PacketBuilder containing L3/L4/L2 details.
+     * @param packetInfo processing::PacketBuilder containing L3/L4/L2 details.
      *
      * Steps:
      * - Encapsulate into full Ethernet frame
@@ -307,16 +292,16 @@ public:
      *
      * No transmission occurs if thread subsystem is not running.
      */
-    virtual void enqueuePacket(PacketBuilder& packetInfo);
+    virtual void enqueuePacket(processing::PacketBuilder& packetInfo);
 
     // VRF MANAGEMENT
 
     /**
      * @brief Get the VRF the interface currently belongs to.
      *
-     * @return VirtualRouter* Pointer to VRF (atomic load, lock-free).
+     * @return core::VirtualRouter* Pointer to VRF (atomic load, lock-free).
      */
-    VirtualRouter* getVRF();
+    core::VirtualRouter* getVRF();
 
     /**
      * @brief Reassign this interface to a new VRF.
@@ -333,19 +318,19 @@ public:
      * @param vrf Target VRF.
      * @return True if reassigned, false if VRF was unchanged.
      */
-    bool setVRF(VirtualRouter* vrf);
+    bool setVRF(core::VirtualRouter* vrf);
 
     std::atomic<bool> shutdownFlag = true; ///< Administrative shutdown flag.
     std::atomic<bool> carrierFlag = true; ///< Physical carrier status flag.
 
     InterfaceConfigs configs; ///< IP addressing and protocol configuration.
 
-    Protocol::Arp* arp = nullptr; ///< ARP module instance (ipv4).
-    Protocol::Ndp* ndp = nullptr; ///< NDP module instance (ipv6).
+    infrastructure::Arp* arp = nullptr; ///< ARP module instance (ipv4).
+    infrastructure::Ndp* ndp = nullptr; ///< NDP module instance (ipv6).
 
     // EIGRP INTERFACES
 
-    std::unordered_map<uint32_t, EIGRP::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
+    std::unordered_map<uint32_t, routing::eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
 
     /**
      * @brief Retrieve or lazily allocate the EIGRP per-interface config registry for a given AS.
@@ -353,23 +338,23 @@ public:
      * @param as Autonomous system number.
      * @return Reference to the EIGRP interface config registry for that AS.
      */
-    Config::Reference<Config::EigrpInterfaceRegistry> getEigrpConfig(uint32_t as);
+    config::Reference<config::EigrpInterfaceRegistry> getEigrpConfig(uint32_t as);
 
     // OSPF INTERFACES
     
-    std::unordered_map<uint32_t, OSPF::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
+    std::unordered_map<uint32_t, routing::ospf::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
 
     /**
      * @brief Retrieves or allocates OSPF per-interface config block.
      *
      * @return Reference wrapper to the OSPF interface config registry.
      */
-    Config::Reference<Config::OspfInterfaceBaseRegistry> getOspfConfig();
+    config::Reference<config::OspfInterfaceBaseRegistry> getOspfConfig();
 
     // DHCP CLIENT STATE
 
-    Protocol::DhcpClient* dhcp = nullptr; ///< DHCPv4 client instance.
-    //Protocol::Dhcpv6Client* dhcpv6 = nullptr; ///< DHCPv6 client instance.
+    services::dhcp::DhcpClient* dhcp = nullptr; ///< DHCPv4 client instance.
+    //services::dhcp::Dhcpv6Client* dhcpv6 = nullptr; ///< DHCPv6 client instance.
 
     // RUNNING MANAGEMENT
 
@@ -387,7 +372,7 @@ public:
      */
     virtual void startThreads();
 
-    TxDistributor* tx;      ///< Egress object for packet sending.
+    qos::egress::TxDistributor* tx;      ///< Egress object for packet sending.
 
     // INGRESS
 
@@ -403,7 +388,7 @@ public:
 
 private:
 
-    std::atomic<VirtualRouter*> routingInstance = nullptr; ///< VRF pointer (atomic for lock-free reads).
+    std::atomic<core::VirtualRouter*> routingInstance = nullptr; ///< VRF pointer (atomic for lock-free reads).
 
     /**
      * @brief Internal state machine transition for IPv4.
@@ -422,4 +407,7 @@ private:
     std::atomic<bool> threadsRunning; ///< True when Rx/Tx threads and protocol modules are active.
 };
 
+} // namespace interface
+
 #endif // INTERFACE_H
+

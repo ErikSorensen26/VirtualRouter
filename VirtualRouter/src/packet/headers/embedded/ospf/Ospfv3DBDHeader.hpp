@@ -5,6 +5,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 /*
  * @struct Ospfv3DBDHeaderRaw
  */
@@ -28,9 +31,9 @@ struct Ospfv3DBDHeader
 {
     DEFINE_FIXED_HEADER(Ospfv3DBDHeaderRaw);
 
-    uint16_t getMtu() const                 { return readU16(raw->mtu); }
-    uint32_t getOptions() const             { return readU16(raw->mtu); }
-    uint32_t getSeqNum() const              { return readU32(raw->seqNum); }
+    uint16_t getMtu() const                 { return utils::readU16(raw->mtu); }
+    uint32_t getOptions() const             { return utils::readU16(raw->mtu); }
+    uint32_t getSeqNum() const              { return utils::readU32(raw->seqNum); }
 
     bool getFlagMS() const                  { return raw->flags & 0x01; }
     bool getFlagM() const                   { return raw->flags & 0x02; }
@@ -38,18 +41,21 @@ struct Ospfv3DBDHeader
     bool getFlagR() const                   { return raw->flags & 0x08; }
 
     void setMtu(uint16_t val)
-        { writeU16(raw->mtu, val); }
+        { utils::writeU16(raw->mtu, val); }
     void setSequence(uint32_t val)
-        { writeU32(raw->seqNum, val); }
+        { utils::writeU32(raw->seqNum, val); }
 
     void setFlagMS(bool val)
-        { setBit(&raw->flags, 7, val); }
+        { utils::setBit(&raw->flags, 7, val); }
     void setFlagM(bool val)
-        { setBit(&raw->flags, 6, val); }
+        { utils::setBit(&raw->flags, 6, val); }
     void setFlagI(bool val)
-        { setBit(&raw->flags, 5, val); }
+        { utils::setBit(&raw->flags, 5, val); }
     void setFlagR(bool val)
-        { setBit(&raw->flags, 4, val); }
+        { utils::setBit(&raw->flags, 4, val); }
 };
 
+} // namespace packet
+
 #endif // OSPFV3_DBD_HEADER_HPP
+

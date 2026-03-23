@@ -8,17 +8,15 @@
 #include <atomic>
 #include <IPAddress.h>
 
-class Global;
-class ProcessQueue;
+namespace core { class Global; }
+namespace core { class ProcessQueue; }
+namespace packet { struct StaticHeader; }
+
 class Internal_EigrpTest;
-struct StaticHeader;
-namespace EIGRP
+
+namespace routing::eigrp
 {
 struct OutgoingQuery;
-}
-
-namespace EIGRP
-{
 class EigrpInterface;
 class Neighbor;
 class ReliablePacket;
@@ -30,8 +28,8 @@ struct ReliableInfo;
 class InterfaceTimers
 {
 public:
-    friend class ::Internal_EigrpTest;
-    InterfaceTimers(EigrpInterface& iface, ProcessQueue& scheduler);
+    friend class Internal_EigrpTest;
+    InterfaceTimers(EigrpInterface& iface, core::ProcessQueue& scheduler);
     ~InterfaceTimers();
 
     // Hello
@@ -74,8 +72,9 @@ private:
 
     Eigrp* base;
     EigrpInterface& iface;
-    ProcessQueue& scheduler;
+    core::ProcessQueue& scheduler;
 };
-}
+} // namespace routing::eigrp
 
 #endif // EIGRP_TIMER_MANAGER_H
+

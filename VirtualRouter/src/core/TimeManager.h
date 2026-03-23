@@ -13,6 +13,9 @@
 
 #include "ThreadPool.hpp"
 
+namespace core
+{
+
 class TimeManager 
 {
 public:
@@ -70,4 +73,7 @@ private:
     ThreadPool& threadPool;
 };
 
+} // namespace utils
+
 #endif // TIME_MANAGER_H
+

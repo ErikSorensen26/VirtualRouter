@@ -10,6 +10,9 @@
 #include "RibBucket.hpp"
 #include "routing/RouteWatcher.hpp"
 
+namespace core
+{
+
 template <typename AddrType>
 class Rib
 {
@@ -108,7 +111,7 @@ public:
         });
     }
 
-    RibEntry<AddrType>* lookup(const NetworkSpan<AddrType>& addr) const
+    RibEntry<AddrType>* lookup(const types::NetworkSpan<AddrType>& addr) const
     {
         return fib.lookup(addr);
     }
@@ -129,7 +132,7 @@ private:
         }
         else
         {
-            RCU::Guard g;
+            utils::RCU::Guard g;
             if (it->second->addRoute(e))
                 routeWatcher.announceRouteChange(key.prefix, key.length, *it->second);
         }
@@ -145,14 +148,14 @@ private:
         RibBucket<AddrType>* b = it->second;
         b->removeRoute(src, pid);
 
-        RCU::Guard g;
+        utils::RCU::Guard g;
 
         if (b->empty())
         {
             table.erase(it);
             fib.erase(key.prefix, key.length);
             routeWatcher.announceRouteChange(key.prefix, key.length, *b);
-            RCU::retire([b]{ delete b; });
+            utils::RCU::retire([b]{ delete b; });
         }
         else
         {
@@ -161,4 +164,7 @@ private:
     }
 };
 
+} // namespace core
+
 #endif // RIB_HPP
+

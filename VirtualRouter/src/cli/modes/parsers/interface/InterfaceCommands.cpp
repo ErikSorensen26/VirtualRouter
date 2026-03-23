@@ -7,7 +7,7 @@
 #include "cli/modes/Mode.hpp"
 #include "cli/runtime/CliEngine.h"
 
-namespace Cli
+namespace cli
 {
 bool Interface_Exit_Handler(INTERFACE_PARAMS)
 {

@@ -9,6 +9,9 @@
 
 #include "rib/Rib.hpp"
 
+namespace core
+{
+
 class RoutingTable
 {
     Rib<uint32_t> rib4;
@@ -69,9 +72,9 @@ public:
     }
 
     template <typename AddrType>
-    RibEntry<AddrType>* lookup(const NetworkSpan<AddrType>& addr)
+    RibEntry<AddrType>* lookup(const types::NetworkSpan<AddrType>& addr)
     {
-        RCU::Guard g;
+        utils::RCU::Guard g;
         if constexpr (std::is_same_v<AddrType, uint32_t>)
             return rib4.lookup(addr);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
@@ -83,7 +86,7 @@ public:
     template <typename AddrType>
     RibEntry<AddrType>* lookup(AddrType addr)
     {
-        return lookup<AddrType>(reinterpret_cast<const NetworkSpan<AddrType>&>(addr));
+        return lookup<AddrType>(reinterpret_cast<const types::NetworkSpan<AddrType>&>(addr));
     }
 
     template <typename AddrType>
@@ -135,12 +138,15 @@ public:
     {
         rib4.clear();
         rib6.clear();
-        RCU::synchronize();
-        RCU::tryReclaim();
+        utils::RCU::synchronize();
+        utils::RCU::tryReclaim();
     }
 
 private:
     template <typename T> static constexpr bool always_false = false;
 };
 
+} // namespace core
+
 #endif // ROUTING_TABLE_HPP
+

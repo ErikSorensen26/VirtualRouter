@@ -13,7 +13,8 @@
 // TODO add new "single_use" property that goes with subcommand_sequence
 // TODO add new "repeatable" property that goes with subcommand_sequence
 
-
+namespace cli
+{
 static std::string lowerCase(std::string str) 
 {
     std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) -> unsigned char {
@@ -1169,7 +1170,7 @@ bool CliSession::matchInputPattern(const std::string &userInput, const std::stri
 
     if (expectedPattern == "X:X:X:X::X")
     {
-        if (CliUtils::isIPv6Address(userInput))
+        if (cli::utils::isIPv6Address(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1179,7 +1180,7 @@ bool CliSession::matchInputPattern(const std::string &userInput, const std::stri
 
     if (expectedPattern == "X:X:X:X::X/<0-128>")
     {
-        if (CliUtils::isIPv6AddressWithMask(userInput))
+        if (cli::utils::isIPv6AddressWithMask(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1189,7 +1190,7 @@ bool CliSession::matchInputPattern(const std::string &userInput, const std::stri
 
     if (expectedPattern == "H.H.H")
     {
-        if (CliUtils::isMACAddress(userInput))
+        if (cli::utils::isMACAddress(userInput))
         {
             currentPattern = expectedPattern;
             isPatternMatching = true;
@@ -1354,4 +1355,5 @@ void CliSession::historyToGlobal()
     modeHistory.clear();
     modeHistory.push_back(&engine.getCommandTree()); 
     configNode = &engine.getCommandTree();
+}
 }

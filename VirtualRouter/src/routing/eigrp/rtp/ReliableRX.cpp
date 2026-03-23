@@ -7,12 +7,12 @@
 #include "eigrp/core/Eigrp.h"
 #include "interface/Interface.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
-void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader& eigrpPacket, const IPAddress& neighborIp, bool multicast)
+void ReliableTransport::handleIncoming(const uint8_t* ipStart, const packet::EigrpHeader& eigrpPacket, const types::IPAddress& neighborIp, bool multicast)
 {
     // Check if passive
-    if (iface.configs->get<Config::EigrpInterface::PASSIVE_INTERFACE>().load())
+    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return;
 
     // Validate packet version
@@ -22,7 +22,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
     RTPInfo hdrInfo(eigrpPacket, neighborIp);
     parseEigrpOptions(eigrpPacket.getTrail().data(), eigrpPacket.getTrail().size(), hdrInfo.opts);
 
-    const TLV16Option* authOpt = nullptr;
+    const packet::TLV16Option* authOpt = nullptr;
     for (const auto& opt : hdrInfo.opts)
     {
         if (opt.type == EIGRP_OPTION_AUTHENTICATION)
@@ -32,7 +32,7 @@ void ReliableTransport::handleIncoming(const uint8_t* ipStart, const EigrpHeader
         }
     }
 
-    size_t size = (eigrpPacket.buffer + EigrpHeader::fixedSize + eigrpPacket.getTrail().size()) - ipStart;
+    size_t size = (eigrpPacket.buffer + packet::EigrpHeader::fixedSize + eigrpPacket.getTrail().size()) - ipStart;
     if (!iface.getAuth().validateAuth(ipStart, size, authOpt))
         return;
 
@@ -97,7 +97,7 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
         {
             if (v.type == EIGRP_OPTION_VERSION && v.valueSize >= 4)
             {
-                version = readU16(v.value + 2);
+                version = utils::readU16(v.value + 2);
                 sawVersion = true;
                 break;
             }
@@ -159,13 +159,13 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             }
 
             if (opt.length >= 8)
-                info.neighbor->holdTime.store(readU16(opt.value + 6), std::memory_order_relaxed);
+                info.neighbor->holdTime.store(utils::readU16(opt.value + 6), std::memory_order_relaxed);
 
             parametersFound = true;
         }
         else if (opt.type == EIGRP_OPTION_MULTICAST_SEQUENCE && opt.valueSize == 4)
         {
-            conditionalSeq = readU32(opt.value);
+            conditionalSeq = utils::readU32(opt.value);
         }
         else if (opt.type == EIGRP_OPTION_SEQUENCE && opt.valueSize > 1)
         {
@@ -177,10 +177,10 @@ void ReliableTransport::processHello(RTPInfo& info, bool unicast)
             const size_t listLen = opt.valueSize - 1;
 
             uint8_t ourAddr[16];
-            if (iface.getBase().getAF() == AddressFamily::IPv4)
+            if (iface.getBase().getAF() == types::AddressFamily::IPv4)
                 iface.getIface()->configs.ipv4.getPrimaryAddress(ourAddr);
             else
-                writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress().addr);
+                utils::writeU128(ourAddr, iface.getIface()->configs.ipv6.getLocalAddress().addr);
 
             for (size_t off = 0; off + addrLen <= listLen; off += addrLen)
             {
@@ -468,4 +468,4 @@ void ReliableTransport::processSIAReply(RTPInfo& info)
     iface.getTopController().processSIAReply(*info.neighbor, seq);
     attemptSendAck(*info.neighbor, seq);
 }
-}
+} // namespace routing

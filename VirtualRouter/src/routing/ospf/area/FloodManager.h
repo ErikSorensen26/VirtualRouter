@@ -7,9 +7,9 @@
 #include <atomic>
 #include "FloodQueue.hpp"
 
-class ProcessQueue;
+namespace core { class ProcessQueue; }
 
-namespace OSPF
+namespace routing::ospf
 {
 class Area;
 class OspfRib;
@@ -36,6 +36,7 @@ private:
     std::atomic<bool> timerActive{0};
     uint32_t timerId;
 };
-}
+} // namespace routing
 
 #endif // FLOOD_MANAGER_H
+

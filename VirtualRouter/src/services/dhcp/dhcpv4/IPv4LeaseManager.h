@@ -9,18 +9,14 @@
 #include "IPv4Pool.h"
 #include "TimeManager.h"
 
-namespace Protocol
+namespace services::dhcp
 {
-    namespace Dhcp
-    {
-        struct Configs;
-    }
-}
+struct Configs;
 
 class IPv4LeaseManager
 {
 public:
-    explicit IPv4LeaseManager(IPv4Pool& pool, Protocol::Dhcp::Configs& configs);
+    explicit IPv4LeaseManager(IPv4Pool& pool, Configs& configs);
 
     bool createLeaseFromTemp(const ClientID& clientId, uint32_t tempIp, uint32_t leaseTime, uint32_t t1, uint32_t t2);
     uint32_t createLease(const ClientID& clientId, uint32_t leaseTime, uint32_t t1, uint32_t t2);
@@ -52,11 +48,12 @@ private:
     mutable std::mutex leaseMutex;
     std::unordered_map<ClientID, Lease> leases;
     IPv4Pool& pool;
-    TimeManager& timeManager;
-    Protocol::Dhcp::Configs& configs;
+    core::TimeManager& timeManager;
+    Configs& configs;
 
     void expireLease(const ClientID& clientId);
 };
-
+} // namespace services::dhcp
 
 #endif // IPV4_LEASE_MANAGER_H
+

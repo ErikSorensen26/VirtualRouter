@@ -8,22 +8,18 @@
 
 #define EIGRP_PARAMS EigrpContext& ctx, const std::vector<std::string>& args
 
-namespace EIGRP
-{
-class Eigrp;
-class EigrpNamed;
-}
+namespace routing::eigrp { class Eigrp; class EigrpNamed; }
 
-namespace Cli
+namespace cli
 {
 struct EigrpContext : ContextBase
 {
-    EigrpContext(const ContextBase& base, EIGRP::Eigrp* eigrp, EIGRP::EigrpNamed* named, Config::EigrpInterfaceRegistry* iface, EIGRP::Eigrp* temp = nullptr)
+    EigrpContext(const ContextBase& base, routing::eigrp::Eigrp* eigrp, routing::eigrp::EigrpNamed* named, config::EigrpInterfaceRegistry* iface, routing::eigrp::Eigrp* temp = nullptr)
         : ContextBase(base), currentEigrp(eigrp), currentEigrpNamed(named), currentEigrpInterface(iface), tempEigrp(temp) {}
-    EIGRP::Eigrp* currentEigrp;
-    EIGRP::EigrpNamed* currentEigrpNamed;
-    Config::EigrpInterfaceRegistry* currentEigrpInterface;
-    EIGRP::Eigrp* tempEigrp;
+    routing::eigrp::Eigrp* currentEigrp;
+    routing::eigrp::EigrpNamed* currentEigrpNamed;
+    config::EigrpInterfaceRegistry* currentEigrpInterface;
+    routing::eigrp::Eigrp* tempEigrp;
 };
 }
 

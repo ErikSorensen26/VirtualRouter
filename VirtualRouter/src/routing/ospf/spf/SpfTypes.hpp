@@ -12,9 +12,8 @@
 #define OSPF_DETERMINISTIC_PARENT_ORDER true
 #define OSPF_STRICT_MISSING_NETWORK_LSA false
 
-namespace OSPF
+namespace routing::ospf
 {
-
 enum class VertexType : uint8_t
 {
     ROUTER = 1,
@@ -35,7 +34,7 @@ struct Vertex
 
 struct VertexHash
 {
-    size_t operator()(const OSPF::Vertex& v) const noexcept
+    size_t operator()(const ospf::Vertex& v) const noexcept
     {
         return (static_cast<size_t>(v.type) << 1) ^ (static_cast<size_t>(v.id) * 0x9e3779b97f4a7c15ull);
     }
@@ -186,6 +185,7 @@ struct RelaxInfo
     SpfResult& out;
     PQ& pq;
 };
-}
+} // namespace routing
 
 #endif // SPF_VERTEX_HPP
+

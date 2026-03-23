@@ -11,7 +11,7 @@
 
 #include "RegistryDatabase.hpp"
 
-namespace Config
+namespace config
 {
 using Registry = RegistryDatabase<
     EigrpRegistry,

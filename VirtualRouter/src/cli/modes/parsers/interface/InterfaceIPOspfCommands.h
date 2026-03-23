@@ -5,7 +5,7 @@
 
 #include "InterfaceOspfCommands.h"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceIPOspf_Area_Handler(INTERFACE_PARAMS);
 using InterfaceIPOspf_Area = commandAdder<InterfaceContext,

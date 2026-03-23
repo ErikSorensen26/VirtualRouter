@@ -12,11 +12,14 @@
 #include <sstream>
 #include <mutex>
 
+namespace web
+{
+
 // Mock class for IConsole using Google Mock
 class WebConsole : public IConsole
 {
 public:
-    WebConsole(UnixApi& api, int clientFd, Global& global)
+    WebConsole(UnixApi& api, int clientFd, core::Global& global)
         : api(api), global(global), clientFd(clientFd) {}
 
     void clearScreen() override {}
@@ -112,7 +115,7 @@ public:
 
 private:
     UnixApi& api;
-    Global& global;
+    core::Global& global;
     int clientFd;
     std::mutex mu;
 
@@ -136,4 +139,7 @@ private:
     }
 };
 
+} // namespace web
+
 #endif // MOCK_CONSOLE_HPP
+

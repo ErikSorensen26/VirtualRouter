@@ -10,7 +10,7 @@
 #include "Command.hpp"
 #include "FixedString.hpp"
 
-namespace Cli
+namespace cli
 {
 template <typename T>
 inline constexpr bool is_arg_tag_v =
@@ -49,7 +49,7 @@ struct SubCommand
             if (it == last) { ok = false; return; }
 
             const std::string_view sv = part.view();
-            if (Cli::as_sv(*it) != sv) { ok = false; return; }
+            if (cli::as_sv(*it) != sv) { ok = false; return; }
 
             ++it;
         };
@@ -83,7 +83,7 @@ struct SubCommand
             if (it == last) { ok = false; return; }
 
             const std::string_view sv = part.view();
-            if (Cli::as_sv(*it) != sv) { ok = false; return; }
+            if (cli::as_sv(*it) != sv) { ok = false; return; }
 
             ++it;
         };

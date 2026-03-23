@@ -12,7 +12,7 @@
 #include "ospf/area/FloodTypes.hpp"
 #include "ospf/database/LSDB.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 class FloodQueue
 {
@@ -147,6 +147,7 @@ private:
     alignas(64) std::atomic<size_t> tail{0};
     alignas(64) std::atomic<size_t> count{0};
 };
-}
+} // namespace routing
 
 #endif // OSPF_FLOOD_QUEUE_HPP
+

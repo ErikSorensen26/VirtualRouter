@@ -1,9 +1,12 @@
 // Encapsulation.cpp
 
+#include <algorithm>
 #include "Encapsulation.h"
-#include "packet/PacketStructure.h"
 #include "PacketBuilder.hpp"
 #include "security/Checksums.h"
+
+namespace processing
+{
 
 // Encapsulates packet information into a formatted string.
 bool encapsulate(PacketBuilder& packet)
@@ -22,22 +25,22 @@ bool encapsulate(PacketBuilder& packet)
             case HeaderType::IPV4:
             {
                 uint16_t ipv4Size = packet.bufferOffset - (header.buffer - packetBuffer);
-                writeU16(header.buffer + 2, ipv4Size);
-                Checksum::calculateChecksum(header.buffer, header.length, 10, 2);
+                utils::writeU16(header.buffer + 2, ipv4Size);
+                security::checksum::calculateChecksum(header.buffer, header.length, 10, 2);
                 break;
             }
             case HeaderType::IPV6:
             {
                 size_t totalSize = packet.bufferOffset - (header.buffer - packetBuffer);
-                uint16_t payloadLen = static_cast<uint16_t>(totalSize - IPv6Header::fixedSize);
-                writeU16(header.buffer + 4, payloadLen);
+                uint16_t payloadLen = static_cast<uint16_t>(totalSize - packet::IPv6Header::fixedSize);
+                utils::writeU16(header.buffer + 4, payloadLen);
                 break;
             }
             case HeaderType::AH: break;
             case HeaderType::ESP: break;
             case HeaderType::ICMP:
             {
-                //Checksum::calculateProtocolChecksum("", encapsulatedPacket, header.offset, index, 2, 2);
+                //security::checksum::calculateProtocolChecksum("", encapsulatedPacket, header.offset, index, 2, 2);
                 break;
             }
             case HeaderType::ICMPV6:
@@ -48,10 +51,10 @@ bool encapsulate(PacketBuilder& packet)
 
                 uint8_t pseudoHeader[40];
                 std::memcpy(pseudoHeader, ip.buffer + 8, 32);
-                writeU32(pseudoHeader + 32, header.length);
+                utils::writeU32(pseudoHeader + 32, header.length);
                 std::memset(pseudoHeader + 36, 0, 3);
                 pseudoHeader[39] = IP_ICMPV6;
-                Checksum::calculateChecksum(header.buffer, header.length, 2, 2, pseudoHeader, 40);
+                security::checksum::calculateChecksum(header.buffer, header.length, 2, 2, pseudoHeader, 40);
                 break;
             }
             case HeaderType::TCP:
@@ -74,17 +77,17 @@ bool encapsulate(PacketBuilder& packet)
                     std::memcpy(pseudoHeader, ip.buffer + 12, 8);
                     pseudoHeader[8] = 0x00;
                     pseudoHeader[9] = IP_TCP;
-                    writeU16(pseudoHeader + 10, size);
-                    Checksum::calculateChecksum(header.buffer, size, 16, 2, pseudoHeader, 12);
+                    utils::writeU16(pseudoHeader + 10, size);
+                    security::checksum::calculateChecksum(header.buffer, size, 16, 2, pseudoHeader, 12);
                 }
                 else if (ip.type == HeaderType::IPV6)
                 {
                     uint8_t pseudoHeader[40];
                     std::memcpy(pseudoHeader, ip.buffer + 8, 32);
-                    writeU32(pseudoHeader + 32, static_cast<uint32_t>(size));
+                    utils::writeU32(pseudoHeader + 32, static_cast<uint32_t>(size));
                     std::memset(pseudoHeader + 36, 0, 3);
                     pseudoHeader[39] = IP_TCP;
-                    Checksum::calculateChecksum(header.buffer, size, 16, 2, pseudoHeader, 40);
+                    security::checksum::calculateChecksum(header.buffer, size, 16, 2, pseudoHeader, 40);
                 }
                 else return false;
                 break;
@@ -92,7 +95,7 @@ bool encapsulate(PacketBuilder& packet)
             case HeaderType::UDP:
             {
                 uint16_t size = packet.bufferOffset - (header.buffer - packetBuffer);
-                writeU16(header.buffer + 4, size);
+                utils::writeU16(header.buffer + 4, size);
                 auto ipIt = std::find_if(
                     std::make_reverse_iterator(packet.getHeaders() + i),
                     std::make_reverse_iterator(packet.getHeaders()),
@@ -107,24 +110,24 @@ bool encapsulate(PacketBuilder& packet)
                     std::memcpy(pseudoHeader, ip.buffer + 12, 8);
                     pseudoHeader[8] = 0x00;
                     pseudoHeader[9] = IP_UDP;
-                    writeU16(pseudoHeader + 10, size);
-                    Checksum::calculateChecksum(header.buffer, size, 6, 2, pseudoHeader, 12);
+                    utils::writeU16(pseudoHeader + 10, size);
+                    security::checksum::calculateChecksum(header.buffer, size, 6, 2, pseudoHeader, 12);
                 }
                 else if (ip.type == HeaderType::IPV6)
                 {
                     uint8_t pseudoHeader[40];
                     std::memcpy(pseudoHeader, ip.buffer + 8, 32);
-                    writeU32(pseudoHeader + 32, static_cast<uint32_t>(size));
+                    utils::writeU32(pseudoHeader + 32, static_cast<uint32_t>(size));
                     std::memset(pseudoHeader + 36, 0, 3);
                     pseudoHeader[39] = IP_UDP;
-                    Checksum::calculateChecksum(header.buffer, size, 6, 2, pseudoHeader, 40);
+                    security::checksum::calculateChecksum(header.buffer, size, 6, 2, pseudoHeader, 40);
                 }
                 else return false;
                 break;
             }
             case HeaderType::EIGRP:
             {
-                Checksum::calculateChecksum(header.buffer, header.length, 2, 2);
+                security::checksum::calculateChecksum(header.buffer, header.length, 2, 2);
                 break;
             }
             case HeaderType::DHCP: break;
@@ -136,3 +139,5 @@ bool encapsulate(PacketBuilder& packet)
     }
     return true;
 }
+
+} // namespace processing

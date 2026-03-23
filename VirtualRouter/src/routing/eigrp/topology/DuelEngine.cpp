@@ -8,13 +8,13 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/rtp/NeighborTable.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 DuelEngine::DuelEngine(Eigrp& process) : base(process), topologyTable(process), tmgr(process, process.getScheduler()) {}
 
 bool DuelEngine::isRouteAdvertised(const uint8_t* network, uint8_t mask)
 {
-    IPPrefix prefix(network, mask, base.getAF(), true);
+    types::IPPrefix prefix(network, mask, base.getAF(), true);
     auto* entry = topologyTable.find(prefix);
     return entry != nullptr && !entry->successors.empty();
 }
@@ -50,7 +50,7 @@ void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpI
     }
 }
 
-const RouteInfo* DuelEngine::findBestRoute(const IPPrefix& prefix)
+const RouteInfo* DuelEngine::findBestRoute(const types::IPPrefix& prefix)
 {
     auto* entry = topologyTable.find(prefix);
     if (!entry || entry->routesBySource.empty() || entry->successors.empty()) return nullptr;
@@ -90,13 +90,13 @@ void DuelEngine::updateSuccessors(std::vector<TopologyEntry*>& entries)
 bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
 {
     if (entry->routesBySource.empty()) return false;
-    EIGRP::TrafficShareMode trafMode = base.getGlobalConfigMgr().getTrafficMode();
+    config::eigrp::TrafficShareMode trafMode = base.getGlobalConfigMgr().getTrafficMode();
     uint8_t variance = base.getGlobalConfigMgr().getVariance();
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
 
-    IPAddress bestNeighbor = entry->bestNeighbor;
+    types::IPAddress bestNeighbor = entry->bestNeighbor;
 
     for (auto& route : entry->routesBySource)
     {
@@ -148,7 +148,7 @@ bool DuelEngine::recalculateSuccessors(TopologyEntry* entry)
         return false;
     }
 
-    if (trafMode == EIGRP::TrafficShareMode::MINIMUM && !entry->successors.empty())
+    if (trafMode == config::eigrp::TrafficShareMode::MINIMUM && !entry->successors.empty())
         entry->successors = {entry->successors.front()};
 
     entry->state = TopologyEntry::State::PASSIVE;
@@ -164,7 +164,7 @@ bool DuelEngine::recalculateDistances(TopologyEntry* entry, uint64_t localMetric
 
     uint64_t bestFD = std::numeric_limits<uint64_t>::max();
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();
-    IPAddress bestNeighbor = (base.getAF() == AddressFamily::IPv4) ? IPAddress(uint32_t(0)) : IPAddress(__uint128_t(0));
+    types::IPAddress bestNeighbor = (base.getAF() == types::AddressFamily::IPv4) ? types::IPAddress(uint32_t(0)) : types::IPAddress(__uint128_t(0));
 
     for (auto& [nbr, route] : entry->routesBySource)
     {
@@ -272,7 +272,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
 
             base.routeManager.withdrawRoute(entry->prefix);
 
-            IPAddress failedNeighbor = entry->bestNeighbor;
+            types::IPAddress failedNeighbor = entry->bestNeighbor;
 
             // Create new active route
             ActiveRoute& ar = activeRoutes[entry->prefix];
@@ -308,7 +308,7 @@ void DuelEngine::setActive(std::vector<TopologyEntry*>& entries, const uint32_t*
     auto& allNeighbors = base.allNeighbors;
     for (auto& ar : routes)
     {
-        IPAddress& origin = ar->originNeighbor;
+        types::IPAddress& origin = ar->originNeighbor;
 
         for (auto& [nbrIp, neighbor] : allNeighbors)
         {
@@ -390,7 +390,7 @@ void DuelEngine::processSIAReply(Neighbor& neighbor, uint32_t seq)
     }
 }
 
-void DuelEngine::removeActiveNeighbor(const IPAddress& neighborIp)
+void DuelEngine::removeActiveNeighbor(const types::IPAddress& neighborIp)
 {
     for (auto it = activeRoutes.begin(); it != activeRoutes.end();)
     {
@@ -468,4 +468,4 @@ void DuelEngine::concludeActive(ActiveRoute& activeRoute)
     activeRoutes.erase(activeRoute.activePrefix);
     base.routeManager.synchronizeRoute(*entry);
 }
-}
+} // namespace routing

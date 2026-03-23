@@ -5,7 +5,7 @@
 #include "BestPath.h"
 #include "bgp/BgpProcess.h"
 
-namespace BGP
+namespace routing::bgp
 {
 uint32_t localPrefOrDefault(const PathAttribute& a)
 {
@@ -29,13 +29,13 @@ BestPathComparator::BestPathComparator(BgpProcess& p, BestPathConfig cfg)
 
 inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const InboundRouteBase& rhs) const
 {
-    if (!proc.getConfigs().get<Config::Bgp::BGP_ALWAYS_COMPARE_MED>().load() && lhs.peerAs != rhs.peerAs)
+    if (!proc.getConfigs().get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load() && lhs.peerAs != rhs.peerAs)
         return false;
     return medOrDefault(lhs.getPathAttributes(), config.medMissingAsWorst)
          < medOrDefault(rhs.getPathAttributes(), config.medMissingAsWorst);
 }
 
-bool BestPathComparator::better(const InboundRouteBase& lhs, const IPAddress& lhsNbr, const InboundRouteBase& rhs, const IPAddress& rhsNbr) const
+bool BestPathComparator::better(const InboundRouteBase& lhs, const types::IPAddress& lhsNbr, const InboundRouteBase& rhs, const types::IPAddress& rhsNbr) const
 {
     PathAttribute lhsAttr = lhs.getPathAttributes();
     PathAttribute rhsAttr = rhs.getPathAttributes();
@@ -95,4 +95,4 @@ bool BestPathComparator::better(const InboundRouteBase& lhs, const IPAddress& lh
     // Final) Lowest neighbor address
     return lhsNbr < rhsNbr;
 }
-}
+} // namespace routing

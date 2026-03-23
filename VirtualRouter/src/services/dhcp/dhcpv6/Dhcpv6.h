@@ -5,6 +5,9 @@
 
 #include "dhcp/DhcpInfo.hpp"
 
+namespace services::dhcp
+{
+
 enum class Dhcpv6StatusCode : uint16_t
 {
     Success                     = 0,
@@ -72,12 +75,14 @@ struct IAPrefixKey
     }
 };
 
+} // namespace services::dhcp
+
 namespace std
 {
     template<>
-    struct hash<IAKey> {
-        size_t operator()(const IAKey& k) const {
-            size_t h1 = std::hash<ClientID>{}(k.duid);
+    struct hash<services::dhcp::IAKey> {
+        size_t operator()(const services::dhcp::IAKey& k) const {
+            size_t h1 = std::hash<services::dhcp::ClientID>{}(k.duid);
             size_t h2 = std::hash<uint32_t>{}(k.iaid);
             size_t h3 = std::hash<uint8_t>{}(static_cast<uint8_t>(k.type));
 
@@ -88,9 +93,9 @@ namespace std
         }
     };
     template<>
-    struct hash<IALeaseKey> {
-        size_t operator()(const IALeaseKey& k) const {
-            size_t h1 = std::hash<ClientID>{}(k.duid);
+    struct hash<services::dhcp::IALeaseKey> {
+        size_t operator()(const services::dhcp::IALeaseKey& k) const {
+            size_t h1 = std::hash<services::dhcp::ClientID>{}(k.duid);
             size_t h2 = std::hash<uint32_t>{}(k.iaid);
             size_t h3 = std::hash<__uint128_t>{}(k.address);
             size_t h4 = std::hash<uint8_t>{}(static_cast<uint8_t>(k.type));
@@ -103,9 +108,9 @@ namespace std
         }
     };
     template<>
-    struct hash<IAPrefixKey> {
-        size_t operator()(const IAPrefixKey& k) const {
-            size_t h1 = std::hash<ClientID>{}(k.duid);
+    struct hash<services::dhcp::IAPrefixKey> {
+        size_t operator()(const services::dhcp::IAPrefixKey& k) const {
+            size_t h1 = std::hash<services::dhcp::ClientID>{}(k.duid);
             size_t h2 = std::hash<uint32_t>{}(k.iaid);
             size_t h3 = std::hash<__uint128_t>{}(k.address);
             size_t h4 = std::hash<uint8_t>{}(k.prefixLength);
@@ -120,3 +125,4 @@ namespace std
 }
 
 #endif // DHCP_H
+

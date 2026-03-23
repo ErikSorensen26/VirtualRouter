@@ -4,12 +4,12 @@
 #include "interface/Interface.h"
 #include "processing/PacketBuilder.hpp"
 
-namespace Protocol::Ethernet
+namespace infrastructure::ethernet
 {
-bool build(Interface* iface, PacketBuilder& packetInfo, uint64_t destMac, uint16_t type)
+bool build(interface::Interface* iface, processing::PacketBuilder& packetInfo, uint64_t destMac, uint16_t type)
 {
     // Create Header
-    EthernetHeader ethernetHeader;
+    packet::EthernetHeader ethernetHeader;
 
     auto* nextHeader = packetInfo.nextBuildHeader();
     if (!nextHeader) return false;
@@ -26,8 +26,8 @@ bool build(Interface* iface, PacketBuilder& packetInfo, uint64_t destMac, uint16
     return true;
 }
 
-bool reserve(PacketBuilder& packetInfo)
+bool reserve(processing::PacketBuilder& packetInfo)
 {
-    return (packetInfo.reserveHeader(HeaderType::ETHERNET, EthernetHeader::fixedSize));
+    return (packetInfo.reserveHeader(packet::HeaderType::ETHERNET, packet::EthernetHeader::fixedSize));
 }
-} // Namespace Protocol::Ethernet
+} // namespace infrastructure::ethernet

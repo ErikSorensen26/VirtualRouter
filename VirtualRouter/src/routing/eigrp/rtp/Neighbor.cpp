@@ -5,12 +5,12 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 inline TLVType getTLVType(EigrpInterface& iface, Neighbor::Version v)
 {
     Eigrp& base = iface.getBase();
-    bool isV6 = base.getAF() == AddressFamily::IPv6;
+    bool isV6 = base.getAF() == types::AddressFamily::IPv6;
     if (v == Neighbor::Version::LEGACY)
     {
         return isV6
@@ -29,7 +29,7 @@ inline TLVType getTLVType(EigrpInterface& iface, Neighbor::Version v)
     }
 }
 
-Neighbor::Neighbor(EigrpInterface& iface, InterfaceTimers& tmgr, const IPAddress& ip, Version v, bool unicast)
+Neighbor::Neighbor(EigrpInterface& iface, InterfaceTimers& tmgr, const types::IPAddress& ip, Version v, bool unicast)
     : ipAddress(ip), unicast(unicast), version(v), tlvType(getTLVType(iface, v)), iface(iface), tmgr(tmgr)
 {
     clear();
@@ -138,4 +138,4 @@ void Neighbor::clearReliable()
     activeConditions.clear();
     receivedConditions.clear();
 }
-}
+} // namespace routing

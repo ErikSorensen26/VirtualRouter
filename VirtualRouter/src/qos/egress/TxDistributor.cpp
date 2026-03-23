@@ -6,11 +6,14 @@
 #include "TxQueueManager.h"
 #include "hardware/egress/EgressBase.h"
 
+namespace qos::egress
+{
+
 TxDistributor::TxDistributor(QueueState** queues, uint32_t size)
     : qs(queues), N(size), rr(0)
 {}
 
-void TxDistributor::pushTo(uint32_t qid, PacketSlot* pkt)
+void TxDistributor::pushTo(uint32_t qid, hardware::PacketSlot* pkt)
 {
     uint32_t n = N.load(std::memory_order_relaxed);
     if (qid >= n || !qs) return;
@@ -20,7 +23,7 @@ void TxDistributor::pushTo(uint32_t qid, PacketSlot* pkt)
     s->queue->enqueue(pkt);
 }
 
-void TxDistributor::push(PacketSlot* pkt, TxDistPolicy policy)
+void TxDistributor::push(hardware::PacketSlot* pkt, TxDistPolicy policy)
 {
     uint32_t n = N.load(std::memory_order_relaxed);
     if (n == 0 || !qs || !pkt)
@@ -51,7 +54,7 @@ uint32_t TxDistributor::pickQueue(TxDistPolicy policy, uint32_t flowHash)
     return 0;
 }
 
-void TxDistributor::release(FrameHandle& frame)
+void TxDistributor::release(hardware::FrameHandle& frame)
 {
     qs[frame.qid]->egress->cancel(frame.slot->index);
 }
@@ -77,7 +80,7 @@ uint32_t TxDistributor::pickWeighted()
     return 0;
 }
 
-bool TxDistributor::getFrame(FrameHandle& frame, TxDistPolicy policy, uint32_t flowHash)
+bool TxDistributor::getFrame(hardware::FrameHandle& frame, TxDistPolicy policy, uint32_t flowHash)
 {
     uint32_t n = N.load(std::memory_order_relaxed);
     if (n == 0 || !qs) return false;
@@ -104,3 +107,5 @@ void TxDistributor::popQueue()
 {
     N.fetch_sub(1, std::memory_order_seq_cst);
 }
+
+} // namespace qos

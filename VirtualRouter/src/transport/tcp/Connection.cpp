@@ -6,7 +6,7 @@
 #include "TcpEngine.h"
 #include "tx/TxBuffer.h"
 
-namespace TCP
+namespace transport::tcp
 {
 Connection::~Connection()
 {
@@ -61,4 +61,4 @@ std::optional<TcpSocketKey> Connection::socketKey() const noexcept
         return std::nullopt;
     return engine->connectionSocketKey(id);
 }
-}
+} // namespace transport::tcp

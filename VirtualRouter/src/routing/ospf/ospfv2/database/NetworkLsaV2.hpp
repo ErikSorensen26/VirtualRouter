@@ -11,7 +11,7 @@
 #include "ospf/transmission/OspfFletcher.hpp"
 #include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct NetworkLsaV2
 {
@@ -24,7 +24,7 @@ struct NetworkLsaV2
 
         NetworkLsaV2 lsa;
         
-        lsa.networkMask = readU32(buf);
+        lsa.networkMask = utils::readU32(buf);
         size_t offset = 4;
 
         if ((len - offset) % 4 != 0)
@@ -32,7 +32,7 @@ struct NetworkLsaV2
 
         while (offset + 4 <= len)
         {
-            uint32_t rid = readU32(buf + offset);
+            uint32_t rid = utils::readU32(buf + offset);
             lsa.attachedRouters.push_back(rid);
             offset += 4;
         }
@@ -45,11 +45,11 @@ struct NetworkLsaV2
         if ((attachedRouters.size() * 4) + 4 != len)
             return false;
 
-        writeU32(buf, networkMask);
+        utils::writeU32(buf, networkMask);
         size_t off = 4;
         for (auto& r : attachedRouters)
         {
-            writeU32(buf + off, r);
+            utils::writeU32(buf + off, r);
             off += 4;
         }
         return true;
@@ -80,6 +80,6 @@ struct NetworkLsaV2
         return a == b;
     }
 };
-}
+} // namespace routing
 
 #endif // NETWORK_LSA_V2_HPP

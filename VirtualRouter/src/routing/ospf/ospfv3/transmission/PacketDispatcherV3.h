@@ -8,15 +8,11 @@
 #include "ospf/database/LSDB.hpp"
 #include "ospf/transmission/PacketDispatcher.h"
 
-struct IPAddress;
-class PacketBuilder;
+namespace processing { class PacketBuilder; }
+namespace types { struct IPAddress; }
+namespace packet { struct Ospfv3HelloHeader; struct Ospfv3DBDHeader; struct Ospfv3LSRHeader; struct Ospfv3LSAHeader; }
 
-struct Ospfv3HelloHeader;
-struct Ospfv3DBDHeader;
-struct Ospfv3LSRHeader;
-struct Ospfv3LSAHeader;
-
-namespace OSPF
+namespace routing::ospf
 {
 class OspfInterface;
 class Neighbor;
@@ -25,11 +21,11 @@ class NeighborTable;
 class PacketDispatcherV3 : public PacketDispatcher
 {
 public:
-    PacketDispatcherV3(OspfInterface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs);
+    PacketDispatcherV3(OspfInterface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& configs);
 
-    Config::OspfInterfaceBaseRegistry& getBaseConfigs() override;
+    config::OspfInterfaceBaseRegistry& getBaseConfigs() override;
 
-    void handleIncoming(const Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
+    void handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast);
 
     void sendHello() override;
     void sendUnicastHello(Neighbor& nbr) override;
@@ -43,25 +39,25 @@ public:
     void onDbdRetransmissionTimer(Neighbor& nbr) override;
 
 private:
-    void transmit(PacketBuilder& pkt, const IPAddress* dest = nullptr) override;
+    void transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest = nullptr) override;
 
     bool processOptions(uint32_t options, Neighbor& nbr) override;
 
-    void finalizeHeader(Ospfv3Header& hdr, OspfBuilder& builder, bool lls = false);
+    void finalizeHeader(packet::Ospfv3Header& hdr, OspfBuilder& builder, bool lls = false);
 
-    void transmitReliable(PacketBuilder& pkt, Neighbor* neighbor, Ospfv3Header& header);
-    bool setupDbd(Neighbor& neighbor, Ospfv3Header& pkt);
+    void transmitReliable(processing::PacketBuilder& pkt, Neighbor* neighbor, packet::Ospfv3Header& header);
+    bool setupDbd(Neighbor& neighbor, packet::Ospfv3Header& pkt);
 
     uint16_t getMtu();
 
-    std::optional<Ospfv3Header> buildHeader(PacketBuilder& builder, uint8_t type);
-    std::optional<Ospfv3HelloHeader> buildHello(OspfBuilder builder, bool lls);
-    std::optional<Ospfv3DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
-    std::optional<Ospfv3LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record, bool floodReduction);
-    std::optional<Ospfv3LSAHeader> buildCopyLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record);
+    std::optional<packet::Ospfv3Header> buildHeader(processing::PacketBuilder& builder, uint8_t type);
+    std::optional<packet::Ospfv3HelloHeader> buildHello(OspfBuilder builder, bool lls);
+    std::optional<packet::Ospfv3DBDHeader> buildDBD(OspfBuilder& builder, Neighbor& nbr, bool lls);
+    std::optional<packet::Ospfv3LSAHeader> buildLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record, bool floodReduction);
+    std::optional<packet::Ospfv3LSAHeader> buildCopyLSAHeader(OspfBuilder& builder, const LsaKey& key, const LsaRecord& record);
 
-    std::optional<PacketBuilder> buildLSRequest(Neighbor& nbr);
-    std::optional<PacketBuilder> buildLSUpdate(Neighbor* nbr);
+    std::optional<processing::PacketBuilder> buildLSRequest(Neighbor& nbr);
+    std::optional<processing::PacketBuilder> buildLSUpdate(Neighbor* nbr);
 
     size_t addLSRequests(OspfBuilder& builder, Neighbor& nbr);
     size_t addLSUpdates(OspfBuilder& builder, Neighbor* nbr);
@@ -82,10 +78,11 @@ private:
 
     std::optional<LsaBody> buildLsaBody(uint16_t type, const uint8_t* buf, uint16_t len);
 
-    Config::Reference<Config::OspfInterfaceBaseRegistry> baseConfigs;
-    Config::Reference<Config::OspfInterfaceRegistry> configs;
+    config::Reference<config::OspfInterfaceBaseRegistry> baseConfigs;
+    config::Reference<config::OspfInterfaceRegistry> configs;
 };
-}
+} // namespace routing
 
 #endif // V3_PACKET_DISPATCHER_H
+
 

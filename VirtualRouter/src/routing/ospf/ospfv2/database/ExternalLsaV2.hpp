@@ -10,7 +10,7 @@
 #include "ospf/transmission/OspfFletcher.hpp"
 #include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct ExternalLsaV2
 {
@@ -26,14 +26,14 @@ struct ExternalLsaV2
 
         ExternalLsaV2 lsa;
 
-        lsa.networkMask = readU32(buf);
+        lsa.networkMask = utils::readU32(buf);
 
-        uint32_t metricWord = readU32(buf + 4);
+        uint32_t metricWord = utils::readU32(buf + 4);
         lsa.isType2 = (metricWord & 0x80000000) != 0;
         lsa.metric = metricWord & 0x7FFFFFFF;
 
-        lsa.forwardingAddress = readU32(buf + 8);
-        lsa.routeTag = readU32(buf + 12);
+        lsa.forwardingAddress = utils::readU32(buf + 8);
+        lsa.routeTag = utils::readU32(buf + 12);
 
         return lsa;
     }
@@ -42,13 +42,13 @@ struct ExternalLsaV2
     {
         if (len != 16) return false;
 
-        writeU32(buf, networkMask);
+        utils::writeU32(buf, networkMask);
         uint32_t metricWord = metric & 0x7FFFFFFF;
         if (isType2) metricWord |= 0x80000000;
-        writeU32(buf + 4, metricWord);
+        utils::writeU32(buf + 4, metricWord);
         if (isType2) buf[4] = 0x80;
-        writeU32(buf + 8, forwardingAddress);
-        writeU32(buf + 12, routeTag);
+        utils::writeU32(buf + 8, forwardingAddress);
+        utils::writeU32(buf + 12, routeTag);
         return true;
     }
 
@@ -67,6 +67,7 @@ struct ExternalLsaV2
         check.addU32(routeTag);
     }
 };
-}
+} // namespace routing
 
 #endif
+

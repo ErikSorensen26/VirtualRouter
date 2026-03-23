@@ -5,6 +5,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 /**
  * @struct EspHeaderRaw
  */
@@ -28,4 +31,7 @@ struct EspHeader
     void setSequence() {}
 };
 
+} // namespace packet
+
 #endif // ESP_HEADER_HPP
+

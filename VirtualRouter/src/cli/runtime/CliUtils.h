@@ -8,26 +8,26 @@
 #include <string>
 #include <utility>
 
-struct IPAddress;
-struct IPv4Address;
-struct IPv6Address;
-struct IPv4Prefix;
-struct IPv6Prefix;
-struct IPPrefix;
+namespace types { struct IPPrefix; }
+namespace types { struct IPv4Address; }
+namespace types { struct IPv4Prefix; }
+namespace types { struct IPAddress; }
+namespace types { struct IPv6Address; }
+namespace types { struct IPv6Prefix; }
 
-namespace CliUtils
+namespace cli::utils
 {
 bool extractSubnetMask(uint32_t mask, uint8_t& plen);
 
-bool extractIPAddress(const std::string& str, IPAddress& addr);
-bool extractIPv4Address(const std::string& str, IPv4Address& addr);
-bool extractIPv6Address(const std::string& str, IPv6Address& addr);
+bool extractIPAddress(const std::string& str, types::IPAddress& addr);
+bool extractIPv4Address(const std::string& str, types::IPv4Address& addr);
+bool extractIPv6Address(const std::string& str, types::IPv6Address& addr);
 
-bool extractIPPrefix(const std::string& addr, IPPrefix& prefix);
-bool extractIPv4Prefix(const std::string& addr, IPv4Prefix& prefix);
-bool extractIPv6Prefix(const std::string& addr, IPv6Prefix& prefix);
-bool extractIPv4Prefix(const std::string& addr, const std::string& mask, IPPrefix& prefix);
-bool extractIPv4Prefix(const std::string& addr, const std::string& mask, IPv4Prefix& prefix);
+bool extractIPPrefix(const std::string& addr, types::IPPrefix& prefix);
+bool extractIPv4Prefix(const std::string& addr, types::IPv4Prefix& prefix);
+bool extractIPv6Prefix(const std::string& addr, types::IPv6Prefix& prefix);
+bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::IPPrefix& prefix);
+bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::IPv4Prefix& prefix);
 
 bool expandIPv6Address(std::string& ipv6Address);
 bool extractMacAddress(const std::string& str, uint64_t& mac);

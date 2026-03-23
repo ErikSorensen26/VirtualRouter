@@ -8,7 +8,7 @@
 #include "cli/modes/contexts/GlobalContext.hpp"
 #include "GlobalIPDHCPCommands.h"
 
-namespace Cli
+namespace cli
 {
 bool GlobalIP_DHCP_Handler(GLOBAL_PARAMS);
 using GlobalIP_DHCP = subAdder<GlobalContext,

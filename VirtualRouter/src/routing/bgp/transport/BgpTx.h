@@ -10,13 +10,9 @@
 #include "bgp/rib/RibTypes.hpp"
 #include "bgp/session/Session.h"
 
-namespace TCP
-{
-class RxConsumer;
-class Connection;
-}
+namespace transport::tcp { class RxConsumer; class Connection; }
 
-namespace BGP
+namespace routing::bgp
 {
 class BgpProcess;
 
@@ -25,26 +21,26 @@ class BgpTx
 public:
     BgpTx() = delete;
 
-    static void buildOpen(TCP::Connection& connection, Session& session); 
+    static void buildOpen(transport::tcp::Connection& connection, Session& session); 
     template <typename N>
-    static void buildUpdate(TCP::Connection& connection, Session& session, const BuildUpdate<typename N::Nlri>& update);
-    static void buildNotification(TCP::Connection& connection, const Notification& notification);
-    static void buildKeepalive(TCP::Connection& connection);
-    static void buildRouteRefresh(TCP::Connection& connection, Session& session,
+    static void buildUpdate(transport::tcp::Connection& connection, Session& session, const BuildUpdate<typename N::Nlri>& update);
+    static void buildNotification(transport::tcp::Connection& connection, const Notification& notification);
+    static void buildKeepalive(transport::tcp::Connection& connection);
+    static void buildRouteRefresh(transport::tcp::Connection& connection, Session& session,
         const AfiSafi& family, RouteRefreshReason reason = RouteRefreshReason::Normal);
 
 private:
     static void buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf);
-    static void appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& attrsSize, TCP::Connection& c);
-    static size_t appendPathAttrs(const Session& session, const PathAttribute& pa, TCP::Connection& c);
+    static void appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& attrsSize, transport::tcp::Connection& c);
+    static size_t appendPathAttrs(const Session& session, const PathAttribute& pa, transport::tcp::Connection& c);
 
     template <typename N>
     static size_t appendMpReach(const Session& session, size_t& attrSize, size_t nlriIdx, size_t maxMsg,
-        const typename BuildUpdate<typename N::Nlri>::Announcement& update, TCP::Connection& c);
+        const typename BuildUpdate<typename N::Nlri>::Announcement& update, transport::tcp::Connection& c);
 
     template <typename N>
     static size_t appendMpUnreach(const Session& session, size_t& attrSize, size_t withdrawIdx, size_t maxMsg,
-        const MpUnreach& unreach, std::span<const NlriPath<typename N::Nlri>> withdraws, TCP::Connection& c);
+        const MpUnreach& unreach, std::span<const NlriPath<typename N::Nlri>> withdraws, transport::tcp::Connection& c);
 };
 
 template <typename N>
@@ -67,27 +63,27 @@ static std::pair<size_t, size_t> computeNlriLen(std::span<const NlriPath<typenam
 }
 
 template <typename N>
-void appendNlri(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, TCP::Connection& c)
+void appendNlri(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, transport::tcp::Connection& c)
 {
     for (const NlriPath<typename N::Nlri>& n : nlri)
     {
         const size_t entrySize = (addPath ? 4u : 0u) + N::nlriEncodedSize(n.nlri);
         std::span<uint8_t> buf = c.reserveSpan(entrySize);
         if (addPath)
-            writeU32(buf.data(), n.pathId);
+            utils::writeU32(buf.data(), n.pathId);
         N::encodeNlri(buf.data() + (addPath ? 4 : 0), n.nlri);
     }
 }
 
 template <typename N>
 size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlriIdx, size_t maxMsg,
-    const typename BuildUpdate<typename N::Nlri>::Announcement& update, TCP::Connection& c)
+    const typename BuildUpdate<typename N::Nlri>::Announcement& update, transport::tcp::Connection& c)
 {
     // MP REACH NLRI
     {
         std::span<const NlriPath<typename N::Nlri>> nlri(update.nlri.data() + nlriIdx, update.nlri.size() - nlriIdx);
 
-        const IPAddress& nextHop = update.attrs.path.nextHop;
+        const types::IPAddress& nextHop = update.attrs.path.nextHop;
         const auto& linkLocal = update.attrs.path.linkLocal;
         constexpr bool isV6 = (N::afi.afi == BGP_AFI_IPV6);
         const size_t nhLen = isV6 ? (linkLocal.has_value() ? 32u : 16u) : 4u;
@@ -110,7 +106,7 @@ size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlr
         // AFI + SAFI
         {
             auto buf = c.reserveSpan(3);
-            writeU16(buf.data(), N::afi.afi);
+            utils::writeU16(buf.data(), N::afi.afi);
             buf[2] = N::afi.safi;
         }
 
@@ -142,7 +138,7 @@ size_t BgpTx::appendMpReach(const Session& session, size_t& attrSize, size_t nlr
 
 template <typename N>
 size_t BgpTx::appendMpUnreach(const Session& session, size_t& attrSize, size_t withdrawIdx, size_t maxMsg,
-    const MpUnreach& mp, std::span<const NlriPath<typename N::Nlri>> withdrawn, TCP::Connection& c)
+    const MpUnreach& mp, std::span<const NlriPath<typename N::Nlri>> withdrawn, transport::tcp::Connection& c)
 {
     // MP UNREACH NLRI
     std::span<NlriPath<typename N::Nlri>> nlri = {withdrawn.data() + withdrawIdx, withdrawn.size() - withdrawIdx};
@@ -162,7 +158,7 @@ size_t BgpTx::appendMpUnreach(const Session& session, size_t& attrSize, size_t w
     
     {
         auto buf = c.reserveSpan(3);
-        writeU16(buf.data(), mp.family.afi);
+        utils::writeU16(buf.data(), mp.family.afi);
         buf[2] = mp.family.safi;
     }
 
@@ -172,7 +168,7 @@ size_t BgpTx::appendMpUnreach(const Session& session, size_t& attrSize, size_t w
 }
 
 template <typename N>
-void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const BuildUpdate<typename N::Nlri>& update)
+void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session, const BuildUpdate<typename N::Nlri>& update)
 {
     constexpr AfiSafi ipv4uni { BGP_AFI_IPV4, BGP_SAFI_UNICAST };
     constexpr bool isLegacyV4 = N::afi == ipv4uni;
@@ -193,7 +189,7 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
 
         while (nlriIdx < a.nlri.size() || withdrawIdx < update.withdrawn.size())
         {
-            auto hdrBuf = connection.reserveSpan(BgpHeader::fixedSize);
+            auto hdrBuf = connection.reserveSpan(packet::BgpHeader::fixedSize);
             auto wdLenBuf = connection.reserveSpan(2);
             auto attrLenBuf = connection.reserveSpan(2);
 
@@ -221,12 +217,12 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
                 }
 
                 buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + attrBytes), hdrBuf.data());
-                writeU16(wdLenBuf.data(), 0);
-                writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
+                utils::writeU16(wdLenBuf.data(), 0);
+                utils::writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
             }
             else
             {
-                size_t wdBudget = maxMsg - BgpHeader::fixedSize - 4 - attrBytes;
+                size_t wdBudget = maxMsg - packet::BgpHeader::fixedSize - 4 - attrBytes;
                 std::span<const NlriPath<typename N::Nlri>> wdSpan(
                     update.withdrawn.data() + withdrawIdx,
                     update.withdrawn.size() - withdrawIdx
@@ -235,7 +231,7 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
                 appendNlri<N>(wdSpan.subspan(0, wdEntries), addPath, connection);
                 withdrawIdx += wdEntries;
 
-                size_t nlriBudget = maxMsg - BgpHeader::fixedSize - 4 - attrBytes - wdBytes;
+                size_t nlriBudget = maxMsg - packet::BgpHeader::fixedSize - 4 - attrBytes - wdBytes;
                 std::span<const NlriPath<typename N::Nlri>> nlriSpan(
                     a.nlri.data() + nlriIdx,
                     a.nlri.size() - nlriIdx
@@ -245,8 +241,8 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
                 nlriIdx += nlriEntries;
 
                 buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + wdBytes + attrBytes + nlriBytes), hdrBuf.data());
-                writeU16(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
-                writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
+                utils::writeU16(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
+                utils::writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
             }
         }
     }
@@ -254,7 +250,7 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
     // Drain remaining withdraws
     while (withdrawIdx < update.withdrawn.size())
     {
-        auto hdrBuf = connection.reserveSpan(BgpHeader::fixedSize);
+        auto hdrBuf = connection.reserveSpan(packet::BgpHeader::fixedSize);
         auto wdLenBuf = connection.reserveSpan(2);
         auto attrLenBuf = connection.reserveSpan(2);
 
@@ -268,12 +264,12 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
             withdrawIdx += withdrawnAdded;
 
             buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + attrBytes), hdrBuf.data());
-            writeU16(wdLenBuf.data(), 0);
-            writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
+            utils::writeU16(wdLenBuf.data(), 0);
+            utils::writeU16(attrLenBuf.data(), static_cast<uint16_t>(attrBytes));
         }
         else
         {
-            size_t wdBudget = maxMsg - BgpHeader::fixedSize - 4;
+            size_t wdBudget = maxMsg - packet::BgpHeader::fixedSize - 4;
             std::span<const NlriPath<typename N::Nlri>> wdSpan(
                 update.withdrawn.data() + withdrawIdx,
                 update.withdrawn.size() - withdrawIdx
@@ -283,11 +279,12 @@ void BgpTx::buildUpdate(TCP::Connection& connection, Session& session, const Bui
             withdrawIdx += wdEntries;
 
             buildHeader(BGP_TYPE_UPDATE, static_cast<uint16_t>(4 + wdBytes), hdrBuf.data());
-            writeU16(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
-            writeU16(attrLenBuf.data(), 0);
+            utils::writeU16(wdLenBuf.data(), static_cast<uint16_t>(wdBytes));
+            utils::writeU16(attrLenBuf.data(), 0);
         }
     }
 }
-}
+} // namespace routing
 
 #endif // BGP_TX_H
+

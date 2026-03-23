@@ -9,8 +9,12 @@
 #include <sys/syscall.h>
 
 #include "hardware/PacketSlot.hpp"
+#include "hardware/egress/EgressBase.h"
 
-class EgressBase;
+namespace qos::egress
+{
+
+using EgressBase = hardware::egress::EgressBase;
 
 class BaseQueue
 {
@@ -18,14 +22,14 @@ public:
     BaseQueue(EgressBase& egress) : out(egress), lock(0), wakeSignal(0), running(true) {}
     virtual ~BaseQueue(){ stop(); }
 
-    void enqueue(PacketSlot* pkt);
+    void enqueue(hardware::PacketSlot* pkt);
     void start();
     void stop();
     EgressBase& out;
 
 protected:
 
-    virtual void atomicEnqueue(PacketSlot* pkt) = 0;
+    virtual void atomicEnqueue(hardware::PacketSlot* pkt) = 0;
     virtual bool isEmpty() const = 0;
     virtual void dequeueOne() = 0;
 
@@ -44,4 +48,7 @@ private:
     void futex_wake(std::atomic<uint32_t>* addr, int count);
 };
 
+} // namespace qos
+
 #endif // BASE_QUEUE_H
+

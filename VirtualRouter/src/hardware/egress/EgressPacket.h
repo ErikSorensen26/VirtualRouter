@@ -9,6 +9,9 @@
 #include <sys/epoll.h>
 #include <atomic>
 
+namespace hardware::egress
+{
+
 class EgressPacket : public EgressBase
 {
     std::atomic<uint32_t> pendingKicks = 0;
@@ -18,7 +21,7 @@ class EgressPacket : public EgressBase
 
 public:
 
-    EgressPacket(Interface& iface, const TxQueueOpts&);
+    EgressPacket(interface::Interface& iface, const qos::egress::TxQueueOpts&);
     ~EgressPacket() override;
 
     bool send(uint32_t index, uint32_t length) noexcept override;
@@ -66,4 +69,7 @@ private:
     void kickKernelCached();
 };
 
+} // namespace hardware
+
 #endif
+

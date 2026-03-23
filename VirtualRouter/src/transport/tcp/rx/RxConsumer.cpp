@@ -6,7 +6,7 @@
 #include "RxConsumer.h"
 #include "RxBuffer.h"
 
-namespace TCP
+namespace transport::tcp
 {
 RxConsumer::RxConsumer(RxBuffer& buf, std::span<uint8_t> data)
     : bufferRx(data), rxView(data), buffer(buf) {}
@@ -31,4 +31,4 @@ RxConsumer::~RxConsumer()
 {
     buffer.commit(consumed);
 }
-}
+} // namespace transport::tcp

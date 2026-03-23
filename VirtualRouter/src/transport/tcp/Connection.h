@@ -6,7 +6,7 @@
 #include "TcpTypes.hpp"
 #include "tx/TxBuffer.h"
 
-namespace TCP
+namespace transport::tcp
 {
 class Listener;
 class TcpEngine;
@@ -50,6 +50,7 @@ private:
     TcpEngine* engine{nullptr};
     ConnId id{0};
 };
-}
+} // namespace transport::tcp
 
 #endif // TCP_CONNECTION_H
+

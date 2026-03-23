@@ -9,7 +9,7 @@
 
 #include "TopologyTypes.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct SpfResult;
 struct OspfNextHop;
@@ -62,6 +62,7 @@ private:
     std::optional<bool/*ADD*/>/*CHANGE*/ mergeCanidate(const OspfRouter& canidate);
     bool mergeCanidates(uint32_t area, const std::vector<OspfRouter>& canidate, Type type);
 };
-}
+} // namespace routing
 
 #endif // OSPF_TOPOLOGY_TABLE_H
+

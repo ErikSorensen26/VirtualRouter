@@ -7,7 +7,7 @@
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/InterfaceContext.hpp"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceIPv6ND_AdvertisementInterval_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_AdvertisementInterval = commandAdder<InterfaceContext,

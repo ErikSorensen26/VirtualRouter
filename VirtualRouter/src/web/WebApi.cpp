@@ -14,6 +14,9 @@
 #include <cstring>
 #include <iostream>
 
+namespace web
+{
+
 static void perrorMsg(const char* msg)
 {
     std::cerr << msg << ": " << std::strerror(errno) << "\n";
@@ -315,3 +318,5 @@ void WebApi::pollOnce(int timeoutMs)
         if (events & EPOLLOUT) handleWrite(fd);
     }
 }
+
+} // namespace web

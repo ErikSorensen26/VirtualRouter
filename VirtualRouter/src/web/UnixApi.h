@@ -9,6 +9,9 @@
 #include <string>
 #include <cstdint>
 
+namespace web
+{
+
 class UnixApi
 {
 public:
@@ -64,4 +67,7 @@ private:
     static bool popLine(std::string& buf, std::string& line);
 };
 
+} // namespace web
+
 #endif // UNIX_API_H
+

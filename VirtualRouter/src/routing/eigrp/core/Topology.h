@@ -9,7 +9,7 @@
 
 class Internal_EigrpTest;
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class EigrpInterface;
 class Eigrp;
@@ -17,7 +17,7 @@ class Eigrp;
 class EigrpTopology
 {
 public:
-    friend class ::Internal_EigrpTest;
+    friend class Internal_EigrpTest;
     friend class EigrpInterface;
     EigrpTopology(Eigrp& base);
 
@@ -26,7 +26,7 @@ public:
     void synchronizeConnected(EigrpInterface& iface);
     void clearConnected(EigrpInterface& iface);
     void handleSIATimeout(OutgoingQuery& query, Neighbor& neighbor);
-    std::unordered_map<IPPrefix, TopologyEntry>& entries();
+    std::unordered_map<types::IPPrefix, TopologyEntry>& entries();
 
     Eigrp& getBase() { return base; }
 
@@ -36,6 +36,7 @@ private:
     DuelEngine duel;
     Eigrp& base;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_TOPOLOGY_H
+

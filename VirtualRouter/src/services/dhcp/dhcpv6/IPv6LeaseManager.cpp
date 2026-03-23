@@ -3,7 +3,10 @@
 #include "IPv6LeaseManager.h"
 #include "Dhcpv6Server.h"
 
-IPv6LeaseManager::IPv6LeaseManager(IPv6Pool& pool, Protocol::Dhcpv6::Configs& cgs)
+namespace services::dhcp
+{
+
+IPv6LeaseManager::IPv6LeaseManager(IPv6Pool& pool, Configs& cgs)
     : pool(pool), timeManager(pool.timeManager), configs(cgs) {}
 
 std::unordered_set<__uint128_t> IPv6LeaseManager::createLease(const IAKey& key, uint32_t leaseTime)
@@ -101,6 +104,7 @@ Dhcpv6StatusMessage IPv6LeaseManager::renewLease(__uint128_t addr, const IAKey& 
     });
 
     return { Dhcpv6StatusCode::Success };
+
 }
 
 Dhcpv6StatusMessage IPv6LeaseManager::rebindLease(__uint128_t addr, const IAKey& key, uint32_t leaseTime)
@@ -171,3 +175,5 @@ void IPv6LeaseManager::expireLease(__uint128_t addr, const IAKey& key)
     leaseTimerIDs.erase(timerIt);
     leaseKeys.erase(addr);
 }
+
+} // namespace services::dhcp

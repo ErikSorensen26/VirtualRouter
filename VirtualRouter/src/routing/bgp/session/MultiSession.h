@@ -10,7 +10,7 @@
 #include "bgp/BgpTypes.hpp"
 #include "tcp/Connection.h"
 
-namespace BGP
+namespace routing::bgp
 {
 class Session;
 class BgpProcess;
@@ -19,12 +19,13 @@ class MultiSession
 {
 public:
     std::unordered_map<AfiSafi, Session> sessions;
-    std::unordered_map<uint64_t, std::variant<Session*, TCP::Connection>> connections;
+    std::unordered_map<uint64_t, std::variant<Session*, transport::tcp::Connection>> connections;
 
     Session* findMultiSession(uint64_t id);
-    Session* activateSession(TCP::ConnId id, const AfiSafi& afiSafi);
-    void close(TCP::ConnId id);
+    Session* activateSession(transport::tcp::ConnId id, const AfiSafi& afiSafi);
+    void close(transport::tcp::ConnId id);
 };
-}
+} // namespace routing::bgp
 
 #endif // BGP_MULTI_SESSION_H
+

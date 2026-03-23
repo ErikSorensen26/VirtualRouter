@@ -5,7 +5,7 @@
 
 #include "RouterEigrpTopologyCommands.h"
 
-namespace Cli
+namespace cli
 {
 //bool RouterEigrpClassicVrf_DefaultInformation_Handler(EIGRP_PARAMS) {} //TODO
 

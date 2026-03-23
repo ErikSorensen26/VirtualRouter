@@ -10,7 +10,7 @@
 
 #include "TxBufferPool.h"
 
-namespace TCP
+namespace transport::tcp
 {
 class TxBuffer;
 
@@ -86,6 +86,7 @@ private:
     size_t capacityBytes = 0;  // total committed capacity (blockCount * blockSize)
 };
 
-} // namespace TCP
+} // namespace transport::tcp
 
 #endif // TCP_TX_BUFFER_H
+

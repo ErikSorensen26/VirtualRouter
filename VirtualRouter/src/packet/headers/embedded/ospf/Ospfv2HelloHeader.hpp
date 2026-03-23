@@ -5,6 +5,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 /*
  * @struct Ospfv2HelloHeaderRaw
  */
@@ -30,28 +33,31 @@ struct Ospfv2HelloHeader
 {
     DEFINE_FIXED_HEADER(Ospfv2HelloHeaderRaw);
 
-    uint32_t getMask() const                { return readU32(raw->networkMask); }
-    uint16_t getHelloInterval() const       { return readU16(raw->helloInterval); }
+    uint32_t getMask() const                { return utils::readU32(raw->networkMask); }
+    uint16_t getHelloInterval() const       { return utils::readU16(raw->helloInterval); }
     uint8_t getPriority() const             { return raw->routerPriority; }
-    uint32_t getDeadInterval() const        { return readU32(raw->deadInterval); }
-    uint32_t getDR() const                  { return readU32(raw->designatedRouter); }
-    uint32_t getBDR() const                 { return readU32(raw->backupDesignatedRouter); }
+    uint32_t getDeadInterval() const        { return utils::readU32(raw->deadInterval); }
+    uint32_t getDR() const                  { return utils::readU32(raw->designatedRouter); }
+    uint32_t getBDR() const                 { return utils::readU32(raw->backupDesignatedRouter); }
     uint8_t getOptions() const              { return raw->options; }
 
     void setMask(uint32_t val)
-        { writeU32(raw->networkMask, val); }
+        { utils::writeU32(raw->networkMask, val); }
     void setHelloInterval(uint16_t val)
-        { writeU16(raw->helloInterval, val); }
+        { utils::writeU16(raw->helloInterval, val); }
     void setPriority(uint8_t val)
         { raw->routerPriority = val; }
     void setDeadInterval(uint32_t val)
-        { writeU32(raw->deadInterval, val); }
+        { utils::writeU32(raw->deadInterval, val); }
     void setDR(uint32_t val)
-        { writeU32(raw->designatedRouter, val); }
+        { utils::writeU32(raw->designatedRouter, val); }
     void setBDR(uint32_t val)
-        { writeU32(raw->backupDesignatedRouter, val); }
+        { utils::writeU32(raw->backupDesignatedRouter, val); }
     void setOptions(uint8_t val)
         { raw->options = val; }
 };
 
+} // namespace packet
+
 #endif // OSPFV2_HELLO_HEADER_HPP
+

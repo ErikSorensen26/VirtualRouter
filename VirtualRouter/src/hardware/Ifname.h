@@ -5,7 +5,13 @@
 
 #include <string>
 
+namespace hardware
+{
+
 [[maybe_unused]] unsigned int ifnametoindex(const char* ifname);
 [[maybe_unused]] std::string indextoifname(unsigned int ifIndex);
 
+} // namespace hardware
+
 #endif // IFNAME_H
+

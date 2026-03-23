@@ -4,6 +4,7 @@
 #define TCP_HEADER_HPP
 
 #include <vector>
+#include <ByteUtils.hpp>
 
 #include "packet/TlvOptions.hpp"
 #include "packet/HeaderHelpers.hpp"
@@ -16,6 +17,9 @@
 #define TCP_OPTION_USER_TIMEOUT     28
 #define TCP_OPTION_TCP_AUTH         29
 #define TCP_OPTION_MULTIPATH        30
+
+namespace packet
+{
 
 /**
  * @struct TcpHeaderRaw
@@ -45,16 +49,16 @@ struct TcpHeader
     DEFINE_PACKET_HEADER(TcpHeaderRaw);
 
     // Accessors
-    uint16_t getSourcePort() const         { return readU16(raw->sourcePort); }
-    uint16_t getDestinationPort() const    { return readU16(raw->destinationPort); }
-    uint32_t getSequenceNumber() const     { return readU32(raw->sequenceNumber); }
-    uint32_t getAckNumber() const          { return readU32(raw->ackNumber); }
+    uint16_t getSourcePort() const         { return utils::readU16(raw->sourcePort); }
+    uint16_t getDestinationPort() const    { return utils::readU16(raw->destinationPort); }
+    uint32_t getSequenceNumber() const     { return utils::readU32(raw->sequenceNumber); }
+    uint32_t getAckNumber() const          { return utils::readU32(raw->ackNumber); }
 
     uint8_t  getHeaderLength() const       { return ((raw->dataOffsetAndFlags1 >> 4) & 0x0F) * 4; }
 
-    uint16_t getWindowSize() const         { return readU16(raw->windowSize); }
+    uint16_t getWindowSize() const         { return utils::readU16(raw->windowSize); }
     const uint8_t* getChecksum() const           { return raw->checksum; }
-    uint16_t getUrgentPointer() const      { return readU16(raw->urgentPointer); }
+    uint16_t getUrgentPointer() const      { return utils::readU16(raw->urgentPointer); }
 
     bool getFlagNS() const                 { return raw->dataOffsetAndFlags1 & 0x01; }
 
@@ -68,13 +72,13 @@ struct TcpHeader
     bool getFlagFIN() const                { return raw->flags & 0x01; }
 
     // Setters
-    void setSourcePort(uint16_t val)       { writeU16(raw->sourcePort, val); }
-    void setDestinationPort(uint16_t val)  { writeU16(raw->destinationPort, val); }
-    void setSequenceNumber(uint32_t val)   { writeU32(raw->sequenceNumber, val); }
-    void setAckNumber(uint32_t val)        { writeU32(raw->ackNumber, val); }
-    void setWindowSize(uint16_t val)       { writeU16(raw->windowSize, val); }
+    void setSourcePort(uint16_t val)       { utils::writeU16(raw->sourcePort, val); }
+    void setDestinationPort(uint16_t val)  { utils::writeU16(raw->destinationPort, val); }
+    void setSequenceNumber(uint32_t val)   { utils::writeU32(raw->sequenceNumber, val); }
+    void setAckNumber(uint32_t val)        { utils::writeU32(raw->ackNumber, val); }
+    void setWindowSize(uint16_t val)       { utils::writeU16(raw->windowSize, val); }
     void setChecksum(const uint8_t* val)   { std::memcpy(raw->checksum, val, 2); }
-    void setUrgentPointer(uint16_t val)    { writeU16(raw->urgentPointer, val); }
+    void setUrgentPointer(uint16_t val)    { utils::writeU16(raw->urgentPointer, val); }
 
     void setHeaderLengthBytes(uint8_t bytes)
     {
@@ -83,16 +87,16 @@ struct TcpHeader
             static_cast<uint8_t>((raw->dataOffsetAndFlags1 & 0x0F) | (words << 4));
     }
 
-    void setFlagNS(bool v)                 { setBit(&raw->dataOffsetAndFlags1, 0, v); }
+    void setFlagNS(bool v)                 { utils::setBit(&raw->dataOffsetAndFlags1, 0, v); }
 
-    void setFlagCWR(bool v)                { setBit(&raw->flags, 7, v); }
-    void setFlagECE(bool v)                { setBit(&raw->flags, 6, v); }
-    void setFlagURG(bool v)                { setBit(&raw->flags, 5, v); }
-    void setFlagACK(bool v)                { setBit(&raw->flags, 4, v); }
-    void setFlagPSH(bool v)                { setBit(&raw->flags, 3, v); }
-    void setFlagRST(bool v)                { setBit(&raw->flags, 2, v); }
-    void setFlagSYN(bool v)                { setBit(&raw->flags, 1, v); }
-    void setFlagFIN(bool v)                { setBit(&raw->flags, 0, v); }
+    void setFlagCWR(bool v)                { utils::setBit(&raw->flags, 7, v); }
+    void setFlagECE(bool v)                { utils::setBit(&raw->flags, 6, v); }
+    void setFlagURG(bool v)                { utils::setBit(&raw->flags, 5, v); }
+    void setFlagACK(bool v)                { utils::setBit(&raw->flags, 4, v); }
+    void setFlagPSH(bool v)                { utils::setBit(&raw->flags, 3, v); }
+    void setFlagRST(bool v)                { utils::setBit(&raw->flags, 2, v); }
+    void setFlagSYN(bool v)                { utils::setBit(&raw->flags, 1, v); }
+    void setFlagFIN(bool v)                { utils::setBit(&raw->flags, 0, v); }
 };
 
 /**
@@ -123,4 +127,7 @@ inline bool parseTcpOptions(const uint8_t* data, size_t size, std::vector<TLV8Op
     return true;
 }
 
+} // namespace packet
+
 #endif // TCP_HEADER_HPP
+

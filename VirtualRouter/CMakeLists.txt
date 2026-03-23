@@ -23,7 +23,7 @@ set(VR_PUBLIC_INCLUDE_ROOTS
 
 # Optional additional public src paths
 set(VR_PUBLIC_INCLUDE_DIRS
-    global
+    core
     utils
     routing
     services

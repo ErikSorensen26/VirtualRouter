@@ -11,9 +11,9 @@
 #include "Arp.h"
 #include "Ndp.h"
 
-namespace Protocol::IPPacket
+namespace infrastructure::ippacket
 {
-static void deriveMulticastMac(uint8_t* mac, IPAddress ip)
+static void deriveMulticastMac(uint8_t* mac, types::IPAddress ip)
 {
     // IPv4 multicast MAC: 01:00:5E:xx:xx:xx (lower 23 bits of IP)
     if (ip.isIPv4())
@@ -39,7 +39,7 @@ static void deriveMulticastMac(uint8_t* mac, IPAddress ip)
     }
 }
 
-static bool getDestinationMac(uint64_t& outMac, Interface* iface, const IPAddress& destIp, PacketBuilder& packet)
+static bool getDestinationMac(uint64_t& outMac, interface::Interface* iface, const types::IPAddress& destIp, processing::PacketBuilder& packet)
 {
     uint8_t macBuf[6];
 
@@ -48,15 +48,15 @@ static bool getDestinationMac(uint64_t& outMac, Interface* iface, const IPAddres
         if (destIp.isMulticast())
         {
             deriveMulticastMac(macBuf, destIp);
-            outMac = readU48(macBuf);
+            outMac = utils::readU48(macBuf);
             return true;
         }
         if (iface->arp)
         {
-            IPv4Address v4addr(destIp.v4());
+            types::IPv4Address v4addr(destIp.v4());
             if (iface->arp->getMac(macBuf, v4addr))
             {
-                outMac = readU48(macBuf);
+                outMac = utils::readU48(macBuf);
                 return true;
             }
             else
@@ -71,15 +71,15 @@ static bool getDestinationMac(uint64_t& outMac, Interface* iface, const IPAddres
         if (destIp.isMulticast())
         {
             deriveMulticastMac(macBuf, destIp);
-            outMac = readU48(macBuf);
+            outMac = utils::readU48(macBuf);
             return true;
         }
         if (iface->ndp)
         {
-            IPv6Address v6addr(destIp.v6());
+            types::IPv6Address v6addr(destIp.v6());
             if (iface->ndp->getMac(macBuf, v6addr))
             {
-                outMac = readU48(macBuf);
+                outMac = utils::readU48(macBuf);
                 return true;
             }
             else
@@ -92,16 +92,16 @@ static bool getDestinationMac(uint64_t& outMac, Interface* iface, const IPAddres
     return false; // Resolution disabled
 }
 
-void reserveIpv4(PacketBuilder& packetInfo)
+void reserveIpv4(processing::PacketBuilder& packetInfo)
 {
     // Decide layer 2 encapsulation based on interface configs
     // DEFAULT -> Ethernet
-    Ethernet::reserve(packetInfo);
+    ethernet::reserve(packetInfo);
 
-    size_t ipSize = IPv4Header::fixedSize;
+    size_t ipSize = packet::IPv4Header::fixedSize;
     //TODO calcualte option lengths
 
-    packetInfo.reserveHeader(HeaderType::IPV4, ipSize);
+    packetInfo.reserveHeader(packet::HeaderType::IPV4, ipSize);
 }
 
 void buildIpv4(
@@ -110,11 +110,11 @@ void buildIpv4(
 {
     if (!ipv4Build.iface || ipv4Build.iface->shutdownFlag.load(std::memory_order_relaxed)) return;
 
-    BuildEntry* nextHeader = ipv4Build.packetInfo.nextBuildHeader();
-    if (!nextHeader || nextHeader->type != HeaderType::IPV4)
+    processing::BuildEntry* nextHeader = ipv4Build.packetInfo.nextBuildHeader();
+    if (!nextHeader || nextHeader->type != packet::HeaderType::IPV4)
         return; // Drop Packet
 
-    IPv4Header ip;
+    packet::IPv4Header ip;
 
     ip.setBuffer(nextHeader->buffer); //TODO
     if (ipv4Build.sourceIp)
@@ -139,11 +139,11 @@ void buildIpv4(
         uint64_t mac = 0;
         if (!getDestinationMac(mac, ipv4Build.iface, ipv4Build.destIp, ipv4Build.packetInfo))
             return; // ARP resolution in progress or failed
-        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, mac, ETHERNET_IPV4);
+        ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, mac, ETHERNET_IPV4);
     }
     else
     {
-        Ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destMac.value(), ETHERNET_IPV4);
+        ethernet::build(ipv4Build.iface, ipv4Build.packetInfo, ipv4Build.destMac.value(), ETHERNET_IPV4);
     }
 }
 
@@ -154,12 +154,12 @@ void buildIpv6(
 {
     if (!ipv6Build.iface || ipv6Build.iface->shutdownFlag.load(std::memory_order_relaxed)) return;
 
-    BuildEntry* nextHeader = ipv6Build.packetInfo.nextBuildHeader();
-    if (!nextHeader || nextHeader->type != HeaderType::IPV6)
+    processing::BuildEntry* nextHeader = ipv6Build.packetInfo.nextBuildHeader();
+    if (!nextHeader || nextHeader->type != packet::HeaderType::IPV6)
         return; // Drop Packet
 
     // IPv6 Header creation
-    IPv6Header ip;
+    packet::IPv6Header ip;
     ip.setBuffer(nextHeader->buffer);
     if (ipv6Build.sourceIp)
     {
@@ -189,7 +189,7 @@ void buildIpv6(
                 if (!src.addr) return;
                 ip.setSourceAddress(src.addr);
             }
-            else if (scope == 0x0E) // Global scope
+            else if (scope == 0x0E) // core::Global scope
             {
                 auto src = ipv6Build.iface->configs.ipv6.getGlobalUnicast();
                 if (!src.addr) return;
@@ -197,7 +197,7 @@ void buildIpv6(
             }
             else return; // Return if no matching scope is found
         }
-        // Global Unicast (2000::/3 = 001xxxxx)
+        // core::Global Unicast (2000::/3 = 001xxxxx)
         else if ((firstByte & 0b11100000) == 0b00100000)
         {
             auto src = ipv6Build.iface->configs.ipv6.getGlobalUnicast();
@@ -238,11 +238,11 @@ void buildIpv6(
         uint64_t mac = 0;
         if (!getDestinationMac(mac, ipv6Build.iface, ipv6Build.destIp, ipv6Build.packetInfo))
             return; // NDP resolution in progress or failed
-        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, mac, ETHERNET_IPV6);
+        ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, mac, ETHERNET_IPV6);
     }
     else
     {
-        Ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destMac.value(), ETHERNET_IPV6);
+        ethernet::build(ipv6Build.iface, ipv6Build.packetInfo, ipv6Build.destMac.value(), ETHERNET_IPV6);
     }
 
     if (!ipv6Build.dontFragment)
@@ -251,15 +251,15 @@ void buildIpv6(
     }
 }
 
-void reserveIpv6(PacketBuilder& packetInfo)
+void reserveIpv6(processing::PacketBuilder& packetInfo)
 {
     // Decide layer 2 encapsulation based on interface configs
     // DEFAULT -> Ethernet
-    Ethernet::reserve(packetInfo);
+    ethernet::reserve(packetInfo);
 
-    size_t ipSize = IPv6Header::fixedSize;
+    size_t ipSize = packet::IPv6Header::fixedSize;
     //TODO calcualte option lengths
 
-    packetInfo.reserveHeader(HeaderType::IPV6, ipSize);
+    packetInfo.reserveHeader(packet::HeaderType::IPV6, ipSize);
 }
-} // Namespace Protocol::Namespace
+} // namespace infrastructure::ippacket

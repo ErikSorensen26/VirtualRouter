@@ -5,6 +5,9 @@
 #include <chrono> 
 #include <Time.h> 
 
+namespace utils
+{
+
 DoTime::DoTime() // Default constructor for the DoTime class.
 {
     // Nothing implemented
@@ -64,3 +67,5 @@ std::string DoTime::getTime()
 
     return formattedTime; // Return the complete formatted time string.
 }
+
+} // namespace utils

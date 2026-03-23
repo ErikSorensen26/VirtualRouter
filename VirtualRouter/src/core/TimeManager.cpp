@@ -2,6 +2,9 @@
 
 #include <TimeManager.h>
 
+namespace core
+{
+
 TimeManager::TimeManager(ThreadPool& pool)
     : nextTimerId(1), stop(false), threadPool(pool)
 {
@@ -174,7 +177,7 @@ void TimeManager::stopTimer()
 
 void TimeManager::Run() 
 {
-    RCU::registerThread();
+    utils::RCU::registerThread();
     std::unique_lock<std::mutex> lock(mutex);
     while (!stop) 
     {
@@ -209,7 +212,7 @@ void TimeManager::Run()
         }
         lock.lock();
     }
-    RCU::unregisterThread();
+    utils::RCU::unregisterThread();
 }
 
 void TimeManager::runSingleTimer(const TimerData& timer)
@@ -248,3 +251,5 @@ void TimeManager::runSingleTimer(const TimerData& timer)
         }
     }
 }
+
+} // namespace utils

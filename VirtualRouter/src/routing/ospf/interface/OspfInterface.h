@@ -1,4 +1,4 @@
-// Interface.h
+// interface::Interface.h
 
 #ifndef OSPF_INTERFACE_H
 #define OSPF_INTERFACE_H
@@ -9,9 +9,9 @@
 #include "ospf/interface/InterfaceTimers.h"
 #include "InterfaceId.hpp"
 
-class Interface;
+namespace interface { class Interface; }
 
-namespace OSPF
+namespace routing::ospf
 {
 class PacketDispatcher;
 class OspfProcess;
@@ -22,7 +22,7 @@ class Neighbor;
 class OspfInterface
 {
 public:
-    OspfInterface(OspfProcess& proc, Interface& iface, Config::Reference<Config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id);
+    OspfInterface(OspfProcess& proc, interface::Interface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id);
     ~OspfInterface();
 
     const OspfInterfaceId id;
@@ -38,17 +38,17 @@ public:
     const InterfaceFlagManager& getFlags() const { return flags; }
     InterfaceFlagManager& getLsaFlags() { return lsaFlags; }
     const InterfaceFlagManager& getLsaFlags() const { return lsaFlags; }
-    Config::OspfInterfaceRegistry& getConfigs() { return configs.get(); }
-    const Config::OspfInterfaceRegistry& getConfigs() const { return configs.get(); }
-    Config::OspfInterfaceBaseRegistry& getBaseConfigs() { return baseConfigs.get(); }
-    const Config::OspfInterfaceBaseRegistry& getBaseConfigs() const noexcept { return baseConfigs.get(); }
+    config::OspfInterfaceRegistry& getConfigs() { return configs.get(); }
+    const config::OspfInterfaceRegistry& getConfigs() const { return configs.get(); }
+    config::OspfInterfaceBaseRegistry& getBaseConfigs() { return baseConfigs.get(); }
+    const config::OspfInterfaceBaseRegistry& getBaseConfigs() const noexcept { return baseConfigs.get(); }
 
     Area& getArea();
     uint32_t getAreaId() const { return id.area; }
-    Interface& getIface() { return iface; }
-    const Interface& getIface() const { return iface; }
+    interface::Interface& getIface() { return iface; }
+    const interface::Interface& getIface() const { return iface; }
 
-    const IPPrefix interfaceAddress;
+    const types::IPPrefix interfaceAddress;
 
     void election();
     void calculateCost();
@@ -92,11 +92,12 @@ private:
     InterfaceFlagManager lsaFlags;
     NeighborTable ntable;
     InterfaceTimers tmgr;
-    Interface& iface;
+    interface::Interface& iface;
 
-    Config::Reference<Config::OspfInterfaceRegistry> configs;
-    Config::Reference<Config::OspfInterfaceBaseRegistry> baseConfigs;
+    config::Reference<config::OspfInterfaceRegistry> configs;
+    config::Reference<config::OspfInterfaceBaseRegistry> baseConfigs;
 };
-}
+} // namespace routing
 
 #endif // OSPF_INTERFACE_H
+

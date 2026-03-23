@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <span>
 
-namespace TCP
+namespace transport::tcp
 {
 class RxBuffer;
 
@@ -31,7 +31,8 @@ private:
 
     RxBuffer& buffer;
 };
-}
+} // namespace transport::tcp
 
 #endif // TCP_CONSUMER_H
+
 

@@ -14,7 +14,7 @@
 
 #define UNUSED(x) (void)(x)
 
-namespace Cli
+namespace cli
 {
 // User-Defined literals to make tokens nicer
 template <FixedString S>

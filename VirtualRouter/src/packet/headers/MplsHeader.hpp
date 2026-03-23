@@ -5,6 +5,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 /**
  * @struct MplsHeaderRaw
  * @brief Represents a raw MPLS header
@@ -48,4 +51,7 @@ struct MplsHeader
         { raw->bytes[3] = ttl; }
 };
 
+} // namespace packet
+
 #endif // MPLS_HEADER_HPP
+

@@ -4,14 +4,13 @@
 #define OSPF_INTERFACE_MANAGER_H
 
 #include <IPAddress.h>
-#include <map>
 
 #include "ospf/interface/InterfaceId.hpp"
 
-class Interface;
-struct IPAddress;
+namespace interface { class Interface; }
+namespace types { struct IPAddress; }
 
-namespace OSPF
+namespace routing::ospf
 {
 struct OspfInterfaceId;
 class InterfaceConfigs;
@@ -24,7 +23,7 @@ public:
     InterfaceManager(OspfProcess& process);
     ~InterfaceManager();
 
-    OspfInterface& createInterface(Interface& interface, const OspfInterfaceId& id);
+    OspfInterface& createInterface(interface::Interface& interface, const OspfInterfaceId& id);
     void removeInterface(const OspfInterfaceId& id);
     void refreshInterfaceList();
 
@@ -32,8 +31,8 @@ public:
     void syncNeighbors();
 
     OspfInterface* getInterface(const OspfInterfaceId& id);
-    OspfInterface* getInterfaceByAddress(const IPAddress& addr);
-    std::vector<IPAddress> getReachableInterfaces(uint32_t area);
+    OspfInterface* getInterfaceByAddress(const types::IPAddress& addr);
+    std::vector<types::IPAddress> getReachableInterfaces(uint32_t area);
     bool isInterfaceReachable(uint32_t area, uint32_t id);
 
     // Lists
@@ -42,6 +41,7 @@ public:
 private:
     OspfProcess& process;
 };
-}
+} // namespace routing
 
 #endif // OSPF_INTERFACE_MANAGER_H
+

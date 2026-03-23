@@ -7,7 +7,7 @@
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/EigrpContext.hpp"
 
-namespace Cli
+namespace cli
 {
 bool RouterEigrpInterface_AuthenticationKeyChain_Handler(EIGRP_PARAMS);
 using RouterEigrpInterface_AuthenticationKeyChain = commandAdder<EigrpContext,

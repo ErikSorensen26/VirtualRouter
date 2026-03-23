@@ -8,20 +8,17 @@
 #include "IPv6Pool.h"
 #include <TimeManager.h>
 
-namespace Protocol
+namespace services::dhcp
 {
-    namespace Dhcpv6
-    {
-        struct Configs;
-    }
-    class Dhcpv6Server;
-}
+
+struct Configs;
+class Dhcpv6Server;
 
 class IPv6LeaseManager
 {
 public:
-    IPv6LeaseManager(IPv6Pool& pool, Protocol::Dhcpv6::Configs& configs);
-    friend class Protocol::Dhcpv6Server;
+    IPv6LeaseManager(IPv6Pool& pool, Configs& configs);
+    friend class Dhcpv6Server;
 
     struct StaticBinding
     {
@@ -50,8 +47,8 @@ private:
     void expireLease(__uint128_t addr, const IAKey& key);
 
     IPv6Pool& pool;
-    TimeManager& timeManager;
-    Protocol::Dhcpv6::Configs& configs;
+    core::TimeManager& timeManager;
+    Configs& configs;
     mutable std::mutex mutex;
 
     std::unordered_map<IAKey, std::unordered_set<__uint128_t>> leases;
@@ -60,4 +57,7 @@ private:
 
 };
 
+} // namespace services::dhcp
+
 #endif //IPV6_LEASE_MANAGER_H
+

@@ -13,24 +13,24 @@
 #include "cli/modes/contexts/EigrpContext.hpp"
 #include "eigrp/core/Eigrp.h"
 
-namespace Cli
+namespace cli
 {
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
 {
-    IPv6Address address; CliUtils::extractIPv6Address(args[0], address);
+    types::IPv6Address address; cli::utils::extractIPv6Address(args[0], address);
     if (!ctx.negate)
     {
-        InterfaceType type = getInterfaceType(args[1]);
+        interface::InterfaceType type = interface::getInterfaceType(args[1]);
         float id = std::stof(args[2]);
-        uint32_t intID = calculateInterfaceKey(type, id);
-        uint64_t _mac = 0; CliUtils::extractMacAddress(args[3], _mac);
-        GlobalConfigs::Ndp::Neighbor entry{
+        uint32_t intID = interface::calculateInterfaceKey(type, id);
+        uint64_t _mac = 0; cli::utils::extractMacAddress(args[3], _mac);
+        core::GlobalConfigs::Ndp::Neighbor entry{
                 intID,
                 _mac
         };
         ctx.global.configs.ndp.neighbors.emplace(
-                address,
-                entry
+            address,
+            entry
         );
         for (const auto& [key, iface] : ctx.global.getInterfaceList())
         {
@@ -48,7 +48,7 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
     uint16_t asNum = static_cast<uint16_t>(std::stoi(args[0]));
     if (!ctx.negate)
     {
-        EIGRP::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
+        routing::eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
         if (as)
         {
             if (as->ipv6Named)
@@ -63,13 +63,13 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
         }
         if (!as->ipv6)
         {
-            as->ipv6 = new EIGRP::Eigrp(asNum, AddressFamily::IPv6, &ctx.vrf);
+            as->ipv6 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv6, &ctx.vrf);
         }
         ctx.terminal.changeMode<CliMode::RouterEigrpClassicV6>(as->ipv6, nullptr, nullptr);
     }
     else
     {
-        EIGRP::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum); if (as)
+        routing::eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum); if (as)
         {
             if (!as->ipv6Named && as->ipv6)
             {

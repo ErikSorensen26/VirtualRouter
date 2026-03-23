@@ -3,7 +3,7 @@
 #include "LsdbTable.h"
 #include "ospf/area/FlagManager.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 LsdbTable::LsdbTable(std::pmr::memory_resource* upstream)
 #if OSPF_LSDB_USE_PMR
@@ -200,4 +200,4 @@ bool LsdbTable::runDCIntegrityScan()
     });
     return enabled;
 }
-}
+} // namespace routing

@@ -6,9 +6,9 @@
 #include "eigrp/core/Eigrp.h"
 #include "DuelEngine.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
-TimerManager::TimerManager(Eigrp& base, ProcessQueue& scheduler)
+TimerManager::TimerManager(Eigrp& base, core::ProcessQueue& scheduler)
     : base(base), scheduler(scheduler)
 {}
 
@@ -32,4 +32,4 @@ void TimerManager::cancelSIATimer(OutgoingQuery& query)
         query.siaTimerId = 0;
     }
 }
-}
+} // namespace routing

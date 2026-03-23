@@ -8,7 +8,7 @@
 #include "infrastructure/Ndp.h"
 #include "cli/runtime/CliUtils.h"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceIPv6ND_AdvertisementInterval_Handler(INTERFACE_PARAMS)
 {
@@ -158,7 +158,7 @@ bool InterfaceIPv6ND_RaInterval_Handler(INTERFACE_PARAMS)
 	ctx.currentInterface.ndp->configs.raInterval = 600000;
 	ctx.currentInterface.ndp->configs.raIntervalMin = 3000;
     }
-    else if (CliUtils::isNumber(args[0]))
+    else if (utils::isNumber(args[0]))
     {
 	std::unique_lock<std::shared_mutex> lock(ctx.currentInterface.ndp->configs.configMutex);
 	ctx.currentInterface.ndp->configs.raIntervalMS = false;
@@ -215,21 +215,21 @@ bool InterfaceIPv6ND_RouterPreference_Handler(INTERFACE_PARAMS)
 {
     if (ctx.negate)
     {
-	ctx.currentInterface.ndp->configs.preference = Protocol::Ndp::Configs::Preference::MEDIUM;
+	ctx.currentInterface.ndp->configs.preference = infrastructure::Ndp::Configs::Preference::MEDIUM;
     }
     else
     {
 	if (args[0] == "high")
 	{
-	    ctx.currentInterface.ndp->configs.preference = Protocol::Ndp::Configs::Preference::HIGH;
+	    ctx.currentInterface.ndp->configs.preference = infrastructure::Ndp::Configs::Preference::HIGH;
 	}
 	else if (args[0] == "medium")
 	{
-	    ctx.currentInterface.ndp->configs.preference = Protocol::Ndp::Configs::Preference::MEDIUM;
+	    ctx.currentInterface.ndp->configs.preference = infrastructure::Ndp::Configs::Preference::MEDIUM;
 	}
 	else if (args[0] == "low")
 	{
-	    ctx.currentInterface.ndp->configs.preference = Protocol::Ndp::Configs::Preference::LOW;
+	    ctx.currentInterface.ndp->configs.preference = infrastructure::Ndp::Configs::Preference::LOW;
 	}
     }
     return true;

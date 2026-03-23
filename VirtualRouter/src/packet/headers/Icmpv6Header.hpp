@@ -3,7 +3,7 @@
 #define ICMPV6_HEADER_HPP
 
 #include <vector>
-
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 #include "packet/TlvOptions.hpp"
 
@@ -49,6 +49,9 @@
 inline constexpr __uint128_t ICMPV6_SOLICIT_MULTICAST = (__uint128_t{0xFF02000000000000} << 64) | 0x000000000001FF00000000ULL;
 inline constexpr __uint128_t ICMPV6_ALL_ROUTERS = (__uint128_t{0xFF02000000000000} << 64) | 0x0000000000000002ULL;
 
+namespace packet
+{
+
 #pragma pack(push, 1)
 struct Icmpv6HeaderRaw
 {
@@ -81,7 +84,7 @@ struct Icmpv6Header
     void setReserved(uint8_t* val)
         { memcpy(raw->reserved, val, 4); }
     void setReservedInt(uint32_t val)
-        { writeU32(raw->reserved, val); }
+        { utils::writeU32(raw->reserved, val); }
 };
 
 // Parses trailing data into ICMPv6 options
@@ -105,4 +108,7 @@ inline bool parseIcmpv6Options(const uint8_t* data, size_t size, std::vector<TLV
     return offset == size;
 }
 
+} // namespace packet
+
 #endif // ICMPV6_HEADER_HPP
+

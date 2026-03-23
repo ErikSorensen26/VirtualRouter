@@ -7,7 +7,7 @@
 
 #include "ospf/area/Originator.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 class OriginatorV3 : public Originator
 {
@@ -20,7 +20,7 @@ public:
     void addExternal(uint32_t asbr, uint32_t lsid, bool remove) override;
     void translateNssaToExternal(const LsaKey& key, const LsaBody& lsa, bool expire) override;
     void addStubDefaultRoute(bool add) override;
-    void originateSummary(uint32_t lsid, const IPPrefix& prefix, uint32_t cost, bool expire) override;
+    void originateSummary(uint32_t lsid, const types::IPPrefix& prefix, uint32_t cost, bool expire) override;
 
 protected:
 
@@ -52,6 +52,7 @@ protected:
     void addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask = false) override;
     void addVirtualLink(LsaBody& router, const OspfInterface& iface, const Neighbor& vNbr) override;
 };
-}
+} // namespace routing
 
 #endif // OSPF_ORIGINATOR_V3_H
+

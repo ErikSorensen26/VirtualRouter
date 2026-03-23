@@ -13,6 +13,8 @@
 
 class ConsoleTest; ///< Forward declaration of ConsoleTest
 
+namespace cli
+{
 /**
  * @enum Color
  * @brief Represents all available terminal colors.
@@ -569,6 +571,6 @@ protected:
     // Options for autocompletion
     std::vector<std::string> autocompleteOptions {"end", "exit"}; ///< List of options for autocompletion
 };
+}
 
 #endif // CONSOLE_H
-

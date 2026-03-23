@@ -12,20 +12,22 @@
 #include "configs/Registry.hpp"
 #include "routing/RoutingTable.hpp"
 
-class Interface; ///< Forward declaration of Interface.
-class Global;    ///< Forward declaration of Global.
-class ControlScheduler;
-namespace EIGRP
-{
+namespace interface { class Interface; enum class InterfaceType : uint8_t; }
+
+namespace routing::eigrp {
     struct EigrpAutonomousSystem; ///< Forward declaration of Eigrp Autonomous System.
     struct EigrpNamed;            ///< Forward declaration of Eigrp Named.
 }
-namespace OSPF
-{
+namespace routing::ospf {
     class OspfProcess;
     class OspfV3Instance;
 }
-enum class InterfaceType: uint8_t; ///< Forward declaration of InterfaceType.
+
+namespace core
+{
+
+class Global;    ///< Forward declaration of Global.
+class ControlScheduler;
 
 /**
  * @class VirtualRouter
@@ -141,12 +143,12 @@ public:
      * Determines which protocol stacks are available in this VRF.
      * Protocols will not initialize for disabled AFs.
      */
-    std::set<AddressFamily> enabledAddressFamilies;
+    std::set<types::AddressFamily> enabledAddressFamilies;
 
     // INTERFACE MANAGEMENT
 
     /**
-     * @brief Attach an existing Interface to this VRF.
+     * @brief Attach an existing interface::Interface to this VRF.
      *
      * Inserts the interface into the VRF's interface map, allowing routing protocols
      * and packet processing engines operating inside the VRF to discover and use it.
@@ -156,39 +158,39 @@ public:
      *
      * @return The inserted interface pointer, or nullptr if the key already exists.
      *
-     * @note Interface ownership stays in the Global controller.
+     * @note interface::Interface ownership stays in the Global controller.
      * @thread_safety Uses a shared lock internally.
      */
-    Interface* addInterface(Interface* interface, uint32_t key);
+    interface::Interface* addInterface(interface::Interface* interface, uint32_t key);
 
     /**
      * @brief Retrieve an interface from the VRF by its key.
      *
      * @param key Unique interface key.
-     * @return The Interface pointer, or nullptr if not present in this VRF.
+     * @return The interface::Interface pointer, or nullptr if not present in this VRF.
      *
      * @thread_safety Shared read lock.
      */
-    Interface* getInterface(uint32_t key);
+    interface::Interface* getInterface(uint32_t key);
 
     /**
      * @brief Obtain a snapshot copy of the interface list.
      *
-     * @return A copy of the unordered_map of interface keys to Interface pointers.
+     * @return A copy of the unordered_map of interface keys to interface::Interface pointers.
      *
      * The returned map is safe for iteration without holding the lock, but may not
      * reflect subsequent modifications.
      *
      * @thread_safety Uses shared read lock.
      */
-    std::unordered_map<uint32_t, Interface*> getinterfaceList();
+    std::unordered_map<uint32_t, interface::Interface*> getinterfaceList();
 
     /**
      * @brief Remove an interface from this VRF's interface table.
      *
      * Does NOT delete the actual interface; ownership stays global.
      *
-     * @param key Interface key to remove.
+     * @param key interface::Interface key to remove.
      * @return True if removed, false if not found.
      *
      * @thread_safety Shared read lock.
@@ -208,7 +210,7 @@ public:
      * - IPv6 EIGRP instance (optional)
      * - Metrics, K-values, timers, bandwidth/delay policies
      */
-    EIGRP::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
+    routing::eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
 
     /**
      * @brief Look up an existing EIGRP Autonomous System by number.
@@ -216,7 +218,7 @@ public:
      * @param id AS number.
      * @return Pointer to AS instance or nullptr if not found.
      */
-    EIGRP::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
+    routing::eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
 
     /**
      * @brief Remove and delete an EIGRP Autonomous System.
@@ -240,7 +242,7 @@ public:
      * @param name The EIGRP instance name.
      * @return Pointer to the newly created named instance, or nullptr if name exists.
      */
-    EIGRP::EigrpNamed& addEigrpNamed(const std::string& name);
+    routing::eigrp::EigrpNamed& addEigrpNamed(const std::string& name);
 
     /**
      * @brief Retrieve a named EIGRP instance.
@@ -248,7 +250,7 @@ public:
      * @param name The named EIGRP configuration identifier.
      * @return Pointer to instance or nullptr if missing.
      */
-    EIGRP::EigrpNamed* getEigrpNamed(const std::string& name);
+    routing::eigrp::EigrpNamed* getEigrpNamed(const std::string& name);
 
     /**
      * @brief Remove a named EIGRP configuration.
@@ -276,7 +278,7 @@ public:
      * @param id Process ID.
      * @return Reference to the newly created OSPFv2 instance.
      */
-    OSPF::OspfProcess& addOspf(uint16_t id);
+    routing::ospf::OspfProcess& addOspf(uint16_t id);
 
     /**
      * @brief retreives an ospfv2 instance.
@@ -284,7 +286,7 @@ public:
      * @param id process id.
      * @return pointer to instance or nullptr if missing.
      */
-    OSPF::OspfProcess* getOspf(uint16_t id);
+    routing::ospf::OspfProcess* getOspf(uint16_t id);
 
     /**
      * @brief Remove and delete an OSPFv2 process.
@@ -304,7 +306,7 @@ public:
      * @param id Process ID.
      * @return Reference to the newly created OSPFv2 instance.
      */
-    OSPF::OspfV3Instance& addOspfv3(uint16_t id);
+    routing::ospf::OspfV3Instance& addOspfv3(uint16_t id);
 
     /**
      * @brief Creates a OSPFv3 address family instance.
@@ -315,7 +317,7 @@ public:
      * @param af Address Family.
      * @return Reference to the newly created OSPFv2 instance.
      */
-    OSPF::OspfProcess& addOspfv3(uint16_t id, AddressFamily af);
+    routing::ospf::OspfProcess& addOspfv3(uint16_t id, types::AddressFamily af);
 
     /**
      * @brief Retreives an OSPFv3 instance.
@@ -323,7 +325,7 @@ public:
      * @param id Process ID.
      * @return Pointer to instance or nullptr if missing.
      */
-    OSPF::OspfV3Instance* getOspfv3(uint16_t id);
+    routing::ospf::OspfV3Instance* getOspfv3(uint16_t id);
 
     /**
      * @brief Remove and delete an OSPFv3 process.
@@ -340,34 +342,34 @@ public:
      * @param af Address Family.
      * @return True if removed, false if missing.
      */
-    bool removeOspfv3(uint16_t id, AddressFamily af);
+    bool removeOspfv3(uint16_t id, types::AddressFamily af);
 
     std::shared_mutex interfaceMutex; ///< Protects interfaceList.
-    std::unordered_map<uint32_t, Interface*> interfaceList; ///< Interfaces belonging to this VRF.
+    std::unordered_map<uint32_t, interface::Interface*> interfaceList; ///< Interfaces belonging to this VRF.
 
     // GLOBAL HELPERS
-    Config::Registry& getRegistry();
+    config::Registry& getRegistry();
     std::string getName() { return instanceName; }
     uint32_t getInstanceId() { return instanceId; }
     bool isDefault() { return defaulted; }
     Global& getGlobal() { return global; }
     RoutingTable& getRib() { return routingTable; }
     const RoutingTable& getRib() const { return routingTable; }
-    TCP::Tcp& getTcp() { return tcpManager; }
+    transport::tcp::Tcp& getTcp() { return tcpManager; }
     ControlScheduler& getControlScheduler();
     
 private:
-    friend class Interface;
+    friend class interface::Interface;
     uint32_t instanceId{0};
     const bool defaulted{false};
 
-    TCP::Tcp tcpManager;
+    transport::tcp::Tcp tcpManager;
 
-    std::unordered_map<uint32_t, EIGRP::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
-    std::unordered_map<std::string, EIGRP::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups.
+    std::unordered_map<uint32_t, routing::eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
+    std::unordered_map<std::string, routing::eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups.
 
-    std::unordered_map<uint32_t, OSPF::OspfProcess> ospfList;
-    std::unordered_map<uint32_t, OSPF::OspfV3Instance> ospfv3List;
+    std::unordered_map<uint32_t, routing::ospf::OspfProcess> ospfList;
+    std::unordered_map<uint32_t, routing::ospf::OspfV3Instance> ospfv3List;
 
     std::string instanceName; ///< Human-readable VRF identifier.
 
@@ -375,4 +377,7 @@ private:
     Global& global; ///< Reference to global system controller.
 };
 
+} // namespace core
+
 #endif // VIRTUAL_ROUTER_H
+

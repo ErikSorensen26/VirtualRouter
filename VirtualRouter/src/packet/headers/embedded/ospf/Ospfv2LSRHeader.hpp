@@ -5,6 +5,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 /*
  * @struct Ospfv2LSRHeaderRaw
  */
@@ -25,16 +28,19 @@ struct Ospfv2LSRHeader
 {
     DEFINE_FIXED_HEADER(Ospfv2LSRHeaderRaw);
 
-    uint32_t getType() const           { return readU32(raw->type); }
-    uint32_t getLsID() const                { return readU32(raw->lsID); }
-    uint32_t getAdvRouter() const           { return readU32(raw->advRouter); }
+    uint32_t getType() const           { return utils::readU32(raw->type); }
+    uint32_t getLsID() const                { return utils::readU32(raw->lsID); }
+    uint32_t getAdvRouter() const           { return utils::readU32(raw->advRouter); }
 
     void setType(uint32_t val)
-        { writeU32(raw->type, val); }
+        { utils::writeU32(raw->type, val); }
     void setLsID(uint32_t val)
-        { writeU32(raw->lsID, val); }
+        { utils::writeU32(raw->lsID, val); }
     void setAdvRouter(uint32_t val)
-        { writeU32(raw->advRouter, val); }
+        { utils::writeU32(raw->advRouter, val); }
 };
 
+} // namespace packet
+
 #endif // OSPFV2_LSR_HEADER_HPP
+

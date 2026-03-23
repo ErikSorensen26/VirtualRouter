@@ -11,9 +11,9 @@
 #include "ospf/topology/TopologyTable.h"
 #include "configs/registry/router/OspfRegistry.h"
 
-class VirtualRouter;
+namespace core { class VirtualRouter; }
 
-namespace OSPF 
+namespace routing::ospf
 {
 class Topology;
 class OspfProcess;
@@ -22,13 +22,13 @@ class Area;
 
 struct OspfV3Instance
 {
-    OspfV3Instance(Config::Reference<Config::OspfAddressFamilyV3Registry> cfgs)
+    OspfV3Instance(config::Reference<config::OspfAddressFamilyV3Registry> cfgs)
         : configs(std::move(cfgs)) {}
 
     OspfProcess* ipv4 = nullptr;
     OspfProcess* ipv6 = nullptr;
     
-    Config::Reference<Config::OspfAddressFamilyV3Registry> configs;
+    config::Reference<config::OspfAddressFamilyV3Registry> configs;
 };
 
 struct OspfInterfaceInstance
@@ -40,10 +40,10 @@ struct OspfInterfaceInstance
 class OspfProcess
 {
 public:
-    using V3AfConfigs = Config::Reference<Config::OspfAddressFamilyV3Registry>;
-    using V2AfConfigs = Config::Reference<Config::OspfAddressFamilyV2Registry>;
+    using V3AfConfigs = config::Reference<config::OspfAddressFamilyV3Registry>;
+    using V2AfConfigs = config::Reference<config::OspfAddressFamilyV2Registry>;
 
-    OspfProcess(bool isV3, uint16_t procId, AddressFamily af, VirtualRouter* vrf);
+    OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf);
 
     // External Origination
     template <typename Policy>
@@ -72,19 +72,19 @@ public:
     void syncSummaryConfig();
 
     // Getters
-    AddressFamily getAF() { return af; }
+    types::AddressFamily getAF() { return af; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
-    Config::OspfRegistry& getConfigs() { return configs.get(); }
+    config::OspfRegistry& getConfigs() { return configs.get(); }
     uint64_t getConfigKey() const { return configs.getKey(); }
-    const Config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
+    const config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
     OspfRib& getRib() { return rib; }
-    ProcessQueueRef getScheduler() { return scheduler.ref(); }
+    core::ProcessQueueRef getScheduler() { return scheduler.ref(); }
     const OspfRib& getRib() const { return rib; }
     uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const
     {
-        const auto& id = configs.get().get<Config::Ospf::ROUTER_ID>();
+        const auto& id = configs.get().get<config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
         return rid;
     }
@@ -107,14 +107,14 @@ public:
 
     const bool isV3;
 
-    VirtualRouter* routingInstance = nullptr;
+    core::VirtualRouter* routingInstance = nullptr;
 
     // External
     std::unordered_map<LsaKey, std::pair<LsaHeader, LsaBody>> externalDb;
     std::atomic<uint32_t> monotonicExternalId{0};
 
     // Summaries
-    std::unordered_map<IPPrefix, uint32_t> intraLsids;
+    std::unordered_map<types::IPPrefix, uint32_t> intraLsids;
     std::atomic<uint32_t> monotonicIntraId{0};
 
     TopologyTable table;
@@ -136,15 +136,15 @@ private:
     };
 
     // Summaries
-    std::unordered_map<IPPrefix, OspfSummaryAddress> summaries;
+    std::unordered_map<types::IPPrefix, OspfSummaryAddress> summaries;
     template <typename Policy>
-    void syncSummarySuppression(std::unordered_map<IPPrefix, OspfSummaryAddress>& activeSummaries);
+    void syncSummarySuppression(std::unordered_map<types::IPPrefix, OspfSummaryAddress>& activeSummaries);
 
     // Areas
     std::unordered_map<uint32_t, Area> areas;
 
     OspfRib rib;
-    ProcessQueue scheduler;
+    core::ProcessQueue scheduler;
 
     // Route type
     bool abr = false;
@@ -154,13 +154,14 @@ private:
     std::optional<uint32_t> defaultRoute = std::nullopt;
 
     const uint16_t procId;
-    const AddressFamily af;
+    const types::AddressFamily af;
     InterfaceManager ifaceMgr;
 
     // Configs
     std::variant<std::monostate, V3AfConfigs, V2AfConfigs> afConfigs;
-    Config::Reference<Config::OspfRegistry> configs;
+    config::Reference<config::OspfRegistry> configs;
 };
-}
+} // namespace routing
 
 #endif // OSPF_H
+

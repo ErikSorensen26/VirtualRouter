@@ -5,10 +5,9 @@
 
 #include <IPAddress.h>
 
-class Global;
-class ProcessQueue;
+namespace core { class Global; class ProcessQueue; }
 
-namespace EIGRP
+namespace routing::eigrp
 {
 struct OutgoingQuery;
 class DuelEngine;
@@ -19,7 +18,7 @@ class Neighbor;
 class TimerManager
 {
 public:
-    TimerManager(Eigrp& base, ProcessQueue& scheduler);
+    TimerManager(Eigrp& base, core::ProcessQueue& scheduler);
 
     void startSIATimer(OutgoingQuery& entry, Neighbor& neighbor);
     void cancelSIATimer(OutgoingQuery& entry);
@@ -27,8 +26,9 @@ public:
 private:
 
     Eigrp& base;
-    ProcessQueue& scheduler;
+    core::ProcessQueue& scheduler;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_TIMER_MANAGER_H
+

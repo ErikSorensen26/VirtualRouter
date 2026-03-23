@@ -5,11 +5,11 @@
 
 #include <cstdint>
 #include <optional>
+#include <ByteUtils.hpp>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct SummaryNetworkLsa
 {
@@ -21,8 +21,8 @@ struct SummaryNetworkLsa
         if (len != 8) return std::nullopt;
 
         SummaryNetworkLsa lsa;
-        lsa.networkMask = readU32(buf);
-        uint32_t metricWord = readU32(buf + 4);
+        lsa.networkMask = utils::readU32(buf);
+        uint32_t metricWord = utils::readU32(buf + 4);
         lsa.metric = metricWord & 0x00FFFFFF;
 
         return lsa;
@@ -32,8 +32,8 @@ struct SummaryNetworkLsa
     {
         if (len != 8) return false;
 
-        writeU32(buf, networkMask);
-        writeU32(buf + 4, metric);
+        utils::writeU32(buf, networkMask);
+        utils::writeU32(buf + 4, metric);
         return true;
     }
 
@@ -53,6 +53,7 @@ struct SummaryNetworkLsa
         return networkMask == rhs.networkMask && metric == rhs.metric;
     }
 };
-}
+} // namespace routing
 
 #endif // SUMMARY_NETWORK_LSA_HPP
+

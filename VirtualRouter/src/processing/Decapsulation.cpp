@@ -4,7 +4,9 @@
 
 #include "Decapsulation.h"
 #include "packet/PacketStructure.h"
-#include "packet/HeaderHelpers.hpp"
+
+namespace processing
+{
 
 inline void prefetch_header(const void* ptr) {
     _mm_prefetch(reinterpret_cast<const char*>(ptr), _MM_HINT_T0);
@@ -15,12 +17,12 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
     packet.offset = 0;
 
     // Layer 2
-    EthernetHeader eth;
+    packet::EthernetHeader eth;
     if (unlikely(!eth.parse(data, len, packet.offset))) return false;
-    packet.headers[packet.count++] = { HeaderType::ETHERNET, packet.offset, EthernetHeader::fixedSize };
-    packet.offset += EthernetHeader::fixedSize;
+    packet.headers[packet.count++] = { packet::HeaderType::ETHERNET, packet.offset, packet::EthernetHeader::fixedSize };
+    packet.offset += packet::EthernetHeader::fixedSize;
 
-    uint16_t ethernetType = readU16(eth.raw->type);
+    uint16_t ethernetType = utils::readU16(eth.raw->type);
 
     // Layer 2.5
     while (true) 
@@ -32,10 +34,10 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
         }
         else if (ethernetType == ETHERNET_MPLS)
         {
-            MplsHeader mpls;
+            packet::MplsHeader mpls;
             if (unlikely(!mpls.parse(data, len, packet.offset))) return false;
-            packet.headers[packet.count++] = { HeaderType::MPLS, packet.offset, MplsHeader::fixedSize };
-            packet.offset += MplsHeader::fixedSize;
+            packet.headers[packet.count++] = { packet::HeaderType::MPLS, packet.offset, packet::MplsHeader::fixedSize };
+            packet.offset += packet::MplsHeader::fixedSize;
 
             if (likely(mpls.getBottomOfStack()))
             {
@@ -47,10 +49,10 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
         }
         else if (ethernetType == ETHERNET_ARP)
         {
-            ArpHeader arp;
+            packet::ArpHeader arp;
             if (unlikely(!arp.parse(data, len, packet.offset))) return false;
-            packet.headers[packet.count++] = { HeaderType::ARP, packet.offset, ArpHeader::fixedSize };
-            packet.offset += ArpHeader::fixedSize;
+            packet.headers[packet.count++] = { packet::HeaderType::ARP, packet.offset, packet::ArpHeader::fixedSize };
+            packet.offset += packet::ArpHeader::fixedSize;
             return true;
         }
         else break;
@@ -60,9 +62,9 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
     if (ethernetType == ETHERNET_IPV4)
     {
         size_t ipv4Size = (data[packet.offset] & 0x0F) * 4;
-        IPv4Header ipv4;
+        packet::IPv4Header ipv4;
         if (unlikely(!ipv4.parse(data, len, ipv4Size, packet.offset))) return false;
-        packet.headers[packet.count++] = { HeaderType::IPV4, packet.offset, ipv4Size };
+        packet.headers[packet.count++] = { packet::HeaderType::IPV4, packet.offset, ipv4Size };
         packet.offset += ipv4Size;
         prefetch_header(data + packet.offset);
         return true;
@@ -70,10 +72,10 @@ bool inspect(PacketInfo& packet, uint8_t* data, size_t len)
 
     if (ethernetType == ETHERNET_IPV6)
     {
-        IPv6Header ipv6;
+        packet::IPv6Header ipv6;
         if (unlikely(!ipv6.parse(data, len, packet.offset))) return false;
-        packet.headers[packet.count++] = { HeaderType::IPV6, packet.offset, IPv6Header::fixedSize };
-        packet.offset += IPv6Header::fixedSize;
+        packet.headers[packet.count++] = { packet::HeaderType::IPV6, packet.offset, packet::IPv6Header::fixedSize };
+        packet.offset += packet::IPv6Header::fixedSize;
         prefetch_header(data + packet.offset);
         return true;
     }
@@ -87,18 +89,18 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
 
     while (likely(packet.offset < len))
     {
-        HeaderType lastType = packet.headers[packet.count - 1].type;
+        packet::HeaderType lastType = packet.headers[packet.count - 1].type;
         uint8_t proto = 0;
 
         // Layer 3 again for robust decapsulation
-        if (lastType == HeaderType::IPV4)
+        if (lastType == packet::HeaderType::IPV4)
         {
-            auto* ip = reinterpret_cast<const IPv4HeaderRaw*>(data + packet.headers[packet.count - 1].offset);
+            auto* ip = reinterpret_cast<const packet::IPv4HeaderRaw*>(data + packet.headers[packet.count - 1].offset);
             proto = ip->protocol;
         }
-        else if (lastType == HeaderType::IPV6)
+        else if (lastType == packet::HeaderType::IPV6)
         {
-            auto* ip = reinterpret_cast<const IPv6HeaderRaw*>(data + packet.headers[packet.count - 1].offset);
+            auto* ip = reinterpret_cast<const packet::IPv6HeaderRaw*>(data + packet.headers[packet.count - 1].offset);
             proto = ip->nextHeader;
         }
         else return false;
@@ -108,29 +110,29 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
         {
             case IP_ICMPV4:
             {
-                IcmpHeader icmp;
+                packet::IcmpHeader icmp;
                 if (unlikely(!icmp.parse(data, len, packet.offset))) return false;
-                packet.headers[packet.count++] = { HeaderType::ICMP, packet.offset, IcmpHeader::fixedSize };
+                packet.headers[packet.count++] = { packet::HeaderType::ICMP, packet.offset, packet::IcmpHeader::fixedSize };
                 return true;
             }
             case IP_ICMPV6:
             {
-                Icmpv6Header icmp;
+                packet::Icmpv6Header icmp;
                 size_t headerSize = len - packet.offset;
                 if (unlikely(!icmp.parse(data, len, headerSize, packet.offset))) return false;
-                packet.headers[packet.count++] = { HeaderType::ICMPV6, packet.offset, headerSize };
+                packet.headers[packet.count++] = { packet::HeaderType::ICMPV6, packet.offset, headerSize };
                 return true;
             }
             case IP_TCP:
             {
                 if (len < packet.offset + 13)
                     return false;
-                TcpHeader tcp;
+                packet::TcpHeader tcp;
                 size_t tcpLen = ((data[packet.offset + 12] & 0xF0) >> 4) * 4;
                 if (tcpLen < 20 || len < packet.offset + tcpLen)
                     return false;
                 if (unlikely(!tcp.parse(data, len, tcpLen, packet.offset))) return false;
-                packet.headers[packet.count++] = { HeaderType::TCP, packet.offset, tcpLen };
+                packet.headers[packet.count++] = { packet::HeaderType::TCP, packet.offset, tcpLen };
                 packet.offset += tcpLen;
                 prefetch_header(data + packet.offset);
 
@@ -142,10 +144,10 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
             }
             case IP_UDP:
             {
-                UdpHeader udp;
+                packet::UdpHeader udp;
                 if (unlikely(!udp.parse(data, len, packet.offset))) return false;
-                packet.headers[packet.count++] = { HeaderType::UDP, packet.offset, UdpHeader::fixedSize };
-                packet.offset += UdpHeader::fixedSize;
+                packet.headers[packet.count++] = { packet::HeaderType::UDP, packet.offset, packet::UdpHeader::fixedSize };
+                packet.offset += packet::UdpHeader::fixedSize;
                 prefetch_header(data + packet.offset);
 
                 uint16_t src = udp.getSourcePort();
@@ -154,46 +156,46 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
                 if ((src == UDP_DHCP_CLIENT && dst == UDP_DHCP_SERVER) ||
                     (src == UDP_DHCP_SERVER && dst == UDP_DHCP_CLIENT))
                 {
-                    DhcpHeader dhcp;
+                    packet::DhcpHeader dhcp;
                     size_t dhcpSize = len - packet.offset;
                     if (unlikely(!dhcp.parse(data, len, dhcpSize, packet.offset))) return false;
-                    packet.headers[packet.count++] = { HeaderType::DHCP, packet.offset, dhcpSize };
+                    packet.headers[packet.count++] = { packet::HeaderType::DHCP, packet.offset, dhcpSize };
                     return true;
                 }
                 else if ((src == UDP_DHCPV6_CLIENT && dst == UDP_DHCPV6_SERVER) ||
                          (src == UDP_DHCPV6_SERVER && dst == UDP_DHCPV6_CLIENT))
                 {
-                    Dhcpv6Header dhcp6;
+                    packet::Dhcpv6Header dhcp6;
                     size_t dhcpSize = len - packet.offset;
                     if (unlikely(!dhcp6.parse(data, len, dhcpSize, packet.offset))) return false;
-                    packet.headers[packet.count++] = { HeaderType::DHCPV6, packet.offset, dhcpSize };
+                    packet.headers[packet.count++] = { packet::HeaderType::DHCPV6, packet.offset, dhcpSize };
                     return true;
                 }
                 break;
             }
             case IP_EIGRP:
             {
-                EigrpHeader eigrp;
+                packet::EigrpHeader eigrp;
                 size_t eigrpSize = len - packet.offset;
                 if (unlikely(!eigrp.parse(data, len, eigrpSize, packet.offset))) return false;
-                packet.headers[packet.count++] = { HeaderType::EIGRP, packet.offset, eigrpSize };
+                packet.headers[packet.count++] = { packet::HeaderType::EIGRP, packet.offset, eigrpSize };
                 return true;
             }
             case IP_IPV4:
             {
-                IPv4Header ip;
+                packet::IPv4Header ip;
                 size_t ipLen = (data[packet.offset] & 0x0F) * 4;
                 if (unlikely(!ip.parse(data, len, ipLen, packet.offset))) return false;
-                packet.headers[packet.count++] = { HeaderType::IPV4, packet.offset, ipLen };
+                packet.headers[packet.count++] = { packet::HeaderType::IPV4, packet.offset, ipLen };
                 packet.offset += ipLen;
                 break;
             }
             case IP_IPV6:
             {
-                IPv6Header ip;
+                packet::IPv6Header ip;
                 if (unlikely(!ip.parse(data, len, packet.offset))) return false;
-                packet.headers[packet.count++] = { HeaderType::IPV6, packet.offset, IPv6Header::fixedSize };
-                packet.offset += IPv6Header::fixedSize;
+                packet.headers[packet.count++] = { packet::HeaderType::IPV6, packet.offset, packet::IPv6Header::fixedSize };
+                packet.offset += packet::IPv6Header::fixedSize;
                 break;
             }
             default:
@@ -203,3 +205,5 @@ bool decapsulate(PacketInfo& packet, uint8_t* data, size_t len)
 
     return false;
 }
+
+} // namespace processing

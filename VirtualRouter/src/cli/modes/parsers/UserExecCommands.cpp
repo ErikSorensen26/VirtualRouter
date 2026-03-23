@@ -3,7 +3,7 @@
 #include "UserExecCommands.h"
 #include "cli/runtime/CliSession.h"
 
-namespace Cli
+namespace cli
 {
 bool UserExec_Enable_Handler(USER_EXEC_PARAMS)
 {

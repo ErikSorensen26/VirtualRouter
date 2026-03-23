@@ -7,6 +7,9 @@
 #include <string>
 #include <optional>
 
+namespace qos::ingress
+{
+
 struct RxQueueOpts
 {
     std::string ifname;
@@ -24,4 +27,7 @@ struct RxQueueOpts
     int cpuId = -1;
 };
 
+} // namespace qos
+
 #endif  // RX_QUEUE_OPTS_HPP
+

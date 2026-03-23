@@ -9,22 +9,25 @@
 #include "interface/Interface.h"
 #include "hardware/HardwareManager.h"
 
-Global::Global(const StartupFiles& stfs, bool enableRouting, bool test)
+namespace core
+{
+
+Global::Global(const cli::StartupFiles& stfs, bool enableRouting, bool test)
     : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), scheduler(threadPool, timeManager), engine(*this, stfs, test)
 {
     txMgr.setCorePool({0, 1, 2, 3});
-    txMgr.setCpuPolicy(CpuPolicy::EqualShare);
+    txMgr.setCpuPolicy(qos::egress::CpuPolicy::EqualShare);
     txMgr.setTxCoreBias(1.0);
 
     rxMgr.setCorePool({4, 5, 6, 7});
-    rxMgr.setCpuPolicy(RxQueueManager::CpuPolicy::EqualShare);
+    rxMgr.setCpuPolicy(qos::ingress::RxQueueManager::CpuPolicy::EqualShare);
 
     if (!test) {
         engine.initEngine(stfs);
     }
 }
 
-Global::Global(IFileSystem* fs, const StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), scheduler(threadPool, timeManager), engine(*this, stfs, fs, test) {}
+Global::Global(cli::IFileSystem* fs, const cli::StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), scheduler(threadPool, timeManager), engine(*this, stfs, fs, test) {}
 
 Global::~Global()
 {
@@ -81,20 +84,20 @@ void Global::reset()
 }
       
 // Interfaces
-Interface* Global::addInterface(InterfaceType interfaceType, const HwIfaceInfo& hwInfo, float interfaceId, bool debug)
+interface::Interface* Global::addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug)
 {
     uint32_t key = calculateInterfaceKey(interfaceType, interfaceId);
     if (interfaceList.find(key) != interfaceList.end())
     {
         return nullptr;
     }
-    InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), hwInfo, debug};
-    interfaceList[key] = new Interface(iface);
+    interface::InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), hwInfo, debug};
+    interfaceList[key] = new interface::Interface(iface);
 
     return interfaceList[key];
 }
 
-Interface* Global::getInterface(uint32_t key)
+interface::Interface* Global::getInterface(uint32_t key)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
     if (interfaceList.find(key) != interfaceList.end())
@@ -104,7 +107,7 @@ Interface* Global::getInterface(uint32_t key)
     return nullptr;
 }
 
-std::map<uint32_t, Interface*>& Global::getInterfaceList()
+std::map<uint32_t, interface::Interface*>& Global::getInterfaceList()
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
     return interfaceList;
@@ -134,11 +137,11 @@ VirtualRouter* Global::addRoutingInstance(const std::string& name)
     return routingInstances[name];
 }
 
-VirtualRouter* Global::getRoutingInstance(const std::string& name, AddressFamily ad)
+VirtualRouter* Global::getRoutingInstance(const std::string& name, types::AddressFamily ad)
 {
     std::lock_guard<std::mutex> lock(routingInstanceMutex);
     if (routingInstances.find(name) != routingInstances.end() && 
-        ad != AddressFamily::NONE 
+        ad != types::AddressFamily::NONE 
         ? routingInstances[name]->enabledAddressFamilies.count(ad)
         : true)
     {
@@ -160,3 +163,5 @@ bool Global::removeRoutingInstance(const std::string& name)
     }
     return false;
 }
+
+} // namespace core

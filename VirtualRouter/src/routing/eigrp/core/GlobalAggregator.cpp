@@ -7,7 +7,7 @@
 #include "eigrp/interface/RouteAggregator.h"
 #include "eigrp/interface/EigrpInterface.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 GlobalAggregator::GlobalAggregator(Eigrp& base) : base(base) {}
 
@@ -38,7 +38,7 @@ void GlobalAggregator::updateSummary(TopologyEntry& top)
 
 void GlobalAggregator::enableAutoSummary(bool enable)
 {
-    if (base.getAF() != AddressFamily::IPv4) return; // Only supported for IPv4
+    if (base.getAF() != types::AddressFamily::IPv4) return; // Only supported for IPv4
 
     auto& configs = base.getGlobalConfigMgr();
     bool current = configs.isAutoSummarized();
@@ -51,7 +51,7 @@ void GlobalAggregator::enableAutoSummary(bool enable)
 
     if (enable)
     {
-        std::set<IPPrefix> classfulGroups;
+        std::set<types::IPPrefix> classfulGroups;
 
         for (auto& [prefix, top] : base.getTopology().entries())
         {
@@ -82,4 +82,4 @@ void GlobalAggregator::recomputeAutoSummaries()
         iface.getAggregator().updateAllSummaryRoutes(true);
     }
 }
-}
+} // namespace routing

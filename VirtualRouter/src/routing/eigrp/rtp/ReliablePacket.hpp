@@ -10,7 +10,7 @@
 #include "packet/headers/EigrpHeader.hpp"
 #include "packet/StaticHeader.hpp"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class Neighbor;
 struct ReliableInfo
@@ -25,7 +25,7 @@ class UnicastReliablePacket
 {
 public:
     UnicastReliablePacket() = default;
-    UnicastReliablePacket(EigrpHeader& builder, const IPAddress& dest)
+    UnicastReliablePacket(packet::EigrpHeader& builder, const types::IPAddress& dest)
         : packet(builder.buffer, builder.fixedSize + builder.getTrail().size()), destination(dest) {}
 
     // Default copy constructor and copy assignment operator
@@ -38,15 +38,15 @@ public:
 
     ReliableInfo info;
 
-    StaticHeader packet;
-    IPAddress destination;
+    packet::StaticHeader packet;
+    types::IPAddress destination;
 };
 
 class MulticastReliablePacket
 {
 public:
     MulticastReliablePacket() = default;
-    MulticastReliablePacket(EigrpHeader& builder, std::unordered_map<Neighbor*, ReliableInfo>& nbrs)
+    MulticastReliablePacket(packet::EigrpHeader& builder, std::unordered_map<Neighbor*, ReliableInfo>& nbrs)
         : packet(builder.buffer, builder.fixedSize + builder.getTrail().size()), neighbors(std::move(nbrs)) {}
 
     // Default copy constructor and copy assignment operator
@@ -57,9 +57,10 @@ public:
     MulticastReliablePacket(MulticastReliablePacket&&) = default;
     MulticastReliablePacket& operator=(MulticastReliablePacket&&) = default;
 
-    StaticHeader packet;
+    packet::StaticHeader packet;
     std::unordered_map<Neighbor*, ReliableInfo> neighbors;
 };
-}
+} // namespace routing
 
 #endif
+

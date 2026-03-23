@@ -9,10 +9,10 @@
 #include "configs/RegistryReference.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
-class Interface;
-struct IPAddress;
+namespace interface { class Interface; }
+namespace types { struct IPAddress; }
 
-namespace EIGRP
+namespace routing::eigrp
 {
 class Eigrp;
 class EigrpInterface;
@@ -23,14 +23,14 @@ public:
     InterfaceManager(Eigrp& base);
     ~InterfaceManager();
 
-    EigrpInterface* createInterface(Interface* interface);
+    EigrpInterface* createInterface(interface::Interface* interface);
     void refreshInterfaceList();
 
     void deactivateAll();
 
     EigrpInterface* getInterface(uint32_t key);
-    Config::Reference<Config::EigrpInterfaceRegistry> getRegistry(Interface& iface);
-    Config::Reference<Config::EigrpInterfaceRegistry> getRegistryByKey(uint32_t key);
+    config::Reference<config::EigrpInterfaceRegistry> getRegistry(interface::Interface& iface);
+    config::Reference<config::EigrpInterfaceRegistry> getRegistryByKey(uint32_t key);
 
     // Lists
     std::unordered_map<uint32_t, EigrpInterface> eigrpInterfaceList; ///< Map of EIGRP interfaces by identifier.
@@ -39,6 +39,7 @@ private:
 
     Eigrp& base;
 };
-}
+} // namespace routing
 
 #endif // INTERFACE_MANAGER_H
+

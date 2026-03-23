@@ -11,6 +11,9 @@
 #include "AddressFamily.hpp"
 #include "packet/HeaderHelpers.hpp"
 
+namespace types
+{
+
 #define IP_CLASS_A_PREFIX 8
 #define IP_CLASS_B_PREFIX 16
 #define IP_CLASS_C_PREFIX 24
@@ -80,12 +83,26 @@ struct IPAddress
     operator uint32_t() const { return v4(); }
     operator __uint128_t() const { return v6(); }
 
-    bool operator==(const IPAddress& o) const { return raw == o.raw; }
-    bool operator!=(const IPAddress& o) const { return raw != o.raw; }
-    bool operator<(const IPAddress& o) const { return raw < o.raw; }
-    bool operator>(const IPAddress& o) const { return raw > o.raw; }
-    bool operator<=(const IPAddress& o) const { return raw <= o.raw; }
-    bool operator>=(const IPAddress& o) const { return raw >= o.raw; }
+    bool operator==(const IPAddress& o) const;
+    bool operator!=(const IPAddress& o) const;
+    bool operator<(const IPAddress& o) const;
+    bool operator>(const IPAddress& o) const;
+    bool operator<=(const IPAddress& o) const;
+    bool operator>=(const IPAddress& o) const;
+
+    bool operator==(const IPv4Address& o) const;
+    bool operator!=(const IPv4Address& o) const;
+    bool operator<(const IPv4Address& o) const;
+    bool operator>(const IPv4Address& o) const;
+    bool operator<=(const IPv4Address& o) const;
+    bool operator>=(const IPv4Address& o) const;
+
+    bool operator==(const IPv6Address& o) const;
+    bool operator!=(const IPv6Address& o) const;
+    bool operator<(const IPv6Address& o) const;
+    bool operator>(const IPv6Address& o) const;
+    bool operator<=(const IPv6Address& o) const;
+    bool operator>=(const IPv6Address& o) const;
 };
 
 struct IPv4Address
@@ -120,6 +137,13 @@ struct IPv4Address
     bool operator> (const IPv4Address& o) const { return addr >  o.addr; }
     bool operator<=(const IPv4Address& o) const { return addr <= o.addr; }
     bool operator>=(const IPv4Address& o) const { return addr >= o.addr; }
+
+    bool operator==(const IPAddress& o) const { return addr == o.v4(); }
+    bool operator!=(const IPAddress& o) const { return addr != o.v4(); }
+    bool operator< (const IPAddress& o) const { return addr <  o.v4(); }
+    bool operator> (const IPAddress& o) const { return addr >  o.v4(); }
+    bool operator<=(const IPAddress& o) const { return addr <= o.v4(); }
+    bool operator>=(const IPAddress& o) const { return addr >= o.v4(); }
 
     bool operator==(uint32_t o) const { return addr == o; }
     bool operator!=(uint32_t o) const { return addr != o; }
@@ -163,6 +187,13 @@ struct IPv6Address
     bool operator> (const IPv6Address& o) const { return addr >  o.addr; }
     bool operator<=(const IPv6Address& o) const { return addr <= o.addr; }
     bool operator>=(const IPv6Address& o) const { return addr >= o.addr; }
+
+    bool operator==(const IPAddress& o) const { return addr == o.raw; }
+    bool operator!=(const IPAddress& o) const { return addr != o.raw; }
+    bool operator< (const IPAddress& o) const { return addr <  o.raw; }
+    bool operator> (const IPAddress& o) const { return addr >  o.raw; }
+    bool operator<=(const IPAddress& o) const { return addr <= o.raw; }
+    bool operator>=(const IPAddress& o) const { return addr >= o.raw; }
 
     bool operator==(const __uint128_t& o) const { return addr == o; }
     bool operator!=(const __uint128_t& o) const { return addr != o; }
@@ -222,6 +253,20 @@ struct alignas(16) IPPrefix
     bool operator> (const IPPrefix& o) const; 
     bool operator<=(const IPPrefix& o) const; 
     bool operator>=(const IPPrefix& o) const; 
+
+    bool operator==(const IPv4Prefix& o) const;
+    bool operator!=(const IPv4Prefix& o) const; 
+    bool operator< (const IPv4Prefix& o) const; 
+    bool operator> (const IPv4Prefix& o) const; 
+    bool operator<=(const IPv4Prefix& o) const; 
+    bool operator>=(const IPv4Prefix& o) const; 
+
+    bool operator==(const IPv6Prefix& o) const;
+    bool operator!=(const IPv6Prefix& o) const; 
+    bool operator< (const IPv6Prefix& o) const; 
+    bool operator> (const IPv6Prefix& o) const; 
+    bool operator<=(const IPv6Prefix& o) const; 
+    bool operator>=(const IPv6Prefix& o) const; 
 };
 
 struct alignas(4) IPv4Prefix
@@ -233,6 +278,7 @@ struct alignas(4) IPv4Prefix
     IPv4Prefix(const IPv4Prefix&) = default;
     IPv4Prefix& operator=(const IPv4Prefix&) = default;
 
+    IPv4Prefix(const IPPrefix& prefix, bool maintainAddress = false);
     IPv4Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress = false);
     IPv4Prefix(uint32_t ip, uint8_t prefix, bool maintainAddress = false);
 
@@ -259,6 +305,13 @@ struct alignas(4) IPv4Prefix
     bool operator>(const IPv4Prefix& o) const;
     bool operator<=(const IPv4Prefix& o) const;
     bool operator>=(const IPv4Prefix& o) const;
+
+    bool operator==(const IPPrefix& o) const;
+    bool operator!=(const IPPrefix& o) const;
+    bool operator<(const IPPrefix& o) const;
+    bool operator>(const IPPrefix& o) const;
+    bool operator<=(const IPPrefix& o) const;
+    bool operator>=(const IPPrefix& o) const;
 };
 
 struct alignas(16) IPv6Prefix
@@ -270,6 +323,7 @@ struct alignas(16) IPv6Prefix
     IPv6Prefix(const IPv6Prefix&) = default;
     IPv6Prefix& operator=(const IPv6Prefix&) = default;
 
+    IPv6Prefix(const IPPrefix& prefix, bool maintainAddress = false);
     IPv6Prefix(const IPAddress& ip, uint8_t prefix, bool maintainAddress = false);
     IPv6Prefix(__uint128_t ip, uint8_t prefix, bool maintainAddress = false);
 
@@ -293,6 +347,13 @@ struct alignas(16) IPv6Prefix
     bool operator>(const IPv6Prefix& o) const;
     bool operator<=(const IPv6Prefix& o) const;
     bool operator>=(const IPv6Prefix& o) const;
+
+    bool operator==(const IPPrefix& o) const;
+    bool operator!=(const IPPrefix& o) const;
+    bool operator<(const IPPrefix& o) const;
+    bool operator>(const IPPrefix& o) const;
+    bool operator<=(const IPPrefix& o) const;
+    bool operator>=(const IPPrefix& o) const;
 };
 
 template <typename T>
@@ -304,11 +365,13 @@ constexpr bool isIpPrefix()
            std::is_same_v<U, IPv6Prefix>;
 }
 
+} // namespace types
+
 namespace std {
 
 template <>
-struct hash<IPAddress> {
-    size_t operator()(const IPAddress& a) const noexcept {
+struct hash<types::IPAddress> {
+    size_t operator()(const types::IPAddress& a) const noexcept {
         uint64_t high = static_cast<uint64_t>(a.raw >> 64);
         uint64_t low  = static_cast<uint64_t>(a.raw);
         high ^= low;
@@ -322,8 +385,8 @@ struct hash<IPAddress> {
 };
 
 template <>
-struct hash<IPv4Address> {
-    size_t operator()(const IPv4Address& a) const noexcept {
+struct hash<types::IPv4Address> {
+    size_t operator()(const types::IPv4Address& a) const noexcept {
         uint32_t x = a.addr;
         x ^= x >> 16;
         x *= 0x85ebca6bu;
@@ -335,8 +398,8 @@ struct hash<IPv4Address> {
 };
 
 template <>
-struct hash<IPv6Address> {
-    size_t operator()(const IPv6Address& a) const noexcept {
+struct hash<types::IPv6Address> {
+    size_t operator()(const types::IPv6Address& a) const noexcept {
         uint64_t high = static_cast<uint64_t>(a.addr >> 64);
         uint64_t low  = static_cast<uint64_t>(a.addr);
         high ^= low;
@@ -350,8 +413,8 @@ struct hash<IPv6Address> {
 };
 
 template <>
-struct hash<IPPrefix> {
-    std::size_t operator()(const IPPrefix& key) const noexcept {
+struct hash<types::IPPrefix> {
+    std::size_t operator()(const types::IPPrefix& key) const noexcept {
         uint64_t high = static_cast<uint64_t>(key.addr >> 64);
         uint64_t low  = static_cast<uint64_t>(key.addr);
         std::size_t h = std::hash<uint8_t>{}(key.prefixLength);
@@ -362,8 +425,8 @@ struct hash<IPPrefix> {
 };
 
 template <>
-struct hash<IPv4Prefix> {
-    size_t operator()(const IPv4Prefix& pfx) const noexcept {
+struct hash<types::IPv4Prefix> {
+    size_t operator()(const types::IPv4Prefix& pfx) const noexcept {
         uint64_t h = std::hash<uint32_t>{}(pfx.addr);
         h ^= static_cast<uint64_t>(pfx.prefixLength) + 0x9e3779b7f4a7c15ull + (h << 6) + (h >> 2);
         return static_cast<size_t>(h);
@@ -371,8 +434,8 @@ struct hash<IPv4Prefix> {
 };
 
 template <>
-struct hash<IPv6Prefix> {
-    size_t operator()(const IPv6Prefix& pfx) const noexcept {
+struct hash<types::IPv6Prefix> {
+    size_t operator()(const types::IPv6Prefix& pfx) const noexcept {
         uint64_t high = static_cast<uint64_t>(pfx.addr >> 64);
         uint64_t low  = static_cast<uint64_t>(pfx.addr);
 
@@ -388,3 +451,4 @@ struct hash<IPv6Prefix> {
 }
 
 #endif // IPADDRESS_H
+

@@ -5,6 +5,9 @@
 
 #include <cstdint>
 
+namespace hardware
+{
+
 #pragma pack(push, 1)
 struct PacketSlot
 {
@@ -26,4 +29,7 @@ struct FrameHandle
     uint32_t qid;
 };
 
+} // namespace hardware
+
 #endif
+

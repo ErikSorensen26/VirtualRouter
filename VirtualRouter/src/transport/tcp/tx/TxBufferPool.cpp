@@ -4,7 +4,7 @@
 #include "TxBuffer.h"
 #include "tcp/TcpTypes.hpp"
 
-namespace TCP
+namespace transport::tcp
 {
 TxBufferPool::TxBufferPool(PoolConfig& c) noexcept : cfg(c)
 {
@@ -121,4 +121,4 @@ void TxBufferPool::release(Block* b) noexcept
         atomicPush(freeList, b);
     }
 }
-}
+} // namespace transport::tcp

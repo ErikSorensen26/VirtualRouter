@@ -176,7 +176,7 @@ bool parseIPv6Prefix(const std::string& s, __uint128_t& addr, uint8_t& len)
 }
 }
 
-namespace CliUtils
+namespace cli::utils
 {
 bool extractSubnetMask(uint32_t mask, uint8_t& plen)
 {
@@ -196,7 +196,7 @@ bool extractSubnetMask(uint32_t mask, uint8_t& plen)
     return true;
 }
 
-bool extractIPAddress(const std::string& str, IPAddress& addr)
+bool extractIPAddress(const std::string& str, types::IPAddress& addr)
 {
     uint32_t v4 = 0;
     if (parseIPv4(str, v4))
@@ -207,17 +207,17 @@ bool extractIPAddress(const std::string& str, IPAddress& addr)
     return parseIPv6(str, addr.raw);
 }
 
-bool extractIPv4Address(const std::string& str, IPv4Address& addr)
+bool extractIPv4Address(const std::string& str, types::IPv4Address& addr)
 {
     return parseIPv4(str, addr.addr);
 }
 
-bool extractIPv6Address(const std::string& str, IPv6Address& addr)
+bool extractIPv6Address(const std::string& str, types::IPv6Address& addr)
 {
     return parseIPv6(str, addr.addr);
 }
 
-bool extractIPPrefix(const std::string& addr, IPPrefix& prefix)
+bool extractIPPrefix(const std::string& addr, types::IPPrefix& prefix)
 {
     uint32_t v4 = 0;
     if (parseIPv4Prefix(addr, v4, prefix.prefixLength))
@@ -228,17 +228,17 @@ bool extractIPPrefix(const std::string& addr, IPPrefix& prefix)
     return parseIPv6Prefix(addr, prefix.addr, prefix.prefixLength);
 }
 
-bool extractIPv4Prefix(const std::string& addr, IPv4Prefix& prefix)
+bool extractIPv4Prefix(const std::string& addr, types::IPv4Prefix& prefix)
 {
     return parseIPv4Prefix(addr, prefix.addr, prefix.prefixLength);
 }
 
-bool extractIPv6Prefix(const std::string& addr, IPv6Prefix& prefix)
+bool extractIPv6Prefix(const std::string& addr, types::IPv6Prefix& prefix)
 {
     return parseIPv6Prefix(addr, prefix.addr, prefix.prefixLength);
 }
 
-bool extractIPv4Prefix(const std::string& addr, const std::string& mask, IPPrefix& prefix)
+bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::IPPrefix& prefix)
 {
     uint32_t maskInt = 0;
     if (!parseIPv4(mask, maskInt)) return false;
@@ -249,7 +249,7 @@ bool extractIPv4Prefix(const std::string& addr, const std::string& mask, IPPrefi
     return true;
 }
 
-bool extractIPv4Prefix(const std::string& addr, const std::string& mask, IPv4Prefix& prefix)
+bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::IPv4Prefix& prefix)
 {
     uint32_t maskInt = 0;
     if (!parseIPv4(mask, maskInt)) return false;
@@ -260,7 +260,7 @@ bool extractIPv4Prefix(const std::string& addr, const std::string& mask, IPv4Pre
 
 bool extractMacAddress(const std::string& str, uint64_t& mac)
 {
-    NetworkSpan<uint64_t> buf = *reinterpret_cast<NetworkSpan<uint64_t>*>(mac);
+    types::NetworkSpan<uint64_t> buf = *reinterpret_cast<types::NetworkSpan<uint64_t>*>(mac);
     std::string hex;
 
     if (str.find('.') != std::string::npos)

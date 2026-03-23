@@ -3,9 +3,9 @@
 #include "ProcessAccessor.h"
 #include "bgp/BgpProcess.h"
 
-namespace BGP
+namespace routing::bgp
 {
-VirtualRouter& ProcessAccessor::getRoutingInstance(BgpProcess& proc)
+core::VirtualRouter& ProcessAccessor::getRoutingInstance(BgpProcess& proc)
 {
     return *proc.routingInstance;
 }
@@ -25,7 +25,7 @@ uint32_t ProcessAccessor::getRid(BgpProcess& proc)
     return proc.getRouterId();
 }
 
-Config::BgpRegistry& ProcessAccessor::getConfigs(BgpProcess& proc)
+config::BgpRegistry& ProcessAccessor::getConfigs(BgpProcess& proc)
 {
     return proc.getConfigs();
 }
@@ -35,13 +35,13 @@ AttributeManager& ProcessAccessor::getAttrMgr(BgpProcess& proc)
     return proc.getAttrMgr();
 }
 
-ProcessQueueRef ProcessAccessor::getScheduler(BgpProcess& proc)
+core::ProcessQueueRef ProcessAccessor::getScheduler(BgpProcess& proc)
 {
     return proc.getScheduler();
 }
 
-void ProcessAccessor::emplaceAfBase(Config::ReferenceContainer<Config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc)
+void ProcessAccessor::emplaceAfBase(config::ReferenceContainer<config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc)
 {
     proc.routingInstance->getRegistry().emplace(base);
 }
-}
+} // namespace routing

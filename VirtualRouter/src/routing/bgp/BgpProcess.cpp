@@ -6,29 +6,29 @@
 #include "BgpProcess.h"
 #include "bgp/neighbor/Neighbor.h"
 
-namespace BGP
+namespace routing::bgp
 {
-BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
+BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
     : routingInstance(vrf),
       asNumber(as),
       scheduler(vrf->getControlScheduler().create()),
       ntable(*this),
-      configs(vrf->getRegistry().create<Config::BgpRegistry>(vrf->getInstanceId()))
+      configs(vrf->getRegistry().create<config::BgpRegistry>(vrf->getInstanceId()))
 {
-    vrf->getRegistry().ensure(configs->get<Config::Bgp::BGP_BASE>());
+    vrf->getRegistry().ensure(configs->get<config::Bgp::BGP_BASE>());
     scheduleScan();
 
-    TCP::ListenOptions opts;
-    opts.policy.pathMtuDiscovery = configs->get<Config::Bgp::BGP_BASE>().local().get()
-        .get<Config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
+    transport::tcp::ListenOptions opts;
+    opts.policy.pathMtuDiscovery = configs->get<config::Bgp::BGP_BASE>().local().get()
+        .get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
     opts.onAccept = BgpProcess::onAcceptCallback;
     opts.onAcceptUser = this;
     opts.recvCallback = BgpProcess::onReceiveCallback;
     opts.recvUser = this;
 
     listener = vrf->getTcp().listen(
-        TCP::TcpEndpoint{
-            .address = IPAddress{},
+        transport::tcp::TcpEndpoint{
+            .address = types::IPAddress{},
             .port = 179
         },
         opts
@@ -37,7 +37,7 @@ BgpProcess::BgpProcess(uint32_t as, VirtualRouter* vrf)
 
 BgpProcess::~BgpProcess() = default;
 
-Session* BgpProcess::findSession(const IPAddress& addr)
+Session* BgpProcess::findSession(const types::IPAddress& addr)
 {
     auto it = sessions.find(addr);
     return (it != sessions.end()) ? &it->second : nullptr;
@@ -45,7 +45,7 @@ Session* BgpProcess::findSession(const IPAddress& addr)
 
 void BgpProcess::startActiveSession(Neighbor& nbr)
 {
-    if (nbr.getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load())
+    if (nbr.getConfigs().get<config::BgpNeighborSession::SHUTDOWN>().load())
         return;
 
     auto [it, ok] = sessions.emplace(nbr.neighborAddress, nbr);
@@ -55,7 +55,7 @@ void BgpProcess::startActiveSession(Neighbor& nbr)
 
 void BgpProcess::startPassiveSession(Neighbor& nbr)
 {
-    if (nbr.getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load())
+    if (nbr.getConfigs().get<config::BgpNeighborSession::SHUTDOWN>().load())
         return;
 
     auto [it, ok] = sessions.emplace(nbr.neighborAddress, nbr);
@@ -73,7 +73,7 @@ void BgpProcess::shutdownNeighbor(Neighbor& nbr)
 void BgpProcess::unshutdownNeighbor(Neighbor& nbr)
 {
     auto& cfgs = nbr.getConfigs();
-    auto& connMode = cfgs.get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+    auto& connMode = cfgs.get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
     bool passive = connMode.hasValue() && !connMode.load();
 
     // If a session already exists (likely in IDLE after being shut down), restart it in place.
@@ -99,7 +99,7 @@ void BgpProcess::onSessionEstablished(Session& session)
     nbr.rid = rid;
     nbr.session = &session;
 
-    auto doEstablish = [this](const IPAddress& peerAddr) {
+    auto doEstablish = [this](const types::IPAddress& peerAddr) {
         Session* s = findSession(peerAddr);
         if (!s || !s->established()) return;
         for (auto& [afi, afVariant] : addressFamilies)
@@ -110,10 +110,10 @@ void BgpProcess::onSessionEstablished(Session& session)
         }
     };
 
-    auto& delayField = getConfigs().get<Config::Bgp::BGP_UPDATE_DELAY>();
+    auto& delayField = getConfigs().get<config::Bgp::BGP_UPDATE_DELAY>();
     if (delayField.hasValue())
     {
-        const IPAddress peerAddr = nbr.neighborAddress;
+        const types::IPAddress peerAddr = nbr.neighborAddress;
         const uint16_t delaySecs = delayField.load();
         scheduler.ref().postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(delaySecs),
@@ -160,25 +160,25 @@ void BgpProcess::disableAddressFamily(AfiSafi& afi)
     addressFamilies.erase(afi);
 }
 
-void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
+void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexcept
 {
     auto* bgp = static_cast<BgpProcess*>(ctx.user);
 
     // Look up the configured neighbor for the remote address.
-    const IPAddress& nbrIp = ctx.key.remote.address;
+    const types::IPAddress& nbrIp = ctx.key.remote.address;
     Neighbor* nbr = bgp->ntable.lookup(nbrIp);
 
-    if (!nbr && bgp->configs->get<Config::Bgp::BGP_LISTEN>().load() && nbrIp.isIPv4())
+    if (!nbr && bgp->configs->get<config::Bgp::BGP_LISTEN>().load() && nbrIp.isIPv4())
     {
         std::string matchedGroup;
-        bgp->configs->get<Config::Bgp::BGP_LISTEN_RANGE>().withRead(
+        bgp->configs->get<config::Bgp::BGP_LISTEN_RANGE>().withRead(
             [&](const std::vector<std::tuple<uint32_t, uint32_t, std::string>>& ranges)
             {
                 uint32_t remoteV4 = nbrIp.v4();
                 for (const auto& [netAddr, prefixLen, pgName] : ranges)
                 {
                     if (prefixLen > 32) continue;
-                    uint32_t mask = v4Mask(static_cast<uint8_t>(prefixLen));
+                    uint32_t mask = types::v4Mask(static_cast<uint8_t>(prefixLen));
                     if ((remoteV4 & mask) == (netAddr & mask))
                     {
                         matchedGroup = pgName;
@@ -193,7 +193,7 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
 
     // Check if accepting a connection is allowed
     auto allowPassive = [&]() {
-        auto& connMode = nbr->getConfigs().get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+        auto& connMode = nbr->getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
         return !(connMode.hasValue() && connMode.load() /*active = true*/);
     };
 
@@ -201,28 +201,28 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
     auto check = [&]() {
         auto& cfgs = nbr->getConfigs();
         bool connectCheck = nbr->isEbgp() &&
-            !cfgs.get<Config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load() &&
-            !cfgs.get<Config::BgpNeighborSession::EBGP_MULTIHOP>().load();
+            !cfgs.get<config::BgpNeighborSession::DISABLE_CONNECTION_CHECK>().load() &&
+            !cfgs.get<config::BgpNeighborSession::EBGP_MULTIHOP>().load();
 
         if (nbrIp.isIPv6())
         {
             auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v6raw());
-            return route && connectCheck ? route->source == RouteSource::CONNECTED : true;
+            return route && connectCheck ? route->source == core::RouteSource::CONNECTED : true;
         }
         else
         {
             auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v4raw());
-            return route && connectCheck ? route->source == RouteSource::CONNECTED : true;
+            return route && connectCheck ? route->source == core::RouteSource::CONNECTED : true;
         }
     };
 
     auto isShutdown = [&]() {
-        return nbr->getConfigs().get<Config::BgpNeighborSession::SHUTDOWN>().load();
+        return nbr->getConfigs().get<config::BgpNeighborSession::SHUTDOWN>().load();
     };
 
     // BGP_LISTEN_LIMIT caps the total number of concurrently accepted sessions.
     auto overLimit = [&]() {
-        auto& limitField = bgp->configs->get<Config::Bgp::BGP_LISTEN_LIMIT>();
+        auto& limitField = bgp->configs->get<config::Bgp::BGP_LISTEN_LIMIT>();
         return limitField.hasValue() && bgp->sessions.size() >= limitField.load();
     };
 
@@ -250,20 +250,20 @@ void BgpProcess::onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept
     it->second.acceptConnection(std::move(ctx.newConn));
 }
 
-void BgpProcess::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
+void BgpProcess::onConnectCallback(transport::tcp::ConnCallbackCtx& ctx) noexcept
 {
     auto* bgp = static_cast<BgpProcess*>(ctx.user);
     Session* session = bgp->findSession(ctx.key.remote.address);
     if (!session)
         return;
 
-    if (ctx.ev.type == TCP::TcpEventType::CONNECTED)
+    if (ctx.ev.type == transport::tcp::TcpEventType::CONNECTED)
         session->postEvent(FsmEvent::TCP_CR_ACKED);
     else
         session->postEvent(FsmEvent::TCP_CONNECTION_FAILS);
 }
 
-void BgpProcess::onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept
+void BgpProcess::onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept
 {
     auto* bgp = static_cast<BgpProcess*>(ctx.user);
     Session* session = bgp->findSession(ctx.key.remote.address);
@@ -285,7 +285,7 @@ void BgpProcess::onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept
 
 void BgpProcess::scheduleScan()
 {
-    uint8_t secs = configs->get<Config::Bgp::BGP_SCAN_TIME>().load();
+    uint8_t secs = configs->get<config::Bgp::BGP_SCAN_TIME>().load();
     scheduler.ref().postAfter(
         std::chrono::steady_clock::now() + std::chrono::seconds(secs),
         [this](uint32_t) {
@@ -294,4 +294,4 @@ void BgpProcess::scheduleScan()
             scheduleScan();
         });
 }
-}
+} // namespace routing

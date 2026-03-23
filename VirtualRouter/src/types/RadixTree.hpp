@@ -8,6 +8,9 @@
 #include <cstring>
 #include <RCU.hpp>
 
+namespace types
+{
+
 /**
  * @class RadixTree<N, T>
  *
@@ -297,4 +300,7 @@ private:
     std::atomic<Node*> root{nullptr};
 };
 
+} // namespace types
+
 #endif // RADIX_TREE_HPP
+

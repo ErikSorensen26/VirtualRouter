@@ -10,7 +10,11 @@
 #include "configs/RegistryDefaultTable.hpp"
 #include "configs/SubRegistry.hpp"
 
-namespace EIGRP
+ // namespace eigrp
+
+namespace config
+{
+namespace eigrp
 {
 enum class AuthType : uint16_t
 {
@@ -20,8 +24,6 @@ enum class AuthType : uint16_t
 };
 }
 
-namespace Config
-{
 enum class EigrpInterface
 {
     AUTHENTICATION_KEYCHAIN,
@@ -43,7 +45,7 @@ enum class EigrpInterface
 };
 
 #define EIGRP_INTERFACE_DEFAULTS(X) \
-    X(EigrpInterface, AUTHENTICATION_MODE,      EIGRP::AuthType::NONE) \
+    X(EigrpInterface, AUTHENTICATION_MODE,      config::eigrp::AuthType::NONE) \
     X(EigrpInterface, BANDWIDTH_PERCENTAGE,     50) \
     X(EigrpInterface, BFD,                      false) \
     X(EigrpInterface, DAMPENING_CHANGE,         false) \
@@ -65,7 +67,7 @@ void EigrpIfaceSummary(void* i);
 
 using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
     OptionalValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
-    AtomicField<EIGRP::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
+    AtomicField<config::eigrp::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(EigrpInterface::BANDWIDTH_PERCENTAGE)>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::BFD)>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_CHANGE)>,
@@ -78,7 +80,7 @@ using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE), EigrpIfacePassive>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN), EigrpIfaceShutdown>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SPLIT_HORIZON)>,
-    ValueField<std::vector<std::tuple<IPAddress, uint8_t>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
+    ValueField<std::vector<std::tuple<types::IPAddress, uint8_t>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
 >;
 
 }

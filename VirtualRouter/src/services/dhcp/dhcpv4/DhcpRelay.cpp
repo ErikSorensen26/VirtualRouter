@@ -1,25 +1,28 @@
 /*#include "DhcpRelay.h"
 #include <Interface.h>
 
-Protocol::DhcpRelay::DhcpRelay(Interface* interface)
+namespace services
+{
+
+protocol::DhcpRelay::DhcpRelay(interface::Interface* interface)
     : associatedInterface(interface)
 {}
 
-Protocol::DhcpRelay::~DhcpRelay() {}
+protocol::DhcpRelay::~DhcpRelay() {}
 
-void Protocol::DhcpRelay::addHelperAddress(const ByteString& helperAddress)
+void protocol::DhcpRelay::addHelperAddress(const ByteString& helperAddress)
 {
     std::lock_guard<std::mutex> lock(relayMutex);
     helperAddresses.push_back(helperAddress);
 }
 
-void Protocol::DhcpRelay::removeHelperAddress(const ByteString& helperAddress)
+void protocol::DhcpRelay::removeHelperAddress(const ByteString& helperAddress)
 {
     std::lock_guard<std::mutex> lock(relayMutex);
     helperAddresses.erase(std::remove(helperAddresses.begin(), helperAddresses.end(), helperAddress), helperAddresses.end());
 }
 
-void Protocol::DhcpRelay::forwardToHelper(PacketInfo& packet)
+void protocol::DhcpRelay::forwardToHelper(PacketInfo& packet)
 {
     std::lock_guard<std::mutex> lock(relayMutex);
     
@@ -43,7 +46,7 @@ void Protocol::DhcpRelay::forwardToHelper(PacketInfo& packet)
     }
 }
 
-void Protocol::DhcpRelay::forwardToClient(PacketInfo& packet)
+void protocol::DhcpRelay::forwardToClient(PacketInfo& packet)
 {
     if (std::holds_alternative<IPv4Header>(packet.Layer3.front()))
     {
@@ -55,7 +58,7 @@ void Protocol::DhcpRelay::forwardToClient(PacketInfo& packet)
     }
 }
 
-void Protocol::DhcpRelay::modifyGiaddr(PacketInfo& packet)
+void protocol::DhcpRelay::modifyGiaddr(PacketInfo& packet)
 {
     if (packet.Layer5.empty() || !std::holds_alternative<DhcpHeader>(packet.Layer5[0]))
     {
@@ -66,7 +69,7 @@ void Protocol::DhcpRelay::modifyGiaddr(PacketInfo& packet)
     dhcpHeader.relayAgentIP = associatedInterface->configs.ipv4.getAddressInt();
 }
 
-ByteString Protocol::DhcpRelay::extractAddress(PacketInfo& packet) const
+ByteString protocol::DhcpRelay::extractAddress(PacketInfo& packet) const
 {
     if (packet.Layer5.empty() || !std::holds_alternative<DhcpHeader>(packet.Layer5[0]))
     {

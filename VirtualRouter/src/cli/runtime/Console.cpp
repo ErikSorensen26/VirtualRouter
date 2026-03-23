@@ -10,6 +10,8 @@
 
 #include "Console.h"
 
+namespace cli
+{
 Console::Console() : iConsole(new RealConsole()) {}
 
 Console::Console(IConsole* term) : iConsole(std::move(term)) {}
@@ -658,4 +660,5 @@ void Console::clearCurrentLine(std::string& input, std::string& nextConsoleLine)
     iConsole->clearLineAfterCursor();
     input = nextConsoleLine;
     cursorPos = input.length();
+}
 }

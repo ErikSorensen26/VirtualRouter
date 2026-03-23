@@ -12,13 +12,16 @@
 #include "security/Encryption.hpp"
 #include "dhcp/DhcpInfo.hpp"
 
-void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* sourceMac, Interface& iface)
+namespace services::dhcp
+{
+
+void DhcpServer::handlePacket(const packet::DhcpHeader& dhcp, const uint8_t* sourceMac, interface::Interface& iface)
 {
     if (dhcp.getMagicCookie() != DHCP_MAGIC_COOKIE)
         return;
 
     auto trail = dhcp.getTrail();
-    std::vector<TLV8Option> options;
+    std::vector<packet::TLV8Option> options;
     if (!parseDhcpOptions(trail.data(), trail.size(), options)) return;
 
     uint8_t overload = 0;
@@ -27,8 +30,8 @@ void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* s
     size_t clientMaxSize = configs.clientMaxSize.load(std::memory_order_relaxed);
     ClientID client;
 
-    const TLV8Option* relayOpt = nullptr;
-    const TLV8Option* authOpt = nullptr;
+    const packet::TLV8Option* relayOpt = nullptr;
+    const packet::TLV8Option* authOpt = nullptr;
 
     for (const auto& opt : options)
     {
@@ -44,7 +47,7 @@ void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* s
                 break;
             case DHCP_OPTION_MAX_SIZE:
                 if (opt.valueSize == 2)
-                    clientMaxSize = readU16(opt.value);
+                    clientMaxSize = utils::readU16(opt.value);
                 break;
             case DHCP_OPTION_CLIENT_ID:
                 client = { opt.value, opt.valueSize };
@@ -76,14 +79,14 @@ void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* s
 
     if (overload & 1)
     {
-        std::vector<TLV8Option> fileOptions;
+        std::vector<packet::TLV8Option> fileOptions;
         parseDhcpOptions(dhcp.raw->file, 128, fileOptions, true);
         options.insert(options.end() - 1, fileOptions.begin(), fileOptions.end());
     }
 
     if (overload & 2)
     {
-        std::vector<TLV8Option> snameOptions;
+        std::vector<packet::TLV8Option> snameOptions;
         parseDhcpOptions(dhcp.raw->serverName, 64, snameOptions);
         options.insert(options.end(), snameOptions.begin(), snameOptions.end());
     }
@@ -113,7 +116,7 @@ void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* s
 
             if (configs.snooping.verifyGiaddr.load(std::memory_order_relaxed))
             {
-                uint32_t giaddr = readU32(dhcp.raw->giaddr);
+                uint32_t giaddr = utils::readU32(dhcp.raw->giaddr);
                 if (!iface.configs.ipv4.comparePrimaryAddress(giaddr))
                     return;
             }
@@ -188,8 +191,8 @@ void Protocol::DhcpServer::handlePacket(const DhcpHeader& dhcp, const uint8_t* s
     }
 }
 
-void Protocol::DhcpServer::sendOffer(
-    Interface& iface,
+void DhcpServer::sendOffer(
+    interface::Interface& iface,
     const uint8_t* transID,
     const ClientID& client,
     const uint8_t* chaddr,
@@ -199,17 +202,17 @@ void Protocol::DhcpServer::sendOffer(
     uint8_t* requests,
     size_t requestsSize,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder(&iface);
-    UDP::reserveUDP(builder, AddressFamily::IPv4);
-    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    processing::PacketBuilder builder(&iface);
+    transport::udp::reserveUDP(builder, types::AddressFamily::IPv4);
+    builder.reserveHeader(packet::HeaderType::DHCP, packet::DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
     if (!header) return;
 
-    DhcpHeader dhcp;
+    packet::DhcpHeader dhcp;
     dhcp.setBuffer(header->buffer);
     dhcp.setOpcode(0x02);
     dhcp.setHType(0x01); // Ethernet
@@ -217,7 +220,7 @@ void Protocol::DhcpServer::sendOffer(
     dhcp.setXid(transID);
 
     std::memset(dhcp.raw->ciaddr, 0, 4);
-    writeU32(dhcp.raw->yiaddr, ip);
+    utils::writeU32(dhcp.raw->yiaddr, ip);
     dhcp.setRelayAgentIp(giaddr);
     dhcp.setServerName(DHCP_SERVER_HOSTNAME);
     dhcp.setBootFile(DHCP_BOOT_FILE);
@@ -230,18 +233,18 @@ void Protocol::DhcpServer::sendOffer(
 
     // Add TLV options directly into trailing span
     const std::string* authKey = authManager.getKeyForClient(client);
-    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey, requests, requestsSize);
+    dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey, requests, requestsSize);
 
     // Message Type
     uint8_t type = DHCP_TYPE_OFFER;
     tlv.tlv.append(DHCP_OPTION_TYPE, 1, &type, 1);
 
     // Server Identifier
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr))
+    if (!dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr))
         return;
 
     // Lease Config
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net) return;
 
     uint32_t lease = net->configs.leaseTime.load(std::memory_order_relaxed);
@@ -249,23 +252,23 @@ void Protocol::DhcpServer::sendOffer(
     uint32_t t2 = (net->configs.t2Percentage.load(std::memory_order_relaxed) * lease) / 100;
 
     // Lease Time
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_LEASE_TIME, lease))
+    if (!dhcp::appendTLV(tlv, DHCP_OPTION_LEASE_TIME, lease))
         return;
 
     // Lease T1
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_RENEWAL_TIME, t1))
+    if (!dhcp::appendTLV(tlv, DHCP_OPTION_RENEWAL_TIME, t1))
         return;
 
     // Lease T2
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_REBINDING_TIME, t2))
+    if (!dhcp::appendTLV(tlv, DHCP_OPTION_REBINDING_TIME, t2))
         return;
 
     // Subnet Mask
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_MASK, net->configs.getSubnetMask()))
+    if (!dhcp::appendTLV(tlv, DHCP_OPTION_MASK, net->configs.getSubnetMask()))
         return;
 
     // Router (Default Gateway)
-    if (!Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, net->configs.getGateway()))
+    if (!dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, net->configs.getGateway()))
         return;
 
     // Dns Servers
@@ -283,7 +286,7 @@ void Protocol::DhcpServer::sendOffer(
 
     // Echo back option relay info
     if (relayInfo)
-        if (!Dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value))
+        if (!dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value))
             return;
 
     if (requestsSize != 0)
@@ -301,26 +304,26 @@ void Protocol::DhcpServer::sendOffer(
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    Interface* currentInterface = &iface;
-    IPPacket::BuildIP ipBuild = {
+    interface::Interface* currentInterface = &iface;
+    infrastructure::ippacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = IPAddress(destination, AddressFamily::IPv4),
-        .destMac = readU48(chaddr),
+        .destIp = types::IPAddress(destination, types::AddressFamily::IPv4),
+        .destMac = utils::readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(
-        AddressFamily::IPv4,
+    transport::udp::buildUdp(
+        types::AddressFamily::IPv4,
         ipBuild,
         UDP_DHCP_SERVER,
         UDP_DHCP_CLIENT
     );
 }
 
-void Protocol::DhcpServer::sendAck(
-    Interface& iface,
+void DhcpServer::sendAck(
+    interface::Interface& iface,
     const uint8_t* transID,
     const ClientID& client,
     const uint8_t* chaddr,
@@ -331,17 +334,17 @@ void Protocol::DhcpServer::sendAck(
     size_t requestsSize,
     bool isRC,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder(&iface);
-    UDP::reserveUDP(builder, AddressFamily::IPv4);
-    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    processing::PacketBuilder builder(&iface);
+    transport::udp::reserveUDP(builder, types::AddressFamily::IPv4);
+    builder.reserveHeader(packet::HeaderType::DHCP, packet::DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
     if (!header) return;
 
-    DhcpHeader dhcp;
+    packet::DhcpHeader dhcp;
     dhcp.setBuffer(header->buffer);
     dhcp.setOpcode(0x02);
     dhcp.setHType(0x01);
@@ -349,7 +352,7 @@ void Protocol::DhcpServer::sendAck(
     dhcp.setXid(transID);
 
     std::memset(dhcp.raw->ciaddr, 0, 4);
-    writeU32(dhcp.raw->yiaddr, ip);
+    utils::writeU32(dhcp.raw->yiaddr, ip);
     dhcp.setRelayAgentIp(giaddr);
     dhcp.setServerName(DHCP_SERVER_HOSTNAME);
     dhcp.setBootFile(DHCP_BOOT_FILE);
@@ -361,17 +364,17 @@ void Protocol::DhcpServer::sendAck(
     size_t tlvLimit = maxAllowed - builder.bufferOffset;
     
     const std::string* authKey = authManager.getKeyForClient(client);
-    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey, requests, requestsSize);
+    dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey, requests, requestsSize);
 
     // Message type
     uint8_t type = DHCP_TYPE_ACK;
-    Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
+    dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
+    dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
     // Lease config
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net) return;
 
     uint32_t lease = net->configs.leaseTime.load(std::memory_order_relaxed);
@@ -379,19 +382,19 @@ void Protocol::DhcpServer::sendAck(
     uint32_t t2 = (net->configs.t2Percentage.load(std::memory_order_relaxed) * lease) / 100;
 
     // Lease Time
-    Dhcp::appendTLV(tlv, DHCP_OPTION_LEASE_TIME, lease);
+    dhcp::appendTLV(tlv, DHCP_OPTION_LEASE_TIME, lease);
 
     // Lease T1
-    Dhcp::appendTLV(tlv, DHCP_OPTION_RENEWAL_TIME, t1);
+    dhcp::appendTLV(tlv, DHCP_OPTION_RENEWAL_TIME, t1);
 
     // Lease T2
-    Dhcp::appendTLV(tlv, DHCP_OPTION_REBINDING_TIME, t2);
+    dhcp::appendTLV(tlv, DHCP_OPTION_REBINDING_TIME, t2);
 
     // Subnet Mask
-    Dhcp::appendTLV(tlv, DHCP_OPTION_MASK, net->configs.getSubnetMask());
+    dhcp::appendTLV(tlv, DHCP_OPTION_MASK, net->configs.getSubnetMask());
     
     // Router
-    Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, net->configs.getGateway());
+    dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, net->configs.getGateway());
 
     // Dns Servers
     appendDnsServers(tlv, net->configs);
@@ -408,7 +411,7 @@ void Protocol::DhcpServer::sendAck(
     
     // Echo relay option
     if (relayInfo)
-        Dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
+        dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
 
     // Option 55
     if (requestsSize != 0)
@@ -416,7 +419,7 @@ void Protocol::DhcpServer::sendAck(
 
     // Rapid commit
     if (isRC)
-        Dhcp::appendTLV(tlv, DHCP_OPTION_RAPID_COMMIT, 0, nullptr);
+        dhcp::appendTLV(tlv, DHCP_OPTION_RAPID_COMMIT, 0, nullptr);
 
     if (tlv.file)
     {
@@ -434,52 +437,52 @@ void Protocol::DhcpServer::sendAck(
     // Add to snooping table
     if (!configs.snooping.allowUntrusted.load(std::memory_order_relaxed))
     {
-        Dhcp::SnoopingEntry entry;
+        dhcp::SnoopingEntry entry;
         std::memcpy(entry.mac, chaddr, 6);
         entry.ip = ip;
         entry.interface = iface.configs.key;
         entry.expiration = std::chrono::steady_clock::now() + std::chrono::seconds(net->configs.leaseTime);
 
         std::lock_guard<std::mutex> lock(serverMutex);
-        snoopingTable.emplace(readU48(entry.mac), entry);
+        snoopingTable.emplace(utils::readU48(entry.mac), entry);
     }
 
-    Interface* currentInterface = &iface;
-    IPPacket::BuildIP ipBuild = {
+    interface::Interface* currentInterface = &iface;
+    infrastructure::ippacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = IPAddress(destination, AddressFamily::IPv4),
-        .destMac = readU48(chaddr),
+        .destIp = types::IPAddress(destination, types::AddressFamily::IPv4),
+        .destMac = utils::readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(
-        AddressFamily::IPv4,
+    transport::udp::buildUdp(
+        types::AddressFamily::IPv4,
         ipBuild,
         UDP_DHCP_SERVER,
         UDP_DHCP_CLIENT
     );
 }
 
-void Protocol::DhcpServer::sendNak(
-    Interface& iface,
+void DhcpServer::sendNak(
+    interface::Interface& iface,
     const uint8_t* transID,
     const ClientID& client,
     const uint8_t* chaddr,
     const uint8_t* giaddr,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder(&iface);
-    UDP::reserveUDP(builder, AddressFamily::IPv4);
-    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    processing::PacketBuilder builder(&iface);
+    transport::udp::reserveUDP(builder, types::AddressFamily::IPv4);
+    builder.reserveHeader(packet::HeaderType::DHCP, packet::DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
     if (!header) return;
 
-    DhcpHeader dhcp;
+    packet::DhcpHeader dhcp;
     dhcp.setBuffer(header->buffer);
     dhcp.setOpcode(0x02);
     dhcp.setHType(0x01);
@@ -499,18 +502,18 @@ void Protocol::DhcpServer::sendNak(
     size_t tlvLimit = maxAllowed - builder.bufferOffset;
 
     const std::string* authKey = authManager.getKeyForClient(client);
-    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+    dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
 
     // Nak
     uint8_t type = DHCP_TYPE_NAK;
-    Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
+    dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
+    dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
     // Echo relay option
     if (relayInfo)
-        Dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
+        dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
 
     if (tlv.file)
     {
@@ -525,29 +528,29 @@ void Protocol::DhcpServer::sendNak(
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    bool hasGiaddr = giaddr && readU32(giaddr) != 0;
-    IPAddress destIP = hasGiaddr ? IPAddress(giaddr, AddressFamily::IPv4) : IPAddress(IPV4_BROADCAST);
+    bool hasGiaddr = giaddr && utils::readU32(giaddr) != 0;
+    types::IPAddress destIP = hasGiaddr ? types::IPAddress(giaddr, types::AddressFamily::IPv4) : types::IPAddress(IPV4_BROADCAST);
 
-    Interface* currentInterface = &iface;
-    IPPacket::BuildIP ipBuild = {
+    interface::Interface* currentInterface = &iface;
+    infrastructure::ippacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
         .destIp = destIP,
-        .destMac = readU48(chaddr),
+        .destMac = utils::readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(
-        AddressFamily::IPv4,
+    transport::udp::buildUdp(
+        types::AddressFamily::IPv4,
         ipBuild,
         UDP_DHCP_SERVER,
         UDP_DHCP_CLIENT
     );
 }
 
-void Protocol::DhcpServer::sendInformReply(
-    Interface& iface,
+void DhcpServer::sendInformReply(
+    interface::Interface& iface,
     const uint8_t* transID,
     const ClientID& client,
     const uint8_t* chaddr,
@@ -556,17 +559,17 @@ void Protocol::DhcpServer::sendInformReply(
     uint8_t* requests,
     size_t requestsSize,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder(&iface);
-    UDP::reserveUDP(builder, AddressFamily::IPv4);
-    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    processing::PacketBuilder builder(&iface);
+    transport::udp::reserveUDP(builder, types::AddressFamily::IPv4);
+    builder.reserveHeader(packet::HeaderType::DHCP, packet::DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
     if (!header) return;
 
-    DhcpHeader dhcp;
+    packet::DhcpHeader dhcp;
     dhcp.setBuffer(header->buffer);
     dhcp.setOpcode(0x02);
     dhcp.setHType(0x01);
@@ -585,16 +588,16 @@ void Protocol::DhcpServer::sendInformReply(
     size_t tlvLimit = maxAllowed - builder.bufferOffset;
 
     const std::string* authKey = authManager.getKeyForClient(client);
-    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+    dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
 
     // ACK
     uint8_t type = DHCP_TYPE_ACK;
-    Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
+    dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
+    dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net) return;
 
     // DNS
@@ -622,7 +625,7 @@ void Protocol::DhcpServer::sendInformReply(
 
     // Echo relay option
     if (relayInfo)
-        Dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
+        dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
 
     if (tlv.file)
     {
@@ -637,42 +640,42 @@ void Protocol::DhcpServer::sendInformReply(
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    Interface* currentInterface = &iface;
-    IPPacket::BuildIP ipBuild = {
+    interface::Interface* currentInterface = &iface;
+    infrastructure::ippacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = IPAddress(destination, AddressFamily::IPv4),
-        .destMac = readU48(chaddr),
+        .destIp = types::IPAddress(destination, types::AddressFamily::IPv4),
+        .destMac = utils::readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(
-        AddressFamily::IPv4,
+    transport::udp::buildUdp(
+        types::AddressFamily::IPv4,
         ipBuild,
         UDP_DHCP_SERVER,
         UDP_DHCP_CLIENT
     );
 }
 
-void Protocol::DhcpServer::sendForceRenew(
-    Interface& iface,
+void DhcpServer::sendForceRenew(
+    interface::Interface& iface,
     const ClientID& client,
     const uint8_t* chaddr,
     uint32_t ip,
     const uint8_t* destination,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
-    PacketBuilder builder(&iface);
-    UDP::reserveUDP(builder, AddressFamily::IPv4);
-    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    processing::PacketBuilder builder(&iface);
+    transport::udp::reserveUDP(builder, types::AddressFamily::IPv4);
+    builder.reserveHeader(packet::HeaderType::DHCP, packet::DhcpHeader::fixedSize);
 
     auto* header = builder.nextBuildHeader();
     if (!header) return;
 
-    DhcpHeader dhcp;
+    packet::DhcpHeader dhcp;
     dhcp.setBuffer(header->buffer);
     dhcp.setOpcode(0x02);
     dhcp.setHType(0x01);
@@ -681,7 +684,7 @@ void Protocol::DhcpServer::sendForceRenew(
     generateDhcpTransid(dhcp.raw->xId);
 
     std::memset(dhcp.raw->ciaddr, 0, 16);
-    writeU32(dhcp.raw->yiaddr, ip);
+    utils::writeU32(dhcp.raw->yiaddr, ip);
 
     dhcp.setServerName(DHCP_SERVER_HOSTNAME);
     dhcp.setBootFile(DHCP_BOOT_FILE);
@@ -694,18 +697,18 @@ void Protocol::DhcpServer::sendForceRenew(
 
     const std::string* authKey = authManager.getKeyForClient(client);
     if (!authKey) return; // ForceRenew can only run authenticated.
-    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, true);
+    dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, true);
 
     // ForceRenew
     uint8_t type = DHCP_TYPE_FORCE_RENEW;
-    Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
+    dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &type);
 
     // Server Identifier
-    Dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
+    dhcp::appendTLV(tlv, DHCP_OPTION_SERVER_IDENTIFIER, iface.configs.ipv4.getPrimaryAddress().addr);
 
     // Echo relay option
     if (relayInfo)
-        Dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
+        dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
 
     if (tlv.file)
     {
@@ -719,47 +722,47 @@ void Protocol::DhcpServer::sendForceRenew(
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    Interface* currentInterface = &iface;
-    IPPacket::BuildIP ipBuild = {
+    interface::Interface* currentInterface = &iface;
+    infrastructure::ippacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = IPAddress(destination, AddressFamily::IPv4),
-        .destMac = readU48(chaddr),
+        .destIp = types::IPAddress(destination, types::AddressFamily::IPv4),
+        .destMac = utils::readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(
-        AddressFamily::IPv4,
+    transport::udp::buildUdp(
+        types::AddressFamily::IPv4,
         ipBuild,
         UDP_DHCP_SERVER,
         UDP_DHCP_CLIENT
     );
 }
 
-void Protocol::DhcpServer::sendLeaseQueryReply(
-    Interface& iface,
+void DhcpServer::sendLeaseQueryReply(
+    interface::Interface& iface,
     const uint8_t* transID,
     const ClientID& client,
     uint32_t clientIP,
     const uint8_t* chaddr,
     const uint8_t* giaddr,
-    const TLV8Option* relayInfo,
+    const packet::TLV8Option* relayInfo,
     const IPv4LeaseManager::Lease* lease,
     uint8_t prefixLen,
     uint8_t responseType,
     size_t clientMaxSize
 )
 {
-    PacketBuilder builder(&iface);
+    processing::PacketBuilder builder(&iface);
     
-    UDP::reserveUDP(builder, AddressFamily::IPv4);
-    builder.reserveHeader(HeaderType::DHCP, DhcpHeader::fixedSize);
+    transport::udp::reserveUDP(builder, types::AddressFamily::IPv4);
+    builder.reserveHeader(packet::HeaderType::DHCP, packet::DhcpHeader::fixedSize);
 
     auto* nextHeader = builder.nextBuildHeader();
     if (!nextHeader) return;
 
-    DhcpHeader dhcp;
+    packet::DhcpHeader dhcp;
     dhcp.setBuffer(nextHeader->buffer);
     dhcp.setOpcode(0x02);
     dhcp.setHType(0x01);
@@ -778,7 +781,7 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
     if (responseType == DHCP_TYPE_LEASE_ACTIVE ||
         responseType == DHCP_TYPE_LEASE_UNASSIGNED)
     {
-        writeU32(dhcp.raw->ciaddr, clientIP);
+        utils::writeU32(dhcp.raw->ciaddr, clientIP);
     }
 
     size_t mtuLimit = iface.configs.ipv4.mtu.load(std::memory_order_relaxed);
@@ -786,32 +789,32 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
     size_t tlvLimit = maxAllowed - builder.bufferOffset;
 
     const std::string* authKey = authManager.getKeyForClient(client);
-    Dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
+    dhcp::DhcpTLVManager tlv(dhcp, tlvLimit, authKey);
 
-    Dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &responseType);
+    dhcp::appendTLV(tlv, DHCP_OPTION_TYPE, 1, &responseType);
 
     if (relayInfo)
-        Dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
+        dhcp::appendTLV(tlv, DHCP_OPTION_RELAY_AGENT_INFO, relayInfo->valueSize, relayInfo->value);
 
     if (responseType == DHCP_TYPE_LEASE_ACTIVE && lease)
     {
         // Lease time
-        Dhcp::appendTLV(tlv, DHCP_OPTION_LEASE_TIME, lease->leaseTime);
+        dhcp::appendTLV(tlv, DHCP_OPTION_LEASE_TIME, lease->leaseTime);
 
         // Lease T1
-        Dhcp::appendTLV(tlv, DHCP_OPTION_RENEWAL_TIME, lease->t1);
+        dhcp::appendTLV(tlv, DHCP_OPTION_RENEWAL_TIME, lease->t1);
 
         // Lease T2
-        Dhcp::appendTLV(tlv, DHCP_OPTION_REBINDING_TIME, lease->t2);
+        dhcp::appendTLV(tlv, DHCP_OPTION_REBINDING_TIME, lease->t2);
 
         // Mask
-        Dhcp::appendTLV(tlv, DHCP_OPTION_MASK, v4Mask(prefixLen));
+        dhcp::appendTLV(tlv, DHCP_OPTION_MASK, types::v4Mask(prefixLen));
 
         // Router
-        Dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, iface.configs.ipv4.getPrimaryAddress().addr);
+        dhcp::appendTLV(tlv, DHCP_OPTION_ROUTER, iface.configs.ipv4.getPrimaryAddress().addr);
 
         // Timestamp
-        Dhcp::appendTLV(tlv, DHCP_OPTION_TIMESTAMP, secondsSinceEpoch());
+        dhcp::appendTLV(tlv, DHCP_OPTION_TIMESTAMP, secondsSinceEpoch());
     }
 
     if (tlv.file)
@@ -827,37 +830,37 @@ void Protocol::DhcpServer::sendLeaseQueryReply(
     tlv.tlv.append(DHCP_OPTION_END, 0, nullptr, 0);
     builder.addTLVSize(tlv.tlv.size());
 
-    Interface* currentInterface = &iface;
-    IPPacket::BuildIP ipBuild = {
+    interface::Interface* currentInterface = &iface;
+    infrastructure::ippacket::BuildIP ipBuild = {
         .iface = currentInterface,
         .packetInfo = builder,
-        .destIp = IPAddress(giaddr, AddressFamily::IPv4),
-        .destMac = readU48(chaddr),
+        .destIp = types::IPAddress(giaddr, types::AddressFamily::IPv4),
+        .destMac = utils::readU48(chaddr),
         .hopLimit = 64,
         .protocolType = IP_UDP
     };
 
-    UDP::buildUdp(
-        AddressFamily::IPv4,
+    transport::udp::buildUdp(
+        types::AddressFamily::IPv4,
         ipBuild,
         UDP_DHCP_SERVER,
         UDP_DHCP_CLIENT
     );
 }
 
-void Protocol::DhcpServer::processDiscover(
-    const DhcpHeader& dhcp,
-    std::vector<TLV8Option>& options,
+void DhcpServer::processDiscover(
+    const packet::DhcpHeader& dhcp,
+    std::vector<packet::TLV8Option>& options,
     ClientID& client,
-    Interface& iface,
+    interface::Interface& iface,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
     if (dhcp.raw->hLen != 6)
         return;
     
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net)
         return;
 
@@ -886,7 +889,7 @@ void Protocol::DhcpServer::processDiscover(
                     rapidCommit = configs.rapidCommit.load(std::memory_order_relaxed);
                 break;
             case DHCP_OPTION_REQUEST_IP:
-                requestedIp = readU32(opt.value);
+                requestedIp = utils::readU32(opt.value);
             default:
                 break;
         }
@@ -1011,7 +1014,7 @@ void Protocol::DhcpServer::processDiscover(
 
     static const uint8_t BROADCAST_BYTES[4] = {0xFF, 0xFF, 0xFF, 0xFF};
     const uint8_t* destination = nullptr;
-    bool hasRelay = readU32(dhcp.getRelayAgentIP()) != 0;
+    bool hasRelay = utils::readU32(dhcp.getRelayAgentIP()) != 0;
 
     if (hasRelay)
         destination = dhcp.getRelayAgentIP();
@@ -1062,19 +1065,19 @@ void Protocol::DhcpServer::processDiscover(
     }
 }
 
-void Protocol::DhcpServer::processRequest(
-    const DhcpHeader& dhcp,
-    std::vector<TLV8Option>& options,
+void DhcpServer::processRequest(
+    const packet::DhcpHeader& dhcp,
+    std::vector<packet::TLV8Option>& options,
     ClientID& client,
-    Interface& iface,
+    interface::Interface& iface,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
     if (dhcp.raw->hLen != 6)
         return;
 
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net)
         return;
 
@@ -1110,7 +1113,7 @@ void Protocol::DhcpServer::processRequest(
 
     static const uint8_t BROADCAST_BYTES[4] = {0xFF, 0xFF, 0xFF, 0xFF};
     const uint8_t* destination = nullptr;
-    bool hasRelay = readU32(dhcp.getRelayAgentIP()) != 0;
+    bool hasRelay = utils::readU32(dhcp.getRelayAgentIP()) != 0;
 
     if (hasRelay)
         destination = dhcp.getRelayAgentIP();
@@ -1148,7 +1151,7 @@ void Protocol::DhcpServer::processRequest(
     }
     else if (requestIP)
     {
-        uint32_t reqIp = readU32(requestIP);
+        uint32_t reqIp = utils::readU32(requestIP);
         
         if (net->leaseManager->createLeaseFromTemp(client, reqIp, leaseTime, t1, t2))
         {
@@ -1182,17 +1185,17 @@ void Protocol::DhcpServer::processRequest(
     );
 }
 
-void Protocol::DhcpServer::processDecline(
-    const DhcpHeader& dhcp,
-    std::vector<TLV8Option>& options,
+void DhcpServer::processDecline(
+    const packet::DhcpHeader& dhcp,
+    std::vector<packet::TLV8Option>& options,
     ClientID& client,
-    Interface& iface
+    interface::Interface& iface
 )
 {
     if (dhcp.raw->hLen != 6)
         return;
     
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net)
         return;
 
@@ -1223,17 +1226,17 @@ void Protocol::DhcpServer::processDecline(
     }
 }
 
-void Protocol::DhcpServer::processRelease(
-    const DhcpHeader& dhcp,
-    std::vector<TLV8Option>& options,
+void DhcpServer::processRelease(
+    const packet::DhcpHeader& dhcp,
+    std::vector<packet::TLV8Option>& options,
     ClientID& client,
-    Interface& iface
+    interface::Interface& iface
 )
 {
     if (dhcp.raw->hLen != 6)
         return;
 
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net)
         return;
 
@@ -1259,19 +1262,19 @@ void Protocol::DhcpServer::processRelease(
     net->leaseManager->releaseLease(client);
 }
 
-void Protocol::DhcpServer::processInform(
-    const DhcpHeader& dhcp,
-    std::vector<TLV8Option>& options,
+void DhcpServer::processInform(
+    const packet::DhcpHeader& dhcp,
+    std::vector<packet::TLV8Option>& options,
     ClientID& client,
-    Interface& iface,
+    interface::Interface& iface,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
     if (dhcp.raw->hLen != 6)
         return;
 
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net)
         return;
 
@@ -1297,7 +1300,7 @@ void Protocol::DhcpServer::processInform(
 
     static const uint8_t BROADCAST_BYTES[4] = {0xFF, 0xFF, 0xFF, 0xFF};
     const uint8_t* destination = nullptr;
-    bool hasRelay = readU32(dhcp.getRelayAgentIP()) != 0;
+    bool hasRelay = utils::readU32(dhcp.getRelayAgentIP()) != 0;
 
     if (hasRelay)
         destination = dhcp.getRelayAgentIP();
@@ -1320,19 +1323,19 @@ void Protocol::DhcpServer::processInform(
     );
 }
 
-void Protocol::DhcpServer::processLeaseQuery(
-    const DhcpHeader& dhcp,
-    std::vector<TLV8Option>& options,
+void DhcpServer::processLeaseQuery(
+    const packet::DhcpHeader& dhcp,
+    std::vector<packet::TLV8Option>& options,
     ClientID& client,
-    Interface& iface,
+    interface::Interface& iface,
     size_t clientMaxSize,
-    const TLV8Option* relayInfo
+    const packet::TLV8Option* relayInfo
 )
 {
     if (dhcp.raw->hLen != 6)
         return;
 
-    Dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
+    dhcp::DhcpNetwork* net = matchingNetwork(iface, dhcp);
     if (!net) return;
 
     uint32_t queryIP = 0;
@@ -1343,7 +1346,7 @@ void Protocol::DhcpServer::processLeaseQuery(
         {
             case DHCP_OPTION_REQUEST_IP:
                 if (opt.valueSize == 4)
-                    queryIP = readU32(opt.value);
+                    queryIP = utils::readU32(opt.value);
                 break;
             default:
                 break;
@@ -1382,7 +1385,7 @@ void Protocol::DhcpServer::processLeaseQuery(
     );
 }
 
-void Protocol::DhcpServer::appendDnsServers(Dhcp::DhcpTLVManager& tlv, const Dhcp::DhcpNetworkConfig& network)
+void DhcpServer::appendDnsServers(dhcp::DhcpTLVManager& tlv, const dhcp::DhcpNetworkConfig& network)
 {
     bool override = configs.updateDNS.override.load(std::memory_order_relaxed);
     bool both = configs.updateDNS.both.load(std::memory_order_relaxed);
@@ -1419,16 +1422,16 @@ void Protocol::DhcpServer::appendDnsServers(Dhcp::DhcpTLVManager& tlv, const Dhc
     {
         if (offset < 52)
         {
-            writeU32(buffer + offset, ip);
+            utils::writeU32(buffer + offset, ip);
             offset += 4;
         }
         else break;
     }
 
-    Dhcp::appendTLV(tlv, DHCP_OPTION_DOMAIN_SERVER, offset, buffer);
+    dhcp::appendTLV(tlv, DHCP_OPTION_DOMAIN_SERVER, offset, buffer);
 }
 
-void Protocol::DhcpServer::appendNtpServers(Dhcp::DhcpTLVManager& tlv, const Dhcp::DhcpNetworkConfig& network)
+void DhcpServer::appendNtpServers(dhcp::DhcpTLVManager& tlv, const dhcp::DhcpNetworkConfig& network)
 {
     if (network.ntpServers.size() == 0) return;
     uint8_t buffer[255];
@@ -1438,16 +1441,16 @@ void Protocol::DhcpServer::appendNtpServers(Dhcp::DhcpTLVManager& tlv, const Dhc
     {
         if (offset < 52)
         {
-            writeU32(buffer + offset, ip);
+            utils::writeU32(buffer + offset, ip);
             offset += 4;
         }
         else break;
     }
 
-    Dhcp::appendTLV(tlv, DHCP_OPTION_NTP, offset, buffer);
+    dhcp::appendTLV(tlv, DHCP_OPTION_NTP, offset, buffer);
 }
 
-void Protocol::DhcpServer::appendAuthOptions(TLV8BufferManager& tlv, const DhcpHeader& dhcp, const ClientID& clientID)
+void DhcpServer::appendAuthOptions(packet::TLV8BufferManager& tlv, const packet::DhcpHeader& dhcp, const ClientID& clientID)
 {
     const std::string* key = authManager.getKeyForClient(clientID);
     if (!key) return;
@@ -1461,25 +1464,25 @@ void Protocol::DhcpServer::appendAuthOptions(TLV8BufferManager& tlv, const DhcpH
     authOpt[2] = 0;
 
     uint64_t counter = authManager.getReplayCounter(clientID) + 1;
-    writeU64(authOpt + 3, counter);
+    utils::writeU64(authOpt + 3, counter);
 
     // Zero the digest field
     std::memset(authOpt + 11, 0, 16);
 
     // Build HMAC input over full packet assuming end option is not yet added
-    Authentication::generateHMAC(
+    security::authentication::generateHMAC(
         authOpt + 11,
         dhcp.buffer,
-        DhcpHeader::fixedSize + tlv.size(),
+        packet::DhcpHeader::fixedSize + tlv.size(),
         reinterpret_cast<const uint8_t*>(key->data()),
         key->size(),
-        Authentication::HmacType::MD5
+        security::authentication::HmacType::MD5
     );
 
     authManager.getReplayCounter(clientID) = counter;
 }
 
-bool Protocol::DhcpServer::validateAuthentication(const DhcpHeader& dhcp, const ClientID& clientID, const uint8_t* data)
+bool DhcpServer::validateAuthentication(const packet::DhcpHeader& dhcp, const ClientID& clientID, const uint8_t* data)
 {
     if (!data) return !authManager.shouldEnforce(clientID);
 
@@ -1488,7 +1491,7 @@ bool Protocol::DhcpServer::validateAuthentication(const DhcpHeader& dhcp, const 
         return false;
 
     // Extract replay counter
-    uint64_t counter = readU64(data + 3);
+    uint64_t counter = utils::readU64(data + 3);
     if (counter <= authManager.getReplayCounter(clientID))
         return false;
 
@@ -1501,13 +1504,13 @@ bool Protocol::DhcpServer::validateAuthentication(const DhcpHeader& dhcp, const 
     std::memset(const_cast<uint8_t*>(data + 11), 0, 16); // Set hash to 0s
     
     uint8_t computedHash[16];
-    Authentication::generateHMAC(
+    security::authentication::generateHMAC(
         computedHash,
         dhcp.buffer,
-        DhcpHeader::fixedSize + dhcp.getTrail().size() - 2,
+        packet::DhcpHeader::fixedSize + dhcp.getTrail().size() - 2,
         reinterpret_cast<const uint8_t*>(key->data()),
         key->size(),
-        Authentication::HmacType::MD5
+        security::authentication::HmacType::MD5
     );
 
     if (std::memcmp(computedHash, receivedHash, 16) != 0)
@@ -1517,10 +1520,10 @@ bool Protocol::DhcpServer::validateAuthentication(const DhcpHeader& dhcp, const 
     return true;
 }
 
-void Protocol::DhcpServer::appendVendorOptions(Dhcp::DhcpTLVManager& tlv, const ClientID& client, const Interface& iface, const Dhcp::DhcpNetworkConfig& configs)
+void DhcpServer::appendVendorOptions(dhcp::DhcpTLVManager& tlv, const ClientID& client, const interface::Interface& iface, const dhcp::DhcpNetworkConfig& configs)
 {
     if (!configs.vendorClassID.empty())
-        Dhcp::appendTLV(tlv, DHCP_OPTION_VENDOR_CLASS_ID, configs.vendorClassID.size(), reinterpret_cast<const uint8_t*>(configs.vendorClassID.data()));
+        dhcp::appendTLV(tlv, DHCP_OPTION_VENDOR_CLASS_ID, configs.vendorClassID.size(), reinterpret_cast<const uint8_t*>(configs.vendorClassID.data()));
 
     uint8_t buffer[256];
     size_t offset = 0;
@@ -1540,28 +1543,28 @@ void Protocol::DhcpServer::appendVendorOptions(Dhcp::DhcpTLVManager& tlv, const 
         buffer[offset++] = 8;
         buffer[offset++] = static_cast<uint8_t>(count * 4);
         for (size_t i = 0; i < count; ++i)
-            writeU32(buffer + offset + i * 4, configs.pxeBootServers[i]);
+            utils::writeU32(buffer + offset + i * 4, configs.pxeBootServers[i]);
         offset += count * 4;
     }
 
     if (offset > 0)
-        Dhcp::appendTLV(tlv, DHCP_OPTION_VENDOR_SPECIFIC, offset, buffer);
+        dhcp::appendTLV(tlv, DHCP_OPTION_VENDOR_SPECIFIC, offset, buffer);
 }
 
-void Protocol::DhcpServer::appendBootOptions(Dhcp::DhcpTLVManager& tlv, const Dhcp::DhcpNetworkConfig& configs)
+void DhcpServer::appendBootOptions(dhcp::DhcpTLVManager& tlv, const dhcp::DhcpNetworkConfig& configs)
 {
     // Option 66
     if (!configs.tftpServerName.empty())
     {
         const auto* data = reinterpret_cast<const uint8_t*>(configs.tftpServerName.data());
-        Dhcp::appendTLV(tlv, DHCP_OPTION_TFTP_SERVER_NAME, configs.tftpServerName.size(), data);
+        dhcp::appendTLV(tlv, DHCP_OPTION_TFTP_SERVER_NAME, configs.tftpServerName.size(), data);
     }
 
     // Option 67
     if (!configs.bootFileName.empty())
     {
         const auto* data = reinterpret_cast<const uint8_t*>(configs.bootFileName.data());
-        Dhcp::appendTLV(tlv, DHCP_OPTION_BOOT_FILE, configs.bootFileName.size(), data);
+        dhcp::appendTLV(tlv, DHCP_OPTION_BOOT_FILE, configs.bootFileName.size(), data);
     }
 
     // Option 150
@@ -1570,14 +1573,14 @@ void Protocol::DhcpServer::appendBootOptions(Dhcp::DhcpTLVManager& tlv, const Dh
         size_t count = std::min(configs.tftpServers.size(), static_cast<size_t>((255 / 4)));
         uint8_t ipData[255];
         for (size_t i = 0; i < count; ++i)
-            writeU32(ipData + i * 4, configs.tftpServers[i]);
-        Dhcp::appendTLV(tlv, DHCP_OPTION_TFTP_SERVERS, count * 4, ipData);
+            utils::writeU32(ipData + i * 4, configs.tftpServers[i]);
+        dhcp::appendTLV(tlv, DHCP_OPTION_TFTP_SERVERS, count * 4, ipData);
     }
 }
 
-Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::matchingNetwork(const Interface& iface, const DhcpHeader& dhcp) const
+DhcpNetwork* DhcpServer::matchingNetwork(const interface::Interface& iface, const packet::DhcpHeader& dhcp) const
 {
-    auto findMatchingNetworkAgainstIP([&](IPv4Address ip) -> Dhcp::DhcpNetwork* {
+    auto findMatchingNetworkAgainstIP([&](types::IPv4Address ip) -> dhcp::DhcpNetwork* {
         for (auto& [_, config] : networks)
         {
             auto network = config->configs.getNetworkID();
@@ -1590,14 +1593,14 @@ Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::matchingNetwork(const Interfa
     });
 
     // Match based on the relay agent IP (if present)
-    auto relayMatch = findMatchingNetworkAgainstIP(IPv4Address(dhcp.getRelayAgentIP()));
+    auto relayMatch = findMatchingNetworkAgainstIP(types::IPv4Address(dhcp.getRelayAgentIP()));
     if (relayMatch)
     {
         return relayMatch;
     }
 
     // Fall back to client IP matching
-    auto clientMatch = findMatchingNetworkAgainstIP(IPv4Address(dhcp.getClientIP()));
+    auto clientMatch = findMatchingNetworkAgainstIP(types::IPv4Address(dhcp.getClientIP()));
     if (clientMatch)
     {
         return clientMatch;
@@ -1606,14 +1609,14 @@ Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::matchingNetwork(const Interfa
     return nullptr; // No match found
 }
 
-Protocol::Dhcp::DhcpNetwork* Protocol::DhcpServer::addPool(const std::string& poolName)
+DhcpNetwork* DhcpServer::addPool(const std::string& poolName)
 {
     std::lock_guard<std::mutex> lock(serverMutex);
     // Create a new pool and lease for the dhcp network.
-    networks.emplace(poolName, new Dhcp::DhcpNetwork(timeManager, configs));
+    networks.emplace(poolName, new dhcp::DhcpNetwork(timeManager, configs));
 }
 
-void Protocol::DhcpServer::removePool(std::string& poolName)
+void DhcpServer::removePool(std::string& poolName)
 {
     std::lock_guard<std::mutex> lock(serverMutex);
     // Remove network config.
@@ -1625,7 +1628,7 @@ void Protocol::DhcpServer::removePool(std::string& poolName)
     }
 }
 
-void Protocol::DhcpServer::addRequestedOptions(Dhcp::DhcpTLVManager& tlv, Dhcp::DhcpNetwork& network, const uint8_t* requestList, size_t requestsSize)
+void DhcpServer::addRequestedOptions(dhcp::DhcpTLVManager& tlv, dhcp::DhcpNetwork& network, const uint8_t* requestList, size_t requestsSize)
 {
     if (!requestList || requestsSize == 0)
         return;
@@ -1640,23 +1643,23 @@ void Protocol::DhcpServer::addRequestedOptions(Dhcp::DhcpTLVManager& tlv, Dhcp::
         switch (opt)
         {
             case DHCP_OPTION_MASK:
-                Dhcp::appendTLV(tlv, opt, network.configs.getSubnetMask());
+                dhcp::appendTLV(tlv, opt, network.configs.getSubnetMask());
                 break;
             case DHCP_OPTION_BROADCAST:
-                Dhcp::appendTLV(tlv, opt, network.pool->broadcast.load(std::memory_order_relaxed));
+                dhcp::appendTLV(tlv, opt, network.pool->broadcast.load(std::memory_order_relaxed));
                 break;
             case DHCP_OPTION_ROUTER:
-                Dhcp::appendTLV(tlv, opt, network.configs.getGateway());
+                dhcp::appendTLV(tlv, opt, network.configs.getGateway());
                 break;
             case DHCP_OPTION_DOMAIN_NAME:
                 if (network.configs.domainName.size() > 0)
-                    Dhcp::appendTLV(tlv, opt, network.configs.domainName.size(), reinterpret_cast<const uint8_t*>(network.configs.domainName.data()));
+                    dhcp::appendTLV(tlv, opt, network.configs.domainName.size(), reinterpret_cast<const uint8_t*>(network.configs.domainName.data()));
                 break;
             case DHCP_OPTION_MTU:
                 if (network.configs.mtu.load(std::memory_order_relaxed) != 0)
                 {
-                    writeU16(buffer, network.configs.mtu.load(std::memory_order_relaxed));
-                    Dhcp::appendTLV(tlv, opt, 2, buffer);
+                    utils::writeU16(buffer, network.configs.mtu.load(std::memory_order_relaxed));
+                    dhcp::appendTLV(tlv, opt, 2, buffer);
                 }
                 break;
             case DHCP_OPTION_NTP:
@@ -1665,17 +1668,17 @@ void Protocol::DhcpServer::addRequestedOptions(Dhcp::DhcpTLVManager& tlv, Dhcp::
             case DHCP_OPTION_HOSTNAME:
                 {
                     std::string hostname = global.getHostname();
-                    Dhcp::appendTLV(tlv, opt, hostname.size(), reinterpret_cast<uint8_t*>(hostname.data()));
+                    dhcp::appendTLV(tlv, opt, hostname.size(), reinterpret_cast<uint8_t*>(hostname.data()));
                 }
                 break;
             case DHCP_OPTION_LEASE_TIME:
-                Dhcp::appendTLV(tlv, opt, lease);
+                dhcp::appendTLV(tlv, opt, lease);
                 break;
             case DHCP_OPTION_RENEWAL_TIME:
-                Dhcp::appendTLV(tlv, opt, (network.configs.t1Percentage.load(std::memory_order_relaxed) * lease) / 100);
+                dhcp::appendTLV(tlv, opt, (network.configs.t1Percentage.load(std::memory_order_relaxed) * lease) / 100);
                 break;
             case DHCP_OPTION_REBINDING_TIME:
-                Dhcp::appendTLV(tlv, opt, (network.configs.t2Percentage.load(std::memory_order_relaxed) * lease) / 100);
+                dhcp::appendTLV(tlv, opt, (network.configs.t2Percentage.load(std::memory_order_relaxed) * lease) / 100);
                 break;
             default:
                 break;
@@ -1683,52 +1686,54 @@ void Protocol::DhcpServer::addRequestedOptions(Dhcp::DhcpTLVManager& tlv, Dhcp::
     }
 }
 
-void Protocol::DhcpServer::appendDomainSearchList(Dhcp::DhcpTLVManager& tlv, const std::vector<std::string>& domains)
+void DhcpServer::appendDomainSearchList(dhcp::DhcpTLVManager& tlv, const std::vector<std::string>& domains)
 {
     
 }
 
-bool Protocol::Dhcp::DhcpNetworkConfig::updateNetwork(IPPrefix& prefix, uint32_t& gateway)
+bool DhcpNetworkConfig::updateNetwork(types::IPPrefix& prefix, uint32_t& gateway)
 {
     return true;
 }
 
-IPPrefix Protocol::Dhcp::DhcpNetworkConfig::getNetworkID() const
+types::IPPrefix DhcpNetworkConfig::getNetworkID() const
 {
-    return IPPrefix();
+    return types::IPPrefix();
 }
 
-uint8_t* Protocol::Dhcp::DhcpNetworkConfig::getNetwork(uint8_t* out) const
+uint8_t* DhcpNetworkConfig::getNetwork(uint8_t* out) const
 {
     return nullptr;
 }
 
-uint32_t Protocol::Dhcp::DhcpNetworkConfig::getNetwork() const
+uint32_t DhcpNetworkConfig::getNetwork() const
 {
     return 0;
 }
 
-uint8_t* Protocol::Dhcp::DhcpNetworkConfig::getGateway(uint8_t* out) const
+uint8_t* DhcpNetworkConfig::getGateway(uint8_t* out) const
 {
     return nullptr;
 }
 
-uint32_t Protocol::Dhcp::DhcpNetworkConfig::getGateway() const
+uint32_t DhcpNetworkConfig::getGateway() const
 {
     return 0;
 }
 
-uint8_t Protocol::Dhcp::DhcpNetworkConfig::getPrefixLen() const
+uint8_t DhcpNetworkConfig::getPrefixLen() const
 {
     return 0;
 }
 
-uint8_t* Protocol::Dhcp::DhcpNetworkConfig::getSubnetMask(uint8_t* out)
+uint8_t* DhcpNetworkConfig::getSubnetMask(uint8_t* out)
 {
     return nullptr;
 }
 
-uint32_t Protocol::Dhcp::DhcpNetworkConfig::getSubnetMask()
+uint32_t DhcpNetworkConfig::getSubnetMask()
 {
     return 0;
 }
+
+} // namespace services

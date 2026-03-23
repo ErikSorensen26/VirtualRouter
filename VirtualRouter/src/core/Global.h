@@ -21,19 +21,17 @@
 #include "AddressFamily.hpp"
 #include "IPAddress.h"
 
+namespace interface { class Interface; }
+namespace hardware { struct HwIfaceInfo; }
+namespace cli { class CliEngine; }
+namespace services::dhcp { class DhcpServer; class Dhcpv6Server; }
+
+namespace core
+{
+
 #define DEFAULT_HOSTNAME "router"
 
-class Interface;     ///< Forward declaration of Interface.
 class VirtualRouter; ///< Forward declaration of VirtualRouter (per-VRF routing instance).
-class CliEngine;     ///< Forward declaration of CliEngine.
-struct HwIfaceInfo;  ///< Forward declaration of HwIfaceInfo.
-namespace Protocol
-{
-class DhcpServer;    ///< Forward declaration of DHCPv4 server.
-class Dhcpv6Server;  ///< Forward declaration of DHCPv6 server.
-}
-enum class AddressFamily : uint8_t; ///< Forward declaration of AddressFamily
-enum class InterfaceType : uint8_t; ///< Forward declaration of InterfaceType
 
 /**
  * @struct GlobalConfigs
@@ -98,11 +96,11 @@ struct GlobalConfigs
         struct Neighbor
         {
             uint64_t mac; ///< MAC address of neighbor.
-            uint32_t interface; ///< Interface ID this neighbor is bound to.
+            uint32_t interface; ///< interface::Interface ID this neighbor is bound to.
             bool proxy = false; ///< Whether this entry is a proxy arp binding
         };
 
-        std::map<std::string, std::map<IPv4Address, Neighbor>> neighbors; ///< Static ARP neighbor table.
+        std::map<std::string, std::map<types::IPv4Address, Neighbor>> neighbors; ///< Static ARP neighbor table.
         std::shared_mutex neighborMutex; ///< Syncronizes neighbor table access.
     } arp;
 
@@ -147,11 +145,11 @@ struct GlobalConfigs
          */
         struct Neighbor
         {
-            uint32_t interface; ///< Interface ID of the static neighbor.
+            uint32_t interface; ///< interface::Interface ID of the static neighbor.
             uint64_t macAddress; ///< MAC address associated with this IPv6 address.
         };
 
-        std::map<IPv6Address, Neighbor> neighbors; ///< Static NDP neighbor table.
+        std::map<types::IPv6Address, Neighbor> neighbors; ///< Static NDP neighbor table.
         std::shared_mutex neighborMutex;         ///< Synchronizes static NDP table access.
     } ndp;
 };
@@ -165,7 +163,7 @@ struct GlobalConfigs
  * any subsystem, including:
  *
  * - Global configuration state (AAA, IPv6 routing, NSF parameters, ARP/NDP settings)
- * - Interface lifecycle management (creation, deletion, lookup)
+ * - interface::Interface lifecycle management (creation, deletion, lookup)
  * - Virtual routing instances (VRFs)
  * - DHCPv4 / DHCPv6 server instances
  * - Global thread pool and timing subsystem
@@ -192,10 +190,10 @@ struct GlobalConfigs
  * Global is heavily multi-threaded by design. Key aspects include:
  *
  * - Hostname protection via std::shared_mutex
- * - Interface list protected by a dedicated std::mutex
+ * - interface::Interface list protected by a dedicated std::mutex
  * - Routing instance map protected by a dedicated std::mutex
  * - Atomic values for fast-path configuration flags (IPv6, AAA, NSF)
- * - ThreadPool and TimeManager used for protocol timers and async tasks
+ * - utils::ThreadPool and core::TimeManager used for protocol timers and async tasks
  *
  * Global does **not** attempt to serialize all operations.  
  * Instead, it exposes fine-grained locking for high-throughput data-plane and control-plane behavior.
@@ -207,13 +205,13 @@ struct GlobalConfigs
  * - Protocol-specific logic (EIGRP, OSPF, BGP, DHCP, NDP)
  * - Per-interface packet IO
  *
- * Those live in VirtualRouter, Interface, and protocol-specific subsystems.
+ * Those live in VirtualRouter, interface::Interface, and protocol-specific subsystems.
  *
  * ## Lifetime
  * Global is constructed once at program start and destroyed only at shutdown.  
  * When destroyed, it is responsible for releasing all dynamically allocated:
  * - VirtualRouter instances
- * - Interface objects
+ * - interface::Interface objects
  * - DHCPv4 / DHCPv6 server instances
  *
  * Configuration and runtime state **must not outlive Global**.
@@ -228,7 +226,7 @@ public:
      * operation:
      *
      * - Allocates and configures the global thread pool.
-     * - Creates the TimeManager used by all periodic or deadline-based operations.
+     * - Creates the core::TimeManager used by all periodic or deadline-based operations.
      * - Initializes the CLI engine, which may load startup configuration.
      * - Configures TX/RX queue managers according to CPU policy.
      * - Optionally enables routing subsystems before any interface is created.
@@ -244,7 +242,7 @@ public:
      * @note The CLI engine *requires* access to Global during construction, therefore
      * this object passes a reference to itself into `CliEngine`.
      */
-    Global(const StartupFiles& stfs = {}, bool enableRouting = false, bool test = false);
+    Global(const cli::StartupFiles& stfs = {}, bool enableRouting = false, bool test = false);
 
     /**
      * @brief Construct a Global system controller using a virtual filesystem.
@@ -257,7 +255,7 @@ public:
      * @param stfs       Startup file structure.
      * @param test       If true, bypasses hardware initialization.
      */
-    Global(IFileSystem* fs, const StartupFiles& stfs = {}, bool test = false);
+    Global(cli::IFileSystem* fs, const cli::StartupFiles& stfs = {}, bool test = false);
 
     /**
      * @brief Destructor for the Global system controller.
@@ -337,21 +335,21 @@ public:
      * @param interfaceId    User-visible ID (GigabitEthernet0/1 → 0.1)
      * @param debug          Enables verbose hardware-layer logging for this interface.
      *
-     * @return Pointer to created Interface on success, or nullptr if key already exists.
+     * @return Pointer to created interface::Interface on success, or nullptr if key already exists.
      *
      * @thread_safety Protected internally by interfaceMutex.
      */
-    Interface* addInterface(InterfaceType interfaceType, const HwIfaceInfo& hwInfo, float interfaceId, bool debug);
+    interface::Interface* addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug);
 
     /**
      * @brief Retrieve an interface by its computed key.
      *
      * @param key Internal interface lookup key.
-     * @return Pointer to Interface or nullptr if not found.
+     * @return Pointer to interface::Interface or nullptr if not found.
      *
      * @note This returns a raw pointer; ownership stays with Global.
      */
-    Interface* getInterface(uint32_t key);
+    interface::Interface* getInterface(uint32_t key);
 
     /**
      * @brief Retrieve the entire interface table.
@@ -361,7 +359,7 @@ public:
      *
      * This is exposed because certain routing protocols require full interface iteration.
      */
-    std::map<uint32_t, Interface*>& getInterfaceList();
+    std::map<uint32_t, interface::Interface*>& getInterfaceList();
 
     /**
      * @brief Remove and destroy an interface.
@@ -395,7 +393,7 @@ public:
      * @param ad Address family (IPv4/IPv6). If NONE, any AF is accepted.
      * @return Pointer to VirtualRouter or nullptr if not found or AF not enabled.
      */
-    VirtualRouter* getRoutingInstance(const std::string& name, AddressFamily = AddressFamily::NONE);
+    VirtualRouter* getRoutingInstance(const std::string& name, types::AddressFamily = types::AddressFamily::NONE);
 
     /**
      * @brief Remove a routing instance.
@@ -409,12 +407,12 @@ public:
 
     // DHCP SERVERS
     
-    Protocol::DhcpServer* dhcpServer = nullptr;     ///< Global IPv4 DHCP Server.
-    Protocol::Dhcpv6Server* dhcpv6Server = nullptr; ///< Global IPv6 DHCP Server.
+    services::dhcp::DhcpServer* dhcpServer = nullptr;     ///< Global IPv4 DHCP Server.
+    services::dhcp::Dhcpv6Server* dhcpv6Server = nullptr; ///< Global IPv6 DHCP Server.
 
     // AUTHENTICATION
 
-    Authentication::KeyChainManager keyChainManager; ///< Manages key chains for protocols.
+    security::authentication::KeyChainManager keyChainManager; ///< Manages key chains for protocols.
 
     // GLOBAL RESET
 
@@ -443,9 +441,9 @@ private:
     std::atomic<bool> ipv6RoutingUnicast = false; ///< Global IPv6 routing flag.
     std::atomic<bool> aaaEnabled = false;         ///< Global AAA enable flag.
 
-    // Interface table
+    // interface::Interface table
     std::mutex interfaceMutex;
-    std::map<uint32_t, Interface*> interfaceList;
+    std::map<uint32_t, interface::Interface*> interfaceList;
 
     // Routing Instances
     std::mutex routingInstanceMutex;
@@ -457,18 +455,21 @@ public:
     bool routingEnabled = false; ///< Initial routing enable flag.
     bool testingMode = false;    ///< Testing mode flag.
 
-    Config::Registry registry;
+    config::Registry registry;
 
     GlobalConfigs configs;       ///< Global ARP/NDP/NSF/etc configuration
 
-    ThreadPool threadPool;       ///< Global thread pool for off-loading.
-    TimeManager timeManager;     ///< Global time manager for time keeping.
+    core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
+    core::TimeManager timeManager;     ///< Global time manager for time keeping.
     ControlScheduler scheduler;  ///< Global control plane execution engine.
 
-    CliEngine engine;            ///< Global CLI engine for user interface.
+    cli::CliEngine engine;            ///< Global CLI engine for user interface.
 
-    TxQueueManager txMgr;        ///< Hardware TX queue controller.
-    RxQueueManager rxMgr;        ///< Hardware RX queue controller.
+    qos::egress::TxQueueManager txMgr;        ///< Hardware TX queue controller.
+    qos::ingress::RxQueueManager rxMgr;        ///< Hardware RX queue controller.
 };
 
+} // namespace core
+
 #endif // GLOBAL_H
+

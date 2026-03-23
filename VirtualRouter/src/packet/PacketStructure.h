@@ -25,20 +25,23 @@
 #include "packet/headers/BgpHeader.hpp"
 #include "packet/headers/SyslogHeader.hpp"
 
+namespace packet
+{
+
 static constexpr int MaxHeaders = 16;
 
 /**
  * @file Encapsulation.h
  * @brief Defines constants, structures, and utility functions for packet encapsulation.
  */
-namespace Variable
+namespace variable
 {
     
     /**
-     * @namespace IP
+     * @namespace ip
      * @brief Contains IP protocol number constants.
      */
-    namespace IP
+    namespace ip
     {
         // Additional Protocols
         inline constexpr uint8_t hopopt = uint8_t{0x00U};       ///< IP protocol number for HOPOPT (0).
@@ -159,4 +162,7 @@ struct PacketInfo
     size_t offset = 0;
 };
 
+} // namespace packet
+
 #endif // PACKET_STRUCTUrE_H
+

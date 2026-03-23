@@ -5,7 +5,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "DuelEngine.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 TopologyTable::TopologyTable(Eigrp& process) : eigrpProcess(process) {}
 
@@ -14,7 +14,7 @@ TopologyTable::~TopologyTable() {}
 RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neighbor* neighbor, TopologyEntry& entry)
 {
     // Create or update the topology table entry
-    IPAddress neighborIp = neighbor ? neighbor->ipAddress : route.nextHop;
+    types::IPAddress neighborIp = neighbor ? neighbor->ipAddress : route.nextHop;
     auto it = entry.routesBySource.find(neighborIp);
     if (it == entry.routesBySource.end())
     {
@@ -40,7 +40,7 @@ RouteInfo& TopologyTable::addRouteUpdate(const ReceivedRoute& route, const Neigh
     return routeEntry;
 }
 
-std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const IPPrefix& prefix, const IPAddress& neighbor)
+std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const types::IPPrefix& prefix, const types::IPAddress& neighbor)
 {
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
         if (auto rit = it->second.routesBySource.find(neighbor); rit != it->second.routesBySource.end())
@@ -48,7 +48,7 @@ std::pair<TopologyEntry*, RouteInfo*> TopologyTable::findPair(const IPPrefix& pr
     return {nullptr, nullptr};
 }
 
-TopologyEntry& TopologyTable::ensure(const IPPrefix& prefix)
+TopologyEntry& TopologyTable::ensure(const types::IPPrefix& prefix)
 {
     auto [it, inserted] = topologyEntries.emplace(prefix, TopologyEntry{});
     if (inserted)
@@ -59,14 +59,14 @@ TopologyEntry& TopologyTable::ensure(const IPPrefix& prefix)
     return it->second;
 }
 
-TopologyEntry* TopologyTable::find(const IPPrefix& prefix)
+TopologyEntry* TopologyTable::find(const types::IPPrefix& prefix)
 {
     if (auto it = topologyEntries.find(prefix); it != topologyEntries.end())
         return &it->second;
     return nullptr;
 }
 
-void TopologyTable::markRouteUnreachable(RouteInfo& route, const IPAddress& neighborIp, TopologyEntry& entry)
+void TopologyTable::markRouteUnreachable(RouteInfo& route, const types::IPAddress& neighborIp, TopologyEntry& entry)
 {
     route.routeInfo.feasibleDistance = std::numeric_limits<uint64_t>::max();
     route.routeInfo.delay = std::numeric_limits<uint64_t>::max();
@@ -97,7 +97,7 @@ void TopologyTable::pruneExpired()
     }
 }
 
-void TopologyTable::pruneNeighbor(const IPAddress& neighborIp)
+void TopologyTable::pruneNeighbor(const types::IPAddress& neighborIp)
 {
     for (auto& [_, entry] : topologyEntries)
     {
@@ -115,5 +115,4 @@ void TopologyTable::pruneNeighbor(const IPAddress& neighborIp)
 
     pruneExpired(); // Remove any empty destinations
 }
-}
-
+} // namespace routing

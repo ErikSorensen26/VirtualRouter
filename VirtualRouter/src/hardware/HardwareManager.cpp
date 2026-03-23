@@ -18,7 +18,10 @@
 #include "interface/configs/InterfaceType.hpp"
 #include "hardware/Ifname.h"
 
-HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& fileSystem, bool enableDummies)
+namespace hardware
+{
+
+HardwareManager::HardwareManager(const std::string& hwConfigFile, cli::IFileSystem& fileSystem, bool enableDummies)
     : allowDummies(enableDummies)
 {
     // Load JSON data
@@ -43,15 +46,15 @@ HardwareManager::HardwareManager(const std::string& hwConfigFile, IFileSystem& f
     }
 
     // Load interface configurations from JSON data
-    if (!configJson.is_object() || !configJson.contains("Interface") || !configJson["Interface"].is_object())
+    if (!configJson.is_object() || !configJson.contains("interface::Interface") || !configJson["interface::Interface"].is_object())
         return;
 
-    nlohmann::ordered_json& interfaces = configJson["Interface"];
+    nlohmann::ordered_json& interfaces = configJson["interface::Interface"];
 
     for (auto& [key, value] : interfaces.items())
     {
-        InterfaceType type = getInterfaceType(key);
-        if (type == InterfaceType::UNDEFINED) continue;
+        interface::InterfaceType type = interface::getInterfaceType(key);
+        if (type == interface::InterfaceType::UNDEFINED) continue;
 
         if (!value.is_array()) continue;
         for (const auto& obj : value)
@@ -127,7 +130,7 @@ HardwareManager::~HardwareManager()
         nlThread.join();
 }
 
-uint32_t HardwareManager::getInterface(InterfaceType type, int index)
+uint32_t HardwareManager::getInterface(interface::InterfaceType type, int index)
 {
     auto it = physicalInterfaces.find(type);
     if (it == physicalInterfaces.end() || index < 0 || index >= (int)it->second.size())
@@ -154,7 +157,7 @@ std::optional<HwIfaceInfo> HardwareManager::extractHwInfo(int sock, struct ifreq
 
     if (ioctl(sock, SIOCGIFHWADDR, &ifr) != 0)
         return std::nullopt;
-    info.mac = readU48(reinterpret_cast<uint8_t*>(ifr.ifr_hwaddr.sa_data));
+    info.mac = utils::readU48(reinterpret_cast<uint8_t*>(ifr.ifr_hwaddr.sa_data));
 
     struct ethtool_cmd edata {};
     edata.cmd = ETHTOOL_GSET;
@@ -277,12 +280,12 @@ bool HardwareManager::bringDown(const std::string& ifname)
     return ok;
 }
 
-void HardwareManager::registerInterface(const HwIfaceInfo* info, Interface* iface)
+void HardwareManager::registerInterface(const HwIfaceInfo* info, interface::Interface* iface)
 {
     registeredInterfaces[info->index].push_back(iface);
 }
 
-void HardwareManager::unregisterInterface(const HwIfaceInfo* info, Interface* iface)
+void HardwareManager::unregisterInterface(const HwIfaceInfo* info, interface::Interface* iface)
 {
     auto it = registeredInterfaces.find(info->index);
     if (it == registeredInterfaces.end()) return;
@@ -331,3 +334,5 @@ void HardwareManager::netlinkMonitorThread()
         }
     }
 }
+
+} // namespace hardware

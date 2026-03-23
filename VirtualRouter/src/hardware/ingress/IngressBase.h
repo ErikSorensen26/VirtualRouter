@@ -9,6 +9,11 @@
 
 #include "qos/ingress/RxQueueOpts.hpp"
 
+namespace interface { class Interface; }
+
+namespace hardware::ingress
+{
+
 struct FrameView
 {
     uint8_t* payload = nullptr;
@@ -16,19 +21,16 @@ struct FrameView
     uint32_t index = 0;
 };
 
-class Interface;
-struct RxQueueOpts;
-
 class IngressBase
 {
 public:
-    IngressBase(Interface& iface, const RxQueueOpts& opts);
+    IngressBase(interface::Interface& iface, const qos::ingress::RxQueueOpts& opts);
     virtual ~IngressBase();
 
     void start();
     void stop();
 
-    RxQueueOpts opts;
+    qos::ingress::RxQueueOpts opts;
 
 protected:
 
@@ -47,7 +49,7 @@ protected:
     void runLoop();
 
 protected:
-    Interface& iface;
+    interface::Interface& iface;
     const uint32_t qid;
 
     std::atomic<bool> running = false;
@@ -61,4 +63,7 @@ protected:
     alignas(64) std::atomic_flag returnDrainOwner = ATOMIC_FLAG_INIT;
 };
 
+} // namespace hardware
+
 #endif // INGRESS_BASE_H
+

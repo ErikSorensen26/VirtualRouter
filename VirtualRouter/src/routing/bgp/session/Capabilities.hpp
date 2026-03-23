@@ -9,7 +9,7 @@
 
 #include "bgp/BgpTypes.hpp"
 
-namespace BGP
+namespace routing::bgp
 {
 // Negotiated capability set
 struct Capabilities
@@ -195,6 +195,7 @@ struct NegotiatedCapabilities
         return false;
     }
 };
-}
+} // namespace routing
 
 #endif // BGP_CAPABILITIES_HPP
+

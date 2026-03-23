@@ -7,24 +7,23 @@
 #include <optional>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct IntraAreaPrefix
 {
     uint8_t options;
     uint16_t metric;
-    IPv6Prefix prefix;
+    types::IPv6Prefix prefix;
 
     void setNoUnicast(bool val)
-        { setBit(&options, 7, val); }
+        { utils::setBit(&options, 7, val); }
     void setLocalAddress(bool val)
-        { setBit(&options, 6, val); }
+        { utils::setBit(&options, 6, val); }
     void setMulticast(bool val)
-        { setBit(&options, 5, val); }
+        { utils::setBit(&options, 5, val); }
     void setPropagate(bool val)
-        { setBit(&options, 4, val); }
+        { utils::setBit(&options, 4, val); }
 
     bool operator==(const IntraAreaPrefix& rhs) const noexcept
     {
@@ -45,12 +44,12 @@ struct IntraAreaPrefixLsa
     {
         if (len < 12) return std::nullopt;
 
-        uint16_t prefixes = readU16(buf);
+        uint16_t prefixes = utils::readU16(buf);
 
         IntraAreaPrefixLsa lsa;
-        lsa.referencedLsaType = readU16(buf + 2);
-        lsa.referencedLinkStateId = readU32(buf + 4);
-        lsa.referencedAdvRouter = readU32(buf + 8);
+        lsa.referencedLsaType = utils::readU16(buf + 2);
+        lsa.referencedLinkStateId = utils::readU32(buf + 4);
+        lsa.referencedAdvRouter = utils::readU32(buf + 8);
 
         size_t off = 12;
         for (uint16_t i = 0; i < prefixes; i++)
@@ -61,13 +60,13 @@ struct IntraAreaPrefixLsa
             
             IntraAreaPrefix prefix;
             prefix.options = buf[off++];
-            prefix.metric = readU16(buf + off);
+            prefix.metric = utils::readU16(buf + off);
             off += 2;
 
             uint8_t prefixBytes = (plen + 7) / 8;
             if (off + prefixBytes > len) return std::nullopt;
 
-            prefix.prefix = IPv6Prefix(buf + off, plen);
+            prefix.prefix = types::IPv6Prefix(buf + off, plen);
 
             lsa.prefixes.push_back(prefix);
         }
@@ -79,10 +78,10 @@ struct IntraAreaPrefixLsa
     {
         if (len < 12) return false;
 
-        writeU16(buf, static_cast<uint16_t>(prefixes.size()));
-        writeU16(buf + 2, referencedLsaType);
-        writeU32(buf + 4, referencedLinkStateId);
-        writeU32(buf + 8, referencedAdvRouter);
+        utils::writeU16(buf, static_cast<uint16_t>(prefixes.size()));
+        utils::writeU16(buf + 2, referencedLsaType);
+        utils::writeU32(buf + 4, referencedLinkStateId);
+        utils::writeU32(buf + 8, referencedAdvRouter);
 
         size_t off = 12;
         for (const auto& prefix : prefixes)
@@ -91,13 +90,13 @@ struct IntraAreaPrefixLsa
 
             buf[off++] = prefix.prefix.prefixLength;
             buf[off++] = prefix.options;
-            writeU16(buf + off, prefix.metric);
+            utils::writeU16(buf + off, prefix.metric);
             off += 2;
 
             uint8_t prefixBytes = (prefix.prefix.prefixLength + 7) / 8;
             if (off + prefixBytes > len) return false;
 
-            writeBytes(buf + off, prefix.prefix.addr, prefixBytes);
+            utils::writeBytes(buf + off, prefix.prefix.addr, prefixBytes);
         }
 
         return true;
@@ -131,6 +130,7 @@ struct IntraAreaPrefixLsa
         }
     }
 };
-}
+} // namespace routing
 
 #endif // INTRA_AREA_PREFIX_HPP
+

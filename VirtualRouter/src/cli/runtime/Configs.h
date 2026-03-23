@@ -25,6 +25,15 @@
 #define ROUTER_CONFIG_FILE "./dir/configs.json"
 #define MODE_KEY "commands"
 
+using json = nlohmann::ordered_json;
+
+namespace core { class Global; }
+namespace hardware { class HardwareManager; }
+
+namespace cli
+{
+struct ModeConfig;
+
 /**
  * @brief Defines filesystem paths for all boot-time configuration inputs.
  *
@@ -46,12 +55,6 @@ struct StartupFiles
     std::string routerConfigFile = ROUTER_CONFIG_FILE;  ///< Persistent router configuration path.
     std::string hwConfigFile = HW_CONFIG_FILE;          ///< Hardware model configuration path.
 };
-
-using json = nlohmann::ordered_json;
-
-class Global;           ///< Forward declaration of Global
-struct ModeConfig;      ///< Forward declaration of ModeConfig
-class HardwareManager;  ///< Forward declaration of HardwareManager
 
 /**
  * @brief Metadata describing a CLI command, including semantic properties and support levels.
@@ -500,8 +503,8 @@ public:
     json root;                              ///< Root of hierarchical router configuration.
     json configSchema;                      ///< Active schema controlling command ordering.
     IFileSystem* fileSystem;                ///< Filesystem interface used for persistence.
-    Global* global = nullptr;               ///< Global router subsystem pointer.
-    HardwareManager* hwManager = nullptr;   ///< Hardware abstraction subsystem.
+    core::Global* global = nullptr;               ///< core::Global router subsystem pointer.
+    hardware::HardwareManager* hwManager = nullptr;   ///< Hardware abstraction subsystem.
 	
 private:
     std::vector<std::string> volatileInputs{
@@ -515,6 +518,6 @@ private:
 
     std::vector<std::string> recover; ///< Holds recovered CLI commands.
 };
+}
 
 #endif // CONFIGS_H
-

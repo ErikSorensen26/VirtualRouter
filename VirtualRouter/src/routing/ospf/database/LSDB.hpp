@@ -24,7 +24,7 @@
 #include "ospf/ospfv2/database/SummaryNetworkLsa.hpp"
 #include "ospf/ospfv2/database/SummaryRouterLsa.hpp"
 #include "ospf/ospfv2/database/ExternalLsaV2.hpp"
-#include "ospf/ospfv2/database/OpaqueLsaV2.hpp" // TODO
+#include "ospf/ospfv2/database/OpaqueLsaV2.hpp"
 
 #include "ospf/ospfv3/database/RouterLsaV3.hpp"
 #include "ospf/ospfv3/database/NetworkLsaV3.hpp"
@@ -36,7 +36,7 @@
 
 #include "ospf/area/FloodTypes.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 // Set to 0 if you do not want std::pmr containers in LSDB storage
 #ifndef OSPF_LSDB_USE_PMR
@@ -287,6 +287,7 @@ using A_LSDB = UMap<LsaAdvKey, UMap<uint32_t, LsaRecord*>>;
 using T_LSDB = UMap<uint32_t, UMap<LsaKey, LsaRecord*>>;
 using O_LSDB = OMap<LsaKey, LsaRecord>;
 
-} // namespace OSPF
+} // namespace routing::ospf
 
 #endif // OSPF_LSDB_H
+

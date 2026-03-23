@@ -9,9 +9,9 @@
 #include "bgp/neighbor/Neighbor.h"
 #include "bgp/neighbor/PeerTemplate.h"
 
-struct IPAddress;
+namespace types { struct IPAddress; }
 
-namespace BGP
+namespace routing::bgp
 {
 class BgpProcess;
 class Neighbor;
@@ -25,21 +25,21 @@ public:
 
     void syncPeerGroups();
 
-    Neighbor* createNeighbor(const IPAddress& ipAddress);
+    Neighbor* createNeighbor(const types::IPAddress& ipAddress);
 
-    void deleteNeighbor(const IPAddress& ipAddress);
+    void deleteNeighbor(const types::IPAddress& ipAddress);
 
     // Create a passive-only neighbor from a bgp listen range match.
     // The neighbor inherits all config from the named peer-group.
-    Neighbor* createDynamicNeighbor(const IPAddress& ipAddress, const std::string& peerGroupName);
+    Neighbor* createDynamicNeighbor(const types::IPAddress& ipAddress, const std::string& peerGroupName);
 
-    Neighbor* lookup(const IPAddress& ipAddress);
-    const Neighbor* lookup(const IPAddress& ipAddress) const;
+    Neighbor* lookup(const types::IPAddress& ipAddress);
+    const Neighbor* lookup(const types::IPAddress& ipAddress) const;
 
     Neighbor* lookup(uint32_t rid);
     const Neighbor* lookup(uint32_t rid) const;
 
-    bool activatePeer(const IPAddress& nbr, uint32_t peer);
+    bool activatePeer(const types::IPAddress& nbr, uint32_t peer);
     bool deactivatePeer(uint32_t peer);
 
     void cancelAllHoldTimers();
@@ -93,12 +93,13 @@ public:
     }
 
 private:
-    std::unordered_map<IPAddress, Neighbor> neighbors;
+    std::unordered_map<types::IPAddress, Neighbor> neighbors;
     std::unordered_map<uint32_t, Neighbor*> peers;
 
     BgpProcess& process;
     PeerTemplateTable peerTemplates;
 };
-}
+} // namespace routing
 
 #endif // BGP_NEIGHBOR_TABLE_H
+

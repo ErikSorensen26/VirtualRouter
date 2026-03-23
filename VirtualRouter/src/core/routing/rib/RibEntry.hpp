@@ -7,6 +7,9 @@
 #include <IPAddress.h>
 #include <optional>
 
+namespace core
+{
+
 #define MAX_NEXTHOP 8
 
 template <typename AddrType>
@@ -234,4 +237,7 @@ struct FibEntry
     }
 };
 
+} // namespace core
+
 #endif // RIB_ENTRY_HPP
+

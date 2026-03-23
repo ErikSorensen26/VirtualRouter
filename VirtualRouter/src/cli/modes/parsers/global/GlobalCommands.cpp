@@ -13,7 +13,7 @@
 #include "eigrp/core/Eigrp.h"
 #include "hardware/HardwareManager.h"
 
-namespace Cli
+namespace cli
 {
 bool Global_Arp_Handler(GLOBAL_PARAMS)
 {
@@ -26,12 +26,12 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
     }
 
     std::shared_lock<std::shared_mutex> lock(ctx.global.configs.arp.neighborMutex);
-    IPv4Address _arpIp; CliUtils::extractIPv4Address(args[offset + 1], _arpIp);
+    types::IPv4Address _arpIp; utils::extractIPv4Address(args[offset + 1], _arpIp);
     if (ctx.negate && ctx.global.configs.arp.neighbors.count(vrfName) && ctx.global.configs.arp.neighbors[vrfName].count(_arpIp))
     {
-        GlobalConfigs::Arp::Neighbor entry = ctx.global.configs.arp.neighbors[vrfName][_arpIp];
-        auto* vrf = ctx.global.getRoutingInstance(vrfName, AddressFamily::IPv4);
-        IPv4Address addr = _arpIp;
+        core::GlobalConfigs::Arp::Neighbor entry = ctx.global.configs.arp.neighbors[vrfName][_arpIp];
+        auto* vrf = ctx.global.getRoutingInstance(vrfName, types::AddressFamily::IPv4);
+        types::IPv4Address addr = _arpIp;
         if (auto iface = vrf ? ctx.vrf.getInterface(entry.interface) : nullptr)
         {
             if (iface->arp)
@@ -43,14 +43,14 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
     }
     else
     {
-        uint32_t ifaceKey = calculateInterfaceKey(getInterfaceType(args[offset + 3]), std::stof(args[offset + 4]));
-        GlobalConfigs::Arp::Neighbor entry;
-        { uint64_t _mac = 0; CliUtils::extractMacAddress(args[offset + 2], _mac); (void)_mac; }
+        uint32_t ifaceKey = interface::calculateInterfaceKey(interface::getInterfaceType(args[offset + 3]), std::stof(args[offset + 4]));
+        core::GlobalConfigs::Arp::Neighbor entry;
+        { uint64_t _mac = 0; utils::extractMacAddress(args[offset + 2], _mac); (void)_mac; }
         entry.interface = ifaceKey;
         entry.proxy = args.size() == 5;
 
         ctx.global.configs.arp.neighbors[vrfName].emplace(_arpIp, entry);
-        auto* vrf = ctx.global.getRoutingInstance(vrfName, AddressFamily::IPv4);
+        auto* vrf = ctx.global.getRoutingInstance(vrfName, types::AddressFamily::IPv4);
         if (auto iface = vrf ? vrf->getInterface(ifaceKey) : nullptr)
         {
             if (iface->arp)
@@ -104,10 +104,10 @@ bool Global_Interface_Handler(GLOBAL_PARAMS)
     ctx.terminal.isList = true;
     std::string type = args[0];
     ctx.terminal.interfaceID = std::stof(args[1]);
-    InterfaceType interfaceType = getInterfaceType(type);
+    interface::InterfaceType interfaceType = interface::getInterfaceType(type);
     uint32_t hwIface;
     int id = static_cast<int>(std::floor(ctx.terminal.interfaceID));
-    uint32_t key = calculateInterfaceKey(interfaceType, ctx.terminal.interfaceID);
+    uint32_t key = interface::calculateInterfaceKey(interfaceType, ctx.terminal.interfaceID);
     if (!ctx.global.getInterface(key))
     {
         if (ctx.negate)
@@ -118,9 +118,9 @@ bool Global_Interface_Handler(GLOBAL_PARAMS)
         else
         {
             hwIface = ctx.terminal.engine.hwManager->getInterface(interfaceType, id);
-            const HwIfaceInfo* info = ctx.terminal.engine.hwManager->getHwInfo(hwIface);
+            const hardware::HwIfaceInfo* info = ctx.terminal.engine.hwManager->getHwInfo(hwIface);
             if (!info) return false;
-            const HwIfaceInfo& hwInfo = *info;
+            const hardware::HwIfaceInfo& hwInfo = *info;
             ctx.global.addInterface(interfaceType, hwInfo, ctx.terminal.interfaceID, ctx.terminal.isDebugModeEnabled);
             ctx.vrf.addInterface(ctx.global.getInterface(key), key);
         }
@@ -135,10 +135,10 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
     ctx.terminal.isList = true;
     std::string id = args[0];
 
-    if (CliUtils::isNumber(id))
+    if (utils::isNumber(id))
     {
         uint16_t asNum = static_cast<uint16_t>(std::stoi(id));
-        EIGRP::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
+        routing::eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
         if (!ctx.negate)
         {
             if (as)
@@ -155,7 +155,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
             }
             if (!as->ipv4)
             {
-                as->ipv4 = new EIGRP::Eigrp(asNum, AddressFamily::IPv4, ctx.global.getRoutingInstance("default"));
+                as->ipv4 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv4, ctx.global.getRoutingInstance("default"));
             }
             ctx.terminal.changeMode<CliMode::RouterEigrpClassicV4>(as->ipv4, nullptr, nullptr);
         }

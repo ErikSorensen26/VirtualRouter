@@ -8,7 +8,10 @@
 #include "interface/Interface.h"
 #include "hardware/PacketSlot.hpp"
 
-EgressBase::EgressBase(Interface& iface, const TxQueueOpts& o)
+namespace hardware::egress
+{
+
+EgressBase::EgressBase(interface::Interface& iface, const qos::egress::TxQueueOpts& o)
     : iface(iface), opts(o), qid(static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)), packetSize(iface.configs.globalMtu.load(std::memory_order_relaxed))
 {
     freeBuf = nullptr;
@@ -106,3 +109,5 @@ bool EgressBase::getFrame(FrameHandle& out)
     out.slot->index = idx;   // keep track of which frame to reclaim
     return true;
 }
+
+} // namespace hardware

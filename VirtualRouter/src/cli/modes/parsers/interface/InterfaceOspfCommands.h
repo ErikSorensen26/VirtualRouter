@@ -7,7 +7,7 @@
 #include "cli/parser/Command.hpp"
 #include "cli/modes/contexts/InterfaceContext.hpp"
 
-namespace Cli
+namespace cli
 {
 bool InterfaceOspf_BFD_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_BFD = commandAdder<InterfaceContext,

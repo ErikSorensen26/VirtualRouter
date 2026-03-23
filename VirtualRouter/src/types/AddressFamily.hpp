@@ -5,6 +5,9 @@
 
 #include <cstdint>
 
+namespace types
+{
+
 /**
  * @enum AddressFamily
  * @brief Enumerates the supported address families for routing.
@@ -16,4 +19,7 @@ enum class AddressFamily : uint8_t
     IPv6 = 16    ///< IPv6 address family.
 };
 
+} // namespace types
+
 #endif // ADDRESS_FAMILY_HPP
+

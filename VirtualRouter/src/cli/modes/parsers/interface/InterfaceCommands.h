@@ -7,7 +7,7 @@
 #include "InterfaceIPv6Commands.h"
 #include "InterfaceOspfv3Commands.h"
 
-namespace Cli
+namespace cli
 {
 bool Interface_Exit_Handler(INTERFACE_PARAMS);
 using Interface_Exit = commandAdder<InterfaceContext,

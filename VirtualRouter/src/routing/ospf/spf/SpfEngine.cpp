@@ -6,7 +6,7 @@
 #include "ospf/area/Area.h"
 #include "ospf/OspfProcess.h"
 
-namespace OSPF
+namespace routing::ospf
 {
 // Min-heap by dist (lazy decrease-key)
 struct QItem
@@ -25,7 +25,7 @@ struct QItem
 template <typename Policy>
 SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 {
-    if (!topo.area.process().getConfigs().template get<Config::Ospf::ISPF>().load() ||
+    if (!topo.area.process().getConfigs().template get<config::Ospf::ISPF>().load() ||
         !last.has_value() || lastEdges.empty())
     {
         SpfResult res = runFull<Policy>(topo);
@@ -399,7 +399,7 @@ template <typename Policy>
 void SpfEngine::finalizeParents(SpfTopology<Policy>& topo, SpfResult& res)
 {
     auto& area = topo.area;
-    uint8_t maxPaths = area.process().getConfigs().template get<Config::Ospf::MAXIMUM_PATHS>().load();
+    uint8_t maxPaths = area.process().getConfigs().template get<config::Ospf::MAXIMUM_PATHS>().load();
 
     for (auto& kv : res.nodes)
     {
@@ -647,4 +647,4 @@ template void SpfEngine::relaxEdgeRepair<PQ>(const Vertex&, const Vertex&, uint6
 
 template void SpfEngine::expandAndRelax<PolicyV2, PQ>(SpfTopology<PolicyV2>&, const Vertex&, RelaxInfo<PQ>&);
 template void SpfEngine::expandAndRelax<PolicyV3, PQ>(SpfTopology<PolicyV3>&, const Vertex&, RelaxInfo<PQ>&);
-}
+} // namespace routing

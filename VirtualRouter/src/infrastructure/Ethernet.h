@@ -5,16 +5,17 @@
 
 #include <cstdint>
 
-class Interface;
-class PacketBuilder;
+namespace interface { class Interface; }
+namespace processing { class PacketBuilder; }
 
-namespace Protocol::Ethernet
+namespace infrastructure::ethernet
 {
     // Constructs the Ethernet header in PacketInfo based on destination IP
     // Returns true of Ethernet Header was successfully set
-    bool build(Interface* iface, PacketBuilder& packetInfo, uint64_t destMac, uint16_t type);
+    bool build(interface::Interface* iface, processing::PacketBuilder& packetInfo, uint64_t destMac, uint16_t type);
 
-    bool reserve(PacketBuilder& packetInfo);
-} // Namespace Protocol::Ethernet
+    bool reserve(processing::PacketBuilder& packetInfo);
+} // namespace infrastructure::ethernet
 
 #endif // ETHERNET_H
+

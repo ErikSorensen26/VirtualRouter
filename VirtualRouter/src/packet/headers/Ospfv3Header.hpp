@@ -4,7 +4,7 @@
 #define OSPFV3_HEADER_HPP
 
 #include <span>
-
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 
 #define OSPFV3_VERSION 3 ///< OSPFv2 Version (2).
@@ -17,6 +17,9 @@
 
 static constexpr uint8_t OSPFV3_ALL_SPF_ROUTERS[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05 };
 static constexpr uint8_t OSPFV3_ALL_D_ROUTERS[16] = { 0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06 };
+
+namespace packet
+{
 
 /**
  * @struct Ospfv3HeaderRaw
@@ -45,10 +48,10 @@ struct Ospfv3Header
 
     uint8_t getVersion() const              { return raw->version; }
     uint8_t getType() const                 { return raw->type; }
-    uint16_t getPacketLen() const           { return readU16(raw->packetLength); }
-    uint32_t getRouterID() const            { return readU32(raw->routerID); }
-    uint32_t getAreaID() const              { return readU32(raw->areaID); }
-    uint16_t getChecksum() const            { return readU16(raw->checksum); }
+    uint16_t getPacketLen() const           { return utils::readU16(raw->packetLength); }
+    uint32_t getRouterID() const            { return utils::readU32(raw->routerID); }
+    uint32_t getAreaID() const              { return utils::readU32(raw->areaID); }
+    uint16_t getChecksum() const            { return utils::readU16(raw->checksum); }
     uint8_t getInstanceID() const           { return raw->instanceID; }
 
     void setVersion(uint8_t val)
@@ -56,13 +59,16 @@ struct Ospfv3Header
     void setType(uint8_t val)
         { raw->type = val; }
     void setPacketLen(uint16_t val)
-        { writeU16(raw->packetLength, val); }
+        { utils::writeU16(raw->packetLength, val); }
     void setRouterID(uint32_t val)
-        { writeU32(raw->routerID, val); }
+        { utils::writeU32(raw->routerID, val); }
     void setAreaID(uint32_t val)
-        { writeU32(raw->areaID, val); }
+        { utils::writeU32(raw->areaID, val); }
     void setInstanceID(uint8_t val)
         { raw->instanceID = val; }
 };
 
+} // namespace packet
+
 #endif // OSPFV3_HEADER_HPP
+

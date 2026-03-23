@@ -9,7 +9,7 @@
 #include "ospf/transmission/OspfFletcher.hpp"
 #include "packet/HeaderHelpers.hpp"
 
-namespace OSPF
+namespace routing::ospf
 {
 struct SummaryRouterLsa
 {
@@ -19,11 +19,11 @@ struct SummaryRouterLsa
     {
         if (len != 8) return std::nullopt;
         
-        if (readU32(buf) != 0) return std::nullopt;
+        if (utils::readU32(buf) != 0) return std::nullopt;
 
         SummaryRouterLsa lsa;
 
-        uint32_t metricWord = readU32(buf + 4);
+        uint32_t metricWord = utils::readU32(buf + 4);
         lsa.metric = metricWord & 0x00FFFFFF;
 
         return lsa;
@@ -33,8 +33,8 @@ struct SummaryRouterLsa
     {
         if (len != 8) return false;
 
-        writeU32(buf, 0);
-        writeU32(buf + 4, metric);
+        utils::writeU32(buf, 0);
+        utils::writeU32(buf + 4, metric);
 
         return true;
     }
@@ -56,6 +56,7 @@ struct SummaryRouterLsa
         return metric == rhs.metric;
     }
 };
-}
+} // namespace routing
 
 #endif // SUMMARY_ROUTER_LSA_HPP
+

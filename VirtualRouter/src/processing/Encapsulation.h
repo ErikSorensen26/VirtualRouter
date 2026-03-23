@@ -3,10 +3,13 @@
 #ifndef ENCAPSULATION_H
 #define ENCAPSULATION_H
 
-#include <cstdint>
+#include "packet/PacketStructure.h"
+
+namespace processing
+{
 
 class PacketBuilder;
-enum class HeaderType : uint8_t;
+using HeaderType = packet::HeaderType;
 
 /**
  * @file Encapsulation.cpp
@@ -28,4 +31,7 @@ enum class HeaderType : uint8_t;
  */
 bool encapsulate(PacketBuilder& packet);
 
+} // namespace processing
+
 #endif // ENCAPSULATION_H
+

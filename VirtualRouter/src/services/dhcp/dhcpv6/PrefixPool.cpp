@@ -2,7 +2,10 @@
 
 #include "PrefixPool.h"
 
-PrefixPool::PrefixPool(const IPv6Prefix& prefix, TimeManager& tm, uint8_t dl)
+namespace services::dhcp
+{
+
+PrefixPool::PrefixPool(const types::IPv6Prefix& prefix, core::TimeManager& tm, uint8_t dl)
     : base(prefix), delegationLength(dl), timeManager(tm)
 {
     size = (__uint128_t(1) << (delegationLength - prefix.prefixLength));
@@ -15,7 +18,7 @@ PrefixPool::~PrefixPool()
     for (auto& [_, t] : quarantined) timeManager.cancelTimer(t);
 }
 
-std::optional<std::unordered_set<IPv6Prefix>> PrefixPool::getIAID(const IAKey& key)
+std::optional<std::unordered_set<types::IPv6Prefix>> PrefixPool::getIAID(const IAKey& key)
 {
     if (auto pfxs = advertisedGroups.find(key); pfxs != advertisedGroups.end())
         return pfxs->second;
@@ -27,7 +30,7 @@ void PrefixPool::setLeaseManager(PrefixLeaseManager* mgr)
     leaseManager = mgr;
 }
 
-bool PrefixPool::withinRange(const IPv6Prefix& prefix) const
+bool PrefixPool::withinRange(const types::IPv6Prefix& prefix) const
 {
     return prefix.addr >= base.addr && prefix.addr < base.addr + size && prefix.prefixLength <= base.prefixLength;
 }
@@ -38,16 +41,16 @@ bool PrefixPool::prefixMatches(__uint128_t a, __uint128_t b, uint8_t length) con
     return (a & mask) == (b & mask);
 }
 
-IPv6Prefix PrefixPool::generatePrefix(uint64_t index, uint8_t length) const
+types::IPv6Prefix PrefixPool::generatePrefix(uint64_t index, uint8_t length) const
 {
     __uint128_t step = __uint128_t(1) << (128 - length);
-    IPv6Prefix pfx;
+    types::IPv6Prefix pfx;
     pfx.addr = base.addr + (index * step);
     pfx.prefixLength = length;
     return pfx;
 }
 
-std::pair<IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocatePrefix(uint8_t requestedLength)
+std::pair<types::IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocatePrefix(uint8_t requestedLength)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -59,7 +62,7 @@ std::pair<IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocatePrefix(uint8_t re
 
     for (__uint128_t i = 0; i < maxAttempts; ++i)
     {
-        IPv6Prefix prefix = generatePrefix(i, effectiveLength);
+        types::IPv6Prefix prefix = generatePrefix(i, effectiveLength);
 
         if (!withinRange(prefix) || isAllocated(prefix) || isExcluded(prefix) || isConflicted(prefix) || isAdvertised(prefix))
             continue;
@@ -70,7 +73,7 @@ std::pair<IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocatePrefix(uint8_t re
     return { {}, { Dhcpv6StatusCode::NoPrefixAvail } };
 }
 
-std::pair<IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocateAdvertisedPrefix(const IAKey& key, uint8_t requestedLength, uint32_t timeout)
+std::pair<types::IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocateAdvertisedPrefix(const IAKey& key, uint8_t requestedLength, uint32_t timeout)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -82,7 +85,7 @@ std::pair<IPv6Prefix, Dhcpv6StatusMessage> PrefixPool::allocateAdvertisedPrefix(
 
     for (__uint128_t i = 0; i < maxAttempts; ++i)
     {
-        IPv6Prefix prefix = generatePrefix(i, effectiveLength);
+        types::IPv6Prefix prefix = generatePrefix(i, effectiveLength);
 
         if (!withinRange(prefix) || isAllocated(prefix) || isExcluded(prefix) || isConflicted(prefix) || isAdvertised(prefix))
             continue;
@@ -114,7 +117,7 @@ std::pair<uint8_t, Dhcpv6StatusMessage> PrefixPool::allocateRequestedAdvertisedP
 
     uint8_t effectiveLength = key.prefixLength > 64 ? delegationLength : std::max(key.prefixLength, delegationLength);
     if (effectiveLength < base.prefixLength) return { {}, { Dhcpv6StatusCode::UnspecFail } };
-    const IPv6Prefix prefix = {key.address, effectiveLength};
+    const types::IPv6Prefix prefix = {key.address, effectiveLength};
 
     if (auto it = quarantined.find(key); it != quarantined.end())
     {
@@ -146,7 +149,7 @@ std::pair<uint8_t, Dhcpv6StatusMessage> PrefixPool::allocateRequestedPrefix(cons
 
     uint8_t effectiveLength = key.prefixLength > 64 ? delegationLength : std::max(key.prefixLength, delegationLength);
     if (effectiveLength < base.prefixLength) return { {}, { Dhcpv6StatusCode::UnspecFail } };
-    const IPv6Prefix prefix = {key.address, key.prefixLength};
+    const types::IPv6Prefix prefix = {key.address, key.prefixLength};
 
     if (auto it = quarantined.find(key); it != quarantined.end())
     {
@@ -173,13 +176,13 @@ bool PrefixPool::activateAdvertisedPrefix(const IAPrefixKey& key)
 
     timeManager.cancelTimer(it->second);
     advertised.erase(it);
-    const IPv6Prefix prefix = {key.address, key.prefixLength};
+    const types::IPv6Prefix prefix = {key.address, key.prefixLength};
     advertisedPDs.erase(prefix);
     allocated.insert(prefix);
     return true;
 }
 
-void PrefixPool::releasePrefix(const IPv6Prefix& prefix)
+void PrefixPool::releasePrefix(const types::IPv6Prefix& prefix)
 {
     std::lock_guard<std::mutex> lock(mutex);
     allocated.erase(prefix);
@@ -188,7 +191,7 @@ void PrefixPool::releasePrefix(const IPv6Prefix& prefix)
 void PrefixPool::expirePrefix(const IAPrefixKey& key, uint32_t timeout)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    const IPv6Prefix prefix = {key.address, key.prefixLength};
+    const types::IPv6Prefix prefix = {key.address, key.prefixLength};
     if (!isAllocated(prefix)) return;
     allocated.erase(prefix);
     quarantined[key] = {
@@ -205,7 +208,7 @@ void PrefixPool::expirePrefix(const IAPrefixKey& key, uint32_t timeout)
 bool PrefixPool::setConflicted(const IAPrefixKey& key, uint32_t duration)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    const IPv6Prefix prefix = {key.address, key.prefixLength};
+    const types::IPv6Prefix prefix = {key.address, key.prefixLength};
     if (isAllocated(prefix)) return false;
     bad[prefix] = timeManager.addTimer(std::chrono::steady_clock::now() + std::chrono::seconds(duration),
         [this, prefix](uint32_t) {
@@ -215,49 +218,49 @@ bool PrefixPool::setConflicted(const IAPrefixKey& key, uint32_t duration)
     return true;
 }
 
-bool PrefixPool::excludePrefix(const IPv6Prefix& prefix)
+bool PrefixPool::excludePrefix(const types::IPv6Prefix& prefix)
 {
     std::lock_guard<std::mutex> lock(mutex);
     return excluded.insert(prefix).second;
 }
 
-bool PrefixPool::removeExclusion(const IPv6Prefix& prefix)
+bool PrefixPool::removeExclusion(const types::IPv6Prefix& prefix)
 {
     std::lock_guard<std::mutex> lock(mutex);
     return excluded.erase(prefix);
 }
 
-bool PrefixPool::isAllocated(const IPv6Prefix& prefix) const
+bool PrefixPool::isAllocated(const types::IPv6Prefix& prefix) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return allocated.count(prefix);
 }
 
-bool PrefixPool::isAdvertised(const IPv6Prefix& prefix) const
+bool PrefixPool::isAdvertised(const types::IPv6Prefix& prefix) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return advertisedPDs.count(prefix);
 }
 
-bool PrefixPool::isQuarantined(const IPv6Prefix& prefix) const
+bool PrefixPool::isQuarantined(const types::IPv6Prefix& prefix) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return quarantinedPDs.count(prefix);
 }
 
-bool PrefixPool::isExcluded(const IPv6Prefix& prefix) const
+bool PrefixPool::isExcluded(const types::IPv6Prefix& prefix) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return excluded.count(prefix);
 }
 
-bool PrefixPool::isConflicted(const IPv6Prefix& prefix) const
+bool PrefixPool::isConflicted(const types::IPv6Prefix& prefix) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return bad.count(prefix);
 }
 
-bool PrefixPool::adjustPool(const IPv6Prefix& newBase, size_t newDelegationLength)
+bool PrefixPool::adjustPool(const types::IPv6Prefix& newBase, size_t newDelegationLength)
 {
     if (newBase.prefixLength > 128 || newDelegationLength > 128 || newDelegationLength < newBase.prefixLength)
         return false;
@@ -293,3 +296,5 @@ bool PrefixPool::isFull()
 
     return used >= size;
 }
+
+} // namespace services::dhcp

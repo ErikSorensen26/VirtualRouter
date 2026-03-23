@@ -14,6 +14,9 @@
 #include <immintrin.h>  // _mm_pause
 #include <RCU.hpp>
 
+namespace core
+{
+
 class ThreadPool
 {
 public:
@@ -147,7 +150,7 @@ private:
 
     void workerLoop()
     {
-        RCU::registerThread();
+        utils::RCU::registerThread();
         while (!stop_.load(std::memory_order_acquire))
         {
             if (consumeOne())
@@ -160,13 +163,13 @@ private:
 
         // Drain remaining tasks
         while (consumeOne()) {}
-        RCU::unregisterThread();
+        utils::RCU::unregisterThread();
     }
 
     bool consumeOne()
     {
         uint64_t pos = tail_.load(std::memory_order_relaxed);
-        for (;;)
+        while (true)
         {
             Slot* s = &slots_[pos & mask_];
             uint64_t seq = s->seq.load(std::memory_order_acquire);
@@ -220,5 +223,8 @@ private:
     ThreadPool& operator=(const ThreadPool&) = delete;
 };
 
+} // namespace utils
+
 #endif // THREADPOOL_HPP
+
 

@@ -5,17 +5,17 @@
 
 #include "ContextBase.hpp"
 
+namespace interface { class Interface; }
+
 #define INTERFACE_PARAMS InterfaceContext& ctx, const std::vector<std::string>& args
 
-class Interface;
-
-namespace Cli
+namespace cli
 {
 struct InterfaceContext : ContextBase
 {
-    InterfaceContext(const ContextBase& base, Interface& iface)
+    InterfaceContext(const ContextBase& base, interface::Interface& iface)
         : ContextBase(base), currentInterface(iface) {}
-    Interface& currentInterface;
+    interface::Interface& currentInterface;
 };
 }
 

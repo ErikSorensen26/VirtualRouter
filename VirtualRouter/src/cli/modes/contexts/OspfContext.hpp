@@ -7,19 +7,16 @@
 
 #define OSPF_PARAMS OspfContext& ctx, const std::vector<std::string>& args
 
-namespace OSPF
-{
-class OspfProcess;
-}
+namespace routing::ospf { class OspfProcess; }
 
-namespace Cli
+namespace cli
 {
 struct OspfContext : ContextBase
 {
-    OspfContext(const ContextBase& base, OSPF::OspfProcess& process)
+    OspfContext(const ContextBase& base, routing::ospf::OspfProcess& process)
         : ContextBase(base), ospf(process) {}
 
-    OSPF::OspfProcess& ospf;
+    routing::ospf::OspfProcess& ospf;
 };
 }
 

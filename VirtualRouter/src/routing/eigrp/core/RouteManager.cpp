@@ -8,9 +8,8 @@
 #include "routing/RoutingTable.hpp"
 #include "interface/Interface.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
-
 RouteManager::RouteManager(Eigrp& process)
     : base(process), rib(process.routingInstance->getRib())
 {
@@ -18,17 +17,17 @@ RouteManager::RouteManager(Eigrp& process)
     as = base.getAS();
 }
 
-void RouteManager::withdrawRoute(const IPPrefix withdraw)
+void RouteManager::withdrawRoute(const types::IPPrefix withdraw)
 {
-    if (af == AddressFamily::IPv4)
+    if (af == types::AddressFamily::IPv4)
     {
-        rib.removeRoute<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
-        rib.removeRoute<uint32_t>(withdraw.v4(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+        rib.removeRoute<uint32_t>(withdraw.v4(), withdraw.prefixLength, core::RouteSource::EIGRP_INTERNAL, as);
+        rib.removeRoute<uint32_t>(withdraw.v4(), withdraw.prefixLength, core::RouteSource::EIGRP_EXTERNAL, as);
     }
     else
     {
-        rib.removeRoute<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_INTERNAL, as);
-        rib.removeRoute<__uint128_t>(withdraw.v6(), withdraw.prefixLength, RouteSource::EIGRP_EXTERNAL, as);
+        rib.removeRoute<__uint128_t>(withdraw.v6(), withdraw.prefixLength, core::RouteSource::EIGRP_INTERNAL, as);
+        rib.removeRoute<__uint128_t>(withdraw.v6(), withdraw.prefixLength, core::RouteSource::EIGRP_EXTERNAL, as);
     }
 }
 
@@ -38,7 +37,7 @@ void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)
 
     std::vector<const RouteInfo*> changedRoutes;
 
-    if (af == AddressFamily::IPv4)
+    if (af == types::AddressFamily::IPv4)
     {
         for (const auto& entry : entries)
             if (auto r = syncRoute<uint32_t>(entry, scale); r)
@@ -58,7 +57,7 @@ void RouteManager::synchronizeRoutes(const std::vector<TopologyEntry*>& entries)
 void RouteManager::synchronizeRoute(const TopologyEntry& entry)
 {
     uint8_t scale = base.getGlobalConfigMgr().getRibScale();
-    if (af == AddressFamily::IPv4)
+    if (af == types::AddressFamily::IPv4)
     {
         if (auto r = syncRoute<uint32_t>(&entry, scale); r)
             base.broadcastRouteChanges({r});
@@ -69,4 +68,4 @@ void RouteManager::synchronizeRoute(const TopologyEntry& entry)
             base.broadcastRouteChanges({r});
     }
 }
-}
+} // namespace routing

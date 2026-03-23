@@ -7,7 +7,7 @@
 #include <tuple>
 #include <cassert>
 
-namespace Config
+namespace config
 {
 
 template <typename... Entries>

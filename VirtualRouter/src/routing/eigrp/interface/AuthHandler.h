@@ -7,15 +7,12 @@
 #include <string>
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
-class PacketBuilder;
-class Global;
-struct TLV16Option;
-namespace Authentication
-{
-class KeyChainManager;
-}
+namespace core { class Global; }
+namespace processing { class PacketBuilder; }
+namespace security { namespace authentication { class KeyChainManager; } }
+namespace packet { struct TLV16Option; }
 
-namespace EIGRP
+namespace routing::eigrp
 {
 enum class AuthType : uint16_t;
 class EigrpInterface;
@@ -24,18 +21,19 @@ class AuthHandler
 {
 public:
 
-    AuthHandler(Config::EigrpInterfaceRegistry& iface, Authentication::KeyChainManager& keyMgr);
+    AuthHandler(config::EigrpInterfaceRegistry& iface, security::authentication::KeyChainManager& keyMgr);
 
     uint16_t buildAuthTLV(uint8_t* out);
 
-    bool validateAuth(const uint8_t* packetStart, size_t size, const TLV16Option* authOpt);
+    bool validateAuth(const uint8_t* packetStart, size_t size, const packet::TLV16Option* authOpt);
 
-    static bool appendAuthHMAC(Global& global, const std::string& chainName, uint8_t* packetStart, size_t size);
+    static bool appendAuthHMAC(core::Global& global, const std::string& chainName, uint8_t* packetStart, size_t size);
 
 private:
-    Config::EigrpInterfaceRegistry& configs;
-    Authentication::KeyChainManager& keyMgr;
+    config::EigrpInterfaceRegistry& configs;
+    security::authentication::KeyChainManager& keyMgr;
 };
-}
+} // namespace routing
 
 #endif // EIGRP_AUTH_HANDLER_H
+

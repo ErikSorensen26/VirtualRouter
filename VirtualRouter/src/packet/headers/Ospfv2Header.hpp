@@ -4,7 +4,7 @@
 #define OSPFV2_HEADER_HPP
 
 #include <span>
-
+#include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 
 #define OSPFV2_VERSION 2 ///< OSPFv2 Version (2).
@@ -21,6 +21,9 @@
 
 constexpr uint8_t OSPFV2_ALL_SPF_ROUTERS[4] = { 0xE0, 0x00, 0x00, 0x05 };
 constexpr uint8_t OSPFV2_ALL_D_ROUTERS[4] = { 0x0E, 0x00, 0x00, 0x06 };
+
+namespace packet
+{
 
 /**
  * @struct Ospfv2HeaderRaw
@@ -49,11 +52,11 @@ struct Ospfv2Header
 
     uint8_t getVersion() const             { return raw->version; }
     uint8_t getType() const                { return raw->type; }
-    uint16_t getPacketLen() const          { return readU16(raw->packetLength); }
-    uint32_t getRouterID() const           { return readU32(raw->routerID); }
-    uint32_t getAreaID() const             { return readU32(raw->areaID); }
-    uint16_t getChecksum() const           { return readU16(raw->checksum); }
-    uint16_t getAuthType() const           { return readU16(raw->authType); }
+    uint16_t getPacketLen() const          { return utils::readU16(raw->packetLength); }
+    uint32_t getRouterID() const           { return utils::readU32(raw->routerID); }
+    uint32_t getAreaID() const             { return utils::readU32(raw->areaID); }
+    uint16_t getChecksum() const           { return utils::readU16(raw->checksum); }
+    uint16_t getAuthType() const           { return utils::readU16(raw->authType); }
     uint8_t* getAuthentication() const     { return raw->authentication; }
 
     void setVersion(uint8_t val)
@@ -61,15 +64,18 @@ struct Ospfv2Header
     void setType(uint8_t val)
         { raw->type = val; }
     void setPacketLen(uint16_t val)
-        { writeU16(raw->packetLength, val); }
+        { utils::writeU16(raw->packetLength, val); }
     void setRouterID(uint32_t val)
-        { writeU32(raw->routerID, val); }
+        { utils::writeU32(raw->routerID, val); }
     void setAreaID(uint32_t val)
-        { writeU32(raw->areaID, val); }
+        { utils::writeU32(raw->areaID, val); }
     void setAuthType(uint16_t val)
-        { writeU16(raw->authType, val); }
+        { utils::writeU16(raw->authType, val); }
     void setAuthentication(const uint8_t* val)
         { std::memcpy(raw->authentication, val, 8); }
 };
 
+} // namespace packet
+
 #endif // OSPFV2_HEADER_HPP
+

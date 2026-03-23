@@ -10,8 +10,11 @@
 
 #define MTU_PADDING 128
 
-class Interface;
-struct TxQueueOpts;
+namespace interface { class Interface; }
+namespace qos::egress { struct TxQueueOpts; }
+
+namespace hardware
+{
 struct FrameHandle;
 
 static inline uint32_t ceilPow2(uint32_t v)
@@ -23,11 +26,15 @@ static inline uint32_t ceilPow2(uint32_t v)
 }
 
 static inline void cpuRelax() { asm volatile("pause" ::: "memory"); }
+}
+
+namespace hardware::egress
+{
 
 class EgressBase
 {
 public:
-    EgressBase(Interface& iface, const TxQueueOpts& opts);
+    EgressBase(interface::Interface& iface, const qos::egress::TxQueueOpts& opts);
     virtual ~EgressBase();
 
     bool getFrame(FrameHandle& frame);
@@ -39,8 +46,8 @@ public:
     virtual void waitWritable() {}
 
 protected:
-    Interface& iface;
-    TxQueueOpts opts;
+    interface::Interface& iface;
+    qos::egress::TxQueueOpts opts;
     const uint32_t qid;
 
     void initFreeRing(uint32_t frameCount);
@@ -62,4 +69,7 @@ private:
     uint32_t freeMask = 0;
 };
 
+} // namespace hardware::egress
+
 #endif // EGRESS_BASE_H
+

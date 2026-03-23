@@ -10,9 +10,11 @@
 #include <thread>
 #include <atomic>
 
-class IFileSystem;
-class Interface;
-enum class InterfaceType : uint8_t;
+namespace interface { class Interface; enum class InterfaceType : uint8_t; }
+namespace cli { class IFileSystem; }
+
+namespace hardware
+{
 
 struct HwIfaceInfo
 {
@@ -26,17 +28,17 @@ class HardwareManager
 {
 public:
     using StateCallback = std::function<void(bool carrier)>;
-    HardwareManager(const std::string& hwConfigFile, IFileSystem& fileSystem, bool enableDummies = false);
+    HardwareManager(const std::string& hwConfigFile, cli::IFileSystem& fileSystem, bool enableDummies = false);
     ~HardwareManager();
 
-    uint32_t getInterface(InterfaceType type, int index);
+    uint32_t getInterface(interface::InterfaceType type, int index);
 
-    void registerInterface(const HwIfaceInfo* info, Interface* iface);
-    void unregisterInterface(const HwIfaceInfo* info, Interface* iface);
+    void registerInterface(const HwIfaceInfo* info, interface::Interface* iface);
+    void unregisterInterface(const HwIfaceInfo* info, interface::Interface* iface);
 
     const HwIfaceInfo* getHwInfo(uint32_t index) const;
-    const std::map<InterfaceType, std::vector<uint32_t>>& getPhysicalInterfaces() { return physicalInterfaces; }
-    const std::vector<uint32_t>& getPhysicalInterfaces(InterfaceType type) { return physicalInterfaces[type]; }
+    const std::map<interface::InterfaceType, std::vector<uint32_t>>& getPhysicalInterfaces() { return physicalInterfaces; }
+    const std::vector<uint32_t>& getPhysicalInterfaces(interface::InterfaceType type) { return physicalInterfaces[type]; }
 
     std::optional<HwIfaceInfo> extractHwInfo(int sock, struct ifreq& ifr);
 
@@ -50,8 +52,8 @@ private:
     bool ensureInterface(const char* ifname);
     bool createDummy(const char* ifname);
 
-    std::unordered_map<uint32_t, std::vector<Interface*>> registeredInterfaces;
-    std::map<InterfaceType, std::vector<uint32_t>> physicalInterfaces;
+    std::unordered_map<uint32_t, std::vector<interface::Interface*>> registeredInterfaces;
+    std::map<interface::InterfaceType, std::vector<uint32_t>> physicalInterfaces;
     std::map<uint32_t, HwIfaceInfo> hwInfo;
 
     nlohmann::ordered_json configJson;
@@ -62,4 +64,7 @@ private:
     std::atomic<bool> nlThreadRunning{false};
 };
 
+} // namespace hardware
+
 #endif // HARDWARE_MANAGER
+

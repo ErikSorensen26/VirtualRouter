@@ -9,8 +9,11 @@
 #include <mutex>
 #include "TxQueueOpts.hpp"
 
-class Interface;
-class EgressBase;
+namespace interface { class Interface; }
+namespace hardware::egress { class EgressBase; }
+
+namespace qos::egress
+{
 class BaseQueue;
 class TxDistributor;
 
@@ -24,12 +27,12 @@ struct TxIfacePolicy
     TxQueueOpts defaultQueueOpts = {};
 };
 
-    struct QueueState
-    {
-        TxQueueOpts opts;
-        EgressBase* egress = nullptr;
-        BaseQueue* queue = nullptr;
-    };
+struct QueueState
+{
+    TxQueueOpts opts;
+    hardware::egress::EgressBase* egress = nullptr;
+    BaseQueue* queue = nullptr;
+};
 
 class TxQueueManager
 {
@@ -42,12 +45,12 @@ public:
 
     void setTxCoreBias(double bias);
 
-    void start(Interface* iface);
-    void stop(Interface* iface);
+    void start(interface::Interface* iface);
+    void stop(interface::Interface* iface);
 
-    void addInterface(Interface& iface, const std::string& ifname, const TxIfacePolicy& policy);
-    void removeInterface(Interface& iface);
-    void updateInterfacePolicy(Interface& iface, const TxIfacePolicy& policy);
+    void addInterface(interface::Interface& iface, const std::string& ifname, const TxIfacePolicy& policy);
+    void removeInterface(interface::Interface& iface);
+    void updateInterfacePolicy(interface::Interface& iface, const TxIfacePolicy& policy);
 
     void shutdown();
 
@@ -60,7 +63,7 @@ private:
 
     struct IfState
     {
-        Interface* iface = nullptr;
+        interface::Interface* iface = nullptr;
         std::string ifname;
         TxIfacePolicy policy;
 
@@ -76,7 +79,7 @@ private:
     CpuPolicy cpuPolicy = CpuPolicy::EqualShare;
     double txCoreBias = 0.5;
 
-    std::unordered_map<Interface*, IfState> ifs;
+    std::unordered_map<interface::Interface*, IfState> ifs;
 
 private:
     void reoptimize();
@@ -93,5 +96,7 @@ private:
     void stopAndDelete(QueueState* qs);
 };
 
+} // namespace qos
 
 #endif // TX_QUEUE_MANAGER_H
+

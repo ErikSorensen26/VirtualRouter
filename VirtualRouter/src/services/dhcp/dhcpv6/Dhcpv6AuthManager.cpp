@@ -5,17 +5,17 @@
 #include "packet/TlvOptions.hpp"
 #include "security/Encryption.hpp"
 
-using namespace std::chrono;
-
+namespace services::dhcp
+{
 #pragma region SERVER
 
-void Protocol::Dhcpv6::AuthManager::addDelayedKey(uint32_t id, const std::string secret, uint32_t lifetime)
+void AuthManager::addDelayedKey(uint32_t id, const std::string secret, uint32_t lifetime)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    delayedKeys[id] = Key{ secret, steady_clock::now(), seconds(lifetime) };
+    delayedKeys[id] = Key{ secret, std::chrono::steady_clock::now(), std::chrono::seconds(lifetime) };
 }
 
-std::optional<Protocol::Dhcpv6::AuthManager::Key> Protocol::Dhcpv6::AuthManager::getDelayedKey(uint64_t keyID)
+std::optional<AuthManager::Key> AuthManager::getDelayedKey(uint64_t keyID)
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto it = delayedKeys.find(keyID);
@@ -23,7 +23,7 @@ std::optional<Protocol::Dhcpv6::AuthManager::Key> Protocol::Dhcpv6::AuthManager:
     return it->second;
 }
 
-std::optional<Protocol::Dhcpv6::AuthManager::Key> Protocol::Dhcpv6::AuthManager::getKeyForClient(const ClientID& duid)
+std::optional<AuthManager::Key> AuthManager::getKeyForClient(const ClientID& duid)
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto it = clientToKey.find(duid);
@@ -31,12 +31,12 @@ std::optional<Protocol::Dhcpv6::AuthManager::Key> Protocol::Dhcpv6::AuthManager:
     return getDelayedKey(it->second);
 }
 
-uint64_t Protocol::Dhcpv6::AuthManager::getNextCounter()
+uint64_t AuthManager::getNextCounter()
 {
     return globalCounter.fetch_add(1, std::memory_order_relaxed);
 }
 
-bool Protocol::Dhcpv6::AuthManager::isReplayValid(const ClientID& duid, uint64_t val)
+bool AuthManager::isReplayValid(const ClientID& duid, uint64_t val)
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto it = replayCounter.find(duid);
@@ -44,13 +44,13 @@ bool Protocol::Dhcpv6::AuthManager::isReplayValid(const ClientID& duid, uint64_t
     return val > it->second;
 }
 
-void Protocol::Dhcpv6::AuthManager::updateReplayCounter(const ClientID& duid, uint64_t val)
+void AuthManager::updateReplayCounter(const ClientID& duid, uint64_t val)
 {
     std::lock_guard<std::mutex> lock(mutex);
     replayCounter[duid] = val;
 }
 
-void Protocol::Dhcpv6::AuthManager::clearExpiredKeys()
+void AuthManager::clearExpiredKeys()
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = delayedKeys.begin(); it != delayedKeys.end(); )
@@ -60,7 +60,7 @@ void Protocol::Dhcpv6::AuthManager::clearExpiredKeys()
     }
 }
 
-bool Protocol::Dhcpv6::AuthManager::hasValidKey(AuthProtocol proto)
+bool AuthManager::hasValidKey(AuthProtocol proto)
 {
     std::lock_guard<std::mutex> lock(mutex);
     if (proto == AuthProtocol::DELAYED)
@@ -71,7 +71,7 @@ bool Protocol::Dhcpv6::AuthManager::hasValidKey(AuthProtocol proto)
     return false;
 }
 
-std::optional<Protocol::Dhcpv6::AuthManager::DelayedAuthInfo> Protocol::Dhcpv6::AuthManager::addDelayedAuthOption(TLV16BufferManager& tlv, const ClientID& duid)
+std::optional<AuthManager::DelayedAuthInfo> AuthManager::addDelayedAuthOption(packet::TLV16BufferManager& tlv, const ClientID& duid)
 {
     if (!config.delayedEnabled.load(std::memory_order_relaxed))
         return std::nullopt; // Disabled
@@ -98,8 +98,8 @@ std::optional<Protocol::Dhcpv6::AuthManager::DelayedAuthInfo> Protocol::Dhcpv6::
     option[1] = static_cast<uint8_t>(algo);
     option[2] = static_cast<uint8_t>(rdm);
 
-    writeU64(option + 3, replay);
-    writeU32(option + 11, clientToKey[duid]);
+    utils::writeU64(option + 3, replay);
+    utils::writeU32(option + 11, clientToKey[duid]);
 
     // Zero out auth digest for digest calculation
     std::memset(option + 15, 0, headerSize - 15);
@@ -114,15 +114,15 @@ std::optional<Protocol::Dhcpv6::AuthManager::DelayedAuthInfo> Protocol::Dhcpv6::
     };
 }
 
-void Protocol::Dhcpv6::AuthManager::addDelayedAuthDigest(Dhcpv6Header& dhcp, TLV16BufferManager& tlv, DelayedAuthInfo& auth)
+void AuthManager::addDelayedAuthDigest(packet::Dhcpv6Header& dhcp, packet::TLV16BufferManager& tlv, DelayedAuthInfo& auth)
 {
     if (auth.algo == AuthAlgorithm::HMACMD5)
-        Authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), Authentication::HmacType::MD5);
+        security::authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), security::authentication::HmacType::MD5);
     else
-        Authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), Authentication::HmacType::SHA1);
+        security::authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), security::authentication::HmacType::SHA1);
 }
 
-bool Protocol::Dhcpv6::AuthManager::validateDelayedAuth(Dhcpv6Header& dhcp, TLV16Option* opt, const ClientID& duid)
+bool AuthManager::validateDelayedAuth(packet::Dhcpv6Header& dhcp, packet::TLV16Option* opt, const ClientID& duid)
 {
     if (!config.delayedEnabled.load(std::memory_order_relaxed))
         return true; // Valid, auth not required
@@ -136,8 +136,8 @@ bool Protocol::Dhcpv6::AuthManager::validateDelayedAuth(Dhcpv6Header& dhcp, TLV1
     if (proto != AuthProtocol::DELAYED || rdm != config.rdm.load(std::memory_order_relaxed))
         return false;
 
-    uint64_t replay = readU64(buf + 3);
-    uint64_t keyID = readU64(buf + 11);
+    uint64_t replay = utils::readU64(buf + 3);
+    uint64_t keyID = utils::readU64(buf + 11);
     uint8_t mac[20];
     size_t macLen = opt->valueSize - 15;
     std::memcpy(mac, opt->value + 15, macLen);
@@ -153,14 +153,14 @@ bool Protocol::Dhcpv6::AuthManager::validateDelayedAuth(Dhcpv6Header& dhcp, TLV1
     const Key& key = *keyOpt;
     size_t dhcpSize = static_cast<size_t>(opt->value + opt->valueSize - dhcp.buffer);
     if (algo == AuthAlgorithm::HMACMD5)
-        Authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.secret.data()), key.secret.size(), Authentication::HmacType::MD5);
+        security::authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.secret.data()), key.secret.size(), security::authentication::HmacType::MD5);
     else
-        Authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.secret.data()), key.secret.size(), Authentication::HmacType::SHA1);
+        security::authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.secret.data()), key.secret.size(), security::authentication::HmacType::SHA1);
 
     return std::memcmp(mac, opt->value + 15, macLen) == 0;
 }
 
-std::optional<__uint128_t> Protocol::Dhcpv6::AuthManager::addRkapAuthOption(TLV16BufferManager& tlv, const ClientID& duid)
+std::optional<__uint128_t> AuthManager::addRkapAuthOption(packet::TLV16BufferManager& tlv, const ClientID& duid)
 {
     if (!config.rkapEnabled.load(std::memory_order_relaxed))
         return std::nullopt;
@@ -180,14 +180,14 @@ std::optional<__uint128_t> Protocol::Dhcpv6::AuthManager::addRkapAuthOption(TLV1
     uint64_t low = gen();
     __uint128_t key = (static_cast<__uint128_t>(high) << 64) | low;
 
-    writeU128(option + 4, key);
+    utils::writeU128(option + 4, key);
 
     tlv.append(DHCPV6_OPTION_AUTHENTICATION, 20, nullptr, 20);
 
     return key;
 }
 
-bool Protocol::Dhcpv6::AuthManager::validateRkapDigest(Dhcpv6Header& dhcp, TLV16Option* opt, const ClientID& duid, __uint128_t secret)
+bool AuthManager::validateRkapDigest(packet::Dhcpv6Header& dhcp, packet::TLV16Option* opt, const ClientID& duid, __uint128_t secret)
 {
     if (!config.rkapEnabled.load(std::memory_order_relaxed))
         return true; // Valid, auth is not required
@@ -205,7 +205,7 @@ bool Protocol::Dhcpv6::AuthManager::validateRkapDigest(Dhcpv6Header& dhcp, TLV16
 
     // Validate endian
     uint8_t key[16];
-    writeU128(key, secret);
+    utils::writeU128(key, secret);
 
     // Harvest digest
     uint8_t digest[16];
@@ -213,7 +213,7 @@ bool Protocol::Dhcpv6::AuthManager::validateRkapDigest(Dhcpv6Header& dhcp, TLV16
     std::memset(const_cast<uint8_t*>(opt->value) + 4, 0, 16);
 
     size_t dhcpSize = static_cast<size_t>(opt->value + opt->valueSize - dhcp.buffer);
-    Authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 4, dhcp.buffer, dhcpSize, key, 16, Authentication::HmacType::MD5);
+    security::authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 4, dhcp.buffer, dhcpSize, key, 16, security::authentication::HmacType::MD5);
 
     return std::memcmp(digest, opt->value + 4, 16) == 0;
 }
@@ -221,35 +221,35 @@ bool Protocol::Dhcpv6::AuthManager::validateRkapDigest(Dhcpv6Header& dhcp, TLV16
 #pragma endregion
 #pragma region CLIENT
 
-void Protocol::Dhcpv6::ClientAuthManager::addDelayedKey(uint32_t id, const std::string secret)
+void ClientAuthManager::addDelayedKey(uint32_t id, const std::string secret)
 {
     std::lock_guard<std::mutex> lock(mutex);
     delayedKeys.push_back({ id, secret });
 }
 
-std::optional<std::pair<uint32_t, std::string>> Protocol::Dhcpv6::ClientAuthManager::getDelayedKey(size_t index)
+std::optional<std::pair<uint32_t, std::string>> ClientAuthManager::getDelayedKey(size_t index)
 {
     std::lock_guard<std::mutex> lock(mutex);
     if (delayedKeys.size() > index + 1) return std::nullopt;
     return delayedKeys.at(index);
 }
 
-uint64_t Protocol::Dhcpv6::ClientAuthManager::getNextCounter()
+uint64_t ClientAuthManager::getNextCounter()
 {
     return replayCounter.fetch_add(1, std::memory_order_relaxed);
 }
 
-bool Protocol::Dhcpv6::ClientAuthManager::isReplayValid(uint64_t val)
+bool ClientAuthManager::isReplayValid(uint64_t val)
 {
     return val > replayCounter.load(std::memory_order_relaxed);
 }
 
-void Protocol::Dhcpv6::ClientAuthManager::updateReplayCounter(uint64_t val)
+void ClientAuthManager::updateReplayCounter(uint64_t val)
 {
     replayCounter.store(val, std::memory_order_release);
 }
 
-std::optional<Protocol::Dhcpv6::ClientAuthManager::DelayedAuthInfo> Protocol::Dhcpv6::ClientAuthManager::addDelayedAuthOption(TLV16BufferManager& tlv)
+std::optional<ClientAuthManager::DelayedAuthInfo> ClientAuthManager::addDelayedAuthOption(packet::TLV16BufferManager& tlv)
 {
     if (!config.delayedEnabled.load(std::memory_order_relaxed))
         return std::nullopt; // Disabled
@@ -276,8 +276,8 @@ std::optional<Protocol::Dhcpv6::ClientAuthManager::DelayedAuthInfo> Protocol::Dh
     option[1] = static_cast<uint8_t>(algo);
     option[2] = static_cast<uint8_t>(rdm);
 
-    writeU64(option + 3, replay);
-    writeU32(option + 11, key.first);
+    utils::writeU64(option + 3, replay);
+    utils::writeU32(option + 11, key.first);
 
     // Zero out auth digest for digest calculation
     std::memset(option + 15, 0, headerSize - 15);
@@ -292,15 +292,15 @@ std::optional<Protocol::Dhcpv6::ClientAuthManager::DelayedAuthInfo> Protocol::Dh
     };
 }
 
-void Protocol::Dhcpv6::ClientAuthManager::addDelayedAuthDigest(Dhcpv6Header& dhcp, TLV16BufferManager& tlv, DelayedAuthInfo& auth)
+void ClientAuthManager::addDelayedAuthDigest(packet::Dhcpv6Header& dhcp, packet::TLV16BufferManager& tlv, DelayedAuthInfo& auth)
 {
     if (auth.algo == AuthAlgorithm::HMACMD5)
-        Authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), Authentication::HmacType::MD5);
+        security::authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), security::authentication::HmacType::MD5);
     else
-        Authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), Authentication::HmacType::SHA1);
+        security::authentication::generateHMAC(auth.digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), reinterpret_cast<const uint8_t*>(auth.key.data()), auth.key.size(), security::authentication::HmacType::SHA1);
 }
 
-bool Protocol::Dhcpv6::ClientAuthManager::validateDelayedAuth(Dhcpv6Header& dhcp, TLV16Option* opt)
+bool ClientAuthManager::validateDelayedAuth(packet::Dhcpv6Header& dhcp, packet::TLV16Option* opt)
 {
     if (!config.delayedEnabled.load(std::memory_order_relaxed))
         return true; // Valid, auth not required
@@ -314,8 +314,8 @@ bool Protocol::Dhcpv6::ClientAuthManager::validateDelayedAuth(Dhcpv6Header& dhcp
     if (proto != AuthProtocol::DELAYED || rdm != config.rdm.load(std::memory_order_relaxed))
         return false;
 
-    uint64_t replay = readU64(buf + 3);
-    uint64_t keyID = readU64(buf + 11);
+    uint64_t replay = utils::readU64(buf + 3);
+    uint64_t keyID = utils::readU64(buf + 11);
     uint8_t mac[20];
     size_t macLen = opt->valueSize - 15;
     std::memcpy(mac, opt->value + 15, macLen);
@@ -331,14 +331,14 @@ bool Protocol::Dhcpv6::ClientAuthManager::validateDelayedAuth(Dhcpv6Header& dhcp
     const auto& key = *keyOpt;
     size_t dhcpSize = static_cast<size_t>(opt->value + opt->valueSize - dhcp.buffer);
     if (algo == AuthAlgorithm::HMACMD5)
-        Authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.second.data()), key.second.size(), Authentication::HmacType::MD5);
+        security::authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.second.data()), key.second.size(), security::authentication::HmacType::MD5);
     else
-        Authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.second.data()), key.second.size(), Authentication::HmacType::SHA1);
+        security::authentication::generateHMAC(const_cast<uint8_t*>(opt->value) + 15, dhcp.buffer, dhcpSize, reinterpret_cast<const uint8_t*>(key.second.data()), key.second.size(), security::authentication::HmacType::SHA1);
 
     return std::memcmp(mac, opt->value + 15, macLen) == 0;
 }
 
-const uint8_t* Protocol::Dhcpv6::ClientAuthManager::addRkapAuthOption(TLV16BufferManager& tlv, const uint8_t* key)
+const uint8_t* ClientAuthManager::addRkapAuthOption(packet::TLV16BufferManager& tlv, const uint8_t* key)
 {
     if (!config.rkapEnabled.load(std::memory_order_relaxed))
         return nullptr;
@@ -358,12 +358,12 @@ const uint8_t* Protocol::Dhcpv6::ClientAuthManager::addRkapAuthOption(TLV16Buffe
     return option + 4;
 }
 
-void Protocol::Dhcpv6::ClientAuthManager::addRkapAuthDigest(Dhcpv6Header& dhcp, TLV16BufferManager& tlv, const uint8_t* key, uint8_t* digest)
+void ClientAuthManager::addRkapAuthDigest(packet::Dhcpv6Header& dhcp, packet::TLV16BufferManager& tlv, const uint8_t* key, uint8_t* digest)
 {
-    Authentication::generateHMAC(digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), key, 16, Authentication::HmacType::MD5);
+    security::authentication::generateHMAC(digest, dhcp.buffer, dhcp.fixedSize + tlv.size(), key, 16, security::authentication::HmacType::MD5);
 }
 
-uint8_t* Protocol::Dhcpv6::ClientAuthManager::validateRkapDigest(Dhcpv6Header& dhcp, TLV16Option* opt)
+uint8_t* ClientAuthManager::validateRkapDigest(packet::Dhcpv6Header& dhcp, packet::TLV16Option* opt)
 {
     if (!config.rkapEnabled.load(std::memory_order_relaxed))
         return nullptr; // Valid, auth is not required
@@ -384,3 +384,5 @@ uint8_t* Protocol::Dhcpv6::ClientAuthManager::validateRkapDigest(Dhcpv6Header& d
 }
 
 #pragma endregion
+
+} // namespace services::dhcp

@@ -6,12 +6,14 @@
 #include <linux/if_packet.h>
 
 #include "EgressBase.h"
-#include "hardware/PacketSlot.hpp"
+
+namespace hardware::egress
+{
 
 class EgressSend : public EgressBase
 {
 public:
-    explicit EgressSend(Interface& iface, const TxQueueOpts& opts);
+    explicit EgressSend(interface::Interface& iface, const qos::egress::TxQueueOpts& opts);
     ~EgressSend() override;
 
     bool send(uint32_t index, uint32_t length) noexcept override;
@@ -32,4 +34,7 @@ private:
     sockaddr_ll addr{};
 };
 
+} // namespace hardware
+
 #endif // EGRESS_SEND_H
+

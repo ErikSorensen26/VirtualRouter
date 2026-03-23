@@ -7,20 +7,20 @@
 #include <IPAddress.h>
 #include <optional>
 
-class Interface;
-class PacketBuilder;
+namespace interface { class Interface; }
+namespace processing { class PacketBuilder; }
 
-namespace Protocol::IPPacket
+namespace infrastructure::ippacket
 {
-void reserveIpv4(PacketBuilder& packetInfo);
-void reserveIpv6(PacketBuilder& packetInfo);
+void reserveIpv4(processing::PacketBuilder& packetInfo);
+void reserveIpv6(processing::PacketBuilder& packetInfo);
 
 struct BuildIP
 {
-    Interface* iface;
-    PacketBuilder& packetInfo;
-    IPAddress destIp;
-    std::optional<IPAddress> sourceIp = std::nullopt;
+    interface::Interface* iface;
+    processing::PacketBuilder& packetInfo;
+    types::IPAddress destIp;
+    std::optional<types::IPAddress> sourceIp = std::nullopt;
     std::optional<uint64_t> destMac = std::nullopt;
     uint8_t DSCP = 0;
     uint8_t hopLimit = 255;
@@ -39,6 +39,7 @@ void buildIpv6(
     BuildIP& ipv6Build,
     uint32_t v6FlowLabel = 0
 );
-} // Namespace Protocol::IPPacket
+} // namespace infrastructure::ippacket
 
 #endif // IP_PACKET_H
+

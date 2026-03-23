@@ -9,17 +9,17 @@
 #include "bgp/transport/BgpRx.h"
 #include "bgp/transport/BgpTx.h"
 
-namespace BGP
+namespace routing::bgp
 {
 Session::Session(Neighbor& nbr) noexcept
     : neighbor(nbr),
-      base(nbr.getConfigs().get<Config::BgpNeighborSession::BGP_BASE>().local().get()),
+      base(nbr.getConfigs().get<config::BgpNeighborSession::BGP_BASE>().local().get()),
       fsm(*this),
       timers(*this)
 {
     neighbor.buildAttributeRanges();
-    holdTime = base.get<Config::BgpTransportBase::HOLDTIME>().load();
-    uint16_t cfgKa = base.get<Config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
+    holdTime = base.get<config::BgpTransportBase::HOLDTIME>().load();
+    uint16_t cfgKa = base.get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
     keepaliveInterval = (cfgKa > 0 && cfgKa < holdTime) ? cfgKa : holdTime / 3;
 
     buildLocalCapabilities();
@@ -87,8 +87,8 @@ void Session::buildLocalCapabilities()
 
     {
         auto& cfgs = neighbor.getConfigs();
-        auto& localAs = cfgs.get<Config::BgpNeighborSession::LOCAL_AS_AS>();
-        localCaps.asn = (cfgs.get<Config::BgpNeighborSession::LOCAL_AS>().load() && localAs.hasValue())
+        auto& localAs = cfgs.get<config::BgpNeighborSession::LOCAL_AS_AS>();
+        localCaps.asn = (cfgs.get<config::BgpNeighborSession::LOCAL_AS>().load() && localAs.hasValue())
             ? localAs.load() : neighbor.getProcess().asNumber;
     }
 
@@ -97,14 +97,14 @@ void Session::buildLocalCapabilities()
     localCaps.routeRefresh = true;
     localCaps.enhancedRouteRefresh = true;
 
-    bool grEnabled = procCfg.get<Config::Bgp::BGP_GRACEFUL_RESTART>().load();
+    bool grEnabled = procCfg.get<config::Bgp::BGP_GRACEFUL_RESTART>().load();
     if (grEnabled)
     {
         localCaps.gracefulRestart = true;
-        localCaps.restartTime = procCfg.get<Config::Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME>().load();
+        localCaps.restartTime = procCfg.get<config::Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME>().load();
     }
 
-    localCaps.multiSess = neighbor.getConfigs().get<Config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
+    localCaps.multiSess = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
     localCaps.extendedMessage = true;
     localCaps.linkLocalNextHop = true;
 
@@ -112,8 +112,8 @@ void Session::buildLocalCapabilities()
     neighbor.getProcess().forEachAf([&](const AfiSafi& afi) {
         auto& afNbrCfgs = neighbor.getAfNeighbor(afi).getConfigs();
 
-        bool rx = afNbrCfgs.get<Config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>().load();
-        bool tx = afNbrCfgs.get<Config::BgpAfBase::ADDITIONAL_PATHS_SEND>().load();
+        bool rx = afNbrCfgs.get<config::BgpAfBase::ADDITIONAL_PATHS_RECEIVE>().load();
+        bool tx = afNbrCfgs.get<config::BgpAfBase::ADDITIONAL_PATHS_SEND>().load();
         uint8_t apSr = 0;
         if (rx) apSr |= BGP_ADD_PATH_RECEIVE;
         if (tx) apSr |= BGP_ADD_PATH_SEND;
@@ -123,9 +123,9 @@ void Session::buildLocalCapabilities()
             localCaps.addPath = true;
         }
 
-        bool orfBoth = afNbrCfgs.get<Config::BgpNeighbor::ORF_BOTH>().load();
-        bool orfRecv = afNbrCfgs.get<Config::BgpNeighbor::ORF_RECEIVE>().load();
-        bool orfSend = afNbrCfgs.get<Config::BgpNeighbor::ORF_SEND>().load();
+        bool orfBoth = afNbrCfgs.get<config::BgpNeighbor::ORF_BOTH>().load();
+        bool orfRecv = afNbrCfgs.get<config::BgpNeighbor::ORF_RECEIVE>().load();
+        bool orfSend = afNbrCfgs.get<config::BgpNeighbor::ORF_SEND>().load();
         uint8_t orfSr = orfBoth ? BGP_ORF_BOTH
                       : ((orfRecv ? BGP_ORF_RECEIVE : 0) | (orfSend ? BGP_ORF_SEND : 0));
         if (orfSr)
@@ -136,7 +136,7 @@ void Session::buildLocalCapabilities()
     });
 }
 
-void Session::acceptConnection(TCP::Connection&& conn)
+void Session::acceptConnection(transport::tcp::Connection&& conn)
 {
     passiveConn.emplace(std::move(conn));
     primaryConn = &passiveConn.value();
@@ -148,9 +148,9 @@ void Session::initiateConnection()
     auto& proc = neighbor.getProcess();
     auto& tcp = proc.routingInstance->getTcp();
 
-    TCP::ConnectOptions opts;
+    transport::tcp::ConnectOptions opts;
     opts.policy.pathMtuDiscovery =
-        base.get<Config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
+        base.get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
 
     if (std::holds_alternative<AfiSafi>(multiSession))
     {
@@ -170,8 +170,8 @@ void Session::initiateConnection()
     }
 
     activeConn.emplace(tcp.connect(
-        TCP::TcpEndpoint{IPAddress{}, 0},
-        TCP::TcpEndpoint{neighbor.neighborAddress, 179},
+        transport::tcp::TcpEndpoint{types::IPAddress{}, 0},
+        transport::tcp::TcpEndpoint{neighbor.neighborAddress, 179},
         opts
     ));
 
@@ -235,7 +235,7 @@ void Session::postEvent(FsmEvent event)
     });
 }
 
-void Session::handleIncoming(TCP::RxConsumer& consumer)
+void Session::handleIncoming(transport::tcp::RxConsumer& consumer)
 {
     BgpRx::handleIncoming(*this, consumer);
 }
@@ -253,7 +253,7 @@ void Session::onFsmTransition(FsmState from, FsmState to, FsmEvent /*trigger*/)
 
             if (negotiated.multiSess)
             {
-                auto& connectionMode = neighbor.getConfigs().get<Config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+                auto& connectionMode = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
                 bool passive = connectionMode.hasValue() && !connectionMode.load();
                 for (const auto& fam : negotiated.multiSessionFamilies)
                 {
@@ -397,16 +397,16 @@ bool Session::resolveCollision(uint32_t incomingPeerRid)
     return keep;
 }
 
-void Session::onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept
+void Session::onConnectCallback(transport::tcp::ConnCallbackCtx& ctx) noexcept
 {
     auto* session = static_cast<Session*>(ctx.user);
-    if (ctx.ev.type == TCP::TcpEventType::CONNECTED)
+    if (ctx.ev.type == transport::tcp::TcpEventType::CONNECTED)
         session->postEvent(FsmEvent::TCP_CR_ACKED);
     else
         session->postEvent(FsmEvent::TCP_CONNECTION_FAILS);
 }
 
-void Session::onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept
+void Session::onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept
 {
     auto* session = static_cast<Session*>(ctx.user);
     session->handleIncoming(ctx.consumer);
@@ -553,4 +553,4 @@ void Session::negotiateCapabilities()
         }
     }
 }
-}
+} // namespace routing

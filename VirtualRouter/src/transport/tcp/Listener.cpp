@@ -6,7 +6,7 @@
 #include "Connection.h"
 #include "TcpEngine.h"
 
-namespace TCP
+namespace transport::tcp
 {
 Listener::~Listener()
 {
@@ -53,4 +53,4 @@ void Listener::disconnect(ConnId cid) noexcept
 {
     return engine->listenerDisconnect(id, cid);
 }
-}
+} // namespace transport::tcp

@@ -5,13 +5,13 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
 
-namespace EIGRP
+namespace routing::eigrp
 {
 NeighborTable::NeighborTable(EigrpInterface& iface)
     : iface(iface)
 {}
 
-Neighbor* NeighborTable::createNeighbor(const IPAddress& neighborIp, Neighbor::Version v, bool isUnicast)
+Neighbor* NeighborTable::createNeighbor(const types::IPAddress& neighborIp, Neighbor::Version v, bool isUnicast)
 {
     // Add neighbor only if it doesn't already exist
     auto& base = iface.getBase();
@@ -82,7 +82,7 @@ void NeighborTable::removeAllMulticast()
     }
 }
 
-void NeighborTable::deleteNeighbor(const IPAddress& neighborIp, bool isUnicast)
+void NeighborTable::deleteNeighbor(const types::IPAddress& neighborIp, bool isUnicast)
 {
     // Find the neighbor and remove it if present
     auto neighborIt = neighbors.find(neighborIp);
@@ -118,7 +118,7 @@ size_t NeighborTable::size()
     return neighbors.size();
 }
 
-Neighbor* NeighborTable::lookup(const IPAddress& neighborIp)
+Neighbor* NeighborTable::lookup(const types::IPAddress& neighborIp)
 {
     auto it = neighbors.find(neighborIp);
     if (it != neighbors.end())
@@ -170,7 +170,7 @@ void NeighborTable::startGracefulRestart(Neighbor& neighbor)
     iface.getTimers().startGracefulTimer(neighbor);
 }
 
-bool NeighborTable::validatePTP(const IPAddress& neighborIp)
+bool NeighborTable::validatePTP(const types::IPAddress& neighborIp)
 {
     if (iface.isPointToPoint)
     {
@@ -186,4 +186,4 @@ bool NeighborTable::validatePTP(const IPAddress& neighborIp)
     }
     return true; // Not P2P mode
 }
-}
+} // namespace routing

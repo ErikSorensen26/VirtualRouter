@@ -7,10 +7,9 @@
 
 #include "configs/registry/router/BgpRegistry.h"
 
-class VirtualRouter;
-class ProcessQueueRef;
+namespace core { class VirtualRouter; class ProcessQueueRef; }
 
-namespace BGP
+namespace routing::bgp
 {
 class NeighborTable;
 class BgpProcess;
@@ -20,15 +19,16 @@ class AttributeManager;
 class ProcessAccessor
 {
 public:
-    static VirtualRouter& getRoutingInstance(BgpProcess& proc);
+    static core::VirtualRouter& getRoutingInstance(BgpProcess& proc);
     static NeighborTable& getNtable(BgpProcess& proc);
     static uint32_t getAsNum(BgpProcess& proc);
     static uint32_t getRid(BgpProcess& proc);
-    static Config::BgpRegistry& getConfigs(BgpProcess& proc);
+    static config::BgpRegistry& getConfigs(BgpProcess& proc);
     static AttributeManager& getAttrMgr(BgpProcess& proc);
-    static ProcessQueueRef getScheduler(BgpProcess& proc);
-    static void emplaceAfBase(Config::ReferenceContainer<Config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc);
+    static core::ProcessQueueRef getScheduler(BgpProcess& proc);
+    static void emplaceAfBase(config::ReferenceContainer<config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc);
 };
-}
+} // namespace routing
 
 #endif // BGP_PROCESS_ACCESSOR_H
+

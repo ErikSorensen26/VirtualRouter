@@ -11,6 +11,9 @@
 #include "RibEntry.hpp"
 #include <RCU.hpp>
 
+namespace core
+{
+
 template <typename AddrType>
 class RibBucket
 {
@@ -27,7 +30,7 @@ public:
     ~RibBucket()
     {
         RibEntry<AddrType>* val = fibEntry.exchange(nullptr, std::memory_order_acq_rel);
-        if (val) RCU::retire([val]{ delete val; });
+        if (val) utils::RCU::retire([val]{ delete val; });
     }
 
     // Returns true if the bucket's best route changed and the FIB was updated.
@@ -142,7 +145,7 @@ public:
         // exposed to a pointer into the (potentially reallocating) routes vector.
         RibEntry<AddrType>* copy = bestEntry ? new RibEntry<AddrType>(*bestEntry) : nullptr;
         RibEntry<AddrType>* old  = fibEntry.exchange(copy, std::memory_order_acq_rel);
-        if (old) RCU::retire([old]{ delete old; });
+        if (old) utils::RCU::retire([old]{ delete old; });
     }
 
     bool empty() const noexcept
@@ -153,11 +156,14 @@ public:
     void clear() noexcept
     {
         RibEntry<AddrType>* old = fibEntry.exchange(nullptr, std::memory_order_acq_rel);
-        if (old) RCU::retire([old]{ delete old; });
+        if (old) utils::RCU::retire([old]{ delete old; });
         routes.clear();
         bestEntry = nullptr;
         prevBest  = nullptr;
     }
 };
 
+} // namespace core
+
 #endif // RIB_BUCKET_HPP
+

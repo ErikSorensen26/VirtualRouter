@@ -7,6 +7,9 @@
 
 #include "packet/HeaderHelpers.hpp"
 
+namespace packet
+{
+
 #define OSPFV2_LSA_ROUTER        0x01  ///< Router LSA (intra-area topology)
 #define OSPFV2_LSA_NETWORK       0x02  ///< Network LSA (DR-generated)
 #define OSPFV2_LSA_SUM_NET       0x03  ///< Summary LSA (inter-area network)
@@ -33,7 +36,7 @@
 #define OSPFV2_RI_TLV_INFO_CAP  0x0001  ///< Informational capabilities
 #define OSPFV2_RI_TLV_FUNC_CAP  0x0002  ///< Functional capabilities
 #define OSPFV2_RI_TLV_SR_ALGO   0x0003  ///< Segment Routing algorithms
-#define OSPFV2_RI_TLV_SRGB      0x0004  ///< Segment Routing Global Block
+#define OSPFV2_RI_TLV_SRGB      0x0004  ///< Segment Routing core::Global Block
 #define OSPFV2_RI_TLV_NODE_MSD  0x0005  ///< Node Maximum SID Depth
 
 #define OSPFV2_TE_TLV_ROUTER_ID 0x0001  ///< Router Address
@@ -50,7 +53,7 @@
 #define OSPFV2_TE_SUB_ADMIN_GRP   0x0009  ///< Administrative group (color)
 #define OSPFV2_TE_SUB_LR_ID       0x000A  ///< Local/Remote identifiers
 #define OSPFV2_TE_SUB_PROTECT     0x000B  ///< Link protection type
-#define OSPFV2_TE_SUB_IF_SWITCH   0x000C  ///< Interface switching capability
+#define OSPFV2_TE_SUB_IF_SWITCH   0x000C  ///< interface::Interface switching capability
 
 #define OSPFV2_TE_LINK_P2P       1  ///< Point-to-point
 #define OSPFV2_TE_LINK_MULTI     2  ///< Multi-access
@@ -103,14 +106,14 @@ struct Ospfv2LSAHeader
 {
     DEFINE_PACKET_HEADER(Ospfv2LSAHeaderRaw);
 
-    uint16_t getAge() const                 { return readU16(raw->age); }
+    uint16_t getAge() const                 { return utils::readU16(raw->age); }
     uint8_t getOptions() const              { return raw->options; }
     uint8_t getType() const                 { return raw->type; }
-    uint32_t getLsID() const                { return readU32(raw->lsID); }
-    uint32_t getAdvRouter() const           { return readU32(raw->advRouter); }
-    uint32_t getSeqNumber() const           { return readU32(raw->seqNum); }
-    uint16_t getChecksum() const            { return readU16(raw->checksum); }
-    uint16_t getLen() const                 { return readU16(raw->length); }
+    uint32_t getLsID() const                { return utils::readU32(raw->lsID); }
+    uint32_t getAdvRouter() const           { return utils::readU32(raw->advRouter); }
+    uint32_t getSeqNumber() const           { return utils::readU32(raw->seqNum); }
+    uint16_t getChecksum() const            { return utils::readU16(raw->checksum); }
+    uint16_t getLen() const                 { return utils::readU16(raw->length); }
     
     bool getOptMT() const                   { return raw->options & 0x01; }
     bool getOptE() const                    { return raw->options & 0x02; }
@@ -129,52 +132,54 @@ struct Ospfv2LSAHeader
     bool getFlagH(uint8_t flags) const      { return flags & 0x80; }
 
     void setAge(uint16_t val)
-        { writeU16(raw->age, val); }
+        { utils::writeU16(raw->age, val); }
     void setOptions(uint8_t val)
         { raw->options = val; }
     void setType(uint8_t val)
         { raw->type = val; }
     void setLsID(uint32_t val)
-        { writeU32(raw->lsID, val); }
+        { utils::writeU32(raw->lsID, val); }
     void setAdvRouter(uint32_t val)
-        { writeU32(raw->advRouter, val); }
+        { utils::writeU32(raw->advRouter, val); }
     void setSeqNum(uint32_t val)
-        { writeU32(raw->seqNum, val); }
+        { utils::writeU32(raw->seqNum, val); }
     void setChecksum(uint16_t val)
-        { writeU16(raw->checksum, val); }
+        { utils::writeU16(raw->checksum, val); }
     void setLen(uint16_t val)
-        { writeU16(raw->length, val); }
+        { utils::writeU16(raw->length, val); }
 
     void setOptMT(bool val)
-        { setBit(&raw->options, 7, val); }
+        { utils::setBit(&raw->options, 7, val); }
     void setOptE(bool val)
-        { setBit(&raw->options, 6, val); }
+        { utils::setBit(&raw->options, 6, val); }
     void setOptMC(bool val)
-        { setBit(&raw->options, 5, val); }
+        { utils::setBit(&raw->options, 5, val); }
     void setOptNP(bool val)
-        { setBit(&raw->options, 4, val); }
+        { utils::setBit(&raw->options, 4, val); }
     void setOptEA(bool val)
-        { setBit(&raw->options, 3, val); }
+        { utils::setBit(&raw->options, 3, val); }
     void setOptDC(bool val)
-        { setBit(&raw->options, 2, val); }
+        { utils::setBit(&raw->options, 2, val); }
     void setOptO(bool val)
-        { setBit(&raw->options, 1, val); }
+        { utils::setBit(&raw->options, 1, val); }
 
     void setFlagB(bool val, uint8_t* flags)
-        { setBit(flags, 7, val); }
+        { utils::setBit(flags, 7, val); }
     void setFlagE(bool val, uint8_t* flags)
-        { setBit(flags, 6, val); }
+        { utils::setBit(flags, 6, val); }
     void setFlagV(bool val, uint8_t* flags)
-        { setBit(flags, 5, val); }
+        { utils::setBit(flags, 5, val); }
     void setFlagW(bool val, uint8_t* flags)
-        { setBit(flags, 4, val); }
+        { utils::setBit(flags, 4, val); }
     void setFlagN(bool val, uint8_t* flags)
-        { setBit(flags, 3, val); }
+        { utils::setBit(flags, 3, val); }
     void setFlagS(bool val, uint8_t* flags)
-        { setBit(flags, 2, val); }
+        { utils::setBit(flags, 2, val); }
     void setFlagH(bool val, uint8_t* flags)
-        { setBit(flags, 0, val); }
+        { utils::setBit(flags, 0, val); }
 };
 
+} // namespace packet
 
 #endif // OSPFV2_LSA_HEADER_HPP
+

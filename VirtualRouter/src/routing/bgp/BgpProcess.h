@@ -16,9 +16,9 @@
 #include "bgp/af/AddressFamily.hpp"
 #include "bgp/af/AddressFamilyInstance.h" // keep
 
-class VirtualRouter;
+namespace core { class VirtualRouter; }
 
-namespace BGP
+namespace routing::bgp
 {
 class BgpNeighbor;
 class Session;
@@ -26,26 +26,26 @@ class Session;
 class BgpProcess
 {
 public:
-    BgpProcess(uint32_t as, VirtualRouter* vrf);
+    BgpProcess(uint32_t as, core::VirtualRouter* vrf);
     ~BgpProcess();
 
-    VirtualRouter* routingInstance = nullptr;
+    core::VirtualRouter* routingInstance = nullptr;
 
     // Getters
-    Config::BgpRegistry& getConfigs() { return configs.get(); }
-    const Config::BgpRegistry& getConfigs() const { return configs.get(); }
+    config::BgpRegistry& getConfigs() { return configs.get(); }
+    const config::BgpRegistry& getConfigs() const { return configs.get(); }
     NeighborTable& getNtable() { return ntable; }
     const NeighborTable& getNtable() const { return ntable; }
     AttributeManager& getAttrMgr() { return attrMgr; }
     const AttributeManager& getAttrMgr() const { return attrMgr; }
     uint32_t getRouterId() const noexcept
     {
-        auto& rid = getConfigs().get<Config::Bgp::BGP_ROUTER_ID>();
+        auto& rid = getConfigs().get<config::Bgp::BGP_ROUTER_ID>();
         if (rid.hasValue()) return rid.load();
         return asNumber;
     }
 
-    Session* findSession(const IPAddress& addr);
+    Session* findSession(const types::IPAddress& addr);
     void startActiveSession(Neighbor& nbr);
     void startPassiveSession(Neighbor& nbr);
     void shutdownNeighbor(Neighbor& nbr);
@@ -66,7 +66,7 @@ public:
     template <AfiSafi AF>
     AddressFamily<AF>* findAddressFamily()
     {
-        static_assert(hasAddressFamily<AF>(), "AddressFamily not supported");
+        static_assert(hasAddressFamily<AF>(), "types::AddressFamily not supported");
         if (auto it = addressFamilies.find(AF); it != addressFamilies.end())
             return &std::get<AddressFamily<AF>>(it->second);
         return nullptr;
@@ -75,7 +75,7 @@ public:
     template <AfiSafi AF>
     AddressFamily<AF>& enableAddressFamily()
     {
-        static_assert(hasAddressFamily<AF>(), "AddressFamily not supported");
+        static_assert(hasAddressFamily<AF>(), "types::AddressFamily not supported");
         if (auto it = addressFamilies.find(AF); it != addressFamilies.end())
             return std::get<AddressFamily<AF>>(it->second);
         auto [it, ok] = addressFamilies.try_emplace(AF, std::in_place_type<AddressFamily<AF>>, *this, AF);
@@ -84,26 +84,27 @@ public:
 
     const uint32_t asNumber;
 
-    static void onConnectCallback(TCP::ConnCallbackCtx& ctx) noexcept;
-    static void onAcceptCallback(TCP::AcceptCallbackCtx& ctx) noexcept;
-    static void onReceiveCallback(TCP::RecvCallbackCtx& ctx) noexcept;
+    static void onConnectCallback(transport::tcp::ConnCallbackCtx& ctx) noexcept;
+    static void onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexcept;
+    static void onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcept;
 
-    ProcessQueueRef getScheduler() { return scheduler.ref(); }
+    core::ProcessQueueRef getScheduler() { return scheduler.ref(); }
 
 private:
 
     void scheduleScan();
 
-    TCP::Listener listener;
-    std::unordered_map<IPAddress, Session> sessions;
+    transport::tcp::Listener listener;
+    std::unordered_map<types::IPAddress, Session> sessions;
     std::unordered_map<AfiSafi, AddressFamilyVariant> addressFamilies;
 
-    ProcessQueue scheduler;
+    core::ProcessQueue scheduler;
     AttributeManager attrMgr;
     NeighborTable ntable;
 
-    Config::Reference<Config::BgpRegistry> configs;
+    config::Reference<config::BgpRegistry> configs;
 };
-}
+} // namespace routing
 
 #endif // BGP_PROCESS_H
+

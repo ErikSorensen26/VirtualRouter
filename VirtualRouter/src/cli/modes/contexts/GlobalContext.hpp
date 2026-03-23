@@ -5,19 +5,19 @@
 
 #include "ContextBase.hpp"
 
+namespace core { class Global; }
+namespace core { class VirtualRouter; }
+
 #define GLOBAL_PARAMS GlobalContext& ctx, const std::vector<std::string>& args
 
-class Global;
-class VirtualRouter;
-
-namespace Cli
+namespace cli
 {
 struct GlobalContext : ContextBase
 {
-    GlobalContext(const ContextBase& base, Global& glob, VirtualRouter& vrf)
+    GlobalContext(const ContextBase& base, core::Global& glob, core::VirtualRouter& vrf)
         : ContextBase(base), global(glob), vrf(vrf) {}
-    Global& global;
-    VirtualRouter& vrf;
+    core::Global& global;
+    core::VirtualRouter& vrf;
 };
 }
 

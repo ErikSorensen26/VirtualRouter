@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace BGP
+namespace routing::bgp
 {
 class Session;
 
@@ -54,6 +54,7 @@ public:
      */
     static uint16_t collisionNotificationCode() noexcept;
 };
-}
+} // namespace routing
 
 #endif // BGP_COLLISION_H
+

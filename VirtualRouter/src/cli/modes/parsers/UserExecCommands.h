@@ -9,7 +9,7 @@
 
 #define USER_EXEC_PARAMS UserExecContext& ctx, const std::vector<std::string>& args
 
-namespace Cli
+namespace cli
 {
 bool UserExec_Enable_Handler(USER_EXEC_PARAMS);
 using UserExec_Enable = commandAdder<UserExecContext,
