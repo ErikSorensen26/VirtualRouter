@@ -8,6 +8,8 @@
 #include <atomic>
 #include <IPAddress.h>
 
+#include "infrastructure/Arp.h"
+#include "infrastructure/Ndp.h"
 #include "configs/InterfaceConfigs.h"
 
 namespace core { class VirtualRouter; }
@@ -16,7 +18,6 @@ namespace qos::egress { class TxDistributor; }
 namespace hardware { struct HwIfaceInfo; }
 namespace routing::eigrp { struct EigrpInterfaceInstance; }
 namespace routing::ospf { struct OspfInterfaceInstance; struct InterfaceConfigs; }
-namespace infrastructure { class Arp; class Ndp; }
 namespace services::dhcp { class DhcpClient; class Dhcpv6Client; }
 
 class EigrpTest; ///< Forward declaration of EigrpTest.
@@ -24,22 +25,10 @@ class MockInterface; ///< Forward declaration of MockInterface.
 
 namespace interface
 {
+enum class StateChange : uint8_t;
+enum class IPv4Event : uint8_t;
+enum class IPv6Event : uint8_t;
 
-enum class InterfaceType : uint8_t; ///< Forward declaration of InterfaceType.
-
-/**
- * @enum StateChange
- * @brief Represents interface state changes.
- */
-enum class StateChange
-{
-    SHUTDOWN,  ///< Bring-up sequence (ARP/NDP/DHCP start)
-    INITIATE,  ///< Tear-down sequence (ARP/NDP/DHCP stop)
-    IPCHANGE,  ///< React to change in IPv4/IPv6 address
-    IPCHANGE2, ///< React to change of secondary IPv4/IPv6 address
-    IPREMOVAL, ///< React to address deletion
-    IPREMOVAL2 ///< React to secondary address deletion
-};
 
 /**
  * @struct InterfaceCreation
@@ -132,6 +121,11 @@ public:
     friend class MockInterface; ///< Test harness access for controlled interface testing.
     friend class EigrpTest; ///< Test harness access for controlled EIGRP testing.
 
+    Interface(const Interface&) = delete;
+    Interface& operator=(const Interface&) = delete;
+    Interface(Interface&&) = delete;
+    Interface& operator=(Interface&&) = delete;
+
     /**
      * @brief Construct a new Interface object.
      *
@@ -183,7 +177,7 @@ public:
      * @param subnet    Prefix length (0–32).
      * @param secondary Set the IP as a secondary address.
      */
-    virtual void setIPv4(types::IPv4Prefix prefix, bool secondary = false);
+    virtual bool setIPv4(types::IPv4Prefix prefix, bool secondary = false);
 
     /**
      * @brief Assign an IPv6 address to the interface.
@@ -198,7 +192,14 @@ public:
      * @param prefix    Prefix length (default 64).
      * @param eui64     Whether EUI-64 formatting should apply.
      */
-    virtual void setIPv6(const types::IPv6Prefix& addr, bool linkLocal = false, bool eui64 = false);
+    virtual bool setIPv6(const types::IPv6Prefix& addr, bool eui64 = false);
+
+    /**
+     * @brief Marks the IPv4 address as ready
+     *
+     * @param ip        IPv4 address.
+     */
+    void setIPv6Ready(const types::IPv6Prefix& addr);
 
     // IP MANAGEMENT
 
@@ -206,6 +207,11 @@ public:
      * @brief Remove the interface's IPv4 configuration.
      */
     void removeIPv4(const types::IPv4Prefix* secondary = nullptr);
+
+    /**
+     * @brief Remove all IPv4 addresses from this interface.
+     */
+    void removeAllIPv4();
 
     /**
      * @brief Remove a specific IPv6 address or the link-local address.
@@ -236,7 +242,7 @@ public:
      * @param address The duplicate IPv6 address.
      * @param linkLocal True if matching against link-local address.
      */
-    void markAddressDuplicate(types::IPv6Address address, bool linkLocal = false);
+    void markAddressDuplicate(types::IPv6Prefix address);
 
     // INTERFACE STATE
 
@@ -256,6 +262,18 @@ public:
      * @param shut True = shutdown, False = enable.
      */
     virtual void shutdown(bool shut);
+
+    /**
+     * @brief Resets infrastructure protocols and IPs
+     *
+     * Actions:
+     * - Restarts ARP/NDP/DHCP
+     * - Clears all IP configs
+     * 
+     * Used for VRF changes.
+     */
+    void reset();
+
 
     /**
      * @brief Simulate physical carrier up/down events.
@@ -295,7 +313,6 @@ public:
     virtual void enqueuePacket(processing::PacketBuilder& packetInfo);
 
     // VRF MANAGEMENT
-
     /**
      * @brief Get the VRF the interface currently belongs to.
      *
@@ -325,8 +342,8 @@ public:
 
     InterfaceConfigs configs; ///< IP addressing and protocol configuration.
 
-    infrastructure::Arp* arp = nullptr; ///< ARP module instance (ipv4).
-    infrastructure::Ndp* ndp = nullptr; ///< NDP module instance (ipv6).
+    infrastructure::Arp arp; ///< ARP module instance (ipv4).
+    infrastructure::Ndp ndp; ///< NDP module instance (ipv6).
 
     // EIGRP INTERFACES
 
@@ -393,12 +410,12 @@ private:
     /**
      * @brief Internal state machine transition for IPv4.
      */
-    void stateChange(StateChange state);
+    void stateChangeV4(IPv4Event state, types::IPv4Prefix addr);
 
     /**
      * @brief Internal state machine transition for IPv6.
      */
-    void stateChangeV6(StateChange state);
+    void stateChangeV6(IPv6Event state, types::IPv6Prefix addr);
 
     std::mutex ipInfoMutex; ///< Protects IPv4/IPv6 settings where atomics aren't used.
 

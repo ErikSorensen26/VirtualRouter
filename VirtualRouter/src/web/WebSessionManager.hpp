@@ -30,9 +30,9 @@ struct WebSession
     std::promise<bool> promise;
     std::future<bool> future;
 
-    WebSession(CliSession* ses) : future(promise.get_future()), session(ses) {}
+    WebSession(cli::CliSession* ses) : future(promise.get_future()), session(ses) {}
 
-    CliSession* session;
+    cli::CliSession* session;
 };
 
 class WebSessionManager
@@ -60,7 +60,7 @@ public:
             for (auto& kv : cid2ses)
             {
                 const std::string& cid = kv.first;
-                CliSession* ses = kv.second;
+                cli::CliSession* ses = kv.second;
                 if (!ses) continue;
 
                 auto itFd = cid2fd.find(cid);
@@ -81,15 +81,15 @@ private:
     std::string udsPath;
     std::string rmBuf;
 
-    std::unordered_map<std::string, CliSession*> cid2ses;
+    std::unordered_map<std::string, cli::CliSession*> cid2ses;
     std::unordered_map<std::string, int> cid2fd;
     std::unordered_map<int, std::string> fd2cid;
 
-    static WebConsole* getWebConsole(CliSession* ses)
+    static web::WebConsole* getWebConsole(cli::CliSession* ses)
     {
         if (!ses) return nullptr;
-        IConsole* ic = ses->iConsole;
-        return dynamic_cast<WebConsole*>(ic);
+        cli::IConsole* ic = ses->iConsole;
+        return dynamic_cast<web::WebConsole*>(ic);
     }
 
     void bindCidToFd(const std::string& cid, int fd)
@@ -182,12 +182,12 @@ private:
             auto it = cid2ses.find(cid);
             if (it == cid2ses.end() || !it->second) return;
 
-            CliSession* ses = it->second;
+            cli::CliSession* ses = it->second;
 
             const std::string line = msg.value("data", "");
             ses->handleInput(line);
 
-            if (WebConsole* wc = getWebConsole(ses))
+            if (web::WebConsole* wc = getWebConsole(ses))
             {
                 wc->flushCommands(*ses, cid, false);
             }

@@ -16,7 +16,7 @@ namespace web
 {
 
 // Mock class for IConsole using Google Mock
-class WebConsole : public IConsole
+class WebConsole : public cli::IConsole
 {
 public:
     WebConsole(UnixApi& api, int clientFd, core::Global& global)
@@ -35,7 +35,7 @@ public:
     size_t getTerminalWidth() override { return std::numeric_limits<size_t>::max(); }
     void beep() override {}
     void flush() override {}
-    CursorPosition getCursorPosition() override { return CursorPosition{}; }
+    cli::CursorPosition getCursorPosition() override { return cli::CursorPosition{}; }
 
     bool getPrompt(std::string& p)
     {
@@ -53,10 +53,10 @@ public:
         return true;
     }
 
-    void print(const std::string& str, Color color) override
+    void print(const std::string& str, cli::Color color) override
     {
-        if (color == Color::TERMINAL) return;
-        if (color == Color::PROMPT) // Secret prompt option
+        if (color == cli::Color::TERMINAL) return;
+        if (color == cli::Color::PROMPT) // Secret prompt option
         {
             prompt = str;
             preBuffer = buffer.str();
@@ -79,7 +79,7 @@ public:
         buffer.clear();
     }
 
-    void flushCommands(CliSession& endSequence, const std::string& id, bool scroll = false)
+    void flushCommands(cli::CliSession& endSequence, const std::string& id, bool scroll = false)
     {
         std::string output;
         {
@@ -123,17 +123,17 @@ private:
     std::string prompt;
     std::stringstream buffer;
 
-    static std::string applyColor(const std::string& s, Color c) {
+    static std::string applyColor(const std::string& s, cli::Color c) {
         switch (c) {
-            case Color::BLACK:   return "\033[1;30m" + s + "\033[0m";
-            case Color::RED:     return "\033[1;31m" + s + "\033[0m";
-            case Color::GREEN:   return "\033[1;32m" + s + "\033[0m";
-            case Color::YELLOW:  return "\033[1;33m" + s + "\033[0m";
-            case Color::BLUE:    return "\033[1;34m" + s + "\033[0m";
-            case Color::MAGENTA: return "\033[1;35m" + s + "\033[0m";
-            case Color::CYAN:    return "\033[1;36m" + s + "\033[0m";
-            case Color::WHITE:   return s + "\033[0m";
-            case Color::NONE:    return s;
+            case cli::Color::BLACK:   return "\033[1;30m" + s + "\033[0m";
+            case cli::Color::RED:     return "\033[1;31m" + s + "\033[0m";
+            case cli::Color::GREEN:   return "\033[1;32m" + s + "\033[0m";
+            case cli::Color::YELLOW:  return "\033[1;33m" + s + "\033[0m";
+            case cli::Color::BLUE:    return "\033[1;34m" + s + "\033[0m";
+            case cli::Color::MAGENTA: return "\033[1;35m" + s + "\033[0m";
+            case cli::Color::CYAN:    return "\033[1;36m" + s + "\033[0m";
+            case cli::Color::WHITE:   return s + "\033[0m";
+            case cli::Color::NONE:    return s;
             default:             return s;
         }
     }

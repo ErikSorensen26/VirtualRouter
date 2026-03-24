@@ -21,7 +21,7 @@ struct StartupArgs
     bool startupFile = false;
     bool routerConfigFile = false;
     bool hwConfigFile = false;
-    StartupFiles fs;
+    cli::StartupFiles fs;
 };
 
 void printHelp(const char* prog)
@@ -109,28 +109,28 @@ int main(int argc, char* argv[])
     if (!handleArgs(argc, argv, opts)) return 0;
 
     if (opts.debug) {
-        setupCrashLogging();
+        utils::setupCrashLogging();
     }
 
-    Logger::getInstance().initialize(true, /*isolateMode*/false);
-    Global* global = new Global(opts.fs, true);
-    CliEngine& engine = global->engine;
+    utils::Logger::getInstance().initialize(true, /*isolateMode*/false);
+    core::Global* global = new core::Global(opts.fs, true);
+    cli::CliEngine& engine = global->engine;
 
     if (!opts.unixPath.empty())
     {
-        WebSessionManager* webMgr = new WebSessionManager(*global, opts.unixPath);
+        web::WebSessionManager* webMgr = new web::WebSessionManager(*global, opts.unixPath);
         webMgr->loop(10);
     }
     else if (!opts.noDefault)
     {
-        RCU::registerThread();
+        utils::RCU::registerThread();
         auto session = engine.createSession(false);
         session->handlePrompt();
         while (true)
         {
             session->handleInput();
         }
-        RCU::unregisterThread();
+        utils::RCU::unregisterThread();
     }
     else
     {

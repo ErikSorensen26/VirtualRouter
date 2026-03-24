@@ -23,9 +23,10 @@ are, what principles guided the decisions, and how the major subsystems fit toge
 12. [TCP Transport Layer](#12-tcp-transport-layer)
 13. [Hardware — Ingress & Egress Pipelines](#13-hardware--ingress--egress-pipelines)
 14. [Infrastructure — ARP & NDP](#14-infrastructure--arp--ndp)
-15. [QoS](#15-qos)
-16. [Cross-Cutting Design Patterns](#16-cross-cutting-design-patterns)
-17. [Concurrency Model](#17-concurrency-model)
+15. [Interface Layer](#15-interface-layer)
+16. [QoS](#16-qos)
+17. [Cross-Cutting Design Patterns](#17-cross-cutting-design-patterns)
+18. [Concurrency Model](#18-concurrency-model)
 
 ---
 
@@ -349,8 +350,8 @@ It owns or references every component that needs VRF isolation.
 ```
 VirtualRouter
 │
-├── unordered_map<uint32_t, Interface*>             interfaceList
-│   └── (shared_mutex interfaceMutex)
+├── interface::InterfaceManager                     ifaceMgr
+│   └── (see §15. Interface Layer)
 │
 ├── unordered_map<uint32_t, EigrpAutonomousSystem>  eigrpList
 │   └── (mutex eigrpAutonomousSystemMutex)
@@ -2084,7 +2085,109 @@ packets.
 
 ---
 
-## 15. QoS
+## 15. Interface Layer
+
+The interface layer binds hardware NICs to the VRF control plane. It consists of
+two classes: `Interface` (one per NIC) and `InterfaceManager` (one per VRF), plus
+the generic `utils::EventManager` used as its event bus.
+
+### Interface
+
+`Interface` is the primary coupling point between:
+- **Hardware queues** (via `qos::egress::TxDistributor` / `IngressBase`)
+- **VRF control plane** (routing protocols, RIB, timers)
+- **Neighbor discovery** (ARP/NDP)
+- **Address assignment** (DHCPv4)
+
+```
+Interface
+├── InterfaceConfigs            configs          (IPv4/IPv6 address lists, per-protocol state)
+├── infrastructure::Arp         arp
+├── infrastructure::Ndp         ndp
+│
+├── qos::egress::TxDistributor* tx               (egress queue handle)
+│
+├── unordered_map<uint32_t, EigrpInterfaceInstance>  eigrpInterfaceList
+├── unordered_map<uint32_t, OspfInterfaceInstance>   ospfInterfaceList
+│
+├── services::dhcp::DhcpClient* dhcp             (DHCPv4 client)
+│
+├── atomic<bool>                shutdownFlag
+├── atomic<bool>                carrierFlag
+└── atomic<VirtualRouter*>      routingInstance  (lock-free VRF pointer)
+```
+
+**Packet pipelines:**
+```
+Ingress:  NIC → processIngress() → PacketBuilder → L3/L4 stack
+Egress:   enqueuePacket() → encapsulate() → TxDistributor → NIC
+```
+
+**State transitions** — `Interface` fires typed events into `InterfaceManager` via
+the private `stateChangeV4()` / `stateChangeV6()` helpers:
+
+| Enum | Values |
+|---|---|
+| `StateChange` | `IF_READY`, `IF_DOWN` |
+| `IPv4Event` | `IPV4_READY`, `IPV4_DEL`, `IPV4_SECONDARY_READY`, `IPV4_SECONDARY_DEL`, `IPV4_CONFLICT` |
+| `IPv6Event` | `IPV6_LL_READY`, `IPV6_LL_DEL`, `IPV6_LL_CONFLICT`, `IPV6_READY`, `IPV6_DEL`, `IPV6_CONFLICT` |
+
+**VRF reassignment** (`setVRF()`): tears down ARP/NDP/DHCP, removes the interface
+from the old VRF's `InterfaceManager`, then attaches to the new one and restarts.
+
+**Per-protocol config** lives on `Interface` itself — protocols do not own their
+interface state. `getEigrpConfig(as)` and `getOspfConfig()` lazily allocate
+`config::Reference` blocks on first access, keyed by AS number.
+
+### InterfaceManager
+
+One `InterfaceManager` lives inside each `VirtualRouter` (replacing the former
+`unordered_map<uint32_t, Interface*>` + `shared_mutex interfaceMutex` pair).
+
+```
+InterfaceManager
+├── unordered_map<uint32_t, Interface*>   interfaces
+├── mutex                                  mutex          (guards the map)
+│
+├── StateEventMgr   stateEventMgr          (StateChange events)
+├── IPv4EventMgr    ipv4EventMgr           (IPv4Event events)
+└── IPv6EventMgr    ipv6EventMgr           (IPv6Event events)
+    where *EventMgr = utils::EventManager<EventEnum, Interface[, Prefix]>
+```
+
+Map API: `add()` / `get()` / `remove()` / `empty()` / `snapshot()`.
+
+Subscription API: `subscribe(event, ctx, cb) → Id` and `unsubscribe(Id)` — one
+overload per event dimension. Protocols call these once at startup and hold the
+returned `Id` for later cleanup.
+
+`notify()` is `private` and called only by `Interface` (declared `friend`). It
+copies the matching callback list before invoking callbacks, so no lock is held
+during protocol code — callbacks can safely call back into `InterfaceManager`.
+
+### utils::EventManager\<CbType, Args...\>
+
+Generic, reusable event bus used by `InterfaceManager` for all three event types.
+
+```
+EventManager<CbType, Args...>
+├── vector<Ctx>                       callbacksByType[COUNT]  (per-enum-value lists)
+├── unordered_map<uint32_t, CbType>   idToType                (for O(1) unregister)
+├── AtomicStack<uint32_t>             unusedIds               (ID recycling)
+└── uint32_t                          nextId
+```
+
+Constraints enforced at compile time:
+- `CbType` must be `enum class` with `uint8_t` underlying type
+- `CbType` must define a `COUNT` sentinel as its last enumerator
+
+`run()` takes the lock, snapshots the relevant `vector<Ctx>`, releases the lock,
+then invokes each callback — making it safe for a callback to call `registerCallback`
+or `unregister` without deadlock.
+
+---
+
+## 16. QoS
 
 ```
 TxQueueManager
@@ -2103,7 +2206,7 @@ implemented. This is the natural next area for filling in after protocol complet
 
 ---
 
-## 16. Cross-Cutting Design Patterns
+## 17. Cross-Cutting Design Patterns
 
 ### 1. Policy-Based Compile-Time Dispatch (BGP Address Families)
 
@@ -2193,7 +2296,7 @@ with no cleanup needed.
 
 ---
 
-## 17. Concurrency Model
+## 18. Concurrency Model
 
 Understanding the concurrency model is essential before modifying any protocol code.
 

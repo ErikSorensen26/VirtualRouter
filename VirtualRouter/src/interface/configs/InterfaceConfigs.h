@@ -136,8 +136,7 @@ public:
 
         struct IPv6Address
         {
-            types::IPv6Address addr;
-            uint8_t length;
+            types::IPv6Prefix prefix;
 
             bool tentative{false};
             bool valid{false};

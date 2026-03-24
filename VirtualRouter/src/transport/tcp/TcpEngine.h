@@ -127,7 +127,12 @@ private:
 
     void closeConnectionInternal(ConnId cid) noexcept;
 
+public:
+    void dropLocalConnections(const types::IPAddress& addr) noexcept;
+
 private:
+    friend class Tcp;
+
     core::VirtualRouter& vr;
     Config cfg;
     TxBufferPool bufferPool;

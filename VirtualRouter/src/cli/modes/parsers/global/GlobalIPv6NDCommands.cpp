@@ -16,13 +16,13 @@ bool GlobalIPv6ND_CacheExpire_Handler(GLOBAL_PARAMS)
 
     for (const auto& [_, iface] : ctx.global.getInterfaceList())
     {
-        if (!iface->ndp->configs.cacheExpireLocal)
+        if (!iface->ndp.configs.cacheExpireLocal)
         {
-            iface->ndp->configs.cacheExpire.store(value, std::memory_order_release); 
+            iface->ndp.configs.cacheExpire.store(value, std::memory_order_release); 
         }
-        if (setRefresh && !iface->ndp->configs.refreshLocal)
+        if (setRefresh && !iface->ndp.configs.refreshLocal)
         {
-            iface->ndp->configs.refresh.store(!ctx.negate, std::memory_order_relaxed);
+            iface->ndp.configs.refresh.store(!ctx.negate, std::memory_order_relaxed);
         }
     }
     return true;
@@ -44,13 +44,13 @@ bool GlobalIPv6ND_CacheIntLimit_Handler(GLOBAL_PARAMS)
 
     for (const auto& [_, iface] : ctx.global.getInterfaceList())
     {
-        if (!iface->ndp->configs.interfaceLimitLocal)
+        if (!iface->ndp.configs.interfaceLimitLocal)
         {
-            iface->ndp->configs.interfaceLimit.store(value, std::memory_order_release); 
+            iface->ndp.configs.interfaceLimit.store(value, std::memory_order_release); 
         }
-        if (setLog && !iface->ndp->configs.loggingRateLocal)
+        if (setLog && !iface->ndp.configs.loggingRateLocal)
         {
-            iface->ndp->configs.loggingRate.store(log, std::memory_order_release);
+            iface->ndp.configs.loggingRate.store(log, std::memory_order_release);
         }
     }
     return true;
@@ -61,9 +61,9 @@ bool GlobalIPv6ND_DADTime_Handler(GLOBAL_PARAMS)
     uint16_t time = ctx.negate ? 1000 : static_cast<uint16_t>(std::stoi(args[0]));
     for (const auto& [_, iface] : ctx.global.getInterfaceList())
     {
-        if (!iface->ndp->configs.dadTimeLocal)
+        if (!iface->ndp.configs.dadTimeLocal)
         {
-            iface->ndp->configs.dadTime.store(time, std::memory_order_release);
+            iface->ndp.configs.dadTime.store(time, std::memory_order_release);
         }
     }
     return true;
@@ -110,9 +110,9 @@ bool GlobalIPv6ND_ReachableTime_Handler(GLOBAL_PARAMS)
     ctx.global.configs.ndp.reachableTime.store(value, std::memory_order_release);
     for (const auto& [_, iface] : ctx.global.getInterfaceList())
     {
-        if (!iface->ndp->configs.reachableTimeLocal)
+        if (!iface->ndp.configs.reachableTimeLocal)
         {
-            iface->ndp->configs.reachableTime.store(value, std::memory_order_release);
+            iface->ndp.configs.reachableTime.store(value, std::memory_order_release);
         }
     }
     return true;

@@ -4,11 +4,19 @@
 #define NDP_H
 
 #include <queue>
+#include <atomic>
+#include <shared_mutex>
+#include <IPAddress.h>
 
+#include "interface/configs/InterfaceConfigs.h"
 #include "packet/PacketStructure.h"
-#include "interface/Interface.h"
+
+// TODO: Have the ability to insert entries when shutdown
 
 class Internal_NdpTest;
+
+namespace interface { class Interface; }
+namespace processing { class PacketBuilder; }
 
 namespace infrastructure
 {
@@ -173,9 +181,11 @@ public:
 
     void shutdown();
 
-    void duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6Address& address, bool isLinkLocal = false);
+    bool isShutdown();
 
-    void preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr, bool isLinkLocal);
+    void duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6Address& address);
+
+    void preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr);
 
     void initiateSlaac();
 

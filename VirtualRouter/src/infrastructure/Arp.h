@@ -150,6 +150,11 @@ public:
      */
     void shutdown();
 
+    /**
+     * @brief return if this instance of ARP is shutdown.
+     */
+    bool isShutdown();
+
 private:
     interface::Interface* currentInterface; ///< Pointer to the associated network interface.
 

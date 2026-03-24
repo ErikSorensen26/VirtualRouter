@@ -307,7 +307,7 @@ std::vector<std::pair<types::IPPrefix, OspfPath>> OspfRib::getIntraAreaRoutes(ui
         if (state.selected.suppressed)
             continue;
 
-        areaRoutes.push_back({prefix, state.selected});
+        areaRoutes.push_back({prefix, state.selected.paths.front()});
     }
 
     return areaRoutes;

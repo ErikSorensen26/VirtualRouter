@@ -14,6 +14,7 @@
 #include "GlobalAggregator.h"
 #include "EigrpConfig.h"
 #include "InterfaceManager.h"
+#include "interface/InterfaceManager.h"
 #include "Topology.h"
 #include "RouteManager.h"
 
@@ -114,6 +115,7 @@ private:
 
     core::ProcessQueue scheduler;
 
+    uint32_t ifUpId, ifDownId, ipReadyId, ipDelId; ///< Interface event subscription IDs.
 public:
     RouteManager routeManager;
     std::unordered_map<types::IPAddress, Neighbor*> allNeighbors;

@@ -233,7 +233,7 @@ bool InterfaceIPv6_NextHopSelf_Handler(INTERFACE_PARAMS)
 bool InterfaceIPv6_NdpRedirects_Handler(INTERFACE_PARAMS)
 {
     UNUSED(args);
-    ctx.currentInterface.ndp->configs.redirects.store(!ctx.negate, std::memory_order_release);
+    ctx.currentInterface.ndp.configs.redirects.store(!ctx.negate, std::memory_order_release);
     return true;
 }
 

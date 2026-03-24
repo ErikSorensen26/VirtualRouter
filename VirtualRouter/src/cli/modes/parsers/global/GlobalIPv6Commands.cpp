@@ -36,7 +36,7 @@ bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
         {
                 if (key == entry.interface)
                 {
-                    iface->ndp->addNdpEntry(address, entry.macAddress, false, true);
+                    iface->ndp.addNdpEntry(address, entry.macAddress, false, true);
                 }
         }
     }

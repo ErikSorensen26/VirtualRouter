@@ -617,6 +617,18 @@ void TcpEngine::listenerDisconnect(ListenId lid, ConnId cid) noexcept
     closeConnectionInternal(cid);
 }
 
+void TcpEngine::dropLocalConnections(const types::IPAddress& addr) noexcept
+{
+    std::vector<ConnId> toClose;
+    for (const auto& [cid, c] : connections)
+    {
+        if (c.key.local.address == addr)
+            toClose.push_back(cid);
+    }
+    for (ConnId cid : toClose)
+        closeConnectionInternal(cid);
+}
+
 void TcpEngine::closeConnectionInternal(ConnId cid) noexcept
 {
     auto it = connections.find(cid);

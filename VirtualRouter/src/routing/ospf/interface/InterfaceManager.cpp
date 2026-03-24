@@ -95,9 +95,6 @@ void InterfaceManager::refreshInterfaceList()
     {
         std::vector<std::unordered_map<OspfInterfaceId, OspfInterface>::node_type> interfacesToRemove;
 
-        // Lock global interface state
-        std::shared_lock<std::shared_mutex> sysLock(process.routingInstance->interfaceMutex);
-
         // Remove shutdown interfaces
         for (auto it = ospfInterfaceList.begin(); it != ospfInterfaceList.end();)
         {
@@ -131,7 +128,7 @@ void InterfaceManager::refreshInterfaceList()
             return std::nullopt;
         };
 
-        for (const auto& [id, interface] : process.routingInstance->interfaceList)
+        for (const auto& [id, interface] : process.routingInstance->getInterfaceManager().snapshot())
         {
             if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
                 continue;

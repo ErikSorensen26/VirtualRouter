@@ -19,15 +19,17 @@
 #include "qos/ingress/RxQueueManager.h"
 #include "processing/Process.h"
 #include "hardware/HardwareManager.h"
+#include "InterfaceManager.h"
 
 #include "eigrp/core/Eigrp.h"
 #include "ospf/OspfProcess.h"
 
 namespace interface
 {
-
 Interface::Interface(const InterfaceCreation& cfgs)
   : configs(cfgs.vrf.getGlobal().timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
+    arp(*this),
+    ndp(*this),
     routingInstance(&cfgs.vrf),
     debug(cfgs.debug),
     threadsRunning(false)
@@ -50,89 +52,96 @@ void Interface::cleanupInterface()
 {
     shutdown(true);
     core::VirtualRouter* vrf = getVRF();
-    if (auto dhcpv6Server = vrf->getGlobal().dhcpv6Server)
-    {
-        //dhcpv6Server->removeInterface(this);
-    }
     
     if (dhcp) delete dhcp;
 
     // Remove interface from list
     if (routingInstance)
     {
-        vrf->removeInterface(configs.key);
+        vrf->getInterfaceManager().remove(configs.key);
     }
 }
 
-void Interface::setIPv4(types::IPv4Prefix prefix, bool secondary)
+bool Interface::setIPv4(types::IPv4Prefix prefix, bool secondary)
 {
+    auto sendGratuitous = [&]()
+    {
+        if (!arp.isShutdown())
+        {
+            types::IPv4Address v4addr(prefix.addr);
+            arp.sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
+            arp.sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
+        }
+    };
+
     if (!secondary)
     {
         configs.ipv4.setPrimaryAddress(prefix);
-        configs.ipv4.mask = prefix.prefixLength;
-        // Send gratuitous arps
-        if (arp)
-        {
-            types::IPv4Address v4addr(prefix.addr);
-            arp->sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
-            arp->sendReply(utils::readU48(ETHERNET_MAC_BROADCAST), v4addr);
-        }
-        stateChange(StateChange::IPCHANGE);
+        sendGratuitous();
+        getVRF()->getInterfaceManager().notify(IPv4Event::IPV4_READY, *this, prefix);
     }
     else
     {
         configs.ipv4.addSecondaryAddress(prefix);
-        stateChange(StateChange::IPCHANGE2);
+        sendGratuitous();
+        getVRF()->getInterfaceManager().notify(IPv4Event::IPV4_SECONDARY_READY, *this, prefix);
     }
+    return true;
 }
 
-void Interface::setIPv6(const types::IPv6Prefix& addr, bool linkLocal, bool eui64)
+bool Interface::setIPv6(const types::IPv6Prefix& addr, bool eui64)
 {
     InterfaceConfigs::IPv6State::IPv6Address* ipv6 = nullptr;
+    types::IPv6Address ip{addr};
 
-    {
-        if (linkLocal)
-        {
-            ipv6 = configs.ipv6.addAddress(addr, true);
-        }
-        else if ((addr.addr >> 120) == 0xFC)
-        {
-            ipv6 = configs.ipv6.addUniqueLocalAddress(addr);
-        }
-        else
-        {
-            ipv6 = configs.ipv6.addAddress(addr, false);
-        }
-    }
+    if (ip.isLocalLink())
+        ipv6 = configs.ipv6.addAddress(addr, true);
+    else if (ip.isLocalUnicast())
+        ipv6 = configs.ipv6.addUniqueLocalAddress(addr);
+    else if (ip.isGlobalUnicast())
+        ipv6 = configs.ipv6.addAddress(addr, false);
+    else
+        return false; // invalid
 
     // Run Duplicate Address Detection (dad) using NDP
     if (ipv6)
     {
-        ndp->duplicateAddressDetection(*ipv6, linkLocal);
+        ndp.duplicateAddressDetection(*ipv6);
     }
     else 
     {
         //TODO duplicate address error
-        return;
+        return false;
     }
+    return true;
+}
 
-    if (linkLocal)
-        stateChangeV6(StateChange::IPCHANGE);
+void Interface::setIPv6Ready(const types::IPv6Prefix& addr)
+{
+    if (addr.isLocalLink())
+        getVRF()->getInterfaceManager().notify(IPv6Event::IPV6_LL_READY, *this, addr);
     else
-        stateChangeV6(StateChange::IPCHANGE2);
+        getVRF()->getInterfaceManager().notify(IPv6Event::IPV6_READY, *this, addr);
 }
 
 void Interface::removeIPv4(const types::IPv4Prefix* prefix)
 {
     if (!prefix)
     {
+        types::IPv4Prefix primary = configs.ipv4.getPrimaryPrefix();
         configs.ipv4.removePrimaryAddress();
-        stateChange(StateChange::IPREMOVAL);
+        stateChangeV4(IPv4Event::IPV4_DEL, primary);
     }
     else
     {
         configs.ipv4.removeSecondaryAddress(*prefix);
+        stateChangeV4(IPv4Event::IPV4_DEL, *prefix);
     }
+}
+
+void Interface::removeAllIPv4()
+{
+    // TODO
 }
 
 void Interface::removeIPv6(const types::IPv6Prefix* prefix)
@@ -140,19 +149,20 @@ void Interface::removeIPv6(const types::IPv6Prefix* prefix)
     if (prefix)
     {
         configs.ipv6.removeAddress(*prefix);
-        stateChangeV6(StateChange::IPREMOVAL);
+        stateChangeV6(IPv6Event::IPV6_DEL, *prefix);
     }
     else
     {
+        types::IPv6Prefix ll = configs.ipv6.getLocalPrefix();
         configs.ipv6.removeLocalAddress();
-        stateChangeV6(StateChange::IPREMOVAL);
+        stateChangeV6(IPv6Event::IPV6_LL_DEL, ll);
     }
 }
 
 void Interface::removeAllIPv6()
 {
-    configs.ipv6.removeAllAddresses();
-    stateChangeV6(StateChange::IPREMOVAL);
+    // TODO
+    //stateChangeV6(StateChange::IPREMOVAL);
 }
 
 std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
@@ -164,7 +174,7 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
     if (!configs.ipv6.linkLocalAddress->valid && configs.ipv6.linkLocalAddress->tentative)
     {
         tentative.emplace_back();
-        utils::writeU128(tentative.back().data(), configs.ipv6.linkLocalAddress->addr.addr);
+        utils::writeU128(tentative.back().data(), configs.ipv6.linkLocalAddress->prefix.addr);
     }
 
     // core::Global unicast
@@ -173,7 +183,7 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
         if (addr->tentative)
         {
             tentative.emplace_back();
-            utils::writeU128(tentative.back().data(), addr->addr.addr);
+            utils::writeU128(tentative.back().data(), addr->prefix.addr);
         }
     }
 
@@ -183,20 +193,18 @@ std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
         if (addr->tentative)
         {
             tentative.emplace_back();
-            utils::writeU128(tentative.back().data(), addr->addr.addr);
+            utils::writeU128(tentative.back().data(), addr->prefix.addr);
         }
     }
 
     return tentative;
 }
 
-void Interface::markAddressDuplicate(types::IPv6Address address, bool linkLocal)
+void Interface::markAddressDuplicate(types::IPv6Prefix address)
 {
-    std::lock_guard<std::shared_mutex> ipLock(configs.ipMutex);
-
-    if (linkLocal && configs.ipv6.linkLocalAddress->addr.addr == address.addr)
+    if (address.isLocalLink() && configs.ipv6.getLocalAddress() == address.addr)
     {
-        configs.ipv6.linkLocalAddress->addr = {};
+        getVRF()->getInterfaceManager().notify(IPv6Event::IPV6_LL_CONFLICT, *this, address);
         configs.ipv6.linkLocalAddress->valid = false;
     }
     else
@@ -204,7 +212,7 @@ void Interface::markAddressDuplicate(types::IPv6Address address, bool linkLocal)
         auto markInvalid = [&](std::vector<InterfaceConfigs::IPv6State::IPv6Address*>& list) {
             for (auto it = list.begin(); it != list.end(); ++it)
             {
-                if ((*it)->addr.addr == address.addr)
+                if ((*it)->prefix.addr == address.addr)
                 {
                     list.erase(it);
                     return;
@@ -223,23 +231,46 @@ void Interface::shutdown(bool shut)
     shutdownFlag.store(shut, std::memory_order_release);
     if (shut) 
     {
-        stateChange(StateChange::SHUTDOWN);
-        stateChangeV6(StateChange::SHUTDOWN);
-        stopThreads();
+        if (dhcp) dhcp->shutdown();
+        arp.shutdown();
+        if (getVRF()->global.isIPv6UnicastRouting())
+        {
+            // DHCPV6
+            ndp.shutdown();
+        }
+
+        getVRF()->getInterfaceManager().notify(StateChange::IF_DOWN, *this);
     }
     else if (!shut) 
     {
-        startThreads();
-        stateChange(StateChange::INITIATE);
-        stateChangeV6(StateChange::INITIATE);
+        if (dhcp) dhcp->initiate();
+        arp.initiateArp();
+        if (getVRF()->global.isIPv6UnicastRouting())
+        {
+            // DHCPV6
+            ndp.initializeNdp();
+        }
+
+        getVRF()->getInterfaceManager().notify(StateChange::IF_READY, *this);
     }
+}
+
+void Interface::reset()
+{
+
+    arp.initiateArp();
+    if (getVRF()->global.isIPv6UnicastRouting())
+        ndp.initializeNdp();
 }
 
 void Interface::physicalShutdown(bool shut)
 {
     if (carrierFlag.load(std::memory_order_relaxed) == !shut) return;
     carrierFlag.store(!shut, std::memory_order_release);
+
+    if (!shut) startThreads();
     shutdown(shut);
+    if (shut) startThreads();
 }
 
 void Interface::enqueuePacket(processing::PacketBuilder& packetInfo, uint64_t mac)
@@ -285,16 +316,8 @@ void Interface::startThreads()
     // Add the interface to the TX Queue manager
     core::VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.start(this);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     vrf->getGlobal().rxMgr.start(this);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     vrf->getGlobal().engine.hwManager->bringUp(configs.hwInfo.ifname);
-
-    // Initialize shared pointers for Protocol objects
-    if (!arp)
-        arp = new infrastructure::Arp(*this);
-    if (!ndp)
-        ndp = new infrastructure::Ndp(*this);
 
     threadsRunning = true;
 
@@ -304,17 +327,6 @@ void Interface::startThreads()
 
 void Interface::stopThreads() 
 {
-    if (arp)
-    {
-        delete arp;
-        arp = nullptr;
-    }
-    if (ndp)
-    {
-        delete ndp;
-        ndp = nullptr;
-    }
-        
     // Add the interface to the TX Queue manager
     core::VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.stop(this);
@@ -322,127 +334,16 @@ void Interface::stopThreads()
     threadsRunning.store(false, std::memory_order_release); 
 }
 
-void Interface::stateChange(StateChange state)
+void Interface::stateChangeV4(IPv4Event state, types::IPv4Prefix addr)
 {
-    // Eigrp Updates
-    core::VirtualRouter* vrf = getVRF();
-    if (vrf)
-    {
-        for (const auto& [_, eigrpPtr] : vrf->eigrpList)
-        {
-            if (eigrpPtr.ipv4)
-            {
-                eigrpPtr.ipv4->refreshInterfaceList();
-            }
-        };
-    }
-    // Other updates...
-
-    if (!vrf->getGlobal().routingEnabled)
-        return;
-
-    switch (state)
-    {
-        case StateChange::INITIATE:
-        {
-            if (dhcp) dhcp->initiate();
-            if (arp) arp->initiateArp();
-            break;
-        }
-        case StateChange::SHUTDOWN:
-        {
-            if (dhcp) dhcp->shutdown();
-            if (arp) arp->shutdown();
-            break;
-        }
-        case StateChange::IPCHANGE:
-        {
-            if (arp)
-            {
-                arp->shutdown();
-                arp->initiateArp();
-            }
-            break;
-        }
-        case StateChange::IPCHANGE2:
-        {
-            break;
-        }
-        case StateChange::IPREMOVAL:
-        {
-            if (arp) arp->shutdown();
-            break;
-        }
-        case StateChange::IPREMOVAL2:
-        {
-            break;
-        }
-    }
+    // TODO: add refresh() to arp and run that.
+    getVRF()->getInterfaceManager().notify(state, *this, addr);
 }
 
-void Interface::stateChangeV6(StateChange state)
+void Interface::stateChangeV6(IPv6Event state, types::IPv6Prefix addr)
 {
-    // Eigrp Updates
-    core::VirtualRouter* vrf = getVRF();
-    if (routingInstance)
-    {
-        for (const auto& [_, eigrpPtr] : vrf->eigrpList)
-        {
-            if (eigrpPtr.ipv6)
-            {
-                eigrpPtr.ipv6->refreshInterfaceList();
-            }
-        };
-    }
-    // Other updates...
-
-    if (!vrf->global.routingEnabled)
-        return;
-    
-    switch (state)
-    {
-        case StateChange::INITIATE:
-        {
-            // Ndp
-            if (ndp)
-            {
-                for (auto& addr : configs.ipv6.globalAddresses)
-                {
-                    if (addr->tentative)
-                        ndp->duplicateAddressDetection(*addr, false);
-                }
-            }
-            break;
-        }
-        case StateChange::SHUTDOWN:
-        {
-            break;
-        }
-        case StateChange::IPCHANGE:
-        {
-            // Ndp
-            if (ndp)
-            {
-                ndp->shutdown();
-                if (vrf->global.routingEnabled)
-                    ndp->initializeNdp();
-            }
-            break;
-        }
-        case StateChange::IPCHANGE2:
-        {
-            break;
-        }
-        case StateChange::IPREMOVAL:
-        {
-            if (ndp) ndp->shutdown();
-            break;
-        }
-        case StateChange::IPREMOVAL2:
-        {
-            break;
-        }
-    }
+    // TODO: add refresh() to ndp and run that.
+    getVRF()->getInterfaceManager().notify(state, *this, addr);
 }
 
 core::VirtualRouter* Interface::getVRF()
@@ -456,20 +357,18 @@ bool Interface::setVRF(core::VirtualRouter* vrf)
     if (oldVrf == vrf)
         return false;
 
-    stateChange(StateChange::SHUTDOWN);
-    stateChangeV6(StateChange::SHUTDOWN);
+    bool isShutdown = shutdownFlag.load(std::memory_order_relaxed);
+    if (!isShutdown) shutdown(true);
 
     //TODO remove ipaddress configs
-
-    removeIPv4();
+    removeAllIPv4();
     removeAllIPv6();
 
-    getVRF()->removeInterface(configs.key);
+    getVRF()->getInterfaceManager().remove(configs.key);
     routingInstance.store(vrf, std::memory_order_release);
-    vrf->addInterface(this, configs.key);
+    vrf->getInterfaceManager().add(this, configs.key);
 
-    stateChange(StateChange::INITIATE);
-    stateChangeV6(StateChange::INITIATE);
+    if (!isShutdown) shutdown(false);
 
     return true;
 }

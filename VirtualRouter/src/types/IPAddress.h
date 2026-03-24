@@ -9,7 +9,6 @@
 
 #include "NetworkSpan.hpp"
 #include "AddressFamily.hpp"
-#include "packet/HeaderHelpers.hpp"
 
 namespace types
 {
@@ -125,8 +124,8 @@ struct IPv4Address
     uint8_t getDefaultMask() const;
     bool contains(IPv4Address ip, uint8_t prefixLen) const;
     void addPrefixLen(uint8_t newPrefixLen);
-    bool isMulticast() const;
     bool isUnspecified() const noexcept { return addr == 0; }
+    bool isMulticast() const;
 
     operator IPAddress() const { return IPAddress(addr); }
     operator uint32_t() const { return addr; }
@@ -173,10 +172,10 @@ struct IPv6Address
     bool contains(IPv6Address ip, uint8_t prefixLen);
     void addPrefixLen(uint8_t newPrefixLen);
     bool isUnspecified() const noexcept { return addr == 0; }
-    bool isMulticast();
-    bool isLocalLink();
-    bool isGlobalUnicast();
-    bool isLocalUnicast();
+    bool isMulticast() const;
+    bool isLocalLink() const;
+    bool isGlobalUnicast() const;
+    bool isLocalUnicast() const;
 
     operator IPAddress() const { return IPAddress(addr); }
     operator __uint128_t() const { return addr; }
@@ -240,6 +239,10 @@ struct alignas(16) IPPrefix
     bool contains(const IPAddress& ip) const;
     void addPrefixLen(uint8_t newPrefixLen);
     bool isUnspecified() const noexcept { return addr == 0; }
+    bool isMulticast() const;
+    bool isLocalLink() const;
+    bool isGlobalUnicast() const;
+    bool isLocalUnicast() const;
 
     operator IPAddress() const { return IPAddress(addr); };
     operator IPv4Address() const { return IPv4Address(v4()); }
@@ -294,6 +297,7 @@ struct alignas(4) IPv4Prefix
     bool contains(IPv4Address ip) const;
     void addPrefixLen(uint8_t prefixLen);
     bool isUnspecified() const noexcept { return addr == 0; }
+    bool isMulticast() const;
 
     operator IPAddress() const { return IPAddress(addr); }
     operator IPv4Address() const { return IPv4Address(addr); }
@@ -336,6 +340,10 @@ struct alignas(16) IPv6Prefix
     bool contains(const IPv6Address& ip) const;
     void addPrefixLen(uint8_t prefixLen);
     bool isUnspecified() const noexcept { return addr == 0; }
+    bool isMulticast() const;
+    bool isLocalLink() const;
+    bool isGlobalUnicast() const;
+    bool isLocalUnicast() const;
 
     operator IPAddress() const { return IPAddress(addr); }
     operator IPv6Address() const { return IPv6Address(addr); }

@@ -20,19 +20,7 @@ VirtualRouter::VirtualRouter(Global& global, const std::string& name)
 // Destructor
 VirtualRouter::~VirtualRouter()
 {
-    std::unordered_map<uint32_t, interface::Interface*> interfaceListCopy;
-    {
-        // Move out interfaces so any callbacks during destruction
-        // do not see stale pointers in the shared map.
-        std::unique_lock<std::shared_mutex> lock(interfaceMutex);
-        interfaceListCopy.swap(interfaceList);
-    }
-    // Interfaces
-    for (auto [key, interface] : interfaceListCopy)
-    {
-        global.removeInterface(key);
-    }
-
+    assert(empty());
     // Eigrp Autonomous Systems
     for (auto it : eigrpList)
     {
@@ -50,6 +38,15 @@ VirtualRouter::~VirtualRouter()
     namedEigrpList.clear();
 }
 
+bool VirtualRouter::empty()
+{
+    return ifaceMgr.empty() &&
+           eigrpList.empty() &&
+           namedEigrpList.empty() &&
+           ospfList.empty() &&
+           ospfv3List.empty();
+}
+
 bool VirtualRouter::calculateRID(uint32_t& rid)
 {
     uint32_t highestIP = 0;
@@ -64,63 +61,23 @@ bool VirtualRouter::calculateRID(uint32_t& rid)
         if (tempIp < highestIP) return;
         highestIP = tempIp;
     };
+
+    auto interfaceList = ifaceMgr.snapshot();
     
+    for (const auto& [id, interface] : interfaceList)
     {
-        std::shared_lock<std::shared_mutex> lock(interfaceMutex);
+        if (interface->configs.interfaceType != interface::InterfaceType::LOOPBACK) continue;
+        processID(interface);
+    }
+    if (highestIP == 0)
+    {
         for (const auto& [id, interface] : interfaceList)
         {
-            if (interface->configs.interfaceType != interface::InterfaceType::LOOPBACK) continue;
             processID(interface);
-        }
-        if (highestIP == 0)
-        {
-            for (const auto& [id, interface] : interfaceList)
-            {
-                processID(interface);
-            }
         }
     }
     rid = highestIP;
     return highestIP != 0;
-}
-
-// Interfaces
-interface::Interface* VirtualRouter::addInterface(interface::Interface* interface, uint32_t key)
-{
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
-    if (interfaceList.find(key) != interfaceList.end())
-    {
-        return nullptr;
-    }
-    interfaceList[key] = interface;
-    return interfaceList[key];
-}
-
-interface::Interface* VirtualRouter::getInterface(uint32_t key)
-{
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
-    if (interfaceList.find(key) != interfaceList.end())
-    {
-        return interfaceList[key];
-    }
-    return nullptr;
-}
-
-std::unordered_map<uint32_t, interface::Interface*> VirtualRouter::getinterfaceList()
-{
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
-    return interfaceList;
-}
-
-bool VirtualRouter::removeInterface(uint32_t key)
-{
-    std::shared_lock<std::shared_mutex> lock(interfaceMutex);
-    if (interfaceList.find(key) != interfaceList.end())
-    {
-        interfaceList.erase(key);
-        return true;
-    }
-    return false;
 }
 
 // Eigrp Autonomous Systems

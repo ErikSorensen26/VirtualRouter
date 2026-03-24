@@ -51,19 +51,16 @@ static bool getDestinationMac(uint64_t& outMac, interface::Interface* iface, con
             outMac = utils::readU48(macBuf);
             return true;
         }
-        if (iface->arp)
+        types::IPv4Address v4addr(destIp.v4());
+        if (iface->arp.getMac(macBuf, v4addr))
         {
-            types::IPv4Address v4addr(destIp.v4());
-            if (iface->arp->getMac(macBuf, v4addr))
-            {
-                outMac = utils::readU48(macBuf);
-                return true;
-            }
-            else
-            {
-                iface->arp->resolveAndSend(v4addr, packet);
-                return false;
-            }
+            outMac = utils::readU48(macBuf);
+            return true;
+        }
+        else
+        {
+            iface->arp.resolveAndSend(v4addr, packet);
+            return false;
         }
     }
     else
@@ -74,19 +71,16 @@ static bool getDestinationMac(uint64_t& outMac, interface::Interface* iface, con
             outMac = utils::readU48(macBuf);
             return true;
         }
-        if (iface->ndp)
+        types::IPv6Address v6addr(destIp.v6());
+        if (iface->ndp.getMac(macBuf, v6addr))
         {
-            types::IPv6Address v6addr(destIp.v6());
-            if (iface->ndp->getMac(macBuf, v6addr))
-            {
-                outMac = utils::readU48(macBuf);
-                return true;
-            }
-            else
-            {
-                iface->ndp->resolveAndSend(v6addr, packet);
-                return false;
-            }
+            outMac = utils::readU48(macBuf);
+            return true;
+        }
+        else
+        {
+            iface->ndp.resolveAndSend(v6addr, packet);
+            return false;
         }
     }
     return false; // Resolution disabled

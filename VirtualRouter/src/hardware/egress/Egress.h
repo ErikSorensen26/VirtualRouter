@@ -12,7 +12,7 @@ namespace hardware::egress
 class EgressXdp;
 class EgressPacket;
 
-inline static EgressBase* create(interface::Interface* iface, const qos::egress::TxQueueOpts& opts);
+EgressBase* create(interface::Interface* iface, const qos::egress::TxQueueOpts& opts);
 } // namespace hardware
 
 #endif

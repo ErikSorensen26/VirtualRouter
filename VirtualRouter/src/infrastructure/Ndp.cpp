@@ -10,6 +10,7 @@
 #include "IPPacket.h"
 #include "processing/PacketBuilder.hpp"
 #include "Ethernet.h"
+#include "interface/InterfaceManager.h"
 
 namespace infrastructure
 {
@@ -110,6 +111,11 @@ void Ndp::shutdown()
         }
         raTimerIds.clear();
     }
+}
+
+bool Ndp::isShutdown()
+{
+    return !running.load(std::memory_order_relaxed);
 }
 
 void Ndp::addNdpEntry(types::IPv6Address targetIp, uint64_t targetMac, bool proxy, bool isStatic)
@@ -339,7 +345,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
             std::shared_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
             for (const auto& addr : currentInterface->configs.ipv6.globalAddresses)
             {
-                if (addr->addr == addrValue && addr->tentative && targetIp == IPV6_SOURCE)
+                if (addr->prefix == addrValue && addr->tentative && targetIp == IPV6_SOURCE)
                 {
                     std::lock_guard<std::mutex> lk(neighborReplyStatusMutex);
                     neighborReplyStatus[targetIp] = true;
@@ -751,7 +757,7 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, uint64_t current
         {
             if (!addr->valid) continue;
 
-            const uint8_t prefixLen = addr->length;
+            const uint8_t prefixLen = addr->prefix.prefixLength;
             uint8_t flags = 0;
             flags |= 0x80; // L = on-link
             flags |= 0x40; // A = autonomous
@@ -774,7 +780,7 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, uint64_t current
             utils::writeU32(value + 4, lifetime);
             utils::writeU32(value + 8, preferredLifetime);
             utils::writeU32(value + 12, 0);
-            utils::writeU128(value + 16, types::IPv6Address{addr->addr.addr, prefixLen}.addr);
+            utils::writeU128(value + 16, types::IPv6Address{addr->prefix.addr, prefixLen}.addr);
 
             options.append(ICMPV6_OPTION_NDP_PREFIX, 4, value, 30);
         }
@@ -1054,7 +1060,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
             if (A && validLifetime > 0 && preferredLifetime <= validLifetime && configs.slaacEnabled.load(std::memory_order_relaxed))
             {
                 interface::InterfaceConfigs::IPv6State::IPv6Address* slaacAddr = new interface::InterfaceConfigs::IPv6State::IPv6Address();
-                slaacAddr->length = prefixLen;
+                slaacAddr->prefix.prefixLength = prefixLen;
                 slaacAddr->tentative = true;
                 slaacAddr->valid = false;
                 slaacAddr->globalTentative = true;
@@ -1064,9 +1070,9 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
 
                 uint8_t mac[6];
                 uint8_t slac[16];
-                // TODO
+                // TODO: fix this
                 calculateEui64(slac, opt.value + 14, currentInterface->configs.getMac(mac));
-                slaacAddr->addr = utils::readU128(slac);
+                slaacAddr->prefix.addr = utils::readU128(slac);
 
                 {
                     std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
@@ -1093,7 +1099,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
                     }
                 );
 
-                duplicateAddressDetection(*slaacAddr, false);
+                duplicateAddressDetection(*slaacAddr);
             }
         }
     }
@@ -1126,7 +1132,7 @@ void Ndp::receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IP
     }
 }
 
-void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6Address& addr, bool isLinkLocal)
+void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 {
     if (global.configs.nsfActive.load(std::memory_order_relaxed))
     {
@@ -1142,15 +1148,15 @@ void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6
                 return; // Drop new resolution due to throttle limit
             }
             std::lock_guard<std::mutex> lock(requestMutex);
-            if (!pendingDadReschedules.count(addr.addr))
+            if (!pendingDadReschedules.count(addr.prefix.addr))
             {
                 pendingDadReschedules.emplace(
-                    addr.addr,
+                    addr.prefix.addr,
                     global.timeManager.addTimer(
                         global.configs.nsfStartTime + suppressWindow,
-                        [this, &addr, ip = addr.addr, isLinkLocal](uint32_t) {
+                        [this, &addr, ip = addr.prefix.addr](uint32_t) {
                             pendingDadReschedules.erase(ip);
-                            duplicateAddressDetection(addr, isLinkLocal);
+                            duplicateAddressDetection(addr);
                         }
                     )
                 );
@@ -1171,39 +1177,39 @@ void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6
 
     {
         std::lock_guard<std::mutex> lock(requestMutex);
-        nsRetryCount[addr.addr] = 0;
+        nsRetryCount[addr.prefix.addr] = 0;
     }
 
     // Clear existing entry in the cache (DAD must be clean)
     {
         std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
-        ndpCache.erase(addr.addr);
+        ndpCache.erase(addr.prefix.addr);
     }
 
     // Register traching for replies
     {
         std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
-        neighborReplyStatus[addr.addr] = false;
+        neighborReplyStatus[addr.prefix.addr] = false;
     }
 
     // Start DAD
-    preformDad(addr, isLinkLocal);
+    preformDad(addr);
 }
 
-void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr, bool isLinkLocal)
+void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 {
     // Local capture values
     const int maxAttempts = configs.dadAttempts.load(std::memory_order_relaxed);
     const auto delay = std::chrono::milliseconds(configs.dadTime.load(std::memory_order_relaxed));
 
-    int attempt = nsRetryCount[addr.addr];
+    int attempt = nsRetryCount[addr.prefix.addr];
     // Check if reply was received
     bool isDuplicate = false;
     {
         std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
-        if (neighborReplyStatus.count(addr.addr))
+        if (neighborReplyStatus.count(addr.prefix.addr))
         {
-            isDuplicate = neighborReplyStatus[addr.addr];
+            isDuplicate = neighborReplyStatus[addr.prefix.addr];
         }
     }
 
@@ -1215,7 +1221,7 @@ void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr, 
             addr.tentative = false;
             addr.valid = false;
         }
-        currentInterface->markAddressDuplicate(addr.addr, isLinkLocal);
+        currentInterface->markAddressDuplicate(addr.prefix);
         remove = true;
     }
     else if (attempt >= maxAttempts)
@@ -1223,20 +1229,19 @@ void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr, 
         std::unique_lock<std::shared_mutex> lock(currentInterface->configs.ipMutex);
         addr.tentative = false;
         addr.valid = true;
+        currentInterface->setIPv6Ready(addr.prefix);
         remove = true;
     }
     else
     {
         // Send anonymous NS (source = ::, no MAC option)
         processing::PacketBuilder ns(currentInterface);
-        neighborSolicitation(ns, addr.addr, nullptr);
-        uint8_t multicastSolicitation[16];
-
+        neighborSolicitation(ns, addr.prefix, nullptr);
         {
             ippacket::BuildIP build = {
                 .iface = currentInterface,
                 .packetInfo = ns,
-                .destIp = generateMulticastSolicitationAddress(addr.addr),
+                .destIp = generateMulticastSolicitationAddress(addr.prefix),
                 .sourceIp = IPV6_SOURCE,
                 .protocolType = IP_ICMPV6
             };
@@ -1244,18 +1249,18 @@ void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr, 
             ippacket::buildIpv6(build);
         }
 
-        pendingRequests.insert(addr.addr);
-        nsRetryCount[addr.addr]++;
+        pendingRequests.insert(addr.prefix);
+        nsRetryCount[addr.prefix]++;
 
         uint32_t timerId = global.timeManager.addTimer(
             std::chrono::steady_clock::now() + delay,
-            [this, &addr, isLinkLocal](uint32_t) {
-                preformDad(addr, isLinkLocal);
+            [this, &addr](uint32_t) {
+                preformDad(addr);
             }
         );
         {
             std::lock_guard<std::mutex> lock(requestMutex); // reuse existing mutex
-            dadTimers[addr.addr] = timerId;
+            dadTimers[addr.prefix] = timerId;
         }
 
     }
@@ -1264,14 +1269,14 @@ void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr, 
     {
         {
             std::lock_guard<std::mutex> lock(requestMutex);
-            pendingRequests.erase(addr.addr);
-            nsRetryCount.erase(addr.addr);
-            dadTimers.erase(addr.addr);
+            pendingRequests.erase(addr.prefix);
+            nsRetryCount.erase(addr.prefix);
+            dadTimers.erase(addr.prefix);
         }
 
         {
             std::lock_guard<std::mutex> lock(neighborReplyStatusMutex);
-            neighborReplyStatus.erase(addr.addr);
+            neighborReplyStatus.erase(addr.prefix);
         }
     }
 

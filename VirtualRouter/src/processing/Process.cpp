@@ -53,8 +53,8 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
             case packet::HeaderType::ARP:
             {
                 GET_HEADER(arp, packet::ArpHeader)
-                if (arp.getOpcode() == ARP_OPCODE_REQUEST) interface->arp->sendReply(utils::readU48(arp.getSenderHwAddr()), arp.getSenderIpAddr());
-                if (arp.getOpcode() == ARP_OPCODE_REPLY) interface->arp->receiveReply(arp);
+                if (arp.getOpcode() == ARP_OPCODE_REQUEST) interface->arp.sendReply(utils::readU48(arp.getSenderHwAddr()), arp.getSenderIpAddr());
+                if (arp.getOpcode() == ARP_OPCODE_REPLY) interface->arp.receiveReply(arp);
                 break;
             }
             case packet::HeaderType::MPLS:
@@ -93,7 +93,7 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
             }
             case packet::HeaderType::ICMPV6:
             {
-                if (!interface || !interface->ndp) return;
+                if (!interface || interface->ndp.isShutdown()) return;
                 auto currentAddr = interface->configs.ipv6.getLocalAddress();
                 GET_HEADER_EXTENDED(icmp, packet::Icmpv6Header)
 
@@ -102,12 +102,12 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
                     case 0x85:
                     {
                         if (types::IPv6Address{utils::readU128(icmp.getTrail().data())}.addr != currentAddr.addr) break;
-                        interface->ndp->sendRouteAdvertisement(utils::readU48(mac), types::IPv6Address{utils::readU128(icmp.getTrail().data())});
+                        interface->ndp.sendRouteAdvertisement(utils::readU48(mac), types::IPv6Address{utils::readU128(icmp.getTrail().data())});
                         break;
                     }
                     case 0x86:
                     {
-                        interface->ndp->receiveRouteAdvertisement(icmp, types::IPv6Address{utils::readU128(address)}, utils::readU48(mac));
+                        interface->ndp.receiveRouteAdvertisement(icmp, types::IPv6Address{utils::readU128(address)}, utils::readU48(mac));
                         break;
                     }
                     case 0x87:
@@ -124,12 +124,12 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
                                 break;
                             }
                         }
-                        interface->ndp->sendNeighborAdvertisement(utils::readU48(mac), types::IPv6Address{utils::readU128(address)});
+                        interface->ndp.sendNeighborAdvertisement(utils::readU48(mac), types::IPv6Address{utils::readU128(address)});
                         break;
                     }
                     case 0x88:
                     {
-                        interface->ndp->receiveNeighborAdvertisement(icmp, types::IPv6Address{utils::readU128(address)});
+                        interface->ndp.receiveNeighborAdvertisement(icmp, types::IPv6Address{utils::readU128(address)});
                         break;
                     }
                     default:

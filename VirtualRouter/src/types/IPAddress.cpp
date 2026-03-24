@@ -1,5 +1,6 @@
 // IPAddress.cpp
 
+#include <ByteUtils.hpp>
 #include "IPAddress.h"
 
 namespace types
@@ -347,22 +348,22 @@ void IPv6Address::addPrefixLen(uint8_t newPrefixLen)
         : addr & ((__uint128_t)(-1) << (128 - newPrefixLen));
 }
 
-bool IPv6Address::isMulticast()
+bool IPv6Address::isMulticast() const
 {
     return raw()[0] == 0xFF;
 }
 
-bool IPv6Address::isLocalLink()
+bool IPv6Address::isLocalLink() const
 {
     return raw()[0] == 0xFE && (raw()[1] & 0xC0) == 0x80;
 }
 
-bool IPv6Address::isGlobalUnicast()
+bool IPv6Address::isGlobalUnicast() const
 {
     return raw()[0] == 0xFD;
 }
 
-bool IPv6Address::isLocalUnicast()
+bool IPv6Address::isLocalUnicast() const
 {
     return (raw()[0] &0xE0) == 0x20;
 }
@@ -536,6 +537,34 @@ void IPPrefix::addPrefixLen(uint8_t newPrefixLen)
             ? (__uint128_t)0
             : addr & ((__uint128_t)(-1) << (128 - newPrefixLen));
     }
+}
+
+bool IPPrefix::isMulticast() const
+{
+    if (isIPv4())
+    {
+        return (v4raw()[0] & 0xE0) == 0xE0;
+    }
+    else if (isIPv6())
+    {
+        return v6raw()[0] == 0xFF;
+    }
+    return false;
+}
+
+bool IPPrefix::isLocalLink() const
+{
+    return isIPv6() && v6raw()[0] == 0xFE && (v6raw()[1] & 0xC0) == 0x80;
+}
+
+bool IPPrefix::isGlobalUnicast() const
+{
+    return isIPv6() && v6raw()[0] == 0xFD;
+}
+
+bool IPPrefix::isLocalUnicast() const
+{
+    return isIPv6() && (v6raw()[0] &0xE0) == 0x20;
 }
 
 bool IPPrefix::operator==(const IPPrefix& o) const
@@ -741,6 +770,11 @@ void IPv4Prefix::addPrefixLen(uint8_t newPrefixLen)
     addr = newPrefixLen == 0 ? 0u : addr & (0xFFFFFFFFu << (32 - newPrefixLen));
 }
 
+bool IPv4Prefix::isMulticast() const
+{
+    return (raw()[0] & 0xE0) == 0xE0;
+}
+
 bool IPv4Prefix::operator==(const IPv4Prefix& o) const
 {
     return addr == o.addr && prefixLength == o.prefixLength;
@@ -878,6 +912,26 @@ void IPv6Prefix::addPrefixLen(uint8_t newPrefixLen)
 {
     addr = newPrefixLen == 0
         ? (__uint128_t)0 : addr & ((__uint128_t)(-1) << (128 - newPrefixLen));
+}
+
+bool IPv6Prefix::isMulticast() const
+{
+    return raw()[0] == 0xFF;
+}
+
+bool IPv6Prefix::isLocalLink() const
+{
+    return raw()[0] == 0xFE && (raw()[1] & 0xC0) == 0x80;
+}
+
+bool IPv6Prefix::isGlobalUnicast() const
+{
+    return raw()[0] == 0xFD;
+}
+
+bool IPv6Prefix::isLocalUnicast() const
+{
+    return (raw()[0] &0xE0) == 0x20;
 }
 
 bool IPv6Prefix::operator==(const IPv6Prefix& o) const

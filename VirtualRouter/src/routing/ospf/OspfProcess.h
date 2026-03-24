@@ -5,6 +5,7 @@
 
 #include <ControlScheduler.h>
 
+#include "interface/InterfaceManager.h"
 #include "ospf/interface/InterfaceManager.h"
 #include "ospf/area/Area.h"
 #include "ospf/topology/RoutingTable.h"
@@ -44,6 +45,7 @@ public:
     using V2AfConfigs = config::Reference<config::OspfAddressFamilyV2Registry>;
 
     OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf);
+    ~OspfProcess();
 
     // External Origination
     template <typename Policy>
@@ -156,6 +158,9 @@ private:
     const uint16_t procId;
     const types::AddressFamily af;
     InterfaceManager ifaceMgr;
+
+    // Interface event subscriptions
+    uint32_t ifUpId, ifDownId, ipReadyId, ipDelId;
 
     // Configs
     std::variant<std::monostate, V3AfConfigs, V2AfConfigs> afConfigs;

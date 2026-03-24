@@ -45,6 +45,9 @@ private:
     friend class Listener;
     friend class Connection;
 
+    // TCP interface event subscriptions
+    uint32_t tcpIfDownId, tcpIPv4DelId, tcpIPv6DelId, tcpIPv6LlDelId;
+
     TcpEngine* engine{nullptr};
 };
 

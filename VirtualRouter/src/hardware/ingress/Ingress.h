@@ -10,7 +10,7 @@ namespace hardware::ingress
 class IngressXdp;
 class IngressPacket;
 
-inline static IngressBase* create(interface::Interface* iface, const qos::ingress::RxQueueOpts& opts);
+IngressBase* create(interface::Interface* iface, const qos::ingress::RxQueueOpts& opts);
 } // namespace hardware
 
 #endif

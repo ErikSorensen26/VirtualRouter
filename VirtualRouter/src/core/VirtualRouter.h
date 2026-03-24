@@ -5,12 +5,12 @@
 
 #include <string>
 #include <set>
-#include <shared_mutex>
 #include <AddressFamily.hpp>
 
 #include "tcp/Tcp.h"
 #include "configs/Registry.hpp"
 #include "routing/RoutingTable.hpp"
+#include "interface/InterfaceManager.h"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
@@ -122,6 +122,16 @@ public:
     ~VirtualRouter();
 
     /**
+     * @brief Returns if this VRF is empty and able to be deconstructed.
+     *
+     * If this VRF is not empty, meaning something is referencing it, then
+     * it cannot safely be deleted.
+     *
+     * @return true if empty, otherwise false.
+     */
+    bool empty();
+
+    /**
      * @brief Calculates a Router ID for a routing process.
      *
      * Performs a full router ID calculation covering all interfaces in the VRF
@@ -144,58 +154,6 @@ public:
      * Protocols will not initialize for disabled AFs.
      */
     std::set<types::AddressFamily> enabledAddressFamilies;
-
-    // INTERFACE MANAGEMENT
-
-    /**
-     * @brief Attach an existing interface::Interface to this VRF.
-     *
-     * Inserts the interface into the VRF's interface map, allowing routing protocols
-     * and packet processing engines operating inside the VRF to discover and use it.
-     *
-     * @param interface Pointer to the interface object.
-     * @param key       Globally unique interface key (derived from type + ID).
-     *
-     * @return The inserted interface pointer, or nullptr if the key already exists.
-     *
-     * @note interface::Interface ownership stays in the Global controller.
-     * @thread_safety Uses a shared lock internally.
-     */
-    interface::Interface* addInterface(interface::Interface* interface, uint32_t key);
-
-    /**
-     * @brief Retrieve an interface from the VRF by its key.
-     *
-     * @param key Unique interface key.
-     * @return The interface::Interface pointer, or nullptr if not present in this VRF.
-     *
-     * @thread_safety Shared read lock.
-     */
-    interface::Interface* getInterface(uint32_t key);
-
-    /**
-     * @brief Obtain a snapshot copy of the interface list.
-     *
-     * @return A copy of the unordered_map of interface keys to interface::Interface pointers.
-     *
-     * The returned map is safe for iteration without holding the lock, but may not
-     * reflect subsequent modifications.
-     *
-     * @thread_safety Uses shared read lock.
-     */
-    std::unordered_map<uint32_t, interface::Interface*> getinterfaceList();
-
-    /**
-     * @brief Remove an interface from this VRF's interface table.
-     *
-     * Does NOT delete the actual interface; ownership stays global.
-     *
-     * @param key interface::Interface key to remove.
-     * @return True if removed, false if not found.
-     *
-     * @thread_safety Shared read lock.
-     */
-    bool removeInterface(uint32_t key);
 
     // EIGRP AUTONOMOUS SYSTEMS
 
@@ -344,10 +302,8 @@ public:
      */
     bool removeOspfv3(uint16_t id, types::AddressFamily af);
 
-    std::shared_mutex interfaceMutex; ///< Protects interfaceList.
-    std::unordered_map<uint32_t, interface::Interface*> interfaceList; ///< Interfaces belonging to this VRF.
-
     // GLOBAL HELPERS
+    interface::InterfaceManager& getInterfaceManager() { return ifaceMgr; }
     config::Registry& getRegistry();
     std::string getName() { return instanceName; }
     uint32_t getInstanceId() { return instanceId; }
@@ -373,6 +329,7 @@ private:
 
     std::string instanceName; ///< Human-readable VRF identifier.
 
+    interface::InterfaceManager ifaceMgr;
     RoutingTable routingTable; ///< Per-VRF Routing Table (RIB + FIB generation logic).
     Global& global; ///< Reference to global system controller.
 };

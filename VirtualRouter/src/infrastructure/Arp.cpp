@@ -12,6 +12,8 @@
 #include "processing/PacketBuilder.hpp"
 #include "Ethernet.h"
 
+// TODO: Have the ability to insert entries when shutdown
+
 namespace infrastructure
 {
 // Constructor: Initiates the ARP object with the given interface
@@ -78,6 +80,11 @@ void Arp::shutdown()
 
     incompletes.store(0, std::memory_order_release);
     pendingIncompletes.clear();
+}
+
+bool Arp::isShutdown()
+{
+    return !running.load(std::memory_order_relaxed);
 }
 
 void Arp::addArpEntry(types::IPv4Address targetIp, uint64_t targetMac, bool proxy, bool isStatic)

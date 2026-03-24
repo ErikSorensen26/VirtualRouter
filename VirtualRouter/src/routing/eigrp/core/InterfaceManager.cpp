@@ -109,7 +109,7 @@ void InterfaceManager::refreshInterfaceList()
         bool isNamed = base.isNamed();
         uint32_t as = base.getAS();
 
-        for (const auto& [id, interface] : base.routingInstance->interfaceList)
+        for (const auto& [id, interface] : base.routingInstance->getInterfaceManager().snapshot())
         {
             if (!interface || interface->shutdownFlag.load(std::memory_order_relaxed))
                 continue;
@@ -134,8 +134,7 @@ void InterfaceManager::refreshInterfaceList()
                 {
                     auto& afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
-                    ipv6Contained = regIt != afIfaces.end() &&
-                                    !regIt->second.get().get<config::EigrpInterface::SHUTDOWN>().load();
+                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second.get().get<config::EigrpInterface::SHUTDOWN>().load();
                 }
                 if (!ipv6Contained)
                     ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&

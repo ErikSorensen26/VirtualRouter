@@ -32,12 +32,9 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
         core::GlobalConfigs::Arp::Neighbor entry = ctx.global.configs.arp.neighbors[vrfName][_arpIp];
         auto* vrf = ctx.global.getRoutingInstance(vrfName, types::AddressFamily::IPv4);
         types::IPv4Address addr = _arpIp;
-        if (auto iface = vrf ? ctx.vrf.getInterface(entry.interface) : nullptr)
+        if (auto iface = vrf ? ctx.vrf.getInterfaceManager().get(entry.interface) : nullptr)
         {
-            if (iface->arp)
-            {
-                iface->arp->removeArpEntry(addr);
-            }
+            iface->arp.removeArpEntry(addr);
         }
         ctx.global.configs.arp.neighbors[vrfName].erase(addr);
     }
@@ -51,12 +48,9 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
 
         ctx.global.configs.arp.neighbors[vrfName].emplace(_arpIp, entry);
         auto* vrf = ctx.global.getRoutingInstance(vrfName, types::AddressFamily::IPv4);
-        if (auto iface = vrf ? vrf->getInterface(ifaceKey) : nullptr)
+        if (auto iface = vrf ? vrf->getInterfaceManager().get(ifaceKey) : nullptr)
         {
-            if (iface->arp)
-            {
-                iface->arp->addArpEntry(_arpIp, entry.mac, entry.proxy, true);
-            }
+            iface->arp.addArpEntry(_arpIp, entry.mac, entry.proxy, true);
         }
     }
     return true;
@@ -113,7 +107,7 @@ bool Global_Interface_Handler(GLOBAL_PARAMS)
         if (ctx.negate)
         {
             ctx.global.removeInterface(key);
-            ctx.vrf.removeInterface(key);
+            ctx.vrf.getInterfaceManager().remove(key);
         }
         else
         {
@@ -122,7 +116,7 @@ bool Global_Interface_Handler(GLOBAL_PARAMS)
             if (!info) return false;
             const hardware::HwIfaceInfo& hwInfo = *info;
             ctx.global.addInterface(interfaceType, hwInfo, ctx.terminal.interfaceID, ctx.terminal.isDebugModeEnabled);
-            ctx.vrf.addInterface(ctx.global.getInterface(key), key);
+            ctx.vrf.getInterfaceManager().add(ctx.global.getInterface(key), key);
         }
     }
     ctx.terminal.changeMode<CliMode::Interface>(*ctx.global.getInterface(key));

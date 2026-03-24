@@ -356,7 +356,7 @@ public:
      * @return int Reference to cursor position
      * @note This returns a reference, be carefull.
      */
-    size_t& getInputCursorPosition() { return cursorPos; }
+    size_t getInputCursorPosition() { return cursorPos; }
 
     /**
      * @brief Get the initial command length
@@ -364,7 +364,7 @@ public:
      * @return int Reference to cursor position
      * @note This returns a reference, be carefull.
      */
-    size_t& getInitialLineLength() { return initialLineLength; }
+    size_t getInitialLineLength() { return initialLineLength; }
 
     std::vector<std::string> getHistory() { return history; }
 

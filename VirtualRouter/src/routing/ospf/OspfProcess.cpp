@@ -38,6 +38,55 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
 {
     configs->context().set(this);
     calculateRID();
+
+    // Subscribe to interface lifecycle events so the interface list stays
+    auto& ifMgr = vrf->getInterfaceManager();
+
+    auto postRefresh = [](void* ctx, interface::Interface&) {
+        auto* p = static_cast<OspfProcess*>(ctx);
+        p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+    };
+
+    ifUpId   = ifMgr.subscribe(interface::StateChange::IF_READY, this, postRefresh);
+    ifDownId = ifMgr.subscribe(interface::StateChange::IF_DOWN,  this, postRefresh);
+
+    if (!isV3)
+    {
+        auto postRefreshV4 = [](void* ctx, interface::Interface&, types::IPv4Prefix&) {
+            auto* p = static_cast<OspfProcess*>(ctx);
+            p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+        };
+        ipReadyId = ifMgr.subscribe(interface::IPv4Event::IPV4_READY, this, postRefreshV4);
+        ipDelId   = ifMgr.subscribe(interface::IPv4Event::IPV4_DEL,   this, postRefreshV4);
+    }
+    else
+    {
+        auto postRefreshV6 = [](void* ctx, interface::Interface&, types::IPv6Prefix&) {
+            auto* p = static_cast<OspfProcess*>(ctx);
+            p->scheduler.post([p]{ p->ifaceMgr.refreshInterfaceList(); });
+        };
+        ipReadyId = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_READY, this, postRefreshV6);
+        ipDelId   = ifMgr.subscribe(interface::IPv6Event::IPV6_LL_DEL,   this, postRefreshV6);
+    }
+}
+
+OspfProcess::~OspfProcess()
+{
+    // Unsubscribe before the scheduler and interface state tear down.
+    auto& ifMgr = routingInstance->getInterfaceManager();
+    ifMgr.unsubscribe(interface::InterfaceManager::StateEventMgr::Id{ifUpId});
+    ifMgr.unsubscribe(interface::InterfaceManager::StateEventMgr::Id{ifDownId});
+    if (!isV3)
+    {
+        ifMgr.unsubscribe(interface::InterfaceManager::IPv4EventMgr::Id{ipReadyId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPv4EventMgr::Id{ipDelId});
+    }
+    else
+    {
+        ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{ipReadyId});
+        ifMgr.unsubscribe(interface::InterfaceManager::IPv6EventMgr::Id{ipDelId});
+    }
+    ifaceMgr.deactivateAll();
 }
 
 bool OspfProcess::calculateRID()
