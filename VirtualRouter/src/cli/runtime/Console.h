@@ -10,251 +10,13 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <vector>
+#include <Mock.hpp>
+#include "ConsoleController.hpp"
 
 class ConsoleTest; ///< Forward declaration of ConsoleTest
 
 namespace cli
 {
-/**
- * @enum Color
- * @brief Represents all available terminal colors.
- */
-enum class Color
-{
-    BLACK,
-    RED,
-    GREEN,
-    YELLOW,
-    BLUE,
-    MAGENTA,
-    CYAN,
-    WHITE,
-    NONE,
-
-    // Secret prompt option
-    TERMINAL,
-    PROMPT
-};
-
-/**
- * @struct CursorPosition
- * @brief Represents the cursor's position in terms of row and comumn.
- */
-struct CursorPosition 
-{
-    int row = 0; ///< The row position of the cursor.
-    int col = 0; ///< The column position of the cursor.
-};
-
-class IConsole
-{
-public:
-
-    virtual ~IConsole() = default;
-
-    // Clears the terminal screen and moves the cursor to home
-    virtual void clearScreen() = 0;
-
-    // Enable line wrapping
-    virtual void enableLineWrapping() = 0;
-
-    // Clears from the cursor to the end of the line
-    virtual void clearLineAfterCursor() = 0;
-
-    // Saves the current cursor position
-    virtual void saveCursorPosition() = 0;
-
-    // Restores the cursor position
-    virtual void restoreCursorPosition() = 0;
-
-    // Moves the cursor to the start of the line
-    virtual void moveCursorToStart() = 0;
-
-    // Moves the cursor left by 'count' positions
-    virtual void moveCursorLeft(size_t count = 1) = 0;
-
-    // Moves the cursor right by 'count' positions
-    virtual void moveCursorRight(size_t count = 1) = 0;
-
-    // Moves the cursor up by 'count' positions
-    virtual void moveCursorUp(size_t count = 1) = 0;
-
-    // Moves the cursor down by 'count' positions
-    virtual void moveCursorDown(size_t count = 1) = 0;
-
-    // Prints a string to the terminal
-    virtual void print(const std::string& str, Color color = Color::NONE) = 0;
-
-    // Flushes cout if able to
-    virtual void flush() = 0;
-
-    // Gets the current cursor position
-    virtual CursorPosition getCursorPosition() = 0;
-
-    // Gets the terminal width
-    virtual size_t getTerminalWidth() = 0;
-
-    // Beep sound
-    virtual void beep() = 0;
-};
-
-class RealConsole : public IConsole
-{
-public:
-    virtual ~RealConsole() override = default;
-
-    void clearScreen() override 
-    {
-        print("\033[2J\033[H"); // ANSI escape to clear screen and move cursor to home
-    }
-
-    void enableLineWrapping() override 
-    {
-        print("\033[?7h"); // Enable line wrapping
-    }
-
-    void clearLineAfterCursor() override 
-    {
-        print("\033[K"); // Clear from cursor to end of line
-    }
-
-    void saveCursorPosition() override 
-    {
-        print("\033[s"); // Save cursor position
-    }
-
-    void restoreCursorPosition() override 
-    {
-        print("\033[u"); // Restore cursor position
-    }
-    void moveCursorToStart() override
-    {
-        print("\033[1G");
-    }
-
-    void moveCursorLeft(size_t count) override 
-    {
-        if (count > 0) {
-            print("\033[" + std::to_string(count) + "D"); // Move cursor left
-        }
-    }
-
-    void moveCursorRight(size_t count) override 
-    {
-        if (count > 0) {
-            print("\033[" + std::to_string(count) + "C"); // Move cursor right
-        }
-    }
-
-    void moveCursorUp(size_t count) override 
-    {
-        if (count > 0) {
-            print("\033[" + std::to_string(count) + "A"); // Move cursor up
-        }
-    }
-
-    void moveCursorDown(size_t count) override 
-    {
-        if (count > 0) {
-            print("\033[" + std::to_string(count) + "B"); // Move cursor down
-        }
-    }
-
-    void print(const std::string& str, Color color = Color::NONE) override 
-    {
-        switch (color)
-        {
-            case Color::BLACK:
-                std::cout << "\033[1;30m" << str << "\033[0m";
-                break;
-            case Color::RED:
-                std::cout << "\033[1;31m" << str << "\033[0m";
-                break;
-            case Color::GREEN:
-                std::cout << "\033[1;32m" << str << "\033[0m";
-                break;
-            case Color::YELLOW:
-                std::cout << "\033[1;33m" << str << "\033[0m";
-                break;
-            case Color::BLUE:
-                std::cout << "\033[1;34m" << str << "\033[0m";
-                break;
-            case Color::MAGENTA:
-                std::cout << "\033[1;35m" << str << "\033[0m";
-                break;
-            case Color::CYAN:
-                std::cout << "\033[1;36m" << str << "\033[0m";
-                break;
-            case Color::WHITE:
-                std::cout << "\033[1;37m" << str << "\033[0m";
-                break;
-            case Color::NONE:
-                std::cout << str;
-                break;
-            default:
-                std::cout << str;
-        }
-    }
-
-    void flush() override
-    {
-        std::cout.flush();
-    }
-
-    CursorPosition getCursorPosition() override 
-    {
-        CursorPosition pos{-1, -1};
-        termios orig, raw;
-        tcgetattr(STDIN_FILENO, &orig); // Save original state
-        raw = orig;
-
-        // Turn off canonical & echo
-        raw.c_lflag &= static_cast<unsigned int>(~(ICANON | ECHO));
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-
-        // Ask terminal for position
-        std::cout << "\033[6n";
-        std::cout.flush();
-
-        char buf[32];
-        size_t i = 0;
-        while (i < sizeof(buf) - 1)
-        {
-            if (read(STDIN_FILENO, buf + i, 1) != 1)
-            {
-                break;
-            }
-            if (buf[i] == 'R')
-            {
-                break;
-            }
-            i++;
-        }
-        buf[i] = '\0';
-
-        // Restore terminal
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig);
-
-        // Parse row, col from e.g. "/033[12;40R"
-        if (buf[0] == '\033' && buf[1] == '[')
-        {
-            std::sscanf(buf, "\033[%d;%dR", &pos.row, &pos.col);
-        }
-        return pos;
-    }
-
-    size_t getTerminalWidth() override
-    {
-        struct winsize w;
-        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-        return w.ws_col > 0 ? w.ws_col : 80;
-    }
-
-    void beep() override 
-    {
-        std::cout << "\a"; // ASCII Bell character
-    }
-};
 
 /**
  * @class Console
@@ -273,24 +35,10 @@ public:
      * @brief Constructor for the Console class.
      *
      * Initializes the Console object of invoking the Configs constructor
-     */
-    Console();
-
-    /**
-     * @brief Constructor for the Console class.
-     *
-     * Initializes the Console object of invoking the Configs constructor
      *
      * @param term Terminal deciding whether it's simulated or not
      */
-    explicit Console(IConsole* term);
-
-    /**
-     * @brief Destructor for the Console class
-     *
-     * Cleans up any resources used by the Console object.
-     */
-    ~Console();
+    explicit Console(ConsoleController& term);
 
     /**
      * @brief Initializes the console settings.
@@ -369,7 +117,7 @@ public:
     std::vector<std::string> getHistory() { return history; }
 
     // Member variables for line wrapping and display.
-    IConsole* iConsole;  ///< Terminal deciding whether its using a simulated terminal.
+    ConsoleController& controller;  ///< Terminal deciding whether its using a simulated terminal.
 
 protected:
 

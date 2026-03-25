@@ -11,7 +11,7 @@
 #include <atomic>
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
-namespace cli { class IFileSystem; }
+namespace cli { class FileSystem; }
 
 namespace hardware
 {
@@ -28,8 +28,10 @@ class HardwareManager
 {
 public:
     using StateCallback = std::function<void(bool carrier)>;
-    HardwareManager(const std::string& hwConfigFile, cli::IFileSystem& fileSystem, bool enableDummies = false);
+    HardwareManager() = default;
     ~HardwareManager();
+
+    void addHardware(const std::string& hwConfigFile, cli::FileSystem& fileSystem, bool enableDummies = false);
 
     uint32_t getInterface(interface::InterfaceType type, int index);
 

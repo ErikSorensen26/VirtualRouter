@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <cstring>
 #include <net/if.h>
-#include <stdexcept>
 
 #include "RxQueueManager.h"
 
@@ -100,7 +99,7 @@ RxQueueManager::HwQueueCaps RxQueueManager::getHwRxQueues(const std::string& ifn
         caps.maxRx = (int)(ec.max_rx ? ec.max_rx : ec.max_combined);
         caps.curRx = (int)(ec.rx_count ? ec.rx_count : ec.combined_count);
         if (caps.maxRx <= 0) caps.maxRx = 1;
-        if (caps.curRx <= 0) caps.maxRx = 1;
+        if (caps.curRx <= 0) caps.curRx = 1;
     }
 
     ::close(s);
@@ -147,15 +146,6 @@ void RxQueueManager::reoptimize()
         ensureQueueCount(st, applied, order);
     }
 
-    /*if (cores.empty()) return;
-
-    for (auto& kv : ifs)
-    {
-        auto&  st = kv.second;
-        auto order = buildCoreOrder(st);
-        int target = computeTargetFor(st, (int)order.size());
-        ensureQueueCount(st, target, order);
-    }*/
 }
 
 int RxQueueManager::computeTargetFor(const IfState& st, int totalCores) const

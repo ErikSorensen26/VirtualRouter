@@ -43,14 +43,14 @@ bool handleArgs(int& argc, char* argv[], StartupArgs& opts)
 {
     const char* shortOpts = "hu:t:dc:s:H:";
     const option longOpts[] = {
-        {"help", no_argument, nullptr, 'h'},
-        {"unix", required_argument, nullptr, 'u'},
-        {"tcp", required_argument, nullptr, 't'},
-        {"no-default", no_argument, nullptr, 'd'},
-        {"config", required_argument, nullptr, 'c'},
-        {"startup-config", required_argument, nullptr, 's'},
-        {"hw-config", required_argument, nullptr, 'H'},
-        {"debug", no_argument, nullptr, 'D'},
+        {"help",          no_argument,       nullptr, 'h'},
+        {"unix",          required_argument, nullptr, 'u'},
+        {"tcp",           required_argument, nullptr, 't'},
+        {"no-default",    no_argument,       nullptr, 'd'},
+        {"config",        required_argument, nullptr, 'c'},
+        {"startup-config",required_argument, nullptr, 's'},
+        {"hw-config",     required_argument, nullptr, 'H'},
+        {"debug",         no_argument,       nullptr, 'D'},
         {nullptr, 0, nullptr, 0}
     };
 
@@ -103,17 +103,21 @@ bool handleArgs(int& argc, char* argv[], StartupArgs& opts)
     return true;
 }
 
-int main(int argc, char* argv[]) 
+// -------------------------------------------------------------------------
+
+int main(int argc, char* argv[])
 {
     StartupArgs opts;
     if (!handleArgs(argc, argv, opts)) return 0;
+
 
     if (opts.debug) {
         utils::setupCrashLogging();
     }
 
     utils::Logger::getInstance().initialize(true, /*isolateMode*/false);
-    core::Global* global = new core::Global(opts.fs, true);
+    cli::FileSystem fs;
+    core::Global* global = new core::Global(fs, opts.fs, true);
     cli::CliEngine& engine = global->engine;
 
     if (!opts.unixPath.empty())

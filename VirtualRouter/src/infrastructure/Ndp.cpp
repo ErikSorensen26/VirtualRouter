@@ -232,7 +232,7 @@ void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder&
 {
     {
         std::lock_guard<std::mutex> lock(packetQueueMutex);
-        packetQueuePerIp[targetIp].emplace(packetToSend);
+        packetQueuePerIp[targetIp].emplace(std::move(packetToSend));
     }
 
     if (global.configs.nsfActive.load(std::memory_order_relaxed))

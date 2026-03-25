@@ -319,6 +319,8 @@ private:
     uint32_t instanceId{0};
     const bool defaulted{false};
 
+    interface::InterfaceManager ifaceMgr;
+
     transport::tcp::Tcp tcpManager;
 
     std::unordered_map<uint32_t, routing::eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
@@ -329,7 +331,6 @@ private:
 
     std::string instanceName; ///< Human-readable VRF identifier.
 
-    interface::InterfaceManager ifaceMgr;
     RoutingTable routingTable; ///< Per-VRF Routing Table (RIB + FIB generation logic).
     Global& global; ///< Reference to global system controller.
 };

@@ -23,7 +23,7 @@ static std::string lowerCase(std::string str)
     return str;
 }
 
-CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), execution(*this), engine(engine)
+CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool enableDebug) : Console(controller), execution(*this), engine(engine)
 {
     // Set debug mode based on the input parameter
     configNode = &engine.getCommandTree();
@@ -36,25 +36,7 @@ CliSession::CliSession(CliEngine& engine, bool enableDebug) : Console(), executi
 
     // Initialize Console
     initConsole();
-    iConsole->print("Initializing Terminal...\r\n");
-}
-
-CliSession::CliSession(CliEngine& engine, IConsole* term) : Console(term), execution(*this), engine(engine)
-{
-    // Set debug mode based on the input parameter
-    isDebugModeEnabled = false;
-
-    // Set debug mode based on the input parameter
-    configNode = &engine.getCommandTree();
-    modeHistory.push_back(configNode);
-    changeMode<CliMode::UserExec>();
-
-    // Set initial mode
-    initializeProcessingState();
-
-    // Initialize Console
-    initConsole();
-    iConsole->print("Initializing Terminal...\r\n");
+    controller.print("Initializing Terminal...\r\n");
 }
 
 void CliSession::handlePrompt()
@@ -84,7 +66,7 @@ void CliSession::handlePrompt()
         input = nextLine;
         cursorPos = input.size();
         oldInputLength = input.size();
-        iConsole->print(nextLine);
+        controller.print(nextLine);
         nextLine.clear();
     }
 
@@ -100,7 +82,7 @@ bool CliSession::handleInput(std::string test)
     if (userCommand == "CRT-Z" && getMode() != CliMode::UserExec) {
         if (!changeMode<CliMode::PrivilegedExec>())
         {
-            iConsole->print("\r\n");
+            controller.print("\r\n");
             return false;
         }
     }
@@ -117,7 +99,7 @@ bool CliSession::handleInput(std::string test)
     if (!executeCommand(userCommand))
     {
         if (paginationList.size() > 0) return false;
-        iConsole->print("\r\n");
+        controller.print("\r\n");
         handlePrompt();
         return false;
     }
@@ -129,7 +111,7 @@ bool CliSession::handleInput(std::string test)
         return false;
     }
 
-    iConsole->print("\r\n");
+    controller.print("\r\n");
     handlePrompt();
     return true;
 }
@@ -298,7 +280,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
         else if (!isMatchSuccessful && (word == "?") && ((previousCommandList.size() == 1 && previousCommandList[0].name == "<error>")))
         {
             nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
-            iConsole->print(std::string("\r\n%") + " Unrecognized command");
+            controller.print(std::string("\r\n%") + " Unrecognized command");
             return word == "?";
         }
 
@@ -312,7 +294,7 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
     if (previousCommandList[0].name == "<error>")
     {
         nextLine = inputCommand.substr(0, inputCommand.size() - 1);
-        iConsole->print(std::string("\r\n%") + " Unrecognized command");
+        controller.print(std::string("\r\n%") + " Unrecognized command");
     }
     else if (previousCommandList[0].name != "<cr>")
     {
@@ -428,7 +410,7 @@ void CliSession::handleInvalidInputMarker(const std::string& formattedOldCommand
     std::string hostname = engine.global.getHostname();
     // Print spaces for hostname, mode, old command
     invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\r\n% Invlid input detected at '^' marker.\r\n";
-    iConsole->print(invalidInput);
+    controller.print(invalidInput);
 }
 
 void CliSession::handleAmbiguousInputMarker(const std::string& ambiguousCommand)
@@ -437,7 +419,7 @@ void CliSession::handleAmbiguousInputMarker(const std::string& ambiguousCommand)
     isCommandValid = false;
     isRunning = false;
     std::string invalidInput = R"(% Ambiguous command: ")" + ambiguousCommand + "\"";
-    iConsole->print("\r\n" + invalidInput);
+    controller.print("\r\n" + invalidInput);
 }
 
 void CliSession::matchCommand(const std::string& inputCommand, const std::string& uWord, 
@@ -666,7 +648,7 @@ std::string CliSession::normalizeCommand(const std::string& inputCommand)
         else
         {
             isRunning = false;
-            iConsole->print("\r\n% Incomplete Command");
+            controller.print("\r\n% Incomplete Command");
             return "";
         }
     }
@@ -1248,14 +1230,14 @@ bool CliSession::handlePagination(char nextch)
 
         if (nextch == '\x20')
         {
-            iConsole->print("\033[2k\033[1G");
-            iConsole->print("\033[1A");
+            controller.print("\033[2k\033[1G");
+            controller.print("\033[1A");
         }
         else if (nextch == 'q')
         {
-            iConsole->print("\033[2k\033[1G");
-            iConsole->print(std::string(10, ' '));
-            iConsole->print("\033[2k\033[1G");
+            controller.print("\033[2k\033[1G");
+            controller.print(std::string(10, ' '));
+            controller.print("\033[2k\033[1G");
             paginationList.clear();
             handlePrompt();
             return false;
@@ -1290,7 +1272,7 @@ bool CliSession::handlePagination(char nextch)
                 case Com::Support::NO_SUPPORT:
                     color = Color::RED;
             }
-            iConsole->print(display, color);
+            controller.print(display, color);
         }
     }
 
@@ -1298,13 +1280,13 @@ bool CliSession::handlePagination(char nextch)
     {
         paginationList.erase(paginationList.begin(), paginationList.begin() + engine.paginationCount);
         paginationList.shrink_to_fit();
-        iConsole->print("\r\n  --More--");
-        iConsole->flush();
+        controller.print("\r\n  --More--");
+        controller.flush();
     }
     else
     {
         paginationList.clear();
-        iConsole->print("\r\n");
+        controller.print("\r\n");
         handlePrompt();
     }
     return true;

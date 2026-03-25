@@ -8,8 +8,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <iostream>
-#include <thread>
-#include <ByteUtils.hpp>
 
 #include "EgressPacket.h"
 #include "qos/egress/TxQueueOpts.hpp"
@@ -35,22 +33,8 @@ static void set_nonblock(int fd) {
         throw std::runtime_error("fcntl(F_SETFL O_NONBLOCK): " + std::string(std::strerror(errno)));
 }
 
-void EgressPacket::dumpRing()
-{
-    for (uint32_t i = 0; i < frameCount; ++i)
-    {
-        auto* h = reinterpret_cast<tpacket2_hdr*>(frameBase + size_t(i) * req.tp_frame_size);
-        uint32_t st = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
-        uint8_t st_user = state[i].load(std::memory_order_relaxed);
-        if (st == TP_STATUS_SEND_REQUEST || st_user != 0)
-            std::fprintf(stderr,
-                 "TX slot %u: tp_status=%u state=%u len=%u mac=%u net=%u\n",
-                 i, st, st_user, h->tp_len, h->tp_mac, h->tp_net);
-    }
-}
-
 EgressPacket::EgressPacket(interface::Interface& iface, const qos::egress::TxQueueOpts& opts)
-    : EgressBase(iface, opts), kickBatch(16), fd(-1), epfd(-1), ring(nullptr)
+    : EgressBase(iface, opts), fd(-1), epfd(-1), ring(nullptr)
 {
     setupSocket();
     setupRing();
@@ -59,26 +43,21 @@ EgressPacket::EgressPacket(interface::Interface& iface, const qos::egress::TxQue
     setupEvents();
 
     frameBase = reinterpret_cast<uint8_t*>(ring);
-    frameCountCached = req.tp_frame_nr;
-    frameSizeCached = req.tp_frame_size;
-    maxPayload = req.tp_frame_size - TPACKET2_HDRLEN - MTU_PADDING - static_cast<uint32_t>(sizeof(PacketSlot));
+    maxPayload = req.tp_frame_size - TPACKET2_HDRLEN - MTU_PADDING
+               - static_cast<uint32_t>(alignof(PacketSlot) - 1)
+               - static_cast<uint32_t>(sizeof(PacketSlot));
 
     frameCount = req.tp_frame_nr;
-    frameSize = req.tp_frame_size;
 
-    state = new std::atomic<uint8_t>[frameCount];
-    for (uint32_t i = 0; i < frameCount; ++i) state[i].store(0, std::memory_order_relaxed);
-
-    if (TPACKET2_HDRLEN + packetSize + MTU_PADDING + sizeof(PacketSlot) > req.tp_frame_size)
+    if (TPACKET2_HDRLEN + packetSize + MTU_PADDING + (alignof(PacketSlot) - 1) + sizeof(PacketSlot) > req.tp_frame_size)
         throw std::runtime_error("packetSize + padding exceeds tx frame size");
 
     for (uint32_t i = 0; i < frameCount; ++i)
     {
         uint8_t* base = reinterpret_cast<uint8_t*>(ring) + i * req.tp_frame_size;
         auto* h = reinterpret_cast<tpacket2_hdr*>(base);
-        h->tp_status = TP_STATUS_AVAILABLE;
-
-        utils::writeU32(base + TPACKET2_HDRLEN + packetSize + MTU_PADDING, i);
+        // Use release store so the kernel sees a consistent initial state.
+        __atomic_store_n(&h->tp_status, TP_STATUS_AVAILABLE, __ATOMIC_RELEASE);
     }
 
     reclaimCursor = 0;
@@ -103,8 +82,6 @@ EgressPacket::~EgressPacket()
         fd = -1;
     }
 
-    delete[] state;
-    state = nullptr;
 }
 
 void EgressPacket::setupSocket()
@@ -130,10 +107,10 @@ void EgressPacket::setupSocket()
 
 void EgressPacket::setupRing()
 {
-    uint32_t needPayload = packetSize + MTU_PADDING + sizeof(PacketSlot);
+    uint32_t needPayload = packetSize + MTU_PADDING + (alignof(PacketSlot) - 1) + sizeof(PacketSlot);
     uint32_t fs = TPACKET2_HDRLEN + std::max(opts.snapLen, needPayload);
     fs = (fs + 15u) & ~15u;
-    if (fs < 2048u) fs = 2048u;
+    if (fs < 2048) fs = 2048;
 
     tpacket_req r{};
     r.tp_frame_size = fs;
@@ -158,8 +135,6 @@ void EgressPacket::setupRing()
 
     req = r;
     ringLen = size_t(req.tp_block_size) * req.tp_block_nr;
-
-    return;
 }
 
 void EgressPacket::bindIface()
@@ -176,14 +151,6 @@ void EgressPacket::bindIface()
     if (::bind(fd, reinterpret_cast<sockaddr*>(&sll), sizeof(sll)) != 0)
         throw std::runtime_error("bind(AF_PACKET) failed: " + std::string(std::strerror(errno)));
 
-    ifidxCached = ifidx;
-
-    kickAddr = {};
-    kickAddr.sll_family = AF_PACKET;
-    kickAddr.sll_protocol = htons(ETH_P_ALL);
-    kickAddr.sll_ifindex = ifidxCached;
-    kickAddr.sll_halen = ETH_ALEN;
-    std::memset(kickAddr.sll_addr, 0xff, ETH_ALEN);
 }
 
 void EgressPacket::mmapRing()
@@ -225,11 +192,16 @@ ALWAYS_INLINE HOT void EgressPacket::mapFrame(uint32_t index, FrameHandle& out)
 
     uint8_t* base = frameBase + size_t(index) * req.tp_frame_size;
     auto* h = reinterpret_cast<tpacket2_hdr*>(base);
-    
-    if (h->tp_status != TP_STATUS_AVAILABLE)
+
+    // Acquire load: must synchronise with the kernel's release-store when it
+    // marks a frame TP_STATUS_AVAILABLE after transmission.
+    if (__atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE) != TP_STATUS_AVAILABLE)
         return;
-    
-    state[index].store(1, std::memory_order_release);
+
+    // Mark allocated — plain store ordered after the acquire above.
+    // tp_padding[0] is our user-space state byte; it shares the cache line
+    // with tp_status so no extra fetch is needed.
+    h->tp_padding[0] = 1;
     out.payload = base + TPACKET2_HDRLEN;
 }
 
@@ -239,55 +211,41 @@ ALWAYS_INLINE HOT bool EgressPacket::send(uint32_t index, uint32_t length) noexc
 
     if (length == 0 || length > maxPayload)
     {
-        auto* h = reinterpret_cast<tpacket2_hdr*>(reinterpret_cast<uint8_t*>(ring) + size_t(index) * req.tp_frame_size);
-        uint8_t expected = state[index].load(std::memory_order_relaxed);
-        if (expected != 0)
-        {
-            state[index].store(0, std::memory_order_relaxed);
-            h->tp_status = TP_STATUS_AVAILABLE;
-            pushFree(index);
-        }
+        cancel(index);
         return false;
     }
 
     auto* h = reinterpret_cast<tpacket2_hdr*>(
             reinterpret_cast<uint8_t*>(ring) + size_t(index) * req.tp_frame_size);
 
-    if (__atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE) != TP_STATUS_AVAILABLE)
-        return false;
-
-    h->tp_len = length;
+    // tp_status is guaranteed AVAILABLE here — mapFrame() verified it and the
+    // kernel cannot change it until we store TP_STATUS_SEND_REQUEST below.
+    h->tp_len     = length;
     h->tp_snaplen = length;
-    h->tp_mac = TPACKET2_HDRLEN;
-    __atomic_thread_fence(__ATOMIC_RELEASE);
-
+    h->tp_mac     = TPACKET2_HDRLEN;
+    // Mark submitted before the release-store; the release on tp_status
+    // ensures tp_padding[0] is visible to any thread that then acquires it.
+    h->tp_padding[0] = 2;
     __atomic_store_n(&h->tp_status, TP_STATUS_SEND_REQUEST, __ATOMIC_RELEASE);
 
-    state[index].store(2, std::memory_order_relaxed);
-
-    uint32_t pkt =  pendingKicks.fetch_add(1, std::memory_order_relaxed);
-    if (/*pkt >= kickBatch*/true)
-    {
-        kickKernelCached();
-    }
-    else
-    {
-        pendingKicks.store(pkt, std::memory_order_relaxed);
-    }
+    // Accumulate pending kicks; flush() (called by BaseQueue after draining the
+    // batch) will do a single sendto(MSG_DONTWAIT) to hand them all to the kernel.
+    pendingKicks.fetch_add(1, std::memory_order_relaxed);
     return true;
 }
 
 void EgressPacket::onAllocNudge()
 {
-    reclaim();
+    // Quick scan: check a small window around the cursor.  If that's not
+    // enough, getFrame will fall through to waitWritable which does a full scan.
+    reclaimImpl(64);
 }
 
 void EgressPacket::kickKernelCached()
 {
     uint32_t current = pendingKicks.exchange(0, std::memory_order_relaxed);
-    if (__builtin_expect(current == 0, 1)) return;
+    if (__builtin_expect(current == 0, 0)) return;
 
-    //dumpRing();
     ssize_t ret = ::sendto(fd, nullptr, 0, MSG_DONTWAIT, nullptr, 0);
 
     if (ret < 0)
@@ -306,48 +264,46 @@ void EgressPacket::flush()
 void EgressPacket::waitWritable()
 {
     kickKernelCached();
-    usleep(100);
+    epoll_event ev[1];
+    ::epoll_wait(epfd, ev, 1, 1);
+    reclaim();
 }
 
 void EgressPacket::reclaim()
 {
-    uint32_t budget = std::min<uint32_t>(frameCount, 4096);
-    uint32_t reclaimed = 0;
+    reclaimImpl(0); // full scan
+}
 
-    for (uint32_t n = 0; n < budget; ++n)
-    {
-        uint32_t idx = reclaimCursor;
-        reclaimCursor = (reclaimCursor + 1) % frameCount;
-        auto* h = reinterpret_cast<tpacket2_hdr*>(frameBase + size_t(idx) * req.tp_frame_size);
-        uint8_t status = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
-
-        if (status == TP_STATUS_AVAILABLE)
-        {
-            uint8_t expected_state = 2;
-            if (state[idx].compare_exchange_strong(expected_state, 0, std::memory_order_acq_rel))
-            {
-                pushFree(idx);
-            }
-        }
-    }
-
-    if (reclaimed == 0) std::this_thread::sleep_for(std::chrono::microseconds(100));
-    
+void EgressPacket::reclaimImpl(uint32_t limit)
+{
     uint32_t idx = reclaimCursor;
-    for (uint32_t i = 0; i < frameCount; ++i)
+    uint32_t count = frameCount;
+    uint32_t found = 0;
+
+
+    for (uint32_t i = 0; i < count; ++i)
     {
         auto* h = reinterpret_cast<tpacket2_hdr*>(frameBase + size_t(idx) * req.tp_frame_size);
-        __u32 current_status = __atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE);
-        if (current_status == TP_STATUS_AVAILABLE)
+
+        if (__atomic_load_n(&h->tp_status, __ATOMIC_ACQUIRE) == TP_STATUS_AVAILABLE)
         {
-            uint8_t expected_state = 2;
-            if (state[idx].compare_exchange_strong(expected_state, 0, std::memory_order_acq_rel))
+            // Plain load/store: ordering is provided by the acquire on tp_status above.
+            // cancel() only operates on state==1; reclaimImpl only on state==2 — no race.
+            if (h->tp_padding[0] == 2)
             {
+                h->tp_padding[0] = 0;
                 pushFree(idx);
-                reclaimed++;
+                ++found;
+                if (limit != 0 && found >= limit)
+                {
+                    if (++idx == count) idx = 0;
+                    reclaimCursor = idx;
+                    return;
+                }
             }
         }
-        idx = (idx + 1) % frameCount;
+
+        if (++idx == count) idx = 0;
     }
 
     reclaimCursor = idx;
@@ -360,11 +316,10 @@ ALWAYS_INLINE HOT void EgressPacket::cancel(uint32_t index)
     auto* h = reinterpret_cast<tpacket2_hdr*>(
         reinterpret_cast<uint8_t*>(ring) + size_t(index) * req.tp_frame_size);
 
-    uint8_t expected = state[index].load(std::memory_order_acquire);
-    if (expected != 0)
+    if (h->tp_padding[0] != 0)
     {
-        state[index].store(0, std::memory_order_relaxed);
-        h->tp_status = TP_STATUS_AVAILABLE;
+        h->tp_padding[0] = 0;
+        __atomic_store_n(&h->tp_status, TP_STATUS_AVAILABLE, __ATOMIC_RELEASE);
         pushFree(index);
     }
 }

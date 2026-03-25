@@ -2,7 +2,6 @@
 #define CONFIGS_H
 
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <cstdio>
 #include <cmath>
@@ -17,6 +16,8 @@
 
 #include <pugixml.hpp>
 #include <json.hpp>
+#include <hardware/HardwareManager.h>
+#include <Mock.hpp>
 
 #define COMMAND_TREE_BIN "./configs/Commands.bin"
 #define COMMAND_TREE "./configs/Commands.json"
@@ -160,47 +161,6 @@ private:
 };
 
 /**
- * @brief Abstract interface defining router filesystem semantics.
- *
- * Implementations provide:
- *
- * ### Operational Responsibilities
- * - Atomic loading of configuration files.
- * - Persistent storage of running configuration snapshots.
- * - Existence checks for boot-critical files.
- * - Optional safe removal of configuration artifacts.
- *
- * ### Error Handling Model
- * - Implementations must fail cleanly without throwing.
- * - Callers must interpret boolean return values as success/failure.
- */
-class IFileSystem
-{
-public:
-    virtual ~IFileSystem() = default;
-
-    /**
-     * @brief Loads a file into memory.
-     */
-    virtual bool readFile(const std::string& path, std::string& content) = 0;
-
-    /**
-     * @brief Writes a file atomically or pseudo-atomically to disk.
-     */
-    virtual bool writeFile(const std::string& path, const std::string& content) = 0;
-
-    /**
-     * @brief Determines if a filesystem node exists.
-     */
-    virtual bool fileExists(const std::string& path) = 0;
-
-    /**
-     * @brief Removes a file if present.
-     */
-    virtual void removeFile(const std::string& path) = 0;
-};
-
-/**
  * @brief Concrete filesystem implementation used by the router process.
  *
  * Backed by POSIX operations including `open`, `mmap`, and `std::ofstream`.
@@ -212,11 +172,12 @@ public:
  * ### Concurrency Model
  * - Not thread-safe; assumes serialization by the caller.
  */
-class FileSystem : public IFileSystem
+class FileSystem
 {
 public:
-    virtual ~FileSystem() override = default;
-    bool readFile(const std::string& path, std::string& content) override
+    MOCK ~FileSystem() = default;
+
+    MOCK bool readFile(const std::string& path, std::string& content)
     {
         int fd = open(path.c_str(), O_RDONLY);
         if (fd < 0) return false;
@@ -233,7 +194,7 @@ public:
         return true;
     }
 
-    bool writeFile(const std::string& path, const std::string& content) override
+    MOCK bool writeFile(const std::string& path, const std::string& content)
     {
         std::ofstream file(path, std::ios::out | std::ios::trunc);
         if (!file.is_open())
@@ -246,12 +207,12 @@ public:
         return true;
     }
 
-    bool fileExists(const std::string& path) override
+    MOCK bool fileExists(const std::string& path)
     {
         return std::filesystem::exists(path);
     }
 
-    void removeFile(const std::string& path) override
+    MOCK void removeFile(const std::string& path)
     {
 
     }
@@ -280,7 +241,7 @@ public:
  *
  * ### Memory & Ownership Model
  * - Owns `hwManager` (allocated dynamically in `initConfigs`).
- * - Does not own the supplied `IFileSystem`; caller must manage its lifetime.
+ * - Does not own the supplied `FileSystem`; caller must manage its lifetime.
  * - JSON nodes (`root`, `configSchema`) persist for the entire router session.
  *
  * ### Mode-Machine Integration
@@ -306,7 +267,7 @@ public:
      * ### Ownership
      * - Does not take ownership of `fileSystem`; caller must manage lifetime.
      */
-    Configs(IFileSystem* fileSystem = new FileSystem);
+    Configs(FileSystem& fileSystem);
 
     /**
      * @brief Initializes all configuration state from startup files and hardware descriptors.
@@ -502,9 +463,8 @@ public:
     std::string routerConfigFilename{};     ///< Current persistent configuration file path.
     json root;                              ///< Root of hierarchical router configuration.
     json configSchema;                      ///< Active schema controlling command ordering.
-    IFileSystem* fileSystem;                ///< Filesystem interface used for persistence.
-    core::Global* global = nullptr;               ///< core::Global router subsystem pointer.
-    hardware::HardwareManager* hwManager = nullptr;   ///< Hardware abstraction subsystem.
+    FileSystem& fileSystem;                ///< Filesystem interface used for persistence.
+    hardware::HardwareManager hwManager;    ///< Hardware abstraction subsystem.
 	
 private:
     std::vector<std::string> volatileInputs{

@@ -32,6 +32,7 @@ public:
         Id(uint32_t d) : id(d) {}
         operator uint32_t() { return id; }
     private:
+        friend class EventManager;
         uint32_t id;
     };
 

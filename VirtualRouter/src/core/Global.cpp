@@ -12,8 +12,12 @@
 namespace core
 {
 
-Global::Global(const cli::StartupFiles& stfs, bool enableRouting, bool test)
-    : routingEnabled(enableRouting), threadPool(/*std::thread::hardware_concurrency()*/5), timeManager(threadPool), scheduler(threadPool, timeManager), engine(*this, stfs, test)
+Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRouting, bool test)
+    : routingEnabled(enableRouting),
+      threadPool(/*std::thread::hardware_concurrency()*/5),
+      timeManager(threadPool),
+      scheduler(threadPool, timeManager),
+      engine(*this, stfs, fs, test)
 {
     txMgr.setCorePool({0, 1, 2, 3});
     txMgr.setCpuPolicy(qos::egress::CpuPolicy::EqualShare);
@@ -26,8 +30,6 @@ Global::Global(const cli::StartupFiles& stfs, bool enableRouting, bool test)
         engine.initEngine(stfs);
     }
 }
-
-Global::Global(cli::IFileSystem* fs, const cli::StartupFiles& stfs, bool test) : threadPool(std::thread::hardware_concurrency()), timeManager(threadPool), scheduler(threadPool, timeManager), engine(*this, stfs, fs, test) {}
 
 Global::~Global()
 {

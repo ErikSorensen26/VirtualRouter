@@ -11,14 +11,8 @@
 
 namespace cli
 {
-CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, bool test) : Configs(), global(global)
-{
-    // Set debug mode based on the input parameter
-    std::string name = "default";
-    global.addRoutingInstance(name);
-}
-
-CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test) : Configs(fs), global(global)
+CliEngine::CliEngine(core::Global& global, const StartupFiles& stfs, FileSystem& fs, bool test)
+    : Configs(fs), global(global)
 {
     // Set debug mode based on the input parameter
     global.addRoutingInstance("default");
@@ -50,7 +44,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
 
     // ----- Load Command Tree JSON via SAX Parsing -----
     std::string fileStream;
-    if (fileSystem->fileExists(COMMAND_TREE_BIN) && fileSystem->readFile(COMMAND_TREE_BIN, fileStream))
+    if (fileSystem.fileExists(COMMAND_TREE_BIN) && fileSystem.readFile(COMMAND_TREE_BIN, fileStream))
     {
         commandTree = nlohmann::ordered_json::from_cbor(
             reinterpret_cast<const uint8_t*>(fileStream.data()),
@@ -58,7 +52,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
         );
         initTree();
     }
-    else if (fileSystem->fileExists(COMMAND_TREE) && fileSystem->readFile(COMMAND_TREE, fileStream))
+    else if (fileSystem.fileExists(COMMAND_TREE) && fileSystem.readFile(COMMAND_TREE, fileStream))
     {
         commandTree = nlohmann::ordered_json::parse(
             fileStream.data(),
@@ -70,7 +64,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
 
         std::vector<uint8_t> treeBin = nlohmann::ordered_json::to_cbor(commandTree);
         std::string binString(reinterpret_cast<const char*>(treeBin.data()), treeBin.size());
-        fileSystem->writeFile(COMMAND_TREE_BIN, binString);
+        fileSystem.writeFile(COMMAND_TREE_BIN, binString);
         initTree();
     }
     else
@@ -101,7 +95,7 @@ void CliEngine::initTree()
     {
         nlohmann::ordered_json& vars = commandTree[VARIABLE_OBJ];
 
-        for (const auto& [type, ifaces] : hwManager->getPhysicalInterfaces())
+        for (const auto& [type, ifaces] : hwManager.getPhysicalInterfaces())
         {
             std::string typeStr = interface::getInterfaceType(type);
             if (vars.contains(typeStr) && vars[typeStr].is_array())
@@ -118,13 +112,13 @@ void CliEngine::initTree()
 
 CliSession* CliEngine::createSession(bool debug)
 {
-    sessions.push_back(new CliSession(*this, debug));
+    sessions.push_back(new CliSession(*this, controller, debug));
     return sessions.back();
 }
 
-CliSession* CliEngine::createSession(IConsole* console)
+CliSession* CliEngine::createSession(ConsoleController& ctr)
 {
-    sessions.push_back(new CliSession(*this, console));
+    sessions.push_back(new CliSession(*this, ctr));
     return sessions.back();
 }
 

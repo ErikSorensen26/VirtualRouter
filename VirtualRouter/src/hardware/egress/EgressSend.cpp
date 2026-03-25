@@ -32,10 +32,10 @@ EgressSend::EgressSend(interface::Interface& iface, const qos::egress::TxQueueOp
 {
     uint32_t ifindex = ifnametoindex(opts.ifname.c_str());
     if (ifindex <= 0)
-        std::runtime_error("EgressSend: Invalid ifindex");
+        throw std::runtime_error("EgressSend: Invalid ifindex");
 
-    frameCount = 64; // Hard coded (deal with it)
-    const size_t rawPerFrame = packetSize + MTU_PADDING + sizeof(PacketSlot);
+    frameCount = opts.frameCount ? opts.frameCount : 64;
+    const size_t rawPerFrame = packetSize + MTU_PADDING + (alignof(PacketSlot) - 1) + sizeof(PacketSlot);
 
     frameStride = alignUp(rawPerFrame, 64);
 

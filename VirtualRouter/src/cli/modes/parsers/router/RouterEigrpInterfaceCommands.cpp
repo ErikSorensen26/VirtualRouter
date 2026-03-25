@@ -37,7 +37,7 @@ bool RouterEigrpInterface_AuthenticationMode_Handler(EIGRP_PARAMS)
         std::string key = args[1];
         if (key.size() > 32)
         {
-            ctx.terminal.iConsole->print("\r\n%EIGRP: HMAC-SHA-256 password truncated to 32 characters");
+            ctx.terminal.controller.print("\r\n%EIGRP: HMAC-SHA-256 password truncated to 32 characters");
             key = key.substr(0, 32);
         }
         ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::SHA256);
@@ -144,7 +144,7 @@ bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
     {
         if (!utils::extractIPv4Prefix(args[0], args[1], network))
         {
-            ctx.terminal.iConsole->print("\r\n%EIGRP: Invalid summary address");
+            ctx.terminal.controller.print("\r\n%EIGRP: Invalid summary address");
             return false;
         }
     }

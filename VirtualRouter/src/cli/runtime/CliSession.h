@@ -58,18 +58,7 @@ public:
      * @param engine The CLI engine managing all sessions.
      * @param enableDebug A boolean flag to enable or disable debug mode.
      */
-    CliSession(CliEngine& engine, bool enableDebug = false);
-
-    /**
-     * @brief Constructor for the Terminal class.
-     * 
-     * Initializes the terminal by setting up debugging options, loading command configurations,
-     * setting the default mode, and restoring the previous state if available.
-     * 
-     * @param term IConsole shared pointer for testing
-     * @param fs IFileSystem shared pointer for testing
-     */
-    CliSession(CliEngine& engine, IConsole* term);
+    CliSession(CliEngine& engine, ConsoleController& controller, bool enableDebug = false);
 
     /**
      * @brief Captures and processes user input in the terminal.

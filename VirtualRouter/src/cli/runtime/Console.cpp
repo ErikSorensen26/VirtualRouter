@@ -12,11 +12,7 @@
 
 namespace cli
 {
-Console::Console() : iConsole(new RealConsole()) {}
-
-Console::Console(IConsole* term) : iConsole(std::move(term)) {}
-
-Console::~Console() { delete iConsole; }
+Console::Console(ConsoleController& term) : controller(term) {}
 
 void Console::setPrompt(const std::string& newPrompt)
 {
@@ -25,7 +21,7 @@ void Console::setPrompt(const std::string& newPrompt)
     initialLineLength = prompt.length();
 
     // Clear current input on the screen and pring new prompt
-    iConsole->print(prompt, Color::PROMPT);
+    controller.print(prompt, Color::PROMPT);
     std::cout.flush();
 }
 
@@ -38,28 +34,28 @@ bool Console::isCursorAtLineEnd()
 void Console::initConsole()
 {
     // Clear the screen once
-    iConsole->clearScreen(); // ANSI escape to clear and move cursor to top
-    iConsole->enableLineWrapping(); // Enable line wrapping
+    controller.clearScreen(); // ANSI escape to clear and move cursor to top
+    controller.enableLineWrapping(); // Enable line wrapping
 
     // Initialize inputBuffer as empty
     cursorPos = 0;
 
     // Print the prompt
-    iConsole->print(prompt, Color::PROMPT);
+    controller.print(prompt, Color::PROMPT);
     std::cout.flush();
 }
 
 void Console::clearLineAfterCursor() 
 {
     size_t width = getTerminalWidth();
-    iConsole->saveCursorPosition();
-    iConsole->print(std::string(width, ' '));
-    iConsole->restoreCursorPosition();
+    controller.saveCursorPosition();
+    controller.print(std::string(width, ' '));
+    controller.restoreCursorPosition();
 }
 
 CursorPosition Console::getCursorPosition() 
 {
-    return iConsole->getCursorPosition();
+    return controller.getCursorPosition();
 }
 
 bool Console::kbhit() 
@@ -88,7 +84,7 @@ bool Console::kbhit()
 
 size_t Console::getTerminalWidth() 
 {
-    return iConsole->getTerminalWidth();
+    return controller.getTerminalWidth();
 }
 
 void Console::moveCursorLeft(size_t steps) 
@@ -101,13 +97,13 @@ void Console::moveCursorLeft(size_t steps)
             if ((cursorPos + initialLineLength) % getTerminalWidth() == 0)
             {
                 // Move to the previous line
-                iConsole->moveCursorUp(1);
-                iConsole->moveCursorRight(terminalWidth);
+                controller.moveCursorUp(1);
+                controller.moveCursorRight(terminalWidth);
             }
             else
             {
                 // Move left
-                iConsole->moveCursorLeft(1);
+                controller.moveCursorLeft(1);
             }
             cursorPos = tempCursorPos - 1;
         }
@@ -125,13 +121,13 @@ void Console::moveCursorRight(size_t steps, std::string* input)
             if ((cursorPos + initialLineLength) % width == width - 1)
             {
                 // Move to the next line
-                iConsole->moveCursorDown(1);
-                iConsole->moveCursorToStart();
+                controller.moveCursorDown(1);
+                controller.moveCursorToStart();
             }
             else
             {
                 // Move right
-                iConsole->moveCursorRight(1);
+                controller.moveCursorRight(1);
             }
             cursorPos = tempCursorPos + 1;
         }
@@ -142,7 +138,7 @@ void Console::moveCursorUp(size_t steps)
 {
     if (steps > 0) 
     {
-        iConsole->moveCursorUp(steps);
+        controller.moveCursorUp(steps);
     }
 }
 
@@ -151,7 +147,7 @@ void Console::moveCursorDown(size_t steps)
     // Move cursor left 'cursorPos' times to reach the beginning
     if (steps > 0) 
     {
-        iConsole->moveCursorDown(steps);
+        controller.moveCursorDown(steps);
     }
 }
 
@@ -230,35 +226,35 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
     size_t currentColumn = (startPosition + initialLineLength) % width;
     
     // Save the current cursor position
-    iConsole->saveCursorPosition();
+    controller.saveCursorPosition();
 
     // Rewrite the input from the start position
     for (size_t i = startPosition; i < (insert ? insertString.size() : input.size()); ++i)
     {
         if (currentColumn >= terminalWidth)
         {
-            iConsole->moveCursorDown(1);
-            iConsole->moveCursorToStart();
+            controller.moveCursorDown(1);
+            controller.moveCursorToStart();
             currentColumn = 0;
         }
-        iConsole->print(std::string(1, (insert ? insertString : input)[i]));
+        controller.print(std::string(1, (insert ? insertString : input)[i]));
     }
 
     // Clear any leftover characters on the current line and subsequent lines
     size_t leftoverSpace = (width < currentColumn) ? (width - currentColumn) : 0;
     if (leftoverSpace && leftoverSpace > 0)
     {
-        iConsole->print(std::string(leftoverSpace, ' '));
+        controller.print(std::string(leftoverSpace, ' '));
     }
 
     // Clear leftover characters
     if (backspace)
     {
-        iConsole->print(" ");
+        controller.print(" ");
     }
 
     // Restore the cursor position
-    iConsole->restoreCursorPosition();
+    controller.restoreCursorPosition();
 }
 
 std::string Console::input(std::string testInput, bool pagination)
@@ -324,12 +320,12 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
 
         if ((cursorPos + initialLineLength + 1) % getTerminalWidth() == 0)
         {
-            iConsole->moveCursorUp(1);
-            iConsole->moveCursorRight(getTerminalWidth());
+            controller.moveCursorUp(1);
+            controller.moveCursorRight(getTerminalWidth());
         }
         else
         {
-            iConsole->moveCursorLeft(1);
+            controller.moveCursorLeft(1);
         }
 
         if (!insert)
@@ -352,7 +348,7 @@ std::string Console::handleSpecialKey(char hInput, std::string& input)
         case '\x3f': // '?'
         {
             // Print '?' and return, so we exit the input loop
-            iConsole->print("?");
+            controller.print("?");
             input += "?";
             return input;
         }
@@ -560,24 +556,24 @@ void Console::updateDisplayInput(std::string& oldInput, std::string& input)
     moveCursorToStart();
 
     // Save the starting position
-    iConsole->saveCursorPosition();
+    controller.saveCursorPosition();
 
     // Clear all lines occupied by the input
     for (size_t i = 0; i < oldLines; ++i)
     {
-        iConsole->clearLineAfterCursor(); // Clear the current line
+        controller.clearLineAfterCursor(); // Clear the current line
         if (i < oldLines)
         {
-            iConsole->moveCursorDown(1); // Move down one line
-            iConsole->moveCursorToStart();
+            controller.moveCursorDown(1); // Move down one line
+            controller.moveCursorToStart();
         }
     }
 
     // Move back up to the starting position
-    iConsole->restoreCursorPosition();
+    controller.restoreCursorPosition();
 
     // Write the updated input
-    iConsole->print(input);
+    controller.print(input);
     cursorPos = input.size();
 }
 
@@ -616,7 +612,7 @@ void Console::handlePrintableChar(char hInput, std::string& input)
             cursorPos++;
             input[cursorPos - 1] = hInput;
         }
-        iConsole->print(std::string(1, hInput), Color::TERMINAL);
+        controller.print(std::string(1, hInput), Color::TERMINAL);
         rewriteTail(input, cursorPos);
     }
     else
@@ -624,7 +620,7 @@ void Console::handlePrintableChar(char hInput, std::string& input)
         // Append or insert at the cursor
         input.insert(cursorPos, 1, hInput);
         cursorPos++;
-        iConsole->print(std::string(1, hInput), Color::TERMINAL);
+        controller.print(std::string(1, hInput), Color::TERMINAL);
         rewriteTail(input, cursorPos);
     }
 }
@@ -657,7 +653,7 @@ std::string Console::getHistory(bool& his)
 void Console::clearCurrentLine(std::string& input, std::string& nextConsoleLine) 
 {
     moveCursorToStart();
-    iConsole->clearLineAfterCursor();
+    controller.clearLineAfterCursor();
     input = nextConsoleLine;
     cursorPos = input.length();
 }

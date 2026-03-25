@@ -27,16 +27,16 @@
 namespace interface
 {
 Interface::Interface(const InterfaceCreation& cfgs)
-  : configs(cfgs.vrf.getGlobal().timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
+  : routingInstance(&cfgs.vrf),
+    configs(cfgs.vrf.getGlobal().timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
     arp(*this),
     ndp(*this),
-    routingInstance(&cfgs.vrf),
     debug(cfgs.debug),
     threadsRunning(false)
 {
     cfgs.vrf.getGlobal().txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
     cfgs.vrf.getGlobal().rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
-    cfgs.vrf.getGlobal().engine.hwManager->registerInterface(&configs.hwInfo, this);
+    cfgs.vrf.getGlobal().engine.hwManager.registerInterface(&configs.hwInfo, this);
 }
 
 Interface::~Interface()
@@ -45,7 +45,7 @@ Interface::~Interface()
     core::VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.removeInterface(*this);
     vrf->getGlobal().rxMgr.removeInterface(*this);
-    vrf->getGlobal().engine.hwManager->unregisterInterface(&configs.hwInfo, this);
+    vrf->getGlobal().engine.hwManager.unregisterInterface(&configs.hwInfo, this);
 }
 
 void Interface::cleanupInterface()
@@ -303,8 +303,9 @@ void Interface::enqueuePacket(processing::PacketBuilder& packetInfo)
     }
 }
 
-void Interface::processIngress(uint8_t* packet, size_t size) 
+void Interface::processIngress(uint8_t* packet, size_t size)
 {
+    rxFrames.fetch_add(1, std::memory_order_relaxed);
     processing::PacketInfo packetInfo;
     processing::inspect(packetInfo, packet, size);
     processing::decapsulate(packetInfo, packet, size);
@@ -317,7 +318,7 @@ void Interface::startThreads()
     core::VirtualRouter* vrf = getVRF();
     vrf->getGlobal().txMgr.start(this);
     vrf->getGlobal().rxMgr.start(this);
-    vrf->getGlobal().engine.hwManager->bringUp(configs.hwInfo.ifname);
+    vrf->getGlobal().engine.hwManager.bringUp(configs.hwInfo.ifname);
 
     threadsRunning = true;
 

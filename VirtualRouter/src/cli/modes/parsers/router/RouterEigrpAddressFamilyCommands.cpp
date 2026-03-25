@@ -201,7 +201,7 @@ bool RouterEigrpAddressFamily_Neighbor_Handler(EIGRP_PARAMS)
     interface::InterfaceType type = interface::getInterfaceType(args[1]);
     if (type == interface::InterfaceType::UNDEFINED)
     {
-        ctx.terminal.iConsole->print("\r\n%EIGRP: Unknown interface type");
+        ctx.terminal.controller.print("\r\n%EIGRP: Unknown interface type");
         return false;
     }
     uint32_t key = interface::calculateInterfaceKey(type, std::stof(args[2]));

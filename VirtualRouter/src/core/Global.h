@@ -231,6 +231,7 @@ public:
      * - Configures TX/RX queue managers according to CPU policy.
      * - Optionally enables routing subsystems before any interface is created.
      *
+     * @param fs         File system object for file system access.
      * @param stfs       Structured set of startup files (.json startup, configs, etc.)
      * @param enableRouting If true, routing is enabled at boot (used for testing purposes)
      * @param test       Enables deterministic testing mode (no hardware initialization).
@@ -242,20 +243,7 @@ public:
      * @note The CLI engine *requires* access to Global during construction, therefore
      * this object passes a reference to itself into `CliEngine`.
      */
-    Global(const cli::StartupFiles& stfs = {}, bool enableRouting = false, bool test = false);
-
-    /**
-     * @brief Construct a Global system controller using a virtual filesystem.
-     *
-     * Used primarily for unit tests and embedded environments where filesystems are mocked.
-     * Behaves identically to the primary constructor except that an external IFileSystem
-     * provider manages persistent storage.
-     *
-     * @param fs         Filesystem abstraction for loading and storing router files.
-     * @param stfs       Startup file structure.
-     * @param test       If true, bypasses hardware initialization.
-     */
-    Global(cli::IFileSystem* fs, const cli::StartupFiles& stfs = {}, bool test = false);
+    Global(cli::FileSystem& fs, const cli::StartupFiles& stfs = {}, bool enableRouting = false, bool test = false);
 
     /**
      * @brief Destructor for the Global system controller.

@@ -5,7 +5,6 @@
 #include <IPAddress.h>
 #include "Configs.h"
 #include "CliUtils.h"
-#include "hardware/HardwareManager.h"
 
 namespace cli
 {
@@ -14,14 +13,16 @@ void Configs::printConfig()
     //std::cout << root.dump(4) << std::endl;
 }
 
-Configs::Configs(IFileSystem* fs) : fileSystem(fs) {}
+Configs::Configs(FileSystem& fs)
+    : fileSystem(fs)
+{}
 
 void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
 {
     // Reset all variables before
     root.clear();
 
-    hwManager = new hardware::HardwareManager(stfs.hwConfigFile, *fileSystem, enableDummies);
+    hwManager.addHardware(stfs.hwConfigFile, fileSystem, enableDummies);
 
     /*if (configSchema.is_null() || !configSchema.is_object())
     {
@@ -31,10 +32,10 @@ void Configs::initConfigs(const StartupFiles& stfs, bool enableDummies)
     routerConfigFilename = stfs.routerConfigFile;
 
     // Load JSON configuration file into doc
-    if (fileSystem->fileExists(stfs.startupFile))
+    if (fileSystem.fileExists(stfs.startupFile))
     {
         std::string content;
-        if (fileSystem->readFile(stfs.startupFile, content))
+        if (fileSystem.readFile(stfs.startupFile, content))
         {
             try
             {
@@ -157,7 +158,7 @@ std::vector<std::string> Configs::recoverConfigs(nlohmann::ordered_json* json)
 bool Configs::saveConfig()
 {
     std::string serialized = root.dump(4);
-    if (fileSystem->writeFile(routerConfigFilename, serialized))
+    if (fileSystem.writeFile(routerConfigFilename, serialized))
     {
         return true;
     }

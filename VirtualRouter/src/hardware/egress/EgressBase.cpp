@@ -1,8 +1,5 @@
 // EgressBase.cpp
 
-#include <pthread.h>
-#include <sched.h>
-
 #include "EgressBase.h"
 #include "qos/egress/TxQueueOpts.hpp"
 #include "interface/Interface.h"
@@ -12,14 +9,11 @@ namespace hardware::egress
 {
 
 EgressBase::EgressBase(interface::Interface& iface, const qos::egress::TxQueueOpts& o)
-    : iface(iface), opts(o), qid(static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)), packetSize(iface.configs.globalMtu.load(std::memory_order_relaxed))
-{
-    freeBuf = nullptr;
-    freeCap = 0;
-    freeMask = 0;
-    freeHead.store(0, std::memory_order_relaxed);
-    freeTail.store(0, std::memory_order_relaxed);
-}
+    : iface(iface),
+      opts(o),
+      qid(static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)),
+      packetSize(iface.configs.globalMtu.load(std::memory_order_relaxed))
+{}
 
 EgressBase::~EgressBase()
 {
@@ -30,10 +24,16 @@ void EgressBase::initFreeRing(uint32_t frameCount)
 {
     destroyFreeRing();
 
+    hwFrameCount = frameCount;
     freeCap  = ceilPow2(frameCount);
     freeMask = freeCap - 1;
 
     freeBuf = new uint32_t[freeCap];
+    freeSeq = new std::atomic<uint32_t>[freeCap];
+
+    for (uint32_t i = 0; i < freeCap; ++i)
+        freeSeq[i].store(i, std::memory_order_relaxed);
+
     freeHead.store(0, std::memory_order_relaxed);
     freeTail.store(0, std::memory_order_relaxed);
 
@@ -43,71 +43,110 @@ void EgressBase::initFreeRing(uint32_t frameCount)
 
 void EgressBase::destroyFreeRing()
 {
-    if (freeBuf) { delete[] freeBuf; freeBuf = nullptr; }
+    delete[] freeBuf;
+    delete[] freeSeq;
+    freeBuf      = nullptr;
+    freeSeq      = nullptr;
+    freeCap      = 0;
+    freeMask     = 0;
+    hwFrameCount = 0;
     freeHead.store(0, std::memory_order_relaxed);
     freeTail.store(0, std::memory_order_relaxed);
-    freeCap  = 0;
-    freeMask = 0;
-}
-
-bool EgressBase::tryPopFree(uint32_t& outIndex)
-{
-    const uint32_t head = freeHead.load(std::memory_order_relaxed);
-    const uint32_t tail = freeTail.load(std::memory_order_acquire);
-
-    if (head == tail) return false; // empty
-
-    outIndex = freeBuf[head & freeMask];
-    freeHead.store(head + 1, std::memory_order_release);
-    return true;
 }
 
 void EgressBase::pushFree(uint32_t index)
 {
-    const uint32_t tail = freeTail.load(std::memory_order_relaxed);
-    const uint32_t head = freeHead.load(std::memory_order_acquire);
+    uint32_t pos = freeTail.load(std::memory_order_relaxed);
+    for (;;)
+    {
+        auto& slotSeq = freeSeq[pos & freeMask];
+        const uint32_t seq = slotSeq.load(std::memory_order_acquire);
+        const int32_t  diff = static_cast<int32_t>(seq) - static_cast<int32_t>(pos);
 
-    if ((tail - head) == freeCap) {
-        // ring full — shouldn’t happen for a free list, but guard it
-        return;
+        if (diff == 0)
+        {
+            // Slot is empty at this position — claim it.
+            if (freeTail.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+                break;
+            // Another producer won the CAS; pos was updated by CAS failure.
+        }
+        else if (diff < 0)
+        {
+            // Ring is full — free list should never overflow; guard and drop.
+            return;
+        }
+        else
+        {
+            // Stale pos; reload.
+            pos = freeTail.load(std::memory_order_relaxed);
+        }
     }
 
-    freeBuf[tail & freeMask] = index;
-    freeTail.store(tail + 1, std::memory_order_release);
+    freeBuf[pos & freeMask] = index;
+    freeSeq[pos & freeMask].store(pos + 1, std::memory_order_release);
 }
+
+bool EgressBase::tryPopFree(uint32_t& outIndex)
+{
+    uint32_t pos = freeHead.load(std::memory_order_relaxed);
+    while (true)
+    {
+        auto& slotSeq = freeSeq[pos & freeMask];
+        const uint32_t seq = slotSeq.load(std::memory_order_acquire);
+        const int32_t  diff = static_cast<int32_t>(seq) - static_cast<int32_t>(pos + 1);
+        if (diff == 0)
+        {
+            if (freeHead.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+                break;
+        }
+        else if (diff < 0)
+        {
+            // Ring is empty.
+            return false;
+        }
+        else
+        {
+            // Stale pos; reload.
+            pos = freeHead.load(std::memory_order_relaxed);
+        }
+    }
+
+    outIndex = freeBuf[pos & freeMask];
+    freeSeq[pos & freeMask].store(pos + freeCap, std::memory_order_release);
+    return true;
+}
+
 
 bool EgressBase::getFrame(FrameHandle& out)
 {
     uint32_t idx;
-    int attempts = 0;
 
-    while (attempts < 3)
+    if (!tryPopFree(idx))
     {
-        if (tryPopFree(idx))
-            break;
-
         onAllocNudge();
-        attempts++;
-
-        if (attempts == 2)
-            waitWritable();
+        if (!tryPopFree(idx))
+        {
+            waitWritable(); // kicks kernel, waits for EPOLLOUT, then does full reclaim
+            if (!tryPopFree(idx))
+                return false;
+        }
     }
-
-    if (attempts >= 3 && !tryPopFree(idx))
-        return false;
 
     out = {};
     mapFrame(idx, out);
     if (!out.payload)
     {
-        cancel(idx);
+        pushFree(idx);
         return false;
     }
 
-    out.slot = reinterpret_cast<PacketSlot*>(out.payload + packetSize + MTU_PADDING);
-    *out.slot = {};          // clear stale metadata from previous use
-    out.slot->index = idx;   // keep track of which frame to reclaim
+    constexpr uintptr_t align = alignof(PacketSlot);
+    const uintptr_t base = reinterpret_cast<uintptr_t>(out.payload) + packetSize + MTU_PADDING;
+    out.slot = reinterpret_cast<PacketSlot*>((base + align - 1u) & ~(align - 1u));
+
+    *out.slot = {};
+    out.slot->index = idx;
     return true;
 }
 
-} // namespace hardware
+} // namespace hardware::egress

@@ -49,7 +49,6 @@ IngressPacket::IngressPacket(interface::Interface& iface, const qos::ingress::Rx
     mmapRing();
     bindIface();
     setupEvents();
-    ready.store(true, std::memory_order_release);
 }
 
 IngressPacket::~IngressPacket()
@@ -60,8 +59,6 @@ IngressPacket::~IngressPacket()
     delete[] blockNextOff;
     delete[] blockRemain;
     delete[] blkInFlight;
-    delete[] blkDone;
-    delete[] blkSeq;
 }
 
 void IngressPacket::setupSocket()
@@ -132,17 +129,9 @@ void IngressPacket::setupRing()
     blockRemain = new uint16_t[blockNr]();
 
     delete[] blkInFlight;
-    delete[] blkDone;
-    delete[] blkSeq;
     blkInFlight = new std::atomic<uint32_t>[blockNr];
-    blkDone = new std::atomic<uint8_t>[blockNr];
-    blkSeq = new uint64_t[blockNr];
     for (uint32_t i = 0; i < blockNr; ++i)
-    {
         blkInFlight[i] = 0;
-        blkDone[i] = 0;
-        blkSeq[i] =  0;
-    }
 
     tpacket_req3 req{};
     req.tp_block_size = blockSize;
@@ -197,7 +186,7 @@ void IngressPacket::waitEvent()
             if (errno == EINTR) continue;
             throw std::runtime_error("epoll_wait failed");
         }
-        flushReturned(256);
+        flushReturns();
         return;
     }
 }
@@ -225,8 +214,6 @@ ALWAYS_INLINE HOT bool IngressPacket::pollFrame(FrameView& out)
         {
             if (blkInFlight[b].load(std::memory_order_acquire) != 0)
                 continue;
-
-            blkSeq[b] = bd->hdr.bh1.seq_num;
 
             remain = bd->hdr.bh1.num_pkts;
             off = bd->hdr.bh1.offset_to_first_pkt;
@@ -290,15 +277,14 @@ void IngressPacket::waitUntilAllFramesReleased()
             uint8_t* blk = (uint8_t*)ring + (size_t)b * blockSize;
             auto* bd = (tpacket_block_desc*)blk;
 
-            const bool user = (bd->hdr.bh1.block_status & TP_STATUS_USER);
-            const bool empty = (blockRemain[b] == 0) && (blkInFlight[b].load(std::memory_order_acquire) == 0);
+            const bool user  = blockReadyV3(bd);
+            const bool empty = (blockRemain[b] == 0) &&
+                               (blkInFlight[b].load(std::memory_order_acquire) == 0);
 
             if (user && empty)
-            {
                 blockReleaseV3(bd);
-            }
 
-            if (bd->hdr.bh1.block_status & TP_STATUS_USER)
+            if (blockReadyV3(bd))
             {
                 all = false;
                 break;

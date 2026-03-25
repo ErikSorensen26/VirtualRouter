@@ -1,21 +1,27 @@
 // IngressXdp.cpp
 
-/*#include "IngressXdp.h"
-#include <linux/if_link.h>
-#include <net/if.h>
-#include <poll.h>
+#include <arpa/inet.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
-#include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <fcntl.h>
 #include <unistd.h>
-#include <stdexcept>
 #include <cstring>
-#include <cerrno>
+#include <stdexcept>
 #include <iostream>
 #include <chrono>
 #include <algorithm>
-#include <Likely.hpp>
+#include <net/if.h>
+
+#include "IngressXdp.h"
+#include "hardware/Ifname.h"
+
+#ifndef HOT
+#define HOT __attribute__((hot))
+#endif
+#ifndef ALWAYS_INLINE
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
+#endif
 
 namespace hardware::ingress
 {
@@ -24,35 +30,27 @@ static inline void xsk_kick(int fd)
 {
     (void)::sendto(fd, nullptr, 0, MSG_DONTWAIT, nullptr, 0);
 }
-static int ifindex_or_throw(const char* ifname)
+
+static uint32_t nextPow2(uint32_t v)
 {
-    int idx = if_nametoindex(ifname);
-    if (idx == 0) throw std::runtime_error(std::string("if_nametoindex failed for: ") + ifname);
-    return idx;
+    if (v <= 1) return 1;
+    --v; v |= v>>1; v |= v>>2; v |= v>>4; v |= v>>8; v |= v>>16; return v+1;
 }
 
-IngressXdp::IngressXdp(const char* ifname, interface::Interface& iface, uint32_t qid, uint32_t frameCount, uint32_t frameSize)
-    : IngressBase(ifname, iface, qid), frameCount(frameCount), frameMask(frameCount - 1), frameSize(frameSize), umemSize(uint64_t(frameCount) * frameSize)
+// CONSTRUCTION
+
+IngressXdp::IngressXdp(interface::Interface& iface, const qos::ingress::RxQueueOpts& opts)
+    : IngressBase(iface, opts)
 {
-    if ((frameSize * frameCount) % 4096 != 0)
-        throw std::runtime_error("frameSize * frameCount must be page-aligned");
-    if ((frameCount & (frameCount - 1)) != 0)
-        throw std::runtime_error("frameCount must be power-of-two");
-
-    // allocate UMEM
-    if (posix_memalign(&umemArea, 4096, umemSize) != 0)
-        throw std::runtime_error("posix_memalign(umem) failed");
-
-    (void)mlock(umemArea, umemSize);
-#ifdef MADV_HUGEPAGE
-    (void)madvise(umemArea, umemSize, MADV_HUGEPAGE);
-#endif
-    (void)madvise(umemArea, umemSize, MADV_WILLNEED);
+    frameCount = nextPow2(opts.frameCount ? opts.frameCount : 1024);
+    frameMask  = frameCount - 1;
+    frameSize  = 4096;
+    umemSize   = uint64_t(frameCount) * frameSize;
 
     rxEntries = frameCount;
     fqEntries = frameCount;
-    rxMask = rxEntries - 1;
-    fqMask = fqEntries - 1;
+    rxMask    = rxEntries - 1;
+    fqMask    = fqEntries - 1;
 
     setupSocket();
     setupUmem();
@@ -64,18 +62,21 @@ IngressXdp::IngressXdp(const char* ifname, interface::Interface& iface, uint32_t
     prefillFillRing();
 }
 
-IngressXdp::~IngressXdp() {
+IngressXdp::~IngressXdp()
+{
     teardownEvents();
+    if (rxRingArea && rxRingArea != MAP_FAILED) ::munmap(rxRingArea, rxRingMapSize);
+    if (fqArea     && fqArea     != MAP_FAILED) ::munmap(fqArea,     fqMapSize);
     if (xskFd >= 0) ::close(xskFd);
-    if (rxRingArea) ::munmap(rxRingArea, rxRingMapSize);
-    if (fqArea)     ::munmap(fqArea, fqMapSize);
     if (umemArea)
     {
-        (void)munlock(umemArea, umemSize);
+        (void)::munlock(umemArea, umemSize);
         ::free(umemArea);
         umemArea = nullptr;
     }
 }
+
+// SETUP
 
 void IngressXdp::setupSocket()
 {
@@ -83,25 +84,31 @@ void IngressXdp::setupSocket()
     if (xskFd < 0)
         throw std::runtime_error("socket(AF_XDP): " + std::string(strerror(errno)));
 
-    int prefer = 1;
-    setsockopt(xskFd, SOL_SOCKET, SO_PREFER_BUSY_POLL, &prefer, sizeof(prefer));
-    int budget = 64;
-    setsockopt(xskFd, SOL_SOCKET, SO_BUSY_POLL_BUDGET, &budget, sizeof(budget));
-    int us = 50;
-    setsockopt(xskFd, SOL_SOCKET, SO_BUSY_POLL, &us, sizeof(us));
+    // Busy-poll hints — kernel ignores these silently if not supported.
+    int v = 1;  (void)setsockopt(xskFd, SOL_SOCKET, SO_PREFER_BUSY_POLL, &v, sizeof(v));
+    v = 64;     (void)setsockopt(xskFd, SOL_SOCKET, SO_BUSY_POLL_BUDGET,  &v, sizeof(v));
+    v = 50;     (void)setsockopt(xskFd, SOL_SOCKET, SO_BUSY_POLL,         &v, sizeof(v));
 }
 
 void IngressXdp::setupUmem()
 {
-    struct xdp_umem_reg umr;
-    std::memset(&umr, 0, sizeof(umr));
-    umr.addr = reinterpret_cast<uintptr_t>(umemArea);
-    umr.len = static_cast<uint64_t>(umemSize);
-    umr.chunk_size = frameSize;
-    umr.headroom = 0;
-    umr.flags = 0;
+    if (posix_memalign(&umemArea, 4096, umemSize) != 0 || !umemArea)
+        throw std::runtime_error("posix_memalign(UMEM) failed");
 
-    if (::setsockopt(xskFd, SOL_XDP, XDP_UMEM_REG, &umr,  sizeof(umr)) != 0)
+    (void)::mlock(umemArea, umemSize);
+#ifdef MADV_HUGEPAGE
+    (void)::madvise(umemArea, umemSize, MADV_HUGEPAGE);
+#endif
+    (void)::madvise(umemArea, umemSize, MADV_WILLNEED);
+
+    struct xdp_umem_reg umr{};
+    umr.addr       = reinterpret_cast<uintptr_t>(umemArea);
+    umr.len        = umemSize;
+    umr.chunk_size = frameSize;
+    umr.headroom   = 0;
+    umr.flags      = 0;
+
+    if (::setsockopt(xskFd, SOL_XDP, XDP_UMEM_REG, &umr, sizeof(umr)) != 0)
         throw std::runtime_error("XDP_UMEM_REG: " + std::string(strerror(errno)));
 
     socklen_t len = sizeof(off);
@@ -122,79 +129,84 @@ void IngressXdp::mmapRings()
 {
     // RX ring
     rxRingMapSize = off.rx.desc + rxEntries * sizeof(struct xdp_desc);
-    rxRingArea = mmap(nullptr, rxRingMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, xskFd, XDP_PGOFF_RX_RING);
+    rxRingArea = ::mmap(nullptr, rxRingMapSize,
+                        PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, xskFd, XDP_PGOFF_RX_RING);
     if (rxRingArea == MAP_FAILED)
         throw std::runtime_error("mmap(RX_RING): " + std::string(strerror(errno)));
 
-    rxProducer = reinterpret_cast<uint32_t*>((uint8_t*)rxRingArea + off.rx.producer);
-    rxConsumer = reinterpret_cast<uint32_t*>((uint8_t*)rxRingArea + off.rx.consumer);
-    rxDesc     = reinterpret_cast<struct xdp_desc*>((uint8_t*)rxRingArea + off.rx.desc);
+    (void)::mlock(rxRingArea, rxRingMapSize);
+
+    rxProducer = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(rxRingArea) + off.rx.producer);
+    rxConsumer = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(rxRingArea) + off.rx.consumer);
+    rxDesc     = reinterpret_cast<struct xdp_desc*>(static_cast<uint8_t*>(rxRingArea) + off.rx.desc);
 
     // Fill ring
     fqMapSize = off.fr.desc + fqEntries * sizeof(uint64_t);
-    fqArea = ::mmap(nullptr, fqMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, xskFd, XDP_UMEM_PGOFF_FILL_RING);
+    fqArea = ::mmap(nullptr, fqMapSize,
+                    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, xskFd, XDP_UMEM_PGOFF_FILL_RING);
     if (fqArea == MAP_FAILED)
         throw std::runtime_error("mmap(FILL_RING): " + std::string(strerror(errno)));
 
-    fqProducer = reinterpret_cast<uint32_t*>((uint8_t*)fqArea + off.fr.producer);
-    fqConsumer = reinterpret_cast<uint32_t*>((uint8_t*)fqArea + off.fr.consumer);
-    fqAddr     = reinterpret_cast<uint64_t*>((uint8_t*)fqArea + off.fr.desc);
+    (void)::mlock(fqArea, fqMapSize);
 
-    rxProdCached = *rxProducer;
-    rxConsShadow = *rxConsumer;
-    fqProdShadow = *fqProducer;
+    fqProducer = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(fqArea) + off.fr.producer);
+    fqConsumer = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(fqArea) + off.fr.consumer);
+    fqAddr     = reinterpret_cast<uint64_t*>(static_cast<uint8_t*>(fqArea) + off.fr.desc);
+
+    rxConsShadow = __atomic_load_n(rxConsumer, __ATOMIC_ACQUIRE);
+    fqProdShadow = __atomic_load_n(fqProducer, __ATOMIC_ACQUIRE);
 }
 
 void IngressXdp::bindSocket()
 {
+    const int ifidx = ifnametoindex(opts.ifname.c_str());
+    if (ifidx <= 0)
+        throw std::runtime_error("ifnametoindex failed for '" + opts.ifname + "'");
+
     struct sockaddr_xdp sxdp{};
-    sxdp.sxdp_family = AF_XDP;
-    sxdp.sxdp_ifindex = ifindex_or_throw(ifname);
+    sxdp.sxdp_family   = AF_XDP;
+    sxdp.sxdp_ifindex  = static_cast<uint32_t>(ifidx);
     sxdp.sxdp_queue_id = qid;
 
-    // try zero copy
+    // Try zero-copy first; fall back to copy mode.
     sxdp.sxdp_flags = XDP_ZEROCOPY | XDP_USE_NEED_WAKEUP;
     if (::bind(xskFd, reinterpret_cast<sockaddr*>(&sxdp), sizeof(sxdp)) == 0)
     {
         zeroCopy = true;
         return;
     }
-    // fallback to copy
+
     sxdp.sxdp_flags = XDP_USE_NEED_WAKEUP;
     if (::bind(xskFd, reinterpret_cast<sockaddr*>(&sxdp), sizeof(sxdp)) != 0)
-        throw std::runtime_error("bind(AF_XDP) copy-mode: " + std::string(strerror(errno)));
-    zeroCopy = false;
+        throw std::runtime_error("bind(AF_XDP): " + std::string(strerror(errno)));
 }
 
 void IngressXdp::checkWakeSupport()
 {
     uint32_t optval = 0;
     socklen_t optlen = sizeof(optval);
-
     if (::getsockopt(xskFd, SOL_XDP, XDP_OPTIONS, &optval, &optlen) == 0)
         needWakeup = (optval & XDP_RING_NEED_WAKEUP) != 0;
-    else
-        needWakeup = false;
 }
 
 void IngressXdp::setupEvents()
 {
     epfd = ::epoll_create1(EPOLL_CLOEXEC);
     if (epfd < 0)
-        throw std::runtime_error("epoll_create1: " + std::string(std::strerror(errno)));
+        throw std::runtime_error("epoll_create1: " + std::string(strerror(errno)));
 
     evtfd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     if (evtfd < 0)
-        throw std::runtime_error("eventfd: " + std::string(std::strerror(errno)));
+        throw std::runtime_error("eventfd: " + std::string(strerror(errno)));
 
     epoll_event ev{};
-    ev.events = EPOLLIN;
+    ev.events  = EPOLLIN;
     ev.data.fd = xskFd;
     if (::epoll_ctl(epfd, EPOLL_CTL_ADD, xskFd, &ev) != 0)
-        throw std::runtime_error("epoll_ctl ADD xskFd: " + std::string(std::strerror(errno)));
+        throw std::runtime_error("epoll_ctl ADD xskFd: " + std::string(strerror(errno)));
 
     epoll_event ev2{};
-    ev2.events = EPOLLIN;
+    ev2.events  = EPOLLIN;
     ev2.data.fd = evtfd;
     if (::epoll_ctl(epfd, EPOLL_CTL_ADD, evtfd, &ev2) != 0)
         throw std::runtime_error("epoll_ctl ADD evtfd: " + std::string(strerror(errno)));
@@ -205,35 +217,76 @@ void IngressXdp::teardownEvents()
     if (epfd >= 0 && xskFd >= 0) ::epoll_ctl(epfd, EPOLL_CTL_DEL, xskFd, nullptr);
     if (epfd >= 0 && evtfd >= 0) ::epoll_ctl(epfd, EPOLL_CTL_DEL, evtfd, nullptr);
     if (evtfd >= 0) { ::close(evtfd); evtfd = -1; }
-    if (epfd >= 0) { ::close(epfd); epfd = -1; }
+    if (epfd  >= 0) { ::close(epfd);  epfd  = -1; }
 }
 
 void IngressXdp::prefillFillRing()
 {
-    const uint32_t mask = fqMask;
     uint32_t prod = fqProdShadow;
-
     for (uint32_t i = 0; i < frameCount; ++i)
-        fqAddr[(prod + i) & mask] = frameAddr(i);
-
+        fqAddr[(prod + i) & fqMask] = frameAddr(i);
     prod += frameCount;
 
     std::atomic_thread_fence(std::memory_order_release);
-    *fqProducer = prod;
+    __atomic_store_n(fqProducer, prod, __ATOMIC_RELEASE);
     fqProdShadow = prod;
 
     if (needWakeup) xsk_kick(xskFd);
 }
 
-inline void IngressXdp::kickIfNeeded()
+// HELPERS
+
+void IngressXdp::kickIfNeeded()
 {
     if (needWakeup) xsk_kick(xskFd);
 }
 
+ALWAYS_INLINE uint32_t IngressXdp::refillRxCache()
+{
+    uint32_t prod = __atomic_load_n(rxProducer, __ATOMIC_ACQUIRE);
+    uint32_t cons = rxConsShadow;
+    uint32_t avail = prod - cons;
+    if (avail == 0) return 0;
+
+    uint32_t take = std::min<uint32_t>(avail, RX_CACHE_CAP);
+
+    for (uint32_t i = 0; i < take; ++i)
+    {
+        const struct xdp_desc& d = rxDesc[(cons + i) & rxMask];
+        rxCache[i].idx = static_cast<uint32_t>(d.addr / frameSize);
+        rxCache[i].len = d.len;
+    }
+
+    cons += take;
+    rxConsShadow = cons;
+    __atomic_store_n(rxConsumer, cons, __ATOMIC_RELEASE);
+
+    rxHead = 0;
+    rxTail = take;
+    return take;
+}
+
+// RUN LOOP
+
+ALWAYS_INLINE HOT bool IngressXdp::pollFrame(FrameView& out)
+{
+    if (rxHead == rxTail && refillRxCache() == 0)
+        return false;
+
+    const RxItem item = rxCache[rxHead++];
+    out.payload = reinterpret_cast<uint8_t*>(umemArea) + frameAddr(item.idx);
+    out.length  = item.len;
+    out.index   = item.idx;
+    outstanding.fetch_add(1, std::memory_order_relaxed);
+    return true;
+}
+
 void IngressXdp::waitEvent()
 {
+    // Commit any pending fill ring entries before sleeping so the kernel can
+    // refill its RX ring while we wait.
+    flushReturns();
     kickIfNeeded();
-    flushReturned(1024);
 
     constexpr int MAX_EVENTS = 8;
     epoll_event events[MAX_EVENTS];
@@ -244,32 +297,46 @@ void IngressXdp::waitEvent()
         if (n < 0)
         {
             if (errno == EINTR) continue;
-            throw std::runtime_error("epoll_wait: " + std::string(std::strerror(errno)));
+            throw std::runtime_error("epoll_wait: " + std::string(strerror(errno)));
         }
+
         for (int i = 0; i < n; ++i)
         {
-            const int fd = events[i].data.fd;
-            const uint32_t ev = events[i].events;
-
-            if (fd == evtfd)
+            if (events[i].data.fd == evtfd)
             {
                 uint64_t x;
                 (void)::read(evtfd, &x, sizeof(x));
                 return;
             }
-            if (fd == xskFd)
-            {
-                if (ev & (EPOLLERR | EPOLLHUP | EPOLLRDHUP))
-                    throw std::runtime_error("epoll xskFd error");
+            if (events[i].data.fd == xskFd)
                 return;
-            }
         }
     }
 }
 
-void IngressXdp::signalStop()
+// FRAME RETURN
+
+ALWAYS_INLINE HOT void IngressXdp::returnToDevice(uint32_t index)
 {
-    stopping.store(true, std::memory_order_release);
+    fqAddr[fqProdShadow & fqMask] = frameAddr(index);
+    ++fqProdShadow;
+    outstanding.fetch_sub(1, std::memory_order_relaxed);
+}
+
+void IngressXdp::onReturnFlush()
+{
+    // Commit everything accumulated in fqProdShadow since the last flush.
+    // Called by IngressBase::flushReturns() after the full returnToDevice batch.
+    __atomic_store_n(fqProducer, fqProdShadow, __ATOMIC_RELEASE);
+    if (needWakeup) xsk_kick(xskFd);
+}
+
+// STOP
+
+void IngressXdp::stopRx()
+{
+    // Writing to evtfd wakes epoll_wait in waitEvent() so the run loop sees
+    // running == false and exits cleanly.
     if (evtfd >= 0)
     {
         uint64_t one = 1;
@@ -277,113 +344,27 @@ void IngressXdp::signalStop()
     }
 }
 
-inline uint32_t IngressXdp::refillRxCache()
-{
-    uint32_t prod = *rxProducer;
-    std::atomic_thread_fence(std::memory_order_acquire);
-
-    uint32_t cons = rxConsShadow;
-    uint32_t avail = prod - cons;
-    if (avail == 0) return 0;
-
-    uint32_t take = std::min<uint32_t>(avail, RX_CACHE_CAP);
-
-    // Fill cache
-    for (uint32_t i = 0; i < take; ++i)
-    {
-        const struct xdp_desc& d = rxDesc[(cons + 1) & rxMask];
-        const uint32_t idx = uint32_t(d.addr / frameSize);
-        rxCache[i].idx = idx;
-        rxCache[i].len = d.len;
-    }
-
-    cons += take;
-    rxConsShadow = cons;
-    std::atomic_thread_fence(std::memory_order_release);
-    *rxConsumer = cons;
-
-    rxHead = 0;
-    rxTail = take;
-    return take;
-}
-
-bool IngressXdp::pollFrame(FrameView& out)
-{
-    if (rxHead != rxTail)
-    {
-        const auto item = rxCache[rxHead++];
-        out.payload = reinterpret_cast<uint8_t*>(umemArea) + (uint64_t(item.idx) * frameSize);
-        out.length = item.len;
-        out.index = item.idx;
-        outstanding.fetch_add(1, std::memory_order_relaxed);
-        return true;
-    }
-
-    if (refillRxCache() == 0)
-        return false;
-
-    const auto item = rxCache[rxHead++];
-    out.payload = reinterpret_cast<uint8_t*>(umemArea) + (uint64_t(item.idx) * frameSize);
-    out.length = item.len;
-    out.index = item.idx;
-    outstanding.fetch_add(1, std::memory_order_relaxed);
-    return true;
-}
-
-void IngressXdp::returnToDevice(uint32_t index)
-{
-    const uint32_t pos = fqProdShadow;
-    fqAddr[pos & fqMask] = frameAddr(index);
-    fqProdShadow = pos + 1;
-
-    ++fqSinceCommit;
-
-    uint32_t used = fqProdShadow - *fqConsumer;
-    if (fqSinceCommit >= FQ_COMMIT_EVERY || used >= (fqEntries - 1))
-    {
-        std::atomic_thread_fence(std::memory_order_release);
-        *fqProducer = fqProdShadow;
-        fqSinceCommit = 0;
-        if (needWakeup) xsk_kick(xskFd);
-    }
-
-    outstanding.fetch_sub(1, std::memory_order_relaxed);
-}
-
-void IngressXdp::onReturnNudge()
-{
-    if (evtfd >= 0)
-    {
-        uint64_t one = 1;
-        ::write(evtfd, &one, sizeof(one));
-    }
-}
-
-void IngressXdp::stopRx() {}
-
 void IngressXdp::waitUntilAllFramesReleased()
 {
-    if (fqSinceCommit)
+    // Commit any remaining fill ring entries before we start waiting.
+    if (fqProdShadow != __atomic_load_n(fqProducer, __ATOMIC_RELAXED))
     {
-        std::atomic_thread_fence(std::memory_order_release);
-        *fqProducer = fqProdShadow;
-        fqSinceCommit = 0;
+        __atomic_store_n(fqProducer, fqProdShadow, __ATOMIC_RELEASE);
         if (needWakeup) xsk_kick(xskFd);
     }
 
-    constexpr auto timeout = std::chrono::milliseconds(2000);
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    
-    while (std::chrono::steady_clock::now() < deadline)
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+    while (outstanding.load(std::memory_order_acquire) != 0)
     {
-        if (outstanding.load(std::memory_order_acquire) == 0) return;
+        if (std::chrono::steady_clock::now() > deadline)
+        {
+            std::cerr << "Warning: timeout waiting for AF_XDP frames to be released ("
+                      << outstanding.load(std::memory_order_relaxed) << " outstanding)\n";
+            return;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+}
 
-#ifndef NDEBUG
-    throw std::runtime_error("Timeout waitinf for AF_XDP frames to be released");
-#else
-    uint32_t left = outstanding.load(std::memory_order_relaxed);
-    std::cerr << "Warning: timeout; " << left << " AF_XDP frames stull outstanding\n";
-#endif
-}*/
+} // namespace hardware::ingress

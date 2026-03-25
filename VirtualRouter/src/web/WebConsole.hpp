@@ -6,6 +6,7 @@
 #include "cli/runtime/Console.h"
 #include "cli/runtime/CliSession.h"
 #include "UnixApi.h"
+#include "cli/runtime/ConsoleController.hpp"
 #include <json.hpp>
 #include <Global.h>
 
@@ -16,7 +17,7 @@ namespace web
 {
 
 // Mock class for IConsole using Google Mock
-class WebConsole : public cli::IConsole
+class WebConsole : public cli::ConsoleController
 {
 public:
     WebConsole(UnixApi& api, int clientFd, core::Global& global)

@@ -30,7 +30,7 @@ bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
 	{
 	    if (!ipv6Address.isLocalLink())
 	    {
-			ctx.terminal.iConsole->print(std::string("\r\n%") + std::string(" Invalid local-link address"));
+			ctx.terminal.controller.print(std::string("\r\n%") + std::string(" Invalid local-link address"));
 			return false;
 	    }
 

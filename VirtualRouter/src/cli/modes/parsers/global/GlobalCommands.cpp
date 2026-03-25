@@ -111,8 +111,8 @@ bool Global_Interface_Handler(GLOBAL_PARAMS)
         }
         else
         {
-            hwIface = ctx.terminal.engine.hwManager->getInterface(interfaceType, id);
-            const hardware::HwIfaceInfo* info = ctx.terminal.engine.hwManager->getHwInfo(hwIface);
+            hwIface = ctx.terminal.engine.hwManager.getInterface(interfaceType, id);
+            const hardware::HwIfaceInfo* info = ctx.terminal.engine.hwManager.getHwInfo(hwIface);
             if (!info) return false;
             const hardware::HwIfaceInfo& hwInfo = *info;
             ctx.global.addInterface(interfaceType, hwInfo, ctx.terminal.interfaceID, ctx.terminal.isDebugModeEnabled);
@@ -139,7 +139,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
             {
                 if (as->ipv4Named)
                 {
-                    ctx.terminal.iConsole->print(std::string("\r\n%" + std::string(" ERROR: AS(" + id + ") used by named mode")));
+                    ctx.terminal.controller.print(std::string("\r\n%" + std::string(" ERROR: AS(" + id + ") used by named mode")));
                     return false; // AS used in named mode. }
                 }
             }

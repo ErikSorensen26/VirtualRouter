@@ -20,7 +20,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS)
     {
         if (ctx.currentEigrpNamed->ipv4->getAS() != asNum && !ctx.negate)
         {
-            ctx.terminal.iConsole->print("\r\nChanging from AS(" + std::to_string(ctx.currentEigrpNamed->ipv4->getAS()) + ") to AS(" + std::to_string(asNum) + ") is not allowed");
+            ctx.terminal.controller.print("\r\nChanging from AS(" + std::to_string(ctx.currentEigrpNamed->ipv4->getAS()) + ") to AS(" + std::to_string(asNum) + ") is not allowed");
             return false;
         }
         ctx.currentEigrp = ctx.currentEigrpNamed->ipv4;
@@ -61,7 +61,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS)
     }
     else
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
+        ctx.terminal.controller.print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
         return false;
     }
     return true;
@@ -76,12 +76,12 @@ bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS)
     auto* vrf = ctx.terminal.engine.global.getRoutingInstance(args[0]);
     if (!vrf)
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " does not exist or is not enabled for IPv4");
+        ctx.terminal.controller.print(std::string("\r\n%") + "VRF " + args[0] + " does not exist or is not enabled for IPv4");
         return false;
     }
     if (!vrf->enabledAddressFamilies.contains(types::AddressFamily::IPv4))
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " exists but is not enalbed for IPv4");
+        ctx.terminal.controller.print(std::string("\r\n%") + "VRF " + args[0] + " exists but is not enalbed for IPv4");
         return false;
     }
 
@@ -119,7 +119,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS)
     }
     else
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
+        ctx.terminal.controller.print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
         return false;
     }
     return true;
@@ -135,7 +135,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS)
     {
         if (ctx.currentEigrpNamed->ipv6->getAS() != asNum && !ctx.negate)
         {
-            ctx.terminal.iConsole->print("\r\nChanging from AS(" + std::to_string(ctx.currentEigrpNamed->ipv6->getAS()) + ") to AS(" + std::to_string(asNum) + ") is not allowed");
+            ctx.terminal.controller.print("\r\nChanging from AS(" + std::to_string(ctx.currentEigrpNamed->ipv6->getAS()) + ") to AS(" + std::to_string(asNum) + ") is not allowed");
             return false;
         }
         ctx.currentEigrp = ctx.currentEigrpNamed->ipv6;
@@ -176,7 +176,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS)
     }
     else
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
+        ctx.terminal.controller.print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
         return false;
     }
     return true;
@@ -191,12 +191,12 @@ bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS)
     auto* vrf = ctx.terminal.engine.global.getRoutingInstance(args[0]);
     if (!vrf)
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " does not exist or is not enabled for IPv6");
+        ctx.terminal.controller.print(std::string("\r\n%") + "VRF " + args[0] + " does not exist or is not enabled for IPv6");
         return false;
     }
     if (!vrf->enabledAddressFamilies.contains(types::AddressFamily::IPv6))
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF " + args[0] + " exists but is not enalbed for IPv6");
+        ctx.terminal.controller.print(std::string("\r\n%") + "VRF " + args[0] + " exists but is not enalbed for IPv6");
         return false;
     }
 
@@ -235,7 +235,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS)
     }
     else
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
+        ctx.terminal.controller.print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") in use by classic router");
         return false;
     }
     return true;

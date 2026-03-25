@@ -26,8 +26,6 @@ protected:
     void waitUntilAllFramesReleased() override;
 
 private:
-    std::atomic<bool> ready{false};
-
     void setupEvents();
     void bindIface();
     void setupRing();
@@ -50,8 +48,6 @@ private:
     uint16_t* blockRemain = nullptr;
 
     std::atomic<uint32_t>* blkInFlight = nullptr;
-    std::atomic<uint8_t>* blkDone = nullptr;
-    uint64_t* blkSeq = nullptr;
 };
 
 } // namespace hardware

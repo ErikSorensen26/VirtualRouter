@@ -15,9 +15,6 @@ namespace hardware::egress
 class EgressPacket : public EgressBase
 {
     std::atomic<uint32_t> pendingKicks = 0;
-    std::atomic<uint64_t> lastKick = 0;
-    uint32_t kickBatch = 64;
-    uint64_t maxKickDelayNs = 10000;
 
 public:
 
@@ -33,11 +30,8 @@ public:
 private:
     void mapFrame(uint32_t index, FrameHandle& out) override;
     void onAllocNudge() override;
-    std::atomic<uint8_t>* state = nullptr;
 
 private:
-    std::atomic<bool> ready{false};
-
     int fd = -1;
     int epfd = -1;
     void* ring = nullptr;
@@ -45,20 +39,12 @@ private:
 
     struct tpacket_req req{};
     uint32_t frameCount = 0;
-    uint32_t frameSize = 0;
-
-    int ifidxCached = -1;
-    sockaddr_ll kickAddr{};
 
     uint32_t reclaimCursor = 0;
     uint32_t maxPayload;
     uint8_t* frameBase;
-    uint32_t frameCountCached = 0;
-    uint32_t frameSizeCached = 0;
 
 private:
-    void dumpRing();
-
     void setupSocket();
     void bindIface();
     void setupRing();
@@ -67,6 +53,8 @@ private:
     void teardownEvents();
 
     void kickKernelCached();
+
+    void reclaimImpl(uint32_t limit);
 };
 
 } // namespace hardware

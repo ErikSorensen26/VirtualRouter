@@ -53,7 +53,7 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
         {
             if (as->ipv6Named)
             {
-                ctx.terminal.iConsole->print(std::string("\r\n%") + std::string(" ERROR: AS(" + std::to_string(asNum) + ") used by named mode"));
+                ctx.terminal.controller.print(std::string("\r\n%") + std::string(" ERROR: AS(" + std::to_string(asNum) + ") used by named mode"));
                 return false; // AS used in named mode.
             }
         }

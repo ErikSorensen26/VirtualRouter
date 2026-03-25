@@ -9,7 +9,6 @@ namespace qos::egress { struct TxQueueOpts; }
 
 namespace hardware::egress
 {
-class EgressXdp;
 class EgressPacket;
 
 EgressBase* create(interface::Interface* iface, const qos::egress::TxQueueOpts& opts);

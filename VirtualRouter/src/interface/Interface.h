@@ -117,6 +117,7 @@ struct InterfaceCreation
  */
 class Interface
 {
+    std::atomic<core::VirtualRouter*> routingInstance = nullptr; ///< VRF pointer (atomic for lock-free reads).
 public:
     friend class MockInterface; ///< Test harness access for controlled interface testing.
     friend class EigrpTest; ///< Test harness access for controlled EIGRP testing.
@@ -403,9 +404,9 @@ public:
      */
     void processIngress(uint8_t* packet, size_t size);
 
-private:
+    std::atomic<uint64_t> rxFrames{0}; ///< Total frames delivered by the ingress ring.
 
-    std::atomic<core::VirtualRouter*> routingInstance = nullptr; ///< VRF pointer (atomic for lock-free reads).
+private:
 
     /**
      * @brief Internal state machine transition for IPv4.

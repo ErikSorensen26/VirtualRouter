@@ -1,9 +1,8 @@
 // IngressBase.cpp
 
-#include <sched.h>
 #include <pthread.h>
+#include <sched.h>
 #include <Likely.hpp>
-#include <chrono>
 #include <RCU.hpp>
 
 #include "IngressBase.h"
@@ -12,32 +11,38 @@
 namespace hardware::ingress
 {
 
-thread_local std::array<uint32_t, 64> localBatch;
-thread_local size_t batchCount = 0;
-
-static inline void cpu_relax() { asm volatile("pause" ::: "memory"); }
-
 IngressBase::IngressBase(interface::Interface& iface, const qos::ingress::RxQueueOpts& opts)
-    : opts(opts), iface(iface), qid((static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)))
-{
-    for (uint32_t i = 0; i < RETURN_RING_CAP; ++i)
-        returnSeq[i].store(i, std::memory_order_relaxed);
-}
+    : opts(opts)
+    , iface(iface)
+    , qid(static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId))
+    , returnCount(0)
+{}
 
 IngressBase::~IngressBase()
 {
-    stop();
+    // stop() must be called before delete — stopRx() is pure virtual and
+    // cannot be dispatched once the derived-class vtable has been replaced.
+    // RxQueueManager::stopAndDelete always calls stop() first; this is a
+    // safety net in case it wasn't, to at least avoid a dangling thread.
+    running.store(false, std::memory_order_release);
+    if (ingressThread.joinable())
+        ingressThread.join();
 }
 
 void IngressBase::start()
 {
     running.store(true, std::memory_order_release);
-    ingressThread = std::thread([this]{
+    ingressThread = std::thread([this] {
         utils::RCU::registerThread();
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(qid, &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+
+        // Pin to the requested CPU for cache locality.
+        if (opts.cpuId >= 0)
+        {
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(opts.cpuId, &cpuset);
+            pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+        }
 
         runLoop();
         utils::RCU::unregisterThread();
@@ -48,118 +53,52 @@ void IngressBase::stop()
 {
     running.store(false, std::memory_order_release);
     stopRx();
-    if (ingressThread.joinable()) ingressThread.join();
+    if (ingressThread.joinable())
+        ingressThread.join();
 }
 
 void IngressBase::releaseFrame(uint32_t index)
 {
-    /*localBatch[batchCount++] = index;
-    if (batchCount == localBatch.size())
-        flushLocalBatch();*/
-
-    uint32_t pos = tail.fetch_add(1, std::memory_order_relaxed);
-    uint32_t slot = pos & (RETURN_RING_CAP - 1);
-
-    uint32_t expected = pos;
-    while (returnSeq[slot].load(std::memory_order_acquire) != expected)
-        asm volatile("pause");
-
-    returnBuf[slot] = index;
-    returnSeq[slot].store(pos + 1, std::memory_order_release);
-
-    uint32_t pending = (pos + 1) - head.load(std::memory_order_relaxed);
-    if (pending >= RETURN_RING_CAP - 64)
-    {
-        onReturnNudge();
-        flushReturned(512);
-    }
+    returnBuf[returnCount++] = index;
+    if (returnCount == RETURN_BATCH)
+        flushReturns();
 }
 
-void IngressBase::flushLocalBatch()
+void IngressBase::flushReturns()
 {
-    size_t n = batchCount;
-    if (unlikely(n == 0)) return;
-
-    const uint32_t mask = (RETURN_RING_CAP - 1);
-    uint32_t base = tail.fetch_add((uint32_t)n, std::memory_order_acq_rel);
-
-    for (size_t j = 0; j < n; ++j)
-    {
-        uint32_t pos = base + (uint32_t)j;
-        uint32_t slot = pos & mask;
-
-        while (returnSeq[slot].load(std::memory_order_acquire) != pos)
-            cpu_relax();
-
-        returnBuf[slot] = localBatch[j];
-        returnSeq[slot].store(pos +1, std::memory_order_release);
-    }
-
-    onReturnNudge();
-    uint32_t want = (uint32_t)std::max<size_t>(n, 2048);
-    flushReturned(want);
-
-    batchCount = 0;
-}
-
-void IngressBase::flushReturned(uint32_t maxBatch)
-{
-    if (returnDrainOwner.test_and_set(std::memory_order_acquire))
-        return;
-
-    uint32_t h = head.load(std::memory_order_relaxed);
-    uint32_t t = tail.load(std::memory_order_acquire);
-
-    uint32_t done = 0;
-    while (done < maxBatch && h != t)
-    {
-        uint32_t slot = h & (RETURN_RING_CAP - 1);
-
-        if (returnSeq[slot].load(std::memory_order_acquire) != (h + 1))
-            break;
-
-        uint32_t idx = returnBuf[slot];
-        returnToDevice(idx);
-
-        returnSeq[slot].store(h + RETURN_RING_CAP, std::memory_order_release);
-        h++; ++done;
-    }
-
-    if (done) head.store(h, std::memory_order_release);
-    returnDrainOwner.clear(std::memory_order_release);
+    if (returnCount == 0) return;
+    for (uint32_t i = 0; i < returnCount; ++i)
+        returnToDevice(returnBuf[i]);
+    returnCount = 0;
+    onReturnFlush();
 }
 
 void IngressBase::runLoop()
 {
-    std::chrono::steady_clock::time_point last;
-    auto startTime = std::chrono::steady_clock::now();
-
     FrameView frame{};
 
     while (running.load(std::memory_order_acquire))
     {
+        // Drain up to BATCH frames before sleeping.
+        constexpr uint32_t BATCH = 256;
         uint32_t drained = 0;
 
-        uint32_t budget = 256;
-        while (budget-- && pollFrame(frame))
+        for (uint32_t i = 0; i < BATCH && pollFrame(frame); ++i)
         {
             iface.processIngress(frame.payload, frame.length);
             releaseFrame(frame.index);
             ++drained;
         }
 
-        flushLocalBatch();
-        flushReturned(std::numeric_limits<uint32_t>::max());
+        flushReturns();
 
         if (drained == 0)
-        {
-            flushLocalBatch();
-            waitEvent();
-        }
-
+            waitEvent(); // block until the kernel signals new data
     }
-    flushLocalBatch();
+
+    // Drain and return everything before joining.
+    flushReturns();
     waitUntilAllFramesReleased();
 }
 
-} // namespace hardware
+} // namespace hardware::ingress

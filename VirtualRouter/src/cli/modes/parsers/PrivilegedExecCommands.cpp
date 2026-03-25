@@ -13,7 +13,7 @@ bool PrivilegedExec_ConfigureTerm_Handler(PRIVILEGED_EXEC_PARAMS)
 {
     UNUSED(args);
     ctx.terminal.changeMode<CliMode::GlobalConfiguration>(ctx.terminal.engine.global, *ctx.terminal.engine.global.getRoutingInstance("default"));
-    ctx.terminal.iConsole->print("\r\nEnter configuration commands, one per line. End with CNTL/Z.");
+    ctx.terminal.controller.print("\r\nEnter configuration commands, one per line. End with CNTL/Z.");
     return true;
 }
 
@@ -31,7 +31,7 @@ bool PrivilegedExec_ShowHistory_Handler(PRIVILEGED_EXEC_PARAMS)
     {
         if (str != "")
         {
-            ctx.terminal.iConsole->print("\r\n " + str);
+            ctx.terminal.controller.print("\r\n " + str);
         }
     }
     return true;
@@ -40,7 +40,7 @@ bool PrivilegedExec_ShowHistory_Handler(PRIVILEGED_EXEC_PARAMS)
 bool PrivilegedExec_ShowClock_Handler(PRIVILEGED_EXEC_PARAMS)
 {
     UNUSED(args);
-    ctx.terminal.iConsole->print("\r\n" + ctx.terminal.engine.timeKeeper.getTime());
+    ctx.terminal.controller.print("\r\n" + ctx.terminal.engine.timeKeeper.getTime());
     return true;
 }
 

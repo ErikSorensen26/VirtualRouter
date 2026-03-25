@@ -13,17 +13,15 @@
 
 #include "HardwareManager.h"
 #include "cli/runtime/Configs.h"
-#include "packet/HeaderHelpers.hpp"
 #include "interface/Interface.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "hardware/Ifname.h"
 
 namespace hardware
 {
-
-HardwareManager::HardwareManager(const std::string& hwConfigFile, cli::IFileSystem& fileSystem, bool enableDummies)
-    : allowDummies(enableDummies)
+void HardwareManager::addHardware(const std::string& hwConfigFile, cli::FileSystem& fileSystem, bool enableDummies)
 {
+    allowDummies = enableDummies;
     // Load JSON data
     if (fileSystem.fileExists(hwConfigFile))
     {

@@ -20,12 +20,12 @@ bool RouterEigrpClassic_AddressFamilyVrf_Handler(EIGRP_PARAMS)
     auto* vrf = ctx.currentEigrp->routingInstance->getGlobal().getRoutingInstance(args[0]);
     if (!vrf)
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF" + args[0] + " does not exist or is not enalbed for IPv4");
+        ctx.terminal.controller.print(std::string("\r\n%") + "VRF" + args[0] + " does not exist or is not enalbed for IPv4");
         return false;
     }
     if (!vrf->enabledAddressFamilies.contains(types::AddressFamily::IPv4))
     {
-        ctx.terminal.iConsole->print(std::string("\r\n%") + "VRF" + args[0] + " does exist but is not enabled for IPv4");
+        ctx.terminal.controller.print(std::string("\r\n%") + "VRF" + args[0] + " does exist but is not enabled for IPv4");
         return false;
     }
 
@@ -38,7 +38,7 @@ bool RouterEigrpClassic_AddressFamilyVrf_Handler(EIGRP_PARAMS)
         {
             if (as->ipv4Named)
             {
-                ctx.terminal.iConsole->print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") used by name mode");
+                ctx.terminal.controller.print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") used by name mode");
                 return false; // AS used in named mode.
             }
         }
@@ -178,7 +178,7 @@ bool RouterEigrpClassic_Neighbor_Handler(EIGRP_PARAMS)
     interface::InterfaceType type = interface::getInterfaceType(args[1]);
     if (type == interface::InterfaceType::UNDEFINED)
     {
-        ctx.terminal.iConsole->print("\r\n%EIGRP: Unknown interface type");
+        ctx.terminal.controller.print("\r\n%EIGRP: Unknown interface type");
         return false;
     }
     uint32_t key = interface::calculateInterfaceKey(type, std::stof(args[2]));

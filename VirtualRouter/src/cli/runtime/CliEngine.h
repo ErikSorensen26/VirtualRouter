@@ -8,7 +8,9 @@
 #include <json.hpp>
 #include <Time.h>
 #include <condition_variable>
+#include <Mock.hpp>
 #include "Configs.h"
+#include "ConsoleController.hpp"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
@@ -16,7 +18,7 @@ namespace cli
 {
 class CliSession; ///< Forward declaration of CliSession.
 class CommandProcessor; ///< Forward declaration of CommandProcessor.
-class IConsole; ///< Forward declaration of IConsole.
+class ConsoleController; ///< Forward declaration of IConsole.
 struct ModeConfig; ///< Forward declaration of ModeConfig.
 
 /**
@@ -111,20 +113,6 @@ public:
     core::Global& global; ///< Reference to the system wide global instance.
 
     /**
-     * @brief Constructs a CLI engine bound to a given router global context.
-     *
-     * This constructor:
-     * - Performs the base `Configs` initialization.
-     * - Registers a default routing instance.
-     * - Does **not** immediately load configuration or command trees.
-     *
-     * @param global Reference to the global router manager and root routing instance registry.
-     * @param stfs   Startup file descriptors required for configuration/bootstrap.
-     * @param test   If true, bypasses certain initialization and load steps for deterministic testing.
-     */
-    CliEngine(core::Global& global, const StartupFiles& stfs, bool test = false);
-
-    /**
      * @brief Constructs the CLI engine with a custom filesystem backend.
      *
      * This overload allows injection of virtual/redirected file systems for testing,
@@ -141,7 +129,7 @@ public:
      * @param fs     Custom file-system interface used for all CLI-related persistence.
      * @param test   Disable initialization logic when true.
      */
-    CliEngine(core::Global& global, const StartupFiles& stfs, IFileSystem* fs, bool test = false);
+    CliEngine(core::Global& global, const StartupFiles& stfs, FileSystem& fs, bool test = false);
 
     /**
      * @brief Destroys the CLI engine and all active sessions.
@@ -208,7 +196,7 @@ public:
      * @param console External console handler to attach to the CLI session.
      * @return Pointer to the newly created session.
      */
-    CliSession* createSession(IConsole* console);
+    CliSession* createSession(ConsoleController& console);
 
     /**
      * @brief Destroys all active CLI sessions and clears the internal registry.
@@ -288,6 +276,8 @@ public:
     std::string maskInput(const std::string& prefix, std::string original);
 
 private:
+    ConsoleController controller;
+
 
     /**
      * @brief Reverses previously applied configuration commands.

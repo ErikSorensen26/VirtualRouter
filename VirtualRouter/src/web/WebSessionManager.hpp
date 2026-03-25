@@ -88,7 +88,7 @@ private:
     static web::WebConsole* getWebConsole(cli::CliSession* ses)
     {
         if (!ses) return nullptr;
-        cli::IConsole* ic = ses->iConsole;
+        cli::ConsoleController* ic = &ses->controller;
         return dynamic_cast<web::WebConsole*>(ic);
     }
 

@@ -8,19 +8,22 @@
 namespace hardware
 {
 
-#pragma pack(push, 1)
+// PacketSlot is per-frame metadata stored in the TX ring buffer after the
+// payload.  It is never serialised to the wire, so natural alignment is used
+// to keep all fields aligned (no pragma pack).
 struct PacketSlot
 {
-    uint32_t index;
-    uint8_t dscp;
-    uint8_t ecn;
-    uint8_t cos;
-    uint32_t len;
-    uint32_t flowHash;
-    uint32_t classId;
-    uint64_t timestampNanos;
+    uint32_t index;           // frame index in the EgressBase free ring
+    uint8_t  dscp;            // DSCP value for QoS marking
+    uint8_t  ecn;             // ECN bits
+    uint8_t  cos;             // 802.1p Class of Service
+    uint8_t  reserved = 0;    // explicit pad → len is 4-byte aligned
+    uint32_t len;             // payload length in bytes
+    uint32_t flowHash;        // per-flow hash for queue selection
+    uint32_t classId;         // traffic class identifier
+    // 4-byte implicit pad here → timestampNanos is 8-byte aligned
+    uint64_t timestampNanos;  // enqueue timestamp (CLOCK_MONOTONIC)
 };
-#pragma pack(pop)
 
 struct FrameHandle
 {

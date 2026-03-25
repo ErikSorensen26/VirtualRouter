@@ -1,5 +1,7 @@
 // InterfaceManager.h
 
+// TODO: fix race condition
+
 #ifndef INTERFACE_MANAGER_H
 #define INTERFACE_MANAGER_H
 
