@@ -1,4 +1,5 @@
 # Directories to ignore
 build/
 .cache/
+docs/doxy/
 \'
