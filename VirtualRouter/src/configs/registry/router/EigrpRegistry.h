@@ -7,8 +7,6 @@
  * EIGRP settings (bandwidth, delay, reliability, timers).
  */
 
-// EigrpRegistry.h
-
 #ifndef EIGRP_REGISTRY_H
 #define EIGRP_REGISTRY_H
 
@@ -19,8 +17,6 @@
 #include "configs/RegistryDefaultTable.hpp"
 #include "EigrpInterfaceRegistry.h"
 #include "configs/SubRegistry.hpp"
-
- // namespace eigrp
 
 namespace config
 {

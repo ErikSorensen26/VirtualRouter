@@ -7,8 +7,6 @@
  * and virtual link settings.
  */
 
-// OspfRegistry.h
-
 #ifndef OSPF_REGISTRY_H
 #define OSPF_REGISTRY_H
 

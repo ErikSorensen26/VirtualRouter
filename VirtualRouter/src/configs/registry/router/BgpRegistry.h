@@ -7,14 +7,6 @@
  * policy objects (route maps, prefix lists, community lists).
  */
 
-/**
- * @defgroup CONFIG_REGISTRY_ROUTER Router Config Schemas
- * @ingroup CONFIG_REGISTRY
- * @brief Per-protocol configuration registry definitions: BGP, EIGRP, OSPF.
- */
-
-// BgpRegistry.h
-
 #ifndef BGP_REGISTRY_H
 #define BGP_REGISTRY_H
 
@@ -26,9 +18,6 @@
 #include "configs/RegistryReference.hpp"
 #include "configs/RegistryDefaultTable.hpp"
 #include "configs/SubRegistry.hpp"
-
- // namespace bgp
-
 
 namespace config
 {

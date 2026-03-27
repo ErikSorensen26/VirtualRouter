@@ -7,8 +7,6 @@
  * and interface-level options (passive, summarization).
  */
 
-// EigrpInterfaceRegistry.h
-
 #ifndef EIGRP_INTERFACE_REGISTRY_H
 #define EIGRP_INTERFACE_REGISTRY_H
 
@@ -18,8 +16,6 @@
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryDefaultTable.hpp"
 #include "configs/SubRegistry.hpp"
-
- // namespace eigrp
 
 namespace config
 {
