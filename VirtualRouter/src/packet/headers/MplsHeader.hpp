@@ -14,7 +14,8 @@ namespace packet
 
 /**
  * @struct MplsHeaderRaw
- * @brief Represents a raw MPLS header
+ * @brief Represents a raw MPLS header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 0)
 struct MplsHeaderRaw
@@ -26,6 +27,7 @@ struct MplsHeaderRaw
 /**
  * @struct MplsHeader
  * @brief Represents an MPLS (Multiprotocol Label Switching) header.
+ * @ingroup PACKET_HEADERS
  */
 struct MplsHeader
 {

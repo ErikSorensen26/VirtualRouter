@@ -15,6 +15,7 @@ namespace packet
 /**
  * @struct IcmpHeaderRaw
  * @brief Represents a raw ICMP header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 0)
 struct IcmpHeaderRaw
@@ -31,6 +32,7 @@ struct IcmpHeaderRaw
 /**
  * @struct IcmpHeader
  * @brief Represents an ICMP (Internet Control Message Protocol) header.
+ * @ingroup PACKET_HEADERS
  */
 struct IcmpHeader
 {   

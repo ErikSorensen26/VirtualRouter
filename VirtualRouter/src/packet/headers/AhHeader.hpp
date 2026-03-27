@@ -15,8 +15,9 @@ namespace packet
 {
 
 /**
- * @struct AhHeader
- * @brief Represents an AH (Authentication Header) header.
+ * @struct AhHeaderRaw
+ * @brief Represents a raw AH (Authentication Header) header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct AhHeaderRaw
@@ -29,6 +30,11 @@ struct AhHeaderRaw
 };
 #pragma pack(pop)
 
+/**
+ * @struct AhHeader
+ * @brief Represents an AH (Authentication Header) header.
+ * @ingroup PACKET_HEADERS
+ */
 struct AhHeader
 {
     DEFINE_PACKET_HEADER(AhHeaderRaw);

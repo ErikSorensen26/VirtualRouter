@@ -45,7 +45,8 @@ namespace packet
 {
 /**
  * @struct IPv4HeaderRaw
- * @brief Represents a raw IPv4 header
+ * @brief Represents a raw IPv4 header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct IPv4HeaderRaw
@@ -67,6 +68,7 @@ struct IPv4HeaderRaw
 /**
  * @struct IPv4Header
  * @brief Represents an IPv4 header.
+ * @ingroup PACKET_HEADERS
  */
 struct IPv4Header
 {
@@ -142,6 +144,7 @@ struct IPv6HeaderRaw
 /**
  * @struct IPv6Header
  * @brief Represents an IPv6 header.
+ * @ingroup PACKET_HEADERS
  */
 struct IPv6Header
 {

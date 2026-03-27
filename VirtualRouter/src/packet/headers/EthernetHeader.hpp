@@ -25,6 +25,7 @@ namespace packet
 /**
  * @struct EthernetHeaderRaw
  * @brief Represents a raw Ethernet header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct EthernetHeaderRaw
@@ -38,6 +39,7 @@ struct EthernetHeaderRaw
 /**
  * @struct EthernetHeader
  * @brief Represents an Ethernet frame header.
+ * @ingroup PACKET_HEADERS
  */
 struct EthernetHeader
 {

@@ -27,8 +27,10 @@ namespace packet
 
 /**
  * @struct Ospfv3HeaderRaw
+ * @brief Represents a raw OSPFv3 header.
+ * @ingroup PACKET_HEADERS
  */
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
 struct Ospfv3HeaderRaw
 {
     uint8_t version;
@@ -44,7 +46,8 @@ struct Ospfv3HeaderRaw
 
 /**
  * @struct Ospfv3Header
- * @brief Represents an OSPF (Open Shortest Path First) header.
+ * @brief Represents an OSPFv3 (Open Shortest Path First) header.
+ * @ingroup PACKET_HEADERS
  */
 struct Ospfv3Header
 {

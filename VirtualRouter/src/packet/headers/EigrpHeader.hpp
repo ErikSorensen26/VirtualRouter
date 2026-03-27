@@ -73,8 +73,10 @@ namespace packet
 {
 /**
  * @struct EigrpHeaderRaw
+ * @brief Represents a raw EIGRP header.
+ * @ingroup PACKET_HEADERS
  */
-#pragma pack(push, 1) 
+#pragma pack(push, 1)
 struct EigrpHeaderRaw
 {
     uint8_t version;
@@ -91,6 +93,7 @@ struct EigrpHeaderRaw
 /**
  * @struct EigrpHeader
  * @brief Represents an EIGRP (Enhanced Interior Gateway Routing Protocol) header.
+ * @ingroup PACKET_HEADERS
  */
 struct EigrpHeader
 {

@@ -74,6 +74,7 @@ namespace packet
 /**
  * @struct DhcpHeaderRaw
  * @brief Represents a raw DHCP header
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct DhcpHeaderRaw
@@ -100,6 +101,7 @@ struct DhcpHeaderRaw
 /**
  * @struct DhcpHeader
  * @brief Represents a DHCP (Dynamic Host Configuration Protocol) header.
+ * @ingroup PACKET_HEADERS
  */
 struct DhcpHeader
 {

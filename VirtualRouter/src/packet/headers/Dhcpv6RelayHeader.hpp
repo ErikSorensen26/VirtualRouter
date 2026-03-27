@@ -12,8 +12,10 @@
 
 namespace packet
 {
-/*
- * @brief DHCPv6 raw relay header
+/**
+ * @struct Dhcpv6RelayHeaderRaw
+ * @brief Represents a raw DHCPv6 relay agent header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct Dhcpv6RelayHeaderRaw
@@ -26,7 +28,9 @@ struct Dhcpv6RelayHeaderRaw
 #pragma pack(pop)
 
 /**
- * @brief DHCPv6 Relay header for relay agent interactions.
+ * @struct Dhcpv6RelayHeader
+ * @brief Represents a DHCPv6 relay agent header for relay agent interactions.
+ * @ingroup PACKET_HEADERS
  */
 struct Dhcpv6RelayHeader
 {

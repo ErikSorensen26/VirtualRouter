@@ -17,6 +17,7 @@ namespace packet
 /**
  * @struct SyslogHeaderRaw
  * @brief Represents a raw Syslog header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 0)
 struct SyslogHeaderRaw
@@ -28,6 +29,7 @@ struct SyslogHeaderRaw
 /**
  * @struct SyslogHeader
  * @brief Represents a Syslog packet header.
+ * @ingroup PACKET_HEADERS
  */
 struct SyslogHeader {
     DEFINE_PACKET_HEADER(SyslogHeaderRaw);

@@ -14,6 +14,8 @@ namespace packet
 
 /**
  * @struct EspHeaderRaw
+ * @brief Represents a raw ESP (Encapsulating Security Payload) header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct EspHeaderRaw
@@ -26,6 +28,7 @@ struct EspHeaderRaw
 /**
  * @struct EspHeader
  * @brief Represents an ESP (Encapsulating Security Payload) header.
+ * @ingroup PACKET_HEADERS
  */
 struct EspHeader
 {

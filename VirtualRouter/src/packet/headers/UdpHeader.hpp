@@ -21,6 +21,7 @@ namespace packet
 /**
  * @struct UdpHeaderRaw
  * @brief Represents a raw UDP header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 0)
 struct UdpHeaderRaw
@@ -35,6 +36,7 @@ struct UdpHeaderRaw
 /**
  * @struct UdpHeader
  * @brief Represents a UDP (User Datagram Protocol) header.
+ * @ingroup PACKET_HEADERS
  */
 struct UdpHeader
 {

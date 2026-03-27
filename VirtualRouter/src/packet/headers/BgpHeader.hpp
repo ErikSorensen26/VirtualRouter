@@ -218,6 +218,11 @@ constexpr uint8_t BGP_MARKER[16] = {
 namespace packet
 {
 
+/**
+ * @struct BgpHeaderRaw
+ * @brief Represents a raw BGP message header.
+ * @ingroup PACKET_HEADERS
+ */
 #pragma pack(push, 1)
 struct BgpHeaderRaw
 {
@@ -230,6 +235,7 @@ struct BgpHeaderRaw
 /**
  * @struct BgpHeader
  * @brief Represents a BGP message header (marker + length + type).
+ * @ingroup PACKET_HEADERS
  */
 struct BgpHeader
 {

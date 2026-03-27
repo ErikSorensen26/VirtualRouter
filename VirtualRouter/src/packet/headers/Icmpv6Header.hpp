@@ -56,6 +56,11 @@ inline constexpr __uint128_t ICMPV6_ALL_ROUTERS = (__uint128_t{0xFF0200000000000
 namespace packet
 {
 
+/**
+ * @struct Icmpv6HeaderRaw
+ * @brief Represents a raw ICMPv6 header.
+ * @ingroup PACKET_HEADERS
+ */
 #pragma pack(push, 1)
 struct Icmpv6HeaderRaw
 {
@@ -66,6 +71,11 @@ struct Icmpv6HeaderRaw
 };
 #pragma pack(pop)
 
+/**
+ * @struct Icmpv6Header
+ * @brief Represents an ICMPv6 (Internet Control Message Protocol v6) header.
+ * @ingroup PACKET_HEADERS
+ */
 struct Icmpv6Header
 {
     DEFINE_PACKET_HEADER(Icmpv6HeaderRaw);

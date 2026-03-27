@@ -28,6 +28,7 @@ namespace packet
 /**
  * @struct ArpHeaderRaw
  * @brief Represents a raw ARP header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct ArpHeaderRaw
@@ -47,6 +48,7 @@ struct ArpHeaderRaw
 /**
  * @struct ArpHeader
  * @brief Represents an ARP (Address Resolution Protocol) header.
+ * @ingroup PACKET_HEADERS
  */
 struct ArpHeader
 {

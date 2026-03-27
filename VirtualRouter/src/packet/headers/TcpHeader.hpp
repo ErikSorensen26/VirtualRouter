@@ -28,6 +28,7 @@ namespace packet
 /**
  * @struct TcpHeaderRaw
  * @brief Represents the raw fixed part of a TCP header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct TcpHeaderRaw
@@ -47,6 +48,7 @@ struct TcpHeaderRaw
 /**
  * @struct TcpHeader
  * @brief High-level TCP header parser/encoder.
+ * @ingroup PACKET_HEADERS
  */
 struct TcpHeader
 {
