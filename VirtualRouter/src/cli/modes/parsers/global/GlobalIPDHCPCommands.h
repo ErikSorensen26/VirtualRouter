@@ -1,4 +1,11 @@
-// GlobalIPDHCPCommands.h
+/**
+ * @file GlobalIPDHCPCommands.h
+ * @brief CLI parser for the `ip dhcp` sub-tree of Global Configuration mode.
+ *
+ * Defines commands reachable via `ip dhcp <...>` in `CliMode::GlobalConfiguration`.
+ * Covers DHCP binding management, BOOTP support, conflict handling, database
+ * configuration, debug flags, and excluded-address ranges.
+ */
 
 #ifndef GLOBAL_IP_DHCP_COMMANDS_H
 #define GLOBAL_IP_DHCP_COMMANDS_H
@@ -57,6 +64,14 @@ using GlobalIPDHCP_ExcludedAddress = commandAdder<GlobalContext,
     "excluded-address"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for the `ip dhcp` sub-tree in Global Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::GlobalConfiguration` with `GlobalContext`.
+ * Currently only `binding` is wired into the active command list;
+ * remaining handlers are declared for future use.
+ */
 using GlobalIPDHCPCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalContext,
     GlobalIPDHCP_Binding
 >;
@@ -71,6 +86,7 @@ using GlobalIPDHCPCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalC
                     global.dhcpServer->configs.limitLeases.store(true, std::memory_order_release);
             }
             else if (commandStream[4] == "per")
+/// @brief Command alias: `excluded-address <rest>` — marks addresses as unavailable for DHCP assignment.
             {
                     global.dhcpServer->configs.leasesPerInterface.store(std::stoi(commandStream[6]), std::memory_order_release);
             }

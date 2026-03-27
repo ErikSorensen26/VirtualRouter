@@ -1,3 +1,12 @@
+/**
+ * @file EigrpInterfaceRegistry.h
+ * @brief EIGRP interface-specific configuration registry.
+ *
+ * Defines per-interface EIGRP parameters including metric components
+ * (bandwidth, delay, reliability, load, MTU), timers (hello, hold),
+ * and interface-level options (passive, summarization).
+ */
+
 // EigrpInterfaceRegistry.h
 
 #ifndef EIGRP_INTERFACE_REGISTRY_H

@@ -1,4 +1,7 @@
-// CrashHandler.hpp
+/**
+ * @file CrashHandler.hpp
+ * @brief Signal handlers that write timestamped crash reports to disk on fatal signals.
+ */
 
 #include <execinfo.h>
 #include <signal.h>
@@ -13,8 +16,30 @@
 namespace utils
 {
 
+/// Filesystem path where crash log files are written.
 #define LOG_DIR "/var/core::VirtualRouter/log"
 
+/**
+ * @brief Async-signal-safe crash handler that writes a backtrace log and terminates.
+ *
+ * Invoked by the OS on fatal signals (SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL).
+ * It creates the log directory if needed, opens a uniquely timestamped file,
+ * writes the signal name, PID, and a stack trace via backtrace_symbols_fd(),
+ * then compresses the file with gzip before calling _exit(1).
+ *
+ * The log filename follows the pattern:
+ * @c YYYY-MM-DD_HH-MM-SS_crash_report.log.gz
+ * under @ref LOG_DIR.
+ *
+ * @param sig  Signal number delivered by the OS (e.g. SIGSEGV).
+ *
+ * @note backtrace_symbols_fd() is async-signal-safe and does not allocate.
+ * The gzip system() call is not async-signal-safe; it is invoked after all
+ * critical data have already been flushed to the file descriptor.
+ *
+ * @warning This function calls _exit(1) and never returns. Do not install it
+ * for signals that are intended to be handled and recovered from.
+ */
 static void crash_handler(int sig)
 {
     const char* signalName;
@@ -63,6 +88,16 @@ static void crash_handler(int sig)
     _exit(1);
 }
 
+/**
+ * @brief Installs crash_handler() for all commonly fatal signals.
+ *
+ * Registers @ref crash_handler for SIGSEGV, SIGABRT, SIGBUS, SIGFPE, and
+ * SIGILL. Call once at process startup, before spawning any threads, so
+ * that every thread inherits the handlers.
+ *
+ * @note SIGFPE is registered twice in the initializer list; this is
+ * harmless but redundant.
+ */
 inline void setupCrashLogging()
 {
     signal(SIGSEGV, crash_handler);

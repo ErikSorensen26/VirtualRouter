@@ -1,4 +1,11 @@
-// CliSession.h
+/**
+ * @file CliSession.h
+ * @brief CLI session: per-user terminal context with mode history and variable state.
+ *
+ * Represents a single user's interactive CLI session. Manages mode navigation,
+ * command execution context, command history, and variable scope. Each connected
+ * user has one CliSession instance owned by CliEngine.
+ */
 
 #ifndef CLI_SESSION_H
 #define CLI_SESSION_H

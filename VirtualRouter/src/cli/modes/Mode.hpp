@@ -1,4 +1,18 @@
-// Mode.hpp
+/**
+ * @file Mode.hpp
+ * @brief CLI mode definitions: mode hierarchy, prompts, and navigation paths.
+ *
+ * Defines all operational modes in the CLI (User Exec, Privileged Exec,
+ * Global Configuration, Interface, EIGRP, OSPF, etc.) along with prompt
+ * strings and mode navigation paths. Mode hierarchy determines which
+ * commands are available at each level.
+ */
+
+/**
+ * @defgroup CLI_MODES CLI Modes
+ * @ingroup CLI
+ * @brief Mode definitions, parser contexts, and command trees for each CLI mode.
+ */
 
 #ifndef MODE_HPP
 #define MODE_HPP
@@ -40,8 +54,20 @@
 namespace cli
 {
 /**
- * @struct Mode
- * @brief Represents various operational modes of the terminal with corresponding command-line prompts.
+ * @enum CliMode
+ * @brief CLI operational modes: the current context and available commands.
+ *
+ * Represents all possible CLI modes the terminal can be in. Each mode
+ * has an associated prompt string and navigation path. Modes form a
+ * hierarchy: User Exec → Privileged Exec → Global Config → protocol modes.
+ *
+ * ## Mode Structure
+ * - **Exec modes**: UserExec (limited), PrivilegedExec (full access)
+ * - **Global Config**: GlobalConfiguration (config-wide settings)
+ * - **Protocol modes**: EIGRP (named, classic, AF), OSPF, interface, ACL
+ * - **None**: placeholder for inactive/uninitialized mode
+ *
+ * @see getPrompt(), getPath()
  */
 enum class CliMode
 {
@@ -75,11 +101,26 @@ static constexpr std::array<ModePath, static_cast<size_t>(CliMode::Count)> CliMo
 #undef X
 };
 
+/**
+ * @brief Gets the prompt string for a CLI mode.
+ *
+ * @param mode The CLI mode to query.
+ * @return Prompt string displayed to user (e.g., `#`, `(config)#`).
+ */
 constexpr std::string_view getPrompt(CliMode mode)
 {
     return cli::CliModePaths[static_cast<size_t>(mode)][0];
 }
 
+/**
+ * @brief Gets the full navigation path for a CLI mode.
+ *
+ * The path represents the sequence of mode names from root to current.
+ * Example: `router`, `eigrp`, `classic` for ClassicV4 mode.
+ *
+ * @param mode The CLI mode to query.
+ * @return Span of mode path components (breadcrumb trail).
+ */
 constexpr cli::ModePath getPath(CliMode mode)
 {
     return cli::CliModePaths[static_cast<size_t>(mode)];

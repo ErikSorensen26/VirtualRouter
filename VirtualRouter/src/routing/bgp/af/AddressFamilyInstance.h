@@ -1,4 +1,13 @@
-// AddressFamilyInstance.h
+/**
+ * @file AddressFamilyInstance.h
+ * @brief Per-AFI route processing instance: Adj-RIB-In, Adj-RIB-Out, Loc-RIB management.
+ */
+
+/**
+ * @defgroup BGP_AF BGP Address Families
+ * @ingroup BGP
+ * @brief Per-AFI instances, NLRI policies, address-family logic, and process accessor.
+ */
 
 #ifndef BGP_ADDRESS_FAMILY_INSTANCE_H
 #define BGP_ADDRESS_FAMILY_INSTANCE_H
@@ -25,6 +34,17 @@
 
 namespace routing::bgp
 {
+
+/**
+ * @brief Serializes and sends a BGP UPDATE to the peer over the primary TCP connection.
+ *
+ * Defined here (not in Session.cpp) because it requires BgpTx::buildUpdate<N>,
+ * which is a template that must be instantiated in the same translation unit
+ * as AddressFamilyInstance.
+ *
+ * @tparam N  NLRI policy type; governs how the UPDATE is serialized.
+ * @param update  Routes to announce and withdraw.
+ */
 template <typename N>
 inline void Session::sendUpdate(const BuildUpdate<typename N::Nlri>& update)
 {
@@ -35,6 +55,15 @@ inline void Session::sendUpdate(const BuildUpdate<typename N::Nlri>& update)
     }
 }
 
+/**
+ * @brief Returns the leading AS_SEQUENCE segment of an AS-PATH, inserting one if absent.
+ *
+ * Used by egress policy to prepend the local AS. When the AS-PATH is empty or
+ * begins with a non-SEQUENCE segment, a new AS_SEQUENCE segment is prepended.
+ *
+ * @param attrs  Path attributes to modify in-place.
+ * @return Reference to the (possibly newly inserted) AS_SEQUENCE segment.
+ */
 inline static AsPathSegment& getAsSegment(Attributes& attrs)
 {
     if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_SEQUENCE)
@@ -43,6 +72,15 @@ inline static AsPathSegment& getAsSegment(Attributes& attrs)
     return attrs.asPath.front();
 }
 
+/**
+ * @brief Returns the leading AS_CONFED_SEQUENCE segment of an AS-PATH, inserting one if absent.
+ *
+ * Used by confederation egress policy to prepend the member AS. Mirrors
+ * getAsSegment but targets the confederation segment type.
+ *
+ * @param attrs  Path attributes to modify in-place.
+ * @return Reference to the (possibly newly inserted) AS_CONFED_SEQUENCE segment.
+ */
 inline static AsPathSegment& getConfedAsSegment(Attributes& attrs)
 {
     if (!attrs.asPath.empty() && attrs.asPath[0].segmentType == BGP_AS_CONFED_SEQUENCE)
@@ -52,27 +90,75 @@ inline static AsPathSegment& getConfedAsSegment(Attributes& attrs)
 }
 
 /**
- * class AddressFamilyInstance<N>
+ * @brief Per-AFI route processing instance: Adj-RIB-In, Loc-RIB, and Adj-RIB-Out for one address family.
+ * @ingroup BGP_AF
  *
- * N is a concrete subclass of NlriPolicy<SomeNlriType, AfiSafi>.
- * It provides:
- *   - N::Nlri      — the NLRI type (e.g. types::IPPrefix)
- *   - N::installRoute(LocalRoute<Nlri>&) — install into the routing table
- *   - N::withdrawRoute(const Nlri&)      — remove from the routing table
+ * Owns and operates all three RIBs for a single BGP address family (IPv4 unicast,
+ * IPv6 unicast, VPN, etc.). Each instance:
+ * - Receives parsed UPDATE messages from @ref BgpRx and applies inbound policy.
+ * - Runs the @ref DecisionEngine to select the best path (and ECMP peers).
+ * - Installs winning routes into the VRF routing table via the NLRI policy.
+ * - Maintains Adj-RIB-Out per peer and drives UPDATE generation through @ref BgpTx.
  *
- * Each AddressFamilyInstance<N> instance manages one AFI/SAFI:
- *   - Adj-RIB-In  (per peer, per prefix) — InboundRoute<Nlri>
- *   - Loc-RIB     (per prefix, best route) — LocalRoute<Nlri> pointing into Adj-RIB-In
- *   - Adj-RIB-Out (per peer, per prefix, post-egress-policy) — OutboundRoute<Nlri>
+ * Additional features per instance:
+ * - BGP Route Dampening (RFC 2439)
+ * - Minimum Route Advertisement Interval (MRAI) per peer
+ * - Enhanced Route Refresh / stale-path tracking (RFC 7313)
+ * - Next-Hop Tracking (NHT) with RIB watch callbacks
+ * - Aggregate address generation with summary-only suppression
+ * - Default-originate to configured peers
+ * - ADD-PATH advertisement (RFC 7911)
+ * - Outbound Route Filtering (ORF) via peer-sent prefix lists
+ * - Soft-reconfiguration inbound (pre-policy RIB storage)
+ * - Slow-peer detection and deferral
+ *
+ * ## Architectural Role
+ * Sits between BGP sessions and the VRF routing table. It is the decision
+ * boundary: everything inbound is normalised here and the best result is
+ * written to both the RIB and Adj-RIB-Out. One instance exists per enabled
+ * (BgpProcess, AFI/SAFI) combination.
+ *
+ * ## Lifecycle & Ownership
+ * Owned by BgpProcess (stored in its AFI map). Constructed when the AFI is
+ * enabled; destroyed when the AFI is disabled or the process stops. The
+ * destructor cancels all active timers and removes all RIB watches before
+ * releasing memory.
+ *
+ * ## Concurrency Model
+ * All methods run exclusively on the BgpProcess scheduler thread. The RIB
+ * watch callbacks post back to this scheduler before touching any member
+ * state, so no internal locking is required.
+ *
+ * @tparam N  NLRI policy type. Must provide:
+ *              - `N::Nlri`        — prefix type (e.g. types::IPv4Prefix)
+ *              - `N::afi`         — AfiSafi constant identifying this family
+ *              - `N::LocRib`      — LocRib storage backend type
+ *              - `N::NlriInstall` — route install descriptor type
+ *              - `installRoute`, `installRoutes`, `withdrawRoute`, `withdrawRoutes`
+ *                methods matching the NlriPolicy interface
+ *
+ * @see BgpProcess, Session, DecisionEngine, NlriPolicy, LocRib
  */
 template <typename N>
 class AddressFamilyInstance
 {
 public:
-    static constexpr AfiSafi afi = N::afi;
-    using NlriT = typename N::Nlri;
-    using IgpMetricResolver = std::function<uint64_t(const types::IPAddress&)>;
+    static constexpr AfiSafi afi = N::afi; ///< AFI/SAFI constants identifying this address family.
+    using NlriT = typename N::Nlri;        ///< Prefix type for this AFI (e.g. types::IPv4Prefix).
+    using IgpMetricResolver = std::function<uint64_t(const types::IPAddress&)>; ///< Callable that resolves the IGP cost to a next-hop address.
 
+    /**
+     * @brief Constructs the AFI instance, registers AF-base config, and starts network-command watches.
+     * @ingroup BGP_AF
+     *
+     * Initialises all RIBs empty. The IGP metric resolver defaults to returning
+     * max uint64 (unreachable) until overridden via setIgpMetricResolver. Config
+     * is loaded lazily from the registry; syncNetworkRoutes() fires immediately
+     * to install any pre-configured `network` prefixes.
+     *
+     * @param proc  Owning BGP process; provides config, scheduler, neighbor table, and routing instance.
+     * @param fam   The AFI/SAFI this instance manages.
+     */
     AddressFamilyInstance(BgpProcess& proc, AfiSafi fam)
         : process(proc),
           family(fam),
@@ -96,6 +182,14 @@ public:
     AddressFamilyInstance(AddressFamilyInstance&&) = delete;
     AddressFamilyInstance& operator=(AddressFamilyInstance&&) = delete;
 
+    /**
+     * @brief Tears down all active timers and RIB watches before destruction.
+     *
+     * Cancels the NHT recompute timer and all per-peer stale-path / max-EOR
+     * timers. Removes all network-command RIB watches and NHT watches. This
+     * must complete before the BgpProcess scheduler is destroyed, because
+     * timer callbacks hold a pointer to this instance.
+     */
     ~AddressFamilyInstance()
     {
         auto sched = ProcessAccessor::getScheduler(process);
@@ -113,11 +207,33 @@ public:
 
     const AfiSafi& getFamily() const noexcept { return family; }
 
+    /**
+     * @brief Installs a callback used to resolve IGP metrics for next-hop addresses.
+     *
+     * The resolver is called during best-path selection to compare routes by IGP
+     * cost when all other attributes are equal (RFC 4271 §9.1.2.2, step 9).
+     * Typically wired up by the BgpProcess to query OSPF or EIGRP metrics.
+     *
+     * @param resolver  Callable mapping a next-hop IPAddress to its IGP cost.
+     *                  Return UINT64_MAX to indicate the next-hop is unreachable.
+     */
     void setIgpMetricResolver(IgpMetricResolver resolver)
     {
         igpMetricResolver = std::move(resolver);
     }
 
+    /**
+     * @brief Processes a raw inbound UPDATE message for this AFI.
+     *
+     * Delegates wire decoding to BgpRx::processUpdate, then hands the parsed
+     * result to the internal route-processing pipeline. On parse error, `error`
+     * is populated with a NOTIFICATION to send back to the peer.
+     *
+     * @param session  Session the UPDATE arrived on.
+     * @param uinfo    Raw UPDATE payload from the TCP stream.
+     * @param error    Output: NOTIFICATION descriptor to send if parsing fails.
+     * @return True on success; false if a parse error occurred and `error` is set.
+     */
     bool onUpdateFromPeer(Session& session, IncomingUpdate& uinfo, Notification& error)
     {
         ParsedUpdate<NlriT> update;
@@ -130,7 +246,15 @@ public:
         return true;
     }
 
-    // Called on session establishment: advertises all current Loc-RIB routes to the new peer.
+    /**
+     * @brief Sends the full Loc-RIB to a newly established peer and fires default-originate/aggregates.
+     *
+     * If Enhanced Route Refresh is negotiated, wraps the initial dump with BORR/EORR
+     * messages (RFC 7313). Called once per session by BgpProcess on FSM transition
+     * to ESTABLISHED.
+     *
+     * @param session  Newly established peer session.
+     */
     void onPeerEstablished(Session& session)
     {
         const bool enhancedRR = session.getNegotiated().enhancedRR;
@@ -147,6 +271,14 @@ public:
             session.sendRouteRefresh(family, RouteRefreshReason::Eorr);
     }
 
+    /**
+     * @brief Re-sends the full Adj-RIB-Out to a peer in response to a ROUTE-REFRESH request.
+     *
+     * Groups outbound NLRIs by path attribute to minimise UPDATE message count.
+     * Wraps the refresh with BORR/EORR when Enhanced Route Refresh is active.
+     *
+     * @param session  Peer session that sent the ROUTE-REFRESH.
+     */
     void refreshPeer(Session& session)
     {
         const uint32_t peerRid = session.getPeerRid();
@@ -199,8 +331,15 @@ public:
             session.sendRouteRefresh(family, RouteRefreshReason::Eorr);
     }
 
-    // Called when peer sends BORR (Enhanced Route Refresh begin): mark Adj-RIB-In stale
-    // and start STALEPATH / MAX-EOR timers (RFC 7313).
+    /**
+     * @brief Handles a BORR (Begin-of-Route-Refresh) from a peer (RFC 7313).
+     *
+     * Marks all current Adj-RIB-In entries from this peer as stale and starts
+     * the STALEPATH and MAX-EOR timers. If EORR does not arrive before the
+     * timers fire, stale entries are purged by purgeStalePeer.
+     *
+     * @param session  Peer session that sent the BORR.
+     */
     void onPeerBorr(Session& session)
     {
         const uint32_t peerRid = session.getPeerRid();
@@ -233,7 +372,17 @@ public:
             [this, peerRid](uint32_t) { staleTimers[peerRid].maxEor = 0; purgeStalePeer(peerRid); });
     }
 
-    // Called when peer sends EORR (Enhanced Route Refresh end): purge stale paths.
+    /**
+     * @brief Purges all remaining stale Adj-RIB-In entries when a peer sends EORR.
+     *
+     * Cancels the STALEPATH and MAX-EOR timers that were armed by @ref onPeerBorr,
+     * then calls @ref purgeStalePeer to remove any NLRIs that the peer did not
+     * re-advertise during the route-refresh cycle.
+     *
+     * @param session  Peer session that sent the EORR.
+     *
+     * @see onPeerBorr, purgeStalePeer
+     */
     void onPeerEorr(Session& session)
     {
         const uint32_t peerRid = session.getPeerRid();
@@ -241,13 +390,32 @@ public:
         purgeStalePeer(peerRid);
     }
 
-    // Called by BGP_SCAN_TIME periodic timer to re-evaluate all active routes.
+    /**
+     * @brief Re-evaluates all active Loc-RIB entries on the BGP_SCAN_TIME periodic tick.
+     *
+     * Iterates every entry in the Loc-RIB and calls @ref recomputeAdjRibOut so that
+     * any attribute or policy changes that occurred since the last scan are reflected
+     * in outbound UPDATE messages to all established peers.
+     */
     void scan()
     {
         for (auto& [nlri, route] : locRib)
             recomputeAdjRibOut(nlri, &route);
     }
 
+    /**
+     * @brief Re-applies the current inbound policy to all stored pre-policy routes from a peer.
+     *
+     * Clears the post-policy Adj-RIB-In for `peerRid`, then replays every entry in
+     * the pre-policy table through @ref applyIngressPolicy and re-installs accepted
+     * routes. Prefixes whose acceptance status changes are passed to @ref recomputeNlri
+     * so that the Loc-RIB and Adj-RIB-Out are updated accordingly.
+     *
+     * Requires that soft-reconfiguration inbound was enabled for this neighbor when
+     * the routes were first received; if the pre-policy table is empty, this is a no-op.
+     *
+     * @param peerRid  Router ID of the peer whose inbound policy is to be re-applied.
+     */
     void softClearInbound(uint32_t peerRid)
     {
         auto preIt = preAdjRibIn.find(peerRid);
@@ -305,6 +473,20 @@ public:
             recomputeNlri(nlri);
     }
 
+    /**
+     * @brief Tears down all per-peer state when a session goes down.
+     *
+     * Performs a full cleanup for `peer`:
+     * - Cancels any pending MRAI timer and removes the MRAI state entry.
+     * - Resets per-AF neighbor flags (ORF filter, max-prefix warning, slow-peer state).
+     * - Cancels stale-path timers from any in-progress route-refresh cycle.
+     * - Removes the pre-policy Adj-RIB-In and Adj-RIB-Out entries.
+     * - Removes all post-policy Adj-RIB-In entries and evicts affected prefixes from
+     *   the Loc-RIB, then calls @ref recomputeNlri for each touched NLRI so the
+     *   remaining peers receive the correct withdraw or re-advertisement.
+     *
+     * @param peer  Router ID of the peer whose session went down.
+     */
     void invalidatePeer(uint32_t peer)
     {
         auto mraiIt = mraiState.find(peer);
@@ -354,6 +536,24 @@ public:
     }
 
 private:
+    /**
+     * @brief Core inbound route processing pipeline for a decoded UPDATE message.
+     *
+     * Processes all withdrawals and announcements in `update` for `peer`:
+     * 1. Removes each withdrawn NLRI from the post-policy Adj-RIB-In, the pre-policy
+     *    table (if soft-reconfiguration is enabled), and the stale set.
+     * 2. For each announced NLRI, stores a pre-policy copy (if soft-reconfiguration is
+     *    enabled), constructs an @ref InboundRoute, and runs it through
+     *    @ref applyIngressPolicy. Accepted routes replace any existing entry in the
+     *    post-policy Adj-RIB-In and are removed from the stale set.
+     * 3. Enforces MAXIMUM_PREFIX: sends `MAX_PREFIX_REACHED` to the FSM and schedules
+     *    a restart when the post-policy prefix count exceeds the configured limit.
+     * 4. Calls @ref recomputeNlri for every touched prefix so the Loc-RIB and
+     *    Adj-RIB-Out are updated.
+     *
+     * @param peer    Neighbor that sent the UPDATE (must be present in the neighbor table).
+     * @param update  Decoded UPDATE payload from @ref BgpRx::processUpdate.
+     */
     void onParsedUpdateFromPeer(Neighbor& peer, ParsedUpdate<NlriT>& update)
     {
         Neighbor* nbr = ProcessAccessor::getNtable(process).lookup(peer.rid);
@@ -488,11 +688,35 @@ private:
             recomputeNlri(n);
     }
 
+    /**
+     * @brief Runs best-path selection and updates the Loc-RIB for a single prefix.
+     *
+     * Convenience wrapper that forwards to the batch overload with a one-element vector.
+     *
+     * @param nlri  Prefix to recompute.
+     */
     void recomputeNlri(const NlriT& nlri)
     {
         recomputeNlri(std::vector<NlriT>{nlri});
     }
 
+    /**
+     * @brief Runs best-path selection and updates the Loc-RIB for a set of prefixes.
+     *
+     * For each NLRI in `nlris`:
+     * - Collects all candidate @ref InboundRoute entries from every peer's Adj-RIB-In,
+     *   refreshing IGP costs, plus any locally-originated network-command routes.
+     * - Applies deterministic-MED grouping when BGP_DETERMINISTIC_MED is configured.
+     * - Passes candidates to @ref DecisionEngine::selectBest (and ADD-PATH pool logic).
+     * - Applies BGP Route Dampening: suppresses a newly reachable prefix or penalises
+     *   a newly unreachable one; suppressed prefixes are held until the reuse timer fires.
+     * - Installs the winning route into the Loc-RIB via @ref installToRib and schedules
+     *   aggregate recompute; withdraws and removes the entry if no best exists.
+     * - Drives @ref recomputeAdjRibOut so all peers receive the correct announcement or
+     *   withdrawal.
+     *
+     * @param nlris  Prefixes to recompute.
+     */
     void recomputeNlri(const std::vector<NlriT> nlris)
     {
         std::vector<LocalRoute<NlriT>*> installs;
@@ -704,6 +928,15 @@ private:
         installToRib(installs);
     }
 
+    /**
+     * @brief Calls the NLRI policy install hook and registers a next-hop tracking watch for one route.
+     *
+     * Builds the install descriptor via @ref buildInstall, forwards it to the policy's
+     * `installRoute` method, then calls @ref registerNht to watch the route's next-hop
+     * address in the RIB.
+     *
+     * @param route  Best-path Loc-RIB entry to install.
+     */
     void installToRib(LocalRoute<NlriT>& route)
     {
         auto install = buildInstall(route);
@@ -711,6 +944,15 @@ private:
         registerNht(route.route.nlri, install.attrs.path.nextHop);
     }
 
+    /**
+     * @brief Calls the NLRI policy batch install hook and registers NHT watches for multiple routes.
+     *
+     * Builds install descriptors for all routes in `routes`, forwards the batch to the
+     * policy's `installRoutes` method, then calls @ref registerNht for each installed
+     * next-hop.
+     *
+     * @param routes  Pointers to Loc-RIB entries to install.
+     */
     void installToRib(std::vector<LocalRoute<NlriT>*>& routes)
     {
         std::vector<typename N::NlriInstall> installs;
@@ -722,12 +964,28 @@ private:
             registerNht(install.route.route.nlri, install.attrs.path.nextHop);
     }
 
+    /**
+     * @brief Calls the NLRI policy withdraw hook and removes the NHT watch for one prefix.
+     *
+     * Unregisters the next-hop tracking watch via @ref unregisterNht, then calls
+     * the policy's `withdrawRoute` to remove the route from the VRF RIB.
+     *
+     * @param nlri  Prefix to withdraw.
+     */
     void withdrawFromRib(const NlriT& nlri)
     {
         unregisterNht(nlri);
         policy.withdrawRoute(nlri);
     }
 
+    /**
+     * @brief Calls the NLRI policy batch withdraw hook and removes NHT watches for multiple prefixes.
+     *
+     * Unregisters the next-hop tracking watch for each NLRI, then forwards the full
+     * list to the policy's `withdrawRoutes` method for a single batch operation.
+     *
+     * @param nlri  Prefixes to withdraw.
+     */
     void withdrawFromRib(const std::vector<NlriT>& nlri)
     {
         for (const auto& n : nlri)
@@ -735,7 +993,25 @@ private:
         policy.withdrawRoutes(nlri);
     }
 
-    // Returns true if the route should be DROPPED (filtered out); false to accept into Adj-RIB-In.
+    /**
+     * @brief Applies all inbound policy checks to a candidate route.
+     *
+     * Evaluates, in order:
+     * - Route Reflector loop prevention (ORIGINATOR_ID and CLUSTER_LIST, iBGP only).
+     * - AS-PATH loop detection: rejects routes containing the local AS more times than
+     *   ALLOWAS_IN permits, and routes containing the configured LOCAL_AS.
+     * - Confederation identifier loop detection.
+     * - BGP_ENFORCE_FIRST_AS: rejects eBGP routes whose first AS does not match the
+     *   neighbor's configured remote AS.
+     * - BGP_MAX_AS_LIMIT: rejects routes whose AS-PATH length exceeds the limit.
+     * - BGP_MAX_COMMUNITY_LIMIT / BGP_MAX_EXT_COMMUNITY_LIMIT: rejects routes carrying
+     *   too many community attributes.
+     *
+     * @param route  Candidate inbound route to evaluate.
+     * @return `true` if the route must be dropped; `false` to accept into Adj-RIB-In.
+     *
+     * @note Outbound route-map filtering is not yet implemented (marked TODO).
+     */
     bool applyIngressPolicy(const InboundRoute<NlriT>& route)
     {
         PathAttribute pathAttrs = ProcessAccessor::getAttrMgr(process).get(*route.pathId);
@@ -836,8 +1112,23 @@ private:
         return false; // accept
     }
 
-    // Group-level egress: strip LOCAL_PREF and prepend AS-path.
-    // Result is shared by all members of the same peer group + isEbgp combination.
+    /**
+     * @brief Applies group-level egress transformations to a route's path attributes.
+     *
+     * The result is the same for all members of a peer group with the same eBGP/iBGP
+     * classification and can therefore be cached and shared across group members.
+     * Transformations applied:
+     * - eBGP: strips LOCAL_PREF, ORIGINATOR_ID, CLUSTER_LIST, and confederation AS-PATH
+     *   segments, then prepends the local (or LOCAL_AS) AS to the leading AS_SEQUENCE.
+     * - Confederation eBGP: prepends the member AS as a new AS_CONFED_SEQUENCE segment.
+     * - iBGP: no AS-PATH modifications.
+     *
+     * @param route    Best-path route to apply egress policy to.
+     * @param session  Outbound session; determines eBGP/iBGP classification and LOCAL_AS config.
+     * @return Modified PathAttribute, or `std::nullopt` if `route` has no path ID.
+     *
+     * @see applyMemberNexthop, applyEgressPolicy
+     */
     std::optional<PathAttribute> applyGroupEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
     {
         if (!route.pathId.has_value())
@@ -887,7 +1178,23 @@ private:
         return pa;
     }
 
-    // Per-member nexthop adjustment, applied after group-level policy.
+    /**
+     * @brief Applies per-member next-hop and community adjustments after group-level egress policy.
+     *
+     * Handles settings that differ between members of the same peer group:
+     * - eBGP: rewrites NEXT_HOP to the session's local address unless NEXT_HOP_UNCHANGED
+     *   is set; strips standard and extended communities unless SEND_COMMUNITY permits
+     *   them; strips private ASNs from the AS-PATH when REMOVE_PRIVATE_AS is configured.
+     * - iBGP: rewrites NEXT_HOP to the local socket address when NEXT_HOP_SELF or
+     *   NEXT_HOP_SELF_ALL is configured.
+     *
+     * @param pa      Path attributes to modify in-place (already processed by group policy).
+     * @param route   Source inbound route (used to check originator identity for NEXT_HOP_SELF).
+     * @param afNbr   AF-level neighbor state for this specific peer.
+     * @param session Outbound session; provides the local socket address and eBGP flag.
+     *
+     * @see applyGroupEgressPolicy
+     */
     void applyMemberNexthop(PathAttribute& pa, const InboundRoute<NlriT>& route,
                             const NeighborAf& afNbr, const Session& session)
     {
@@ -941,7 +1248,19 @@ private:
         }
     }
 
-    // Combined egress policy for ungrouped neighbors.
+    /**
+     * @brief Applies the combined group and member egress policy for an ungrouped peer.
+     *
+     * Calls @ref applyGroupEgressPolicy followed by @ref applyMemberNexthop in a single
+     * step. Used for peers that are not part of a peer group; for group members, the two
+     * stages are invoked separately so the group result can be shared.
+     *
+     * @param route    Route to apply egress policy to.
+     * @param session  Outbound session.
+     * @return Fully-adjusted PathAttribute, or `std::nullopt` if the route has no path ID.
+     *
+     * @see applyGroupEgressPolicy, applyMemberNexthop
+     */
     std::optional<PathAttribute> applyEgressPolicy(const InboundRoute<NlriT>& route, const Session& session)
     {
         auto pa = applyGroupEgressPolicy(route, session);
@@ -952,6 +1271,14 @@ private:
         return pa;
     }
 
+    /**
+     * @brief Per-peer Minimum Route Advertisement Interval (MRAI) rate-limit state.
+     *
+     * Tracks the timestamp of the last UPDATE sent to this peer and the set of NLRIs
+     * whose advertisement was deferred because the interval had not yet elapsed. A
+     * one-shot timer (identified by `timerId`) fires after the interval expires and
+     * drains the pending set via @ref drainMraiPending.
+     */
     struct MraiState
     {
         std::chrono::steady_clock::time_point lastSent{};
@@ -959,7 +1286,16 @@ private:
         uint32_t timerId = 0;
     };
 
-    // Called by the MRAI timer: bypasses the rate-limit check and recomputes for all deferred NLRIs.
+    /**
+     * @brief MRAI timer callback: flushes deferred NLRIs for one peer.
+     * @ingroup BGP_AF
+     *
+     * Sets `mraiBypassPeer` so that @ref recomputeAdjRibOut skips the rate-limit check
+     * for this peer, then recomputes each pending NLRI. Clears `mraiBypassPeer` once
+     * draining is complete so normal MRAI enforcement resumes.
+     *
+     * @param peerRid  Router ID of the peer whose MRAI timer fired.
+     */
     void drainMraiPending(uint32_t peerRid)
     {
         auto it = mraiState.find(peerRid);
@@ -978,6 +1314,24 @@ private:
         mraiBypassPeer = 0;
     }
 
+    /**
+     * @brief Recomputes and sends the Adj-RIB-Out entry for one NLRI to all established peers.
+     *
+     * Iterates every established neighbor and, for each:
+     * - Withdraws the NLRI from the peer if `best` is null, or if any egress check fails
+     *   (inactive next-hop via NHT, MRAI / slow-peer deferral, AF not negotiated, iBGP
+     *   split-horizon, ACTIVATE not set, summary-only suppression, or ORF filter).
+     * - Applies @ref applyGroupEgressPolicy and @ref applyMemberNexthop (or
+     *   @ref applyEgressPolicy for ungrouped peers) and stamps Route Reflector attributes.
+     * - Skips sending when the computed path attributes are identical to what was last
+     *   sent, to avoid redundant UPDATEs.
+     * - Batches ADD-PATH paths into a single UPDATE and removes stale ADD-PATH entries
+     *   whose source routes are no longer in the candidate set.
+     * - Updates slow-peer detection state from the TX backlog after each send.
+     *
+     * @param nlri  Prefix to recompute.
+     * @param best  Winning Loc-RIB entry, or `nullptr` to withdraw the prefix from all peers.
+     */
     void recomputeAdjRibOut(const NlriT& nlri, LocalRoute<NlriT>* best)
     {
         auto& attrMgr = ProcessAccessor::getAttrMgr(process);
@@ -1333,6 +1687,16 @@ private:
         });
     }
 
+    /**
+     * @brief Invokes the IGP metric resolver for a next-hop address.
+     *
+     * Returns `UINT64_MAX` when no resolver is installed (next-hop treated as
+     * unreachable) or when the resolver itself indicates the next-hop is not reachable
+     * via any IGP.
+     *
+     * @param nextHop  Next-hop address to resolve.
+     * @return IGP cost to reach `nextHop`, or `UINT64_MAX` if unreachable.
+     */
     uint64_t resolveIgpMetric(const types::IPAddress& nextHop) const
     {
         if (!igpMetricResolver)
@@ -1340,18 +1704,50 @@ private:
         return igpMetricResolver(nextHop);
     }
 
+    /**
+     * @brief Returns the configured cluster ID, falling back to the BGP router ID.
+     *
+     * Used by Route Reflector egress policy to stamp CLUSTER_LIST and by inbound loop
+     * detection to reject routes carrying our own cluster ID.
+     *
+     * @return Configured BGP_CLUSTER_ID, or the process router ID if not set.
+     */
     uint32_t getClusterId() const
     {
         auto& cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CLUSTER_ID>();
         return cidField.hasValue() ? cidField.load() : ProcessAccessor::getRid(process);
     }
 
+    /**
+     * @brief Returns the configured confederation identifier, falling back to the local AS.
+     *
+     * Used throughout egress policy and AS-PATH loop detection to identify the
+     * confederation's public AS number. When no confederation is configured, the
+     * local AS number is returned so the logic degenerates correctly.
+     *
+     * @return Configured BGP_CONFEDERATION_IDENTIFIER, or the local AS number if not set.
+     */
     uint32_t getConfedId() const
     {
         auto& cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>();
         return cidField.hasValue() ? cidField.load() : ProcessAccessor::getAsNum(process);
     }
 
+    /**
+     * @brief Applies a peer-sent ORF prefix-list to one outbound NLRI.
+     *
+     * Evaluates each ORF entry whose action is `ADD` against `nlri`. An entry matches
+     * when `nlri`'s prefix length falls within the entry's [minLen, maxLen] range and
+     * `nlri` is a subnet of the entry's prefix. The first matching entry determines
+     * the outcome; entries that do not match are skipped. An implicit deny applies when
+     * the filter is non-empty and no entry matched.
+     *
+     * For NLRI types other than IP prefixes, this always returns `true` (ORF not applicable).
+     *
+     * @param nlri    Outbound NLRI to evaluate.
+     * @param filter  ORF prefix-list entries received from the peer.
+     * @return `true` if the NLRI should be advertised; `false` if the ORF filter denies it.
+     */
     bool passesOrfFilter(const NlriT& nlri, const std::vector<OrfPrefixEntry>& filter) const
     {
         if constexpr (std::is_same_v<NlriT, types::IPPrefix>)
@@ -1382,6 +1778,14 @@ private:
         }
     }
 
+    /**
+     * @brief Per-aggregate-prefix origination state.
+     *
+     * Tracks whether an aggregate is currently being advertised (`active`) and
+     * stores the pre-egress-policy PathAttribute (`basePa`) assembled by
+     * @ref recomputeAggregate. Each established peer receives a per-session copy of
+     * `basePa` after @ref applyAggregateEgressPolicy has been applied.
+     */
     struct AggregateState
     {
         bool active = false;
@@ -1389,6 +1793,23 @@ private:
     };
 
 public:
+    /**
+     * @brief Originates the default route (0.0.0.0/0 or ::/0) to a specific peer.
+     * @ingroup BGP_AF
+     *
+     * Sends a synthesised UPDATE announcing the AFI-appropriate default prefix.
+     * The generated path attributes are built locally — no Loc-RIB entry is required.
+     * AS-PATH and NEXT_HOP are adjusted for eBGP, confederation-eBGP, and iBGP
+     * sessions using the same local-AS and confederation logic as regular egress policy.
+     *
+     * A no-op if DEFAULT_ORIGINATE is not enabled for this neighbor or the AFI is not
+     * an IP prefix type. Records the peer RID in @ref defaultOriginatedPeers so that
+     * @ref withdrawDefaultOriginate can issue the matching withdrawal.
+     *
+     * @param session  Peer session to send the default route to.
+     *
+     * @see withdrawDefaultOriginate
+     */
     void sendDefaultOriginate(Session& session)
     {
         if constexpr (!types::isIpPrefix<NlriT>)
@@ -1468,6 +1889,18 @@ public:
         defaultOriginatedPeers.insert(session.getPeerRid());
     }
 
+    /**
+     * @brief Withdraws the previously originated default route from a peer.
+     *
+     * Sends a BGP UPDATE withdrawing the AFI-appropriate default prefix (0.0.0.0/0
+     * or ::/0). A no-op if no default route was previously sent to this peer (i.e.,
+     * the peer RID is not in @ref defaultOriginatedPeers). Also a no-op for non-IP
+     * prefix NLRI types.
+     *
+     * @param session  Peer session to withdraw the default route from.
+     *
+     * @see sendDefaultOriginate
+     */
     void withdrawDefaultOriginate(Session& session)
     {
         if constexpr (!types::isIpPrefix<NlriT>)
@@ -1492,6 +1925,17 @@ public:
     }
 
 private:
+    /**
+     * @brief Sends all currently active aggregate announcements to a newly established peer.
+     *
+     * Called from @ref onPeerEstablished and @ref refreshPeer to synchronise a new or
+     * refreshing peer with the current aggregate state. Skips peers for which this AFI
+     * is not negotiated or not activated.
+     *
+     * @param session  Peer session to send aggregates to.
+     *
+     * @see sendAggregateToPeer
+     */
     void sendActiveAggregatesToPeer(Session& session)
     {
         if constexpr (!types::isIpPrefix<NlriT>)
@@ -1506,6 +1950,16 @@ private:
                 sendAggregateToPeer(aggNlri, state, session);
     }
 
+    /**
+     * @brief Checks whether a more-specific prefix is suppressed by a summary-only aggregate.
+     *
+     * Iterates all configured aggregate addresses whose `summary-only` flag is set. If
+     * `nlri` is a more-specific subnet of an active aggregate, it must be withheld from
+     * outbound UPDATEs.
+     *
+     * @param nlri  Candidate outbound prefix to check.
+     * @return `true` if `nlri` is suppressed by an active summary-only aggregate.
+     */
     bool aggregateSuppressed(const NlriT& nlri)
     {
         bool suppressed = false;
@@ -1528,6 +1982,14 @@ private:
         return suppressed;
     }
 
+    /**
+     * @brief Arms the aggregate recompute timer if it is not already running.
+     *
+     * Uses BGP_AGGREGATE_TIMER to debounce rapid Loc-RIB changes. The timer fires
+     * once after the configured delay and calls @ref recomputeAllAggregates.
+     *
+     * @note Only meaningful for IP prefix NLRI types; called conditionally via `if constexpr`.
+     */
     void scheduleAggregateRecompute()
     {
         if (aggregateTimerId != 0)
@@ -1538,6 +2000,15 @@ private:
             [this](uint32_t) { aggregateTimerId = 0; recomputeAllAggregates(); });
     }
 
+    /**
+     * @brief Removes stale aggregate state entries and recomputes all configured aggregates.
+     *
+     * First withdraws and removes any @ref AggregateState entries that no longer have a
+     * corresponding entry in the AGGREGATE_ADDRESS config. Then calls
+     * @ref recomputeAggregate for each currently configured aggregate.
+     *
+     * @note A no-op for non-IP-prefix NLRI types.
+     */
     void recomputeAllAggregates()
     {
         if constexpr (!types::isIpPrefix<NlriT>)
@@ -1567,6 +2038,19 @@ private:
             recomputeAggregate(cfg);
     }
 
+    /**
+     * @brief Computes and originates one aggregate prefix from Loc-RIB contributors.
+     *
+     * Finds all Loc-RIB entries that are more-specific subnets of `cfg`'s aggregate
+     * prefix. If none exist, withdraws the aggregate and marks it inactive. Otherwise,
+     * builds a PathAttribute by taking the worst ORIGIN across contributors and either
+     * collecting all contributor AS numbers into an AS_SET (when `as-confed-set` is
+     * configured) or setting ATOMIC_AGGREGATE. Stamps the AGGREGATOR attribute with
+     * the local AS and router ID, stores the result in @ref AggregateState, and
+     * advertises it to all peers via @ref sendAggregateToAllPeers.
+     *
+     * @param cfg  Aggregate address configuration tuple (prefix, as-set flag, summary-only flag).
+     */
     void recomputeAggregate(const config::BgpAggregateAddress::Tuple& cfg)
     {
         const NlriT aggNlri = config::BgpAggregateAddress::prefix(cfg);
@@ -1645,6 +2129,21 @@ private:
         state.active = true;
     }
 
+    /**
+     * @brief Applies egress transformations to an aggregate's PathAttribute before sending.
+     *
+     * Mirrors the logic of @ref applyGroupEgressPolicy for aggregate routes:
+     * - eBGP: strips LOCAL_PREF, ORIGINATOR_ID, CLUSTER_LIST, and confederation AS-PATH
+     *   segments; prepends the local (or LOCAL_AS) AS to the leading AS_SEQUENCE; rewrites
+     *   NEXT_HOP to the session's local socket address.
+     * - Confederation eBGP: prepends the member AS as AS_CONFED_SEQUENCE; sets LOCAL_PREF 100.
+     * - iBGP: sets LOCAL_PREF 100; rewrites NEXT_HOP.
+     *
+     * Modifies `pa` in-place; the caller owns the copy.
+     *
+     * @param pa       Aggregate path attributes to modify.
+     * @param session  Outbound session used to determine eBGP classification and addresses.
+     */
     void applyAggregateEgressPolicy(PathAttribute& pa, const Session& session)
     {
         auto& sesCfgs = session.getNeighbor().getConfigs();
@@ -1695,6 +2194,16 @@ private:
             pa.path.nextHop = conn->socketKey()->local.address;
     }
 
+    /**
+     * @brief Advertises an active aggregate to all established and activated peers.
+     *
+     * Iterates every neighbor; skips those without an established session, without this
+     * AFI negotiated, or without ACTIVATE configured. Calls @ref sendAggregateToPeer
+     * for each eligible peer.
+     *
+     * @param aggNlri  Aggregate prefix to advertise.
+     * @param state    Aggregate state holding the pre-policy PathAttribute.
+     */
     void sendAggregateToAllPeers(const NlriT& aggNlri, AggregateState& state)
     {
         ProcessAccessor::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
@@ -1710,6 +2219,16 @@ private:
         });
     }
 
+    /**
+     * @brief Sends one aggregate announcement to a specific peer.
+     *
+     * Copies the aggregate's base PathAttribute, applies @ref applyAggregateEgressPolicy
+     * for this session, and sends a single-NLRI UPDATE.
+     *
+     * @param aggNlri  Aggregate prefix to announce.
+     * @param state    Aggregate state holding the pre-policy PathAttribute.
+     * @param session  Target peer session.
+     */
     void sendAggregateToPeer(const NlriT& aggNlri, AggregateState& state, Session& session)
     {
         PathAttribute pa = state.basePa;
@@ -1723,6 +2242,15 @@ private:
         session.sendUpdate<N>(update);
     }
 
+    /**
+     * @brief Withdraws an aggregate prefix from all established peers.
+     *
+     * Iterates every neighbor with an established session for which this AFI is
+     * negotiated and sends a single-NLRI withdrawal UPDATE. Peers for which the AFI
+     * is not negotiated are silently skipped.
+     *
+     * @param aggNlri  Aggregate prefix to withdraw.
+     */
     void withdrawAggregate(const NlriT& aggNlri)
     {
         ProcessAccessor::getNtable(process).forEachNeighbor([&](Neighbor& nbr) {
@@ -1738,6 +2266,15 @@ private:
         });
     }
 
+    /**
+     * @brief Reads dampening configuration and returns a populated DampenParams struct.
+     *
+     * Converts all config fields (half-life, reuse, suppress, max-suppress-time) from
+     * their config units (minutes) to seconds, and pre-computes the penalty ceiling as
+     * `suppress * 2^(maxSuppressSecs / halfLifeSecs)`.
+     *
+     * @return Current dampening parameters derived from registry configuration.
+     */
     DampenParams getDampenParams() const
     {
         DampenParams p;
@@ -1749,6 +2286,13 @@ private:
         return p;
     }
 
+    /**
+     * @brief Arms the 5-second dampening reuse scan timer if not already running.
+     *
+     * The timer fires once and calls @ref onDampenReuseTimer. If any prefixes remain
+     * suppressed after that scan, the timer is re-armed by `onDampenReuseTimer`
+     * itself to ensure continuous reuse checking.
+     */
     void startDampenReuseTimer()
     {
         if (dampenReuseTimerId_ != 0)
@@ -1758,6 +2302,16 @@ private:
             [this](uint32_t) { dampenReuseTimerId_ = 0; onDampenReuseTimer(); });
     }
 
+    /**
+     * @brief Periodic dampening reuse check; re-injects un-suppressed prefixes into the Loc-RIB.
+     *
+     * Evaluates every entry in the dampen table against the current time and parameters.
+     * Prefixes whose penalty has decayed below the reuse threshold have `pendingReuse`
+     * set to `true` and are queued for @ref recomputeNlri (which will bypass the
+     * suppress check because `pendingReuse` is set). Stale dampen entries (penalty fully
+     * decayed, no longer suppressed) are pruned. If any prefixes remain suppressed after
+     * the scan, the timer is re-armed via @ref startDampenReuseTimer.
+     */
     void onDampenReuseTimer()
     {
         auto params = getDampenParams();
@@ -1792,6 +2346,15 @@ private:
             startDampenReuseTimer();
     }
 
+    /**
+     * @brief Context carried through a RIB watch callback to identify the owning NHT watch.
+     *
+     * Allocated inside @ref NhtEntry and passed to the RIB as the opaque `ctx` pointer.
+     * The callback captures `self` and `bgpSched` by value so it can post back to the
+     * BGP scheduler without touching any member state directly from the RIB thread.
+     *
+     * @see nhtCallback, registerNht
+     */
     struct NhtCtx
     {
         AddressFamilyInstance* self;
@@ -1799,15 +2362,38 @@ private:
         core::ProcessQueueRef        bgpSched;
     };
 
+    /**
+     * @brief Per-next-hop NHT tracking entry.
+     * @ingroup BGP_AF
+     *
+     * Groups all installed NLRIs that share a common next-hop address under a single
+     * RIB watch. When reachability changes, all associated NLRIs are queued in
+     * @ref pendingNhtRecompute and processed after the NHT recompute delay.
+     */
     struct NhtEntry
     {
         uint32_t                  watchId   = 0;
         bool                      isV6      = false;
-        bool                      reachable = true;
+        bool                      reachable = true; ///< Current reachability of this next-hop; updated by @ref onNhtChange.
         std::unordered_set<NlriT> nlris;
         std::optional<NhtCtx>     ctx;
     };
 
+    /**
+     * @brief RIB watch callback invoked when a next-hop's best route changes.
+     * @ingroup BGP_AF
+     *
+     * Called on the RIB's thread. Posts a lambda back to the BGP scheduler that calls
+     * @ref onNhtChange with the new reachability state. Returning `false` keeps the
+     * watch registered for future changes.
+     *
+     * @tparam Addr  Address type of the RIB watcher (`uint32_t` for IPv4, `__uint128_t` for IPv6).
+     * @param cctx   Callback context provided by the RIB, containing the opaque `ctx` pointer
+     *               and the new best-route pointer (null when the next-hop becomes unreachable).
+     * @return `false` to keep the watch alive.
+     *
+     * @see registerNht, onNhtChange
+     */
     template <typename Addr>
     static bool nhtCallback(core::RouteWatcher<Addr>::CallbackCtx& cctx)
     {
@@ -1820,6 +2406,18 @@ private:
         return false;
     }
 
+    /**
+     * @brief Registers a next-hop tracking watch for a newly installed route.
+     *
+     * If BGP_NEXT_HOP_TRACKING is disabled, this is a no-op. Otherwise, an @ref NhtEntry
+     * is created or updated for `nh`, and a RIB route watch is registered via
+     * `RoutingTable::watchAddress`. Multiple NLRIs sharing the same next-hop share a
+     * single watch. Records the NLRI-to-next-hop mapping in @ref nlriToNextHop for
+     * efficient reversal during @ref unregisterNht.
+     *
+     * @param nlri  Installed NLRI whose next-hop is to be tracked.
+     * @param nh    Next-hop address resolved from the route's path attributes.
+     */
     void registerNht(const NlriT& nlri, const types::IPAddress& nh)
     {
         if (!configs->get<config::BgpAddressFamily::BGP_NEXT_HOP_TRACKING>().load())
@@ -1844,6 +2442,15 @@ private:
         nlriToNextHop[nlri] = nh;
     }
 
+    /**
+     * @brief Removes the NHT association for a withdrawn route.
+     *
+     * Looks up the next-hop for `nlri` in @ref nlriToNextHop, removes `nlri` from the
+     * corresponding @ref NhtEntry, and cancels the RIB watch and destroys the entry
+     * if no other NLRIs share the same next-hop.
+     *
+     * @param nlri  Withdrawn NLRI whose next-hop tracking is to be removed.
+     */
     void unregisterNht(const NlriT& nlri)
     {
         auto nhIt = nlriToNextHop.find(nlri);
@@ -1869,6 +2476,12 @@ private:
         }
     }
 
+    /**
+     * @brief Cancels all NHT watches and clears the NHT tables on teardown.
+     *
+     * Called from the destructor to ensure all RIB watches are deregistered before
+     * the AFI instance is destroyed. Clears both @ref nhtTable and @ref nlriToNextHop.
+     */
     void clearNhtWatches()
     {
         if (nhtTable.empty()) return;
@@ -1880,6 +2493,19 @@ private:
         nlriToNextHop.clear();
     }
 
+    /**
+     * @brief Determines the administrative distance to assign to an inbound route.
+     *
+     * Selects among DISTANCE_BGP_EXTERNAL, DISTANCE_BGP_INTERNAL, DISTANCE_BGP_LOCAL
+     * (or their MBGP equivalents for non-IPv4-unicast families) based on whether the
+     * route is eBGP, iBGP, or locally originated. For IP prefix NLRI types, also
+     * evaluates the DISTANCE_RANGE per-prefix override list; the first matching range
+     * replaces the base distance.
+     *
+     * @param route  Route to classify (examines `sourceNeighbor` and `ebgp` fields).
+     * @param nlri   Prefix associated with `route`; used for DISTANCE_RANGE matching.
+     * @return Administrative distance to assign when installing into the RIB.
+     */
     uint8_t computeAdminDistance(const InboundRouteBase& route, const NlriT& nlri) const
     {
         // MBGP = any AF other than IPv4 unicast.
@@ -1934,6 +2560,18 @@ private:
         return dist;
     }
 
+    /**
+     * @brief Assembles an NlriInstall descriptor from a Loc-RIB entry.
+     *
+     * Fetches the route's path attributes, computes the administrative distance via
+     * @ref computeAdminDistance, sets the metric from the MED attribute (or
+     * DEFAULT_METRIC for locally-originated routes when MED is absent), and records
+     * the BGP_RECURSIVE_HOST flag. The resulting descriptor is passed to the NLRI
+     * policy's install methods.
+     *
+     * @param route  Loc-RIB entry to build the install descriptor for.
+     * @return Populated NlriInstall descriptor ready to pass to the NLRI policy.
+     */
     typename N::NlriInstall buildInstall(LocalRoute<NlriT>& route)
     {
         auto pa = route.route.getPathAttributes();
@@ -1964,6 +2602,17 @@ private:
         return install;
     }
 
+    /**
+     * @brief Removes a BGP route directly from the global RIB by prefix, bypassing the NLRI policy.
+     *
+     * Used when withdrawing a locally-originated network-command route that was installed
+     * via @ref installToRib after @ref onNetworkRibChanged. Dispatches to the appropriate
+     * RIB `removeRoute` overload based on the AFI (IPv4 or IPv6).
+     *
+     * A no-op for non-IP-prefix NLRI types.
+     *
+     * @param nlri  Prefix to remove from the global RIB.
+     */
     void withdrawFromRibDirect(const NlriT& nlri)
     {
         if constexpr (!types::isIpPrefix<NlriT>)
@@ -1978,6 +2627,15 @@ private:
             rt.removeRoute(readU128(nlri.addr), nlri.prefixLength, core::RouteSource::BGP, pid);
     }
 
+    /**
+     * @brief Context for a network-command RIB watch callback.
+     *
+     * Allocated inside @ref NetworkWatchEntry and passed as the opaque `ctx` pointer to
+     * the RIB watcher. Carries the NLRI being watched and a scheduler reference so that
+     * @ref networkWatchCallback can safely post back to the BGP thread.
+     *
+     * @see networkWatchCallback, syncNetworkRoutes
+     */
     struct NetworkWatchCtx
     {
         AddressFamilyInstance* self;
@@ -1985,6 +2643,15 @@ private:
         core::ProcessQueueRef        bgpSched;
     };
 
+    /**
+     * @brief Per-prefix network-command watch state.
+     * @ingroup BGP_AF
+     *
+     * Holds the RIB watch ID and address-family flag for one `network` prefix. The
+     * embedded @ref NetworkWatchCtx must remain stable in memory for the lifetime of
+     * the watch; it is stored as `std::optional` to allow in-place construction
+     * without requiring a heap allocation per prefix.
+     */
     struct NetworkWatchEntry
     {
         uint32_t                   watchId = 0;
@@ -1992,6 +2659,20 @@ private:
         std::optional<NetworkWatchCtx> ctx;
     };
 
+    /**
+     * @brief RIB watch callback for network-command prefix reachability changes.
+     * @ingroup BGP_AF
+     *
+     * Invoked on the RIB thread when a watched network prefix appears or disappears.
+     * Posts a lambda to the BGP scheduler that calls @ref onNetworkRibChanged with the
+     * prefix and new reachability state. Returning `false` keeps the watch registered.
+     *
+     * @tparam Addr  Address type of the RIB watcher (`uint32_t` or `__uint128_t`).
+     * @param cctx   Callback context from the RIB; `newBest != nullptr` means reachable.
+     * @return `false` to keep the watch alive.
+     *
+     * @see syncNetworkRoutes, onNetworkRibChanged
+     */
     template <typename Addr>
     static bool networkWatchCallback(typename core::RouteWatcher<Addr>::CallbackCtx& cctx)
     {
@@ -2004,7 +2685,17 @@ private:
         return false; // keep watch alive
     }
 
-    // Called on the BGP scheduler when a watched network prefix appears/disappears in the RIB.
+    /**
+     * @brief Reacts to a network-command prefix becoming reachable or unreachable in the RIB.
+     *
+     * When `reachable` is `true`, synthesises a locally-originated @ref InboundRoute
+     * with ORIGIN=IGP (and DEFAULT_METRIC as MED if configured) and inserts it into
+     * @ref networkLocalRoutes. When `reachable` is `false`, removes the entry. In both
+     * cases calls @ref recomputeNlri so the Loc-RIB and Adj-RIB-Out are updated.
+     *
+     * @param nlri      Network-command prefix whose reachability changed.
+     * @param reachable `true` if the prefix is now reachable; `false` if it disappeared.
+     */
     void onNetworkRibChanged(const NlriT& nlri, bool reachable)
     {
         if (reachable)
@@ -2036,8 +2727,16 @@ private:
         recomputeNlri(nlri);
     }
 
-    // Synchronise network-command watches with the current NETWORK config.
-    // Call once at construction and whenever the NETWORK config changes.
+    /**
+     * @brief Reconciles network-command RIB watches with the current NETWORK configuration.
+     *
+     * Removes watches for prefixes that have been removed from the NETWORK config (and
+     * withdraws any locally-originated route for them), then adds watches for newly
+     * configured prefixes. Should be called once at construction and again whenever the
+     * NETWORK config key changes.
+     *
+     * @note A no-op for non-IP-prefix NLRI types.
+     */
     void syncNetworkRoutes()
     {
         if constexpr (!types::isIpPrefix<NlriT>)
@@ -2103,6 +2802,13 @@ private:
         }
     }
 
+    /**
+     * @brief Cancels all network-command RIB watches and clears local route state on teardown.
+     *
+     * Called from the destructor to deregister all watches registered by
+     * @ref syncNetworkRoutes before the instance is destroyed. Clears both
+     * @ref networkWatches and @ref networkLocalRoutes.
+     */
     void clearNetworkWatches()
     {
         if (networkWatches.empty())
@@ -2117,6 +2823,17 @@ private:
         networkLocalRoutes.clear();
     }
 
+    /**
+     * @brief Updates next-hop reachability state and queues affected NLRIs for recompute.
+     *
+     * Called on the BGP scheduler (posted by @ref nhtCallback) when a watched next-hop's
+     * best route changes. If the reachability state is unchanged, this is a no-op.
+     * Otherwise, all NLRIs in the @ref NhtEntry's `nlris` set are inserted into
+     * @ref pendingNhtRecompute and the NHT recompute timer is armed.
+     *
+     * @param nh        Next-hop address whose reachability changed.
+     * @param reachable New reachability state.
+     */
     void onNhtChange(const types::IPAddress& nh, bool reachable)
     {
         auto it = nhtTable.find(nh);
@@ -2132,6 +2849,13 @@ private:
         scheduleNhtRecompute();
     }
 
+    /**
+     * @brief Arms the NHT recompute timer with the configured BGP_NEXT_HOP_TRIGGER_DELAY.
+     *
+     * Debounces rapid next-hop flaps by coalescing multiple reachability changes into a
+     * single recompute pass. Defaults to a 5-second delay when BGP_NEXT_HOP_TRIGGER_DELAY
+     * is not set. The timer fires once and calls @ref processNhtPending.
+     */
     void scheduleNhtRecompute()
     {
         if (nhtTimerId != 0) return;
@@ -2144,6 +2868,12 @@ private:
             [this](uint32_t) { nhtTimerId = 0; processNhtPending(); });
     }
 
+    /**
+     * @brief Drains the pending NHT recompute set after the trigger delay expires.
+     *
+     * Moves @ref pendingNhtRecompute to a local set to prevent re-entrant insertions
+     * from corrupting the iteration, then calls @ref recomputeNlri for each pending NLRI.
+     */
     void processNhtPending()
     {
         std::unordered_set<NlriT> pending = std::move(pendingNhtRecompute);
@@ -2151,7 +2881,18 @@ private:
             recomputeNlri(nlri);
     }
 
-    // Purge routes from Adj-RIB-In that are still in the stale set after BORR/EORR.
+    /**
+     * @brief Removes Adj-RIB-In entries that remain stale after a BORR/EORR cycle.
+     *
+     * Called when either the STALEPATH or MAX-EOR timer fires (or immediately on EORR).
+     * Any NLRI still in `stalePeerNlris[peerRid]` was not re-advertised by the peer
+     * during the route-refresh exchange and is therefore treated as withdrawn. Affected
+     * Loc-RIB entries are removed and @ref recomputeNlri is called for each touched NLRI.
+     *
+     * @param peerRid  Router ID of the peer whose stale routes are to be purged.
+     *
+     * @see onPeerBorr, onPeerEorr, cancelStaleTimers
+     */
     void purgeStalePeer(uint32_t peerRid)
     {
         auto staleIt = stalePeerNlris.find(peerRid);
@@ -2181,6 +2922,14 @@ private:
             recomputeNlri(nlri);
     }
 
+    /**
+     * @brief Cancels the STALEPATH and MAX-EOR timers for a peer and clears its stale set.
+     *
+     * Called from @ref onPeerEorr to cancel in-flight timers when EORR arrives before
+     * they fire, and from @ref invalidatePeer during session teardown.
+     *
+     * @param peerRid  Router ID of the peer whose stale-path timers are to be cancelled.
+     */
     void cancelStaleTimers(uint32_t peerRid)
     {
         auto it = staleTimers.find(peerRid);
@@ -2195,42 +2944,46 @@ private:
 
 private:
 
-    // Pre-policy Adj-RIB-In for soft-reconfiguration inbound.
-    PreAdjRibInTable<NlriT> preAdjRibIn;
-    AdjRibInTable<NlriT>  adjRibIn;
-    LocRibTable<NlriT> locRib;
-    AdjRibOutTable<NlriT> adjRibOut;
+    PreAdjRibInTable<NlriT> preAdjRibIn;   ///< Pre-policy Adj-RIB-In; stored per peer for soft-reconfiguration inbound replay.
+    AdjRibInTable<NlriT>   adjRibIn;      ///< Post-policy Adj-RIB-In; keyed by peer RID then (NLRI, path-id).
+    LocRibTable<NlriT>     locRib;        ///< Loc-RIB: best path per prefix after decision process.
+    AdjRibOutTable<NlriT>  adjRibOut;     ///< Adj-RIB-Out: per-peer egress state keyed by (peer RID, NLRI).
 
-    std::unordered_map<uint32_t, MraiState> mraiState;
-    uint32_t mraiBypassPeer = 0;
+    std::unordered_map<uint32_t, MraiState> mraiState;        ///< MRAI rate-limit state per peer RID.
+    uint32_t mraiBypassPeer = 0;                              ///< Peer RID currently draining via MRAI timer; 0 when not active.
 
-    std::unordered_map<NlriT, DampenState> dampenTable;
-    uint32_t dampenReuseTimerId_ = 0;
+    std::unordered_map<NlriT, DampenState> dampenTable;       ///< Dampening penalty and suppression state per prefix.
+    uint32_t dampenReuseTimerId_ = 0;                         ///< Timer ID for the next dampening reuse scan; 0 when not armed.
 
-    std::unordered_set<uint32_t> defaultOriginatedPeers;
-    std::unordered_map<NlriT, AggregateState> aggregateStates;
-    uint32_t aggregateTimerId = 0;
+    std::unordered_set<uint32_t> defaultOriginatedPeers;      ///< Set of peer RIDs to which a default route has been sent.
+    std::unordered_map<NlriT, AggregateState> aggregateStates; ///< Per-aggregate-prefix origination state.
+    uint32_t aggregateTimerId = 0;                             ///< Timer ID for the deferred aggregate recompute; 0 when not armed.
 
-    std::unordered_map<types::IPAddress, NhtEntry>  nhtTable;
-    std::unordered_map<NlriT,    types::IPAddress>  nlriToNextHop;
-    std::unordered_set<NlriT>                pendingNhtRecompute;
-    uint32_t                                 nhtTimerId = 0;
+    std::unordered_map<types::IPAddress, NhtEntry>  nhtTable;         ///< NHT entries keyed by next-hop address.
+    std::unordered_map<NlriT,    types::IPAddress>  nlriToNextHop;    ///< Maps each installed NLRI to its tracked next-hop address.
+    std::unordered_set<NlriT>                       pendingNhtRecompute; ///< NLRIs awaiting recompute after a next-hop reachability change.
+    uint32_t                                        nhtTimerId = 0;   ///< Timer ID for the NHT recompute delay; 0 when not armed.
 
-    // Network command: locally-originated route state.
-    std::unordered_map<NlriT, NetworkWatchEntry>     networkWatches;
-    std::unordered_map<NlriT, InboundRoute<NlriT>>   networkLocalRoutes;
+    std::unordered_map<NlriT, NetworkWatchEntry>   networkWatches;     ///< Per-prefix RIB watches for network-command prefixes.
+    std::unordered_map<NlriT, InboundRoute<NlriT>> networkLocalRoutes; ///< Locally-originated InboundRoutes injected by the network command.
 
     // Enhanced Route Refresh (RFC 7313) stale-path tracking.
+    /**
+     * @brief Holds the STALEPATH and MAX-EOR timer IDs for one peer's route-refresh cycle.
+     *
+     * Both timers are armed by @ref onPeerBorr and cancelled by @ref cancelStaleTimers.
+     * Either timer firing triggers @ref purgeStalePeer for the associated peer RID.
+     */
     struct StaleTimerIds { uint32_t stalepath = 0; uint32_t maxEor = 0; };
-    std::unordered_map<uint32_t, StaleTimerIds>              staleTimers;
-    std::unordered_map<uint32_t, std::unordered_set<NlriT>>  stalePeerNlris;
+    std::unordered_map<uint32_t, StaleTimerIds>             staleTimers;    ///< Per-peer STALEPATH and MAX-EOR timer IDs.
+    std::unordered_map<uint32_t, std::unordered_set<NlriT>> stalePeerNlris; ///< Per-peer set of NLRIs marked stale after a BORR.
 
-    N policy;
-    IgpMetricResolver igpMetricResolver;
-    BgpProcess& process;
-    AfiSafi family;
+    N                 policy;              ///< NLRI policy: drives RIB install/withdraw calls and defines the prefix type.
+    IgpMetricResolver igpMetricResolver;   ///< Callable that resolves IGP cost to a next-hop; returns UINT64_MAX when unset or unreachable.
+    BgpProcess&       process;             ///< Reference to the owning BgpProcess; provides config, scheduler, and neighbor table.
+    AfiSafi           family;             ///< AFI/SAFI this instance manages.
 
-    config::Reference<config::BgpAddressFamilyRegistry> configs;
+    config::Reference<config::BgpAddressFamilyRegistry> configs; ///< Registry reference for address-family configuration.
 };
 } // namespace routing::bgp
 

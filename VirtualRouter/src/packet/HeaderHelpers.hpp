@@ -1,3 +1,7 @@
+/**
+ * @file HeaderHelpers.hpp
+ */
+
 
 #ifndef HEADER_HELPER_HPP
 #define HEADER_HELPER_HPP

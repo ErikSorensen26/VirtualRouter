@@ -1,4 +1,10 @@
-// RouterEigrpTopologyCommands.h
+/**
+ * @file RouterEigrpTopologyCommands.h
+ * @brief CLI parser for EIGRP topology base commands.
+ *
+ * Defines topology-level filtering and configuration including
+ * route filtering, prefix lists, and metric redistribution settings.
+ */
 
 #ifndef ROUTER_EIGRP_TOPOLOGY_COMMANDS_H
 #define ROUTER_EIGRP_TOPOLOGY_COMMANDS_H
@@ -71,6 +77,13 @@ using RouterEigrpTopology_Variance = commandAdder<EigrpContext,
     "variance"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for EIGRP topology base filtering and configuration.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Enables route filtering (permit/deny) and topology-level redistribution
+ * settings for advanced EIGRP control.
+ */
 using RouterEigrpTopologyCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpTopology_AutoSummary,
     RouterEigrpTopology_DefaultMetric,
@@ -84,10 +97,18 @@ using RouterEigrpTopologyCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpTopology_Variance
 >;
 
+/**
+ * @brief IPv4 topology mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpTopologyV4Commands = CliModeParser<CliMode::RouterEigrpTopologyV4, EigrpContext,
     RouterEigrpTopologyCommands
 >;
 
+/**
+ * @brief IPv6 topology mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpTopologyV6Commands = CliModeParser<CliMode::RouterEigrpTopologyV6, EigrpContext,
     RouterEigrpTopologyCommands
 >;

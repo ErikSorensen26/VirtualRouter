@@ -1,4 +1,12 @@
-// InterfaceIPv6NDCommands.h
+/**
+ * @file InterfaceIPv6NDCommands.h
+ * @brief CLI parser for the `ipv6 nd` sub-tree of Interface Configuration mode.
+ *
+ * Defines per-interface IPv6 Neighbor Discovery commands reachable via
+ * `ipv6 nd <...>` in `CliMode::Interface`, including Router Advertisement
+ * tuning, DAD configuration, cache limits, NUD behaviour, destination guard,
+ * and autoconfiguration controls.
+ */
 
 #ifndef INTERFACE_IPV6_ND_COMMANDS_H
 #define INTERFACE_IPV6_ND_COMMANDS_H
@@ -143,6 +151,13 @@ using InterfaceIPv6ND_RouterPreference = commandAdder<InterfaceContext,
     "router-preference"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for the `ipv6 nd` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and exposes all
+ * per-interface Neighbor Discovery tuning commands.
+ */
 using InterfaceIPv6NDCommands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceIPv6ND_AdvertisementInterval,
     InterfaceIPv6ND_AutoconfigDefRoute,

@@ -1,4 +1,7 @@
-// ControlScheduler.h
+/**
+ * @file ControlScheduler.h
+ * @brief Serialized task scheduler with timer support for control-plane protocols.
+ */
 
 #ifndef CONTROL_ENGINE_H
 #define CONTROL_ENGINE_H
@@ -26,20 +29,45 @@ namespace core
 class ProcessQueueRef;
 class ProcessQueue;
 
+/**
+ * @brief Intrusive linked-list node tracking an in-flight delayed timer owned by a @ref ProcessQueueRef.
+ * @ingroup CORE
+ *
+ * Nodes are heap-allocated when `ProcessQueueRef::postAfter()` registers a timer and are
+ * freed once the timer fires or is cancelled.  The `active` flag lets the cancellation
+ * path mark a node without acquiring a lock.
+ */
 struct RefTimerNode
 {
-    std::atomic<RefTimerNode*> next{nullptr};
-    std::atomic<bool> active{true};
-    uint32_t handle = 0;
+    std::atomic<RefTimerNode*> next{nullptr}; ///< Next node in the owner's timer list.
+    std::atomic<bool> active{true};           ///< False once the timer has been cancelled.
+    uint32_t handle = 0;                      ///< Public timer handle returned to the caller.
 };
 
+/**
+ * @brief Shared lifetime-tracking state for a @ref ProcessQueueRef.
+ * @ingroup CORE
+ *
+ * Each `ProcessQueueRef` allocates one of these on construction.  The `alive`
+ * flag gates whether posted callbacks are executed after the ref is released.
+ * `pending` counts in-flight tasks; the destructor of `ProcessQueueRef` spins
+ * until `pending` reaches zero so all lambdas that captured `this` have finished.
+ */
 struct ProcessQueueRefState
 {
-    std::atomic<bool> alive{true};
-    std::atomic<uint32_t> pending{0};
-    std::atomic<RefTimerNode*> timerHead{nullptr};
+    std::atomic<bool> alive{true};             ///< False after the owning ProcessQueueRef is released.
+    std::atomic<uint32_t> pending{0};          ///< Count of posted tasks not yet executed.
+    std::atomic<RefTimerNode*> timerHead{nullptr}; ///< Head of the singly-linked list of live timers.
 };
 
+/**
+ * @brief Decrements the pending count on a @ref ProcessQueueRefState and notifies waiters.
+ *
+ * Called by @ref RefPendingToken on destruction to signal the destructor of
+ * @ref ProcessQueueRef that one more in-flight task has completed.
+ *
+ * @param state  State to update; safe to call with `nullptr` (no-op).
+ */
 inline void releaseRefPending(ProcessQueueRefState* state) noexcept
 {
     if (!state)
@@ -50,12 +78,24 @@ inline void releaseRefPending(ProcessQueueRefState* state) noexcept
         state->pending.notify_all();
 }
 
+/**
+ * @brief RAII token that decrements the @ref ProcessQueueRefState pending counter on destruction.
+ * @ingroup CORE
+ *
+ * Every lambda posted via @ref ProcessQueueRef::post or @ref ProcessQueueRef::postAfter captures
+ * one of these tokens by move.  When the lambda completes (or is discarded), the token destructor
+ * decrements `state->pending`, allowing `ProcessQueueRef::release()` to unblock.
+ */
 struct RefPendingToken
 {
     ProcessQueueRefState* state = nullptr;
 
     RefPendingToken() = default;
 
+    /**
+     * @brief Constructs a token that will decrement `s->pending` on destruction.
+     * @param s  State object whose `pending` counter was pre-incremented by the caller.
+     */
     explicit RefPendingToken(ProcessQueueRefState* s) noexcept
         : state(s)
     {}
@@ -89,36 +129,124 @@ struct RefPendingToken
     }
 };
 
+/**
+ * @brief Serialized task scheduler that multiplexes control-plane work over a shared @ref ThreadPool.
+ * @ingroup CORE
+ *
+ * `ControlScheduler` provides a pool of individually-serialized execution contexts called
+ * @ref ProcessQueue instances.  Each `ProcessQueue` is a single-consumer MPSC ring: only
+ * one thread runs its tasks at a time, which allows protocol state machines to be written
+ * without internal locking.
+ *
+ * Each instance contains:
+ * - A pool of @ref ProcessQueue slots, each backed by up to 8 sub-queues selectable by label.
+ * - A pool of @ref DelayedSlot entries for timer-driven deferred tasks.
+ * - A reference to the global @ref ThreadPool for task dispatch.
+ * - A reference to the global @ref TimeManager for timer registration.
+ *
+ * ## Architectural Role
+ * `ControlScheduler` sits between protocol state machines and the raw `ThreadPool`.
+ * Protocols never submit directly to the pool; they post to a `ProcessQueue` or
+ * `ProcessQueueRef`, which guarantees serialization and respects lifetime (`alive` flag).
+ *
+ * ## Lifecycle & Ownership
+ * - Owned by @ref Global; lives for the entire process lifetime.
+ * - `ProcessQueue` objects are created via `create()` and destroyed by moving them
+ *   out of scope (RAII).  The underlying slot is recycled for the next `create()`.
+ * - `ProcessQueueRef` is a borrow of a `ProcessQueue` that adds safe post-destruction
+ *   semantics: tasks posted after the ref is released are silently dropped.
+ *
+ * ## Concurrency Model
+ * - `ProcessQueue::post()` is safe to call from any thread.
+ * - All tasks posted to the same `ProcessQueue` are executed serially on whatever
+ *   thread the pool assigns to drain it; that thread changes between drains.
+ * - `pqAllocMtx` guards slot allocation/free only; no lock is held during task execution.
+ *
+ * ## Fast Path vs. Slow Path
+ * - **Fast path**: `post()` enqueues a task and triggers a single pool `enqueue()` if
+ *   the queue was idle.  No allocation, no system calls.
+ * - **Slow path**: `postAfter()` allocates a `DelayedSlot`, registers a `TimeManager`
+ *   timer, and links a `RefTimerNode` if an owner is present.
+ *
+ * @warning Do not destroy a `ProcessQueue` while tasks are in flight; call
+ * `ProcessQueue::reset()` only after all external posters have stopped.
+ *
+ * @see ProcessQueue
+ * @see ProcessQueueRef
+ */
 class ControlScheduler
 {
     static constexpr uint64_t kMaxSubQueues = 8;
     static constexpr uint32_t kInvalidIndex = 0xFFFFFFFFu;
 
 public:
-    using ProcessQueueId = uint32_t;
-    using Label = uint16_t;
+    using ProcessQueueId = uint32_t; ///< Opaque slot index identifying a @ref ProcessQueue.
+    using Label = uint16_t;          ///< Sub-queue selector for priority/class separation.
 
+    /**
+     * @brief Configuration for a single labeled sub-queue within a @ref ProcessQueue.
+     * @ingroup CORE
+     *
+     * When creating a queue with `create()`, callers may supply labeled sub-queues to
+     * separate high-priority from low-priority work within the same serialized context.
+     */
     struct SubQueueConfig
     {
-        Label label;
-        uint32_t capacity;
+        Label label;       ///< Unique label identifying this sub-queue.
+        uint32_t capacity; ///< Ring capacity (must be power of two).
     };
 
+    /**
+     * @brief Constructs the scheduler and pre-allocates slot arrays.
+     *
+     * @param externalPool    ThreadPool used to dispatch drain tasks.
+     * @param tmgr            TimeManager used to register delayed-task timers.
+     * @param maxQueues       Maximum number of simultaneous @ref ProcessQueue instances.
+     * @param maxDelayedTimers Maximum number of in-flight delayed tasks.
+     */
     explicit ControlScheduler(core::ThreadPool& externalPool,
                               core::TimeManager& tmgr,
                               size_t maxQueues = 4096,
                               size_t maxDelayedTimers = 4096);
 
+    /**
+     * @brief Destructs the scheduler and tears down all remaining queues.
+     *
+     * Sets the `stopping` flag so that post/schedule calls become no-ops, then
+     * waits for all in-flight drain tasks to complete before freeing slot arrays.
+     */
     ~ControlScheduler();
 
     ControlScheduler(const ControlScheduler&) = delete;
     ControlScheduler& operator=(const ControlScheduler&) = delete;
 
+    /** @brief Returns the @ref TimeManager used for delayed task scheduling. */
     core::TimeManager& timers() noexcept { return timeManager; }
 
+    /**
+     * @brief Allocates a new serialized @ref ProcessQueue.
+     *
+     * The returned object owns the slot; dropping or resetting it returns the
+     * slot to the free pool.  Sub-queues can be assigned labels so that
+     * `post(Label, fn)` routes the task to the correct ring.
+     *
+     * @param capacity  Default sub-queue ring capacity (must be power of two).
+     * @param labeled   Optional additional sub-queues with explicit labels and capacities.
+     * @return A new, ready-to-use @ref ProcessQueue.
+     */
     ProcessQueue create(uint32_t capacity = 4096,
                         std::initializer_list<SubQueueConfig> labeled = {});
 
+    /**
+     * @brief Attempts to cancel a pending delayed task by its timer handle.
+     *
+     * If the timer has already fired or the handle is stale, this is a no-op
+     * and returns `false`.  Safe to call from any thread.
+     *
+     * @param timerId  Handle returned by `ProcessQueue::schedule()` or
+     *                 `ProcessQueueRef::postAfter()`.
+     * @return `true` if the timer was found and cancelled before firing.
+     */
     bool cancelDelayed(uint32_t timerId) noexcept;
 
 private:
@@ -330,27 +458,27 @@ private:
     uint32_t nextDelayedGeneration(uint32_t current) const noexcept;
 
 private:
-    std::atomic<bool> stopping{false};
+    std::atomic<bool> stopping{false}; ///< Set during destruction to reject new posts.
 
-    core::ThreadPool& pool;
-    core::TimeManager& timeManager;
+    core::ThreadPool&  pool;        ///< Shared thread pool for dispatching drain tasks.
+    core::TimeManager& timeManager; ///< Timer service used by @ref schedule().
 
-    const size_t maxProcessQueues;
-    ProcessQueueSlot* pqSlots = nullptr;
+    const size_t      maxProcessQueues;   ///< Maximum number of concurrent @ref ProcessQueue slots.
+    ProcessQueueSlot* pqSlots = nullptr;  ///< Heap-allocated array of @ref ProcessQueueSlot records.
 
-    std::mutex pqAllocMtx;
-    std::vector<ProcessQueueId> pqFreeIds;
+    std::mutex              pqAllocMtx; ///< Guards @c pqFreeIds during slot alloc/free.
+    std::vector<ProcessQueueId> pqFreeIds; ///< Stack of recycled slot indices.
 
-    const size_t maxDelayedTimers;
-    DelayedSlot* delayedSlots = nullptr;
+    const size_t  maxDelayedTimers;       ///< Maximum number of in-flight delayed tasks.
+    DelayedSlot*  delayedSlots = nullptr; ///< Heap-allocated array of @ref DelayedSlot records.
 
-    std::atomic<uint32_t> delayedFreeHead{kInvalidIndex};
+    std::atomic<uint32_t> delayedFreeHead{kInvalidIndex}; ///< Head of the lock-free free-list for delayed slots.
 
-    const uint32_t delayedIndexBits;
-    const uint32_t delayedIndexMask;
-    const uint32_t delayedGenerationMask;
+    const uint32_t delayedIndexBits;       ///< Bit-width of the index field in a packed timer handle.
+    const uint32_t delayedIndexMask;       ///< Mask isolating the index field from a packed handle.
+    const uint32_t delayedGenerationMask;  ///< Mask isolating the generation field from a packed handle.
 
-    std::atomic<uint32_t> timerInFlight{0};
+    std::atomic<uint32_t> timerInFlight{0}; ///< Count of @ref TimeManager callbacks currently pending dispatch.
 };
 
 template <typename F>
@@ -534,6 +662,33 @@ uint32_t ControlScheduler::schedule(ProcessQueueId id,
     return publicHandle;
 }
 
+/**
+ * @brief A borrowed, lifetime-safe reference to a @ref ProcessQueue.
+ * @ingroup CORE
+ *
+ * `ProcessQueueRef` is produced by `ProcessQueue::ref()` and may outlive the
+ * originating `ProcessQueue`.  Tasks posted through a ref are silently dropped
+ * if the underlying queue has been destroyed — the `alive` flag in
+ * @ref ProcessQueueRefState gates execution.
+ *
+ * ## Lifecycle & Ownership
+ * - The ref holds a heap-allocated @ref ProcessQueueRefState that is shared
+ *   (by raw pointer) with every lambda it posts.
+ * - `release()` (called by the destructor) sets `alive = false` and then
+ *   blocks until `pending` reaches zero, ensuring no lambda executes past the
+ *   ref's lifetime.
+ *
+ * ## Concurrency Model
+ * - `post()` and `postAfter()` are safe to call from any thread.
+ * - Destruction **blocks** the calling thread until all posted-but-not-yet-run
+ *   lambdas have either executed or been discarded.
+ *
+ * @warning Never destroy a `ProcessQueueRef` from inside a task it has posted;
+ * doing so causes `release()` to wait on `pending` from within the drain loop,
+ * which deadlocks.
+ *
+ * @see ProcessQueue::ref
+ */
 class ProcessQueueRef
 {
     friend class ControlScheduler;
@@ -580,6 +735,16 @@ public:
         release();
     }
 
+    /**
+     * @brief Posts a task to the default sub-queue, guarded by the ref's lifetime.
+     *
+     * The task is silently dropped (not executed) if the @ref ProcessQueueRefState
+     * `alive` flag is `false` at execution time.
+     *
+     * @tparam F  Callable type; must fit in the inline task storage (≤128 bytes).
+     * @param fn  Task to execute on the queue's drain thread.
+     * @return `true` if the task was enqueued; `false` if the queue is closed or full.
+     */
     template <typename F>
     bool post(F&& fn) const noexcept
     {
@@ -589,6 +754,14 @@ public:
         return engine->postOwned(id, gen, std::nullopt, state, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Posts a task to a specific labeled sub-queue, guarded by the ref's lifetime.
+     *
+     * @tparam F      Callable type.
+     * @param label   Sub-queue label registered at @ref ProcessQueue creation time.
+     * @param fn      Task to execute.
+     * @return `true` if enqueued; `false` if the label is unknown, queue closed, or full.
+     */
     template <typename F>
     bool post(ControlScheduler::Label label, F&& fn) const noexcept
     {
@@ -598,6 +771,17 @@ public:
         return engine->postOwned(id, gen, label, state, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Schedules a task to run after `expiration`, guarded by the ref's lifetime.
+     *
+     * The callback receives the timer handle as its only argument so it can
+     * distinguish which timer fired if multiple are outstanding.
+     *
+     * @tparam F          Callable of type `void(uint32_t)`.
+     * @param expiration  Absolute time at which the task should fire.
+     * @param fn          Task; receives its own timer handle as argument.
+     * @return Non-zero timer handle on success; `0` on failure (scheduler stopping, no slot).
+     */
     template <typename F>
     uint32_t postAfter(std::chrono::steady_clock::time_point expiration, F&& fn) const noexcept
     {
@@ -607,6 +791,15 @@ public:
         return engine->schedule(id, gen, std::nullopt, state, expiration, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Schedules a task to a labeled sub-queue after `expiration`.
+     *
+     * @tparam F          Callable of type `void(uint32_t)`.
+     * @param label       Sub-queue label.
+     * @param expiration  Absolute expiry time point.
+     * @param fn          Task; receives its timer handle as argument.
+     * @return Non-zero timer handle on success; `0` on failure.
+     */
     template <typename F>
     uint32_t postAfter(ControlScheduler::Label label,
                        std::chrono::steady_clock::time_point expiration,
@@ -618,6 +811,12 @@ public:
         return engine->schedule(id, gen, label, state, expiration, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Cancels a pending delayed task by its handle.
+     *
+     * @param timerId  Handle returned by @ref postAfter.
+     * @return `true` if the timer was cancelled before firing.
+     */
     bool cancel(uint32_t timerId) noexcept
     {
         if (!engine)
@@ -671,18 +870,49 @@ private:
     }
 
 private:
-    ControlScheduler* engine = nullptr;
-    ControlScheduler::ProcessQueueId id = 0;
-    uint32_t gen = 0;
-    ProcessQueueRefState* state = nullptr;
+    ControlScheduler* engine = nullptr;            ///< Owning scheduler; null for a moved-from ref.
+    ControlScheduler::ProcessQueueId id = 0;       ///< Slot index of the target @ref ProcessQueue.
+    uint32_t gen = 0;                              ///< Generation counter; guards against ABA reuse.
+    ProcessQueueRefState* state = nullptr;         ///< Shared lifetime state; heap-allocated.
 };
 
+/**
+ * @brief Owning handle for a single serialized execution context within @ref ControlScheduler.
+ * @ingroup CORE
+ *
+ * A `ProcessQueue` is a single-consumer task queue: the @ref ControlScheduler
+ * guarantees that only one thread executes its tasks at any moment, making it safe
+ * to use as a synchronization boundary for protocol state machines without internal
+ * mutexes.
+ *
+ * Supports up to `kMaxSubQueues` labeled sub-queues so that callers can separate
+ * work classes (e.g. high-priority hellos vs. low-priority route updates) within the
+ * same serialized context.
+ *
+ * ## Lifecycle & Ownership
+ * - Created exclusively by `ControlScheduler::create()`.
+ * - Move-only: transferring ownership transfers the underlying slot.
+ * - Calling `reset()` (or letting the object go out of scope) destroys the slot and
+ *   waits for the drain task to finish if one is currently executing.
+ *
+ * ## Concurrency Model
+ * - `post()` and `schedule()` are safe to call from any thread.
+ * - The drain function serializes all tasks; callers must not assume which thread runs them.
+ *
+ * @warning Do not call `reset()` from within a task posted to this queue;
+ * `destroyProcessQueue` will attempt to drain the queue, resulting in a deadlock.
+ *
+ * @see ProcessQueueRef
+ * @see ControlScheduler::create
+ */
 class ProcessQueue
 {
     friend class ControlScheduler;
 
 public:
     ProcessQueue() = default;
+
+    /** @brief Destroys the queue, releasing its slot back to the scheduler. */
     ~ProcessQueue() { reset(); }
 
     ProcessQueue(const ProcessQueue&) = delete;
@@ -715,6 +945,13 @@ public:
         return *this;
     }
 
+    /**
+     * @brief Posts a task to the default sub-queue.
+     *
+     * @tparam F  Callable type; must fit within inline task storage (≤128 bytes).
+     * @param fn  Task to execute; no arguments, no return value.
+     * @return `true` if the task was enqueued; `false` if closed or ring full.
+     */
     template <typename F>
     bool post(F&& fn) const noexcept
     {
@@ -724,6 +961,14 @@ public:
         return engine->post(id, gen, std::nullopt, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Posts a task to a specific labeled sub-queue.
+     *
+     * @tparam F      Callable type.
+     * @param label   Sub-queue label, registered at creation via @ref SubQueueConfig.
+     * @param fn      Task to execute.
+     * @return `true` if enqueued; `false` if label unknown, closed, or ring full.
+     */
     template <typename F>
     bool post(ControlScheduler::Label label, F&& fn) const noexcept
     {
@@ -733,6 +978,14 @@ public:
         return engine->post(id, gen, label, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Schedules a task to run at `expiration` on the default sub-queue.
+     *
+     * @tparam F          Callable of type `void(uint32_t)`; the argument is the timer handle.
+     * @param expiration  Absolute time point (steady_clock) at which to fire.
+     * @param fn          Task to execute; receives its own timer handle as argument.
+     * @return Non-zero timer handle on success; `0` if no slot was available.
+     */
     template <typename F>
     uint32_t schedule(std::chrono::steady_clock::time_point expiration, F&& fn) const noexcept
     {
@@ -742,6 +995,15 @@ public:
         return engine->schedule(id, gen, std::nullopt, nullptr, expiration, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Schedules a task to run at `expiration` on a labeled sub-queue.
+     *
+     * @tparam F          Callable of type `void(uint32_t)`.
+     * @param label       Sub-queue label.
+     * @param expiration  Absolute expiry time point.
+     * @param fn          Task; receives its timer handle as argument.
+     * @return Non-zero timer handle on success; `0` on failure.
+     */
     template <typename F>
     uint32_t schedule(ControlScheduler::Label label,
                       std::chrono::steady_clock::time_point expiration,
@@ -753,6 +1015,12 @@ public:
         return engine->schedule(id, gen, label, nullptr, expiration, std::forward<F>(fn));
     }
 
+    /**
+     * @brief Cancels a pending delayed task by its handle.
+     *
+     * @param timerId  Handle returned by @ref schedule.
+     * @return `true` if found and cancelled before firing.
+     */
     bool cancel(uint32_t timerId) noexcept
     {
         if (!engine)
@@ -761,6 +1029,12 @@ public:
         return engine->cancelDelayed(timerId);
     }
 
+    /**
+     * @brief Creates a @ref ProcessQueueRef that borrows this queue with safe lifetime semantics.
+     *
+     * The returned ref may be stored in objects whose lifetime is shorter than the queue's.
+     * Tasks posted through the ref after the ref is destroyed are silently discarded.
+     */
     ProcessQueueRef ref() const noexcept
     {
         if (!engine)
@@ -769,6 +1043,12 @@ public:
         return ProcessQueueRef(*engine, id, gen);
     }
 
+    /**
+     * @brief Destroys the queue and releases its slot back to the scheduler.
+     *
+     * Safe to call multiple times. Waits for any currently-executing drain to finish
+     * before returning.  All pending but unstarted tasks are discarded.
+     */
     void reset() noexcept
     {
         if (engine)
@@ -790,9 +1070,9 @@ private:
     {}
 
 private:
-    ControlScheduler* engine = nullptr;
-    ControlScheduler::ProcessQueueId id = 0;
-    uint32_t gen = 0;
+    ControlScheduler* engine = nullptr;      ///< Owning scheduler; null for a default-constructed or moved-from queue.
+    ControlScheduler::ProcessQueueId id = 0; ///< Slot index within @c ControlScheduler::pqSlots.
+    uint32_t gen = 0;                        ///< Generation counter matching @c ProcessQueueSlot::generation.
 };
 
 } // namespace core

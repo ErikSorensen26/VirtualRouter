@@ -1,3 +1,7 @@
+/**
+ * @file Dhcpv6AuthManager.h
+ */
+
 // Dhcpv6AuthManager.h
 
 #ifndef DHCPV6_AUTH_MANAGER
@@ -38,6 +42,7 @@ public:
     /**
      * @struct key
      * @brief Authentication key
+     * @ingroup SERVICES_DHCP_V6
      */
     struct Key
     {

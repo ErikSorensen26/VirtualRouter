@@ -1,4 +1,12 @@
-// InterfaceIPv6Commands.h
+/**
+ * @file InterfaceIPv6Commands.h
+ * @brief CLI parser for the `ipv6` sub-tree of Interface Configuration mode.
+ *
+ * Defines commands reachable via `ipv6 <...>` in `CliMode::Interface`, covering
+ * IPv6 address assignment, EIGRP per-interface parameters (authentication,
+ * bandwidth, dampening, hello/hold timers, MTU, next-hop-self, split-horizon,
+ * summary-address), NDP redirects, and sub-trees for `nd` and `ospf`.
+ */
 
 #ifndef INTERFACE_IPV6_COMMANDS_H
 #define INTERFACE_IPV6_COMMANDS_H
@@ -104,6 +112,13 @@ using InterfaceIPv6_SummaryAddress = commandAdder<InterfaceContext,
     "summary-address"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for the `ipv6` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes all
+ * IPv6 address, EIGRP per-interface, NDP, and OSPFv3 interface sub-tree commands.
+ */
 using InterfaceIPv6Commands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceIPv6_AddressSet,
     InterfaceIPv6_AuthenticationKeyChain,

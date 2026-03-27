@@ -1,4 +1,15 @@
-// PacketStructure.h
+/**
+ * @file PacketStructure.h
+ * @brief Central include hub and structural types for multi-layer packet parsing and building.
+ *
+ * @defgroup PACKET Wire-Format Packet Headers
+ * @brief Protocol wire-format struct definitions for Ethernet, IP, TCP, UDP, OSPF, EIGRP, BGP,
+ *        DHCP, and related headers.
+ *
+ * Includes all individual header files and defines @c HeaderType, @c HeaderLayer, @c HeaderEntry,
+ * and @c PacketInfo, which together describe a parsed multi-layer packet and its layer offsets.
+ * The @c packet::variable::ip namespace provides well-known IP protocol number constants.
+ */
 
 #ifndef PACKET_STRUCTURE_H
 #define PACKET_STRUCTURE_H
@@ -31,15 +42,15 @@ namespace packet
 static constexpr int MaxHeaders = 16;
 
 /**
- * @file Encapsulation.h
- * @brief Defines constants, structures, and utility functions for packet encapsulation.
+ * @namespace packet::variable
+ * @brief Compile-time constants used throughout packet processing.
  */
 namespace variable
 {
-    
+
     /**
-     * @namespace ip
-     * @brief Contains IP protocol number constants.
+     * @namespace packet::variable::ip
+     * @brief IP protocol number constants (IANA-assigned next-header / protocol field values).
      */
     namespace ip
     {
@@ -102,26 +113,46 @@ namespace variable
 
 // ------------------------- Structure Definitions -------------------------
 
+/// @brief Identifies the protocol type of a single parsed header layer.
 enum class HeaderType : uint8_t
 {
-    NONE,
-    ETHERNET,
-    ARP, MPLS,
-    IPV4, IPV6, AH, ESP, ICMP, ICMPV6,
-    TCP, UDP, EIGRP, OSPFV2, OSPFV3,
-    DHCP, DHCPV6, DHCPV6_RELAY, BGP,
-    ENCAPSULATE
+    NONE,        ///< No header / unset.
+    ETHERNET,    ///< IEEE 802.3 Ethernet frame header.
+    ARP,         ///< Address Resolution Protocol header.
+    MPLS,        ///< MPLS label stack entry.
+    IPV4,        ///< Internet Protocol version 4 header.
+    IPV6,        ///< Internet Protocol version 6 header.
+    AH,          ///< IPsec Authentication Header.
+    ESP,         ///< IPsec Encapsulating Security Payload header.
+    ICMP,        ///< Internet Control Message Protocol (v4) header.
+    ICMPV6,      ///< Internet Control Message Protocol version 6 header.
+    TCP,         ///< Transmission Control Protocol header.
+    UDP,         ///< User Datagram Protocol header.
+    EIGRP,       ///< Enhanced Interior Gateway Routing Protocol header.
+    OSPFV2,      ///< OSPF version 2 header (RFC 2328).
+    OSPFV3,      ///< OSPF version 3 header (RFC 5340).
+    DHCP,        ///< Dynamic Host Configuration Protocol header (RFC 2131).
+    DHCPV6,      ///< DHCPv6 header (RFC 3315).
+    DHCPV6_RELAY, ///< DHCPv6 relay-agent header (RFC 3315).
+    BGP,         ///< Border Gateway Protocol message header (RFC 4271).
+    ENCAPSULATE  ///< Marker for a fully encapsulated inner packet.
 };
 
+/// @brief OSI model layer classification for a header type.
 enum class HeaderLayer
 {
-    LAYER2,
-    LAYER2_5,
-    LAYER3,
-    LAYER4,
-    LAYER5
+    LAYER2,   ///< Data-link layer (Ethernet, ARP).
+    LAYER2_5, ///< Layer 2.5 shim (MPLS).
+    LAYER3,   ///< Network layer (IP, ICMP, AH, ESP).
+    LAYER4,   ///< Transport layer (TCP, UDP).
+    LAYER5    ///< Application/session layer (routing protocols, DHCP, BGP).
 };
 
+/**
+ * @brief Returns the fixed wire-format size in bytes for a given @c HeaderType.
+ * @param type The header type to query.
+ * @return Fixed size in bytes, or 0 for unknown/variable types.
+ */
 inline size_t getHeaderSize(HeaderType type)
 {
     switch (type)

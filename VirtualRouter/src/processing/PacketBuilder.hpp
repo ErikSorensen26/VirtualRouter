@@ -1,3 +1,7 @@
+/**
+ * @file PacketBuilder.hpp
+ */
+
 // PacketBuilder.hpp
 
 #ifndef PACKET_BUILDER_HPP
@@ -266,6 +270,7 @@ private:
 };
 
 /**
+ * @ingroup PROCESSING
  * @class StaticPacket
  *
  * Heap-allocated snapshot of a built packet (without owning a TX frame).

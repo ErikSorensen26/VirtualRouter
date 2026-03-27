@@ -1,3 +1,14 @@
+/**
+ * @file Rip.h
+ * @brief RIP routing protocol stub.
+ */
+
+/**
+ * @defgroup RIP RIP
+ * @ingroup ROUTING
+ * @brief RIP routing protocol implementation.
+ */
+
 // Rip.h
 
 #ifndef RIP_H

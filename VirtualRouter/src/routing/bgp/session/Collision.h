@@ -1,4 +1,7 @@
-// Collision.h
+/**
+ * @file Collision.h
+ * @brief BGP session collision detection and resolution.
+ */
 
 #ifndef BGP_COLLISION_H
 #define BGP_COLLISION_H

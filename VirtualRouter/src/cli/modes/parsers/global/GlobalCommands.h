@@ -1,4 +1,11 @@
-// GlobalCommands.hpp
+/**
+ * @file GlobalCommands.h
+ * @brief Top-level CLI mode parser for the Global Configuration mode.
+ *
+ * Aggregates all commands available in `CliMode::GlobalConfiguration`, including
+ * ARP management, hostname, routing protocol entry points (EIGRP, OSPF, BGP),
+ * interface navigation, and sub-trees for `ip` and `ipv6`.
+ */
 
 #ifndef GLOBAL_COMMANDS_H
 #define GLOBAL_COMMANDS_H
@@ -71,6 +78,15 @@ using Global_RouterBGP = commandAdder<GlobalContext,
     "router"_tok, "bgp"_tok, ARG
 >;
 
+/**
+ * @brief Complete parser for the Global Configuration CLI mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Instantiated as a `CliModeParser` that covers `CliMode::GlobalConfiguration`
+ * with `GlobalContext`. Composes all top-level global commands including
+ * ARP, hostname, routing protocol entry points, interface navigation,
+ * and `ip`/`ipv6` sub-trees.
+ */
 using GlobalCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalContext,
     Global_Arp,
     Global_Exit,

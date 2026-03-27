@@ -1,3 +1,7 @@
+/**
+ * @file PrefixLeaseManager.h
+ */
+
 // PrefixLeaseManager.h
 
 #ifndef PREFIX_LEASE_MANAGER_H

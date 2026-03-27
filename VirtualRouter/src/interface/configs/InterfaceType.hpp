@@ -1,4 +1,7 @@
-// InterfaceType.hpp
+/**
+ * @file InterfaceType.hpp
+ * @brief Enumeration and conversion functions for interface types (Ethernet, Loopback, Tunnel, etc.).
+ */
 
 #ifndef INTERFACE_TYPE_HPP
 #define INTERFACE_TYPE_HPP
@@ -11,25 +14,38 @@ namespace interface
 
 /**
  * @enum InterfaceType
- * @brief Enunerates the various types of network interfaces supported
- */
-/**
- * @enum InterfaceType
- * @brief Enunerates the various types of network interfaces supported
+ * @brief Enumeration of all supported interface types.
+ * @ingroup INTERFACE_CONFIGS
+ *
+ * Defines the complete set of interface types supported by the router:
+ * physical Ethernet types (with speed variants), logical types (Loopback, Tunnel, VLAN),
+ * and aggregate types (Port-Channel). Used throughout the system to determine interface
+ * behavior, display naming, and capabilities.
  */
 enum class InterfaceType : uint8_t
 {
-    UNDEFINED = 0,          ///< Undefined interface type.
-    ETHERNET = 1,           ///< Ethernet interface type.
-    FAST_ETHERNET = 2,      ///< Fast Ethernet type.
-    GIGABIT_ETHERNET = 3,   ///< Gigabit Ethernet interface type.
-    LOOPBACK = 4,           ///< Loopback interface type.
-    PORT_CHANNEL = 5,       ///< Port-channel interface type.
-    TUNNEL = 6,             ///< Tunnel interface type.
-    VIRTUAL_TEMPLATE = 7,   ///< Virtual Template interface type.
-    VLAN = 8                ///< VLAN interface type.
+    UNDEFINED = 0,          ///< Undefined or unknown interface type.
+    ETHERNET = 1,           ///< Base Ethernet interface (1 Mbps or legacy).
+    FAST_ETHERNET = 2,      ///< Fast Ethernet interface (10/100 Mbps).
+    GIGABIT_ETHERNET = 3,   ///< Gigabit Ethernet interface (1+ Gbps).
+    LOOPBACK = 4,           ///< Loopback interface (always up, no neighbors).
+    PORT_CHANNEL = 5,       ///< Aggregated physical interfaces (LAG/LACP).
+    TUNNEL = 6,             ///< Tunnel interface (virtual IP-in-IP).
+    VIRTUAL_TEMPLATE = 7,   ///< Virtual Template interface (template for cloning).
+    VLAN = 8                ///< VLAN subinterface (L2 virtual interface).
 };
 
+/**
+ * @brief Converts a CLI string to InterfaceType enum.
+ *
+ * Maps CLI command strings (e.g., "Ethernet", "FastEthernet") to the corresponding
+ * enum value. Case-sensitive matching against standard CLI naming conventions.
+ *
+ * @param type CLI interface type string.
+ * @return InterfaceType enum value, or UNDEFINED if not recognized.
+ *
+ * @see getInterfaceType(InterfaceType)
+ */
 inline static InterfaceType getInterfaceType(const std::string& type)
 {
     if (type == "Ethernet") return InterfaceType::ETHERNET;
@@ -43,6 +59,16 @@ inline static InterfaceType getInterfaceType(const std::string& type)
     return InterfaceType::UNDEFINED;
 }
 
+/**
+ * @brief Converts InterfaceType enum to a CLI string.
+ *
+ * Maps enum values back to their CLI representation for display, logging, and configuration output.
+ *
+ * @param type InterfaceType enum value.
+ * @return CLI string (e.g., "Ethernet", "FastEthernet"), or empty string for UNDEFINED.
+ *
+ * @see getInterfaceType(const std::string&)
+ */
 inline static std::string getInterfaceType(const InterfaceType type)
 {
     switch (type)

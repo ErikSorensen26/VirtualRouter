@@ -1,4 +1,10 @@
-// InterfaceCommands.h
+/**
+ * @file InterfaceCommands.h
+ * @brief Top-level CLI mode parser for the Interface Configuration mode.
+ *
+ * Aggregates all commands available in `CliMode::Interface`, including
+ * exit, shutdown, and sub-trees for `ip`, `ipv6`, and `ospfv3`.
+ */
 
 #ifndef INTERFACE_COMMANDS_H
 #define INTERFACE_COMMANDS_H
@@ -36,6 +42,13 @@ using Interface_Shutdown = commandAdder<InterfaceContext,
     "shutdown"_tok
 >;
 
+/**
+ * @brief Complete parser for the Interface Configuration CLI mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes
+ * exit, shutdown, and `ip`/`ipv6` sub-trees.
+ */
 using InterfaceCommands = CliModeParser<CliMode::Interface, InterfaceContext,
     Interface_Exit,
     Interface_IP,

@@ -1,3 +1,14 @@
+/**
+ * @file DhcpServer.h
+ * @brief DHCPv4 server: lease management and DHCP message handling.
+ */
+
+/**
+ * @defgroup SERVICES_DHCP_V4 DHCPv4
+ * @ingroup SERVICES_DHCP
+ * @brief DHCPv4 server, relay, client, lease manager, and pool.
+ */
+
 // DhcpServer.h
 
 #ifndef DHCP_SERVER_H

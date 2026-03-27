@@ -1,3 +1,7 @@
+/**
+ * @file TupleSchema.hpp
+ */
+
 // TupleSchema.hpp
 
 #ifndef TUPLE_SCHEMA_HPP

@@ -1,4 +1,12 @@
-// GlobalIPv6NDCommands.h
+/**
+ * @file GlobalIPv6NDCommands.h
+ * @brief CLI parser for the `ipv6 nd` sub-tree of Global Configuration mode.
+ *
+ * Defines global Neighbor Discovery (ND) tuning commands reachable via
+ * `ipv6 nd <...>` in `CliMode::GlobalConfiguration`, covering neighbor cache
+ * expiry, DAD timers, host-mode, NSF convergence/throttle, NUD limits,
+ * reachable-time, resolution data limits, and route-owner behaviour.
+ */
 
 #ifndef GLOBAL_IPV6_ND_COMMANDS_H
 #define GLOBAL_IPV6_ND_COMMANDS_H
@@ -75,6 +83,13 @@ using GlobalIPv6ND_RouteOwner = commandAdder<GlobalContext,
     "route-owner"_tok
 >;
 
+/**
+ * @brief Parser for the `ipv6 nd` sub-tree in Global Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::GlobalConfiguration` with `GlobalContext` and exposes
+ * all global Neighbor Discovery tuning commands.
+ */
 using GlobalIPv6NDCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalContext,
     GlobalIPv6ND_CacheExpire,
     GlobalIPv6ND_CacheIntLimit,

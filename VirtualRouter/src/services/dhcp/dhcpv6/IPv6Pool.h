@@ -1,3 +1,7 @@
+/**
+ * @file IPv6Pool.h
+ */
+
 // IPv6Pool.h
 
 #ifndef IPV6_POOL_H

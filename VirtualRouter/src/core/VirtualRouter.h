@@ -1,4 +1,12 @@
-// VirtualRouter.h
+/**
+ * @file VirtualRouter.h
+ * @brief Per-VRF routing instance owning protocols, RIB, and interface namespace.
+ */
+
+/**
+ * @defgroup ROUTING Routing Protocols
+ * @brief All routing protocol implementations (EIGRP, OSPF, BGP, RIP).
+ */
 
 #ifndef VIRTUAL_ROUTER_H
 #define VIRTUAL_ROUTER_H
@@ -15,8 +23,8 @@
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
 namespace routing::eigrp {
-    struct EigrpAutonomousSystem; ///< Forward declaration of Eigrp Autonomous System.
-    struct EigrpNamed;            ///< Forward declaration of Eigrp Named.
+    struct EigrpAutonomousSystem;
+    struct EigrpNamed;
 }
 namespace routing::ospf {
     class OspfProcess;
@@ -26,12 +34,12 @@ namespace routing::ospf {
 namespace core
 {
 
-class Global;    ///< Forward declaration of Global.
+class Global;
 class ControlScheduler;
 
 /**
- * @class VirtualRouter
  * @brief Represents a complete routing instance (VRF) within the virtual router.
+ * @ingroup CORE
  *
  * A VirtualRouter mirrors the behavior of a VRF (Virtual Routing and Forwarding instance).
  *
@@ -303,31 +311,69 @@ public:
     bool removeOspfv3(uint16_t id, types::AddressFamily af);
 
     // GLOBAL HELPERS
+
+    /**
+     * @brief Returns the per-VRF interface manager.
+     *
+     * The @ref interface::InterfaceManager tracks which interfaces belong to this
+     * VRF and exposes iteration and lookup over that set.
+     */
     interface::InterfaceManager& getInterfaceManager() { return ifaceMgr; }
+
+    /**
+     * @brief Returns the VRF-scoped configuration registry.
+     *
+     * Routing protocols and CLI commands use this registry to read and write
+     * per-VRF configuration knobs without touching the global registry.
+     */
     config::Registry& getRegistry();
+
     std::string getName() { return instanceName; }
     uint32_t getInstanceId() { return instanceId; }
     bool isDefault() { return defaulted; }
     Global& getGlobal() { return global; }
+
+    /**
+     * @brief Returns the per-VRF Routing Information Base.
+     *
+     * Protocols install and withdraw routes here. The RIB in turn updates the
+     * FIB and notifies any registered @ref RouteWatcher observers.
+     */
     RoutingTable& getRib() { return routingTable; }
+
+    /** @brief Returns a const view of the per-VRF RIB for read-only consumers. */
     const RoutingTable& getRib() const { return routingTable; }
+
+    /**
+     * @brief Returns the per-VRF TCP connection manager.
+     *
+     * Used by BGP and other TCP-based protocols to open and accept connections
+     * scoped to this VRF's address space.
+     */
     transport::tcp::Tcp& getTcp() { return tcpManager; }
+
+    /**
+     * @brief Returns the global @ref ControlScheduler shared by all VRFs.
+     *
+     * Protocols use this to obtain @ref ProcessQueue instances for serialized,
+     * timer-aware task scheduling.
+     */
     ControlScheduler& getControlScheduler();
     
 private:
     friend class interface::Interface;
     uint32_t instanceId{0};
-    const bool defaulted{false};
+    const bool defaulted{false}; ///< True for the single "default" VRF that cannot be deleted.
 
-    interface::InterfaceManager ifaceMgr;
+    interface::InterfaceManager ifaceMgr; ///< Tracks interfaces attached to this VRF.
 
-    transport::tcp::Tcp tcpManager;
+    transport::tcp::Tcp tcpManager; ///< Per-VRF TCP stack for BGP and other transport protocols.
 
-    std::unordered_map<uint32_t, routing::eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers.
-    std::unordered_map<std::string, routing::eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups.
+    std::unordered_map<uint32_t, routing::eigrp::EigrpAutonomousSystem> eigrpList; ///< Classic-mode EIGRP AS containers. Keyed by AS number.
+    std::unordered_map<std::string, routing::eigrp::EigrpNamed> namedEigrpList; ///< Named-mode EIGRP groups. Keyed by instance name.
 
-    std::unordered_map<uint32_t, routing::ospf::OspfProcess> ospfList;
-    std::unordered_map<uint32_t, routing::ospf::OspfV3Instance> ospfv3List;
+    std::unordered_map<uint32_t, routing::ospf::OspfProcess> ospfList; ///< OSPFv2 process instances. Keyed by process ID.
+    std::unordered_map<uint32_t, routing::ospf::OspfV3Instance> ospfv3List; ///< OSPFv3 instances. Keyed by process ID.
 
     std::string instanceName; ///< Human-readable VRF identifier.
 

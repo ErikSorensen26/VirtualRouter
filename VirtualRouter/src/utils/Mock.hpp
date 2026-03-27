@@ -1,4 +1,7 @@
-// Mock.hpp
+/**
+ * @file Mock.hpp
+ * @brief Mock/test utilities for unit testing.
+ */
 
 #ifndef MOCK_HPP
 #define MOCK_HPP

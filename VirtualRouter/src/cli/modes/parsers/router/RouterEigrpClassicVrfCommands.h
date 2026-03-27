@@ -1,4 +1,10 @@
-// RouterEigrpClassicVrfCommands.h
+/**
+ * @file RouterEigrpClassicVrfCommands.h
+ * @brief CLI parser for EIGRP classic commands in VRF context.
+ *
+ * Defines EIGRP classic commands available within a VRF namespace,
+ * including network declarations and topology access.
+ */
 
 #ifndef ROUTER_EIGRP_CLASSIC_VRF_COMMANDS_H
 #define ROUTER_EIGRP_CLASSIC_VRF_COMMANDS_H
@@ -69,6 +75,13 @@ using RouterEigrpClassicVrf_TimersGracefulRestart = commandAdder<EigrpContext,
     "timers"_tok, "graceful-restart"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for EIGRP classic commands within a VRF namespace.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Provides VRF-specific EIGRP classic configuration including networks,
+ * neighbors, metrics, and topology access.
+ */
 using RouterEigrpClassicVrfCommands = CliModeParser<CliMode::RouterEigrpClassicVRF, EigrpContext,
     RouterEigrpTopologyCommands,
     RouterEigrpClassicVrf_EigrpLogNeighborChanges,

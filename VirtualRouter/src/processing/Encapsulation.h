@@ -1,3 +1,7 @@
+/**
+ * @file Encapsulation.h
+ */
+
 // Encapsulation.h
 
 #ifndef ENCAPSULATION_H

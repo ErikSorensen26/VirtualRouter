@@ -1,4 +1,12 @@
-// InterfaceIPv6OspfCommands.h
+/**
+ * @file InterfaceIPv6OspfCommands.h
+ * @brief CLI parser for the `ipv6 ospf` sub-tree of Interface Configuration mode.
+ *
+ * Defines OSPFv3 (IPv6) interface-level commands reachable via `ipv6 ospf <...>`
+ * in `CliMode::Interface`.  Extends the shared `InterfaceOspfCommands` base with
+ * IPv6-specific additions: process-area association, authentication, encryption,
+ * and static neighbor configuration.
+ */
 
 #ifndef INTERFACE_IPV6_OSPF_COMMANDS_H
 #define INTERFACE_IPV6_OSPF_COMMANDS_H
@@ -31,6 +39,13 @@ using InterfaceIPv6Ospf_Neighbor = commandAdder<InterfaceContext,
     "neighbor"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for the `ipv6 ospf` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv3-specific
+ * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
+ */
 using InterfaceIPv6OspfCommands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceOspfCommands,
     InterfaceIPv6Ospf_Area,
@@ -41,4 +56,3 @@ using InterfaceIPv6OspfCommands = CliModeParser<CliMode::Interface, InterfaceCon
 }
 
 #endif // INTERFACE_IPV6_OSPF_COMMANDS_H
-

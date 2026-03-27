@@ -1,4 +1,7 @@
-// AddressFamily.hpp
+/**
+ * @file AddressFamily.hpp
+ * @brief Address family (IPv4, IPv6) enumeration and utilities.
+ */
 
 #ifndef ADDRESS_FAMILY_HPP
 #define ADDRESS_FAMILY_HPP

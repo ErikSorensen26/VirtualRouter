@@ -1,4 +1,10 @@
-// PriviledgedExecCommands.hpp
+/**
+ * @file PrivilegedExecCommands.h
+ * @brief CLI parser for Privileged Exec mode: configuration and monitoring commands.
+ *
+ * Defines commands available in Privileged Exec mode (`#` prompt),
+ * including global configuration entry point, show commands, and system operations.
+ */
 
 #ifndef PRIVILEGED_EXEC_COMMANDS_HPP
 #define PRIVILEGED_EXEC_COMMANDS_HPP
@@ -41,6 +47,13 @@ using PrivilegedExec_WriteMem = commandAdder<PrivilegedExecContext,
     "write"_tok, "memory"_tok
 >;
 
+/**
+ * @brief Parser for Privileged Exec mode commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates configuration entry point, monitoring (show), and system
+ * commands accessible to privileged users.
+ */
 using PrivilegedExecCommands = CliModeParser<CliMode::PrivilegedExec, PrivilegedExecContext,
     PrivilegedExec_ConfigureTerm,
     PrivilegedExec_Exit,

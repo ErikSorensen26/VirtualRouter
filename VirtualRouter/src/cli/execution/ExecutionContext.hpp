@@ -1,4 +1,18 @@
-// ExecutionContext.hpp
+/**
+ * @file ExecutionContext.hpp
+ * @brief Instantiates the concrete `ExecutionManager` type alias for the router CLI.
+ *
+ * Aggregates every registered `CliModeParser` specialization into a single
+ * `cli::Executor` template instantiation.  All mode parsers must be listed
+ * here; adding a new mode requires only appending its parser type to the
+ * `ExecutionManager` alias.
+ */
+
+/**
+ * @defgroup CLI_EXECUTION CLI Execution
+ * @ingroup CLI
+ * @brief Executor template instantiation and ExecutionContext binding.
+ */
 
 #ifndef EXECUTION_CONTEXT_HPP
 #define EXECUTION_CONTEXT_HPP
@@ -19,6 +33,20 @@
 
 namespace cli
 {
+/**
+ * @brief Concrete `Executor` instantiation that binds all registered CLI mode parsers.
+ *
+ * `ExecutionManager` is the single object created per `CliSession` that owns
+ * the active context and routes each command to the correct parser.  Adding
+ * support for a new `CliMode` requires:
+ * 1. Defining a `CliModeParser<NewMode>` specialization.
+ * 2. Adding `NewModeCommands` to the variadic list below.
+ *
+ * @note The `Executor` static assertions guarantee no duplicate `CliMode`
+ *       values and that every entry satisfies `is_cli_mode_v`.
+ *
+ * @ingroup CLI
+ */
 using ExecutionManager = cli::Executor<
     UserExecCommands,
     PrivilegedExecCommands,

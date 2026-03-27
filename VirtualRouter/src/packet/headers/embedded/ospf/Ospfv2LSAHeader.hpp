@@ -1,3 +1,14 @@
+/**
+ * @file Ospfv2LSAHeader.hpp
+ * @brief OSPFv2 LSA wire-format header.
+ */
+
+/**
+ * @defgroup PACKET_HEADERS_OSPF OSPF Embedded Headers
+ * @ingroup PACKET_HEADERS
+ * @brief OSPFv2 and OSPFv3 embedded message headers (Hello, DBD, LSA, LSR, LSU).
+ */
+
 // Ospfv2LSAHeader.hpp
 
 #ifndef OSPFV2_LSA_HEADER_HPP

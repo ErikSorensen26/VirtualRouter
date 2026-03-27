@@ -1,5 +1,10 @@
-// Console.h
-
+/**
+ * @file Console.h
+ * @brief Console I/O: user input, cursor control, and command-line editing.
+ *
+ * Handles terminal input/output including character-by-character input processing,
+ * history navigation, cursor positioning, and command-line editing features.
+ */
 
 #ifndef CONSOLE_H
 #define CONSOLE_H
@@ -13,7 +18,7 @@
 #include <Mock.hpp>
 #include "ConsoleController.hpp"
 
-class ConsoleTest; ///< Forward declaration of ConsoleTest
+class ConsoleTest;
 
 namespace cli
 {

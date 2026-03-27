@@ -1,4 +1,11 @@
-// RouterEigrpCommands.h
+/**
+ * @file RouterEigrpClassicCommands.h
+ * @brief CLI parser for EIGRP classic mode commands.
+ *
+ * Defines commands for EIGRP classic (flat) configuration model,
+ * including network/neighbor setup, address-family entry point,
+ * metrics, logging, and topology access.
+ */
 
 #ifndef ROUTER_EIGRP_CLASSIC_COMMANDS_H
 #define ROUTER_EIGRP_CLASSIC_COMMANDS_H
@@ -77,6 +84,13 @@ using RouterEigrpClassic_TimersGracefulRestart = commandAdder<EigrpContext,
     "timers"_tok, "graceful-restart"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for EIGRP classic mode commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates network/neighbor configuration, logging, metrics, stub mode,
+ * and topology base access for classic (flat) EIGRP model.
+ */
 using RouterEigrpClassicCommands = CliModeParser<CliMode::RouterEigrpClassicV4, EigrpContext,
     RouterEigrpTopologyCommands,
     RouterEigrpClassic_AddressFamilyVrf,
@@ -92,10 +106,18 @@ using RouterEigrpClassicCommands = CliModeParser<CliMode::RouterEigrpClassicV4, 
     RouterEigrpClassic_TimersGracefulRestart
 >;
 
+/**
+ * @brief IPv4 classic mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpClassicCommandsV4 = CliModeParser<CliMode::RouterEigrpClassicV4, EigrpContext,
     RouterEigrpClassicCommands
 >;
 
+/**
+ * @brief IPv6 classic mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpClassicCommandsV6 = CliModeParser<CliMode::RouterEigrpClassicV6, EigrpContext,
     RouterEigrpClassicCommands
 >;

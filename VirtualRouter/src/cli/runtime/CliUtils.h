@@ -1,4 +1,10 @@
-// CliUtils.h
+/**
+ * @file CliUtils.h
+ * @brief CLI utility functions: IP address, prefix, and MAC address parsing.
+ *
+ * Provides helper functions for extracting and validating network addresses
+ * from CLI input strings, including IPv4/IPv6 addresses, prefixes, and MAC addresses.
+ */
 
 #ifndef CLI_UTILS_H
 #define CLI_UTILS_H

@@ -1,4 +1,8 @@
-// RouteWatcher.hpp
+/**
+ * @file RouteWatcher.hpp
+ * @brief RIB subscription engine for per-prefix, per-address, and per-protocol
+ *        route-change callbacks.
+ */
 
 #ifndef ROUTE_WATCHER_HPP
 #define ROUTE_WATCHER_HPP
@@ -21,10 +25,16 @@ namespace core
 template <typename Addr>
 class Rib;
 
+/**
+ * @brief Hash map key combining a `RouteSource` and a process ID.
+ *
+ * Used as the key for protocol-level watch subscriptions so that callbacks
+ * can be scoped to exactly one routing protocol process instance.
+ */
 struct SrcPidKey
 {
-    RouteSource source;
-    uint64_t    processId;
+    RouteSource source;    ///< Protocol that installed the routes.
+    uint64_t    processId; ///< Process instance identifier.
 
     bool operator==(const SrcPidKey& o) const noexcept
     {
@@ -32,8 +42,18 @@ struct SrcPidKey
     }
 };
 
+/**
+ * @brief Hash functor for `SrcPidKey`.
+ * @ingroup CORE_ROUTING
+ */
 struct SrcPidHash
 {
+    /**
+     * @brief Compute a hash value for a `SrcPidKey`.
+     * @ingroup CORE_ROUTING
+     * @param k Key to hash.
+     * @return Hash value.
+     */
     size_t operator()(const SrcPidKey& k) const noexcept
     {
         uint64_t h = static_cast<uint64_t>(k.source);
@@ -42,67 +62,133 @@ struct SrcPidHash
     }
 };
 
+/**
+ * @brief Subscription manager that fires callbacks whenever the best route for
+ *        a prefix, host address, or protocol changes.
+ *
+ * `RouteWatcher` is the notification backbone used by protocols such as BGP
+ * (network command, next-hop tracking) to react to RIB changes without polling.
+ * It supports three subscription modes:
+ *
+ * - **Prefix watch** (`watchRoute`): fires when the best route for an exact
+ *   (prefix, length) changes.
+ * - **Address watch** (`watchAddress`): similar to a prefix watch but
+ *   automatically follows when the resolving prefix is withdrawn and a
+ *   less-specific route takes over.
+ * - **Protocol watch** (`watchProtocol`): fires for any best-route change
+ *   attributed to a specific (RouteSource, processId) pair.
+ *
+ * ## Architectural Role
+ * Owned by `Rib<AddrType>` and driven exclusively by `Rib::installRoute()` /
+ * `Rib::withdrawRoute()` via the `friend` declaration.  The public `watch*` /
+ * `remove` methods may be called from any thread; they post work to the Rib's
+ * scheduler.
+ *
+ * ## Lifecycle & Ownership
+ * Created alongside the owning `Rib`.  All internal state is managed on the
+ * scheduler thread.  On `Rib::clear()`, `announceAllGone()` fires every
+ * remaining callback with `newBest = nullptr` before clearing subscription
+ * tables.
+ *
+ * ## Concurrency Model
+ * - All internal maps are accessed only on the `ProcessQueue` scheduler thread.
+ * - `watchRoute`, `watchAddress`, `watchProtocol`, and `remove` are thread-safe
+ *   (they post tasks) and return immediately.
+ * - Watch IDs are allocated from a lock-free atomic counter + recycle stack.
+ *
+ * @tparam Addr Unsigned integral address type (`uint32_t` / `__uint128_t`).
+ *
+ * @see Rib
+ * @see RibBucket
+ */
 template <typename Addr>
 class RouteWatcher
 {
     static_assert(std::is_unsigned_v<Addr>);
-    static constexpr uint8_t W = sizeof(Addr) * 8;
+    static constexpr uint8_t W = sizeof(Addr) * 8; ///< Address width in bits.
 
 public:
-    using WatchId  = uint32_t; // 0 = invalid
+    /// Opaque subscription handle; 0 is the invalid/null value.
+    using WatchId  = uint32_t;
 
+    /**
+     * @brief Context structure passed to every watch callback invocation.
+     * @ingroup CORE_ROUTING
+     */
     struct CallbackCtx
     {
-        void*                  ctx;
-        WatchId                id;
-        const RibEntry<Addr>*  oldBest;
-        const RibEntry<Addr>*  newBest;
+        void*                  ctx;     ///< Caller-supplied context pointer.
+        WatchId                id;      ///< Watch ID that triggered this invocation.
+        const RibEntry<Addr>*  oldBest; ///< Previous best route (may be `nullptr`).
+        const RibEntry<Addr>*  newBest; ///< New best route (may be `nullptr` = withdrawn).
     };
 
+    /**
+     * @brief Callback signature.
+     * @ingroup CORE_ROUTING
+     *
+     * Return `true` to auto-cancel the watch after this invocation;
+     * return `false` to keep the watch active.
+     */
     using Callback = bool (*)(CallbackCtx&);
 
+    /**
+     * @brief Optional filter applied before invoking a watch callback.
+     * @ingroup CORE_ROUTING
+     *
+     * When set, only routes matching the specified source and/or processId
+     * are considered for the "best" value passed to the callback.
+     */
     struct WatchFilter
     {
-        std::optional<RouteSource> src;
-        std::optional<uint64_t>    processId;
+        std::optional<RouteSource> src;       ///< Restrict to this protocol source.
+        std::optional<uint64_t>    processId; ///< Restrict to this process instance.
     };
 
 private:
+    /// Internal subscription node for a single watch registration.
     struct WatchNode
     {
-        WatchId               id        = 0;
-        void*                 ctx       = nullptr;
-        Callback              fn        = nullptr;
-        WatchFilter           filter;
-        const RibEntry<Addr>* lastKnown = nullptr;
-        bool                  canceled  = false;
+        WatchId               id        = 0;       ///< Unique watch identifier.
+        void*                 ctx       = nullptr; ///< Caller context pointer.
+        Callback              fn        = nullptr; ///< Callback function.
+        WatchFilter           filter;              ///< Source/process filter.
+        const RibEntry<Addr>* lastKnown = nullptr; ///< Last route seen by this watcher; used for change detection.
+        bool                  canceled  = false;   ///< Set by `remove()`; pruned on next fire.
     };
 
+    /// Internal state for an address-level watch, which wraps a prefix watch.
     struct AddrWatchState
     {
-        RouteWatcher*         self;
-        Addr                  addr;
-        void*                 userCtx;
-        Callback              userFn;
-        WatchFilter           filter;
-        WatchId               addrId;
-        WatchId               prefixId;
-        const RibEntry<Addr>* lastUserRoute;
+        RouteWatcher*         self;          ///< Owning watcher.
+        Addr                  addr;          ///< Host address being watched.
+        void*                 userCtx;       ///< Original caller context.
+        Callback              userFn;        ///< Original caller callback.
+        WatchFilter           filter;        ///< Source/process filter.
+        WatchId               addrId;        ///< ID of this address watch.
+        WatchId               prefixId;      ///< ID of the underlying prefix watch currently pinned.
+        const RibEntry<Addr>* lastUserRoute; ///< Last route delivered to the user callback.
     };
 
-    std::unordered_map<PrefixKey<Addr>, std::vector<WatchNode>, PrefixHash<Addr>> prefixWatchTable;
-    std::unordered_map<WatchId, PrefixKey<Addr>>                                  prefixIdMap;
+    std::unordered_map<PrefixKey<Addr>, std::vector<WatchNode>, PrefixHash<Addr>> prefixWatchTable; ///< Prefix-to-watchers map.
+    std::unordered_map<WatchId, PrefixKey<Addr>>                                  prefixIdMap;      ///< WatchId to prefix key reverse-index.
 
-    std::unordered_map<SrcPidKey, std::vector<WatchNode>, SrcPidHash> protocolWatchTable;
-    std::unordered_map<WatchId, SrcPidKey>                            protocolIdMap;
+    std::unordered_map<SrcPidKey, std::vector<WatchNode>, SrcPidHash> protocolWatchTable; ///< Protocol-to-watchers map.
+    std::unordered_map<WatchId, SrcPidKey>                            protocolIdMap;      ///< WatchId to SrcPidKey reverse-index.
 
-    std::unordered_map<WatchId, AddrWatchState> addrWatches;
+    std::unordered_map<WatchId, AddrWatchState> addrWatches; ///< Active address-level watches.
 
-    Fib<Addr>& fib;
-    ProcessQueueRef scheduler;
-    std::atomic<WatchId> nextId{1};
-    types::AtomicStack<uint32_t> availableIds;
+    Fib<Addr>&             fib;           ///< FIB reference used for re-resolution in address watches.
+    ProcessQueueRef        scheduler;     ///< Scheduler queue for serialising callback delivery.
+    std::atomic<WatchId>   nextId{1};     ///< Monotone counter for new watch IDs.
+    types::AtomicStack<uint32_t> availableIds; ///< Recycled watch IDs.
 
+    /**
+     * @brief Mask the host bits of an address prefix.
+     * @param p Raw prefix value.
+     * @param l Prefix length in bits.
+     * @return Network-masked address.
+     */
     static Addr maskAddr(Addr p, uint8_t l) noexcept
     {
         if (l == 0) return Addr(0);
@@ -110,6 +196,12 @@ private:
         return p & (~Addr(0) << (W - l));
     }
 
+    /**
+     * @brief Compare two `RibEntry` pointers for semantic equality.
+     * @param a First entry (may be `nullptr`).
+     * @param b Second entry (may be `nullptr`).
+     * @return `true` if both are null, or if all forwarding-relevant fields match.
+     */
     static bool routesEqual(const RibEntry<Addr>* a, const RibEntry<Addr>* b) noexcept
     {
         if (!a && !b) return true;
@@ -128,6 +220,12 @@ private:
         return true;
     }
 
+    /**
+     * @brief Compute the filtered best route from a bucket for a watch node.
+     * @param bucket RibBucket containing candidate routes.
+     * @param filter Source/process filter to apply.
+     * @return Best matching `RibEntry*`, or `nullptr`.
+     */
     static RibEntry<Addr>* computeBestForPrefix(RibBucket<Addr>& bucket, const WatchFilter& filter) noexcept
     {
         if (filter.src.has_value() && filter.processId.has_value())
@@ -139,6 +237,12 @@ private:
         return bucket.bestEntry;
     }
 
+    /**
+     * @brief Apply a source/process filter to a single route.
+     * @param r      Route to test (may be `nullptr`).
+     * @param filter Filter to apply.
+     * @return `r` if it passes the filter; `nullptr` otherwise.
+     */
     static const RibEntry<Addr>* applyFilter(const RibEntry<Addr>* r, const WatchFilter& filter) noexcept
     {
         if (!r)                                                                  return nullptr;
@@ -147,6 +251,10 @@ private:
         return r;
     }
 
+    /**
+     * @brief Allocate a unique watch ID, reusing recycled IDs when available.
+     * @return New watch ID (never 0).
+     */
     WatchId allocateId() noexcept
     {
         uint32_t id{};
@@ -155,6 +263,18 @@ private:
         else return nextId.fetch_add(1, std::memory_order_release) ;
     }
 
+    /**
+     * @brief Iterate a list of `WatchNode`s, fire callbacks on changed routes,
+     *        and compact out canceled or self-removing nodes.
+     *
+     * @tparam GetCur  Callable `(WatchNode&) -> const RibEntry<Addr>*` that
+     *                 computes the current best for a node.
+     * @tparam IdMap   Type of the reverse-index map (`prefixIdMap` or
+     *                 `protocolIdMap`).
+     * @param nodes   Node list to iterate (modified in place).
+     * @param getCur  Best-route accessor for the current event.
+     * @param idmap   Reverse-index map to remove canceled entries from.
+     */
     template <typename GetCur, typename IdMap>
     void fireNodes(std::vector<WatchNode>& nodes, GetCur&& getCur, IdMap& idmap)
     {
@@ -187,6 +307,13 @@ private:
         nodes.resize(w);
     }
 
+    /**
+     * @brief Internal callback used as the underlying prefix watch for every
+     *        address watch.  Handles prefix withdrawals by re-resolving via the
+     *        FIB and re-pinning to the new resolving prefix.
+     * @param cctx Callback context from the prefix watch.
+     * @return `true` if the address watch should be removed.
+     */
     static bool addrWatchCallback(CallbackCtx& cctx)
     {
         auto*  state          = static_cast<AddrWatchState*>(cctx.ctx);
@@ -243,13 +370,37 @@ private:
     }
 
 public:
+    /**
+     * @brief Construct a `RouteWatcher` bound to the given FIB and scheduler.
+     * @param f  FIB used for address-watch re-resolution.
+     * @param sc Scheduler queue; all callbacks are delivered on this thread.
+     */
     explicit RouteWatcher(Fib<Addr>& f, ProcessQueue& sc) : fib(f), scheduler(sc.ref()) {}
+
+    /**
+     * @brief Destructor — all active watches are dropped without firing callbacks.
+     */
     ~RouteWatcher() = default;
 
     RouteWatcher(const RouteWatcher&)            = delete;
     RouteWatcher& operator=(const RouteWatcher&) = delete;
 
-    // Watch best-route changes for an exact (prefix, length).
+    // WATCH REGISTRATION
+
+    /**
+     * @brief Register a callback for best-route changes on an exact prefix.
+     *
+     * The callback fires each time the best route (as filtered by `filter`)
+     * for `(prefix, length)` changes.  Returning `true` from the callback
+     * cancels the watch.
+     *
+     * @param prefix  Network prefix to watch.
+     * @param length  Prefix length in bits.
+     * @param ctx     Opaque context pointer passed back in `CallbackCtx`.
+     * @param fn      Callback; must not be null.
+     * @param filter  Optional source/process filter.
+     * @return Non-zero `WatchId`, or 0 on failure.
+     */
     WatchId watchRoute(Addr prefix, uint8_t length, void* ctx, Callback fn,
                        WatchFilter filter = {})
     {
@@ -264,6 +415,19 @@ public:
         return id;
     }
 
+    /**
+     * @brief Register a callback tracking the resolving route for a host address.
+     *
+     * Returns 0 immediately if the address is currently unreachable (or does
+     * not pass `filter`).  Once registered, the watch follows prefix changes
+     * transparently.
+     *
+     * @param addr    Host address to watch.
+     * @param ctx     Opaque context pointer.
+     * @param fn      Callback; must not be null.
+     * @param filter  Optional source/process filter.
+     * @return Non-zero `WatchId`, or 0 if unreachable.
+     */
     WatchId watchAddress(Addr addr, void* ctx, Callback fn, WatchFilter filter = {})
     {
         if (!fn) return 0;
@@ -297,7 +461,15 @@ public:
         return addrId;
     }
 
-    // Watch best-route changes from a specific (src, pid) across all prefixes.
+    /**
+     * @brief Register a callback for best-route changes from a specific protocol
+     *        process across all prefixes.
+     * @param src Protocol source to watch.
+     * @param pid Process instance ID.
+     * @param ctx Opaque context pointer.
+     * @param fn  Callback; must not be null.
+     * @return Non-zero `WatchId`, or 0 on failure.
+     */
     WatchId watchProtocol(RouteSource src, uint64_t pid, void* ctx, Callback fn)
     {
         if (!fn) return 0;
@@ -311,6 +483,14 @@ public:
         return id;
     }
 
+    /**
+     * @brief Cancel a watch subscription.
+     *
+     * Safe to call from any thread.  The cancellation is posted to the
+     * scheduler and takes effect asynchronously.
+     *
+     * @param id Watch ID to cancel.
+     */
     void remove(WatchId id) noexcept
     {
         scheduler.post([this, id]() {
@@ -355,6 +535,14 @@ public:
 private:
     friend Rib<Addr>;
 
+    /**
+     * @brief Called by `Rib` after every `addRoute` / `removeRoute` that
+     *        touches `bucket`.  Fires all matching watches whose observed
+     *        route has changed.
+     * @param prefix Network prefix that changed.
+     * @param length Prefix length in bits.
+     * @param bucket Bucket whose best-path was just recomputed.
+     */
     void announceRouteChange(Addr prefix, uint8_t length, RibBucket<Addr>& bucket)
     {
         // Prefix watches (includes addr watch proxy nodes)
@@ -421,6 +609,10 @@ private:
         }
     }
 
+    /**
+     * @brief Fire every active watch with `newBest = nullptr` and clear all
+     *        subscription tables.  Called by `Rib::clear()`.
+     */
     void announceAllGone()
     {
         auto fireAll = [&](auto& t, auto& idm)
@@ -460,4 +652,3 @@ private:
 } // namespace core
 
 #endif // ROUTE_WATCHER_HPP
-

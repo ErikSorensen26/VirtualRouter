@@ -1,3 +1,14 @@
+/**
+ * @file IpHeaders.hpp
+ * @brief IPv4 and IPv6 wire-format header structures.
+ */
+
+/**
+ * @defgroup PACKET_HEADERS Packet Headers
+ * @ingroup PACKET
+ * @brief Wire-format protocol header structures: IP, TCP, UDP, OSPF, EIGRP, BGP, DHCP, etc.
+ */
+
 // IPHeader.hpp
 
 #ifndef IP_HEADER_HPP
@@ -114,6 +125,7 @@ struct IPv4Header
 /**
  * @struct IPv6HeaderRaw
  * @brief Represents a raw IPv6 header.
+ * @ingroup PACKET_HEADERS
  */
 #pragma pack(push, 1)
 struct IPv6HeaderRaw

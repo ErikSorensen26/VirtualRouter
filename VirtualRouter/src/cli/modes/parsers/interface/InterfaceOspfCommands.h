@@ -1,4 +1,13 @@
-// InterfaceOspfCommands.h
+/**
+ * @file InterfaceOspfCommands.h
+ * @brief Shared OSPF interface command base used by both OSPFv2 and OSPFv3 sub-trees.
+ *
+ * Defines the common set of OSPF interface-level commands shared between the
+ * `ip ospf` (OSPFv2) and `ipv6 ospf` / `ospfv3` (OSPFv3) sub-trees in
+ * `CliMode::Interface`.  Covers BFD, interface cost, database filter, dead/hello
+ * intervals, demand circuit, flood reduction, MTU ignore, network type, DR
+ * priority, retransmit interval, and transmit delay.
+ */
 
 #ifndef INTERFACE_OSPF_COMMANDS_H
 #define INTERFACE_OSPF_COMMANDS_H
@@ -81,6 +90,14 @@ using InterfaceOspf_TransmitDelay = commandAdder<InterfaceContext,
     "transmit-delay"_tok, ARG_REST
 >;
 
+/**
+ * @brief Shared base parser for common OSPF interface commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Used as a component by both `InterfaceIPOspfCommands` (OSPFv2) and
+ * `InterfaceIPv6OspfCommands` / `InterfaceOspfv3Commands` (OSPFv3).
+ * Covers `CliMode::Interface` with `InterfaceContext`.
+ */
 using InterfaceOspfCommands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceOspf_BFD,
     InterfaceOspf_Cost,

@@ -1,4 +1,10 @@
-// RouterEigrpNamedCommands.h
+/**
+ * @file RouterEigrpNamedCommands.h
+ * @brief CLI parser for EIGRP named mode (MD5-era) commands.
+ *
+ * Defines commands for EIGRP named mode configuration,
+ * including address-family setup, timers, logging, and process-wide settings.
+ */
 
 #ifndef ROUTER_EIGRP_COMMANDS_H
 #define ROUTER_EIGRP_COMMANDS_H
@@ -38,6 +44,7 @@ using RouterEigrpNamed_AddressFamilyIPv6Vrf = commandAdder<EigrpContext,
     "address-family"_tok, "ipv6"_tok, "vrf"_tok, ARG, "autonomous-system"_tok, ARG
 >;
 
+/// @brief Handler for `exit` — leaves EIGRP named mode.
 bool RouterEigrpNamed_Exit_Handler(EIGRP_PARAMS);
 using RouterEigrpNamed_Exit = commandAdder<EigrpContext,
     RouterEigrpNamed_Exit_Handler,
@@ -45,8 +52,15 @@ using RouterEigrpNamed_Exit = commandAdder<EigrpContext,
 >;
 
 //bool RouterEigrpNamed_ServiceFamily_Handler(EIGRP_PARAMS); //TODO
-// bool RouterEigrpNamed_Shutdown_Handler(EIGRP_PARAMS); //TODO
+//bool RouterEigrpNamed_Shutdown_Handler(EIGRP_PARAMS); //TODO
 
+/**
+ * @brief Parser for EIGRP named mode (MD5-era) configuration commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates address-family entry, logging, metrics, topology access,
+ * and named-mode-specific settings.
+ */
 using RouterEigrpNamedCommands = CliModeParser<CliMode::RouterEigrpNamed, EigrpContext,
     RouterEigrpNamed_AddressFamilyIPv4,
     RouterEigrpNamed_AddressFamilyIPv4Vrf,

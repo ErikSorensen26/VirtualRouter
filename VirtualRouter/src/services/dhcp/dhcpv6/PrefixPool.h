@@ -1,3 +1,7 @@
+/**
+ * @file PrefixPool.h
+ */
+
 
 #ifndef PREFIX_POOL_H
 #define PREFIX_POOL_H

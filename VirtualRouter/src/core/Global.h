@@ -1,4 +1,12 @@
-// Global.h
+/**
+ * @file Global.h
+ * @brief Central system controller owning all global router subsystems.
+ */
+
+/**
+ * @defgroup CORE Core System
+ * @brief Core router infrastructure: lifecycle management, scheduling, RIB/FIB, and global state.
+ */
 
 #ifndef GLOBAL_H
 #define GLOBAL_H
@@ -26,12 +34,22 @@ namespace hardware { struct HwIfaceInfo; }
 namespace cli { class CliEngine; }
 namespace services::dhcp { class DhcpServer; class Dhcpv6Server; }
 
+/**
+ * @namespace core
+ * @brief Top-level namespace for all VirtualRouter core infrastructure.
+ *
+ * Contains the primary ownership and lifecycle objects: @ref Global (system
+ * controller), @ref VirtualRouter (per-VRF routing instance), @ref RoutingTable
+ * (RIB/FIB), @ref ControlScheduler (task scheduling), @ref ThreadPool, and
+ * @ref TimeManager.  Nothing in this namespace handles packets directly; it
+ * provides the scaffolding on which protocol subsystems are built.
+ */
 namespace core
 {
 
 #define DEFAULT_HOSTNAME "router"
 
-class VirtualRouter; ///< Forward declaration of VirtualRouter (per-VRF routing instance).
+class VirtualRouter;
 
 /**
  * @struct GlobalConfigs
@@ -60,6 +78,7 @@ struct GlobalConfigs
     /**
      * @struct Arp
      * @brief Configuration and neighbor tables for IPv4 ARP.
+     * @ingroup CORE
      *
      * Controls global ARP behavior and caches. Provides tunable limits for:
      * - Incomplete ARP resolution queue lengths
@@ -90,6 +109,7 @@ struct GlobalConfigs
         /**
          * @struct Neighbor
          * @brief Static IPv4 neighbor entry.
+         * @ingroup CORE
          *
          * Represents a manually configured ARP entry that overrides dynamic discovery.
          */
@@ -107,6 +127,7 @@ struct GlobalConfigs
     /**
      * @struct Ndp
      * @brief Global IPv6 Neighbor Discovery (NDP) configuration and static neighbor table.
+     * @ingroup CORE
      *
      * Controls IPv6 ND behavior including:
      * - DAD (Duplicate Address Detection)
@@ -140,6 +161,7 @@ struct GlobalConfigs
                 /**
          * @struct Neighbor
          * @brief Static IPv6 neighbor entry.
+         * @ingroup CORE
          *
          * Defines a binding of an IPv6 address to a MAC and interface, bypassing dynamic NDP.
          */
@@ -157,6 +179,7 @@ struct GlobalConfigs
 /**
  * @class Global
  * @brief Central control-plane and process-wide manager for all router subsystems.
+ * @ingroup CORE
  *
  * The Global class acts as the top-level orchestration object for the entire virtual
  * router system. It owns and manages all global services that must be accessible from
@@ -282,7 +305,7 @@ public:
 
     // GLOBAL FEATURE FLAGS
 
-        /**
+    /**
      * @brief Enable or disable IPv6 unicast routing globally.
      *
      * Equivalent to IOS command `ipv6 unicast-routing`.  
@@ -312,7 +335,7 @@ public:
 
     // INTERFACE MANAGEMENT
 
-        /**
+    /**
      * @brief Create a new logical or physical interface and assign it to the default VRF.
      *
      * Interfaces represent IO endpoints (AF_PACKET, dummy, tunnel, VLAN interfaces, etc.)
@@ -421,7 +444,7 @@ public:
 private:
     // INTERNAL STATE
 
-    Global& operator=(const Global&) = delete;  ///< Copying Global is disabled.
+    Global& operator=(const Global&) = delete;
 
     std::string hostname = DEFAULT_HOSTNAME;    ///< System hostname.
     std::shared_mutex hostnameMutex;            ///< Mutex protecting the hostname.
@@ -430,12 +453,12 @@ private:
     std::atomic<bool> aaaEnabled = false;         ///< Global AAA enable flag.
 
     // interface::Interface table
-    std::mutex interfaceMutex;
-    std::map<uint32_t, interface::Interface*> interfaceList;
+    std::mutex interfaceMutex; ///< Guards interfaceList for all CRUD operations.
+    std::map<uint32_t, interface::Interface*> interfaceList; ///< All physical/logical interfaces. Owned by Global.
 
     // Routing Instances
-    std::mutex routingInstanceMutex;
-    std::unordered_map<std::string, VirtualRouter*> routingInstances;
+    std::mutex routingInstanceMutex; ///< Guards routingInstances for all CRUD operations.
+    std::unordered_map<std::string, VirtualRouter*> routingInstances; ///< All VRF instances. Owned by Global.
     
 public:
     // PUBLIC SYSTEM COMPONENTS
@@ -443,7 +466,7 @@ public:
     bool routingEnabled = false; ///< Initial routing enable flag.
     bool testingMode = false;    ///< Testing mode flag.
 
-    config::Registry registry;
+    config::Registry registry; ///< Global configuration registry (read by CLI and protocol subsystems).
 
     GlobalConfigs configs;       ///< Global ARP/NDP/NSF/etc configuration
 

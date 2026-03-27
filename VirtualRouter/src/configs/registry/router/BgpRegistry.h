@@ -1,3 +1,18 @@
+/**
+ * @file BgpRegistry.h
+ * @brief BGP configuration registry: process, neighbor, AF, and route-map settings.
+ *
+ * Defines the configuration schema for BGP routing protocol including
+ * global parameters, address-family settings, neighbor templates, and
+ * policy objects (route maps, prefix lists, community lists).
+ */
+
+/**
+ * @defgroup CONFIG_REGISTRY_ROUTER Router Config Schemas
+ * @ingroup CONFIG_REGISTRY
+ * @brief Per-protocol configuration registry definitions: BGP, EIGRP, OSPF.
+ */
+
 // BgpRegistry.h
 
 #ifndef BGP_REGISTRY_H

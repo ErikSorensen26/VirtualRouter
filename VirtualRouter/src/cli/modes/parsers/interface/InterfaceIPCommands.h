@@ -1,4 +1,12 @@
-// InterfaceIPCommands.cpp
+/**
+ * @file InterfaceIPCommands.h
+ * @brief CLI parser for the `ip` sub-tree of Interface Configuration mode.
+ *
+ * Defines commands reachable via `ip <...>` in `CliMode::Interface`, covering
+ * IPv4 address assignment, EIGRP per-interface parameters (authentication,
+ * bandwidth, dampening, hello/hold timers, MTU, next-hop-self, split-horizon,
+ * summary-address), and the `ip ospf` sub-tree.
+ */
 
 #ifndef INTERFACE_IP_COMMANDS_H
 #define INTERFACE_IP_COMMANDS_H
@@ -69,7 +77,7 @@ using InterfaceIP_NextHopSelf = commandAdder<InterfaceContext,
 >;
 
 using InterfaceIP_Ospf = subAdder<InterfaceContext,
-    InterfaceIPOspfCommands, 
+    InterfaceIPOspfCommands,
     "ospf"_tok
 >;
 
@@ -85,6 +93,13 @@ using InterfaceIP_SummaryAddress = commandAdder<InterfaceContext,
     "summary-address"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for the `ip` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes all
+ * IPv4 address, EIGRP per-interface, and OSPF interface sub-tree commands.
+ */
 using InterfaceIPCommands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceIP_AddressSet,
     InterfaceIP_AuthenticationKeyChain,

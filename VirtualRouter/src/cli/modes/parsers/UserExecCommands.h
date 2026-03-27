@@ -1,4 +1,16 @@
-// UserExecCommands.hpp
+/**
+ * @file UserExecCommands.h
+ * @brief CLI parser for User Exec mode: basic connectivity commands.
+ *
+ * Defines commands available in User Exec mode (`>` prompt),
+ * providing limited access (enable, exit).
+ */
+
+/**
+ * @defgroup CLI_MODE_PARSERS CLI Mode Parsers
+ * @ingroup CLI_MODES
+ * @brief Top-level mode parser headers for Privileged Exec and User Exec modes.
+ */
 
 #ifndef USER_EXEC_COMMANDS_HPP
 #define USER_EXEC_COMMANDS_HPP
@@ -23,6 +35,12 @@ using UserExec_Exit = commandAdder<UserExecContext,
     "exit"_tok
 >;
 
+/**
+ * @brief Parser for User Exec mode commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Provides limited user access with enable and exit commands.
+ */
 using UserExecCommands = CliModeParser<CliMode::UserExec, UserExecContext,
     UserExec_Enable,
     UserExec_Exit

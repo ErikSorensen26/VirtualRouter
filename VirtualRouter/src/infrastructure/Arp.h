@@ -1,4 +1,7 @@
-// Arp.h
+/**
+ * @file Arp.h
+ * @brief IPv4 ARP cache and address-resolution engine.
+ */
 
 // TODO add per-entry timers
 
@@ -19,37 +22,50 @@ namespace interface { class Interface; }
 namespace processing { class PacketBuilder; }
 namespace packet { struct ArpHeader; }
 
-// Forward declarations
 class Internal_ArpTest;
+
 namespace infrastructure
 {
 
 /**
  * @class Arp
- * Handles ARP functionality, including cache management, ARP request/reply handling, and packet resolution.
+ * @brief IPv4 ARP cache and resolution engine for a single network interface.
+ *
+ * Manages the ARP cache for one interface: sends ARP requests, processes
+ * incoming replies, handles proxy-ARP entries, and queues packets that are
+ * waiting for a next-hop MAC to be resolved.
+ *
+ * The cache is protected by a shared_mutex to allow concurrent reads from the
+ * forwarding path while serialising writes on resolution events.
+ *
+ * @ingroup INFRASTRUCTURE
  */
-class Arp 
+class Arp
 {
 public:
     friend class Internal_ArpTest;
 
     /**
-     * @struct Configs.
-     * @brief holds configurations for ARP.
+     * @struct Configs
+     * @brief Runtime-tunable configuration for the ARP module.
+     * @ingroup INFRASTRUCTURE
+     *
+     * All fields are atomic and may be updated from any thread.
      */
     struct Configs
     {
-        std::atomic<bool> authorized = false;
-        std::atomic<bool> packetPriority = false; //TODO
+        std::atomic<bool> authorized = false;       ///< Whether authoritative ARP is enabled.
+        std::atomic<bool> packetPriority = false;   ///< Packet-priority flag (TODO).
 
-        std::atomic<uint8_t> probeInterval = 5;
-        std::atomic<uint8_t> probeCount = 3;
+        std::atomic<uint8_t> probeInterval = 5;     ///< Seconds between ARP retry probes.
+        std::atomic<uint8_t> probeCount = 3;        ///< Maximum number of unanswered probes before marking INCOMPLETE.
 
-        std::atomic<uint32_t> loggingThreshold; //TODO
-        std::atomic<uint32_t> timeout = 14400;
+        std::atomic<uint32_t> loggingThreshold;     ///< Log threshold for ARP events (TODO).
+        std::atomic<uint32_t> timeout = 14400;      ///< Cache entry lifetime in seconds.
     } configs;
 
     /**
+    * @ingroup INFRASTRUCTURE
     * @enum ArpCacheStatus
     * Represents different ARP cache states 
     */

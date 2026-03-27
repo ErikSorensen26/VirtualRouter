@@ -1,4 +1,13 @@
-// RouterLsaV2.hpp
+/**
+ * @file RouterLsaV2.hpp
+ * @brief OSPFv2 Router LSA (Type 1) body and per-link descriptor — RFC 2328 §A.4.2.
+ */
+
+/**
+ * @defgroup OSPF_V2_DATABASE OSPFv2 Database
+ * @ingroup OSPF_V2
+ * @brief OSPFv2 LSA type definitions: Router, Network, Summary, External, Opaque.
+ */
 
 #ifndef ROUTER_LSA_V2_HPP
 #define ROUTER_LSA_V2_HPP
@@ -14,13 +23,31 @@
 
 namespace routing::ospf
 {
+/**
+ * @brief A single link descriptor within an OSPFv2 Router LSA body.
+ * @ingroup OSPF_V2_DATABASE
+ *
+ * Encodes one adjacency or stub network, as defined in RFC 2328 §A.4.2.
+ * Link types:
+ * - 1 — Point-to-point connection to another router.
+ * - 2 — Connection to a transit network (DR exists).
+ * - 3 — Connection to a stub network.
+ * - 4 — Virtual link.
+ *
+ * TOS sub-fields are parsed but discarded (only metric[0] is kept).
+ */
 struct RouterLinkV2
 {
-    uint32_t linkId;
-    uint32_t linkData;
-    uint8_t type;
-    uint16_t metric;
+    uint32_t linkId;    ///< Link ID (neighbor RID, DR IP, or subnet address depending on type).
+    uint32_t linkData;  ///< Link data (interface IP or unnumbered interface index).
+    uint8_t type;       ///< Link type (1=P2P, 2=transit, 3=stub, 4=virtual).
+    uint16_t metric;    ///< Cost metric for this link.
 
+    /**
+     * @brief Compares two link descriptors for equality.
+     * @param rhs The other link to compare against.
+     * @return True if all fields are identical.
+     */
     bool operator==(const RouterLinkV2& rhs) const noexcept
     {
         return linkId == rhs.linkId &&
@@ -29,6 +56,11 @@ struct RouterLinkV2
                metric == rhs.metric;
     }
 
+    /**
+     * @brief Provides a total order over link descriptors for sort-based equality checks.
+     * @param rhs The other link to compare against.
+     * @return True if this link is ordered before @p rhs.
+     */
     bool operator<(const RouterLinkV2& rhs) const noexcept
     {
         return std::tie(type, linkId, linkData, metric)
@@ -36,12 +68,31 @@ struct RouterLinkV2
     }
 };
 
+/**
+ * @brief Wire-format body of an OSPFv2 Router LSA (Type 1).
+ * @ingroup OSPF_V2_DATABASE
+ *
+ * Every router in an OSPF area originates exactly one Router LSA describing
+ * all of its active links.  The body begins with a flags/count header
+ * followed by a variable number of @ref RouterLinkV2 descriptors.
+ *
+ * Body length is `4 + 12 * links.size()` bytes (TOS entries are not generated).
+ *
+ * Use @ref build to parse a received buffer, and @ref buildBody to serialise
+ * for transmission.  Equality comparison is order-independent.
+ */
 struct RouterLsaV2
 {
-    uint8_t flags;
-    std::vector<RouterLinkV2> links;
+    uint8_t flags;                   ///< Router flags (bit 0=ASBR, bit 1=ABR, bit 2=Vlink endpoint).
+    std::vector<RouterLinkV2> links; ///< Ordered list of link descriptors.
 
     // Build the LSA
+    /**
+     * @brief Parses an OSPFv2 Router LSA body from a wire buffer.
+     * @param buf Pointer to the start of the LSA body (after the 20-byte LSA header).
+     * @param len Length of @p buf in bytes; must be at least 4.
+     * @return Parsed struct on success, or @c std::nullopt if the buffer is malformed.
+     */
     static std::optional<RouterLsaV2> build(const uint8_t* buf, uint16_t len)
     {
         if (len < 4) return std::nullopt;
@@ -77,6 +128,12 @@ struct RouterLsaV2
         return lsa;
     }
 
+    /**
+     * @brief Serialises this LSA body into a wire buffer.
+     * @param buf Destination buffer; must be at least @ref size() bytes.
+     * @param len Available bytes in @p buf; must equal @ref size().
+     * @return True on success; false if @p len does not match the expected size.
+     */
     bool buildBody(uint8_t* buf, uint16_t len) const
     {
         if ((links.size() * 12) + 4 != len) return false;
@@ -98,11 +155,19 @@ struct RouterLsaV2
         return true;
     }
 
+    /**
+     * @brief Returns the serialised size of this LSA body in bytes.
+     * @return `4 + 12 * links.size()`.
+     */
     inline uint16_t size() const
     {
         return 4 + static_cast<uint16_t>(4 * links.size());
     }
 
+    /**
+     * @brief Feeds this LSA body's fields into a Fletcher checksum accumulator.
+     * @param check Checksum accumulator to update.
+     */
     void appendChecksum(ChecksumFletcher& check) const
     {
         check.add(flags);
@@ -118,6 +183,15 @@ struct RouterLsaV2
         }
     }
 
+    /**
+     * @brief Compares two Router LSAs for semantic equality.
+     *
+     * Both link lists are sorted by their natural order before comparison so
+     * that the result is independent of link insertion order.
+     *
+     * @param rhs The other Router LSA to compare against.
+     * @return True if both LSAs have the same flags and identical link sets.
+     */
     bool operator==(const RouterLsaV2& rhs) const
     {
         if (flags != rhs.flags || links.size() != rhs.links.size())
@@ -138,7 +212,6 @@ struct RouterLsaV2
         return true;
     }
 };
-} // namespace routing
+} // namespace routing::ospf
 
 #endif // ROUTER_LSA_V2_HPP
-

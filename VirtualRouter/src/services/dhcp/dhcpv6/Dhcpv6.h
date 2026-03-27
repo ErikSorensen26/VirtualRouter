@@ -1,3 +1,14 @@
+/**
+ * @file Dhcpv6.h
+ * @brief DHCPv6 process object.
+ */
+
+/**
+ * @defgroup SERVICES_DHCP_V6 DHCPv6
+ * @ingroup SERVICES_DHCP
+ * @brief DHCPv6 server, relay, client, auth manager, lease manager, and pool.
+ */
+
 // Dhcpv6.h
 
 #ifndef DHCPV6_H

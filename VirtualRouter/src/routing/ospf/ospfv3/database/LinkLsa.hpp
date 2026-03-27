@@ -1,29 +1,72 @@
-// LinkLsa.hpp
+/**
+ * @file LinkLsa.hpp
+ * @brief OSPFv3 Link LSA format and flooding.
+ */
 
 #ifndef LINK_LSA_HPP
 #define LINK_LSA_HPP
 
 #include <IPAddress.h>
 #include <optional>
+#include <ByteUtils.hpp>
 
 #include "ospf/transmission/OspfFletcher.hpp"
-#include "packet/HeaderHelpers.hpp"
 
 namespace routing::ospf
 {
+
+/**
+ * @brief One IPv6 prefix entry inside a Link-LSA.
+ * @ingroup OSPF_V3_DATABASE
+ *
+ * Represents a single prefix advertised on the link by the originating
+ * router. Used by neighbors to derive on-link addressing information.
+ *
+ * Contains:
+ * - Prefix options (OSPFv3 flags)
+ * - Variable-length IPv6 prefix
+ *
+ * Created during parsing and serialized as part of LinkLsa.
+ */
 struct LinkLsaPrefix
 {
-    uint8_t options;
-    types::IPv6Prefix prefix;
+    uint8_t options;           ///< OSPFv3 prefix flags.
+    types::IPv6Prefix prefix;  ///< IPv6 prefix with explicit length.
 };
 
+/**
+ * @brief OSPFv3 Link-LSA body.
+ * @ingroup OSPF_V3_DATABASE
+ *
+ * Encodes per-link information originated by a router:
+ * - Link-local IPv6 address
+ * - Interface priority (DR election)
+ * - Advertised prefixes
+ *
+ * Acts as the boundary between raw packet buffers and internal state.
+ * Does not manage flooding, aging, or LSDB insertion.
+ *
+ * Parsing and serialization must strictly follow wire format ordering.
+ */
 struct LinkLsa
 {
-    uint8_t priority;
-    uint32_t options;
-    types::IPv6Address localLink;
-    std::vector<LinkLsaPrefix> prefixes;
+    uint8_t priority;                     ///< DR election priority.
+    uint32_t options;                     ///< 24-bit OSPFv3 options.
+    types::IPv6Address localLink;         ///< Link-local IPv6 address.
+    std::vector<LinkLsaPrefix> prefixes;  ///< Advertised prefixes.
 
+    /**
+     * @brief Parse a Link-LSA body from a buffer.
+     *
+     * Validates minimum size and walks the prefix list with strict
+     * bounds checking. Prefix length is in bits and converted to bytes.
+     *
+     * @param buf Input buffer.
+     * @param len Buffer length.
+     * @return Parsed LSA or nullopt on failure.
+     *
+     * @warning Any boundary violation aborts parsing.
+     */
     static std::optional<LinkLsa> build(const uint8_t* buf, uint16_t len)
     {
         if (len < 21) return std::nullopt;
@@ -52,6 +95,18 @@ struct LinkLsa
         return lsa;
     }
 
+    /**
+     * @brief Serialize the Link-LSA body into a buffer.
+     *
+     * Writes fixed fields followed by prefix entries. Caller must provide
+     * sufficient space (see size()).
+     *
+     * @param[out] buf Output buffer.
+     * @param len Buffer size.
+     * @return True on success, false if buffer too small.
+     *
+     * @warning No rollback on failure; buffer contents undefined.
+     */
     bool buildBody(uint8_t* buf, uint16_t len) const
     {
         if (len < 20) return false;
@@ -76,6 +131,14 @@ struct LinkLsa
         return true;
     }
 
+    /**
+     * @brief Compute serialized size of the LSA body.
+     *
+     * Includes fixed header and all prefix entries using
+     * ceil(prefixLen / 8) byte sizing.
+     *
+     * @return Total size in bytes.
+     */
     inline uint16_t size() const
     {
         uint16_t len = 20;
@@ -86,6 +149,13 @@ struct LinkLsa
         return len;
     }
 
+    /**
+     * @brief Append fields to Fletcher checksum.
+     *
+     * Fields are added in wire order to match serialization.
+     *
+     * @param[in,out] check Checksum accumulator.
+     */
     void appendChecksum(ChecksumFletcher& check) const
     {
         check.add(priority);
@@ -100,7 +170,7 @@ struct LinkLsa
         }
     }
 };
-} // namespace routing
+
+} // namespace routing::ospf
 
 #endif // LINK_LSA_HPP
-

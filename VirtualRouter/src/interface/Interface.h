@@ -1,4 +1,16 @@
-// Interface.h
+/**
+ * @file Interface.h
+ * @brief Network interface: L2/L3 configuration, neighbor discovery, packet I/O.
+ *
+ * Represents a fully functional network interface with ARP/NDP, IP configuration,
+ * DHCP client support, and packet ingress/egress pipelines. Interfaces belong to
+ * a VRF and integrate hardware, routing protocols, and neighbor discovery.
+ */
+
+/**
+ * @defgroup INTERFACE Network Interface
+ * @brief Per-VRF network interface objects: L2/L3 config, ARP/NDP, and packet I/O pipelines.
+ */
 
 #ifndef INTERFACE_H
 #define INTERFACE_H
@@ -20,8 +32,8 @@ namespace routing::eigrp { struct EigrpInterfaceInstance; }
 namespace routing::ospf { struct OspfInterfaceInstance; struct InterfaceConfigs; }
 namespace services::dhcp { class DhcpClient; class Dhcpv6Client; }
 
-class EigrpTest; ///< Forward declaration of EigrpTest.
-class MockInterface; ///< Forward declaration of MockInterface.
+class EigrpTest;
+class MockInterface;
 
 namespace interface
 {
@@ -54,6 +66,7 @@ struct InterfaceCreation
 /**
  * @class Interface
  * @brief Represents a fully functional L2/L3 interface within a core::VirtualRouter (VRF).
+ * @ingroup INTERFACE
  *
  * The Interface class integrates:
  * - Hardware bring-up/bring-down (via qos::TxQueueManager, RxQueueManager, and HwManager)

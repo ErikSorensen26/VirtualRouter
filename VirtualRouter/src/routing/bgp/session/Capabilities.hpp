@@ -1,201 +1,235 @@
-// Capabilities.hpp
+/**
+ * @file Capabilities.hpp
+ * @brief BGP session capabilities: multiprotocol, graceful restart, add-path, etc.
+ *
+ * Defines the Capabilities and NegotiatedCapabilities structures which model
+ * the optional features a BGP session can advertise and negotiate. These
+ * include multiprotocol support, route refresh, 4-byte ASN, graceful restart,
+ * long-lived graceful restart (LLGR), add-path, outbound route filtering (ORF),
+ * extended next-hop encoding, labeling, BGPsec, and FQDN.
+ *
+ * Helper functions provide efficient querying of capabilities per AFI/SAFI.
+ */
 
 #ifndef BGP_CAPABILITIES_HPP
 #define BGP_CAPABILITIES_HPP
 
 #include <string>
 #include <unordered_set>
-#include <algorithm>
 
 #include "bgp/BgpTypes.hpp"
 
 namespace routing::bgp
 {
-// Negotiated capability set
+
+/**
+ * @brief Represents the capabilities advertised by a BGP peer.
+ *
+ * Populated during BGP OPEN message processing. Indicates which optional
+ * features the remote or local peer supports.
+ *
+ * ## Lifecycle
+ * Constructed during session negotiation and used to determine enabled
+ * features during the session.
+ *
+ * ## Invariants
+ * - AFI/SAFI lists contain no duplicates.
+ * - Boolean flags reflect support for specific protocol features.
+ */
 struct Capabilities
 {
-    // Multiprotocol extensions
-    std::vector<AfiSafi> mpFamilies;
+    std::vector<AfiSafi> mpFamilies; ///< Multiprotocol families supported by the peer.
 
-    // Route refresh
-    bool routeRefresh = false;
-    bool enhancedRouteRefresh = false;
+    bool routeRefresh = false;          ///< Indicates standard route refresh support.
+    bool enhancedRouteRefresh = false;  ///< Indicates enhanced route refresh support.
+    bool asn32bit = false;              ///< Indicates 4-byte ASN support.
+    uint32_t asn = 0;                   ///< Local ASN value used for 4-byte ASNs.
 
-    // 4-byte ASN
-    bool asn32bit = false;
-    uint32_t asn;
+    bool extendedMessage = false;       ///< Indicates extended message size capability.
 
-    // Extended message size
-    bool extendedMessage = false;
-
-    // Graceful restart
+    // Graceful restart support
     struct GracefulRestartFamily
     {
-        AfiSafi family;
-        bool forwardingStatePreserved;
+        AfiSafi family;                 ///< Address family the restart applies to.
+        bool forwardingStatePreserved;  ///< True if forwarding state is preserved.
     };
+    bool gracefulRestart = false;       ///< Indicates GR support.
+    bool restarting = false;            ///< True if session is currently restarting.
+    uint16_t restartTime = 0;           ///< Graceful restart timer in seconds.
+    std::vector<GracefulRestartFamily> gracefulFamilies; ///< Per-family GR info.
 
-    bool gracefulRestart = false;
-    bool restarting = false;
-    uint16_t restartTime = 0;
-    std::vector<GracefulRestartFamily> gracefulFamilies;
-
-    // Long-lived graceful restart
+    // Long-lived graceful restart (LLGR)
     struct LlgrFamily
     {
-        AfiSafi family;
-        uint32_t staleTime;
-        uint8_t flags;
+        AfiSafi family; ///< Address family.
+        uint32_t staleTime; ///< Time in seconds routes remain stale.
+        uint8_t flags;      ///< Flags associated with LLGR.
     };
+    bool llgr = false;                 ///< Indicates LLGR support.
+    std::vector<LlgrFamily> llgrFamilies; ///< Per-family LLGR info.
 
-    bool llgr = false;
-    std::vector<LlgrFamily> llgrFamilies;
+    // Multipath sessions
+    bool multiSess = false;                  ///< Supports multiple sessions.
+    std::vector<AfiSafi> multiSessionFamilies; ///< AFI/SAFI families for multi-session.
 
-    bool multiSess = false;
-    std::vector<AfiSafi> multiSessionFamilies;
-
-    // ADD-PATH
+    // Add-path
     struct AddPathFamily
     {
-        AfiSafi family;
-        uint8_t sendReceive;
+        AfiSafi family;        ///< Address family.
+        uint8_t sendReceive;   ///< Bitmask: send/receive directions.
     };
+    bool addPath = false;                  ///< Indicates add-path support.
+    std::vector<AddPathFamily> addPathFamilies; ///< Per-family add-path info.
 
-    bool addPath = false;
-    std::vector<AddPathFamily> addPathFamilies;
-
-    // Outbound route filtering
+    // Outbound route filtering (ORF)
     struct OrfEntry
     {
-        AfiSafi family;
-        uint8_t orfType;
-        uint8_t sendReceive;
+        AfiSafi family;       ///< Address family.
+        uint8_t orfType;      ///< Type of ORF message.
+        uint8_t sendReceive;  ///< Bitmask: send/receive directions.
     };
-
-    bool outboundRouteFiltering = false;
-    std::vector<OrfEntry> orfEntries;
+    bool outboundRouteFiltering = false; ///< Indicates ORF support.
+    std::vector<OrfEntry> orfEntries;   ///< Per-family ORF information.
 
     // Extended next-hop encoding
     struct ExtendedNextHop
     {
-        AfiSafi family;
-        uint16_t nextHopAfi;
+        AfiSafi family;      ///< Address family.
+        uint16_t nextHopAfi; ///< AFI for next-hop encoding.
     };
-
-    bool extendedNextHop = false;
-    std::vector<ExtendedNextHop> extendedNextHopEntries;
+    bool extendedNextHop = false;                    ///< Indicates extended next-hop support.
+    std::vector<ExtendedNextHop> extendedNextHopEntries; ///< Per-family extended next-hop info.
 
     // Multiple labels
-    bool multipleLabels = false;
-    std::vector<AfiSafi> labeledFamilies;
+    bool multipleLabels = false; ///< Indicates support for multiple MPLS labels.
+    std::vector<AfiSafi> labeledFamilies; ///< Families with multiple label support.
 
     // Route-target constraints
-    bool routeTargetConstraint = false;
-    std::vector<AfiSafi> RtConstraintFamily;
+    bool routeTargetConstraint = false; ///< Indicates RT constraint support.
+    std::vector<AfiSafi> RtConstraintFamily; ///< AFI/SAFI families for RT constraints.
 
     // BGPsec
-    bool bgpsec = false;
-    std::vector<AfiSafi> bgpsecFamilies;
+    bool bgpsec = false; ///< Indicates BGPsec support.
+    std::vector<AfiSafi> bgpsecFamilies; ///< Per-family BGPsec support.
 
-    // FQDN
-    bool fqdn = false;
-    std::string hostname;
-    std::string domain;
+    // Fully qualified domain name (FQDN)
+    bool fqdn = false; ///< Indicates FQDN support.
+    std::string hostname; ///< Local hostname advertised.
+    std::string domain;   ///< Local domain name advertised.
 
-    // Link-local next hop (RFC 8950)
-    bool linkLocalNextHop = false;
+    // Link-local next hop
+    bool linkLocalNextHop = false; ///< RFC 8950 support for link-local next-hop.
 
-    // Helpers
-    bool supportsFamily(const AfiSafi& fam) const noexcept
-    {
-        for (const auto& f : mpFamilies)
-            if (f == fam) return true;
-        return false;
-    }
+    // HELPER FUNCTIONS
 
-    bool addPathSend(const AfiSafi& fam) const noexcept
-    {
-        for (const auto& ap : addPathFamilies)
-            if (ap.family == fam) return (ap.sendReceive & BGP_ADD_PATH_SEND) != 0;
-        return false;
-    }
+    /**
+     * @brief Checks if a given AFI/SAFI is supported by the peer.
+     * @ingroup BGP_SESSION
+     *
+     * @param fam Address family to check.
+     * @return True if the peer supports this AFI/SAFI.
+     */
+    bool supportsFamily(const AfiSafi& fam) const noexcept;
 
-    bool addPathReceive(const AfiSafi& fam) const noexcept
-    {
-        for (const auto& ap : addPathFamilies)
-            if (ap.family == fam) return (ap.sendReceive & BGP_ADD_PATH_RECEIVE) != 0;
-        return false;
-    }
+    /**
+     * @brief Checks if add-path sending is enabled for a given AFI/SAFI.
+     *
+     * @param fam Address family to check.
+     * @return True if send capability is enabled.
+     */
+    bool addPathSend(const AfiSafi& fam) const noexcept;
+
+    /**
+     * @brief Checks if add-path receiving is enabled for a given AFI/SAFI.
+     *
+     * @param fam Address family to check.
+     * @return True if receive capability is enabled.
+     */
+    bool addPathReceive(const AfiSafi& fam) const noexcept;
 };
 
-// Negotiated session result
+/**
+ * @brief Represents the actual negotiated capabilities for a BGP session.
+ *
+ * Populated after OPEN message exchange and negotiation. Indicates which
+ * features are enabled for the session and includes per-family data for
+ * add-path, graceful restart, LLGR, and ORF.
+ *
+ * ## Lifecycle
+ * Used by session FSM, route advertisement, and timers to determine behavior.
+ */
 struct NegotiatedCapabilities
 {
-    bool asn32bit = false;
-    bool routeRefresh = false;
-    bool enhancedRR = false;
-    bool gracefulRestart = false;
-    bool llgr = false;
-    bool extendedMessage = false;
-    bool addpath = false;
-    bool multiSess = false;
-    bool linkLocalNextHop = false;
-    bool orf = false;
-    std::vector<Capabilities::AddPathFamily> addPathFamilies;
-    std::vector<Capabilities::GracefulRestartFamily> grFamilies;
-    std::vector<Capabilities::LlgrFamily> llgrFamilies;
-    std::vector<Capabilities::OrfEntry> orfEntries;
-    std::unordered_set<AfiSafi> activeFamilies;
-    std::unordered_set<AfiSafi> multiSessionFamilies;
+    bool asn32bit = false;              ///< 4-byte ASN support.
+    bool routeRefresh = false;          ///< Standard route refresh support.
+    bool enhancedRR = false;            ///< Enhanced route refresh support.
+    bool gracefulRestart = false;       ///< Graceful restart support.
+    bool llgr = false;                  ///< LLGR support.
+    bool extendedMessage = false;       ///< Extended message size support.
+    bool addpath = false;               ///< Add-path support.
+    bool multiSess = false;             ///< Multi-session support.
+    bool linkLocalNextHop = false;      ///< Link-local next-hop support.
+    bool orf = false;                   ///< ORF support.
 
-    bool addPathSend(const AfiSafi& fam) const noexcept
-    {
-        for (const auto& ap : addPathFamilies)
-            if (ap.family == fam) return (ap.sendReceive & BGP_ADD_PATH_SEND) != 0;
-        return false;
-    }
+    std::vector<Capabilities::AddPathFamily> addPathFamilies; ///< Negotiated add-path.
+    std::vector<Capabilities::GracefulRestartFamily> grFamilies; ///< Negotiated GR.
+    std::vector<Capabilities::LlgrFamily> llgrFamilies;       ///< Negotiated LLGR.
+    std::vector<Capabilities::OrfEntry> orfEntries;           ///< Negotiated ORF.
 
-    Capabilities::AddPathFamily* findAddPath(AfiSafi afi)
-    {
-        auto it = std::find_if(addPathFamilies.begin(), addPathFamilies.end(),
-            [&](const Capabilities::AddPathFamily& p) { return p.family == afi; });
-        return it == addPathFamilies.end()
-            ? nullptr : &*it;
-    }
+    std::unordered_set<AfiSafi> activeFamilies;              ///< AFI/SAFI currently active.
+    std::unordered_set<AfiSafi> multiSessionFamilies;        ///< Multi-session families.
 
-    Capabilities::GracefulRestartFamily* findGracefulRestart(AfiSafi afi)
-    {
-        auto it = std::find_if(grFamilies.begin(), grFamilies.end(),
-            [&](const Capabilities::GracefulRestartFamily& p) { return p.family == afi; });
-        return it == grFamilies.end()
-            ? nullptr : &*it;
-    }
+    /**
+     * @brief Returns true if add-path send is enabled for a given AFI/SAFI.
+     *
+     * @param fam Address family to query.
+     * @return True if sending add-path is negotiated.
+     */
+    bool addPathSend(const AfiSafi& fam) const noexcept;
 
-    Capabilities::LlgrFamily* findLlgr(AfiSafi afi)
-    {
-        auto it = std::find_if(llgrFamilies.begin(), llgrFamilies.end(),
-            [&](const Capabilities::LlgrFamily& p) { return p.family == afi; });
-        return it == llgrFamilies.end()
-            ? nullptr : &*it;
-    }
+    /**
+     * @brief Finds the negotiated AddPath entry for a given AFI/SAFI.
+     *
+     * @param afi AFI/SAFI to query.
+     * @return Pointer to AddPathFamily if present; nullptr otherwise.
+     */
+    Capabilities::AddPathFamily* findAddPath(AfiSafi afi);
 
-    bool canReceiveOrf(const AfiSafi& fam, uint8_t orfType) const noexcept
-    {
-        for (const auto& e : orfEntries)
-            if (e.family == fam && e.orfType == orfType)
-                return (e.sendReceive & BGP_ORF_RECEIVE) != 0;
-        return false;
-    }
+    /**
+     * @brief Finds the negotiated Graceful Restart entry for a given AFI/SAFI.
+     *
+     * @param afi AFI/SAFI to query.
+     * @return Pointer to GracefulRestartFamily if present; nullptr otherwise.
+     */
+    Capabilities::GracefulRestartFamily* findGracefulRestart(AfiSafi afi);
 
-    bool canSendOrf(const AfiSafi& fam, uint8_t orfType) const noexcept
-    {
-        for (const auto& e : orfEntries)
-            if (e.family == fam && e.orfType == orfType)
-                return (e.sendReceive & BGP_ORF_SEND) != 0;
-        return false;
-    }
+    /**
+     * @brief Finds the negotiated LLGR entry for a given AFI/SAFI.
+     *
+     * @param afi AFI/SAFI to query.
+     * @return Pointer to LlgrFamily if present; nullptr otherwise.
+     */
+    Capabilities::LlgrFamily* findLlgr(AfiSafi afi);
+
+    /**
+     * @brief Determines if ORF receive is enabled for a given AFI/SAFI and ORF type.
+     *
+     * @param fam Address family to query.
+     * @param orfType ORF type to check.
+     * @return True if receive is allowed for this ORF type.
+     */
+    bool canReceiveOrf(const AfiSafi& fam, uint8_t orfType) const noexcept;
+
+    /**
+     * @brief Determines if ORF send is enabled for a given AFI/SAFI and ORF type.
+     *
+     * @param fam Address family to query.
+     * @param orfType ORF type to check.
+     * @return True if send is allowed for this ORF type.
+     */
+    bool canSendOrf(const AfiSafi& fam, uint8_t orfType) const noexcept;
 };
-} // namespace routing
+
+} // namespace routing::bgp
 
 #endif // BGP_CAPABILITIES_HPP
-

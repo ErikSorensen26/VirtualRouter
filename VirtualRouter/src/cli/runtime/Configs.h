@@ -1,3 +1,11 @@
+/**
+ * @file Configs.h
+ * @brief CLI configuration management: file paths, startup, and schema loading.
+ *
+ * Manages CLI configuration state including command tree loading, configuration
+ * schema validation, startup file paths, and persistent configuration I/O.
+ */
+
 #ifndef CONFIGS_H
 #define CONFIGS_H
 
@@ -59,6 +67,7 @@ struct StartupFiles
 
 /**
  * @brief Metadata describing a CLI command, including semantic properties and support levels.
+ * @ingroup CLI_RUNTIME
  *
  * Represents an element in a router’s command taxonomy. Command definitions may be generated
  * from schema files or static tables and serve as a basis for help systems, auto-completion,
@@ -77,6 +86,7 @@ struct Com
 
     /**
      * @brief Enumerates supported levels of functionality for a given command.
+     * @ingroup CLI_RUNTIME
      *
      * Used by platform-capability systems to mark incomplete or partially-implemented commands.
      */
@@ -117,6 +127,7 @@ public:
 
     /**
      * @brief Returns stringified numeric value.
+     * @ingroup CLI_RUNTIME
      */
     std::string getValue() { return std::to_string(value); }
 
@@ -220,6 +231,7 @@ public:
 
 /**
  * @brief Core subsystem responsible for building, validating, ordering, saving,
+ * @ingroup CLI_RUNTIME
  * and recovering the router’s hierarchical configuration tree.
  *
  * The Configs class is the authoritative owner of the router configuration model.

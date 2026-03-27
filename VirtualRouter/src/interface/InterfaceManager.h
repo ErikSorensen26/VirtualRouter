@@ -1,3 +1,7 @@
+/**
+ * @file InterfaceManager.h
+ */
+
 // InterfaceManager.h
 
 // TODO: fix race condition
@@ -23,7 +27,7 @@ class Interface;
  *
  * Deletion is treated as DOWN — the interface fires DOWN before being removed.
  */
-enum class InterfaceType : uint8_t; ///< Forward declaration of InterfaceType.
+enum class InterfaceType : uint8_t;
 
 /**
  * @enum StateChange

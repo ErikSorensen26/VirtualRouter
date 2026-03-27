@@ -1,3 +1,13 @@
+/**
+ * @file CommandProcessor.h
+ */
+
+/**
+ * @defgroup CLI_COMMANDS_OLD CLI Commands (Legacy)
+ * @ingroup CLI
+ * @brief Retired command processor kept for historical reference.
+ */
+
 /*
 #ifndef COMMAND_PROCESSOR_H
 #define COMMAND_PROCESSOR_H

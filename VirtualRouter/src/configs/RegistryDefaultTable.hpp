@@ -1,3 +1,7 @@
+/**
+ * @file RegistryDefaultTable.hpp
+ */
+
 // RegistryDefaultTable.hpp
 
 #ifndef REGISTRY_DEFAULT_TABLE_HPP

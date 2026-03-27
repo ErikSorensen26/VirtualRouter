@@ -1,3 +1,7 @@
+/**
+ * @file Dhcpv6Server.h
+ */
+
 // Dhcpv6Server.h
 
 #ifndef DHCPV6_SERVER_H
@@ -243,6 +247,7 @@ struct CachedDhcpNetwork
 
 /**
  * @brief Represents a IA_NA identifier block
+ * @ingroup SERVICES_DHCP_V6
  */
 struct IANABlock
 {
@@ -260,6 +265,7 @@ struct IANABlock
 
 /**
  * @brief Represents a IA_TA identifier block
+ * @ingroup SERVICES_DHCP_V6
  */
 struct IATABlock
 {
@@ -275,6 +281,7 @@ struct IATABlock
 
 /**
  * @brief Represents a IA_PD identifier block
+ * @ingroup SERVICES_DHCP_V6
  */
 struct IAPDBlock 
 {
@@ -334,6 +341,7 @@ struct Dhcpv6SendType
 };
 
 /**
+ * @ingroup SERVICES_DHCP_V6
  * @enum ReconfigReason
  *
  * This holds resonds for the reconfiguration.
@@ -372,6 +380,7 @@ struct RelayLink
 
 /**
 * @brief Represents a DHCPv6 server.
+* @ingroup SERVICES_DHCP_V6
 *
 * Handles DHCPv6 message processing (SOLICIT, REQUEST, RELEASE, DECLINE),
 * IPv6 address allocation, and lease management.

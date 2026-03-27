@@ -1,4 +1,28 @@
-// SubRegistry.hpp
+/**
+ * @file SubRegistry.hpp
+ * @brief Hierarchical configuration registry: field storage, inheritance, and masking.
+ *
+ * Implements a template-based configuration container that manages typed fields
+ * organized by an enum index. Supports inheritance hierarchy with field masking
+ * (child registries inherit parent values by default). Uses compile-time type
+ * checking and optional field values for flexible configuration schemas.
+ *
+ * ## Features
+ * - **Field storage**: Type-safe tuple-based storage for heterogeneous fields
+ * - **Inheritance**: Child SubRegistry instances inherit parent field values
+ * - **Masking**: Child fields can override parent defaults via optional wrapper
+ * - **Context support**: Optional ContextProvider for fields requiring external data
+ * - **Thread-safe**: Mutex-guarded access for concurrent configuration updates
+ *
+ * ## Usage
+ * ```cpp
+ * enum class MyConfig { TIMEOUT, RETRIES, COUNT };
+ * using MyRegistry = SubRegistry<MyConfig,
+ *     AtomicField<uint16_t CONFIG_INDEX_ARG(MyConfig::TIMEOUT)>,
+ *     AtomicField<uint8_t CONFIG_INDEX_ARG(MyConfig::RETRIES)>
+ * >;
+ * ```
+ */
 
 #ifndef SUB_REGISTRY_HPP
 #define SUB_REGISTRY_HPP
@@ -14,9 +38,43 @@
 
 namespace config
 {
+/**
+ * @brief Convert enum value to zero-based index for array/tuple access.
+ *
+ * @tparam E Enum constant
+ * @return Constexpr size_t equal to static_cast<size_t>(E)
+ */
 template <auto E>
 inline constexpr size_t toIndex = static_cast<size_t>(E);
 
+/**
+ * @class SubRegistry
+ * @brief Hierarchical configuration registry with field masking and inheritance.
+ *
+ * Template-based registry that stores typed configuration fields indexed by an enum.
+ * Supports parent-child relationships where children inherit parent field values
+ * via masking. All fields are stored in a tuple and accessed by enum constant.
+ *
+ * ## Architecture
+ * - **Field tuple**: Each enum value corresponds to one field in the tuple
+ * - **Inheritance**: Child registries can inherit from parent, with fields masked
+ * - **Optional storage**: Fields are stored in `optional<Field>` for lazy initialization
+ * - **Thread-safe**: Mutex protects concurrent field access/modification
+ *
+ * ## Type requirements
+ * - `ENUM`: Enum class with `COUNT` as last value (field count)
+ * - `Fields...`: Variadic field types (AtomicField, OptionalAtomicField, etc.)
+ *
+ * ## Compile-time checks
+ * - Number of Fields must equal ENUM::COUNT
+ * - Field indices must match their tuple positions
+ * - Each AtomicField must have a default value in RegistryDefaultTable
+ *
+ * @tparam ENUM Enum type for field indexing
+ * @tparam Fields Tuple of field types (one per enum value)
+ *
+ * @see RegistryTypes.hpp, RegistryDefaultTable.hpp
+ */
 template <typename ENUM, typename... Fields>
 class SubRegistry
 {
@@ -24,7 +82,10 @@ public:
     using type    = ENUM;
 
     // Meta tuple: used ONLY for compile-time checks / type indexing.
-    using FieldTuple = std::tuple<Fields...>; // Storage tuple: holds non-movable fields without ever moving/copying them.
+    /// Type alias for the field tuple (for type checking only, not storage).
+    using FieldTuple = std::tuple<Fields...>;
+    
+    /// Type alias for storage: optional wrapper around each field (allows lazy init).
     using StorageTuple = std::tuple<std::optional<Fields>...>;
 
     static_assert(sizeof...(Fields) == config::toIndex<ENUM::COUNT>);
@@ -43,8 +104,19 @@ public:
     );
 #endif
 
+    /**
+     * @brief Gets the context provider for fields that require external data.
+     *
+     * @return Reference to the context provider shared with parent (if masked).
+     */
     ContextProvider& context() noexcept { return ctxProvider; }
 
+    /**
+     * @brief Constructs a root registry with no parent.
+     *
+     * Initializes all fields with default values from RegistryDefaultTable.
+     * No parent masking is applied.
+     */
     explicit SubRegistry() noexcept
         : ctxProvider(),
           fields(),
@@ -54,6 +126,14 @@ public:
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
+    /**
+     * @brief Constructs a child registry that inherits from a parent.
+     *
+     * All fields are initialized and then masked with parent field values.
+     * Child can override parent values on a per-field basis.
+     *
+     * @param parent Reference to parent SubRegistry of the same type.
+     */
     SubRegistry(SubRegistry& parent)
         : ctxProvider(parent.ctxProvider),
           fields(),
@@ -64,6 +144,12 @@ public:
         applyMask(base, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
+    /**
+     * @brief Gets a field by enum constant (mutable).
+     *
+     * @tparam F Enum constant identifying the field
+     * @return Reference to the field value
+     */
     template <ENUM F>
     decltype(auto) get() noexcept
     {
@@ -71,6 +157,12 @@ public:
         return (*std::get<I>(fields));
     }
 
+    /**
+     * @brief Gets a field by enum constant (const).
+     *
+     * @tparam F Enum constant identifying the field
+     * @return Const reference to the field value
+     */
     template <ENUM F>
     decltype(auto) get() const noexcept
     {
@@ -78,20 +170,34 @@ public:
         return (*std::get<I>(fields));
     }
 
+    /**
+     * @brief Checks whether this registry is masked by a parent.
+     *
+     * @return True if this registry has a parent and inherits its values.
+     */
     bool isMasked() const noexcept
     {
         return base != nullptr;
     }
 
+    /**
+     * @brief Applies masking by a new parent (resets field inheritance).
+     *
+     * Used after construction to change or establish parent relationship.
+     * All maskable fields are reset to inherit from the new parent.
+     *
+     * @param parent Pointer to parent SubRegistry (or nullptr to remove masking).
+     */
     void setMask(SubRegistry* parent)
     {
         applyMask(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
-    std::mutex mu;
+    std::mutex mu; ///< Synchronization mutex for concurrent field access.
 
 private:
 
+    /// Creates constructor arguments for a field (context/mutex/parent as needed).
     template <typename F>
     auto createField()
     {
@@ -108,6 +214,7 @@ private:
             return std::tuple<>{};
     }
 
+    /// Creates constructor arguments for a masked field (includes parent field).
     template <typename F>
     auto createMaskedField(const F& parentField)
     {
@@ -124,12 +231,14 @@ private:
             return std::forward_as_tuple(parentField);
     }
 
+    /// Constructs all fields (fold expression over index_sequence).
     template <size_t... I>
     void constructFields(std::index_sequence<I...>) noexcept
     {
         (constructOne<I, std::tuple_element_t<I, FieldTuple>>(), ...);
     }
 
+    /// Constructs one field at index I and emplaces it in its optional.
     template <size_t I, typename F>
     void constructOne() noexcept
     {
@@ -143,12 +252,14 @@ private:
         );
     }
 
+    /// Installs default values from RegistryDefaultTable for all AtomicFields.
     template <size_t... I>
     void installDefaults(std::index_sequence<I...>) noexcept
     {
         (installDefaultOne<I>(), ...);
     }
 
+    /// Installs default for one field if it's an AtomicField.
     template <size_t I>
     void installDefaultOne() noexcept
     {
@@ -167,12 +278,14 @@ private:
         }
     }
 
+    /// Applies masking to all fields from a parent registry.
     template <size_t... I>
     void applyMask(SubRegistry* parent, std::index_sequence<I...>) noexcept
     {
         (applyMaskOne<I>(parent), ...);
     }
 
+    /// Applies masking to one field if it supports the setMask() interface.
     template <size_t I>
     void applyMaskOne(SubRegistry* parent) noexcept
     {
@@ -189,8 +302,13 @@ private:
         }
     }
 
+    /// Context provider for fields requiring external data.
     ContextProvider ctxProvider;
+    
+    /// Optional storage for all fields (allows lazy initialization).
     StorageTuple fields;
+    
+    /// Pointer to parent registry for field inheritance (nullptr if root).
     SubRegistry* base{nullptr};
 };
 }

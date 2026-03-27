@@ -1,3 +1,13 @@
+/**
+ * @file Process.h
+ * @brief Packet processing pipeline entry point.
+ */
+
+/**
+ * @defgroup PROCESSING Processing
+ * @brief Packet processing pipeline: encapsulation, decapsulation, and packet builder.
+ */
+
 // Process.h
 
 #ifndef PROCESS_H

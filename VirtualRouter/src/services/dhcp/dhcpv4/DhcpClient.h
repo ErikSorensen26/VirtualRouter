@@ -1,3 +1,7 @@
+/**
+ * @file DhcpClient.h
+ */
+
 // DhcpClient.h
 
 #ifndef DHCP_CLIENT_H

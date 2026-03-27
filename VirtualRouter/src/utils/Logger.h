@@ -1,4 +1,12 @@
-// Logger.h
+/**
+ * @file Logger.h
+ * @brief Logging infrastructure with levels and output control.
+ */
+
+/**
+ * @defgroup UTILS Utilities
+ * @brief Cross-cutting utilities: logging, byte manipulation, timing, RCU, and event dispatch.
+ */
 
 #ifndef LOGGER_H
 #define LOGGER_H
@@ -15,11 +23,19 @@
 namespace utils
 {
 
+/**
+ * @brief Logging infrastructure: severity levels, output control, formatting.
+ * @ingroup UTILS
+ *
+ * Centralized logging with configurable severity (DEBUG, INFO, WARNING, ERROR, CRITICAL),
+ * multiple output destinations (syslog, file, console), and rate limiting.
+ */
 class LogStream;
 
 /**
  * @enum LogLevel
  * @brief Enumerates the various levels of logging severity.
+ * @ingroup UTILS
  */
 enum class LogLevel 
 {
@@ -49,6 +65,7 @@ public:
 /**
  * @class Logger
  * @brief Singleton class responsible for logging messages to a remote Log Server.
+ * @ingroup UTILS
  *
  * The Logger class provides thread-safe logging capabilities with different severity levels.
  * It supports asynchronous message sending using a dedicated sender thread and handles
@@ -60,6 +77,7 @@ public:
 
     /**
      * @brief Retrieves the singleton instance of the Logger.
+     * @ingroup UTILS
      *
      * @return Logger& Reference to the Logger instance.
      */

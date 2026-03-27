@@ -1,3 +1,12 @@
+/**
+ * @file OspfRegistry.h
+ * @brief OSPF configuration registry: process, area, and global settings.
+ *
+ * Defines the configuration schema for OSPF including process parameters,
+ * area configuration (types, authentication), router timers, default routes,
+ * and virtual link settings.
+ */
+
 // OspfRegistry.h
 
 #ifndef OSPF_REGISTRY_H

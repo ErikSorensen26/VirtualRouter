@@ -1,3 +1,7 @@
+/**
+ * @file SyslogHeader.hpp
+ */
+
 // SyslogHeader.hpp
 
 #ifndef SYSLOG_HEADER_HPP

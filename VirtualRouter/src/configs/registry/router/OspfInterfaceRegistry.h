@@ -1,3 +1,12 @@
+/**
+ * @file OspfInterfaceRegistry.h
+ * @brief OSPF interface-specific configuration registry.
+ *
+ * Defines per-interface OSPF parameters including area assignment,
+ * router timers (hello, dead), cost metric, network type, authentication,
+ * priority (for DR election), and interface options.
+ */
+
 // OspfInterfaceRegistry.h
 
 #ifndef OSPF_INTERFACE_REGISTRY_H

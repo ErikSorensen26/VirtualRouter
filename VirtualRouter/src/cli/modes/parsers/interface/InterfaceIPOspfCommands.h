@@ -1,4 +1,13 @@
-// InterfaceIPOspfCommands.h
+/**
+ * @file InterfaceIPOspfCommands.h
+ * @brief CLI parser for the `ip ospf` sub-tree of Interface Configuration mode.
+ *
+ * Defines OSPFv2 interface-level commands reachable via `ip ospf <...>` in
+ * `CliMode::Interface`.  Extends the shared `InterfaceOspfCommands` base with
+ * IPv4-specific additions: process-area association, authentication (plain-text
+ * and MD5), Link-Local Signalling, prefix suppression, resync timeout, shutdown,
+ * and TTL security.
+ */
 
 #ifndef INTERFACE_IP_OSPF_COMMANDS_H
 #define INTERFACE_IP_OSPF_COMMANDS_H
@@ -61,6 +70,13 @@ using InterfaceIPOspf_TtlSecurity = commandAdder<InterfaceContext,
     "ttl-security"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for the `ip ospf` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv2-specific
+ * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
+ */
 using InterfaceIPOspfCommands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceOspfCommands,
     InterfaceIPOspf_Area,

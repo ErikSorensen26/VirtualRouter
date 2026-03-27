@@ -1,4 +1,10 @@
-// RouterEigrpInterfaceCommands.h
+/**
+ * @file RouterEigrpInterfaceCommands.h
+ * @brief CLI parser for EIGRP interface-level commands.
+ *
+ * Defines interface-specific EIGRP commands including delay, bandwidth,
+reliability, hello interval, hold time, and split horizon settings.
+ */
 
 #ifndef ROUTER_EIGRP_INTERFACE_COMMANDS_H
 #define ROUTER_EIGRP_INTERFACE_COMMANDS_H
@@ -83,6 +89,13 @@ using RouterEigrpInterface_SummaryAddress = commandAdder<EigrpContext,
     "summary-address"_tok, ARG, ARG_REST
 >;
 
+/**
+ * @brief Parser for EIGRP interface-level configuration commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Configures per-interface EIGRP parameters including bandwidth, delay,
+ * reliability, timers, and split horizon settings.
+ */
 using RouterEigrpInterfaceCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpInterface_AuthenticationKeyChain,
     RouterEigrpInterface_AuthenticationMode,
@@ -98,10 +111,18 @@ using RouterEigrpInterfaceCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpInterface_SummaryAddress
 >;
 
+/**
+ * @brief IPv4 address-family interface mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpInterfaceV4Commands = CliModeParser<CliMode::RouterEigrpInterfaceV4, EigrpContext,
     RouterEigrpInterfaceCommands
 >;
 
+/**
+ * @brief IPv6 address-family interface mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpInterfaceV6Commands = CliModeParser<CliMode::RouterEigrpInterfaceV6, EigrpContext,
     RouterEigrpInterfaceCommands
 >;

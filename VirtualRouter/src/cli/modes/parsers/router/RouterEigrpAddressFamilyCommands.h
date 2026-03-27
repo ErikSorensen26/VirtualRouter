@@ -1,4 +1,11 @@
-// RouterEigrpAddressFamilyCommands.h
+/**
+ * @file RouterEigrpAddressFamilyCommands.h
+ * @brief CLI parser for EIGRP address-family sub-mode commands.
+ *
+ * Defines commands available within an EIGRP address family (IPv4/IPv6),
+ * including interface configuration (af-interface), network/neighbor setup,
+ * metric/weight tuning, DUAL stub mode, and topology filtering.
+ */
 
 #ifndef ROUTER_EIGRP_ADDRESS_FAMILY_COMMANDS_H
 #define ROUTER_EIGRP_ADDRESS_FAMILY_COMMANDS_H
@@ -111,6 +118,13 @@ using RouterEigrpAddressFamily_Topology = commandAdder<EigrpContext,
     "topology"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for EIGRP address-family commands (shared IPv4/IPv6).
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates AF-level configuration including networks, neighbors, metrics,
+ * and stub mode settings.
+ */
 using RouterEigrpAddressFamilyCommands = CliModeParser<CliMode::None, EigrpContext,
     RouterEigrpAddressFamily_AfInterface,
     RouterEigrpAddressFamily_EigrpDefaultRouteTag,
@@ -130,10 +144,18 @@ using RouterEigrpAddressFamilyCommands = CliModeParser<CliMode::None, EigrpConte
     RouterEigrpAddressFamily_Topology
 >;
 
+/**
+ * @brief IPv4 address-family mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpAddressFamilyV4Commands = CliModeParser<CliMode::RouterEigrpAddressFamilyV4, EigrpContext,
     RouterEigrpAddressFamilyCommands
 >;
 
+/**
+ * @brief IPv6 address-family mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
 using RouterEigrpAddressFamilyV6Commands = CliModeParser<CliMode::RouterEigrpAddressFamilyV6, EigrpContext,
     RouterEigrpAddressFamilyCommands
 >;

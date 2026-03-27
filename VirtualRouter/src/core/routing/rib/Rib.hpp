@@ -1,4 +1,13 @@
-// Rib.hpp
+/**
+ * @file Rib.hpp
+ * @brief Single-address-family Routing Information Base.
+ */
+
+/**
+ * @defgroup CORE_ROUTING_RIB Core Routing RIB
+ * @ingroup CORE_ROUTING
+ * @brief Routing Information Base: per-AF RIB buckets, entries, and route source types.
+ */
 
 #ifndef RIB_HPP
 #define RIB_HPP
@@ -13,12 +22,57 @@
 namespace core
 {
 
+/**
+ * @brief Single-address-family RIB: owns the sorted `RibBucket` map, runs
+ *        best-path selection, and drives FIB updates.
+ *
+ * `Rib` is the central control-plane store for one address family (IPv4 or
+ * IPv6).  It maps every known prefix to a `RibBucket`, which in turn holds
+ * all candidate routes and the current best entry.  All mutations are
+ * serialised through a `ProcessQueue` so the RIB state is always consistent
+ * from the writer's perspective.  Data-plane reads go directly to the `Fib`
+ * via RCU.
+ *
+ * ## Architectural Role
+ * `RoutingTable` owns two `Rib` instances — one for IPv4 (`uint32_t`) and one
+ * for IPv6 (`__uint128_t`).  Routing protocols call `addRoute()` /
+ * `removeRoute()` on `RoutingTable`, which forwards to the appropriate `Rib`.
+ *
+ * ## Lifecycle & Ownership
+ * - Constructed with a `ProcessQueue` moved in; the queue must outlive the
+ *   Rib or be the Rib's own queue (as provided by `ControlScheduler::create`).
+ * - Non-copyable, non-movable.
+ * - `clear()` (and the destructor) post a task that deletes all buckets and
+ *   erases the FIB; callers should follow with `RCU::synchronize()`.
+ *
+ * ## Concurrency Model
+ * - Public mutating methods (`addRoute`, `removeRoute`, `clear`) post lambdas
+ *   to the internal `ProcessQueue` and return immediately — they are safe to
+ *   call from any thread.
+ * - `lookup()` delegates to `Fib::lookup()` which is lock-free under an
+ *   `RCU::Guard`; the caller is responsible for holding the guard.
+ * - Watch registration (`watchRoute`, `watchAddress`, `watchProtocol`) posts
+ *   to the scheduler and returns a `WatchId` immediately.
+ *
+ * @tparam AddrType Unsigned integral address type (`uint32_t` or `__uint128_t`).
+ *
+ * @see RoutingTable
+ * @see RibBucket
+ * @see RouteWatcher
+ * @see Fib
+ */
 template <typename AddrType>
 class Rib
 {
     static_assert(std::is_unsigned_v<AddrType>, "AddrType must be unsigned integral");
-    static constexpr uint8_t W = sizeof(AddrType)*8;
+    static constexpr uint8_t W = sizeof(AddrType)*8; ///< Address width in bits.
 
+    /**
+     * @brief Mask the host bits of a prefix.
+     * @param p Raw prefix value.
+     * @param l Prefix length in bits.
+     * @return Network-masked prefix.
+     */
     static AddrType mask(AddrType p, uint8_t l)
     {
         if (l == 0) return 0;
@@ -26,25 +80,46 @@ class Rib
         return p & (~AddrType(0) << (W - l));
     }
 
-    std::unordered_map<PrefixKey<AddrType>, RibBucket<AddrType>*, PrefixHash<AddrType>> table;
-    Fib<AddrType> fib;
-    ProcessQueue scheduler;
-    RouteWatcher<AddrType> routeWatcher;
+    std::unordered_map<PrefixKey<AddrType>, RibBucket<AddrType>*, PrefixHash<AddrType>> table; ///< Prefix-to-bucket map.
+    Fib<AddrType>           fib;          ///< Forwarding table updated after each best-path run.
+    ProcessQueue            scheduler;    ///< Serialises all RIB mutations.
+    RouteWatcher<AddrType>  routeWatcher; ///< Subscription manager for route-change callbacks.
 
 public:
+    /// Opaque watch subscription identifier (0 = invalid).
     using WatchId     = typename RouteWatcher<AddrType>::WatchId;
+    /// Optional filter applied to watch callbacks.
     using WatchFilter = typename RouteWatcher<AddrType>::WatchFilter;
+    /// Callback signature invoked on route changes.
     using Callback    = typename RouteWatcher<AddrType>::Callback;
 
+    /**
+     * @brief Construct a Rib with the given serialisation queue.
+     * @param s `ProcessQueue` used to serialise all state mutations.
+     *          Must be created via `ControlScheduler::create()`.
+     */
     Rib(ProcessQueue&& s) : scheduler(std::move(s)), routeWatcher(fib, scheduler) {}
 
-    Rib(const Rib&) = delete;
+    Rib(const Rib&)            = delete;
     Rib& operator=(const Rib&) = delete;
-    Rib(Rib&&) = delete;
-    Rib& operator=(Rib&&) = delete;
+    Rib(Rib&&)                 = delete;
+    Rib& operator=(Rib&&)      = delete;
 
+    /**
+     * @brief Destroy the RIB, posting a `clear()` task to drain all state.
+     */
     ~Rib() { clear(); }
 
+    // ROUTE INSTALLATION
+
+    /**
+     * @brief Enqueue installation of a batch of routes.
+     *
+     * Takes ownership of each pointer in `es`.  The actual insertion happens
+     * asynchronously on the scheduler thread.
+     *
+     * @param es Vector of heap-allocated `RibEntry` pointers; cleared on return.
+     */
     void addRoutes(std::vector<RibEntry<AddrType>*>& es)
     {
         scheduler.post([this, routes = std::move(es)]() {
@@ -53,6 +128,13 @@ public:
         });
     }
 
+    /**
+     * @brief Enqueue installation of a single route.
+     *
+     * Takes ownership of `e`.  The actual insertion happens asynchronously.
+     *
+     * @param e Heap-allocated route entry.
+     */
     void addRoute(const RibEntry<AddrType>* e)
     {
         scheduler.post([this, e]() {
@@ -60,6 +142,14 @@ public:
         });
     }
 
+    // ROUTE WITHDRAWAL
+
+    /**
+     * @brief Enqueue withdrawal of a batch of prefixes for a given source.
+     * @param withdraws Vector of (prefix, length) pairs; moved into the task.
+     * @param src       Protocol source to remove.
+     * @param pid       Process instance ID (0 = any).
+     */
     void removeRoutes(std::vector<std::pair<AddrType, uint8_t>>& withdraws, RouteSource src, uint64_t pid = 0)
     {
         scheduler.post([this, ws = std::move(withdraws), src, pid]() {
@@ -68,6 +158,13 @@ public:
         });
     }
 
+    /**
+     * @brief Enqueue withdrawal of a single prefix for a given source.
+     * @param prefix Network prefix address.
+     * @param length Prefix length in bits.
+     * @param src    Protocol source to remove.
+     * @param pid    Process instance ID (default 0).
+     */
     void removeRoute(AddrType prefix, uint8_t length, RouteSource src, uint64_t pid = 0)
     {
         scheduler.post([this, prefix, length, src, pid]() {
@@ -75,28 +172,79 @@ public:
         });
     }
 
+    // ACCESSORS
+
+    /**
+     * @brief Return a reference to the underlying FIB (data-plane read path).
+     */
     Fib<AddrType>& getFib() noexcept { return fib; }
 
+    // WATCH SUBSCRIPTIONS
+
+    /**
+     * @brief Watch best-route changes for an exact (prefix, length).
+     *
+     * The callback is fired on the scheduler thread whenever the best route
+     * for the prefix changes (install, update, or withdraw).  Returning `true`
+     * from the callback auto-cancels the watch.
+     *
+     * @param prefix  Network prefix to watch.
+     * @param length  Prefix length in bits.
+     * @param ctx     Caller context pointer passed back in `CallbackCtx`.
+     * @param fn      Callback function.
+     * @param filter  Optional source/process filter.
+     * @return Non-zero `WatchId` on success; 0 on failure.
+     */
     WatchId watchRoute(AddrType prefix, uint8_t length, void* ctx, Callback fn, WatchFilter filter = {})
     {
         return routeWatcher.watchRoute(prefix, length, ctx, fn, filter);
     }
 
+    /**
+     * @brief Watch the resolving route for a host address (follows re-routes).
+     *
+     * Internally pins to the longest-matching prefix that currently resolves
+     * the address; if that prefix is withdrawn, re-resolves via the FIB
+     * and re-pins automatically.  Returns 0 if the address is currently
+     * unreachable (after applying `filter`).
+     *
+     * @param addr    Host address to watch.
+     * @param ctx     Caller context pointer.
+     * @param fn      Callback function.
+     * @param filter  Optional source/process filter.
+     * @return Non-zero `WatchId`, or 0 if unreachable.
+     */
     WatchId watchAddress(AddrType addr, void* ctx, Callback fn, WatchFilter filter = {})
     {
         return routeWatcher.watchAddress(addr, ctx, fn, filter);
     }
 
+    /**
+     * @brief Watch all best-route changes from a specific (source, processId).
+     * @param src Protocol source to watch.
+     * @param pid Process instance ID.
+     * @param ctx Caller context pointer.
+     * @param fn  Callback function.
+     * @return Non-zero `WatchId` on success; 0 on failure.
+     */
     WatchId watchProtocol(RouteSource src, uint64_t pid, void* ctx, Callback fn)
     {
         return routeWatcher.watchProtocol(src, pid, ctx, fn);
     }
 
+    /**
+     * @brief Cancel a previously registered watch by ID.
+     * @param id Watch identifier returned by a `watch*` method.
+     */
     void unwatchRoute(WatchId id)
     {
         routeWatcher.remove(id);
     }
 
+    /**
+     * @brief Remove all routes and clear the FIB; fires "gone" callbacks on
+     *        all active watches.
+     */
     void clear() noexcept
     {
         scheduler.post([this]() {
@@ -111,12 +259,26 @@ public:
         });
     }
 
+    /**
+     * @brief Longest-prefix-match lookup (data-plane fast path).
+     *
+     * @warning The caller must hold an `RCU::Guard` for the duration of the
+     *          lookup and must not dereference the returned pointer after the
+     *          guard is released.
+     *
+     * @param addr Network-order address span.
+     * @return Pointer to the best-matching `RibEntry`, or `nullptr`.
+     */
     RibEntry<AddrType>* lookup(const types::NetworkSpan<AddrType>& addr) const
     {
         return fib.lookup(addr);
     }
 
 private:
+    /**
+     * @brief Install a single route into the RIB (runs on the scheduler thread).
+     * @param e Heap-allocated route entry; ownership is passed to the bucket.
+     */
     void installRoute(const RibEntry<AddrType>* e)
     {
         PrefixKey key{ mask(e->prefix, e->length), e->length };
@@ -138,6 +300,13 @@ private:
         }
     }
 
+    /**
+     * @brief Withdraw a route from the RIB (runs on the scheduler thread).
+     * @param prefix Network prefix address.
+     * @param length Prefix length in bits.
+     * @param src    Protocol source being removed.
+     * @param pid    Process instance ID.
+     */
     void withdrawRoute(AddrType prefix, uint8_t length, RouteSource src, uint64_t pid = 0)
     {
         PrefixKey key{ mask(prefix, length), length };
@@ -167,4 +336,3 @@ private:
 } // namespace core
 
 #endif // RIB_HPP
-

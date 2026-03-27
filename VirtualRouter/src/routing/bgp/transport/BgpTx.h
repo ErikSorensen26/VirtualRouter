@@ -1,4 +1,7 @@
-// BgpTx.h
+/**
+ * @file BgpTx.h
+ * @brief BGP message transmission: encoding UPDATE, NOTIFICATION, KEEPALIVE.
+ */
 
 #ifndef BGP_TX_H
 #define BGP_TX_H
@@ -16,33 +19,204 @@ namespace routing::bgp
 {
 class BgpProcess;
 
+/**
+ * @brief Stateless BGP message encoder: builds and writes outbound BGP messages.
+ * @ingroup BGP_TRANSPORT
+ *
+ * All methods are static; BgpTx carries no state of its own.  It writes
+ * directly into a @ref transport::tcp::Connection by reserving spans from
+ * the connection's transmit buffer, ensuring zero-copy construction of
+ * variable-length UPDATE messages.
+ *
+ * UPDATE encoding handles two distinct wire formats:
+ * - **Legacy IPv4 unicast**: withdrawn routes and NLRI appear in the fixed
+ *   BGP UPDATE fields; path attributes occupy the middle section.
+ * - **Multiprotocol (non-IPv4 or non-unicast)**: withdrawn and announced
+ *   prefixes are carried inside MP_UNREACH_NLRI and MP_REACH_NLRI attributes.
+ *
+ * Large UPDATE sets are automatically split across multiple BGP messages to
+ * respect the negotiated maximum message size (4096 bytes standard, 65535
+ * bytes if Extended Message capability was negotiated).
+ *
+ * ## Architectural Role
+ * BgpTx is the outbound half of the BGP transport layer, symmetric to
+ * @ref BgpRx.  It sits between the decision engine / Adj-RIB-Out and the TCP
+ * send buffer.  Callers are responsible for supplying correctly formatted
+ * @ref BuildUpdate structures; BgpTx only encodes and writes them.
+ *
+ * @see BgpRx, Session, BuildUpdate
+ */
 class BgpTx
 {
 public:
     BgpTx() = delete;
 
-    static void buildOpen(transport::tcp::Connection& connection, Session& session); 
+    /**
+     * @brief Encode and write a BGP OPEN message for @p session.
+     *
+     * Includes the local AS number, hold time, router ID, and all locally
+     * supported capabilities as optional parameters.
+     *
+     * @param connection TCP connection to write into.
+     * @param session    Session supplying local parameters and capability list.
+     */
+    static void buildOpen(transport::tcp::Connection& connection, Session& session);
+
+    /**
+     * @brief Encode and write one or more BGP UPDATE messages for the given @p update.
+     *
+     * Splits the announcement and withdrawal lists across as many UPDATE
+     * messages as required.  Legacy IPv4 unicast uses the BGP UPDATE wire
+     * format directly; all other AFIs use MP_REACH_NLRI / MP_UNREACH_NLRI
+     * path attributes.  Add-Path path IDs are prepended to each prefix when
+     * the capability was negotiated for this AFI.
+     *
+     * @tparam N  NLRI policy type. Must provide:
+     *              - `N::Nlri`                          — prefix/NLRI type
+     *              - `N::afi`                           — `AfiSafi` constant
+     *              - `N::nlriEncodedSize(nlri)`         — wire size of one prefix in bytes
+     *              - `N::encodeNlri(ptr, nlri)`         — write one prefix at @p ptr
+     *
+     * @param connection TCP connection to write into.
+     * @param session    Session supplying negotiated capabilities and max message size.
+     * @param update     Announcements and withdrawals to encode.
+     */
     template <typename N>
     static void buildUpdate(transport::tcp::Connection& connection, Session& session, const BuildUpdate<typename N::Nlri>& update);
+
+    /**
+     * @brief Encode and write a BGP NOTIFICATION message.
+     *
+     * Sends the error code, subcode, and optional data bytes from
+     * @p notification, then the connection should be closed by the caller.
+     *
+     * @param connection   TCP connection to write into.
+     * @param notification Notification to encode.
+     */
     static void buildNotification(transport::tcp::Connection& connection, const Notification& notification);
+
+    /**
+     * @brief Encode and write a BGP KEEPALIVE message.
+     *
+     * A KEEPALIVE is a fixed 19-byte BGP header with no payload.
+     *
+     * @param connection TCP connection to write into.
+     */
     static void buildKeepalive(transport::tcp::Connection& connection);
+
+    /**
+     * @brief Encode and write a ROUTE-REFRESH request for the given address family.
+     *
+     * @param connection TCP connection to write into.
+     * @param session    Session context (used to validate the capability was negotiated).
+     * @param family     AFI/SAFI to request a refresh for.
+     * @param reason     Refresh subtype: Normal, Begin-of-RIB, or End-of-RIB.
+     */
     static void buildRouteRefresh(transport::tcp::Connection& connection, Session& session,
         const AfiSafi& family, RouteRefreshReason reason = RouteRefreshReason::Normal);
 
 private:
+
+    /**
+     * @brief Write a BGP fixed header into an already-reserved 19-byte buffer.
+     *
+     * Fills in the 16-byte all-ones marker, the total message length
+     * (19 + @p payloadSize), and the message type byte.
+     *
+     * @param type        BGP message type (e.g. BGP_TYPE_UPDATE).
+     * @param payloadSize Byte count of the message payload (excluding the header).
+     * @param buf         Pointer to a 19-byte buffer to write into.
+     */
     static void buildHeader(uint8_t type, uint16_t payloadSize, uint8_t* buf);
+
+    /**
+     * @brief Reserve and write a path-attribute type-length header into @p c.
+     *
+     * Handles the extended-length flag automatically: if @p valueLen exceeds
+     * 255 the Extended Length flag is set and a 2-byte length field is written;
+     * otherwise a 1-byte length is used.  Increments @p attrsSize by the total
+     * bytes written (flag + type + length).
+     *
+     * @param flags     Attribute flags byte (e.g. BGP_ATTR_FLAG_OPTIONAL).
+     * @param type      Attribute type code.
+     * @param valueLen  Length of the attribute value that follows.
+     * @param attrsSize Accumulator for total attribute bytes written; updated in place.
+     * @param c         TCP connection to write the header into.
+     */
     static void appendAttrHdr(uint8_t flags, uint8_t type, size_t valueLen, size_t& attrsSize, transport::tcp::Connection& c);
+
+    /**
+     * @brief Encode all standard path attributes for one announcement and write them to @p c.
+     *
+     * Writes ORIGIN, AS_PATH, NEXT_HOP (IPv4 only), MED, LOCAL_PREF,
+     * COMMUNITIES, and any unknown transitive attributes carried in @p pa.
+     * eBGP egress policy (LOCAL_PREF stripping, AS prepend) must be applied
+     * by the caller before invoking this method.
+     *
+     * @param session Session context used to determine iBGP vs. eBGP and 4-byte ASN support.
+     * @param pa      Path attribute set to encode.
+     * @param c       TCP connection to write into.
+     * @return Total bytes written for all path attributes.
+     */
     static size_t appendPathAttrs(const Session& session, const PathAttribute& pa, transport::tcp::Connection& c);
 
+    /**
+     * @brief Encode an MP_REACH_NLRI attribute carrying as many prefixes as fit in @p maxMsg.
+     *
+     * Writes the AFI, SAFI, next-hop (with optional link-local for IPv6), SNPA
+     * count (zero), and as many NLRI entries from @p update starting at
+     * @p nlriIdx as can fit within the remaining message budget.
+     *
+     * @tparam N  NLRI policy type — same constraints as @ref buildUpdate.
+     *
+     * @param session   Session context used to resolve the Add-Path flag for this AFI.
+     * @param attrSize  Running total of attribute bytes written; incremented in place.
+     * @param nlriIdx   Index into the announcement's NLRI vector to start from.
+     * @param maxMsg    Maximum total UPDATE message size in bytes.
+     * @param update    Announcement carrying the NLRI vector and path attributes.
+     * @param c         TCP connection to write into.
+     * @return Number of NLRI entries written; caller should advance @p nlriIdx by this value.
+     */
     template <typename N>
     static size_t appendMpReach(const Session& session, size_t& attrSize, size_t nlriIdx, size_t maxMsg,
         const typename BuildUpdate<typename N::Nlri>::Announcement& update, transport::tcp::Connection& c);
 
+    /**
+     * @brief Encode an MP_UNREACH_NLRI attribute carrying as many withdrawn prefixes as fit.
+     *
+     * Writes the AFI, SAFI, and as many entries from @p withdraws starting at
+     * @p withdrawIdx as can fit within the remaining message budget.
+     *
+     * @tparam N  NLRI policy type — same constraints as @ref buildUpdate.
+     *
+     * @param session     Session context used to resolve the Add-Path flag.
+     * @param attrSize    Running total of attribute bytes written; incremented in place.
+     * @param withdrawIdx Index into @p withdraws to start from.
+     * @param maxMsg      Maximum total UPDATE message size in bytes.
+     * @param unreach     MP_UNREACH descriptor carrying the AFI/SAFI to encode.
+     * @param withdraws   Full withdrawn-prefix span for this update.
+     * @param c           TCP connection to write into.
+     * @return Number of withdrawn entries written; caller should advance @p withdrawIdx by this value.
+     */
     template <typename N>
     static size_t appendMpUnreach(const Session& session, size_t& attrSize, size_t withdrawIdx, size_t maxMsg,
         const MpUnreach& unreach, std::span<const NlriPath<typename N::Nlri>> withdraws, transport::tcp::Connection& c);
 };
 
+/**
+ * @brief Compute how many NLRI entries from @p nlri fit within @p maxNlriSize bytes.
+ * @ingroup BGP_TRANSPORT
+ *
+ * Iterates prefixes in order and accumulates encoded sizes until the budget is
+ * exhausted.  Add-Path path IDs (4 bytes each) are counted when @p addPath is true.
+ *
+ * @tparam N  NLRI policy type providing `N::nlriEncodedSize(nlri)`.
+ *
+ * @param nlri         Span of NLRI entries to measure.
+ * @param addPath      Whether Add-Path path IDs are included in the wire encoding.
+ * @param maxNlriSize  Maximum total byte budget for all NLRI entries.
+ * @return A pair of { number of entries that fit, total byte size of those entries }.
+ */
 template <typename N>
 static std::pair<size_t, size_t> computeNlriLen(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, size_t maxNlriSize)
 {
@@ -62,6 +236,19 @@ static std::pair<size_t, size_t> computeNlriLen(std::span<const NlriPath<typenam
     return {nlriSize, total};
 }
 
+/**
+ * @brief Write a sequence of NLRI entries into a TCP connection buffer.
+ * @ingroup BGP_TRANSPORT
+ *
+ * Reserves one buffer span per NLRI entry and writes the optional Add-Path
+ * path ID followed by the encoded prefix.
+ *
+ * @tparam N  NLRI policy type providing `N::nlriEncodedSize` and `N::encodeNlri`.
+ *
+ * @param nlri    NLRI entries to encode.
+ * @param addPath Whether to prepend a 4-byte path ID before each entry.
+ * @param c       TCP connection to write into.
+ */
 template <typename N>
 void appendNlri(std::span<const NlriPath<typename N::Nlri>> nlri, bool addPath, transport::tcp::Connection& c)
 {
@@ -155,7 +342,7 @@ size_t BgpTx::appendMpUnreach(const Session& session, size_t& attrSize, size_t w
     nlri = nlri.subspan(0, nlriEntries);
 
     appendAttrHdr(BGP_ATTR_FLAG_OPTIONAL, BGP_ATTR_MP_UNREACH_NLRI, vlen, attrSize, c);
-    
+
     {
         auto buf = c.reserveSpan(3);
         utils::writeU16(buf.data(), mp.family.afi);
@@ -287,4 +474,3 @@ void BgpTx::buildUpdate(transport::tcp::Connection& connection, Session& session
 } // namespace routing
 
 #endif // BGP_TX_H
-

@@ -1,4 +1,11 @@
-// ConsoleController.hpp
+/**
+ * @file ConsoleController.hpp
+ * @brief Console control interface: terminal output, colors, and cursor manipulation.
+ *
+ * Provides an abstraction for console-level operations including text output,
+ * color/styling, cursor positioning, and terminal feature detection.
+ * Can be mocked for testing.
+ */
 
 #ifndef CONSOLE_CONTROLLER_HPP
 #define CONSOLE_CONTROLLER_HPP

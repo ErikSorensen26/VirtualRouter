@@ -1,3 +1,14 @@
+/**
+ * @file BgpOpenHeader.hpp
+ * @brief BGP OPEN message embedded header structures.
+ */
+
+/**
+ * @defgroup PACKET_HEADERS_BGP BGP Embedded Headers
+ * @ingroup PACKET_HEADERS
+ * @brief BGP OPEN message embedded parameter and capability headers.
+ */
+
 // BgpHeader.hpp
 
 #ifndef BGP_OPEN_HEADER_HPP

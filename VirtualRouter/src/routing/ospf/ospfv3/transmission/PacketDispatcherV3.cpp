@@ -6,9 +6,6 @@
 #include "ospf/neighbor/Neighbor.h"
 #include "ospf/area/Area.h"
 #include "packet/headers/embedded/ospf/Ospfv3DBDHeader.hpp"
-#include "packet/headers/embedded/ospf/Ospfv3HelloHeader.hpp"
-#include "packet/headers/embedded/ospf/Ospfv3LSAHeader.hpp"
-#include "packet/headers/embedded/ospf/Ospfv3LSRHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
 

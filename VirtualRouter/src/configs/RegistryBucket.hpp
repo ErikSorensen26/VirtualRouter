@@ -1,3 +1,7 @@
+/**
+ * @file RegistryBucket.hpp
+ */
+
 // RegistryBucket.hpp
 
 #ifndef REGISTRY_BUCKET_HPP

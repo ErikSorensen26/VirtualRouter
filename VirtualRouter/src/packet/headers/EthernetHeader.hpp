@@ -1,3 +1,7 @@
+/**
+ * @file EthernetHeader.hpp
+ */
+
 // EthernetHeader.hpp
 
 #ifndef ETHERNET_HEADER_HPP

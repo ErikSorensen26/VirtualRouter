@@ -1,4 +1,13 @@
-// AttributeManager.hpp
+/**
+ * @file AttributeManager.hpp
+ * @brief BGP path attributes: AS path, next-hop, MED, local preference.
+ */
+
+/**
+ * @defgroup BGP_ATTRIBUTES BGP Attributes
+ * @ingroup BGP
+ * @brief Path attribute storage, reference counting, and attribute type definitions.
+ */
 
 #ifndef BGP_ATTRIBUTE_MANAGER_HPP
 #define BGP_ATTRIBUTE_MANAGER_HPP
@@ -13,6 +22,13 @@
 
 namespace routing::bgp
 {
+/**
+ * @brief BGP path attributes: AS path, next-hop, MED, local preference, communities.
+ * @ingroup BGP_ATTRIBUTES
+ *
+ * Manages BGP UPDATE message attributes including flags, type code, length,
+ * and value. Handles all well-known and optional attributes per RFC 4271.
+ */
 class AttributeManager
 {
 public:

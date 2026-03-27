@@ -1,3 +1,7 @@
+/**
+ * @file FIFOQueue.hpp
+ */
+
 // FIFOQueue.hpp
 
 #ifndef FIFO_QUEUE_HPP

@@ -1,4 +1,13 @@
-// DecisionEngine.h
+/**
+ * @file DecisionEngine.hpp
+ * @brief Decision engine: best path computation and route installation.
+ */
+
+/**
+ * @defgroup BGP_DECISION BGP Decision
+ * @ingroup BGP
+ * @brief Best-path selection algorithm and decision engine.
+ */
 
 #ifndef BGP_DECISION_ENGINE_H
 #define BGP_DECISION_ENGINE_H
@@ -11,6 +20,24 @@ namespace routing::bgp
 {
 class BgpProcess;
 
+/**
+ * @brief Best path selection and route installation for one BGP process.
+ * @ingroup BGP_DECISION
+ *
+ * Implements the decision process (RFC 4271 § 9.1): takes candidate routes
+ * from Adj-RIB-In, selects best using BestPathComparator, manages equal-cost
+ * multipaths, and installs results to Loc-RIB and routing table.
+ *
+ * ## Lifecycle
+ * Owned by BgpProcess. Created during process initialization and destroyed
+ * with the process.
+ *
+ * ## Concurrency Model
+ * Thread-safe if BgpProcess is single-threaded (scheduler pattern).
+ *
+ * @tparam N NLRI type (IPv4Prefix, IPv6Prefix, etc.)
+ * @see BestPathComparator, AddressFamilyInstance
+ */
 class DecisionEngine
 {
 public:

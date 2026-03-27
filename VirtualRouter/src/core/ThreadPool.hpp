@@ -1,4 +1,7 @@
-// ThreadPool.h
+/**
+ * @file ThreadPool.hpp
+ * @brief Lock-free MPMC thread pool with inline lambda storage.
+ */
 
 #ifndef THREADPOOL_HPP
 #define THREADPOOL_HPP
@@ -10,28 +13,77 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-#include <algorithm>    // std::max
-#include <immintrin.h>  // _mm_pause
+#include <algorithm>
+#include <immintrin.h>
 #include <RCU.hpp>
 
 namespace core
 {
 
+/**
+ * @brief Lock-free MPMC thread pool backed by a power-of-two ring of inline task slots.
+ * @ingroup CORE
+ *
+ * `ThreadPool` provides a fixed set of worker threads and a bounded, lock-free
+ * multi-producer/multi-consumer queue.  Lambdas are stored inline inside each ring
+ * slot (up to 128 bytes) to avoid per-task heap allocation.
+ *
+ * ## Architectural Role
+ * - All protocol timers and control-plane tasks ultimately land here via
+ *   @ref ControlScheduler, which serializes per-queue work before submitting to the pool.
+ * - Hardware RX/TX paths may also submit lightweight tasks here for off-loading.
+ *
+ * ## Lifecycle & Ownership
+ * - Owned by @ref Global; one pool is shared across the entire process.
+ * - Workers are launched in the constructor and joined in `shutdown()` / destructor.
+ *
+ * ## Concurrency Model
+ * - `enqueue()` is safe to call from any thread simultaneously; uses CAS on
+ *   the head index to claim a slot without a mutex.
+ * - Workers use an analogous CAS on the tail index to claim tasks.
+ *
+ * ## Fast Path vs. Slow Path
+ * - **Fast path**: `enqueue()` is a tight CAS loop with `_mm_pause` backoff — no locks,
+ *   no allocations.
+ * - **Slow path**: `shutdown()` joins all worker threads, which may block.
+ *
+ * @warning The queue is bounded.  `enqueue()` returns `false` when full; callers
+ * must handle backpressure (e.g., spin or drop the task).
+ */
 class ThreadPool
 {
 public:
-    // Small-inline functor storage: no std::function, no allocations per task.
+    /**
+     * @brief Inline functor storage that avoids heap allocation per task.
+     * @ingroup CORE
+     *
+     * Each ring slot owns one `Task`.  `set()` placement-new's the lambda into
+     * the inline storage buffer.  `run()` invokes it and `cleanup()` destructs it
+     * and resets the function pointers so the slot is ready for reuse.
+     *
+     * @warning Lambdas larger than 128 bytes trigger a `static_assert` at compile time.
+     */
     struct Task
     {
-        using InvokeFn  = void(*)(void*);
-        using DestroyFn = void(*)(void*);
+        using InvokeFn  = void(*)(void*); ///< Type-erased invocation trampoline.
+        using DestroyFn = void(*)(void*); ///< Type-erased destructor trampoline.
 
-        alignas(64) unsigned char storage[128];
-        InvokeFn  invoke  = nullptr;
-        DestroyFn destroy = nullptr;
+        alignas(64) unsigned char storage[128]; ///< Inline storage for the captured lambda.
+        InvokeFn  invoke  = nullptr; ///< Points to the lambda's call operator; null if empty.
+        DestroyFn destroy = nullptr; ///< Points to the lambda's destructor; null if empty.
 
         Task() = default;
 
+        /**
+         * @brief Stores a callable `f` into the inline storage.
+         * @ingroup CORE
+         *
+         * Placement-new's the decayed type into `storage` and wires up the
+         * type-erased `invoke` and `destroy` trampolines.
+         *
+         * @tparam F  Callable type; `sizeof(F)` must be ≤ 128 bytes.
+         * @param f   Callable to store (moved into storage).
+         */
         template<typename F>
         void set(F&& f)
         {
@@ -42,12 +94,13 @@ public:
             destroy = [](void* p){ reinterpret_cast<Fn*>(p)->~Fn(); };
         }
 
-        // Run lambda if present
+        /** @brief Executes the stored callable if one is present. */
         void run() noexcept
         {
             if (invoke) invoke(storage);
         }
-        // Destroy lambda if present
+
+        /** @brief Destructs the stored callable and resets the slot to empty. */
         void cleanup() noexcept
         {
             if (destroy) destroy(storage);
@@ -60,8 +113,14 @@ public:
         ~Task()                      = default; // never auto-destroy per-slot; we manage it explicitly
     };
 
-    // numThreads: worker count
-    // capacity:   queue capacity (must be power of two)
+    /**
+     * @brief Constructs the pool and starts `numThreads` worker threads.
+     *
+     * @param numThreads  Number of worker threads.  Defaults to `max(4, hardware_concurrency)`.
+     * @param capacity    Ring buffer capacity.  Must be a power of two and ≥ 2.
+     *
+     * @warning If `capacity` is not a power of two, the constructor throws `std::runtime_error`.
+     */
     explicit ThreadPool(size_t numThreads = std::max(4u, std::thread::hardware_concurrency()),
                         size_t capacity   = (1u << 16))
         : capacity_(capacity),
@@ -90,7 +149,19 @@ public:
         delete[] slots_;
     }
 
-    // Enqueue a lambda (no args; captures only). Returns false if queue is full.
+    /**
+     * @brief Enqueues a zero-argument callable for execution by a worker thread.
+     *
+     * Uses a CAS-based claim on the head index; no mutex is held.  The lambda is
+     * moved into the ring slot's inline storage.
+     *
+     * @tparam F  Callable type; `sizeof(F)` must be ≤ 128 bytes.
+     * @param f   Task to enqueue; must accept no arguments and return void.
+     * @return `true` if the task was enqueued; `false` if the ring is full.
+     *
+     * @note The caller is responsible for handling a `false` return — there is no
+     * built-in retry or blocking behavior.
+     */
     template<typename F>
     bool enqueue(F&& f)
     {
@@ -127,6 +198,13 @@ public:
         }
     }
 
+    /**
+     * @brief Signals all worker threads to stop and joins them.
+     *
+     * May be called before the destructor to drain the pool while other
+     * resources are still live. Safe to call multiple times; subsequent calls
+     * are no-ops.
+     */
     void shutdown()
     {
         bool expected = false;
@@ -139,15 +217,26 @@ public:
     }
 
 private:
+    /**
+     * @brief Internal ring slot pairing a task with its Vyukov sequence number.
+     *
+     * The sequence number protocol:
+     * - `seq == index`     → slot is empty; a producer may claim it.
+     * - `seq == index + 1` → slot is full; a consumer may claim it.
+     * - `seq == index + capacity` → slot has been recycled by the consumer.
+     */
     struct Slot
     {
-        // Sequence number protocol:
-        //  producer owns slot when seq == index
-        //  consumer owns slot when seq == index + 1
-        std::atomic<uint64_t> seq;
-        Task task;
+        std::atomic<uint64_t> seq; ///< Vyukov sequence number for this slot.
+        Task task;                 ///< Inline task storage.
     };
 
+    /**
+     * @brief Per-worker event loop: consumes tasks until @c stop_ is set.
+     *
+     * Registers the thread with @ref utils::RCU on entry and unregisters on exit.
+     * Busy-spins with @c _mm_pause backoff when the queue is empty.
+     */
     void workerLoop()
     {
         utils::RCU::registerThread();
@@ -166,6 +255,14 @@ private:
         utils::RCU::unregisterThread();
     }
 
+    /**
+     * @brief Attempts to dequeue and execute one task from the ring.
+     *
+     * Uses a CAS on the tail index to claim a slot. Executes the task in-place
+     * and then recycles the slot for producers.
+     *
+     * @return `true` if a task was consumed; `false` if the ring was empty.
+     */
     bool consumeOne()
     {
         uint64_t pos = tail_.load(std::memory_order_relaxed);
@@ -204,26 +301,26 @@ private:
         }
     }
 
-    // queue
-    const size_t capacity_;
-    const size_t mask_;
-    Slot* slots_;
+    // RING STATE
+    const size_t capacity_; ///< Ring buffer capacity (power of two).
+    const size_t mask_;     ///< `capacity_ - 1`; used for fast modulo.
+    Slot* slots_;           ///< Heap-allocated array of ring slots.
 
-    // indices
-    alignas(64) std::atomic<uint64_t> head_; // producer index
-    alignas(64) std::atomic<uint64_t> tail_; // consumer index
+    // INDICES (cache-line isolated to prevent false sharing)
+    alignas(64) std::atomic<uint64_t> head_; ///< Producer cursor (next slot to claim).
+    alignas(64) std::atomic<uint64_t> tail_; ///< Consumer cursor (next slot to consume).
 
-    // control
-    std::atomic<bool> stop_;
+    // CONTROL
+    std::atomic<bool> stop_; ///< Set to @c true by @ref shutdown() to halt workers.
 
-    // workers
-    std::vector<std::thread> workers_;
+    // WORKERS
+    std::vector<std::thread> workers_; ///< Worker threads running @ref workerLoop().
 
     ThreadPool(const ThreadPool&)            = delete;
     ThreadPool& operator=(const ThreadPool&) = delete;
 };
 
-} // namespace utils
+} // namespace core
 
 #endif // THREADPOOL_HPP
 

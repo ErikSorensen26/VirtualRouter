@@ -1,3 +1,19 @@
+/**
+ * @file DhcpInfo.hpp
+ * @brief Shared DHCP data types used across DHCPv4 and DHCPv6.
+ */
+
+/**
+ * @defgroup SERVICES Services
+ * @brief Network services: DHCP server, relay, and client.
+ */
+
+/**
+ * @defgroup SERVICES_DHCP DHCP
+ * @ingroup SERVICES
+ * @brief DHCP service: shared types, DHCPv4, and DHCPv6 implementations.
+ */
+
 // DhcpInfo.hpp
 
 #ifndef DHCP_INFO_HPP

@@ -1,4 +1,11 @@
-// InterfaceOspfv3Commands.h
+/**
+ * @file InterfaceOspfv3Commands.h
+ * @brief CLI parser for OSPFv3 commands in Interface Configuration mode.
+ *
+ * Defines OSPFv3-specific commands reachable in Interface Configuration mode,
+ * including area assignment, authentication/encryption settings, and neighbor
+ * configuration for IPv6 OSPF interfaces.
+ */
 
 #ifndef INTERFACE_OSPFV3_COMMANDS_H
 #define INTERFACE_OSPFV3_COMMANDS_H
@@ -31,6 +38,13 @@ using InterfaceOspfv3_Neighbor = commandAdder<InterfaceContext,
     "neighbor"_tok, ARG_REST
 >;
 
+/**
+ * @brief Parser for OSPFv3 commands in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates area, authentication, encryption, and neighbor commands
+ * for OSPFv3 interfaces under `CliMode::Interface` with `InterfaceContext`.
+ */
 using InterfaceOspfv3Commands = CliModeParser<CliMode::Interface, InterfaceContext,
     InterfaceOspfCommands,
     InterfaceOspfv3_Area,

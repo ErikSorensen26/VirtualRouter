@@ -1,4 +1,17 @@
-// CliEngine.h
+/**
+ * @file CliEngine.h
+ * @brief CLI engine: centralized command-tree, session, and configuration management.
+ *
+ * Owns and manages the global command tree, configuration schema, active sessions,
+ * and integration with the router's persistent state. Serves as the top-level
+ * orchestration layer for all CLI subsystems.
+ */
+
+/**
+ * @defgroup CLI_RUNTIME CLI Runtime
+ * @ingroup CLI
+ * @brief Session management, engine, console, and configuration I/O.
+ */
 
 #ifndef CLI_ENGINE_H
 #define CLI_ENGINE_H
@@ -16,10 +29,10 @@ namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
 namespace cli
 {
-class CliSession; ///< Forward declaration of CliSession.
-class CommandProcessor; ///< Forward declaration of CommandProcessor.
-class ConsoleController; ///< Forward declaration of IConsole.
-struct ModeConfig; ///< Forward declaration of ModeConfig.
+class CliSession;
+class CommandProcessor;
+class ConsoleController;
+struct ModeConfig;
 
 /**
  * @enum RoutingMode

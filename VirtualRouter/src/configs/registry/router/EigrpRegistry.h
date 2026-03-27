@@ -1,3 +1,12 @@
+/**
+ * @file EigrpRegistry.h
+ * @brief EIGRP configuration registry: process, AF, and interface settings.
+ *
+ * Defines the configuration schema for EIGRP including process parameters,
+ * address-family configuration, metric tuning, stub mode, and per-interface
+ * EIGRP settings (bandwidth, delay, reliability, timers).
+ */
+
 // EigrpRegistry.h
 
 #ifndef EIGRP_REGISTRY_H
