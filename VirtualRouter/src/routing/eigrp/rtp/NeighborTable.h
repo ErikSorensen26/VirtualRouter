@@ -188,7 +188,7 @@ public:
 
     // NEIGHBOR MANAGEMENT
 
-    std::map<types::IPAddress, Neighbor> neighbors; ///< Multicast-discovered neighbors keyed by IP; the authoritative adjacency list.
+    std::unordered_map<types::IPAddress, Neighbor> neighbors; ///< Multicast-discovered neighbors keyed by IP; the authoritative adjacency list.
     std::unordered_set<types::IPAddress> unicast;   ///< IP addresses of manually configured unicast peers.
 
     EigrpInterface& iface; ///< Owning interface; used for timer scheduling and metric access.

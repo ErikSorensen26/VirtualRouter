@@ -1,6 +1,5 @@
 // InterfaceConfigs.cpp
 
-#include <IPAddress.h>
 #include <TimeManager.h>
 
 #include "InterfaceConfigs.h"
@@ -15,11 +14,11 @@ namespace interface
 InterfaceConfigs::InterfaceConfigs(core::TimeManager& timeManager, InterfaceType type, float id, const hardware::HwIfaceInfo& info)
   : id(id),
     interfaceType(type),
-    key(calculateInterfaceKey(type, id)),
+    key(type, id),
     hwInfo(info),
     ipv6(timeManager)
 {
-    macAddress.store(hwInfo.mac, std::memory_order_relaxed);
+    macAddress.store(hwInfo.mac.mac, std::memory_order_relaxed);
 }
 
 InterfaceConfigs::~InterfaceConfigs()
@@ -33,9 +32,9 @@ uint8_t* InterfaceConfigs::getMac(uint8_t* mac)
     return mac;
 }
 
-uint64_t InterfaceConfigs::getMac()
+types::Mac InterfaceConfigs::getMac()
 {
-    return macAddress.load(std::memory_order_relaxed);
+    return types::Mac(macAddress.load(std::memory_order_relaxed));
 }
 
 void InterfaceConfigs::setMac(const uint8_t* mac)

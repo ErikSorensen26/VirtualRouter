@@ -59,7 +59,7 @@ bool Dhcpv6Server::handleDhcpPacket(Dhcpv6PacketReceive& packet, types::IPv6Addr
     auto trail = dhcp.getTrail();
     if (!parseDhcpv6Options(trail.data(), trail.size(), options)) return false;
 
-    DhcpNetwork* network = matchAddressToPool( networkAddress, iface.configs.key);
+    DhcpNetwork* network = matchAddressToPool( networkAddress, iface.configs.key.getId());
 
     uint8_t dhcpType = dhcp.getType();
 
@@ -217,7 +217,7 @@ bool Dhcpv6Server::handleDhcpPacket(Dhcpv6PacketReceive& packet, types::IPv6Addr
             {
                 reconfigAccepts[clientID] = {
                     .clientAddress = networkAddress ? 0 : utils::readU128(packet.send.clientAddress),
-                    .interfaceKey = iface.configs.key
+                    .interfaceKey = iface.configs.key.getId()
                 };
             }
         }
@@ -1711,7 +1711,7 @@ bool Dhcpv6Server::buildReconfigure(Dhcpv6PacketBuild& build, Dhcpv6PacketSend& 
     activeReconfigs[send.clientID] = ReconfigureState {
         .reason = reason,
         .secret = key.value(),
-        .interfaceKey = send.iface.configs.key,
+        .interfaceKey = send.iface.configs.key.getId(),
         .timerID = timeManager.addTimer(
             std::chrono::steady_clock::now() + std::chrono::seconds(configs.reconfigureTimeout.load(std::memory_order_relaxed)),
             [this, clientID = send.clientID](uint32_t) {

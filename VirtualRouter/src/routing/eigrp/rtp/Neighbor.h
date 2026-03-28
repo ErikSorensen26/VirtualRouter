@@ -6,11 +6,11 @@
 #ifndef EIGRP_NEIGHBOR_H
 #define EIGRP_NEIGHBOR_H
 
-#include <map>
 #include <IPAddress.h>
 #include <atomic>
 #include <deque>
-#include <set>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "ReliablePacket.hpp"
 #include "packet/headers/EigrpHeader.hpp"
@@ -60,7 +60,7 @@ enum class TLVType : uint16_t
  *
  * ## Lifecycle & Ownership
  * Constructed by @ref NeighborTable::createNeighbor. Not copyable or movable
- * because in-place construction in a `std::map` is required and outstanding
+ * because in-place construction in a `std::unordered_map` is required and outstanding
  * timer callbacks hold raw pointers. Destroyed only by @ref NeighborTable when
  * the adjacency is explicitly torn down after all timers have been cancelled.
  *
@@ -244,15 +244,15 @@ public:
 
     std::atomic<uint32_t> currentReliable{0}; ///< Sequence number of the reliable packet currently pending ACK from this neighbor.
     std::deque<std::pair<uint32_t, bool>> reliableQueue; ///< Ordered queue of (seq, isUnicast) pairs waiting to be sent reliably.
-    std::map<uint32_t, UnicastReliablePacket> reliablePackets; ///< In-flight unicast reliable packets keyed by sequence number.
-    std::set<uint32_t> activeConditions; ///< Sequence numbers for which this neighbor is listed in a conditional-receive HELLO.
+    std::unordered_map<uint32_t, UnicastReliablePacket> reliablePackets; ///< In-flight unicast reliable packets keyed by sequence number.
+    std::unordered_set<uint32_t> activeConditions; ///< Sequence numbers for which this neighbor is listed in a conditional-receive HELLO.
     std::unordered_map<uint32_t, bool> receivedConditions; ///< Tracks which conditional-receive sequence numbers this neighbor has responded to.
 
 private:
     std::atomic<State> state{State::DOWN};
 
     std::deque<uint32_t> ackQueue;         ///< Pending ACKs to be piggybacked; bounded to avoid unbounded growth.
-    std::set<uint32_t> outstandingAcks;    ///< Tracks ACKs already in `ackQueue` to prevent duplicates.
+    std::unordered_set<uint32_t> outstandingAcks;    ///< Tracks ACKs already in `ackQueue` to prevent duplicates.
 
     EigrpInterface& iface;
     InterfaceTimers& tmgr;

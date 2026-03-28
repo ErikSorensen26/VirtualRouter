@@ -20,10 +20,12 @@
 #include <cstring>
 #include <unordered_set>
 #include <IPAddress.h>
+#include <Mac.hpp>
 #include <optional>
 
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
+#include "InterfaceType.hpp"
 
 namespace core { class Global; class TimeManager; }
 namespace hardware { struct HwIfaceInfo; }
@@ -39,27 +41,6 @@ namespace interface
 // INTERFACE KEY
 
 enum class InterfaceType : uint8_t;
-
-/**
- * @brief Encodes an interface type and fractional interface number into a 32-bit key.
- *
- * The upper 8 bits carry the @ref InterfaceType; the lower 24 bits hold the
- * interface number scaled by 256 (to represent sub-interface fractions like
- * GigabitEthernet0/0.1). The result is suitable for use as an unordered-map
- * key or as a stable interface identifier passed between subsystems.
- *
- * @param type  Interface type to encode.
- * @param id    Interface number, including fractional sub-interface component.
- * @return 32-bit key with type in bits [31:24] and fixed-point id in bits [23:0].
- */
-inline uint32_t calculateInterfaceKey(InterfaceType type, float id)
-{
-    uint8_t typeEncoded = static_cast<uint8_t>(type);
-    float clamped = std::max(0.0f, std::min(id, 65535.256f));
-    uint32_t fixed = static_cast<uint32_t>(clamped * 256.0f);
-    fixed &= 0x00FFFFFF;
-    return (static_cast<uint32_t>(typeEncoded) << 24) | fixed;
-}
 
 // INTERFACE CONFIGS
 
@@ -152,7 +133,12 @@ public:
      */
     uint8_t* getMac(uint8_t* mac);
 
-    uint64_t getMac();
+    /**
+     * @brief Gets the interface MAC address.
+     *
+     * @return Mac
+     */
+    types::Mac getMac();
 
     /**
      * @brief Updates the MAC address stored for this interface.
@@ -163,7 +149,7 @@ public:
 
     float         id;            ///< Interface number, including sub-interface fraction.
     InterfaceType interfaceType; ///< Logical interface type.
-    uint32_t      key;           ///< Composite key encoding type and id; used for global interface lookup.
+    InterfaceKey  key;           ///< Composite key encoding type and id; used for global interface lookup.
 
     const hardware::HwIfaceInfo& hwInfo; ///< Immutable hardware descriptor; owned externally.
 

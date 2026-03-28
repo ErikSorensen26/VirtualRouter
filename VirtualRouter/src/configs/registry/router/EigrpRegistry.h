@@ -7,8 +7,6 @@
  * EIGRP settings (bandwidth, delay, reliability, timers).
  */
 
-// EigrpRegistry.h
-
 #ifndef EIGRP_REGISTRY_H
 #define EIGRP_REGISTRY_H
 
@@ -19,8 +17,7 @@
 #include "configs/RegistryDefaultTable.hpp"
 #include "EigrpInterfaceRegistry.h"
 #include "configs/SubRegistry.hpp"
-
- // namespace eigrp
+#include "interface/configs/InterfaceType.hpp"
 
 namespace config
 {
@@ -182,9 +179,9 @@ void EigrpSyncRouterId(void* e);
 
 using EigrpRegistry = SubRegistry<Eigrp,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::AUTO_SUMMARIZATION)>,
-    OwnedListField<config::EigrpInterfaceRegistry, uint32_t CONFIG_INDEX_ARG(routing::eigrp::AF_INTERFACE)>,
+    OwnedListField<config::EigrpInterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(routing::eigrp::AF_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::BFD_ALL_INTERFACE)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(routing::eigrp::BFD_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(routing::eigrp::BFD_INTERFACE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(routing::eigrp::DEFAULT_INFORMATION_IN)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(routing::eigrp::DEFAULT_INFORMATION_OUT)>,
     OptionalValueField<std::tuple<uint32_t, uint32_t, uint8_t, uint8_t, uint16_t> CONFIG_INDEX_ARG(routing::eigrp::DEFAULT_METRICS)>,
@@ -192,12 +189,12 @@ using EigrpRegistry = SubRegistry<Eigrp,
     AtomicField<uint8_t CONFIG_INDEX_ARG(routing::eigrp::INTERNAL_ADMIN_DISTANCE)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(routing::eigrp::EXTERNAL_ADMIN_DISTANCE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_IN)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_IN_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_IN_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_IN_ACL)>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_IN_PREFIX)>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_IN_GATEWAY)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_OUT)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_OUT_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_OUT_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_OUT_ACL)>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_OUT_PREFIX)>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::DISTRIBUTE_LIST_OUT_GATEWAY)>,
@@ -228,15 +225,15 @@ using EigrpRegistry = SubRegistry<Eigrp,
     AtomicField<uint8_t CONFIG_INDEX_ARG(routing::eigrp::WEIGHT_K3), EigrpSyncKValues>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(routing::eigrp::WEIGHT_k4), EigrpSyncKValues>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(routing::eigrp::WEIGHT_k5), EigrpSyncKValues>,
-    ValueField<std::vector<std::tuple<types::IPAddress, uint32_t>> CONFIG_INDEX_ARG(routing::eigrp::NEIGHBOR), EigrpSyncNeighbors>,
+    ValueField<std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>> CONFIG_INDEX_ARG(routing::eigrp::NEIGHBOR), EigrpSyncNeighbors>,
     ValueField<std::vector<std::tuple<uint32_t, uint32_t>> CONFIG_INDEX_ARG(routing::eigrp::NETWORK), EigrpSyncNetworks>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_IN)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_IN_OFFSET)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_IN_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_IN_INTERFACE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_OUT)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_OUT_OFFSET)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_OUT_INTERFACE)>,
-    ValueField<std::vector<uint32_t> CONFIG_INDEX_ARG(routing::eigrp::PASSIVE_INTERFACES), EigrpSyncPassive>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(routing::eigrp::OFFSET_LIST_OUT_INTERFACE)>,
+    ValueField<std::vector<interface::InterfaceKey> CONFIG_INDEX_ARG(routing::eigrp::PASSIVE_INTERFACES), EigrpSyncPassive>,
     AtomicField<bool CONFIG_INDEX_ARG(routing::eigrp::SHUTDOWN), EigrpShutdown>,
     ValueField<std::vector<std::tuple<types::IPAddress, uint8_t, uint32_t, uint32_t, uint8_t, uint8_t, uint16_t, uint8_t>> CONFIG_INDEX_ARG(routing::eigrp::SUMMARY_METRIC)>,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(routing::eigrp::ACTIVE_TIME)>,

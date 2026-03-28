@@ -7,6 +7,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/Interface.h"
 #include "configs/registry/router/EigrpRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace routing::eigrp
 {
@@ -14,14 +15,14 @@ InterfaceManager::InterfaceManager(Eigrp& base) : base(base) {}
 
 InterfaceManager::~InterfaceManager() {}
 
-EigrpInterface* InterfaceManager::getInterface(uint32_t key)
+EigrpInterface* InterfaceManager::getInterface(interface::InterfaceKey key)
 {
     if (auto it = eigrpInterfaceList.find(key); it != eigrpInterfaceList.end())
         return &it->second;
     return nullptr;
 }
 
-config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistryByKey(uint32_t key)
+config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistryByKey(interface::InterfaceKey key)
 {
     auto& registry = base.routingInstance->getRegistry();
     auto& configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
@@ -30,7 +31,7 @@ config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistryB
 
 config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistry(interface::Interface& iface)
 {
-    uint32_t key = iface.configs.key;
+    interface::InterfaceKey key = iface.configs.key;
     auto& registry = base.routingInstance->getRegistry();
 
     if (base.isNamed())
@@ -56,7 +57,7 @@ EigrpInterface* InterfaceManager::createInterface(interface::Interface* interfac
         // Add the interface to eigrp even if its down
         types::AddressFamily af = base.getAF();
         uint32_t as = base.getAS();
-        uint32_t key = interface->configs.key;
+        interface::InterfaceKey key = interface->configs.key;
 
         // Get or create registry entry for this interface
         config::Reference<config::EigrpInterfaceRegistry> ifaceReg = getRegistry(*interface);
@@ -89,7 +90,7 @@ void InterfaceManager::refreshInterfaceList()
         if (!base.calculateRID()) return; // No valid RID
 
     {
-        std::vector<std::unordered_map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
+        std::vector<std::unordered_map<interface::InterfaceKey, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
 
         // Remove shutdown interfaces
         for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)

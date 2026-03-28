@@ -718,7 +718,7 @@ void OriginatorV3::addP2PLink(LsaBody& router, const OspfInterface& iface, const
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_P2P,
         .metric = iface.cost,
-        .interfaceId = iface.getIface().configs.key,
+        .interfaceId = iface.getIface().configs.key.getId(),
         .neighborInterfaceId = neighbor.neighborInterfaceId,
         .neighborRouterId = neighbor.routerID
     });
@@ -733,7 +733,7 @@ void OriginatorV3::addStubLink(LsaBody& router, const OspfInterface& iface, bool
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_STUB,
         .metric = metric,
-        .interfaceId = iface.getIface().configs.key,
+        .interfaceId = iface.getIface().configs.key.getId(),
         .neighborInterfaceId = 0,
         .neighborRouterId = 0
     });
@@ -744,7 +744,7 @@ void OriginatorV3::addVirtualLink(LsaBody& router, const OspfInterface& iface, c
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{
         .type = OSPFV3_LINK_VIRTUAL,
         .metric = iface.cost,
-        .interfaceId = iface.getIface().configs.key,
+        .interfaceId = iface.getIface().configs.key.getId(),
         .neighborInterfaceId = vNbr.neighborInterfaceId,
         .neighborRouterId = vNbr.routerID
     });

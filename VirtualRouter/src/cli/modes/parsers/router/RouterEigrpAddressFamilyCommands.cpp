@@ -18,7 +18,7 @@ bool RouterEigrpAddressFamily_AfInterface_Handler(EIGRP_PARAMS)
 
     interface::InterfaceType type = interface::getInterfaceType(args[0]);
     float interfaceId = std::stof(args[1]);
-    uint32_t key = interface::calculateInterfaceKey(type, interfaceId);
+    interface::InterfaceKey key(type, interfaceId);
 
     auto ref = ctx.currentEigrp->getIfaceMgr().getRegistryByKey(key);
     ctx.currentEigrpInterface = &ref.get();
@@ -204,7 +204,7 @@ bool RouterEigrpAddressFamily_Neighbor_Handler(EIGRP_PARAMS)
         ctx.terminal.controller.print("\r\n%EIGRP: Unknown interface type");
         return false;
     }
-    uint32_t key = interface::calculateInterfaceKey(type, std::stof(args[2]));
+    interface::InterfaceKey key(type, std::stof(args[2]));
     if (!ctx.negate)
         ctx.currentEigrp->getGlobalConfigMgr().enableUnicastPeer(neighborIp, key);
     else

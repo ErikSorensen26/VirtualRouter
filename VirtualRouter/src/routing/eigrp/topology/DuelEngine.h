@@ -7,9 +7,9 @@
 #define EIGRP_DUEL_ENGINE_H
 
 #include <cstdint>
-#include <set>
 #include <IPAddress.h>
-#include <map>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "TopologyTable.h"
 #include "TimerManager.h"
@@ -62,9 +62,16 @@ struct OutgoingQuery
 struct ActiveRoute
 {
     types::IPPrefix activePrefix;
-    std::map<types::IPAddress, OutgoingQuery> pendingQueries; ///< Neighbors that have not yet replied to the active query.
+    std::unordered_map<types::IPAddress, OutgoingQuery> pendingQueries; ///< Neighbors that have not yet replied to the active query.
     std::vector<std::pair<types::IPAddress, ReceivedRoute>> possibleRoutes; ///< Candidate routes received during the active cycle.
-    std::set<std::pair<types::IPAddress, uint32_t>> remoteSources; ///< (neighbor IP, sequence) pairs from which query propagation is expected.
+    struct PairHash {
+        size_t operator()(const std::pair<types::IPAddress, uint32_t>& p) const noexcept {
+            size_t h = std::hash<types::IPAddress>{}(p.first);
+            h ^= std::hash<uint32_t>{}(p.second) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+    std::unordered_set<std::pair<types::IPAddress, uint32_t>, PairHash> remoteSources; ///< (neighbor IP, sequence) pairs from which query propagation is expected.
     RouteInfo* originRoute = nullptr;          ///< The route record that triggered this active cycle, if known.
     types::IPAddress originNeighbor;           ///< The neighbor from whom the loss event was received.
 };
@@ -331,7 +338,7 @@ private:
      */
     bool recalculateSuccessors(TopologyEntry* entry);
 
-    std::map<types::IPPrefix, ActiveRoute> activeRoutes; ///< Per-prefix active-state records; non-empty only during recomputation.
+    std::unordered_map<types::IPPrefix, ActiveRoute> activeRoutes; ///< Per-prefix active-state records; non-empty only during recomputation.
 };
 } // namespace routing::eigrp
 

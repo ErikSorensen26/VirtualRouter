@@ -27,6 +27,7 @@
 #include "eigrp/rtp/NeighborTable.h"
 #include "configs/RegistryReference.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace interface { class Interface; class InterfaceConfigs; }
 
@@ -188,7 +189,7 @@ public:
 
     std::set<types::IPPrefix> connectedRoutes; ///< Directly connected prefixes on this interface.
 
-    uint32_t interfaceKey; ///< Unique key identifying this interface within the EIGRP process.
+    interface::InterfaceKey interfaceKey; ///< Unique key identifying this interface within the EIGRP process.
 
     types::IPAddress ifaceAddress; ///< Primary IP address of this interface.
 

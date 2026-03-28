@@ -5,6 +5,7 @@
 #include <VirtualRouter.h>
 
 #include "GlobalIPv6Commands.h"
+#include "Mac.hpp"
 #include "interface/configs/InterfaceType.hpp"
 #include "interface/configs/InterfaceConfigs.h"
 #include "infrastructure/Ndp.h"
@@ -22,11 +23,11 @@ bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
     {
         interface::InterfaceType type = interface::getInterfaceType(args[1]);
         float id = std::stof(args[2]);
-        uint32_t intID = interface::calculateInterfaceKey(type, id);
-        uint64_t _mac = 0; cli::utils::extractMacAddress(args[3], _mac);
+        interface::InterfaceKey intId(type, id);
+        types::Mac mac = 0; cli::utils::extractMacAddress(args[3], mac);
         core::GlobalConfigs::Ndp::Neighbor entry{
-                intID,
-                _mac
+                intId,
+                mac
         };
         ctx.global.configs.ndp.neighbors.emplace(
             address,

@@ -40,7 +40,7 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
     }
     else
     {
-        uint32_t ifaceKey = interface::calculateInterfaceKey(interface::getInterfaceType(args[offset + 3]), std::stof(args[offset + 4]));
+        interface::InterfaceKey ifaceKey(interface::getInterfaceType(args[offset + 3]), std::stof(args[offset + 4]));
         core::GlobalConfigs::Arp::Neighbor entry;
         { uint64_t _mac = 0; utils::extractMacAddress(args[offset + 2], _mac); (void)_mac; }
         entry.interface = ifaceKey;
@@ -101,7 +101,7 @@ bool Global_Interface_Handler(GLOBAL_PARAMS)
     interface::InterfaceType interfaceType = interface::getInterfaceType(type);
     uint32_t hwIface;
     int id = static_cast<int>(std::floor(ctx.terminal.interfaceID));
-    uint32_t key = interface::calculateInterfaceKey(interfaceType, ctx.terminal.interfaceID);
+    interface::InterfaceKey key(interfaceType, ctx.terminal.interfaceID);
     if (!ctx.global.getInterface(key))
     {
         if (ctx.negate)

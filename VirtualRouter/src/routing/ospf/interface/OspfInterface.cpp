@@ -33,7 +33,7 @@ namespace ospf
 {
 OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id)
     : id(id),
-      interfaceId(iface.configs.key),
+      interfaceId(iface.configs.key.getId()),
       interfaceAddress(getIfaceAddr(iface, proc.getAF())),
       dispatcher(proc.isV3
           ? static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this, configs))

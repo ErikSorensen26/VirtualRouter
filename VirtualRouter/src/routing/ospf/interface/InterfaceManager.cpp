@@ -149,7 +149,7 @@ void InterfaceManager::refreshInterfaceList()
                 { auto pfx = interface->configs.ipv6.getLocalPrefix(); currentAddress = types::IPPrefix(pfx.addr, pfx.prefixLength); }
                 bool inRange = ipInfo.ospf.enabledProcesses.contains(procId) &&
                                  interface->getVRF() == process.routingInstance;
-                if (inRange) key.emplace(id, ipInfo.ospf.enabledProcesses[procId]);
+                if (inRange) key.emplace(id.getId(), ipInfo.ospf.enabledProcesses[procId]);
             }
 
             // Remove any invalid interfaces (wrong area or wrong ip)

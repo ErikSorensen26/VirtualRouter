@@ -7,8 +7,6 @@
  * priority (for DR election), and interface options.
  */
 
-// OspfInterfaceRegistry.h
-
 #ifndef OSPF_INTERFACE_REGISTRY_H
 #define OSPF_INTERFACE_REGISTRY_H
 

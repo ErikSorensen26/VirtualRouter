@@ -440,7 +440,7 @@ void DhcpServer::sendAck(
         dhcp::SnoopingEntry entry;
         std::memcpy(entry.mac, chaddr, 6);
         entry.ip = ip;
-        entry.interface = iface.configs.key;
+        entry.interface = iface.configs.key.getId();
         entry.expiration = std::chrono::steady_clock::now() + std::chrono::seconds(net->configs.leaseTime);
 
         std::lock_guard<std::mutex> lock(serverMutex);

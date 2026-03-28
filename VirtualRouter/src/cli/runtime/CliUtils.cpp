@@ -5,6 +5,7 @@
 #include <sstream>
 #include <utility>
 #include <IPAddress.h>
+#include <Mac.hpp>
 #include <regex>
 
 #include "CliUtils.h"
@@ -258,9 +259,9 @@ bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::
     return true;
 }
 
-bool extractMacAddress(const std::string& str, uint64_t& mac)
+bool extractMacAddress(const std::string& str, types::Mac mac)
 {
-    types::NetworkSpan<uint64_t> buf = *reinterpret_cast<types::NetworkSpan<uint64_t>*>(mac);
+    types::NetworkSpan<uint64_t> buf = *reinterpret_cast<types::NetworkSpan<uint64_t>*>(mac.mac);
     std::string hex;
 
     if (str.find('.') != std::string::npos)

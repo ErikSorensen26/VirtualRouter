@@ -7,14 +7,6 @@
  * policy objects (route maps, prefix lists, community lists).
  */
 
-/**
- * @defgroup CONFIG_REGISTRY_ROUTER Router Config Schemas
- * @ingroup CONFIG_REGISTRY
- * @brief Per-protocol configuration registry definitions: BGP, EIGRP, OSPF.
- */
-
-// BgpRegistry.h
-
 #ifndef BGP_REGISTRY_H
 #define BGP_REGISTRY_H
 
@@ -26,9 +18,7 @@
 #include "configs/RegistryReference.hpp"
 #include "configs/RegistryDefaultTable.hpp"
 #include "configs/SubRegistry.hpp"
-
- // namespace bgp
-
+#include "interface/configs/InterfaceType.hpp"
 
 namespace config
 {
@@ -206,9 +196,9 @@ using BgpNeighborRegistry = SubRegistry<BgpNeighbor,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ORF_SEND)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::ORIGINATE_ROUTE_MAP)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_IN_INTERFACE)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_OUT)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_OUT_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpNeighbor::DISTRIBUTE_LIST_OUT_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::DMZLINK_BW)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::FILTER_LIST_IN)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpNeighbor::FILTER_LIST_OUT)>,
@@ -470,10 +460,10 @@ using BgpAddressFamilyRegistry = SubRegistry<BgpAddressFamily,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_INTERNAL)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTANCE_MBGP_LOCAL)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_IN_PREFIX)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_INTERFACE)>,
+    OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_OUT_PREFIX)>,
     OptionalValueField<std::string CONFIG_INDEX_ARG(BgpAddressFamily::DISTRIBUTE_LIST_GATEWAY)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::MAXIMUM_PATHS_EBGP)>,

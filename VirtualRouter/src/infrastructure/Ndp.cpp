@@ -118,7 +118,7 @@ bool Ndp::isShutdown()
     return !running.load(std::memory_order_relaxed);
 }
 
-void Ndp::addNdpEntry(types::IPv6Address targetIp, uint64_t targetMac, bool proxy, bool isStatic)
+void Ndp::addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy, bool isStatic)
 {
     if (!isStatic)
     {
@@ -433,7 +433,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
     processQueuedPackets(targetIp, mac);
 }
 
-void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, types::IPv6Address srcIp, uint64_t srcMac)
+void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, types::IPv6Address srcIp, types::Mac srcMac)
 {
     auto trail = nsHeader.getTrail();
     types::IPv6Address targetIp = utils::readU128(trail.data());
@@ -470,7 +470,7 @@ void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, type
         neighborAdvertisement(na, replyMac, &srcIp);
     }
 
-    if (srcMac == 0 && srcIp == IPV6_SOURCE)
+    if (srcMac.mac == 0 && srcIp == IPV6_SOURCE)
     {
         // Multicast NA for DAD response or missing MAC
         ippacket::BuildIP build = {
@@ -499,7 +499,7 @@ void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, type
     }
 }
 
-void Ndp::processQueuedPackets(types::IPv6Address targetIp, uint64_t macAddress)
+void Ndp::processQueuedPackets(types::IPv6Address targetIp, types::Mac macAddress)
 {
     std::queue<processing::PacketBuilder> packets;
     {
@@ -637,7 +637,7 @@ void Ndp::neighborSolicitation(processing::PacketBuilder& packet, types::IPv6Add
     packet.bufferOffset += nextHeader->length;
 }
 
-void Ndp::neighborAdvertisement(processing::PacketBuilder& packet, uint64_t currentMac, types::IPv6Address* targetIp = nullptr)
+void Ndp::neighborAdvertisement(processing::PacketBuilder& packet, types::Mac currentMac, types::IPv6Address* targetIp = nullptr)
 {
     ippacket::reserveIpv6(packet);
     packet.reserveHeader(packet::HeaderType::ICMPV6, 0); // Will set size later
@@ -671,7 +671,7 @@ void Ndp::neighborAdvertisement(processing::PacketBuilder& packet, uint64_t curr
     options.append(ICMPV6_OPTION_NDP_TARGET, 1, nullptr, 6);
 }
 
-void Ndp::routeSolicitation(processing::PacketBuilder& packet, uint64_t currentMac)
+void Ndp::routeSolicitation(processing::PacketBuilder& packet, types::Mac currentMac)
 {
     ippacket::reserveIpv6(packet);
     packet.reserveHeader(packet::HeaderType::ICMPV6, 0); // Will set size later
@@ -700,7 +700,7 @@ void Ndp::routeSolicitation(processing::PacketBuilder& packet, uint64_t currentM
     packet.bufferOffset += nextHeader->length;
 }
 
-void Ndp::routeAdvertisement(processing::PacketBuilder& packet, uint64_t currentMac)
+void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac currentMac)
 {
     ippacket::reserveIpv6(packet);
     packet.reserveHeader(packet::HeaderType::ICMPV6, 0); // Will set size later
@@ -789,7 +789,7 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, uint64_t current
     packet.bufferOffset += nextHeader->length;
 }
 
-void Ndp::sendNeighborAdvertisement(uint64_t destMac, types::IPv6Address targetIp)
+void Ndp::sendNeighborAdvertisement(types::Mac destMac, types::IPv6Address targetIp)
 {
     if (configs.suppressNA.load(std::memory_order_relaxed))
         return;
@@ -875,7 +875,7 @@ void Ndp::sendRouteSolicitation(types::IPv6Address targetIp)
     }
 }
 
-void Ndp::sendRouteAdvertisement(uint64_t targetMac, types::IPv6Address targetIp)
+void Ndp::sendRouteAdvertisement(types::Mac targetMac, types::IPv6Address targetIp)
 {
     if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
@@ -981,7 +981,7 @@ void Ndp::sendRedirectIfNeeded(const packet::PacketInfo& originalPacket, const u
 */
 }
 
-void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, types::IPv6Address sourceIp, uint64_t sourceMac)
+void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, types::IPv6Address sourceIp, types::Mac sourceMac)
 {
     if (configs.suppressRA.load(std::memory_order_relaxed)) return;
 
@@ -1505,7 +1505,7 @@ void Ndp::addSlaacExclusionPrefix(types::IPv6Address prefix, bool remove)
     }
 }
 
-void Ndp::addRaGuardAllowedMac(uint64_t mac, bool remove)
+void Ndp::addRaGuardAllowedMac(types::Mac mac, bool remove)
 {
     if (remove)
     {

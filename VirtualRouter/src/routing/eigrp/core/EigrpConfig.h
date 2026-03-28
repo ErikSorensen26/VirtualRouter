@@ -13,6 +13,7 @@
 #include "eigrp/EigrpTypes.hpp"
 #include "configs/registry/router/EigrpRegistry.h"
 #include "configs/RegistryReference.hpp"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace routing::eigrp
 {
@@ -116,7 +117,7 @@ public:
      * @param key Interface key.
      * @param add True to make passive, false to remove the passive flag.
      */
-    void setPassiveInterface(uint32_t key, bool add = true);
+    void setPassiveInterface(interface::InterfaceKey key, bool add = true);
 
     /**
      * @brief Enables a unicast static neighbor relationship on an interface.
@@ -127,7 +128,7 @@ public:
      * @param neighborIp IP address of the peer.
      * @param key        Interface key the peer is reachable through.
      */
-    void enableUnicastPeer(const types::IPAddress& neighborIp, uint32_t key);
+    void enableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key);
 
     /**
      * @brief Removes a unicast static neighbor relationship.
@@ -135,7 +136,7 @@ public:
      * @param neighborIp IP address of the peer to remove.
      * @param key        Interface key the peer was configured on.
      */
-    void disableUnicastPeer(const types::IPAddress& neighborIp, uint32_t key);
+    void disableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key);
 
     config::EigrpRegistry& getConfigs() { return configs.get(); }
 
@@ -156,13 +157,13 @@ public:
     /**
      * @brief Returns true if the given interface key is configured as passive.
      */
-    bool isPassive(uint32_t key) const;
+    bool isPassive(interface::InterfaceKey key) const;
 
     /**
      * @brief Returns the set of unicast peer addresses configured on the
      *        given interface key.
      */
-    std::unordered_set<types::IPAddress> getUnicastNeighbors(uint32_t key) const;
+    std::unordered_set<types::IPAddress> getUnicastNeighbors(interface::InterfaceKey key) const;
 
     // DAMPENING CONFIG ACCESSORS
 

@@ -12,14 +12,14 @@
 #define GLOBAL_H
 
 #include <string>
-#include <map>
 #include <mutex>
 #include <shared_mutex>
 #include <atomic>
-#include <map>
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
+#include <Mac.hpp>
 
+#include "interface/configs/InterfaceType.hpp"
 #include "qos/egress/TxQueueManager.h"
 #include "qos/ingress/RxQueueManager.h"
 #include "cli/runtime/CliEngine.h"
@@ -115,12 +115,12 @@ struct GlobalConfigs
          */
         struct Neighbor
         {
-            uint64_t mac; ///< MAC address of neighbor.
-            uint32_t interface; ///< interface::Interface ID this neighbor is bound to.
+            types::Mac mac; ///< MAC address of neighbor.
+            interface::InterfaceKey interface; ///< interface::Interface ID this neighbor is bound to.
             bool proxy = false; ///< Whether this entry is a proxy arp binding
         };
 
-        std::map<std::string, std::map<types::IPv4Address, Neighbor>> neighbors; ///< Static ARP neighbor table.
+        std::unordered_map<std::string, std::unordered_map<types::IPv4Address, Neighbor>> neighbors; ///< Static ARP neighbor table.
         std::shared_mutex neighborMutex; ///< Syncronizes neighbor table access.
     } arp;
 
@@ -167,11 +167,11 @@ struct GlobalConfigs
          */
         struct Neighbor
         {
-            uint32_t interface; ///< interface::Interface ID of the static neighbor.
-            uint64_t macAddress; ///< MAC address associated with this IPv6 address.
+            interface::InterfaceKey interface; ///< interface::InterfaceKey of the static neighbor.
+            types::Mac macAddress; ///< MAC address associated with this IPv6 address.
         };
 
-        std::map<types::IPv6Address, Neighbor> neighbors; ///< Static NDP neighbor table.
+        std::unordered_map<types::IPv6Address, Neighbor> neighbors; ///< Static NDP neighbor table.
         std::shared_mutex neighborMutex;         ///< Synchronizes static NDP table access.
     } ndp;
 };
@@ -360,7 +360,7 @@ public:
      *
      * @note This returns a raw pointer; ownership stays with Global.
      */
-    interface::Interface* getInterface(uint32_t key);
+    interface::Interface* getInterface(interface::InterfaceKey key);
 
     /**
      * @brief Retrieve the entire interface table.
@@ -370,7 +370,7 @@ public:
      *
      * This is exposed because certain routing protocols require full interface iteration.
      */
-    std::map<uint32_t, interface::Interface*>& getInterfaceList();
+    std::unordered_map<interface::InterfaceKey, interface::Interface*>& getInterfaceList();
 
     /**
      * @brief Remove and destroy an interface.
@@ -380,7 +380,7 @@ public:
      * @param key Lookup key for the interface.
      * @return True if interface was removed, false if not found.
      */
-    bool removeInterface(uint32_t key);
+    bool removeInterface(interface::InterfaceKey key);
 
     // ROUTING INSTANCES (VRFs)
 
@@ -454,7 +454,7 @@ private:
 
     // interface::Interface table
     std::mutex interfaceMutex; ///< Guards interfaceList for all CRUD operations.
-    std::map<uint32_t, interface::Interface*> interfaceList; ///< All physical/logical interfaces. Owned by Global.
+    std::unordered_map<interface::InterfaceKey, interface::Interface*> interfaceList; ///< All physical/logical interfaces. Owned by Global.
 
     // Routing Instances
     std::mutex routingInstanceMutex; ///< Guards routingInstances for all CRUD operations.

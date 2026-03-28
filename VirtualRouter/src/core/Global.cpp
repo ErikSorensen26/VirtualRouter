@@ -1,7 +1,7 @@
 // Global.cpp
 
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <mutex>
 
 #include "Global.h"
@@ -88,7 +88,7 @@ void Global::reset()
 // Interfaces
 interface::Interface* Global::addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug)
 {
-    uint32_t key = calculateInterfaceKey(interfaceType, interfaceId);
+    interface::InterfaceKey key(interfaceType, interfaceId);
     if (interfaceList.find(key) != interfaceList.end())
     {
         return nullptr;
@@ -99,7 +99,7 @@ interface::Interface* Global::addInterface(interface::InterfaceType interfaceTyp
     return interfaceList[key];
 }
 
-interface::Interface* Global::getInterface(uint32_t key)
+interface::Interface* Global::getInterface(interface::InterfaceKey key)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
     if (interfaceList.find(key) != interfaceList.end())
@@ -109,13 +109,13 @@ interface::Interface* Global::getInterface(uint32_t key)
     return nullptr;
 }
 
-std::map<uint32_t, interface::Interface*>& Global::getInterfaceList()
+std::unordered_map<interface::InterfaceKey, interface::Interface*>& Global::getInterfaceList()
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
     return interfaceList;
 }
 
-bool Global::removeInterface(uint32_t key)
+bool Global::removeInterface(interface::InterfaceKey key)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
     if (auto it = interfaceList.find(key); it != interfaceList.end())

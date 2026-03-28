@@ -5,6 +5,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/Interface.h"
 #include "hardware/HardwareManager.h"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace routing::eigrp
 {

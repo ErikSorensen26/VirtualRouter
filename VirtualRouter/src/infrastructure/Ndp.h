@@ -10,6 +10,7 @@
 #include <atomic>
 #include <shared_mutex>
 #include <IPAddress.h>
+#include <Mac.hpp>
 
 #include "interface/configs/InterfaceConfigs.h"
 #include "packet/PacketStructure.h"
@@ -170,7 +171,7 @@ public:
      */
     struct NdpCacheEntry
     {
-        uint64_t macAddress;                                    ///< Resolved MAC address.
+        types::Mac macAddress;                                  ///< Resolved MAC address.
         std::chrono::steady_clock::time_point expiryTime;       ///< Entry expiration timestamp.
         NudState state = NudState::ACTIVE;                      ///< Current reachability state.
         uint32_t timerId = 0;                                   ///< NUD state transition timer ID.
@@ -220,7 +221,7 @@ public:
      *
      * @see resolveAndSend
      */
-    void addNdpEntry(types::IPv6Address targetIp, uint64_t targetMac, bool proxy = false, bool isStatic = false);
+    void addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool proxy = false, bool isStatic = false);
 
     /**
      * @brief Resolves an IP address and sends queued packet, or queues if unresolved.
@@ -256,7 +257,7 @@ public:
      * @param currentMac Source MAC address for this NA.
      * @param targetIp Destination IPv6 address for the NA (unicast to solicitor if provided).
      */
-    void sendNeighborAdvertisement(uint64_t currentMac, types::IPv6Address targetIp);
+    void sendNeighborAdvertisement(types::Mac currentMac, types::IPv6Address targetIp);
 
     /**
      * @brief Sends an unsolicited Neighbor Advertisement for all local addresses.
@@ -282,7 +283,7 @@ public:
      * @param targetMac Destination MAC address.
      * @param targetIp Destination IPv6 address.
      */
-    void sendRouteAdvertisement(uint64_t targetMac, types::IPv6Address targetIp);
+    void sendRouteAdvertisement(types::Mac targetMac, types::IPv6Address targetIp);
 
     /**
      * @brief Sends an ICMPv6 Redirect message to a host.
@@ -328,7 +329,7 @@ public:
      * @param srcIp IPv6 source address of the sender.
      * @param srcMac MAC address of the sender.
      */
-    void receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, types::IPv6Address srcIp, uint64_t srcMac);
+    void receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, types::IPv6Address srcIp, types::Mac srcMac);
 
     /**
      * @brief Processes an inbound Router Advertisement.
@@ -340,7 +341,7 @@ public:
      * @param sourceIp IPv6 source address of the router.
      * @param srcMac MAC address of the router.
      */
-    void receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, types::IPv6Address sourceIp, uint64_t srcMac);
+    void receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, types::IPv6Address sourceIp, types::Mac srcMac);
 
     /**
      * @brief Processes an inbound Redirect message.
@@ -418,7 +419,7 @@ public:
      * @param mac MAC address to whitelist/blacklist.
      * @param remove If true, removes from whitelist. Default false (add).
      */
-    void addRaGuardAllowedMac(uint64_t mac, bool remove = false);
+    void addRaGuardAllowedMac(types::Mac mac, bool remove = false);
 
     /**
      * @brief Resolves an IPv6 address to its cached MAC address.
@@ -445,7 +446,7 @@ private:
     std::unordered_map<types::IPv6Address, std::queue<processing::PacketBuilder>> packetQueuePerIp; ///< Queued packets pending resolution.
 
     // RA Guard and security
-    std::unordered_set<uint64_t> raGuardAllowedMacs;           ///< Whitelisted RA sources.
+    std::unordered_set<types::Mac> raGuardAllowedMacs;           ///< Whitelisted RA sources.
 
     // Timing and scheduling
     std::unordered_map<types::IPv6Address, std::chrono::steady_clock::time_point> lastUnsolicitedNaTime;
@@ -489,7 +490,7 @@ protected:
      * @param targetIp Resolved IPv6 address.
      * @param macAddress Associated MAC address.
      */
-    void processQueuedPackets(types::IPv6Address targetIp, uint64_t macAddress);
+    void processQueuedPackets(types::IPv6Address targetIp, types::Mac macAddress);
 
     /**
      * @brief Callback invoked when a neighbor transitions from REACHABLE to stale.
@@ -597,7 +598,7 @@ protected:
      * @param currentMac Source MAC address for the NA.
      * @param targetIp Destination address for the NA (nullptr for unspecified).
      */
-    void neighborAdvertisement(processing::PacketBuilder& packet, uint64_t currentMac, types::IPv6Address* targetIp);
+    void neighborAdvertisement(processing::PacketBuilder& packet, types::Mac currentMac, types::IPv6Address* targetIp);
 
     /**
      * @brief Constructs a Router Solicitation ICMPv6 packet.
@@ -607,7 +608,7 @@ protected:
      * @param packet PacketBuilder to write into.
      * @param currentMac Source MAC address for the RS.
      */
-    void routeSolicitation(processing::PacketBuilder& packet, uint64_t currentMac);
+    void routeSolicitation(processing::PacketBuilder& packet, types::Mac currentMac);
 
     /**
      * @brief Constructs a Router Advertisement ICMPv6 packet.
@@ -618,7 +619,7 @@ protected:
      * @param packet PacketBuilder to write into.
      * @param currentMac Source MAC address for the RA.
      */
-    void routeAdvertisement(processing::PacketBuilder& packet, uint64_t currentMac);
+    void routeAdvertisement(processing::PacketBuilder& packet, types::Mac currentMac);
 
     core::Global& global;                                     ///< Reference to global system controller.
 };

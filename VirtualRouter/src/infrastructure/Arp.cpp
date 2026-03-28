@@ -87,7 +87,7 @@ bool Arp::isShutdown()
     return !running.load(std::memory_order_relaxed);
 }
 
-void Arp::addArpEntry(types::IPv4Address targetIp, uint64_t targetMac, bool proxy, bool isStatic)
+void Arp::addArpEntry(types::IPv4Address targetIp, types::Mac targetMac, bool proxy, bool isStatic)
 {
     auto now = std::chrono::steady_clock::now();
 
@@ -434,7 +434,7 @@ void Arp::receiveReply(const packet::ArpHeader& receivedReply)
     processQueuedPackets(senderIp, utils::readU64(mac));
 }
 
-void Arp::receiveRequest(const packet::ArpHeader& request, uint64_t sourceMac)
+void Arp::receiveRequest(const packet::ArpHeader& request, types::Mac sourceMac)
 {
     types::IPv4Address targetIp = request.raw->targetIpAddress;
     types::IPv4Address senderIp = request.raw->senderIpAddress;
@@ -480,7 +480,7 @@ void Arp::receiveRequest(const packet::ArpHeader& request, uint64_t sourceMac)
     currentInterface->enqueuePacket(reply, sourceMac);
 }
 
-void Arp::processQueuedPackets(types::IPv4Address targetIp, uint64_t macAddress)
+void Arp::processQueuedPackets(types::IPv4Address targetIp, types::Mac macAddress)
 {
     std::queue<processing::PacketBuilder> packets;
     {
@@ -582,7 +582,7 @@ void Arp::scheduleRequest(types::IPv4Address targetIp, ArpCacheEntry& entry)
 }
 
 // Method to send an ARP reply
-void Arp::sendReply(uint64_t targetMac, types::IPv4Address targetIp) 
+void Arp::sendReply(types::Mac targetMac, types::IPv4Address targetIp) 
 {
     if (!currentInterface->shutdownFlag.load(std::memory_order_relaxed))
     {
@@ -597,7 +597,7 @@ void Arp::sendReply(uint64_t targetMac, types::IPv4Address targetIp)
 }
 
 // Creates an ARP request packet
-void Arp::arpRequest(processing::PacketBuilder& packet, uint64_t currentMac, types::IPv4Address sourceIp, types::IPv4Address targetIp) 
+void Arp::arpRequest(processing::PacketBuilder& packet, types::Mac currentMac, types::IPv4Address sourceIp, types::IPv4Address targetIp) 
 {
     packet::EthernetHeader eth;
     packet::ArpHeader arp;
@@ -625,7 +625,7 @@ void Arp::arpRequest(processing::PacketBuilder& packet, uint64_t currentMac, typ
 }
 
 // Creates an ARP reply packet
-void Arp::arpReply(processing::PacketBuilder& packet, uint64_t currentMac, uint64_t targetMac, types::IPv4Address sourceIp, types::IPv4Address targetIp) 
+void Arp::arpReply(processing::PacketBuilder& packet, types::Mac currentMac, types::Mac targetMac, types::IPv4Address sourceIp, types::IPv4Address targetIp) 
 {
     packet::EthernetHeader eth;
     packet::ArpHeader arp;

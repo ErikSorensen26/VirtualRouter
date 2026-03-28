@@ -8,10 +8,10 @@
 
 #include <string>
 #include <cstdint>
+#include <functional>
 
 namespace interface
 {
-
 /**
  * @enum InterfaceType
  * @brief Enumeration of all supported interface types.
@@ -94,7 +94,85 @@ inline static std::string getInterfaceType(const InterfaceType type)
     }
 }
 
+/**
+ * @brief Encodes an interface type and fractional interface number into a 32-bit key.
+ *
+ * The upper 8 bits carry the @ref InterfaceType; the lower 24 bits hold the
+ * interface number scaled by 256 (to represent sub-interface fractions like
+ * GigabitEthernet0/0.1). The result is suitable for use as an unordered-map
+ * key or as a stable interface identifier passed between subsystems.
+ *
+ * @param type  Interface type to encode.
+ * @param id    Interface number, including fractional sub-interface component.
+ * @return 32-bit key with type in bits [31:24] and fixed-point id in bits [23:0].
+ */
+inline uint32_t encodeInterfaceKey(InterfaceType type, float id)
+{
+    uint8_t typeEncoded = static_cast<uint8_t>(type);
+    float clamped = std::max(0.0f, std::min(id, 65535.256f));
+    uint32_t fixed = static_cast<uint32_t>(clamped * 256.0f);
+    fixed &= 0x00FFFFFF;
+    return (static_cast<uint32_t>(typeEncoded) << 24) | fixed;
+}
+
+/**
+ * @brief decodes a 32-bit key into a interface type and fractional interface number.
+ *
+ * @param id    Interface number, including fractional sub-interface component.
+ * @return std::pair<InterfaceType, float> Interface type and interface id.
+ */
+inline std::pair<InterfaceType, float> decodeInterfaceKey(uint32_t key)
+{
+    InterfaceType type = static_cast<InterfaceType>((key >> 24) & 0xFF);
+    uint32_t fixed = key & 0x00FFFFFF;
+    float id = static_cast<float>(fixed) / 256.0f;
+    return { type, id };
+}
+
+
+/**
+ * @brief Interface Key type
+ * @ingroup INTERFACE_CONFIGS
+ *
+ * Defines the interface key type for configurations
+ */
+struct InterfaceKey
+{
+    // TODO finish doxy
+    InterfaceKey() = default;
+
+    bool operator==(const InterfaceKey& k) const noexcept
+    {
+        return k.getId() == id;
+    }
+
+    InterfaceKey(InterfaceType type, float id)
+        : id(encodeInterfaceKey(type, id))
+    {}
+
+    InterfaceKey(uint32_t ifaceId)
+        : id(ifaceId)
+    {}
+
+    uint32_t getId() const { return id; }
+
+    std::pair<InterfaceType, float> decode() { return decodeInterfaceKey(id); }
+
+private:
+    uint32_t id;
+};
 } // namespace interface
 
-#endif // INTERFACE_TYPE_HPP
+namespace std
+{
+template<>
+struct hash<interface::InterfaceKey>
+{
+    size_t operator()(const interface::InterfaceKey& key) const noexcept
+    {
+        return std::hash<uint32_t>()(key.getId());
+    }
+};
+}
 
+#endif // INTERFACE_TYPE_HPP

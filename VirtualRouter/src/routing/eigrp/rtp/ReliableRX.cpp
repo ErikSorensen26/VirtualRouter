@@ -299,7 +299,7 @@ void ReliableTransport::processUpdate(RTPInfo& info)
         routeBuffer.reserve(info.opts.size());
         for (const auto& opt : info.opts)
         {
-            if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)
+            if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey.getId(), af); route)
             {
                 routeBuffer.emplace_back(std::move(*route));
             }
@@ -405,7 +405,7 @@ void ReliableTransport::processQuery(RTPInfo& info)
     std::vector<ReceivedRoute> queriedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)
+        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey.getId(), af); route)
         {
             queriedRoutes.emplace_back(std::move(*route));
         }
@@ -444,7 +444,7 @@ void ReliableTransport::processReply(RTPInfo& info)
     std::vector<ReceivedRoute> receivedRoutes;
     for (const auto& opt : info.opts)
     {
-        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey, af); route)
+        if (auto route = TLVBuilder::decodeRoute(opt, iface.interfaceKey.getId(), af); route)
         {
             receivedRoutes.emplace_back(std::move(*route));
         }

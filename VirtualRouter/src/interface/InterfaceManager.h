@@ -13,6 +13,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <EventManager.hpp>
+#include "configs/InterfaceType.hpp"
 
 namespace types { struct IPv4Prefix; struct IPv6Prefix; }
 
@@ -106,13 +107,13 @@ public:
      * @brief Add an interface to the VRF.
      * @return The inserted pointer, or nullptr if the key is already present.
      */
-    Interface* add(Interface* iface, uint32_t key);
+    Interface* add(Interface* iface, InterfaceKey key);
 
     /**
      * @brief Look up an interface by key.
      * @return Pointer or nullptr if not found.
      */
-    Interface* get(uint32_t key) const;
+    Interface* get(InterfaceKey key) const;
 
     /**
      * @brief Remove an interface from the VRF.
@@ -122,7 +123,7 @@ public:
      *
      * @return true if found and removed, false otherwise.
      */
-    bool remove(uint32_t key);
+    bool remove(InterfaceKey key);
 
     /**
      * @brief return true if empty, otherwise false.
@@ -132,7 +133,7 @@ public:
     /**
      * @brief Return a copy of the current interface map for safe iteration.
      */
-    std::unordered_map<uint32_t, Interface*> snapshot() const;
+    std::unordered_map<InterfaceKey, Interface*> snapshot() const;
 
     /**
      * @brief Subscribe to an interface lifecycle event.
@@ -190,7 +191,7 @@ private:
     friend class Interface;
 
     mutable std::mutex mutex; ///< Guards `interfaces`.
-    std::unordered_map<uint32_t, Interface*> interfaces; ///< All interfaces in this VRF.
+    std::unordered_map<interface::InterfaceKey, Interface*> interfaces; ///< All interfaces in this VRF.
 
 
     /**

@@ -120,7 +120,7 @@ bool RouterEigrpClassicVrf_Neighbor_Handler(EIGRP_PARAMS)
         ctx.terminal.controller.print("\r\n%EIGRP: Unknown interface type");
         return false;
     }
-    uint32_t key = interface::calculateInterfaceKey(type, std::stof(args[2]));
+    interface::InterfaceKey key(type, std::stof(args[2]));
     if (!ctx.negate)
         ctx.currentEigrp->getGlobalConfigMgr().enableUnicastPeer(neighborIp, key);
     else
@@ -152,7 +152,7 @@ bool RouterEigrpClassicVrf_Network_Handler(EIGRP_PARAMS)
 bool RouterEigrpClassicVrf_PassiveInterface_Handler(EIGRP_PARAMS)
 {
     ctx.terminal.isList = true;
-    uint32_t key = interface::calculateInterfaceKey(interface::getInterfaceType(args[0]), std::stof(args[1]));
+    interface::InterfaceKey key(interface::getInterfaceType(args[0]), std::stof(args[1]));
     ctx.currentEigrp->getGlobalConfigMgr().setPassiveInterface(key, !ctx.negate);
     return true;
 }

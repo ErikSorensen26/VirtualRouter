@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <Mac.hpp>
 
 namespace types { struct IPPrefix; }
 namespace types { struct IPv4Address; }
@@ -36,7 +37,7 @@ bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::
 bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::IPv4Prefix& prefix);
 
 bool expandIPv6Address(std::string& ipv6Address);
-bool extractMacAddress(const std::string& str, uint64_t& mac);
+bool extractMacAddress(const std::string& str, types::Mac mac);
 
 bool isIPv6Address(const std::string& address);
 bool isIPv6AddressWithMask(const std::string& addressWithMask);
