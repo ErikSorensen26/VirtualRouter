@@ -99,7 +99,21 @@ public:
      * @return True if a new entry was inserted, false if an existing entry
      *         was updated in place.
      */
-    bool add(Key& key, Record& record);
+    bool add(Key& key, Record& record)
+    {
+        auto it = outboundInfo.find(key);
+        if (it != outboundInfo.end())
+        {
+            auto& slot = outbound[it->second.index];
+            slot = std::move(record);
+            return false;
+        }
+
+        outbound.emplace_back(std::move(record));
+        outboundKeys.emplace_back(key);
+        outboundInfo.emplace(key, OutboundInfo{outbound.size(), 0});
+        return true;
+    }
 
     /**
      * @brief Adds or replaces an entry in the retransmission queue (copy overload).
@@ -109,7 +123,21 @@ public:
      * @return True if a new entry was inserted, false if an existing entry
      *         was updated in place.
      */
-    bool add(const Key& key, const Record& record);
+    bool add(const Key& key, const Record& record)
+    {
+        auto it = outboundInfo.find(key);
+        if (it != outboundInfo.end())
+        {
+            auto& slot = outbound[it->second.index];
+            slot = record;
+            return false;
+        }
+
+        outbound.emplace_back(record);
+        outboundKeys.emplace_back(key);
+        outboundInfo.emplace(key, OutboundInfo{outbound.size(), 0});
+        return true;
+    }
 
     /**
      * @brief Checks whether an entry with the given key is present.
@@ -117,7 +145,10 @@ public:
      * @param key  The key to search for.
      * @return True if the key exists in the queue.
      */
-    bool has(const Key& key);
+    bool has(const Key& key)
+    {
+        return outboundInfo.contains(key);
+    }
 
     /**
      * @brief Retrieves a copy of the record associated with @p key.
@@ -125,7 +156,13 @@ public:
      * @param key  The key to look up.
      * @return The stored record, or `std::nullopt` if the key is not present.
      */
-    std::optional<Record> get(const Key& key);
+    std::optional<Record> get(const Key& key)
+    {
+        auto it = outboundInfo.find(key);
+        if (it == outboundInfo.end())
+            return std::nullopt;
+        return outbound[it->second.index];
+    }
 
     /**
      * @brief Returns a read-only view of all records currently in the queue.
@@ -133,7 +170,10 @@ public:
      * The order of records is not guaranteed to be insertion order after
      * removals (swap-and-pop is used internally).
      */
-    const std::vector<Record>& getAll() const;
+    const std::vector<Record>& getAll() const
+    {
+        return outbound;
+    }
 
     /**
      * @brief Removes the entry identified by @p key.
@@ -145,7 +185,36 @@ public:
      * @param key  The key of the entry to remove.
      * @return True if the entry was found and removed, false if not present.
      */
-    bool erase(const Key& key);
+    bool erase(const Key& key)
+    {
+        auto it = outboundInfo.find(key);
+        if (it == outboundInfo.end())
+            return false;
+
+        const size_t idx = it->second.index;
+        const size_t last = outbound.size() - 1;
+
+        if (idx != last)
+        {
+            outbound[idx] = std::move(outbound[last]);
+            outboundKeys[idx] = std::move(outboundKeys[last]);
+            outboundInfo[outboundKeys[idx]].index = idx;
+        }
+
+        outbound.pop_back();
+        outboundKeys.pop_back();
+        outboundInfo.erase(it);
+
+        if (cursor >= outbound.size()) cursor = 0;
+        if (burstRemaining > 0) --burstRemaining;
+
+        if (outbound.empty())
+        {
+            cursor = 0;
+            burstRemaining = 0;
+        }
+        return true;
+    }
 
     /**
      * @brief Removes all entries and resets burst state.
@@ -153,12 +222,22 @@ public:
      * Called when the adjacency resets to ensure no stale entries are
      * retransmitted to the next incarnation of the neighbor.
      */
-    void clear();
+    void clear()
+    {
+        outbound.clear();
+        outboundKeys.clear();
+        outboundInfo.clear();
+        cursor = 0;
+        burstRemaining = 0;
+    }
 
     /**
      * @brief Returns true if there are any pending entries in the queue.
      */
-    bool getActive() const;
+    bool getActive() const
+    {
+        return !outbound.empty();
+    }
 
     /**
      * @brief Initialises a retransmit burst over all current entries.
@@ -171,7 +250,11 @@ public:
      * cursor and refreshes the budget, which may cause some entries to be
      * visited twice.
      */
-    void beginRetransmitBurst();
+    void beginRetransmitBurst()
+    {
+        burstRemaining = static_cast<uint32_t>(outbound.size());
+        if (cursor >= outbound.size()) cursor = 0;
+    }
 
     /**
      * @brief Retrieves the next record in the current burst without advancing.
@@ -184,7 +267,18 @@ public:
      * @return True if a record was written to @p recordOut, false if the burst
      *         budget is exhausted or the queue is empty.
      */
-    bool nextInBurst(Record& recordOut);
+    bool nextInBurst(Record& recordOut)
+    {
+        if (burstRemaining == 0 || outbound.empty())
+            return false;
+
+        if (cursor >= outbound.size())
+            cursor = 0;
+
+        recordOut = outbound[cursor];
+
+        return true;
+    }
 
     /**
      * @brief Marks the burst entry identified by @p key as retransmitted and
@@ -198,12 +292,32 @@ public:
      *
      * @param key  Key of the entry just sent.
      */
-    void markBurst(Key& key);
+    void markBurst(Key& key)
+    {
+        if (auto it = outboundInfo.find(key); it != outboundInfo.end())
+        {
+            cursor = (cursor + 1) % outbound.size();
+            --burstRemaining;
+
+            it->second.retransmissions++;
+            if (it->second.retransmissions >= getMaxRetransmission())
+            {
+                erase(key);
+                return;
+            }
+
+            cursor = (cursor + 1) % outbound.size();
+            --burstRemaining;
+        }
+    }
 
     /**
      * @brief Returns true while the current burst still has entries to deliver.
      */
-    bool burstActive() const;
+    bool burstActive() const
+    {
+        return burstRemaining != 0;
+    }
 
 private:
     /**
@@ -212,7 +326,12 @@ private:
      * Reads `RETRANSMISSION_DC_LIMIT` for demand circuits or
      * `RETRANSMISSION_NON_DC_LIMIT` for regular interfaces.
      */
-    uint8_t getMaxRetransmission();
+    uint8_t getMaxRetransmission()
+    {
+        return iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT>().load()
+            ? process.getConfigs().get<config::Ospf::RETRANSMISSION_DC_LIMIT>().load()
+            : process.getConfigs().get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT>().load();
+    }
 
     size_t   cursor = 0;          ///< Index of the next entry to deliver in the current burst.
     uint32_t burstRemaining = 0;  ///< Number of entries remaining in the current burst.

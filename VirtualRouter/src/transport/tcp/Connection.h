@@ -132,6 +132,13 @@ public:
      */
     std::optional<TcpSocketKey> socketKey() const noexcept;
 
+    /**
+     * @brief returns the amount of pending tx bytes to be sent to the remote addr/port.
+     *
+     * @return size_t amount of bytes remaining to send.
+     */
+    size_t pendingTxBytes() const noexcept { return bufferTx.size(); }
+
 private:
     friend class RxConsumer;
     friend class TcpEngine;
