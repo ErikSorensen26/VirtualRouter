@@ -10,11 +10,20 @@
 namespace core
 {
 
-VirtualRouter::VirtualRouter(Global& global, const std::string& name)
-    : defaulted(name == "default"), tcpManager(*this), routingTable(global.scheduler), global(global)
+VirtualRouter::VirtualRouter(Global& g, const std::string& name)
+    : defaulted(name == "default"),
+      configs([&g, &name]() {
+          auto& vrfs = g.configs->get<config::Global::VRF_CONFIGS>();
+          return g.registry.emplaceBack(vrfs, name);
+      }()),
+      tcpManager(*this),
+      routingTable(g.scheduler),
+      global(g)
 {
     instanceName = name;
     enabledAddressFamilies.insert(types::AddressFamily::IPv4);
+
+    // TODO initiate routing protocols
 }
 
 // Destructor
@@ -265,6 +274,16 @@ bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
         return true;
     }
     return false;
+}
+
+config::VrfRegistry& VirtualRouter::getConfigs()
+{
+    return configs.get();
+}
+
+config::GlobalRegistry& VirtualRouter::getGlobalConfigs()
+{
+    return global.configs.get();
 }
 
 config::Registry& VirtualRouter::getRegistry()

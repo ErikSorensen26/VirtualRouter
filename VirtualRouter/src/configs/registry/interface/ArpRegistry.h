@@ -21,6 +21,7 @@ enum class Arp
     PROBE_INTERVAL,
     PROBE_COUNT,
     TIMEOUT,
+    COUNT
 };
 
 #define ARP_DEFAULTS(X) \

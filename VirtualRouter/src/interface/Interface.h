@@ -60,7 +60,7 @@ struct InterfaceCreation
     float interfaceId;              ///< ID of interface (user input).
     core::VirtualRouter& vrf;             ///< VRF that the interface will be initialized in.
     const hardware::HwIfaceInfo& info;        ///< Hardware information of the NIC.
-    bool debug;                     ///< Debug mode for testing.
+    bool debug = false;             ///< Debug mode for testing.
 };
 
 /**

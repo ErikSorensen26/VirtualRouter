@@ -28,6 +28,8 @@
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
 #include "IPAddress.h"
+#include "configs/RegistryReference.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
 
 namespace interface { class Interface; }
 namespace hardware { struct HwIfaceInfo; }
@@ -350,7 +352,7 @@ public:
      *
      * @thread_safety Protected internally by interfaceMutex.
      */
-    interface::Interface* addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug);
+    interface::Interface* addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug = false);
 
     /**
      * @brief Retrieve an interface by its computed key.
@@ -370,7 +372,7 @@ public:
      *
      * This is exposed because certain routing protocols require full interface iteration.
      */
-    std::unordered_map<interface::InterfaceKey, interface::Interface*>& getInterfaceList();
+    std::unordered_map<interface::InterfaceKey, interface::Interface>& getInterfaceList();
 
     /**
      * @brief Remove and destroy an interface.
@@ -454,11 +456,11 @@ private:
 
     // interface::Interface table
     std::mutex interfaceMutex; ///< Guards interfaceList for all CRUD operations.
-    std::unordered_map<interface::InterfaceKey, interface::Interface*> interfaceList; ///< All physical/logical interfaces. Owned by Global.
+    std::unordered_map<interface::InterfaceKey, interface::Interface> interfaceList; ///< All physical/logical interfaces. Owned by Global.
 
     // Routing Instances
     std::mutex routingInstanceMutex; ///< Guards routingInstances for all CRUD operations.
-    std::unordered_map<std::string, VirtualRouter*> routingInstances; ///< All VRF instances. Owned by Global.
+    std::unordered_map<std::string, VirtualRouter> routingInstances; ///< All VRF instances. Owned by Global.
     
 public:
     // PUBLIC SYSTEM COMPONENTS
@@ -468,7 +470,7 @@ public:
 
     config::Registry registry; ///< Global configuration registry (read by CLI and protocol subsystems).
 
-    GlobalConfigs configs;       ///< Global ARP/NDP/NSF/etc configuration
+    config::Reference<config::GlobalRegistry> configs; ///< Global ARP/NDP/NSF/etc configuration
 
     core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
     core::TimeManager timeManager;     ///< Global time manager for time keeping.
@@ -478,6 +480,7 @@ public:
 
     qos::egress::TxQueueManager txMgr;        ///< Hardware TX queue controller.
     qos::ingress::RxQueueManager rxMgr;        ///< Hardware RX queue controller.
+
 };
 
 } // namespace core

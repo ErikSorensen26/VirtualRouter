@@ -34,6 +34,7 @@ Interface::Interface(const InterfaceCreation& cfgs)
     debug(cfgs.debug),
     threadsRunning(false)
 {
+    // TODO add configs
     cfgs.vrf.getGlobal().txMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
     cfgs.vrf.getGlobal().rxMgr.addInterface(*this, configs.hwInfo.ifname, { .maxQueues = 1 });
     cfgs.vrf.getGlobal().engine.hwManager.registerInterface(&configs.hwInfo, this);

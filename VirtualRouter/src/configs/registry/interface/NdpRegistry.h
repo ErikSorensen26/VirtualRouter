@@ -46,7 +46,8 @@ enum class NdpBase
     NUD_REFRESH_PERIOD,
     REACHABLE_TIME,
     RESOLUTION_DATA_LIMIT,
-    ROUTE_OWNER
+    ROUTE_OWNER,
+    COUNT
 };
 
 #define NDP_BASE_DEFAULTS(X) \
@@ -92,6 +93,7 @@ enum class NdpEntry
     NO_RTR_ADDRESS,
     OFF_LINK,
     NO_ADVERTISE,
+    COUNT
 };
 
 #define NDP_ENTRY_DEFAULTS(X) \
@@ -140,7 +142,8 @@ enum class Ndp
     RA_MTU_SUPPRESS,
     RA_SUPPRESS,
     RA_SUPPRESS_ALL,
-    ROUTER_PREFERENCE
+    ROUTER_PREFERENCE,
+    COUNT
 };
 
 #define NDP_DEFAULTS(X) \
@@ -171,13 +174,11 @@ enum class Ndp
 CONFIG_DEFAULT_TABLE(NDP_DEFAULTS);
 
 using NdpRegistry = SubRegistry<Ndp,
+    ReferenceContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Ndp::BASE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::ADVERTISEMENT_INTERVAL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_DEFAULT_ROUTE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_PREFIX)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::CACHE_EXPIRE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::CACHE_REFRESH)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::DAD_ATTEMPTS)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::DAD_TIME)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::DESTINATION_GUARD)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::MANAGED_CONFIG_FLAG)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::NA_GLEAN)>,

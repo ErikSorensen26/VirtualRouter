@@ -25,23 +25,23 @@ enum class Vrf2
     ROUTER_OSPF, // TODO uitn32 reference
     ROUTER_OSPFV3, // TODO uint32 reference
     ROUTER_RIP, // TODO reference
-    IP_DOMAIN_LIST, // TODO
-    IP_DOMAIN_LOOKUP_SOURCE_INTERFACE, // TODO interfacekey
-    IP_DOMAIN_NAME, // TODO
-    IP_HOST, // TODO
-    IP_IGMP_IMMEDIATE_LEAVE_GROUP_LIST, // TODO strings
-    IP_IGMP_LIMIT, // TODO uint16
-    IP_IGMP_SSM_MAP, // TODO bool
-    IP_IGMP_SSM_MAP_QUERY_DNS, // TODO bool
-    IP_IGMP_SSM_MAP_STATIC, // TODO
-    IP_MROUTE, // TODO
-    IP_MSDP, // TODO
-    IP_MULTICAST, // TODO
-    IP_MULTICAST_ROUTING, // TODO bool
-    IP_NAME_SERVER, // TODO ipaddress
-    IP_PIM, // TODO
-    IP_RADIUS_SOURCE_INTERFACE, // TODO interfacekey
-    IP_ROUTE, // TODO
+    IPV4_DOMAIN_LIST, // TODO
+    IPV4_DOMAIN_LOOKUP_SOURCE_INTERFACE, // TODO interfacekey
+    IPV4_DOMAIN_NAME, // TODO
+    IPV4_HOST, // TODO
+    IPV4_IGMP_IMMEDIATE_LEAVE_GROUP_LIST, // TODO strings
+    IPV4_IGMP_LIMIT, // TODO uint16
+    IPV4_IGMP_SSM_MAP, // TODO bool
+    IPV4_IGMP_SSM_MAP_QUERY_DNS, // TODO bool
+    IPV4_IGMP_SSM_MAP_STATIC, // TODO
+    IPV4_MROUTE, // TODO
+    IPV4_MSDP, // TODO
+    IPV4_MULTICAST, // TODO
+    IPV4_MULTICAST_ROUTING, // TODO bool
+    IPV4_NAME_SERVER, // TODO ipaddress
+    IPV4_PIM, // TODO
+    IPV4_RADIUS_SOURCE_INTERFACE, // TODO interfacekey
+    IPV4_ROUTE, // TODO
     IPV6_MLD_SSM_MAP, // TODO bool
     IPV6_MLD_SSM_MAP_QUERY_DNS, // TODO bool
     IPV6_MLD_SSM_MAP_STATIC, // TODO
@@ -58,10 +58,11 @@ enum class Vrf2
 enum class Vrf
 {
     ARP_STATIC_ENTRY,
+    COUNT
 };
 
 using VrfRegistry = SubRegistry<Vrf,
-    ValueField<std::vector<types::IPv4Address, types::Mac>>
+    ValueField<std::vector<std::tuple<types::IPv4Address, types::Mac>> CONFIG_INDEX_ARG(Vrf::ARP_STATIC_ENTRY)>
 >;
 }
 

@@ -19,6 +19,7 @@
 #include "configs/Registry.hpp"
 #include "routing/RoutingTable.hpp"
 #include "interface/InterfaceManager.h"
+#include "configs/registry/global/GlobalRegistry.h"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
@@ -321,6 +322,20 @@ public:
     interface::InterfaceManager& getInterfaceManager() { return ifaceMgr; }
 
     /**
+     * @brief Returns the per-vrf configuation registry.
+     *
+     * The @ref config::VrfRegistry holds all configs belonging to this VRF.
+     */
+    config::VrfRegistry& getConfigs();
+
+    /**
+     * @brief Returns the global configuation registry.
+     *
+     * The @ref config::GlobalRegistry holds all configs belonging to the global scope..
+     */
+    config::GlobalRegistry& getGlobalConfigs();
+
+    /**
      * @brief Returns the VRF-scoped configuration registry.
      *
      * Routing protocols and CLI commands use this registry to read and write
@@ -364,6 +379,8 @@ private:
     friend class interface::Interface;
     uint32_t instanceId{0};
     const bool defaulted{false}; ///< True for the single "default" VRF that cannot be deleted.
+
+    config::Reference<config::VrfRegistry> configs; ///< Tracks all VRF related configs.
 
     interface::InterfaceManager ifaceMgr; ///< Tracks interfaces attached to this VRF.
 

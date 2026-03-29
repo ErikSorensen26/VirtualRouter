@@ -156,7 +156,7 @@ struct InterfaceKey
 
     uint32_t getId() const { return id; }
 
-    std::pair<InterfaceType, float> decode() { return decodeInterfaceKey(id); }
+    std::pair<InterfaceType, float> decode() const { return decodeInterfaceKey(id); }
 
 private:
     uint32_t id;
