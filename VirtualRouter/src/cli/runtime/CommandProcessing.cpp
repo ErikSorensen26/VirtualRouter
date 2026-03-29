@@ -61,6 +61,7 @@ bool CliSession::executeCommand(std::string &command)
 	error = false;
 	isList = false;
 	textLine = false;
+	isCommandExecutionSuccessful = false;
 
 	CliMode preMode = execution.getMode();
 

@@ -26,9 +26,6 @@ Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRo
     rxMgr.setCorePool({4, 5, 6, 7});
     rxMgr.setCpuPolicy(qos::ingress::RxQueueManager::CpuPolicy::EqualShare);
 
-    if (!test) {
-        engine.initEngine(stfs);
-    }
 }
 
 Global::~Global()

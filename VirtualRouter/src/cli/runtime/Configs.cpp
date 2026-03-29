@@ -1,5 +1,7 @@
 // Configs.cpp
 
+// TODO add hex range volatile value
+
 #include <iostream>
 
 #include <IPAddress.h>

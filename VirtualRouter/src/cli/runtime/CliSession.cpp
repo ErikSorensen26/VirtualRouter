@@ -830,26 +830,16 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
             }
             availableCommands.push_back(commandData);
 
-            // Check if the user input matches a pattern or specific command
+            // Check if the user input matches a specific (literal) command
             std::string commandName = (*command)[CLI_JSON_COMMAND_NAME];
-            if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
+            if (!engine.isVolatile(commandName) && commandName.size() >= userInput.size())
             {
-                commandNode = command;
-                matchCount++;
-                patternMatched = true;
-                if (!isValidCommandDirectory(commandNode)) 
-                {
-                    endOfCommand = true;
-                }
-            } 
-            else if (!engine.isVolatile(commandName) && commandName.size() >= userInput.size())
-            {
-                if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), lowerCase(commandName).begin()) && !isExactMatch) 
+                if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), lowerCase(commandName).begin()) && !isExactMatch)
                 {
                     commandNode = command;
                     matchCount++;
                 }
-                if (commandName == lowerUserInput) 
+                if (commandName == lowerUserInput)
                 {
                     isExactMatch = true;
                     exactMatchCommand.name = lowerCase((*command)[CLI_JSON_COMMAND_NAME]);
@@ -863,6 +853,28 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
                     }
                     commandNode = command;
                 }
+            }
+        }
+    }
+
+    // Second pass: try WORD/LINE patterns only if no literal command matched
+    if (matchCount == 0 && !isExactMatch)
+    {
+        for (const json* command : tempDir)
+        {
+            if (!command->contains(CLI_JSON_COMMAND_NAME) || !command->contains(CLI_JSON_DESCRIPTION))
+                continue;
+            std::string commandName = (*command)[CLI_JSON_COMMAND_NAME];
+            if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
+            {
+                commandNode = command;
+                matchCount++;
+                patternMatched = true;
+                if (!isValidCommandDirectory(commandNode))
+                {
+                    endOfCommand = true;
+                }
+                break;
             }
         }
     }
@@ -1233,7 +1245,7 @@ bool CliSession::handlePagination(char nextch)
             controller.print("\033[2k\033[1G");
             controller.print("\033[1A");
         }
-        else if (nextch == 'q')
+        else
         {
             controller.print("\033[2k\033[1G");
             controller.print(std::string(10, ' '));

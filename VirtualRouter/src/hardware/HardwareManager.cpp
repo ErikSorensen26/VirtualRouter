@@ -44,10 +44,10 @@ void HardwareManager::addHardware(const std::string& hwConfigFile, cli::FileSyst
     }
 
     // Load interface configurations from JSON data
-    if (!configJson.is_object() || !configJson.contains("interface::Interface") || !configJson["interface::Interface"].is_object())
+    if (!configJson.is_object() || !configJson.contains("Interface") || !configJson["Interface"].is_object())
         return;
 
-    nlohmann::ordered_json& interfaces = configJson["interface::Interface"];
+    nlohmann::ordered_json& interfaces = configJson["Interface"];
 
     for (auto& [key, value] : interfaces.items())
     {
@@ -109,8 +109,11 @@ void HardwareManager::addHardware(const std::string& hwConfigFile, cli::FileSyst
         return;
     }
 
-    nlThreadRunning.store(true);
-    nlThread = std::thread(&HardwareManager::netlinkMonitorThread, this);
+    if (!nlThread.joinable())
+    {
+        nlThreadRunning.store(true);
+        nlThread = std::thread(&HardwareManager::netlinkMonitorThread, this);
+    }
 }
 
 HardwareManager::~HardwareManager()

@@ -273,8 +273,7 @@ std::string Console::input(std::string testInput, bool pagination)
 
             if (pagination)
             {
-                if (hInput == '\x20' || hInput == 'q') return std::string(1, hInput);
-                else return "";
+                return std::string(1, hInput);
             }
 
             // 1. Handle single-char special keys (Enter, Tab, '?', Backspace, Delete)
