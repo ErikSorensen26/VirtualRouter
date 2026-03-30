@@ -121,6 +121,8 @@ public:
 
     std::vector<std::string> getHistory() { return history; }
 
+    void setTerminalWidth(size_t w) { controller.setTerminalWidth(w); }
+
     // Member variables for line wrapping and display.
     ConsoleController& controller;  ///< Terminal deciding whether its using a simulated terminal.
 

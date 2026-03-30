@@ -8,16 +8,15 @@
 #ifndef ARP_H
 #define ARP_H
 
+#include <mutex>
 #include <chrono>
+#include <shared_mutex>
 #include <atomic>
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
 #include <IPAddress.h>
 #include <Mac.hpp>
-#include <ControlScheduler.h>
-#include "configs/registry/interface/ArpRegistry.h"
-#include "configs/RegistryReference.hpp"
 
 namespace core { class Global; }
 namespace interface { class Interface; }
@@ -46,6 +45,25 @@ class Arp
 {
 public:
     friend class Internal_ArpTest;
+
+    /**
+     * @struct Configs
+     * @brief Runtime-tunable configuration for the ARP module.
+     * @ingroup INFRASTRUCTURE
+     *
+     * All fields are atomic and may be updated from any thread.
+     */
+    struct Configs
+    {
+        std::atomic<bool> authorized = false;       ///< Whether authoritative ARP is enabled.
+        std::atomic<bool> packetPriority = false;   ///< Packet-priority flag (TODO).
+
+        std::atomic<uint8_t> probeInterval = 5;     ///< Seconds between ARP retry probes.
+        std::atomic<uint8_t> probeCount = 3;        ///< Maximum number of unanswered probes before marking INCOMPLETE.
+
+        std::atomic<uint32_t> loggingThreshold;     ///< Log threshold for ARP events (TODO).
+        std::atomic<uint32_t> timeout = 14400;      ///< Cache entry lifetime in seconds.
+    } configs;
 
     /**
     * @ingroup INFRASTRUCTURE
@@ -167,9 +185,12 @@ private:
     std::unordered_set<types::IPv4Address> pendingIncompletes;
     std::atomic<uint32_t> incompletes = 0;
 
-    std::atomic<bool> running; ///< Indicates whether the ARP service is active.
+    mutable std::shared_mutex arpCacheMutex; ///< Mutex for thread-safe access to the ARP cache.
+    std::mutex requestMutex; ///< Mutex for thread-safe access to `pendingRequests`.
+    std::mutex replyStatusMutex; ///< Mutex for thread-safe access to `replyStatus`.
+    std::mutex packetQueueMutex; ///< Mutex for thread-safe access to `packetQueuePerIp`.
 
-    config::Reference<config::ArpRegistry> configs; ///< Config object holding ARP configs
+    std::atomic<bool> running; ///< Indicates whether the ARP service is active.
 
 protected:
     /**

@@ -14,7 +14,7 @@ PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc)
       process(proc),
       sessionConfigs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
-    proc.routingInstance->getRegistry().ensure(
+    proc.routingInstance->getRegistry().emplace(
         sessionConfigs->get<config::BgpNeighborSession::BGP_BASE>(),
         proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
     );
@@ -45,7 +45,7 @@ PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, BgpProces
     : name(groupName),
       configs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
-    proc.routingInstance->getRegistry().ensure(
+    proc.routingInstance->getRegistry().emplace(
         configs->get<config::BgpNeighborSession::BGP_BASE>(),
         proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
     );

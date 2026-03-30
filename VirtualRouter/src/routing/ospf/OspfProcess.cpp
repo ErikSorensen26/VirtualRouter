@@ -21,7 +21,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
             {
                 // TODO: add address family v3 configs from elsewhere
                 auto& afCfgs = std::get<V3AfConfigs>(afConfigs);
-                return registry.ensure(afCfgs->get<config::OspfAddressFamilyV3::BASE>());
+                return registry.emplace(afCfgs->get<config::OspfAddressFamilyV3::BASE>());
             }
             // OSPFv3 VRF mode does not support address families
             return registry.create<config::OspfRegistry>();
@@ -32,7 +32,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
             afConfigs.emplace<V2AfConfigs>(registry.create<config::OspfAddressFamilyV2Registry>());
             auto& afCfgs = std::get<V2AfConfigs>(afConfigs);
             auto& v2Base = afCfgs->get<config::OspfAddressFamilyV2::BASE>();
-            return registry.ensure(v2Base);
+            return registry.emplace(v2Base);
         }
     }())
 {

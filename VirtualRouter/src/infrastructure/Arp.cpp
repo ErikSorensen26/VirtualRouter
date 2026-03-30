@@ -10,6 +10,7 @@
 #include "interface/Interface.h"
 #include "packet/headers/ArpHeader.hpp"
 #include "processing/PacketBuilder.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
 #include "Ethernet.h"
 
 // TODO: Have the ability to insert entries when shutdown
@@ -27,7 +28,7 @@ Arp::Arp(interface::Interface& CurrentInterface)
 
 void Arp::initiateArp()
 {
-    std::shared_lock<std::shared_mutex> lock(global.configs.arp.neighborMutex);
+    /*
     auto it = global.configs.arp.neighbors.find(currentInterface->getVRF()->getName());
     if (it != global.configs.arp.neighbors.end())
     {
@@ -39,6 +40,7 @@ void Arp::initiateArp()
             }
         }
     }
+    */
     running.store(true, std::memory_order_relaxed);
 }
 
@@ -106,7 +108,7 @@ void Arp::addArpEntry(types::IPv4Address targetIp, types::Mac targetMac, bool pr
     }
 
     // STICKY ARP: if enabled, do now overwrite existing dynamic entry
-    if (global.configs.arp.stickyArp.load(std::memory_order_relaxed))
+    if (global.configs->get<config::Global::IPV4_STICKY_ARP>().load())
     {
         std::unique_lock<std::shared_mutex> lock(arpCacheMutex);
         auto existing = arpCache.find(targetIp);
@@ -194,9 +196,9 @@ void Arp::removeArpEntry(types::IPv4Address ip, bool isStatic)
 // Get MAC address for the given ip
 bool Arp::getMac(uint8_t* out, types::IPv4Address targetIp)
 {
+    /*
     std::shared_lock<std::shared_mutex> lock(arpCacheMutex);
     {
-        std::shared_lock<std::shared_mutex> neighborLock(global.configs.arp.neighborMutex);
         auto staticIt = staticArpCache.find(targetIp);
         if (staticIt != staticArpCache.end())
         {
@@ -204,6 +206,7 @@ bool Arp::getMac(uint8_t* out, types::IPv4Address targetIp)
             return true;
         }
     }
+    */
     auto it = arpCache.find(targetIp);
     if (it != arpCache.end() && std::chrono::steady_clock::now() < it->second.expiryTime && it->second.status == ArpCacheStatus::COMPLETE)
     {
@@ -216,7 +219,7 @@ bool Arp::getMac(uint8_t* out, types::IPv4Address targetIp)
 // Enqueue a packet for ARP resolution and send once resolved
 void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder& packetToSend)
 {
-    if (!global.configs.arp.incompleteEnabled.load(std::memory_order_relaxed))
+    if (!global.configs->get<config::Global::IPV4_ARP_INCOMPLETE>().load())
         return;
 
     {
@@ -224,7 +227,7 @@ void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder&
         auto& queue = packetQueuePerIp[targetIp];
 
         // Enforce queue size limit from global config
-        if (queue.size() < global.configs.arp.queueSize.load(std::memory_order_relaxed))
+        if (queue.size() < global.configs->get<config::Global::IPV4_ARP_QUEUE>().load())
         {
             packetQueuePerIp[targetIp].push(std::move(packetToSend));
         }
@@ -235,7 +238,8 @@ void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder&
         if (it != arpCache.end()) return;
 
         // Entry limit enforcement
-        if (incompletes.load(std::memory_order_relaxed) >= global.configs.arp.incompleteResolveLimit.load(std::memory_order_relaxed))
+        auto& incompleteEntries = global.configs->get<config::Global::IPV4_ARP_INCOMPLETE_ENTRIES>();
+        if (incompleteEntries.hasValue() && incompletes.load(std::memory_order_relaxed) >= incompleteEntries.load())
         {
             pendingIncompletes.insert(targetIp);
             return; // Too many incomplete entries
@@ -253,7 +257,7 @@ void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder&
 
 void Arp::expireArpEntry(types::IPv4Address ip)
 {
-    if (global.configs.arp.incompleteEnabled.load(std::memory_order_relaxed))
+    if (global.configs->get<config::Global::IPV4_ARP_INCOMPLETE>().load())
     {
         auto it = arpCache.find(ip);
         if (it != arpCache.end())
@@ -334,14 +338,14 @@ void Arp::receiveReply(const packet::ArpHeader& receivedReply)
 
     // Ignore gratuitous ARP if disabled
     bool garp = senderIp == targetIp;
-    if (garp && (!global.configs.arp.acceptGratiutous.load(std::memory_order_relaxed) ||
+    if (garp && (!global.configs->get<config::Global::IPV4_ARP_GRATUITOUS>().load() ||
         !running.load(std::memory_order_relaxed) || !global.routingEnabled ||
         std::memcmp(mac, ETHERNET_MAC_BROADCAST, 6) == 0))
         return;
 
     if (arpCache.count(senderIp))
     {
-        if (arpCache[senderIp].status == ArpCacheStatus::COMPLETE && global.configs.arp.stickyArp.load(std::memory_order_relaxed))
+        if (arpCache[senderIp].status == ArpCacheStatus::COMPLETE && global.configs->get<config::Global::IPV4_STICKY_ARP>().load())
         {
             // Ignore if sticky ARP is enabled
             return;
@@ -460,7 +464,7 @@ void Arp::receiveRequest(const packet::ArpHeader& request, types::Mac sourceMac)
             replyMac = currentInterface->configs.getMac();
             isLocal = true;
         }
-        else if (!global.configs.arp.disableProxy.load(std::memory_order_relaxed))
+        else if (global.configs->get<config::Global::IPV4_ARP_PROXY>().load())
         {
             std::shared_lock<std::shared_mutex> arpLock(arpCacheMutex);
             auto it = proxyEntries.find(targetIp);
@@ -519,8 +523,9 @@ void Arp::scheduleRequest(types::IPv4Address targetIp, ArpCacheEntry& entry)
     uint32_t retries;
     if (entry.status == ArpCacheStatus::INCOMPLETE)
     {
-        interval = global.configs.arp.incompleteInterval.load(std::memory_order_relaxed);
-        retries = global.configs.arp.incompleteRetries.load(std::memory_order_relaxed);
+        // TODO calculate the dam interval
+        interval = 5; // not the right value, i cant find shit telling me how to calculate this
+        retries = global.configs->get<config::Global::IPV4_ARP_INCOMPLETE_RETRY>().load();
     }
     else
     {

@@ -35,12 +35,12 @@ Ndp::Ndp(interface::Interface& iface)
     global(iface.getVRF()->getGlobal())
 {
     // Initialize global configs
-    configs.refresh = global.configs.ndp.refresh.load(std::memory_order_relaxed);
+    /*configs.refresh = global.configs.ndp.refresh.load(std::memory_order_relaxed);
     configs.loggingRate = global.configs.ndp.loggingRate.load(std::memory_order_relaxed);
     configs.cacheExpire = global.configs.ndp.cacheExpire.load(std::memory_order_relaxed);
     configs.dadTime = global.configs.ndp.dadTime.load(std::memory_order_relaxed);
     configs.reachableTime = global.configs.ndp.reachableTime.load(std::memory_order_relaxed);
-    configs.interfaceLimit = global.configs.ndp.interfaceLimit.load(std::memory_order_relaxed);
+    configs.interfaceLimit = global.configs.ndp.interfaceLimit.load(std::memory_order_relaxed);*/
 
     if (global.routingEnabled)
         initializeNdp();
@@ -49,7 +49,7 @@ Ndp::Ndp(interface::Interface& iface)
 void Ndp::initializeNdp()
 {
     // Add static neighbors
-    std::shared_lock<std::shared_mutex> lock(global.configs.ndp.neighborMutex);
+    /*std::shared_lock<std::shared_mutex> lock(global.configs.ndp.neighborMutex);
     for (const auto& [ip, neighbor] : global.configs.ndp.neighbors)
     {
         if (neighbor.interface == currentInterface->configs.key)
@@ -57,7 +57,7 @@ void Ndp::initializeNdp()
             addNdpEntry(ip, neighbor.macAddress, false, true);
         }
     }
-    running.store(true, std::memory_order_relaxed);
+    running.store(true, std::memory_order_relaxed);*/
     if (!configs.raSuppressAll.load(std::memory_order_relaxed))
         scheduleNextRA();
 }
@@ -144,7 +144,7 @@ void Ndp::addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool pr
     // Only start refresh timer if enabled and dynamic
     if (!isStatic)
     {
-        uint16_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
+        uint16_t refresh = 5; //global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
         if (refresh > 0)
         {
             entry.timerId = global.timeManager.addTimer(
@@ -190,7 +190,6 @@ uint8_t* Ndp::getMac(uint8_t* out, types::IPv6Address ip)
     std::shared_lock<std::shared_mutex> lock(ndpCacheMutex);
     {
 
-        std::shared_lock<std::shared_mutex> neighborLock(global.configs.ndp.neighborMutex);
         auto staticIt = staticNdpCache.find(ip);
         if (staticIt != staticNdpCache.end())
         {
@@ -235,7 +234,7 @@ void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder&
         packetQueuePerIp[targetIp].emplace(std::move(packetToSend));
     }
 
-    if (global.configs.nsfActive.load(std::memory_order_relaxed))
+    /*if (global.configs.nsfActive.load(std::memory_order_relaxed))
     {
         auto now = std::chrono::steady_clock::now();
         auto gracePeriod = std::chrono::seconds(global.configs.ndp.nsfConvergenceTime.load(std::memory_order_relaxed));
@@ -252,13 +251,13 @@ void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder&
     else if (nfsResolutionCount.load(std::memory_order_relaxed) != 0)
     {
         nfsResolutionCount.store(0, std::memory_order_release);
-    }
+    }*/
 
     std::unique_lock<std::shared_mutex> lock(ndpCacheMutex);
     auto it = ndpCache.find(targetIp);
     if (it != ndpCache.end())
     {
-        bool strict = global.configs.ndp.strictMode;
+        bool strict = false;//global.configs.ndp.strictMode;
 
         if (it->second.state == NudState::STALE)
         {
@@ -292,7 +291,7 @@ void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder&
     else
     {
         // Enforce resolution-limit (only for new unknown neighbors)
-        uint32_t maxResolution = global.configs.ndp.resolutionLimit.load(std::memory_order_relaxed);
+        uint32_t maxResolution = 5;//global.configs.ndp.resolutionLimit.load(std::memory_order_relaxed);
         if (maxResolution != 0 && currentResolvingNeighbors.load(std::memory_order_relaxed) >= maxResolution)
         {
             // Drop resolution entirely
@@ -369,7 +368,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
                 it->second.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.cacheExpire.load(std::memory_order_relaxed));
                 global.timeManager.cancelTimer(it->second.timerId);
                 it->second.timerId = 0;
-                uint16_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
+                uint16_t refresh = 5;//global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
                 if (refresh > 0)
                 {
                     it->second.timerId = global.timeManager.addTimer(
@@ -393,7 +392,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
                 entry.macAddress = mac;
                 entry.state = NudState::REACHABLE;
                 entry.expiryTime = std::chrono::steady_clock::now() + std::chrono::seconds(configs.cacheExpire.load(std::memory_order_relaxed));
-                uint16_t refresh = global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
+                uint16_t refresh = 5;//global.configs.ndp.nudRefreshPeriod.load(std::memory_order_relaxed);
                 if (refresh > 0)
                 {
                     entry.timerId = global.timeManager.addTimer(
@@ -540,7 +539,7 @@ void Ndp::onReachableTimeout(types::IPv6Address targetIp)
     global.timeManager.cancelTimer(it->second.timerId);
     it->second.timerId = 0;
 
-    if (global.configs.ndp.refresh.load(std::memory_order_relaxed))
+    if (true)//global.configs.ndp.refresh.load(std::memory_order_relaxed))
     {
         // Move to Probe instead of stale
         startNud(targetIp, it->second, lock);
@@ -555,7 +554,7 @@ void Ndp::onReachableTimeout(types::IPv6Address targetIp)
 void Ndp::startNud(types::IPv6Address targetIp, NdpCacheEntry& entry, std::unique_lock<std::shared_mutex>& cacheLock)
 {
     // Nud probe limit check
-    uint32_t maxNud = global.configs.ndp.nudLimit.load(std::memory_order_relaxed);
+    uint32_t maxNud = 5;//global.configs.ndp.nudLimit.load(std::memory_order_relaxed);
     if (currentNudProbes.load(std::memory_order_relaxed) >= maxNud)
     {
         {
@@ -1025,7 +1024,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
 
     if (configs.autoConfigDefaultRoute.load(std::memory_order_relaxed) && routerLifetime > 0 && sourceIp == IPV6_SOURCE)
     {
-        if (global.configs.ndp.ndAsRouteOwner.load(std::memory_order_relaxed))
+        //if (global.configs.ndp.ndAsRouteOwner.load(std::memory_order_relaxed))
         {
             //TODO make ndp interface owner
         }
@@ -1134,7 +1133,7 @@ void Ndp::receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IP
 
 void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 {
-    if (global.configs.nsfActive.load(std::memory_order_relaxed))
+    /*if (global.configs.nsfActive.load(std::memory_order_relaxed))
     {
         auto now = std::chrono::steady_clock::now();
         auto suppressWindow = std::chrono::seconds(global.configs.ndp.nsfDadSupressionTime.load(std::memory_order_relaxed));
@@ -1163,7 +1162,7 @@ void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6
             }
             return; // Supress DAD during NSF recovery
         }
-    }
+    }*/
 
     if (currentInterface->shutdownFlag.load(std::memory_order_relaxed))
         return;

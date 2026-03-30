@@ -148,10 +148,11 @@ bool CliSession::detectHelpTriggers(const std::vector<std::string>& parsedWords)
 bool CliSession::isNoCommand(const std::vector<std::string>& parsedWords)
 {
     if (parsedWords.empty()) return false;
-    if (parsedWords[0] != "no" || parsedWords.size() < 2) return false;
+    if (lowerCase(parsedWords[0]) != "no" || parsedWords.size() < 2) return false;
 
     // Avoid "exit and conf"
-    if (parsedWords[1] == "exit" || parsedWords[1].rfind("conf", 0) == 0) return false;
+    std::string w1 = lowerCase(parsedWords[1]);
+    if (w1 == "exit" || w1.rfind("conf", 0) == 0) return false;
 
     // Must not be in userExec or privilegedExec
     CliMode currentMode = execution.getMode();
@@ -161,10 +162,11 @@ bool CliSession::isNoCommand(const std::vector<std::string>& parsedWords)
 bool CliSession::isDoCommand(const std::vector<std::string>& parsedWords)
 {
     if (parsedWords.empty()) return false;
-    if (parsedWords[0] != "do" || parsedWords.size() < 2) return false;
+    if (lowerCase(parsedWords[0]) != "do" || parsedWords.size() < 2) return false;
 
     // Avoid "exit and conf"
-    if (parsedWords[1] == "exit" || parsedWords[1].rfind("conf", 0) == 0) return false;
+    std::string w1 = lowerCase(parsedWords[1]);
+    if (w1 == "exit" || w1.rfind("conf", 0) == 0) return false;
 
     // Must not already be in userExec or privilegedExec
     CliMode currentMode = execution.getMode();
@@ -270,16 +272,17 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
                const std::string& inputCommand, std::string& formattedOldCommand,
                std::string& fullyFormattedCommand, std::string& volatileCommand)
 {
-    // Return false if "?" is not actually truggered or doesn't apply
+    // Return false if "?" is not actually triggered or doesn't apply
     if (word != "?" || isMatchSuccessful || previousCommandList.empty() || isNextWordHelpRequested || endOfCommand)
     {
         if ((word == "?") && isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested)
         {
-            nextLine = inputCommand.substr(0, inputCommand.size());
+            // strip the '?' — matchCommand will display previousCommandList and set nextLine
+            nextLine = inputCommand.substr(0, inputCommand.size() - 1);
         }
         else if (!isMatchSuccessful && (word == "?") && ((previousCommandList.size() == 1 && previousCommandList[0].name == "<error>")))
         {
-            nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
+            nextLine = inputCommand.substr(0, inputCommand.size() - 1);
             controller.print(std::string("\r\n%") + " Unrecognized command");
             return word == "?";
         }
@@ -290,19 +293,14 @@ bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& p
     fullyFormattedCommand += word;
     volatileCommand       += word;
 
-    nextLine = " " + inputCommand.substr(0, inputCommand.size() - 1);
+    nextLine = inputCommand.substr(0, inputCommand.size() - 1);
     if (previousCommandList[0].name == "<error>")
     {
-        nextLine = inputCommand.substr(0, inputCommand.size() - 1);
         controller.print(std::string("\r\n%") + " Unrecognized command");
     }
     else if (previousCommandList[0].name != "<cr>")
     {
         displayAvailableCommands(previousCommandList);
-    }
-    else
-    {
-        nextLine = inputCommand.substr(0, inputCommand.size());
     }
     return true;
 }
@@ -409,7 +407,7 @@ void CliSession::handleInvalidInputMarker(const std::string& formattedOldCommand
 
     std::string hostname = engine.global.getHostname();
     // Print spaces for hostname, mode, old command
-    invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\r\n% Invlid input detected at '^' marker.\r\n";
+    invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\r\n% Invalid input detected at '^' marker.\r\n";
     controller.print(invalidInput);
 }
 
@@ -449,24 +447,39 @@ void CliSession::matchCommand(const std::string& inputCommand, const std::string
     // Handle "?" or "vk_tab" after partial match:
     if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested) && !endOfCommand)
     {
-        // Display possible commands and append "?"
-        displayAvailableCommands(availableCommands);
+        // With a space before '?': show next-level subcommands.
+        // Without a space: show the matched command(s) at the current level.
+        if (isNextWordHelpRequested)
+        {
+            displayAvailableCommands(availableCommands);
+        }
+        else
+        {
+            displayAvailableCommands(previousCommandList);
+        }
         fullyFormattedCommand += word;
         volatileCommand       += word;
 
-        // Typically set nextline to old command + space
-        nextLine = formattedOldCommand + " ";
+        // With a space before '?', keep the trailing space so the next word is separate.
+        // Without a space, restore exactly what the user typed (no extra space).
+        if (isNextWordHelpRequested)
+        {
+            nextLine = formattedOldCommand + " ";
+            if (isHelpModeActive)
+            {
+                nextLine += " ";
+            }
+        }
+        else
+        {
+            nextLine = formattedOldCommand;
+        }
+
         // If the first command is <error>, revert to raw input
         if (!availableCommands.empty() && availableCommands[0].name == "<error>")
         {
             nextLine = inputCommand.substr(0, inputCommand.size() - 1);
             handleAmbiguousInputMarker(nextLine);
-        }
-
-        // If in help mode, an extra space is appended for later
-        if (isHelpModeActive)
-        {
-            nextLine += " ";
         }
 
         // We displayed help, so reset success
@@ -916,7 +929,7 @@ std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, 
     {
         error = true;
     } 
-    else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(execution.getContext().negate && userInput == "no"))
+    else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(execution.getContext().negate && lowerUserInput == "no"))
     {
         endCommandString = lowerCase((*commandNode)[CLI_JSON_COMMAND_NAME]);
         endOfCommand = true;
@@ -1258,7 +1271,11 @@ bool CliSession::handlePagination(char nextch)
 
     size_t paginationSize = engine.paginationCount == 0 ? paginationList.size() : engine.paginationCount;
 
-    for (int i = 0; i < paginationList.size() && i < paginationSize; i++)
+    size_t termWidth = getTerminalWidth();
+    // Column where description text starts: "  " + name + padding
+    size_t descCol = 2 + maxNameLength + 6;
+
+    for (int i = 0; i < (int)paginationList.size() && i < (int)paginationSize; i++)
     {
         const Com &command = paginationList[i];
         if (command.name != engine.errorCommand.name)
@@ -1266,12 +1283,47 @@ bool CliSession::handlePagination(char nextch)
             std::string display;
             display += "\r\n  " + command.name;
             size_t nameLength = command.name.size();
-            for (size_t i = 0; i <= (maxNameLength - nameLength + 5); i++)
+            for (size_t j = 0; j <= (maxNameLength - nameLength + 5); j++)
             {
-                display +=" ";
+                display += " ";
             }
-            // Uncomment if you want to display descriptions
-            display += command.description;
+
+            // Wrap description at terminal width
+            const std::string& desc = command.description;
+            if (desc.empty() || termWidth == 0 || descCol + desc.size() <= termWidth)
+            {
+                display += desc;
+            }
+            else
+            {
+                // Wrap words at terminal width
+                std::string indent(descCol, ' ');
+                size_t col = descCol;
+                size_t di = 0;
+                while (di < desc.size())
+                {
+                    // Find end of next word
+                    size_t wordStart = di;
+                    while (di < desc.size() && desc[di] != ' ') di++;
+                    size_t wordEnd = di;
+                    while (di < desc.size() && desc[di] == ' ') di++;
+
+                    std::string word = desc.substr(wordStart, wordEnd - wordStart);
+                    if (col + word.size() > termWidth && col > descCol)
+                    {
+                        display += "\r\n" + indent;
+                        col = descCol;
+                    }
+                    display += word;
+                    col += word.size();
+                    if (di < desc.size())
+                    {
+                        display += " ";
+                        col++;
+                    }
+                }
+            }
+
             Color color;
             switch (command.support)
             {

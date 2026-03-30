@@ -19,6 +19,7 @@
 #include <mutex>
 #include <atomic>
 #include <IPAddress.h>
+#include <ControlScheduler.h>
 
 #include "infrastructure/Arp.h"
 #include "infrastructure/Ndp.h"
@@ -131,6 +132,7 @@ struct InterfaceCreation
 class Interface
 {
     std::atomic<core::VirtualRouter*> routingInstance = nullptr; ///< VRF pointer (atomic for lock-free reads).
+    core::ProcessQueue scheduler; ///< Control scheduler for control plane.
 public:
     friend class MockInterface; ///< Test harness access for controlled interface testing.
     friend class EigrpTest; ///< Test harness access for controlled EIGRP testing.
@@ -430,8 +432,6 @@ private:
      * @brief Internal state machine transition for IPv6.
      */
     void stateChangeV6(IPv6Event state, types::IPv6Prefix addr);
-
-    std::mutex ipInfoMutex; ///< Protects IPv4/IPv6 settings where atomics aren't used.
 
     bool debug; ///< Debug flag for verbose logging.
 

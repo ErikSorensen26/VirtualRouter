@@ -28,7 +28,8 @@ namespace interface
 {
 Interface::Interface(const InterfaceCreation& cfgs)
   : routingInstance(&cfgs.vrf),
-    configs(cfgs.vrf.getGlobal().timeManager, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
+    scheduler(cfgs.vrf.getControlScheduler().create()),
+    configs(scheduler, cfgs.interfaceType, cfgs.interfaceId, cfgs.info),
     arp(*this),
     ndp(*this),
     debug(cfgs.debug),

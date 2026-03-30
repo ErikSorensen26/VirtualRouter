@@ -47,6 +47,12 @@ using PrivilegedExec_WriteMem = commandAdder<PrivilegedExecContext,
     "write"_tok, "memory"_tok
 >;
 
+bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS);
+using PrivilegedExec_TerminalWidth = commandAdder<PrivilegedExecContext,
+    PrivilegedExec_TerminalWidth_Handler,
+    "terminal"_tok, "width"_tok, ARG
+>;
+
 /**
  * @brief Parser for Privileged Exec mode commands.
  * @ingroup CLI_MODE_PARSERS
@@ -59,7 +65,8 @@ using PrivilegedExecCommands = CliModeParser<CliMode::PrivilegedExec, Privileged
     PrivilegedExec_Exit,
     PrivilegedExec_ShowHistory,
     PrivilegedExec_ShowClock,
-    PrivilegedExec_WriteMem
+    PrivilegedExec_WriteMem,
+    PrivilegedExec_TerminalWidth
 >;
 }
 

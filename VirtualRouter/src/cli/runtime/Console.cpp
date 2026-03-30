@@ -98,7 +98,7 @@ void Console::moveCursorLeft(size_t steps)
             {
                 // Move to the previous line
                 controller.moveCursorUp(1);
-                controller.moveCursorRight(terminalWidth);
+                controller.moveCursorRight(getTerminalWidth());
             }
             else
             {
@@ -231,7 +231,7 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
     // Rewrite the input from the start position
     for (size_t i = startPosition; i < (insert ? insertString.size() : input.size()); ++i)
     {
-        if (currentColumn >= terminalWidth)
+        if (currentColumn >= width)
         {
             controller.moveCursorDown(1);
             controller.moveCursorToStart();

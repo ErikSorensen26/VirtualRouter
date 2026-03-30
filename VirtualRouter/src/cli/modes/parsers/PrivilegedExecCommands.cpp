@@ -50,4 +50,17 @@ bool PrivilegedExec_WriteMem_Handler(PRIVILEGED_EXEC_PARAMS)
     ctx.terminal.engine.saveConfig();
     return true;
 }
+
+bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS)
+{
+    if (args.empty() || !ctx.terminal.engine.isNumeric(args[0])) return false;
+    long w = std::stol(args[0]);
+    if (w < 40 || w > 512)
+    {
+        ctx.terminal.controller.print("\r\n% Width must be between 40 and 512");
+        return false;
+    }
+    ctx.terminal.setTerminalWidth(static_cast<size_t>(w));
+    return true;
+}
 }

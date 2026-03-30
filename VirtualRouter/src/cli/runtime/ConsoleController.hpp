@@ -206,10 +206,19 @@ public:
 
     CONSOLE_MOCK size_t getTerminalWidth()
     {
+        if (terminalWidthOverride > 0) return terminalWidthOverride;
         struct winsize w;
         ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
         return w.ws_col > 0 ? w.ws_col : 80;
     }
+
+    void setTerminalWidth(size_t w)
+    {
+        terminalWidthOverride = w;
+    }
+
+private:
+    size_t terminalWidthOverride = 0;
 
     CONSOLE_MOCK void beep()
     {

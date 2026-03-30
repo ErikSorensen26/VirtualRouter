@@ -15,7 +15,7 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
       ntable(*this),
       configs(vrf->getRegistry().create<config::BgpRegistry>(vrf->getInstanceId()))
 {
-    vrf->getRegistry().ensure(configs->get<config::Bgp::BGP_BASE>());
+    vrf->getRegistry().emplace(configs->get<config::Bgp::BGP_BASE>());
     scheduleScan();
 
     transport::tcp::ListenOptions opts;

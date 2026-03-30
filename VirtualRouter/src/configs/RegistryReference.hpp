@@ -305,6 +305,13 @@ public:
         assert(ref.has_value());
         return *ref;
     }
+    /**
+     * @brief Clears the local reference and reverts state to INHERIT.
+     */
+    void unset() noexcept
+    {
+
+    }
 
 private:
     template <typename...>

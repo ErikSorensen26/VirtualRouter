@@ -234,48 +234,6 @@ public:
         return ref;
     }
 
-    /**
-     * @brief Force-allocate a fresh scope, replacing any previously bound one.
-     *
-     * Unlike `emplace()`, `ensure()` always creates a new allocation and
-     * replaces the existing binding in `container`. Used when a config scope
-     * must be recreated from scratch (e.g. on `no router eigrp` followed by
-     * `router eigrp`).
-     *
-     * @tparam T          Entry registry struct type.
-     * @param  container  Target `ReferenceContainer` field.
-     * @return The newly created `Reference<T>`.
-     */
-    template <typename T CONFIG_INDEX_PARAM>
-    Reference<T> ensure(ReferenceContainer<T CONFIG_INDEX_ARG(F)>& container)
-    {
-        Reference<T> ref = container.base
-            ? create<T>(*container.base)
-            : create<T>();
-        container.unsetLocal();
-        container.setLocal(ref);
-        return ref;
-    }
-
-    /**
-     * @brief Force-allocate a fresh scope under a specific parent, replacing
-     *        any previously bound one.
-     *
-     * @tparam T          Entry registry struct type.
-     * @param  container  Target `ReferenceContainer` field.
-     * @param  parent     Parent scope reference.
-     * @return The newly created `Reference<T>`.
-     */
-    template <typename T CONFIG_INDEX_PARAM>
-    Reference<T> ensure(ReferenceContainer<T CONFIG_INDEX_ARG(F)>& container, Reference<T>& parent)
-    {
-        container.base = &parent;
-        Reference<T> ref = create<T>(*container.base);
-        container.unsetLocal();
-        container.setLocal(ref);
-        return ref;
-    }
-
     // LIST FIELD OPERATIONS
 
     /**

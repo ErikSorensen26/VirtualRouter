@@ -18,6 +18,7 @@ namespace cli
 {
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
 {
+    /*
     types::IPv6Address address; cli::utils::extractIPv6Address(args[0], address);
     if (!ctx.negate)
     {
@@ -42,6 +43,7 @@ bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
         }
     }
     return true;
+    */
 }
 
 bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)

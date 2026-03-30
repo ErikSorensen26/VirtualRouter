@@ -9,10 +9,11 @@
  * @brief Per-interface address, MTU, type, and protocol configuration state.
  */
 
+// TODO UPDATE DOXY
+
 #ifndef INTERFACE_CONFIGS_H
 #define INTERFACE_CONFIGS_H
 
-#include <shared_mutex>
 #include <atomic>
 #include <vector>
 #include <unordered_set>
@@ -25,6 +26,7 @@
 
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
+#include "configs/registry/interface/InterfaceRegistry.h"
 #include "InterfaceType.hpp"
 
 namespace core { class Global; class TimeManager; }
@@ -38,9 +40,8 @@ class Internal_NdpTest;
 namespace interface
 {
 
-// INTERFACE KEY
-
 enum class InterfaceType : uint8_t;
+class Interface;
 
 // INTERFACE CONFIGS
 
@@ -97,7 +98,7 @@ public:
      * @param id           Interface number; may include a fractional sub-interface component.
      * @param info         Hardware descriptor; must outlive this object.
      */
-    InterfaceConfigs(core::TimeManager& timeManager, InterfaceType type, float id, const hardware::HwIfaceInfo& info);
+    InterfaceConfigs(interface::Interface& iface, InterfaceType type, float id, const hardware::HwIfaceInfo& info);
 
     /**
      * @brief Destroys the interface configuration, cancelling any pending address timers.
@@ -116,7 +117,6 @@ public:
      * @param len      Prefix length in bits.
      */
     bool hasAddress(const uint8_t* address, uint8_t len);
-
     /**
      * @brief Returns true if the interface currently holds the given IPv6 address and prefix.
      *
@@ -140,30 +140,25 @@ public:
      */
     types::Mac getMac();
 
-    /**
-     * @brief Updates the MAC address stored for this interface.
-     *
-     * @param mac  6-byte MAC address in network order.
-     */
-    void setMac(const uint8_t* mac);
+    // Getters
+    uint32_t getBandwidth();
+    uint32_t getReceiveBandwidth();
+
+    config::InterfaceRegistry& getConfigs() { return configs.get(); }
+    const config::InterfaceRegistry& getConfigs() const { return configs.get(); }
+
+    // TODO finish doxy
+    void syncMac();
+    void syncPrimaryIP();
+    void syncSecondaryIP();
+    void syncLocalLink();
+    void syncIPv6();
 
     float         id;            ///< Interface number, including sub-interface fraction.
     InterfaceType interfaceType; ///< Logical interface type.
     InterfaceKey  key;           ///< Composite key encoding type and id; used for global interface lookup.
 
     const hardware::HwIfaceInfo& hwInfo; ///< Immutable hardware descriptor; owned externally.
-
-    std::atomic<uint8_t>  tid      = 0;       ///< Topology ID; used by multi-topology routing (default 0).
-    std::atomic<uint16_t> vlan     = 1;       ///< 802.1Q VLAN tag (default 1 = untagged).
-    std::atomic<bool>     trusted  = false;   ///< When true, this interface is treated as a trusted security zone.
-    std::atomic<uint32_t> bandwidth{1000000}; ///< Configured bandwidth in kbps; used by EIGRP metric computation.
-    std::atomic<uint32_t> delay{10};          ///< Configured delay in microseconds; used by EIGRP metric computation.
-    std::atomic<uint8_t>  load{1};            ///< Current load value (1–255); used by EIGRP composite metric.
-    std::atomic<uint8_t>  reliability{255};   ///< Reliability (255 = 100%); used by EIGRP composite metric.
-    std::atomic<uint8_t>  ttl{64};            ///< Default IP TTL applied to packets originated on this interface.
-    std::atomic<uint16_t> globalMtu{1500};    ///< Interface-wide MTU in bytes; may be overridden per address family.
-
-    std::shared_mutex ipMutex; ///< Guards combined IPv4 + IPv6 address state for readers needing both AFs atomically.
 
     // IPv4 STATE
 
@@ -323,7 +318,7 @@ public:
          * @param time  Timer service; used to schedule DAD retransmissions and
          *              preferred/valid lifetime expiry events.
          */
-        explicit IPv6State(core::TimeManager& time);
+        explicit IPv6State(core::TimeManager& tmgr);
 
         /**
          * @brief Destroys IPv6 state and cancels all pending address timers.
@@ -531,7 +526,7 @@ public:
 
     private:
         core::TimeManager& timeManager;
-        mutable std::shared_mutex ipMutex;
+        mutable std::mutex ipMutex;          ///< Guards local/global address vector.
 
         IPv6Address*              linkLocalAddress   = nullptr; ///< The single link-local address, if assigned.
         std::vector<IPv6Address*> globalAddresses;              ///< Heap-allocated global unicast entries.
@@ -594,7 +589,12 @@ public:
     } dhcpv6;
 
 private:
-    std::atomic<uint64_t> macAddress; ///< Interface MAC address packed into 64 bits (6 bytes used, big-endian).
+    friend class Interface;
+
+    // TODO finish doxy
+    config::Reference<config::InterfaceRegistry> configs;
+
+    std::atomic<types::Mac> macAddress;
 };
 
 } // namespace interface

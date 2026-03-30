@@ -31,6 +31,9 @@ Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRo
     rxMgr.setCorePool({4, 5, 6, 7});
     rxMgr.setCpuPolicy(qos::ingress::RxQueueManager::CpuPolicy::EqualShare);
 
+    // Build required global registries
+    registry.emplace(configs->get<config::Global::IPV6_ND>());
+
     // Load VRFs out of global configs
     {
         std::lock_guard<std::mutex> lock(routingInstanceMutex);
@@ -38,14 +41,14 @@ Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRo
         {
             if (routingInstances.find(name) != routingInstances.end())
                 continue;
-            routingInstances.emplace(name, *this, name);
+            routingInstances.try_emplace(name, *this, name);
         }
     }
 
     // Load Interfaces out of global scope and assign correct VRFs
     {
         std::lock_guard<std::mutex> lock(interfaceMutex);
-        for (const auto& [id, cfg] : configs->get<config::Global::INTERFACES>())
+        for (const auto& [id, cfg] : configs->get<config::Global::INTERFACE>())
         {
             auto [type, key] = id.decode();
             uint32_t hwIface = engine.hwManager.getInterface(type, static_cast<int>(std::floor(key)));
@@ -57,7 +60,7 @@ Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRo
 
             auto& ifaceVrfField = cfg->get<config::Interface::VRF_FORWARDING>();
             std::string ifaceVrf;
-            ifaceVrfField.withRead([&ifaceVrf](std::string& v) { ifaceVrf = v; });
+            ifaceVrfField.withRead([&ifaceVrf](const std::string& v) { ifaceVrf = v; });
 
             interface::InterfaceCreation iface = {type, key, *getRoutingInstance(ifaceVrf), *info};
             interfaceList.emplace(id, iface);
@@ -137,7 +140,7 @@ VirtualRouter* Global::addRoutingInstance(const std::string& name)
     std::lock_guard<std::mutex> lock(routingInstanceMutex);
     if (routingInstances.find(name) != routingInstances.end())
         return nullptr;
-    routingInstances.emplace(name, *this, name);
+    routingInstances.try_emplace(name, *this, name);
     return &routingInstances.at(name);
 }
 

@@ -17,6 +17,7 @@ namespace cli
 {
 bool Global_Arp_Handler(GLOBAL_PARAMS)
 {
+    /*
     size_t offset = 0;
     std::string vrfName = "default";
     if (args[0] == "vrf")
@@ -53,6 +54,7 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
             iface->arp.addArpEntry(_arpIp, entry.mac, entry.proxy, true);
         }
     }
+    */
     return true;
 }
 
