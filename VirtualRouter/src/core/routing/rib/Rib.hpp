@@ -324,7 +324,8 @@ private:
             table.erase(it);
             fib.erase(key.prefix, key.length);
             routeWatcher.announceRouteChange(key.prefix, key.length, *b);
-            utils::RCU::retire([b]{ delete b; });
+            auto deleter = [](void* b) { delete reinterpret_cast<RibBucket<AddrType>*>(b); };
+            utils::RCU::retire(deleter, b);
         }
         else
         {

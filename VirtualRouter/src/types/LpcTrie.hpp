@@ -3,20 +3,22 @@
  * @brief Level-Compressed Patricia Trie for high-performance IP longest-prefix-match.
  */
 
-// LPCTrie.hpp
-#pragma once
+// // TODO finish doxy
+
+#ifndef LPC_TRIE_HPP
+#define LPC_TRIE_HPP
+
 #include <atomic>
 #include <algorithm>
 #include <cassert>
-#include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <RCU.hpp>
 #include <NetworkSpan.hpp>
+#include <ByteUtils.hpp>
 
 namespace types
 {
-
 /**
  * @brief Level-Compressed Patricia Trie (LC-Trie) for IP prefix lookup with
  *        configurable stride width and optional RCU-based safe reclamation.
@@ -76,1036 +78,707 @@ namespace types
  * @see RadixTree
  * @see NetworkSpan
  */
-template<uint8_t N, typename T, uint8_t S = 8, bool useRCU = false>
+template<uint8_t Nu, typename T, uint8_t S = 4, bool useRCU = false>
 class LPCTrie
 {
-    static_assert(N > 0,            "N must be >= 1");
-    static_assert(S >= 1 && S <= 8, "stride S must be 1..8 bits");
-
+    static_assert(Nu > 0,            "N must be >= 1");
+    static_assert(S >= 1 && S <= 8, "stride S must be 1..8");
+ 
 public:
-    /// Total addressable bits (N * 8).
-    static constexpr uint16_t W      = static_cast<uint16_t>(N) * 8;
-    /// Number of children per stride level (2^S).
-    static constexpr uint8_t  FANOUT = static_cast<uint8_t>(1u << S);
-    /// Bitmask for extracting a stride-width index.
-    static constexpr uint8_t  SMASK  = static_cast<uint8_t>(FANOUT - 1);
+    static constexpr uint8_t N = Nu;
 
-    /// Maximum number of children stored in the sparse child array before
-    /// promoting to the dense bitmap representation.
-    static constexpr uint8_t  SPARSE_THRESHOLD = 6;
-
+    // The canonical address integer type (uint32_t for IPv4, __uint128_t for IPv6).
+    using AddrT  = typename utils::smallestInteger<N>::type;
+    using SpanT  = NetworkSpan<AddrT>;
+ 
+    static constexpr uint16_t W      = static_cast<uint16_t>(N) * 8; ///< Total bits.
+    static constexpr uint8_t  FANOUT = static_cast<uint8_t>(1u << S); ///< Children per node.
+    static constexpr AddrT    SMASK  = static_cast<AddrT>(FANOUT - 1u); ///< Stride mask.
+ 
+    // ── Types ─────────────────────────────────────────────────────────────────
+ 
     /**
-     * @brief One entry in a node's per-prefix sorted list.
-     * @ingroup TYPES
-     *
-     * Sorted first by length (shorter prefixes sort earlier) then
-     * lexicographically by prefix bytes. The sort order is exploited by
-     * @c localBest(), which reads the last element to obtain the longest
-     * prefix stored on the node.
+     * One prefix entry stored on a node.
+     * Sorted by length then lexicographically so the last entry is always
+     * the longest-prefix match (exploited by localBest()).
      */
     struct PrefixEntry
     {
-        uint8_t prefix[N];
-        uint8_t len;        ///< Prefix length in bits.
-        T*      ptr;        ///< Caller-owned value pointer; not freed by the trie.
-
+        AddrT   addr;   ///< Host-order prefix, host bits zeroed.
+        T*      ptr;
+        uint8_t len;    ///< Prefix length in bits [0..W].
+ 
         bool operator<(const PrefixEntry& o) const noexcept
         {
-            if (len != o.len) return len < o.len;
-            return std::memcmp(prefix, o.prefix, N) < 0;
+            return len != o.len ? len < o.len : addr < o.addr;
         }
     };
-
+ 
     struct Node;
-
-    /**
-     * @brief One slot in a sparse child array, pairing a stride-bit index with
-     * @ingroup TYPES
-     *        the corresponding child node pointer.
-     */
-    struct ChildSlot
+ 
+    // Dense child array: FANOUT atomic Node* pointers.
+    // For S≤4 (≤16 children) this is 128 bytes — fits in two cache lines.
+    // For S=8 (256 children) this is 2 KB — still faster than sparse search.
+    struct ChildArray
     {
-        uint8_t  index;     ///< Stride-bit index in [0, FANOUT).
-        uint8_t  _pad[7];
-        Node*    child;
+        std::atomic<Node*> slots[FANOUT]{};
+        ChildArray() noexcept = default;
+        ChildArray(const ChildArray&) = delete;
+        ChildArray& operator=(const ChildArray&) = delete;
     };
-
+ 
     /**
-     * @brief A single node in the LC-Trie.
-     * @ingroup TYPES
+     * A trie node.
      *
-     * Stores zero or more prefix entries that terminate within this node's
-     * stride window, an optional path-compression skip (collapsed single-child
-     * levels), and child pointers in either sparse or dense form.
+     * ## Lookup hot path (read-side, lock-free)
+     * Only `skipPattern`, `skipMask`, `skipLen`, `best`, and the child array
+     * are touched. All are accessed with acquire semantics or relaxed (when the
+     * node pointer itself was already acquired).
      *
      * ## Prefix storage
-     * Up to @c PREFIX_INLINE entries are stored inline without a heap
-     * allocation; once that threshold is exceeded a heap array is allocated.
-     * Entries remain sorted by @c PrefixEntry::operator< at all times.
+     * Inline array for ≤ PREFIX_INLINE entries; heap array beyond that.
+     * Kept sorted at all times.
      *
      * ## Child storage
-     * Starts sparse (sorted @c ChildSlot array). Promotes to dense (bitmap +
-     * packed pointer array) automatically when @c nChildren exceeds
-     * @c SPARSE_THRESHOLD. Demotes back to sparse only when the last dense
-     * child is removed.
+     * Always dense: `FANOUT` atomic Node* in a heap-allocated ChildArray.
+     * Null slots occupy no extra space beyond the pointer itself.
+     * For small strides (S=4) this is only 128 bytes per node.
      */
     struct Node
     {
-        uint8_t  skipBits[N];   ///< Reference bytes used during path-compression matching.
-        uint8_t  skipLen;       ///< Number of consecutive bits compressed by this node's skip.
-        uint8_t  depth;         ///< Depth of this node measured in complete strides from root.
-
-        /// Cached pointer to the locally best (longest) prefix value; updated on
-        /// every insert/erase with release semantics for lock-free readers.
+        // ── Hot fields (touched by lookup) ───────────────────────────────────
+        AddrT   skipPattern{0}; ///< Compressed bits, host-order, right-aligned.
+        AddrT   skipMask   {0}; ///< 1-bits for every compressed bit position.
+        uint8_t skipLen    {0}; ///< How many bits are compressed.
+ 
+        /// Cached longest-prefix value for this subtree.
+        /// Written with release; read with relaxed (guarded by the node-pointer
+        /// acquire on the parent's child slot).
         std::atomic<T*> best{nullptr};
-
-        /// Maximum number of PrefixEntry objects stored inline without heap allocation.
-        static constexpr uint8_t PREFIX_INLINE = 4;
-        uint8_t        nPrefixes{0};
-        PrefixEntry*   prefixes{nullptr};   ///< Heap array used when nPrefixes > PREFIX_INLINE; null otherwise.
-        PrefixEntry    inlinePfx[PREFIX_INLINE];
-
-        bool     dense{false};  ///< True when the child store is in dense (bitmap) mode.
-        uint8_t  nChildren{0};
-
-        /**
-         * @brief Child pointer storage as a discriminated union between sparse and dense modes.
-         *
-         * The sparse variant holds up to @c SPARSE_THRESHOLD sorted @c ChildSlot entries.
-         * The dense variant holds a 64-bit bitmap (one bit per possible stride index) plus
-         * a packed heap-allocated array of the non-null child pointers in bitmap order.
-         */
-        union ChildStore
-        {
-            struct Sparse
-            {
-                ChildSlot slots[SPARSE_THRESHOLD];
-            } sparse;
-
-            struct Dense
-            {
-                uint64_t  bitmap;
-                Node**    children;     ///< Packed array, heap-allocated; length == popcount(bitmap).
-            } dense;
-
-            ChildStore() { std::memset(this, 0, sizeof(*this)); }
-        } cs;
-
-        Node() : skipLen(0), depth(0)
-        {
-            std::memset(skipBits, 0, N);
-        }
-
+ 
+        // ── Prefix storage ────────────────────────────────────────────────────
+        static constexpr uint8_t PREFIX_INLINE = 8;
+        uint8_t       nPrefixes{0};
+        PrefixEntry*  heapPfx{nullptr};   ///< non-null iff nPrefixes > PREFIX_INLINE
+        PrefixEntry   inlinePfx[PREFIX_INLINE];
+ 
+        // ── Child storage (always dense) ──────────────────────────────────────
+        ChildArray* children{nullptr};  ///< Allocated on demand (nullptr = leaf).
+ 
+        // ── Bookkeeping ───────────────────────────────────────────────────────
+        uint8_t depth{0};
+ 
+        Node() noexcept = default;
         Node(const Node&)            = delete;
         Node& operator=(const Node&) = delete;
-
+ 
+        ~Node()
+        {
+            delete[] heapPfx;
+            delete children;
+        }
+ 
+        // ── Prefix accessors ──────────────────────────────────────────────────
         PrefixEntry* prefixBegin() noexcept
-        {
-            return prefixes ? prefixes : inlinePfx;
-        }
+            { return heapPfx ? heapPfx : inlinePfx; }
         const PrefixEntry* prefixBegin() const noexcept
-        {
-            return prefixes ? prefixes : inlinePfx;
-        }
-        PrefixEntry* prefixEnd()             noexcept { return prefixBegin() + nPrefixes; }
+            { return heapPfx ? heapPfx : inlinePfx; }
+        PrefixEntry* prefixEnd()       noexcept { return prefixBegin() + nPrefixes; }
         const PrefixEntry* prefixEnd() const noexcept { return prefixBegin() + nPrefixes; }
-
-        /**
-         * @brief Searches the node's prefix list for an exact match on @p pfx / @p len.
-         *
-         * @return Pointer to the matching @c PrefixEntry, or @c nullptr if not found.
-         */
-        PrefixEntry* findPrefix(const uint8_t* pfx, uint8_t len) noexcept
+ 
+        /** O(n) scan — used only on write path. */
+        PrefixEntry* findPrefix(AddrT addr, uint8_t len) noexcept
         {
-            PrefixEntry* b = prefixBegin();
-            PrefixEntry* e = prefixEnd();
-            for (PrefixEntry* p = b; p != e; ++p)
-                if (p->len == len && std::memcmp(p->prefix, pfx, N) == 0)
-                    return p;
+            for (auto* p = prefixBegin(); p != prefixEnd(); ++p)
+                if (p->len == len && p->addr == addr) return p;
             return nullptr;
         }
-
-        /**
-         * @brief Inserts or updates the prefix entry for @p pfx / @p len on this node.
-         *
-         * Promotes from inline to heap storage when the inline capacity is exhausted.
-         * The prefix list is kept sorted after every modification.
-         *
-         * @param pfx Pointer to N prefix bytes (caller-masked).
-         * @param len Prefix length in bits.
-         * @param ptr Caller-owned value pointer to store.
-         */
-        void insertPrefix(const uint8_t* pfx, uint8_t len, T* ptr)
+        const PrefixEntry* findPrefix(AddrT addr, uint8_t len) const noexcept
         {
-            // Check for existing entry
-            PrefixEntry* existing = findPrefix(pfx, len);
-            if (existing) { existing->ptr = ptr; return; }
-
-            PrefixEntry entry;
-            std::memcpy(entry.prefix, pfx, N);
-            entry.len = len;
-            entry.ptr = ptr;
-
-            if (nPrefixes < PREFIX_INLINE && !prefixes)
+            for (const auto* p = prefixBegin(); p != prefixEnd(); ++p)
+                if (p->len == len && p->addr == addr) return p;
+            return nullptr;
+        }
+ 
+        /**
+         * Insert or update. Keeps the list sorted.
+         * Promotes to heap storage when inline capacity is exhausted.
+         */
+        void insertPrefix(AddrT addr, uint8_t len, T* ptr)
+        {
+            if (PrefixEntry* ex = findPrefix(addr, len))
+                { ex->ptr = ptr; return; }
+ 
+            PrefixEntry entry{addr, ptr, len};
+ 
+            if (nPrefixes < PREFIX_INLINE && !heapPfx)
             {
-                // Still in inline storage
                 inlinePfx[nPrefixes++] = entry;
                 std::sort(prefixBegin(), prefixEnd());
                 return;
             }
-
+ 
+            // Promote or grow heap array.
             uint8_t newCount = nPrefixes + 1;
-            PrefixEntry* newArr = new PrefixEntry[newCount];
-            std::memcpy(newArr, prefixBegin(), nPrefixes * sizeof(PrefixEntry));
-            newArr[nPrefixes] = entry;
-            std::sort(newArr, newArr + newCount);
-            delete[] prefixes;
-            prefixes = newArr;
+            PrefixEntry* arr = new PrefixEntry[newCount];
+            std::memcpy(arr, prefixBegin(), nPrefixes * sizeof(PrefixEntry));
+            arr[nPrefixes] = entry;
+            std::sort(arr, arr + newCount);
+            delete[] heapPfx;
+            heapPfx   = arr;
             nPrefixes = newCount;
         }
-
+ 
         /**
-         * @brief Removes the prefix entry for @p pfx / @p len from this node.
-         *
-         * @return @c true if the entry was found and removed, @c false if not present.
+         * Remove an exact match. Returns true if found.
+         * Does NOT demote heap→inline after removal (keeps allocator churn low).
          */
-        bool removePrefix(const uint8_t* pfx, uint8_t len)
+        bool removePrefix(AddrT addr, uint8_t len) noexcept
         {
             PrefixEntry* b = prefixBegin();
             PrefixEntry* e = prefixEnd();
             for (PrefixEntry* p = b; p != e; ++p)
             {
-                if (p->len == len && std::memcmp(p->prefix, pfx, N) == 0)
+                if (p->len == len && p->addr == addr)
                 {
-                    // Shift remaining entries down
-                    std::memmove(p, p + 1, (e - p - 1) * sizeof(PrefixEntry));
+                    std::memmove(p, p + 1, static_cast<size_t>(e - p - 1) * sizeof(PrefixEntry));
                     --nPrefixes;
                     return true;
                 }
             }
             return false;
         }
-
+ 
         /**
-         * @brief Returns the value pointer of the longest prefix stored on this node.
-         *
-         * Exploits the sorted order: the last entry always has the greatest length.
-         * Returns @c nullptr if no prefixes are stored.
+         * The longest prefix stored directly on this node, or nullptr.
+         * Because the list is sorted by length ascending, the last entry wins.
          */
         T* localBest() const noexcept
         {
             if (!nPrefixes) return nullptr;
             return prefixEnd()[-1].ptr;
         }
-
-        /**
-         * @brief Retrieves the child node for stride index @p idx, or @c nullptr if absent.
-         *
-         * Dispatches to the sparse linear search or the dense bitmap + popcount
-         * path depending on the current child storage mode.
-         */
+ 
+        /** Recompute best by scanning the subtree breadth-first. */
+        T* subtreeBest() const noexcept
+        {
+            // For the purposes of updateBest we just use localBest — the
+            // invariant is maintained bottom-up during insert/erase.
+            return localBest();
+        }
+ 
+        // ── Child accessors (hot path inlined) ────────────────────────────────
+ 
+        /** Acquire-load of child at stride index idx. */
+        __attribute__((always_inline))
         Node* getChild(uint8_t idx) const noexcept
         {
-            if (!dense)
-            {
-                const ChildSlot* b = cs.sparse.slots;
-                const ChildSlot* e = b + nChildren;
-                const ChildSlot* it = std::lower_bound(b, e, idx,
-                    [](const ChildSlot& s, uint8_t v){ return s.index < v; });
-                if (it != e && it->index == idx)
-                    return it->child;
-                return nullptr;
-            }
-            else
-            {
-                uint64_t bit = uint64_t(1) << idx;
-                if (!(cs.dense.bitmap & bit)) return nullptr;
-                uint8_t pos = static_cast<uint8_t>(
-                    __builtin_popcountll(cs.dense.bitmap & (bit - 1)));
-                return cs.dense.children[pos];
-            }
+            if (!children) return nullptr;
+            return children->slots[idx].load(std::memory_order_acquire);
         }
-
+ 
+        /** Release-store of child at stride index idx. */
+        void setChild(uint8_t idx, Node* child) noexcept
+        {
+            if (!children)
+                children = new ChildArray();
+            children->slots[idx].store(child, std::memory_order_release);
+        }
+ 
         /**
-         * @brief Sets the child pointer for stride index @p idx.
-         *
-         * In sparse mode, inserts a new sorted slot. Promotes to dense mode
-         * automatically when the sparse threshold is reached.
-         * In dense mode, either updates an existing slot or inserts a new one
-         * into the packed array.
-         *
-         * @param idx   Stride-bit index in [0, FANOUT).
-         * @param child Pointer to the child node.
+         * Atomically exchange child at idx with nullptr.
+         * Returns the old pointer.
          */
-        void setChild(uint8_t idx, Node* child)
+        Node* removeChild(uint8_t idx) noexcept
         {
-            if (!dense)
-            {
-                ChildSlot* b = cs.sparse.slots;
-                ChildSlot* e = b + nChildren;
-                ChildSlot* it = std::lower_bound(b, e, idx,
-                    [](const ChildSlot& s, uint8_t v){ return s.index < v; });
-
-                if (it != e && it->index == idx)
-                {
-                    it->child = child;
-                    return;
-                }
-
-                if (nChildren < SPARSE_THRESHOLD)
-                {
-                    // Shift right and insert
-                    std::memmove(it + 1, it,
-                        (e - it) * sizeof(ChildSlot));
-                    it->index = idx;
-                    it->child = child;
-                    ++nChildren;
-                    return;
-                }
-
-                // Promote to dense
-                promoteTodense(idx, child);
-                return;
-            }
-
-            uint64_t bit = uint64_t(1) << idx;
-            if (cs.dense.bitmap & bit)
-            {
-                uint8_t pos = static_cast<uint8_t>(
-                    __builtin_popcountll(cs.dense.bitmap & (bit - 1)));
-                cs.dense.children[pos] = child;
-                return;
-            }
-
-            uint8_t pos = static_cast<uint8_t>(
-                __builtin_popcountll(cs.dense.bitmap & (bit - 1)));
-            uint8_t newCount = nChildren + 1;
-            Node** newArr = new Node*[newCount];
-            std::memcpy(newArr,         cs.dense.children, pos * sizeof(Node*));
-            newArr[pos] = child;
-            std::memcpy(newArr + pos + 1, cs.dense.children + pos,
-                (nChildren - pos) * sizeof(Node*));
-            delete[] cs.dense.children;
-            cs.dense.children = newArr;
-            cs.dense.bitmap  |= bit;
-            ++nChildren;
+            if (!children) return nullptr;
+            return children->slots[idx].exchange(nullptr, std::memory_order_acq_rel);
         }
-
-        /**
-         * @brief Unlinks and returns the child at stride index @p idx.
-         *
-         * Demotes from dense to sparse (resetting the bitmap to zero) when
-         * the last dense child is removed.
-         *
-         * @param idx Stride-bit index in [0, FANOUT).
-         * @return Pointer to the removed child node, or @c nullptr if not present.
-         */
-        Node* removeChild(uint8_t idx)
+ 
+        bool isEmpty() const noexcept
         {
-            if (!dense)
-            {
-                ChildSlot* b = cs.sparse.slots;
-                ChildSlot* e = b + nChildren;
-                ChildSlot* it = std::lower_bound(b, e, idx,
-                    [](const ChildSlot& s, uint8_t v){ return s.index < v; });
-                if (it == e || it->index != idx) return nullptr;
-                Node* removed = it->child;
-                std::memmove(it, it + 1, (e - it - 1) * sizeof(ChildSlot));
-                --nChildren;
-                return removed;
-            }
-
-            uint64_t bit = uint64_t(1) << idx;
-            if (!(cs.dense.bitmap & bit)) return nullptr;
-
-            uint8_t pos = static_cast<uint8_t>(
-                __builtin_popcountll(cs.dense.bitmap & (bit - 1)));
-            Node* removed = cs.dense.children[pos];
-
-            uint8_t newCount = nChildren - 1;
-            if (newCount == 0)
-            {
-                delete[] cs.dense.children;
-                cs.dense.children = nullptr;
-                cs.dense.bitmap   = 0;
-                dense = false;
-            }
-            else
-            {
-                Node** newArr = new Node*[newCount];
-                std::memcpy(newArr, cs.dense.children, pos * sizeof(Node*));
-                std::memcpy(newArr + pos, cs.dense.children + pos + 1,
-                    (nChildren - pos - 1) * sizeof(Node*));
-                delete[] cs.dense.children;
-                cs.dense.children = newArr;
-                cs.dense.bitmap  &= ~bit;
-            }
-            --nChildren;
-            return removed;
-        }
-
-        ~Node()
-        {
-            delete[] prefixes;
-            if (dense) delete[] cs.dense.children;
-        }
-
-    private:
-        /**
-         * @brief Promotes the child store from sparse to dense mode, inserting
-         *        @p newChild at index @p newIdx in the same operation.
-         *
-         * Builds the full bitmap from existing sparse slots plus the new entry,
-         * allocates the packed child array in bitmap order, and switches
-         * @c dense to @c true. Called only when the sparse threshold is reached.
-         */
-        void promoteTodense(uint8_t newIdx, Node* newChild)
-        {
-            uint64_t bmp = uint64_t(1) << newIdx;
-            for (uint8_t i = 0; i < nChildren; ++i)
-                bmp |= uint64_t(1) << cs.sparse.slots[i].index;
-
-            uint8_t total = static_cast<uint8_t>(__builtin_popcountll(bmp));
-            Node** arr = new Node*[total];
-
-            uint64_t tmp = bmp;
-            uint8_t  pos = 0;
-            while (tmp)
-            {
-                uint8_t bit = static_cast<uint8_t>(__builtin_ctzll(tmp));
-                if (bit == newIdx)
-                    arr[pos] = newChild;
-                else
-                {
-                    for (uint8_t i = 0; i < nChildren; ++i)
-                        if (cs.sparse.slots[i].index == bit)
-                            { arr[pos] = cs.sparse.slots[i].child; break; }
-                }
-                ++pos;
-                tmp &= tmp - 1;
-            }
-
-            cs.dense.bitmap   = bmp;
-            cs.dense.children = arr;
-            dense             = true;
-            nChildren         = total;
+            if (nPrefixes) return false;
+            if (!children)  return true;
+            for (uint8_t i = 0; i < FANOUT; ++i)
+                if (children->slots[i].load(std::memory_order_relaxed))
+                    return false;
+            return true;
         }
     };
-
+ 
+    // ── Public interface ──────────────────────────────────────────────────────
+ 
+    LPCTrie()  noexcept = default;
+    ~LPCTrie() noexcept { clear(); }
+ 
+    LPCTrie(const LPCTrie&)            = delete;
+    LPCTrie& operator=(const LPCTrie&) = delete;
+ 
     /**
-     * @brief Visits every prefix entry in the trie, invoking @p fn for each one.
+     * @brief Longest-prefix lookup — the hot path.
      *
-     * Traversal order is unspecified. The callback receives the raw prefix bytes,
-     * the prefix length in bits, and the stored @c T* pointer.
+     * Algorithm:
+     *  1. Load root with acquire.
+     *  2. At each node, validate skip bits with a single XOR+AND.
+     *  3. Read n->best (relaxed — guarded by the pointer acquire).
+     *  4. Extract the next S-bit stride and descend.
      *
-     * @tparam F Callable compatible with @c void(const uint8_t*, uint8_t, T*).
-     * @param fn Visitor function invoked once per @c PrefixEntry across all nodes.
+     * Zero byte-array operations. Zero heap allocations. O(W/S) iterations.
+     *
+     * @param addr  Host-order address (from NetworkSpan implicit conversion).
+     * @return      Longest matching prefix value, or nullptr.
      */
-    template <typename F>
-    void forEach(F&& fn) const noexcept
+    __attribute__((hot))
+    T* lookup(const SpanT& span) const noexcept
     {
-        const Node* r = root.load(std::memory_order_acquire);
-        if (r) forEachNode(r, std::forward<F>(fn));
-    }
-
-    /**
-     * @brief Finds the longest prefix that covers @p addr.
-     *
-     * Descends the trie consuming @c S bits per level, verifying path-
-     * compression skip bits along the way. At each node all stored prefix
-     * entries are checked for coverage; the last matching one (longest) is
-     * returned on success.
-     *
-     * @tparam AddrT Unsigned integer type whose byte width equals @c N
-     *               (e.g. @c uint32_t for IPv4, @c unsigned __int128 for IPv6).
-     *               Accessed via a @ref NetworkSpan to hide endianness.
-     * @param addr Network-order address wrapped in a @ref NetworkSpan.
-     * @return Pointer to the best-match value, or @c nullptr if no prefix covers @p addr.
-     *
-     * @note Safe to call concurrently when @c useRCU is @c true and the caller
-     *       holds an RCU read guard.
-     */
-    template<std::unsigned_integral AddrT>
-    T* lookup(const NetworkSpan<AddrT>& addr) const noexcept
-    {
-        static_assert(sizeof(AddrT) == N, "address type size must match trie byte width N");
-        Node* n    = root.load(std::memory_order_acquire);
-        T*    best = nullptr;
-        uint16_t pos = 0;   // current bit position in addr
-
-        while (n)
+        const AddrT addr = static_cast<AddrT>(span);
+ 
+        const Node* n    = root_.load(std::memory_order_acquire);
+        T*          best = nullptr;
+        uint16_t    pos  = 0;
+ 
+        while (n) [[likely]]
         {
-            // Path compression check: verify skipped bits match
-            if (n->skipLen > 0)
+            if (n->skipLen)
             {
-                if (!bitsMatch(addr, n->skipBits, pos, n->skipLen))
+                if (((addr ^ n->skipPattern) & n->skipMask) != 0) [[unlikely]]
                     break;
                 pos += n->skipLen;
             }
-
-            // Check all prefix entries on this node for coverage
-            const PrefixEntry* pb = n->prefixBegin();
-            const PrefixEntry* pe = n->prefixEnd();
-            for (const PrefixEntry* p = pb; p != pe; ++p)
-            {
-                if (prefixCovers(addr, p->prefix, p->len))
-                    best = p->ptr;
-            }
-
-            if (pos >= W) break;
-
-            uint8_t idx = extractBits(addr, pos, S);
+ 
+            if (T* v = n->best.load(std::memory_order_relaxed))
+                best = v;
+ 
+            if (pos >= W) [[unlikely]]
+                break;
+ 
+            const uint16_t shift = static_cast<uint16_t>(W - pos - S);
+            const uint8_t  idx   = static_cast<uint8_t>((addr >> shift) & SMASK);
             pos += S;
-
-            Node* child = n->getChild(idx);
-            n = child;
+ 
+            if (!n->children) break;
+            n = n->children->slots[idx].load(std::memory_order_acquire);
         }
-
+ 
         return best;
     }
-
+ 
     /**
-     * @brief Finds the value pointer for the exact prefix @p pfx / @p len.
-     *
-     * Unlike @c lookup, covering prefixes do not satisfy the query — only an
-     * exact length and byte match returns a result.
-     *
-     * @param pfx Pointer to N prefix bytes.
-     * @param len Prefix length in bits.
-     * @return Stored @c T* pointer, or @c nullptr if not found.
+     * Exact-match lookup: only returns a value if both the prefix bytes and
+     * the prefix length match precisely.
      */
     T* lookupExact(const uint8_t* pfx, uint8_t len) const noexcept
     {
-        uint8_t masked[N];
-        applyMask(pfx, len, masked);
-
-        Node* n   = root.load(std::memory_order_acquire);
-        uint16_t pos = 0;
-
+        if (len > W) return nullptr;
+        const AddrT masked = applyMask(toHostOrder(pfx), len);
+ 
+        const Node* n   = root_.load(std::memory_order_acquire);
+        uint16_t    pos = 0;
+ 
         while (n)
         {
-            if (n->skipLen > 0)
+            if (n->skipLen)
             {
-                if (!bitsMatch(masked, n->skipBits, pos, n->skipLen))
+                if (((masked ^ n->skipPattern) & n->skipMask) != 0)
                     return nullptr;
                 pos += n->skipLen;
             }
-
-            PrefixEntry* e = n->findPrefix(masked, len);
-            if (e) return e->ptr;
-
+ 
+            if (const PrefixEntry* e = n->findPrefix(masked, len))
+                return e->ptr;
+ 
             if (pos >= W) break;
-
-            uint8_t idx = extractBits(masked, pos, S);
+ 
+            const uint16_t shift = static_cast<uint16_t>(W - pos - S);
+            const uint8_t  idx   = static_cast<uint8_t>((masked >> shift) & SMASK);
             pos += S;
             n = n->getChild(idx);
         }
         return nullptr;
     }
-
+ 
     /**
-     * @brief Inserts a new prefix/pointer pair into the trie.
-     *
-     * The host bits of @p pfx beyond @p len are masked to zero. If the prefix
-     * already exists its stored pointer is updated. A new root node is created
-     * if the trie is empty.
-     *
-     * @param pfx   Pointer to N prefix bytes.
-     * @param len   Prefix length in bits [0, W].
-     * @param entry Caller-owned value pointer to associate with this prefix.
-     * @return @c true on success; @c false if @p len > W.
-     *
-     * @warning Must not be called concurrently with any other mutating operation.
+     * Insert or update a prefix.
+     * @param pfx   N bytes, network order.
+     * @param len   Prefix length in bits [0..W].
+     * @param entry Caller-owned value.
+     * @return false if len > W.
      */
     bool insert(const uint8_t* pfx, uint8_t len, T* entry)
     {
         if (len > W) return false;
-
-        uint8_t masked[N];
-        applyMask(pfx, len, masked);
-
-        // Ensure root
-        if (!root.load(std::memory_order_acquire))
+        const AddrT masked = applyMask(toHostOrder(pfx), len);
+ 
+        // Ensure root exists.
+        if (!root_.load(std::memory_order_acquire))
         {
-            Node* fresh = new Node();
+            Node* fresh    = new Node();
             Node* expected = nullptr;
-            if (!root.compare_exchange_strong(expected, fresh,
-                    std::memory_order_release, std::memory_order_acquire))
+            if (!root_.compare_exchange_strong(expected, fresh,
+                    std::memory_order_release, std::memory_order_relaxed))
                 delete fresh;
         }
-
-        insertAt(root.load(std::memory_order_acquire), masked, len, entry, 0);
+ 
+        insertAt(root_.load(std::memory_order_relaxed), masked, len, entry, 0);
         return true;
     }
-
+ 
     /**
-     * @brief Removes the prefix entry for @p pfx / @p len from the trie.
-     *
-     * After removing the entry, empty leaf nodes are pruned. The @c T* value
-     * pointed to by the entry is not freed.
-     *
-     * @param pfx Pointer to N prefix bytes.
-     * @param len Prefix length in bits.
-     * @return @c true if the prefix was found and removed, @c false otherwise.
-     *
-     * @warning Must not be called concurrently with any other mutating operation.
+     * Remove a prefix.
+     * @return false if not found.
      */
     bool erase(const uint8_t* pfx, uint8_t len)
     {
         if (len > W) return false;
-
-        uint8_t masked[N];
-        applyMask(pfx, len, masked);
-
-        Node* r = root.load(std::memory_order_acquire);
+        const AddrT masked = applyMask(toHostOrder(pfx), len);
+ 
+        Node* r = root_.load(std::memory_order_acquire);
         if (!r) return false;
-
         return eraseAt(r, nullptr, 0, masked, len, 0);
     }
-
+ 
     /**
-     * @brief Removes all nodes from the trie, resetting it to an empty state.
-     *
-     * Node memory is reclaimed according to the @c useRCU policy. Pointed-to
-     * @c T objects are not freed.
-     *
-     * @warning Must not be called concurrently with any other operation.
+     * Delete all nodes. Not safe to call concurrently.
      */
-    void clear()
+    void clear() noexcept
     {
-        Node* old = root.exchange(nullptr, std::memory_order_acq_rel);
+        Node* old = root_.exchange(nullptr, std::memory_order_acq_rel);
         destroyAll(old);
     }
-
+ 
     /**
-     * @brief Extracts @p count consecutive bits from @p addr starting at bit offset @p off.
-     *
-     * Bits are in network (big-endian) order: bit 0 is the MSB of @p addr[0].
-     * The extracted bits are returned right-aligned in the result byte.
-     *
-     * @param addr  Pointer to N address bytes.
-     * @param off   Starting bit index [0, W).
-     * @param count Number of bits to extract [1, 8].
-     * @return Extracted bits in the low @p count bits of the result.
+     * Visit every prefix in unspecified order.
+     * @tparam F  void(AddrT host_order_addr, uint8_t len, T* ptr)
      */
-    static uint8_t extractBits(const uint8_t* addr, uint16_t off, uint8_t count) noexcept
+    template<typename F>
+    void forEach(F&& fn) const noexcept
     {
-        uint8_t result = 0;
-        for (uint8_t i = 0; i < count; ++i)
-        {
-            uint16_t bitIdx = off + i;
-            uint8_t  b      = (addr[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
-            result = static_cast<uint8_t>((result << 1) | b);
-        }
-        return result;
+        const Node* r = root_.load(std::memory_order_acquire);
+        if (r) forEachNode(r, std::forward<F>(fn));
     }
-
+ 
+    // ── Static helpers (public for testing) ──────────────────────────────────
+ 
+    /** Convert N network-order bytes to a host-order AddrT integer.
+     *
+     *  "Host order" here means: bit 0 of the address (MSB of byte 0) sits
+     *  in the highest bit of the returned integer, so that
+     *      extractBits(addr, 0, S) == addr >> (W - S)
+     *  holds unconditionally on any platform.  This is NOT the same as the
+     *  platform's native endianness — it is always big-endian integer order.
+     */
+    static AddrT toHostOrder(const uint8_t* net) noexcept
+    {
+        // Assemble bytes most-significant-first into the integer.
+        // byte[0] lands in bits [W-1..W-8], byte[1] in [W-9..W-16], etc.
+        // No platform-endianness swap needed: the integer arithmetic is
+        // endian-agnostic and NetworkSpan does the same assembly internally.
+        AddrT v = 0;
+        for (uint8_t i = 0; i < N; ++i)
+            v = (v << 8) | static_cast<AddrT>(net[i]);
+        return v;
+    }
+ 
     /**
-     * @brief @ref extractBits overload for @ref NetworkSpan-wrapped addresses.
-     *
-     * @tparam AddrT Unsigned integer type whose byte width equals @c N.
-     * @param addr  Network-order address wrapped in a @ref NetworkSpan.
-     * @param off   Starting bit index [0, W).
-     * @param count Number of bits to extract [1, 8].
-     * @return Extracted bits in the low @p count bits of the result.
+     * Zero host bits beyond len. Works for any unsigned integer width.
      */
-    template<std::unsigned_integral AddrT>
-    static uint8_t extractBits(const NetworkSpan<AddrT>& addr, uint16_t off, uint8_t count) noexcept
+    static AddrT applyMask(AddrT addr, uint8_t len) noexcept
     {
-        uint8_t result = 0;
-        for (uint8_t i = 0; i < count; ++i)
-        {
-            uint16_t bitIdx = off + i;
-            uint8_t  b      = (addr[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
-            result = static_cast<uint8_t>((result << 1) | b);
-        }
-        return result;
+        if (len == 0)  return AddrT{0};
+        if (len >= W)  return addr;
+        // Shift a full-width mask right by (W - len) positions.
+        // Special-case: shifting by W bits is UB for fixed-width types.
+        AddrT mask = ~AddrT{0};
+        mask <<= (W - len);
+        return addr & mask;
     }
-
-    /**
-     * @brief Masks the host bits of @p pfx beyond @p len, writing the result to @p out.
-     *
-     * Bits [len, W) in @p out are zeroed. This canonicalises prefixes so that
-     * 10.1.2.3/24 and 10.1.2.0/24 map to the same key.
-     *
-     * @param pfx Pointer to N input bytes.
-     * @param len Number of prefix bits to preserve [0, W].
-     * @param out Pointer to N output bytes. May not alias @p pfx.
-     */
-    static void applyMask(const uint8_t* pfx, uint8_t len, uint8_t* out) noexcept
-    {
-        if (len == 0) { std::memset(out, 0, N); return; }
-        if (len >= W) { std::memcpy(out, pfx, N); return; }
-
-        uint8_t full = len >> 3;
-        uint8_t rem  = len & 7;
-
-        if (full) std::memcpy(out, pfx, full);
-        if (rem)
-        {
-            out[full] = pfx[full] & static_cast<uint8_t>(0xFF00u >> rem);
-            ++full;
-        }
-        if (full < N) std::memset(out + full, 0, N - full);
-    }
-
+ 
 private:
-    template <typename F>
-    static void forEachNode(const Node* n, F&& fn) noexcept
-    {
-        const PrefixEntry* pb = n->prefixBegin();
-        const PrefixEntry* pe = n->prefixEnd();
-        for (const PrefixEntry* p = pb; p != pe; ++p)
-            fn(p->prefix, p->len, p->ptr);
-
-        if (!n->dense)
-        {
-            for (uint8_t i = 0; i < n->nChildren; ++i)
-                forEachNode(n->cs.sparse.slots[i].child, fn);
-        }
-        else
-        {
-            uint8_t count = static_cast<uint8_t>(__builtin_popcountll(n->cs.dense.bitmap));
-            for (uint8_t i = 0; i < count; ++i)
-                forEachNode(n->cs.dense.children[i], fn);
-        }
-    }
-
+ 
     /**
-     * @brief Returns true if @p count bits of @p addr starting at offset @p off
-     *        match the corresponding bits of @p ref.
-     *
-     * Used to validate path-compression skip bits during descent.
+     * Build skipMask: a mask with exactly `len` high bits set,
+     * aligned to bit position `pos` within the W-bit address.
+     * Example: W=32, pos=8, len=8 → 0x00FF0000
      */
-    static bool bitsMatch(const uint8_t* addr, const uint8_t* ref,
-                          uint16_t off, uint8_t count) noexcept
+    static AddrT makeMask(uint16_t pos, uint8_t len) noexcept
     {
-        for (uint8_t i = 0; i < count; ++i)
-        {
-            uint16_t bitIdx = off + i;
-            uint8_t  a = (addr[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
-            uint8_t  r = (ref [bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
-            if (a != r) return false;
-        }
-        return true;
+        constexpr AddrT ALL_ONES = ~AddrT{0};
+        if (len == 0) return AddrT{0};
+        if (len >= W) return ALL_ONES;
+        // len consecutive 1s in the low bits, shifted left to position pos.
+        const AddrT low_mask = (AddrT{1} << len) - AddrT{1};
+        return low_mask << (W - pos - len);
     }
-
-    /// @ref bitsMatch overload for @ref NetworkSpan-wrapped addresses.
-    template<std::unsigned_integral AddrT>
-    static bool bitsMatch(const NetworkSpan<AddrT>& addr, const uint8_t* ref,
-                          uint16_t off, uint8_t count) noexcept
-    {
-        for (uint8_t i = 0; i < count; ++i)
-        {
-            uint16_t bitIdx = off + i;
-            uint8_t  a = (addr[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
-            uint8_t  r = (ref [bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1;
-            if (a != r) return false;
-        }
-        return true;
-    }
-
-    /// Returns true if @p prefix/len is a covering prefix of @p addr (raw byte array variant).
-    static bool prefixCovers(const uint8_t* addr,
-                              const uint8_t* prefix,
-                              uint8_t        len) noexcept
-    {
-        if (len == 0) return true;
-        uint8_t full = len >> 3;
-        uint8_t rem  = len & 7;
-        if (full && std::memcmp(addr, prefix, full) != 0) return false;
-        if (rem)
-        {
-            uint8_t m = static_cast<uint8_t>(0xFF00u >> rem);
-            if ((addr[full] & m) != prefix[full]) return false;
-        }
-        return true;
-    }
-
-    /// @ref prefixCovers overload for @ref NetworkSpan-wrapped addresses.
-    template<std::unsigned_integral AddrT>
-    static bool prefixCovers(const NetworkSpan<AddrT>& addr,
-                              const uint8_t* prefix,
-                              uint8_t        len) noexcept
-    {
-        if (len == 0) return true;
-        uint8_t full = len >> 3;
-        uint8_t rem  = len & 7;
-        for (uint8_t i = 0; i < full; ++i)
-            if (addr[i] != prefix[i]) return false;
-        if (rem)
-        {
-            uint8_t m = static_cast<uint8_t>(0xFF00u >> rem);
-            if ((addr[full] & m) != prefix[full]) return false;
-        }
-        return true;
-    }
-
+ 
     /**
-     * @brief Recursive insertion into the subtree rooted at @p n, starting at bit @p pos.
-     *
-     * Consumes the skip bits stored on @p n, then either stores the prefix on
-     * @p n (if remaining bits fit within one stride) or descends to a child,
-     * creating one if absent. When path compression diverges, @c splitNode is
-     * called to introduce a branch node at the divergence point.
-     *
-     * @param n     Current node.
-     * @param pfx   Canonicalised prefix bytes.
-     * @param len   Prefix length in bits.
-     * @param entry Caller-owned value pointer.
-     * @param pos   Current bit offset (consumed bits so far).
+     * Count how many bits of `a` and `b` agree, starting at `pos`,
+     * for up to `maxBits` bits. Returns the count.
      */
-    void insertAt(Node* n, const uint8_t* pfx, uint8_t len, T* entry, uint16_t pos)
-    {
-        // Consume skip bits
-        if (n->skipLen > 0)
-        {
-            uint8_t matchLen = commonPrefixLen(pfx, n->skipBits, pos,
-                                               pos + n->skipLen);
-            if (matchLen < n->skipLen)
-            {
-                // Split: create a new branch node at the divergence point
-                splitNode(n, pfx, len, entry, pos, matchLen);
-                return;
-            }
-            pos += n->skipLen;
-        }
-
-        // If the prefix ends at or before this stride, store it here
-        if (pos >= len)
-        {
-            n->insertPrefix(pfx, len, entry);
-            updateBest(n, entry);
-            return;
-        }
-
-        uint16_t remaining = len - pos;
-
-        // If remaining bits fit within one stride, store on this node
-        if (remaining <= S)
-        {
-            n->insertPrefix(pfx, len, entry);
-            updateBest(n, entry);
-            return;
-        }
-
-        // Descend
-        uint8_t idx   = extractBits(pfx, pos, S);
-        pos += S;
-        Node*   child = n->getChild(idx);
-
-        if (!child)
-        {
-            // Create new leaf node with path compression
-            Node* leaf    = new Node();
-            leaf->depth   = static_cast<uint8_t>(pos / S);
-
-            if (len > pos)
-            {
-                leaf->skipLen = static_cast<uint8_t>(len - pos);
-                std::memcpy(leaf->skipBits, pfx, N);
-            }
-
-            leaf->insertPrefix(pfx, len, entry);
-            leaf->best.store(entry, std::memory_order_relaxed);
-            n->setChild(idx, leaf);
-            updateBest(n, entry);
-            return;
-        }
-
-        insertAt(child, pfx, len, entry, pos);
-        updateBest(n, child->best.load(std::memory_order_relaxed));
-    }
-
-    /**
-     * @brief Splits @p n at bit position @p pos + @p matchLen to introduce a branch
-     *        for the new prefix @p pfx / @p len.
-     *
-     * The current node's skip is shortened to @p matchLen bits; the remainder
-     * of the old skip and @p n's existing children/prefixes are moved to a new
-     * sub-node linked as a child of @p n at the old diverging stride index.
-     * The new prefix is then inserted via @c insertAt starting from the branch point.
-     *
-     * @param n        Node whose skip compression diverges from the new prefix.
-     * @param pfx      New prefix bytes.
-     * @param len      New prefix length.
-     * @param entry    New value pointer.
-     * @param pos      Bit offset at which @p n's skip begins.
-     * @param matchLen Number of skip bits that match before the divergence.
-     */
-    void splitNode(Node* n, const uint8_t* pfx, uint8_t len, T* entry,
-                   uint16_t pos, uint8_t matchLen)
-    {
-        uint8_t oldSkipLen = n->skipLen;
-        n->skipLen = matchLen;
-        pos += matchLen;
-
-        // The diverging bit of the old skip becomes a child index
-        if (pos + S <= W)
-        {
-            uint8_t oldIdx = extractBits(n->skipBits, pos, S);
-            pos += S;
-
-            // Move n's existing children and prefixes to a new sub-node
-            Node* sub       = new Node();
-            sub->depth      = static_cast<uint8_t>(pos / S);
-            sub->skipLen   = static_cast<uint8_t>(oldSkipLen - matchLen - S > 0
-                                  ? oldSkipLen - matchLen - S : 0);
-            if (sub->skipLen > 0)
-                std::memcpy(sub->skipBits, n->skipBits, N);
-
-            // Move children from n to sub
-            if (!n->dense)
-            {
-                for (uint8_t i = 0; i < n->nChildren; ++i)
-                    sub->setChild(n->cs.sparse.slots[i].index,
-                                  n->cs.sparse.slots[i].child);
-            }
-            else
-            {
-                uint64_t bmp = n->cs.dense.bitmap;
-                uint8_t  pi  = 0;
-                while (bmp)
-                {
-                    uint8_t bit = static_cast<uint8_t>(__builtin_ctzll(bmp));
-                    sub->setChild(bit, n->cs.dense.children[pi++]);
-                    bmp &= bmp - 1;
-                }
-                delete[] n->cs.dense.children;
-                n->cs.dense.children = nullptr;
-                n->cs.dense.bitmap   = 0;
-                n->dense             = false;
-            }
-            n->nChildren = 0;
-
-            PrefixEntry* pb = n->prefixBegin();
-            PrefixEntry* pe = n->prefixEnd();
-            for (PrefixEntry* p = pb; p != pe; ++p)
-                sub->insertPrefix(p->prefix, p->len, p->ptr);
-            delete[] n->prefixes;
-            n->prefixes   = nullptr;
-            n->nPrefixes  = 0;
-
-            n->setChild(oldIdx, sub);
-        }
-
-        // Now insert the new prefix from the current pos
-        insertAt(n, pfx, len, entry, pos);
-    }
-
-    /**
-     * @brief Returns the number of consecutive identical bits between @p a and @p b
-     *        in the range [@p off, @p end).
-     */
-    static uint8_t commonPrefixLen(const uint8_t* a, const uint8_t* b,
-                                   uint16_t off, uint16_t end) noexcept
+    static uint8_t commonSkipLen(AddrT a, AddrT b,
+                                  uint16_t pos, uint16_t maxBits) noexcept
     {
         uint8_t count = 0;
-        for (uint16_t i = off; i < end; ++i)
+        for (uint16_t i = 0; i < maxBits; ++i)
         {
-            uint8_t ba = (a[i >> 3] >> (7 - (i & 7))) & 1;
-            uint8_t bb = (b[i >> 3] >> (7 - (i & 7))) & 1;
-            if (ba != bb) break;
+            const uint16_t bitPos = pos + i;
+            const uint16_t shift  = static_cast<uint16_t>(W - bitPos - 1);
+            if (((a >> shift) & 1) != ((b >> shift) & 1)) break;
             ++count;
         }
         return count;
     }
-
-    /// Updates @p n's cached best-match pointer if @p candidate is non-null.
-    static void updateBest(Node* n, T* candidate) noexcept
-    {
-        if (candidate)
-            n->best.store(candidate, std::memory_order_release);
-    }
-
+ 
     /**
-     * @brief Recursive erasure starting at node @p n.
-     *
-     * Verifies skip bits, then tries to remove the prefix from @p n's prefix
-     * list. If found and the node becomes empty and childless, the node is
-     * detached from @p parent and retired. If not found on this node, descends
-     * to the child indicated by the next stride.
-     *
-     * @return @c true if the prefix was found and removed.
+     * Push `entry` into `n->best` if it is non-null.
      */
-    bool eraseAt(Node* n, Node* parent, uint8_t parentIdx,
-                 const uint8_t* pfx, uint8_t len, uint16_t pos)
+    static void updateBest(Node* n, T* entry) noexcept
     {
+        if (entry)
+            n->best.store(entry, std::memory_order_release);
+    }
+ 
+    /**
+     * Recompute `n->best` from the node's own prefix list.
+     * Does NOT recurse into children — callers chain bottom-up.
+     */
+    static void recomputeBest(Node* n) noexcept
+    {
+        n->best.store(n->localBest(), std::memory_order_release);
+    }
+ 
+    /**
+     * Recursive insertion into the subtree at `n`, having consumed `pos` bits.
+     *
+     * Invariant: on entry, the `pos` bits [0..pos) of `pfx` have been
+     * validated or consumed by parent nodes and this node's skip.
+     */
+    void insertAt(Node* n, AddrT pfx, uint8_t len, T* entry, uint16_t pos)
+    {
+        // 1. Consume skip bits (Path Compression)
         if (n->skipLen > 0)
         {
-            if (!bitsMatch(pfx, n->skipBits, pos, n->skipLen))
+            const uint8_t match = commonSkipLen(pfx, n->skipPattern, pos, n->skipLen);
+            if (match < n->skipLen)
+            {
+                splitNode(n, pfx, len, entry, pos, match);
+                return;
+            }
+            pos += n->skipLen;
+        }
+ 
+        // 2. Prefix terminates on this node.
+        if (pos >= len || (len - pos) <= S)
+        {
+            n->insertPrefix(pfx, len, entry);
+            // Update this node's best match to its own longest internal prefix.
+            n->best.store(n->localBest(), std::memory_order_release);
+            return;
+        }
+ 
+        // 3. Descend.
+        const uint16_t shift = static_cast<uint16_t>(W - pos - S);
+        const uint8_t  idx   = static_cast<uint8_t>((pfx >> shift) & SMASK);
+        pos += S;
+ 
+        Node* child = n->getChild(idx);
+        if (!child)
+        {
+            // Create a new leaf
+            Node* leaf   = new Node();
+            leaf->depth  = static_cast<uint8_t>(pos / S);
+ 
+            const uint16_t remaining = static_cast<uint16_t>(len - pos);
+            if (remaining > 0)
+            {
+                leaf->skipLen     = static_cast<uint8_t>(remaining > 255 ? 255 : remaining);
+                leaf->skipPattern = pfx;
+                leaf->skipMask    = makeMask(pos, leaf->skipLen);
+            }
+
+            // INHERITANCE: The child must inherit the parent's current best 
+            // as a fallback for LPM.
+            T* parentBest = n->best.load(std::memory_order_relaxed);
+            if (parentBest) leaf->best.store(parentBest, std::memory_order_relaxed);
+
+            leaf->insertPrefix(pfx, len, entry);
+            
+            // Now update the child's best with its own new prefix.
+            updateBest(leaf, entry);
+            
+            n->setChild(idx, leaf);
+            
+            return;
+        }
+
+        // INHERITANCE: Before descending, ensure the child knows about the 
+        // parent's best match if the child doesn't have a better one.
+        T* parentBest = n->best.load(std::memory_order_relaxed);
+        if (parentBest) updateBest(child, parentBest);
+ 
+        insertAt(child, pfx, len, entry, pos);
+    }     
+
+    void splitNode(Node* n, AddrT pfx, uint8_t len, T* entry,
+                   uint16_t pos, uint8_t matchLen)
+    {
+        const uint8_t  oldSkipLen = n->skipLen;
+        const AddrT    oldPattern = n->skipPattern;
+
+        // Create a new sub-node that will hold n's original data
+        Node* sub      = new Node();
+        
+        // Move prefixes from n to sub
+        if (n->nPrefixes) {
+            for (auto* p = n->prefixBegin(); p != n->prefixEnd(); ++p)
+                sub->insertPrefix(p->addr, p->len, p->ptr);
+            
+            delete[] n->heapPfx;
+            n->heapPfx = nullptr;
+            n->nPrefixes = 0;
+        }
+
+        // Move children from n to sub
+        if (n->children) {
+            sub->children = n->children;
+            n->children = nullptr;
+        }
+
+        // Setup sub-node skip bits (the remaining skip bits after the split)
+        const uint16_t branchPos = pos + matchLen;
+        const uint16_t subPos    = branchPos + S;
+        
+        if (oldSkipLen > matchLen + S) {
+            sub->skipLen = oldSkipLen - (matchLen + S);
+            sub->skipPattern = oldPattern;
+            sub->skipMask = makeMask(subPos, sub->skipLen);
+        }
+
+        // Recompute sub's best now that it has its prefixes back
+        sub->best.store(sub->localBest(), std::memory_order_relaxed);
+
+        // Update original node n to only cover the matched skip prefix
+        n->skipLen = matchLen;
+        n->skipMask = makeMask(pos, matchLen);
+        n->best.store(nullptr, std::memory_order_release); // Will be re-evaluated
+
+        // Link sub as a child of n at the diverging bit
+        const uint16_t shift = static_cast<uint16_t>(W - branchPos - S);
+        const uint8_t oldIdx = static_cast<uint8_t>((oldPattern >> shift) & SMASK);
+        n->setChild(oldIdx, sub);
+
+        // Insert the new entry into the newly restructured tree
+        insertAt(n, pfx, len, entry, pos);
+    } 
+ 
+    /**
+     * Recursive erasure. Returns true on success.
+     * Updates `best` bottom-up after removal.
+     * Prunes childless, prefix-free nodes.
+     */
+    bool eraseAt(Node* n, Node* parent, uint8_t parentIdx,
+                 AddrT pfx, uint8_t len, uint16_t pos)
+    {
+        if (n->skipLen)
+        {
+            if (((pfx ^ n->skipPattern) & n->skipMask) != 0)
                 return false;
             pos += n->skipLen;
         }
-
-        // Try removing from this node's prefix list first
+ 
         if (n->removePrefix(pfx, len))
         {
-            // Update best hint
-            n->best.store(n->localBest(), std::memory_order_release);
-
-            // Prune if node is now empty and childless
-            if (n->nPrefixes == 0 && n->nChildren == 0 && parent)
+            recomputeBest(n);
+            if (n->isEmpty() && parent)
             {
                 parent->removeChild(parentIdx);
                 retireNode(n);
             }
             return true;
         }
-
+ 
         if (pos >= W) return false;
-
-        uint8_t idx   = extractBits(pfx, pos, S);
+ 
+        const uint16_t shift = static_cast<uint16_t>(W - pos - S);
+        const uint8_t  idx   = static_cast<uint8_t>((pfx >> shift) & SMASK);
         pos += S;
-        Node*   child = n->getChild(idx);
+ 
+        Node* child = n->getChild(idx);
         if (!child) return false;
-
-        bool removed = eraseAt(child, n, idx, pfx, len, pos);
+ 
+        const bool removed = eraseAt(child, n, idx, pfx, len, pos);
         if (removed)
-            n->best.store(n->localBest(), std::memory_order_release);
+            recomputeBest(n);  // child may have been pruned or changed
         return removed;
     }
-
-    /// Post-order traversal that retires every node in the subtree rooted at @p n.
-    static void destroyAll(Node* n)
+ 
+    template<typename F>
+    static void forEachNode(const Node* n, F&& fn) noexcept
+    {
+        for (const PrefixEntry* p = n->prefixBegin(); p != n->prefixEnd(); ++p)
+            fn(p->addr, p->len, p->ptr);
+ 
+        if (!n->children) return;
+        for (uint8_t i = 0; i < FANOUT; ++i)
+        {
+            const Node* child = n->children->slots[i].load(std::memory_order_relaxed);
+            if (child) forEachNode(child, fn);
+        }
+    }
+ 
+ 
+    /** Post-order recursive deletion.  NOT deferred through RCU — this is
+     *  only called from `clear()` after all writers have finished. */
+    static void destroyAll(Node* n) noexcept
     {
         if (!n) return;
-
-        if (!n->dense)
+        if (n->children)
         {
-            for (uint8_t i = 0; i < n->nChildren; ++i)
-                destroyAll(n->cs.sparse.slots[i].child);
+            for (uint8_t i = 0; i < FANOUT; ++i)
+            {
+                Node* child = n->children->slots[i].load(std::memory_order_relaxed);
+                if (child) destroyAll(child);
+            }
         }
-        else
-        {
-            uint8_t count = static_cast<uint8_t>(
-                __builtin_popcountll(n->cs.dense.bitmap));
-            for (uint8_t i = 0; i < count; ++i)
-                destroyAll(n->cs.dense.children[i]);
-        }
-
-        retireNode(n);
+        delete n;
     }
-
-    static void destroyNode(Node* n) { delete n; }
-
+ 
+    static void destroyNode(Node* n) noexcept { delete n; }
+ 
     /**
-     * @brief Reclaims @p n according to the @c useRCU policy.
-     *
-     * With @c useRCU=true the deletion is deferred via @ref utils::RCU::retire
-     * so readers in a read-side critical section see valid memory until they exit.
-     * With @c useRCU=false the node is deleted immediately.
+     * Retire a single node: immediately if !useRCU, deferred otherwise.
+     * Used during incremental erase, not during clear().
      */
-    static void retireNode(Node* n)
+    static void retireNode(Node* n) noexcept
     {
         if (!n) return;
+        // Recursively retire children too before the node itself,
+        // so readers that still hold a pointer to n see valid children.
         if constexpr (useRCU)
-            utils::RCU::retire([n]{ destroyNode(n); });
+        {
+            // Schedule child retirements first.
+            if (n->children)
+            {
+                for (uint8_t i = 0; i < FANOUT; ++i)
+                {
+                    Node* c = n->children->slots[i].load(std::memory_order_relaxed);
+                    if (c) retireNode(c);
+                }
+            }
+            auto deleter = [](void* ctx) noexcept {
+                destroyAll(static_cast<Node*>(ctx));
+            };
+            utils::RCU::retire(deleter, n);
+        }
         else
-            destroyNode(n);
+        {
+            destroyAll(n);
+        }
     }
-
-    std::atomic<Node*> root{nullptr}; ///< Root of the LC-Trie; null when empty.
+ 
+    // ── Data members ──────────────────────────────────────────────────────────
+    std::atomic<Node*> root_{nullptr};
 };
 
 } // namespace types
+
+#endif // LPC_TRIE_HPP

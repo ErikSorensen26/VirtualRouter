@@ -96,6 +96,22 @@ inline __uint128_t ntohdll(__uint128_t val) {
     return htondll(val);
 }
 
+template <size_t B>
+struct smallestInteger
+{
+private:
+    static_assert(B > 0, "Size must be at least 1 byte");
+    static_assert(B < 16, "No integer type available for this type");
+
+public:
+    using type =
+        std::conditional_t<B <= 1, uint8_t,
+        std::conditional_t<B <= 2, uint16_t,
+        std::conditional_t<B <= 4, uint32_t,
+        std::conditional_t<B <= 8, uint64_t,
+        __uint128_t>>>>;
+};
+
 // MASK HELPERS
 
 /**

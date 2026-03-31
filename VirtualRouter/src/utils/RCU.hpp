@@ -1,6 +1,10 @@
+
 /**
  * @file RCU.hpp
- * @brief Read-Copy-Update synchronization for lock-free reads.
+ * @brief Epoch-based Read-Copy-Update with zero‑overhead deferred deletion.
+ *
+ * Provides lock‑free read paths and batched, function‑pointer‑based retirement.
+ * All type erasure is removed – deleters are invoked directly via raw pointers.
  */
 
 #ifndef RCU_HPP
@@ -8,80 +12,58 @@
 
 #include <atomic>
 #include <thread>
-#include <functional>
+#include <cstdint>
 
-namespace utils
-{
+namespace utils {
 
 /**
- * @brief Epoch-based Read-Copy-Update (RCU) primitive for lock-free read paths.
- * @ingroup UTILS
+ * @brief Epoch‑based RCU primitive for lock‑free reads with efficient retirement.
  *
- * Provides a classic RCU contract: readers run without any locks by
- * stamping the current global epoch on entry and clearing it on exit.
- * Writers call synchronize() to advance the epoch and spin until every
- * active reader has observed the new epoch, guaranteeing that no reader
- * still holds a reference to pre-update data.
+ * ## Design Goals
+ * - **Reader‑side**: two atomic stores per Guard (minimal overhead).
+ * - **Writer‑side**: synchronize() advances epoch and waits for quiescent state.
+ * - **Deferred deletion**: uses a fixed‑size ring buffer of `(epoch, fn, ctx)`
+ *   triples. No `std::function`, no heap allocation for callbacks.
  *
- * Objects that are no longer reachable from the current version of a
- * data structure are submitted via retire(), which defers their deletion
- * until they are provably invisible to all existing readers.
+ * ## Fast vs. Slow Path
+ * - **Fast path** (`Guard`): atomic loads/stores, no blocking.
+ * - **Slow path** (`synchronize`): spins on thread epoch list; intended for
+ *   infrequent writers.
+ * - **Reclamation** (`retire`): lock‑free CAS to enqueue a deletion request.
+ *   Every 128th call triggers an automatic `synchronize()+tryReclaim()` to
+ *   bound queue growth.
  *
- * ## Architectural Role
- * Intended for data structures that are read on the fast path far more
- * often than they are modified. The routing table, ARP/NDP caches, and
- * similar hot-read structures use this to avoid reader-side locking
- * entirely. Writers pay the cost of synchronize() on the slow path.
+ * ## Memory Ordering
+ * All operations use acquire/release semantics where necessary to ensure
+ * visibility of updates across threads. The `globalEpoch` is monotonic and
+ * serves as a logical timestamp.
  *
- * ## Concurrency Model
- * - @ref globalEpoch and @ref head are process-global atomics shared by all
- *   threads; no additional lock guards them.
- * - Each thread has a TLS @ref ThreadEpoch that records whether it is
- *   inside a read-side critical section and, if so, which epoch it entered.
- * - The retire queue (@ref retireRight) is a lock-free bounded ring accessed
- *   with CAS on @ref retireHead. Only @ref retireTail is updated under the
- *   implicit serialization provided by synchronize().
- *
- * ## Fast Path vs. Slow Path
- * - Fast path: constructing a @ref Guard (two atomic stores, no blocking).
- * - Slow path: synchronize() spins over all registered thread epochs. Every
- *   128 retirements it also calls synchronize() + tryReclaim() automatically.
- *
- * @warning Every thread that enters a read-side critical section must call
- * registerThread() exactly once before constructing its first Guard.
- * Failure to do so means the thread's epoch is never visible to
- * synchronize(), which can allow a writer to free memory still in use.
- *
- * @warning The retire queue has a fixed capacity of RETIRE_Q_SIZE entries.
- * If the queue fills, retire() calls synchronize() + tryReclaim() inline,
- * which will block the calling thread until space is reclaimed.
+ * @warning Every thread that enters a read‑side critical section must call
+ *          `registerThread()` exactly once before its first `Guard`.
+ * @warning The retire queue has fixed capacity (`RETIRE_Q_SIZE`). If full,
+ *          `retire()` will call `synchronize()` inline and block until space
+ *          is reclaimed. Do not call `retire()` from real‑time threads that
+ *          cannot tolerate blocking.
  */
-class RCU
-{
+class RCU {
 public:
     /**
-     * @brief Per-thread epoch record threaded into the global linked list.
-     * @ingroup UTILS
+     * @brief Per‑thread epoch record, linked into a global list.
      *
-     * Threads write their current epoch into this structure on Guard
-     * construction so that synchronize() can observe them. The @ref active
-     * flag distinguishes a thread that is registered but idle from one
-     * that is inside a critical section.
+     * Threads set `epoch` to the current global value when inside a critical
+     * section, and clear it (to 0) on exit. The `active` flag indicates that
+     * the thread is registered and should be considered by `synchronize()`.
      */
-    struct ThreadEpoch
-    {
-        std::atomic<uint64_t> epoch{0};  ///< Epoch at which this thread entered its current critical section; 0 when idle.
-        std::atomic<bool> active{false}; ///< True while the thread is registered with the RCU subsystem.
-        ThreadEpoch* next{nullptr};      ///< Intrusive linked-list link; immutable once inserted.
+    struct ThreadEpoch {
+        std::atomic<uint64_t> epoch{0};   ///< Current epoch if in a guard; 0 otherwise.
+        std::atomic<bool> active{false};  ///< True after `registerThread()`.
+        ThreadEpoch* next{nullptr};       ///< Intrusive list link.
     };
 
     /**
-     * @brief Returns the TLS epoch record for the calling thread, creating it on first call.
-     * @ingroup UTILS
+     * @brief Returns the thread‑local epoch record, allocated once per thread.
      *
-     * The returned reference is valid for the lifetime of the thread.
-     * The record is heap-allocated once and leaked intentionally; the OS
-     * reclaims it on thread exit.
+     * The record is intentionally leaked – the OS reclaims it on thread exit.
      */
     static ThreadEpoch& tlsEpoch()
     {
@@ -89,36 +71,54 @@ public:
         return *te;
     }
 
-private:
-    static inline std::atomic<uint64_t> globalEpoch{1};    ///< Monotonically increasing epoch; advanced by each synchronize() call.
-    static inline std::atomic<ThreadEpoch*> head{nullptr}; ///< Head of the intrusive list of all registered thread epochs.
-
     /**
-     * @brief A single deferred-deletion entry in the retire ring.
+     * @brief Signature for a deferred deletion callback.
+     *
+     * @param ctx  Opaque pointer passed to the deleter (e.g., the object to free).
+     */
+    using DeleterFn = void(*)(void* ctx);
+
+private:
+    /**
+     * @brief A single entry in the retire ring buffer.
+     *
+     * Uses raw function pointer
+     * This eliminates heap allocation, virtual calls, and type erasure.
      */
     struct RetireEntry
     {
-        uint64_t retireEpoch;         ///< Epoch at which this entry was submitted; safe to reclaim once globalEpoch > retireEpoch + 1.
-        std::function<void()> deleter; ///< Callable that frees or otherwise disposes of the retired object.
+        uint64_t retireEpoch;   ///< Epoch when this entry was enqueued.
+        DeleterFn deleter;      ///< Function to call (pure pointer, no indirection).
+        void* context;          ///< Argument passed to deleter.
+
+        RetireEntry() : retireEpoch(0), deleter(nullptr), context(nullptr) {}
     };
 
-    static constexpr size_t RETIRE_Q_SIZE = 8192; ///< Maximum number of in-flight retired objects before reclaim is forced.
+    static inline std::atomic<uint64_t> globalEpoch{1};      ///< Monotonic epoch counter.
+    static inline std::atomic<ThreadEpoch*> head{nullptr};   ///< Linked list head.
 
-    static inline std::atomic<size_t> retireHead{0};         ///< Producer index into the retire ring (CAS-updated).
-    static inline std::atomic<size_t> retireTail{0};         ///< Consumer index into the retire ring (updated by tryReclaim()).
-    static inline RetireEntry retireRight[RETIRE_Q_SIZE];    ///< Fixed-size retire ring buffer.
+    static constexpr size_t RETIRE_Q_SIZE = 8192;            ///< Must be power of two for fast modulo.
+
+    static inline std::atomic<size_t> retireHead{0};         ///< Producer index (CAS).
+    static inline std::atomic<size_t> retireTail{0};         ///< Consumer index (CAS).
+    static inline RetireEntry retireRight[RETIRE_Q_SIZE];    ///< Ring buffer.
+
+    /**
+     * @brief Fast modulo for power‑of‑two sizes.
+     */
+    static inline size_t ringIndex(size_t idx) noexcept
+    {
+        return idx & (RETIRE_Q_SIZE - 1);
+    }
 
 public:
     /**
      * @brief Registers the calling thread with the RCU subsystem.
-     * @ingroup UTILS
      *
-     * Inserts the thread's @ref ThreadEpoch into the global list so that
-     * synchronize() can observe it. This must be called once per thread
-     * before constructing any @ref Guard. Calling it more than once on the
-     * same thread is safe; subsequent calls only set the active flag.
+     * Inserts the thread's `ThreadEpoch` into the global list and marks it active.
+     * This must be called before constructing any `Guard`. Multiple calls are safe.
      */
-    static void registerThread()
+    static void registerThread() noexcept
     {
         ThreadEpoch* te = &tlsEpoch();
         te->active.store(true, std::memory_order_release);
@@ -127,80 +127,85 @@ public:
         if (!inserted)
         {
             ThreadEpoch* old = head.load(std::memory_order_acquire);
-            do {
+            do
+            {
                 te->next = old;
-            } while (!head.compare_exchange_weak(old, te, std::memory_order_release, std::memory_order_acquire));
+            }
+            while (!head.compare_exchange_weak(old, te,
+                                                 std::memory_order_release,
+                                                 std::memory_order_acquire));
             inserted = true;
         }
     }
 
     /**
-     * @brief Deregisters the calling thread and waits for all readers to drain.
+     * @brief Deregisters the calling thread and waits for all readers to finish.
      *
-     * Marks the thread as inactive, then calls synchronize() to ensure that
-     * any objects retired by this thread are safe to reclaim before the
-     * thread's stack and TLS are torn down.
-     *
-     * @warning Must be called before a registered thread exits. Skipping this
-     * call leaves a stale, potentially dangling ThreadEpoch in the global list.
+     * Marks the thread inactive, then calls `synchronize()` to ensure any
+     * objects retired by this thread are safe to reclaim. Must be called
+     * before the thread exits.
      */
-    static void unregisterThread()
+    static void unregisterThread() noexcept
     {
         ThreadEpoch& te = tlsEpoch();
         te.active.store(false, std::memory_order_release);
         synchronize();
-        te.epoch.store(UINT64_MAX, std::memory_order_release);
+        te.epoch.store(0, std::memory_order_release);
     }
 
     /**
-     * @brief RAII read-side critical section guard.
+     * @brief RAII guard for a read‑side critical section.
      *
-     * Construction stamps the calling thread's epoch with the current global
-     * epoch, marking it as inside a critical section. Destruction clears the
-     * epoch, signalling to synchronize() that this thread holds no references
-     * to pre-update data.
-     *
-     * Guards must not be held across synchronize() calls — doing so would
-     * cause synchronize() to spin indefinitely.
-     *
-     * @warning Do not hold a Guard across a call to synchronize() or
-     * unregisterThread() from the same thread.
+     * Construction records the current global epoch in the thread's TLS.
+     * Destruction clears it. Guards must not be held across a call to
+     * `synchronize()` (would cause writer to spin).
      */
     class Guard
     {
     public:
-        /**
-         * @brief Enters the read-side critical section by recording the current epoch.
-         */
         explicit Guard() noexcept
         {
-            tlsEpoch().epoch.store(globalEpoch.load(std::memory_order_acquire), std::memory_order_release);
+            // Acquire load of globalEpoch ensures we see all previous writes.
+            uint64_t epoch = globalEpoch.load(std::memory_order_acquire);
+            tlsEpoch().epoch.store(epoch, std::memory_order_release);
         }
 
-        /**
-         * @brief Exits the read-side critical section by clearing the epoch.
-         */
         ~Guard() noexcept
         {
-            tlsEpoch().epoch.store(0, std::memory_order_release);
+            // Release store ensures that the epoch clear is visible to synchronize.
+            if (owns) tlsEpoch().epoch.store(0, std::memory_order_release);
         }
+
+        // Non‑copyable, non‑movable
+        Guard(const Guard&) = delete;
+        Guard& operator=(const Guard&) = delete;
+
+        Guard(Guard&& o)
+        {
+            o.owns = false;
+        }
+        Guard& operator=(Guard&& o)
+        {
+            o.owns = false;
+            return *this;
+        }
+
+    private:
+        bool owns = true;
     };
 
     /**
-     * @brief Advances the global epoch and blocks until all active readers have caught up.
+     * @brief Advances the global epoch and waits for all active readers to catch up.
      *
-     * After this call returns, no thread can hold a reference to any object
-     * that was logically removed before the call. It is safe to free such
-     * objects on return.
-     *
-     * This is the write-side quiescent-state barrier; it is intentionally
-     * expensive. Writers should batch updates where possible to amortize the
-     * cost.
+     * This is the writer’s quiescent‑state barrier. It is intentionally expensive;
+     * writers should batch updates to amortise the cost.
      */
     static void synchronize() noexcept
     {
+        // Atomically increment epoch and get the new value.
         const uint64_t target = globalEpoch.fetch_add(1, std::memory_order_acq_rel) + 1;
 
+        // Spin until every registered thread either has epoch >= target or is idle.
         while (true)
         {
             bool allSafe = true;
@@ -208,9 +213,12 @@ public:
 
             while (cur)
             {
+                // Only consider active threads; inactive ones are safe.
                 if (cur->active.load(std::memory_order_acquire))
                 {
                     uint64_t e = cur->epoch.load(std::memory_order_acquire);
+                    // If a thread is inside a guard with an epoch older than target,
+                    // it might still hold references to old data.
                     if (e != 0 && e < target)
                     {
                         allSafe = false;
@@ -221,90 +229,138 @@ public:
             }
 
             if (allSafe) break;
-            std::this_thread::yield();
+            std::this_thread::yield();  // Back off to reduce CPU contention.
         }
 
+        // Full fence ensures all prior memory operations are visible to subsequent
+        // reads that rely on this barrier.
         std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 
     /**
-     * @brief Runs pending deleters whose retire epoch is old enough to be safe.
+     * @brief Runs pending deleters whose retirement epoch is now safe.
      *
-     * Walks the tail of the retire ring and invokes each deleter whose
-     * @c retireEpoch is at least two epochs behind the current global epoch,
-     * guaranteeing no active reader can still observe the retired object.
-     * Stops at the first entry that is not yet safe to reclaim.
+     * Scans the retire ring buffer from the current tail forward, reclaiming
+     * any entry whose `retireEpoch <= globalEpoch - 2`. Uses a CAS on
+     * `retireTail` to claim a contiguous block, ensuring each entry is deleted
+     * exactly once.
      */
     static void tryReclaim() noexcept
     {
-        const uint64_t safeEpoch = globalEpoch.load(std::memory_order_acquire) - 2;
-        size_t tail = retireTail.load(std::memory_order_acquire);
-        size_t headIdx = retireHead.load(std::memory_order_acquire);
+        uint64_t curEpoch = globalEpoch.load(std::memory_order_acquire);
+        if (curEpoch < 2) return;  // Not enough epochs to safely reclaim anything.
 
-        while (tail != headIdx)
-        {
-            RetireEntry& e = retireRight[tail % RETIRE_Q_SIZE];
-            if (e.retireEpoch == 0 || e.retireEpoch > safeEpoch)
-                break;
-
-            auto fn = std::move(e.deleter);
-            e.retireEpoch = 0;
-            fn();
-            ++tail;
-        }
-
-        retireTail.store(tail, std::memory_order_acquire);
-    }
-
-    /**
-     * @brief Submits a deletion callback to be executed once all current readers have finished.
-     *
-     * The callable @p fn will be invoked by a future call to tryReclaim() once
-     * the global epoch has advanced far enough that no reader can still hold a
-     * reference to the object being freed. Typically @p fn is a lambda that
-     * calls @c delete on a raw pointer.
-     *
-     * Every 128 calls, retire() implicitly calls synchronize() + tryReclaim()
-     * to prevent unbounded queue growth.
-     *
-     * @tparam F  Callable type. Must be invocable with no arguments.
-     * @param fn  Deletion callback forwarded into the retire queue entry.
-     *
-     * @warning If the retire queue is full, retire() will call synchronize()
-     * inline, blocking the caller until space is reclaimed. Avoid retiring
-     * objects in tight loops on the fast path.
-     */
-    template<typename F>
-    static void retire(F&& fn) noexcept
-    {
-        const uint64_t nowEpoch = globalEpoch.load(std::memory_order_acquire);
-        size_t headIdx;
+        const uint64_t safeEpoch = curEpoch - 2;  // Safe when globalEpoch > retireEpoch + 1.
 
         while (true)
         {
-            headIdx = retireHead.load(std::memory_order_acquire);
+            size_t tail = retireTail.load(std::memory_order_acquire);
+            size_t headIdx = retireHead.load(std::memory_order_acquire);
+            size_t newTail = tail;
+
+            // Walk the ring until we hit an entry that is not safe.
+            while (newTail != headIdx)
+            {
+                RetireEntry& e = retireRight[ringIndex(newTail)];
+                if (e.retireEpoch == 0 || e.retireEpoch > safeEpoch)
+                    break;
+                ++newTail;
+            }
+
+            if (newTail == tail) break;  // No work.
+
+            // Attempt to atomically advance the tail to newTail.
+            if (retireTail.compare_exchange_weak(tail, newTail,
+                                                 std::memory_order_acq_rel,
+                                                 std::memory_order_acquire))
+            {
+                // We own the range [tail, newTail). Invoke deleters.
+                for (size_t i = tail; i < newTail; ++i)
+                {
+                    RetireEntry& e = retireRight[ringIndex(i)];
+                    DeleterFn fn = e.deleter;
+                    void* ctx = e.context;
+                    e.retireEpoch = 0;      // Mark as reclaimed.
+                    e.deleter = nullptr;
+                    e.context = nullptr;
+                    fn(ctx);                // Direct function call, zero overhead.
+                }
+                break;
+            }
+            // CAS failed; another thread claimed the range. Retry.
+        }
+    }
+
+    /**
+     * @brief Enqueues a deletion callback to be invoked when safe.
+     *
+     * This is the primary API for retiring objects. The callback is a raw
+     * function pointer that receives a void* context. No heap allocation occurs.
+     *
+     * @param fn     Function to call (e.g., a custom deleter).
+     * @param ctx    Opaque pointer passed to `fn` (typically the object to delete).
+     */
+    static void retire(DeleterFn fn, void* ctx) noexcept
+    {
+        const uint64_t nowEpoch = globalEpoch.load(std::memory_order_acquire);
+
+        while (true)
+        {
+            size_t headIdx = retireHead.load(std::memory_order_acquire);
             size_t nextIdx = headIdx + 1;
             size_t tail = retireTail.load(std::memory_order_acquire);
 
+            // Check if the ring buffer is full.
             if (nextIdx - tail >= RETIRE_Q_SIZE)
             {
                 synchronize();
                 tryReclaim();
-                continue;
+                continue;  // Retry after freeing space.
             }
 
-            if (retireHead.compare_exchange_weak(headIdx, nextIdx, std::memory_order_acq_rel))
+            // Attempt to claim the next slot.
+            if (retireHead.compare_exchange_weak(headIdx, nextIdx,
+                                                 std::memory_order_acq_rel,
+                                                 std::memory_order_acquire))
+            {
+                // Success; fill the entry.
+                RetireEntry& e = retireRight[ringIndex(headIdx)];
+                e.retireEpoch = nowEpoch;
+                e.deleter = fn;
+                e.context = ctx;
                 break;
+            }
         }
 
-        retireRight[headIdx % RETIRE_Q_SIZE] = { nowEpoch, std::forward<F>(fn) };
-
+        // Auto‑reclaim every 128 retirements to bound queue growth.
         static thread_local size_t counter = 0;
         if (++counter % 128 == 0)
         {
             synchronize();
             tryReclaim();
         }
+    }
+
+    /**
+     * @brief Convenience template to retire an object using its normal `delete`.
+     *
+     * This is a zero‑overhead wrapper around `retire(DeleterFn, void*)`.
+     * It creates a static deleter function that casts the void* back to T*
+     * and calls `delete`. Because the deleter is a plain function, there is
+     * no per‑call type erasure overhead.
+     *
+     * @tparam T      Type of the object to delete.
+     * @param ptr     Pointer to the object (must have been allocated with `new`).
+     */
+    template<typename T>
+    static void retireObject(T* ptr) noexcept
+    {
+        // Static deleter function – only one instance per T.
+        static DeleterFn deleter = [](void* ctx)
+        {
+            delete static_cast<T*>(ctx);
+        };
+        retire(deleter, static_cast<void*>(ptr));
     }
 };
 
