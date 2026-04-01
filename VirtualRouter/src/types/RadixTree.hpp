@@ -475,7 +475,10 @@ private:
     {
         if (!n) return;
         if constexpr (useRCU)
-            utils::RCU::retire([n]{ destroy(n); });
+        {
+            auto deleter = [](void* n) { destroy(n); };
+            utils::RCU::retire(deleter, n);
+        }
         else
             destroy(n);
     }

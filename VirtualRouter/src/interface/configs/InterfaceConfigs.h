@@ -147,11 +147,46 @@ public:
     config::InterfaceRegistry& getConfigs() { return configs.get(); }
     const config::InterfaceRegistry& getConfigs() const { return configs.get(); }
 
-    // TODO finish doxy
+    /**
+     * @brief Re-reads the hardware MAC address and updates the cached atomic value.
+     *
+     * Called when the MAC changes (e.g. after a `mac-address` config command).
+     * Writes to the `macAddress` atomic so the data plane picks up the new value
+     * without a lock.
+     */
     void syncMac();
+
+    /**
+     * @brief Re-reads the primary IPv4 address from config and updates the atomic.
+     *
+     * Must be called after any change to the primary address field in the
+     * interface registry so that the data-plane fast path and ARP see the
+     * current address immediately.
+     */
     void syncPrimaryIP();
+
+    /**
+     * @brief Re-reads all secondary IPv4 addresses from config and updates
+     *        the secondary address list.
+     */
     void syncSecondaryIP();
+
+    /**
+     * @brief Re-reads the IPv6 link-local address from config and updates
+     *        the link-local state.
+     *
+     * Triggers DAD for the new link-local address if one is configured.
+     */
     void syncLocalLink();
+
+    /**
+     * @brief Re-reads all global IPv6 addresses from config and reconciles
+     *        the global address list.
+     *
+     * Adds newly configured addresses (triggering DAD) and removes any that
+     * have been deleted from config. Called when the IPv6 address config
+     * changes on the interface.
+     */
     void syncIPv6();
 
     float         id;            ///< Interface number, including sub-interface fraction.
@@ -591,8 +626,7 @@ public:
 private:
     friend class Interface;
 
-    // TODO finish doxy
-    config::Reference<config::InterfaceRegistry> configs;
+    config::Reference<config::InterfaceRegistry> configs; ///< Owning reference to the interface config registry; source of truth for all configurable parameters.
 
     std::atomic<types::Mac> macAddress;
 };

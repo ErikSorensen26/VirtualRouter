@@ -3,8 +3,6 @@
  * @brief Lock-free chained hash map with RCU-deferred node reclamation.
  */
 
-// TODO finish doxy
-
 #ifndef ATOMIC_HASH_MAP_HPP
 #define ATOMIC_HASH_MAP_HPP
 
@@ -14,6 +12,7 @@
 #include <xmmintrin.h>
 #include <RCU.hpp>
 #include <cstring>
+#include <ByteUtils.hpp>
 
 namespace types
 {
@@ -354,10 +353,14 @@ public:
     AtomicHashMap(const AtomicHashMap&)            = delete;
     AtomicHashMap& operator=(const AtomicHashMap&) = delete;
 
-
     /**
-     * Copy value out safely.  The RCU guard is scoped to this call, so the
-     * returned value is always valid.  Returns true if found.
+     * @brief Looks up a key and copies its value into @p out.
+     *
+     * Acquires an RCU read-side guard internally so the returned value is always
+     * from a consistent snapshot. Safe to call from any thread concurrently.
+     *
+     * @param[out] out Receives the value if the key is found.
+     * @return True if found and @p out was populated; false if the key is absent.
      */
     bool find(const Key& key, Value& out) const noexcept
     {
@@ -369,8 +372,55 @@ public:
     }
 
     /**
-     * Snapshot for safe iteration.  The RCU guard lives inside the returned
-     * Snapshot object; drop the Snapshot when done iterating.
+     * @brief Looks up a key and writes the low @p W bits of its value into @p out.
+     *
+     * Performs a width-dispatch write using `utils::writeU8/16/24/32/48/64/128`
+     * so the result lands correctly regardless of host endianness. Acquires an
+     * RCU read-side guard for the duration of the lookup.
+     *
+     * @tparam W Bit width to write. Must be one of 8, 16, 24, 32, 48, 64, 128
+     *           and must not exceed `sizeof(Value) * 8`.
+     * @param[out] out Destination buffer; must be at least `W/8` bytes.
+     * @return True if found and @p out was written; false if the key is absent.
+     */
+    template<size_t W>
+    bool findAndWrite(const Key& key, uint8_t* out) const noexcept
+    requires ((W == 8 || W == 16 || W == 24 || W == 32 || W == 48 || W == 64 || W == 128) && (sizeof(Value) * 8) >= W)
+    {
+        utils::RCU::Guard guard;
+        const Table* t = current.load(std::memory_order_acquire);
+        const Value* v = t->find(key, hash(key), equal);
+        if (v)
+        {
+            if constexpr (W == 8)
+                out[0] = static_cast<uint8_t>(*v);
+            else if constexpr (W == 16)
+                utils::writeU16(out, static_cast<uint16_t>(*v));
+            else if constexpr (W == 24)
+                utils::writeU24(out, static_cast<uint32_t>(*v));
+            else if constexpr (W == 32)
+                utils::writeU32(out, static_cast<uint32_t>(*v));
+            else if constexpr (W == 48)
+                utils::writeU48(out, static_cast<uint64_t>(*v));
+            else if constexpr (W == 64)
+                utils::writeU64(out, static_cast<uint64_t>(*v));
+            else
+                utils::writeU128(out, static_cast<__uint128_t>(*v));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @brief Returns an RCU-guarded snapshot of the current table for safe iteration.
+     *
+     * The returned @ref Snapshot holds an RCU read-side guard for its lifetime.
+     * Dropping the Snapshot releases the guard. Any write that occurs after the
+     * snapshot is taken will not be visible through it.
+     *
+     * @note Do not hold a Snapshot across a call to @c insert or @c erase —
+     *       the writer waits for all active guards to expire before freeing the
+     *       old table, so holding a snapshot while writing will deadlock.
      */
     Snapshot snapshot() const noexcept
     {
@@ -389,9 +439,16 @@ public:
     bool empty() const noexcept { return size() == 0; }
 
     /**
-     * Insert or update.
-     * Returns true  → key was new (inserted)
-     *         false → key existed (value updated)
+     * @brief Inserts a new key-value pair or updates the value of an existing key.
+     *
+     * Clones the current table before mutating so concurrent readers always see
+     * a consistent snapshot. Triggers a resize when the load factor exceeds the
+     * configured @p LoadPct threshold.
+     *
+     * @return True if the key was newly inserted; false if the value was updated.
+     *
+     * @warning Must be called from a single writer thread. Concurrent inserts
+     *          race on the internal block allocator and corrupt state.
      */
     bool insert(const Key& key, const Value& value)
     {
@@ -416,8 +473,13 @@ public:
     }
 
     /**
-     * Erase key.
-     * Returns true if found and erased, false if not present.
+     * @brief Removes the entry with the given key.
+     *
+     * Clones the current table, marks the slot as deleted in the clone, and
+     * publishes it. The old table is retired via RCU and freed once all active
+     * readers have exited their critical sections.
+     *
+     * @return True if the key was found and removed; false if not present.
      */
     bool erase(const Key& key)
     {
@@ -434,7 +496,12 @@ public:
         return true;
     }
 
-    /** Drop all entries, reset to minimum capacity. */
+    /**
+     * @brief Removes all entries and resets to minimum capacity.
+     *
+     * Publishes a fresh empty table via RCU. The old table is retired and freed
+     * once all active readers have exited.
+     */
     void clear()
     {
         std::lock_guard<std::mutex> lk(writeMutex);
@@ -442,7 +509,15 @@ public:
         publish(Table::make(16), old);
     }
 
-    /** Ensure capacity for at least n entries without a resize. */
+    /**
+     * @brief Pre-allocates table capacity for at least @p n entries.
+     *
+     * If the current capacity already accommodates @p n entries without
+     * exceeding the load threshold, this is a no-op. Otherwise a new larger
+     * table is published via RCU.
+     *
+     * @param n Minimum number of entries the table should accommodate.
+     */
     void reserve(size_t n)
     {
         std::lock_guard<std::mutex> lk(writeMutex);

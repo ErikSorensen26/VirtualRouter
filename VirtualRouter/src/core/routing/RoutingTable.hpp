@@ -169,9 +169,8 @@ public:
      * @return Pointer to the best-matching `RibEntry`, or `nullptr`.
      */
     template <typename AddrType>
-    RibEntry<AddrType>* lookup(const types::NetworkSpan<AddrType>& addr)
+    RibEntry<AddrType>* lookup(const types::NetworkSpan<AddrType>& addr, utils::RCU::Guard&)
     {
-        utils::RCU::Guard g;
         if constexpr (std::is_same_v<AddrType, uint32_t>)
             return rib4.lookup(addr);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
@@ -187,9 +186,9 @@ public:
      * @return Pointer to the best-matching `RibEntry`, or `nullptr`.
      */
     template <typename AddrType>
-    RibEntry<AddrType>* lookup(AddrType addr)
+    RibEntry<AddrType>* lookup(AddrType addr, utils::RCU::Guard& g)
     {
-        return lookup<AddrType>(reinterpret_cast<const types::NetworkSpan<AddrType>&>(addr));
+        return lookup<AddrType>(reinterpret_cast<const types::NetworkSpan<AddrType>&>(addr, g));
     }
 
     // WATCH SUBSCRIPTIONS
@@ -225,13 +224,13 @@ public:
      * @return Non-zero watch ID, or 0 if unreachable.
      */
     template <typename AddrType>
-    typename Rib<AddrType>::WatchId watchAddress(AddrType addr, void* ctx,
-                                                  typename Rib<AddrType>::Callback fn)
+    typename Rib<AddrType>::WatchId watchAddress(AddrType addr, void* ctx, typename Rib<AddrType>::Callback fn,
+                                                 typename Rib<AddrType>::WatchFilter filter = {})
     {
         if constexpr (std::is_same_v<AddrType, uint32_t>)
-            return rib4.watchAddress(addr, ctx, fn);
+            return rib4.watchAddress(addr, ctx, fn, filter);
         else if constexpr (std::is_same_v<AddrType, __uint128_t>)
-            return rib6.watchAddress(addr, ctx, fn);
+            return rib6.watchAddress(addr, ctx, fn, filter);
         else
             static_assert(always_false<AddrType>, "Unsupported Address Type");
         return 0;
@@ -264,10 +263,15 @@ public:
      * @param id   Watch ID to cancel.
      * @param isV6 `true` to cancel in the IPv6 RIB; `false` for IPv4.
      */
-    void unwatchAddress(uint32_t id, bool isV6)
+    template <typename AddrType>
+    void unwatchAddress(uint32_t id)
     {
-        if (isV6) rib6.unwatchRoute(id);
-        else      rib4.unwatchRoute(id);
+        if constexpr (std::is_same_v<AddrType, uint32_t>)
+            rib4.unwatchRoute(id);
+        else if constexpr (std::is_same_v<AddrType, __uint128_t>)
+            rib6.unwatchRoute(id);
+        else
+            static_assert(always_false<AddrType>, "Unsupported Address Type");
     }
 
     /**

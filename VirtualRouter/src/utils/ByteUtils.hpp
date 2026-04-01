@@ -101,7 +101,7 @@ struct smallestInteger
 {
 private:
     static_assert(B > 0, "Size must be at least 1 byte");
-    static_assert(B < 16, "No integer type available for this type");
+    static_assert(B <= 16, "No integer type available for this type");
 
 public:
     using type =

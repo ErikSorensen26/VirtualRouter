@@ -20,6 +20,7 @@ namespace core
  */
 enum class RouteSource : uint8_t
 {
+    DYNAMIC,         ///< Dynamically learned routes.
     CONNECTED,       ///< Directly connected interface prefix.
     STATIC,          ///< Administratively configured static route.
     EIGRP_INTERNAL,  ///< EIGRP internal (intra-AS) route.

@@ -3,8 +3,6 @@
  * @brief Level-Compressed Patricia Trie for high-performance IP longest-prefix-match.
  */
 
-// // TODO finish doxy
-
 #ifndef LPC_TRIE_HPP
 #define LPC_TRIE_HPP
 
@@ -95,7 +93,6 @@ public:
     static constexpr uint8_t  FANOUT = static_cast<uint8_t>(1u << S); ///< Children per node.
     static constexpr AddrT    SMASK  = static_cast<AddrT>(FANOUT - 1u); ///< Stride mask.
  
-    // ── Types ─────────────────────────────────────────────────────────────────
  
     /**
      * One prefix entry stored on a node.
@@ -162,10 +159,8 @@ public:
         PrefixEntry*  heapPfx{nullptr};   ///< non-null iff nPrefixes > PREFIX_INLINE
         PrefixEntry   inlinePfx[PREFIX_INLINE];
  
-        // ── Child storage (always dense) ──────────────────────────────────────
         ChildArray* children{nullptr};  ///< Allocated on demand (nullptr = leaf).
  
-        // ── Bookkeeping ───────────────────────────────────────────────────────
         uint8_t depth{0};
  
         Node() noexcept = default;
@@ -178,7 +173,6 @@ public:
             delete children;
         }
  
-        // ── Prefix accessors ──────────────────────────────────────────────────
         PrefixEntry* prefixBegin() noexcept
             { return heapPfx ? heapPfx : inlinePfx; }
         const PrefixEntry* prefixBegin() const noexcept
@@ -364,8 +358,15 @@ public:
     }
  
     /**
-     * Exact-match lookup: only returns a value if both the prefix bytes and
-     * the prefix length match precisely.
+     * @brief Exact-match lookup: returns a value only when both the prefix
+     *        bytes and the prefix length match precisely.
+     *
+     * Unlike @c lookup, this does not return a covering prefix — the key must
+     * match @p pfx/@p len exactly or the result is nullptr.
+     *
+     * @param pfx Network-order prefix bytes (must be @c N bytes).
+     * @param len Prefix length in bits [0..W].
+     * @return Exact match pointer, or nullptr if not found.
      */
     T* lookupExact(const uint8_t* pfx, uint8_t len) const noexcept
     {
@@ -398,11 +399,17 @@ public:
     }
  
     /**
-     * Insert or update a prefix.
-     * @param pfx   N bytes, network order.
+     * @brief Inserts or updates a prefix entry.
+     *
+     * If a matching prefix already exists its pointer is updated in-place.
+     * Otherwise a new `PrefixEntry` is added and the `best` cache on the
+     * covering node and all ancestors is updated with release semantics.
+     *
+     * @param pfx   Network-order prefix bytes (must be @c N bytes).
      * @param len   Prefix length in bits [0..W].
-     * @param entry Caller-owned value.
-     * @return false if len > W.
+     * @param entry Caller-owned value pointer; the trie stores it but does not
+     *              take ownership.
+     * @return True on success; false if @p len > W.
      */
     bool insert(const uint8_t* pfx, uint8_t len, T* entry)
     {
@@ -424,8 +431,15 @@ public:
     }
  
     /**
-     * Remove a prefix.
-     * @return false if not found.
+     * @brief Removes a prefix entry.
+     *
+     * Unlinks the entry from its node's prefix list and prunes any nodes that
+     * become empty as a result. Updates the `best` cache on affected ancestors.
+     * If @c useRCU is true, pruned nodes are retired via @ref utils::RCU::retire.
+     *
+     * @param pfx Network-order prefix bytes (must be @c N bytes).
+     * @param len Prefix length in bits [0..W].
+     * @return True if the prefix was found and removed; false if not present.
      */
     bool erase(const uint8_t* pfx, uint8_t len)
     {
@@ -438,7 +452,13 @@ public:
     }
  
     /**
-     * Delete all nodes. Not safe to call concurrently.
+     * @brief Destroys all trie nodes and resets to an empty state.
+     *
+     * Performs a post-order traversal, deleting every node. Does not touch the
+     * objects pointed to by stored `T*` entries — caller retains ownership.
+     *
+     * @warning Not safe to call while any reader holds an RCU guard or is
+     *          mid-lookup. Coordinate externally before calling.
      */
     void clear() noexcept
     {
@@ -447,8 +467,10 @@ public:
     }
  
     /**
-     * Visit every prefix in unspecified order.
-     * @tparam F  void(AddrT host_order_addr, uint8_t len, T* ptr)
+     * @brief Visits every prefix entry in unspecified traversal order.
+     *
+     * @tparam F Callable with signature `void(AddrT host_order_addr, uint8_t len, T* ptr)`.
+     * @param fn Visitor invoked once per prefix entry.
      */
     template<typename F>
     void forEach(F&& fn) const noexcept
@@ -775,7 +797,6 @@ private:
         }
     }
  
-    // ── Data members ──────────────────────────────────────────────────────────
     std::atomic<Node*> root_{nullptr};
 };
 

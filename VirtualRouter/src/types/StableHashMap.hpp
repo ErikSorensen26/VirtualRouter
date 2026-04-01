@@ -1,4 +1,8 @@
-// TODO finish doxy
+/**
+ * @file StableHashMap.hpp
+ * @brief Open-addressing Swiss-table hash map with pointer-stable node storage.
+ * @ingroup TYPES
+ */
 
 #ifndef STABLE_HASH_MAP_HPP
 #define STABLE_HASH_MAP_HPP
@@ -47,6 +51,32 @@ public:
     bool operator!=(const AlignedAllocator&) const { return false; }
 };
 
+/**
+ * @brief Open-addressing hash map whose element addresses never move after insertion.
+ * @ingroup TYPES
+ *
+ * Uses a Swiss-table control-byte array (AVX2 SIMD probing) for O(1) average-case
+ * lookup and a private `NodePool` slab allocator so that each `Value` lives at a
+ * stable heap address for its entire lifetime. Iterators and references to values
+ * remain valid across insertions and rehashes; only erasure invalidates an entry's
+ * reference.
+ *
+ * ## Architectural Role
+ * Intended for control-plane caches (ARP, NDP, session tables) where external code
+ * holds raw pointers or references into map values and those pointers must not be
+ * invalidated by unrelated insertions.
+ *
+ * ## Concurrency Model
+ * Not thread-safe. All reads and writes must be serialized by the caller (e.g. via
+ * a control-plane scheduler queue).
+ *
+ * @tparam Key       Key type. Must be equality-comparable and hashable by @p Hash.
+ * @tparam Value     Value type. Stored by value inside a node allocated from the
+ *                   internal slab pool; the address is stable after construction.
+ * @tparam Hash      Hash functor. Defaults to `std::hash<Key>`.
+ * @tparam KeyEqual  Equality functor. Defaults to `std::equal_to<Key>`.
+ * @tparam Allocator Allocator for node pool blocks. Defaults to `std::allocator`.
+ */
 template<
     typename Key,
     typename Value,
@@ -276,6 +306,17 @@ private:
     }
 
 public:
+    /**
+     * @brief Constructs an empty map with the given initial bucket capacity.
+     *
+     * The capacity is rounded up to the next power of two (minimum 8) so that
+     * the AVX2 SIMD probe window always covers a full 32-byte aligned group.
+     *
+     * @param initialCapacity Hint for the number of elements before the first rehash.
+     * @param hash            Hash functor instance.
+     * @param equal           Key equality functor instance.
+     * @param alloc           Allocator for the internal node pool.
+     */
     explicit StableHashMap(size_t initialCapacity = 8,
                            const Hash& hash = Hash(),
                            const KeyEqual& equal = KeyEqual(),
@@ -291,6 +332,10 @@ public:
         slots.assign(capacity, nullptr);
     }
 
+    /**
+     * @brief Destructor. Deallocates all live nodes back to the pool and
+     *        releases all pool blocks.
+     */
     ~StableHashMap()
     {
         clear();
@@ -438,6 +483,12 @@ public:
         return nodeTraits::max_size(nodeAllocator);
     }
 
+    /**
+     * @brief Destroys all entries and resets the map to an empty state.
+     *
+     * All nodes are returned to the pool allocator. Does not release the
+     * underlying bucket array memory (capacity is preserved for reuse).
+     */
     void clear()
     {
         for (size_t i = 0; i < capacity; ++i)
@@ -454,16 +505,43 @@ public:
         numFilled = 0;
     }
 
+    Node* preAllocateNode()
+    {
+        return allocateNode();
+    }
+
+    /**
+     * @brief Inserts a key-value pair by const reference.
+     *
+     * @return Iterator to the element and `true` if inserted; iterator to
+     *         the existing element and `false` if the key was already present.
+     */
     std::pair<Iterator, bool> insert(const std::pair<const Key, Value>& value)
     {
         return emplace(value.first, value.second);
     }
 
+    /**
+     * @brief Inserts a key-value pair by move.
+     *
+     * @return Iterator to the element and `true` if inserted; iterator to
+     *         the existing element and `false` if the key was already present.
+     */
     std::pair<Iterator, bool> insert(std::pair<const Key, Value>&& value)
     {
         return emplace(std::move(value.first), std::move(value.second));
     }
 
+    /**
+     * @brief Constructs a new entry in-place from forwarded key and value.
+     *
+     * If the key already exists the existing value is overwritten with the
+     * forwarded value. Triggers a rehash if the load factor threshold is
+     * exceeded.
+     *
+     * @return Iterator to the element and `true` if inserted; iterator to
+     *         the updated element and `false` if it already existed.
+     */
     template<typename K, typename V>
     std::pair<Iterator, bool> emplace(K&& key, V&& value)
     {
@@ -491,6 +569,14 @@ public:
         return {iterator(slots.data(), res.insert_slot, capacity), true};
     }
 
+    /**
+     * @brief Erases the element at the given iterator position.
+     *
+     * The node is returned to the pool allocator. The iterator is invalidated;
+     * all other iterators and references remain valid.
+     *
+     * @param pos Iterator to the element to erase. No-op if equal to `end()`.
+     */
     void erase(Iterator pos)
     {
         if (pos == end()) return;
@@ -504,6 +590,11 @@ public:
         }
     }
 
+    /**
+     * @brief Erases the element with the given key.
+     *
+     * @return 1 if the key was found and erased, 0 if not present.
+     */
     size_t erase(const Key& key)
     {
         size_t hash = hash_fn(key);
@@ -522,6 +613,11 @@ public:
         return 0;
     }
 
+    /**
+     * @brief Finds an element by key.
+     *
+     * @return Iterator to the element, or `end()` if not found.
+     */
     Iterator find(const Key& key)
     {
         size_t hash = hash_fn(key);

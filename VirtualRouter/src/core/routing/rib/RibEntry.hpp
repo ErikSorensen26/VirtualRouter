@@ -9,6 +9,7 @@
 #include "RouteSource.hpp"
 #include <IPAddress.h>
 #include <optional>
+#include "interface/configs/InterfaceType.hpp"
 
 namespace core
 {
@@ -69,7 +70,7 @@ template <typename AddrType>
 struct NextHopPath
 {
     std::optional<AddrType> nextHop; ///< Gateway address; absent for connected routes.
-    uint32_t iface;                  ///< Egress interface index.
+    interface::InterfaceKey iface;   ///< Egress interface index.
     uint32_t weight;                 ///< Relative ECMP weight (1 = equal share).
 };
 
@@ -143,7 +144,7 @@ struct RibEntry
      * @return `true` if the next-hop was added or updated; `false` if the
      *         slot table is full or an identical entry already exists.
      */
-    bool addNextHop(const AddrType nhAddr, uint32_t iface, uint32_t weight = 1) noexcept
+    bool addNextHop(const AddrType nhAddr, interface::InterfaceKey iface, uint32_t weight = 1) noexcept
     {
         if (nextHopCount >= MAX_NEXTHOP)
             return false;

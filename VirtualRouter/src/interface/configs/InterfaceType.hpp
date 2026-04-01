@@ -138,21 +138,37 @@ inline std::pair<InterfaceType, float> decodeInterfaceKey(uint32_t key)
  */
 struct InterfaceKey
 {
-    // TODO finish doxy
     InterfaceKey() = default;
+
+    /**
+     * @brief Constructs a key from an interface type and sub-interface number.
+     *
+     * Encodes both fields into a single 32-bit integer via @c encodeInterfaceKey
+     * so the key is trivially hashable and copyable.
+     *
+     * @param type Interface type (Ethernet, Loopback, etc.).
+     * @param id   Sub-interface number, including fractional part for sub-interfaces.
+     */
+    InterfaceKey(InterfaceType type, float id)
+        : id(encodeInterfaceKey(type, id))
+    {}
+
+    /**
+     * @brief Constructs a key directly from an already-encoded 32-bit value.
+     *
+     * Used when round-tripping a key that was previously stored as a uint32_t
+     * (e.g. in a config registry or on-wire format).
+     *
+     * @param ifaceId Pre-encoded interface key integer.
+     */
+    InterfaceKey(uint32_t ifaceId)
+        : id(ifaceId)
+    {}
 
     bool operator==(const InterfaceKey& k) const noexcept
     {
         return k.getId() == id;
     }
-
-    InterfaceKey(InterfaceType type, float id)
-        : id(encodeInterfaceKey(type, id))
-    {}
-
-    InterfaceKey(uint32_t ifaceId)
-        : id(ifaceId)
-    {}
 
     uint32_t getId() const { return id; }
 

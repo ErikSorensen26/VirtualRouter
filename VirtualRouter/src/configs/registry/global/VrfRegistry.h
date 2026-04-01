@@ -114,7 +114,7 @@ DEFINE_TUPLE_SCHEMA(IPRoute, IP_ROUTE_FIELDS)
 DEFINE_TUPLE_SCHEMA(IPv6Route, IPV6_ROUTE_FIELDS)
 
 using VrfRegistry = SubRegistry<Vrf,
-    ValueField<std::vector<std::tuple<types::IPv4Address, types::Mac>> CONFIG_INDEX_ARG(ARP_STATIC_ENTRY)>,
+    ValueField<std::vector<std::tuple<types::IPv4Address, types::Mac, std::optional<interface::InterfaceKey>>> CONFIG_INDEX_ARG(ARP_STATIC_ENTRY)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Vrf::ROUTER_BGP_AS)>,
     ReferenceContainer<BgpRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_BGP)>,
     OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_CLASSIC)>,
