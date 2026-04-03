@@ -175,7 +175,7 @@ void Console::skipWordLeft(std::string& input)
 
     size_t newPos = cursorPos - 1;
 
-    if (input[newPos - 1] == ' ')
+    if (newPos > 0 && input[newPos - 1] == ' ')
     {
         while (newPos > 0 && input[newPos - 1] == ' ')
         {
@@ -241,7 +241,7 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
     }
 
     // Clear any leftover characters on the current line and subsequent lines
-    size_t leftoverSpace = (width < currentColumn) ? (width - currentColumn) : 0;
+    size_t leftoverSpace = (width > currentColumn) ? (width - currentColumn) : 0;
     if (leftoverSpace && leftoverSpace > 0)
     {
         controller.print(std::string(leftoverSpace, ' '));
@@ -598,19 +598,11 @@ void Console::handlePrintableChar(char hInput, std::string& input)
             break; // Continue checking
     }
 
-    // If insert mode is on and not at the end => insert mid-line
+    // If insert mode is on and not at the end => overwrite mid-line
     if (insert && cursorPos < input.size())
     {
-        if (cursorPos == input.size())
-        {
-            cursorPos++;
-            input.insert(cursorPos, 1, hInput);
-        }
-        else
-        {
-            cursorPos++;
-            input[cursorPos - 1] = hInput;
-        }
+        input[cursorPos] = hInput;
+        cursorPos++;
         controller.print(std::string(1, hInput), Color::TERMINAL);
         rewriteTail(input, cursorPos);
     }

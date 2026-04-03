@@ -6,6 +6,8 @@
  * from CLI input strings, including IPv4/IPv6 addresses, prefixes, and MAC addresses.
  */
 
+// TODO finish doxy
+
 #ifndef CLI_UTILS_H
 #define CLI_UTILS_H
 
@@ -39,6 +41,9 @@ bool extractIPv4Prefix(const std::string& addr, const std::string& mask, types::
 bool expandIPv6Address(std::string& ipv6Address);
 bool extractMacAddress(const std::string& str, types::Mac mac);
 
+bool matchNumericRange(const std::string& input, const std::string& pattern);
+
+bool isIPv4Address(const std::string& address);
 bool isIPv6Address(const std::string& address);
 bool isIPv6AddressWithMask(const std::string& addressWithMask);
 bool isMACAddress(const std::string& macAddress);

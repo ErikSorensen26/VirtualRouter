@@ -3,6 +3,8 @@
  * @brief Core field types, flag traits, and C++ concepts used by the registry.
  */
 
+// TODO finish doxy (the whole file...)
+
 #ifndef REGISTRY_TYPES_HPP
 #define REGISTRY_TYPES_HPP
 
@@ -54,7 +56,6 @@ class SubRegistry;
 
 // TYPE ALIASES
 
-using ApplyKey = uint64_t; ///< Key type used to identify registry slots in apply callbacks.
 using ApplyFn  = void (*)(void* ctx); ///< Callback signature for live-notification appliers.
 
 // FIELD FLAG TAGS
@@ -280,6 +281,14 @@ public:
         defaultValue = d;
     }
 
+    /**
+     * @brief Sets the value to the default value.
+     */
+    void setDefault() noexcept
+    {
+        set(defaultValue);
+    }
+
 private:
     template <typename ENUM, typename... Fields>
     friend class SubRegistry;
@@ -353,6 +362,11 @@ public:
     void setDefault(T d) noexcept
     {
         defaultValue = d;
+    }
+
+    void setDefault() noexcept
+    {
+        set(defaultValue);
     }
 
 private:

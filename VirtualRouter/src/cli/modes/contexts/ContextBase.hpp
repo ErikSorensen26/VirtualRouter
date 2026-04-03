@@ -69,6 +69,7 @@ struct ContextBase
 
     CliSession& terminal;   ///< Reference to the owning CLI session.
     bool negate = false;    ///< True when the command is a `no`-form negation.
+    bool defaulted = false;
 };
 }
 

@@ -27,7 +27,6 @@
 #include "configs/Registry.hpp"
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
-#include "IPAddress.h"
 #include "configs/RegistryReference.hpp"
 #include "configs/registry/global/GlobalRegistry.h"
 
@@ -52,131 +51,6 @@ namespace core
 #define DEFAULT_HOSTNAME "router"
 
 class VirtualRouter;
-
-/**
- * @struct GlobalConfigs
- * @brief System-wide configuration container for ARP, NDP, and Non-Stop Forwarding (NSF).
- *
- * GlobalConfigs stores configuration and runtime parameters that apply across the entire router,
- * independent of any specific interface or VRF. It is shared by forwarding-plane modules,
- * routing protocols, the CLI engine, and neighbor-discovery subsystems.
- *
- * ## Concurrency Model
- * - High-frequency fields use `std::atomic` for lock-free reads (ARP/NDP fast path).
- * - Neighbor maps use `std::shared_mutex` for concurrent reads and exclusive writes.
- *
- * ## Subcomponents
- * - **Arp**: IPv4 neighbor discovery, rate limits, and static entries.
- * - **Ndp**: IPv6 neighbor discovery, DAD timers, and static neighbors.
- * - **NSF**: Non-stop-forwarding timers and active state.
- *
- * This structure is owned by the Global object and exists for the router’s lifetime.
- */
-struct GlobalConfigs
-{
-    std::atomic<bool> nsfActive = false; ///< Indicates whether NSF is active.
-    std::chrono::steady_clock::time_point nsfStartTime; ///< Time when NSF began.
-
-    /**
-     * @struct Arp
-     * @brief Configuration and neighbor tables for IPv4 ARP.
-     * @ingroup CORE
-     *
-     * Controls global ARP behavior and caches. Provides tunable limits for:
-     * - Incomplete ARP resolution queue lengths
-     * - Retry behavior
-     * - Proxy ARP enablement
-     * - Gratuitous ARP acceptance
-     *
-     * Also includes a static neighbor table and associated locking for safe access
-     * across the control plane and data plane.
-     */
-    struct Arp
-    {
-        std::atomic<bool> acceptGratiutous = true;  ///< Accepts gratious ARPs globally.
-        std::atomic<bool> incompleteEnabled = true; ///< Allows incomplete ARP entries.
-        std::atomic<bool> disableProxy = false;     ///< Disables proxy arp on all interfaces.
-        std::atomic<bool> redirects = false;        ///< Enables ARP redirects (TODO).
-        std::atomic<bool> stickyArp = false;        ///< Prevents learned MAC changes.
-
-        std::atomic<uint32_t> incompleteResolveLimit = 1024; ///< Max concurrent unresolved ARP lookups.
-        std::atomic<uint32_t> incompleteRetries = 3;         ///< Retries before giving up ARP resolution.
-        std::atomic<uint32_t> incompleteInterval = 5;        ///< Retry interval (seconds).
-        std::atomic<uint32_t> queueSize = 512;               ///< Queue size for pending ARP packets.
-
-        std::string arpDumpFileLocation; ///< Debug dump location for ARP data (TODO).
-        std::atomic<uint32_t> stackTraceSize; ///< Size of stack trace dump (TODO).
-        std::atomic<uint8_t> stackTraceDepth; ///< Depth of stack trace dump (TODO).
-
-        /**
-         * @struct Neighbor
-         * @brief Static IPv4 neighbor entry.
-         * @ingroup CORE
-         *
-         * Represents a manually configured ARP entry that overrides dynamic discovery.
-         */
-        struct Neighbor
-        {
-            types::Mac mac; ///< MAC address of neighbor.
-            interface::InterfaceKey interface; ///< interface::Interface ID this neighbor is bound to.
-            bool proxy = false; ///< Whether this entry is a proxy arp binding
-        };
-
-        std::unordered_map<std::string, std::unordered_map<types::IPv4Address, Neighbor>> neighbors; ///< Static ARP neighbor table.
-        std::shared_mutex neighborMutex; ///< Syncronizes neighbor table access.
-    } arp;
-
-    /**
-     * @struct Ndp
-     * @brief Global IPv6 Neighbor Discovery (NDP) configuration and static neighbor table.
-     * @ingroup CORE
-     *
-     * Controls IPv6 ND behavior including:
-     * - DAD (Duplicate Address Detection)
-     * - Neighbor Unreachability Detection (NUD)
-     * - Cache expiration settings
-     * - Refresh and convergence timers for NSF events
-     * - Resolution rate limits
-     *
-     * Also maintains a static neighbor table used as a global override for NDP learning.
-     */
-    struct Ndp
-    {
-        std::atomic<bool> refresh = false;        ///< Force NDP refresh cycle.
-        std::atomic<bool> ndAsRouteOwner = false; ///< Install ND entries directly into RIB (optional behavior) (TODO).
-        std::atomic<bool> strictMode = false;     ///< Enforce strict ND validation.
-
-        std::atomic<uint16_t> nudRefreshPeriod = 0; ///< Periodic refresh interval for NUD.
-
-        std::atomic<uint16_t> cacheExpire = 600;      ///< Expiration time for dynamic NDP entries.
-        std::atomic<uint16_t> loggingRate = 0;        ///< Logging throttle for ND events.
-        std::atomic<uint16_t> dadTime = 1000;         ///< Duplicate Address Detectiong timer (ms)
-        std::atomic<uint16_t> nsfConvergenceTime = 180; ///< NSF convergence time (seconds).
-        std::atomic<uint16_t> nsfDadSupressionTime = 180; ///< NSF DAD suppression window.
-        std::atomic<uint16_t> nsfThrottleResolutions = 1000; ///< Max ND resolutions during NSF.
-        std::atomic<uint16_t> nudLimit = 2048;        ///< Maximum concurrent NUD operations.
-        std::atomic<uint16_t> resolutionLimit = 512;  ///< Max outstanding ND resolutions.
-
-        std::atomic<uint32_t> interfaceLimit = 0;     ///< Limit on ND-enabled interfaces.
-        std::atomic<uint32_t> reachableTime = 30000;  ///< Time (ms) that a neighbor is considered reachable.
-
-                /**
-         * @struct Neighbor
-         * @brief Static IPv6 neighbor entry.
-         * @ingroup CORE
-         *
-         * Defines a binding of an IPv6 address to a MAC and interface, bypassing dynamic NDP.
-         */
-        struct Neighbor
-        {
-            interface::InterfaceKey interface; ///< interface::InterfaceKey of the static neighbor.
-            types::Mac macAddress; ///< MAC address associated with this IPv6 address.
-        };
-
-        std::unordered_map<types::IPv6Address, Neighbor> neighbors; ///< Static NDP neighbor table.
-        std::shared_mutex neighborMutex;         ///< Synchronizes static NDP table access.
-    } ndp;
-};
 
 /**
  * @class Global

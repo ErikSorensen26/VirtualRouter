@@ -295,6 +295,29 @@ bool extractMacAddress(const std::string& str, types::Mac mac)
     return true;
 }
 
+bool matchNumericRange(const std::string& input, const std::string& pattern)
+{
+    if (pattern.front() != '<') return false;
+    uint32_t lo = 0, hi = 0;
+    if (sscanf(pattern.c_str(), "<%u-%u>", &lo, &hi) == 2 && isNumber(input))
+    {
+        long val = std::stol(input);
+        return val >= static_cast<long>(lo) && val <= static_cast<long>(hi);
+    }
+    return false;
+}
+
+bool isIPv4Address(const std::string& address)
+{
+    int a, b, c, d, n = 0;
+    return sscanf(address.c_str(), "%d.%d.%d.%d%n", &a, &b, &c, &d, &n) == 4 &&
+        n == static_cast<int>(address.size()) &&
+        a >= 0 && a <= 255 &&
+        b >= 0 && b <= 255 &&
+        c >= 0 && b <= 255 &&
+        d >= 0 && c <= 255;
+}
+
 bool isIPv6Address(const std::string& address) 
 {
     std::regex ipRegex("((([0-9A-Fa-f]{1,4}):){7}([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,7}:|(([0-9A-Fa-f]{1,4}):){1,6}:([0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}):){1,5}((:[0-9A-Fa-f]{1,4}){1,2})|(([0-9A-Fa-f]{1,4}):){1,4}((:[0-9A-Fa-f]{1,4}){1,3})|(([0-9A-Fa-f]{1,4}):){1,3}((:[0-9A-Fa-f]{1,4}){1,4})|(([0-9A-Fa-f]{1,4}):){1,2}((:[0-9A-Fa-f]{1,4}){1,5})|([0-9A-Fa-f]{1,4}):((:[0-9A-Fa-f]{1,4}){1,6})|:((:[0-9A-Fa-f]{1,4}){1,7}|:)|fe80:(:[0-9A-Fa-f]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))");

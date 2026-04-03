@@ -720,7 +720,7 @@ using GlobalRegistry = SubRegistry<Global,
     // IPV6_ND – reference
     ReferenceContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Global::IPV6_ND)>,
     // IPV6_NEIGHBOR – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
+    ValueField<std::vector<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac>> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_OSPF_NAME_LOOKUP)>,
     // IPV6_PREFIX_LIST – incomplete
     ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_LIST)>,
