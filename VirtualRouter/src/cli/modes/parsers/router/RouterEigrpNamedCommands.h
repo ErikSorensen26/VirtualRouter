@@ -18,7 +18,7 @@ namespace cli
 bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS);
 using RouterEigrpNamed_AddressFamilyIPv4 = commandAdder<EigrpContext,
     RouterEigrpNamed_AddressFamilyIPv4_Handler,
-    "address-family"_tok, "ipv4"_tok, "autonomous-system"_tok, ARG
+    "address-family"_tok, "ipv4"_tok, "autonomous-system"_tok
 >;
 
 //bool RouterEigrpNamed_AddressFamilyIPv4Multicast_Handler(EIGRP_PARAMS); //TODO
@@ -27,13 +27,13 @@ using RouterEigrpNamed_AddressFamilyIPv4 = commandAdder<EigrpContext,
 bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS);
 using RouterEigrpNamed_AddressFamilyIPv4Vrf = commandAdder<EigrpContext,
     RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler,
-    "address-family"_tok, "ipv4"_tok, "vrf"_tok, ARG, "autonomous-system"_tok, ARG
+    "address-family"_tok, "ipv4"_tok, "vrf"_tok, "autonomous-system"_tok
 >;
 
 bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS);
 using RouterEigrpNamed_AddressFamilyIPv6 = commandAdder<EigrpContext,
     RouterEigrpNamed_AddressFamilyIPv6_Handler,
-    "address-family"_tok, "ipv6"_tok, "autonomous-system"_tok, ARG
+    "address-family"_tok, "ipv6"_tok, "autonomous-system"_tok
 >;
 
 //bool RouterEigrpNamed_AddressFamilyIPv6Unicast_Handler(EIGRP_PARAMS); // TODO
@@ -41,7 +41,7 @@ using RouterEigrpNamed_AddressFamilyIPv6 = commandAdder<EigrpContext,
 bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS);
 using RouterEigrpNamed_AddressFamilyIPv6Vrf = commandAdder<EigrpContext,
     RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler,
-    "address-family"_tok, "ipv6"_tok, "vrf"_tok, ARG, "autonomous-system"_tok, ARG
+    "address-family"_tok, "ipv6"_tok, "vrf"_tok, "autonomous-system"_tok
 >;
 
 /// @brief Handler for `exit` — leaves EIGRP named mode.

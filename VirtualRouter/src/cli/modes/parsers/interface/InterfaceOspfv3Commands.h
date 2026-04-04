@@ -17,25 +17,25 @@ namespace cli
 bool InterfaceOspfv3_Area_Handler(INTERFACE_PARAMS);
 using InterfaceOspfv3_Area = commandAdder<InterfaceContext,
     InterfaceOspfv3_Area_Handler,
-    ARG, "area"_tok, ARG, ARG_REST
+    ARG, "area"_tok
 >;
 
 bool InterfaceOspfv3_Authentication_Handler(INTERFACE_PARAMS);
 using InterfaceOspfv3_Authentication = commandAdder<InterfaceContext,
     InterfaceOspfv3_Authentication_Handler,
-    "authentication"_tok, ARG_REST
+    "authentication"_tok
 >;
 
 bool InterfaceOspfv3_Encryption_Handler(INTERFACE_PARAMS);
 using InterfaceOspfv3_Encryption = commandAdder<InterfaceContext,
     InterfaceOspfv3_Encryption_Handler,
-    "encryption"_tok, ARG_REST
+    "encryption"_tok
 >;
 
 bool InterfaceOspfv3_Neighbor_Handler(INTERFACE_PARAMS);
 using InterfaceOspfv3_Neighbor = commandAdder<InterfaceContext,
     InterfaceOspfv3_Neighbor_Handler,
-    "neighbor"_tok, ARG_REST
+    "neighbor"_tok
 >;
 
 /**

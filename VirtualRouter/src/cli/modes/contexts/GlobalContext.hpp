@@ -7,12 +7,13 @@
 #define GLOBAL_CONTEXT_HPP
 
 #include "ContextBase.hpp"
+#include "cli/runtime/Token.hpp"
 
 namespace core { class Global; }
 namespace core { class VirtualRouter; }
 
 /// @brief Convenience macro for Global Configuration command handler parameter lists.
-#define GLOBAL_PARAMS GlobalContext& ctx, const std::vector<std::string>& args
+#define GLOBAL_PARAMS GlobalContext& ctx, const std::vector<std::span<cli::Token>>& segs
 
 namespace cli
 {

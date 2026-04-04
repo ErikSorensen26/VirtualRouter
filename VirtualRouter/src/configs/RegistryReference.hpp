@@ -222,7 +222,7 @@ public:
      */
     explicit ReferenceContainer(const Reference<T>& parent) noexcept
         : ref(std::nullopt),
-          state(MaskState::INHERIT),
+          state(FieldState::INHERIT),
           base(&parent)
     {}
 
@@ -236,7 +236,7 @@ public:
      */
     explicit ReferenceContainer(const ReferenceContainer& parent) noexcept
         : ref(std::nullopt),
-          state(MaskState::INHERIT),
+          state(FieldState::INHERIT),
           base(&parent.local())
     {}
 
@@ -245,7 +245,7 @@ public:
      */
     bool bound() const noexcept
     {
-        if (state == MaskState::SET)
+        if (state == FieldState::CANNED)
             return ref.has_value();
 
         return base != nullptr;
@@ -260,7 +260,7 @@ public:
      */
     const Reference<T>& effective() const noexcept
     {
-        if (base && state == MaskState::INHERIT)
+        if (base && state == FieldState::INHERIT)
             return *base;
 
         bool buh = ref.has_value();
@@ -325,7 +325,7 @@ private:
     void setLocal(const Reference<T>& r) noexcept
     {
         ref.emplace(r);
-        state = MaskState::SET;
+        state = FieldState::CANNED;
     }
 
     /**
@@ -334,13 +334,13 @@ private:
     void unsetLocal() noexcept
     {
         ref.reset();
-        state = MaskState::INHERIT;
+        state = FieldState::INHERIT;
     }
 
     // PRIVATE MEMBERS
 
     std::optional<Reference<T>> ref{std::nullopt}; ///< Locally-set reference, if any.
-    MaskState state{MaskState::INHERIT};            ///< Whether a local override is in effect.
+    FieldState state{FieldState::INHERIT};            ///< Whether a local override is in effect.
     Reference<T>* base{nullptr};                   ///< Pointer to the parent scope's reference, if present.
 };
 }

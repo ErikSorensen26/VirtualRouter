@@ -21,25 +21,25 @@ namespace cli
 bool InterfaceOspf_BFD_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_BFD = commandAdder<InterfaceContext,
     InterfaceOspf_BFD_Handler,
-    "bfd"_tok, ARG_REST
+    "bfd"_tok
 >;
 
 bool InterfaceOspf_Cost_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_Cost = commandAdder<InterfaceContext,
     InterfaceOspf_Cost_Handler,
-    "cost"_tok, ARG
+    "cost"_tok
 >;
 
 bool InterfaceOspf_DatabaseFilter_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_DatabaseFilter = commandAdder<InterfaceContext,
     InterfaceOspf_DatabaseFilter_Handler,
-    "database-filter"_tok, ARG_REST
+    "database-filter"_tok
 >;
 
 bool InterfaceOspf_DeadInterval_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_DeadInterval = commandAdder<InterfaceContext,
     InterfaceOspf_DeadInterval_Handler,
-    "dead-interval"_tok, ARG_REST
+    "dead-interval"_tok
 >;
 
 bool InterfaceOspf_DemandCircuit_Handler(INTERFACE_PARAMS);
@@ -57,7 +57,7 @@ using InterfaceOspf_FloodReduction = commandAdder<InterfaceContext,
 bool InterfaceOspf_HelloInterval_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_HelloInterval = commandAdder<InterfaceContext,
     InterfaceOspf_HelloInterval_Handler,
-    "hello-interval"_tok, ARG_REST
+    "hello-interval"_tok
 >;
 
 bool InterfaceOspf_MtuIgnore_Handler(INTERFACE_PARAMS);
@@ -69,25 +69,25 @@ using InterfaceOspf_MtuIgnore = commandAdder<InterfaceContext,
 bool InterfaceOspf_Network_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_Network = commandAdder<InterfaceContext,
     InterfaceOspf_Network_Handler,
-    "network"_tok, ARG_REST
+    "network"_tok
 >;
 
 bool InterfaceOspf_Priority_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_Priority = commandAdder<InterfaceContext,
     InterfaceOspf_Priority_Handler,
-    "priority"_tok, ARG_REST
+    "priority"_tok
 >;
 
 bool InterfaceOspf_RetransmitInterval_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_RetransmitInterval = commandAdder<InterfaceContext,
     InterfaceOspf_RetransmitInterval_Handler,
-    "retransmit-interval"_tok, ARG_REST
+    "retransmit-interval"_tok
 >;
 
 bool InterfaceOspf_TransmitDelay_Handler(INTERFACE_PARAMS);
 using InterfaceOspf_TransmitDelay = commandAdder<InterfaceContext,
     InterfaceOspf_TransmitDelay_Handler,
-    "transmit-delay"_tok, ARG_REST
+    "transmit-delay"_tok
 >;
 
 /**

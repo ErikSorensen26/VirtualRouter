@@ -9,8 +9,6 @@
  * @brief Per-interface address, MTU, type, and protocol configuration state.
  */
 
-// TODO UPDATE DOXY
-
 #ifndef INTERFACE_CONFIGS_H
 #define INTERFACE_CONFIGS_H
 
@@ -33,7 +31,6 @@ namespace core { class Global; class TimeManager; }
 namespace hardware { struct HwIfaceInfo; }
 namespace infrastructure { class Ndp; }
 namespace services::dhcp { struct InterfaceConfigs; struct DhcpNetwork; }
-
 class MockInterface;
 class Internal_NdpTest;
 
@@ -141,10 +138,17 @@ public:
     types::Mac getMac();
 
     // Getters
+
+    /// Returns the configured transmit bandwidth for this interface in kbps.
     uint32_t getBandwidth();
+
+    /// Returns the configured receive bandwidth for this interface in kbps.
     uint32_t getReceiveBandwidth();
 
+    /// Returns a mutable reference to the interface config registry.
     config::InterfaceRegistry& getConfigs() { return configs.get(); }
+
+    /// Returns a read-only reference to the interface config registry.
     const config::InterfaceRegistry& getConfigs() const { return configs.get(); }
 
     /**
@@ -188,6 +192,15 @@ public:
      * changes on the interface.
      */
     void syncIPv6();
+
+    /**
+     * @brief Re-reads dhcpv6 from config and reconciles
+     *        the global dhcp state.
+     *
+     * Adds dhcp client and removes old primary address.
+     * changes on the interface.
+     */
+    void syncDhcpv6();
 
     float         id;            ///< Interface number, including sub-interface fraction.
     InterfaceType interfaceType; ///< Logical interface type.
@@ -236,6 +249,7 @@ public:
          */
         void addSecondaryAddress(types::IPv4Prefix prefix);
 
+        /// Clears the primary IPv4 address, resetting address and mask atomics to zero.
         void removePrimaryAddress();
 
         /**
@@ -261,13 +275,25 @@ public:
          */
         uint8_t* getSecondaryAddress(uint8_t* out) const;
 
+        /// Returns the primary IPv4 address.
         types::IPv4Address getPrimaryAddress() const;
+
+        /// Returns the first secondary IPv4 address, or `std::nullopt` if none is configured.
         std::optional<types::IPv4Address> getSecondaryAddress() const;
 
+        /// Returns true if a primary IPv4 address is configured.
         bool hasPrimaryAddress() const;
+
+        /// Returns true if the primary address matches @p prefix exactly.
         bool hasPrimaryAddress(types::IPv4Prefix prefix) const;
+
+        /// Returns true if the primary address matches the given raw address and mask length.
         bool hasPrimaryAddress(const uint8_t* addr, uint8_t mask) const;
+
+        /// Returns true if any secondary address matches @p prefix exactly.
         bool hasSecondaryAddress(types::IPv4Prefix prefix) const;
+
+        /// Returns true if any secondary address matches the given raw address and mask length.
         bool hasSecondaryAddress(const uint8_t* addr, uint8_t mask) const;
 
         /**
@@ -286,12 +312,19 @@ public:
          */
         std::optional<uint8_t> getSecondaryPrefix(uint8_t* out) const;
 
+        /// Returns the primary address as a prefix (address + length).
         types::IPv4Prefix getPrimaryPrefix() const;
+
+        /// Returns the first secondary prefix, or `std::nullopt` if none is configured.
         std::optional<types::IPv4Prefix> getSecondaryPrefix();
 
+        /// Returns the primary address prefix length in bits.
         uint8_t getPrimaryMask() const;
+
+        /// Returns the first secondary address prefix length, or `std::nullopt` if none is configured.
         std::optional<uint8_t> getSecondaryMask() const;
 
+        /// Returns a list of all secondary IPv4 addresses (without prefix lengths).
         std::vector<types::IPv4Address> getSecondaryList() const;
 
         /**
@@ -303,6 +336,7 @@ public:
          */
         std::vector<types::IPv4Prefix> getSecondaryPrefixList(bool maintainAddress = false) const;
 
+        /// Returns the set of all secondary IPv4 addresses (without prefix lengths).
         std::unordered_set<types::IPv4Address> getSecondarySet() const;
 
         /**
@@ -312,8 +346,14 @@ public:
          */
         std::unordered_set<types::IPv4Prefix> getSecondaryPrefixSet(bool maintainAddress = false) const;
 
+        /// Returns true if the primary address matches the raw 4-byte network-order address @p ip.
         bool comparePrimaryAddress(const uint8_t* ip);
+
+        /// Returns true if the primary address matches @p ip.
         bool comparePrimaryAddress(types::IPv4Address ip);
+
+        /// Returns true if the primary address and prefix length both match @p prefix.
+        bool comparePrimaryPrefix(types::IPv4Prefix prefix);
 
     private:
         mutable std::mutex ipMutex;          ///< Guards secondary address vector and coordinated primary reads.
@@ -426,6 +466,7 @@ public:
          */
         IPv6Address* addGlobalAddress(const types::IPv6Prefix& ip);
 
+        /// Removes the link-local address and cancels any associated DAD timers.
         void removeLocalAddress();
 
         /**
@@ -435,6 +476,7 @@ public:
          */
         void removeAddress(const types::IPv6Prefix& prefix);
 
+        /// Removes all link-local, global unicast, and ULA addresses, cancelling their timers.
         void removeAllAddresses();
 
         /**
@@ -476,19 +518,37 @@ public:
          */
         uint8_t* getLocalUnicast(uint8_t* out) const;
 
+        /// Returns the link-local address (unspecified if none is assigned).
         types::IPv6Address getLocalAddress() const;
+
+        /// Returns the first valid global unicast address (unspecified if none is valid).
         types::IPv6Address getGlobalUnicast() const;
+
+        /// Returns the first valid unique-local address (unspecified if none is valid).
         types::IPv6Address getLocalUnicast() const;
 
+        /// Returns true if the interface holds the given 16-byte network-order IPv6 address (any scope).
         bool hasAddress(const uint8_t* addr);
+
+        /// Returns true if the interface holds @p addr in any address list.
         bool hasAddress(types::IPv6Address addr);
 
+        /// Returns true if the link-local address matches the given raw address and prefix length.
         bool hasLocalAddress(const uint8_t* addr, uint8_t len) const;
+
+        /// Returns true if any global unicast address matches the given raw address and prefix length.
         bool hasGlobalUnicast(const uint8_t* addr, uint8_t len) const;
+
+        /// Returns true if any ULA matches the given raw address and prefix length.
         bool hasLocalUnicast(const uint8_t* addr, uint8_t len) const;
 
+        /// Returns true if the link-local address matches @p prefix.
         bool hasLocalAddress(const types::IPv6Prefix& prefix) const;
+
+        /// Returns true if any global unicast address matches @p prefix.
         bool hasGlobalUnicast(const types::IPv6Prefix& prefix) const;
+
+        /// Returns true if any ULA matches @p prefix.
         bool hasLocalUnicast(const types::IPv6Prefix& prefix) const;
 
         /**
@@ -515,16 +575,31 @@ public:
          */
         uint8_t getLocalUnicastPrefix(uint8_t* out) const;
 
+        /// Returns the link-local address as a prefix (address + length).
         types::IPv6Prefix getLocalPrefix() const;
+
+        /// Returns the first global unicast address as a prefix.
         types::IPv6Prefix getGlobalUnicastPrefix() const;
+
+        /// Returns the first ULA as a prefix.
         types::IPv6Prefix getLocalUnicastPrefix() const;
 
+        /// Returns the link-local address prefix length in bits.
         uint8_t getLocalMask() const;
+
+        /// Returns the first global unicast address prefix length in bits.
         uint8_t getGlobalUnicastMask() const;
+
+        /// Returns the first ULA prefix length in bits.
         uint8_t getLocalUnicastMask() const;
 
+        /// Returns a list of all routable (non-link-local) IPv6 addresses.
         std::vector<types::IPv6Address> getRoutableList() const;
+
+        /// Returns a list of all global unicast addresses.
         std::vector<types::IPv6Address> getGlobalList() const;
+
+        /// Returns a list of all ULA addresses.
         std::vector<types::IPv6Address> getLocalList() const;
 
         /**
@@ -548,12 +623,22 @@ public:
          */
         std::vector<types::IPv6Prefix> getLocalPrefixList(bool maintainAddress = false) const;
 
+        /// Returns the set of all routable (non-link-local) IPv6 addresses.
         std::unordered_set<types::IPv6Address> getRoutableSet() const;
+
+        /// Returns the set of all global unicast addresses.
         std::unordered_set<types::IPv6Address> getGlobalSet() const;
+
+        /// Returns the set of all ULA addresses.
         std::unordered_set<types::IPv6Address> getUniqueSet() const;
 
+        /// Returns the set of routable prefixes; host bits are preserved when @p maintainAddress is true.
         std::unordered_set<types::IPv6Prefix> getRoutablePrefixSet(bool maintainAddress = false) const;
+
+        /// Returns the set of global unicast prefixes; host bits are preserved when @p maintainAddress is true.
         std::unordered_set<types::IPv6Prefix> getGlobalPrefixSet(bool maintainAddress = false) const;
+
+        /// Returns the set of ULA prefixes; host bits are preserved when @p maintainAddress is true.
         std::unordered_set<types::IPv6Prefix> getUniquePrefixSet(bool maintainAddress = false) const;
 
         std::atomic<uint16_t> mtu{1500};       ///< IPv6 MTU; may differ from globalMtu if locally overridden.
@@ -628,7 +713,7 @@ private:
 
     config::Reference<config::InterfaceRegistry> configs; ///< Owning reference to the interface config registry; source of truth for all configurable parameters.
 
-    std::atomic<types::Mac> macAddress;
+    std::atomic<types::Mac> macAddress; ///< Cached MAC address; updated by @ref syncMac when the config changes.
 };
 
 } // namespace interface

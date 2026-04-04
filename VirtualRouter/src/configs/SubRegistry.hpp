@@ -201,7 +201,7 @@ private:
     template <typename F>
     auto createField()
     {
-        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
+        if constexpr (IsListField<F> || IsValueField<F>)
         {
             if constexpr (RequiresContext<F>)
                 return std::forward_as_tuple(ctxProvider, mu);
@@ -218,7 +218,7 @@ private:
     template <typename F>
     auto createMaskedField(const F& parentField)
     {
-        if constexpr (IsValueField<F> || IsOptionalValueField<F>)
+        if constexpr (IsListField<F> || IsValueField<F>)
         {
             if constexpr (RequiresContext<F>)
                 return std::forward_as_tuple(ctxProvider, mu, parentField);

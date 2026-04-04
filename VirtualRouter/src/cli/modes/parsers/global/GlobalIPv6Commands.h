@@ -26,13 +26,13 @@ using GlobalIPv6_ND = subAdder<GlobalContext,
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS);
 using GlobalIPv6_Neighbor = commandAdder<GlobalContext,
     GlobalIPv6_Neighbor_Handler,
-    "neighbor"_tok, ARG, ARG, ARG, ARG
+    "neighbor"_tok
 >;
 
 bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS);
 using GlobalIPv6_RouterEIGRP = commandAdder<GlobalContext,
     GlobalIPv6_RouterEIGRP_Handler,
-    "router"_tok, "eigrp"_tok, ARG
+    "router"_tok, "eigrp"_tok
 >;
 
 /**

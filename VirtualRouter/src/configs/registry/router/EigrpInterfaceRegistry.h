@@ -71,7 +71,7 @@ void EigrpIfaceShutdown(void* i);
 void EigrpIfaceSummary(void* i);
 
 using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
+    ValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
     AtomicField<config::eigrp::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(EigrpInterface::BANDWIDTH_PERCENTAGE)>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::BFD)>,
@@ -85,7 +85,7 @@ using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE), EigrpIfacePassive>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN), EigrpIfaceShutdown>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SPLIT_HORIZON)>,
-    ValueField<std::vector<std::tuple<types::IPAddress, uint8_t>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
+    ListField<std::vector<std::tuple<types::IPAddress, uint8_t>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
 >;
 
 }

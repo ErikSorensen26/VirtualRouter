@@ -177,7 +177,7 @@ public:
      * - IPv6 EIGRP instance (optional)
      * - Metrics, K-values, timers, bandwidth/delay policies
      */
-    routing::eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
+    routing::eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint16_t id);
 
     /**
      * @brief Look up an existing EIGRP Autonomous System by number.
@@ -185,7 +185,7 @@ public:
      * @param id AS number.
      * @return Pointer to AS instance or nullptr if not found.
      */
-    routing::eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
+    routing::eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint16_t id);
 
     /**
      * @brief Remove and delete an EIGRP Autonomous System.
@@ -196,7 +196,7 @@ public:
      * @param id AS number to remove.
      * @return True if removed, false if missing.
      */
-    bool removeEigrpAutonomousSystem(uint32_t id);
+    bool removeEigrpAutonomousSystem(uint16_t id);
 
     // EIGRP NAMED SYSTEMS
 

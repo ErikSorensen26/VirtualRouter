@@ -509,111 +509,78 @@ DEFINE_TUPLE_SCHEMA(IPExtendedAcl, IP_EXTENDED_ACL_FIELDS)
 
 
 using GlobalRegistry = SubRegistry<Global,
-    // ARCHIVE
     AtomicField<bool CONFIG_INDEX_ARG(Global::ARCHIVE)>,
-    // BANNER section
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::BANNER)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_CONFIG_SAVE)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_EXEC)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_INCOMING)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_LOGIN)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_MOTD)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_PROMPT_TIMEOUT)>,
-    // BFD
+    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_CONFIG_SAVE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_EXEC)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_INCOMING)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_LOGIN)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_MOTD)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_PROMPT_TIMEOUT)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::BFD_SLOW_TIMERS)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::BFD_SINGLE_HOP_TEMPLATES)>,
-    // CEF_TABLE – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::CEF_TABLE)>,
-    // CLASS_MAP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::CLASS_MAP)>,
-    // CLOCK
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::CEF_TABLE)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::CLASS_MAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::CLOCK_CALENDAR_VALID)>,
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::CLOCK_SUMMER_TIME)>,
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::CLOCK_TIME_ZONE)>,
-    // CONFIG_REGISTER
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::CLOCK_SUMMER_TIME)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::CLOCK_TIME_ZONE)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::CONFIG_REGISTER)>,
-    // CONTROL_PLANE
     AtomicField<bool CONFIG_INDEX_ARG(Global::CONTROL_PLANE)>,
-    // CRYPTO – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::CRYPTO)>,
-    // EAP_PROFILE
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::CRYPTO)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::EAP_PROFILE)>,
-    // ENABLE_PASSWORD – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::ENABLE_PASSWORD)>,
-    // ENABLE_SECRET – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::ENABLE_SECRET)>,
-    // FLOW exporters, monitors, records, sampler maps
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::ENABLE_PASSWORD)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::ENABLE_SECRET)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_EXPORTER)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_MONITOR)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_RECORD)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_SAMPLER_MAP)>,
-    // HOSTNAME
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::HOSTNAME)>,
-    // INTERFACE – interfacekey reference
+    ValueField<std::string CONFIG_INDEX_ARG(Global::HOSTNAME)>,
     OwnedListField<InterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Global::INTERFACE)>,
-    // IP_ACCESS_LIST – incomplete
-    ValueField<std::vector<std::vector<IPStandardAcl>> CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_EXTENDED)>,
+    ListField<std::vector<IPStandardAcl> CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_EXTENDED)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_HELPER_EGRESS_CHECK)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOGGING_HASH_GENERATION)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOGGING_INTERVAL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_MATCH_LOCAL_TRAFFIC)>,
-    OptionalValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_ROLE_BASED)>,
-    OptionalValueField<std::vector<std::vector<IPExtendedAcl>> CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_STANDARD)>,
-    // IP_ACCOUNTING_LIST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_LIST)>,
+    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_ROLE_BASED)>,
+    ValueField<std::vector<IPExtendedAcl> CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_STANDARD)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_LIST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_THRESHOLD)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_TRANSITS)>,
-    // IP_ADDRESS_POOL – AddressPoolMode (enum)
     AtomicField<bool CONFIG_INDEX_ARG(IP_ADDRESS_POOL_DHCP)>,
     AtomicField<bool CONFIG_INDEX_ARG(IP_ADDRESS_POOL_DHCP_PROXY)>,
     AtomicField<bool CONFIG_INDEX_ARG(IP_ADDRESS_POOL_LOCAL)>,
-    // IP_ARP_GRATUITOUS – GratuitousType (enum)
     AtomicField<int CONFIG_INDEX_ARG(Global::IP_ARP_GRATUITOUS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE_ENTRIES)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE_RETRY)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ARP_PROXY)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ARP_QUEUE)>,
-    // IP_AS_PATH_ACCESS_LIST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_AS_PATH_ACCESS_LIST)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_AS_PATH_ACCESS_LIST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_BGP_COMMUNITY_NEW_FORMAT)>,
-    // IP_CEF – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_CEF)>,
-    // IP_CLASSLESS – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_CLASSLESS)>,
-    // IP_COMMUNITY_LIST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_COMMUNITY_LIST)>,
-    // IP_DEFAULT_NETWORK – ipv4
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_CEF)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_CLASSLESS)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_COMMUNITY_LIST)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_DEFAULT_NETWORK)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DEFAULT_GATEWAY)>,
-    // IP_DHCP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP)>,
-    // IP_DHCP_CLIENT – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_CLIENT)>,
-    // IP_DHCP_RELAY – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_RELAY)>,
-    // IP_DHCP_SERVER – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_SERVER)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_CLIENT)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_RELAY)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_DHCP_SERVER)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_LOOKUP_NSAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_LOOKUP_RECURSIVE)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::IP_DOMAIN_MULTICAST)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::IP_DOMAIN_MULTICAST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_RECURSIVE_ALLOW_SOA)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_DOMAIN_RECURSIVE_RETRY)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_DOMAIN_RETRY)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_DOMAIN_ROUND_ROBIN)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_DOMAIN_TIMEOUT)>,
-    // IP_EXPLICIT_PATH_IDENTIFIER – string reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IP_EXPLICIT_PATH_IDENTIFIER)>,
-    // IP_EXPLICIT_PATH_NAME – int reference
     OwnedListField<EmptyRegistry, int CONFIG_INDEX_ARG(Global::IP_EXPLICIT_PATH_NAME)>,
-    // IP_EXTCOMMUNITY_LIST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_EXTCOMMUNITY_LIST)>,
-    // IP_FLOW_AGGREGATION_CACHE – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_AGGREGATION_CACHE)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_EXTCOMMUNITY_LIST)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_AGGREGATION_CACHE)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_ENTRIES)>,
-    // IP_FLOW_CACHE_MPLS – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_MPLS)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_MPLS)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_TIMEOUT_ACTIVE)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_FLOW_CACHE_TIMEOUT_INACTIVE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_FRAGMENT_OFFSET)>,
@@ -624,10 +591,8 @@ using GlobalRegistry = SubRegistry<Global,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_TTL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_VLAN_ID)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_CAPTURE_EGRESS_INPUT_INTERFACE)>,
-    // IP_FLOW_EXPORT_DESTINATION – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_DESTINATION)>,
-    // IP_FLOW_EXPORT_SOURCE – interfacekey
-    OptionalValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_SOURCE)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_DESTINATION)>,
+    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_SOURCE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_OPTIONS_EXPORT_STATS)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_OPTIONS_REFRESH_RATE)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_TEMPLATE_OPTIONA_TIMEOUT_RATE)>,
@@ -639,8 +604,7 @@ using GlobalRegistry = SubRegistry<Global,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_EXPORT_VERSION_PEER_AS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_FLOW_TOP_TALKERS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_HOSTNAME_STRICT)>,
-    // IP_HTTP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_HTTP)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_HTTP)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_PER_MS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_DF)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG)>,
@@ -648,121 +612,78 @@ using GlobalRegistry = SubRegistry<Global,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ICMP_RATE_LIMIT_UNREACHABLE_LOG_PER_MS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_REDIRECT_HOST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ICMP_REDIRECT_SUBNET)>,
-    // IP_KERBEROS_SOURCE_INTERFACE – interfacekey
-    OptionalValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_KERBEROS_SOURCE_INTERFACE)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::IP_LOCAL_POLICY_ROUTE_MAP)>,
-    // IP_LOCAL_POOL – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_LOCAL_POOL)>,
+    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_KERBEROS_SOURCE_INTERFACE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::IP_LOCAL_POLICY_ROUTE_MAP)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_LOCAL_POOL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_MFIB)>,
-    // IP_NAT – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_NAT)>,
-    // IP_NBAR – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_NBAR)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_NAT)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_NBAR)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_OSPF_NAME_LOOKUP)>,
-    // IP_POLICY_LIST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_POLICY_LIST)>,
-    // IP_PREFIX_LIST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_PREFIX_LIST)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_POLICY_LIST)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_PREFIX_LIST)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_REFLEXIVE_LIST_TIMEOUT)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ROUTING)>,
-    // IP_ROUTING_PROTOCOL_PURGE_INTERFACE – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_ROUTING_PROTOCOL_PURGE_INTERFACE)>,
-    // IP_RSVP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_RSVP)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_ROUTING_PROTOCOL_PURGE_INTERFACE)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_RSVP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_SCP_SERVER)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_SECURITY_ESO_INFO_SOURCE)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_SECURITY_ESO_INFO_MAX_C_BYTES)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IP_SECURITY_ESO_INFO_DEFAULT_BIT)>,
-    // IP_SLA – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_SLA)>,
-    // IP_SSH – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_SSH)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_SLA)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_SSH)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_STICKY_ARP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_SUBNET_ZERO)>,
-    // IP_TACACS_SOURCE_INTERFACE – interfacekey
-    OptionalValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_TACACS_SOURCE_INTERFACE)>,
-    // IP_TCP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_TCP)>,
-    // IP_TELNET – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_TELNET)>,
-    // IP_TFTP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_TFTP)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::IP_TRAFFIC_EXPORT_PROFILE)>,
+    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IP_TACACS_SOURCE_INTERFACE)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_TCP)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_TELNET)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_TFTP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::IP_TRAFFIC_EXPORT_PROFILE)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_COMPUTE_INTERVAL)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_COMPUTE_WINDOW)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_NOTIFY_HOLD_DOWN)>,
-    // IP_VRF – string reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IP_VRF)>,
-    // IPv6
-    // IPV6_ACCESS_LIST – word reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST_LOG_UPDATE_THRESHOLD)>,
-    // IPV6_ACCESS_LIST_ROLE_BASED – word reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST_ROLE_BASED)>,
-    // IPV6_CEF – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_CEF)>,
-    // IPV6_DHCP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP)>,
-    // IPV6_DHCP_CLIENT – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP_CLIENT)>,
-    // IPV6_DHCP_RELAY – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP_RELAY)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_CEF)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP_CLIENT)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_DHCP_RELAY)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_FLOWSET)>,
-    // IPV6_GENERAL_PREFIX – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_GENERAL_PREFIX)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_GENERAL_PREFIX)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::IPV6_HOP_LIMIT)>,
-    // IPV6_HOST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_HOST)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_HOST)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IPV6_ICMP_ERROR_INTERVAL)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_ICMP_BUCKET_SIZE)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::IPV6_LOCAL_POLICY_ROUTE_MAP)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::IPV6_LOCAL_POLICY_ROUTE_MAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_MFIB)>,
-    // IPV6_ND – reference
     ReferenceContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Global::IPV6_ND)>,
-    // IPV6_NEIGHBOR – incomplete
-    ValueField<std::vector<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac>> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
+    ListField<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_OSPF_NAME_LOOKUP)>,
-    // IPV6_PREFIX_LIST – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_LIST)>,
-    // IPV6_PREFIX_POOL – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_POOL)>,
-    // IPV6_RADIUS_SOURCE_INTERFACE – interfacekey
-    OptionalValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IPV6_RADIUS_SOURCE_INTERFACE)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_LIST)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_POOL)>,
+    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IPV6_RADIUS_SOURCE_INTERFACE)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_SPD_QUEUE_MAX_THRESHOLD)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_SPD_QUEUE_MIN_THRESHOLD)>,
-    // IPV6_TACACS_SOURCE_INTERFACE – interfacekey
-    OptionalValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IPV6_TACACS_SOURCE_INTERFACE)>,
+    ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IPV6_TACACS_SOURCE_INTERFACE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_TRAFFIC_INTERFACE_STATISTICS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_TRAFFIC_INTERFACE_STATISTICS_UNCLEARABLE)>,
-    // KERBEROS – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::KERBEROS)>,
-    // KEY_CHAIN – string reference
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::KERBEROS)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::KEY_CHAIN)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::KEY_CONFIG_KEY)>,
-    // KRON – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::KRON)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::KEY_CONFIG_KEY)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::KRON)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::L2_PSEUDOWIRE_ROUTING)>,
-    // L2_ROUTER_ID – ipv4
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::L2_ROUTER_ID)>,
-    // L2_VFI – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::L2_VFI)>,
-    // L2VPN_PSEUDOWIRE_STATIC_OAM_CLASS – string reference
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::L2_VFI)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::L2VPN_PSEUDOWIRE_STATIC_OAM_CLASS)>,
-    // L2VPN_VFI_CONTEXT – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::L2VPN_VFI_CONTEXT)>,
-    // L2VPN_XCONNECT_CONTEXT – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::L2VPN_XCONNECT_CONTEXT)>,
-    // L3VPN_ENCAPSULATION_IP_PROFILE – string reference
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::L2VPN_VFI_CONTEXT)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::L2VPN_XCONNECT_CONTEXT)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::L3VPN_ENCAPSULATION_IP_PROFILE)>,
-    // LINE_RANGE
-    OptionalValueField<std::pair<uint16_t, uint16_t> CONFIG_INDEX_ARG(Global::LINE_RANGE)>,
-    // LINE_AUX, LINE_CONSOLE, LINE_VTY – uint16 references
+    ValueField<std::pair<uint16_t, uint16_t> CONFIG_INDEX_ARG(Global::LINE_RANGE)>,
     OwnedListField<EmptyRegistry, uint16_t CONFIG_INDEX_ARG(Global::LINE_AUX)>,
     OwnedListField<EmptyRegistry, uint16_t CONFIG_INDEX_ARG(Global::LINE_CONSOLE)>,
     OwnedListField<EmptyRegistry, uint16_t CONFIG_INDEX_ARG(Global::LINE_VTY)>,
-    // LOGGING – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::LOGGING)>,
-    // LOGIN
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::LOGGING)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_BLOCK_FOR_TIME)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_BLOCK_FOR_ATTEMPTS)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_BLOCK_FOR_WITHIN)>,
@@ -773,92 +694,61 @@ using GlobalRegistry = SubRegistry<Global,
     AtomicField<bool CONFIG_INDEX_ARG(Global::LOGIN_ON_SUCCESS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::LOGIN_ON_SUCCESS_LOG)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::LOGIN_ON_SUCCESS_LOG_EVERY)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_QUITE_MODE_ACCESS_CLASS)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_STRING_NAME)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_STRING_LINE)>,
-    // MLS
+    ValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_QUITE_MODE_ACCESS_CLASS)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_STRING_NAME)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::LOGIN_STRING_LINE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::MLS_RP_IP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::MLS_RP_IP_INPUT_ACL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::MLS_RP_IP_ROUTE_MAP)>,
-    // MLS_RP_NDE_ADDRESS – ipv4
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::MLS_RP_NDE_ADDRESS)>,
-    // MONITOR_EVENT_TRACE – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::MONITOR_EVENT_TRACE)>,
-    // MPLS – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::MPLS)>,
-    // NETCONF
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::NETCONF_FORMAT)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::MONITOR_EVENT_TRACE)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::MPLS)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::NETCONF_FORMAT)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::NETCONF_LOCKTIME)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::NETCONF_MAX_MESSAGE)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::NETCONF_MAX_SESSIONS)>,
-    // NTP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::NTP)>,
-    // OBJECT_GROUP_SECURITY – string reference
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::NTP)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::OBJECT_GROUP_SECURITY)>,
-    // PASSWORD
     AtomicField<bool CONFIG_INDEX_ARG(Global::PASSWORD_ENCRYPTION_AES)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::PASSWORD_LOGGING)>,
-    // POLICY_MAP – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::POLICY_MAP)>,
-    // PRIVILEGED – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::PRIVILEGED)>,
-    // QOS
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::POLICY_MAP)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::PRIVILEGED)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::QOS_POLICE_ORDER_PARENT_FIRST)>,
     AtomicField<int CONFIG_INDEX_ARG(Global::QOS_SHAME_TIMER)>, // 1 or 4
-    // ROUTE_MAP – string reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_MAP)>,
-    // ROUTE_TAG_LIST – string reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_TAG_LIST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::ROUTE_TAG_NOTATION_DOTTED_DECIMAL)>,
-    // SAMPLER – string reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SAMPLER)>,
-    // SASL_PROFILE – string reference
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SASL_PROFILE)>,
-    // SCRIPTING
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_ENCDIR)>,
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_INIT)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_ENCDIR)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_INIT)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_LOW_MEMORY)>,
-    // SECURITY
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::SECURITY_AUTH_FAILURE_RATE_THRESHOLD)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::SECURITY_AUTH_FAILURE_RATE_THRESHOLD_LOG)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::SECURITY_PASSWORDS_MIN_LENGTH)>,
-    // SERVICE – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::SERVICE)>,
-    OptionalValueField<std::string CONFIG_INDEX_ARG(Global::SERVICE_POLICY_TYPE_CONTROL)>,
-    // SNMP
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::SERVICE)>,
+    ValueField<std::string CONFIG_INDEX_ARG(Global::SERVICE_POLICY_TYPE_CONTROL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::SNMP_IFMIB_IFALIAS_LONG)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::SNMP_IFMIB_IFINDEX_PERSIST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::SNMP_IFMIB_TRAP_THROTTLE)>,
-    // SNMP_MIB – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::SNMP_MIB)>,
-    // SNMP_SERVER – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::SNMP_SERVER)>,
-    // STANDBY
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::SNMP_MIB)>,
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::SNMP_SERVER)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::STANDBY_BFD_ALL_INTERFACES)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::STANDBY_REDIRECTS)>,
-    // TACACS_SERVER – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::TACACS_SERVER)>,
-    // TIME_RANGE – string reference
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::TACACS_SERVER)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::TIME_RANGE)>,
-    // TRACK_OBJECT – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::TRACK_OBJECT)>,
-    // TRACK_RESOLUTION
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::TRACK_OBJECT)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_BGP)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_EIGRP)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_OSPF)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::TRACK_RESOLUTION_IP_ROUTE_STATIC)>,
-    // USERNAME – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::USERNAME)>,
-    // VRF
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::USERNAME)>,
     OwnedListField<VrfRegistry, std::string CONFIG_INDEX_ARG(Global::VRF_CONFIGS)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::VRF_LIST)>,
-    // VRF_SELECTION – incomplete
-    ValueField<Incomplete CONFIG_INDEX_ARG(Global::VRF_SELECTION)>,
-    // WARM REBOOT
+    ListField<Incomplete CONFIG_INDEX_ARG(Global::VRF_SELECTION)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::WARM_REBOOT)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::WARM_REBOOT_COUNT)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Global::WARM_REBOOT_UPTIME)>,
-    // XCONNECT
     AtomicField<bool CONFIG_INDEX_ARG(Global::XCONNECT_LOGGING_PSEUDOWIRE_STATUS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::XCONNECT_LOGGING_REDUNDANCY)>
 >;

@@ -18,25 +18,25 @@ namespace cli
 bool InterfaceIPv6Ospf_Area_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6Ospf_Area = commandAdder<InterfaceContext,
     InterfaceIPv6Ospf_Area_Handler,
-    ARG, "area"_tok, ARG, ARG_REST
+    ARG, "area"_tok
 >;
 
 bool InterfaceIPv6Ospf_Authentication_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6Ospf_Authentication = commandAdder<InterfaceContext,
     InterfaceIPv6Ospf_Authentication_Handler,
-    "authentication"_tok, ARG_REST
+    "authentication"_tok
 >;
 
 bool InterfaceIPv6Ospf_Encryption_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6Ospf_Encryption = commandAdder<InterfaceContext,
     InterfaceIPv6Ospf_Encryption_Handler,
-    "encryption"_tok, ARG_REST
+    "encryption"_tok
 >;
 
 bool InterfaceIPv6Ospf_Neighbor_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6Ospf_Neighbor = commandAdder<InterfaceContext,
     InterfaceIPv6Ospf_Neighbor_Handler,
-    "neighbor"_tok, ARG_REST
+    "neighbor"_tok
 >;
 
 /**

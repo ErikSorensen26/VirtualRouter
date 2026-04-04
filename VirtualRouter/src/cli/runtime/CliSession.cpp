@@ -436,7 +436,6 @@ private:
         static const std::regex hostnameRx  { R"(^[A-Za-z0-9]([A-Za-z0-9\-\.]*[A-Za-z0-9])?$)" };
         static const std::regex nameRx      { R"(^[A-Za-z0-9\-]+$)" };
         static const std::regex passwordRx  { R"(^[ -~]+$)" };
-        static const std::regex interfaceRx { R"(^[A-Za-z]+[0-9\/\:]+$)" };
         static const std::regex filenameRx  { R"(^[A-Za-z0-9_\-\.\/]+$)" };
         static const std::regex communityRx { R"(^[0-9]+:[0-9]+$)" };
         static const std::regex wordRx      { R"(^[A-Za-z0-9_\-\.\/]+$)" };
@@ -447,7 +446,6 @@ private:
             { "context", &nameRx }, { "vdpn-group", &nameRx },
             { "password", &passwordRx }, { "secret", &passwordRx }, { "key-string", &passwordRx },
             { "encryption type", &passwordRx },
-            { "input", &interfaceRx }, { "output", &interfaceRx },
             { "filename", &filenameRx }, { "flash", &filenameRx }, { "tftp", &filenameRx },
             { "dir", &filenameRx }, { "view", &filenameRx },
             { "community", &communityRx }, { "as number", &communityRx }
@@ -746,7 +744,6 @@ bool CliSession::executeCommand(std::string& command)
 {
     isModeChanged = false;
     isExitCommand = false;
-    isList        = false;
     textLine      = false;
     execution.getContext().negate   = false;
     execution.getContext().defaulted = false;
@@ -991,14 +988,14 @@ bool CliSession::handlePagination(char nextch)
             }
         }
 
-        Color color;
+        /*Color color;
         switch (cmd.support)
         {
             case Com::Support::SUPPORTED:  color = Color::WHITE;  break;
             case Com::Support::PARTIAL:    color = Color::YELLOW; break;
             default:                       color = Color::RED;    break;
-        }
-        controller.print(display, color);
+        }*/
+        controller.print(display);
     }
 
     if (paginationList.size() > pageSize)

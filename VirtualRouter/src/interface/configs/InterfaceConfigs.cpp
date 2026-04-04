@@ -33,6 +33,7 @@ InterfaceConfigs::InterfaceConfigs(interface::Interface& iface, InterfaceType ty
     syncSecondaryIP();
     syncLocalLink();
     syncIPv6();
+    syncDhcpv6();
 }
 
 InterfaceConfigs::~InterfaceConfigs()
@@ -51,7 +52,7 @@ void InterfaceConfigs::syncMac()
 
 void InterfaceConfigs::syncPrimaryIP()
 {
-    // TODO
+    // TODO: include dhcp, clientid, hostname
 }
 
 void InterfaceConfigs::syncSecondaryIP()
@@ -69,6 +70,10 @@ void InterfaceConfigs::syncIPv6()
     // TODO
 }
 
+void InterfaceConfigs::syncDhcpv6()
+{
+    // TODO
+}
 
 uint8_t* InterfaceConfigs::getMac(uint8_t* mac)
 {
@@ -270,6 +275,12 @@ bool InterfaceConfigs::IPv4State::comparePrimaryAddress(const uint8_t* ip)
 bool InterfaceConfigs::IPv4State::comparePrimaryAddress(types::IPv4Address ip)
 {
     return address.load(std::memory_order_relaxed) == ip.addr;
+}
+
+bool InterfaceConfigs::IPv4State::comparePrimaryPrefix(types::IPv4Prefix prefix)
+{
+    return address.load(std::memory_order_relaxed) == prefix.addr &&
+           mask.load(std::memory_order_relaxed) == prefix.prefixLength;
 }
 
 // IPV6

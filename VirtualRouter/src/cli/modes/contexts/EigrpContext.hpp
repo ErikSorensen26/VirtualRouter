@@ -8,9 +8,10 @@
 
 #include "ContextBase.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
+#include "cli/runtime/Token.hpp"
 
 /// @brief Convenience macro for EIGRP command handler parameter lists.
-#define EIGRP_PARAMS EigrpContext& ctx, const std::vector<std::string>& args
+#define EIGRP_PARAMS EigrpContext& ctx, const std::vector<std::span<cli::Token>>& segs
 
 namespace routing::eigrp { class Eigrp; class EigrpNamed; }
 

@@ -17,7 +17,7 @@ namespace cli
 bool RouterEigrpClassic_AddressFamilyVrf_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_AddressFamilyVrf = commandAdder<EigrpContext,
     RouterEigrpClassic_AddressFamilyVrf_Handler,
-    "address-family"_tok, "ipv4"_tok, "vrf"_tok, ARG
+    "address-family"_tok, "ipv4"_tok, "vrf"_tok
 >;
 
 //bool RouterEigrp_AddressFamilyVrfUnicast_Handler(EIGRP_PARAMS) {} //TODO
@@ -33,19 +33,19 @@ using RouterEigrpClassic_EigrpLogNeighborChanges = commandAdder<EigrpContext,
 bool RouterEigrpClassic_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_EigrpLogNeighborWarnings = commandAdder<EigrpContext,
     RouterEigrpClassic_EigrpLogNeighborWarnings_Handler,
-    "eigrp"_tok, "log-neighbor-warnings"_tok, ARG_REST
+    "eigrp"_tok, "log-neighbor-warnings"_tok
 >;
 
 bool RouterEigrpClassic_EigrpRouterId_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_EigrpRouterId = commandAdder<EigrpContext,
     RouterEigrpClassic_EigrpRouterId_Handler,
-    "eigrp"_tok, "router-id"_tok, ARG_REST
+    "eigrp"_tok, "router-id"_tok
 >;
 
 bool RouterEigrpClassic_EigrpStub_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_EigrpStub = commandAdder<EigrpContext,
     RouterEigrpClassic_EigrpStub_Handler,
-    "eigrp"_tok, "stub"_tok, ARG_REST
+    "eigrp"_tok, "stub"_tok
 >;
 
 bool RouterEigrpClassic_Exit_Handler(EIGRP_PARAMS);
@@ -57,31 +57,31 @@ using RouterEigrpClassic_Exit = commandAdder<EigrpContext,
 bool RouterEigrpClassic_MetricWeights_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_MetricWeights = commandAdder<EigrpContext,
     RouterEigrpClassic_MetricWeights_Handler,
-    "metric"_tok, "weights"_tok, ARG_REST
+    "metric"_tok, "weights"_tok
 >;
 
 bool RouterEigrpClassic_Neighbor_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_Neighbor = commandAdder<EigrpContext,
     RouterEigrpClassic_MetricWeights_Handler,
-    "neighbor"_tok, ARG, ARG_REST
+    "neighbor"_tok
 >;
 
 bool RouterEigrpClassic_Network_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_Network = commandAdder<EigrpContext,
     RouterEigrpClassic_Network_Handler,
-    "network"_tok, ARG, ARG_REST
+    "network"_tok
 >;
 
 bool RouterEigrpClassic_PassiveInterface_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_PassiveInterface = commandAdder<EigrpContext,
     RouterEigrpClassic_PassiveInterface_Handler,
-    "passive-interface"_tok, ARG, ARG
+    "passive-interface"_tok
 >;
 
 bool RouterEigrpClassic_TimersGracefulRestart_Handler(EIGRP_PARAMS);
 using RouterEigrpClassic_TimersGracefulRestart = commandAdder<EigrpContext,
     RouterEigrpClassic_TimersGracefulRestart_Handler,
-    "timers"_tok, "graceful-restart"_tok, ARG_REST
+    "timers"_tok, "graceful-restart"_tok
 >;
 
 /**

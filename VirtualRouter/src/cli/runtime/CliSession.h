@@ -12,7 +12,7 @@
 
 #include "Console.h"
 #include "cli/modes/Mode.hpp"
-#include "cli/execution/ExecutionContext.hpp"
+//#include "cli/execution/ExecutionContext.hpp"
 
 namespace core { class VirtualRouter; }
 namespace interface { class Interface; }
@@ -132,8 +132,6 @@ public:
 
     // PUBLIC STATE (read by command handlers after execution)
 
-    float interfaceID        = 0.f;   ///< Numeric suffix of the current interface (e.g. 0.1 for Gi0/1).
-    bool  isList             = false; ///< Set when the last command was a list-type entry (e.g. `ip route`).
     bool  textLine           = false; ///< Set when the last command contained a LINE-pattern token.
     bool  isModeChanged      = false; ///< Set when the last command caused a mode transition.
 
@@ -216,7 +214,7 @@ private:
 
     // SESSION-LEVEL STATE
 
-    cli::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
+    //cli::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
 
     const nlohmann::ordered_json* workingDirectory = nullptr; ///< Current command-tree array for the active mode.
 
@@ -245,7 +243,7 @@ bool CliSession::changeMode(Args&&... args)
 {
     std::span<const std::string_view> path = getPath(T);
     if (!setCommandDirectory(path)) return false;
-    execution.changeMode<T>(std::forward<Args>(args)...);
+    //execution.changeMode<T>(std::forward<Args>(args)...);
     return true;
 }
 

@@ -91,9 +91,9 @@ using OspfAreaRegistry = SubRegistry<OspfArea,
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_NO_REDISTRIBUTION)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_ALWAYS_TRANSLATE)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfArea::NSSA_SUPPRESS_FA)>,
-    ValueField<std::vector<std::tuple<types::IPPrefix, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(OspfArea::RANGE),
+    ListField<std::vector<std::tuple<types::IPPrefix, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(OspfArea::RANGE),
         OspfAreaSycnRanges>,
-    ValueField<std::vector<std::tuple<>> CONFIG_INDEX_ARG(OspfArea::VIRTUAL_LINKS)> // TODO:
+    ListField<std::vector<std::tuple<>> CONFIG_INDEX_ARG(OspfArea::VIRTUAL_LINKS)> // TODO:
 >;
 
 enum class Ospf
@@ -253,11 +253,11 @@ using OspfRegistry = SubRegistry<Ospf,
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::OPAQUE)>, // TODO:
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::TRANSIT)>, // TODO: // virtual link
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::DOMAIN_ID)>, // TODO:
-    ValueField<std::vector<uint32_t> CONFIG_INDEX_ARG(Ospf::SECONDARY_DOMAIN_ID)>, // TODO:
+    ListField<std::vector<uint32_t> CONFIG_INDEX_ARG(Ospf::SECONDARY_DOMAIN_ID)>, // TODO:
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::DEFAULT_ORIGINATE_ALWAYS)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::DEFAULT_ORIGINATE_METRIC)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::DEFAULT_ORIGINATE_METRIC_TYPE)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Ospf::DEFAULT_ORIGINATE_ROUTE_MAP)>, // TODO:
+    ListField<std::string CONFIG_INDEX_ARG(Ospf::DEFAULT_ORIGINATE_ROUTE_MAP)>, // TODO:
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::DEFAULT_METRIC)>, // XXX: REDISTRIBUTION
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::DISCARD_INTERNAL)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Ospf::DISCARD_INTERNAL_DISTANCE)>,
@@ -295,15 +295,15 @@ using OspfRegistry = SubRegistry<Ospf,
     OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Ospf::MAX_LSA_RESET_TIME)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::MAX_LSA_WARNING_ONLY)>, // XXX:
     AtomicField<uint8_t CONFIG_INDEX_ARG(Ospf::MAXIMUM_PATHS)>,
-    ValueField<std::vector<uint32_t> CONFIG_INDEX_ARG(Ospf::MPLS_LDP_AREAS)>, // TODO:
-    ValueField<std::vector<uint32_t> CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_AREAS)>, // TODO:
-    ValueField<std::vector<std::tuple<uint32_t, uint32_t>> CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_INTERFACES)>, // TODO:
-    ValueField<std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_MESH_GROUP)>, // TODO:
+    ListField<std::vector<uint32_t> CONFIG_INDEX_ARG(Ospf::MPLS_LDP_AREAS)>, // TODO:
+    ListField<std::vector<uint32_t> CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_AREAS)>, // TODO:
+    ListField<std::vector<std::tuple<uint32_t, uint32_t>> CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_INTERFACES)>, // TODO:
+    ListField<std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_MESH_GROUP)>, // TODO:
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_MULTICAST_INACT)>, // TODO:
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::MPLS_TRAF_ENG_ROUTER_ID)>, // TODO:
-    ValueField<std::vector<std::tuple<types::IPPrefix, uint32_t>> CONFIG_INDEX_ARG(Ospf::NETWORKS),
+    ListField<std::vector<std::tuple<types::IPPrefix, uint32_t>> CONFIG_INDEX_ARG(Ospf::NETWORKS),
         OspfSyncNetworks>,
-    ValueField<std::vector<std::tuple<
+    ListField<std::vector<std::tuple<
         types::IPAddress,
         std::optional<uint16_t>,
         std::optional<bool>,
@@ -314,7 +314,7 @@ using OspfRegistry = SubRegistry<Ospf,
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::NSF_CISCO_HELPER)>, // TODO:
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::NSF_STRICT_CHECKING)>, // TODO:
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::HELLO_QUEUE_DEPTH)>, // XXX:
-    ValueField<std::string CONFIG_INDEX_ARG(Ospf::PREFIX_PRIORITY_ROUTE_MAP)>, // TODO:
+    ListField<std::string CONFIG_INDEX_ARG(Ospf::PREFIX_PRIORITY_ROUTE_MAP)>, // TODO:
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::UPDATE_QUEUE_DEPTH)>, // XXX:
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::ROUTER_ID)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::SHUTDOWN)>, // XXX:
@@ -322,12 +322,12 @@ using OspfRegistry = SubRegistry<Ospf,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Ospf::FLOOD_PACING)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Ospf::LSA_GROUP_PACING)>,
     AtomicField<uint8_t CONFIG_INDEX_ARG(Ospf::RETRANSMISSION_PACING)>,
-    ValueField<std::string CONFIG_INDEX_ARG(Ospf::TABLE_MAP)>, // TODO:
+    ListField<std::string CONFIG_INDEX_ARG(Ospf::TABLE_MAP)>, // TODO:
     AtomicField<bool CONFIG_INDEX_ARG(Ospf::TABLE_MAP_FILTER)>, // TODO:
     AtomicField<uint8_t CONFIG_INDEX_ARG(Ospf::PRIORITY)>,
     OptionalAtomicField<std::nullptr_t CONFIG_INDEX_ARG(Ospf::REDISTRIBUTE)>, // TODO:
     OptionalAtomicField<std::nullptr_t CONFIG_INDEX_ARG(Ospf::SNMP)>, // TODO:
-    ValueField<std::vector<std::tuple<types::IPPrefix, bool, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(Ospf::SUMMARY_ADDRESS),
+    ListField<std::vector<std::tuple<types::IPPrefix, bool, bool, std::optional<uint32_t>>> CONFIG_INDEX_ARG(Ospf::SUMMARY_ADDRESS),
         OspfSyncSummaries>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::LSA_THROTTLE_DELAY)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Ospf::LSA_THROTTLE_HOLD)>,

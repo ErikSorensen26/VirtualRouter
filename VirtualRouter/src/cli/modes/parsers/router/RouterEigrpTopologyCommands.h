@@ -26,19 +26,19 @@ using RouterEigrpTopology_AutoSummary = commandAdder<EigrpContext,
 bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_DefaultMetric = commandAdder<EigrpContext,
     RouterEigrpTopology_DefaultMetric_Handler,
-    "default-metric"_tok, ARG_REST
+    "default-metric"_tok
 >;
 
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_Distance = commandAdder<EigrpContext,
     RouterEigrpTopology_Distance_Handler,
-    "distance"_tok, ARG_REST
+    "distance"_tok
 >;
 
 bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_EigrpEventLogSize = commandAdder<EigrpContext,
     RouterEigrpTopology_EigrpEventLogSize_Handler,
-    "eigrp"_tok, "event-log-size"_tok, ARG_REST
+    "eigrp"_tok, "event-log-size"_tok
 >;
 
 bool RouterEigrpTopology_Exit_Handler(EIGRP_PARAMS);
@@ -50,31 +50,31 @@ using RouterEigrpTopology_Exit = commandAdder<EigrpContext,
 bool RouterEigrpTopology_MaximumPaths_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_MaximumPaths = commandAdder<EigrpContext,
     RouterEigrpTopology_MaximumPaths_Handler,
-    "maximum-paths"_tok, ARG_REST
+    "maximum-paths"_tok
 >;
 
 bool RouterEigrpTopology_MetricMaximumHops_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_MetricMaximumHops = commandAdder<EigrpContext,
     RouterEigrpTopology_MetricMaximumHops_Handler,
-    "metric"_tok, "maximum-hops"_tok, ARG_REST
+    "metric"_tok, "maximum-hops"_tok
 >;
 
 bool RouterEigrpTopology_ActiveTime_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_ActiveTime = commandAdder<EigrpContext,
     RouterEigrpTopology_ActiveTime_Handler,
-    "timers"_tok, "active-time"_tok, ARG_REST
+    "timers"_tok, "active-time"_tok
 >;
 
 bool RouterEigrpTopology_TrafficShare_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_TrafficShare = commandAdder<EigrpContext,
     RouterEigrpTopology_TrafficShare_Handler,
-    "traffic-share"_tok, ARG_REST
+    "traffic-share"_tok
 >;
 
 bool RouterEigrpTopology_Variance_Handler(EIGRP_PARAMS);
 using RouterEigrpTopology_Variance = commandAdder<EigrpContext,
     RouterEigrpTopology_Variance_Handler,
-    "variance"_tok, ARG_REST
+    "variance"_tok
 >;
 
 /**

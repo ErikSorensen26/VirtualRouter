@@ -80,95 +80,26 @@ struct StartupFiles
  */
 struct Com 
 {
-    std::string name;                ///< Human-readable command keyword.
-    std::string description;         ///< Description of semantic behavior.
-    std::vector<std::string> properties; ///< Arbitrary property labels (e.g., feature flags).
-
     /**
-     * @brief Enumerates supported levels of functionality for a given command.
-     * @ingroup CLI_RUNTIME
+     * @brief Enumerates match states when comparing commands.
      *
-     * Used by platform-capability systems to mark incomplete or partially-implemented commands.
+     * Used by @ref CliSession to indicate how the command matches to user input.
      */
-    enum class Support
+    enum class Match
     {
-        SUPPORTED,      ///< Fully implemented.
-        PARTIAL,        ///< Implemented with limitations.
-        NO_SUPPORT      ///< Disabled or unavailable.
+        NONE,
+        FULL,
+        PARTIAL
     };
-    Support support = Support::NO_SUPPORT; ///< Implementation capability indicator.
-};
 
-/**
- * @brief Encapsulates local computations for volatile parameter normalization.
- *
- * Many router commands include volatile operands (IP addresses, masks, wildcard identifiers,
- * interface-unique strings, etc.). These are not stable keys and must be normalized before
- * insertion into the configuration tree.
- *
- * ### Architectural Role
- * - Provides classification helpers for volatile values.
- * - Used primarily during configuration building and recovery.
- *
- * ### Memory & Ownership Model
- * - Contains POD values only.
- * - No dynamic allocation; lifetime is stack-managed.
- *
- * ### Threading Model
- * - Not thread-safe; intended for single-threaded CLI and parsing contexts.
- *
- * ### Invariants
- * - Returned strings must remain deterministic for identical input sequences.
- * - No external state beyond stored POD members.
- */
-class volatileValueUsage 
-{
-public:
+    std::string_view name{};          ///< Human-readable command keyword.
+    std::string_view description{};   ///< Description of semantic behavior.
+    std::vector<std::string_view> properties{}; ///< Arbitrary property labels (e.g., feature flags).
+    Match match = Match::NONE;        ///< Indicates if the match was a partial.
 
-    /**
-     * @brief Returns stringified numeric value.
-     * @ingroup CLI_RUNTIME
-     */
-    std::string getValue() { return std::to_string(value); }
-
-    /**
-     * @brief Returns stringified IPv4 address value.
-     */
-    std::string getIp() { return std::to_string(ip); }
-
-    /**
-     * @brief Returns stringified IPv6 value.
-     */
-    std::string getIpv6() { return std::to_string(ipv6); }
-
-    /**
-     * @brief Returns stringified subnet mask value.
-     */
-    std::string getSubnet() { return std::to_string(subnet); }
-
-    /**
-     * @brief Returns stringified MAC address value.
-     */
-    std::string getMac() { return std::to_string(mac); }
-
-    /**
-     * @brief Returns stringified XYZ coordinate.
-     */
-    std::string getXYZ() { return std::to_string(xyz); }
-
-    /**
-     * @brief Returns stringified volatile identifier.
-     */
-    std::string getID() { return std::to_string(id); }
-
-private:
-    unsigned int value = 0;   ///< Generic volatile scalar.
-    unsigned int ip = 0;      ///< IPv4 volatile value normalized as integer.
-    unsigned int ipv6 = 0;    ///< IPv6 volatile placeholder.
-    unsigned int subnet = 0;  ///< Subnet mask volatile value.
-    unsigned int mac = 0;     ///< MAC volatile value.
-    unsigned int xyz = 0;     ///< Coordinate volatile value.
-    unsigned int id = 0;      ///< Generic ID value.
+    bool isExact() { return match == Match::FULL; }
+    bool isPartial() { return match == Match::FULL || match == Match::PARTIAL; }
+    bool isNone() { return !isPartial(); }
 };
 
 /**
@@ -317,155 +248,6 @@ public:
     std::vector<std::string> recoverConfigs(nlohmann::ordered_json* json = nullptr);
 
     /**
-     * @brief Recursively walks the configuration tree to extract CLI command sequences.
-     *
-     * ### Behavior
-     * - Interprets volatile values.
-     * - Detects mode context branches (`commands`).
-     * - Appends fully-formed commands at recursion terminals.
-     *
-     * ### Invariants
-     * - Must not mutate configuration state.
-     *
-     * @param currentNode JSON node under traversal.
-     * @param command Accumulated command tokens.
-     * @param commandList Receiver for output commands.
-     */
-    void processConfigs(nlohmann::ordered_json* currentNode, std::vector<std::string> command, std::vector<std::string>& commandList);
-
-    /**
-     * @brief Applies a CLI command into the configuration tree with schema-aware ordering
-     * and optional mode transitions.
-     *
-     * ### Behavior
-     * - Normalizes volatile operands.
-     * - Creates missing nodes, respecting schema-defined lexical order.
-     * - Detects duplicate entries for list-style commands.
-     * - Updates `modeConfig.configNode` when entering or exiting mode contexts.
-     *
-     * ### Mode Interaction
-     * - Disallowed in non-configuration modes (userExec / privilegedExec).
-     * - Optionally pushes/pops mode history.
-     *
-     * ### Preconditions
-     * - `modeConfig.configNode` must reference a valid JSON node.
-     *
-     * @return True if the command was successfully applied.
-     */
-    bool saveCommand(std::vector<std::string>& oldCommand,
-                     std::vector<std::string>& command,
-                     ModeConfig& modeConfig,
-                     bool changeMode,
-                     bool exitMode,
-                     bool isList);
-
-    /**
-     * @brief Inserts a command (main or subcommand) into its parent node while honoring
-     * schema-specified ordering rules.
-     *
-     * ### Architectural Role
-     * - Ensures deterministic serialization regardless of insertion sequence.
-     * - Defines CLI recovery determinism across versions and platforms.
-     *
-     * @param parentNode JSON node into which keys are inserted.
-     * @param modeConfig Mode configuration containing active schema.
-     * @param mainCommand Main command keyword.
-     * @param subCommand Optional subordinate command keyword.
-     * @param isListed Whether the command represents a list-style node.
-     */
-    void insertOrdered(nlohmann::ordered_json* parentNode,
-                       ModeConfig& modeConfig,
-                       const std::string& mainCommand,
-                       const std::string& subCommand = "",
-                       bool isListed = false);
-
-    /**
-     * @brief Serializes in-memory configuration to disk as formatted JSON.
-     *
-     * ### Behavior
-     * - Produces human-readable configuration captures.
-     * - Overwrites existing startup config.
-     *
-     * @return Success indicator from filesystem implementation.
-     */
-    bool saveConfig();
-
-    /**
-     * @brief Removes a configuration entry from the JSON tree.
-     *
-     * Although the implementation currently acts as a stub, its architectural role is:
-     *
-     * ### Responsibilities
-     * - Perform inverse of `saveCommand`.
-     * - Support `no ...` style CLI semantics.
-     * - Maintain schema ordering after removal.
-     *
-     * @return True if deletion succeeded.
-     */
-    bool deleteConfig(ModeConfig& modeConfig,
-                      std::vector<std::string>& oldCommand,
-                      std::vector<std::string>& command,
-                      bool isList);
-
-    /**
-     * @brief Identifies whether a command token represents a volatile operand.
-     *
-     * Volatile operands cannot be used as stable JSON keys and require normalization:
-     * IPv4, IPv6, masks, wildcard IDs, MACs, generic `<val-range>` parameters, etc.
-     *
-     * @param str Candidate command token.
-     * @return True if the token must be normalized.
-     */
-    bool isVolatile(const std::string& str);
-
-    /**
-     * @brief Converts a token sequence into a canonical space-delimited CLI expression.
-     *
-     * Used during recovery and as part of the debugging pipeline.
-     */
-    std::string joinCommand(const std::vector<std::string>& command);
-
-    /**
-     * @brief Resolves a normalized volatile key name based on current JSON siblings.
-     *
-     * ### Behavior
-     * - Guarantees uniqueness by appending numeric suffixes.
-     * - Determines semantic class (IP, mask, wildcard, ID, etc.).
-     *
-     * @return Normalized volatile key safe for use as a JSON object key.
-     */
-    std::string getVolatileValue(std::string& type,
-                                 std::string& value,
-                                 nlohmann::ordered_json& currentJson);
-
-    /**
-     * @brief Resolves volatile key names using already-observed volatile operands.
-     *
-     * Used during deduplication detection in list-style configuration modes.
-     *
-     * @return Stable JSON key for volatile operand.
-     */
-    std::string getVolatileValue(std::string& type,
-                                 std::string value,
-                                 std::vector<std::string> volatileValues);
-
-    /**
-     * @brief Computes the base volatile key type for a token (e.g., ip, mask, wildcard).
-     *
-     * Does not guarantee uniqueness—that is handled by the overloads of `getVolatileValue`.
-     */
-    std::string getVolatileValueHelper(std::string& command, std::string& com);
-
-    /**
-     * @brief Selects an alternate configuration schema based on active CLI mode.
-     *
-     * This drives mode-specific command ordering (e.g., interface mode, routing-protocol mode).
-     *
-     * @param mode Target mode name.
-     */
-    void setSchemaMode(const std::string& mode);
-
-    /**
      * @brief Emits the current configuration tree for diagnostic purposes.
      *
      * Typically suppressed in production; used heavily during development and automated tests.
@@ -477,17 +259,8 @@ public:
     json configSchema;                      ///< Active schema controlling command ordering.
     FileSystem& fileSystem;                ///< Filesystem interface used for persistence.
     hardware::HardwareManager hwManager;    ///< Hardware abstraction subsystem.
-	
+
 private:
-    std::vector<std::string> volatileInputs{
-        "WORD", "LINE", "A.B.C.D", "X:X:X:X::X",
-        "X:X:X:X::X/<0-128>", "H.H.H", "x/y/z"
-    }; ///< Known volatile patterns.
-
-    std::vector<std::string> inputs{
-        "ip", "subnet", "id", "value", "ipv6", "mac"
-    }; ///< Stable volatile classifier names.
-
     std::vector<std::string> recover; ///< Holds recovered CLI commands.
 };
 }

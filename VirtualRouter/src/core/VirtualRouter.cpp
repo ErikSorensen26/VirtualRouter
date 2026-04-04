@@ -90,21 +90,21 @@ bool VirtualRouter::calculateRID(uint32_t& rid)
 }
 
 // Eigrp Autonomous Systems
-routing::eigrp::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint32_t id)
+routing::eigrp::EigrpAutonomousSystem* VirtualRouter::addEigrpAutonomousSystem(uint16_t id)
 {
     if (eigrpList.contains(id))
         return nullptr;
     return &eigrpList[id];
 }
 
-routing::eigrp::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint32_t id)
+routing::eigrp::EigrpAutonomousSystem* VirtualRouter::getEigrpAutonomousSystem(uint16_t id)
 {
     if (auto it = eigrpList.find(id); it != eigrpList.end())
         return &it->second;
     return nullptr;
 }
 
-bool VirtualRouter::removeEigrpAutonomousSystem(uint32_t id)
+bool VirtualRouter::removeEigrpAutonomousSystem(uint16_t id)
 {
     if (eigrpList.find(id) != eigrpList.end())
     {

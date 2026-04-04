@@ -116,7 +116,7 @@ using OspfInterfaceRegistry = SubRegistry<OspfInterface,
     OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterface::HELLO_MULTIPLIER),
         OspfInterfaceSyncTimers>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::MTU_IGNORE)>,
-    ValueField<std::vector<std::tuple<
+    ListField<std::vector<std::tuple<
         types::IPAddress,
         std::optional<uint16_t>,
         std::optional<bool>,
@@ -161,9 +161,9 @@ enum class OspfInterfaceIPSec : uint8_t
 using OspfInterfaceIPSecRegistry = SubRegistry<OspfInterfaceIPSec,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceIPSec::SPI)>, // TODO:
     OptionalAtomicField<ospf::IPsecAuthType CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_TYPE)>, // TODO:
-    ValueField<std::array<uint8_t, 40> CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_KEY)>, // TODO:
+    ListField<std::array<uint8_t, 40> CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_KEY)>, // TODO:
     OptionalAtomicField<ospf::IPsecEncryptType CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_TYPE)>, // TODO:
-    ValueField<std::array<uint8_t, 64> CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_KEY)> // TODO:
+    ListField<std::array<uint8_t, 64> CONFIG_INDEX_ARG(OspfInterfaceIPSec::ENCRYPTION_KEY)> // TODO:
 >;
 
 enum class OspfInterfaceBase : uint8_t
@@ -210,7 +210,7 @@ using OspfInterfaceBaseRegistry = SubRegistry<OspfInterfaceBase,
     OptionalAtomicField<uint64_t CONFIG_INDEX_ARG(OspfInterfaceBase::AUTHENTICATION_KEY)>,
     ReferenceContainer<OspfInterfaceIPSecRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::IPSEC)>,
     OptionalAtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::LLS)>,
-    ValueField<std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>> CONFIG_INDEX_ARG(OspfInterfaceBase::MESSAGE_DIGEST_KEYS),
+    ListField<std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>> CONFIG_INDEX_ARG(OspfInterfaceBase::MESSAGE_DIGEST_KEYS),
         OspfInterfaceBaseUpdateDigestKey>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::MESSAGE_DIGEST_ENCRYPT)>,
     AtomicField<bool CONFIG_INDEX_ARG(OspfInterfaceBase::PREFIX_SUPPRESSION),

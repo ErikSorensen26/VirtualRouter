@@ -11,6 +11,7 @@
 #ifndef EXECUTOR_HPP
 #define EXECUTOR_HPP
 
+#include "cli/runtime/Token.hpp"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/ContextBase.hpp"
 
@@ -125,21 +126,19 @@ public:
      * can be called without virtual dispatch.
      *
      * @tparam Parser  The concrete `CliModeParser` whose `execute` to call.
-     * @param ctx  Base-class context reference; down-cast to `Parser::ContextType`.
-     * @param b    Begin iterator of the token range.
-     * @param e    End iterator of the token range.
+     * @param ctx     Base-class context reference; down-cast to `Parser::ContextType`.
+     * @param tokens  Flat token span from `CliSession::executeModeParser`.
      * @return True if the command was recognized and executed.
      */
     template <typename Parser>
     static bool executeThunk(
         cli::ContextBase& ctx,
-        std::vector<std::string>::const_iterator b,
-        std::vector<std::string>::const_iterator e)
+        std::span<Token> tokens)
     {
         using Ctx = typename Parser::ContextType;
         static_assert(std::is_base_of_v<cli::ContextBase, Ctx>,
                       "Parser::ContextType must derive from cli::ContextBase");
-        return Parser::execute(static_cast<Ctx&>(ctx), b, e);
+        return Parser::execute(static_cast<Ctx&>(ctx), tokens);
     }
 
     /**
@@ -198,17 +197,18 @@ public:
     }
 
     /**
-     * @brief Dispatches a tokenized command to the active mode parser.
-     * @param tokens  Whitespace-split command tokens from the session input.
+     * @brief Dispatches a flat token span to the active mode parser.
+     *
+     * Passes the token span directly to the active mode's `executeThunk`.
+     * Segmentation is handled inside each `Command::tryExecute` so that
+     * `SubCommand` can forward the raw span without re-segmenting.
+     *
+     * @param tokens  Flat token span from `CliSession::executeModeParser`.
      * @return True if the command was recognized and executed successfully.
      */
-    bool execute(const std::vector<std::string>& tokens)
+    bool execute(std::span<Token> tokens)
     {
-        return executeFn[head](
-            *modeConfig[head],
-            tokens.begin(),
-            tokens.end()
-        );
+        return executeFn[head](*modeConfig[head], tokens);
     }
 
     /**
@@ -229,8 +229,7 @@ private:
     /// @brief Signature of a type-erased parser dispatch function.
     using ExecuteFn = bool (*)(
         cli::ContextBase&,
-        std::vector<std::string>::const_iterator,
-        std::vector<std::string>::const_iterator
+        std::span<Token>
     );
 
     // PRIVATE HELPERS

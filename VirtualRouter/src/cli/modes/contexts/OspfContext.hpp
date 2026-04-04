@@ -7,9 +7,10 @@
 #define OSPF_CONTEXT_HPP
 
 #include "ContextBase.hpp"
+#include "cli/runtime/Token.hpp"
 
 /// @brief Convenience macro for OSPF command handler parameter lists.
-#define OSPF_PARAMS OspfContext& ctx, const std::vector<std::string>& args
+#define OSPF_PARAMS OspfContext& ctx, const std::vector<std::span<cli::Token>>& segs
 
 namespace routing::ospf { class OspfProcess; }
 

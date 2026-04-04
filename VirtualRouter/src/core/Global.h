@@ -217,16 +217,15 @@ public:
      * Interfaces represent IO endpoints (AF_PACKET, dummy, tunnel, VLAN interfaces, etc.)
      * and contain protocol stacks, ARP/NDP tables, hardware state, and configuration.
      *
-     * @param interfaceType  Type of interface (Ethernet, Loopback, Tunnel, etc.)
+     * @param interfaceKey   Type of interface (Ethernet, Loopback, Tunnel, etc.)
      * @param hwInfo         Low-level hardware metadata (ifindex, MAC, driver type)
-     * @param interfaceId    User-visible ID (GigabitEthernet0/1 → 0.1)
      * @param debug          Enables verbose hardware-layer logging for this interface.
      *
      * @return Pointer to created interface::Interface on success, or nullptr if key already exists.
      *
      * @thread_safety Protected internally by interfaceMutex.
      */
-    interface::Interface* addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug = false);
+    interface::Interface* addInterface(interface::InterfaceKey interfaceKey, const hardware::HwIfaceInfo& hwInfo, bool debug = false);
 
     /**
      * @brief Retrieve an interface by its computed key.

@@ -7,11 +7,12 @@
 #define INTERFACE_CONTEXT_HPP
 
 #include "ContextBase.hpp"
+#include "cli/runtime/Token.hpp"
 
 namespace interface { class Interface; }
 
 /// @brief Convenience macro for Interface Configuration command handler parameter lists.
-#define INTERFACE_PARAMS InterfaceContext& ctx, const std::vector<std::string>& args
+#define INTERFACE_PARAMS InterfaceContext& ctx, const std::vector<std::span<cli::Token>>& segs
 
 namespace cli
 {

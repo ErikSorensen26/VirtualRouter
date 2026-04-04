@@ -68,7 +68,7 @@ enum class NdpBase
 CONFIG_DEFAULT_TABLE(NDP_BASE_DEFAULTS);
 
 using NdpBaseRegistry = SubRegistry<NdpBase,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpBase::CACHE_EXPIRE)>,
+    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::CACHE_EXPIRE)>,
     AtomicField<bool CONFIG_INDEX_ARG(NdpBase::CACHE_REFRESH)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpBase::CACHE_INTERFACE_LIMIT)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE)>,

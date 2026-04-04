@@ -38,25 +38,25 @@ using InterfaceIPv6ND_AutoconfigPrefix = commandAdder<InterfaceContext,
 bool InterfaceIPv6ND_CacheExpire_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_CacheExpire = commandAdder<InterfaceContext,
     InterfaceIPv6ND_CacheExpire_Handler,
-    "cache"_tok, "expire"_tok, ARG_REST
+    "cache"_tok, "expire"_tok
 >;
 
 bool InterfaceIPv6ND_CacheInterfaceLimit_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_CacheInterfaceLimit = commandAdder<InterfaceContext,
     InterfaceIPv6ND_CacheInterfaceLimit_Handler,
-    "cache"_tok, "interface-limit"_tok, ARG_REST
+    "cache"_tok, "interface-limit"_tok
 >;
 
 bool InterfaceIPv6ND_DADAttempts_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_DADAttempts = commandAdder<InterfaceContext,
     InterfaceIPv6ND_DADAttempts_Handler,
-    "dad"_tok, "attempts"_tok, ARG_REST
+    "dad"_tok, "attempts"_tok
 >;
 
 bool InterfaceIPv6ND_DADTime_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_DADTime = commandAdder<InterfaceContext,
     InterfaceIPv6ND_DADTime_Handler,
-    "dad"_tok, "time"_tok, ARG_REST
+    "dad"_tok, "time"_tok
 >;
 
 bool InterfaceIPv6ND_DestinationGuard_Handler(INTERFACE_PARAMS);
@@ -80,7 +80,7 @@ using InterfaceIPv6ND_NaGlean = commandAdder<InterfaceContext,
 bool InterfaceIPv6ND_NsInterval_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_NsInterval = commandAdder<InterfaceContext,
     InterfaceIPv6ND_NsInterval_Handler,
-    "ns-interval"_tok, ARG_REST
+    "ns-interval"_tok
 >;
 
 bool InterfaceIPv6ND_NudIGP_Handler(INTERFACE_PARAMS);
@@ -92,7 +92,7 @@ using InterfaceIPv6ND_NudIGP = commandAdder<InterfaceContext,
 bool InterfaceIPv6ND_NudRetry_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_NudRetry = commandAdder<InterfaceContext,
     InterfaceIPv6ND_NudRetry_Handler,
-    "nud"_tok, "retry"_tok, ARG_REST
+    "nud"_tok, "retry"_tok
 >;
 
 bool InterfaceIPv6ND_OtherConfigFlag_Handler(INTERFACE_PARAMS);
@@ -112,13 +112,13 @@ using InterfaceIPv6ND_RaHopLimitUnspecified = commandAdder<InterfaceContext,
 bool InterfaceIPv6ND_RaInterval_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_RaInterval = commandAdder<InterfaceContext,
     InterfaceIPv6ND_RaInterval_Handler,
-    "ra"_tok, "interval"_tok, ARG_REST
+    "ra"_tok, "interval"_tok
 >;
 
 bool InterfaceIPv6ND_RaLifetime_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_RaLifetime = commandAdder<InterfaceContext,
     InterfaceIPv6ND_RaLifetime_Handler,
-    "ra"_tok, "lifetime"_tok, ARG_REST
+    "ra"_tok, "lifetime"_tok
 >;
 
 bool InterfaceIPv6ND_RaMtuSuppression_Handler(INTERFACE_PARAMS);
@@ -142,13 +142,13 @@ using InterfaceIPv6ND_RaSuppressionAll = commandAdder<InterfaceContext,
 bool InterfaceIPv6ND_ReachableTime_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_ReachableTime = commandAdder<InterfaceContext,
     InterfaceIPv6ND_ReachableTime_Handler,
-    "reachable-time"_tok, ARG_REST
+    "reachable-time"_tok
 >;
 
 bool InterfaceIPv6ND_RouterPreference_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6ND_RouterPreference = commandAdder<InterfaceContext,
     InterfaceIPv6ND_RouterPreference_Handler,
-    "router-preference"_tok, ARG_REST
+    "router-preference"_tok
 >;
 
 /**

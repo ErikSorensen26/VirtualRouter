@@ -9,30 +9,141 @@
 #include "interface/Interface.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
+namespace
+{
+config::InterfaceRegistry& getIfaceConfigs(interface::Interface& iface)
+{
+    return iface.configs.getConfigs();
+}
+}
+
 namespace cli
 {
 bool InterfaceIP_AddressSet_Handler(INTERFACE_PARAMS)
 {
-    if (!ctx.negate)
+    auto& ifcfg = getIfaceConfigs(ctx.currentInterface);
+
+    if (ctx.negate || ctx.defaulted)
     {
-	if (args[0] != "dhcp")
-	{
-	    types::IPv4Address ipAddress; cli::utils::extractIPv4Address(args[0], ipAddress);
-	    types::IPv4Address _mask; cli::utils::extractIPv4Address(args[1], _mask);
-	    uint8_t subnet = static_cast<uint8_t>(__builtin_popcount(_mask.addr));
-	    ctx.currentInterface.setIPv4(types::IPv4Prefix(ipAddress.addr, subnet));
-	}
-	else
-	{
-	    if (!ctx.currentInterface.dhcp)
-	    {
-		ctx.currentInterface.dhcp = new services::dhcp::DhcpClient(&ctx.currentInterface);
-	    }
-	}
+        if (args.empty())
+        {
+            ifcfg.get<config::Interface::IP_ADDRESS>().unset();
+            return true;
+        }
+        else if (args[0] == "dhcp")
+        {
+            if (args.size() == 1)
+            {
+                ifcfg.get<config::Interface::IP_ADDRESS_DHCP>().unset();
+                return true;
+            }
+            else
+            {
+                return false;
+                // TODO handle client id and hostname
+            }
+        }
+        else if (args[0] == "pool")
+        {
+            return false;
+            // TODO pool
+        }
+        else if (args.size() >= 2)
+        {
+            types::IPv4Prefix prefix;
+            if (cli::utils::extractIPv4Prefix(args[0], args[1], prefix))
+            {
+                auto& primary = ifcfg.get<config::Interface::IP_ADDRESS>();
+                auto& secondary = ifcfg.get<config::Interface::IP_ADDRESS_SECONDARY>();
+
+                if (primary.hasValue() && primary.load() == prefix)
+                {
+                    primary.unset();
+                    return true;
+                }
+
+                secondary.withWrite([&](std::vector<std::tuple<types::IPv4Prefix, std::string>>& ips) {
+                    auto it = std::find_if(ips.begin(), ips.end(), [&](const auto& ip) {
+                        return std::get<0>(ip) == prefix;
+                    });
+
+                    for (size_t i = 2; i < args.size(); ++i)
+                    {
+                        if (args[i] == "vrf")
+                            if (args[++i] != std::get<1>(*it))
+                                return;
+                    }
+                    ips.erase(it);
+                });
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (args[0] == "dhcp")
+    {
+        if (auto& primary = ifcfg.get<config::Interface::IP_ADDRESS>(); primary.hasValue())
+            primary.unset();
+        ifcfg.get<config::Interface::IP_ADDRESS_DHCP>().set(true);
+
+        for (int i = 1; i < args.size(); i++)
+        {
+            if (args[i] == "client-id")
+            {
+                // TODO
+                i += 2;
+                return false;
+            }
+            if (args[i] == "hostname")
+            {
+                // TODO
+                ++i;
+                return false;
+            }
+        }
+    }
+    else if (args[0] == "pool")
+    {
+        // TODO
+        return false;
+    }
+    else if (args.size() >= 2)
+    {
+        types::IPPrefix prefix; 
+        cli::utils::extractIPv4Prefix(args[0], args[1], prefix);
+        if (args.size() == 2)
+        {
+            if (auto& dhcp = ifcfg.get<config::Interface::IP_ADDRESS_DHCP>(); dhcp.load())
+                dhcp.set(false);
+            ifcfg.get<config::Interface::IP_ADDRESS>().set(prefix);
+            return true;
+        }
+        else
+        {
+            std::string vrf = "default";
+            for (size_t i = 2; i < args.size(), i++)
+            {
+            }
+            if (auto& dhcp = ifcfg.get<config::Interface::IP>) 
+        }
+        ctx.currentInterface.setIPv4()
+    }
+
+
+    if (args[0] != "dhcp")
+    {
+        types::IPv4Address ipAddress; cli::utils::extractIPv4Address(args[0], ipAddress);
+        types::IPv4Address _mask; cli::utils::extractIPv4Address(args[1], _mask);
+        uint8_t subnet = static_cast<uint8_t>(__builtin_popcount(_mask.addr));
+        ctx.currentInterface.setIPv4(types::IPv4Prefix(ipAddress.addr, subnet));
     }
     else
     {
-	ctx.currentInterface.removeIPv4();
+        if (!ctx.currentInterface.dhcp)
+        {
+            ctx.currentInterface.dhcp = new services::dhcp::DhcpClient(&ctx.currentInterface);
+        }
     }
     return true;
 }

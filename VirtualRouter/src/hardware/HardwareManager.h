@@ -103,15 +103,6 @@ public:
     void addHardware(const std::string& hwConfigFile, cli::FileSystem& fileSystem, bool enableDummies = false);
 
     /**
-     * @brief Returns the kernel interface index for the given type and slot number.
-     *
-     * @param type   Logical interface type (Ethernet, Loopback, …).
-     * @param index  Zero-based slot index within @p type's list.
-     * @return Kernel @c ifindex, or `0` if not found.
-     */
-    uint32_t getInterface(interface::InterfaceType type, int index);
-
-    /**
      * @brief Associates a logical interface with its hardware info record.
      *
      * Called by @ref core::Global when a new @ref interface::Interface is created.
@@ -139,7 +130,7 @@ public:
      * @param index  Kernel @c ifindex.
      * @return Pointer to the record, or @c nullptr if unknown.
      */
-    const HwIfaceInfo* getHwInfo(uint32_t index) const;
+    const HwIfaceInfo* getHwInfo(interface::InterfaceKey key) const;
 
     /** @brief Returns the full map of all physical interfaces grouped by type. */
     const std::unordered_map<interface::InterfaceType, std::vector<uint32_t>>& getPhysicalInterfaces() { return physicalInterfaces; }

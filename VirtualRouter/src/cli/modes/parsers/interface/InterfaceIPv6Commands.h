@@ -21,61 +21,61 @@ namespace cli
 bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_AddressSet = commandAdder<InterfaceContext,
     InterfaceIPv6_AddressSet_Handler,
-    "address"_tok, ARG_REST
+    "address"_tok
 >;
 
 bool InterfaceIPv6_AuthenticationKeyChain_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_AuthenticationKeyChain = commandAdder<InterfaceContext,
     InterfaceIPv6_AuthenticationKeyChain_Handler,
-    "authentication"_tok, "key-chain"_tok, ARG_REST
+    "authentication"_tok, "key-chain"_tok
 >;
 
 bool InterfaceIPv6_AuthenticationMode_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_AuthenticationMode = commandAdder<InterfaceContext,
     InterfaceIPv6_AuthenticationMode_Handler,
-    "authentication"_tok, "mode"_tok, ARG_REST
+    "authentication"_tok, "mode"_tok
 >;
 
 bool InterfaceIPv6_BandwidthPercent_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_BandwidthPercent = commandAdder<InterfaceContext,
     InterfaceIPv6_BandwidthPercent_Handler,
-    "bandwidth-percent"_tok, ARG_REST
+    "bandwidth-percent"_tok
 >;
 
 bool InterfaceIPv6_DampeningChange_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_DampeningChange = commandAdder<InterfaceContext,
     InterfaceIPv6_DampeningChange_Handler,
-    "dampening-change"_tok, ARG_REST
+    "dampening-change"_tok
 >;
 
 bool InterfaceIPv6_DampeningInterval_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_DampeningInterval = commandAdder<InterfaceContext,
     InterfaceIPv6_DampeningInterval_Handler,
-    "dampening-interval"_tok, ARG_REST
+    "dampening-interval"_tok
 >;
 
 bool InterfaceIPv6_EigrpAs_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_EigrpAs = commandAdder<InterfaceContext,
     InterfaceIPv6_EigrpAs_Handler,
-    "eigrp"_tok, ARG
+    "eigrp"_tok
 >;
 
 bool InterfaceIPv6_HelloInterval_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_HelloInterval = commandAdder<InterfaceContext,
     InterfaceIPv6_HelloInterval_Handler,
-    "hello-interval"_tok, ARG_REST
+    "hello-interval"_tok
 >;
 
 bool InterfaceIPv6_HoldTime_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_HoldTime = commandAdder<InterfaceContext,
     InterfaceIPv6_HoldTime_Handler,
-    "hold-time"_tok, ARG_REST
+    "hold-time"_tok
 >;
 
 bool InterfaceIPv6_Mtu_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_Mtu = commandAdder<InterfaceContext,
     InterfaceIPv6_Mtu_Handler,
-    "mtu"_tok, ARG_REST
+    "mtu"_tok
 >;
 
 using InterfaceIPv6_ND = subAdder<InterfaceContext,
@@ -86,7 +86,7 @@ using InterfaceIPv6_ND = subAdder<InterfaceContext,
 bool InterfaceIPv6_NextHopSelf_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_NextHopSelf = commandAdder<InterfaceContext,
     InterfaceIPv6_NextHopSelf_Handler,
-    "next-hop-self"_tok, ARG_REST
+    "next-hop-self"_tok
 >;
 
 bool InterfaceIPv6_NdpRedirects_Handler(INTERFACE_PARAMS);
@@ -103,13 +103,13 @@ using InterfaceIPv6_Ospf = subAdder<InterfaceContext,
 bool InterfaceIPv6_SplitHorizon_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_SplitHorizon = commandAdder<InterfaceContext,
     InterfaceIPv6_SplitHorizon_Handler,
-    "split-horizon"_tok, ARG_REST
+    "split-horizon"_tok
 >;
 
 bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS);
 using InterfaceIPv6_SummaryAddress = commandAdder<InterfaceContext,
     InterfaceIPv6_SummaryAddress_Handler,
-    "summary-address"_tok, ARG_REST
+    "summary-address"_tok
 >;
 
 /**

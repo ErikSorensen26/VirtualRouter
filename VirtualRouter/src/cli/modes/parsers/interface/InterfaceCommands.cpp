@@ -11,15 +11,15 @@ namespace cli
 {
 bool Interface_Exit_Handler(INTERFACE_PARAMS)
 {
-    UNUSED(args);
-	ctx.terminal.exitMode<CliMode::GlobalConfiguration>(ctx.terminal.engine.global, *ctx.currentInterface.getVRF());
+    UNUSED(segs);
+    ctx.terminal.exitMode<CliMode::GlobalConfiguration>(ctx.terminal.engine.global, *ctx.currentInterface.getVRF());
     return true;
 }
 
 bool Interface_Shutdown_Handler(INTERFACE_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentInterface.shutdown(!ctx.negate);
+    UNUSED(segs);
+    ctx.currentInterface.shutdown(!ctx.negate && !ctx.defaulted);
     return true;
 }
 }

@@ -19,7 +19,7 @@ namespace cli
 bool RouterEigrpAddressFamily_AfInterface_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_AfInterface = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_AfInterface_Handler,
-    "af-interface"_tok, ARG, ARG
+    "af-interface"_tok
 >;
 
 // RouterEigrpAddressFamily_AfInterfaceDefault_Handler(EIGRP_PARAMS) //TODO
@@ -27,13 +27,13 @@ using RouterEigrpAddressFamily_AfInterface = commandAdder<EigrpContext,
 bool RouterEigrpAddressFamily_EigrpDefaultRouteTag_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_EigrpDefaultRouteTag = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_EigrpDefaultRouteTag_Handler,
-    "eigrp"_tok, "default-route-tag"_tok, ARG_REST
+    "eigrp"_tok, "default-route-tag"_tok
 >;
 
 bool RouterEigrpAddressFamily_EigrpEventLogSize_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_EigrpEventLogSize = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_EigrpEventLogSize_Handler,
-    "eigrp"_tok, "event-log-size"_tok, ARG_REST
+    "eigrp"_tok, "event-log-size"_tok
 >;
 
 bool RouterEigrpAddressFamily_EigrpLogNeighborChanges_Handler(EIGRP_PARAMS);
@@ -45,19 +45,19 @@ using RouterEigrpAddressFamily_EigrpLogNeighborChanges = commandAdder<EigrpConte
 bool RouterEigrpAddressFamily_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_EigrpLogNeighborWarnings = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_EigrpLogNeighborWarnings_Handler,
-    "eigrp"_tok, "log-neighbor-warnings"_tok, ARG_REST
+    "eigrp"_tok, "log-neighbor-warnings"_tok
 >;
 
 bool RouterEigrpAddressFamily_EigrpRouterId_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_EigrpRouterId = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_EigrpRouterId_Handler,
-    "eigrp"_tok, "router-id"_tok, ARG_REST
+    "eigrp"_tok, "router-id"_tok
 >;
 
 bool RouterEigrpAddressFamily_EigrpStub_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_EigrpStub = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_EigrpStub_Handler,
-    "eigrp"_tok, "stub"_tok, ARG_REST
+    "eigrp"_tok, "stub"_tok
 >;
 
 // bool RouterEigrpAddressFamily_EigrpStubSite_Handler(EIGRP_PARAMS); //TODO
@@ -71,31 +71,31 @@ using RouterEigrpAddressFamily_Exit = commandAdder<EigrpContext,
 bool RouterEigrpAddressFamily_MaximumPrefix_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_MaximumPrefix = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_MaximumPrefix_Handler,
-    "maximum-prefix"_tok, ARG, ARG_REST
+    "maximum-prefix"_tok
 >;
 
 bool RouterEigrpAddressFamily_MetricRibScale_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_MetricRibScale = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_MetricRibScale_Handler,
-    "metric"_tok, "rib-scale"_tok, ARG_REST
+    "metric"_tok, "rib-scale"_tok
 >;
 
 bool RouterEigrpAddressFamily_MetricWeights_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_MetricWeights = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_MetricWeights_Handler,
-    "metric"_tok, "weights"_tok, ARG_REST
+    "metric"_tok, "weights"_tok
 >;
 
 bool RouterEigrpAddressFamily_Neighbor_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_Neighbor = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_Neighbor_Handler,
-    "neighbor"_tok, ARG, ARG_REST
+    "neighbor"_tok
 >;
 
 bool RouterEigrpAddressFamily_Network_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_Network = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_Network_Handler,
-    "network"_tok, ARG, ARG_REST
+    "network"_tok
 >;
 
 // bool RouterEigrpAddressFamily_Shutdown_Handler(EIGRP_PARAMS); //TODO
@@ -109,13 +109,13 @@ using RouterEigrpAddressFamily_SoftSia = commandAdder<EigrpContext,
 bool RouterEigrpAddressFamily_TimersGracefulRestart_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_TimersGracefulRestart = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_TimersGracefulRestart_Handler,
-    "timers"_tok, "graceful-restart"_tok, "purge-time"_tok, ARG_REST
+    "timers"_tok, "graceful-restart"_tok, "purge-time"_tok
 >;
 
 bool RouterEigrpAddressFamily_Topology_Handler(EIGRP_PARAMS);
 using RouterEigrpAddressFamily_Topology = commandAdder<EigrpContext,
     RouterEigrpAddressFamily_Topology_Handler,
-    "topology"_tok, ARG_REST
+    "topology"_tok
 >;
 
 /**

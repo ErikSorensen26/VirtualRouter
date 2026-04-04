@@ -1,16 +1,22 @@
 // Token.hpp
 
-// TODO finish doxy
-
 #ifndef TOKEN_HPP
 #define TOKEN_HPP
 
 #include <span>
 #include <vector>
-#include "CliUtils.h"
+#include <cstdint>
+#include <string_view>
 
 namespace cli
 {
+namespace utils
+{
+    bool isNumericRange(std::string_view);
+}
+constexpr uint64_t ARG = 0;
+
+
 /**
  * @brief Pattern category assigned to a token matched against a variable placeholder.
  *
@@ -31,7 +37,15 @@ enum class PatternKind
 };
 
 /**
- * TODO doxy comment
+ * @brief Maps a placeholder string from the command tree to its @ref PatternKind.
+ *
+ * Called during token resolution to classify whether a command-tree node is a
+ * user-supplied variable placeholder (e.g. `"A.B.C.D"`, `"LINE"`, `"<0-255>"`)
+ * or a fixed keyword. Returns @ref PatternKind::NONE for anything that does not
+ * match a known placeholder.
+ *
+ * @param p  Placeholder string exactly as it appears in the command tree.
+ * @return   The @ref PatternKind that matches @p p, or `PatternKind::NONE`.
  */
 static PatternKind matchVolatilePattern(std::string_view p)
 {
@@ -60,12 +74,22 @@ static PatternKind matchVolatilePattern(std::string_view p)
 struct Token
 {
     Token(std::string_view token, std::string_view pattern)
-        : value(token), pattern(matchVolatilePattern(pattern))
+        : hash(tokenHash(token)), value(token), pattern(matchVolatilePattern(pattern))
     {}
 
     Token(std::string_view token)
-        : value(token), pattern(PatternKind::NONE)
+        : hash(tokenHash(token)), value(token), pattern(PatternKind::NONE)
     {}
+
+    static constexpr uint64_t tokenHash(std::string_view sv)
+    {
+        uint64_t h = 0;
+        for (char c : sv) {
+            h = h * 31 + static_cast<uint64_t>(c);
+        }
+        if (h == 0) ++h;
+        return h;
+    }
 
     uint64_t hash;
     std::string_view value;
@@ -75,13 +99,40 @@ struct Token
     bool isPattern() const { return pattern != PatternKind::NONE; }
 
     operator std::string_view() const { return value; }
+    operator uint64_t() const { return hash; }
 };
 
 inline bool operator==(const Token& t, std::string_view s) { return t.value == s; }
 inline bool operator!=(const Token& t, std::string_view s) { return t.value != s; }
 
+inline bool operator==(const Token& t, uint64_t s) { return t.hash == s; }
+inline bool operator==(uint64_t s, const Token& t) { return t.hash == s; }
+inline bool operator!=(const Token& t, uint64_t s) { return t.hash != s; }
+inline bool operator!=(uint64_t s, const Token& t) { return t.hash != s; }
+
+inline Token* operator>>(const std::span<Token>& seg, size_t idx)
+{
+    if (idx >= seg.size()) return nullptr;
+    return &seg[idx];
+}
+
+
 /**
- * TODO finish doxy
+ * @brief Splits a flat token span into keyword-anchored segments.
+ *
+ * Each segment begins at a keyword token (non-pattern) and extends to include
+ * all immediately following pattern tokens. Leading pattern tokens (before the
+ * first keyword) are discarded. This mirrors how Cisco-style CLI pipelines
+ * separate sub-commands: the keyword is the command verb and any trailing
+ * pattern tokens are its arguments.
+ *
+ * @code
+ * // "ip address A.B.C.D A.B.C.D" produces two segments:
+ * //   ["ip"]  and  ["address", <ipv4>, <ipv4>]
+ * @endcode
+ *
+ * @param tokens  Flat span of resolved @ref Token objects from the parser.
+ * @return        Vector of sub-spans, each starting at a keyword token.
  */
 inline std::vector<std::span<Token>> segmentTokens(std::span<Token> tokens)
 {

@@ -97,16 +97,13 @@ void Global::reset()
 }
       
 // Interfaces
-interface::Interface* Global::addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug)
+interface::Interface* Global::addInterface(interface::InterfaceKey key, const hardware::HwIfaceInfo& hwInfo, bool debug)
 {
-    interface::InterfaceKey key(interfaceType, interfaceId);
     if (interfaceList.find(key) != interfaceList.end())
-    {
         return nullptr;
-    }
-    interface::InterfaceCreation iface = {interfaceType, interfaceId, *getRoutingInstance("default"), hwInfo, debug};
+    auto [type, id] = key.decode();
+    interface::InterfaceCreation iface = {type, id, *getRoutingInstance("default"), hwInfo, debug};
     interfaceList.emplace(key, iface);
-
     return &interfaceList.at(key);
 }
 

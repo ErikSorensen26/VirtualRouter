@@ -29,9 +29,10 @@ struct Entry
 template <typename ENUM, ENUM E>
 inline constexpr bool hasV = Entry<ENUM, E>::has;
 
-template <typename ENUM, ENUM E, typename T>
+template <typename T, auto E>
 constexpr T getV() noexcept
 {
+    using ENUM = decltype(E);
     static_assert(Entry<ENUM, E>::has, "No default exists for this enum entry.");
     return Entry<ENUM, E>::template get<T>();
 }
@@ -50,6 +51,39 @@ constexpr T getV() noexcept
 
 #define CONFIG_DEFAULT_TABLE(TABLE_MACRO) \
     TABLE_MACRO(CONFIG_DEFAULT_ROW)
+
+template <typename T>
+struct Strip
+{
+    using type = T;
+};
+
+template <typename T>
+struct Strip<T*>
+{
+    using type = typename Strip<T>::type;
+};
+
+template <typename T>
+struct Strip<T&>
+{
+    using type = typename Strip<T>::type;
+};
+
+template <typename T>
+struct Strip<T&&>
+{
+    using type = typename Strip<T>::type;
+};
+
+template <typename T>
+struct Strip<const T>
+{
+    using type = typename Strip<T>::type;
+};
+
+template <typename T>
+using DefType = typename Strip<T>::type;
 }
 
 #endif // REGISTRY_DEFAULT_TABLE_HPP

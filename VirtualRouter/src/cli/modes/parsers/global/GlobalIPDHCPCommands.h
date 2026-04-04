@@ -19,7 +19,7 @@ namespace cli
 bool GlobalIPDHCP_Binding_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_Binding = commandAdder<GlobalContext,
     GlobalIPDHCP_Binding_Handler,
-    "binding"_tok, ARG_REST
+    "binding"_tok
 >;
 
 bool GlobalIPDHCP_Bootp_Handler(GLOBAL_PARAMS);
@@ -43,25 +43,25 @@ using GlobalIPDHCP_ConflictResolution = commandAdder<GlobalContext,
 bool GlobalIPDHCP_DatabaseTimeout_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_DatabaseTimeout = commandAdder<GlobalContext,
     GlobalIPDHCP_DatabaseTimeout_Handler,
-    "database"_tok, ARG, "timeout"_tok, ARG_REST
+    "database"_tok, "timeout"_tok
 >;
 
 bool GlobalIPDHCP_DatabaseWrite_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_DatabaseWrite = commandAdder<GlobalContext,
     GlobalIPDHCP_DatabaseWrite_Handler,
-    "database"_tok, ARG, "write-delay"_tok, ARG_REST
+    "database"_tok, "write-delay"_tok
 >;
 
 bool GlobalIPDHCP_Debug_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_Debug = commandAdder<GlobalContext,
     GlobalIPDHCP_Debug_Handler,
-    "debug"_tok, ARG_REST
+    "debug"_tok
 >;
 
 bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS);
 using GlobalIPDHCP_ExcludedAddress = commandAdder<GlobalContext,
     GlobalIPDHCP_ExcludedAddress_Handler,
-    "excluded-address"_tok, ARG_REST
+    "excluded-address"_tok
 >;
 
 /**

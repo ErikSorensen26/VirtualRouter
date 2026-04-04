@@ -50,7 +50,7 @@ using PrivilegedExec_WriteMem = commandAdder<PrivilegedExecContext,
 bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS);
 using PrivilegedExec_TerminalWidth = commandAdder<PrivilegedExecContext,
     PrivilegedExec_TerminalWidth_Handler,
-    "terminal"_tok, "width"_tok, ARG
+    "terminal"_tok, "width"_tok
 >;
 
 /**

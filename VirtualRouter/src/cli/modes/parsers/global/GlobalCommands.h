@@ -23,7 +23,7 @@ namespace cli
 bool Global_Arp_Handler(GLOBAL_PARAMS);
 using Global_Arp = commandAdder<GlobalContext,
     Global_Arp_Handler,
-    "arp"_tok, ARG_REST
+    "arp"_tok
 >;
 
 bool Global_Exit_Handler(GLOBAL_PARAMS);
@@ -35,7 +35,7 @@ using Global_Exit = commandAdder<GlobalContext,
 bool Global_SetHostname_Handler(GLOBAL_PARAMS);
 using Global_SetHostname = commandAdder<GlobalContext,
     Global_SetHostname_Handler,
-    "hostname"_tok, ARG_REST
+    "hostname"_tok
 >;
 
 bool Global_End_Handler(GLOBAL_PARAMS);
@@ -57,25 +57,25 @@ using Global_IPv6 = subAdder<GlobalContext,
 bool Global_Interface_Handler(GLOBAL_PARAMS);
 using Global_Interface = commandAdder<GlobalContext,
     Global_Interface_Handler,
-    "interface"_tok, ARG, ARG
+    "interface"_tok
 >;
 
 bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS);
 using Global_RouterEIGRP = commandAdder<GlobalContext,
     Global_RouterEIGRP_Handler,
-    "router"_tok, "eigrp"_tok, ARG
+    "router"_tok, "eigrp"_tok
 >;
 
 bool Global_RouterOSPF_Handler(GLOBAL_PARAMS);
 using Global_RouterOSPF = commandAdder<GlobalContext,
     Global_RouterOSPF_Handler,
-    "router"_tok, "ospf"_tok, ARG
+    "router"_tok, "ospf"_tok
 >;
 
 bool Global_RouterBGP_Handler(GLOBAL_PARAMS);
 using Global_RouterBGP = commandAdder<GlobalContext,
     Global_RouterBGP_Handler,
-    "router"_tok, "bgp"_tok, ARG
+    "router"_tok, "bgp"_tok
 >;
 
 /**

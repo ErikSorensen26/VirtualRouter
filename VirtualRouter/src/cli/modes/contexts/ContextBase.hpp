@@ -17,6 +17,9 @@
 #ifndef CONTEXT_BASE_HPP
 #define CONTEXT_BASE_HPP
 
+/// @brief Silences unused-parameter warnings for command handler parameters.
+#define UNUSED(x) (void)(x)
+
 /// @brief Namespace enclosing all CLI subsystem types.
 namespace cli
 {

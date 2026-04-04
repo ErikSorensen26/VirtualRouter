@@ -19,7 +19,7 @@
  * @brief Typed configuration registry for all protocol scopes.
  *
  * The `config` namespace owns the entire compile-time registry infrastructure:
- * field types (@ref AtomicField, @ref ValueField, etc.), reference-counted
+ * field types (@ref AtomicField, @ref ListField, etc.), reference-counted
  * handles (@ref Reference), and the top-level allocation table
  * (@ref RegistryDatabase). Protocol processes receive a @ref Reference at
  * construction and never touch the database directly after that.
