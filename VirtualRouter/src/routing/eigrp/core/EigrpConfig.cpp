@@ -27,7 +27,7 @@ void EigrpConfig::addNetworkRange(const types::IPv4Prefix& newNetwork)
                       : (~0u >> newNetwork.prefixLength);
 
     bool added = false;
-    configs->get<config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+    configs.get<config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
         for (const auto& [a, w] : v)
             if (a == addr && w == wildcard) return;
         v.emplace_back(addr, wildcard);
@@ -48,7 +48,7 @@ void EigrpConfig::delNetworkRange(const types::IPv4Prefix& delNetwork)
                       : (~0u >> delNetwork.prefixLength);
 
     bool removed = false;
-    configs->get<config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+    configs.get<config::Eigrp::NETWORK>().withWrite([&](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
         auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
             return std::get<0>(t) == addr && std::get<1>(t) == wildcard;
         });
@@ -65,7 +65,7 @@ void EigrpConfig::delNetworkRange(const types::IPv4Prefix& delNetwork)
 bool EigrpConfig::isInNetworkRange(types::IPv4Address testIp) const
 {
     bool found = false;
-    configs->get<config::Eigrp::NETWORK>().withRead([&](const std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+    configs.get<config::Eigrp::NETWORK>().withRead([&](const std::vector<std::tuple<uint32_t, uint32_t>>& v) {
         for (const auto& [addr, wildcard] : v) {
             if ((testIp.addr & ~wildcard) == (addr & ~wildcard)) {
                 found = true;
@@ -78,7 +78,7 @@ bool EigrpConfig::isInNetworkRange(types::IPv4Address testIp) const
 
 void EigrpConfig::clearNetworks()
 {
-    configs->get<config::Eigrp::NETWORK>().withWrite([](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
+    configs.get<config::Eigrp::NETWORK>().withWrite([](std::vector<std::tuple<uint32_t, uint32_t>>& v) {
         v.clear();
     });
     base.getIfaceMgr().refreshInterfaceList();
@@ -96,7 +96,7 @@ void EigrpConfig::enableStub(bool isStub, bool advertiseConnected, bool advertis
 
 void EigrpConfig::setPassiveInterface(interface::InterfaceKey key, bool add)
 {
-    configs->get<config::Eigrp::PASSIVE_INTERFACES>().withWrite([&](std::vector<interface::InterfaceKey>& v) {
+    configs.get<config::Eigrp::PASSIVE_INTERFACES>().withWrite([&](std::vector<interface::InterfaceKey>& v) {
         if (add) {
             if (std::find(v.begin(), v.end(), key) == v.end())
                 v.push_back(key);
@@ -112,7 +112,7 @@ void EigrpConfig::setPassiveInterface(interface::InterfaceKey key, bool add)
 
 void EigrpConfig::enableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key)
 {
-    configs->get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
+    configs.get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
         for (const auto& [ip, k] : v)
             if (ip == neighborIp && k == key) return;
         v.emplace_back(neighborIp, key);
@@ -125,7 +125,7 @@ void EigrpConfig::enableUnicastPeer(const types::IPAddress& neighborIp, interfac
 
 void EigrpConfig::disableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key)
 {
-    configs->get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
+    configs.get<config::Eigrp::NEIGHBOR>().withWrite([&](std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
         v.erase(std::remove_if(v.begin(), v.end(), [&](const auto& t) {
             return std::get<0>(t) == neighborIp && std::get<1>(t) == key;
         }), v.end());
@@ -139,7 +139,7 @@ void EigrpConfig::disableUnicastPeer(const types::IPAddress& neighborIp, interfa
 bool EigrpConfig::isPassive(interface::InterfaceKey key) const
 {
     bool found = false;
-    configs->get<config::Eigrp::PASSIVE_INTERFACES>().withRead([&](const std::vector<interface::InterfaceKey>& v) {
+    configs.get<config::Eigrp::PASSIVE_INTERFACES>().withRead([&](const std::vector<interface::InterfaceKey>& v) {
         found = std::find(v.begin(), v.end(), key) != v.end();
     });
     return found;
@@ -148,7 +148,7 @@ bool EigrpConfig::isPassive(interface::InterfaceKey key) const
 std::unordered_set<types::IPAddress> EigrpConfig::getUnicastNeighbors(interface::InterfaceKey key) const
 {
     std::unordered_set<types::IPAddress> result;
-    configs->get<config::Eigrp::NEIGHBOR>().withRead([&](const std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
+    configs.get<config::Eigrp::NEIGHBOR>().withRead([&](const std::vector<std::tuple<types::IPAddress, interface::InterfaceKey>>& v) {
         for (const auto& [ip, ifaceKey] : v)
             if (ifaceKey == key)
                 result.insert(ip);
@@ -175,7 +175,7 @@ KValue EigrpConfig::getKValues() const
 {
     auto& reg = configs.get();
     return KValue(
-        reg.get<config::Eigrp::WEIGTH_K1>().load(),
+        reg.get<config::Eigrp::WEIGHT_K1>().load(),
         reg.get<config::Eigrp::WEIGHT_K2>().load(),
         reg.get<config::Eigrp::WEIGHT_K3>().load(),
         reg.get<config::Eigrp::WEIGHT_k4>().load(),

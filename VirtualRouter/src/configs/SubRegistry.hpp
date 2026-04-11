@@ -32,12 +32,16 @@
 #include <cstddef>
 #include <mutex>
 #include <optional>
+#include <typeinfo>
+#include <stdexcept>
 
 #include "RegistryTypes.hpp"
 #include "RegistryDefaultTable.hpp"
 
 namespace config
 {
+enum class Global;
+
 /**
  * @brief Convert enum value to zero-based index for array/tuple access.
  *
@@ -46,6 +50,19 @@ namespace config
  */
 template <auto E>
 inline constexpr size_t toIndex = static_cast<size_t>(E);
+
+/**
+ * @brief Empty base tag that identifies a type as a `SubRegistry` specialization.
+ *
+ * All `SubRegistry<ENUM, Fields...>` instances inherit from this struct so that
+ * the `IsSubRegistry` concept can detect them without depending on the full
+ * template parameter list.
+ */
+struct SubRegistryFlag {};
+
+template <typename T>
+concept IsSubRegistry = 
+    std::derived_from<T, SubRegistryFlag>;
 
 /**
  * @class SubRegistry
@@ -76,7 +93,7 @@ inline constexpr size_t toIndex = static_cast<size_t>(E);
  * @see RegistryTypes.hpp, RegistryDefaultTable.hpp
  */
 template <typename ENUM, typename... Fields>
-class SubRegistry
+class SubRegistry : public SubRegistryFlag
 {
 public:
     using type    = ENUM;
@@ -84,6 +101,9 @@ public:
     // Meta tuple: used ONLY for compile-time checks / type indexing.
     /// Type alias for the field tuple (for type checking only, not storage).
     using FieldTuple = std::tuple<Fields...>;
+
+    template <ENUM i>
+    using FieldTypeAt = std::tuple_element_t<static_cast<size_t>(i), FieldTuple>;
     
     /// Type alias for storage: optional wrapper around each field (allows lazy init).
     using StorageTuple = std::tuple<std::optional<Fields>...>;
@@ -103,6 +123,17 @@ public:
         "Tuple order must match enum field indicies"
     );
 #endif
+    SubRegistry() requires std::is_same_v<ENUM, config::Global>
+        : ctxProvider(),
+          fields(),
+          parent(this),
+          parentType(typeid(*this)),
+          base(nullptr)
+    {
+        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
 
     /**
      * @brief Gets the context provider for fields that require external data.
@@ -110,39 +141,6 @@ public:
      * @return Reference to the context provider shared with parent (if masked).
      */
     ContextProvider& context() noexcept { return ctxProvider; }
-
-    /**
-     * @brief Constructs a root registry with no parent.
-     *
-     * Initializes all fields with default values from RegistryDefaultTable.
-     * No parent masking is applied.
-     */
-    explicit SubRegistry() noexcept
-        : ctxProvider(),
-          fields(),
-          base(nullptr)
-    {
-        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
-        installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
-    }
-
-    /**
-     * @brief Constructs a child registry that inherits from a parent.
-     *
-     * All fields are initialized and then masked with parent field values.
-     * Child can override parent values on a per-field basis.
-     *
-     * @param parent Reference to parent SubRegistry of the same type.
-     */
-    SubRegistry(SubRegistry& parent)
-        : ctxProvider(parent.ctxProvider),
-          fields(),
-          base(&parent)
-    {
-        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
-        installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
-        applyMask(base, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
-    }
 
     /**
      * @brief Gets a field by enum constant (mutable).
@@ -188,14 +186,95 @@ public:
      *
      * @param parent Pointer to parent SubRegistry (or nullptr to remove masking).
      */
-    void setMask(SubRegistry* parent)
+    void setMask(SubRegistry* mask)
     {
-        applyMask(parent, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        applyMask(mask, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
+    template <typename P>
+    P& resolveParent()
+    {
+        if (parentType != typeid(P))
+            throw std::runtime_error("Parent type mismatch");
+        return *static_cast<P*>(parent);
     }
 
     std::mutex mu; ///< Synchronization mutex for concurrent field access.
 
+    /**
+     * @brief Automatically initialises every unbound @ref RegistryContainer field.
+     *
+     * Called by @ref RegistryDatabase immediately after a new slot is constructed
+     * so that each `RegistryContainer<U>` receives its own registry slot without
+     * requiring a separate `emplace()` call at the use site.
+     *
+     * @tparam Entries  Pack of all entry types registered in the database.
+     * @param  db       The owning database used to allocate child slots.
+     */
+    template <typename... Entries>
+    void initContainers(RegistryDatabase<Entries...>& db)
+    {
+        initContainersImpl(db, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
 private:
+    template <typename T, typename K CONFIG_INDEX_PARAM, auto H>
+    friend class OwnedListField;
+
+    /**
+     * @brief Constructs a root registry with no parent.
+     *
+     * Initializes all fields with default values from RegistryDefaultTable.
+     * 
+     * @param parent Pointer to parent SubRegistry.
+     */
+    template <typename P>
+    explicit SubRegistry(P& p) noexcept
+        : ctxProvider(),
+          fields(),
+          parent(&p),
+          parentType(typeid(p)),
+          base(nullptr)
+    {
+        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
+    /**
+     * @brief Constructs a child registry that inherits from a parent.
+     *
+     * All fields are initialized and then masked with parent field values.
+     * Child can override parent values on a per-field basis.
+     *
+     * @param parent Pointer to parent SubRegistry.
+     * @param mask Reference to inherited SubRegistry of the same type.
+     */
+    template <typename P>
+    SubRegistry(P& p, SubRegistry& mask)
+        : ctxProvider(mask.ctxProvider),
+          fields(),
+          parent(&p),
+          parentType(typeid(p)),
+          base(&mask)
+    {
+        constructFields(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+        applyMask(base, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
+    }
+
+    template <typename... Entries, size_t... I>
+    void initContainersImpl(RegistryDatabase<Entries...>& db, std::index_sequence<I...>)
+    {
+        (initContainerOne<I>(db), ...);
+    }
+
+    template <size_t I, typename... Entries>
+    void initContainerOne(RegistryDatabase<Entries...>& db)
+    {
+        using F = std::tuple_element_t<I, FieldTuple>;
+        if constexpr (IsRefContainer<F>)
+            db.autoInit(*std::get<I>(fields));
+    }
 
     /// Creates constructor arguments for a field (context/mutex/parent as needed).
     template <typename F>
@@ -280,14 +359,14 @@ private:
 
     /// Applies masking to all fields from a parent registry.
     template <size_t... I>
-    void applyMask(SubRegistry* parent, std::index_sequence<I...>) noexcept
+    void applyMask(SubRegistry* mask, std::index_sequence<I...>) noexcept
     {
-        (applyMaskOne<I>(parent), ...);
+        (applyMaskOne<I>(mask), ...);
     }
 
     /// Applies masking to one field if it supports the setMask() interface.
     template <size_t I>
-    void applyMaskOne(SubRegistry* parent) noexcept
+    void applyMaskOne(SubRegistry* mask) noexcept
     {
         using Field = std::tuple_element_t<I, FieldTuple>;
 
@@ -296,7 +375,7 @@ private:
         if constexpr (requires(Field& f, const Field* p) { f.setMask(p); })
         {
             const Field* parentField =
-                parent ? std::get<I>(parent->fields).operator->() : nullptr;
+                parent ? std::get<I>(mask->fields).operator->() : nullptr;
 
             local.setMask(parentField);
         }
@@ -307,6 +386,10 @@ private:
     
     /// Optional storage for all fields (allows lazy initialization).
     StorageTuple fields;
+
+    /// Parent pointer, must point to the parent object
+    void* const parent = nullptr;
+    const std::type_info& parentType;
     
     /// Pointer to parent registry for field inheritance (nullptr if root).
     SubRegistry* base{nullptr};

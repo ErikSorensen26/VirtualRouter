@@ -12,144 +12,60 @@
 #define INTERFACE_IPV6_ND_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/modes/contexts/InterfaceContext.hpp"
+#include "interface/configs/InterfaceType.hpp" // IWYU pragma: keep
+#include "cli/modes/contexts/Context.hpp"
+#include "configs/registry/interface/NdpRegistry.h"
+
+#define NDP_PARAMS DEFINE_PARAMS(config::NdpRegistry)
 
 namespace cli
 {
-bool InterfaceIPv6ND_AdvertisementInterval_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_AdvertisementInterval = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_AdvertisementInterval_Handler,
-    "advertisement-interval"_tok
->;
+bool InterfaceIPv6ND_AdvertisementInterval_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_AutoconfigDefRoute_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_AutoconfigPrefix_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_CacheExpire_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_CacheInterfaceLimit_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_DADAttempts_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_DADTime_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_DestinationGuard_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_ManagedConfigFlag_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_NaGlean_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_NsInterval_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_NudIGP_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_NudRetry_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_OtherConfigFlag_Handler(NDP_PARAMS);
+// bool InterfaceIPv6ND_Prefix_Handler(NDP_PARAMS) {} //TODO
+bool InterfaceIPv6ND_RaHopLimitUnspecified_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_RaInterval_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_RaLifetime_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_RaMtuSuppression_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_RaSuppression_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_RaSuppressionAll_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_ReachableTime_Handler(NDP_PARAMS);
+bool InterfaceIPv6ND_RouterPreference_Handler(NDP_PARAMS);
 
-bool InterfaceIPv6ND_AutoconfigDefRoute_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_AutoconfigDefRoute = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_AutoconfigDefRoute_Handler,
-    "autoconfig"_tok, "default-route"_tok
->;
-
-bool InterfaceIPv6ND_AutoconfigPrefix_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_AutoconfigPrefix = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_AutoconfigPrefix_Handler,
-    "autoconfig"_tok, "prefix"_tok
->;
-
-bool InterfaceIPv6ND_CacheExpire_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_CacheExpire = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_CacheExpire_Handler,
-    "cache"_tok, "expire"_tok
->;
-
-bool InterfaceIPv6ND_CacheInterfaceLimit_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_CacheInterfaceLimit = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_CacheInterfaceLimit_Handler,
-    "cache"_tok, "interface-limit"_tok
->;
-
-bool InterfaceIPv6ND_DADAttempts_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_DADAttempts = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_DADAttempts_Handler,
-    "dad"_tok, "attempts"_tok
->;
-
-bool InterfaceIPv6ND_DADTime_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_DADTime = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_DADTime_Handler,
-    "dad"_tok, "time"_tok
->;
-
-bool InterfaceIPv6ND_DestinationGuard_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_DestinationGuard = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_DestinationGuard_Handler,
-    "destination-guard"_tok
->;
-
-bool InterfaceIPv6ND_ManagedConfigFlag_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_ManagedConfigFlag = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_ManagedConfigFlag_Handler,
-    "managed-config-flag"_tok
->;
-
-bool InterfaceIPv6ND_NaGlean_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_NaGlean = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_NaGlean_Handler,
-    "na"_tok, "glean"_tok
->;
-
-bool InterfaceIPv6ND_NsInterval_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_NsInterval = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_NsInterval_Handler,
-    "ns-interval"_tok
->;
-
-bool InterfaceIPv6ND_NudIGP_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_NudIGP = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_NudIGP_Handler,
-    "nud"_tok, "igp"_tok
->;
-
-bool InterfaceIPv6ND_NudRetry_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_NudRetry = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_NudRetry_Handler,
-    "nud"_tok, "retry"_tok
->;
-
-bool InterfaceIPv6ND_OtherConfigFlag_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_OtherConfigFlag = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_OtherConfigFlag_Handler,
-    "other-config-flag"_tok
->;
-
-// bool InterfaceIPv6ND_Prefix_Handler(INTERFACE_PARAMS) {} //TODO
-
-bool InterfaceIPv6ND_RaHopLimitUnspecified_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_RaHopLimitUnspecified = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_RaHopLimitUnspecified_Handler,
-    "ra"_tok, "hop-limit"_tok, "unspecified"_tok
->;
-
-bool InterfaceIPv6ND_RaInterval_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_RaInterval = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_RaInterval_Handler,
-    "ra"_tok, "interval"_tok
->;
-
-bool InterfaceIPv6ND_RaLifetime_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_RaLifetime = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_RaLifetime_Handler,
-    "ra"_tok, "lifetime"_tok
->;
-
-bool InterfaceIPv6ND_RaMtuSuppression_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_RaMtuSuppression = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_RaMtuSuppression_Handler,
-    "ra"_tok, "mtu"_tok, "suppress"_tok
->;
-
-bool InterfaceIPv6ND_RaSuppression_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_RaSuppression = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_RaSuppression_Handler,
-    "ra"_tok, "suppress"_tok
->;
-
-bool InterfaceIPv6ND_RaSuppressionAll_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_RaSuppressionAll = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_RaSuppressionAll_Handler,
-    "ra"_tok, "suppress"_tok, "all"_tok
->;
-
-bool InterfaceIPv6ND_ReachableTime_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_ReachableTime = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_ReachableTime_Handler,
-    "reachable-time"_tok
->;
-
-bool InterfaceIPv6ND_RouterPreference_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6ND_RouterPreference = commandAdder<InterfaceContext,
-    InterfaceIPv6ND_RouterPreference_Handler,
-    "router-preference"_tok
->;
+#define INTERFACE_IPV6_ND_LIST(X, Y) \
+    X(Y, (_COM_, AdvertisementInterval, "advertisement-interval"_tok)) \
+    X(Y, (_COM_, AutoconfigDefRoute, "autoconfig"_tok, "default-route"_tok)) \
+    X(Y, (_COM_, AutoconfigPrefix, "autoconfig"_tok, "prefix"_tok)) \
+    X(Y, (_COM_, CacheExpire, "cache"_tok, "expire"_tok)) \
+    X(Y, (_COM_, CacheInterfaceLimit, "cache"_tok, "interface-limit"_tok)) \
+    X(Y, (_COM_, DADAttempts, "dad"_tok, "attempts"_tok)) \
+    X(Y, (_COM_, DADTime, "dad"_tok, "time"_tok)) \
+    X(Y, (_COM_, DestinationGuard, "destination-guard"_tok)) \
+    X(Y, (_COM_, ManagedConfigFlag, "managed-config-flag"_tok)) \
+    X(Y, (_COM_, NaGlean, "na"_tok, "glean"_tok)) \
+    X(Y, (_COM_, NsInterval, "ns-interval"_tok)) \
+    X(Y, (_COM_, NudIGP, "nud"_tok, "igp"_tok)) \
+    X(Y, (_COM_, NudRetry, "nud"_tok, "retry"_tok)) \
+    X(Y, (_COM_, OtherConfigFlag, "other-config-flag"_tok)) \
+    X(Y, (_COM_, RaHopLimitUnspecified, "ra"_tok, "hop-limit"_tok, "unspecified"_tok)) \
+    X(Y, (_COM_, RaInterval, "ra"_tok, "interval"_tok)) \
+    X(Y, (_COM_, RaLifetime, "ra"_tok, "lifetime"_tok)) \
+    X(Y, (_COM_, RaMtuSuppression, "ra"_tok, "mtu"_tok, "suppress"_tok)) \
+    X(Y, (_COM_, RaSuppression, "ra"_tok, "suppress"_tok)) \
+    X(Y, (_COM_, ReachableTime, "reachable-time"_tok)) \
+    X(Y, (_COM_, RouterPreference, "router-preference"_tok)) \
 
 /**
  * @brief Parser for the `ipv6 nd` sub-tree in Interface Configuration mode.
@@ -158,31 +74,10 @@ using InterfaceIPv6ND_RouterPreference = commandAdder<InterfaceContext,
  * Covers `CliMode::Interface` with `InterfaceContext` and exposes all
  * per-interface Neighbor Discovery tuning commands.
  */
-using InterfaceIPv6NDCommands = CliModeParser<CliMode::Interface, InterfaceContext,
-    InterfaceIPv6ND_AdvertisementInterval,
-    InterfaceIPv6ND_AutoconfigDefRoute,
-    InterfaceIPv6ND_AutoconfigPrefix,
-    InterfaceIPv6ND_CacheExpire,
-    InterfaceIPv6ND_CacheInterfaceLimit,
-    InterfaceIPv6ND_DADAttempts,
-    InterfaceIPv6ND_DADTime,
-    InterfaceIPv6ND_DestinationGuard,
-    InterfaceIPv6ND_ManagedConfigFlag,
-    InterfaceIPv6ND_NaGlean,
-    InterfaceIPv6ND_NsInterval,
-    InterfaceIPv6ND_NudIGP,
-    InterfaceIPv6ND_NudRetry,
-    InterfaceIPv6ND_OtherConfigFlag,
-    /*InterfaceIPv6ND_Prefix,*/
-    InterfaceIPv6ND_RaHopLimitUnspecified,
-    InterfaceIPv6ND_RaInterval,
-    InterfaceIPv6ND_RaLifetime,
-    InterfaceIPv6ND_RaMtuSuppression,
-    InterfaceIPv6ND_RaSuppression,
-    InterfaceIPv6ND_RaSuppressionAll,
-    InterfaceIPv6ND_ReachableTime,
-    InterfaceIPv6ND_RouterPreference
->;
+DEFINE_CMD_MODE(InterfaceIPv6ND, CliMode::Interface, config::NdpRegistry, INTERFACE_IPV6_ND_LIST);
 }
+
+#undef INTERFACE_IPV6_ND_LIST
+#undef NDP_PARAMS
 
 #endif // INTERFACE_IPV6_ND_COMMANDS_H

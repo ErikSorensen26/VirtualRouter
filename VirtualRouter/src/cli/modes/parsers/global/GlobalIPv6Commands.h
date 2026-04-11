@@ -11,43 +11,27 @@
 #define GLOBAL_IPV6_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/parser/SubCommand.hpp"
-#include "cli/modes/contexts/GlobalContext.hpp"
-#include "GlobalIPv6NDCommands.h"
+#include "configs/registry/global/GlobalRegistry.h"
+
+#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
+#define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
-using GlobalIPv6_ND = subAdder<GlobalContext,
-    GlobalIPv6NDCommands,
-    "nd"_tok
->;
-
+bool GlobalIPv6_ND_SubHandler(GLOBAL_SUB_PARAMS);
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS);
-using GlobalIPv6_Neighbor = commandAdder<GlobalContext,
-    GlobalIPv6_Neighbor_Handler,
-    "neighbor"_tok
->;
-
 bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS);
-using GlobalIPv6_RouterEIGRP = commandAdder<GlobalContext,
-    GlobalIPv6_RouterEIGRP_Handler,
-    "router"_tok, "eigrp"_tok
->;
 
-/**
- * @brief Parser for the `ipv6` sub-tree in Global Configuration mode.
- * @ingroup CLI_MODE_PARSERS
- *
- * Covers `CliMode::GlobalConfiguration` with `GlobalContext` and exposes
- * Neighbor Discovery configuration, static neighbor entries, and the
- * IPv6 EIGRP router entry point.
- */
-using GlobalIPv6Commands = CliModeParser<CliMode::GlobalConfiguration, GlobalContext,
-    GlobalIPv6_ND,
-    GlobalIPv6_Neighbor,
-    GlobalIPv6_RouterEIGRP
->;
+#define GLOBAL_IPV6_LIST(X, Y) \
+    X(Y, (_SUB_, ND, "nd"_tok)) \
+    X(Y, (_COM_, Neighbor, "neighbor"_tok)) \
+    X(Y, (_COM_, RouterEIGRP, "router"_tok, "eigrp"_tok))
+
+DEFINE_CMD_MODE(GlobalIPv6, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IPV6_LIST);
 }
+
+#undef GLOBAL_IPV6_LIST
+#undef GLOBAL_PARAMS
+#undef GLOBAL_SUB_PARAMS
 
 #endif // GLOBAL_IPV6_COMMANDS_H

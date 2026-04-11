@@ -12,7 +12,7 @@
 
 #include "Console.h"
 #include "cli/modes/Mode.hpp"
-//#include "cli/execution/ExecutionContext.hpp"
+#include "cli/execution/ExecutionContext.hpp"
 
 namespace core { class VirtualRouter; }
 namespace interface { class Interface; }
@@ -111,8 +111,15 @@ public:
      * @tparam Args  Constructor argument types for the target mode context.
      * @return True if the mode directory was found and the transition succeeded.
      */
-    template <CliMode T, typename... Args>
-    bool changeMode(Args&&... args);
+    template <CliMode T, typename S>
+    requires config::IsSubRegistry<S>
+    bool changeMode(S& configs)
+    {
+        std::span<const std::string_view> path = getPath(T);
+        if (!setCommandDirectory(path)) return false;
+        execution.changeMode<T, S>(configs);
+        return true;
+    }
 
     /**
      * @brief Sets the exit flag and transitions to a new CLI mode.
@@ -123,11 +130,12 @@ public:
      * @tparam T     Target @ref CliMode enum value.
      * @tparam Args  Constructor argument types for the target mode context.
      */
-    template <CliMode T, typename... Args>
-    void exitMode(Args&&... args)
+    template <CliMode T, typename N, typename S>
+    requires (config::IsSubRegistry<N> && config::IsSubRegistry<S>)
+    bool exitMode(S& old)
     {
-        isExitCommand = true;
-        changeMode<T>(std::forward<Args>(args)...);
+        auto& modeConfig = old.template resolveParent<N>();
+        return changeMode<T>(modeConfig);
     }
 
     // PUBLIC STATE (read by command handlers after execution)
@@ -214,7 +222,7 @@ private:
 
     // SESSION-LEVEL STATE
 
-    //cli::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
+    cli::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
 
     const nlohmann::ordered_json* workingDirectory = nullptr; ///< Current command-tree array for the active mode.
 
@@ -230,23 +238,10 @@ private:
 
     std::vector<Com> paginationList; ///< Remaining commands to display; non-empty while paging.
     size_t           maxNameLength = 0; ///< Widest name in paginationList, used to align descriptions.
-
-    // FLAGS
-
-    bool isExitCommand = false; ///< Set by exitMode() so callers know the mode was left intentionally.
+    void*            previousMode = nullptr; ///< Pointer to the previous config object.
 
     std::vector<std::string> executionHistory; ///< Resolved command strings for commands that mutate list-type config.
 };
-
-template <CliMode T, typename... Args>
-bool CliSession::changeMode(Args&&... args)
-{
-    std::span<const std::string_view> path = getPath(T);
-    if (!setCommandDirectory(path)) return false;
-    //execution.changeMode<T>(std::forward<Args>(args)...);
-    return true;
-}
-
 } // namespace cli
 
 #endif // CLI_SESSION_H

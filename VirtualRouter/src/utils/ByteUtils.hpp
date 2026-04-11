@@ -1,7 +1,6 @@
 /**
  * @file ByteUtils.hpp
- * @brief Network-order byte manipulation: endian conversion, fixed-width reads and writes.
- */
+ * @brief Network-order byte manipulation: endian conversion, fixed-width reads and writes. */
 
 #ifndef BYTE_UTILS_HPP
 #define BYTE_UTILS_HPP
@@ -96,19 +95,21 @@ inline __uint128_t ntohdll(__uint128_t val) {
     return htondll(val);
 }
 
-template <size_t B>
-struct smallestInteger
+template <size_t b>
+struct SmallestInteger
 {
 private:
-    static_assert(B > 0, "Size must be at least 1 byte");
-    static_assert(B <= 16, "No integer type available for this type");
+    static constexpr size_t bytes = (b + 7) / 8;
+
+    static_assert(b > 0, "Size must be at least 1 byte");
+    static_assert(bytes <= 16, "No integer type available for this type");
 
 public:
     using type =
-        std::conditional_t<B <= 1, uint8_t,
-        std::conditional_t<B <= 2, uint16_t,
-        std::conditional_t<B <= 4, uint32_t,
-        std::conditional_t<B <= 8, uint64_t,
+        std::conditional_t<bytes <= 1, uint8_t,
+        std::conditional_t<bytes <= 2, uint16_t,
+        std::conditional_t<bytes <= 4, uint32_t,
+        std::conditional_t<bytes <= 8, uint64_t,
         __uint128_t>>>>;
 };
 

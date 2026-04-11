@@ -13,7 +13,7 @@ namespace core
 VirtualRouter::VirtualRouter(Global& g, const std::string& name)
     : defaulted(name == "default"),
       configs([&g, &name]() {
-          auto& vrfs = g.configs->get<config::Global::VRF_CONFIGS>();
+          auto& vrfs = g.configs.get<config::Global::VRF_CONFIGS>();
           return g.registry.emplaceBack(vrfs, name);
       }()),
       tcpManager(*this),

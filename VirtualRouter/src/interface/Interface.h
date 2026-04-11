@@ -16,7 +16,6 @@
 #define INTERFACE_H
 
 // Standard includes
-#include <mutex>
 #include <atomic>
 #include <IPAddress.h>
 #include <ControlScheduler.h>
@@ -24,6 +23,7 @@
 #include "infrastructure/Arp.h"
 #include "infrastructure/Ndp.h"
 #include "configs/InterfaceConfigs.h"
+#include "utils/Mock.hpp"
 
 namespace core { class VirtualRouter; }
 namespace processing { class PacketBuilder; }
@@ -167,7 +167,7 @@ public:
      *
      * The interface is always shutdown before deletion.
      */
-    virtual ~Interface();
+    MOCK ~Interface();
 
     /**
      * @brief Cleanup helper invoked by destructor and VRF teardown.
@@ -193,7 +193,7 @@ public:
      * @param subnet    Prefix length (0–32).
      * @param secondary Set the IP as a secondary address.
      */
-    virtual bool setIPv4(types::IPv4Prefix prefix, bool secondary = false);
+    MOCK bool setIPv4(types::IPv4Prefix prefix, bool secondary = false);
 
     /**
      * @brief Assign an IPv6 address to the interface.
@@ -208,7 +208,7 @@ public:
      * @param prefix    Prefix length (default 64).
      * @param eui64     Whether EUI-64 formatting should apply.
      */
-    virtual bool setIPv6(const types::IPv6Prefix& addr, bool eui64 = false);
+    MOCK bool setIPv6(const types::IPv6Prefix& addr, bool eui64 = false);
 
     /**
      * @brief Marks the IPv4 address as ready
@@ -277,7 +277,12 @@ public:
      *
      * @param shut True = shutdown, False = enable.
      */
-    virtual void shutdown(bool shut);
+    MOCK void shutdown(bool shut);
+
+    /**
+     * @brief Syncs and executes full administrative shutdown or bring-up of the interface.
+     */
+    MOCK void syncShutdown();
 
     /**
      * @brief Resets infrastructure protocols and IPs
@@ -313,7 +318,7 @@ public:
      *
      * No transmission occurs if thread subsystem is not running.
      */
-    virtual void enqueuePacket(processing::PacketBuilder& packetInfo, uint64_t mac);
+    MOCK void enqueuePacket(processing::PacketBuilder& packetInfo, uint64_t mac);
 
     /**
      * @brief Enqueue a packet for transmission.
@@ -326,7 +331,7 @@ public:
      *
      * No transmission occurs if thread subsystem is not running.
      */
-    virtual void enqueuePacket(processing::PacketBuilder& packetInfo);
+    MOCK void enqueuePacket(processing::PacketBuilder& packetInfo);
 
     // VRF MANAGEMENT
     /**
@@ -360,7 +365,7 @@ public:
      * serialized through this queue. Callers obtain a @ref core::ProcessQueueRef
      * from it via @c ref().
      */
-    core::ProcessQueue& getScheduler();
+    core::ProcessQueue& getScheduler() { return scheduler; }
 
     std::atomic<bool> shutdownFlag = true; ///< Administrative shutdown flag.
     std::atomic<bool> carrierFlag = true; ///< Physical carrier status flag.
@@ -369,29 +374,6 @@ public:
 
     infrastructure::Arp arp; ///< ARP module instance (ipv4).
     infrastructure::Ndp ndp; ///< NDP module instance (ipv6).
-
-    // EIGRP INTERFACES
-
-    std::unordered_map<uint32_t, routing::eigrp::EigrpInterfaceInstance> eigrpInterfaceList; ///< EIGRP interface-level state.
-
-    /**
-     * @brief Retrieve or lazily allocate the EIGRP per-interface config registry for a given AS.
-     *
-     * @param as Autonomous system number.
-     * @return Reference to the EIGRP interface config registry for that AS.
-     */
-    config::Reference<config::EigrpInterfaceRegistry> getEigrpConfig(uint32_t as);
-
-    // OSPF INTERFACES
-    
-    std::unordered_map<uint32_t, routing::ospf::OspfInterfaceInstance> ospfInterfaceList; ///< OSPF interface level state.
-
-    /**
-     * @brief Retrieves or allocates OSPF per-interface config block.
-     *
-     * @return Reference wrapper to the OSPF interface config registry.
-     */
-    config::Reference<config::OspfInterfaceBaseRegistry> getOspfConfig();
 
     // DHCP CLIENT STATE
 
@@ -412,7 +394,7 @@ public:
      *
      * Called during interface INITIATE state or VRF reassignment.
      */
-    virtual void startThreads();
+    MOCK void startThreads();
 
     qos::egress::TxDistributor* tx;      ///< Egress object for packet sending.
 

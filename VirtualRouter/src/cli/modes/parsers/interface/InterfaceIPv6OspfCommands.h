@@ -12,32 +12,23 @@
 #define INTERFACE_IPV6_OSPF_COMMANDS_H
 
 #include "InterfaceOspfCommands.h"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
+
+#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 
 namespace cli
 {
-bool InterfaceIPv6Ospf_Area_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6Ospf_Area = commandAdder<InterfaceContext,
-    InterfaceIPv6Ospf_Area_Handler,
-    ARG, "area"_tok
->;
+bool InterfaceIPv6Ospf_Area_Handler(OSPF_PARAMS);
+bool InterfaceIPv6Ospf_Authentication_Handler(OSPF_PARAMS);
+bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS);
+bool InterfaceIPv6Ospf_Neighbor_Handler(OSPF_PARAMS);
 
-bool InterfaceIPv6Ospf_Authentication_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6Ospf_Authentication = commandAdder<InterfaceContext,
-    InterfaceIPv6Ospf_Authentication_Handler,
-    "authentication"_tok
->;
-
-bool InterfaceIPv6Ospf_Encryption_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6Ospf_Encryption = commandAdder<InterfaceContext,
-    InterfaceIPv6Ospf_Encryption_Handler,
-    "encryption"_tok
->;
-
-bool InterfaceIPv6Ospf_Neighbor_Handler(INTERFACE_PARAMS);
-using InterfaceIPv6Ospf_Neighbor = commandAdder<InterfaceContext,
-    InterfaceIPv6Ospf_Neighbor_Handler,
-    "neighbor"_tok
->;
+#define INTERFACE_IPV6_OSPF_LIST(X, Y) \
+    X(Y, (_EXT_, InterfaceOspfCommands)) \
+    X(Y, (_COM_, Area, P_ARG, "area"_tok)) \
+    X(Y, (_COM_, Authentication, "authentication"_tok)) \
+    X(Y, (_COM_, Encryption, "encryption"_tok)) \
+    X(Y, (_COM_, Neighbor, "neighbor"_tok))
 
 /**
  * @brief Parser for the `ipv6 ospf` sub-tree in Interface Configuration mode.
@@ -46,13 +37,10 @@ using InterfaceIPv6Ospf_Neighbor = commandAdder<InterfaceContext,
  * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv3-specific
  * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
  */
-using InterfaceIPv6OspfCommands = CliModeParser<CliMode::Interface, InterfaceContext,
-    InterfaceOspfCommands,
-    InterfaceIPv6Ospf_Area,
-    InterfaceIPv6Ospf_Authentication,
-    InterfaceIPv6Ospf_Encryption,
-    InterfaceIPv6Ospf_Neighbor
->;
+DEFINE_CMD_MODE(InterfaceIPv6Ospf, CliMode::Interface, config::OspfInterfaceBaseRegistry, INTERFACE_IPV6_OSPF_LIST);
 }
+
+#undef INTERFACE_IPV6_OSPF_LIST
+#undef OSPF_PARAMS
 
 #endif // INTERFACE_IPV6_OSPF_COMMANDS_H

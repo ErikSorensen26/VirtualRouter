@@ -86,7 +86,7 @@ public:
     static constexpr uint8_t N = Nu;
 
     // The canonical address integer type (uint32_t for IPv4, __uint128_t for IPv6).
-    using AddrT  = typename utils::smallestInteger<N>::type;
+    using AddrT  = typename utils::SmallestInteger<N * 8>::type;
     using SpanT  = NetworkSpan<AddrT>;
  
     static constexpr uint16_t W      = static_cast<uint16_t>(N) * 8; ///< Total bits.

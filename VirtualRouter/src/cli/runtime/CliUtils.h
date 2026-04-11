@@ -8,18 +8,12 @@
 
 #include <cstdint>
 #include <string_view>
-#include <type_traits>
-#include <charconv>
 #include <optional>
 #include <string>
 #include <utility>
-#include <algorithm>
 #include <Mac.hpp>
+#include <charconv>
 #include "interface/configs/InterfaceType.hpp"
-#include "configs/RegistryTypes.hpp"
-#include "configs/RegistryDefaultTable.hpp"
-#include "cli/modes/contexts/ContextBase.hpp"
-#include "Token.hpp"
 
 namespace types { struct IPPrefix; }
 namespace types { struct IPv4Address; }
@@ -37,6 +31,14 @@ namespace types { struct IPv6Prefix; }
  */
 namespace cli::utils
 {
+/**
+ * @brief Parses an unsigned integer from a `string_view`.
+ *
+ * @tparam T   Unsigned integer type (at most 8 bytes).
+ * @param val  Output parameter populated on success.
+ * @param sv   Source string view.
+ * @return True if the entire string was a valid non-negative integer of type `T`.
+ */
 template <typename T>
 requires std::is_unsigned_v<T> && (sizeof(T) <= 8)
 bool stouint(T& val, std::string_view sv)
@@ -46,6 +48,15 @@ bool stouint(T& val, std::string_view sv)
     return false;
 }
 
+/**
+ * @brief Parses an unsigned integer from a raw char pointer + length.
+ *
+ * @tparam T    Unsigned integer type (at most 8 bytes).
+ * @param val   Output parameter populated on success.
+ * @param sv    Start of the character sequence.
+ * @param siz   Length of the character sequence.
+ * @return True if parsing succeeded.
+ */
 template <typename T>
 requires std::is_unsigned_v<T> && (sizeof(T) <= 8)
 bool stouint(T& val, const char* sv, size_t siz)
@@ -55,6 +66,15 @@ bool stouint(T& val, const char* sv, size_t siz)
     return false;
 }
 
+/**
+ * @brief Parses an unsigned integer from a half-open char range `[sv1, sv2)`.
+ *
+ * @tparam T    Unsigned integer type (at most 8 bytes).
+ * @param val   Output parameter populated on success.
+ * @param sv1   Pointer to first character.
+ * @param sv2   Pointer one past the last character.
+ * @return True if parsing succeeded.
+ */
 template <typename T>
 requires std::is_unsigned_v<T> && (sizeof(T) <= 8)
 bool stouint(T& val, const char* sv1, const char* sv2)
@@ -64,6 +84,14 @@ bool stouint(T& val, const char* sv1, const char* sv2)
     return false;
 }
 
+/**
+ * @brief Parses a floating-point number from a `string_view`.
+ *
+ * @tparam T   Floating-point type.
+ * @param val  Output parameter populated on success.
+ * @param sv   Source string view.
+ * @return True if the entire string was a valid floating-point value.
+ */
 template <typename T>
 requires std::is_floating_point_v<T>
 bool stofloat(T& val, std::string_view sv)
@@ -72,207 +100,22 @@ bool stofloat(T& val, std::string_view sv)
     return ec == std::errc{};
 }
 
+/**
+ * @brief Parses a signed or unsigned integer from a `string_view`.
+ *
+ * @tparam T   Integral type.
+ * @param val  Output parameter populated on success.
+ * @param sv   Source string view.
+ * @return True if the entire string was a valid integer of type `T`.
+ */
 template <typename T>
-bool translateValue(T& value, const Token& token)
+requires std::is_integral_v<T>
+bool stoint(T& val, std::string_view sv)
 {
-    if constexpr (config::IsIgnoreCompare<T>)
-        return translateValue(value.value, token);
-    else if constexpr (std::is_unsigned_v<T>)
-        return stouint(value, token.value);
-    else if constexpr (std::is_floating_point_v<T>)
-        return stofloat(value, token.value);
-    else if constexpr (std::is_same_v<T, types::Mac>)
-        return extractMacAddress(token.value, value);
-    else if constexpr (std::is_same_v<T, types::IPAddress>)
-        return extractIPAddress(token.value, value);
-    else if constexpr (std::is_same_v<T, types::IPv4Address>)
-        return extractIPv4Address(token.value, value);
-    else if constexpr (std::is_same_v<T, types::IPv6Address>)
-        return extractIPv6Address(token.value, value);
-    else if constexpr (std::is_same_v<T, types::IPPrefix>)
-        return extractIPPrefix(token.value, value);
-    else if constexpr (std::is_same_v<T, types::IPv4Prefix>)
-        return extractIPv4Prefix(token.value, value);
-    else if constexpr (std::is_same_v<T, types::IPv6Prefix>)
-        return extractIPv6Prefix(token.value, value);
-    else if constexpr (std::is_same_v<T, std::string>)
-    {
-        value = token.value; 
-        return true;
-    }
-    return false;
+    auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+    return ec == std::errc{};
 }
 
-template <typename T>
-bool translateDoubleValue(T& value, const Token& token1, const Token& token2)
-{
-    if constexpr (std::is_same_v<T, interface::InterfaceKey>)
-        return extractInterfaceId(token1.value, token2.value, value);
-    else if constexpr (std::is_same_v<T, types::IPPrefix>)
-        return extractIPv4Prefix(token1, token2, value);
-    else if constexpr (std::is_same_v<T, types::IPv4Prefix>)
-        return extractIPv4Prefix(token1, token2, value);
-    return false;
-} 
-
-template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
-bool handleValueReset(T& field, cli::ContextBase& ctx)
-{
-    if (ctx.negate)
-    {
-        field.unset();
-        return true;
-    }
-    else if (ctx.defaulted)
-    {
-        field.setDefault();
-        return true;
-    }
-    return false;
-}
-
-template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
-inline bool setFieldValue(T& field, cli::ContextBase& ctx, Token* t = nullptr)
-{
-    if (handleValueReset(field, ctx))
-        return true;
-
-    using type = config::DefType<T>::type;
-
-    if constexpr (std::is_same_v<type, bool> && config::IsAtomicField<T>)
-    {
-        field.set(!field.getDefault());
-        return true;
-    }
-    else
-    {
-        if (!t) return false;
-
-        T value{};
-        if (!translateValue(value, *t))
-            return false;
-
-        field.set(value);
-        return true;
-    }
-}
-
-template <typename T>
-requires config::IsAtomicField<T> || config::IsOptionalAtomicField<T> || config::IsValueField<T>
-inline bool setDoubleFieldValue(T& field, cli::ContextBase& ctx, Token* t1, Token* t2)
-{
-    if (handleValueReset(field, ctx))
-        return true;
-
-    using type = config::DefType<T>::type;
-    if constexpr (std::is_same_v<type, bool> && config::IsAtomicField<T>)
-    {
-        field.set(!field.getDefault());
-        return true;
-    }
-    else
-    {
-        if (!t1 || !t2) return false;
-
-        T value{};
-        if (!translateDoubleValue(value, *t1, *t2))
-            return false;
-
-        field.set(value);
-        return true;
-    }
-}
-
-template <typename T>
-inline bool setTupleElement(T& field, Token* t = nullptr)
-{
-    if (!t) return false;
-    return translateValue(field, *t);
-}
-
-template <typename T>
-inline bool setDoubleTupleElement(T& field, Token* t1, Token* t2)
-{
-    if (!t1 || !t2) return false;
-    return translateDoubleValue(field, *t1, *t2);
-}
-
-template <typename T>
-struct isOptional : std::false_type {};
-
-template <typename T>
-struct isOptional<std::optional<T>> : std::true_type {};
-
-template <size_t I = 0, typename Tuple>
-bool compareTuple(const Tuple& lhs, const Tuple& rhs)
-{
-    if constexpr (I < std::tuple_size_v<Tuple>)
-    {
-        using Elem = std::tuple_element_t<I, Tuple>;
-
-        if constexpr (isOptional<Elem>::value)
-        {
-            const auto& lhsOpt = std::get<I>(lhs);
-            const auto& rhsOpt = std::get<I>(rhs);
-
-            if (rhsOpt.has_value() && lhsOpt != rhsOpt)
-                return false;
-        }
-        else if constexpr (!config::IsIgnoreCompare<Elem>)
-        {
-            if (std::get<I>(lhs) != std::get<I>(rhs))
-                return false;
-        }
-
-        return compareTuple<I + 1>(lhs, rhs);
-    }
-
-    return true;
-}
-
-template <typename T>
-struct IsTuple : std::false_type {};
-
-template <typename... Ts>
-struct IsTuple<std::tuple<Ts...>> : std::true_type {};
-
-template <typename T>
-requires config::IsListField<T>
-inline bool addListEntry(T& field, cli::ContextBase& ctx, typename config::DefType<T>::type& tup)
-{
-    using type = config::DefType<T>::type;
-
-    if (ctx.negate || ctx.defaulted)
-    {
-        field.withWrite([&](std::vector<type>& entries) {
-            std::erase_if(entries, [&](const type& entry) {
-                if constexpr (IsTuple<T>::value)
-                    return compareTuple(entry, tup);
-                else
-                    return entry == tup;
-            });
-        });
-        return true;
-    }
-
-    field.withWrite([&](std::vector<type>& list) {
-        auto it = std::find_if(list.begin(), list.end(), [&](const type& entry) {
-            if constexpr (IsTuple<T>::value)
-                return compareTuple(entry, tup);
-            else
-                return entry == tup;
-        });
-
-        if (it != list.end())
-            *it = tup;
-        else
-            list.push_back(tup);
-    });
-
-    return true;
-}
 
 /**
  * @brief Converts the tokens and sets the interface id.
@@ -398,11 +241,22 @@ bool extractMacAddress(std::string_view str, types::Mac mac);
  */
 bool matchNumericRange(std::string_view input, std::string_view pattern);
 
+/// @brief Returns true if `p` matches the `<lo-hi>` numeric range pattern syntax.
 bool isNumericRange(std::string_view p);
+
+/// @brief Returns true if `address` is a valid dot-decimal IPv4 address.
 bool isIPv4Address(std::string_view address);
+
+/// @brief Returns true if `address` is a valid colon-hex IPv6 address.
 bool isIPv6Address(std::string_view address);
+
+/// @brief Returns true if `addressWithMask` is a valid IPv6 CIDR prefix (e.g. `"2001:db8::/32"`).
 bool isIPv6AddressWithMask(std::string_view addressWithMask);
+
+/// @brief Returns true if `macAddress` is a valid MAC address string.
 bool isMACAddress(std::string_view macAddress);
+
+/// @brief Returns true if `s` consists entirely of decimal digit characters.
 bool isNumber(std::string_view s);
 
 /**

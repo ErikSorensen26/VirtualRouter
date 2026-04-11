@@ -9,49 +9,28 @@
 #ifndef PRIVILEGED_EXEC_COMMANDS_HPP
 #define PRIVILEGED_EXEC_COMMANDS_HPP
 
+#include "cli/modes/contexts/Context.hpp"
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/modes/contexts/PrivilegedExecContext.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
 
-#define PRIVILEGED_EXEC_PARAMS PrivilegedExecContext& ctx, const std::vector<std::string>& args
+#define PRIVILEGED_EXEC_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
 bool PrivilegedExec_ConfigureTerm_Handler(PRIVILEGED_EXEC_PARAMS);
-using PrivilegedExec_ConfigureTerm = commandAdder<PrivilegedExecContext,
-    PrivilegedExec_ConfigureTerm_Handler,
-    "configure"_tok, "terminal"_tok
->;
-
 bool PrivilegedExec_Exit_Handler(PRIVILEGED_EXEC_PARAMS);
-using PrivilegedExec_Exit = commandAdder<PrivilegedExecContext,
-    PrivilegedExec_Exit_Handler,
-    "exit"_tok
->;
-
 bool PrivilegedExec_ShowHistory_Handler(PRIVILEGED_EXEC_PARAMS);
-using PrivilegedExec_ShowHistory = commandAdder<PrivilegedExecContext,
-    PrivilegedExec_ShowHistory_Handler,
-    "show"_tok, "history"_tok
->;
-
 bool PrivilegedExec_ShowClock_Handler(PRIVILEGED_EXEC_PARAMS);
-using PrivilegedExec_ShowClock = commandAdder<PrivilegedExecContext,
-    PrivilegedExec_ShowClock_Handler,
-    "show"_tok, "clock"_tok
->;
-
 bool PrivilegedExec_WriteMem_Handler(PRIVILEGED_EXEC_PARAMS);
-using PrivilegedExec_WriteMem = commandAdder<PrivilegedExecContext,
-    PrivilegedExec_WriteMem_Handler,
-    "write"_tok, "memory"_tok
->;
-
 bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS);
-using PrivilegedExec_TerminalWidth = commandAdder<PrivilegedExecContext,
-    PrivilegedExec_TerminalWidth_Handler,
-    "terminal"_tok, "width"_tok
->;
+
+#define PRIVILEGED_EXEC_LIST(X, Y) \
+    X(Y, (_COM_, ConfigureTerm, "configure"_tok, "terminal"_tok)) \
+    X(Y, (_COM_, Exit, "exit"_tok)) \
+    X(Y, (_COM_, ShowHistory, "show"_tok)) \
+    X(Y, (_COM_, ShowClock, "show"_tok, "clock"_tok)) \
+    X(Y, (_COM_, WriteMem, "write"_tok, "memory"_tok)) \
+    X(Y, (_COM_, TerminalWidth, "terminal"_tok, "width"_tok))
 
 /**
  * @brief Parser for Privileged Exec mode commands.
@@ -60,14 +39,10 @@ using PrivilegedExec_TerminalWidth = commandAdder<PrivilegedExecContext,
  * Aggregates configuration entry point, monitoring (show), and system
  * commands accessible to privileged users.
  */
-using PrivilegedExecCommands = CliModeParser<CliMode::PrivilegedExec, PrivilegedExecContext,
-    PrivilegedExec_ConfigureTerm,
-    PrivilegedExec_Exit,
-    PrivilegedExec_ShowHistory,
-    PrivilegedExec_ShowClock,
-    PrivilegedExec_WriteMem,
-    PrivilegedExec_TerminalWidth
->;
+DEFINE_CMD_MODE(PrivilegedExec, CliMode::PrivilegedExec, config::GlobalRegistry, PRIVILEGED_EXEC_LIST);
 }
+
+#undef PRIVILEGED_EXEC_LIST
+#undef PRIVILEGED_EXEC_PARAMS
 
 #endif // PRIVILEDGED_EXEC_COMMANDS_HPP

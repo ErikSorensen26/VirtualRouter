@@ -5,7 +5,6 @@
 
 namespace interface
 {
-
 Interface* InterfaceManager::add(Interface* iface, interface::InterfaceKey key)
 {
     std::lock_guard lock(mutex);

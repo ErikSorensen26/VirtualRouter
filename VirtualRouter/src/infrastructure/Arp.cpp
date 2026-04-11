@@ -126,7 +126,7 @@ void Arp::completeArpEntry(std::pair<const types::IPv4Address, ArpCacheEntry>& e
 
     auto now = std::chrono::steady_clock::now();
 
-    if (cache.status == ArpCacheStatus::COMPLETE && global.configs->get<config::Global::IP_STICKY_ARP>().load())
+    if (cache.status == ArpCacheStatus::COMPLETE && global.configs.get<config::Global::IP_STICKY_ARP>().load())
         return;
 
     // Cancel old timer if already present
@@ -140,11 +140,11 @@ void Arp::completeArpEntry(std::pair<const types::IPv4Address, ArpCacheEntry>& e
     cache.status = ArpCacheStatus::COMPLETE;
     cache.macAddress = targetMac;
     cache.retries = 0;
-    cache.expiryTime = now + std::chrono::seconds(configs->get<config::Arp::TIMEOUT>().load());
+    cache.expiryTime = now + std::chrono::seconds(configs.get<config::Arp::TIMEOUT>().load());
 
     // Update the data-plane table
     arpTable.insert(entry.first, targetMac);
-    cache.renewalTime = now + std::chrono::seconds((configs->get<config::Arp::TIMEOUT>().load() * 10) / 8); // Renewal is 80 percent
+    cache.renewalTime = now + std::chrono::seconds((configs.get<config::Arp::TIMEOUT>().load() * 10) / 8); // Renewal is 80 percent
 
     // Refresh vs expire logic
     cache.requestTimerId = scheduler.postAfter(
@@ -244,7 +244,7 @@ bool Arp::getMac(uint8_t* out, types::IPv4Address targetIp)
 // Enqueue a packet for ARP resolution and send once resolved
 void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder& packetToSend)
 {
-    if (!global.configs->get<config::Global::IP_ARP_INCOMPLETE>().load())
+    if (!global.configs.get<config::Global::IP_ARP_INCOMPLETE>().load())
         return;
 
     bool cached = arpCache.contains(targetIp);
@@ -252,7 +252,7 @@ void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder&
     // Entry limit enforcement, only enforce if a new entry is required
     if (!cached)
     {
-        auto& incompleteEntries = global.configs->get<config::Global::IP_ARP_INCOMPLETE_ENTRIES>();
+        auto& incompleteEntries = global.configs.get<config::Global::IP_ARP_INCOMPLETE_ENTRIES>();
         if (incompleteEntries.hasValue() && incompletes >= incompleteEntries.load())
             return; // Too many incomplete entries
         insertionOrder.push_back(targetIp);
@@ -270,7 +270,7 @@ void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder&
     } 
 
     // Enforce queue size limit from global config
-    if (queue.size() < global.configs->get<config::Global::IP_ARP_QUEUE>().load())
+    if (queue.size() < global.configs.get<config::Global::IP_ARP_QUEUE>().load())
     {
         queue.push(std::move(packetToSend));
     }
@@ -296,7 +296,7 @@ void Arp::receiveReply(const packet::ArpHeader& receivedReply)
 
     // Ignore gratuitous ARP if disabled
     bool garp = senderIp == targetIp;
-    if (garp && (!global.configs->get<config::Global::IP_ARP_GRATUITOUS>().load() ||
+    if (garp && (!global.configs.get<config::Global::IP_ARP_GRATUITOUS>().load() ||
         !running.load(std::memory_order_relaxed) || !global.routingEnabled ||
         std::memcmp(mac, ETHERNET_MAC_BROADCAST, 6) == 0))
         return;
@@ -304,7 +304,7 @@ void Arp::receiveReply(const packet::ArpHeader& receivedReply)
     if (auto cacheIt = arpCache.find(senderIp); cacheIt != arpCache.end())
     {
         if (arpCache[senderIp].status == ArpCacheStatus::COMPLETE &&
-            global.configs->get<config::Global::IP_STICKY_ARP>().load())
+            global.configs.get<config::Global::IP_STICKY_ARP>().load())
             return;
 
         completeArpEntry(*cacheIt, utils::readU48(mac));
@@ -322,7 +322,7 @@ void Arp::receiveRequest(const packet::ArpHeader& request, types::Mac sourceMac)
     types::IPv4Address targetIp = request.raw->targetIpAddress;
     types::IPv4Address senderIp = request.raw->senderIpAddress;
 
-    if (configs->get<config::Arp::AUTHORIZED>().load() && !arpCache.contains(senderIp))
+    if (configs.get<config::Arp::AUTHORIZED>().load() && !arpCache.contains(senderIp))
         return;
 
     // Drop invalid request (e.g., 0.0.0.0 or identical source/target)
@@ -336,7 +336,7 @@ void Arp::receiveRequest(const packet::ArpHeader& request, types::Mac sourceMac)
     {
         isLocal = true;
     }
-    else if (global.configs->get<config::Global::IP_ARP_PROXY>().load())
+    else if (global.configs.get<config::Global::IP_ARP_PROXY>().load())
     {
         const core::RibEntry<uint32_t>* br;
         if (proxyEntries.find(targetIp, br))
@@ -403,12 +403,12 @@ void Arp::scheduleRequest(types::IPv4Address targetIp, ArpCacheEntry& entry)
     if (entry.status == ArpCacheStatus::INCOMPLETE)
     {
         interval = 1; // 1-second retransmit interval for initial ARP resolution
-        maxRetries = global.configs->get<config::Global::IP_ARP_INCOMPLETE_RETRY>().load();
+        maxRetries = global.configs.get<config::Global::IP_ARP_INCOMPLETE_RETRY>().load();
     }
     else
     {
-        interval = configs->get<config::Arp::PROBE_INTERVAL>().load();
-        maxRetries = configs->get<config::Arp::PROBE_COUNT>().load();
+        interval = configs.get<config::Arp::PROBE_INTERVAL>().load();
+        maxRetries = configs.get<config::Arp::PROBE_COUNT>().load();
     }
 
     entry.retries++;

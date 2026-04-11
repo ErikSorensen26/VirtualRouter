@@ -7,7 +7,9 @@
 #include <IPAddress.h>
 #include <Mac.hpp>
 #include <regex>
+#include <Global.h>
 
+#include "cli/runtime/CliSession.h"
 #include "CliUtils.h"
 
 namespace

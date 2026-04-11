@@ -1,140 +1,126 @@
 // RouterEigrpTopologyCommands.cpp
 
 #include "RouterEigrpTopologyCommands.h"
-#include "eigrp/core/Eigrp.h"
-#include "eigrp/core/EigrpConfig.h"
 #include "configs/registry/router/EigrpRegistry.h"
+#include "cli/parser/CommandUtils.hpp"
 #include "cli/runtime/CliSession.h"
-#include "cli/runtime/CliUtils.h"
+
+#define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpRegistry)
 
 namespace cli
 {
 bool RouterEigrpTopology_AutoSummary_Handler(EIGRP_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentEigrp->getGlobalConfigMgr().setAutoSummary(!ctx.negate);
+    UNUSED(segs);
+    auto& autosum = ctx.configs.get<config::Eigrp::AUTO_SUMMARIZATION>();
+    utils::setToggleValue(autosum, ctx);
     return true;
 }
 
 bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS)
 {
-    auto& field = ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<config::Eigrp::DEFAULT_METRICS>();
-    if (!ctx.negate)
-    {
-        field.set(std::make_tuple(
-            static_cast<uint32_t>(std::stoul(args[0])),
-            static_cast<uint32_t>(std::stoul(args[1])),
-            static_cast<uint8_t>(std::stoul(args[2])),
-            static_cast<uint8_t>(std::stoul(args[3])),
-            static_cast<uint16_t>(std::stoul(args[4]))
-        ));
-    }
-    else
-    {
-        field.unset();
-    }
-    return true;
+    auto& metrics = ctx.configs.get<config::Eigrp::DEFAULT_METRICS>();
+    if (utils::handleValueReset(metrics, ctx))
+        return true;
+
+    config::DefType<decltype(metrics)>::type tup;
+
+    return utils::setTupleElement(std::get<0>(tup), segs[0] >> 1) &&
+          !utils::setTupleElement(std::get<1>(tup), segs[0] >> 2) &&
+          !utils::setTupleElement(std::get<2>(tup), segs[0] >> 3) &&
+          !utils::setTupleElement(std::get<3>(tup), segs[0] >> 4) &&
+          !utils::setTupleElement(std::get<4>(tup), segs[0] >> 5);
 }
 
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
 {
-    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
-    if (args[0] == "eigrp")
-    {
-        if (!ctx.negate)
-        {
-            cfg.get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().set(static_cast<uint8_t>(std::stoul(args[1])));
-            cfg.get<config::Eigrp::EXTERNAL_ADMIN_DISTANCE>().set(static_cast<uint8_t>(std::stoul(args[2])));
-        }
-        else
-        {
-            cfg.get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().set(90);
-            cfg.get<config::Eigrp::EXTERNAL_ADMIN_DISTANCE>().set(170);
-        }
-    }
+    auto& internal = ctx.configs.get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>();
+    auto& external = ctx.configs.get<config::Eigrp::EXTERNAL_ADMIN_DISTANCE>();
+    if (!utils::setFieldValue(internal, ctx, segs >> 0 >> 1))
+        return false;
+    if (!utils::setFieldValue(external, ctx, segs >> 0 >> 2))
+        return false;
     return true;
 }
 
 bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 {
-    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAX_EVENT_LOG_SIZE>().set(
-        ctx.negate ? 500u : static_cast<uint32_t>(std::stoul(args[0])));
-    return true;
+    auto& logSiz = ctx.configs.get<config::Eigrp::MAX_EVENT_LOG_SIZE>();
+    return utils::setFieldValue(logSiz, ctx, segs[0] >> 1);
 }
 
-bool RouterEigrpTopology_Exit_Handler(EIGRP_PARAMS)
+bool RouterEigrpTopologyV4_Exit_Handler(EIGRP_PARAMS)
 {
-    UNUSED(args);
-    if (ctx.currentEigrp->getAF() == types::AddressFamily::IPv4)
-        ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV4>(ctx.currentEigrp, ctx.currentEigrpNamed, nullptr);
-    else
-        ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV6>(ctx.currentEigrp, ctx.currentEigrpNamed, nullptr);
-    return true;
+    UNUSED(segs);
+    return ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV4, config::EigrpRegistry>(ctx.configs);
+}
+
+bool RouterEigrpTopologyV6_Exit_Handler(EIGRP_PARAMS)
+{
+    UNUSED(segs);
+    return ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV6, config::EigrpRegistry>(ctx.configs);
 }
 
 bool RouterEigrpTopology_MaximumPaths_Handler(EIGRP_PARAMS)
 {
-    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAX_PATHS>().set(
-        ctx.negate ? 4 : static_cast<uint8_t>(std::stoul(args[0])));
-    return true;
+    auto& maxPaths = ctx.configs.get<config::Eigrp::MAX_PATHS>();
+    return utils::setFieldValue(maxPaths, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpTopology_MetricMaximumHops_Handler(EIGRP_PARAMS)
 {
-    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<config::Eigrp::MAX_HOPS>().set(
-        ctx.negate ? 100 : static_cast<uint8_t>(std::stoul(args[0])));
-    return true;
+    auto& metricMax = ctx.configs.get<config::Eigrp::MAXIMUM_PREFIX>();
+    return utils::setFieldValue(metricMax, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpTopology_ActiveTime_Handler(EIGRP_PARAMS)
 {
-    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
-    if (!ctx.negate)
+    auto& active = ctx.configs.get<config::Eigrp::ACTIVE_TIME>();
+    auto& disabled = ctx.configs.get<config::Eigrp::ACTIVE_DISABLED>();
+
+    switch (segs[0][0])
     {
-        if (args[0] == "disabled")
+        case "active-time"_tok:
         {
-            cfg.get<config::Eigrp::ACTIVE_DISABLED>().set(true);
+            return utils::setFieldValue(active, ctx, segs[0] >> 1);
         }
-        else
+        case "disable"_tok:
         {
-            cfg.get<config::Eigrp::ACTIVE_TIME>().set(static_cast<uint16_t>(std::stoul(args[0])));
-            cfg.get<config::Eigrp::ACTIVE_DISABLED>().set(false);
+            utils::setToggleValue(disabled, ctx);
+            return true;
         }
     }
-    else
-    {
-        cfg.get<config::Eigrp::ACTIVE_TIME>().unset();
-        cfg.get<config::Eigrp::ACTIVE_DISABLED>().set(false);
-    }
-    return true;
+    return false;
 }
 
 bool RouterEigrpTopology_TrafficShare_Handler(EIGRP_PARAMS)
 {
-    auto& cfg = ctx.currentEigrp->getGlobalConfigMgr().getConfigs();
-    if (!ctx.negate)
+    auto& trafficShare = ctx.configs.get<config::Eigrp::TRAFFIC_SHARE>();
+    if (utils::handleValueReset(trafficShare, ctx))
+        return true;
+
+    switch (segs[0][0])
     {
-        if (args[0] == "balanced")
-            cfg.get<config::Eigrp::TRAFFIC_SHARE>().set(config::eigrp::TrafficShareMode::BALENCED);
-        else if (args[0] == "min")
+        case "balenced"_tok:
         {
-            if (args.size() == 2 && args[1] == "across-interfaces")
-                cfg.get<config::Eigrp::TRAFFIC_SHARE>().set(config::eigrp::TrafficShareMode::MINIMUM_ACROSS_INTERFACE);
-            else
-                cfg.get<config::Eigrp::TRAFFIC_SHARE>().set(config::eigrp::TrafficShareMode::MINIMUM);
+            trafficShare.set(config::eigrp::TrafficShareMode::BALENCED);
+            return true;
+        }
+        case "min"_tok:
+        {
+            trafficShare.set(config::eigrp::TrafficShareMode::MINIMUM);
+            return true;
         }
     }
-    else
-    {
-        cfg.get<config::Eigrp::TRAFFIC_SHARE>().set(config::eigrp::TrafficShareMode::BALENCED);
-    }
-    return true;
+
+    return false;
 }
 
 bool RouterEigrpTopology_Variance_Handler(EIGRP_PARAMS)
 {
-    ctx.currentEigrp->getGlobalConfigMgr().getConfigs().get<config::Eigrp::VARIANCE>().set(
-        ctx.negate ? 1 : static_cast<uint8_t>(std::stoul(args[0])));
-    return true;
+    auto& variance = ctx.configs.get<config::Eigrp::VARIANCE>();
+    return utils::setFieldValue(variance, ctx, segs >> 0 >> 1);
 }
 }
+
+#undef EIGRP_PARAMS

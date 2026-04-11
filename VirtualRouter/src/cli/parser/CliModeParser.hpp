@@ -8,7 +8,10 @@
 
 #include <type_traits>
 #include "cli/modes/Mode.hpp"
-#include "cli/runtime/Token.hpp"
+#include "cli/modes/contexts/Context.hpp"
+
+#include "cli/parser/Command.hpp" // IWYU pragma: keep
+#include "cli/parser/SubCommand.hpp" // IWYU pragma: keep
 
 /**
  * @brief Compile-time CLI command parsing and dispatch.
@@ -38,12 +41,7 @@ namespace cli
  * @return     Compile-time hashed value of the string (`uint64_t`), suitable
  *             as a NTTP for templates like `commandAdder`.
  */
-consteval uint64_t operator""_tok(const char* str, size_t len)
-{
-    return Token::tokenHash(std::string_view(str, len));
-}
-
-template <CliMode Mode, typename Context, typename... Commands>
+template <CliMode Mode, typename C, typename... Commands>
 class CliModeParser;
 
 // TRAITS
@@ -106,14 +104,14 @@ inline constexpr bool is_cli_mode_v = is_cli_mode<std::decay_t<T>>::value;
  * @see SubCommand
  * @see Executor
  */
-template <CliMode Mode, typename Context, typename... Commands>
+template <CliMode Mode, typename C, typename... Commands>
 class CliModeParser
 {
-    static_assert((std::is_same_v<Context, typename Commands::ContextType> && ...),
+    static_assert((std::is_same_v<C, typename Commands::ContextType> && ...),
                   "All Commands must share the same Context type");
 
 public:
-    using ContextType = Context; ///< Context type for this mode.
+    using ContextType = C; ///< Context type for this mode.
     static constexpr CliMode mode = Mode; ///< CliMode enum value for this parser.
 
     /**
@@ -129,7 +127,7 @@ public:
      *               Defaults to 0; advanced by parent `SubCommand` for nested parsers.
      * @return `true` if a command matched and executed successfully.
      */
-    static bool execute(Context& ctx, std::span<Token> tokens, size_t idx = 0)
+    static bool execute(Context<C>& ctx, std::span<Token> tokens, size_t idx = 0)
     {
         bool executed = false;
 
@@ -156,7 +154,6 @@ public:
 
         return executed;
     }
-
 };
 }
 

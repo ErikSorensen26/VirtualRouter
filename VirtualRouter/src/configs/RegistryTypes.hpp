@@ -12,7 +12,7 @@
 #include <cassert>
 #include <utility>
 #include <unordered_map>
-#include "cli/runtime/Token.hpp"
+#include <vector>
 
 #define ENABLE_CONFIG_INDEX 0
 
@@ -49,9 +49,6 @@ namespace config
 
 template <typename...>
 class RegistryDatabase;
-
-template <typename T>
-class Reference;
 
 template <typename ENUM, typename... Fields>
 class SubRegistry;
@@ -99,7 +96,7 @@ struct OptionalAtomicFieldFlag : AtomicFieldFlag {};
  * @brief Flag type that marks a field as a reference-container (sub-scope pointer).
  * @ingroup CONFIG
  *
- * Used by @ref ReferenceContainer to satisfy the @ref IsRefContainer concept.
+ * Used by @ref RegistryContainer to satisfy the @ref IsRefContainer concept.
  */
 struct RefContainerFieldFlag {};
 
@@ -271,7 +268,7 @@ public:
      * @brief Sets a local value and transitions this field to SET state.
      * @param v  New value to store.
      */
-    inline void set(cli::Token v) noexcept
+    inline void set(T v) noexcept
     {
         value.store(v, std::memory_order_release);
         state.store(FieldState::CANNED, std::memory_order_release);
@@ -699,7 +696,8 @@ template <typename T CONFIG_INDEX_PARAM>
 class ListField<T CONFIG_INDEX_ARG(F), nullptr> : public ListFieldFlag
 {
 public:
-    using type = T;
+    using type = std::vector<T>;
+    using node = T;
     CONFIG_INDEX_MEMBER
 
     /**
@@ -1103,45 +1101,62 @@ private:
  * Each `Reference<T>` in `children` increments the corresponding bucket
  * slot's refcount. Erasing or clearing the map releases those references.
  *
+ * ## Callback variant
+ * When the optional `H` template parameter is set to an `ApplyFn`, the field
+ * fires `H(ctx)` after every insert (via `emplaceBack`) and every `erase()` /
+ * `clear()`. The context pointer is registered with the owning
+ * `SubRegistry::context()` at protocol startup.
+ *
  * @tparam T  Registry struct type of the child entries.
  * @tparam K  Key type used to index children (must be hashable).
+ * @tparam H  Optional `ApplyFn` callback fired on every structural change.
+ *            Defaults to `nullptr` (no notification).
  *
  * @see RegistryDatabase::emplaceBack
  * @see Reference
  */
+template <typename T, typename K CONFIG_INDEX_PARAM, auto H = nullptr>
+class OwnedListField;
+
+/// @brief `OwnedListField` specialization without a live-notification applier.
 template <typename T, typename K CONFIG_INDEX_PARAM>
-class OwnedListField : public OwnedListFieldFlag
+class OwnedListField<T, K CONFIG_INDEX_ARG(F), nullptr> : public OwnedListFieldFlag
 {
 public:
-    using type = std::unordered_map<K, Reference<T>>; ///< Container type for child entries.
-    using key = K;                                     ///< Key type used to look up children.
+    using type = T; ///< Child entry type.
+    using key = K;  ///< Key type used to look up children.
     CONFIG_INDEX_MEMBER
 
     /**
-     * @brief Returns a mutable reference to the local children map, transitioning to SET state.
+     * @brief Inserts a new child entry keyed by `k`, or returns the existing one.
      *
-     * @return Mutable reference to the local `unordered_map<K, Reference<T>>`.
+     * If an entry for `k` already exists it is returned unchanged; otherwise a
+     * default-constructed `T` is inserted and returned.
+     *
+     * @param k  Key identifying the child entry.
+     * @return Reference to the (new or existing) child entry.
      */
-    inline type& getMutable() noexcept
+    T& emplaceBack(const K& k) noexcept
     {
-        return children;
+        auto [it, ok] = children.emplace(k);
+        return it->second;
     }
 
     /**
      * @brief Finds a child entry by key.
      *
-     * @param key  Key to search for.
+     * @param k  Key to search for.
      * @return Const iterator to the matching entry, or `end()` if not found.
      */
-    const inline type::const_iterator find(const K& key) const noexcept
+    inline std::unordered_map<key, type>::iterator find(const K& k) noexcept
     {
-        return children.find(key);
+        return children.find(k);
     }
 
     /**
      * @brief Returns the past-the-end iterator for the local children map.
      */
-    const inline type::const_iterator end() const noexcept
+    inline std::unordered_map<key, type>::iterator end() noexcept
     {
         return children.end();
     }
@@ -1149,33 +1164,43 @@ public:
     /**
      * @brief Returns the begin iterator for the local children map.
      */
-    const inline type::const_iterator begin() const noexcept
+    inline std::unordered_map<key, type>::iterator begin() noexcept
     {
         return children.begin();
     }
 
     /**
-     * @brief Returns the effective children map, falling through to the parent in INHERIT state.
+     * @brief Returns a const reference to the local children map.
      *
-     * @return Const reference to the local or inherited `unordered_map<K, Reference<T>>`.
+     * @return Const reference to the `unordered_map<K, Reference<T>>`.
      */
-    inline const type& get() const noexcept
+    inline const std::unordered_map<key, type>& get() noexcept
     {
         return children;
     }
 
     /**
-     * @brief Removes the child entry identified by `key` from the local map.
+     * @brief Returns a bool depending on if the key exists in the children map.
      *
-     * @param key  Key of the entry to remove.
+     * @return returns true if the key was found, otherwise false.
      */
-    inline void erase(const K& key) noexcept
+    inline bool contains(key& k) const noexcept
     {
-        children.erase(key);
+        return children.contains(k);
     }
 
     /**
-     * @brief Removes all child entries and reverts to INHERIT state.
+     * @brief Removes the child entry identified by `k` from the local map.
+     *
+     * @param k  Key of the entry to remove.
+     */
+    inline void erase(const K& k) noexcept
+    {
+        children.erase(k);
+    }
+
+    /**
+     * @brief Removes all child entries.
      */
     inline void clear() noexcept
     {
@@ -1188,20 +1213,159 @@ private:
     template <typename...>
     friend class RegistryDatabase;
 
-    /// @brief Links this field to its parent scope's field for inheritance.
-    void setMask(OwnedListField* parent)
+    void setMask(OwnedListField* parent) noexcept { (void)parent; }
+
+    std::unordered_map<key, type> children{}; ///< Locally-owned child entries.
+};
+
+/// @brief `OwnedListField` specialization with a live-notification applier callback.
+template <typename T, typename K CONFIG_INDEX_PARAM, ApplyFn H>
+class OwnedListField<T, K CONFIG_INDEX_ARG(F), H> : public OwnedListFieldFlag
+{
+public:
+    using type = T; ///< Child entry type.
+    using key = K;  ///< Key type used to look up children.
+    static constexpr ApplyFn applier = H; ///< Callback invoked after every structural change.
+    CONFIG_INDEX_MEMBER
+
+    /**
+     * @brief Constructs the field, binding it to a shared @ref ContextProvider.
+     *
+     * @param p  Context provider shared with all applier-enabled fields in the
+     *           same @ref SubRegistry.
+     */
+    explicit OwnedListField(ContextProvider& p) noexcept
+        : provider(p)
+    {}
+
+    /**
+     * @brief Fires the applier if a context pointer has been registered.
+     *
+     * Called internally by `erase()`, `clear()`, and @ref RegistryDatabase::emplaceBack
+     * after every structural change to the children map.
+     */
+    void notifyChanged() noexcept
+    {
+        if (provider.hasCtx())
+            applier(provider.get());
+    }
+
+    /**
+     * @brief Inserts a new child entry keyed by `k`, or returns the existing one.
+     *
+     * If the entry is newly inserted, fires the applier callback via
+     * @ref notifyChanged so that the owning protocol process can react to the
+     * structural change (e.g., re-evaluate neighbor configuration).
+     *
+     * @param k  Key identifying the child entry.
+     * @return Reference to the (new or existing) child entry.
+     */
+    T& emplaceBack(const K& k) noexcept
+    {
+        auto [it, ok] = children.emplace(k);
+        if (ok) notifyChanged();
+        return it->second;
+    }
+
+    /**
+     * @brief Finds a child entry by key.
+     *
+     * @param k  Key to search for.
+     * @return Const iterator to the matching entry, or `end()` if not found.
+     */
+    inline std::unordered_map<key, type>::const_iterator find(const K& k) const noexcept
+    {
+        return children.find(k);
+    }
+
+    /**
+     * @brief Returns the past-the-end iterator for the local children map.
+     */
+    inline std::unordered_map<key, type>::const_iterator end() const noexcept
+    {
+        return children.end();
+    }
+
+    /**
+     * @brief Returns the begin iterator for the local children map.
+     */
+    inline std::unordered_map<key, type>::const_iterator begin() const noexcept
+    {
+        return children.begin();
+    }
+
+    /**
+     * @brief Returns a const reference to the local children map.
+     *
+     * @return Const reference to the `unordered_map<K, Reference<T>>`.
+     */
+    inline const std::unordered_map<key, type>& get() const noexcept
+    {
+        return children;
+    }
+    
+    /**
+     * @brief Returns a bool depending on if the key exists in the children map.
+     *
+     * @return returns true if the key was found, otherwise false.
+     */
+    inline bool contains(key& k) const noexcept
+    {
+        return children.contains(k);
+    }
+
+    /**
+     * @brief Removes the child entry identified by `k` and fires the applier.
+     *
+     * @param k  Key of the entry to remove.
+     */
+    inline void erase(const K& k) noexcept
+    {
+        children.erase(k);
+        notifyChanged();
+    }
+
+    /**
+     * @brief Removes all child entries and fires the applier.
+     */
+    inline void clear() noexcept
+    {
+        children.clear();
+        notifyChanged();
+    }
+
+private:
+    template <typename ENUM, typename... Fields>
+    friend class SubRegistry;
+    template <typename...>
+    friend class RegistryDatabase;
+
+    void setMask(OwnedListField* parent) noexcept
     {
         (void)parent;
     }
 
-    type children{};                   ///< Locally-owned child entries.
+    ContextProvider& provider; ///< Shared context used to fire the applier.
+    std::unordered_map<key, type> children{}; ///< Locally-owned child entries.
 };
 
 /**
- * TODO finish doxy
+ * @brief Wrapper that makes a value participate in config field storage but be
+ *        excluded from equality comparisons between list entries.
+ *
+ * When a config list entry (node) contains a field that should not act as a
+ * match key — for example, a description string or a metadata tag — wrapping
+ * it in `IgnoreCompare<T>` causes @ref compareTuple to skip it during the
+ * duplicate-check that guards `setListEntry`.  The value is still stored and
+ * accessible via implicit conversion to `T`.
+ *
+ * @tparam T  Underlying value type to store.
+ *
+ * @see IgnoreCompareFlag
+ * @see IsIgnoreCompare
  */
 template <typename T>
-struct IgnoreCompare : IgnoreCompareFlag
+struct IgnoreCompare : public IgnoreCompareFlag
 {
     using type = T;
     T value;

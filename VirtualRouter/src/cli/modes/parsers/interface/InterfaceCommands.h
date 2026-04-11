@@ -9,38 +9,29 @@
 #ifndef INTERFACE_COMMANDS_H
 #define INTERFACE_COMMANDS_H
 
-#include "InterfaceIPCommands.h"
-#include "InterfaceIPv6Commands.h"
-#include "InterfaceOspfv3Commands.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "configs/registry/interface/InterfaceRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
+
+#define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
+#define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
 
 namespace cli
 {
 bool Interface_Exit_Handler(INTERFACE_PARAMS);
-using Interface_Exit = commandAdder<InterfaceContext,
-    Interface_Exit_Handler,
-    "exit"_tok
->;
-
-using Interface_IP = subAdder<InterfaceContext,
-    InterfaceIPCommands,
-    "ip"_tok
->;
-
-using Interface_IPv6 = subAdder<InterfaceContext,
-    InterfaceIPv6Commands,
-    "ipv6"_tok
->;
-
-using Interface_Ospfv3 = subAdder<InterfaceContext,
-    InterfaceOspfv3Commands,
-    "ospfv3"_tok
->;
-
 bool Interface_Shutdown_Handler(INTERFACE_PARAMS);
-using Interface_Shutdown = commandAdder<InterfaceContext,
-    Interface_Shutdown_Handler,
-    "shutdown"_tok
->;
+
+bool Interface_IP_SubHandler(INTERFACE_SUB_PARAMS);
+bool Interface_IPv6_SubHandler(INTERFACE_SUB_PARAMS);
+bool Interface_Ospfv3_SubHandler(INTERFACE_SUB_PARAMS);
+
+#define INTERFACE_LIST(X, Y) \
+    X(Y, (_COM_, Exit, "exit"_tok)) \
+    X(Y, (_SUB_, IP, "ip"_tok)) \
+    X(Y, (_SUB_, IPv6, "ipv6"_tok)) \
+    X(Y, (_SUB_, Ospfv3, "ospfv3"_tok)) \
+    X(Y, (_COM_, Shutdown, "shutdown"_tok))
+
 
 /**
  * @brief Complete parser for the Interface Configuration CLI mode.
@@ -49,12 +40,11 @@ using Interface_Shutdown = commandAdder<InterfaceContext,
  * Covers `CliMode::Interface` with `InterfaceContext` and composes
  * exit, shutdown, and `ip`/`ipv6` sub-trees.
  */
-using InterfaceCommands = CliModeParser<CliMode::Interface, InterfaceContext,
-    Interface_Exit,
-    Interface_IP,
-    Interface_IPv6,
-    Interface_Shutdown
->;
+DEFINE_CMD_MODE(Interface, CliMode::Interface, config::InterfaceRegistry, INTERFACE_LIST);
 }
+
+#undef INTERFACE_LIST
+#undef INTERFACE_PARAMS
+#undef INTERFACE_SUB_PARAMS
 
 #endif // INTERFACE_COMMANDS_H

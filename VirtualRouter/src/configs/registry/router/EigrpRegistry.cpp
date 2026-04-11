@@ -71,4 +71,12 @@ void EigrpSyncRouterId(void* e)
             eigrp.clearRouterID();
     });
 }
+
+void EigrpSyncAfInterface(void* e)
+{
+    routing::eigrp::Eigrp& eigrp = *static_cast<routing::eigrp::Eigrp*>(e);
+    eigrp.getScheduler().post([&eigrp] {
+        eigrp.refreshInterfaceList();
+    });
+}
 }

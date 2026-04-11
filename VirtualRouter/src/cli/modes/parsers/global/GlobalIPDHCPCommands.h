@@ -11,70 +11,29 @@
 #define GLOBAL_IP_DHCP_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/modes/contexts/GlobalContext.hpp"
+#include "cli/modes/contexts/Context.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
+
+#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
 bool GlobalIPDHCP_Binding_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_Binding = commandAdder<GlobalContext,
-    GlobalIPDHCP_Binding_Handler,
-    "binding"_tok
->;
-
 bool GlobalIPDHCP_Bootp_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_Bootp = commandAdder<GlobalContext,
-    GlobalIPDHCP_Bootp_Handler,
-    "bootp"_tok
->;
-
 bool GlobalIPDHCP_ConflictLogging_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_ConflictLogging = commandAdder<GlobalContext,
-    GlobalIPDHCP_ConflictLogging_Handler,
-    "conflict"_tok, "logging"_tok
->;
-
 bool GlobalIPDHCP_ConflictResolution_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_ConflictResolution = commandAdder<GlobalContext,
-    GlobalIPDHCP_ConflictResolution_Handler,
-    "conflict"_tok, "resolution"_tok
->;
-
 bool GlobalIPDHCP_DatabaseTimeout_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_DatabaseTimeout = commandAdder<GlobalContext,
-    GlobalIPDHCP_DatabaseTimeout_Handler,
-    "database"_tok, "timeout"_tok
->;
-
 bool GlobalIPDHCP_DatabaseWrite_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_DatabaseWrite = commandAdder<GlobalContext,
-    GlobalIPDHCP_DatabaseWrite_Handler,
-    "database"_tok, "write-delay"_tok
->;
 
-bool GlobalIPDHCP_Debug_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_Debug = commandAdder<GlobalContext,
-    GlobalIPDHCP_Debug_Handler,
-    "debug"_tok
->;
+#define GLOBAL_IP_DHCP_LIST(X, Y) \
+    X(Y, (_COM_, Binding,            "binding"_tok)) \
+    X(Y, (_COM_, Bootp,              "bootp"_tok)) \
+    X(Y, (_COM_, ConflictLogging,    "conflict"_tok, "logging"_tok)) \
+    X(Y, (_COM_, ConflictResolution, "conflict"_tok, "resolution"_tok)) \
+    X(Y, (_COM_, DatabaseTimeout,    "database"_tok, "timeout"_tok)) \
+    X(Y, (_COM_, DatabaseWrite,      "database"_tok, "write-delay"_tok))
 
-bool GlobalIPDHCP_ExcludedAddress_Handler(GLOBAL_PARAMS);
-using GlobalIPDHCP_ExcludedAddress = commandAdder<GlobalContext,
-    GlobalIPDHCP_ExcludedAddress_Handler,
-    "excluded-address"_tok
->;
-
-/**
- * @brief Parser for the `ip dhcp` sub-tree in Global Configuration mode.
- * @ingroup CLI_MODE_PARSERS
- *
- * Covers `CliMode::GlobalConfiguration` with `GlobalContext`.
- * Currently only `binding` is wired into the active command list;
- * remaining handlers are declared for future use.
- */
-using GlobalIPDHCPCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalContext,
-    GlobalIPDHCP_Binding
->;
+DEFINE_CMD_MODE(GlobalIPDHCP, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IP_DHCP_LIST)
 
 /*if (commandStream[1] == "dhcp")
 {
@@ -290,5 +249,8 @@ using GlobalIPDHCPCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalC
     }
 }*/
 }
+
+#undef GLOBAL_IP_DHCP_LIST
+#undef GLOBAL_PARAMS
 
 #endif // GLOBAL_IP_DHCP_COMMANDS_H

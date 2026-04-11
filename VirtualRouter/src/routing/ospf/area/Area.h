@@ -434,7 +434,7 @@ protected:
     uint32_t resetTid{0};       ///< Timer handle for the deferred area-reset timer.
     uint32_t agingTimerId{0};   ///< Timer handle for the one-second LSA aging tick.
 
-    config::Reference<config::OspfAreaRegistry> configs; ///< Area-level OSPF configuration reference.
+    config::OspfAreaRegistry& configs; ///< Area-level OSPF configuration reference.
 
     /**
      * @brief Runtime state for a configured `area range` inter-area summarization prefix.

@@ -21,7 +21,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
             {
                 // TODO: add address family v3 configs from elsewhere
                 auto& afCfgs = std::get<V3AfConfigs>(afConfigs);
-                return registry.emplace(afCfgs->get<config::OspfAddressFamilyV3::BASE>());
+                return registry.emplace(afCfgs.get<config::OspfAddressFamilyV3::BASE>());
             }
             // OSPFv3 VRF mode does not support address families
             return registry.create<config::OspfRegistry>();
@@ -31,7 +31,7 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
             // OSPFv2 types::AddressFamily
             afConfigs.emplace<V2AfConfigs>(registry.create<config::OspfAddressFamilyV2Registry>());
             auto& afCfgs = std::get<V2AfConfigs>(afConfigs);
-            auto& v2Base = afCfgs->get<config::OspfAddressFamilyV2::BASE>();
+            auto& v2Base = afCfgs.get<config::OspfAddressFamilyV2::BASE>();
             return registry.emplace(v2Base);
         }
     }())
@@ -105,10 +105,17 @@ Area& OspfProcess::insureArea(uint32_t areaId)
 {
     if (!areas.contains(areaId))
     {
-        areas.try_emplace(areaId, *this, areaId); // TODO: maybe add pmr
+        areas.try_emplace(areaId, *this, areaId);
         setABR(areas.size() > 1 && areas.contains(0));
     }
     return areas.at(areaId);
+}
+
+void OspfProcess::removeArea(uint32_t areaId)
+{
+    if (!areas.contains(areaId)) return;
+    areas.erase(areaId);
+    setABR(areas.size() > 1 && areas.contains(0));
 }
 
 void OspfProcess::setASBR(bool val)
@@ -157,7 +164,7 @@ void OspfProcess::initiateReset()
 
 void OspfProcess::addDefaultRoute(bool add)
 {
-    bool always = configs->get<config::Ospf::DEFAULT_ORIGINATE_ALWAYS>().load();
+    bool always = configs.get<config::Ospf::DEFAULT_ORIGINATE_ALWAYS>().load();
 
     if (!always)
     {
@@ -178,10 +185,10 @@ void OspfProcess::addDefaultRoute(bool add)
     ExternalOriginateContext ctx = {
         .lsId = defaultRoute.value(),
         .prefix = types::IPPrefix(af),
-        .metric = configs->get<config::Ospf::DEFAULT_ORIGINATE_METRIC>().load(),
+        .metric = configs.get<config::Ospf::DEFAULT_ORIGINATE_METRIC>().load(),
         .tag = 0,
         .nextHop = std::nullopt,
-        .metricIsE2 = configs->get<config::Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>().load()
+        .metricIsE2 = configs.get<config::Ospf::DEFAULT_ORIGINATE_METRIC_TYPE>().load()
     };
 
     isV3 ? originateExternal<PolicyV3>(ctx, !add)
@@ -346,7 +353,7 @@ void OspfProcess::originateExternals(std::vector<std::pair<ExternalOriginateCont
 
 void OspfProcess::syncSummaryConfig()
 {
-    auto& cfg = configs->get<config::Ospf::SUMMARY_ADDRESS>();
+    auto& cfg = configs.get<config::Ospf::SUMMARY_ADDRESS>();
 
     std::unordered_map<types::IPPrefix, OspfSummaryAddress> active = summaries;
 
@@ -569,9 +576,9 @@ void OspfProcess::syncSummarySuppression(std::unordered_map<types::IPPrefix, Osp
         }
     }
 
-    if (configs->get<config::Ospf::DISCARD_EXTERNAL>().load())
+    if (configs.get<config::Ospf::DISCARD_EXTERNAL>().load())
     {
-        const uint8_t ad = configs->get<config::Ospf::DISCARD_EXTERNAL_DISTANCE>().load();
+        const uint8_t ad = configs.get<config::Ospf::DISCARD_EXTERNAL_DISTANCE>().load();
 
         for (const auto& [sumPfx, s] : activeSummaries)
         {

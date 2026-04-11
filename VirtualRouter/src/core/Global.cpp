@@ -15,10 +15,6 @@ namespace core
 Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRouting, bool test)
     : routingEnabled(enableRouting),
       registry(),
-      configs([&]() {
-          // TODO load registry if needed
-          return registry.create<config::GlobalRegistry>();
-      }()),
       threadPool(/*std::thread::hardware_concurrency()*/5),
       timeManager(threadPool),
       scheduler(threadPool, timeManager),
@@ -31,41 +27,10 @@ Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRo
     rxMgr.setCorePool({4, 5, 6, 7});
     rxMgr.setCpuPolicy(qos::ingress::RxQueueManager::CpuPolicy::EqualShare);
 
-    // Build required global registries
-    registry.emplace(configs->get<config::Global::IPV6_ND>());
-
     // Load VRFs out of global configs
-    {
-        std::lock_guard<std::mutex> lock(routingInstanceMutex);
-        for (const auto& [name, _] : configs->get<config::Global::VRF_CONFIGS>())
-        {
-            if (routingInstances.find(name) != routingInstances.end())
-                continue;
-            routingInstances.try_emplace(name, *this, name);
-        }
-    }
-
+    routingInstanceRefresh();
     // Load Interfaces out of global scope and assign correct VRFs
-    {
-        std::lock_guard<std::mutex> lock(interfaceMutex);
-        for (const auto& [id, cfg] : configs->get<config::Global::INTERFACE>())
-        {
-            auto [type, key] = id.decode();
-            uint32_t hwIface = engine.hwManager.getInterface(type, static_cast<int>(std::floor(key)));
-            const hardware::HwIfaceInfo* info = engine.hwManager.getHwInfo(hwIface);
-            if (!info) continue;
-
-            if (interfaceList.find(id) != interfaceList.end())
-                continue;
-
-            auto& ifaceVrfField = cfg->get<config::Interface::VRF_FORWARDING>();
-            std::string ifaceVrf;
-            ifaceVrfField.withRead([&ifaceVrf](const std::string& v) { ifaceVrf = v; });
-
-            interface::InterfaceCreation iface = {type, key, *getRoutingInstance(ifaceVrf), *info};
-            interfaceList.emplace(id, iface);
-        }
-    }
+    interfaceRefresh();
 }
 
 Global::~Global()
@@ -97,6 +62,38 @@ void Global::reset()
 }
       
 // Interfaces
+void Global::interfaceRefresh()
+{
+    {
+        std::lock_guard<std::mutex> lock(interfaceMutex);
+        auto& interfaceCfgs = configs.get<config::Global::INTERFACE>();
+        
+        // Erase
+        for (auto it = interfaceList.begin(); it != interfaceList.end();)
+        {
+            if (interfaceCfgs.find(it->first) == interfaceCfgs.end())
+                it = interfaceList.erase(it);
+            else
+                ++it;
+        }
+
+        for (auto& [id, cfg] : interfaceCfgs)
+        {
+            if (!interfaceList.contains(id))
+            {
+                auto [type, key] = id.decode();
+                const hardware::HwIfaceInfo* info = engine.hwManager.getHwInfo(id);
+                if (!info) continue;
+
+                std::string ifaceVrf = cfg.get<config::Interface::VRF_FORWARDING>().load();
+
+                interface::InterfaceCreation iface = {type, key, *getRoutingInstance(ifaceVrf), *info};
+                interfaceList.emplace(id, iface);
+            }
+        }
+    }
+}
+
 interface::Interface* Global::addInterface(interface::InterfaceKey key, const hardware::HwIfaceInfo& hwInfo, bool debug)
 {
     if (interfaceList.find(key) != interfaceList.end())
@@ -115,12 +112,6 @@ interface::Interface* Global::getInterface(interface::InterfaceKey key)
     return nullptr;
 }
 
-std::unordered_map<interface::InterfaceKey, interface::Interface>& Global::getInterfaceList()
-{
-    std::lock_guard<std::mutex> lock(interfaceMutex);
-    return interfaceList;
-}
-
 bool Global::removeInterface(interface::InterfaceKey key)
 {
     std::lock_guard<std::mutex> lock(interfaceMutex);
@@ -130,6 +121,29 @@ bool Global::removeInterface(interface::InterfaceKey key)
         return true;
     }
     return false;
+}
+
+void Global::routingInstanceRefresh()
+{
+    {
+        std::lock_guard<std::mutex> lock(routingInstanceMutex);
+        auto& vrfConfigs = configs.get<config::Global::VRF_CONFIGS>();
+
+        // Erase
+        for (auto it = routingInstances.begin(); it != routingInstances.end();)
+        {
+            if (vrfConfigs.find(it->first) == vrfConfigs.end())
+                it = routingInstances.erase(it);
+            else
+                ++it;
+        }
+
+        for (const auto& [name, _] : vrfConfigs)
+        {
+            if (!routingInstances.contains(name))
+                routingInstances.try_emplace(name, *this, name);
+        }
+    }
 }
 
 VirtualRouter* Global::addRoutingInstance(const std::string& name)

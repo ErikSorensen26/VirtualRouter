@@ -3,7 +3,7 @@
  */
 
 // RegistryBucket.hpp
-
+/*
 #ifndef REGISTRY_BUCKET_HPP
 #define REGISTRY_BUCKET_HPP
 
@@ -204,3 +204,4 @@ public:
 }
 
 #endif // REGISTRY_BUCKET_HPP
+*/

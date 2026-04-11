@@ -10,122 +10,75 @@ reliability, hello interval, hold time, and split horizon settings.
 #define ROUTER_EIGRP_INTERFACE_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/modes/contexts/EigrpContext.hpp"
+#include "cli/modes/contexts/Context.hpp"
+#include "configs/registry/router/EigrpInterfaceRegistry.h"
+
+#define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpInterfaceRegistry)
 
 namespace cli
 {
 bool RouterEigrpInterface_AuthenticationKeyChain_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_AuthenticationKeyChain = commandAdder<EigrpContext,
-    RouterEigrpInterface_AuthenticationKeyChain_Handler,
-    "authentication"_tok, "key-chain"_tok
->;
-
 bool RouterEigrpInterface_AuthenticationMode_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_AuthenticationMode = commandAdder<EigrpContext,
-    RouterEigrpInterface_AuthenticationMode_Handler,
-    "authentication"_tok, "mode"_tok
->;
-
 bool RouterEigrpInterface_BandwidthPercentage_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_BandwidthPercentage = commandAdder<EigrpContext,
-    RouterEigrpInterface_BandwidthPercentage_Handler,
-    "bandwidth-percentage"_tok
->;
-
 bool RouterEigrpInterface_DampeningChange_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_DampeningChange = commandAdder<EigrpContext,
-    RouterEigrpInterface_DampeningChange_Handler,
-    "dampening-change"_tok
->;
-
 bool RouterEigrpInterface_DampeningInterval_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_DampeningInterval = commandAdder<EigrpContext,
-    RouterEigrpInterface_DampeningInterval_Handler,
-    "dampening-interval"_tok
->;
-
-bool RouterEigrpInterface_Exit_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_Exit = commandAdder<EigrpContext,
-    RouterEigrpInterface_Exit_Handler,
-    "exit-af-interface"_tok
->;
-
 bool RouterEigrpInterface_HelloInterval_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_HelloInterval = commandAdder<EigrpContext,
-    RouterEigrpInterface_HelloInterval_Handler,
-    "hello-interval"_tok
->;
-
 bool RouterEigrpInterface_HoldTime_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_HoldTime = commandAdder<EigrpContext,
-    RouterEigrpInterface_HoldTime_Handler,
-    "hold-time"_tok
->;
-
 bool RouterEigrpInterface_NextHopSelf_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_NextHopSelf = commandAdder<EigrpContext,
-    RouterEigrpInterface_NextHopSelf_Handler,
-    "next-hop-self"_tok
->;
-
 bool RouterEigrpInterface_PassiveInterface_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_PassiveInterface = commandAdder<EigrpContext,
-    RouterEigrpInterface_PassiveInterface_Handler,
-    "passive-interface"_tok
->;
-
 // bool RouterEigrpInterface_Shutdown_Handler(EIGRP_PARAMS); //TODO
-
 bool RouterEigrpInterface_SplitHorizon_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_SplitHorizon = commandAdder<EigrpContext,
-    RouterEigrpInterface_SplitHorizon_Handler,
-    "split-horizon"_tok
->;
-
 bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS);
-using RouterEigrpInterface_SummaryAddress = commandAdder<EigrpContext,
-    RouterEigrpInterface_SummaryAddress_Handler,
-    "summary-address"_tok
->;
+
+bool RouterEigrpInterfaceV4_Exit_Handler(EIGRP_PARAMS);
+bool RouterEigrpInterfaceV6_Exit_Handler(EIGRP_PARAMS);
+
+#define ROUTER_EIGRP_INTERFACE_LIST(X, Y) \
+    X(Y, (_COM_, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (_COM_, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (_COM_, BandwidthPercentage, "bandwidth-percentage"_tok)) \
+    X(Y, (_COM_, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (_COM_, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (_COM_, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (_COM_, HoldTime, "hold-time"_tok)) \
+    X(Y, (_COM_, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (_COM_, PassiveInterface, "passive-interface"_tok)) \
+    X(Y, (_COM_, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (_COM_, SummaryAddress, "summary-address"_tok))
 
 /**
- * @brief Parser for EIGRP interface-level configuration commands.
+ * @brief Parser for EIGRPv4 interface-level configuration commands.
  * @ingroup CLI_MODE_PARSERS
  *
  * Configures per-interface EIGRP parameters including bandwidth, delay,
  * reliability, timers, and split horizon settings.
  */
-using RouterEigrpInterfaceCommands = CliModeParser<CliMode::None, EigrpContext,
-    RouterEigrpInterface_AuthenticationKeyChain,
-    RouterEigrpInterface_AuthenticationMode,
-    RouterEigrpInterface_BandwidthPercentage,
-    RouterEigrpInterface_DampeningChange,
-    RouterEigrpInterface_DampeningInterval,
-    RouterEigrpInterface_Exit,
-    RouterEigrpInterface_HelloInterval,
-    RouterEigrpInterface_HoldTime,
-    RouterEigrpInterface_NextHopSelf,
-    RouterEigrpInterface_PassiveInterface,
-    RouterEigrpInterface_SplitHorizon,
-    RouterEigrpInterface_SummaryAddress
->;
+DEFINE_CMD_MODE(RouterEigrpInterface, CliMode::None, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST)
+
+#define ROUTER_EIGRP_INTERFACE_LIST_V4(X, Y) \
+    X(Y, (_COM_, Exit, "exit-af-intervace"_tok)) \
+    X(Y, (_EXT_, RouterEigrpInterfaceCommands))
 
 /**
  * @brief IPv4 address-family interface mode parser.
  * @ingroup CLI_MODE_PARSERS
  */
-using RouterEigrpInterfaceV4Commands = CliModeParser<CliMode::RouterEigrpInterfaceV4, EigrpContext,
-    RouterEigrpInterfaceCommands
->;
+DEFINE_CMD_MODE(RouterEigrpInterfaceV4, CliMode::RouterEigrpInterfaceV4, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST_V4)
+
+#define ROUTER_EIGRP_INTERFACE_LIST_V6(X, Y) \
+    X(Y, (_COM_, Exit, "exit-af-intervace"_tok)) \
+    X(Y, (_EXT_, RouterEigrpInterfaceCommands))
 
 /**
  * @brief IPv6 address-family interface mode parser.
  * @ingroup CLI_MODE_PARSERS
  */
-using RouterEigrpInterfaceV6Commands = CliModeParser<CliMode::RouterEigrpInterfaceV6, EigrpContext,
-    RouterEigrpInterfaceCommands
->;
+DEFINE_CMD_MODE(RouterEigrpInterfaceV6, CliMode::RouterEigrpInterfaceV6, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST_V6)
 }
+
+#undef ROUTER_EIGRP_INTERFACE_LIST
+#undef ROUTER_EIGRP_INTERFACE_LIST_V4
+#undef ROUTER_EIGRP_INTERFACE_LIST_V6
+#undef EIGRP_PARAMS
 
 #endif // ROUTER_EIGRP_INTERFACE_COMMANDS_H

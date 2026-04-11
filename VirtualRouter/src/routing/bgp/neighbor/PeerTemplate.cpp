@@ -15,7 +15,7 @@ PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc)
       sessionConfigs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().emplace(
-        sessionConfigs->get<config::BgpNeighborSession::BGP_BASE>(),
+        sessionConfigs.get<config::BgpNeighborSession::BGP_BASE>(),
         proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
     );
 }
@@ -46,7 +46,7 @@ PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, BgpProces
       configs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().emplace(
-        configs->get<config::BgpNeighborSession::BGP_BASE>(),
+        configs.get<config::BgpNeighborSession::BGP_BASE>(),
         proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
     );
 }
@@ -75,7 +75,7 @@ void PeerTemplateTable::syncPeerGroups()
 {
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto& pgField = nbr.getConfigs().getConfigs()->get<config::BgpNeighborSession::PEER_GROUP>();
+        auto& pgField = nbr.getConfigs().getConfigs().get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
         {
             auto* pg = lookupPeerGroup(pgField.load());
@@ -98,7 +98,7 @@ void PeerTemplateTable::syncPeerSessionTemplates()
 {
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto& f = nbr.getConfigs().getConfigs()->get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
+        auto& f = nbr.getConfigs().getConfigs().get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
         if (f.hasValue())
         {
             auto* ps = lookupPeerSessionTemplate(f.load());

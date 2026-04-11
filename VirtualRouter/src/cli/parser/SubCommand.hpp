@@ -6,9 +6,9 @@
 #ifndef SUB_COMMAND_HPP
 #define SUB_COMMAND_HPP
 
-#include <type_traits>
 #include <cstdint>
 #include "cli/runtime/Token.hpp"
+#include "cli/modes/contexts/Context.hpp"
 
 /**
  * @brief Compile-time CLI command parsing and dispatch.
@@ -51,18 +51,13 @@ namespace cli
  * @see subAdder
  */
 template <
-    typename Context,
     typename SubParser,
     uint64_t... PrefixParts
 >
 struct SubCommand
 {
-    using ContextType = Context; ///< Context type shared with the parent parser.
+    using ContextType = SubParser::ContextType; ///< Context type shared with the parent parser.
 
-    static_assert(
-        std::is_same_v<typename SubParser::ContextType, Context>,
-        "SubCommand: SubParser must use the same Context type"
-    );
 
     /**
      * @brief Matches the prefix at `idx` and, on success, delegates to the sub-parser.
@@ -77,7 +72,7 @@ struct SubCommand
      * @param idx    Offset at which prefix matching begins.
      * @return `true` if the prefix matched and the sub-parser executed successfully.
      */
-    static bool tryExecute(Context& ctx, std::span<Token> tokens, size_t idx)
+    static bool tryExecute(Context<ContextType>& ctx, std::span<Token> tokens, size_t idx)
     {
         constexpr size_t prefixSize = sizeof...(PrefixParts);
         if (tokens.size() - idx < prefixSize)
@@ -104,11 +99,10 @@ struct SubCommand
  * @tparam Parts     Keyword hash NTTPs (`_tok` literals) forming the prefix.
  */
 template <
-    typename Context,
     typename SubParser,
     auto... Parts
 >
-using subAdder = SubCommand<Context, SubParser, Parts...>;
+using subAdder = SubCommand<SubParser, Parts...>;
 }
 
 #endif // SUB_COMMAND_HPP

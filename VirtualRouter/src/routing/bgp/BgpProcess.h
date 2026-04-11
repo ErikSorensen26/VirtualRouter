@@ -23,7 +23,7 @@
 #include "bgp/transport/BgpTx.h"
 #include "bgp/attributes/AttributeManager.hpp"
 #include "bgp/af/AddressFamily.hpp"
-#include "bgp/af/AddressFamilyInstance.h" // keep
+#include "bgp/af/AddressFamilyInstance.h" // IWYU pragma: keep
 
 namespace core { class VirtualRouter; }
 
@@ -291,7 +291,7 @@ private:
     AttributeManager attrMgr;     ///< Flyweight store for path attributes shared across all sessions.
     NeighborTable ntable;         ///< Configured and dynamic neighbor registry.
 
-    config::Reference<config::BgpRegistry> configs; ///< Process-level BGP configuration.
+    config::BgpRegistry& configs; ///< Process-level BGP configuration.
 };
 } // namespace routing
 

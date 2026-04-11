@@ -32,8 +32,8 @@ enum class Vrf
     ARP_STATIC_ENTRY,
     ROUTER_BGP_AS, // TODO
     ROUTER_BGP, // TODO
-    ROUTER_EIGRP_CLASSIC, // TODO
-    ROUTER_EIGRP_NAMED, // TODO
+    ROUTER_EIGRP_V4,
+    ROUTER_EIGRP_V6,
     ROUTER_OSPF, // TODO
     ROUTER_OSPFV3, // TODO
     ROUTER_RIP, // TODO
@@ -68,7 +68,6 @@ enum class Vrf
     IPV6_ROUTE, // TODO
     IPV6_ROUTE_STATIC_BFD, // TODO
     IPV6_ROUTE_STATIC_RESOLVE, // TODO
-    IPV6_ROUTER_EIGRP, // TODO uint16 reference
     IPV6_ROUTER_OSPF, // TODO uint16 reference
     IPV6_ROUTER_RIP_NAME, // TODO string
     IPV6_ROUTER_RIP, // TODO string reference
@@ -126,15 +125,18 @@ DEFINE_TUPLE_SCHEMA(IPv6Route, IPV6_ROUTE_FIELDS)
 
 DEFINE_TUPLE_SCHEMA(IPMRoute, IP_MROUTE_FIELDS)
 
+void VrfRouterEigrpV4(void*);
+void VrfRouterEigrpV6(void*);
+
 using VrfRegistry = SubRegistry<Vrf,
     ListField<std::tuple<types::IPv4Address, IGNOR(types::Mac), std::optional<interface::InterfaceKey>> CONFIG_INDEX_ARG(ARP_STATIC_ENTRY)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Vrf::ROUTER_BGP_AS)>,
-    ReferenceContainer<BgpRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_BGP)>,
-    OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_CLASSIC)>,
-    OwnedListField<EigrpRegistry, std::string CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_NAMED)>,
+    RegistryContainer<BgpRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_BGP)>,
+    OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V4), VrfRouterEigrpV4>,
+    OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_EIGRP_V6), VrfRouterEigrpV6>,
     OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPF)>,
     OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::ROUTER_OSPFV3)>,
-    ReferenceContainer<EmptyRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_RIP)>,
+    RegistryContainer<EmptyRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_RIP)>,
     OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LIST)>,
     OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_LOOKUP_SOURCE_INTERFACE)>,
     OptionalAtomicField<Incomplete CONFIG_INDEX_ARG(Vrf::IP_DOMAIN_NAME)>,
@@ -166,10 +168,9 @@ using VrfRegistry = SubRegistry<Vrf,
     ListField<std::vector<IPv6Route> CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE)>,
     ListField<std::vector<std::tuple<interface::InterfaceKey, types::IPv6Address, bool>> CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_BFD)>,
     AtomicField<bool CONFIG_INDEX_ARG(Vrf::IPV6_ROUTE_STATIC_RESOLVE)>,
-    OwnedListField<EigrpRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_EIGRP)>,
     OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_OSPF)>,
     ValueField<std::string CONFIG_INDEX_ARG(Vrf::IPV6_ROUTER_RIP_NAME)>,
-    ReferenceContainer<EmptyRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_RIP)>
+    RegistryContainer<EmptyRegistry CONFIG_INDEX_ARG(Vrf::ROUTER_RIP)>
 >;
 }
 

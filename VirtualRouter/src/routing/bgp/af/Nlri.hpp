@@ -200,12 +200,15 @@ private:
             auto& nh = attrs.path.nextHop;
             if (!nh.isIPv4()) return false;
             uint32_t addr = nh.v4();
-            const core::RibEntry<uint32_t>* nhEntry = rib.lookup(nh.v4raw());
-            if (!nhEntry)
-                return false;
-            if (!install.recursiveHost && nhEntry->length == 32)
-                return false;
-            entry->addNextHop(addr, nhEntry->nextHops[0].iface);
+            {
+                utils::RCU::Guard g;
+                const core::RibEntry<uint32_t>* nhEntry = rib.lookup(nh.v4raw(), g);
+                if (!nhEntry)
+                    return false;
+                if (!install.recursiveHost && nhEntry->length == 32)
+                    return false;
+                entry->addNextHop(addr, nhEntry->nextHops[0].iface);
+            }
             return true;
         };
 

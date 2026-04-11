@@ -4,177 +4,166 @@
 #include <ByteUtils.hpp>
 
 #include "InterfaceIPOspfCommands.h"
-#include "interface/Interface.h"
 #include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "configs/registry/interface/InterfaceRegistry.h"
 #include "cli/runtime/CliSession.h"
-#include "ospf/OspfProcess.h"
-#include "ospf/interface/OspfInterface.h"
-#include "ospf/interface/InterfaceManager.h"
+#include "cli/parser/CommandUtils.hpp"
+
+#define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 
 namespace cli
 {
+config::OspfInterfaceBaseRegistry& getOspfConfigs(Context<config::InterfaceRegistry>& ctx)
+{
+    return ctx.configs.get<config::Interface::IP_OSPF>().get();
+}
+
 bool InterfaceIPOspf_Area_Handler(INTERFACE_PARAMS)
 {
-    auto& ifaceConfigs = ctx.currentInterface.getOspfConfig().get();
+    config::OspfInterfaceBaseRegistry* ospf = nullptr;
 
-    // TODO: add to process queue
-    auto* vrf = ctx.currentInterface.getVRF();
-    if (ctx.negate)
-    {
-	auto* ospf = vrf->getOspf(static_cast<uint32_t>(std::stoi(args[0])));
-	if (!ospf) return true;
-	ospf->getIfaceMgr().removeInterface({ctx.currentInterface.configs.ipv4.getPrimaryAddress().addr, static_cast<uint32_t>(std::stoi(args[2]))});
+    uint16_t id;
+    if (!utils::setValue(id, segs >> 0 >> 1))
+	return false;
 
-	ifaceConfigs.get<config::OspfInterfaceBase::PROCESS_ID>().unset();
-	ifaceConfigs.get<config::OspfInterfaceBase::AREA_ID>().unset();
-	ifaceConfigs.get<config::OspfInterfaceBase::INCLUDE_SECONDARIES>().unset();
-    }
-    else if (ifaceConfigs.context().hasCtx())
-    {
-	auto* ospf = vrf->getOspf(static_cast<uint32_t>(std::stoi(args[0])));
-	if (!ospf || !ctx.currentInterface.configs.ipv4.hasPrimaryAddress()) return false;
-
-	auto& context = *static_cast<routing::ospf::OspfInterface*>(ifaceConfigs.context().get());
-	if (context.getArea().process().getProcId() != static_cast<uint32_t>(std::stoi(args[0])) ||
-	    context.getArea().areaId != static_cast<uint32_t>(std::stoi(args[1])))
-	{
-	    // Remove interface from other area
-	    context.getArea().process().getIfaceMgr().removeInterface(routing::ospf::OspfInterfaceId(ctx.currentInterface.configs.ipv4.getPrimaryAddress().addr, context.getArea().areaId));
-	}
-
-	ifaceConfigs.context().clear();
-	uint32_t areaId = static_cast<uint32_t>(std::stoi(args[1]));
-	ospf->getIfaceMgr().createInterface(ctx.currentInterface, {ctx.currentInterface.configs.ipv4.getPrimaryAddress().addr, areaId});
-
-	ifaceConfigs.get<config::OspfInterfaceBase::PROCESS_ID>().set(ospf->getProcId());
-	ifaceConfigs.get<config::OspfInterfaceBase::AREA_ID>().set(areaId);
-    }
-    
-    bool includeSecondaries = args.size() != 4;
-    ifaceConfigs.get<config::OspfInterfaceBase::INCLUDE_SECONDARIES>().set(ctx.negate ? !includeSecondaries : includeSecondaries);
+    types::IPv4Address areaId;
+    auto idTok = segs >> 1 >> 1;
+    if (!utils::setValue(areaId, idTok) && !utils::setValue(areaId.addr, idTok))
+	return false;
+    auto& area = ospf->get<config::OspfInterfaceBase::AREA_ID>();
+    if (!utils::handleValueReset(area, ctx))
+	area.set(areaId.addr);
+    auto& secondaries = ospf->get<config::OspfInterfaceBase::INCLUDE_SECONDARIES>();
+    if (!utils::handleValueReset(secondaries, ctx) && (segs >> 2))
+	utils::setToggleValue(secondaries, ctx);
     return true;
 }
 
 bool InterfaceIPOspf_Authentication_Handler(INTERFACE_PARAMS)
 {
-    auto& authType = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    auto& ospf = getOspfConfigs(ctx);
+    auto& authType = ospf.get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
 
-    if (ctx.negate)
+    if (segs.empty())
     {
-	authType.unset();
+	if (utils::handleValueReset(authType, ctx))
+	    return true;
+	authType.set(config::ospf::AuthType::SIMPLE);
 	return true;
     }
-
-    if (args[0] == "message-digest")
-	authType.set(config::ospf::AuthType::CRYPTO);
-    else if (args[0] == "null")
-	authType.set(config::ospf::AuthType::NULL_AUTH);
     else
-	authType.set(config::ospf::AuthType::SIMPLE);
-
-    return true;
+    {
+	switch (segs[0][0])
+	{
+	    case "message-digest"_tok:
+	    {
+		authType.set(config::ospf::AuthType::CRYPTO);
+		return true;
+	    }
+	    case "null"_tok:
+	    {
+		authType.set(config::ospf::AuthType::NULL_AUTH);
+		return true;
+	    }
+	}
+    }
+    return false;
 }
 
 bool InterfaceIPOspf_AuthenticationKey_Handler(INTERFACE_PARAMS)
 {
-    // TODO: handle encryption type
-
-    auto& key = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
-    if (ctx.negate)
+    auto& ospf = getOspfConfigs(ctx);
+    auto& authKey = ospf.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+    if (utils::handleValueReset(authKey, ctx))
+	return true;
+    Token* t = segs >> 0 >> 1;
+    if (t)
     {
-	key.unset();
+	std::string keyStr = std::string(t->value).append(std::min<size_t>(0, 8 - t->value.size()), '\0');
+	uint64_t key = ::utils::readU64(reinterpret_cast<uint8_t*>(keyStr.data()));
+	authKey.set(key);
 	return true;
     }
-
-    key.set(utils::readU64(reinterpret_cast<const uint8_t*>(args[1].data())));
-    return true;
+    return false;
 }
 
 bool InterfaceIPOspf_LLS_Handler(INTERFACE_PARAMS)
 {
-    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::LLS>().set(!(ctx.negate || args.size() == 1));
+    auto& ospf = getOspfConfigs(ctx);
+    auto& lls = ospf.get<config::OspfInterfaceBase::LLS>();
+    if (!utils::handleValueReset(lls, ctx))
+	return true;
+    bool disable = segs >> 1; // Disable
+    lls.set(!disable);
     return true;
 }
 
 bool InterfaceIPOspf_MessageDigestKey_Handler(INTERFACE_PARAMS)
 {
-    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withWrite(
-    [&](std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>& keys) {
-	    if (ctx.negate)
+    auto& ospf = getOspfConfigs(ctx);
+    auto& digestKeys = ospf.get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>();
+    config::DefType<decltype(digestKeys)>::node tup;
+    for (const auto& seg : segs)
+    {
+	switch (seg[0])
+	{
+	    case "message-digest-key"_tok:
 	    {
-		keys.erase(std::remove_if(keys.begin(), keys.end(), [&](const auto& key) {
-		    return std::get<0>(key) == std::stoi(args[0]);
-		}));
-		return;
+		if (!utils::setTupleElement(std::get<0>(tup), segs >> 0 >> 1))
+		    return false;
+		break;
 	    }
-
-	    // TODO: handle encryption
-
-	    std::array<uint8_t, 16> keyString;
-	    std::copy_n(args[2].data(), std::min(args[2].size(), size_t(16)), keyString.data());
-	    uint64_t now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-		std::chrono::steady_clock::now().time_since_epoch()
-	    ).count());
-
-	    for (auto& key : keys)
+	    case "md5"_tok:
 	    {
-		if (std::get<0>(key) == std::stoi(args[0]))
-		{
-		    std::get<1>(key) = keyString;
-		    std::get<2>(key) = now;
-		}
+		std::string value;
+		utils::setValue(value, seg >> 1);
+		value.append(16 - value.size(), '\0');
+		auto& arr = std::get<1>(tup);
+		std::memcpy(arr.value.data(), value.data(), 16);
+		break;
 	    }
+	}
+    }
 
-	    keys.push_back(std::make_tuple(
-		static_cast<uint8_t>(std::stoi(args[0])),
-		keyString, now
-	    ));
-	});
-    return true;
+    return utils::setListEntry(digestKeys, ctx, tup);
 }
 
 bool InterfaceIPOspf_PrefixSuppression_Handler(INTERFACE_PARAMS)
 {
-    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>().set(!(ctx.negate || args.size() == 1));
+    auto& ospf = getOspfConfigs(ctx);
+    auto& ps = ospf.get<config::OspfInterfaceBase::PREFIX_SUPPRESSION>();
+    if (!utils::handleValueReset(ps, ctx))
+	return true;
+    bool disable = segs >> 1; // Disable
+    ps.set(!disable);
     return true;
 }
 
 bool InterfaceIPOspf_ResyncTimeout_Handler(INTERFACE_PARAMS)
 {
-    auto& resync = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::RESYNC_TIMEOUT>();
-    if (ctx.negate)
-    {
-	resync.unset();
-	return true;
-    }
-
-    resync.set(static_cast<uint16_t>(std::stoi(args[0])));
-    return true;
+    auto& resync = getOspfConfigs(ctx).get<config::OspfInterfaceBase::RESYNC_TIMEOUT>();
+    return utils::setFieldValue(resync, ctx, segs >> 0 >> 1);
 }
 
 bool InterfaceIPOspf_Shutdown_Handler(INTERFACE_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::SHUTDOWN>().set(!ctx.negate);
+    UNUSED(segs);
+    auto& shut = getOspfConfigs(ctx).get<config::OspfInterfaceBase::SHUTDOWN>();
+    utils::setToggleValue(shut, ctx);
     return true;
 }
 
 bool InterfaceIPOspf_TtlSecurity_Handler(INTERFACE_PARAMS)
 {
-    auto& config = ctx.currentInterface.getOspfConfig()->get<config::OspfInterfaceBase::BASE>().local();
-    auto& ttl = config->get<config::OspfInterface::TTL_SEC>();
-    auto& hops = config->get<config::OspfInterface::TTL_SEC_HOPS>();
-
-    if (!ctx.negate || (args.size() == 1))
-    {
-	ttl.unset();
-	ttl.unset();
+    auto& ospf = getOspfConfigs(ctx);
+    auto& ttlSec = ospf.get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::TTL_SEC>();
+    auto& ttlSecHops = ospf.get<config::OspfInterfaceBase::BASE>().get().get<config::OspfInterface::TTL_SEC_HOPS>();
+    if (utils::handleValueReset(ttlSec, ctx) && utils::handleValueReset(ttlSecHops, ctx))
 	return true;
-    }
-
-    ttl.set(true);
-    if (args.size() == 2)
-	hops.set(static_cast<uint8_t>(std::stoi(args[1])));
+    ttlSec.set((segs >> 0 >> 0) != "disable"_tok);
+    utils::setFieldValueWithFallback(ttlSecHops, ctx, segs >> 0 >> 1);
     return true;
 }
 }
+
+#undef INTERFACE_PARAMS

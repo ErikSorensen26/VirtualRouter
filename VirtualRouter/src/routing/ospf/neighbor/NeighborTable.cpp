@@ -113,7 +113,12 @@ Neighbor* NeighborTable::createNeighbor(uint32_t rid, const types::IPAddress& ip
 
 void NeighborTable::deleteNeighbor(uint32_t rid, bool /*unicast*/)
 {
-    neighbors.erase(rid);
+    auto it = neighbors.find(rid);
+    if (it == neighbors.end()) return;
+
+    // Formally tear down adjacency: flushes LSAs and clears retransmission lists
+    it->second.setState(Neighbor::State::DOWN);
+    neighbors.erase(it);
 }
 
 Neighbor* NeighborTable::lookup(uint32_t rid)
@@ -135,7 +140,7 @@ const Neighbor* NeighborTable::lookup(uint32_t rid) const
 std::optional<size_t> NeighborTable::addNeighborList(uint8_t* buf, size_t maxSize)
 {
     size_t siz = neighbors.size();
-    if (maxSize > siz * 4) return std::nullopt;
+    if (maxSize < siz * 4) return std::nullopt; // buffer too small
     size_t off = 0;
     for (auto& [rid, _] : neighbors)
     {

@@ -24,10 +24,8 @@
 #include "qos/ingress/RxQueueManager.h"
 #include "cli/runtime/CliEngine.h"
 #include "security/keys/KeyChainManager.h"
-#include "configs/Registry.hpp"
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
-#include "configs/RegistryReference.hpp"
 #include "configs/registry/global/GlobalRegistry.h"
 
 namespace interface { class Interface; }
@@ -210,6 +208,17 @@ public:
     bool isAAA() {return aaaEnabled.load(std::memory_order_relaxed); }
 
     // INTERFACE MANAGEMENT
+    
+    /**
+     * @brief Reconciles the live interface list with the current configuration registry.
+     *
+     * Called after any change to the interface configuration table. Creates
+     * interfaces that appear in the registry but not in the live list, and
+     * removes interfaces present in the live list but absent from the registry.
+     * Each new interface is initialized with hardware metadata and assigned to
+     * the default VRF.
+     */
+    void interfaceRefresh();
 
     /**
      * @brief Create a new logical or physical interface and assign it to the default VRF.
@@ -238,16 +247,6 @@ public:
     interface::Interface* getInterface(interface::InterfaceKey key);
 
     /**
-     * @brief Retrieve the entire interface table.
-     *
-     * @warning The returned reference exposes internal data structures and is only safe
-     * while the caller holds the implicit lock created by Global’s internal mutex.
-     *
-     * This is exposed because certain routing protocols require full interface iteration.
-     */
-    std::unordered_map<interface::InterfaceKey, interface::Interface>& getInterfaceList();
-
-    /**
      * @brief Remove and destroy an interface.
      *
      * All protocol sessions on the interface should already be shut down externally.
@@ -258,6 +257,16 @@ public:
     bool removeInterface(interface::InterfaceKey key);
 
     // ROUTING INSTANCES (VRFs)
+
+    /**
+     * @brief Reconciles the live VRF list with the current configuration registry.
+     *
+     * Called after any change to the VRF configuration table. Creates VRF
+     * instances that appear in the registry but not in the live routing instance
+     * map, and removes VRFs that are no longer configured. Newly created VRFs
+     * are initialized with their configured address families.
+     */
+    void routingInstanceRefresh();
 
     /**
      * @brief Create a new routing instance (VRF).
@@ -279,7 +288,7 @@ public:
      * @param ad Address family (IPv4/IPv6). If NONE, any AF is accepted.
      * @return Pointer to VirtualRouter or nullptr if not found or AF not enabled.
      */
-    VirtualRouter* getRoutingInstance(const std::string& name, types::AddressFamily = types::AddressFamily::NONE);
+    VirtualRouter* getRoutingInstance(const std::string& name = "default", types::AddressFamily = types::AddressFamily::NONE);
 
     /**
      * @brief Remove a routing instance.
@@ -341,9 +350,7 @@ public:
     bool routingEnabled = false; ///< Initial routing enable flag.
     bool testingMode = false;    ///< Testing mode flag.
 
-    config::Registry registry; ///< Global configuration registry (read by CLI and protocol subsystems).
-
-    config::Reference<config::GlobalRegistry> configs; ///< Global ARP/NDP/NSF/etc configuration
+    config::GlobalRegistry configs; ///< Global ARP/NDP/NSF/etc configuration
 
     core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
     core::TimeManager timeManager;     ///< Global time manager for time keeping.

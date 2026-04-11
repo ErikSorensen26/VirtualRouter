@@ -10,28 +10,23 @@
 #define GLOBAL_IP_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/SubCommand.hpp"
-#include "cli/modes/contexts/GlobalContext.hpp"
-#include "GlobalIPDHCPCommands.h"
+#include "configs/registry/global/GlobalRegistry.h"
+
+#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
+#define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
-bool GlobalIP_DHCP_Handler(GLOBAL_PARAMS);
-using GlobalIP_DHCP = subAdder<GlobalContext,
-    GlobalIPDHCPCommands,
-    "dhcp"_tok
->;
+bool GlobalIP_DHCP_SubHandler(GLOBAL_SUB_PARAMS);
 
-/**
- * @brief Parser for the `ip` sub-tree in Global Configuration mode.
- * @ingroup CLI_MODE_PARSERS
- *
- * Covers `CliMode::GlobalConfiguration` with `GlobalContext` and
- * currently exposes the `ip dhcp` sub-tree.
- */
-using GlobalIPCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalContext,
-    GlobalIP_DHCP
->;
+#define GLOBAL_IP_LIST(X, Y) \
+    X(Y, (_SUB_, DHCP, "dhcp"_tok))
+
+DEFINE_CMD_MODE(GlobalIP, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IP_LIST);
 }
+
+#undef GLOBAL_IP_LIST
+#undef GLOBAL_PARAMS
+#undef GLOBAL_SUB_PARAMS
 
 #endif

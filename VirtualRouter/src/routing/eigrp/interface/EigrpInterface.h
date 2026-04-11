@@ -25,7 +25,6 @@
 #include "TopologyController.h"
 #include "eigrp/rtp/ReliableTransport.h"
 #include "eigrp/rtp/NeighborTable.h"
-#include "configs/RegistryReference.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "interface/configs/InterfaceType.hpp"
 
@@ -64,7 +63,7 @@ public:
      * @param ifaceReg    Registry reference holding the per-interface config.
      * @param interface   The underlying network interface object.
      */
-    EigrpInterface(Eigrp& eigrpSystem, config::Reference<config::EigrpInterfaceRegistry>& ifaceReg, interface::Interface& interface);
+    EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistry& ifaceReg, interface::Interface& interface);
 
     /**
      * @brief Tears down timers and removes all neighbors before destruction.
@@ -156,10 +155,10 @@ public:
      */
     bool isAuthEnabled() const
     {
-        return configs->get<config::EigrpInterface::AUTHENTICATION_MODE>().load() != config::eigrp::AuthType::NONE;
+        return configs.get<config::EigrpInterface::AUTHENTICATION_MODE>().load() != config::eigrp::AuthType::NONE;
     }
 
-    config::Reference<config::EigrpInterfaceRegistry> configs; ///< Registry-backed configuration for this interface.
+    config::EigrpInterfaceRegistry& configs; ///< Registry-backed configuration for this interface.
 
     // RUNTIME STATE (not persisted in registry)
     std::atomic<bool> multicastEnabledFlag{true};  ///< Whether multicast is currently enabled.

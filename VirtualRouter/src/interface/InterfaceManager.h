@@ -102,7 +102,6 @@ public:
     using IPv4EventMgr = utils::EventManager<IPv4Event, Interface, types::IPv4Prefix>;
     using IPv6EventMgr = utils::EventManager<IPv6Event, Interface, types::IPv6Prefix>;
 
-
     /**
      * @brief Add an interface to the VRF.
      * @return The inserted pointer, or nullptr if the key is already present.

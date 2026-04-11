@@ -33,7 +33,7 @@ Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
           : *static_cast<Originator*>(new OriginatorV2(*this))
       ),
       scheduler(base.getScheduler()),
-      type(configs->get<config::OspfArea::AREA_TYPE>().load()),
+      type(configs.get<config::OspfArea::AREA_TYPE>().load()),
       areaId(id)
 {
     configs->context().set(this);
@@ -179,7 +179,10 @@ void Area::runDCIntegrityScan()
             {
                 iface.floodReduction = enabled;
 
-                // TODO: refresh interface
+                // Re-announce the updated DC bit to neighbors and re-originate
+                // this interface's router-LSA contribution with the new options.
+                iface.getTimers().scheduleHello();
+                iface.getArea().getOriginator().updateInterface(iface.id.interfaceId);
             }
         }
     }
@@ -197,14 +200,15 @@ void Area::setFloodReduction(OspfInterface& iface)
     if (iface.floodReduction != enableFloodReduction)
     {
         iface.floodReduction = enableFloodReduction;
-        // TODO: refresh interface
+        iface.getTimers().scheduleHello();
+        iface.getArea().getOriginator().updateInterface(iface.id.interfaceId);
     }
 }
 
 bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 {
     if ((type == config::ospf::AreaType::NSSA || type == config::ospf::AreaType::TOTALLY_NSSA) &&
-        configs->get<config::OspfArea::NSSA_SUPPRESS_FA>().load())
+        configs.get<config::OspfArea::NSSA_SUPPRESS_FA>().load())
         return false;
 
     if (base.getConfigs().get<config::Ospf::LRC_FORWARDING_ADDRESS>().load())
@@ -221,7 +225,7 @@ bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 
 void Area::syncRangeConfig()
 {
-    auto& cfgRanges = configs->get<config::OspfArea::RANGE>();
+    auto& cfgRanges = configs.get<config::OspfArea::RANGE>();
     std::unordered_set<types::IPPrefix> activeRanges;
     rangePrefixes.clear();
 

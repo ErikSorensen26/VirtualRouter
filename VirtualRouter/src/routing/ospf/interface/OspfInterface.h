@@ -86,7 +86,6 @@ public:
      * @param id       Composite key (hardware index + area) for this interface.
      */
     OspfInterface(OspfProcess& proc, interface::Interface& iface,
-                  config::Reference<config::OspfInterfaceBaseRegistry>& configs,
                   const OspfInterfaceId& id);
 
     /**
@@ -110,10 +109,10 @@ public:
     const InterfaceFlagManager& getFlags() const { return flags; }
     InterfaceFlagManager& getLsaFlags() { return lsaFlags; }
     const InterfaceFlagManager& getLsaFlags() const { return lsaFlags; }
-    config::OspfInterfaceRegistry& getConfigs() { return configs.get(); }
-    const config::OspfInterfaceRegistry& getConfigs() const { return configs.get(); }
-    config::OspfInterfaceBaseRegistry& getBaseConfigs() { return baseConfigs.get(); }
-    const config::OspfInterfaceBaseRegistry& getBaseConfigs() const noexcept { return baseConfigs.get(); }
+    config::OspfInterfaceRegistry& getConfigs() { return configs; }
+    const config::OspfInterfaceRegistry& getConfigs() const { return configs; }
+    config::OspfInterfaceBaseRegistry& getBaseConfigs() { return baseConfigs; }
+    const config::OspfInterfaceBaseRegistry& getBaseConfigs() const noexcept { return baseConfigs; }
 
     /**
      * @brief Returns the OSPF area this interface participates in.
@@ -250,8 +249,8 @@ private:
     InterfaceTimers tmgr;
     interface::Interface& iface;
 
-    config::Reference<config::OspfInterfaceRegistry> configs;         ///< Version-specific interface config.
-    config::Reference<config::OspfInterfaceBaseRegistry> baseConfigs; ///< Base (version-agnostic) interface config.
+    config::OspfInterfaceBaseRegistry& baseConfigs; ///< Base (version-agnostic) interface config.
+    config::OspfInterfaceRegistry& configs;         ///< Version-specific interface config.
 };
 
 } // namespace routing::ospf

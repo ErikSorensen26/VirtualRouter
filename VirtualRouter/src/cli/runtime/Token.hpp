@@ -14,8 +14,6 @@ namespace utils
 {
     bool isNumericRange(std::string_view);
 }
-constexpr uint64_t ARG = 0;
-
 
 /**
  * @brief Pattern category assigned to a token matched against a variable placeholder.
@@ -24,39 +22,45 @@ constexpr uint64_t ARG = 0;
  * named placeholder in the command tree (e.g. `A.B.C.D`, `LINE`, `<0-255>`).
  * `None` means the token is a fixed command keyword, not a user-supplied value.
  */
-enum class PatternKind
+
+enum Pattern : uint64_t
 {
-    NONE,          ///< Fixed command keyword — not a user-supplied variable.
-    WORD,          ///< Matches the `WORD` placeholder (hostname, name, identifier).
-    LINE,          ///< Matches the `LINE` placeholder; value contains the full remainder of the input.
-    IPV4,          ///< Matches the `A.B.C.D` placeholder.
-    IPV6,          ///< Matches the `X:X:X:X::X` placeholder.
-    IPV6_PREFIX,   ///< Matches the `X:X:X:X::X/<0-128>` placeholder.
-    MAC,           ///< Matches the `H.H.H` placeholder.
-    NUMERIC_RANGE, ///< Matches a `<lo-hi>` numeric range placeholder.
+    P_ARG,           ///< Does not match anything, also represents all.
+    P_WORD,          ///< Matches the `WORD` placeholder (hostname, name, identifier).
+    P_LINE,          ///< Matches the `LINE` placeholder; value contains the full remainder of the input.
+    P_IPV4,          ///< Matches the `A.B.C.D` placeholder.
+    P_IPV6,          ///< Matches the `X:X:X:X::X` placeholder.
+    P_IPV6PFX,       ///< Matches the `X:X:X:X::X/<0-128>` placeholder.
+    P_IPV4PFX,       ///< Matches the `A.B.C.D/nn` placeholder.
+    P_MAC,           ///< Matches the `H.H.H` placeholder.
+    P_NUMRNG,        ///< Matches a `<lo-hi>` numeric range placeholder.
+    P_NONE,          ///< Fixed command keyword — not a user-supplied variable.
+    P_COUNT,
 };
 
+
 /**
- * @brief Maps a placeholder string from the command tree to its @ref PatternKind.
+ * @brief Maps a placeholder string from the command tree to its @ref Pattern.
  *
  * Called during token resolution to classify whether a command-tree node is a
  * user-supplied variable placeholder (e.g. `"A.B.C.D"`, `"LINE"`, `"<0-255>"`)
- * or a fixed keyword. Returns @ref PatternKind::NONE for anything that does not
+ * or a fixed keyword. Returns @ref Pattern::NONE for anything that does not
  * match a known placeholder.
  *
  * @param p  Placeholder string exactly as it appears in the command tree.
- * @return   The @ref PatternKind that matches @p p, or `PatternKind::NONE`.
+ * @return   The @ref Pattern that matches @p p, or `Pattern::NONE`.
  */
-static PatternKind matchVolatilePattern(std::string_view p)
+static Pattern matchVolatilePattern(std::string_view p)
 {
-    if (p == "LINE")               return PatternKind::LINE;
-    if (p == "WORD")               return PatternKind::WORD;
-    if (p == "A.B.C.D")            return PatternKind::IPV4;
-    if (p == "X:X:X:X::X")         return PatternKind::IPV6;
-    if (p == "X:X:X:X::X/<0-128>") return PatternKind::IPV6_PREFIX;
-    if (p == "H.H.H")              return PatternKind::MAC;
-    if (utils::isNumericRange(p))  return PatternKind::NUMERIC_RANGE;
-    return PatternKind::NONE;
+    if (p == "LINE")               return P_LINE;
+    if (p == "WORD")               return P_WORD;
+    if (p == "A.B.C.D")            return P_IPV4;
+    if (p == "X:X:X:X::X")         return P_IPV6;
+    if (p == "X:X:X:X::X/<0-128>") return P_IPV6PFX;
+    if (p == "A.B.C.D/nn")         return P_IPV4PFX;
+    if (p == "H.H.H")              return P_MAC;
+    if (utils::isNumericRange(p))  return P_NUMRNG;
+    return P_NONE;
 }
 
 
@@ -78,7 +82,7 @@ struct Token
     {}
 
     Token(std::string_view token)
-        : hash(tokenHash(token)), value(token), pattern(PatternKind::NONE)
+        : hash(tokenHash(token)), value(token), pattern(P_NONE)
     {}
 
     static constexpr uint64_t tokenHash(std::string_view sv)
@@ -87,20 +91,26 @@ struct Token
         for (char c : sv) {
             h = h * 31 + static_cast<uint64_t>(c);
         }
-        if (h == 0) ++h;
+        if (h <= static_cast<uint64_t>(P_COUNT))
+            h += static_cast<uint64_t>(P_COUNT);
         return h;
     }
 
     uint64_t hash;
     std::string_view value;
-    PatternKind pattern = PatternKind::NONE;
+    Pattern pattern = P_NONE;
 
-    bool isLine()    const { return pattern == PatternKind::LINE; }
-    bool isPattern() const { return pattern != PatternKind::NONE; }
+    bool isLine()    const { return pattern == P_LINE; }
+    bool isPattern() const { return pattern != P_NONE; }
 
     operator std::string_view() const { return value; }
     operator uint64_t() const { return hash; }
 };
+
+consteval uint64_t operator""_tok(const char* str, size_t len)
+{
+    return Token::tokenHash(std::string_view(str, len));
+}
 
 inline bool operator==(const Token& t, std::string_view s) { return t.value == s; }
 inline bool operator!=(const Token& t, std::string_view s) { return t.value != s; }
@@ -110,10 +120,57 @@ inline bool operator==(uint64_t s, const Token& t) { return t.hash == s; }
 inline bool operator!=(const Token& t, uint64_t s) { return t.hash != s; }
 inline bool operator!=(uint64_t s, const Token& t) { return t.hash != s; }
 
-inline Token* operator>>(const std::span<Token>& seg, size_t idx)
+struct TokenPtr
+{
+    TokenPtr(Token* p = nullptr)
+        : ptr(p)
+    {}
+
+    operator Token*() const { return ptr; }
+    explicit operator bool() const { return ptr != nullptr; }
+    Token* ptr = nullptr;
+};
+
+struct TokenSegment
+{
+    TokenSegment(const std::span<Token>* s = nullptr)
+        : ptr(s)
+    {}
+
+    operator const std::span<Token>*() const { return ptr; }
+    explicit operator bool() const { return ptr != nullptr; }
+    const std::span<Token>* ptr = nullptr;
+
+    inline TokenPtr operator>>(size_t idx)
+    {
+        if (!ptr) return nullptr;
+        if (idx >= ptr->size()) return nullptr;
+        return &(*ptr)[idx];
+    }
+};
+
+inline TokenPtr operator>>(const std::span<Token>& seg, size_t idx)
 {
     if (idx >= seg.size()) return nullptr;
     return &seg[idx];
+}
+
+inline TokenSegment operator>>(const std::vector<std::span<Token>>& segs, size_t idx)
+{
+    if (idx >= segs.size()) return TokenSegment{};
+    return TokenSegment{&segs[idx]};
+}
+
+inline bool operator==(const TokenPtr& t, uint64_t sv)
+{
+    if (!t.ptr) return false;
+    return sv == t.ptr->hash;
+}
+
+inline bool operator!=(const TokenPtr& t, uint64_t sv)
+{
+    if (!t.ptr) return true;
+    return sv != t.ptr->hash;
 }
 
 
@@ -134,23 +191,44 @@ inline Token* operator>>(const std::span<Token>& seg, size_t idx)
  * @param tokens  Flat span of resolved @ref Token objects from the parser.
  * @return        Vector of sub-spans, each starting at a keyword token.
  */
-inline std::vector<std::span<Token>> segmentTokens(std::span<Token> tokens)
+inline std::vector<std::span<Token>> segmentTokens(std::span<Token> tokens, size_t threshold)
 {
     std::vector<std::span<Token>> segments;
     const size_t n = tokens.size();
-    size_t i = 0;
+    if (n == 0) return segments;
 
-    while (i < n && tokens[i].isPattern())
-        ++i;
+    size_t firstPattern = n;
+    for (size_t j = 0; j < n; ++j)
+    {
+        if (tokens[j].isPattern())
+        {
+            firstPattern = j;
+            break;
+        }
+    }
+
+    size_t literalBeforePattern = n;
+    if (firstPattern > 0)
+        literalBeforePattern = firstPattern - 1;
+
+    size_t i = std::min(threshold < n ? threshold : n, literalBeforePattern);
 
     while (i < n)
     {
-        size_t start = i;
-        ++i;
-        while (i < n && tokens[i].isPattern()) ++i;
-        segments.emplace_back(tokens.data() + start, i - start);
-    }
+        size_t segmentStart = i;
+        if (tokens[segmentStart].isPattern())
+        {
+            ++segmentStart;
+            if (segmentStart >= n) break;
+        }
 
+        size_t j = segmentStart + 1;
+        while (j < n && tokens[j].isPattern())
+            ++j;
+
+        segments.emplace_back(tokens.subspan(segmentStart, j - segmentStart));
+        i = j;
+    }
     return segments;
 }
 }

@@ -16,7 +16,6 @@
 #include <AddressFamily.hpp>
 
 #include "tcp/Tcp.h"
-#include "configs/Registry.hpp"
 #include "routing/RoutingTable.hpp"
 #include "interface/InterfaceManager.h"
 #include "configs/registry/global/GlobalRegistry.h"
@@ -167,6 +166,36 @@ public:
     // EIGRP AUTONOMOUS SYSTEMS
 
     /**
+     * @brief Synchronizes all classic and named EIGRP IPv4 instances with the current interface state.
+     *
+     * Called whenever the interface list or EIGRP configuration changes. Re-evaluates
+     * which interfaces should be participating in EIGRP IPv4 based on configured
+     * network statements and enabled address families, then updates each running
+     * instance accordingly.
+     */
+    void refreshEigrpV4();
+
+    /**
+     * @brief Synchronizes all classic and named EIGRP IPv6 instances with the current interface state.
+     *
+     * Equivalent to @ref refreshEigrpV4 for the IPv6 data plane. Re-evaluates
+     * interface participation for all EIGRP IPv6 processes and updates
+     * neighbor relationships and topology entries as needed.
+     */
+    void refreshEigrpV6();
+
+    /**
+     * @brief Pushes current interface metrics and state into all EIGRP IPv6 interface managers.
+     *
+     * Called after interface configuration changes (MTU, bandwidth, delay) to
+     * ensure EIGRP IPv6 recomputes its composite metric and redistributes
+     * updated routes if anything changed.
+     */
+    void refreshEigrpV6Interfaces();
+
+    // EIGRP CLASSIC SYSTEMS
+
+    /**
      * @brief Create a classic-mode EIGRP Autonomous System instance.
      *
      * @param id Numeric AS number.
@@ -236,6 +265,16 @@ public:
     bool removeEigrpNamed(const std::string& name);
 
     // OSPF PROCESS
+    
+    /**
+     * @brief Synchronizes all OSPF (v2 and v3) processes with the current interface state.
+     *
+     * Called when interfaces are added, removed, or reconfigured. Re-evaluates
+     * which interfaces are eligible for OSPF participation based on configured
+     * areas and address families, then updates DR/BDR elections and adjacencies
+     * as needed.
+     */
+    void refreshOspf();
 
     /**
      * @brief Creates a OSPFv2 instance.
@@ -264,6 +303,11 @@ public:
     bool removeOspf(uint16_t id);
 
     // OSPFv3 PROCESS
+
+    /**
+     * TODO finis doxy
+     */
+    void refreshOspfv3();
 
     /**
      * @brief Creates a OSPFv3 instance.
@@ -335,14 +379,6 @@ public:
      */
     config::GlobalRegistry& getGlobalConfigs();
 
-    /**
-     * @brief Returns the VRF-scoped configuration registry.
-     *
-     * Routing protocols and CLI commands use this registry to read and write
-     * per-VRF configuration knobs without touching the global registry.
-     */
-    config::Registry& getRegistry();
-
     std::string getName() { return instanceName; }
     uint32_t getInstanceId() { return instanceId; }
     bool isDefault() { return defaulted; }
@@ -380,7 +416,7 @@ private:
     uint32_t instanceId{0};
     const bool defaulted{false}; ///< True for the single "default" VRF that cannot be deleted.
 
-    config::Reference<config::VrfRegistry> configs; ///< Tracks all VRF related configs.
+    config::VrfRegistry& configs; ///< Tracks all VRF related configs.
 
     interface::InterfaceManager ifaceMgr; ///< Tracks interfaces attached to this VRF.
 

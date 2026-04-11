@@ -32,7 +32,7 @@ struct NeighborConfigs
      * @brief Construct with an owned reference to the per-neighbor session config registry.
      * @param cfgs Owning reference to the BgpNeighborSessionRegistry for this neighbor.
      */
-    NeighborConfigs(config::Reference<config::BgpNeighborSessionRegistry>&& cfgs)
+    NeighborConfigs(config::BgpNeighborSessionRegistry& cfgs)
         : configs(cfgs) {}
 
     /**
@@ -45,7 +45,7 @@ struct NeighborConfigs
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
             return peerGroup->getSessionConfigs().get<F>();
-        return configs->get<F>();
+        return configs.get<F>();
     }
 
     /**
@@ -58,7 +58,7 @@ struct NeighborConfigs
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
             return std::as_const(peerGroup->getSessionConfigs().get<F>());
-        return std::as_const(configs->get<F>());
+        return std::as_const(configs.get<F>());
     }
 
     /**
@@ -92,7 +92,7 @@ struct NeighborConfigs
         if (peerSession)
             return false;
         peerGroup = group;
-        configs->setMask(group ? &group->getSessionConfigs() : nullptr);
+        configs.setMask(group ? &group->getSessionConfigs() : nullptr);
         return true;
     }
 
@@ -109,12 +109,12 @@ struct NeighborConfigs
         if (peerGroup)
             return false;
         peerSession = ps;
-        configs->setMask(ps ? &ps->getConfigs() : nullptr);
+        configs.setMask(ps ? &ps->getConfigs() : nullptr);
         return true;
     }
 
-    config::Reference<config::BgpNeighborSessionRegistry>& getConfigs() { return configs; }
-    const config::Reference<config::BgpNeighborSessionRegistry>& getConfigs() const { return configs; }
+    config::BgpNeighborSessionRegistry& getConfigs() { return configs; }
+    const config::BgpNeighborSessionRegistry& getConfigs() const { return configs; }
     PeerGroup* getPeerGroup() { return peerGroup; }
     const PeerGroup* getPeerGroup() const { return peerGroup; }
     PeerSessionTemplate* getPeerSessionTemplate() { return peerSession; }
@@ -123,7 +123,7 @@ struct NeighborConfigs
 private:
     PeerGroup* peerGroup = nullptr;        ///< Non-owning; set when this neighbor belongs to a peer-group.
     PeerSessionTemplate* peerSession = nullptr; ///< Non-owning; set when a session template is applied.
-    config::Reference<config::BgpNeighborSessionRegistry> configs; ///< Per-neighbor session config registry (owned reference).
+    config::BgpNeighborSessionRegistry& configs; ///< Per-neighbor session config registry (owned reference).
 };
 } // namespace routing
 

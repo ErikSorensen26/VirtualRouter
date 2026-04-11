@@ -34,7 +34,7 @@ struct NeighborAfConfigs
      * @param fam  The address family this object covers.
      * @param cfgs Owning reference to the per-neighbor AF config registry.
      */
-    NeighborAfConfigs(const AfiSafi& fam, config::Reference<config::BgpNeighborRegistry>&& cfgs)
+    NeighborAfConfigs(const AfiSafi& fam, config::BgpNeighborRegistry& cfgs)
         : family(fam), configs(cfgs)
     {}
 
@@ -47,8 +47,8 @@ struct NeighborAfConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return peerConfigs->get<F>();
-        return configs->get<F>();
+            return (*peerConfigs).get<F>();
+        return configs.get<F>();
     }
 
     /**
@@ -60,8 +60,8 @@ struct NeighborAfConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedBaseTable.test(config::toIndex<F>))
-            return peerConfigs->get<config::BgpNeighbor::AF_BASE>().local()->get<F>();
-        return peerConfigs->get<config::BgpNeighbor::AF_BASE>().local()->get<F>();
+            return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
+        return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
     }
 
     /**
@@ -73,7 +73,7 @@ struct NeighborAfConfigs
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
             return std::as_const(peerConfigs->get<F>());
-        return std::as_const(configs->get<F>());
+        return std::as_const(configs.get<F>());
     }
 
     /**
@@ -146,7 +146,7 @@ struct NeighborAfConfigs
         peerGroup = group;
         peerConfigs = group ? group->getAfConfigs(family) : nullptr;
         if (peerGroup) assert(peerConfigs);
-        configs->setMask(group ? group->getAfConfigs(family) : nullptr);
+        configs.setMask(group ? group->getAfConfigs(family) : nullptr);
         return true;
     }
 
@@ -164,12 +164,11 @@ struct NeighborAfConfigs
         if (peerGroup)
             return false;
         peerPolicy = pp;
-        configs->setMask(peerPolicy ? &pp->getConfigs() : nullptr);
+        configs.setMask(peerPolicy ? &pp->getConfigs() : nullptr);
         return true;
     }
 
-    config::BgpNeighborRegistry& getConfigs() { return configs.get(); }
-    const config::BgpNeighborRegistry& getConfigs() const { return configs.get(); }
+    const config::BgpNeighborRegistry& getConfigs() const { return configs; }
     PeerGroup* getPeerGroup() { return peerGroup; }
     const PeerGroup* getPeerGroup() const { return peerGroup; }
     PeerPolicyTemplate* getPeerPolicyTemplate() { return peerPolicy; }
@@ -182,7 +181,7 @@ private:
     config::BgpNeighborRegistry* peerConfigs = nullptr; ///< AF-level config from the peer-group (non-owning).
 
     PeerPolicyTemplate* peerPolicy = nullptr;  ///< Non-owning; set when a policy template is applied.
-    config::Reference<config::BgpNeighborRegistry> configs; ///< Per-neighbor AF config registry (owned reference).
+    config::BgpNeighborRegistry& configs; ///< Per-neighbor AF config registry (owned reference).
 };
 } // namespace routing
 

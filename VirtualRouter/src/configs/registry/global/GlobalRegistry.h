@@ -96,6 +96,8 @@ enum class IPOption : uint8_t
 };
 }
 
+void globalInterface(void*);
+
 enum class Global
 {
     ARCHIVE, // TODO
@@ -307,6 +309,7 @@ enum class Global
     ROUTE_MAP, // TODO
     ROUTE_TAG_LIST, // TODO
     ROUTE_TAG_NOTATION_DOTTED_DECIMAL, // TODO
+    ROUTER_EIGRP_NAMED,
     SAMPLER, // TODO
     SASL_PROFILE, // TODO
     SCRIPTING_TCL_ENCDIR, // TODO
@@ -535,7 +538,7 @@ using GlobalRegistry = SubRegistry<Global,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_RECORD)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_SAMPLER_MAP)>,
     ValueField<std::string CONFIG_INDEX_ARG(Global::HOSTNAME)>,
-    OwnedListField<InterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Global::INTERFACE)>,
+    OwnedListField<InterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Global::INTERFACE), globalInterface>,
     ListField<std::vector<IPStandardAcl> CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_EXTENDED)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_HELPER_EGRESS_CHECK)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD)>,
@@ -657,7 +660,7 @@ using GlobalRegistry = SubRegistry<Global,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_ICMP_BUCKET_SIZE)>,
     ValueField<std::string CONFIG_INDEX_ARG(Global::IPV6_LOCAL_POLICY_ROUTE_MAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_MFIB)>,
-    ReferenceContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Global::IPV6_ND)>,
+    RegistryContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Global::IPV6_ND)>,
     ListField<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_OSPF_NAME_LOOKUP)>,
     ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_LIST)>,
@@ -718,6 +721,7 @@ using GlobalRegistry = SubRegistry<Global,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_MAP)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_TAG_LIST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Global::ROUTE_TAG_NOTATION_DOTTED_DECIMAL)>,
+    OwnedListField<EigrpNamedRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTER_EIGRP_NAMED)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SAMPLER)>,
     OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SASL_PROFILE)>,
     ListField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_ENCDIR)>,

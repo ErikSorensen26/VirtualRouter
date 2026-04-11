@@ -180,7 +180,7 @@ CONFIG_DEFAULT_TABLE(BGP_NEIGHBOR_DEFAULTS);
 void BgpNeighborDefaultOriginate(void*);
 
 using BgpNeighborRegistry = SubRegistry<BgpNeighbor,
-    ReferenceContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpNeighbor::AF_BASE)>,
+    RegistryContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpNeighbor::AF_BASE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ACTIVATE)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_BACKUP)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighbor::ADVERTISE_DIVERSE_PATH_MPATH)>,
@@ -284,7 +284,7 @@ void BgpNeighborSessionShutdown(void*);
 void BgpNeighborSessionPathAttribute(void*);
 
 using BgpNeighborSessionRegistry = SubRegistry<BgpNeighborSession,
-    ReferenceContainer<BgpBaseRegistry CONFIG_INDEX_ARG(BgpNeighborSession::BGP_BASE)>,
+    RegistryContainer<BgpBaseRegistry CONFIG_INDEX_ARG(BgpNeighborSession::BGP_BASE)>,
     ValueField<std::string CONFIG_INDEX_ARG(BgpNeighborSession::DESCRIPTION)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::DISABLE_CONNECTION_CHECK)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpNeighborSession::EBGP_MULTIHOP)>,
@@ -421,7 +421,7 @@ CONFIG_DEFAULT_TABLE(BGP_ADDRESS_FAMILY_DEFAULTS);
 DEFINE_TUPLE_SCHEMA(BgpAggregateAddress, BGP_AGGREGATE_ADDRESS_FIELDS)
 
 using BgpAddressFamilyRegistry = SubRegistry<BgpAddressFamily,
-    ReferenceContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpAddressFamily::AF_BASE)>,
+    RegistryContainer<BgpAfBaseRegistry CONFIG_INDEX_ARG(BgpAddressFamily::AF_BASE)>,
     ListField<std::vector<BgpAggregateAddress::Tuple> CONFIG_INDEX_ARG(BgpAddressFamily::AGGREGATE_ADDRESS)>,
     AtomicField<bool CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_INSTALL)>,
     OptionalAtomicField<uint8_t CONFIG_INDEX_ARG(BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT)>,
@@ -548,7 +548,7 @@ enum class Bgp
 CONFIG_DEFAULT_TABLE(BGP_DEFAULTS);
 
 using BgpRegistry = SubRegistry<Bgp,
-    ReferenceContainer<BgpBaseRegistry CONFIG_INDEX_ARG(Bgp::BGP_BASE)>,
+    RegistryContainer<BgpBaseRegistry CONFIG_INDEX_ARG(Bgp::BGP_BASE)>,
     OwnedListField<BgpAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(Bgp::ADDRESS_FAMILIES)>,
     AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_ALWAYS_COMPARE_MED)>,
     AtomicField<bool CONFIG_INDEX_ARG(Bgp::BGP_AS_DOT_NOTATION)>,

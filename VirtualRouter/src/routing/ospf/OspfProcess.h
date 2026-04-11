@@ -61,13 +61,13 @@ struct OspfV3Instance
      *
      * @param cfgs Shared OSPFv3 address-family configuration reference.
      */
-    OspfV3Instance(config::Reference<config::OspfAddressFamilyV3Registry> cfgs)
-        : configs(std::move(cfgs)) {}
+    OspfV3Instance(config::OspfAddressFamilyV3Registry& cfgs)
+        : configs(cfgs) {}
 
     OspfProcess* ipv4 = nullptr; ///< OSPFv3 process handling the IPv4 address family.
     OspfProcess* ipv6 = nullptr; ///< OSPFv3 process handling the IPv6 address family.
 
-    config::Reference<config::OspfAddressFamilyV3Registry> configs; ///< Shared AF-level configuration reference.
+    config::OspfAddressFamilyV3Registry& configs; ///< Shared AF-level configuration reference.
 };
 
 /**
@@ -125,8 +125,8 @@ struct OspfInterfaceInstance
 class OspfProcess
 {
 public:
-    using V3AfConfigs = config::Reference<config::OspfAddressFamilyV3Registry>; ///< OSPFv3 AF config reference type alias.
-    using V2AfConfigs = config::Reference<config::OspfAddressFamilyV2Registry>; ///< OSPFv2 AF config reference type alias.
+    using V3AfConfigs = config::OspfAddressFamilyV3Registry; ///< OSPFv3 AF config reference type alias.
+    using V2AfConfigs = config::OspfAddressFamilyV2Registry; ///< OSPFv2 AF config reference type alias.
 
     /**
      * @brief Constructs an OSPF process.
@@ -248,16 +248,15 @@ public:
     types::AddressFamily getAF() { return af; }
     InterfaceManager& getIfaceMgr() { return ifaceMgr; }
     const InterfaceManager& getIfaceMgr() const noexcept { return ifaceMgr; }
-    config::OspfRegistry& getConfigs() { return configs.get(); }
-    uint64_t getConfigKey() const { return configs.getKey(); }
-    const config::OspfRegistry& getConfigs() const noexcept { return configs.get(); }
+    config::OspfRegistry& getConfigs() { return configs; }
+    const config::OspfRegistry& getConfigs() const noexcept { return configs; }
     OspfRib& getRib() { return rib; }
     core::ProcessQueueRef getScheduler() { return scheduler.ref(); }
     const OspfRib& getRib() const { return rib; }
     uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const
     {
-        const auto& id = configs.get().get<config::Ospf::ROUTER_ID>();
+        const auto& id = configs.get<config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
         return rid;
     }
@@ -295,6 +294,17 @@ public:
      * @return Reference to the (possibly newly created) @ref Area.
      */
     Area& insureArea(uint32_t areaId);
+
+    /**
+     * @brief Removes an area and recalculates ABR status.
+     *
+     * Erases the area from the process map and re-evaluates whether this router
+     * is still an ABR. Called automatically when the last interface in a
+     * non-backbone area is removed.
+     *
+     * @param areaId OSPF area identifier to remove.
+     */
+    void removeArea(uint32_t areaId);
 
     // ROUTER TYPE FLAGS
 
@@ -339,6 +349,7 @@ public:
     void addDefaultRoute(bool add);
 
     const bool isV3; ///< True when this process uses OSPFv3 packet encoding (RFC 5340).
+    const bool afCapable;
 
     core::VirtualRouter* routingInstance = nullptr; ///< Owning VRF; used to query interface and RIB state.
 
@@ -408,8 +419,8 @@ private:
     uint32_t ifUpId, ifDownId, ipReadyId, ipDelId; ///< Event subscription handles; used to deregister on destruction.
 
     // CONFIGS
-    std::variant<std::monostate, V3AfConfigs, V2AfConfigs> afConfigs; ///< Address-family-specific config reference (v2 or v3).
-    config::Reference<config::OspfRegistry> configs; ///< Process-level OSPF configuration reference.
+    std::variant<std::monostate, std::reference_wrapper<V3AfConfigs>, std::reference_wrapper<V2AfConfigs>> afConfigs; ///< Address-family-specific config reference (v2 or v3).
+    config::OspfRegistry& configs; ///< Process-level OSPF configuration reference.
 };
 } // namespace routing
 

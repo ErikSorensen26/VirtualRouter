@@ -3,30 +3,32 @@
 #include <Global.h>
 
 #include "PrivilegedExecCommands.h"
-#include "cli/modes/contexts/GlobalContext.hpp"
+#include "cli/modes/contexts/Context.hpp"
 #include "cli/runtime/CliSession.h"
 #include "cli/runtime/CliEngine.h"
+
+#define PRIVILEGED_EXEC_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
 bool PrivilegedExec_ConfigureTerm_Handler(PRIVILEGED_EXEC_PARAMS)
 {
-    UNUSED(args);
-    ctx.terminal.changeMode<CliMode::GlobalConfiguration>(ctx.terminal.engine.global, *ctx.terminal.engine.global.getRoutingInstance("default"));
+    UNUSED(segs);
+    ctx.terminal.changeMode<CliMode::GlobalConfiguration>(ctx.configs);
     ctx.terminal.controller.print("\r\nEnter configuration commands, one per line. End with CNTL/Z.");
     return true;
 }
 
 bool PrivilegedExec_Exit_Handler(PRIVILEGED_EXEC_PARAMS)
 {
-    UNUSED(args);
-    ctx.terminal.exitMode<CliMode::UserExec>();
+    UNUSED(segs);
+    ctx.terminal.exitMode<CliMode::UserExec, config::GlobalRegistry>(ctx.configs);
     return true;
 }
 
 bool PrivilegedExec_ShowHistory_Handler(PRIVILEGED_EXEC_PARAMS)
 {
-    UNUSED(args);
+    UNUSED(segs);
     for (std::string str : ctx.terminal.getHistory())
     {
         if (str != "")
@@ -39,20 +41,21 @@ bool PrivilegedExec_ShowHistory_Handler(PRIVILEGED_EXEC_PARAMS)
 
 bool PrivilegedExec_ShowClock_Handler(PRIVILEGED_EXEC_PARAMS)
 {
-    UNUSED(args);
+    UNUSED(segs);
     ctx.terminal.controller.print("\r\n" + ctx.terminal.engine.timeKeeper.getTime());
     return true;
 }
 
 bool PrivilegedExec_WriteMem_Handler(PRIVILEGED_EXEC_PARAMS)
 {
-    UNUSED(args);
-    ctx.terminal.engine.saveConfig();
-    return true;
+    UNUSED(segs);
+    //ctx.terminal.engine.saveConfig();
+    return false;
 }
 
 bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS)
 {
+/*
     if (args.empty() || !ctx.terminal.engine.isNumeric(args[0])) return false;
     long w = std::stol(args[0]);
     if (w < 40 || w > 512)
@@ -61,6 +64,7 @@ bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS)
         return false;
     }
     ctx.terminal.setTerminalWidth(static_cast<size_t>(w));
-    return true;
+*/
+    return false;
 }
 }

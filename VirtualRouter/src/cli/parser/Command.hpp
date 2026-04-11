@@ -21,6 +21,7 @@
 #include <span>
 #include <type_traits>
 #include <cstddef>
+#include "cli/modes/contexts/Context.hpp"
 #include "cli/runtime/Token.hpp"
 
 /**
@@ -36,6 +37,26 @@
  */
 namespace cli
 {
+/**
+ * @brief Extracts the `ContextType` from a handler function pointer type.
+ * @ingroup CLI_PARSER
+ *
+ * Primary template is declared but not defined; only the specialization for
+ * the expected handler signature is provided.  A static_assert in @ref Command
+ * uses this to enforce the correct signature at the point of use.
+ *
+ * @tparam T  Handler function pointer type to inspect.
+ */
+template <typename T>
+struct HandlerTraits;
+
+/// @brief Specialization for the canonical handler signature `bool(Context<C>&, ...)`.
+template <typename C>
+struct HandlerTraits<bool(*)(Context<C>&, const std::vector<std::span<Token>>&)>
+{
+    using ContextType = C; ///< The SubRegistry type the handler's context is parameterized on.
+};
+
 /**
  * @brief Compile-time CLI command descriptor binding a token pattern to a handler.
  * @ingroup CLI
@@ -73,20 +94,20 @@ namespace cli
  * @see commandAdder
  */
 template <
-    typename Context,
     auto Handler,
     uint64_t... Parts
 >
+    requires requires { typename HandlerTraits<decltype(Handler)>::ContextType; }
 struct Command
 {
-    using ContextType = Context; ///< Context type shared with all sibling commands.
+    using ContextType = typename HandlerTraits<decltype(Handler)>::ContextType; ///< Context type shared with all sibling commands.
     static constexpr auto handler = Handler; ///< Handler function pointer.
     static constexpr size_t partCount = sizeof...(Parts); ///< Number of fixed keyword parts.
     static constexpr std::array<uint64_t, partCount> parts = { Parts... };
 
     static_assert(
-        std::is_invocable_v<decltype(Handler), Context&, const std::vector<std::span<Token>>&>,
-        "Handler must be callable with (Context&, const std::vector<std::span<Token>>&)"
+        std::is_same_v<bool, std::invoke_result_t<decltype(Handler), Context<ContextType>&, const std::vector<std::span<Token>>&>>,
+        "Handler must return bool"
     );
 
     /**
@@ -109,18 +130,18 @@ struct Command
      * @param idx    Offset into `tokens` at which matching begins (advanced by parent SubCommands).
      * @return `true` if the pattern matched and the handler returned `true`.
      */
-    static bool tryExecute(Context& ctx, std::span<Token> tokens, size_t idx)
+    static bool tryExecute(Context<ContextType>& ctx, std::span<Token> tokens, size_t idx)
     {
         if (tokens.size() - idx < partCount)
             return false;
 
         for (size_t i = 0; i < partCount; ++i)
         {
-            const Token& t = tokens[idx + i];
+            const Token& t = tokens[++idx];
 
             if (t.isPattern())
             {
-                if (parts[i] != ARG)
+                if (parts[i] != P_ARG && parts[i] != static_cast<uint64_t>(t.pattern))
                     return false;
             }
             else
@@ -130,7 +151,7 @@ struct Command
             }
         }
 
-        std::vector<std::span<Token>> segs = segmentTokens(tokens);
+        std::vector<std::span<Token>> segs = segmentTokens(tokens, idx);
         return Handler(ctx, segs);
     }
 };
@@ -147,11 +168,10 @@ struct Command
  * @tparam Parts   Same as @ref Command::Parts.
  */
 template <
-    typename Context,
     auto Handler,
     auto... Parts
 >
-using commandAdder = Command<Context, Handler, Parts...>;
+using commandAdder = Command<Handler, Parts...>;
 }
 
 #endif // COMMAND_HPP

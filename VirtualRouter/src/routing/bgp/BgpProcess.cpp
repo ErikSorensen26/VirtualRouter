@@ -15,11 +15,11 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
       ntable(*this),
       configs(vrf->getRegistry().create<config::BgpRegistry>(vrf->getInstanceId()))
 {
-    vrf->getRegistry().emplace(configs->get<config::Bgp::BGP_BASE>());
+    vrf->getRegistry().emplace(configs.get<config::Bgp::BGP_BASE>());
     scheduleScan();
 
     transport::tcp::ListenOptions opts;
-    opts.policy.pathMtuDiscovery = configs->get<config::Bgp::BGP_BASE>().local().get()
+    opts.policy.pathMtuDiscovery = configs.get<config::Bgp::BGP_BASE>().local().get()
         .get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
     opts.onAccept = BgpProcess::onAcceptCallback;
     opts.onAcceptUser = this;
@@ -168,10 +168,10 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
     const types::IPAddress& nbrIp = ctx.key.remote.address;
     Neighbor* nbr = bgp->ntable.lookup(nbrIp);
 
-    if (!nbr && bgp->configs->get<config::Bgp::BGP_LISTEN>().load() && nbrIp.isIPv4())
+    if (!nbr && bgp->configs.get<config::Bgp::BGP_LISTEN>().load() && nbrIp.isIPv4())
     {
         std::string matchedGroup;
-        bgp->configs->get<config::Bgp::BGP_LISTEN_RANGE>().withRead(
+        bgp->configs.get<config::Bgp::BGP_LISTEN_RANGE>().withRead(
             [&](const std::vector<std::tuple<uint32_t, uint32_t, std::string>>& ranges)
             {
                 uint32_t remoteV4 = nbrIp.v4();
@@ -222,7 +222,7 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
 
     // BGP_LISTEN_LIMIT caps the total number of concurrently accepted sessions.
     auto overLimit = [&]() {
-        auto& limitField = bgp->configs->get<config::Bgp::BGP_LISTEN_LIMIT>();
+        auto& limitField = bgp->configs.get<config::Bgp::BGP_LISTEN_LIMIT>();
         return limitField.hasValue() && bgp->sessions.size() >= limitField.load();
     };
 
@@ -285,7 +285,7 @@ void BgpProcess::onReceiveCallback(transport::tcp::RecvCallbackCtx& ctx) noexcep
 
 void BgpProcess::scheduleScan()
 {
-    uint8_t secs = configs->get<config::Bgp::BGP_SCAN_TIME>().load();
+    uint8_t secs = configs.get<config::Bgp::BGP_SCAN_TIME>().load();
     scheduler.ref().postAfter(
         std::chrono::steady_clock::now() + std::chrono::seconds(secs),
         [this](uint32_t) {

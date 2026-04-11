@@ -6,53 +6,25 @@
  * including address-family setup, timers, logging, and process-wide settings.
  */
 
-#ifndef ROUTER_EIGRP_COMMANDS_H
-#define ROUTER_EIGRP_COMMANDS_H
+#ifndef ROUTER_EIGRP_NAMED_COMMANDS_H
+#define ROUTER_EIGRP_NAMED_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/modes/contexts/EigrpContext.hpp"
+#include "cli/modes/contexts/Context.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
+
+#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
-bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_PARAMS);
-using RouterEigrpNamed_AddressFamilyIPv4 = commandAdder<EigrpContext,
-    RouterEigrpNamed_AddressFamilyIPv4_Handler,
-    "address-family"_tok, "ipv4"_tok, "autonomous-system"_tok
->;
+bool RouterEigrpNamed_AddressFamilyIPv4_Handler(GLOBAL_PARAMS);
+bool RouterEigrpNamed_AddressFamilyIPv6_Handler(GLOBAL_PARAMS);
+bool RouterEigrpNamed_Exit_Handler(GLOBAL_PARAMS);
 
-//bool RouterEigrpNamed_AddressFamilyIPv4Multicast_Handler(EIGRP_PARAMS); //TODO
-//bool RouterEigrpNamed_AddressFamilyIPv4Unicast_Handler(EIGRP_PARAMS); //TODO
-
-bool RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler(EIGRP_PARAMS);
-using RouterEigrpNamed_AddressFamilyIPv4Vrf = commandAdder<EigrpContext,
-    RouterEigrpNamed_AddressFamilyIPv4Vrf_Handler,
-    "address-family"_tok, "ipv4"_tok, "vrf"_tok, "autonomous-system"_tok
->;
-
-bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_PARAMS);
-using RouterEigrpNamed_AddressFamilyIPv6 = commandAdder<EigrpContext,
-    RouterEigrpNamed_AddressFamilyIPv6_Handler,
-    "address-family"_tok, "ipv6"_tok, "autonomous-system"_tok
->;
-
-//bool RouterEigrpNamed_AddressFamilyIPv6Unicast_Handler(EIGRP_PARAMS); // TODO
-
-bool RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler(EIGRP_PARAMS);
-using RouterEigrpNamed_AddressFamilyIPv6Vrf = commandAdder<EigrpContext,
-    RouterEigrpNamed_AddressFamilyIPv6Vrf_Handler,
-    "address-family"_tok, "ipv6"_tok, "vrf"_tok, "autonomous-system"_tok
->;
-
-/// @brief Handler for `exit` — leaves EIGRP named mode.
-bool RouterEigrpNamed_Exit_Handler(EIGRP_PARAMS);
-using RouterEigrpNamed_Exit = commandAdder<EigrpContext,
-    RouterEigrpNamed_Exit_Handler,
-    "exit"_tok
->;
-
-//bool RouterEigrpNamed_ServiceFamily_Handler(EIGRP_PARAMS); //TODO
-//bool RouterEigrpNamed_Shutdown_Handler(EIGRP_PARAMS); //TODO
+#define ROUTER_EIGRP_NAMED_LIST(X, Y) \
+    X(Y, (_COM_, AddressFamilyIPv4, "address-family"_tok, "ipv4"_tok)) \
+    X(Y, (_COM_, AddressFamilyIPv6, "address-family"_tok, "ipv6"_tok)) \
+    X(Y, (_COM_, Exit, "exit"_tok))
 
 /**
  * @brief Parser for EIGRP named mode (MD5-era) configuration commands.
@@ -61,13 +33,10 @@ using RouterEigrpNamed_Exit = commandAdder<EigrpContext,
  * Aggregates address-family entry, logging, metrics, topology access,
  * and named-mode-specific settings.
  */
-using RouterEigrpNamedCommands = CliModeParser<CliMode::RouterEigrpNamed, EigrpContext,
-    RouterEigrpNamed_AddressFamilyIPv4,
-    RouterEigrpNamed_AddressFamilyIPv4Vrf,
-    RouterEigrpNamed_AddressFamilyIPv6,
-    RouterEigrpNamed_AddressFamilyIPv6Vrf,
-    RouterEigrpNamed_Exit
->;
+DEFINE_CMD_MODE(RouterEigrpNamed, CliMode::RouterEigrpNamed, config::GlobalRegistry, ROUTER_EIGRP_NAMED_LIST);
 }
 
-#endif
+#undef ROUTER_EIGRP_NAMED_LIST
+#undef GLOBAL_PARAMS
+
+#endif // ROUTER_EIGRP_NAMED_COMMANDS_H

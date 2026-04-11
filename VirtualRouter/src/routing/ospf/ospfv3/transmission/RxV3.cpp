@@ -26,10 +26,6 @@ static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
     check.addBytes(lsa + 2, len - 2);
     return check.finalize() == 0;
 }
-config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getBaseConfigs()
-{
-    return baseConfigs.get();
-}
 
 void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
 {
@@ -37,7 +33,7 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check if 
-    auto ntype = configs->get<config::OspfInterface::NETWORK>().load();
+    auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
     if (multicast && (ntype == config::ospf::NetworkType::NON_BROADCAST || ntype == config::ospf::NetworkType::POINT_TO_MULTIPOINT))
         return;
 
@@ -68,7 +64,17 @@ void PacketDispatcherV3::handleIncoming(const packet::Ospfv3Header& ospfHeader, 
         if (checksum != ospfHeader.getChecksum())
             return; // Invalid checksum
     }
-    // TODO header stuff
+    // RFC 5340 §4.4.1: discard packets sourced by this router itself
+    if (ospfHeader.getRouterID() == iface.getProcess().getRouterId())
+        return;
+
+    // Discard unrecognised packet types (valid range: 1–5)
+    if (ospfHeader.getType() < 1 || ospfHeader.getType() > 5)
+        return;
+
+    // RFC 5340 §4.4.1: instance ID must match the interface's configured instance
+    if (ospfHeader.getInstanceID() != iface.getBaseConfigs().get<config::OspfInterfaceBase::INSTANCE_ID>().load())
+        return;
 
     if (ospfHeader.getType() == OSPFV3_TYPE_HELLO)
     {
@@ -101,7 +107,8 @@ bool PacketDispatcherV3::processOptions(uint32_t options, Neighbor& nbr)
     auto& flags = iface.getFlags();
     auto& areaFlags = iface.getArea().getFlags();
 
-    if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED)
+    bool ignore = iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT_IGNORE>().load();
+    if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED && !ignore)
     {
         if (InterfaceFlagManager::getDemandCircuits(options) && flags.getDemandCircuits() &&
             iface.getConfigs().get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_POINT)

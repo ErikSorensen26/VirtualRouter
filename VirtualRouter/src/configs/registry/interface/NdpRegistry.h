@@ -63,7 +63,6 @@ enum class NdpBase
     X(NdpBase, NUD_REFRESH_PERIOD, 10) \
     X(NdpBase, REACHABLE_TIME, 300000) \
     X(NdpBase, RESOLUTION_DATA_LIMIT, 8) \
-    X(NdpBase, ROUTE_OWNER, true)
 
 CONFIG_DEFAULT_TABLE(NDP_BASE_DEFAULTS);
 
@@ -174,7 +173,7 @@ enum class Ndp
 CONFIG_DEFAULT_TABLE(NDP_DEFAULTS);
 
 using NdpRegistry = SubRegistry<Ndp,
-    ReferenceContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Ndp::BASE)>,
+    RegistryContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Ndp::BASE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::ADVERTISEMENT_INTERVAL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_DEFAULT_ROUTE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_PREFIX)>,
@@ -190,7 +189,7 @@ using NdpRegistry = SubRegistry<Ndp,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::NUD_FINAL_WAIT)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::OTHER_CONFIG_FLAG)>,
     OwnedListField<NdpEntryRegistry, types::IPv6Prefix CONFIG_INDEX_ARG(Ndp::PREFIX_ENTRIES)>,
-    ReferenceContainer<NdpEntryRegistry CONFIG_INDEX_ARG(Ndp::PREFIX_DEFAULTS)>,
+    RegistryContainer<NdpEntryRegistry CONFIG_INDEX_ARG(Ndp::PREFIX_DEFAULTS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::PREFIX_FRAMED_IPV6_PREFIX)>,
     AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_HOP_LIMIT_UNSPECIFIED)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Ndp::RA_INTERVAL)>,

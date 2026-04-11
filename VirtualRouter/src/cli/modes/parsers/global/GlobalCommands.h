@@ -11,95 +11,43 @@
 #define GLOBAL_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/parser/SubCommand.hpp"
-#include "cli/modes/contexts/GlobalContext.hpp"
+#include "cli/modes/contexts/Context.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
 
-#include "GlobalIPCommands.h"
-#include "GlobalIPv6Commands.h"
+#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
+#define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
 bool Global_Arp_Handler(GLOBAL_PARAMS);
-using Global_Arp = commandAdder<GlobalContext,
-    Global_Arp_Handler,
-    "arp"_tok
->;
-
 bool Global_Exit_Handler(GLOBAL_PARAMS);
-using Global_Exit = commandAdder<GlobalContext,
-    Global_Exit_Handler,
-    "exit"_tok
->;
-
 bool Global_SetHostname_Handler(GLOBAL_PARAMS);
-using Global_SetHostname = commandAdder<GlobalContext,
-    Global_SetHostname_Handler,
-    "hostname"_tok
->;
-
 bool Global_End_Handler(GLOBAL_PARAMS);
-using Global_End = commandAdder<GlobalContext,
-    Global_End_Handler,
-    "end"_tok
->;
-
-using Global_IP = subAdder<GlobalContext,
-    GlobalIPCommands,
-    "ip"_tok
->;
-
-using Global_IPv6 = subAdder<GlobalContext,
-    GlobalIPv6Commands,
-    "ipv6"_tok
->;
-
 bool Global_Interface_Handler(GLOBAL_PARAMS);
-using Global_Interface = commandAdder<GlobalContext,
-    Global_Interface_Handler,
-    "interface"_tok
->;
-
 bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS);
-using Global_RouterEIGRP = commandAdder<GlobalContext,
-    Global_RouterEIGRP_Handler,
-    "router"_tok, "eigrp"_tok
->;
-
 bool Global_RouterOSPF_Handler(GLOBAL_PARAMS);
-using Global_RouterOSPF = commandAdder<GlobalContext,
-    Global_RouterOSPF_Handler,
-    "router"_tok, "ospf"_tok
->;
-
 bool Global_RouterBGP_Handler(GLOBAL_PARAMS);
-using Global_RouterBGP = commandAdder<GlobalContext,
-    Global_RouterBGP_Handler,
-    "router"_tok, "bgp"_tok
->;
 
-/**
- * @brief Complete parser for the Global Configuration CLI mode.
- * @ingroup CLI_MODE_PARSERS
- *
- * Instantiated as a `CliModeParser` that covers `CliMode::GlobalConfiguration`
- * with `GlobalContext`. Composes all top-level global commands including
- * ARP, hostname, routing protocol entry points, interface navigation,
- * and `ip`/`ipv6` sub-trees.
- */
-using GlobalCommands = CliModeParser<CliMode::GlobalConfiguration, GlobalContext,
-    Global_Arp,
-    Global_Exit,
-    Global_SetHostname,
-    Global_End,
-    Global_IP,
-    Global_IPv6,
-    Global_Interface,
-    Global_RouterEIGRP,
-    Global_RouterOSPF,
-    Global_RouterBGP
->;
+bool Global_IP_SubHandler(GLOBAL_SUB_PARAMS);
+bool Global_IPv6_SubHandler(GLOBAL_SUB_PARAMS);
+
+#define GLOBAL_LIST(X, Y) \
+    X(Y, (_COM_, Arp, "arp"_tok)) \
+    X(Y, (_COM_, Exit, "exit"_tok)) \
+    X(Y, (_COM_, SetHostname, "hostname"_tok)) \
+    X(Y, (_COM_, End, "end"_tok)) \
+    X(Y, (_SUB_, IP, "ip"_tok)) \
+    X(Y, (_SUB_, IPv6, "ipv6"_tok)) \
+    X(Y, (_COM_, Interface, "interface"_tok)) \
+    X(Y, (_COM_, RouterEIGRP, "router"_tok, "eigrp"_tok)) \
+    X(Y, (_COM_, RouterOSPF, "router"_tok, "ospf"_tok)) \
+    X(Y, (_COM_, RouterBGP, "router"_tok, "bgp"_tok))
+
+DEFINE_CMD_MODE(Global, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_LIST);
 }
 
+#undef GLOBAL_LIST
+#undef GLOBAL_PARAMS
+#undef GLOBAL_SUB_PARAMS
 
 #endif // GLOBAL_COMMANDS_H

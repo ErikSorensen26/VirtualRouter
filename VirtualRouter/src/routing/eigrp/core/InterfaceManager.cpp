@@ -124,6 +124,15 @@ void InterfaceManager::refreshInterfaceList()
             if (base.getAF() == types::AddressFamily::IPv4)
             {
                 inRange = config.isInNetworkRange(ipInfo.ipv4.getPrimaryAddress());
+                // Named mode: an explicitly configured af-interface entry also qualifies
+                // even without a matching network statement.
+                if (!inRange && isNamed)
+                {
+                    auto& afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
+                    auto regIt = afIfaces.find(ipInfo.key);
+                    inRange = (regIt != afIfaces.end()) &&
+                              !regIt->second.get().get<config::EigrpInterface::SHUTDOWN>().load();
+                }
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
                     remake = inRange && !ipInfo.ipv4.comparePrimaryAddress(types::IPv4Address(it->second.ifaceAddress.v4()));

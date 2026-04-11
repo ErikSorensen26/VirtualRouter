@@ -13,82 +13,39 @@
 #define INTERFACE_OSPF_COMMANDS_H
 
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/modes/contexts/InterfaceContext.hpp"
+#include "cli/modes/contexts/Context.hpp"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
+
+#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 
 namespace cli
 {
-bool InterfaceOspf_BFD_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_BFD = commandAdder<InterfaceContext,
-    InterfaceOspf_BFD_Handler,
-    "bfd"_tok
->;
+bool InterfaceOspf_BFD_Handler(OSPF_PARAMS);
+bool InterfaceOspf_Cost_Handler(OSPF_PARAMS);
+bool InterfaceOspf_DatabaseFilter_Handler(OSPF_PARAMS);
+bool InterfaceOspf_DeadInterval_Handler(OSPF_PARAMS);
+bool InterfaceOspf_DemandCircuit_Handler(OSPF_PARAMS);
+bool InterfaceOspf_FloodReduction_Handler(OSPF_PARAMS);
+bool InterfaceOspf_HelloInterval_Handler(OSPF_PARAMS);
+bool InterfaceOspf_MtuIgnore_Handler(OSPF_PARAMS);
+bool InterfaceOspf_Network_Handler(OSPF_PARAMS);
+bool InterfaceOspf_Priority_Handler(OSPF_PARAMS);
+bool InterfaceOspf_RetransmissionInterval_Handler(OSPF_PARAMS);
+bool InterfaceOspf_TransmitDelay_Handler(OSPF_PARAMS);
 
-bool InterfaceOspf_Cost_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_Cost = commandAdder<InterfaceContext,
-    InterfaceOspf_Cost_Handler,
-    "cost"_tok
->;
-
-bool InterfaceOspf_DatabaseFilter_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_DatabaseFilter = commandAdder<InterfaceContext,
-    InterfaceOspf_DatabaseFilter_Handler,
-    "database-filter"_tok
->;
-
-bool InterfaceOspf_DeadInterval_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_DeadInterval = commandAdder<InterfaceContext,
-    InterfaceOspf_DeadInterval_Handler,
-    "dead-interval"_tok
->;
-
-bool InterfaceOspf_DemandCircuit_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_DemandCircuit = commandAdder<InterfaceContext,
-    InterfaceOspf_DemandCircuit_Handler,
-    "demand-circuit"_tok
->;
-
-bool InterfaceOspf_FloodReduction_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_FloodReduction = commandAdder<InterfaceContext,
-    InterfaceOspf_FloodReduction_Handler,
-    "flood-reduction"_tok
->;
-
-bool InterfaceOspf_HelloInterval_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_HelloInterval = commandAdder<InterfaceContext,
-    InterfaceOspf_HelloInterval_Handler,
-    "hello-interval"_tok
->;
-
-bool InterfaceOspf_MtuIgnore_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_MtuIgnore = commandAdder<InterfaceContext,
-    InterfaceOspf_MtuIgnore_Handler,
-    "mtu-ignore"_tok
->;
-
-bool InterfaceOspf_Network_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_Network = commandAdder<InterfaceContext,
-    InterfaceOspf_Network_Handler,
-    "network"_tok
->;
-
-bool InterfaceOspf_Priority_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_Priority = commandAdder<InterfaceContext,
-    InterfaceOspf_Priority_Handler,
-    "priority"_tok
->;
-
-bool InterfaceOspf_RetransmitInterval_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_RetransmitInterval = commandAdder<InterfaceContext,
-    InterfaceOspf_RetransmitInterval_Handler,
-    "retransmit-interval"_tok
->;
-
-bool InterfaceOspf_TransmitDelay_Handler(INTERFACE_PARAMS);
-using InterfaceOspf_TransmitDelay = commandAdder<InterfaceContext,
-    InterfaceOspf_TransmitDelay_Handler,
-    "transmit-delay"_tok
->;
+#define INTERFACE_OSPF_LIST(X, Y) \
+    X(Y, (_COM_, BFD, "bfd"_tok)) \
+    X(Y, (_COM_, Cost, "cost"_tok)) \
+    X(Y, (_COM_, DatabaseFilter, "database-filter"_tok)) \
+    X(Y, (_COM_, DeadInterval, "dead-interval"_tok)) \
+    X(Y, (_COM_, DemandCircuit, "demand-circuit"_tok)) \
+    X(Y, (_COM_, FloodReduction, "flood-reduction"_tok)) \
+    X(Y, (_COM_, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (_COM_, MtuIgnore, "mtu-ignore"_tok)) \
+    X(Y, (_COM_, Network, "network"_tok)) \
+    X(Y, (_COM_, Priority, "priority"_tok)) \
+    X(Y, (_COM_, RetransmissionInterval, "retransmission-interval"_tok)) \
+    X(Y, (_COM_, TransmitDelay, "transmit-delay"_tok))
 
 /**
  * @brief Shared base parser for common OSPF interface commands.
@@ -98,20 +55,10 @@ using InterfaceOspf_TransmitDelay = commandAdder<InterfaceContext,
  * `InterfaceIPv6OspfCommands` / `InterfaceOspfv3Commands` (OSPFv3).
  * Covers `CliMode::Interface` with `InterfaceContext`.
  */
-using InterfaceOspfCommands = CliModeParser<CliMode::Interface, InterfaceContext,
-    InterfaceOspf_BFD,
-    InterfaceOspf_Cost,
-    InterfaceOspf_DatabaseFilter,
-    InterfaceOspf_DeadInterval,
-    InterfaceOspf_DemandCircuit,
-    InterfaceOspf_FloodReduction,
-    InterfaceOspf_HelloInterval,
-    InterfaceOspf_MtuIgnore,
-    InterfaceOspf_Network,
-    InterfaceOspf_Priority,
-    InterfaceOspf_RetransmitInterval,
-    InterfaceOspf_TransmitDelay
->;
+DEFINE_CMD_MODE(InterfaceOspf, CliMode::Interface, config::OspfInterfaceBaseRegistry, INTERFACE_OSPF_LIST);
 }
+
+#undef INTERFACE_OSPF_LIST
+#undef OSPF_PARAMS
 
 #endif

@@ -37,10 +37,7 @@ static uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_
 
 Ndp::Ndp(interface::Interface& interface)
     : iface(interface),
-      configs([&interface]() {
-          auto& ndpConfigs = interface.configs.getConfigs().get<config::Interface::IPV6_ND>();
-          return interface.getVRF()->getRegistry().emplace(ndpConfigs);
-      }()),
+      configs(interface.configs.getConfigs().get<config::Interface::IPV6_ND>().get()),
       global(interface.getVRF()->getGlobal()),
       scheduler(interface.getScheduler().ref())
 {
@@ -72,7 +69,7 @@ void Ndp::refresh()
 void Ndp::initializeNdp()
 {
     running.store(true, std::memory_order_release);
-    if (!configs->get<config::Ndp::RA_SUPPRESS_ALL>().load())
+    if (!configs.get<config::Ndp::RA_SUPPRESS_ALL>().load())
         scheduleNextRA();
 }
 
@@ -157,7 +154,7 @@ void Ndp::completeNdpEntry(types::IPv6Address targetIp, NdpCacheEntry& entry, ty
 
     ndpTable.insert(targetIp, mac);
 
-    uint16_t refreshPeriod = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::NUD_REFRESH_PERIOD>().load();
+    uint16_t refreshPeriod = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::NUD_REFRESH_PERIOD>().load();
     if (refreshPeriod > 0)
     {
         entry.timerId = scheduler.postAfter(
@@ -167,7 +164,7 @@ void Ndp::completeNdpEntry(types::IPv6Address targetIp, NdpCacheEntry& entry, ty
     }
     else
     {
-        uint32_t reachableTime = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::REACHABLE_TIME>().load();
+        uint32_t reachableTime = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::REACHABLE_TIME>().load();
         entry.timerId = scheduler.postAfter(
             std::chrono::steady_clock::now() + std::chrono::milliseconds(reachableTime),
             [this, targetIp](uint32_t) { onReachableTimeout(targetIp); }
@@ -182,7 +179,7 @@ void Ndp::addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool pr
     if (!isStatic)
     {
         // Enforce per-interface cache limit
-        auto& limitField = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::CACHE_INTERFACE_LIMIT>();
+        auto& limitField = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_INTERFACE_LIMIT>();
         if (limitField.hasValue())
         {
             uint32_t limit = limitField.load();
@@ -243,7 +240,7 @@ void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder&
     auto it = ndpCache.find(targetIp);
     if (it != ndpCache.end())
     {
-        bool strict = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::HOST_MODE_STRICT>().load();
+        bool strict = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::HOST_MODE_STRICT>().load();
 
         switch (it->second.state)
         {
@@ -267,7 +264,7 @@ void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder&
     }
     else
     {
-        uint16_t maxResolution = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::RESOLUTION_DATA_LIMIT>().load();
+        uint16_t maxResolution = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::RESOLUTION_DATA_LIMIT>().load();
         if (maxResolution != 0 && currentResolvingNeighbors >= maxResolution)
         {
             queuedResolution.insert(targetIp);
@@ -281,7 +278,7 @@ void Ndp::resolveAndSend(types::IPv6Address targetIp, processing::PacketBuilder&
 
     // Queue the packet
     auto& queue = pendingPackets[targetIp];
-    uint8_t queueLimit = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::RESOLUTION_DATA_LIMIT>().load();
+    uint8_t queueLimit = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::RESOLUTION_DATA_LIMIT>().load();
     if (queue.size() < queueLimit)
         queue.push(std::move(packetToSend));
 }
@@ -320,7 +317,7 @@ void Ndp::scheduleNeighborSolicitation(types::IPv6Address targetIp)
 
     uint8_t attempt    = nsRetryCount[targetIp];
     bool runningNud    = false;
-    uint16_t maxRetries = configs->get<config::Ndp::NUD_RETRY_ATTEMPTS>().load();
+    uint16_t maxRetries = configs.get<config::Ndp::NUD_RETRY_ATTEMPTS>().load();
 
     auto cacheIt = ndpCache.find(targetIp);
     if (cacheIt != ndpCache.end())
@@ -331,14 +328,14 @@ void Ndp::scheduleNeighborSolicitation(types::IPv6Address targetIp)
     }
 
     // On exhaustion
-    if (attempt >= (runningNud ? maxRetries : configs->get<config::Ndp::NUD_RETRY>().load()))
+    if (attempt >= (runningNud ? maxRetries : configs.get<config::Ndp::NUD_RETRY>().load()))
     {
         if (runningNud && cacheIt != ndpCache.end() &&
-            cacheIt->second.nudGroup <= configs->get<config::Ndp::NUD_RETRY>().load())
+            cacheIt->second.nudGroup <= configs.get<config::Ndp::NUD_RETRY>().load())
         {
             // Transition to UNREACHABLE with final-wait timer
             cacheIt->second.state = NudState::UNREACHABLE;
-            uint16_t finalWait    = configs->get<config::Ndp::NUD_FINAL_WAIT>().load();
+            uint16_t finalWait    = configs.get<config::Ndp::NUD_FINAL_WAIT>().load();
             cacheIt->second.retryTimerId = scheduler.postAfter(
                 std::chrono::steady_clock::now() + std::chrono::milliseconds(finalWait),
                 [this, targetIp](uint32_t) { retryNud(targetIp); }
@@ -394,8 +391,8 @@ void Ndp::scheduleNeighborSolicitation(types::IPv6Address targetIp)
     nsRetryCount[targetIp]++;
 
     uint32_t interval = runningNud
-        ? configs->get<config::Ndp::NUD_RETRY_INTERVAL>().load()
-        : configs->get<config::Ndp::NS_INTERVAL>().load();
+        ? configs.get<config::Ndp::NUD_RETRY_INTERVAL>().load()
+        : configs.get<config::Ndp::NS_INTERVAL>().load();
 
     if (nsRetryTimers.count(targetIp))
         scheduler.cancel(nsRetryTimers[targetIp]);
@@ -418,7 +415,7 @@ void Ndp::scheduleNeighborSolicitation(types::IPv6Address targetIp)
 
 void Ndp::startNud(types::IPv6Address targetIp, NdpCacheEntry& entry)
 {
-    uint16_t nudLimit = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::NUD_LIMIT>().load();
+    uint16_t nudLimit = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::NUD_LIMIT>().load();
     if (nudLimit != 0 && currentNudProbes >= nudLimit)
     {
         queuedNudProbes.insert(targetIp);
@@ -440,7 +437,7 @@ void Ndp::onReachableTimeout(types::IPv6Address targetIp)
 
     it->second.timerId = 0;
 
-    bool doRefresh = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::CACHE_REFRESH>().load();
+    bool doRefresh = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_REFRESH>().load();
     if (doRefresh)
         startNud(targetIp, it->second);
     else
@@ -539,7 +536,7 @@ void Ndp::receiveNeighborAdvertisement(const packet::Icmpv6Header& receivedNA, t
     else
     {
         // Unsolicited NA (NA_GLEAN): learn from it if configured
-        if (configs->get<config::Ndp::NA_GLEAN>().load())
+        if (configs.get<config::Ndp::NA_GLEAN>().load())
             addNdpEntry(targetIp, mac);
     }
 
@@ -610,18 +607,18 @@ void Ndp::receiveNeighborSolicitation(const packet::Icmpv6Header& nsHeader, type
 
 void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, types::IPv6Address sourceIp, types::Mac sourceMac)
 {
-    if (configs->get<config::Ndp::RA_SUPPRESS>().load()) return;
+    if (configs.get<config::Ndp::RA_SUPPRESS>().load()) return;
 
-    if (configs->get<config::Ndp::DESTINATION_GUARD>().load())
+    if (configs.get<config::Ndp::DESTINATION_GUARD>().load())
     {
-        auto mode = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::HOST_MODE_STRICT>().load();
+        auto mode = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::HOST_MODE_STRICT>().load();
 
         if (!mode) return; // BLOCK_ALL when strict
 
         if (!raGuardAllowedMacs.count(sourceMac))
         {
             auto& lastTime = raReceivedTimestamps[sourceMac.mac];
-            auto rateLimit = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
+            auto rateLimit = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
             auto interval  = std::chrono::milliseconds(1000 / std::max<uint16_t>(rateLimit, 1));
             auto now       = std::chrono::steady_clock::now();
 
@@ -635,7 +632,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
     bool mFlag = flags & 0x80;
     bool oFlag = flags & 0x40;
 
-    if (configs->get<config::Ndp::AUTOCONFIG_DEFAULT_ROUTE>().load())
+    if (configs.get<config::Ndp::AUTOCONFIG_DEFAULT_ROUTE>().load())
     {
         uint32_t pid = (uint32_t)std::hash<__uint128_t>{}(sourceIp.addr);
 
@@ -698,7 +695,7 @@ void Ndp::receiveRouteAdvertisement(const packet::Icmpv6Header& receivedRA, type
             );
             if (isExcluded) continue;
 
-            if (A && validLifetime > 0 && configs->get<config::Ndp::AUTOCONFIG_PREFIX>().load())
+            if (A && validLifetime > 0 && configs.get<config::Ndp::AUTOCONFIG_PREFIX>().load())
             {
                 auto* slaacAddr              = new interface::InterfaceConfigs::IPv6State::IPv6Address();
                 slaacAddr->prefix.prefixLength = prefixLen;
@@ -769,7 +766,7 @@ void Ndp::receiveRedirectMessage(const packet::Icmpv6Header& redirect, types::IP
 
 void Ndp::sendNeighborAdvertisement(types::Mac destMac, types::IPv6Address targetIp)
 {
-    if (configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::HOST_MODE_STRICT>().load()) return; // suppressNA
+    if (configs.get<config::Ndp::BASE>().get().get<config::NdpBase::HOST_MODE_STRICT>().load()) return; // suppressNA
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
 
     processing::PacketBuilder naPacket(&iface);
@@ -845,7 +842,7 @@ void Ndp::sendRouteAdvertisement(types::Mac targetMac, types::IPv6Address target
 
 void Ndp::sendRedirectMessage(types::IPv6Address targetIp, types::IPv6Address destinationIp)
 {
-    if (!configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::ROUTE_OWNER>().load()) return;
+    if (!configs.get<config::Ndp::BASE>().get().get<config::NdpBase::ROUTE_OWNER>().load()) return;
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
 
     processing::PacketBuilder packet(&iface);
@@ -884,7 +881,7 @@ void Ndp::sendRedirectMessage(types::IPv6Address targetIp, types::IPv6Address de
 void Ndp::sendRedirectIfNeeded(const packet::PacketInfo& originalPacket, const uint8_t* pkt)
 {
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
-    if (!configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::ROUTE_OWNER>().load()) return;
+    if (!configs.get<config::Ndp::BASE>().get().get<config::NdpBase::ROUTE_OWNER>().load()) return;
 
     // Find the IPv6 header
     packet::IPv6HeaderRaw* ipv6 = nullptr;
@@ -963,10 +960,10 @@ void Ndp::scheduleNextRA()
             ++it;
     }
 
-    uint32_t baseInterval = configs->get<config::Ndp::RA_INTERVAL>().load();
-    if (configs->get<config::Ndp::ADVERTISEMENT_INTERVAL>().load())
+    uint32_t baseInterval = configs.get<config::Ndp::RA_INTERVAL>().load();
+    if (configs.get<config::Ndp::ADVERTISEMENT_INTERVAL>().load())
     {
-        uint32_t minInterval = configs->get<config::Ndp::RA_MIN_INTERVAL>().load();
+        uint32_t minInterval = configs.get<config::Ndp::RA_MIN_INTERVAL>().load();
         if (minInterval > baseInterval) minInterval = baseInterval;
         uint32_t delta = baseInterval - minInterval;
         baseInterval   = minInterval + (static_cast<uint32_t>(rand()) % (delta + 1));
@@ -979,7 +976,7 @@ void Ndp::scheduleNextRA()
             raTimerIds.erase(timerId);
 
             if (!running.load(std::memory_order_relaxed) ||
-                configs->get<config::Ndp::RA_SUPPRESS>().load())
+                configs.get<config::Ndp::RA_SUPPRESS>().load())
                 return;
 
             auto localAddr = iface.configs.ipv6.getLocalAddress();
@@ -998,7 +995,7 @@ void Ndp::scheduleNextRA()
 
 void Ndp::initiateSlaac()
 {
-    if (!configs->get<config::Ndp::AUTOCONFIG_PREFIX>().load()) return;
+    if (!configs.get<config::Ndp::AUTOCONFIG_PREFIX>().load()) return;
 
     processing::PacketBuilder rs(&iface);
     routeSolicitation(rs, iface.configs.getMac());
@@ -1015,7 +1012,7 @@ void Ndp::initiateSlaac()
 void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 {
     if (iface.shutdownFlag.load(std::memory_order_relaxed)) return;
-    if (configs->get<config::Ndp::DAD_ATTEMPTS>().load() == 0) return;
+    if (configs.get<config::Ndp::DAD_ATTEMPTS>().load() == 0) return;
     if (!addr.tentative) return;
 
     nsRetryCount[addr.prefix] = 0;
@@ -1031,9 +1028,9 @@ void Ndp::duplicateAddressDetection(interface::InterfaceConfigs::IPv6State::IPv6
 
 void Ndp::preformDad(interface::InterfaceConfigs::IPv6State::IPv6Address& addr)
 {
-    const int    maxAttempts = configs->get<config::Ndp::DAD_ATTEMPTS>().load();
+    const int    maxAttempts = configs.get<config::Ndp::DAD_ATTEMPTS>().load();
     const auto   delay       = std::chrono::milliseconds(
-                                   configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::DAD_TIME>().load());
+                                   configs.get<config::Ndp::BASE>().get().get<config::NdpBase::DAD_TIME>().load());
     int          attempt     = nsRetryCount[addr.prefix];
 
     bool isDuplicate = dadStatus.count(addr.prefix) && dadStatus[addr.prefix];
@@ -1113,7 +1110,7 @@ void Ndp::addRaGuardAllowedMac(types::Mac mac, bool remove)
 bool Ndp::shouldLog()
 {
     auto now  = std::chrono::steady_clock::now();
-    uint16_t rate = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
+    uint16_t rate = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>().load();
     if (rate == 0) return true;
 
     auto minInterval = std::chrono::microseconds(1'000'000 / rate);
@@ -1242,22 +1239,22 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
     icmp.setCode(0);
 
     uint8_t reserved[4] = {};
-    if (configs->get<config::Ndp::MANAGED_CONFIG_FLAG>().load()) reserved[1] |= 0x80;
-    if (configs->get<config::Ndp::OTHER_CONFIG_FLAG>().load())   reserved[1] |= 0x40;
+    if (configs.get<config::Ndp::MANAGED_CONFIG_FLAG>().load()) reserved[1] |= 0x80;
+    if (configs.get<config::Ndp::OTHER_CONFIG_FLAG>().load())   reserved[1] |= 0x40;
 
-    switch (configs->get<config::Ndp::ROUTER_PREFERENCE>().load())
+    switch (configs.get<config::Ndp::ROUTER_PREFERENCE>().load())
     {
         case config::ndp::Preference::LOW:  reserved[1] |= 0x18; break; // 11
         case config::ndp::Preference::HIGH: reserved[1] |= 0x08; break; // 01
         default: break;                                                   // 00 = MEDIUM
     }
 
-    reserved[0] |= configs->get<config::Ndp::RA_HOP_LIMIT_UNSPECIFIED>().load() ? 0 : 64;
-    utils::writeU16(reserved + 2, configs->get<config::Ndp::RA_LIFETIME>().load());
+    reserved[0] |= configs.get<config::Ndp::RA_HOP_LIMIT_UNSPECIFIED>().load() ? 0 : 64;
+    utils::writeU16(reserved + 2, configs.get<config::Ndp::RA_LIFETIME>().load());
     icmp.setReserved(reserved);
 
     uint8_t* trail = icmp.getTrailData();
-    uint32_t reachableTime = configs->get<config::Ndp::BASE>().get()->get<config::NdpBase::REACHABLE_TIME>().load();
+    uint32_t reachableTime = configs.get<config::Ndp::BASE>().get().get<config::NdpBase::REACHABLE_TIME>().load();
     utils::writeU32(trail,     reachableTime);
     utils::writeU32(trail + 4, 0); // retrans timer — let neighbor use its own
 
@@ -1266,14 +1263,14 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
     utils::writeU48(buf, currentMac);
     options.append(ICMPV6_OPTION_NDP_SOURCE, 1, nullptr, 6);
 
-    if (!configs->get<config::Ndp::RA_MTU_SUPPRESS>().load())
+    if (!configs.get<config::Ndp::RA_MTU_SUPPRESS>().load())
     {
         uint8_t mtu[6] = {};
         utils::writeU32(mtu + 2, iface.configs.ipv6.mtu.load(std::memory_order_relaxed));
         options.append(ICMPV6_OPTION_NDP_MTU, 1, mtu, 6);
     }
 
-    if (configs->get<config::Ndp::AUTOCONFIG_PREFIX>().load())
+    if (configs.get<config::Ndp::AUTOCONFIG_PREFIX>().load())
     {
         for (const auto& addr : iface.configs.ipv6.globalAddresses)
         {
@@ -1282,7 +1279,7 @@ void Ndp::routeAdvertisement(processing::PacketBuilder& packet, types::Mac curre
             const uint8_t prefixLen = addr->prefix.prefixLength;
             uint8_t flags = 0xC0; // L=1 (on-link), A=1 (autonomous)
 
-            uint32_t lifetime          = configs->get<config::Ndp::RA_LIFETIME>().load();
+            uint32_t lifetime          = configs.get<config::Ndp::RA_LIFETIME>().load();
             uint32_t preferredLifetime = lifetime / 2;
 
             uint8_t value[30] = {};

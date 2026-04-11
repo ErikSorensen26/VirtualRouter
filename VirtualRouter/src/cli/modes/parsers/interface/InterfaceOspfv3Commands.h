@@ -11,32 +11,47 @@
 #define INTERFACE_OSPFV3_COMMANDS_H
 
 #include "InterfaceOspfCommands.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "configs/registry/interface/InterfaceRegistry.h"
+
+#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
+#define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
 
 namespace cli
 {
-bool InterfaceOspfv3_Area_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Area = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Area_Handler,
-    ARG, "area"_tok
->;
+bool InterfaceOspfv3_Area_Handler(OSPF_PARAMS);
+bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS);
 
-bool InterfaceOspfv3_Authentication_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Authentication = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Authentication_Handler,
-    "authentication"_tok
->;
+#define OSPFV3_LIST(X, Y) \
+    X(Y, (_EXT_, InterfaceOspfCommands)) \
+    X(Y, (_COM_, Neighbor, "neighbor"_tok))
 
-bool InterfaceOspfv3_Encryption_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Encryption = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Encryption_Handler,
-    "encryption"_tok
->;
+DEFINE_CMD_MODE(InterfaceOspfv3, CliMode::Interface, config::OspfInterfaceBaseRegistry, OSPFV3_LIST);
 
-bool InterfaceOspfv3_Neighbor_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Neighbor = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Neighbor_Handler,
-    "neighbor"_tok
->;
+bool InterfaceDefaultOspfv3_Authentication_Handler(OSPF_PARAMS);
+bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS);
+bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS);
+bool InterfaceDefaultOspfv3_NullEncryption_Handler(OSPF_PARAMS);
+
+#define DEFAULT_OSPFV3_LIST(X, Y) \
+    X(Y, (_EXT_, InterfaceOspfCommands)) \
+    X(Y, (_COM_, Authentication, "authentication"_tok, "ipsec"_tok)) \
+    X(Y, (_COM_, NullAuthentication, "authentication"_tok, "null"_tok)) \
+    X(Y, (_COM_, Encryption, "encryption"_tok, "ipsec"_tok)) \
+    X(Y, (_COM_, NullEncryption, "encryption"_tok, "null"_tok)) \
+
+DEFINE_CMD_MODE(InterfaceDefaultOspfv3, CliMode::Interface, config::OspfInterfaceBaseRegistry, DEFAULT_OSPFV3_LIST);
+
+bool InterfaceOspfv3Base_ProcessIP_SubHandler(INTERFACE_SUB_PARAMS);
+bool InterfaceOspfv3Base_ProcessIPv6_SubHandler(INTERFACE_SUB_PARAMS);
+bool InterfaceOspfv3Base_Process_SubHandler(INTERFACE_SUB_PARAMS);
+bool InterfaceOspfv3Base_Default_SubHandler(INTERFACE_SUB_PARAMS);
+
+#define INTERFACE_OSPFV3_LIST(X, Y) \
+    X(Y, (_SUB_, ProcessIP, P_NUMRNG, "ipv4"_tok)) \
+    X(Y, (_SUB_, ProcessIPv6, P_NUMRNG, "ipv6"_tok)) \
+    X(Y, (_SUB_, Process, P_NUMRNG)) \
+    X(Y, (_SUB_, Default))
 
 /**
  * @brief Parser for OSPFv3 commands in Interface Configuration mode.
@@ -45,14 +60,12 @@ using InterfaceOspfv3_Neighbor = commandAdder<InterfaceContext,
  * Aggregates area, authentication, encryption, and neighbor commands
  * for OSPFv3 interfaces under `CliMode::Interface` with `InterfaceContext`.
  */
-using InterfaceOspfv3Commands = CliModeParser<CliMode::Interface, InterfaceContext,
-    InterfaceOspfCommands,
-    InterfaceOspfv3_Area,
-    InterfaceOspfv3_Authentication,
-    InterfaceOspfv3_Encryption,
-    InterfaceOspfv3_Neighbor
->;
+DEFINE_CMD_MODE(InterfaceOspfv3Base, CliMode::Interface, config::InterfaceRegistry, INTERFACE_OSPFV3_LIST);
 }
+
+#undef INTERFACE_OSPFV3_LIST
+#undef OSPF_PARAMS
+#undef INTERFACE_SUB_PARAMS
 
 #endif // INTERFACE_IPV6_OSPF_COMMANDS_H
 

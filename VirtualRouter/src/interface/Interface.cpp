@@ -246,23 +246,28 @@ void Interface::shutdown(bool shut)
     else if (!shut) 
     {
         if (dhcp) dhcp->initiate();
-        arp.initiateArp();
+        arp.refresh();
         if (getVRF()->global.isIPv6UnicastRouting())
         {
             // DHCPV6
-            ndp.initializeNdp();
+            ndp.refresh();
         }
 
         getVRF()->getInterfaceManager().notify(StateChange::IF_READY, *this);
     }
 }
 
+void Interface::syncShutdown()
+{
+    bool shut = configs.configs.get<config::Interface::SHUTDOWN>().load();
+    shutdown(shut);
+}
+
 void Interface::reset()
 {
-
-    arp.initiateArp();
+    arp.refresh();
     if (getVRF()->global.isIPv6UnicastRouting())
-        ndp.initializeNdp();
+        ndp.refresh();
 }
 
 void Interface::physicalShutdown(bool shut)
@@ -375,28 +380,4 @@ bool Interface::setVRF(core::VirtualRouter* vrf)
 
     return true;
 }
-
-config::Reference<config::EigrpInterfaceRegistry> Interface::getEigrpConfig(uint32_t as)
-{
-    auto it = configs.eigrp.eigrpIfaceConfigs.find(as);
-    if (it == configs.eigrp.eigrpIfaceConfigs.end())
-    {
-        auto* vrf = routingInstance.load(std::memory_order_relaxed);
-        auto [ins, ok] = configs.eigrp.eigrpIfaceConfigs.emplace(as, vrf->getRegistry().create<config::EigrpInterfaceRegistry>());
-        return ins->second;
-    }
-    return it->second;
-}
-
-config::Reference<config::OspfInterfaceBaseRegistry> Interface::getOspfConfig()
-{
-    if (!configs.ospf.ospfInterfaceConfigs.has_value())
-    {
-        auto* vrf = routingInstance.load(std::memory_order_relaxed);
-        configs.ospf.ospfInterfaceConfigs.emplace(vrf->getRegistry().create<config::OspfInterfaceBaseRegistry>());
-        vrf->getRegistry().emplace(configs.ospf.ospfInterfaceConfigs.value()->get<config::OspfInterfaceBase::BASE>());
-    }
-    return configs.ospf.ospfInterfaceConfigs.value();
-}
-
 } // namespace interface

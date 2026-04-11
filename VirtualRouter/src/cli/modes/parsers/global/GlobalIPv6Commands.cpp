@@ -5,23 +5,28 @@
 #include <VirtualRouter.h>
 
 #include "GlobalIPv6Commands.h"
-#include "Mac.hpp"
+#include "GlobalIPv6NDCommands.h"
 #include "interface/configs/InterfaceType.hpp"
-#include "interface/configs/InterfaceConfigs.h"
 #include "cli/runtime/CliSession.h"
-#include "cli/runtime/CliUtils.h"
-#include "cli/modes/contexts/EigrpContext.hpp"
-#include "eigrp/core/Eigrp.h"
+#include "cli/parser/CommandUtils.hpp"
 #include "GlobalHelpers.hpp"
+
+#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
+#define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
+bool GlobalIPv6_ND_SubHandler(GLOBAL_SUB_PARAMS)
+{
+    auto& ndp = ctx.configs.get<config::Interface::IPV6_ND>().get();
+    return GlobalIPv6NDCommands::execute(ctx, toks, idx);
+}
+
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
 {
     //ListField<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
-    config::GlobalRegistry& g = getGlobalConfigs(ctx.global);
-    auto& neighbors = g.get<config::Global::IPV6_NEIGHBOR>();
-    typename config::DefType<decltype(neighbors)>::type tup;
+    auto& neighbors = ctx.configs.get<config::Global::IPV6_NEIGHBOR>();
+    typename config::DefType<decltype(neighbors)>::node tup;
     for (const auto& seg : segs)
     {
         switch (seg[0])
@@ -44,7 +49,7 @@ bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
         }
     }
 
-    return utils::addListEntry(neighbors, ctx, tup);
+    return utils::setListEntry(neighbors, ctx, tup);
 }
 
 bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
@@ -52,43 +57,25 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
     uint16_t asNum;
     if (!utils::stouint(asNum, segs[0][1]))
         return false;
-
-    if (ctx.negate || ctx.defaulted)
+    config::VrfRegistry* vrf;
+    if (!getVrfConfigs(vrf, ctx))
+        return false;
+    auto& eigrpList = vrf->get<config::Vrf::ROUTER_EIGRP_V6>();
+    if (auto it = eigrpList.find(asNum); it != eigrpList.end())
     {
-        routing::eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum); if (as)
+        if (it->second.get<config::Eigrp::IS_NAMED>().load())
         {
-            if (!as->ipv6Named && as->ipv6)
-            {
-                delete as->ipv6;
-                as->ipv6 = nullptr;
-                if (!as->ipv4)
-                {
-                    ctx.vrf.removeEigrpAutonomousSystem(asNum);
-                }
-            }
+            ctx.terminal.controller.print(std::string("\r\n%") + std::string(" ERROR: AS(" + std::to_string(asNum) + ") used by named mode"));
+            return false; 
         }
     }
     else
     {
-        routing::eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
-        if (as)
-        {
-            if (as->ipv6Named)
-            {
-                ctx.terminal.controller.print(std::string("\r\n%") + std::string(" ERROR: AS(" + std::to_string(asNum) + ") used by named mode"));
-                return false; // AS used in named mode.
-            }
-        }
-        else
-        {
-            as = ctx.vrf.addEigrpAutonomousSystem(asNum);
-        }
-        if (!as->ipv6)
-        {
-            as->ipv6 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv6, &ctx.vrf);
-        }
-        ctx.terminal.changeMode<CliMode::RouterEigrpClassicV6>(as->ipv6, nullptr, nullptr);
+        utils::setOwnedField(eigrpList, ctx, asNum);
     }
-    return true;
+    return ctx.terminal.changeMode<CliMode::RouterEigrpClassicV6>(eigrpList.get().at(asNum));
 }
 }
+
+#undef GLOBAL_PARAMS
+#undef GLOBAL_SUB_PARAMS

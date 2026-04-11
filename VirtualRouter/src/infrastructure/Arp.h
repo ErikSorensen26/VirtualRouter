@@ -152,7 +152,7 @@ public:
 private:
     interface::Interface& iface; ///< Pointer to the associated network interface.
 
-    config::Reference<config::ArpRegistry> configs; ///< Per-interface ARP configuration (timeout, probe interval, etc.).
+    config::ArpRegistry& configs; ///< Per-interface ARP configuration (timeout, probe interval, etc.).
     types::StableHashMap<types::IPv4Address, ArpCacheEntry> arpCache; ///< ARP cache mapping IPs to MAC addresses and expiration times.
     types::AtomicHashMap<types::IPv4Address, types::Mac> arpTable; ///< Dataplane ARP table mapping IPs to MAC.
 

@@ -349,9 +349,9 @@ enum class OspfAddressFamilyV3
 };
 
 using OspfAddressFamilyV3Registry = SubRegistry<OspfAddressFamilyV3,
-    ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::BASE)>,
-    ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV4)>,
-    ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV6)>
+    RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::BASE)>,
+    RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV4)>,
+    RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV3::IPV6)>
 >;
 
 enum class OspfAddressFamilyV2
@@ -361,7 +361,7 @@ enum class OspfAddressFamilyV2
 };
 
 using OspfAddressFamilyV2Registry = SubRegistry<OspfAddressFamilyV2,
-    ReferenceContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV2::BASE)>
+    RegistryContainer<OspfRegistry CONFIG_INDEX_ARG(OspfAddressFamilyV2::BASE)>
 >;
 }
 

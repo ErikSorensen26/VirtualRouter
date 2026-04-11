@@ -15,15 +15,12 @@
 #include "configs/RegistryReference.hpp"
 #include "configs/SubRegistry.hpp"
 #include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "configs/registry/router/EigrpInterfaceRegistry.h"
 
 #include "ArpRegistry.h"
 #include "NdpRegistry.h"
 
-#undef IP_IGMP
 #undef IP_MTU
-#undef IP_OSPF
-#undef IP_PIM
-#undef IP_RSVP
 #undef IPV6_MTU
 
 struct IncompleteIf {};
@@ -72,12 +69,10 @@ enum class Interface
     IP_ADDRESS, // TODO list of ipprefix
     IP_ADDRESS_SECONDARY, // TODO IPPrefix, string
     IP_ADDRESS_DHCP, // TODO
-    IP_ADDRESS_DHCP_CLIENT_ID, // TODO string
-    IP_ADDRESS_DHCP_HOSTNAME, // TODO string
-    IP_ADDRESS_POOL, // TODO
     IP_BFD_FAST_EXTERNAL_FALLOVER, // TODO bool
     IP_CEF_ACCOUNTING_NON_RECURSIVE, // TODO bool
     IP_DHCP, // TODO
+    IP_EIGRP, // TODO
     IP_DIRECT_BROADCAST, // TODO
     IP_FLOW_INGRESS, // TODO bool
     IP_FLOW_EGRESS, // TODO bool
@@ -99,7 +94,6 @@ enum class Interface
     IP_NAT_OUTSIDE, // TODO bool
     IP_NBAR_PROTOCOL_DISCOVER_IP, // TODO bool
     IP_NBAR_PROTOCOL_DISCOVER_IPV6, // TODO bool
-    IP_OSPF_DEFAULT, // TODO
     IP_OSPF, // TODO
     IP_PIM, // TODO
     IP_POLICY_ROUTE_MAP, // TODO string
@@ -124,13 +118,14 @@ enum class Interface
     IP_VERIFY_UNICAST_SOURCE_REACHABLE_VIA, // TODO
     IP_VRF, // TODO
     IPV6_ADDRESS_LL, // TODO IPv6prefix
-    IPV6_ADDRESS, // TODO vector<tuple<string, ipv6prefix, bool(anycast), bool(eui-64)>>
+    IPV6_ADDRESS, // TODO
     IPV6_ADDRESS_AUTOCONFIG, // TODO bool
     IPV6_ADDRESS_AUTOCONFIG_DEFAULT, // TODO bool
     IPV6_ADDRESS_DHCP, // TODO 
     IPV6_CEF, // TODO bool
     IPV6_DHCP, // TODO
     IPV6_EIGRP, // TODO as list
+    IPV6_EIGRP_ENABLED,
     IPV6_FLOW_MONITOR, // TODO bool
     IPV6_LIST_SOURCE_LOCATOR, // TODO interface::InterfaceKEy
     IPV6_MFIB_CEF_INPUT, // TODO bool
@@ -141,8 +136,7 @@ enum class Interface
     IPV6_MTU, // TODO, uint16
     IPV6_MULTICAST, // TODO
     IPV6_ND,
-    IPV6_OSPF_DEFAULT,
-    IPV6_OSPF, // TODO
+    IPV6_OSPF,
     IPV6_PIM, // TODO
     IPV6_POLICY_ROUTE_MAP, // TODO string
     IPV6_REDIRECTS, // TODO bool
@@ -171,6 +165,7 @@ enum class Interface
     SERVICE_POLICY_OUTPUT, // TODO string
     SERVICE_POLICY_CONTROL, // TODO string
     SERVICE_POLICY_CONTROL_DEFAULT, // TODO bool
+    SHUTDOWN, // TODO
     SNMP_IFINDEX_PERSIST, // TODO bool
     SNMP_TRAP_IP_VERIFY_DROP_RATE, // TODO bool
     SNMP_TRAP_LINK_STATUS, // TODO bool
@@ -248,18 +243,21 @@ enum class Interface
     (Interface, MTU, 1500) \
     (Interface, NEGOTIATION_AUTO, true) \
     (Interface, SERVICE_POLICY_CONTROL_DEFAULT, false) \
+    (interface, SHUTDOWN, true) \
     (Interface, SNMP_IFINDEX_PERSIST, false) \
     (Interface, SNMP_TRAP_IP_VERIFY_DROP_RATE, false) \
     (Interface, SNMP_TRAP_LINK_STATUS, true) \
     (Interface, SNMP_TRAP_LINK_STATUS_PERMIT_DUPLICATES, false) \
     (Interface, TIMEOUT_ABSOLUTE_LIFETIME, 0)
 
-void InterfaceIPAddress(void* ctx);
-void InterfaceIPAddressSecondary(void* ctx);
+void interfaceIPAddress(void*);
+void interfaceIPAddressSecondary(void*);
+void interfaceShutdown(void*);
+void interfaceIPv6Eigrp(void*);
 
 using InterfaceRegistry = SubRegistry<Interface,
     ValueField<std::string CONFIG_INDEX_ARG(Interface::AAA_CONNECTION_INFO)>,
-    ReferenceContainer<ArpRegistry CONFIG_INDEX_ARG(Interface::ARP)>,
+    RegistryContainer<ArpRegistry CONFIG_INDEX_ARG(Interface::ARP)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Interface::BANDWIDTH)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Interface::BANDWIDTH_RECEIVE)>,
     OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Interface::BANDWIDTH_INHERITANCE)>,
@@ -286,20 +284,18 @@ using InterfaceRegistry = SubRegistry<Interface,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::HISTORY_PPS)>,
     AtomicField<uint32_t CONFIG_INDEX_ARG(Interface::HOLD_QUEUE_LENGTH)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_ACCESS_GROUP)>,
-    OptionalAtomicField<types::IPv4Prefix CONFIG_INDEX_ARG(Interface::IP_ADDRESS), InterfaceIPAddress>,
-    ListField<std::vector<std::tuple<types::IPv4Prefix, std::string>> CONFIG_INDEX_ARG(Interface::IP_ADDRESS_SECONDARY), InterfaceIPAddressSecondary>,
-    AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_ADDRESS_DHCP), InterfaceIPAddress>,
-    ValueField<std::string CONFIG_INDEX_ARG(Interface::IP_ADDRESS_DHCP_CLIENT_ID), InterfaceIPAddress>,
-    ValueField<std::string CONFIG_INDEX_ARG(Interface::IP_ADDRESS_DHCP_HOSTNAME), InterfaceIPAddress>,
-    OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_ADDRESS_POOL)>,
+    OptionalAtomicField<types::IPv4Prefix CONFIG_INDEX_ARG(Interface::IP_ADDRESS), interfaceIPAddress>,
+    ListField<std::tuple<types::IPv4Prefix, std::string> CONFIG_INDEX_ARG(Interface::IP_ADDRESS_SECONDARY), interfaceIPAddressSecondary>,
+    AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_ADDRESS_DHCP), interfaceIPAddress>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_BFD_FAST_EXTERNAL_FALLOVER)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_CEF_ACCOUNTING_NON_RECURSIVE)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_DHCP)>,
+    OwnedListField<EigrpInterfaceRegistry, uint16_t CONFIG_INDEX_ARG(Interface::IP_EIGRP)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_DIRECT_BROADCAST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_FLOW_INGRESS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_FLOW_EGRESS)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_FLOW_MONITOR)>,
-    ListField<std::vector<std::tuple<types::IPv4Address, bool, std::string>> CONFIG_INDEX_ARG(Interface::IP_HELPER_ADDRESS)>,
+    ListField<std::tuple<types::IPv4Address, bool, std::string> CONFIG_INDEX_ARG(Interface::IP_HELPER_ADDRESS)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_IGMP)>,
     OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Interface::IP_LISP_SOURCE_LOCATOR)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_LOAD_SHARING_PER_DESTINATION)>,
@@ -316,8 +312,7 @@ using InterfaceRegistry = SubRegistry<Interface,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_NAT_OUTSIDE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_NBAR_PROTOCOL_DISCOVER_IP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_NBAR_PROTOCOL_DISCOVER_IPV6)>,
-    ReferenceContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(Interface::IP_OSPF_DEFAULT)>,
-    OwnedListField<OspfInterfaceRegistry, uint16_t CONFIG_INDEX_ARG(Interface::IP_OSPF)>,
+    RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(Interface::IP_OSPF)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_PIM)>,
     ValueField<std::string CONFIG_INDEX_ARG(Interface::IP_POLICY_ROUTE_MAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IP_PROXY_ARP)>,
@@ -341,13 +336,14 @@ using InterfaceRegistry = SubRegistry<Interface,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_VERIFY_UNICAST_SOURCE_REACHABLE_VIA)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IP_VRF)>,
     OptionalAtomicField<types::IPv6Address CONFIG_INDEX_ARG(Interface::IPV6_ADDRESS_LL)>,
-    ListField<std::vector<types::IPv6Address> CONFIG_INDEX_ARG(Interface::IPV6_ADDRESS)>,
+    ListField<std::tuple<types::IPv6Address, std::string, IGNOR(bool), IGNOR(bool)> CONFIG_INDEX_ARG(Interface::IPV6_ADDRESS)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_ADDRESS_AUTOCONFIG)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_ADDRESS_AUTOCONFIG_DEFAULT)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IPV6_ADDRESS_DHCP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_CEF)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IPV6_DHCP)>,
-    OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IPV6_EIGRP)>,
+    OwnedListField<EigrpInterfaceRegistry, uint16_t CONFIG_INDEX_ARG(Interface::IPV6_EIGRP)>,
+    ListField<uint16_t CONFIG_INDEX_ARG(Interface::IPV6_EIGRP_ENABLED), interfaceIPv6Eigrp>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_FLOW_MONITOR)>,
     OptionalAtomicField<interface::InterfaceKey CONFIG_INDEX_ARG(Interface::IPV6_LIST_SOURCE_LOCATOR)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_MFIB_CEF_INPUT)>,
@@ -357,9 +353,8 @@ using InterfaceRegistry = SubRegistry<Interface,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_MFIB_FORWARDING)>,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Interface::IPV6_MTU)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IPV6_MULTICAST)>,
-    ReferenceContainer<NdpRegistry CONFIG_INDEX_ARG(Interface::Interface::IPV6_ND)>,
-    ReferenceContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(Interface::IPV6_OSPF_DEFAULT)>,
-    OwnedListField<OspfInterfaceRegistry, uint16_t CONFIG_INDEX_ARG(Interface::IPV6_OSPF)>,
+    RegistryContainer<NdpRegistry CONFIG_INDEX_ARG(Interface::Interface::IPV6_ND)>,
+    RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(Interface::IPV6_OSPF)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IPV6_PIM)>,
     ValueField<std::string CONFIG_INDEX_ARG(Interface::IPV6_POLICY_ROUTE_MAP)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_REDIRECTS)>,
@@ -380,7 +375,7 @@ using InterfaceRegistry = SubRegistry<Interface,
     AtomicField<uint16_t CONFIG_INDEX_ARG(Interface::MTU)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::NEGOTIATION_AUTO)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::NTP)>,
-    ReferenceContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(Interface::OSPFV3_DEFAULT)>,
+    RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(Interface::OSPFV3_DEFAULT)>,
     OwnedListField<OspfInterfaceRegistry, uint16_t CONFIG_INDEX_ARG(Interface::OSPFV3)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::RATE_LIMIT)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::RMON)>,
@@ -388,6 +383,7 @@ using InterfaceRegistry = SubRegistry<Interface,
     ValueField<std::string CONFIG_INDEX_ARG(Interface::SERVICE_POLICY_OUTPUT)>,
     ValueField<std::string CONFIG_INDEX_ARG(Interface::SERVICE_POLICY_CONTROL)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::SERVICE_POLICY_CONTROL_DEFAULT)>,
+    AtomicField<bool CONFIG_INDEX_ARG(Interface::SHUTDOWN), interfaceShutdown>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::SNMP_IFINDEX_PERSIST)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::SNMP_TRAP_IP_VERIFY_DROP_RATE)>,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::SNMP_TRAP_LINK_STATUS)>,

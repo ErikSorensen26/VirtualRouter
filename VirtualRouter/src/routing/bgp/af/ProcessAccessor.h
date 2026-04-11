@@ -106,7 +106,7 @@ public:
      * @param base  The AF-base config container to register.
      * @param proc  The `BgpProcess` that owns the registry.
      */
-    static void emplaceAfBase(config::ReferenceContainer<config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc);
+    static void emplaceAfBase(config::RegistryContainer<config::BgpAfBaseRegistry CONFIG_INDEX_PARAM>& base, BgpProcess& proc);
 };
 } // namespace routing
 

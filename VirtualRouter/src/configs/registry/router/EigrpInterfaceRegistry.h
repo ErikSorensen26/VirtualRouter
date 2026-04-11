@@ -54,9 +54,9 @@ enum class EigrpInterface
     X(EigrpInterface, BANDWIDTH_PERCENTAGE,     50) \
     X(EigrpInterface, BFD,                      false) \
     X(EigrpInterface, DAMPENING_CHANGE,         false) \
-    X(EigrpInterface, DAMPENING_CHANGE_PERCENT, 1) \
+    X(EigrpInterface, DAMPENING_CHANGE_PERCENT, 50) \
     X(EigrpInterface, DAMPENING_INTERVAL,       false) \
-    X(EigrpInterface, DAMPENING_INTERVAL_TIME,  5) \
+    X(EigrpInterface, DAMPENING_INTERVAL_TIME,  30) \
     X(EigrpInterface, HELLO_INTERVAL,           5) \
     X(EigrpInterface, HOLD_TIME,                15) \
     X(EigrpInterface, NEXT_HOP_SELF,            false) \
@@ -85,7 +85,7 @@ using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE), EigrpIfacePassive>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN), EigrpIfaceShutdown>,
     AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SPLIT_HORIZON)>,
-    ListField<std::vector<std::tuple<types::IPAddress, uint8_t>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
+    ListField<std::tuple<types::IPPrefix, std::optional<std::string>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
 >;
 
 }

@@ -81,7 +81,27 @@ OspfInterface& InterfaceManager::createInterface(interface::Interface& interface
 
 void InterfaceManager::removeInterface(const OspfInterfaceId& id)
 {
-    // TODO: remove interface here
+    auto it = ospfInterfaceList.find(id);
+    if (it == ospfInterfaceList.end()) return;
+
+    uint32_t areaId = id.area;
+    ospfInterfaceList.erase(it); // destructor tears down neighbors, timers, LSAs
+
+    // Auto-remove non-backbone areas that are now empty
+    if (areaId != 0)
+    {
+        bool hasInterfaces = false;
+        for (const auto& [ifaceId, iface] : ospfInterfaceList)
+        {
+            if (ifaceId.area == areaId)
+            {
+                hasInterfaces = true;
+                break;
+            }
+        }
+        if (!hasInterfaces)
+            process.removeArea(areaId);
+    }
 }
 
 void InterfaceManager::refreshInterfaceList()
@@ -125,7 +145,7 @@ void InterfaceManager::refreshInterfaceList()
                     }
                 }
             });
-            return std::nullopt;
+            return area;
         };
 
         for (const auto& [id, interface] : process.routingInstance->getInterfaceManager().snapshot())
@@ -152,14 +172,23 @@ void InterfaceManager::refreshInterfaceList()
                 if (inRange) key.emplace(id.getId(), ipInfo.ospf.enabledProcesses[procId]);
             }
 
-            // Remove any invalid interfaces (wrong area or wrong ip)
+            // Remove any stale entries for this hardware interface (wrong area or wrong IP)
             for (auto it = ospfInterfaceList.begin(); it != ospfInterfaceList.end();)
             {
+                if (&it->second.getIface() != interface)
+                {
+                    ++it;
+                    continue;
+                }
                 if (!key.has_value() || it->first.area != key.value().area ||
                     it->second.interfaceAddress != currentAddress)
                 {
-                    auto node = ospfInterfaceList.extract(it);
+                    auto node = ospfInterfaceList.extract(it++);
                     interfacesToRemove.push_back(std::move(node));
+                }
+                else
+                {
+                    ++it;
                 }
             }
 

@@ -11,87 +11,46 @@
 #ifndef INTERFACE_IP_COMMANDS_H
 #define INTERFACE_IP_COMMANDS_H
 
-#include "cli/parser/SubCommand.hpp"
-#include "InterfaceIPOspfCommands.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "interface/configs/InterfaceType.hpp"
+#include "configs/registry/interface/InterfaceRegistry.h"
+
+#define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
+#define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
 
 namespace cli
 {
 bool InterfaceIP_AddressSet_Handler(INTERFACE_PARAMS);
-using InterfaceIP_AddressSet = commandAdder<InterfaceContext,
-    InterfaceIP_AddressSet_Handler,
-    "address"_tok
->;
-
+bool InterfaceIP_AddressDhcp_Handler(INTERFACE_PARAMS);
 bool InterfaceIP_AuthenticationKeyChain_Handler(INTERFACE_PARAMS);
-using InterfaceIP_AuthenticationKeyChain = commandAdder<InterfaceContext,
-    InterfaceIP_AuthenticationKeyChain_Handler,
-    "authentication"_tok, "key-chain"_tok
->;
-
 bool InterfaceIP_AuthenticationMode_Handler(INTERFACE_PARAMS);
-using InterfaceIP_AuthenticationMode = commandAdder<InterfaceContext,
-    InterfaceIP_AuthenticationMode_Handler,
-    "authentication"_tok, "mode"_tok
->;
-
 bool InterfaceIP_BandwidthPercentage_Handler(INTERFACE_PARAMS);
-using InterfaceIP_BandwidthPercentage = commandAdder<InterfaceContext,
-    InterfaceIP_BandwidthPercentage_Handler,
-    "bandwidth-percentage"_tok
->;
-
 bool InterfaceIP_DampeningChange_Handler(INTERFACE_PARAMS);
-using InterfaceIP_DampeningChange = commandAdder<InterfaceContext,
-    InterfaceIP_DampeningChange_Handler,
-    "dampening-change"_tok
->;
-
 bool InterfaceIP_DampeningInterval_Handler(INTERFACE_PARAMS);
-using InterfaceIP_DampeningInterval = commandAdder<InterfaceContext,
-    InterfaceIP_DampeningInterval_Handler,
-    "dampening-interval"_tok
->;
-
 bool InterfaceIP_HelloInterval_Handler(INTERFACE_PARAMS);
-using InterfaceIP_HelloInterval = commandAdder<InterfaceContext,
-    InterfaceIP_HelloInterval_Handler,
-    "hello-interval"_tok
->;
-
 bool InterfaceIP_HoldTime_Handler(INTERFACE_PARAMS);
-using InterfaceIP_HoldTime = commandAdder<InterfaceContext,
-    InterfaceIP_HoldTime_Handler,
-    "hold-time"_tok
->;
-
 bool InterfaceIP_Mtu_Handler(INTERFACE_PARAMS);
-using InterfaceIP_Mtu = commandAdder<InterfaceContext,
-    InterfaceIP_Mtu_Handler,
-    "mtu"_tok
->;
-
 bool InterfaceIP_NextHopSelf_Handler(INTERFACE_PARAMS);
-using InterfaceIP_NextHopSelf = commandAdder<InterfaceContext,
-    InterfaceIP_NextHopSelf_Handler,
-    "next-hop-self"_tok
->;
-
-using InterfaceIP_Ospf = subAdder<InterfaceContext,
-    InterfaceIPOspfCommands,
-    "ospf"_tok
->;
-
 bool InterfaceIP_SplitHorizon_Handler(INTERFACE_PARAMS);
-using InterfaceIP_SplitHorizon = commandAdder<InterfaceContext,
-    InterfaceIP_SplitHorizon_Handler,
-    "split-horizon"_tok
->;
-
 bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS);
-using InterfaceIP_SummaryAddress = commandAdder<InterfaceContext,
-    InterfaceIP_SummaryAddress_Handler,
-    "summary-address"_tok
->;
+
+bool InterfaceIP_Ospf_SubHandler(INTERFACE_SUB_PARAMS);
+
+#define INTERFACE_IP_LIST(X, Y) \
+    X(Y, (_COM_, AddressSet, "address"_tok, P_IPV4)) \
+    X(Y, (_COM_, AddressDhcp, "address"_tok, "dhcp"_tok)) \
+    X(Y, (_COM_, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (_COM_, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (_COM_, BandwidthPercentage, "bandwidth-percentage"_tok)) \
+    X(Y, (_COM_, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (_COM_, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (_COM_, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (_COM_, HoldTime, "hold-time"_tok)) \
+    X(Y, (_COM_, Mtu, "mtu"_tok)) \
+    X(Y, (_COM_, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (_SUB_, Ospf, "ospf"_tok)) \
+    X(Y, (_COM_, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (_COM_, SummaryAddress, "summary-address"_tok))
 
 /**
  * @brief Parser for the `ip` sub-tree in Interface Configuration mode.
@@ -100,21 +59,11 @@ using InterfaceIP_SummaryAddress = commandAdder<InterfaceContext,
  * Covers `CliMode::Interface` with `InterfaceContext` and composes all
  * IPv4 address, EIGRP per-interface, and OSPF interface sub-tree commands.
  */
-using InterfaceIPCommands = CliModeParser<CliMode::Interface, InterfaceContext,
-    InterfaceIP_AddressSet,
-    InterfaceIP_AuthenticationKeyChain,
-    InterfaceIP_AuthenticationMode,
-    InterfaceIP_BandwidthPercentage,
-    InterfaceIP_DampeningChange,
-    InterfaceIP_DampeningInterval,
-    InterfaceIP_HelloInterval,
-    InterfaceIP_HoldTime,
-    InterfaceIP_Mtu,
-    InterfaceIP_NextHopSelf,
-    InterfaceIP_Ospf,
-    InterfaceIP_SplitHorizon,
-    InterfaceIP_SummaryAddress
->;
+DEFINE_CMD_MODE(InterfaceIP, CliMode::Interface, config::InterfaceRegistry, INTERFACE_IP_LIST);
 }
+
+#undef INTERFACE_IP_LIST
+#undef INTERFACE_PARAMS
+#undef INTERFACE_SUB_PARAMS
 
 #endif // INTERFACE_IP_COMMANDS_H

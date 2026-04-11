@@ -107,7 +107,7 @@ public:
      *
      * @param iface Physical interface whose registry is needed.
      */
-    config::Reference<config::EigrpInterfaceRegistry> getRegistry(interface::Interface& iface);
+    const config::EigrpInterfaceRegistry& getRegistry(interface::Interface& iface) const;
 
     /**
      * @brief Returns a registry reference for the per-interface EIGRP
@@ -115,7 +115,7 @@ public:
      *
      * @param key System interface identifier.
      */
-    config::Reference<config::EigrpInterfaceRegistry> getRegistryByKey(interface::InterfaceKey key);
+    const config::EigrpInterfaceRegistry& getRegistryByKey(interface::InterfaceKey key) const;
 
     // INTERFACE LIST
     std::unordered_map<interface::InterfaceKey, EigrpInterface> eigrpInterfaceList; ///< Active EIGRP interfaces keyed by interface identifier.

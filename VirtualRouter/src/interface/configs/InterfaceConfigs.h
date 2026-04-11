@@ -665,34 +665,6 @@ public:
         friend class Internal_NdpTest;
     } ipv6;
 
-    // PROTOCOL SUB-CONFIGURATIONS
-
-    /**
-     * @brief Per-interface EIGRP configuration and enabled autonomous-system tracking.
-     *
-     * Stores which IPv6 autonomous systems have this interface enabled, and
-     * holds a reference-counted handle to the per-AS interface registry entry
-     * for each enabled AS.
-     */
-    struct Eigrp
-    {
-        std::unordered_set<uint32_t> ipv6AutonomousSystems; ///< Set of IPv6 AS numbers that have activated this interface.
-        std::unordered_map<uint32_t, config::Reference<config::EigrpInterfaceRegistry>> eigrpIfaceConfigs; ///< Per-AS EIGRP interface config registry references, keyed by AS number.
-    } eigrp;
-
-    /**
-     * @brief Per-interface OSPF process membership and interface registry reference.
-     * @ingroup INTERFACE_CONFIGS
-     *
-     * `enabledProcesses` maps OSPF process ID to the area ID this interface is
-     * assigned to. `ospfInterfaceConfigs` holds the registry reference once the
-     * interface has been placed under an OSPF process.
-     */
-    struct Ospf
-    {
-        std::unordered_map<uint32_t, uint32_t> enabledProcesses;  ///< Maps OSPF process ID → area ID for each enabled process.
-        std::optional<config::Reference<config::OspfInterfaceBaseRegistry>> ospfInterfaceConfigs = std::nullopt; ///< OSPF interface config registry entry; set when the interface joins a process.
-    } ospf;
 
     /**
      * @brief DHCPv6 client/relay configuration attached to this interface.
@@ -711,7 +683,7 @@ public:
 private:
     friend class Interface;
 
-    config::Reference<config::InterfaceRegistry> configs; ///< Owning reference to the interface config registry; source of truth for all configurable parameters.
+    config::InterfaceRegistry& configs; ///< Owning reference to the interface config registry; source of truth for all configurable parameters.
 
     std::atomic<types::Mac> macAddress; ///< Cached MAC address; updated by @ref syncMac when the config changes.
 };

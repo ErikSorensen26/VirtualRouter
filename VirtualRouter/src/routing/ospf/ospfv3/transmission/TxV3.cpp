@@ -51,7 +51,7 @@ void PacketDispatcherV3::sendHello()
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs->get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : false;
     if (!buildHello(builder, lls)) return;
 
@@ -71,7 +71,7 @@ void PacketDispatcherV3::sendUnicastHello(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs->get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : false;
     if (!buildHello(builder, lls)) return;
 
@@ -91,7 +91,7 @@ void PacketDispatcherV3::sendInitDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs->get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : false;
     auto dbd = buildDBD(builder, nbr, lls);
     if (!dbd.has_value()) return;
@@ -122,7 +122,7 @@ bool PacketDispatcherV3::sendDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs->get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : false;
     auto db = buildDBD(builder, nbr, lls);
     if (!db.has_value()) return false;
@@ -294,18 +294,18 @@ std::optional<packet::Ospfv3HelloHeader> PacketDispatcherV3::buildHello(OspfBuil
     hello.setBuffer(builder.getBuf());
 
     hello.setInterfaceID(iface.interfaceId);
-    hello.setHelloInterval(configs->get<config::OspfInterface::HELLO_INTERVAL>().load());
+    hello.setHelloInterval(configs.get<config::OspfInterface::HELLO_INTERVAL>().load());
 
     uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
     if (lls) options |= 0x10;
     hello.setOptions(options);
 
-    hello.setRouterPriority(configs->get<config::OspfInterface::PRIORITY>().load());
-    hello.setDeadInterval(configs->get<config::OspfInterface::DEAD_INTERVAL>().load());
+    hello.setRouterPriority(configs.get<config::OspfInterface::PRIORITY>().load());
+    hello.setDeadInterval(configs.get<config::OspfInterface::DEAD_INTERVAL>().load());
     hello.setDrID(static_cast<uint32_t>(iface.dr.rid.load(std::memory_order_relaxed)));
     hello.setBdrID(static_cast<uint32_t>(iface.bdr.rid.load(std::memory_order_relaxed)));
 
-    auto ntype = configs->get<config::OspfInterface::NETWORK>().load();
+    auto ntype = configs.get<config::OspfInterface::NETWORK>().load();
     if (ntype == config::ospf::NetworkType::BROADCAST ||
         ntype == config::ospf::NetworkType::NON_BROADCAST)
     {

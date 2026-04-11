@@ -13,7 +13,7 @@
 
 #include "cli/runtime/Token.hpp"
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/modes/contexts/ContextBase.hpp"
+#include "cli/modes/contexts/Context.hpp"
 
 /// @brief Namespace enclosing all CLI subsystem types.
 namespace cli
@@ -130,14 +130,12 @@ public:
      * @param tokens  Flat token span from `CliSession::executeModeParser`.
      * @return True if the command was recognized and executed.
      */
-    template <typename Parser>
+    template <typename Parser, typename C>
     static bool executeThunk(
-        cli::ContextBase& ctx,
+        cli::Context<C>& ctx,
         std::span<Token> tokens)
     {
         using Ctx = typename Parser::ContextType;
-        static_assert(std::is_base_of_v<cli::ContextBase, Ctx>,
-                      "Parser::ContextType must derive from cli::ContextBase");
         return Parser::execute(static_cast<Ctx&>(ctx), tokens);
     }
 
@@ -153,25 +151,25 @@ public:
      *               the `ContextBase` copy source or `CliSession` reference.
      * @param args   Subsystem references required by the target context type.
      */
-    template <CliMode M, typename... Args>
-    void changeMode(Args&&... args)
+    template <CliMode M, typename C>
+    void changeMode(C& config)
     {
         swap();
 
         using Parser = FindParser<M>;
-        using Ctx = typename Parser::ContextType;
+        using Ctx = Context<typename Parser::ContextType>;
 
         executeFn[head] = executeThunk<Parser>;
 
-        if (modeConfig[head ^ 1])
+        if (ctxBuffer[head ^ 1])
         {
-            modeConfig[head] =
-                std::make_unique<Ctx>(*modeConfig[head ^ 1], std::forward<Args>(args)...);
+            ctxBuffer[head] = reinterpret_cast<ContextBase*>(&storage[head]);
+            new (&storage[head]) Ctx(session, config);
         }
         else
         {
-            modeConfig[head] =
-                std::make_unique<Ctx>(session, std::forward<Args>(args)...);
+            ctxBuffer[head] = reinterpret_cast<ContextBase*>(&storage[head]);
+            new (&storage[head]) Ctx(session, config);
         }
 
         currentMode[head] = M;
@@ -187,13 +185,13 @@ public:
     }
 
     /**
-     * @brief Returns a reference to the currently active context.
+     * @brief Resets the context by reverting the 'negate' and '
      * @warning The returned reference is invalidated by the next `changeMode` call.
      * @return Reference to the active `ContextBase` (concrete type varies by mode).
      */
     cli::ContextBase& getContext()
     {
-        return *modeConfig[head];
+        return *ctxBuffer[head];
     }
 
     /**
@@ -208,7 +206,7 @@ public:
      */
     bool execute(std::span<Token> tokens)
     {
-        return executeFn[head](*modeConfig[head], tokens);
+        return executeFn[head](*ctxBuffer[head], tokens);
     }
 
     /**
@@ -223,27 +221,31 @@ public:
     }
 
 private:
-
-    // PRIVATE TYPES
-
     /// @brief Signature of a type-erased parser dispatch function.
-    using ExecuteFn = bool (*)(
-        cli::ContextBase&,
-        std::span<Token>
-    );
-
-    // PRIVATE HELPERS
+    using ExecuteFn = bool (*)(ContextBase&, std::span<Token>);
 
     /// @brief Toggles the active ping-pong slot index (0 ↔ 1).
     void swap() { head = (head == 0) ? 1 : 0; }
 
-    // PRIVATE MEMBERS
+    template <typename Parser, typename C>
+    requires std::is_same_v<typename Parser::ContextType, C>
+    static bool executeThunk(cli::Context<C>& ctx, std::span<Token> tokens)
+    {
+        return Parser::execute(ctx, tokens);
+    }
 
     size_t head = 0;                                    ///< Index of the currently active ping-pong slot (0 or 1).
     CliSession& session;                                ///< Back-reference to the owning session; non-owning.
+
     CliMode currentMode[2];                             ///< Stored mode for each ping-pong slot.
-    std::unique_ptr<cli::ContextBase> modeConfig[2];    ///< Owned context for each ping-pong slot.
     ExecuteFn executeFn[2] = {};                        ///< Dispatch function pointer for each ping-pong slot.
+
+    /// @brief Sentinel enum used only to compute the minimum `Context<>` size for the ping-pong storage slots.
+    enum class Dummy { COUNT };
+    /// @brief Raw aligned storage for two `Context<>` instances; avoids heap allocation on mode switch.
+    alignas(ContextBase) char storage[2][sizeof(cli::Context<config::SubRegistry<Dummy>>)] = {};
+    /// @brief Pointers into `storage`; null until the first `changeMode` call for that slot.
+    ContextBase* ctxBuffer[2] { nullptr, nullptr };
 };
 }
 

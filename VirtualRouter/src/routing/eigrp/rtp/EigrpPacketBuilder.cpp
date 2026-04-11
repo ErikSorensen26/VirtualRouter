@@ -77,13 +77,13 @@ bool EigrpPacketBuilder::appendParameterTLV(packet::TLV16BufferManager& tlv, Eig
     if (iface.getRtp().pendingPeerTermination.load(std::memory_order_relaxed))
     {
         std::memset(val, 0, 6);
-        utils::writeU16(val + 6, iface.configs->get<config::EigrpInterface::HOLD_TIME>().load());
+        utils::writeU16(val + 6, iface.configs.get<config::EigrpInterface::HOLD_TIME>().load());
         iface.getRtp().pendingPeerTermination.store(false, std::memory_order_release);
     }
     else
     {
         KValue k = iface.getBase().getGlobalConfigMgr().getKValues();
-        TLVBuilder::calculateParameters(val, k, iface.configs->get<config::EigrpInterface::HOLD_TIME>().load());
+        TLVBuilder::calculateParameters(val, k, iface.configs.get<config::EigrpInterface::HOLD_TIME>().load());
     }
     return tlv.append(EIGRP_OPTION_PARAMETER, 12, nullptr, 8);
 }

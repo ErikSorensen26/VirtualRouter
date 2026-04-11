@@ -743,14 +743,11 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
 bool CliSession::executeCommand(std::string& command)
 {
     isModeChanged = false;
-    isExitCommand = false;
     textLine      = false;
     execution.getContext().negate   = false;
     execution.getContext().defaulted = false;
 
     if (command.empty()) return false;
-
-    const CliMode preMode = execution.getMode();
 
     ParseResult parsed = parseInput(command);
 
@@ -825,7 +822,7 @@ bool CliSession::tryDoCommand(const std::string& remainder)
     const json*       savedDir    = workingDirectory;
     const json*       savedCfg    = configNode;
 
-    changeMode<CliMode::PrivilegedExec>();
+    changeMode<CliMode::PrivilegedExec>(engine.global.configs);
 
     std::string cmd = remainder;
     const bool ok   = executeCommand(cmd);

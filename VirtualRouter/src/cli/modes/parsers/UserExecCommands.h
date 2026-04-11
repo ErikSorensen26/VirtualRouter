@@ -15,25 +15,20 @@
 #ifndef USER_EXEC_COMMANDS_HPP
 #define USER_EXEC_COMMANDS_HPP
 
+#include "cli/modes/contexts/Context.hpp"
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/parser/Command.hpp"
-#include "cli/modes/contexts/UserExecContext.hpp"
+#include "configs/registry/global/GlobalRegistry.h"
 
-#define USER_EXEC_PARAMS UserExecContext& ctx, const std::vector<std::string>& args
+#define USER_EXEC_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
 bool UserExec_Enable_Handler(USER_EXEC_PARAMS);
-using UserExec_Enable = commandAdder<UserExecContext,
-    UserExec_Enable_Handler,
-    "enable"_tok
->;
-
 bool UserExec_Exit_Handler(USER_EXEC_PARAMS);
-using UserExec_Exit = commandAdder<UserExecContext,
-    UserExec_Exit_Handler,
-    "exit"_tok
->;
+
+#define USER_EXEC_LIST(X, Y) \
+    X(Y, (_COM_, Enable, "enable"_tok)) \
+    X(Y, (_COM_, Exit, "exit"_tok))
 
 /**
  * @brief Parser for User Exec mode commands.
@@ -41,10 +36,7 @@ using UserExec_Exit = commandAdder<UserExecContext,
  *
  * Provides limited user access with enable and exit commands.
  */
-using UserExecCommands = CliModeParser<CliMode::UserExec, UserExecContext,
-    UserExec_Enable,
-    UserExec_Exit
->;
+DEFINE_CMD_MODE(UserExec, CliMode::UserExec, config::GlobalRegistry, USER_EXEC_LIST)
 }
 
 #endif // USER_EXEC_COMMANDS_HPP

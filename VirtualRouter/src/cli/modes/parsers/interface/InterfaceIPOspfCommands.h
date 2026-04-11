@@ -12,63 +12,34 @@
 #ifndef INTERFACE_IP_OSPF_COMMANDS_H
 #define INTERFACE_IP_OSPF_COMMANDS_H
 
+#include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "InterfaceOspfCommands.h"
+
+#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 
 namespace cli
 {
-bool InterfaceIPOspf_Area_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_Area = commandAdder<InterfaceContext,
-    InterfaceIPOspf_Area_Handler,
-    ARG, "area"_tok
->;
+bool InterfaceIPOspf_Area_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_Authentication_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_AuthenticationKey_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_LLS_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_MessageDigestKey_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_PrefixSuppression_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_ResyncTimeout_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_Shutdown_Handler(OSPF_PARAMS);
+bool InterfaceIPOspf_TtlSecurity_Handler(OSPF_PARAMS);
 
-bool InterfaceIPOspf_Authentication_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_Authentication = commandAdder<InterfaceContext,
-    InterfaceIPOspf_Authentication_Handler,
-    "authentication"_tok
->;
-
-bool InterfaceIPOspf_AuthenticationKey_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_AuthenticationKey = commandAdder<InterfaceContext,
-    InterfaceIPOspf_AuthenticationKey_Handler,
-    "authentication-key"_tok
->;
-
-bool InterfaceIPOspf_LLS_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_LLS = commandAdder<InterfaceContext,
-    InterfaceIPOspf_LLS_Handler,
-    "lls"_tok
->;
-
-bool InterfaceIPOspf_MessageDigestKey_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_MessageDigestKey = commandAdder<InterfaceContext,
-    InterfaceIPOspf_MessageDigestKey_Handler,
-    "message-digest-key"_tok
->;
-
-bool InterfaceIPOspf_PrefixSuppression_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_PrefixSuppression = commandAdder<InterfaceContext,
-    InterfaceIPOspf_PrefixSuppression_Handler,
-    "prefix-suppression"_tok
->;
-
-bool InterfaceIPOspf_ResyncTimeout_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_ResyncTimeout = commandAdder<InterfaceContext,
-    InterfaceIPOspf_ResyncTimeout_Handler,
-    "resync-timeout"_tok
->;
-
-bool InterfaceIPOspf_Shutdown_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_Shutdown = commandAdder<InterfaceContext,
-    InterfaceIPOspf_Shutdown_Handler,
-    "shutdown"_tok
->;
-
-bool InterfaceIPOspf_TtlSecurity_Handler(INTERFACE_PARAMS);
-using InterfaceIPOspf_TtlSecurity = commandAdder<InterfaceContext,
-    InterfaceIPOspf_TtlSecurity_Handler,
-    "ttl-security"_tok
->;
+#define INTERFACE_IP_OSPF_LIST(X, Y) \
+    X(Y, (_EXT_, InterfaceOspfCommands)) \
+    X(Y, (_COM_, Area, P_ARG, "Area"_tok)) \
+    X(Y, (_COM_, Authentication, "authentication"_tok)) \
+    X(Y, (_COM_, AuthenticationKey, "authentication-key"_tok)) \
+    X(Y, (_COM_, LLS, "lls"_tok)) \
+    X(Y, (_COM_, MessageDigestKey, "message-digest-key"_tok)) \
+    X(Y, (_COM_, PrefixSuppression, "prefix-suppression"_tok)) \
+    X(Y, (_COM_, ResyncTimeout, "resync-timeout"_tok)) \
+    X(Y, (_COM_, Shutdown, "shutdown"_tok)) \
+    X(Y, (_COM_, TtlSecurity, "ttl-security"_tok))
 
 /**
  * @brief Parser for the `ip ospf` sub-tree in Interface Configuration mode.
@@ -77,18 +48,10 @@ using InterfaceIPOspf_TtlSecurity = commandAdder<InterfaceContext,
  * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv2-specific
  * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
  */
-using InterfaceIPOspfCommands = CliModeParser<CliMode::Interface, InterfaceContext,
-    InterfaceOspfCommands,
-    InterfaceIPOspf_Area,
-    InterfaceIPOspf_Authentication,
-    InterfaceIPOspf_AuthenticationKey,
-    InterfaceIPOspf_LLS,
-    InterfaceIPOspf_MessageDigestKey,
-    InterfaceIPOspf_PrefixSuppression,
-    InterfaceIPOspf_ResyncTimeout,
-    InterfaceIPOspf_Shutdown,
-    InterfaceIPOspf_TtlSecurity
->;
+DEFINE_CMD_MODE(InterfaceIPOspf, CliMode::Interface, config::OspfInterfaceBaseRegistry, INTERFACE_IP_OSPF_LIST);
 }
+
+#undef INTERFACE_OSPF_LIST
+#undef OSPF_PARAMS
 
 #endif // INTERFACE_IP_OSPF_COMMANDS_H

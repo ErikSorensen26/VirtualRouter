@@ -43,7 +43,7 @@ InterfaceConfigs::~InterfaceConfigs()
 
 void InterfaceConfigs::syncMac()
 {
-    auto& macField = configs->get<config::Interface::MAC_ADDRESS>();
+    auto& macField = configs.get<config::Interface::MAC_ADDRESS>();
     if (macField.hasValue())
         macAddress.store(macField.load(), std::memory_order_release);
     else
@@ -90,20 +90,20 @@ uint32_t InterfaceConfigs::getBandwidth()
 {
     if (id != std::floor(id)) // Child interface
     {
-        auto& bw = configs->get<config::Interface::BANDWIDTH_INHERITANCE>();
+        auto& bw = configs.get<config::Interface::BANDWIDTH_INHERITANCE>();
         if (bw.hasValue()) return bw.load();
     }
-    return configs->get<config::Interface::BANDWIDTH>().load();
+    return configs.get<config::Interface::BANDWIDTH>().load();
 }
 
 uint32_t InterfaceConfigs::getReceiveBandwidth()
 {
     if (id != std::floor(id)) // Child interface
     {
-        auto& bw = configs->get<config::Interface::BANDWIDTH_RECEIVE_INHERITANCE>();
+        auto& bw = configs.get<config::Interface::BANDWIDTH_RECEIVE_INHERITANCE>();
         if (bw.hasValue()) return bw.load();
     }
-    return configs->get<config::Interface::BANDWIDTH_RECEIVE>().load();
+    return configs.get<config::Interface::BANDWIDTH_RECEIVE>().load();
 }
 
 //IPV4
