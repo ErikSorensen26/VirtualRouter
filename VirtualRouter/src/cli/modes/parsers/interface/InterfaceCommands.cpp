@@ -2,6 +2,7 @@
 
 #include "InterfaceCommands.h"
 
+#include <Global.h>
 #include "cli/runtime/CliSession.h"
 #include "cli/modes/Mode.hpp"
 #include "cli/runtime/CliEngine.h"
@@ -19,14 +20,15 @@ namespace cli
 bool Interface_Exit_Handler(INTERFACE_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.exitMode<CliMode::GlobalConfiguration, config::GlobalRegistry>(ctx.configs);
+    return ctx.terminal.popMode();
 }
 
 bool Interface_Shutdown_Handler(INTERFACE_PARAMS)
 {
     UNUSED(segs);
     auto& shut = ctx.configs.get<config::Interface::SHUTDOWN>();
-    return utils::setFieldValue(shut, ctx, segs[0] >> 1);
+    utils::setToggleValue(shut, ctx);
+    return true;
 }
 
 bool Interface_IP_SubHandler(INTERFACE_SUB_PARAMS)
@@ -41,6 +43,8 @@ bool Interface_IPv6_SubHandler(INTERFACE_SUB_PARAMS)
 
 bool Interface_Ospfv3_SubHandler(INTERFACE_SUB_PARAMS)
 {
-
+    UNUSED(toks);
+    UNUSED(idx);
+    return false;
 }
 }

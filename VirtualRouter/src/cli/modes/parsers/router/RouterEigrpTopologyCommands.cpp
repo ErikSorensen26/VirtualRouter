@@ -25,11 +25,13 @@ bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS)
 
     config::DefType<decltype(metrics)>::type tup;
 
-    return utils::setTupleElement(std::get<0>(tup), segs[0] >> 1) &&
-          !utils::setTupleElement(std::get<1>(tup), segs[0] >> 2) &&
-          !utils::setTupleElement(std::get<2>(tup), segs[0] >> 3) &&
-          !utils::setTupleElement(std::get<3>(tup), segs[0] >> 4) &&
-          !utils::setTupleElement(std::get<4>(tup), segs[0] >> 5);
+    if (!utils::setTupleElement(std::get<0>(tup), segs[0] >> 1)) return false;
+    if (!utils::setTupleElement(std::get<1>(tup), segs[0] >> 2)) return false;
+    if (!utils::setTupleElement(std::get<2>(tup), segs[0] >> 3)) return false;
+    if (!utils::setTupleElement(std::get<3>(tup), segs[0] >> 4)) return false;
+    if (!utils::setTupleElement(std::get<4>(tup), segs[0] >> 5)) return false;
+    metrics.set(tup);
+    return true;
 }
 
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
@@ -52,13 +54,13 @@ bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 bool RouterEigrpTopologyV4_Exit_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV4, config::EigrpRegistry>(ctx.configs);
+    return ctx.terminal.popMode();
 }
 
 bool RouterEigrpTopologyV6_Exit_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV6, config::EigrpRegistry>(ctx.configs);
+    return ctx.terminal.popMode();
 }
 
 bool RouterEigrpTopology_MaximumPaths_Handler(EIGRP_PARAMS)

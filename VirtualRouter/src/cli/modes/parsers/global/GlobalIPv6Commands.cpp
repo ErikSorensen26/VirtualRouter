@@ -18,8 +18,11 @@ namespace cli
 {
 bool GlobalIPv6_ND_SubHandler(GLOBAL_SUB_PARAMS)
 {
-    auto& ndp = ctx.configs.get<config::Interface::IPV6_ND>().get();
-    return GlobalIPv6NDCommands::execute(ctx, toks, idx);
+    auto& ndp = ctx.configs.get<config::Global::IPV6_ND>().get();
+    Context<config::NdpBaseRegistry> newCtx(ctx.terminal, ndp);
+    newCtx.negate = ctx.negate;
+    newCtx.defaulted = ctx.defaulted;
+    return GlobalIPv6NDCommands::execute(newCtx, toks, idx);
 }
 
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)

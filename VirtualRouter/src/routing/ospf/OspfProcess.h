@@ -349,7 +349,7 @@ public:
     void addDefaultRoute(bool add);
 
     const bool isV3; ///< True when this process uses OSPFv3 packet encoding (RFC 5340).
-    const bool afCapable;
+    const bool afCapable = false;
 
     core::VirtualRouter* routingInstance = nullptr; ///< Owning VRF; used to query interface and RIB state.
 

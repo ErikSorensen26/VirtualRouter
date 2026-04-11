@@ -14,7 +14,7 @@ namespace core
 
 Global::Global(cli::FileSystem& fs, const cli::StartupFiles& stfs, bool enableRouting, bool test)
     : routingEnabled(enableRouting),
-      registry(),
+      configs(),
       threadPool(/*std::thread::hardware_concurrency()*/5),
       timeManager(threadPool),
       scheduler(threadPool, timeManager),

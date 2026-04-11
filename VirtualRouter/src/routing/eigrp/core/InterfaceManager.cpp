@@ -22,27 +22,18 @@ EigrpInterface* InterfaceManager::getInterface(interface::InterfaceKey key)
     return nullptr;
 }
 
-config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistryByKey(interface::InterfaceKey key)
+config::EigrpInterfaceRegistry& InterfaceManager::getRegistryByKey(interface::InterfaceKey key)
 {
-    auto& registry = base.routingInstance->getRegistry();
     auto& configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
-    return registry.emplaceBack(configList, key);
+    return configList.emplaceBack(key);
 }
 
-config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistry(interface::Interface& iface)
+config::EigrpInterfaceRegistry& InterfaceManager::getRegistry(interface::Interface& iface)
 {
     interface::InterfaceKey key = iface.configs.key;
-    auto& registry = base.routingInstance->getRegistry();
 
-    if (base.isNamed())
-    {
-        auto& configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
-        return registry.emplaceBack(configList, key);
-    }
-    else
-    {
-        return iface.getEigrpConfig(base.getAS());
-    }
+    auto& configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
+    return configList.emplaceBack(key);
 }
 
 EigrpInterface* InterfaceManager::createInterface(interface::Interface* interface)
@@ -60,22 +51,13 @@ EigrpInterface* InterfaceManager::createInterface(interface::Interface* interfac
         interface::InterfaceKey key = interface->configs.key;
 
         // Get or create registry entry for this interface
-        config::Reference<config::EigrpInterfaceRegistry> ifaceReg = getRegistry(*interface);
+        config::EigrpInterfaceRegistry& ifaceReg = getRegistry(*interface);
 
-        if (af == types::AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4 || af == types::AddressFamily::IPv6)
         {
             auto ifaceIt = eigrpInterfaceList.try_emplace(key, base, ifaceReg, *interface);
             EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
             base.getTopology().synchronizeConnected(*eigrpIfacePtr);
-            interface->eigrpInterfaceList[as].IPv4 = eigrpIfacePtr;
-            return eigrpIfacePtr;
-        }
-        else if (af == types::AddressFamily::IPv6)
-        {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(key, base, ifaceReg, *interface);
-            EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
-            base.getTopology().synchronizeConnected(*eigrpIfacePtr);
-            interface->eigrpInterfaceList[as].IPv6 = eigrpIfacePtr;
             return eigrpIfacePtr;
         }
     }
@@ -131,7 +113,7 @@ void InterfaceManager::refreshInterfaceList()
                     auto& afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
                     inRange = (regIt != afIfaces.end()) &&
-                              !regIt->second.get().get<config::EigrpInterface::SHUTDOWN>().load();
+                              !regIt->second.get<config::EigrpInterface::SHUTDOWN>().load();
                 }
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
@@ -144,11 +126,9 @@ void InterfaceManager::refreshInterfaceList()
                 {
                     auto& afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
-                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second.get().get<config::EigrpInterface::SHUTDOWN>().load();
+                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second.get<config::EigrpInterface::SHUTDOWN>().load();
                 }
-                if (!ipv6Contained)
-                    ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&
-                                    interface->getVRF() == base.routingInstance;
+                (void)as;
                 inRange = ipv6Contained;
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())

@@ -69,7 +69,7 @@ using ApplyFn  = void (*)(void* ctx); ///< Callback signature for live-notificat
 template <typename T, typename F>
 concept WriteFn = requires(F f, T t)
 {
-    { F(t) } -> std::same_as<bool>;
+    { f(t) } -> std::same_as<bool>;
 };
 
 // FIELD FLAG TAGS
@@ -737,7 +737,7 @@ public:
     void withWrite(Fn&& fn)
     {
         std::lock_guard<std::mutex> lk(mu);
-        return std::forward<Fn>(fn)(value);
+        std::forward<Fn>(fn)(value);
     }
 
     std::mutex& mu; ///< Shared mutex; held during all reads and writes.
@@ -812,7 +812,7 @@ public:
      *
      * @tparam Fn  Callable of the form `void(T&)`.
      */
-    template <WriteFn<T> Fn>
+    template <typename Fn>
     void withWrite(Fn&& fn)
     {
         bool runApplier{false};
@@ -838,7 +838,7 @@ private:
     }
 
     ContextProvider& provider;                         ///< Shared context used to fire the applier.
-    T value{};                                         ///< Guarded value; valid when state == SET.
+    std::vector<T> value{};                            ///< Guarded value; valid when state == SET.
     std::atomic<FieldState> state{FieldState::INHERIT};  ///< Whether a local override is active.
     ListField* base{nullptr};                         ///< Parent field for inheritance; null at root.
 };
@@ -1138,7 +1138,7 @@ public:
      */
     T& emplaceBack(const K& k) noexcept
     {
-        auto [it, ok] = children.emplace(k);
+        auto [it, ok] = children.try_emplace(k);
         return it->second;
     }
 
@@ -1170,11 +1170,21 @@ public:
     }
 
     /**
+     * @brief Returns a reference to the local children map.
+     *
+     * @return Reference to the `unordered_map<K, T>`.
+     */
+    inline std::unordered_map<key, type>& get() noexcept
+    {
+        return children;
+    }
+
+    /**
      * @brief Returns a const reference to the local children map.
      *
-     * @return Const reference to the `unordered_map<K, Reference<T>>`.
+     * @return Const reference to the `unordered_map<K, T>`.
      */
-    inline const std::unordered_map<key, type>& get() noexcept
+    inline const std::unordered_map<key, type>& get() const noexcept
     {
         return children;
     }
@@ -1262,7 +1272,7 @@ public:
      */
     T& emplaceBack(const K& k) noexcept
     {
-        auto [it, ok] = children.emplace(k);
+        auto [it, ok] = children.try_emplace(k);
         if (ok) notifyChanged();
         return it->second;
     }
@@ -1295,15 +1305,25 @@ public:
     }
 
     /**
+     * @brief Returns a reference to the local children map.
+     *
+     * @return Reference to the `unordered_map<K, T>`.
+     */
+    inline std::unordered_map<key, type>& get() noexcept
+    {
+        return children;
+    }
+
+    /**
      * @brief Returns a const reference to the local children map.
      *
-     * @return Const reference to the `unordered_map<K, Reference<T>>`.
+     * @return Const reference to the `unordered_map<K, T>`.
      */
     inline const std::unordered_map<key, type>& get() const noexcept
     {
         return children;
     }
-    
+
     /**
      * @brief Returns a bool depending on if the key exists in the children map.
      *

@@ -9,6 +9,7 @@
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
 #include "configs/registry/interface/InterfaceRegistry.h"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
 
 namespace routing::ospf
 {
@@ -18,14 +19,15 @@ PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface)
 
 config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getConfigs()
 {
-    auto& configs = iface.getIface().configs.getConfigs();
+    auto& ifCfgs = iface.getIface().configs.getConfigs();
     if (iface.getProcess().isV3)
     {
-        return configs.get<config::Interface::OSPFV3>().emplaceBack(iface.getProcess().getProcId());
+        auto& afReg = ifCfgs.get<config::Interface::OSPFV3>().emplaceBack(iface.getProcess().getProcId());
+        return afReg.get<config::OspfInterfaceAf::IPV6>().get();
     }
-    else 
+    else
     {
-        return configs.get<config::Interface::IPV6_OSPF>().get();
+        return ifCfgs.get<config::Interface::IPV6_OSPF>().get();
     }
 }
 

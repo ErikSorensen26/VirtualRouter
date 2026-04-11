@@ -13,7 +13,7 @@ namespace routing::bgp
 {
 Session::Session(Neighbor& nbr) noexcept
     : neighbor(nbr),
-      base(nbr.getConfigs().get<config::BgpNeighborSession::BGP_BASE>().local().get()),
+      base(nbr.getConfigs().get<config::BgpNeighborSession::BGP_BASE>().get()),
       fsm(*this),
       timers(*this)
 {
@@ -83,7 +83,7 @@ void Session::startPassiveMultiSession(const AfiSafi& family)
 
 void Session::buildLocalCapabilities()
 {
-    auto procCfg = neighbor.getProcess().getConfigs();
+    auto& procCfg = neighbor.getProcess().getConfigs();
 
     {
         auto& cfgs = neighbor.getConfigs();

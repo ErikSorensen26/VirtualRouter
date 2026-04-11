@@ -22,32 +22,46 @@ void NeighborTable::syncUnicast()
         for (const auto& [ip, _] : unicast)
             unicastNbrs.insert(ip);
 
-        using NeighborEntry = std::tuple<types::IPAddress, std::optional<uint16_t>, std::optional<bool>, std::optional<uint16_t>, std::optional<uint8_t>>;
-
-        // Update configs of all unicast neighbors
-        auto updateNeighbors = [&](const std::vector<NeighborEntry>& nbrs)
+        // Update configs of all unicast neighbors (OspfInterface::NEIGHBOR has IgnoreCompare wrappers)
+        ifaceConfigs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const auto& nbrs)
         {
-            for (auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)
+            for (const auto& entry : nbrs)
             {
+                const auto& ip    = std::get<0>(entry);
+                const auto& cost  = std::get<1>(entry).value;
+                const auto& dbf   = std::get<2>(entry).value;
+                const auto& poll  = std::get<3>(entry).value;
+                const auto& prio  = std::get<4>(entry).value;
                 if (!iface.interfaceAddress.contains(ip))
                     continue;
                 unicastNbrs.erase(ip);
                 unicast.try_emplace(
-                    ip, 
+                    ip,
                     cost,
-                    dbfilter.value_or(false),
-                    pollIntv.value_or(120),
-                    priority.value_or(0)
+                    dbf,
+                    poll.value_or(120),
+                    prio.value_or(0)
                 );
             }
-        };
-
-        ifaceConfigs.get<config::OspfInterface::NEIGHBOR>().withRead([&](const std::vector<NeighborEntry>& nbrs) {
-            updateNeighbors(nbrs);
         });
 
-        iface.getArea().process().getConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const std::vector<NeighborEntry>& nbrs) {
-            updateNeighbors(nbrs);
+        // Ospf::NEIGHBORS uses double-nesting (ListField<vector<tuple<...>>>)
+        iface.getArea().process().getConfigs().get<config::Ospf::NEIGHBORS>().withRead([&](const auto& nbrsList)
+        {
+            for (const auto& nbrs : nbrsList)
+                for (const auto& [ip, cost, dbfilter, pollIntv, priority] : nbrs)
+                {
+                    if (!iface.interfaceAddress.contains(ip))
+                        continue;
+                    unicastNbrs.erase(ip);
+                    unicast.try_emplace(
+                        ip,
+                        cost,
+                        dbfilter.value_or(false),
+                        pollIntv.value_or(120),
+                        priority.value_or(0)
+                    );
+                }
         });
 
         // Erase left over neighbors

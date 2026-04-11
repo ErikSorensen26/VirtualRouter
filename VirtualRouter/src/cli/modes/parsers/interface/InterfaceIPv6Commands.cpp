@@ -211,7 +211,7 @@ bool InterfaceIPv6_DampeningInterval_Handler(INTERFACE_PARAMS)
     return false;
 }
 
-bool InterfaceIPv6_EigrpAs_Handler(INTERFACE_PARAMS)
+bool InterfaceIPv6_Eigrp_Handler(INTERFACE_PARAMS)
 {
     auto& eigrpList = ctx.configs.get<config::Interface::IPV6_EIGRP_ENABLED>();
     uint16_t as;

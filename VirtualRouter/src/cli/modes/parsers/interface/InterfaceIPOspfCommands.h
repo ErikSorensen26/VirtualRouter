@@ -30,16 +30,16 @@ bool InterfaceIPOspf_Shutdown_Handler(OSPF_PARAMS);
 bool InterfaceIPOspf_TtlSecurity_Handler(OSPF_PARAMS);
 
 #define INTERFACE_IP_OSPF_LIST(X, Y) \
-    X(Y, (_EXT_, InterfaceOspfCommands)) \
-    X(Y, (_COM_, Area, P_ARG, "Area"_tok)) \
-    X(Y, (_COM_, Authentication, "authentication"_tok)) \
-    X(Y, (_COM_, AuthenticationKey, "authentication-key"_tok)) \
-    X(Y, (_COM_, LLS, "lls"_tok)) \
-    X(Y, (_COM_, MessageDigestKey, "message-digest-key"_tok)) \
-    X(Y, (_COM_, PrefixSuppression, "prefix-suppression"_tok)) \
-    X(Y, (_COM_, ResyncTimeout, "resync-timeout"_tok)) \
-    X(Y, (_COM_, Shutdown, "shutdown"_tok)) \
-    X(Y, (_COM_, TtlSecurity, "ttl-security"_tok))
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Area, P_ARG, "Area"_tok)) \
+    X(Y, (COMMAND, Authentication, "authentication"_tok)) \
+    X(Y, (COMMAND, AuthenticationKey, "authentication-key"_tok)) \
+    X(Y, (COMMAND, LLS, "lls"_tok)) \
+    X(Y, (COMMAND, MessageDigestKey, "message-digest-key"_tok)) \
+    X(Y, (COMMAND, PrefixSuppression, "prefix-suppression"_tok)) \
+    X(Y, (COMMAND, ResyncTimeout, "resync-timeout"_tok)) \
+    X(Y, (COMMAND, Shutdown, "shutdown"_tok)) \
+    X(Y, (COMMAND, TtlSecurity, "ttl-security"_tok))
 
 /**
  * @brief Parser for the `ip ospf` sub-tree in Interface Configuration mode.

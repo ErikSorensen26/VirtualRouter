@@ -179,76 +179,78 @@ enum class Interface
 };
 
 #define INTERFACE_DEFAULTS(X) \
-    (Interface, BANDWIDTH, 0) \
-    (Interface, BANDWIDTH_RECEIVE, 0) \
-    (Interface, BFD_ECHO, true) \
-    (Interface, BFD_INTERVAL, 250) \
-    (Interface, BFD_INTERVAL_MIN_RX, 250) \
-    (Interface, BFD_INTERVAL_MULTIPLIER, 3) \
-    (Interface, CDP, true) \
-    (Interface, DAMPENING_HALF_LIFE, 5) \
-    (Interface, DAMPENING_REUSE, 1000) \
-    (Interface, DAMPENING_THRESHOLD, 2000) \
-    (Interface, DAMPENING_MAX_DURATION, 20) \
-    (Interface, DAMPENING_RESTART_PENALTY, 1000) \
-    (Interface, DELAY, 0) \
-    (Interface, DOT1Q_TUNNELING_ETHERNET, 0x8100) \
-    (Interface, HOLD_QUEUE_LENGTH, 40) \
-    (Interface, IP_ADDRESS_DHCP, false) \
-    (Interface, IP_BFD_FAST_EXTERNAL_FALLOVER, false) \
-    (Interface, IP_CEF_ACCOUNTING_NON_RECURSIVE, false) \
-    (Interface, IP_FLOW_INGRESS, false) \
-    (Interface, IP_FLOW_EGRESS, false) \
-    (Interface, IP_LOAD_SHARING_PER_DESTINATION, true) \
-    (Interface, IP_LOAD_SHARING_PER_PACKET, false) \
-    (Interface, IP_LOCAL_PROXY_ARP, false) \
-    (Interface, IP_MASK_REPLY, false) \
-    (Interface, IP_MFIB_CEF_INPUT, true) \
-    (Interface, IP_MFIB_CEF_OUTPUT, true) \
-    (Interface, IP_MFIB_FORWARDING_INPUT, false) \
-    (Interface, IP_MFIB_FORWARDING_OUTPUT, false) \
-    (Interface, IP_MTU, 1500) \
-    (Interface, IP_NAT_INSIDE, false) \
-    (Interface, IP_NAT_OUTSIDE, false) \
-    (Interface, IP_NBAR_PROTOCOL_DISCOVER_IP, false) \
-    (Interface, IP_NBAR_PROTOCOL_DISCOVER_IPV6, false) \
-    (Interface, IP_PROXY_ARP, true) \
-    (Interface, IP_REDIRECTS, true) \
-    (Interface, IP_ROUTE_CACHE, true) \
-    (Interface, IP_ROUTE_CACHE_CEF, true) \
-    (Interface, IP_ROUTE_CACHE_FLOW, false) \
-    (Interface, IP_ROUTE_CACHE_POLICY, false) \
-    (Interface, IP_ROUTE_CACHE_SAME_INTERFACE, false) \
-    (Interface, IP_RTP_COMPRESSION_CONNECTIONS, 16) \
-    (Interface, IP_TCP_ADJUST_MSS, 0) \
-    (Interface, IP_TCP_COMPRESSION_CONNECTIONS, 16) \
-    (Interface, IP_VERIFY_UNICAST_NOTIFICATION_DROP_RATE, 0) \
-    (Interface, IPV6_ADDRESS_AUTOCONFIG, false) \
-    (Interface, IPV6_ADDRESS_AUTOCONFIG_DEFAULT, false) \
-    (Interface, IPV6_CEF, true) \
-    (Interface, IPV6_FLOW_MONITOR, false) \
-    (Interface, IPV6_MFIB_CEF_INPUT, true) \
-    (Interface, IPV6_MFIB_CEF_OUTPUT, true) \
-    (Interface, IPV6_MFIB_FORWARDING_INPUT, false) \
-    (Interface, IPV6_MFIB_FORWARDING_OUTPUT, false) \
-    (Interface, IPV6_MFIB_FORWARDING, false) \
-    (Interface, IPV6_MTU, 1500) \
-    (Interface, IPV6_REDIRECTS, true) \
-    (Interface, IPV6_VERIFY_UNICAST_REVERSE_PATH, false) \
-    (Interface, KEEPALIVE, true) \
-    (Interface, KEEPALIVE_PERIOD, 10) \
-    (Interface, LOAD_INTERVAL, 300) \
-    (Interface, LOOPBACK_DRIVER, false) \
-    (Interface, LOOPBACK_MAC, false) \
-    (Interface, MTU, 1500) \
-    (Interface, NEGOTIATION_AUTO, true) \
-    (Interface, SERVICE_POLICY_CONTROL_DEFAULT, false) \
-    (interface, SHUTDOWN, true) \
-    (Interface, SNMP_IFINDEX_PERSIST, false) \
-    (Interface, SNMP_TRAP_IP_VERIFY_DROP_RATE, false) \
-    (Interface, SNMP_TRAP_LINK_STATUS, true) \
-    (Interface, SNMP_TRAP_LINK_STATUS_PERMIT_DUPLICATES, false) \
-    (Interface, TIMEOUT_ABSOLUTE_LIFETIME, 0)
+    X(Interface, BANDWIDTH, 0) \
+    X(Interface, BANDWIDTH_RECEIVE, 0) \
+    X(Interface, BFD_ECHO, true) \
+    X(Interface, BFD_INTERVAL, 250) \
+    X(Interface, BFD_INTERVAL_MIN_RX, 250) \
+    X(Interface, BFD_INTERVAL_MULTIPLIER, 3) \
+    X(Interface, CDP, true) \
+    X(Interface, DAMPENING_HALF_LIFE, 5) \
+    X(Interface, DAMPENING_REUSE, 1000) \
+    X(Interface, DAMPENING_THRESHOLD, 2000) \
+    X(Interface, DAMPENING_MAX_DURATION, 20) \
+    X(Interface, DAMPENING_RESTART_PENALTY, 1000) \
+    X(Interface, DELAY, 0) \
+    X(Interface, DOT1Q_TUNNELING_ETHERNET, 0x8100) \
+    X(Interface, HOLD_QUEUE_LENGTH, 40) \
+    X(Interface, IP_ADDRESS_DHCP, false) \
+    X(Interface, IP_BFD_FAST_EXTERNAL_FALLOVER, false) \
+    X(Interface, IP_CEF_ACCOUNTING_NON_RECURSIVE, false) \
+    X(Interface, IP_FLOW_INGRESS, false) \
+    X(Interface, IP_FLOW_EGRESS, false) \
+    X(Interface, IP_LOAD_SHARING_PER_DESTINATION, true) \
+    X(Interface, IP_LOAD_SHARING_PER_PACKET, false) \
+    X(Interface, IP_LOCAL_PROXY_ARP, false) \
+    X(Interface, IP_MASK_REPLY, false) \
+    X(Interface, IP_MFIB_CEF_INPUT, true) \
+    X(Interface, IP_MFIB_CEF_OUTPUT, true) \
+    X(Interface, IP_MFIB_FORWARDING_INPUT, false) \
+    X(Interface, IP_MFIB_FORWARDING_OUTPUT, false) \
+    X(Interface, IP_MTU, 1500) \
+    X(Interface, IP_NAT_INSIDE, false) \
+    X(Interface, IP_NAT_OUTSIDE, false) \
+    X(Interface, IP_NBAR_PROTOCOL_DISCOVER_IP, false) \
+    X(Interface, IP_NBAR_PROTOCOL_DISCOVER_IPV6, false) \
+    X(Interface, IP_PROXY_ARP, true) \
+    X(Interface, IP_REDIRECTS, true) \
+    X(Interface, IP_ROUTE_CACHE, true) \
+    X(Interface, IP_ROUTE_CACHE_CEF, true) \
+    X(Interface, IP_ROUTE_CACHE_FLOW, false) \
+    X(Interface, IP_ROUTE_CACHE_POLICY, false) \
+    X(Interface, IP_ROUTE_CACHE_SAME_INTERFACE, false) \
+    X(Interface, IP_RTP_COMPRESSION_CONNECTIONS, 16) \
+    X(Interface, IP_TCP_ADJUST_MSS, 0) \
+    X(Interface, IP_TCP_COMPRESSION_CONNECTIONS, 16) \
+    X(Interface, IP_VERIFY_UNICAST_NOTIFICATION_DROP_RATE, 0) \
+    X(Interface, IPV6_ADDRESS_AUTOCONFIG, false) \
+    X(Interface, IPV6_ADDRESS_AUTOCONFIG_DEFAULT, false) \
+    X(Interface, IPV6_CEF, true) \
+    X(Interface, IPV6_FLOW_MONITOR, false) \
+    X(Interface, IPV6_MFIB_CEF_INPUT, true) \
+    X(Interface, IPV6_MFIB_CEF_OUTPUT, true) \
+    X(Interface, IPV6_MFIB_FORWARDING_INPUT, false) \
+    X(Interface, IPV6_MFIB_FORWARDING_OUTPUT, false) \
+    X(Interface, IPV6_MFIB_FORWARDING, false) \
+    X(Interface, IPV6_MTU, 1500) \
+    X(Interface, IPV6_REDIRECTS, true) \
+    X(Interface, IPV6_VERIFY_UNICAST_REVERSE_PATH, false) \
+    X(Interface, KEEPALIVE, true) \
+    X(Interface, KEEPALIVE_PERIOD, 10) \
+    X(Interface, LOAD_INTERVAL, 300) \
+    X(Interface, LOOPBACK_DRIVER, false) \
+    X(Interface, LOOPBACK_MAC, false) \
+    X(Interface, MTU, 1500) \
+    X(Interface, NEGOTIATION_AUTO, true) \
+    X(Interface, SERVICE_POLICY_CONTROL_DEFAULT, false) \
+    X(Interface, SHUTDOWN, true) \
+    X(Interface, SNMP_IFINDEX_PERSIST, false) \
+    X(Interface, SNMP_TRAP_IP_VERIFY_DROP_RATE, false) \
+    X(Interface, SNMP_TRAP_LINK_STATUS, true) \
+    X(Interface, SNMP_TRAP_LINK_STATUS_PERMIT_DUPLICATES, false) \
+    X(Interface, TIMEOUT_ABSOLUTE_LIFETIME, 0)
+
+CONFIG_DEFAULT_TABLE(INTERFACE_DEFAULTS);
 
 void interfaceIPAddress(void*);
 void interfaceIPAddressSecondary(void*);
@@ -376,7 +378,7 @@ using InterfaceRegistry = SubRegistry<Interface,
     AtomicField<bool CONFIG_INDEX_ARG(Interface::NEGOTIATION_AUTO)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::NTP)>,
     RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(Interface::OSPFV3_DEFAULT)>,
-    OwnedListField<OspfInterfaceRegistry, uint16_t CONFIG_INDEX_ARG(Interface::OSPFV3)>,
+    OwnedListField<OspfInterfaceAfRegistry, uint16_t CONFIG_INDEX_ARG(Interface::OSPFV3)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::RATE_LIMIT)>,
     OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::RMON)>,
     ValueField<std::string CONFIG_INDEX_ARG(Interface::SERVICE_POLICY_INPUT)>,

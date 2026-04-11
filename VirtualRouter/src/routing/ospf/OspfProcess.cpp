@@ -3,6 +3,7 @@
 #include <Global.h>
 #include <VirtualRouter.h>
 #include <ControlScheduler.h>
+#include <RCU.hpp>
 
 #include "OspfProcess.h"
 #include "area/Area.h"
@@ -13,15 +14,15 @@ namespace routing::ospf
 {
 OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, core::VirtualRouter* vrf)
     : isV3(isV3), routingInstance(vrf), rib(*this), scheduler(vrf->getControlScheduler().create()), procId(procId), af(af), ifaceMgr(*this),
-    configs([this, isV3]() {
+    configs([this, isV3]() -> config::OspfRegistry& {
         auto& registry = routingInstance->getGlobal().registry;
         if (isV3)
         {
             if (routingInstance->isDefault())
             {
                 // TODO: add address family v3 configs from elsewhere
-                auto& afCfgs = std::get<V3AfConfigs>(afConfigs);
-                return registry.emplace(afCfgs.get<config::OspfAddressFamilyV3::BASE>());
+                auto& afCfgs = std::get<std::reference_wrapper<V3AfConfigs>>(afConfigs).get();
+                return registry.emplace(afCfgs.get<config::OspfAddressFamilyV3::BASE>().get());
             }
             // OSPFv3 VRF mode does not support address families
             return registry.create<config::OspfRegistry>();
@@ -29,14 +30,15 @@ OspfProcess::OspfProcess(bool isV3, uint16_t procId, types::AddressFamily af, co
         else
         {
             // OSPFv2 types::AddressFamily
-            afConfigs.emplace<V2AfConfigs>(registry.create<config::OspfAddressFamilyV2Registry>());
-            auto& afCfgs = std::get<V2AfConfigs>(afConfigs);
-            auto& v2Base = afCfgs.get<config::OspfAddressFamilyV2::BASE>();
+            auto& v2Reg = registry.create<config::OspfAddressFamilyV2Registry>();
+            afConfigs.emplace<std::reference_wrapper<V2AfConfigs>>(std::ref(v2Reg));
+            auto& afCfgs = std::get<std::reference_wrapper<V2AfConfigs>>(afConfigs).get();
+            auto& v2Base = afCfgs.get<config::OspfAddressFamilyV2::BASE>().get();
             return registry.emplace(v2Base);
         }
     }())
 {
-    configs->context().set(this);
+    configs.context().set(this);
     calculateRID();
 
     // Subscribe to interface lifecycle events so the interface list stays
@@ -169,13 +171,14 @@ void OspfProcess::addDefaultRoute(bool add)
     if (!always)
     {
         auto& globalRib = routingInstance->getRib();
+        utils::RCU::Guard g;
         if (af == types::AddressFamily::IPv4)
         {
-            if (!globalRib.lookup<uint32_t>(0)) return;
+            if (!globalRib.lookup<uint32_t>(0, g)) return;
         }
         else
         {
-            if (!globalRib.lookup<__uint128_t>(0)) return;
+            if (!globalRib.lookup<__uint128_t>(0, g)) return;
         }
     }
 
@@ -359,16 +362,17 @@ void OspfProcess::syncSummaryConfig()
 
     std::unordered_set<types::IPPrefix> seen;
 
-    cfg.withRead([&](const auto& ts) {
-        for (const auto& [pfx, noAdv, nssaOnly, tag] : ts)
-        {
-            seen.insert(pfx);
+    cfg.withRead([&](const auto& tsList) {
+        for (const auto& ts : tsList)
+            for (const auto& [pfx, noAdv, nssaOnly, tag] : ts)
+            {
+                seen.insert(pfx);
 
-            auto& s = active[pfx];
-            s.notAdvertise = noAdv;
-            s.nssaOnly = nssaOnly;
-            s.tag = tag;
-        }
+                auto& s = active[pfx];
+                s.notAdvertise = noAdv;
+                s.nssaOnly = nssaOnly;
+                s.tag = tag;
+            }
     });
 
     for (auto it = active.begin(); it != active.end();)

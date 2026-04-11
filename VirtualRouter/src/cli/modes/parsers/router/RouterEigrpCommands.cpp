@@ -29,7 +29,7 @@ bool RouterEigrp_EigrpLogNeighborWarnings_Handler(EIGRP_PARAMS)
     return true;
 }
 
-bool RouterEigrpAddressFamily_EigrpRouterId_Handler(EIGRP_PARAMS)
+bool RouterEigrp_EigrpRouterId_Handler(EIGRP_PARAMS)
 {
     auto& rid = ctx.configs.get<config::Eigrp::ROUTER_ID>();
     return utils::setFieldValue(rid, ctx, segs >> 0 >> 1);

@@ -1,5 +1,6 @@
 // ReliableTX.cpp
 
+#include "hardware/HardwareManager.h"
 #include "ReliableTransport.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "EigrpPacketBuilder.h"
@@ -174,8 +175,8 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
         return;
     
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     auto versionedUpdate = [&](const TLVType& version)
@@ -221,8 +222,8 @@ void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const R
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     auto versionedUpdate = [&](const TLVType& version)
@@ -261,7 +262,7 @@ void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
     info.delay = std::numeric_limits<uint64_t>::max();
     info.mtu = getMtu();
 
@@ -300,8 +301,8 @@ void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     
     auto versionedQuery = [&](const TLVType& version)
     {
@@ -331,8 +332,8 @@ void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<O
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     
     auto versionedQuery = [&](const TLVType& version)
     {
@@ -359,8 +360,8 @@ void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const Ro
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     do
@@ -381,8 +382,8 @@ void ReliableTransport::sendSIAQuery(Neighbor& neighbor, const std::vector<Outgo
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     do

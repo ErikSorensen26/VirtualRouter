@@ -15,6 +15,7 @@
 
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryDefaultTable.hpp"
+#include "configs/RegistryReference.hpp"
 #include "configs/SubRegistry.hpp"
 
 namespace config

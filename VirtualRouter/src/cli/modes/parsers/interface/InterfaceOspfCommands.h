@@ -12,9 +12,9 @@
 #ifndef INTERFACE_OSPF_COMMANDS_H
 #define INTERFACE_OSPF_COMMANDS_H
 
+#include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
-#include "configs/registry/router/OspfInterfaceRegistry.h"
 
 #define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 
@@ -34,18 +34,18 @@ bool InterfaceOspf_RetransmissionInterval_Handler(OSPF_PARAMS);
 bool InterfaceOspf_TransmitDelay_Handler(OSPF_PARAMS);
 
 #define INTERFACE_OSPF_LIST(X, Y) \
-    X(Y, (_COM_, BFD, "bfd"_tok)) \
-    X(Y, (_COM_, Cost, "cost"_tok)) \
-    X(Y, (_COM_, DatabaseFilter, "database-filter"_tok)) \
-    X(Y, (_COM_, DeadInterval, "dead-interval"_tok)) \
-    X(Y, (_COM_, DemandCircuit, "demand-circuit"_tok)) \
-    X(Y, (_COM_, FloodReduction, "flood-reduction"_tok)) \
-    X(Y, (_COM_, HelloInterval, "hello-interval"_tok)) \
-    X(Y, (_COM_, MtuIgnore, "mtu-ignore"_tok)) \
-    X(Y, (_COM_, Network, "network"_tok)) \
-    X(Y, (_COM_, Priority, "priority"_tok)) \
-    X(Y, (_COM_, RetransmissionInterval, "retransmission-interval"_tok)) \
-    X(Y, (_COM_, TransmitDelay, "transmit-delay"_tok))
+    X(Y, (COMMAND, BFD, "bfd"_tok)) \
+    X(Y, (COMMAND, Cost, "cost"_tok)) \
+    X(Y, (COMMAND, DatabaseFilter, "database-filter"_tok)) \
+    X(Y, (COMMAND, DeadInterval, "dead-interval"_tok)) \
+    X(Y, (COMMAND, DemandCircuit, "demand-circuit"_tok)) \
+    X(Y, (COMMAND, FloodReduction, "flood-reduction"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, MtuIgnore, "mtu-ignore"_tok)) \
+    X(Y, (COMMAND, Network, "network"_tok)) \
+    X(Y, (COMMAND, Priority, "priority"_tok)) \
+    X(Y, (COMMAND, RetransmissionInterval, "retransmission-interval"_tok)) \
+    X(Y, (COMMAND, TransmitDelay, "transmit-delay"_tok))
 
 /**
  * @brief Shared base parser for common OSPF interface commands.

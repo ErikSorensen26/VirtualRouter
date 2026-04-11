@@ -1,24 +1,24 @@
 // RouterEigrpNamedCommands.cpp
 
-#include "RouterEigrpNamedCommands.h"
-
 #include <sstream>
 #include <Global.h>
 #include <VirtualRouter.h>
+
+#include "RouterEigrpNamedCommands.h"
 #include "cli/runtime/CliSession.h"
 #include <cli/parser/CommandUtils.hpp>
 
-#define GLOBAL_PARAMS DEFINE_PARAMS(config::EigrpNamedRegistry)
+#define EIGRP_NAMED_PARAMS DEFINE_PARAMS(config::EigrpNamedRegistry)
 
 namespace cli
 {
-bool RouterEigrpNamed_AddressFamilyIPv4_Handler(GLOBAL_PARAMS)
+bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS)
 {
-    auto& global = ctx.configs.resolveParent<config::GlobalRegistry>();
+    auto& global = ctx.terminal.engine.global.configs;
     auto& namedList = ctx.configs.get<config::EigrpNamed::NAMED_INSTANCES_V4>();
 
     std::string vrfName = "default";
-    uint16_t as;
+    uint16_t as = 0;
 
     for (const auto& seg : segs)
     {
@@ -70,7 +70,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(GLOBAL_PARAMS)
                 }
                 else
                 {
-                    exists = true;  
+                    exists = true;
                     return;
                 }
             }
@@ -92,19 +92,18 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(GLOBAL_PARAMS)
                 return false;
             }
     }
-    ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV4>(
+    return ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV4>(
         eigrpList.emplaceBack(as)
     );
-    return true;
 }
 
-bool RouterEigrpNamed_AddressFamilyIPv6_Handler(GLOBAL_PARAMS)
+bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_NAMED_PARAMS)
 {
-    auto& global = ctx.configs.resolveParent<config::GlobalRegistry>();
+    auto& global = ctx.terminal.engine.global.configs;
     auto& namedList = ctx.configs.get<config::EigrpNamed::NAMED_INSTANCES_V6>();
 
     std::string vrfName = "default";
-    uint16_t as;
+    uint16_t as = 0;
 
     for (const auto& seg : segs)
     {
@@ -156,7 +155,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(GLOBAL_PARAMS)
                 }
                 else
                 {
-                    exists = true;  
+                    exists = true;
                     return;
                 }
             }
@@ -178,17 +177,16 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(GLOBAL_PARAMS)
                 return false;
             }
     }
-    ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV6>(
+    return ctx.terminal.changeMode<CliMode::RouterEigrpAddressFamilyV6>(
         eigrpList.emplaceBack(as)
     );
-    return true;
 }
 
-bool RouterEigrpNamed_Exit_Handler(GLOBAL_PARAMS)
+bool RouterEigrpNamed_Exit_Handler(EIGRP_NAMED_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.exitMode<CliMode::GlobalConfiguration, config::GlobalRegistry>(ctx.configs);
+    return ctx.terminal.popMode();
 }
 }
 
-#undef EIGRP_PARAMS
+#undef EIGRP_NAMED_PARAMS

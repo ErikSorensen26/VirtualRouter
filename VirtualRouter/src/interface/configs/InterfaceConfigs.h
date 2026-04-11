@@ -146,10 +146,10 @@ public:
     uint32_t getReceiveBandwidth();
 
     /// Returns a mutable reference to the interface config registry.
-    config::InterfaceRegistry& getConfigs() { return configs.get(); }
+    config::InterfaceRegistry& getConfigs() { return configs; }
 
     /// Returns a read-only reference to the interface config registry.
-    const config::InterfaceRegistry& getConfigs() const { return configs.get(); }
+    const config::InterfaceRegistry& getConfigs() const { return configs; }
 
     /**
      * @brief Re-reads the hardware MAC address and updates the cached atomic value.

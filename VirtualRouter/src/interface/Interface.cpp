@@ -170,7 +170,7 @@ void Interface::removeAllIPv6()
 std::vector<std::array<uint8_t, 16>> Interface::getTentativeAddress()
 {
     std::vector<std::array<uint8_t, 16>> tentative;
-    std::lock_guard<std::shared_mutex> lock(configs.ipMutex);
+    std::lock_guard<std::mutex> lock(configs.ipv6.ipMutex);
 
     // Link-local (there can only be one)
     if (!configs.ipv6.linkLocalAddress->valid && configs.ipv6.linkLocalAddress->tentative)

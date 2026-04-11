@@ -9,22 +9,22 @@
 #ifndef ROUTER_EIGRP_NAMED_COMMANDS_H
 #define ROUTER_EIGRP_NAMED_COMMANDS_H
 
+#include "configs/registry/router/EigrpRegistry.h"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
-#include "configs/registry/global/GlobalRegistry.h"
 
-#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
+#define EIGRP_NAMED_PARAMS DEFINE_PARAMS(config::EigrpNamedRegistry)
 
 namespace cli
 {
-bool RouterEigrpNamed_AddressFamilyIPv4_Handler(GLOBAL_PARAMS);
-bool RouterEigrpNamed_AddressFamilyIPv6_Handler(GLOBAL_PARAMS);
-bool RouterEigrpNamed_Exit_Handler(GLOBAL_PARAMS);
+bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS);
+bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_NAMED_PARAMS);
+bool RouterEigrpNamed_Exit_Handler(EIGRP_NAMED_PARAMS);
 
 #define ROUTER_EIGRP_NAMED_LIST(X, Y) \
-    X(Y, (_COM_, AddressFamilyIPv4, "address-family"_tok, "ipv4"_tok)) \
-    X(Y, (_COM_, AddressFamilyIPv6, "address-family"_tok, "ipv6"_tok)) \
-    X(Y, (_COM_, Exit, "exit"_tok))
+    X(Y, (COMMAND, AddressFamilyIPv4, "address-family"_tok, "ipv4"_tok)) \
+    X(Y, (COMMAND, AddressFamilyIPv6, "address-family"_tok, "ipv6"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok))
 
 /**
  * @brief Parser for EIGRP named mode (MD5-era) configuration commands.
@@ -33,10 +33,10 @@ bool RouterEigrpNamed_Exit_Handler(GLOBAL_PARAMS);
  * Aggregates address-family entry, logging, metrics, topology access,
  * and named-mode-specific settings.
  */
-DEFINE_CMD_MODE(RouterEigrpNamed, CliMode::RouterEigrpNamed, config::GlobalRegistry, ROUTER_EIGRP_NAMED_LIST);
+DEFINE_CMD_MODE(RouterEigrpNamed, CliMode::RouterEigrpNamed, config::EigrpNamedRegistry, ROUTER_EIGRP_NAMED_LIST);
 }
 
 #undef ROUTER_EIGRP_NAMED_LIST
-#undef GLOBAL_PARAMS
+#undef EIGRP_NAMED_PARAMS
 
 #endif // ROUTER_EIGRP_NAMED_COMMANDS_H

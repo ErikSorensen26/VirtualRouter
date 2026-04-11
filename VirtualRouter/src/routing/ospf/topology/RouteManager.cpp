@@ -1,5 +1,6 @@
 // OspfRouteManager.cpp
 
+#include <RCU.hpp>
 #include <VirtualRouter.h>
 
 #include "RouteManager.h"
@@ -366,7 +367,8 @@ void routemanager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
 template <typename AddrT>
 static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInternalAddress(AddrT addr, OspfProcess& process, core::RoutingTable& globalRib)
 {
-    core::RibEntry<AddrT>* r = globalRib.lookup<AddrT>(addr);
+    utils::RCU::Guard g;
+    core::RibEntry<AddrT>* r = globalRib.lookup<AddrT>(addr, g);
     if (!r || r->nextHopCount == 0) return std::nullopt;
 
     std::vector<OspfNextHop> hops;
@@ -374,7 +376,7 @@ static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInter
     for (size_t i = 0; i < r->nextHopCount; i++)
     {
         auto& hop = r->nextHops[i];
-        hops.push_back(OspfNextHop{hop.iface, types::IPAddress{hop.nextHop.value()}});
+        hops.push_back(OspfNextHop{hop.iface.getId(), types::IPAddress{hop.nextHop.value()}});
     }
 
     return std::make_pair(r->metric, hops);

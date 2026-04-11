@@ -10,9 +10,9 @@
 #ifndef GLOBAL_IP_DHCP_COMMANDS_H
 #define GLOBAL_IP_DHCP_COMMANDS_H
 
+#include "configs/registry/global/GlobalRegistry.h"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
-#include "configs/registry/global/GlobalRegistry.h"
 
 #define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
@@ -26,12 +26,12 @@ bool GlobalIPDHCP_DatabaseTimeout_Handler(GLOBAL_PARAMS);
 bool GlobalIPDHCP_DatabaseWrite_Handler(GLOBAL_PARAMS);
 
 #define GLOBAL_IP_DHCP_LIST(X, Y) \
-    X(Y, (_COM_, Binding,            "binding"_tok)) \
-    X(Y, (_COM_, Bootp,              "bootp"_tok)) \
-    X(Y, (_COM_, ConflictLogging,    "conflict"_tok, "logging"_tok)) \
-    X(Y, (_COM_, ConflictResolution, "conflict"_tok, "resolution"_tok)) \
-    X(Y, (_COM_, DatabaseTimeout,    "database"_tok, "timeout"_tok)) \
-    X(Y, (_COM_, DatabaseWrite,      "database"_tok, "write-delay"_tok))
+    X(Y, (COMMAND, Binding,            "binding"_tok)) \
+    X(Y, (COMMAND, Bootp,              "bootp"_tok)) \
+    X(Y, (COMMAND, ConflictLogging,    "conflict"_tok, "logging"_tok)) \
+    X(Y, (COMMAND, ConflictResolution, "conflict"_tok, "resolution"_tok)) \
+    X(Y, (COMMAND, DatabaseTimeout,    "database"_tok, "timeout"_tok)) \
+    X(Y, (COMMAND, DatabaseWrite,      "database"_tok, "write-delay"_tok))
 
 DEFINE_CMD_MODE(GlobalIPDHCP, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IP_DHCP_LIST)
 

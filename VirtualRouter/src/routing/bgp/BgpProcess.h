@@ -115,8 +115,8 @@ public:
 
     // GETTERS
 
-    config::BgpRegistry& getConfigs() { return configs.get(); }
-    const config::BgpRegistry& getConfigs() const { return configs.get(); }
+    config::BgpRegistry& getConfigs() { return configs; }
+    const config::BgpRegistry& getConfigs() const { return configs; }
     NeighborTable& getNtable() { return ntable; }
     const NeighborTable& getNtable() const { return ntable; }
     AttributeManager& getAttrMgr() { return attrMgr; }

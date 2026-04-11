@@ -7,7 +7,7 @@
 #include <VirtualRouter.h>
 
 #include "GlobalIPDHCPCommands.h"
-#include "cli/parser/CommandUtils.hpp".h"
+#include "cli/parser/CommandUtils.hpp"
 #include "dhcp/dhcpv4/DhcpServer.h"
 
 #define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)

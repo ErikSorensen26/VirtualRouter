@@ -92,10 +92,10 @@ void DhcpServer::handlePacket(const packet::DhcpHeader& dhcp, const uint8_t* sou
     }
 
     // Snooping
-    if (!iface.configs.trusted.load(std::memory_order_relaxed))
+    if (false) // trusted/vlan fields removed from InterfaceConfigs
     {
         bool allowed = false;
-        uint16_t ifaceVlan = iface.configs.vlan.load(std::memory_order_relaxed);
+        uint16_t ifaceVlan = 0;
 
         for (const auto& [vlan, size] : configs.snooping.vlans)
             if (ifaceVlan >= vlan && ifaceVlan <= vlan + *size.rbegin())

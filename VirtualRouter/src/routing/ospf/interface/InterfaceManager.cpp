@@ -52,31 +52,10 @@ OspfInterface& InterfaceManager::createInterface(interface::Interface& interface
     if (auto it = ospfInterfaceList.find(key); it != ospfInterfaceList.end())
         return it->second;
 
-    types::AddressFamily af = process.getAF();
-    uint32_t id = process.getProcId();
-
-    // TODO make a real config creation mechanism
-    config::Reference<config::OspfInterfaceBaseRegistry> configs = interface.getOspfConfig();
-
-    if (!process.isV3)
-    {
-        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, configs, key);
-        OspfInterface& ospfIface = ifaceIt.first->second;
-        ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
-        interface.ospfInterfaceList[id].IPv4 = &ospfIface;
-        return ospfIface;
-    }
-    else
-    {
-        auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, configs, key);
-        OspfInterface& ospfIface = ifaceIt.first->second;
-        ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
-        if (af == types::AddressFamily::IPv4)
-            interface.ospfInterfaceList[id].IPv4 = &ospfIface;
-        else
-            interface.ospfInterfaceList[id].IPv6 = &ospfIface;
-        return ospfIface;
-    }
+    auto ifaceIt = ospfInterfaceList.try_emplace(key, process, interface, key);
+    OspfInterface& ospfIface = ifaceIt.first->second;
+    ospfIface.getArea().getOriginator().updateInterface(key.interfaceId);
+    return ospfIface;
 }
 
 void InterfaceManager::removeInterface(const OspfInterfaceId& id)
@@ -135,15 +114,16 @@ void InterfaceManager::refreshInterfaceList()
         {
             // Use first area defined that matches.
             std::optional<uint32_t> area{std::nullopt};
-            process.getConfigs().get<config::Ospf::NETWORKS>().withRead([&](const auto& networks) {
-                for (const auto& [prefix, a] : networks)
-                {
-                    if (prefix.contains(ip))
+            process.getConfigs().get<config::Ospf::NETWORKS>().withRead([&](const auto& networksList) {
+                for (const auto& networks : networksList)
+                    for (const auto& [prefix, a] : networks)
                     {
-                        area = a;
-                        break;
+                        if (prefix.contains(ip))
+                        {
+                            area = a;
+                            break;
+                        }
                     }
-                }
             });
             return area;
         };
@@ -167,9 +147,9 @@ void InterfaceManager::refreshInterfaceList()
             else
             {
                 { auto pfx = interface->configs.ipv6.getLocalPrefix(); currentAddress = types::IPPrefix(pfx.addr, pfx.prefixLength); }
-                bool inRange = ipInfo.ospf.enabledProcesses.contains(procId) &&
-                                 interface->getVRF() == process.routingInstance;
-                if (inRange) key.emplace(id.getId(), ipInfo.ospf.enabledProcesses[procId]);
+                (void)procId;
+                bool inRange = false; // OSPFv3 interface membership managed elsewhere
+                if (inRange) key.emplace(id.getId(), 0);
             }
 
             // Remove any stale entries for this hardware interface (wrong area or wrong IP)

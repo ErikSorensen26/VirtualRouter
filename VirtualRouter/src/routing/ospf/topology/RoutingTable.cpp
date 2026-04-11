@@ -1,5 +1,6 @@
 // OspfRoutingTable.cpp
 
+#include <RCU.hpp>
 #include <VirtualRouter.h>
 #include <algorithm>
 #include <utility>
@@ -665,10 +666,11 @@ void OspfRib::recomputeLocked(const std::unordered_set<types::IPPrefix>& touched
 
 bool OspfRib::globalRibContains(const types::IPPrefix& prefix) const
 {
+    utils::RCU::Guard g;
     if (prefix.isIPv4())
-        return rib.lookup(prefix.v4());
+        return rib.lookup(prefix.v4(), g);
     else
-        return rib.lookup(prefix.v6());
+        return rib.lookup(prefix.v6(), g);
 }
 
 bool OspfRib::validateInterAreaSummaryEligibility(const types::IPPrefix& prefix) const

@@ -129,7 +129,7 @@ public:
     }
 
 private:
-    config::BgpNeighborSessionRegistry configs;
+    config::BgpNeighborSessionRegistry& configs;
 };
 
 /**

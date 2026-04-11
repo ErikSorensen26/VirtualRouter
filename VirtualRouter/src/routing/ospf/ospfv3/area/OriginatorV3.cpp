@@ -1,5 +1,6 @@
 // OriginatorV3.cpp
 
+#include <RCU.hpp>
 #include <VirtualRouter.h>
 
 #include "OriginatorV3.h"
@@ -560,7 +561,8 @@ void OriginatorV3::translateNssaToExternal(const LsaKey& key7, const LsaBody& bo
         __uint128_t lookupAddr = (!ext7.forwardingAddress.has_value() || ext7.forwardingAddress->addr == 0)
             ? ext7.prefix.addr : ext7.forwardingAddress->addr;
 
-        if (!base.routingInstance->getRib().lookup(lookupAddr))
+        utils::RCU::Guard g;
+        if (!base.routingInstance->getRib().lookup(lookupAddr, g))
             return;
     }
 

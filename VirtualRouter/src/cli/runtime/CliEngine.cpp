@@ -7,7 +7,6 @@
 #include "CliSession.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "hardware/HardwareManager.h"
-#include "cli/modes/contexts/GlobalContext.hpp"
 
 namespace cli
 {
@@ -36,7 +35,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
     initConfigs(stfs);
 
     // Initialize default error and carriage return commands
-    carriageReturnCommand.name = 
+    carriageReturnCommand.name = "";
 
     // Clear current command tree
     commandTree.clear();

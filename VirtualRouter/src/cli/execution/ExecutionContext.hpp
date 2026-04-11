@@ -17,6 +17,7 @@
 #ifndef EXECUTION_CONTEXT_HPP
 #define EXECUTION_CONTEXT_HPP
 
+#include "configs/RegistryReference.hpp"
 #include "cli/execution/Executor.hpp"
 
 #include "cli/modes/parsers/global/GlobalCommands.h"

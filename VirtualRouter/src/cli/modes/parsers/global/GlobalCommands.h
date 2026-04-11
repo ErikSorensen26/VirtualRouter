@@ -10,9 +10,9 @@
 #ifndef GLOBAL_COMMANDS_H
 #define GLOBAL_COMMANDS_H
 
+#include "configs/registry/global/GlobalRegistry.h"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
-#include "configs/registry/global/GlobalRegistry.h"
 
 #define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 #define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
@@ -32,16 +32,16 @@ bool Global_IP_SubHandler(GLOBAL_SUB_PARAMS);
 bool Global_IPv6_SubHandler(GLOBAL_SUB_PARAMS);
 
 #define GLOBAL_LIST(X, Y) \
-    X(Y, (_COM_, Arp, "arp"_tok)) \
-    X(Y, (_COM_, Exit, "exit"_tok)) \
-    X(Y, (_COM_, SetHostname, "hostname"_tok)) \
-    X(Y, (_COM_, End, "end"_tok)) \
-    X(Y, (_SUB_, IP, "ip"_tok)) \
-    X(Y, (_SUB_, IPv6, "ipv6"_tok)) \
-    X(Y, (_COM_, Interface, "interface"_tok)) \
-    X(Y, (_COM_, RouterEIGRP, "router"_tok, "eigrp"_tok)) \
-    X(Y, (_COM_, RouterOSPF, "router"_tok, "ospf"_tok)) \
-    X(Y, (_COM_, RouterBGP, "router"_tok, "bgp"_tok))
+    X(Y, (COMMAND, Arp, "arp"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (COMMAND, SetHostname, "hostname"_tok)) \
+    X(Y, (COMMAND, End, "end"_tok)) \
+    X(Y, (SUBPRSR, IP, "ip"_tok)) \
+    X(Y, (SUBPRSR, IPv6, "ipv6"_tok)) \
+    X(Y, (COMMAND, Interface, "interface"_tok)) \
+    X(Y, (COMMAND, RouterEIGRP, "router"_tok, "eigrp"_tok)) \
+    X(Y, (COMMAND, RouterOSPF, "router"_tok, "ospf"_tok)) \
+    X(Y, (COMMAND, RouterBGP, "router"_tok, "bgp"_tok))
 
 DEFINE_CMD_MODE(Global, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_LIST);
 }

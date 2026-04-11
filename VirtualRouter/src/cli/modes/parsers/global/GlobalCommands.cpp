@@ -58,8 +58,7 @@ bool Global_Arp_Handler(GLOBAL_PARAMS)
 bool Global_Exit_Handler(GLOBAL_PARAMS)
 {
     UNUSED(segs);
-    ctx.terminal.changeMode<CliMode::PrivilegedExec>(ctx.configs);
-    return true;
+    return ctx.terminal.popMode();
 }
 
 bool Global_SetHostname_Handler(GLOBAL_PARAMS)
@@ -71,8 +70,7 @@ bool Global_SetHostname_Handler(GLOBAL_PARAMS)
 bool Global_End_Handler(GLOBAL_PARAMS)
 {
     UNUSED(segs);
-    ctx.terminal.changeMode<CliMode::PrivilegedExec>(ctx.configs);
-    return true;
+    return ctx.terminal.resetAndChangeMode<CliMode::PrivilegedExec>(ctx.terminal.engine.global.configs);
 }
 
 bool Global_Interface_Handler(GLOBAL_PARAMS)
@@ -96,135 +94,25 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
     if (utils::stouint(id, name))
     {
         auto& eigrpList = vrf->get<config::Vrf::ROUTER_EIGRP_V4>();
-        utils::setOwnedField(eigrpList, ctx, id);
+        if (ctx.negate || ctx.defaulted)
+        {
+            eigrpList.erase(id);
+            return true;
+        }
         // TODO handle vrf
-        return ctx.terminal.changeMode<CliMode::RouterEigrpClassicV4>(eigrpList.get().at(id));
+        return ctx.terminal.changeMode<CliMode::RouterEigrpClassicV4>(eigrpList.emplaceBack(id));
     }
     else
     {
-        // TODO named
-    }
-    
-
-
-/*
-
-{
-    ctx.terminal.isList = true;
-    auto* vrf = ctx.currentEigrp->routingInstance->getGlobal().getRoutingInstance(args[0]);
-    if (!vrf)
-    {
-        ctx.terminal.controller.print(std::string("\r\n%") + "VRF" + args[0] + " does not exist or is not enalbed for IPv4");
-        return false;
-    }
-    if (!vrf->enabledAddressFamilies.contains(types::AddressFamily::IPv4))
-    {
-        ctx.terminal.controller.print(std::string("\r\n%") + "VRF" + args[0] + " does exist but is not enabled for IPv4");
-        return false;
-    }
-
-    uint16_t asNum = args.size() == 3 ? static_cast<uint16_t>(std::stoi(args[2])) : ctx.currentEigrp->getAS();
-
-    routing::eigrp::EigrpAutonomousSystem* as = vrf->getEigrpAutonomousSystem(asNum);
-    if (!ctx.negate)
-    {
-        if (as)
-        {
-            if (as->ipv4Named)
-            {
-                ctx.terminal.controller.print(std::string("\r\n%") + " ERROR: AS(" + std::to_string(asNum) + ") used by name mode");
-                return false; // AS used in named mode.
-            }
-        }
-        else
-        {
-            as = vrf->addEigrpAutonomousSystem(asNum);
-        }
-
-        if (!as->ipv4)
-        {
-            as->ipv4 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv4, vrf);
-        }
-
-        ctx.terminal.changeMode<CliMode::RouterEigrpClassicVRF>(as->ipv4, nullptr, nullptr, ctx.currentEigrp);
-    }
-    else
-    {
-        if (as)
-        {
-            if (!as->ipv4Named && as->ipv4)
-            {
-                delete as->ipv4;
-                as->ipv4 = nullptr;
-                if (!as->ipv6 && !as->ipv6Named)
-                {
-                    vrf->removeEigrpAutonomousSystem(asNum);
-                }
-            }
-        }
-    }
-    return true;
-}
-
-    std::string id = args[0];
-
-    if (utils::isNumber(id))
-    {
-        uint16_t asNum = static_cast<uint16_t>(std::stoi(id));
-        routing::eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
+        auto& namedList = ctx.configs.get<config::Global::ROUTER_EIGRP_NAMED>();
+        std::string nameStr(name);
         if (ctx.negate || ctx.defaulted)
         {
-            if (as)
-            {
-                if (!as->ipv4Named && as->ipv4)
-                {
-                    delete as->ipv4;
-                    as->ipv4 = nullptr;
-                    if (!as->ipv6)
-                    {
-                        ctx.vrf.removeEigrpAutonomousSystem(asNum);
-                    }
-                }
-            }
+            namedList.erase(nameStr);
+            return true;
         }
-        else
-        {
-            if (as)
-            {
-                if (as->ipv4Named)
-                {
-                    ctx.terminal.controller.print(std::string("\r\n%" + std::string(" ERROR: AS(" + id + ") used by named mode")));
-                    return false; // AS used in named mode. }
-                }
-            }
-            else
-            {
-                as = ctx.vrf.addEigrpAutonomousSystem(asNum);
-            }
-            if (!as->ipv4)
-            {
-                as->ipv4 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv4, ctx.global.getRoutingInstance("default"));
-            }
-            ctx.terminal.changeMode<CliMode::RouterEigrpClassicV4>(as->ipv4, nullptr, nullptr);
-        }
-}
-    else
-    {
-        if (ctx.negate || ctx.defaulted)
-        {
-            ctx.vrf.removeEigrpNamed(id);
-        }
-        else
-        {
-            if (!ctx.vrf.getEigrpNamed(id))
-            {
-                ctx.vrf.addEigrpNamed(id);
-            }
-            ctx.terminal.changeMode<CliMode::RouterEigrpNamed>(nullptr, ctx.vrf.getEigrpNamed(id), nullptr);
-        }
+        return ctx.terminal.changeMode<CliMode::RouterEigrpNamed>(namedList.emplaceBack(nameStr));
     }
-    */
-    return false;
 }
 
 bool Global_RouterOSPF_Handler(GLOBAL_PARAMS)

@@ -11,9 +11,9 @@
 #ifndef INTERFACE_IPV6_COMMANDS_H
 #define INTERFACE_IPV6_COMMANDS_H
 
-#include "cli/parser/CliModeParser.hpp"
-#include "interface/configs/InterfaceType.hpp"
 #include "configs/registry/interface/InterfaceRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "cli/parser/CliModeParser.hpp"
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
@@ -42,25 +42,25 @@ bool InterfaceIPv6_ND_SubHandler(INTERFACE_SUB_PARAMS);
 bool InterfaceIPv6_Ospf_SubHandler(INTERFACE_SUB_PARAMS);
 
 #define INTERFACE_IPV6_LIST(X, Y) \
-    X(Y, (_COM_, AddressSet, "address"_tok, P_IPV6PFX)) \
-    X(Y, (_COM_, AddressNamed, "address"_tok, P_WORD)) \
-    X(Y, (_COM_, AddressLinkLocal, "address"_tok, P_IPV6)) \
-    X(Y, (_COM_, AddressAuto, "address"_tok, "autoconfig"_tok)) \
-    X(Y, (_COM_, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
-    X(Y, (_COM_, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
-    X(Y, (_COM_, BandwidthPercent, "bandwidth-percent"_tok)) \
-    X(Y, (_COM_, DampeningChange, "dampening-change"_tok)) \
-    X(Y, (_COM_, DampeningInterval, "dampening-interval"_tok)) \
-    X(Y, (_COM_, Eigrp, "eigrp"_tok)) \
-    X(Y, (_COM_, HelloInterval, "hello-interval"_tok)) \
-    X(Y, (_COM_, HoldTime, "hold-time"_tok)) \
-    X(Y, (_COM_, Mtu, "mtu"_tok)) \
-    X(Y, (_SUB_, ND, "nd"_tok)) \
-    X(Y, (_COM_, NextHopSelf, "next-hop-self"_tok)) \
-    X(Y, (_COM_, NdpRedirects, "redirects"_tok)) \
-    X(Y, (_SUB_, Ospf, "ospf"_tok)) \
-    X(Y, (_COM_, SplitHorizon, "split-horizon"_tok)) \
-    X(Y, (_COM_, SummaryAddress, "summary-address"_tok))
+    X(Y, (COMMAND, AddressSet, "address"_tok, P_IPV6PFX)) \
+    X(Y, (COMMAND, AddressNamed, "address"_tok, P_WORD)) \
+    X(Y, (COMMAND, AddressLinkLocal, "address"_tok, P_IPV6)) \
+    X(Y, (COMMAND, AddressAuto, "address"_tok, "autoconfig"_tok)) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercent, "bandwidth-percent"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, Eigrp, "eigrp"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, Mtu, "mtu"_tok)) \
+    X(Y, (SUBPRSR, ND, "nd"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (COMMAND, NdpRedirects, "redirects"_tok)) \
+    X(Y, (SUBPRSR, Ospf, "ospf"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
 
 /**
  * @brief Parser for the `ipv6` sub-tree in Interface Configuration mode.

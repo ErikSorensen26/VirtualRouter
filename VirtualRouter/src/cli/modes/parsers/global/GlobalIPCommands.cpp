@@ -9,6 +9,6 @@ namespace cli
 {
 bool GlobalIP_DHCP_SubHandler(GLOBAL_SUB_PARAMS)
 {
-    return false;
+    return GlobalIPDHCPCommands::execute(ctx, toks, idx);
 }
 }

@@ -22,7 +22,7 @@ struct Mac
     {
         return mac == other.mac;
     }
-    operator uint64_t() { return mac; }
+    operator uint64_t() const { return mac; }
 
     uint64_t mac;
 };

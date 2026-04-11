@@ -69,19 +69,19 @@ public:
     /// @brief Sets the bit corresponding to `e`.
     void set(Enum e) noexcept
     {
-        bits |= bit(static_cast<Storage>(e));
+        bits |= bit(e);
     }
 
     /// @brief Clears the bit corresponding to `e`.
     void clear(Enum e) noexcept
     {
-        bits &= ~bit(static_cast<Storage>(e));
+        bits &= ~bit(e);
     }
 
     /// @brief Flips the bit corresponding to `e`.
     void toggle(Enum e) noexcept
     {
-        bits ^= bit(static_cast<Storage>(e));
+        bits ^= bit(e);
     }
 
     /// @brief Clears all bits.
@@ -93,7 +93,7 @@ public:
     /// @brief Returns true if the bit corresponding to `e` is set.
     bool test(Enum e) const noexcept
     {
-        return (bits & bit(static_cast<Storage>(e))) != 0;
+        return (bits & bit(e)) != 0;
     }
 
     /// @brief Returns true if at least one bit is set.

@@ -17,9 +17,8 @@ namespace infrastructure
 // Constructor: Initiates the ARP object with the given interface
 Arp::Arp(interface::Interface& interface) 
     : iface(interface),
-      configs([&interface]() {
-          auto& arpConfigs = interface.configs.getConfigs().get<config::Interface::ARP>();
-          return interface.getVRF()->getRegistry().emplace(arpConfigs);
+      configs([&interface]() -> config::ArpRegistry& {
+          return interface.configs.getConfigs().get<config::Interface::ARP>().get();
       }()),
       global(interface.getVRF()->getGlobal()),
       scheduler(interface.getScheduler().ref())
@@ -43,12 +42,12 @@ void Arp::refresh()
 void Arp::initiateArp()
 {
     iface.getVRF()->getConfigs().get<config::Vrf::ARP_STATIC_ENTRY>().withRead(
-        [&](const std::vector<std::tuple<types::IPv4Address, types::Mac, std::optional<interface::InterfaceKey>>>& entries) {
+        [&](const auto& entries) {
             interface::InterfaceKey localKey = iface.configs.key;
-            for (const auto [ip, mac, key] : entries)
+            for (const auto& [ip, mac, key] : entries)
             {
                 if (localKey == key.value_or(localKey))
-                    addStaticArpEntry(ip, mac);
+                    addStaticArpEntry(ip, mac.value);
             }
         }
     );
@@ -103,7 +102,7 @@ void Arp::addStaticArpEntry(types::IPv4Address targetIp, types::Mac targetMac)
         ArpCacheEntry entry;
         entry.macAddress = targetMac;
         entry.status = ArpCacheStatus::COMPLETE;
-        arpCache[targetIp] = entry;
+        arpCache[targetIp] = std::move(entry);
 
         // Add to table
         arpTable.insert(targetIp, targetMac);

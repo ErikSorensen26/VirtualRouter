@@ -20,7 +20,7 @@ InterfaceConfigs::InterfaceConfigs(interface::Interface& iface, InterfaceType ty
     key(type, id),
     hwInfo(info),
     ipv6(iface.getVRF()->getGlobal().timeManager),
-    configs([&iface, type, id]() {
+    configs([&iface, type, id]() -> config::InterfaceRegistry& {
         interface::InterfaceKey key(type, id);
         auto* vrf = iface.getVRF();
         auto& interfaceList = vrf->getGlobalConfigs().get<config::Global::INTERFACE>();
@@ -38,7 +38,6 @@ InterfaceConfigs::InterfaceConfigs(interface::Interface& iface, InterfaceType ty
 
 InterfaceConfigs::~InterfaceConfigs()
 {
-    eigrp.eigrpIfaceConfigs.clear();
 }
 
 void InterfaceConfigs::syncMac()

@@ -3,7 +3,7 @@
 #include "RouterEigrpInterfaceCommands.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "cli/runtime/CliSession.h"
-#include "cli/parser/CommandUtils.hpp".h"
+#include "cli/parser/CommandUtils.hpp"
 
 #define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpInterfaceRegistry)
 
@@ -62,13 +62,13 @@ bool RouterEigrpInterface_DampeningInterval_Handler(EIGRP_PARAMS)
 bool RouterEigrpInterfaceV4_Exit_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV6, config::EigrpRegistry>(ctx.configs);
+    return ctx.terminal.popMode();
 }
 
 bool RouterEigrpInterfaceV6_Exit_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV4, config::EigrpRegistry>(ctx.configs);
+    return ctx.terminal.popMode();
 }
 
 bool RouterEigrpInterface_HelloInterval_Handler(EIGRP_PARAMS)

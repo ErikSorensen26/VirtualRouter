@@ -201,6 +201,7 @@ private:
         size_t insertSlot = size_t(-1);
     };
 
+    __attribute__((target("avx2")))
     ProbeResult probe(const Key& key, size_t hash, uint8_t fp) const
     {
         const size_t mask = this->mask();
@@ -222,7 +223,7 @@ private:
                 int idx = __builtin_ctz(match);
                 size_t slot = (pos + idx) & mask;
                 Node* e = slots[slot];
-                if (e && e->full_hash == hash && keyEq(e->kv.first, key))
+                if (e && e->fullHash == hash && keyEq(e->kv.first, key))
                     return {e, slot, size_t(-1)};
                 match &= match - 1;
             }
@@ -455,22 +456,22 @@ public:
 
     Iterator begin()
     {
-        return iterator(slots.data(), 0, capacity);
+        return Iterator(slots.data(), 0, capacity);
     }
 
     Iterator end()
     {
-        return iterator(slots.data(), capacity, capacity);
+        return Iterator(slots.data(), capacity, capacity);
     }
 
     ConstIterator begin() const
     {
-        return const_iterator(slots.data(), 0, capacity);
+        return ConstIterator(slots.data(), 0, capacity);
     }
 
     ConstIterator end() const
     {
-        return const_iterator(slots.data(), capacity, capacity);
+        return ConstIterator(slots.data(), capacity, capacity);
     }
 
     ConstIterator cbegin() const { return begin(); }
@@ -496,7 +497,7 @@ public:
             if (control[i] != EMPTY && control[i] != DELETED)
             {
                 Node* node = slots[i];
-                if (node) deallocate_node(node);
+                if (node) deallocateNode(node);
                 slots[i] = nullptr;
             }
             control[i] = EMPTY;
@@ -545,7 +546,7 @@ public:
     template<typename K, typename V>
     std::pair<Iterator, bool> emplace(K&& key, V&& value)
     {
-        size_t hash = hash_fn(key);
+        size_t hash = hashFn(key);
         uint8_t fp = (hash >> 57) & 0x7F;
 
         ProbeResult res = probe(key, hash, fp);
@@ -554,19 +555,19 @@ public:
         {
             // update value (but key must not change)
             res.found->kv.second = std::forward<V>(value);
-            return {iterator(slots.data(), res.found_slot, capacity), false};
+            return {Iterator(slots.data(), res.foundSlot, capacity), false};
         }
 
         // allocate new node
         rehashIfNeeded();
 
         Node* node = construct_node(std::forward<K>(key), std::forward<V>(value), hash);
-        slots[res.insert_slot] = node;
-        control[res.insert_slot] = fp;
+        slots[res.insertSlot] = node;
+        control[res.insertSlot] = fp;
         ++numLive;
         ++numFilled;
 
-        return {iterator(slots.data(), res.insert_slot, capacity), true};
+        return {Iterator(slots.data(), res.insertSlot, capacity), true};
     }
 
     /**
@@ -583,7 +584,7 @@ public:
         Node* node = slots[pos.idx];
         if (node)
         {
-            deallocate_node(node);
+            deallocateNode(node);
             slots[pos.idx] = nullptr;
             control[pos.idx] = DELETED;
             --numLive;
@@ -597,16 +598,16 @@ public:
      */
     size_t erase(const Key& key)
     {
-        size_t hash = hash_fn(key);
+        size_t hash = hashFn(key);
         uint8_t fp = (hash >> 57) & 0x7F;
 
         ProbeResult res = probe(key, hash, fp);
 
         if (res.found)
         {
-            deallocate_node(res.found);
-            slots[res.found_slot] = nullptr;
-            control[res.found_slot] = DELETED;
+            deallocateNode(res.found);
+            slots[res.foundSlot] = nullptr;
+            control[res.foundSlot] = DELETED;
             --numLive;
             return 1;
         }
@@ -620,28 +621,28 @@ public:
      */
     Iterator find(const Key& key)
     {
-        size_t hash = hash_fn(key);
+        size_t hash = hashFn(key);
         uint8_t fp = (hash >> 57) & 0x7F;
 
         ProbeResult res = probe(key, hash, fp);
 
         if (res.found)
         {
-            return iterator(slots.data(), res.found_slot, capacity);
+            return Iterator(slots.data(), res.foundSlot, capacity);
         }
         return end();
     }
 
     ConstIterator find(const Key& key) const
     {
-        size_t hash = hash_fn(key);
+        size_t hash = hashFn(key);
         uint8_t fp = (hash >> 57) & 0x7F;
 
         ProbeResult res = probe(key, hash, fp);
 
         if (res.found)
         {
-            return const_iterator(slots.data(), res.found_slot, capacity);
+            return ConstIterator(slots.data(), res.foundSlot, capacity);
         }
         return end();
     }

@@ -24,11 +24,11 @@ bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS);
 bool InterfaceIPv6Ospf_Neighbor_Handler(OSPF_PARAMS);
 
 #define INTERFACE_IPV6_OSPF_LIST(X, Y) \
-    X(Y, (_EXT_, InterfaceOspfCommands)) \
-    X(Y, (_COM_, Area, P_ARG, "area"_tok)) \
-    X(Y, (_COM_, Authentication, "authentication"_tok)) \
-    X(Y, (_COM_, Encryption, "encryption"_tok)) \
-    X(Y, (_COM_, Neighbor, "neighbor"_tok))
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Area, P_ARG, "area"_tok)) \
+    X(Y, (COMMAND, Authentication, "authentication"_tok)) \
+    X(Y, (COMMAND, Encryption, "encryption"_tok)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok))
 
 /**
  * @brief Parser for the `ipv6 ospf` sub-tree in Interface Configuration mode.

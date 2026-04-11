@@ -11,10 +11,10 @@
 #ifndef INTERFACE_IPV6_ND_COMMANDS_H
 #define INTERFACE_IPV6_ND_COMMANDS_H
 
-#include "cli/parser/CliModeParser.hpp"
-#include "interface/configs/InterfaceType.hpp" // IWYU pragma: keep
-#include "cli/modes/contexts/Context.hpp"
 #include "configs/registry/interface/NdpRegistry.h"
+#include "interface/configs/InterfaceType.hpp" // IWYU pragma: keep
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/modes/contexts/Context.hpp"
 
 #define NDP_PARAMS DEFINE_PARAMS(config::NdpRegistry)
 
@@ -45,27 +45,27 @@ bool InterfaceIPv6ND_ReachableTime_Handler(NDP_PARAMS);
 bool InterfaceIPv6ND_RouterPreference_Handler(NDP_PARAMS);
 
 #define INTERFACE_IPV6_ND_LIST(X, Y) \
-    X(Y, (_COM_, AdvertisementInterval, "advertisement-interval"_tok)) \
-    X(Y, (_COM_, AutoconfigDefRoute, "autoconfig"_tok, "default-route"_tok)) \
-    X(Y, (_COM_, AutoconfigPrefix, "autoconfig"_tok, "prefix"_tok)) \
-    X(Y, (_COM_, CacheExpire, "cache"_tok, "expire"_tok)) \
-    X(Y, (_COM_, CacheInterfaceLimit, "cache"_tok, "interface-limit"_tok)) \
-    X(Y, (_COM_, DADAttempts, "dad"_tok, "attempts"_tok)) \
-    X(Y, (_COM_, DADTime, "dad"_tok, "time"_tok)) \
-    X(Y, (_COM_, DestinationGuard, "destination-guard"_tok)) \
-    X(Y, (_COM_, ManagedConfigFlag, "managed-config-flag"_tok)) \
-    X(Y, (_COM_, NaGlean, "na"_tok, "glean"_tok)) \
-    X(Y, (_COM_, NsInterval, "ns-interval"_tok)) \
-    X(Y, (_COM_, NudIGP, "nud"_tok, "igp"_tok)) \
-    X(Y, (_COM_, NudRetry, "nud"_tok, "retry"_tok)) \
-    X(Y, (_COM_, OtherConfigFlag, "other-config-flag"_tok)) \
-    X(Y, (_COM_, RaHopLimitUnspecified, "ra"_tok, "hop-limit"_tok, "unspecified"_tok)) \
-    X(Y, (_COM_, RaInterval, "ra"_tok, "interval"_tok)) \
-    X(Y, (_COM_, RaLifetime, "ra"_tok, "lifetime"_tok)) \
-    X(Y, (_COM_, RaMtuSuppression, "ra"_tok, "mtu"_tok, "suppress"_tok)) \
-    X(Y, (_COM_, RaSuppression, "ra"_tok, "suppress"_tok)) \
-    X(Y, (_COM_, ReachableTime, "reachable-time"_tok)) \
-    X(Y, (_COM_, RouterPreference, "router-preference"_tok)) \
+    X(Y, (COMMAND, AdvertisementInterval, "advertisement-interval"_tok)) \
+    X(Y, (COMMAND, AutoconfigDefRoute, "autoconfig"_tok, "default-route"_tok)) \
+    X(Y, (COMMAND, AutoconfigPrefix, "autoconfig"_tok, "prefix"_tok)) \
+    X(Y, (COMMAND, CacheExpire, "cache"_tok, "expire"_tok)) \
+    X(Y, (COMMAND, CacheInterfaceLimit, "cache"_tok, "interface-limit"_tok)) \
+    X(Y, (COMMAND, DADAttempts, "dad"_tok, "attempts"_tok)) \
+    X(Y, (COMMAND, DADTime, "dad"_tok, "time"_tok)) \
+    X(Y, (COMMAND, DestinationGuard, "destination-guard"_tok)) \
+    X(Y, (COMMAND, ManagedConfigFlag, "managed-config-flag"_tok)) \
+    X(Y, (COMMAND, NaGlean, "na"_tok, "glean"_tok)) \
+    X(Y, (COMMAND, NsInterval, "ns-interval"_tok)) \
+    X(Y, (COMMAND, NudIGP, "nud"_tok, "igp"_tok)) \
+    X(Y, (COMMAND, NudRetry, "nud"_tok, "retry"_tok)) \
+    X(Y, (COMMAND, OtherConfigFlag, "other-config-flag"_tok)) \
+    X(Y, (COMMAND, RaHopLimitUnspecified, "ra"_tok, "hop-limit"_tok, "unspecified"_tok)) \
+    X(Y, (COMMAND, RaInterval, "ra"_tok, "interval"_tok)) \
+    X(Y, (COMMAND, RaLifetime, "ra"_tok, "lifetime"_tok)) \
+    X(Y, (COMMAND, RaMtuSuppression, "ra"_tok, "mtu"_tok, "suppress"_tok)) \
+    X(Y, (COMMAND, RaSuppression, "ra"_tok, "suppress"_tok)) \
+    X(Y, (COMMAND, ReachableTime, "reachable-time"_tok)) \
+    X(Y, (COMMAND, RouterPreference, "router-preference"_tok)) \
 
 /**
  * @brief Parser for the `ipv6 nd` sub-tree in Interface Configuration mode.

@@ -17,6 +17,15 @@
  */
 namespace cli
 {
+template <typename T>
+struct SubHandlerTraits;
+
+/// @brief Specialization for the canonical handler signature `bool(Context<C>&, ...)`.
+template <typename C>
+struct SubHandlerTraits<bool(*)(Context<C>&, std::span<Token>, size_t)>
+{
+    using ContextType = C; ///< The SubRegistry type the handler's context is parameterized on.
+};
 
 /**
  * @brief Prefix-based delegating command that forwards remaining segments to a child parser.
@@ -51,13 +60,20 @@ namespace cli
  * @see subAdder
  */
 template <
-    typename SubParser,
-    uint64_t... PrefixParts
+    auto Handler,
+    uint64_t... Parts
 >
 struct SubCommand
 {
-    using ContextType = SubParser::ContextType; ///< Context type shared with the parent parser.
+    using ContextType = typename SubHandlerTraits<decltype(Handler)>::ContextType; ///< Context type shared with all sibling commands.
+    static constexpr auto handler = Handler; ///< Handler function pointer.
+    static constexpr size_t partCount = sizeof...(Parts); ///< Number of fixed keyword parts.
+    static constexpr std::array<uint64_t, partCount> parts = { Parts... };
 
+    static_assert(
+        std::is_same_v<bool, std::invoke_result_t<decltype(Handler), Context<ContextType>&, std::span<Token>, std::size_t>>,
+        "Handler must return bool"
+    );
 
     /**
      * @brief Matches the prefix at `idx` and, on success, delegates to the sub-parser.
@@ -74,21 +90,29 @@ struct SubCommand
      */
     static bool tryExecute(Context<ContextType>& ctx, std::span<Token> tokens, size_t idx)
     {
-        constexpr size_t prefixSize = sizeof...(PrefixParts);
-        if (tokens.size() - idx < prefixSize)
+        if (tokens.size() - idx < partCount)
             return false;
 
-        constexpr std::array<uint64_t, prefixSize> prefixHashes = { PrefixParts... };
-
-        for (size_t i = 0; i < prefixSize; ++i)
+        for (size_t i = 0; i < partCount; ++i)
         {
-            if (tokens[idx + i].hash != prefixHashes[i])
-                return false;
+            const Token& t = tokens[++idx];
+
+            if (t.isPattern())
+            {
+                if (parts[i] != P_ARG && parts[i] != static_cast<uint64_t>(t.pattern))
+                    return false;
+            }
+            else
+            {
+                if (t.hash != parts[i])
+                    return false;
+            }
         }
 
-        return SubParser::execute(ctx, tokens, idx + prefixSize);
+        return Handler(ctx, tokens, idx);
     }
 };
+
 
 /**
  * @brief Convenience alias for @ref SubCommand used at definition sites.
@@ -99,10 +123,10 @@ struct SubCommand
  * @tparam Parts     Keyword hash NTTPs (`_tok` literals) forming the prefix.
  */
 template <
-    typename SubParser,
+    auto Handler,
     auto... Parts
 >
-using subAdder = SubCommand<SubParser, Parts...>;
+using subAdder = SubCommand<Handler, Parts...>;
 }
 
 #endif // SUB_COMMAND_HPP

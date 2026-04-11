@@ -9,9 +9,9 @@
 #ifndef PRIVILEGED_EXEC_COMMANDS_HPP
 #define PRIVILEGED_EXEC_COMMANDS_HPP
 
+#include "configs/registry/global/GlobalRegistry.h"
 #include "cli/modes/contexts/Context.hpp"
 #include "cli/parser/CliModeParser.hpp"
-#include "configs/registry/global/GlobalRegistry.h"
 
 #define PRIVILEGED_EXEC_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
@@ -25,12 +25,12 @@ bool PrivilegedExec_WriteMem_Handler(PRIVILEGED_EXEC_PARAMS);
 bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS);
 
 #define PRIVILEGED_EXEC_LIST(X, Y) \
-    X(Y, (_COM_, ConfigureTerm, "configure"_tok, "terminal"_tok)) \
-    X(Y, (_COM_, Exit, "exit"_tok)) \
-    X(Y, (_COM_, ShowHistory, "show"_tok)) \
-    X(Y, (_COM_, ShowClock, "show"_tok, "clock"_tok)) \
-    X(Y, (_COM_, WriteMem, "write"_tok, "memory"_tok)) \
-    X(Y, (_COM_, TerminalWidth, "terminal"_tok, "width"_tok))
+    X(Y, (COMMAND, ConfigureTerm, "configure"_tok, "terminal"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (COMMAND, ShowHistory, "show"_tok)) \
+    X(Y, (COMMAND, ShowClock, "show"_tok, "clock"_tok)) \
+    X(Y, (COMMAND, WriteMem, "write"_tok, "memory"_tok)) \
+    X(Y, (COMMAND, TerminalWidth, "terminal"_tok, "width"_tok))
 
 /**
  * @brief Parser for Privileged Exec mode commands.

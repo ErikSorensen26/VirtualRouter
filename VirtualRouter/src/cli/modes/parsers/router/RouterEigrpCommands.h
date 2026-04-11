@@ -10,8 +10,8 @@
 #ifndef ROUTER_EIGRP_COMMANDS_H
 #define ROUTER_EIGRP_COMMANDS_H
 
-#include "cli/parser/CliModeParser.hpp"
 #include "configs/registry/router/EigrpRegistry.h"
+#include "cli/parser/CliModeParser.hpp"
 
 #define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpRegistry)
 
@@ -28,14 +28,14 @@ bool RouterEigrp_Network_Handler(EIGRP_PARAMS);
 bool RouterEigrp_TimersGracefulRestart_Handler(EIGRP_PARAMS);
 
 #define ROUTER_EIGRP_LIST(X, Y) \
-    X(Y, (_COM_, EigrpLogNeighborChanges, "eigrp"_tok, "log-neighbor-changes"_tok)) \
-    X(Y, (_COM_, EigrpLogNeighborWarnings, "eigrp"_tok, "log-neighbor-warnings"_tok)) \
-    X(Y, (_COM_, EigrpRouterId, "eigrp"_tok, "router-id"_tok)) \
-    X(Y, (_COM_, EigrpStub, "eigrp"_tok, "stub"_tok)) \
-    X(Y, (_COM_, MetricWeights, "metric"_tok, "weights"_tok)) \
-    X(Y, (_COM_, Neighbor, "neighbor"_tok)) \
-    X(Y, (_COM_, Network, "network"_tok)) \
-    X(Y, (_COM_, TimersGracefulRestart, "timers"_tok, "graceful-restart"_tok))
+    X(Y, (COMMAND, EigrpLogNeighborChanges, "eigrp"_tok, "log-neighbor-changes"_tok)) \
+    X(Y, (COMMAND, EigrpLogNeighborWarnings, "eigrp"_tok, "log-neighbor-warnings"_tok)) \
+    X(Y, (COMMAND, EigrpRouterId, "eigrp"_tok, "router-id"_tok)) \
+    X(Y, (COMMAND, EigrpStub, "eigrp"_tok, "stub"_tok)) \
+    X(Y, (COMMAND, MetricWeights, "metric"_tok, "weights"_tok)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok)) \
+    X(Y, (COMMAND, Network, "network"_tok)) \
+    X(Y, (COMMAND, TimersGracefulRestart, "timers"_tok, "graceful-restart"_tok))
 
 /**
  * @brief Parser for EIGRP classic mode commands.

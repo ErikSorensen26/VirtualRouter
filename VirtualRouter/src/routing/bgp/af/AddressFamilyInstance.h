@@ -793,7 +793,7 @@ private:
             // Build ADD-PATH candidate pool for additional-paths advertisement.
             if (best.has_value())
             {
-                config::BgpAfBaseRegistry& base = configs.get<config::BgpAddressFamily::AF_BASE>().local();
+                config::BgpAfBaseRegistry& base = configs.get<config::BgpAddressFamily::AF_BASE>().get();
                 bool selectBackup    = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
                 bool selectBestExt   = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
                 bool selectAll       = base.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
@@ -1517,7 +1517,7 @@ private:
 
                 if (!best->additionalPaths.empty())
                 {
-                    config::BgpAfBaseRegistry& baseCfg = configs.get<config::BgpAddressFamily::AF_BASE>().local();
+                    config::BgpAfBaseRegistry& baseCfg = configs.get<config::BgpAddressFamily::AF_BASE>().get();
                     bool advBackup    = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
                     bool advBestExt   = configs.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
                     bool advAll       = baseCfg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
@@ -1956,7 +1956,8 @@ private:
     bool aggregateSuppressed(const NlriT& nlri)
     {
         bool suppressed = false;
-        configs.get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& aggCfgs) {
+        configs.get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& aggCfgsList) {
+            for (const auto& aggCfgs : aggCfgsList)
             for (const auto& aggCfg : aggCfgs)
             {
                 if (!config::BgpAggregateAddress::summaryOnly(aggCfg))
@@ -2008,8 +2009,9 @@ private:
             return;
 
         std::vector<config::BgpAggregateAddress::Tuple> cfgs;
-        configs.get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& v) {
-            cfgs = v;
+        configs.get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& vList) {
+            for (const auto& v : vList)
+                cfgs.insert(cfgs.end(), v.begin(), v.end());
         });
 
         for (auto it = aggregateStates.begin(); it != aggregateStates.end(); )
@@ -2463,7 +2465,8 @@ private:
             if (entry.watchId)
             {
                 auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
-                rt.unwatchAddress(entry.watchId, entry.isV6);
+                if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
+                else rt.unwatchAddress<uint32_t>(entry.watchId);
             }
             nhtTable.erase(entIt);
         }
@@ -2481,7 +2484,8 @@ private:
         auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
         for (auto& [nh, entry] : nhtTable)
             if (entry.watchId)
-                rt.unwatchAddress(entry.watchId, entry.isV6);
+                if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
+                else rt.unwatchAddress<uint32_t>(entry.watchId);
         nhtTable.clear();
         nlriToNextHop.clear();
     }
@@ -2530,8 +2534,9 @@ private:
         if constexpr (types::isIpPrefix<NlriT>)
         {
             configs.get<config::BgpAddressFamily::DISTANCE_RANGE>().withRead(
-                [&](const auto& ranges)
+                [&](const auto& rangesList)
                 {
+                    for (const auto& ranges : rangesList)
                     for (const auto& range : ranges)
                     {
                         uint8_t rangeDist       = std::get<0>(range);
@@ -2810,7 +2815,8 @@ private:
         auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
         for (auto& [nlri, entry] : networkWatches)
             if (entry.watchId)
-                rt.unwatchAddress(entry.watchId, entry.isV6);
+                if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
+                else rt.unwatchAddress<uint32_t>(entry.watchId);
 
         networkWatches.clear();
         networkLocalRoutes.clear();

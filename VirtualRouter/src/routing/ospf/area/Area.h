@@ -189,8 +189,8 @@ public:
     const LsdbTable& lsdb() const noexcept { return db; }
     const OspfProcess& process() const noexcept { return base; }
     OspfProcess& process() { return base; }
-    config::OspfAreaRegistry& getConfigs() { return configs.get(); }
-    const config::OspfAreaRegistry& getConfigs() const noexcept { return configs.get(); }
+    config::OspfAreaRegistry& getConfigs() { return configs; }
+    const config::OspfAreaRegistry& getConfigs() const noexcept { return configs; }
     AreaFlagManager& getFlags() { return flags; }
     const AreaFlagManager& getFlags() const noexcept { return flags; }
     const SpfManager& getSpfManager() const noexcept { return spfMgr; }

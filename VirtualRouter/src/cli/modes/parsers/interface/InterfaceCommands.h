@@ -9,9 +9,9 @@
 #ifndef INTERFACE_COMMANDS_H
 #define INTERFACE_COMMANDS_H
 
-#include "cli/parser/CliModeParser.hpp"
 #include "configs/registry/interface/InterfaceRegistry.h"
 #include "interface/configs/InterfaceType.hpp"
+#include "cli/parser/CliModeParser.hpp"
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
@@ -26,11 +26,11 @@ bool Interface_IPv6_SubHandler(INTERFACE_SUB_PARAMS);
 bool Interface_Ospfv3_SubHandler(INTERFACE_SUB_PARAMS);
 
 #define INTERFACE_LIST(X, Y) \
-    X(Y, (_COM_, Exit, "exit"_tok)) \
-    X(Y, (_SUB_, IP, "ip"_tok)) \
-    X(Y, (_SUB_, IPv6, "ipv6"_tok)) \
-    X(Y, (_SUB_, Ospfv3, "ospfv3"_tok)) \
-    X(Y, (_COM_, Shutdown, "shutdown"_tok))
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (SUBPRSR, IP, "ip"_tok)) \
+    X(Y, (SUBPRSR, IPv6, "ipv6"_tok)) \
+    X(Y, (SUBPRSR, Ospfv3, "ospfv3"_tok)) \
+    X(Y, (COMMAND, Shutdown, "shutdown"_tok))
 
 
 /**

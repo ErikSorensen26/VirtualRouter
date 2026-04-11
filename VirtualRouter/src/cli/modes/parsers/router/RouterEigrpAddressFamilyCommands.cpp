@@ -1,7 +1,8 @@
 // RouterEigrpAddressFamilyCommands.cpp
 
-#include "RouterEigrpAddressFamilyCommands.h"
+#include <Global.h>
 
+#include "RouterEigrpAddressFamilyCommands.h"
 #include "configs/registry/router/EigrpRegistry.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
@@ -68,8 +69,7 @@ bool RouterEigrpAddressFamily_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_Exit_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    ctx.terminal.exitMode<CliMode::RouterEigrpNamed, config::EigrpNamedRegistry>(ctx.configs);
-    return true;
+    return ctx.terminal.popMode();
 }
 
 bool RouterEigrpAddressFamily_MaximumPrefix_Handler(EIGRP_PARAMS)

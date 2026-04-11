@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <VirtualRouter.h>
+#include <RCU.hpp>
 
 #include "BgpProcess.h"
 #include "bgp/neighbor/Neighbor.h"
@@ -19,7 +20,7 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
     scheduleScan();
 
     transport::tcp::ListenOptions opts;
-    opts.policy.pathMtuDiscovery = configs.get<config::Bgp::BGP_BASE>().local().get()
+    opts.policy.pathMtuDiscovery = configs.get<config::Bgp::BGP_BASE>().get()
         .get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
     opts.onAccept = BgpProcess::onAcceptCallback;
     opts.onAcceptUser = this;
@@ -172,18 +173,22 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
     {
         std::string matchedGroup;
         bgp->configs.get<config::Bgp::BGP_LISTEN_RANGE>().withRead(
-            [&](const std::vector<std::tuple<uint32_t, uint32_t, std::string>>& ranges)
+            [&](const auto& rangesList)
             {
                 uint32_t remoteV4 = nbrIp.v4();
-                for (const auto& [netAddr, prefixLen, pgName] : ranges)
+                for (const auto& ranges : rangesList)
                 {
-                    if (prefixLen > 32) continue;
-                    uint32_t mask = types::v4Mask(static_cast<uint8_t>(prefixLen));
-                    if ((remoteV4 & mask) == (netAddr & mask))
+                    for (const auto& [netAddr, prefixLen, pgName] : ranges)
                     {
-                        matchedGroup = pgName;
-                        break;
+                        if (prefixLen > 32) continue;
+                        uint32_t mask = types::v4Mask(static_cast<uint8_t>(prefixLen));
+                        if ((remoteV4 & mask) == (netAddr & mask))
+                        {
+                            matchedGroup = pgName;
+                            break;
+                        }
                     }
+                    if (!matchedGroup.empty()) break;
                 }
             });
 
@@ -206,12 +211,14 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
 
         if (nbrIp.isIPv6())
         {
-            auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v6raw());
+            utils::RCU::Guard g;
+            auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v6raw(), g);
             return route && connectCheck ? route->source == core::RouteSource::CONNECTED : true;
         }
         else
         {
-            auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v4raw());
+            utils::RCU::Guard g;
+            auto* route = bgp->routingInstance->getRib().lookup(nbrIp.v4raw(), g);
             return route && connectCheck ? route->source == core::RouteSource::CONNECTED : true;
         }
     };

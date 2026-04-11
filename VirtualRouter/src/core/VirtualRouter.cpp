@@ -12,9 +12,9 @@ namespace core
 
 VirtualRouter::VirtualRouter(Global& g, const std::string& name)
     : defaulted(name == "default"),
-      configs([&g, &name]() {
+      configs([&g, &name]() -> config::VrfRegistry& {
           auto& vrfs = g.configs.get<config::Global::VRF_CONFIGS>();
-          return g.registry.emplaceBack(vrfs, name);
+          return vrfs.emplaceBack(name);
       }()),
       tcpManager(*this),
       routingTable(g.scheduler),
@@ -132,29 +132,29 @@ bool VirtualRouter::removeEigrpNamed(const std::string& name)
     if (namedEigrpList.find(name) != namedEigrpList.end())
     {
         auto& eigrp = namedEigrpList[name];
-        if (eigrp.ipv4)
+        for (auto& [subName, pair] : eigrp.systems)
         {
-            uint32_t as = eigrp.ipv4->getAS();
-            if (eigrpList.find(as) != eigrpList.end())
+            auto [v4, v6] = pair;
+            if (v4)
             {
-                delete eigrpList[as].ipv4;
-                eigrpList[as].ipv4 = nullptr;
-                if (!eigrpList[as].ipv6)
+                uint32_t as = v4->getAS();
+                if (eigrpList.find(as) != eigrpList.end())
                 {
-                    removeEigrpAutonomousSystem(as);
+                    delete eigrpList[as].ipv4;
+                    eigrpList[as].ipv4 = nullptr;
+                    if (!eigrpList[as].ipv6)
+                        removeEigrpAutonomousSystem(as);
                 }
             }
-        }
-        if (eigrp.ipv6)
-        {
-            uint32_t as = eigrp.ipv6->getAS();
-            if (eigrpList.find(as) != eigrpList.end())
+            if (v6)
             {
-                delete eigrpList[as].ipv6;
-                eigrpList[as].ipv6 = nullptr;
-                if (!eigrpList[as].ipv4)
+                uint32_t as = v6->getAS();
+                if (eigrpList.find(as) != eigrpList.end())
                 {
-                    removeEigrpAutonomousSystem(as);
+                    delete eigrpList[as].ipv6;
+                    eigrpList[as].ipv6 = nullptr;
+                    if (!eigrpList[as].ipv4)
+                        removeEigrpAutonomousSystem(as);
                 }
             }
         }
@@ -200,7 +200,7 @@ routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::Address
 {
     if (ospfv3List.find(id) == ospfv3List.end())
     {
-        config::Reference<config::OspfAddressFamilyV3Registry> afConfigs = global.registry.create<config::OspfAddressFamilyV3Registry>();
+        config::OspfAddressFamilyV3Registry& afConfigs = global.registry.create<config::OspfAddressFamilyV3Registry>();
         ospfv3List.emplace(id, afConfigs);
     }
     auto ospf = ospfv3List.at(id);
@@ -276,14 +276,41 @@ bool VirtualRouter::removeOspfv3(uint16_t id, types::AddressFamily af)
     return false;
 }
 
+void VirtualRouter::refreshEigrpV4()
+{
+    for (auto& [id, as] : eigrpList)
+        if (as.ipv4) as.ipv4->getIfaceMgr().refreshInterfaceList();
+    for (auto& [name, named] : namedEigrpList)
+        for (auto& [subName, pair] : named.systems)
+            if (pair.first) pair.first->getIfaceMgr().refreshInterfaceList();
+}
+
+void VirtualRouter::refreshEigrpV6()
+{
+    for (auto& [id, as] : eigrpList)
+        if (as.ipv6) as.ipv6->getIfaceMgr().refreshInterfaceList();
+    for (auto& [name, named] : namedEigrpList)
+        for (auto& [subName, pair] : named.systems)
+            if (pair.second) pair.second->getIfaceMgr().refreshInterfaceList();
+}
+
+void VirtualRouter::refreshEigrpV6Interfaces()
+{
+    for (auto& [id, as] : eigrpList)
+        if (as.ipv6) as.ipv6->getIfaceMgr().refreshInterfaceList();
+    for (auto& [name, named] : namedEigrpList)
+        for (auto& [subName, pair] : named.systems)
+            if (pair.second) pair.second->getIfaceMgr().refreshInterfaceList();
+}
+
 config::VrfRegistry& VirtualRouter::getConfigs()
 {
-    return configs.get();
+    return configs;
 }
 
 config::GlobalRegistry& VirtualRouter::getGlobalConfigs()
 {
-    return global.configs.get();
+    return global.configs;
 }
 
 config::Registry& VirtualRouter::getRegistry()

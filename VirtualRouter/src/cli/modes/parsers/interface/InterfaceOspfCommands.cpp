@@ -156,7 +156,7 @@ bool InterfaceOspf_Priority_Handler(OSPF_PARAMS)
     return utils::setFieldValue(priority, ctx, segs >> 0 >> 1);
 }
 
-bool InterfaceOspf_RetransmitInterval_Handler(OSPF_PARAMS)
+bool InterfaceOspf_RetransmissionInterval_Handler(OSPF_PARAMS)
 {
     auto& ospf = ctx.configs.get<config::OspfInterfaceBase::BASE>().get();
     auto& retrans = ospf.get<config::OspfInterface::RETRANSMIT_INTERVAL>();

@@ -5,7 +5,7 @@
 
 namespace config
 {
-void GlobalInterface(void* g)
+void globalInterface(void* g)
 {
     core::Global& global = *static_cast<core::Global*>(g);
     global.interfaceRefresh();

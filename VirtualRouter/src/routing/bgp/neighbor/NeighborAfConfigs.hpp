@@ -168,6 +168,7 @@ struct NeighborAfConfigs
         return true;
     }
 
+    config::BgpNeighborRegistry& getConfigs() { return configs; }
     const config::BgpNeighborRegistry& getConfigs() const { return configs; }
     PeerGroup* getPeerGroup() { return peerGroup; }
     const PeerGroup* getPeerGroup() const { return peerGroup; }

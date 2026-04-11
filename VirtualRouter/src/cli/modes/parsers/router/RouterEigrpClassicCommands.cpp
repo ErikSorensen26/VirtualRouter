@@ -15,7 +15,7 @@ namespace cli
 bool RouterEigrpClassic_Exit_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    return ctx.terminal.exitMode<CliMode::GlobalConfiguration, config::GlobalRegistry>(ctx.configs);
+    return ctx.terminal.popMode();
 }
 
 bool RouterEigrpClassic_PassiveInterface_Handler(EIGRP_PARAMS)

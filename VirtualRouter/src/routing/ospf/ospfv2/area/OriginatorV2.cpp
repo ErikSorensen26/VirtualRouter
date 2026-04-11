@@ -1,5 +1,6 @@
 // OriginatorV2.cpp
 
+#include <RCU.hpp>
 #include <VirtualRouter.h>
 
 #include "OriginatorV2.h"
@@ -170,14 +171,15 @@ void OriginatorV2::translateNssaToExternal(const LsaKey& key7, const LsaBody& bo
     auto& base = area.process();
     if (area.process().getConfigs().get<config::Ospf::LRC_NSSA_TRANSLATION>().load())
     {
+        utils::RCU::Guard g;
         if (ext7.forwardingAddress == 0)
         {
-            if (!base.routingInstance->getRib().lookup(key7.linkStateId))
+            if (!base.routingInstance->getRib().lookup(key7.linkStateId, g))
                 return;
         }
         else
         {
-            if (!base.routingInstance->getRib().lookup(ext7.forwardingAddress))
+            if (!base.routingInstance->getRib().lookup(ext7.forwardingAddress, g))
                 return;
         }
     }

@@ -9,8 +9,8 @@
 #ifndef GLOBAL_IP_COMMANDS_H
 #define GLOBAL_IP_COMMANDS_H
 
-#include "cli/parser/CliModeParser.hpp"
 #include "configs/registry/global/GlobalRegistry.h"
+#include "cli/parser/CliModeParser.hpp"
 
 #define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 #define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
@@ -20,7 +20,7 @@ namespace cli
 bool GlobalIP_DHCP_SubHandler(GLOBAL_SUB_PARAMS);
 
 #define GLOBAL_IP_LIST(X, Y) \
-    X(Y, (_SUB_, DHCP, "dhcp"_tok))
+    X(Y, (SUBPRSR, DHCP, "dhcp"_tok))
 
 DEFINE_CMD_MODE(GlobalIP, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IP_LIST);
 }

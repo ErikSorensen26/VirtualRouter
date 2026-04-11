@@ -18,7 +18,7 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
     : family(fam),
       mpNegotiated(false),
       parent(p),
-      configs(fam, [&p, &fam]() {
+      configs(fam, [&p, &fam]() -> config::BgpNeighborRegistry& {
           auto& neighborConfigs = p.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>();
           uint32_t id = fam.afi | uint32_t(fam.afi) << 16;
           return p.getProcess().routingInstance->getRegistry().emplaceBack(neighborConfigs, id);

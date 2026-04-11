@@ -1,5 +1,6 @@
 // Area.cpp
 
+#include <RCU.hpp>
 #include <variant>
 #include <limits>
 #include <Global.h>
@@ -36,7 +37,7 @@ Area::Area(OspfProcess& base, uint32_t id, std::pmr::memory_resource* mr)
       type(configs.get<config::OspfArea::AREA_TYPE>().load()),
       areaId(id)
 {
-    configs->context().set(this);
+    configs.context().set(this);
     startAgingTimer();
 }
 
@@ -213,9 +214,10 @@ bool Area::isValidForwardAddress(const types::IPAddress& addr) const
 
     if (base.getConfigs().get<config::Ospf::LRC_FORWARDING_ADDRESS>().load())
     {
+        utils::RCU::Guard g;
         return addr.isIPv6()
-            ? base.routingInstance->getRib().lookup(addr.v6()) != nullptr
-            : base.routingInstance->getRib().lookup(addr.v4()) != nullptr;
+            ? base.routingInstance->getRib().lookup(addr.v6(), g) != nullptr
+            : base.routingInstance->getRib().lookup(addr.v4(), g) != nullptr;
     }
     else
     {
@@ -229,17 +231,18 @@ void Area::syncRangeConfig()
     std::unordered_set<types::IPPrefix> activeRanges;
     rangePrefixes.clear();
 
-    cfgRanges.withRead([&](const std::vector<std::tuple<types::IPPrefix, bool, std::optional<uint32_t>>>& ts)
+    cfgRanges.withRead([&](const auto& tsList)
     {
-        for (const auto& t : ts)
-        {
-            const auto& [pfx, noAdv, cost] = t;
-            rangePrefixes.insert(pfx);
+        for (const auto& ts : tsList)
+            for (const auto& t : ts)
+            {
+                const auto& [pfx, noAdv, cost] = t;
+                rangePrefixes.insert(pfx);
 
-            auto& r = ranges[pfx];
-            r.notAdvertise = noAdv;
-            r.costOverride = cost;
-        }
+                auto& r = ranges[pfx];
+                r.notAdvertise = noAdv;
+                r.costOverride = cost;
+            }
     });
 
     for (auto it = ranges.begin(); it != ranges.end();)

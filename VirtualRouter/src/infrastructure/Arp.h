@@ -225,12 +225,14 @@ protected:
      */
     void renewArpEntry(types::IPv4Address targetIp);
 
+public:
     /**
      * @brief Sends an ARP reply to a specified MAC and IP.
      * @param targetMac The recipient's MAC address.
      * @param targetIp The recipient's IP address.
      */
     void sendReply(types::Mac targetMac, types::IPv4Address targetIp);
+protected:
 
     /**
      * @brief Sends an ARP request for a given IP.

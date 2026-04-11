@@ -11,9 +11,9 @@
 #ifndef INTERFACE_IP_COMMANDS_H
 #define INTERFACE_IP_COMMANDS_H
 
-#include "cli/parser/CliModeParser.hpp"
-#include "interface/configs/InterfaceType.hpp"
 #include "configs/registry/interface/InterfaceRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
+#include "cli/parser/CliModeParser.hpp"
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
@@ -37,20 +37,20 @@ bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS);
 bool InterfaceIP_Ospf_SubHandler(INTERFACE_SUB_PARAMS);
 
 #define INTERFACE_IP_LIST(X, Y) \
-    X(Y, (_COM_, AddressSet, "address"_tok, P_IPV4)) \
-    X(Y, (_COM_, AddressDhcp, "address"_tok, "dhcp"_tok)) \
-    X(Y, (_COM_, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
-    X(Y, (_COM_, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
-    X(Y, (_COM_, BandwidthPercentage, "bandwidth-percentage"_tok)) \
-    X(Y, (_COM_, DampeningChange, "dampening-change"_tok)) \
-    X(Y, (_COM_, DampeningInterval, "dampening-interval"_tok)) \
-    X(Y, (_COM_, HelloInterval, "hello-interval"_tok)) \
-    X(Y, (_COM_, HoldTime, "hold-time"_tok)) \
-    X(Y, (_COM_, Mtu, "mtu"_tok)) \
-    X(Y, (_COM_, NextHopSelf, "next-hop-self"_tok)) \
-    X(Y, (_SUB_, Ospf, "ospf"_tok)) \
-    X(Y, (_COM_, SplitHorizon, "split-horizon"_tok)) \
-    X(Y, (_COM_, SummaryAddress, "summary-address"_tok))
+    X(Y, (COMMAND, AddressSet, "address"_tok, P_IPV4)) \
+    X(Y, (COMMAND, AddressDhcp, "address"_tok, "dhcp"_tok)) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercentage, "bandwidth-percentage"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, Mtu, "mtu"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (SUBPRSR, Ospf, "ospf"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
 
 /**
  * @brief Parser for the `ip` sub-tree in Interface Configuration mode.

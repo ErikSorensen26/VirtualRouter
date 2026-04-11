@@ -188,7 +188,7 @@ public:
     template <typename AddrType>
     RibEntry<AddrType>* lookup(AddrType addr, utils::RCU::Guard& g)
     {
-        return lookup<AddrType>(reinterpret_cast<const types::NetworkSpan<AddrType>&>(addr, g));
+        return lookup<AddrType>(reinterpret_cast<const types::NetworkSpan<AddrType>&>(addr), g);
     }
 
     // WATCH SUBSCRIPTIONS

@@ -15,9 +15,9 @@
 #ifndef USER_EXEC_COMMANDS_HPP
 #define USER_EXEC_COMMANDS_HPP
 
+#include "configs/registry/global/GlobalRegistry.h"
 #include "cli/modes/contexts/Context.hpp"
 #include "cli/parser/CliModeParser.hpp"
-#include "configs/registry/global/GlobalRegistry.h"
 
 #define USER_EXEC_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 
@@ -27,8 +27,8 @@ bool UserExec_Enable_Handler(USER_EXEC_PARAMS);
 bool UserExec_Exit_Handler(USER_EXEC_PARAMS);
 
 #define USER_EXEC_LIST(X, Y) \
-    X(Y, (_COM_, Enable, "enable"_tok)) \
-    X(Y, (_COM_, Exit, "exit"_tok))
+    X(Y, (COMMAND, Enable, "enable"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok))
 
 /**
  * @brief Parser for User Exec mode commands.

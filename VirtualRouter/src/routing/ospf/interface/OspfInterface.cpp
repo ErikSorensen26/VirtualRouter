@@ -311,16 +311,13 @@ void OspfInterface::syncNetworkType()
 
 void OspfInterface::syncDigestKey()
 {
-    baseConfigs.get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>& keys)
+    baseConfigs.get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const auto& keys)
     {
-        auto it = std::max_element(keys.begin(), keys.end(), [](const auto& a, const auto& b) {
-            return std::get<2>(a) < std::get<2>(b);
-        });
-
-        if (it != keys.end())
+        if (!keys.empty())
         {
-            authKey = utils::readU128(std::get<1>(*it).data());
-            authKeyId = std::get<0>(*it);
+            const auto& last = keys.back();
+            authKey = utils::readU128(std::get<1>(last).value.data());
+            authKeyId = std::get<0>(last);
         }
         else
         {

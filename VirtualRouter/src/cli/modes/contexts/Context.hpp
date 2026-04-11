@@ -20,11 +20,11 @@
 #include "configs/SubRegistry.hpp"
 
 /// @brief Entry type tag: plain @ref Command descriptor.
-#define _COM_ 0
+#define COMMAND 0
 /// @brief Entry type tag: @ref SubCommand prefix dispatcher.
-#define _SUB_ 1
+#define SUBPRSR 1
 /// @brief Entry type tag: mode extension (external command list injection).
-#define _EXT_ 2
+#define INHERIT 2
 
 /// @brief Silences unused-parameter warnings for command handler parameters.
 #define UNUSED(x) (void)(x)
@@ -61,8 +61,13 @@
 
 // Define a full command grep
 #define DEFINE_CMD_MODE(prefix, mode, context, list) \
-    using prefix##Commands = CliModeParser<mode, context \
-    list(EXPAND_COMMAND_WRAPPER, (prefix, context))>;
+    using Executor = CliModeParser<mode, context \
+    list(EXPAND_COMMAND_WRAPPER, (prefix, context))>; \
+    bool execute##prefix##Commands(Context<context>& ctx, std::vector<Token>& toks, size_t idx = 0) \
+    { return prefix##Commands::execute(ctx, toks, idx); }
+
+// Define the execution function
+#define DEFINE_CMD_EXECUTOR(prefix, mode) \
 
 // Define parameter list
 #define DEFINE_PARAMS(config) \

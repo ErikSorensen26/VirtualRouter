@@ -101,41 +101,62 @@ public:
     bool handleInput(std::string input = "");
 
     /**
-     * @brief Transitions the session to a new CLI mode.
+     * @brief Transitions to a new CLI mode and pushes the current mode onto the nav stack.
      *
-     * Updates the working directory pointer, prompt string, and mode history,
-     * then delegates to @ref ExecutionManager::changeMode to construct the
-     * new mode object with the supplied arguments.
+     * Updates the working directory pointer and prompt string, captures the current
+     * mode into the nav stack, then delegates to @ref ExecutionManager::changeMode.
+     * Use this for all normal sub-mode entries (interface, router, address-family, etc.)
+     * so that `popMode()` can return here automatically.
      *
-     * @tparam T     Target @ref CliMode enum value.
-     * @tparam Args  Constructor argument types for the target mode context.
-     * @return True if the mode directory was found and the transition succeeded.
+     * @tparam T  Target @ref CliMode enum value.
+     * @tparam S  Registry type for the new mode.
      */
     template <CliMode T, typename S>
     requires config::IsSubRegistry<S>
     bool changeMode(S& configs)
     {
+        if (execution.hasMode() && navTop < NAV_STACK_DEPTH)
+            navStack[navTop++] = { execution.captureCurrentMode(), currentPrompt, workingDirectory, configNode };
+
         std::span<const std::string_view> path = getPath(T);
-        if (!setCommandDirectory(path)) return false;
+        if (!setCommandDirectory(path))
+        {
+            if (navTop > 0) --navTop;
+            return false;
+        }
         execution.changeMode<T, S>(configs);
         return true;
     }
 
     /**
-     * @brief Sets the exit flag and transitions to a new CLI mode.
+     * @brief Pops the navigation stack and restores the previous CLI mode.
      *
-     * Identical to @ref changeMode but marks the current command as an exit
-     * so callers can detect that the mode was left intentionally.
+     * Called by `exit` handlers. Restores the mode, prompt, working directory, and
+     * config node exactly as they were when `changeMode` entered the current mode.
      *
-     * @tparam T     Target @ref CliMode enum value.
-     * @tparam Args  Constructor argument types for the target mode context.
+     * @return True if there was a mode to pop; false if already at the bottom.
      */
-    template <CliMode T, typename N, typename S>
-    requires (config::IsSubRegistry<N> && config::IsSubRegistry<S>)
-    bool exitMode(S& old)
+    bool popMode();
+
+    /**
+     * @brief Transitions to a mode without pushing or popping the nav stack.
+     *
+     * Used for hard resets (`end`, Ctrl-Z) that jump to a fixed mode regardless
+     * of navigation depth. Clears the entire nav stack first so subsequent
+     * `popMode()` calls find an empty stack.
+     *
+     * @tparam T  Target @ref CliMode enum value.
+     * @tparam S  Registry type for the new mode.
+     */
+    template <CliMode T, typename S>
+    requires config::IsSubRegistry<S>
+    bool resetAndChangeMode(S& configs)
     {
-        auto& modeConfig = old.template resolveParent<N>();
-        return changeMode<T>(modeConfig);
+        navTop = 0;
+        std::span<const std::string_view> path = getPath(T);
+        if (!setCommandDirectory(path)) return false;
+        execution.changeMode<T, S>(configs);
+        return true;
     }
 
     // PUBLIC STATE (read by command handlers after execution)
@@ -221,6 +242,20 @@ private:
     bool handlePagination(char ch = '\0');
 
     // SESSION-LEVEL STATE
+
+    /// @brief One entry in the navigation history stack.
+    struct NavFrame
+    {
+        cli::NavEntry             executorEntry;   ///< Execution state (mode, dispatch, construct, config ptr).
+        std::string               savedPrompt;     ///< Prompt string active when this mode was entered.
+        const nlohmann::ordered_json* savedWorkingDir = nullptr; ///< Command-tree node for this mode.
+        const nlohmann::ordered_json* savedConfigNode = nullptr; ///< Config-tree root for this mode.
+    };
+
+    static constexpr size_t NAV_STACK_DEPTH = 10; ///< Maximum navigation depth (UserExec → deepest sub-mode).
+
+    NavFrame navStack[NAV_STACK_DEPTH]; ///< Fixed-size navigation history; avoids heap allocation.
+    size_t   navTop = 0;               ///< Number of valid frames currently on the stack.
 
     cli::ExecutionManager execution; ///< Owns the active mode object and dispatches token lists.
 

@@ -168,7 +168,7 @@ public:
 
     bool getDampening() const          { return configs.get<config::Eigrp::DAMPENING>().load(); }
     bool getDampeningWarning() const   { return configs.get<config::Eigrp::DAMPENING_WARNINGS>().load(); }
-    uint8_t getDampeningInterval() const  { return configs.get<config::Eigrp::DAMPENING_INTERVAL>().load(); }
+    uint8_t getDampeningInterval() const  { return configs.get<config::Eigrp::DAMPENING_THRESHOLD>().load(); }
     uint16_t getDampeningResetTime() const { return configs.get<config::Eigrp::DAMPENING_RESET_TIME>().load(); }
     uint16_t getDampeningRestart() const   { return configs.get<config::Eigrp::DAMPENING_RESTART>().load(); }     ///< Seconds before a dampened neighbor is allowed to restart.
     uint16_t getDampeningRestartCount() const { return configs.get<config::Eigrp::DAMPENING_RESTART_COUNT>().load(); } ///< Maximum restart attempts before the neighbor is suppressed indefinitely.
@@ -189,6 +189,7 @@ public:
     bool isNonStopForwarding() const { return configs.get<config::Eigrp::NON_STOP_FORWARDING>().load(); }
     uint16_t getPurgeTime() const    { return configs.get<config::Eigrp::GRACEFUL_PURGE_TIME>().load(); } ///< Seconds that NSF-restarting routes are kept in the RIB during graceful restart.
     bool isAutoSummarized() const    { return configs.get<config::Eigrp::AUTO_SUMMARIZATION>().load(); }
+    void setAutoSummary(bool enable) { configs.get<config::Eigrp::AUTO_SUMMARIZATION>().set(enable); }
 
     /**
      * @brief Returns the Stuck-In-Active (SIA) timeout in seconds.

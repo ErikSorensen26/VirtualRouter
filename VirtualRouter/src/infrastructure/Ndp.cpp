@@ -37,7 +37,9 @@ static uint8_t* calculateEui64(uint8_t* out, const uint8_t* prefix, const uint8_
 
 Ndp::Ndp(interface::Interface& interface)
     : iface(interface),
-      configs(interface.configs.getConfigs().get<config::Interface::IPV6_ND>().get()),
+      configs([&interface]() -> config::NdpRegistry& {
+          return interface.configs.getConfigs().get<config::Interface::IPV6_ND>().get();
+      }()),
       global(interface.getVRF()->getGlobal()),
       scheduler(interface.getScheduler().ref())
 {

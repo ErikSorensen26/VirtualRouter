@@ -21,8 +21,8 @@ bool RouterEigrpClassic_Exit_Handler(EIGRP_PARAMS);
 bool RouterEigrpClassic_PassiveInterface_Handler(EIGRP_PARAMS);
 
 #define ROUTER_EIGRP_CLASSIC_LIST(X, Y) \
-    X(Y, (_COM_, Exit, "exit"_tok)) \
-    X(Y, (_COM_, PassiveInterface, "passive-interface"_tok))
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (COMMAND, PassiveInterface, "passive-interface"_tok))
 
 /**
  * @brief Parser for EIGRP classic mode commands.
@@ -34,8 +34,8 @@ bool RouterEigrpClassic_PassiveInterface_Handler(EIGRP_PARAMS);
 DEFINE_CMD_MODE(RouterEigrpClassic, CliMode::None, config::EigrpRegistry, ROUTER_EIGRP_CLASSIC_LIST)
 
 #define ROUTER_EIGRP_CLASSIC_LIST_V4(X, Y) \
-    X(Y, (_EXT_, RouterEigrpCommands)) \
-    X(Y, (_EXT_, RouterEigrpClassicCommands))
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpClassicCommands))
 
 /**
  * @brief IPv4 classic mode parser.
@@ -44,8 +44,8 @@ DEFINE_CMD_MODE(RouterEigrpClassic, CliMode::None, config::EigrpRegistry, ROUTER
 DEFINE_CMD_MODE(RouterEigrpClassicV4, CliMode::RouterEigrpClassicV4, config::EigrpRegistry, ROUTER_EIGRP_CLASSIC_LIST_V4)
 
 #define ROUTER_EIGRP_CLASSIC_VRF_LIST(X, Y) \
-    X(Y, (_EXT_, RouterEigrpCommands)) \
-    X(Y, (_EXT_, RouterEigrpClassicCommands))
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpClassicCommands))
 
 /**
  * @brief IPv4 classic vrf mode parser
@@ -54,8 +54,8 @@ DEFINE_CMD_MODE(RouterEigrpClassicV4, CliMode::RouterEigrpClassicV4, config::Eig
 DEFINE_CMD_MODE(RouterEigrpClassicVrf, CliMode::RouterEigrpClassicVRF, config::EigrpRegistry, ROUTER_EIGRP_CLASSIC_VRF_LIST)
 
 #define ROUTER_EIGRP_CLASSIC_LIST_V6(X, Y) \
-    X(Y, (_EXT_, RouterEigrpCommands)) \
-    X(Y, (_EXT_, RouterEigrpClassicCommands))
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpClassicCommands))
 
 /**
  * @brief IPv6 classic mode parser.

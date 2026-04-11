@@ -307,7 +307,7 @@ public:
 
 private:
     interface::Interface& iface;                                          ///< Owning interface.
-    config::NdpRegistry configs;                       ///< Per-interface NDP configuration.
+    config::NdpRegistry& configs;                       ///< Per-interface NDP configuration.
 
     // Data-plane table (lock-free reads from forwarding path)
     types::AtomicHashMap<types::IPv6Address, types::Mac> ndpTable;        ///< Fast-path MAC lookup table.

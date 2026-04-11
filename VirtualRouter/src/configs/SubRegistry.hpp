@@ -123,7 +123,7 @@ public:
         "Tuple order must match enum field indicies"
     );
 #endif
-    SubRegistry() requires std::is_same_v<ENUM, config::Global>
+    SubRegistry()
         : ctxProvider(),
           fields(),
           parent(this),
@@ -347,13 +347,10 @@ private:
         if constexpr (config::IsAtomicField<Field>)
         {
             constexpr ENUM E = static_cast<ENUM>(I);
-
             using T = typename Field::type;
-
-            static_assert(hasV<ENUM, E>, "Missing default for an AtomicField<...> entry (ENUM,E).");
-
             auto& f = *std::get<I>(fields);
-            f.setDefault(getV<ENUM, E, T>());
+            if constexpr (hasV<ENUM, E>)
+                f.setDefault(getV<T, E>());
         }
     }
 

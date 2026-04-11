@@ -10,8 +10,8 @@
 #ifndef GLOBAL_IPV6_COMMANDS_H
 #define GLOBAL_IPV6_COMMANDS_H
 
-#include "cli/parser/CliModeParser.hpp"
 #include "configs/registry/global/GlobalRegistry.h"
+#include "cli/parser/CliModeParser.hpp"
 
 #define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 #define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
@@ -23,9 +23,9 @@ bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS);
 bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS);
 
 #define GLOBAL_IPV6_LIST(X, Y) \
-    X(Y, (_SUB_, ND, "nd"_tok)) \
-    X(Y, (_COM_, Neighbor, "neighbor"_tok)) \
-    X(Y, (_COM_, RouterEIGRP, "router"_tok, "eigrp"_tok))
+    X(Y, (SUBPRSR, ND, "nd"_tok)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok)) \
+    X(Y, (COMMAND, RouterEIGRP, "router"_tok, "eigrp"_tok))
 
 DEFINE_CMD_MODE(GlobalIPv6, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IPV6_LIST);
 }

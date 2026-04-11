@@ -38,12 +38,10 @@ void EigrpTopology::synchronizeConnected(EigrpInterface& iface)
 
     ReceivedRoute r{};
     r.originInterface = iface.interfaceKey;
-    r.bandwidth = base.isNamed()
-        ? interface->configs.hwInfo.bandwidth
-        : interface->configs.bandwidth.load(std::memory_order_relaxed);
+    r.bandwidth = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
     r.delay = 0;
-    r.load = interface->configs.load.load(std::memory_order_relaxed);
-    r.reliability = interface->configs.reliability.load(std::memory_order_relaxed);
+    r.load = 1;
+    r.reliability = 255;
     r.hopCount = 0;
     r.mtu = base.getAF() == types::AddressFamily::IPv4
         ? interface->configs.ipv4.mtu.load(std::memory_order_relaxed)

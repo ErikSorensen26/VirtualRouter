@@ -11,7 +11,6 @@
 #include "CliEngine.h"
 #include "CliUtils.h"
 #include "cli/modes/Mode.hpp"
-#include "cli/modes/contexts/GlobalContext.hpp"
 
 namespace cli
 {
@@ -54,7 +53,7 @@ static std::string getLastWord(const std::string& s)
 
 inline static bool isVolatile(std::string_view p)
 {
-    return matchVolatilePattern(p) != PatternKind::NONE;
+    return matchVolatilePattern(p) != P_NONE;
 }
 
 struct NodeView
@@ -464,7 +463,7 @@ CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool en
 {
     configNode = &engine.getCommandTree();
     modeHistory.push_back(configNode);
-    changeMode<CliMode::UserExec>();
+    changeMode<CliMode::UserExec>(engine.global.configs);
     initConsole();
 
 #ifdef DEBUG
@@ -502,7 +501,7 @@ bool CliSession::handleInput(std::string test)
 
     if (userCommand == "CRT-Z" && getMode() != CliMode::UserExec)
     {
-        if (!changeMode<CliMode::PrivilegedExec>())
+        if (!resetAndChangeMode<CliMode::PrivilegedExec>(engine.global.configs))
         {
             controller.print("\r\n");
             return false;
@@ -566,15 +565,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         const size_t pos = rawInput.find_first_not_of(" \t", 7);
         result.status = ParseResult::Status::DO_COMMAND;
         result.doRemainder = (pos != std::string::npos) ? rawInput.substr(pos) : "";
-        return result;
-    }
-
-    // Handle standalone global command
-    if (!hasHelpToken)
-    {
-        ctx.commandState = CommandState::COMPLETE;
-        result.status = ParseResult::Status::GLOBLA_CMD;
-        result.globalToken = words[0];
         return result;
     }
 
@@ -716,8 +706,13 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     }
 
     // Final validation
-    if (!ctx.isCommandValid() && !ctx.isHelpActive() && !ctx.isLineActive() &&
-        ctx.isCommandInvalid() && ctx.isRunning())
+    if (ctx.isHelpActive() && ctx.isRunning())
+    {
+        result.status = ParseResult::Status::HELP;
+        return result;
+    }
+
+    if (!ctx.isCommandValid() && !hasHelpToken)
     {
         if (prevCommands.size() > 1)
         {
@@ -726,12 +721,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             return result;
         }
         result.status = ParseResult::Status::INCOMPLETE;
-        return result;
-    }
-
-    if (ctx.isHelpActive() && ctx.isRunning())
-    {
-        result.status = ParseResult::Status::HELP;
         return result;
     }
 
@@ -816,11 +805,25 @@ bool CliSession::executeCommand(std::string& command)
     return executeModeParser(execTokens);
 }
 
+bool CliSession::popMode()
+{
+    if (navTop == 0) return false;
+
+    const NavFrame& frame = navStack[--navTop];
+    execution.restoreFromEntry(frame.executorEntry);
+    currentPrompt    = frame.savedPrompt;
+    workingDirectory = frame.savedWorkingDir;
+    configNode       = frame.savedConfigNode;
+    isModeChanged    = true;
+    return true;
+}
+
 bool CliSession::tryDoCommand(const std::string& remainder)
 {
     const std::string savedPrompt = currentPrompt;
     const json*       savedDir    = workingDirectory;
     const json*       savedCfg    = configNode;
+    const size_t      savedNavTop = navTop;   // temp transition: undo nav push on return
 
     changeMode<CliMode::PrivilegedExec>(engine.global.configs);
 
@@ -828,6 +831,7 @@ bool CliSession::tryDoCommand(const std::string& remainder)
     const bool ok   = executeCommand(cmd);
 
     execution.revert();
+    navTop           = savedNavTop;
     currentPrompt    = savedPrompt;
     workingDirectory = savedDir;
     configNode       = savedCfg;
@@ -848,9 +852,9 @@ bool CliSession::tryGlobalCommand(const std::string& rawInput)
     const std::string savedPrompt = currentPrompt;
     const json*       savedDir    = workingDirectory;
     const json*       savedCfg    = configNode;
+    const size_t      savedNavTop = navTop;   // may revert if command fails
 
-    changeMode<CliMode::GlobalConfiguration>(engine.global,
-        *engine.global.getRoutingInstance("default"));
+    changeMode<CliMode::GlobalConfiguration>(engine.global.configs);
     historyToGlobal();
 
     std::string cmd = rawInput;
@@ -859,6 +863,7 @@ bool CliSession::tryGlobalCommand(const std::string& rawInput)
     if (getMode() == CliMode::GlobalConfiguration && !ok)
     {
         execution.revert();
+        navTop           = savedNavTop;
         currentPrompt    = savedPrompt;
         workingDirectory = savedDir;
         configNode       = savedCfg;
@@ -951,13 +956,13 @@ bool CliSession::handlePagination(char nextch)
     for (size_t i = 0; i < paginationList.size() && i < pageSize; ++i)
     {
         const Com& cmd = paginationList[i];
-        if (cmd.name == engine.errorCommand.name) continue;
+        if (cmd.name == engine.carriageReturnCommand.name) continue;
 
-        std::string display = "\r\n  " + cmd.name;
+        std::string display = std::string("\r\n  ") + std::string(cmd.name);
         for (size_t j = 0; j <= (maxNameLength - cmd.name.size() + 5); ++j)
             display += ' ';
 
-        const std::string& desc = cmd.description;
+        const std::string_view desc = cmd.description;
         if (desc.empty() || termWidth == 0 || descCol + desc.size() <= termWidth)
         {
             display += desc;
@@ -973,7 +978,7 @@ bool CliSession::handlePagination(char nextch)
                 size_t wordEnd = di;
                 while (di < desc.size() && desc[di] == ' ') ++di;
 
-                std::string w = desc.substr(wordStart, wordEnd - wordStart);
+                std::string w(desc.substr(wordStart, wordEnd - wordStart));
                 if (col + w.size() > termWidth && col > descCol)
                 {
                     display += "\r\n" + indent;

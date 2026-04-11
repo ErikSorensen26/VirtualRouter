@@ -23,8 +23,8 @@ bool InterfaceOspfv3_Area_Handler(OSPF_PARAMS);
 bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS);
 
 #define OSPFV3_LIST(X, Y) \
-    X(Y, (_EXT_, InterfaceOspfCommands)) \
-    X(Y, (_COM_, Neighbor, "neighbor"_tok))
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok))
 
 DEFINE_CMD_MODE(InterfaceOspfv3, CliMode::Interface, config::OspfInterfaceBaseRegistry, OSPFV3_LIST);
 
@@ -34,11 +34,11 @@ bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS);
 bool InterfaceDefaultOspfv3_NullEncryption_Handler(OSPF_PARAMS);
 
 #define DEFAULT_OSPFV3_LIST(X, Y) \
-    X(Y, (_EXT_, InterfaceOspfCommands)) \
-    X(Y, (_COM_, Authentication, "authentication"_tok, "ipsec"_tok)) \
-    X(Y, (_COM_, NullAuthentication, "authentication"_tok, "null"_tok)) \
-    X(Y, (_COM_, Encryption, "encryption"_tok, "ipsec"_tok)) \
-    X(Y, (_COM_, NullEncryption, "encryption"_tok, "null"_tok)) \
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Authentication, "authentication"_tok, "ipsec"_tok)) \
+    X(Y, (COMMAND, NullAuthentication, "authentication"_tok, "null"_tok)) \
+    X(Y, (COMMAND, Encryption, "encryption"_tok, "ipsec"_tok)) \
+    X(Y, (COMMAND, NullEncryption, "encryption"_tok, "null"_tok)) \
 
 DEFINE_CMD_MODE(InterfaceDefaultOspfv3, CliMode::Interface, config::OspfInterfaceBaseRegistry, DEFAULT_OSPFV3_LIST);
 
@@ -48,10 +48,10 @@ bool InterfaceOspfv3Base_Process_SubHandler(INTERFACE_SUB_PARAMS);
 bool InterfaceOspfv3Base_Default_SubHandler(INTERFACE_SUB_PARAMS);
 
 #define INTERFACE_OSPFV3_LIST(X, Y) \
-    X(Y, (_SUB_, ProcessIP, P_NUMRNG, "ipv4"_tok)) \
-    X(Y, (_SUB_, ProcessIPv6, P_NUMRNG, "ipv6"_tok)) \
-    X(Y, (_SUB_, Process, P_NUMRNG)) \
-    X(Y, (_SUB_, Default))
+    X(Y, (SUBPRSR, ProcessIP, P_NUMRNG, "ipv4"_tok)) \
+    X(Y, (SUBPRSR, ProcessIPv6, P_NUMRNG, "ipv6"_tok)) \
+    X(Y, (SUBPRSR, Process, P_NUMRNG)) \
+    X(Y, (SUBPRSR, Default))
 
 /**
  * @brief Parser for OSPFv3 commands in Interface Configuration mode.

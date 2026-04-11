@@ -22,7 +22,8 @@ bool PrivilegedExec_ConfigureTerm_Handler(PRIVILEGED_EXEC_PARAMS)
 bool PrivilegedExec_Exit_Handler(PRIVILEGED_EXEC_PARAMS)
 {
     UNUSED(segs);
-    ctx.terminal.exitMode<CliMode::UserExec, config::GlobalRegistry>(ctx.configs);
+    if (!ctx.terminal.popMode())
+        ctx.terminal.resetAndChangeMode<CliMode::UserExec>(ctx.terminal.engine.global.configs);
     return true;
 }
 

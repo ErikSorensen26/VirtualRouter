@@ -32,13 +32,13 @@ bool RouterEigrpAddressFamilyV4_Topology_Handler(EIGRP_PARAMS);
 bool RouterEigrpAddressFamilyV6_Topology_Handler(EIGRP_PARAMS);
 
 #define ROUTER_EIGRP_LIST(X, Y) \
-    X(Y, (_COM_, EigrpDefaultRouteTag, "eigrp"_tok, "default-route-tag"_tok)) \
-    X(Y, (_COM_, EigrpEventLogSize, "eigrp"_tok, "event-log-size"_tok)) \
-    X(Y, (_COM_, Exit, "exit-address-family"_tok)) \
-    X(Y, (_COM_, MaximumPrefix, "maximum-prefix"_tok)) \
-    X(Y, (_COM_, MetricRibScale, "metric"_tok, "rib-scale"_tok)) \
-    X(Y, (_COM_, NeighborMaximumPrefix, "neighbor"_tok, "maximum-prefix"_tok)) \
-    X(Y, (_COM_, SoftSia, "soft-sia"_tok)) \
+    X(Y, (COMMAND, EigrpDefaultRouteTag, "eigrp"_tok, "default-route-tag"_tok)) \
+    X(Y, (COMMAND, EigrpEventLogSize, "eigrp"_tok, "event-log-size"_tok)) \
+    X(Y, (COMMAND, Exit, "exit-address-family"_tok)) \
+    X(Y, (COMMAND, MaximumPrefix, "maximum-prefix"_tok)) \
+    X(Y, (COMMAND, MetricRibScale, "metric"_tok, "rib-scale"_tok)) \
+    X(Y, (COMMAND, NeighborMaximumPrefix, "neighbor"_tok, "maximum-prefix"_tok)) \
+    X(Y, (COMMAND, SoftSia, "soft-sia"_tok)) \
 
 /**
  * @brief Parser for EIGRPv4 address-family commands (shared IPv4/IPv6).
@@ -50,10 +50,10 @@ bool RouterEigrpAddressFamilyV6_Topology_Handler(EIGRP_PARAMS);
 DEFINE_CMD_MODE(RouterEigrpAddressFamily, CliMode::None, config::EigrpRegistry, ROUTER_EIGRP_LIST);
 
 #define ROUTER_EIGRP_LIST_V4(X, Y) \
-    X(Y, (_COM_, AfInterface, "af-interface"_tok)) \
-    X(Y, (_COM_, Topology, "topology"_tok, "base"_tok)) \
-    X(Y, (_EXT_, RouterEigrpCommands)) \
-    X(Y, (_EXT_, RouterEigrpAddressFamilyCommands))
+    X(Y, (COMMAND, AfInterface, "af-interface"_tok)) \
+    X(Y, (COMMAND, Topology, "topology"_tok, "base"_tok)) \
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpAddressFamilyCommands))
 
 /**
  * @brief IPv4 address-family mode parser.
@@ -62,10 +62,10 @@ DEFINE_CMD_MODE(RouterEigrpAddressFamily, CliMode::None, config::EigrpRegistry, 
 DEFINE_CMD_MODE(RouterEigrpAddressFamilyV4, CliMode::RouterEigrpAddressFamilyV4, config::EigrpRegistry, ROUTER_EIGRP_LIST_V4)
 
 #define ROUTER_EIGRP_LIST_V6(X, Y) \
-    X(Y, (_COM_, AfInterface, "af-interface"_tok)) \
-    X(Y, (_COM_, Topology, "topology"_tok, "base"_tok)) \
-    X(Y, (_EXT_, RouterEigrpCommands)) \
-    X(Y, (_EXT_, RouterEigrpAddressFamilyCommands))
+    X(Y, (COMMAND, AfInterface, "af-interface"_tok)) \
+    X(Y, (COMMAND, Topology, "topology"_tok, "base"_tok)) \
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpAddressFamilyCommands))
 
 /**
  * @brief IPv6 address-family mode parser.

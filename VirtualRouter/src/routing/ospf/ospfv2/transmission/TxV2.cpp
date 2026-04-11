@@ -29,7 +29,7 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
 {
     hdr.setPacketLen(static_cast<uint16_t>(builder.offset + packet::Ospfv2Header::fixedSize));
 
-    config::ospf::AuthType auth = baseConfigs.get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>().load();
+    config::ospf::AuthType auth = getConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>().load();
     if (auth == config::ospf::AuthType::CRYPTO)
     {
         auto& id = iface.authKeyId;
@@ -64,7 +64,7 @@ void PacketDispatcherV2::finalizeHeader(packet::Ospfv2Header& hdr, OspfBuilder& 
 
         if (auth == config::ospf::AuthType::SIMPLE)
         {
-            auto& key = baseConfigs.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+            auto& key = getConfigs().get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
             if (key.hasValue()) buildOspfSimpleAuthentication(hdr, key.load());
         }
     }
@@ -84,7 +84,7 @@ void PacketDispatcherV2::sendHello()
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = getConfigs().get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<config::Ospf::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
@@ -104,7 +104,7 @@ void PacketDispatcherV2::sendUnicastHello(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = getConfigs().get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<config::Ospf::LLS>().load();
     if (!buildHello(builder, lls)) return;
 
@@ -124,7 +124,7 @@ void PacketDispatcherV2::sendInitDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = getConfigs().get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<config::Ospf::LLS>().load();
     auto dbd = buildDBD(builder, nbr, lls);
     if (!dbd.has_value()) return;
@@ -155,7 +155,7 @@ bool PacketDispatcherV2::sendDBD(Neighbor& nbr)
 
     OspfBuilder builder{pkt, trail, 0, maxSize};
 
-    auto& ifaceLLS = baseConfigs.get<config::OspfInterfaceBase::LLS>();
+    auto& ifaceLLS = getConfigs().get<config::OspfInterfaceBase::LLS>();
     bool lls = ifaceLLS.hasValue() ? ifaceLLS.load() : iface.getProcess().getConfigs().get<config::Ospf::LLS>().load();
     auto db = buildDBD(builder, nbr, lls);
     if (!db.has_value()) return false;
@@ -326,18 +326,18 @@ std::optional<packet::Ospfv2HelloHeader> PacketDispatcherV2::buildHello(OspfBuil
     hello.setBuffer(builder.getBuf());
 
     hello.setMask(iface.interfaceAddress.getMask());
-    hello.setHelloInterval(configs.get<config::OspfInterface::HELLO_INTERVAL>().load());
+    hello.setHelloInterval(iface.getConfigs().get<config::OspfInterface::HELLO_INTERVAL>().load());
 
     uint8_t options = static_cast<uint8_t>(iface.getFlags().getFlags());
     if (lls) options |= 0x10;
     hello.setOptions(options);
 
-    hello.setPriority(configs.get<config::OspfInterface::PRIORITY>().load());
-    hello.setDeadInterval(configs.get<config::OspfInterface::DEAD_INTERVAL>().load());
+    hello.setPriority(iface.getConfigs().get<config::OspfInterface::PRIORITY>().load());
+    hello.setDeadInterval(iface.getConfigs().get<config::OspfInterface::DEAD_INTERVAL>().load());
     hello.setDR(static_cast<uint32_t>(iface.dr.rid.load(std::memory_order_relaxed)));
     hello.setBDR(static_cast<uint32_t>(iface.bdr.rid.load(std::memory_order_relaxed)));
 
-    auto ntype = configs.get<config::OspfInterface::NETWORK>().load();
+    auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
     if (ntype == config::ospf::NetworkType::BROADCAST ||
         ntype == config::ospf::NetworkType::NON_BROADCAST)
     {

@@ -16,7 +16,7 @@ PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc)
 {
     proc.routingInstance->getRegistry().emplace(
         sessionConfigs.get<config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
+        proc.getConfigs().get<config::Bgp::BGP_BASE>().get()
     );
 }
 
@@ -26,8 +26,8 @@ config::BgpNeighborRegistry* PeerGroup::getAfConfigs(const AfiSafi& afi)
     if (it != afConfigs.end())
         return &it->second.get();
 
-    auto ref = process.routingInstance->getRegistry().create<config::BgpNeighborRegistry>();
-    auto [newIt, ok] = afConfigs.try_emplace(afi, std::move(ref));
+    config::BgpNeighborRegistry& ref = process.routingInstance->getRegistry().create<config::BgpNeighborRegistry>();
+    auto [newIt, ok] = afConfigs.try_emplace(afi, std::ref(ref));
     assert(ok);
     return ok ? &newIt->second.get() : nullptr;
 }
@@ -47,7 +47,7 @@ PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, BgpProces
 {
     proc.routingInstance->getRegistry().emplace(
         configs.get<config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<config::Bgp::BGP_BASE>().local()
+        proc.getConfigs().get<config::Bgp::BGP_BASE>().get()
     );
 }
 
