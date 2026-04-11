@@ -14,6 +14,7 @@
 #include "cli/runtime/Token.hpp"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
+#include "cli/modes/Mode.hpp"
 
 /// @brief Namespace enclosing all CLI subsystem types.
 namespace cli

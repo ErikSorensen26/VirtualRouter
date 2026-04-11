@@ -4,8 +4,8 @@
 #include <Global.h>
 
 #include "InterfaceIPv6NDCommands.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
-#include "configs/registry/interface/NdpRegistry.h"
 
 #define NDP_PARAMS DEFINE_PARAMS(config::NdpRegistry)
 
@@ -261,6 +261,40 @@ bool InterfaceIPv6ND_RouterPreference_Handler(NDP_PARAMS)
     }
     return false;
 }
+
+// bool InterfaceIPv6ND_Prefix_Handler(NDP_PARAMS) {} //TODO
+
+#define INTERFACE_IPV6_ND_LIST(X, Y) \
+    X(Y, (COMMAND, AdvertisementInterval, "advertisement-interval"_tok)) \
+    X(Y, (COMMAND, AutoconfigDefRoute, "autoconfig"_tok, "default-route"_tok)) \
+    X(Y, (COMMAND, AutoconfigPrefix, "autoconfig"_tok, "prefix"_tok)) \
+    X(Y, (COMMAND, CacheExpire, "cache"_tok, "expire"_tok)) \
+    X(Y, (COMMAND, CacheInterfaceLimit, "cache"_tok, "interface-limit"_tok)) \
+    X(Y, (COMMAND, DADAttempts, "dad"_tok, "attempts"_tok)) \
+    X(Y, (COMMAND, DADTime, "dad"_tok, "time"_tok)) \
+    X(Y, (COMMAND, DestinationGuard, "destination-guard"_tok)) \
+    X(Y, (COMMAND, ManagedConfigFlag, "managed-config-flag"_tok)) \
+    X(Y, (COMMAND, NaGlean, "na"_tok, "glean"_tok)) \
+    X(Y, (COMMAND, NsInterval, "ns-interval"_tok)) \
+    X(Y, (COMMAND, NudIGP, "nud"_tok, "igp"_tok)) \
+    X(Y, (COMMAND, NudRetry, "nud"_tok, "retry"_tok)) \
+    X(Y, (COMMAND, OtherConfigFlag, "other-config-flag"_tok)) \
+    X(Y, (COMMAND, RaHopLimitUnspecified, "ra"_tok, "hop-limit"_tok, "unspecified"_tok)) \
+    X(Y, (COMMAND, RaInterval, "ra"_tok, "interval"_tok)) \
+    X(Y, (COMMAND, RaLifetime, "ra"_tok, "lifetime"_tok)) \
+    X(Y, (COMMAND, RaMtuSuppression, "ra"_tok, "mtu"_tok, "suppress"_tok)) \
+    X(Y, (COMMAND, RaSuppression, "ra"_tok, "suppress"_tok)) \
+    X(Y, (COMMAND, ReachableTime, "reachable-time"_tok)) \
+    X(Y, (COMMAND, RouterPreference, "router-preference"_tok)) \
+
+/**
+ * @brief Parser for the `ipv6 nd` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and exposes all
+ * per-interface Neighbor Discovery tuning commands.
+ */
+DEFINE_CMD_MODE(InterfaceIPv6ND, config::NdpRegistry, INTERFACE_IPV6_ND_LIST);
 }
 
 #undef NDP_PARAMS

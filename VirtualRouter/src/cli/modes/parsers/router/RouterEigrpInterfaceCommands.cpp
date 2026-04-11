@@ -1,6 +1,7 @@
 // RouterEigrpInterfaceCommands.cpp
 
 #include "RouterEigrpInterfaceCommands.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
@@ -117,6 +118,50 @@ bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
     utils::setTupleElement(std::get<1>(tup), segs >> 1 >> 1);
     return utils::setListEntry(sum, ctx, tup);
 }
+
+// bool RouterEigrpInterface_Shutdown_Handler(EIGRP_PARAMS); //TODO
+
+#define ROUTER_EIGRP_INTERFACE_LIST(X, Y) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercentage, "bandwidth-percentage"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (COMMAND, PassiveInterface, "passive-interface"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
+
+/**
+ * @brief Parser for EIGRPv4 interface-level configuration commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Configures per-interface EIGRP parameters including bandwidth, delay,
+ * reliability, timers, and split horizon settings.
+ */
+DEFINE_CMD_MODE(RouterEigrpInterface, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST)
+
+#define ROUTER_EIGRP_INTERFACE_LIST_V4(X, Y) \
+    X(Y, (COMMAND, Exit, "exit-af-intervace"_tok)) \
+    X(Y, (INHERIT, RouterEigrpInterfaceCommands))
+
+/**
+ * @brief IPv4 address-family interface mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpInterfaceV4, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST_V4)
+
+#define ROUTER_EIGRP_INTERFACE_LIST_V6(X, Y) \
+    X(Y, (COMMAND, Exit, "exit-af-intervace"_tok)) \
+    X(Y, (INHERIT, RouterEigrpInterfaceCommands))
+
+/**
+ * @brief IPv6 address-family interface mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpInterfaceV6, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST_V6)
 }
 
 #undef EIGRP_PARAMS

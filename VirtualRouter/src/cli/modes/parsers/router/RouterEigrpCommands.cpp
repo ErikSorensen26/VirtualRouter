@@ -1,10 +1,8 @@
 // RouterEigrpCommands.cpp
 
-#include <Global.h>
-#include <VirtualRouter.h>
-
+#include "RouterEigrpCommands.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
-#include "configs/registry/router/EigrpRegistry.h"
 
 #define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpRegistry)
 
@@ -130,6 +128,25 @@ bool RouterEigrp_TimersGracefulRestart_Handler(EIGRP_PARAMS)
     auto& purgeTime = ctx.configs.get<config::Eigrp::GRACEFUL_PURGE_TIME>();
     return utils::setFieldValue(purgeTime, ctx, segs[0] >> 1);
 }
+
+#define ROUTER_EIGRP_LIST(X, Y) \
+    X(Y, (COMMAND, EigrpLogNeighborChanges, "eigrp"_tok, "log-neighbor-changes"_tok)) \
+    X(Y, (COMMAND, EigrpLogNeighborWarnings, "eigrp"_tok, "log-neighbor-warnings"_tok)) \
+    X(Y, (COMMAND, EigrpRouterId, "eigrp"_tok, "router-id"_tok)) \
+    X(Y, (COMMAND, EigrpStub, "eigrp"_tok, "stub"_tok)) \
+    X(Y, (COMMAND, MetricWeights, "metric"_tok, "weights"_tok)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok)) \
+    X(Y, (COMMAND, Network, "network"_tok)) \
+    X(Y, (COMMAND, TimersGracefulRestart, "timers"_tok, "graceful-restart"_tok))
+
+/**
+ * @brief Parser for EIGRP classic mode commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates network/neighbor configuration, logging, metrics, stub mode,
+ * and topology base access for classic (flat) EIGRP model.
+ */
+DEFINE_CMD_MODE(RouterEigrp, config::EigrpRegistry, ROUTER_EIGRP_LIST)
 }
 
 #undef EIGRP_PARAMS

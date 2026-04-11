@@ -3,7 +3,9 @@
 #include <Global.h>
 
 #include "RouterEigrpAddressFamilyCommands.h"
-#include "configs/registry/router/EigrpRegistry.h"
+#include "cli/parser/CliModeParser.hpp"
+
+#include "RouterEigrpCommands.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
 #include "interface/configs/InterfaceType.hpp"
@@ -193,6 +195,48 @@ bool RouterEigrpAddressFamily_SoftSia_Handler(EIGRP_PARAMS)
     utils::setToggleValue(soft, ctx);
     return true;
 }
+
+#define ROUTER_EIGRP_LIST(X, Y) \
+    X(Y, (COMMAND, EigrpDefaultRouteTag, "eigrp"_tok, "default-route-tag"_tok)) \
+    X(Y, (COMMAND, EigrpEventLogSize, "eigrp"_tok, "event-log-size"_tok)) \
+    X(Y, (COMMAND, Exit, "exit-address-family"_tok)) \
+    X(Y, (COMMAND, MaximumPrefix, "maximum-prefix"_tok)) \
+    X(Y, (COMMAND, MetricRibScale, "metric"_tok, "rib-scale"_tok)) \
+    X(Y, (COMMAND, NeighborMaximumPrefix, "neighbor"_tok, "maximum-prefix"_tok)) \
+    X(Y, (COMMAND, SoftSia, "soft-sia"_tok)) \
+
+/**
+ * @brief Parser for EIGRPv4 address-family commands (shared IPv4/IPv6).
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates AF-level configuration including networks, neighbors, metrics,
+ * and stub mode settings.
+ */
+DEFINE_CMD_MODE(RouterEigrpAddressFamily, config::EigrpRegistry, ROUTER_EIGRP_LIST);
+
+#define ROUTER_EIGRP_LIST_V4(X, Y) \
+    X(Y, (COMMAND, AfInterface, "af-interface"_tok)) \
+    X(Y, (COMMAND, Topology, "topology"_tok, "base"_tok)) \
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpAddressFamilyCommands))
+
+/**
+ * @brief IPv4 address-family mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpAddressFamilyV4, config::EigrpRegistry, ROUTER_EIGRP_LIST_V4)
+
+#define ROUTER_EIGRP_LIST_V6(X, Y) \
+    X(Y, (COMMAND, AfInterface, "af-interface"_tok)) \
+    X(Y, (COMMAND, Topology, "topology"_tok, "base"_tok)) \
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpAddressFamilyCommands))
+
+/**
+ * @brief IPv6 address-family mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpAddressFamilyV6, config::EigrpRegistry, ROUTER_EIGRP_LIST_V6)
 }
 
 #undef EIGRP_PARAMS

@@ -3,7 +3,7 @@
 #include <VirtualRouter.h>
 
 #include "InterfaceOspfCommands.h"
-#include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
 
 #define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
@@ -169,6 +169,30 @@ bool InterfaceOspf_TransmitDelay_Handler(OSPF_PARAMS)
     auto& delay = ospf.get<config::OspfInterface::TRANSMIT_DELAY>();
     return utils::setFieldValue(delay, ctx, segs >> 0 >> 1);
 }
+
+#define INTERFACE_OSPF_LIST(X, Y) \
+    X(Y, (COMMAND, BFD, "bfd"_tok)) \
+    X(Y, (COMMAND, Cost, "cost"_tok)) \
+    X(Y, (COMMAND, DatabaseFilter, "database-filter"_tok)) \
+    X(Y, (COMMAND, DeadInterval, "dead-interval"_tok)) \
+    X(Y, (COMMAND, DemandCircuit, "demand-circuit"_tok)) \
+    X(Y, (COMMAND, FloodReduction, "flood-reduction"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, MtuIgnore, "mtu-ignore"_tok)) \
+    X(Y, (COMMAND, Network, "network"_tok)) \
+    X(Y, (COMMAND, Priority, "priority"_tok)) \
+    X(Y, (COMMAND, RetransmissionInterval, "retransmission-interval"_tok)) \
+    X(Y, (COMMAND, TransmitDelay, "transmit-delay"_tok))
+
+/**
+ * @brief Shared base parser for common OSPF interface commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Used as a component by both `InterfaceIPOspfCommands` (OSPFv2) and
+ * `InterfaceIPv6OspfCommands` / `InterfaceOspfv3Commands` (OSPFv3).
+ * Covers `CliMode::Interface` with `InterfaceContext`.
+ */
+DEFINE_CMD_MODE(InterfaceOspf, config::OspfInterfaceBaseRegistry, INTERFACE_OSPF_LIST);
 }
 
 #undef OSPF_PARAMS

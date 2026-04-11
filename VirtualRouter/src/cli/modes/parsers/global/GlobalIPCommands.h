@@ -10,23 +10,12 @@
 #define GLOBAL_IP_COMMANDS_H
 
 #include "configs/registry/global/GlobalRegistry.h"
-#include "cli/parser/CliModeParser.hpp"
-
-#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
-#define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
+#include "cli/modes/contexts/Context.hpp"
+#include "cli/modes/Mode.hpp"
 
 namespace cli
 {
-bool GlobalIP_DHCP_SubHandler(GLOBAL_SUB_PARAMS);
-
-#define GLOBAL_IP_LIST(X, Y) \
-    X(Y, (SUBPRSR, DHCP, "dhcp"_tok))
-
-DEFINE_CMD_MODE(GlobalIP, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IP_LIST);
+DEFINE_CMD_EXECUTOR(GlobalIP, CliMode::GlobalConfiguration, config::GlobalRegistry);
 }
-
-#undef GLOBAL_IP_LIST
-#undef GLOBAL_PARAMS
-#undef GLOBAL_SUB_PARAMS
 
 #endif

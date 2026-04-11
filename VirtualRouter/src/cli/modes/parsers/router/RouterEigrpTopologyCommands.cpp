@@ -1,6 +1,8 @@
 // RouterEigrpTopologyCommands.cpp
 
 #include "RouterEigrpTopologyCommands.h"
+#include "cli/parser/CliModeParser.hpp"
+
 #include "configs/registry/router/EigrpRegistry.h"
 #include "cli/parser/CommandUtils.hpp"
 #include "cli/runtime/CliSession.h"
@@ -123,6 +125,46 @@ bool RouterEigrpTopology_Variance_Handler(EIGRP_PARAMS)
     auto& variance = ctx.configs.get<config::Eigrp::VARIANCE>();
     return utils::setFieldValue(variance, ctx, segs >> 0 >> 1);
 }
-}
 
-#undef EIGRP_PARAMS
+// bool RouterEigrpTopology_DefaultInformation_Handler(EIGRP_PARAMS) //TODO
+
+#define ROUTER_EIGRP_TOPOLOGY_LIST(X, Y) \
+    X(Y, (COMMAND, AutoSummary, "auto-summary"_tok)) \
+    X(Y, (COMMAND, DefaultMetric, "default-metric"_tok)) \
+    X(Y, (COMMAND, Distance, "distance"_tok, "eigrp"_tok)) \
+    X(Y, (COMMAND, EigrpEventLogSize, "eigrp"_tok, "event-log-size"_tok)) \
+    X(Y, (COMMAND, MaximumPaths, "maximum-paths"_tok)) \
+    X(Y, (COMMAND, MetricMaximumHops, "metric"_tok, "maximum-hops"_tok)) \
+    X(Y, (COMMAND, ActiveTime, "timers"_tok, "active-timer"_tok)) \
+    X(Y, (COMMAND, TrafficShare, "traffic-share"_tok)) \
+    X(Y, (COMMAND, Variance, "variance"_tok)) \
+
+/**
+ * @brief Parser for EIGRP topology base filtering and configuration.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Enables route filtering (permit/deny) and topology-level redistribution
+ * settings for advanced EIGRP control.
+ */
+DEFINE_CMD_MODE(RouterEigrpTopology, config::EigrpRegistry, ROUTER_EIGRP_TOPOLOGY_LIST);
+
+#define ROUTER_EIGRP_TOPOLOGY_LIST_V4(X, Y) \
+    X(Y, (COMMAND, Exit, "exit-af-topology"_tok)) \
+    X(Y, (INHERIT, RouterEigrpTopologyCommands))
+
+/**
+ * @brief IPv4 topology mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpTopologyV4, config::EigrpRegistry, ROUTER_EIGRP_TOPOLOGY_LIST_V4);
+
+#define ROUTER_EIGRP_TOPOLOGY_LIST_V6(X, Y) \
+    X(Y, (COMMAND, Exit, "exit-af-topology"_tok)) \
+    X(Y, (INHERIT, RouterEigrpTopologyCommands))
+
+/**
+ * @brief IPv6 topology mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpTopologyV6, config::EigrpRegistry, ROUTER_EIGRP_TOPOLOGY_LIST_V6)
+}

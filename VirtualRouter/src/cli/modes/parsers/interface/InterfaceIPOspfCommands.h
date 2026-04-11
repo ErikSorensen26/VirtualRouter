@@ -13,45 +13,12 @@
 #define INTERFACE_IP_OSPF_COMMANDS_H
 
 #include "configs/registry/router/OspfInterfaceRegistry.h"
-#include "InterfaceOspfCommands.h"
-
-#define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
+#include "cli/modes/contexts/Context.hpp"
+#include "cli/modes/Mode.hpp"
 
 namespace cli
 {
-bool InterfaceIPOspf_Area_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_Authentication_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_AuthenticationKey_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_LLS_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_MessageDigestKey_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_PrefixSuppression_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_ResyncTimeout_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_Shutdown_Handler(OSPF_PARAMS);
-bool InterfaceIPOspf_TtlSecurity_Handler(OSPF_PARAMS);
-
-#define INTERFACE_IP_OSPF_LIST(X, Y) \
-    X(Y, (INHERIT, InterfaceOspfCommands)) \
-    X(Y, (COMMAND, Area, P_ARG, "Area"_tok)) \
-    X(Y, (COMMAND, Authentication, "authentication"_tok)) \
-    X(Y, (COMMAND, AuthenticationKey, "authentication-key"_tok)) \
-    X(Y, (COMMAND, LLS, "lls"_tok)) \
-    X(Y, (COMMAND, MessageDigestKey, "message-digest-key"_tok)) \
-    X(Y, (COMMAND, PrefixSuppression, "prefix-suppression"_tok)) \
-    X(Y, (COMMAND, ResyncTimeout, "resync-timeout"_tok)) \
-    X(Y, (COMMAND, Shutdown, "shutdown"_tok)) \
-    X(Y, (COMMAND, TtlSecurity, "ttl-security"_tok))
-
-/**
- * @brief Parser for the `ip ospf` sub-tree in Interface Configuration mode.
- * @ingroup CLI_MODE_PARSERS
- *
- * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv2-specific
- * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
- */
-DEFINE_CMD_MODE(InterfaceIPOspf, CliMode::Interface, config::OspfInterfaceBaseRegistry, INTERFACE_IP_OSPF_LIST);
+DEFINE_CMD_EXECUTOR(InterfaceIPOspf, CliMode::Interface, config::OspfInterfaceBaseRegistry);
 }
-
-#undef INTERFACE_OSPF_LIST
-#undef OSPF_PARAMS
 
 #endif // INTERFACE_IP_OSPF_COMMANDS_H

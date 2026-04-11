@@ -1,8 +1,8 @@
 // GlobalIPv6NDCommands.cpp
 
-#include <Global.h>
-
 #include "GlobalIPv6NDCommands.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/CommandUtils.hpp"
 #include "configs/registry/interface/NdpRegistry.h"
 #include "cli/parser/CommandUtils.hpp"
 
@@ -141,6 +141,19 @@ bool GlobalIPv6ND_RouteOwner_Handler(NDP_PARAMS)
     utils::setToggleValue(nd.get<config::NdpBase::ROUTE_OWNER>(), ctx);
     return true;
 }
+
+#define GLOBAL_IPV6_ND_LIST(X, Y) \
+    X(Y, (COMMAND, CacheExpire, "cache"_tok, "expire"_tok)) \
+    X(Y, (COMMAND, CacheIntLimit, "cache"_tok, "interface-limit"_tok)) \
+    X(Y, (COMMAND, DADTime, "dad"_tok, "time"_tok)) \
+    X(Y, (COMMAND, HostMode, "host"_tok, "mode"_tok, "strict"_tok)) \
+    X(Y, (COMMAND, NSF, "nsf"_tok)) \
+    X(Y, (COMMAND, NudLimit, "nud"_tok, "limit"_tok)) \
+    X(Y, (COMMAND, ReachableTime, "reachable-time"_tok)) \
+    X(Y, (COMMAND, ResolutionLimit, "resolution"_tok, "data"_tok, "limit"_tok)) \
+    X(Y, (COMMAND, RouteOwner, "route-owner"_tok)) \
+
+DEFINE_CMD_MODE(GlobalIPv6ND, config::NdpBaseRegistry, GLOBAL_IPV6_ND_LIST)
 }
 
 #undef NDP_PARAMS

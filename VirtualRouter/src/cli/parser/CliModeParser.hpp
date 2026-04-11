@@ -7,7 +7,6 @@
 #define CLI_MODE_PARSER_HPP
 
 #include <type_traits>
-#include "cli/modes/Mode.hpp"
 #include "cli/modes/contexts/Context.hpp"
 
 #include "cli/parser/Command.hpp" // IWYU pragma: keep
@@ -41,35 +40,17 @@ namespace cli
  * @return     Compile-time hashed value of the string (`uint64_t`), suitable
  *             as a NTTP for templates like `commandAdder`.
  */
-template <CliMode Mode, typename C, typename... Commands>
+template <typename C, typename... Commands>
 class CliModeParser;
 
 // TRAITS
 
 /**
- * @brief Primary template: `T` is not a @ref CliModeParser.
- * @ingroup CLI_PARSER
- *
- * Used by @ref Executor to distinguish between raw @ref Command types and
- * nested @ref CliModeParser types inside a command pack.
- *
- * @tparam T Type to inspect.
- */
-template <typename T, typename = void> struct is_cli_mode : std::false_type {};
-
-/**
- * @brief Partial specialization: `T` is a @ref CliModeParser (has a `mode` member).
+ * @brief Convenience variable template.
  * @ingroup CLI_PARSER
  */
 template <typename T>
-struct is_cli_mode<T, std::void_t<decltype(T::mode)>> : std::true_type {};
-
-/**
- * @brief Convenience variable template for @ref is_cli_mode.
- * @ingroup CLI_PARSER
- */
-template <typename T>
-inline constexpr bool is_cli_mode_v = is_cli_mode<std::decay_t<T>>::value;
+concept is_cli_mode_v = std::derived_from<T, CliModeParserFlag>;
 
 /**
  * @brief Groups a set of commands under a single CLI mode and provides a unified execute interface.
@@ -104,7 +85,7 @@ inline constexpr bool is_cli_mode_v = is_cli_mode<std::decay_t<T>>::value;
  * @see SubCommand
  * @see Executor
  */
-template <CliMode Mode, typename C, typename... Commands>
+template <typename C, typename... Commands>
 class CliModeParser
 {
     static_assert((std::is_same_v<C, typename Commands::ContextType> && ...),
@@ -112,7 +93,6 @@ class CliModeParser
 
 public:
     using ContextType = C; ///< Context type for this mode.
-    static constexpr CliMode mode = Mode; ///< CliMode enum value for this parser.
 
     /**
      * @brief Attempts to execute the first matching command in the pack.

@@ -5,8 +5,8 @@
 #include <VirtualRouter.h>
 
 #include "GlobalIPv6Commands.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "GlobalIPv6NDCommands.h"
-#include "interface/configs/InterfaceType.hpp"
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
 #include "GlobalHelpers.hpp"
@@ -78,6 +78,13 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
     }
     return ctx.terminal.changeMode<CliMode::RouterEigrpClassicV6>(eigrpList.get().at(asNum));
 }
+
+#define GLOBAL_IPV6_LIST(X, Y) \
+    X(Y, (SUBPRSR, ND, "nd"_tok)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok)) \
+    X(Y, (COMMAND, RouterEIGRP, "router"_tok, "eigrp"_tok))
+
+DEFINE_CMD_MODE(GlobalIPv6, config::GlobalRegistry, GLOBAL_IPV6_LIST);
 }
 
 #undef GLOBAL_PARAMS

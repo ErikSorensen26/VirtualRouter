@@ -1,13 +1,10 @@
 // InterfaceCommands.cpp
 
 #include "InterfaceCommands.h"
-
-#include <Global.h>
-#include "cli/runtime/CliSession.h"
-#include "cli/modes/Mode.hpp"
-#include "cli/runtime/CliEngine.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
 
+#include "cli/runtime/CliSession.h"
 #include "InterfaceIPCommands.h"
 #include "InterfaceIPv6Commands.h"
 #include "InterfaceOspfv3Commands.h"
@@ -43,8 +40,23 @@ bool Interface_IPv6_SubHandler(INTERFACE_SUB_PARAMS)
 
 bool Interface_Ospfv3_SubHandler(INTERFACE_SUB_PARAMS)
 {
-    UNUSED(toks);
-    UNUSED(idx);
-    return false;
+    return InterfaceOspfv3BaseCommands::execute(ctx, toks, idx);
 }
+
+#define INTERFACE_LIST(X, Y) \
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (SUBPRSR, IP, "ip"_tok)) \
+    X(Y, (SUBPRSR, IPv6, "ipv6"_tok)) \
+    X(Y, (SUBPRSR, Ospfv3, "ospfv3"_tok)) \
+    X(Y, (COMMAND, Shutdown, "shutdown"_tok))
+
+
+/**
+ * @brief Complete parser for the Interface Configuration CLI mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes
+ * exit, shutdown, and `ip`/`ipv6` sub-trees.
+ */
+DEFINE_CMD_MODE(Interface, config::InterfaceRegistry, INTERFACE_LIST);
 }

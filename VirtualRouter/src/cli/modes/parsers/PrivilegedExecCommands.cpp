@@ -3,6 +3,8 @@
 #include <Global.h>
 
 #include "PrivilegedExecCommands.h"
+#include "cli/parser/CliModeParser.hpp"
+
 #include "cli/modes/contexts/Context.hpp"
 #include "cli/runtime/CliSession.h"
 #include "cli/runtime/CliEngine.h"
@@ -68,4 +70,21 @@ bool PrivilegedExec_TerminalWidth_Handler(PRIVILEGED_EXEC_PARAMS)
 */
     return false;
 }
+
+#define PRIVILEGED_EXEC_LIST(X, Y) \
+    X(Y, (COMMAND, ConfigureTerm, "configure"_tok, "terminal"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (COMMAND, ShowHistory, "show"_tok)) \
+    X(Y, (COMMAND, ShowClock, "show"_tok, "clock"_tok)) \
+    X(Y, (COMMAND, WriteMem, "write"_tok, "memory"_tok)) \
+    X(Y, (COMMAND, TerminalWidth, "terminal"_tok, "width"_tok))
+
+/**
+ * @brief Parser for Privileged Exec mode commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates configuration entry point, monitoring (show), and system
+ * commands accessible to privileged users.
+ */
+DEFINE_CMD_MODE(PrivilegedExec, config::GlobalRegistry, PRIVILEGED_EXEC_LIST);
 }

@@ -3,6 +3,8 @@
 #include <VirtualRouter.h>
 
 #include "InterfaceOspfv3Commands.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "InterfaceOspfCommands.h"
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
 
@@ -125,6 +127,16 @@ bool InterfaceDefaultOspfv3_Authentication_Handler(OSPF_PARAMS)
 	    }
 	}
     }
+    return true;
+}
+
+bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS)
+{
+    auto& configs = ctx.configs.get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& authType = configs.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
+    if (utils::handleValueReset(authType, ctx))
+	return true;
+    authType.set(config::ospf::IPsecAuthType::NULL_AUTH);
     return true;
 }
 
@@ -257,6 +269,16 @@ bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS)
     return true;
 }
 
+bool InterfaceDefaultOspfv3_NullEncryption_Handler(OSPF_PARAMS)
+{
+    auto& configs = ctx.configs.get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& type = configs.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
+    if (utils::handleValueReset(type, ctx))
+	return true;
+    type.set(config::ospf::IPsecEncryptType::NULL_TYPE);
+    return true;
+}
+
 bool InterfaceOspfv3Base_ProcessIP_SubHandler(INTERFACE_SUB_PARAMS)
 {
     uint16_t id;
@@ -304,4 +326,34 @@ bool InterfaceOspfv3Base_Default_SubHandler(INTERFACE_SUB_PARAMS)
     newCtx.defaulted = ctx.defaulted;
     return InterfaceDefaultOspfv3Commands::execute(newCtx, toks, idx);
 }
+
+#define OSPFV3_LIST(X, Y) \
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok))
+
+DEFINE_CMD_MODE(InterfaceOspfv3, config::OspfInterfaceBaseRegistry, OSPFV3_LIST);
+
+#define DEFAULT_OSPFV3_LIST(X, Y) \
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Authentication, "authentication"_tok, "ipsec"_tok)) \
+    X(Y, (COMMAND, NullAuthentication, "authentication"_tok, "null"_tok)) \
+    X(Y, (COMMAND, Encryption, "encryption"_tok, "ipsec"_tok)) \
+    X(Y, (COMMAND, NullEncryption, "encryption"_tok, "null"_tok)) \
+
+DEFINE_CMD_MODE(InterfaceDefaultOspfv3, config::OspfInterfaceBaseRegistry, DEFAULT_OSPFV3_LIST);
+
+#define INTERFACE_OSPFV3_LIST(X, Y) \
+    X(Y, (SUBPRSR, ProcessIP, P_NUMRNG, "ipv4"_tok)) \
+    X(Y, (SUBPRSR, ProcessIPv6, P_NUMRNG, "ipv6"_tok)) \
+    X(Y, (SUBPRSR, Process, P_NUMRNG)) \
+    X(Y, (SUBPRSR, Default))
+
+/**
+ * @brief Parser for OSPFv3 commands in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates area, authentication, encryption, and neighbor commands
+ * for OSPFv3 interfaces under `CliMode::Interface` with `InterfaceContext`.
+ */
+DEFINE_CMD_MODE(InterfaceOspfv3Base, config::InterfaceRegistry, INTERFACE_OSPFV3_LIST);
 }

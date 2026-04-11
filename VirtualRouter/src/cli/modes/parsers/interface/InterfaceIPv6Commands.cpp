@@ -3,12 +3,12 @@
 #include <VirtualRouter.h>
 
 #include "InterfaceIPv6Commands.h"
-#include "cli/runtime/CliSession.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
-#include "configs/registry/router/EigrpInterfaceRegistry.h"
+
+#include "cli/runtime/CliSession.h"
 #include "InterfaceIPv6NDCommands.h"
 #include "cli/modes/parsers/interface/InterfaceIPv6OspfCommands.h"
-#include <infrastructure/Ndp.h>
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
 #define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
@@ -342,4 +342,34 @@ bool InterfaceIPv6_Ospf_SubHandler(INTERFACE_SUB_PARAMS)
     newCtx.defaulted = ctx.defaulted;
     return InterfaceIPv6OspfCommands::execute(newCtx, toks, idx);
 }
+
+#define INTERFACE_IPV6_LIST(X, Y) \
+    X(Y, (COMMAND, AddressSet, "address"_tok, P_IPV6PFX)) \
+    X(Y, (COMMAND, AddressNamed, "address"_tok, P_WORD)) \
+    X(Y, (COMMAND, AddressLinkLocal, "address"_tok, P_IPV6)) \
+    X(Y, (COMMAND, AddressAuto, "address"_tok, "autoconfig"_tok)) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercent, "bandwidth-percent"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, Eigrp, "eigrp"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, Mtu, "mtu"_tok)) \
+    X(Y, (SUBPRSR, ND, "nd"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (COMMAND, NdpRedirects, "redirects"_tok)) \
+    X(Y, (SUBPRSR, Ospf, "ospf"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
+
+/**
+ * @brief Parser for the `ipv6` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes all
+ * IPv6 address, EIGRP per-interface, NDP, and OSPFv3 interface sub-tree commands.
+ */
+DEFINE_CMD_MODE(InterfaceIPv6, config::InterfaceRegistry, INTERFACE_IPV6_LIST)
 }

@@ -1,8 +1,8 @@
 // InterfaceIPCommands.cpp
 
 #include "InterfaceIPCommands.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
-#include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "InterfaceIPOspfCommands.h"
 
 #define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
@@ -249,4 +249,29 @@ bool InterfaceIP_Ospf_SubHandler(INTERFACE_SUB_PARAMS)
     newCtx.defaulted = ctx.defaulted;
     return InterfaceIPOspfCommands::execute(newCtx, toks, idx);
 }
+
+#define INTERFACE_IP_LIST(X, Y) \
+    X(Y, (COMMAND, AddressSet, "address"_tok, P_IPV4)) \
+    X(Y, (COMMAND, AddressDhcp, "address"_tok, "dhcp"_tok)) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercentage, "bandwidth-percentage"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, Mtu, "mtu"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (SUBPRSR, Ospf, "ospf"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
+
+/**
+ * @brief Parser for the `ip` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes all
+ * IPv4 address, EIGRP per-interface, and OSPF interface sub-tree commands.
+ */
+DEFINE_CMD_MODE(InterfaceIP, config::InterfaceRegistry, INTERFACE_IP_LIST);
 }

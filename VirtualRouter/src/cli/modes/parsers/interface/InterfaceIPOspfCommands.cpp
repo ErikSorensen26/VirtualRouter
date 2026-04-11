@@ -4,10 +4,10 @@
 #include <ByteUtils.hpp>
 
 #include "InterfaceIPOspfCommands.h"
-#include "configs/registry/router/OspfInterfaceRegistry.h"
-#include "configs/registry/interface/InterfaceRegistry.h"
-#include "cli/runtime/CliSession.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
+#include "cli/runtime/CliSession.h"
+#include "InterfaceOspfCommands.h"
 
 #define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 
@@ -158,6 +158,27 @@ bool InterfaceIPOspf_TtlSecurity_Handler(OSPF_PARAMS)
     utils::setFieldValueWithFallback(ttlSecHops, ctx, segs >> 0 >> 1);
     return true;
 }
+
+#define INTERFACE_IP_OSPF_LIST(X, Y) \
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Area, P_ARG, "Area"_tok)) \
+    X(Y, (COMMAND, Authentication, "authentication"_tok)) \
+    X(Y, (COMMAND, AuthenticationKey, "authentication-key"_tok)) \
+    X(Y, (COMMAND, LLS, "lls"_tok)) \
+    X(Y, (COMMAND, MessageDigestKey, "message-digest-key"_tok)) \
+    X(Y, (COMMAND, PrefixSuppression, "prefix-suppression"_tok)) \
+    X(Y, (COMMAND, ResyncTimeout, "resync-timeout"_tok)) \
+    X(Y, (COMMAND, Shutdown, "shutdown"_tok)) \
+    X(Y, (COMMAND, TtlSecurity, "ttl-security"_tok))
+
+/**
+ * @brief Parser for the `ip ospf` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv2-specific
+ * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
+ */
+DEFINE_CMD_MODE(InterfaceIPOspf, config::OspfInterfaceBaseRegistry, INTERFACE_IP_OSPF_LIST);
 }
 
 #undef OSPF_PARAMS

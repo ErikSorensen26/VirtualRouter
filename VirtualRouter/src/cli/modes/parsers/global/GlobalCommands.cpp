@@ -5,9 +5,8 @@
 #include <vector>
 
 #include "GlobalCommands.h"
-#include "interface/configs/InterfaceType.hpp"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/parser/CommandUtils.hpp"
-#include "configs/registry/router/EigrpRegistry.h"
 #include "configs/RegistryDefaultTable.hpp"
 #include "GlobalIPCommands.h"
 #include "GlobalIPv6Commands.h"
@@ -117,12 +116,14 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
 
 bool Global_RouterOSPF_Handler(GLOBAL_PARAMS)
 {
-    return true;
+    // TODO
+    return false;
 }
 
 bool Global_RouterBGP_Handler(GLOBAL_PARAMS)
 {
-    return true;
+    // TODO
+    return false;
 }
 
 bool Global_IP_SubHandler(GLOBAL_SUB_PARAMS)
@@ -134,7 +135,18 @@ bool Global_IPv6_SubHandler(GLOBAL_SUB_PARAMS)
 {
     return GlobalIPv6Commands::execute(ctx, toks, idx);
 }
-}
 
-#undef GLOBAL_PARAMS
-#undef GLOBAL_SUB_PARAMS
+#define GLOBAL_LIST(X, Y) \
+    X(Y, (COMMAND, Arp, "arp"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (COMMAND, SetHostname, "hostname"_tok)) \
+    X(Y, (COMMAND, End, "end"_tok)) \
+    X(Y, (SUBPRSR, IP, "ip"_tok)) \
+    X(Y, (SUBPRSR, IPv6, "ipv6"_tok)) \
+    X(Y, (COMMAND, Interface, "interface"_tok)) \
+    X(Y, (COMMAND, RouterEIGRP, "router"_tok, "eigrp"_tok)) \
+    X(Y, (COMMAND, RouterOSPF, "router"_tok, "ospf"_tok)) \
+    X(Y, (COMMAND, RouterBGP, "router"_tok, "bgp"_tok))
+
+DEFINE_CMD_MODE(Global, config::GlobalRegistry, GLOBAL_LIST);
+}

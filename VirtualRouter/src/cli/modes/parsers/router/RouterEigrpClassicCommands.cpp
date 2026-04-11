@@ -1,9 +1,9 @@
 // RouterEigrpCommands.cpp
 
-#include <Global.h>
-#include <VirtualRouter.h>
-
 #include "RouterEigrpClassicCommands.h"
+#include "cli/parser/CliModeParser.hpp"
+
+#include "RouterEigrpCommands.h"
 #include "cli/parser/CommandUtils.hpp"
 #include "configs/registry/router/EigrpRegistry.h"
 #include "cli/runtime/CliSession.h"
@@ -26,6 +26,51 @@ bool RouterEigrpClassic_PassiveInterface_Handler(EIGRP_PARAMS)
         return false;
     return utils::setListEntry(passive, ctx, tup);
 }
+
+//bool RouterEigrpClassic_DefaultInformation_Handler(EIGRP_PARAMS) {} //TODO
+
+#define ROUTER_EIGRP_CLASSIC_LIST(X, Y) \
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (COMMAND, PassiveInterface, "passive-interface"_tok))
+
+/**
+ * @brief Parser for EIGRP classic mode commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates network/neighbor configuration, logging, metrics, stub mode,
+ * and topology base access for classic (flat) EIGRP model.
+ */
+DEFINE_CMD_MODE(RouterEigrpClassic, config::EigrpRegistry, ROUTER_EIGRP_CLASSIC_LIST)
+
+#define ROUTER_EIGRP_CLASSIC_LIST_V4(X, Y) \
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpClassicCommands))
+
+/**
+ * @brief IPv4 classic mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpClassicV4, config::EigrpRegistry, ROUTER_EIGRP_CLASSIC_LIST_V4)
+
+#define ROUTER_EIGRP_CLASSIC_VRF_LIST(X, Y) \
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpClassicCommands))
+
+/**
+ * @brief IPv4 classic vrf mode parser
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpClassicVrf, config::EigrpRegistry, ROUTER_EIGRP_CLASSIC_VRF_LIST)
+
+#define ROUTER_EIGRP_CLASSIC_LIST_V6(X, Y) \
+    X(Y, (INHERIT, RouterEigrpCommands)) \
+    X(Y, (INHERIT, RouterEigrpClassicCommands))
+
+/**
+ * @brief IPv6 classic mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpClassicV6, config::EigrpRegistry, ROUTER_EIGRP_CLASSIC_LIST_V6);
 }
 
 #undef EIGRP_PARAMS

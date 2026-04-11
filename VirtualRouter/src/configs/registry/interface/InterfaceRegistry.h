@@ -16,6 +16,7 @@
 #include "configs/SubRegistry.hpp"
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
 
 #include "ArpRegistry.h"
 #include "NdpRegistry.h"

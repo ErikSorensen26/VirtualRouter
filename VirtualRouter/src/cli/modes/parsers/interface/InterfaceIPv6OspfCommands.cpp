@@ -3,9 +3,10 @@
 #include <VirtualRouter.h>
 
 #include "InterfaceIPv6OspfCommands.h"
-#include "configs/registry/router/OspfInterfaceRegistry.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
+#include "InterfaceOspfCommands.h"
 
 #define OSPF_PARAMS DEFINE_PARAMS(config::OspfInterfaceBaseRegistry)
 
@@ -207,6 +208,22 @@ bool InterfaceIPv6Ospf_Neighbor_Handler(OSPF_PARAMS)
 
     return utils::setListEntry(neighbors, ctx, tup);
 }
+
+#define INTERFACE_IPV6_OSPF_LIST(X, Y) \
+    X(Y, (INHERIT, InterfaceOspfCommands)) \
+    X(Y, (COMMAND, Area, P_ARG, "area"_tok)) \
+    X(Y, (COMMAND, Authentication, "authentication"_tok)) \
+    X(Y, (COMMAND, Encryption, "encryption"_tok)) \
+    X(Y, (COMMAND, Neighbor, "neighbor"_tok))
+
+/**
+ * @brief Parser for the `ipv6 ospf` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Extends `InterfaceOspfCommands` (shared OSPFv2/v3 base) with OSPFv3-specific
+ * interface commands.  Covers `CliMode::Interface` with `InterfaceContext`.
+ */
+DEFINE_CMD_MODE(InterfaceIPv6Ospf, config::OspfInterfaceBaseRegistry, INTERFACE_IPV6_OSPF_LIST);
 }
 
 #undef OSPF_PARAMS

@@ -10,71 +10,14 @@
 #define ROUTER_EIGRP_TOPOLOGY_COMMANDS_H
 
 #include "configs/registry/router/EigrpRegistry.h"
-#include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
-
-#define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpRegistry)
+#include "cli/modes/Mode.hpp"
 
 namespace cli
 {
-bool RouterEigrpTopology_AutoSummary_Handler(EIGRP_PARAMS);
-// bool RouterEigrpTopology_DefaultInformation_Handler(EIGRP_PARAMS) //TODO
-bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopology_MaximumPaths_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopology_MetricMaximumHops_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopology_ActiveTime_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopology_TrafficShare_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopology_Variance_Handler(EIGRP_PARAMS);
-
-bool RouterEigrpTopologyV4_Exit_Handler(EIGRP_PARAMS);
-bool RouterEigrpTopologyV6_Exit_Handler(EIGRP_PARAMS);
-
-#define ROUTER_EIGRP_TOPOLOGY_LIST(X, Y) \
-    X(Y, (COMMAND, AutoSummary, "auto-summary"_tok)) \
-    X(Y, (COMMAND, DefaultMetric, "default-metric"_tok)) \
-    X(Y, (COMMAND, Distance, "distance"_tok, "eigrp"_tok)) \
-    X(Y, (COMMAND, EigrpEventLogSize, "eigrp"_tok, "event-log-size"_tok)) \
-    X(Y, (COMMAND, MaximumPaths, "maximum-paths"_tok)) \
-    X(Y, (COMMAND, MetricMaximumHops, "metric"_tok, "maximum-hops"_tok)) \
-    X(Y, (COMMAND, ActiveTime, "timers"_tok, "active-timer"_tok)) \
-    X(Y, (COMMAND, TrafficShare, "traffic-share"_tok)) \
-    X(Y, (COMMAND, Variance, "variance"_tok)) \
-
-/**
- * @brief Parser for EIGRP topology base filtering and configuration.
- * @ingroup CLI_MODE_PARSERS
- *
- * Enables route filtering (permit/deny) and topology-level redistribution
- * settings for advanced EIGRP control.
- */
-DEFINE_CMD_MODE(RouterEigrpTopology, CliMode::None, config::EigrpRegistry, ROUTER_EIGRP_TOPOLOGY_LIST);
-
-#define ROUTER_EIGRP_TOPOLOGY_LIST_V4(X, Y) \
-    X(Y, (COMMAND, Exit, "exit-af-topology"_tok)) \
-    X(Y, (INHERIT, RouterEigrpTopologyCommands))
-
-/**
- * @brief IPv4 topology mode parser.
- * @ingroup CLI_MODE_PARSERS
- */
-DEFINE_CMD_MODE(RouterEigrpTopologyV4, CliMode::RouterEigrpTopologyV4, config::EigrpRegistry, ROUTER_EIGRP_TOPOLOGY_LIST_V4);
-
-#define ROUTER_EIGRP_TOPOLOGY_LIST_V6(X, Y) \
-    X(Y, (COMMAND, Exit, "exit-af-topology"_tok)) \
-    X(Y, (INHERIT, RouterEigrpTopologyCommands))
-
-/**
- * @brief IPv6 topology mode parser.
- * @ingroup CLI_MODE_PARSERS
- */
-DEFINE_CMD_MODE(RouterEigrpTopologyV6, CliMode::RouterEigrpTopologyV6, config::EigrpRegistry, ROUTER_EIGRP_TOPOLOGY_LIST_V6)
+DEFINE_CMD_EXECUTOR(RouterEigrpTopology, CliMode::None, config::EigrpRegistry);
+DEFINE_CMD_EXECUTOR(RouterEigrpTopologyV4, CliMode::RouterEigrpTopologyV4, config::EigrpRegistry);
+DEFINE_CMD_EXECUTOR(RouterEigrpTopologyV6, CliMode::RouterEigrpTopologyV6, config::EigrpRegistry);
 }
-
-#undef ROUTER_EIGRP_TOPOLOGY_LIST
-#undef ROUTER_EIGRP_TOPOLOGY_LIST_V4
-#undef ROUTER_EIGRP_TOPOLOGY_LIST_V6
-#undef EIGRP_PARAMS
 
 #endif // ROUTER_EIGRP_TOPOLOGY_COMMANDS_H

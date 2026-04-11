@@ -11,27 +11,12 @@
 #define GLOBAL_IPV6_COMMANDS_H
 
 #include "configs/registry/global/GlobalRegistry.h"
-#include "cli/parser/CliModeParser.hpp"
-
-#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
-#define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
+#include "cli/modes/contexts/Context.hpp"
+#include "cli/modes/Mode.hpp"
 
 namespace cli
 {
-bool GlobalIPv6_ND_SubHandler(GLOBAL_SUB_PARAMS);
-bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS);
-bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS);
-
-#define GLOBAL_IPV6_LIST(X, Y) \
-    X(Y, (SUBPRSR, ND, "nd"_tok)) \
-    X(Y, (COMMAND, Neighbor, "neighbor"_tok)) \
-    X(Y, (COMMAND, RouterEIGRP, "router"_tok, "eigrp"_tok))
-
-DEFINE_CMD_MODE(GlobalIPv6, CliMode::GlobalConfiguration, config::GlobalRegistry, GLOBAL_IPV6_LIST);
+DEFINE_CMD_EXECUTOR(GlobalIPv6, CliMode::GlobalConfiguration, config::GlobalRegistry);
 }
-
-#undef GLOBAL_IPV6_LIST
-#undef GLOBAL_PARAMS
-#undef GLOBAL_SUB_PARAMS
 
 #endif // GLOBAL_IPV6_COMMANDS_H

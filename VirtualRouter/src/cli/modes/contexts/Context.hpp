@@ -18,6 +18,7 @@
 #define CONTEXT_HPP
 
 #include "configs/SubRegistry.hpp"
+namespace cli { struct CliModeParserFlag {}; }
 
 /// @brief Entry type tag: plain @ref Command descriptor.
 #define COMMAND 0
@@ -60,14 +61,20 @@
     using prefix##Commands = cli::CliModeParser<mode, context __VA_ARGS__>;
 
 // Define a full command grep
-#define DEFINE_CMD_MODE(prefix, mode, context, list) \
-    using Executor = CliModeParser<mode, context \
+#define DEFINE_CMD_MODE(prefix, context, list) \
+    using prefix##Executor = CliModeParser<context \
     list(EXPAND_COMMAND_WRAPPER, (prefix, context))>; \
-    bool execute##prefix##Commands(Context<context>& ctx, std::vector<Token>& toks, size_t idx = 0) \
-    { return prefix##Commands::execute(ctx, toks, idx); }
+    bool prefix##Commands::execute(Context<context>& ctx, std::span<Token> toks, size_t idx) \
+    { return prefix##Executor::execute(ctx, toks, idx); }
 
 // Define the execution function
-#define DEFINE_CMD_EXECUTOR(prefix, mode) \
+#define DEFINE_CMD_EXECUTOR(prefix, climode, context) \
+    struct prefix##Commands : CliModeParserFlag \
+    { \
+        using ContextType = context; \
+        static constexpr CliMode mode = climode; \
+        static bool execute(Context<context>& ctx, std::span<Token> toks, size_t idx = 0); \
+    }
 
 // Define parameter list
 #define DEFINE_PARAMS(config) \

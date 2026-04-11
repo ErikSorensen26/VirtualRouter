@@ -5,7 +5,9 @@
 #include <VirtualRouter.h>
 
 #include "RouterEigrpNamedCommands.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "cli/runtime/CliSession.h"
+#include "cli/runtime/CliEngine.h"
 #include <cli/parser/CommandUtils.hpp>
 
 #define EIGRP_NAMED_PARAMS DEFINE_PARAMS(config::EigrpNamedRegistry)
@@ -187,6 +189,20 @@ bool RouterEigrpNamed_Exit_Handler(EIGRP_NAMED_PARAMS)
     UNUSED(segs);
     return ctx.terminal.popMode();
 }
+
+#define ROUTER_EIGRP_NAMED_LIST(X, Y) \
+    X(Y, (COMMAND, AddressFamilyIPv4, "address-family"_tok, "ipv4"_tok)) \
+    X(Y, (COMMAND, AddressFamilyIPv6, "address-family"_tok, "ipv6"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok))
+
+/**
+ * @brief Parser for EIGRP named mode (MD5-era) configuration commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Aggregates address-family entry, logging, metrics, topology access,
+ * and named-mode-specific settings.
+ */
+DEFINE_CMD_MODE(RouterEigrpNamed, config::EigrpNamedRegistry, ROUTER_EIGRP_NAMED_LIST);
 }
 
 #undef EIGRP_NAMED_PARAMS
