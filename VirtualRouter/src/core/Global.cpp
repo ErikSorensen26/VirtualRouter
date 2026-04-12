@@ -66,7 +66,7 @@ void Global::interfaceRefresh()
 {
     {
         std::lock_guard<std::mutex> lock(interfaceMutex);
-        auto& interfaceCfgs = configs.get<config::Global::INTERFACE>();
+        auto& interfaceCfgs = configs.reg.get<config::Global::INTERFACE>();
         
         // Erase
         for (auto it = interfaceList.begin(); it != interfaceList.end();)
@@ -85,7 +85,7 @@ void Global::interfaceRefresh()
                 const hardware::HwIfaceInfo* info = engine.hwManager.getHwInfo(id);
                 if (!info) continue;
 
-                std::string ifaceVrf = cfg.get<config::Interface::VRF_FORWARDING>().load();
+                std::string ifaceVrf = cfg.reg.get<config::Interface::VRF_FORWARDING>().load();
 
                 interface::InterfaceCreation iface = {type, key, *getRoutingInstance(ifaceVrf), *info};
                 interfaceList.emplace(id, iface);
@@ -127,7 +127,7 @@ void Global::routingInstanceRefresh()
 {
     {
         std::lock_guard<std::mutex> lock(routingInstanceMutex);
-        auto& vrfConfigs = configs.get<config::Global::VRF_CONFIGS>();
+        auto& vrfConfigs = configs.reg.get<config::Global::VRF_CONFIGS>();
 
         // Erase
         for (auto it = routingInstances.begin(); it != routingInstances.end();)

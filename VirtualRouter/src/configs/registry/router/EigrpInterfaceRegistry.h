@@ -71,24 +71,26 @@ void EigrpIfacePassive(void* i);
 void EigrpIfaceShutdown(void* i);
 void EigrpIfaceSummary(void* i);
 
-using EigrpInterfaceRegistry = SubRegistry<EigrpInterface,
-    ValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
-    AtomicField<config::eigrp::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(EigrpInterface::BANDWIDTH_PERCENTAGE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::BFD)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_CHANGE)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_CHANGE_PERCENT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_INTERVAL)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_INTERVAL_TIME)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HELLO_INTERVAL)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HOLD_TIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::NEXT_HOP_SELF)>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE), EigrpIfacePassive>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN), EigrpIfaceShutdown>,
-    AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SPLIT_HORIZON)>,
-    ListField<std::tuple<types::IPPrefix, std::optional<std::string>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
->;
-
+struct EigrpInterfaceRegistry
+{
+    SubRegistry<EigrpInterface,
+        ValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
+        AtomicField<config::eigrp::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
+        AtomicField<uint32_t CONFIG_INDEX_ARG(EigrpInterface::BANDWIDTH_PERCENTAGE)>,
+        AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::BFD)>,
+        AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_CHANGE)>,
+        AtomicField<uint8_t CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_CHANGE_PERCENT)>,
+        AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_INTERVAL)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::DAMPENING_INTERVAL_TIME)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HELLO_INTERVAL)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(EigrpInterface::HOLD_TIME)>,
+        AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::NEXT_HOP_SELF)>,
+        AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::PASSIVE_INTERFACE), EigrpIfacePassive>,
+        AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SHUTDOWN), EigrpIfaceShutdown>,
+        AtomicField<bool CONFIG_INDEX_ARG(EigrpInterface::SPLIT_HORIZON)>,
+        ListField<std::tuple<types::IPPrefix, std::optional<std::string>> CONFIG_INDEX_ARG(EigrpInterface::SUMMARY_ADDRESS), EigrpIfaceSummary>
+    > reg;
+};
 }
 
 #endif // EIGRP_INTERFACE_REGISTRY_H

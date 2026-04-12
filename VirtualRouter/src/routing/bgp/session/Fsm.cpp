@@ -302,19 +302,19 @@ void Fsm::handleOpenSent(FsmEvent event)
         // Peer open received. The session has already validated content
         {
             // Reject if peer's hold time is below our configured minimum
-            auto& minHtCfg = session.getBaseConfig().get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
+            auto& minHtCfg = session.getBaseConfig().reg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
             if (minHtCfg.hasValue() && session.holdTime != 0 && session.holdTime < minHtCfg.load())
             {
                 resetToIdle(true, BGP_NOTIFICATION_OPEN_UNACCEPTABLE_HOLD);
                 break;
             }
 
-            uint16_t cfg = session.getBaseConfig().get<config::BgpTransportBase::HOLDTIME>().load();
+            uint16_t cfg = session.getBaseConfig().reg.get<config::BgpTransportBase::HOLDTIME>().load();
             uint16_t minHt = std::min<uint16_t>(session.holdTime, cfg);
             session.holdTime = minHt;
 
             // Prefer configured keepalive interval over holdtime/3
-            uint16_t cfgKa = session.getBaseConfig().get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
+            uint16_t cfgKa = session.getBaseConfig().reg.get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
             uint16_t kaInterval;
             if (minHt == 0)
                 kaInterval = 0;

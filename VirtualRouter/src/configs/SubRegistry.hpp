@@ -64,6 +64,14 @@ template <typename T>
 concept IsSubRegistry = 
     std::derived_from<T, SubRegistryFlag>;
 
+template <typename T>
+concept IsSubRegistryWrapper =
+    requires (T t) { t.reg; } &&
+    IsSubRegistry<std::remove_cvref_t<decltype(T::reg)>>;
+
+template <typename T>
+using SubRegistryType = decltype(std::declval<T>().reg);
+
 /**
  * @class SubRegistry
  * @brief Hierarchical configuration registry with field masking and inheritance.

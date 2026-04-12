@@ -16,7 +16,7 @@ PacketDispatcherV2::PacketDispatcherV2(OspfInterface& iface)
 
 config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getConfigs()
 {
-    return iface.getIface().configs.getConfigs().get<config::Interface::IP_OSPF>().get();
+    return iface.getIface().configs.getConfigs().reg.get<config::Interface::IP_OSPF>().get();
 }
 
 void PacketDispatcherV2::transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest)

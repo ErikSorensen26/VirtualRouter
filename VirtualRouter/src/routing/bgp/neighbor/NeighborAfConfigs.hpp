@@ -47,8 +47,8 @@ struct NeighborAfConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return (*peerConfigs).get<F>();
-        return configs.get<F>();
+            return (*peerConfigs).reg.get<F>();
+        return configs.reg.get<F>();
     }
 
     /**
@@ -60,8 +60,8 @@ struct NeighborAfConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedBaseTable.test(config::toIndex<F>))
-            return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
-        return peerConfigs->get<config::BgpNeighbor::AF_BASE>().get().get<F>();
+            return peerConfigs->reg.get<config::BgpNeighbor::AF_BASE>().get().reg.get<F>();
+        return peerConfigs->reg.get<config::BgpNeighbor::AF_BASE>().get().reg.get<F>();
     }
 
     /**
@@ -72,8 +72,8 @@ struct NeighborAfConfigs
     template <config::BgpNeighbor F> decltype(auto) get() const
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return std::as_const(peerConfigs->get<F>());
-        return std::as_const(configs.get<F>());
+            return std::as_const(peerConfigs->reg.get<F>());
+        return std::as_const(configs.reg.get<F>());
     }
 
     /**
@@ -146,7 +146,7 @@ struct NeighborAfConfigs
         peerGroup = group;
         peerConfigs = group ? group->getAfConfigs(family) : nullptr;
         if (peerGroup) assert(peerConfigs);
-        configs.setMask(group ? group->getAfConfigs(family) : nullptr);
+        configs.reg.setMask(group ? &group->getAfConfigs(family)->reg : nullptr);
         return true;
     }
 
@@ -164,7 +164,7 @@ struct NeighborAfConfigs
         if (peerGroup)
             return false;
         peerPolicy = pp;
-        configs.setMask(peerPolicy ? &pp->getConfigs() : nullptr);
+        configs.reg.setMask(peerPolicy ? &pp->getConfigs().reg : nullptr);
         return true;
     }
 

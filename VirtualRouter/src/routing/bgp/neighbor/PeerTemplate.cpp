@@ -15,8 +15,8 @@ PeerGroup::PeerGroup(const std::string& groupName, BgpProcess& proc)
       sessionConfigs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().emplace(
-        sessionConfigs.get<config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<config::Bgp::BGP_BASE>().get()
+        sessionConfigs.reg.get<config::BgpNeighborSession::BGP_BASE>(),
+        proc.getConfigs().reg.get<config::Bgp::BGP_BASE>().get()
     );
 }
 
@@ -46,8 +46,8 @@ PeerSessionTemplate::PeerSessionTemplate(const std::string& groupName, BgpProces
       configs(proc.routingInstance->getRegistry().create<config::BgpNeighborSessionRegistry>())
 {
     proc.routingInstance->getRegistry().emplace(
-        configs.get<config::BgpNeighborSession::BGP_BASE>(),
-        proc.getConfigs().get<config::Bgp::BGP_BASE>().get()
+        configs.reg.get<config::BgpNeighborSession::BGP_BASE>(),
+        proc.getConfigs().reg.get<config::Bgp::BGP_BASE>().get()
     );
 }
 
@@ -75,7 +75,7 @@ void PeerTemplateTable::syncPeerGroups()
 {
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto& pgField = nbr.getConfigs().getConfigs().get<config::BgpNeighborSession::PEER_GROUP>();
+        auto& pgField = nbr.getConfigs().getConfigs().reg.get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
         {
             auto* pg = lookupPeerGroup(pgField.load());
@@ -98,7 +98,7 @@ void PeerTemplateTable::syncPeerSessionTemplates()
 {
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
-        auto& f = nbr.getConfigs().getConfigs().get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
+        auto& f = nbr.getConfigs().getConfigs().reg.get<config::BgpNeighborSession::INHERIT_PEER_SESSION>();
         if (f.hasValue())
         {
             auto* ps = lookupPeerSessionTemplate(f.load());
@@ -116,7 +116,7 @@ void PeerTemplateTable::syncPeerPolicyTemplates()
     auto& ntable = process.getNtable();
     ntable.forEachNeighbor([&](Neighbor& nbr) {
         nbr.forEachAfNeighbor([this](NeighborAf& afNbr) {
-            auto& f = afNbr.getConfigs().getConfigs().get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
+            auto& f = afNbr.getConfigs().getConfigs().reg.get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
             if (f.hasValue())
             {
                 auto* pp = lookupPeerPolicyTemplate(f.load());

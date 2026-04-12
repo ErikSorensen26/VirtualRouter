@@ -128,7 +128,7 @@ template <typename Policy>
 void routemanager::deriveIntraAreaRoutes(const SpfResult& spf, std::vector<std::pair<types::IPPrefix, OspfPath>>& out, Area& area)
 {
     auto& lsdb = area.lsdb();
-    const uint8_t adminDistance = area.process().getConfigs().get<config::Ospf::INTRA_AREA_DISTANCE>().load();
+    const uint8_t adminDistance = area.process().getConfigs().reg.get<config::Ospf::INTRA_AREA_DISTANCE>().load();
 
     NhCache nhCache;
     out.reserve(out.size() + spf.confirmedOrder.size());
@@ -276,7 +276,7 @@ static std::optional<RouterReach> resolveToAbrs(OspfProcess& topo, uint32_t abrR
 template<typename Policy>
 std::pair<types::IPPrefix, std::optional<OspfPath>> routemanager::deriveInterAreaNetwork(Area& area, const LsaKey& key, const LsaHeader& header, const LsaBody& body)
 {
-    const uint8_t adminDistance = area.process().getConfigs().get<config::Ospf::INTER_AREA_DISTANCE>().load();
+    const uint8_t adminDistance = area.process().getConfigs().reg.get<config::Ospf::INTER_AREA_DISTANCE>().load();
 
     const typename Policy::InterNetworkLsa& summary = std::get<typename Policy::InterNetworkLsa>(body);
     
@@ -291,7 +291,7 @@ std::pair<types::IPPrefix, std::optional<OspfPath>> routemanager::deriveInterAre
     auto abrInfo = resolveToAbrs(area.process(), key.advertisingRouter);
     if (!abrInfo.has_value()) return {prefix, std::nullopt}; // ABR not found
 
-    const uint64_t distance = area.process().getConfigs().get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+    const uint64_t distance = area.process().getConfigs().reg.get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
         ? std::numeric_limits<uint64_t>::max() : abrInfo->cost + summary.metric;
 
     return {prefix, makePath(area.areaId, 0, adminDistance, distance, std::move(abrInfo->nextHops), OspfRouteType::INTER_AREA)};
@@ -306,7 +306,7 @@ void routemanager::deriveInterAreaRouter(Area& area, const LsaKey& key, const Ls
     if (!abrInfo.has_value()) return;
 
     const typename Policy::InterRouterLsa& asbr = std::get<typename Policy::InterRouterLsa>(body);
-    uint64_t distance = area.process().getConfigs().get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+    uint64_t distance = area.process().getConfigs().reg.get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
         ? std::numeric_limits<uint64_t>::max() : abrInfo->cost + asbr.metric;
 
     area.process().table.updateAreaAsbr(area.areaId, OspfRouter{key.linkStateId, distance, std::move(abrInfo->nextHops)}, remove);
@@ -316,7 +316,7 @@ template<typename Policy>
 void routemanager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::pair<types::IPPrefix, OspfPath>>& out, Area& area)
 {
     auto& lsdb = area.lsdb();
-    const uint8_t adminDistance = area.process().getConfigs().get<config::Ospf::INTER_AREA_DISTANCE>().load();
+    const uint8_t adminDistance = area.process().getConfigs().reg.get<config::Ospf::INTER_AREA_DISTANCE>().load();
 
     NhCache nhCache;
     out.reserve(out.size() + spf.confirmedOrder.size());
@@ -334,7 +334,7 @@ void routemanager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
         if (!abrInfo.has_value()) return; // ABR not found
 
         const typename Policy::InterNetworkLsa& summary = std::get<typename Policy::InterNetworkLsa>(record.body);
-        const uint64_t distance = area.process().getConfigs().get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+        const uint64_t distance = area.process().getConfigs().reg.get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
             ? std::numeric_limits<uint64_t>::max() : abrInfo->first + summary.metric;
 
         if constexpr (std::is_same_v<std::remove_cv_t<typename Policy::InterNetworkLsa>, SummaryNetworkLsa>)
@@ -354,7 +354,7 @@ void routemanager::deriveInterAreaRoutes(const SpfResult& spf, std::vector<std::
         if (!abrInfo.has_value()) return;
 
         const typename Policy::InterRouterLsa& asbr = std::get<typename Policy::InterRouterLsa>(record.body);
-        const uint64_t distance = area.process().getConfigs().get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
+        const uint64_t distance = area.process().getConfigs().reg.get<config::Ospf::MAX_METRIC_SUMMARY_LSA>().load()
             ? std::numeric_limits<uint64_t>::max() : abrInfo->first + asbr.metric;
 
         asbrs.emplace_back(key.linkStateId, distance, abrInfo->second);
@@ -385,7 +385,7 @@ static std::optional<std::pair<uint64_t, std::vector<OspfNextHop>>> resolveInter
 template<typename Policy>
 std::pair<types::IPPrefix, std::optional<OspfPath>> routemanager::deriveExternalRoute(OspfProcess& process, const LsaKey& key, const std::pair<LsaHeader, LsaBody>& rec)
 {
-    const uint8_t adminDistance = process.getConfigs().get<config::Ospf::EXTERNAL_DISTANCE>().load();
+    const uint8_t adminDistance = process.getConfigs().reg.get<config::Ospf::EXTERNAL_DISTANCE>().load();
     const uint32_t selfRid       = process.getRouterId();
 
     using EL = std::remove_cv_t<typename Policy::ExternalLsa>;
@@ -474,7 +474,7 @@ std::pair<types::IPPrefix, std::optional<OspfPath>> routemanager::deriveExternal
 template<typename Policy>
 std::vector<std::pair<types::IPPrefix, OspfPath>> routemanager::deriveExternalRoutes(OspfProcess& process)
 {
-    const uint8_t adminDistance = process.getConfigs().get<config::Ospf::EXTERNAL_DISTANCE>().load();
+    const uint8_t adminDistance = process.getConfigs().reg.get<config::Ospf::EXTERNAL_DISTANCE>().load();
     const uint32_t selfRid       = process.getRouterId();
 
     using EL = std::remove_cv_t<typename Policy::ExternalLsa>;

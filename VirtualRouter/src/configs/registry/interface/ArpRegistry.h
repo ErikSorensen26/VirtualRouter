@@ -32,14 +32,17 @@ enum class Arp
     X(Arp, PROBE_COUNT, 2) \
     X(Arp, TIMEOUT, 14400)
 
-using ArpRegistry = SubRegistry<Arp,
-    AtomicField<bool CONFIG_INDEX_ARG(Arp::AUTHORIZED)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::LOG_THRESHOLD_ENTRIES)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Arp::PACKET_PRIORITY)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_INTERVAL)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_COUNT)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::TIMEOUT)>
->;
+struct ArpRegistry
+{
+    SubRegistry<Arp,
+        AtomicField<bool CONFIG_INDEX_ARG(Arp::AUTHORIZED)>,
+        AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::LOG_THRESHOLD_ENTRIES)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Arp::PACKET_PRIORITY)>,
+        AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_INTERVAL)>,
+        AtomicField<uint8_t CONFIG_INDEX_ARG(Arp::PROBE_COUNT)>,
+        AtomicField<uint32_t CONFIG_INDEX_ARG(Arp::TIMEOUT)>
+    > reg;
+};
 }
 
 #endif // ARP_REGISTRY

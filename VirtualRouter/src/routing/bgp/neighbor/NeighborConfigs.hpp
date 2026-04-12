@@ -44,8 +44,8 @@ struct NeighborConfigs
     decltype(auto) get()
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return peerGroup->getSessionConfigs().get<F>();
-        return configs.get<F>();
+            return peerGroup->getSessionConfigs().reg.get<F>();
+        return configs.reg.get<F>();
     }
 
     /**
@@ -57,8 +57,8 @@ struct NeighborConfigs
     decltype(auto) get() const
     {
         if (peerGroup && peerOwnedTable.test(config::toIndex<F>))
-            return std::as_const(peerGroup->getSessionConfigs().get<F>());
-        return std::as_const(configs.get<F>());
+            return std::as_const(peerGroup->getSessionConfigs().reg.get<F>());
+        return std::as_const(configs.reg.get<F>());
     }
 
     /**
@@ -92,7 +92,7 @@ struct NeighborConfigs
         if (peerSession)
             return false;
         peerGroup = group;
-        configs.setMask(group ? &group->getSessionConfigs() : nullptr);
+        configs.reg.setMask(group ? &group->getSessionConfigs().reg : nullptr);
         return true;
     }
 
@@ -109,7 +109,7 @@ struct NeighborConfigs
         if (peerGroup)
             return false;
         peerSession = ps;
-        configs.setMask(ps ? &ps->getConfigs() : nullptr);
+        configs.reg.setMask(ps ? &ps->getConfigs().reg : nullptr);
         return true;
     }
 

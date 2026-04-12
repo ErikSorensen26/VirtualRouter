@@ -256,7 +256,7 @@ public:
     uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const
     {
-        const auto& id = configs.get<config::Ospf::ROUTER_ID>();
+        const auto& id = configs.reg.get<config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
         return rid;
     }

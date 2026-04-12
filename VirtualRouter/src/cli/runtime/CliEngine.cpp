@@ -35,7 +35,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
     initConfigs(stfs);
 
     // Initialize default error and carriage return commands
-    carriageReturnCommand.name = "";
+    carriageReturnCommand.name = CARRIAGE_RETURN;
 
     // Clear current command tree
     commandTree.clear();

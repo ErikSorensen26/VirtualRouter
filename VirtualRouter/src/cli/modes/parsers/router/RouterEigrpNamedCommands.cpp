@@ -17,7 +17,7 @@ namespace cli
 bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS)
 {
     auto& global = ctx.terminal.engine.global.configs;
-    auto& namedList = ctx.configs.get<config::EigrpNamed::NAMED_INSTANCES_V4>();
+    auto& namedList = ctx.configs.reg.get<config::EigrpNamed::NAMED_INSTANCES_V4>();
 
     std::string vrfName = "default";
     uint16_t as = 0;
@@ -41,7 +41,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS)
         }
     }
 
-    auto& vrfList = global.get<config::Global::VRF_CONFIGS>();
+    auto& vrfList = global.reg.get<config::Global::VRF_CONFIGS>();
     auto vit = vrfList.find(vrfName);
     if (vit == vrfList.end())
     {
@@ -82,11 +82,11 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS)
     if (!result) return false;
 
     // Verify selected system is not classic if new
-    auto& eigrpList = vit->second.get<config::Vrf::ROUTER_EIGRP_V4>();
+    auto& eigrpList = vit->second.reg.get<config::Vrf::ROUTER_EIGRP_V4>();
     if (!exists)
     {
         if (auto it = eigrpList.find(as); it != eigrpList.end())
-            if (!it->second.get<config::Eigrp::IS_NAMED>().load())
+            if (!it->second.reg.get<config::Eigrp::IS_NAMED>().load())
             {
                 std::ostringstream oss;
                 oss << "\r\n%ERROR: AS(" << as << ") used by classic router";
@@ -102,7 +102,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS)
 bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_NAMED_PARAMS)
 {
     auto& global = ctx.terminal.engine.global.configs;
-    auto& namedList = ctx.configs.get<config::EigrpNamed::NAMED_INSTANCES_V6>();
+    auto& namedList = ctx.configs.reg.get<config::EigrpNamed::NAMED_INSTANCES_V6>();
 
     std::string vrfName = "default";
     uint16_t as = 0;
@@ -126,7 +126,7 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_NAMED_PARAMS)
         }
     }
 
-    auto& vrfList = global.get<config::Global::VRF_CONFIGS>();
+    auto& vrfList = global.reg.get<config::Global::VRF_CONFIGS>();
     auto vit = vrfList.find(vrfName);
     if (vit == vrfList.end())
     {
@@ -167,11 +167,11 @@ bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_NAMED_PARAMS)
     if (!result) return false;
 
     // Verify selected system is not classic if new
-    auto& eigrpList = vit->second.get<config::Vrf::ROUTER_EIGRP_V6>();
+    auto& eigrpList = vit->second.reg.get<config::Vrf::ROUTER_EIGRP_V6>();
     if (!exists)
     {
         if (auto it = eigrpList.find(as); it != eigrpList.end())
-            if (!it->second.get<config::Eigrp::IS_NAMED>().load())
+            if (!it->second.reg.get<config::Eigrp::IS_NAMED>().load())
             {
                 std::ostringstream oss;
                 oss << "\r\n%ERROR: AS(" << as << ") used by classic router";

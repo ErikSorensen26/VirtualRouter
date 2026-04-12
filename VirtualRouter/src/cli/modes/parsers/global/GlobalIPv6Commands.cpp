@@ -18,7 +18,7 @@ namespace cli
 {
 bool GlobalIPv6_ND_SubHandler(GLOBAL_SUB_PARAMS)
 {
-    auto& ndp = ctx.configs.get<config::Global::IPV6_ND>().get();
+    auto& ndp = ctx.configs.reg.get<config::Global::IPV6_ND>().get();
     Context<config::NdpBaseRegistry> newCtx(ctx.terminal, ndp);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;
@@ -28,7 +28,7 @@ bool GlobalIPv6_ND_SubHandler(GLOBAL_SUB_PARAMS)
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
 {
     //ListField<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
-    auto& neighbors = ctx.configs.get<config::Global::IPV6_NEIGHBOR>();
+    auto& neighbors = ctx.configs.reg.get<config::Global::IPV6_NEIGHBOR>();
     typename config::DefType<decltype(neighbors)>::node tup;
     for (const auto& seg : segs)
     {
@@ -63,10 +63,10 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
     config::VrfRegistry* vrf;
     if (!getVrfConfigs(vrf, ctx))
         return false;
-    auto& eigrpList = vrf->get<config::Vrf::ROUTER_EIGRP_V6>();
+    auto& eigrpList = vrf->reg.get<config::Vrf::ROUTER_EIGRP_V6>();
     if (auto it = eigrpList.find(asNum); it != eigrpList.end())
     {
-        if (it->second.get<config::Eigrp::IS_NAMED>().load())
+        if (it->second.reg.get<config::Eigrp::IS_NAMED>().load())
         {
             ctx.terminal.controller.print(std::string("\r\n%") + std::string(" ERROR: AS(" + std::to_string(asNum) + ") used by named mode"));
             return false; 

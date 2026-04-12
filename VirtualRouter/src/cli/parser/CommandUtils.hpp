@@ -470,18 +470,18 @@ void setOwnedField(T& field, cli::ContextBase& ctx, typename config::DefType<T>:
  * @tparam T   SubRegistry type owning the fields.
  * @tparam Es  Pack of enum constants identifying the fields to track.
  */
-template <typename T, T::type... Es>
-requires config::IsSubRegistry<T>
+template <typename T, config::SubRegistryType<T>::type... Es>
+requires config::IsSubRegistryWrapper<T>
 class FieldSetter
 {
 public:
     static constexpr size_t N = sizeof...(Es);
 
-    bool set(T::type e, Context<T>& ctx, Token* token = nullptr)
+    bool set(config::SubRegistryType<T>::type e, Context<T>& ctx, Token* token = nullptr)
     {
         bool isSet = false;
-        auto trySet = [&]<T::type E>() {
-            if (E == e) isSet = setFieldValue(ctx.configs.template get<E>(), ctx, token);
+        auto trySet = [&]<config::SubRegistryType<T>::type E>() {
+            if (E == e) isSet = setFieldValue(ctx.configs.reg.template get<E>(), ctx, token);
         };
         (trySet.template operator()<Es>(), ...);
         if (auto idx = indexOf(e); isSet)
@@ -489,11 +489,11 @@ public:
         return isSet;
     }
 
-    bool set(T::type e, Context<T>& ctx, Token* t1, Token* t2)
+    bool set(config::SubRegistryType<T>::type e, Context<T>& ctx, Token* t1, Token* t2)
     {
         bool isSet = false;
-        auto trySet = [&]<T::type E>() {
-            if (E == e) isSet = setDoubleFieldValue(ctx.configs.template get<E>(), ctx, t1, t2);
+        auto trySet = [&]<config::SubRegistryType<T>::type E>() {
+            if (E == e) isSet = setDoubleFieldValue(ctx.configs.reg.template get<E>(), ctx, t1, t2);
         };
         (trySet.template operator()<Es>(), ...);
         if (auto idx = indexOf(e); isSet)
@@ -503,19 +503,19 @@ public:
 
     void clearLeft(Context<T>& ctx)
     {
-        auto tryUnset = [&]<T::type E>() {
+        auto tryUnset = [&]<config::SubRegistryType<T>::type E>() {
             if (auto idx = indexOf(E); idx && bits.test(*idx))
-                ctx.configs.template get<E>().unset();
+                ctx.configs.reg.template get<E>().unset();
         };
         (tryUnset.template operator()<Es>(), ...);
     }
 
 private:
-    static constexpr std::array<typename T::type, N> values = {Es...};
+    static constexpr std::array<typename config::SubRegistryType<T>::type, N> values = {Es...};
     std::bitset<N> bits{};
 
 
-    static constexpr std::optional<size_t> indexOf(T::type e)
+    static constexpr std::optional<size_t> indexOf(config::SubRegistryType<T>::type e)
     {
         for (size_t i = 0; i < N; ++i)
         {

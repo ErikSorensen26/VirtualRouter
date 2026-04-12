@@ -146,7 +146,7 @@ public:
  * @ingroup CLI
  */
 template <typename T>
-requires config::IsSubRegistry<T>
+requires config::IsSubRegistryWrapper<T>
 class Context : public ContextBase
 {
 public:

@@ -33,7 +33,7 @@ uint16_t PacketDispatcher::calculateAge(bool floodReduction, const LsaRecord& re
         age = (record.header.age & 0x7FFF) + delta;
     }
 
-    age += iface.getConfigs().get<config::OspfInterface::TRANSMIT_DELAY>().load();
+    age += iface.getConfigs().reg.get<config::OspfInterface::TRANSMIT_DELAY>().load();
 
     if (age > OSPF_MAX_AGE) age = OSPF_MAX_AGE;
 
@@ -79,7 +79,7 @@ void PacketDispatcher::sendReliableLSRequest(Neighbor& nbr, const std::vector<Ls
 
 void PacketDispatcher::sendReliableLSUpdate(Neighbor* nbr, std::vector<std::pair<FloodInfo, LsaRecordRef>>& updates)
 {
-    bool filter = iface.getConfigs().get<config::OspfInterface::DATABASE_FILTER>().load();
+    bool filter = iface.getConfigs().reg.get<config::OspfInterface::DATABASE_FILTER>().load();
     bool floodReduction = iface.floodReduction;
 
     if (nbr)

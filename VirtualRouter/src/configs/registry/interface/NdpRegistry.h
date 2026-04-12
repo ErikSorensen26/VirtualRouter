@@ -66,22 +66,25 @@ enum class NdpBase
 
 CONFIG_DEFAULT_TABLE(NDP_BASE_DEFAULTS);
 
-using NdpBaseRegistry = SubRegistry<NdpBase,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::CACHE_EXPIRE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpBase::CACHE_REFRESH)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpBase::CACHE_INTERFACE_LIMIT)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::DAD_TIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpBase::HOST_MODE_STRICT)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NSF_CONVERGENCE_TIME)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NSF_DAD_SUPPRESS)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NSF_THROTTLE_RESOLUTIONS)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NUD_LIMIT)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NUD_REFRESH_PERIOD)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(NdpBase::REACHABLE_TIME)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(NdpBase::RESOLUTION_DATA_LIMIT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpBase::ROUTE_OWNER)>
->;
+struct NdpBaseRegistry
+{
+    SubRegistry<NdpBase,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::CACHE_EXPIRE)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpBase::CACHE_REFRESH)>,
+        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpBase::CACHE_INTERFACE_LIMIT)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::DAD_TIME)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpBase::HOST_MODE_STRICT)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NSF_CONVERGENCE_TIME)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NSF_DAD_SUPPRESS)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NSF_THROTTLE_RESOLUTIONS)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NUD_LIMIT)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::NUD_REFRESH_PERIOD)>,
+        AtomicField<uint32_t CONFIG_INDEX_ARG(NdpBase::REACHABLE_TIME)>,
+        AtomicField<uint8_t CONFIG_INDEX_ARG(NdpBase::RESOLUTION_DATA_LIMIT)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpBase::ROUTE_OWNER)>
+    > reg;
+};
 
 enum class NdpEntry
 {
@@ -172,34 +175,37 @@ enum class Ndp
 
 CONFIG_DEFAULT_TABLE(NDP_DEFAULTS);
 
-using NdpRegistry = SubRegistry<Ndp,
-    RegistryContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Ndp::BASE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::ADVERTISEMENT_INTERVAL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_DEFAULT_ROUTE)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_PREFIX)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::DAD_ATTEMPTS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::DESTINATION_GUARD)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::MANAGED_CONFIG_FLAG)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::NA_GLEAN)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Ndp::NS_INTERVAL)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::NUD_IGP)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Ndp::NUD_RETRY)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::NUD_RETRY_INTERVAL)>,
-    AtomicField<uint8_t CONFIG_INDEX_ARG(Ndp::NUD_RETRY_ATTEMPTS)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::NUD_FINAL_WAIT)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::OTHER_CONFIG_FLAG)>,
-    OwnedListField<NdpEntryRegistry, types::IPv6Prefix CONFIG_INDEX_ARG(Ndp::PREFIX_ENTRIES)>,
-    RegistryContainer<NdpEntryRegistry CONFIG_INDEX_ARG(Ndp::PREFIX_DEFAULTS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::PREFIX_FRAMED_IPV6_PREFIX)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_HOP_LIMIT_UNSPECIFIED)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Ndp::RA_INTERVAL)>,
-    AtomicField<uint32_t CONFIG_INDEX_ARG(Ndp::RA_MIN_INTERVAL)>,
-    AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::RA_LIFETIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_MTU_SUPPRESS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_SUPPRESS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_SUPPRESS_ALL)>,
-    AtomicField<ndp::Preference CONFIG_INDEX_ARG(Ndp::ROUTER_PREFERENCE)>
->;
+struct NdpRegistry
+{
+    SubRegistry<Ndp,
+        RegistryContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Ndp::BASE)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::ADVERTISEMENT_INTERVAL)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_DEFAULT_ROUTE)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_PREFIX)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::DAD_ATTEMPTS)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::DESTINATION_GUARD)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::MANAGED_CONFIG_FLAG)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::NA_GLEAN)>,
+        AtomicField<uint32_t CONFIG_INDEX_ARG(Ndp::NS_INTERVAL)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::NUD_IGP)>,
+        AtomicField<uint8_t CONFIG_INDEX_ARG(Ndp::NUD_RETRY)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::NUD_RETRY_INTERVAL)>,
+        AtomicField<uint8_t CONFIG_INDEX_ARG(Ndp::NUD_RETRY_ATTEMPTS)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::NUD_FINAL_WAIT)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::OTHER_CONFIG_FLAG)>,
+        OwnedListField<NdpEntryRegistry, types::IPv6Prefix CONFIG_INDEX_ARG(Ndp::PREFIX_ENTRIES)>,
+        RegistryContainer<NdpEntryRegistry CONFIG_INDEX_ARG(Ndp::PREFIX_DEFAULTS)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::PREFIX_FRAMED_IPV6_PREFIX)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_HOP_LIMIT_UNSPECIFIED)>,
+        AtomicField<uint32_t CONFIG_INDEX_ARG(Ndp::RA_INTERVAL)>,
+        AtomicField<uint32_t CONFIG_INDEX_ARG(Ndp::RA_MIN_INTERVAL)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(Ndp::RA_LIFETIME)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_MTU_SUPPRESS)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_SUPPRESS)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Ndp::RA_SUPPRESS_ALL)>,
+        AtomicField<ndp::Preference CONFIG_INDEX_ARG(Ndp::ROUTER_PREFERENCE)>
+    > reg;
+};
 }
 
 #endif // NDP_REGISTRY

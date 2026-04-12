@@ -259,7 +259,7 @@ void Interface::shutdown(bool shut)
 
 void Interface::syncShutdown()
 {
-    bool shut = configs.configs.get<config::Interface::SHUTDOWN>().load();
+    bool shut = configs.configs.reg.get<config::Interface::SHUTDOWN>().load();
     shutdown(shut);
 }
 

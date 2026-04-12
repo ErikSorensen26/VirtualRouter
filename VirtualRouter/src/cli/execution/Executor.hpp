@@ -129,6 +129,11 @@ public:
         : session(sess)
     {}
 
+    Executor(const Executor&) = delete;
+    Executor& operator=(const Executor&) = delete;
+    Executor(Executor&&) = delete;
+    Executor& operator=(Executor&&) = delete;
+
     /**
      * @brief Transitions to a new CLI mode, constructing the appropriate context.
      *
@@ -153,9 +158,10 @@ public:
         constructFn[head] = constructCtxThunk<C>;
         configPtr[head]   = static_cast<void*>(&config);
 
-        ctxBuffer[head] = reinterpret_cast<ContextBase*>(&storage[head]);
-        new (&storage[head]) Ctx(session, config);
+        void* buf = &storage[head];
+        Ctx* ctx = new (buf) Ctx(session, config);
 
+        ctxBuffer[head] = reinterpret_cast<ContextBase*>(ctx);
         currentMode[head] = M;
     }
 
@@ -189,13 +195,16 @@ public:
     void restoreFromEntry(const NavEntry& entry)
     {
         swap();
+
         executeFn[head]   = entry.executeFn;
         constructFn[head] = entry.constructFn;
         configPtr[head]   = entry.configPtr;
         currentMode[head] = entry.mode;
 
-        ctxBuffer[head] = reinterpret_cast<ContextBase*>(&storage[head]);
-        entry.constructFn(static_cast<void*>(&session), entry.configPtr, storage[head]);
+        void* buf = &storage[head];
+        entry.constructFn(static_cast<void*>(&session), entry.configPtr, static_cast<char*>(buf));
+
+        ctxBuffer[head] = reinterpret_cast<ContextBase*>(buf);
     }
 
     /**
@@ -279,8 +288,10 @@ private:
 
     /// @brief Sentinel enum used only to compute the minimum `Context<>` size for the ping-pong storage slots.
     enum class Dummy { COUNT };
+    struct DummyConfig { config::SubRegistry<Dummy> reg; }; ///< Dummy config struct to satisfy `Context`'s registry requirement.
     /// @brief Raw aligned storage for two `Context<>` instances; avoids heap allocation on mode switch.
-    alignas(ContextBase) char storage[2][sizeof(cli::Context<config::SubRegistry<Dummy>>)] = {};
+    using Storage = std::aligned_storage_t<sizeof(Context<DummyConfig>), alignof(Context<DummyConfig>)>;
+    Storage storage[2] = {};
     /// @brief Pointers into `storage`; null until the first `changeMode` call for that slot.
     ContextBase* ctxBuffer[2] { nullptr, nullptr };
 };

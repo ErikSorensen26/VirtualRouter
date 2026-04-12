@@ -29,7 +29,7 @@ BestPathComparator::BestPathComparator(BgpProcess& p, BestPathConfig cfg)
 
 inline bool BestPathComparator::compareMed(const InboundRouteBase& lhs, const InboundRouteBase& rhs) const
 {
-    if (!proc.getConfigs().get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load() && lhs.peerAs != rhs.peerAs)
+    if (!proc.getConfigs().reg.get<config::Bgp::BGP_ALWAYS_COMPARE_MED>().load() && lhs.peerAs != rhs.peerAs)
         return false;
     return medOrDefault(lhs.getPathAttributes(), config.medMissingAsWorst)
          < medOrDefault(rhs.getPathAttributes(), config.medMissingAsWorst);

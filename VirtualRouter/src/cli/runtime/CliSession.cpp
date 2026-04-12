@@ -475,7 +475,6 @@ CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool en
 
 void CliSession::handlePrompt()
 {
-    cursorPos = 0;
     setPrompt(engine.global.getHostname() + currentPrompt);
 
     insert = false;
@@ -485,7 +484,6 @@ void CliSession::handlePrompt()
     std::string preload;
     if (!nextLine.empty())
     {
-        if (nextLine.back() == ' ') nextLine.pop_back();
         preload = nextLine;
         cursorPos      = preload.size();
         oldInputLength = preload.size();
@@ -548,7 +546,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     auto handlePrefix = [&](const std::string& prefix, bool& flag)
     {
         if (!lowerCmp(words[0], prefix) || words.size() < 2) return;
-        const std::string w1 = lowerStr(std::string(words[1]));
         const CliMode m = execution.getMode();
         if (m != CliMode::UserExec && m != CliMode::PrivilegedExec)
         {
@@ -577,7 +574,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
     for (size_t idx = 0; idx < words.size(); idx++)
     {
         std::string_view word = words[idx];
-        if (!ctx.isRunning()) break;
         
         // Extend line token if active
         /*if (tokens.back().isLine())
@@ -605,7 +601,7 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         {
             if (ctx.nwh || prevCommands.size() != 1)
             {
-                result.nextLine = trimLeft(rawInput) + " ";
+                result.nextLine = rawInput.substr(0, rawInput.size() - 1);
                 result.status = ParseResult::Status::TAB;
                 return result;
             }
@@ -613,21 +609,19 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             // Single match autocomplete
             std::string_view stripped = rawInput;
             if (!stripped.empty()) stripped.remove_suffix(1);
-            std::string lastResolved = tokens.empty() ? std::string{} : std::string(tokens.back().value);
             long lastSp = static_cast<long>(stripped.rfind(' '));
             std::string nl;
-            // TODO bug
             if (lastSp < 0)
-                nl = " " + engine.maskInput(stripped, lastResolved) + "  ";
-            //else
-                //nl = engine.maskInput(std::string(" " + stripped), stripped.substr(0, static_cast<size_t>(lastSp)));
+                nl = std::string(prevCommands[0].name) + " ";
+            else
+                nl = std::string(stripped.substr(0, static_cast<size_t>(lastSp + 1))) + std::string(prevCommands[0].name) + " ";
             result.nextLine = nl;
             result.status = ParseResult::Status::TAB;
             return result;
         }
 
         // Error handle
-        if (ctx.err && !ctx.isHelpActive() && ctx.isRunning())
+        if (ctx.err && !ctx.isHelpActive())
         {
             if (available.size() > 1)
             {
@@ -636,7 +630,7 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
                 return result;
             }
             result.status = ParseResult::Status::INVALID;
-            result.markerCommand = trimLeft(rawInput.substr(0, rawInput.find(word.data())));
+            result.markerCommand = trimLeft(rawInput.substr(0, static_cast<size_t>(word.data() - rawInput.data())));
             return result;
         }
 
@@ -705,6 +699,8 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         }
     }
 
+    if (ctx.eoc) ctx.commandState = CommandState::COMPLETE;
+
     // Final validation
     if (ctx.isHelpActive() && ctx.isRunning())
     {
@@ -770,7 +766,7 @@ bool CliSession::executeCommand(std::string& command)
             return false;
 
         case ParseResult::Status::INCOMPLETE:
-            if (tryGlobalCommand(command)) return false;
+            if (tryGlobalCommand(command)) return true;
             controller.print("\r\n% Incomplete Command");
             return false;
 
@@ -956,8 +952,6 @@ bool CliSession::handlePagination(char nextch)
     for (size_t i = 0; i < paginationList.size() && i < pageSize; ++i)
     {
         const Com& cmd = paginationList[i];
-        if (cmd.name == engine.carriageReturnCommand.name) continue;
-
         std::string display = std::string("\r\n  ") + std::string(cmd.name);
         for (size_t j = 0; j <= (maxNameLength - cmd.name.size() + 5); ++j)
             display += ' ';

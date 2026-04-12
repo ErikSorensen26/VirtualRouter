@@ -132,7 +132,7 @@ public:
      */
     uint32_t getRouterId() const noexcept
     {
-        auto& rid = getConfigs().get<config::Bgp::BGP_ROUTER_ID>();
+        auto& rid = getConfigs().reg.get<config::Bgp::BGP_ROUTER_ID>();
         if (rid.hasValue()) return rid.load();
         return asNumber;
     }

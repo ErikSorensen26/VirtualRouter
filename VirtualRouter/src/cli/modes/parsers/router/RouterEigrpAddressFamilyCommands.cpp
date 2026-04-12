@@ -19,7 +19,7 @@ static bool handleAfInterface(EIGRP_PARAMS, types::AddressFamily af)
     interface::InterfaceKey key;
     if (!utils::setDoubleValue(key, segs[0] >> 0, segs[0] >> 1))
         return false;
-    auto& ifaceCtx = ctx.configs.get<config::Eigrp::AF_INTERFACE>().emplaceBack(key);
+    auto& ifaceCtx = ctx.configs.reg.get<config::Eigrp::AF_INTERFACE>().emplaceBack(key);
     if (af == types::AddressFamily::IPv4)
         return ctx.terminal.changeMode<CliMode::RouterEigrpInterfaceV4>(ifaceCtx);
     else
@@ -58,13 +58,13 @@ bool RouterEigrpAddressFamilyV6_AfInterface_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpAddressFamily_EigrpDefaultRouteTag_Handler(EIGRP_PARAMS)
 {
-    auto& tag = ctx.configs.get<config::Eigrp::DEFAULT_ROUTE_TAG>();
+    auto& tag = ctx.configs.reg.get<config::Eigrp::DEFAULT_ROUTE_TAG>();
     return utils::setFieldValue(tag, ctx, segs >> 0 >> 1);
 }
 
 bool RouterEigrpAddressFamily_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 {
-    auto& eventsiz = ctx.configs.get<config::Eigrp::MAX_EVENT_LOG_SIZE>();
+    auto& eventsiz = ctx.configs.reg.get<config::Eigrp::MAX_EVENT_LOG_SIZE>();
     return utils::setFieldValue(eventsiz, ctx, segs >> 0 >> 1);
 }
 
@@ -130,7 +130,7 @@ bool RouterEigrpAddressFamily_MaximumPrefix_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpAddressFamily_MetricRibScale_Handler(EIGRP_PARAMS)
 {
-    auto& ribScale = ctx.configs.get<config::Eigrp::RIB_SCALE>();
+    auto& ribScale = ctx.configs.reg.get<config::Eigrp::RIB_SCALE>();
     return utils::setFieldValue(ribScale, ctx, segs[0] >> 1);
 }
 
@@ -191,7 +191,7 @@ bool RouterEigrpAddressFamily_NeighborMaximumPrefix_Handler(EIGRP_PARAMS)
 bool RouterEigrpAddressFamily_SoftSia_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    auto& soft = ctx.configs.get<config::Eigrp::NON_STOP_FORWARDING>();
+    auto& soft = ctx.configs.reg.get<config::Eigrp::NON_STOP_FORWARDING>();
     utils::setToggleValue(soft, ctx);
     return true;
 }

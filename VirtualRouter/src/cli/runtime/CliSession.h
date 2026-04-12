@@ -84,6 +84,11 @@ public:
      */
     CliSession(CliEngine& engine, ConsoleController& controller, bool enableDebug = false);
 
+    CliSession(const CliSession&) = delete;
+    CliSession& operator=(const CliSession&) = delete;
+    CliSession(CliSession&&) = delete;
+    CliSession& operator=(CliSession&&) = delete;
+
     /**
      * @brief Prints the prompt and pre-fills any pending nextLine input.
      *
@@ -112,7 +117,7 @@ public:
      * @tparam S  Registry type for the new mode.
      */
     template <CliMode T, typename S>
-    requires config::IsSubRegistry<S>
+    requires config::IsSubRegistryWrapper<S>
     bool changeMode(S& configs)
     {
         if (execution.hasMode() && navTop < NAV_STACK_DEPTH)
@@ -149,7 +154,7 @@ public:
      * @tparam S  Registry type for the new mode.
      */
     template <CliMode T, typename S>
-    requires config::IsSubRegistry<S>
+    requires config::IsSubRegistryWrapper<S>
     bool resetAndChangeMode(S& configs)
     {
         navTop = 0;

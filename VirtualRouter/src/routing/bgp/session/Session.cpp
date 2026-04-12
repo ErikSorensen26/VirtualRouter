@@ -18,8 +18,8 @@ Session::Session(Neighbor& nbr) noexcept
       timers(*this)
 {
     neighbor.buildAttributeRanges();
-    holdTime = base.get<config::BgpTransportBase::HOLDTIME>().load();
-    uint16_t cfgKa = base.get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
+    holdTime = base.reg.get<config::BgpTransportBase::HOLDTIME>().load();
+    uint16_t cfgKa = base.reg.get<config::BgpTransportBase::KEEPALIVE_INTERVAL>().load();
     keepaliveInterval = (cfgKa > 0 && cfgKa < holdTime) ? cfgKa : holdTime / 3;
 
     buildLocalCapabilities();
@@ -97,11 +97,11 @@ void Session::buildLocalCapabilities()
     localCaps.routeRefresh = true;
     localCaps.enhancedRouteRefresh = true;
 
-    bool grEnabled = procCfg.get<config::Bgp::BGP_GRACEFUL_RESTART>().load();
+    bool grEnabled = procCfg.reg.get<config::Bgp::BGP_GRACEFUL_RESTART>().load();
     if (grEnabled)
     {
         localCaps.gracefulRestart = true;
-        localCaps.restartTime = procCfg.get<config::Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME>().load();
+        localCaps.restartTime = procCfg.reg.get<config::Bgp::BGP_GRACEFUL_RESTART_RESTART_TIME>().load();
     }
 
     localCaps.multiSess = neighbor.getConfigs().get<config::BgpNeighborSession::TRANSPORT_MULTI_SESSION>().load();
@@ -150,7 +150,7 @@ void Session::initiateConnection()
 
     transport::tcp::ConnectOptions opts;
     opts.policy.pathMtuDiscovery =
-        base.get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
+        base.reg.get<config::BgpTransportBase::TRANSPORT_PATH_MTU_DISCOVERY>().load();
 
     if (std::holds_alternative<AfiSafi>(multiSession))
     {

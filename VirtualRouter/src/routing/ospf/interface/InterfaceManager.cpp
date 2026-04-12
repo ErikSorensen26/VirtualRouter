@@ -114,7 +114,7 @@ void InterfaceManager::refreshInterfaceList()
         {
             // Use first area defined that matches.
             std::optional<uint32_t> area{std::nullopt};
-            process.getConfigs().get<config::Ospf::NETWORKS>().withRead([&](const auto& networksList) {
+            process.getConfigs().reg.get<config::Ospf::NETWORKS>().withRead([&](const auto& networksList) {
                 for (const auto& networks : networksList)
                     for (const auto& [prefix, a] : networks)
                     {

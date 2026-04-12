@@ -24,7 +24,7 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
           return p.getProcess().routingInstance->getRegistry().emplaceBack(neighborConfigs, id);
       }())
 {
-    configs.getConfigs().context().set(this);
+    configs.getConfigs().reg.context().set(this);
 
     // Resolve peer group
     {
