@@ -306,7 +306,12 @@ public:
     // OSPFv3 PROCESS
 
     /**
-     * TODO finis doxy
+     * @brief Synchronizes all OSPFv3 processes with the current interface state.
+     *
+     * Called when interfaces are added, removed, or reconfigured. Re-evaluates
+     * which interfaces are eligible for OSPFv3 participation based on configured
+     * areas and address families (IPv4 and IPv6 under a single process ID), then
+     * updates DR/BDR elections and adjacencies as needed.
      */
     void refreshOspfv3();
 

@@ -26,7 +26,7 @@ break if it were done differently?"
 14. [Infrastructure — ARP & NDP](#14-infrastructure--arp--ndp)
 15. [Interface Layer](#15-interface-layer)
 16. [QoS](#16-qos)
-17. [Cross-Cutting Design Patterns](#17-cross-cutting-design-patterns)
+17. [Cross-Cutting Decisions](#17-cross-cutting-decisions)
 18. [Concurrency Model](#18-concurrency-model)
 
 ---
@@ -36,7 +36,7 @@ break if it were done differently?"
 A few core convictions shaped every decision in this codebase. They're worth stating
 explicitly because they explain choices that might otherwise look like over-engineering.
 
-### The data plane must never yield to the control plane
+**The data plane must never yield to the control plane.**
 
 Packet forwarding happens on nanosecond timescales. Route updates, SPF runs, and BGP
 best-path recalculations happen on millisecond timescales. These two worlds should
@@ -52,7 +52,7 @@ exists; they just do a FIB lookup and hand the packet to egress.
 This isn't a performance optimization applied after the fact — it's the foundational
 constraint the entire threading model is built around.
 
-### Abstractions should cost nothing at runtime
+**Abstractions should cost nothing at runtime.**
 
 C++ templates are used not as a convenience but as a correctness and performance
 tool. The CLI parser generates its match logic at compile time via fold expressions
@@ -66,7 +66,7 @@ branches in the hot path.
 The rule of thumb: if something can be decided at compile time, it is. If it can't,
 the runtime cost should be explicit and measurable.
 
-### Type safety is a design tool, not just a feature
+**Type safety is a design tool, not just a feature.**
 
 The config registry makes it impossible to read a field from the wrong registry scope
 — the compiler rejects it. The CLI command system makes it impossible to have an
@@ -81,7 +81,7 @@ otherwise be silent runtime failures — wrong config key, wrong address family,
 unhandled LSA type. The type system enforces protocol invariants that the RFC states
 in English.
 
-### Protocol state is single-threaded; threading is structural
+**Protocol state is single-threaded; threading is structural.**
 
 Instead of protecting protocol data structures with mutexes, each protocol process
 serializes all mutations through a `ProcessQueue` — a lock-free MPSC ring. Hardware
@@ -96,7 +96,7 @@ the threading model makes locks unnecessary. This is not "avoid locks because th
 slow" — it's "structure the system so that locks are the wrong tool for most of the
 problem."
 
-### RFC compliance is the specification
+**RFC compliance is the specification.**
 
 Each protocol implements the actual standard, not an approximation. OSPFv2 implements
 all 8 neighbor states, the exact DR/BDR two-pass election from RFC 2328 §9.4,
@@ -110,7 +110,7 @@ The goal is a router that can form adjacencies with real Cisco, Juniper, and FRR
 instances and behave correctly without special casing. That requires reading the RFC
 carefully enough to get the corner cases right, not just the happy path.
 
-### VRF isolation is a first-class constraint, not a retrofit
+**VRF isolation is a first-class constraint, not a retrofit.**
 
 `VirtualRouter` is the root of all protocol state from day one. Each VRF has its own
 RIB, its own FIB, its own TCP stack, its own OSPF and BGP processes. There is no
@@ -122,16 +122,15 @@ second `VirtualRouter`. Nothing else changes.
 
 ## 1. Repository Layout
 
-The directory structure is not arbitrary. It encodes coupling constraints: code in
-`hardware/` depends on kernel AF_PACKET and AF_XDP APIs and must not know that
+The directory structure encodes coupling constraints, not just organization. Code
+in `hardware/` depends on kernel AF_PACKET and AF_XDP APIs and must not know that
 protocols exist. Code in `routing/` depends on VRF state and must not know which
 kernel I/O backend is running. Neither layer can accidentally reach the other because
 they live in separate trees with no cross-includes in those directions.
 
-The separation also makes the layering auditable. If `routing/bgp/` ever included
-anything from `hardware/`, that would immediately signal a design violation. The
-directory layout is the first line of enforcement for the layered architecture
-described in §2.
+The separation makes the layering auditable. If `routing/bgp/` ever included anything
+from `hardware/`, that would immediately signal a design violation. The directory
+layout is the first line of enforcement for the layered architecture described in §2.
 
 ```
 VirtualRouter/src/
@@ -165,7 +164,7 @@ VirtualRouter/src/
 ├── cli/
 │   ├── parser/                 Command<>, CliModeParser<>, FixedString
 │   ├── modes/                  Mode enum, CliMode path table
-│   │   └── contexts/           Per-mode Context objects (GlobalContext, OspfContext, etc.)
+│   │   └── contexts/           Per-mode Context objects
 │   ├── execution/              Executor<> — mode switching and dispatch
 │   └── runtime/                CliSession, I/O loop
 │
@@ -340,48 +339,30 @@ Each VRF has its own RIB, FIB, TCP stack, and protocol instances. Adding a secon
 VRF is instantiating a second `VirtualRouter`. Removing a VRF is destroying one.
 Nothing else needs to change.
 
-Interfaces are globally owned but VRF-attached, which is an intentional ownership
-split. Interfaces are hardware resources — a physical NIC exists whether or not a
-VRF has claimed it. Ownership by the VRF would complicate interface reassignment
-(moving an interface between VRFs would require protocol teardown coordination across
-two VRF objects). Instead, the VRF holds a reference, and `setVRF()` on the
-Interface handles all the teardown and re-attach logic in one place.
+### Why interfaces are globally owned but VRF-attached
 
-Protocol instances (EIGRP, OSPF) are fully owned by the VRF. This means protocol
-teardown is automatic on VRF destruction — no external coordination needed.
+An interface is a hardware resource — a physical NIC exists whether or not a VRF has
+claimed it. If the VRF owned the interface, moving an interface between VRFs would
+require protocol teardown coordination across two VRF objects simultaneously, with
+no clean point of synchronization. Instead, the VRF holds a reference, and `setVRF()`
+on the Interface handles all teardown and re-attach logic in one place. The ownership
+split is intentional: hardware ownership stays global, logical assignment is VRF-scoped.
 
-### VirtualRouter — The VRF Container
+### Why protocols are fully owned by the VRF
 
-```
-VirtualRouter
-│
-├── interface::InterfaceManager                     ifaceMgr
-│   └── (see §15. Interface Layer)
-│
-├── unordered_map<uint32_t, EigrpAutonomousSystem>  eigrpList
-│   └── (mutex eigrpAutonomousSystemMutex)
-│
-├── unordered_map<string, EigrpNamed>               namedEigrpList
-│   └── (mutex eigrpNamedMutex)
-│
-├── unordered_map<uint32_t, OspfProcess>            ospfList
-├── unordered_map<uint32_t, OspfV3Instance>         ospfv3List
-│
-├── RoutingTable                                    routingTable
-│   ├── Rib<uint32_t>    (IPv4 RIB)
-│   └── Rib<__uint128_t> (IPv6 RIB)
-│
-├── TCP::Tcp                                        tcpManager
-│   └── (isolated per-VRF TCP socket namespace)
-│
-├── string                                          instanceName
-├── set<AddressFamily>                              enabledAddressFamilies
-└── uint32_t                                        rid  (calculateRID())
-```
+> **Protocol teardown must be automatic on VRF destruction.**
+>
+> If protocol instances were globally owned and referenced by VRFs, destroying a VRF
+> would require the caller to know which protocols existed and call teardown on each —
+> a fragile ordering requirement that any new protocol addition could break.
+>
+> Full ownership by the VRF means `~VirtualRouter()` destroys everything in a defined
+> order without any external coordination. No protocol can outlive its VRF.
 
-**Router ID calculation** (`calculateRID`): Scans interface list for the highest
+**Router ID calculation** (`calculateRID`): Scans the interface list for the highest
 IPv4 address on a loopback; if none found, falls back to the highest IPv4 on any
-Ethernet interface. This mirrors Cisco IOS RID election behavior.
+Ethernet interface. This mirrors Cisco IOS RID election behavior and ensures
+deterministic IDs on stable topologies without manual configuration.
 
 ---
 
@@ -389,169 +370,81 @@ Ethernet interface. This mirrors Cisco IOS RID election behavior.
 
 Three design decisions define this subsystem.
 
-**Template parameterization over address family.** `Rib<AddrType>` is instantiated
-separately for IPv4 (`uint32_t`) and IPv6 (`__uint128_t`). The compiler generates
-two completely separate, type-safe tables with no runtime branching on address
-family. The alternative — a single table with `if (af == IPv6)` everywhere — would
-scatter address-family conditionals through every route operation and make it
-impossible for the compiler to reason about type correctness across address families.
+### Why RIB is template-parameterized over address family
 
-**RCU for the FIB.** The FIB is read on every forwarded packet. Lock acquisition on
-that path is not acceptable — even an uncontended mutex costs hundreds of nanoseconds.
-RCU makes the read completely lock-free: a forwarding thread takes one memory barrier,
-does its lookup, and exits the guard. The writer pays the cost: it copies the new
-entry to the heap, atomically swaps it in, and defers freeing the old one until all
-current readers have exited. For a read-overwhelmingly-dominant data structure like
-the FIB, this is exactly the right trade.
+> **Why `Rib<AddrType>`, not a single table with runtime AF flags.**
+>
+> A single table with `if (af == IPv6)` scattered through every route operation
+> would make it impossible for the compiler to reason about type correctness across
+> address families. Any new AF would require auditing every conditional. The cost
+> is latent bugs where IPv4 logic silently runs on an IPv6 prefix.
+>
+> `Rib<uint32_t>` and `Rib<__uint128_t>` are generated as completely separate,
+> type-safe instances. The compiler rejects any cross-AF operation at the call site.
+> There is no runtime AF branching anywhere in the hot path.
 
-**RouteWatcher instead of polling.** Protocols need to react to route changes — BGP
-NHT tracks whether a next-hop is reachable; redistribution tracks whether a source
-protocol's best route changed. Polling would waste CPU and introduce reaction latency
-proportional to the poll interval. `RouteWatcher` fires callbacks immediately when
-the relevant prefix changes, from the RIB's scheduler thread, keeping reaction
-latency at one scheduler quantum.
+### Why RCU for the FIB
 
-### Rib<AddrType>
+> **Why RCU, not a shared mutex on the FIB.**
+>
+> The FIB is read on every forwarded packet — nanosecond-scale accesses. Even an
+> uncontended mutex costs hundreds of nanoseconds for the acquire/release pair, plus
+> it serializes all forwarding threads behind the same lock.
+>
+> RCU makes the read completely lock-free: a forwarding thread takes one memory
+> barrier, does its lookup, and exits the guard. The writer pays the cost: it copies
+> the new entry to the heap, atomically swaps it in, and defers freeing the old one
+> until all current readers have exited their guards. For a data structure read on
+> every packet but written only on route convergence, this is the right trade.
 
-```
-Rib<AddrType>
-│
-├── unordered_map<PrefixKey, RibBucket<AddrType>*>  table
-│   └── RIB entries grouped by exact prefix; each bucket holds all sources
-│
-├── Fib<AddrType>                                   fib
-│   └── LPCTrie<AddrType>  (Longest Prefix Compression Trie)
-│       └── Lock-free lookups via RCU read guards
-│
-├── ProcessQueue                                    scheduler
-│   └── All RIB mutations serialized through this queue
-│
-└── RouteWatcher<AddrType>                          routeWatcher
-    └── Callback-based change notification system
-```
+### Why RouteWatcher instead of polling
 
-**RibEntry<AddrType>**: The unit stored per prefix per source.
+> **Why callback-based NHT, not polling for next-hop reachability.**
+>
+> Polling would waste CPU continuously and introduce reaction latency proportional
+> to the poll interval. For BGP next-hop tracking, a 1-second poll interval means
+> routes with unreachable next-hops are advertised for up to 1 second after the
+> route withdraws. For redistribution, the same delay applies.
+>
+> `RouteWatcher` fires callbacks immediately when the relevant prefix changes, from
+> the RIB's scheduler thread. Reaction latency is one scheduler quantum. The protocol
+> doesn't poll — it's told.
 
-```
-RibEntry<AddrType>
-├── prefix: AddrType
-├── length: uint8_t            (prefix length / mask)
-├── source: RouteSource        (BGP, OSPF, EIGRP, STATIC, CONNECTED, ...)
-├── processId: uint64_t        (which process instance installed this)
-├── adminDistance: uint8_t     (preference between sources; lower wins)
-├── metric: uint64_t
-├── tag: uint32_t
-├── topInfo: void*             (opaque protocol-specific metadata)
-├── nextHops: NextHopPath[8]   (up to MAX_NEXTHOP=8 equal-cost next hops)
-│   └── NextHopPath: { optional<AddrType> nextHop, uint32_t iface, uint32_t weight }
-└── nextHopCount: uint8_t
-```
+### Three Watch Modes
 
-**FibEntry<AddrType>**: A stripped-down heap copy of the winning `RibEntry`,
-containing only forwarding fields (prefix, length, nextHops). Stored atomically
-in `RibBucket::fibEntry` and retired via RCU when replaced.
+**Exact prefix watch** (`watchRoute`): Fires whenever the best route for a specific
+(prefix, length) changes according to a filter. Used for redistribution: "tell me
+whenever OSPF changes its best route for 10.0.0.0/8."
 
-### RibBucket<AddrType>
+**LPM address watch** (`watchAddress`): Watches reachability of a host address via
+longest-prefix match. This is BGP NHT. When the covering prefix withdraws, the watch
+automatically re-pins to the next less-specific prefix — the caller transparently
+follows route changes through supernet fallbacks without re-registering.
 
-Each unique (prefix, length) pair owns one `RibBucket`. It holds all competing
-source routes and maintains the current best selection.
-
-```
-RibBucket<AddrType>
-│
-├── vector<RibEntry<AddrType>>             routes      ← all installed sources
-├── RibEntry<AddrType>*                    bestEntry   ← current winner (ptr into routes)
-├── RibEntry<AddrType>*                    prevBest    ← winner before last selectBest()
-└── atomic<RibEntry<AddrType>*>            fibEntry    ← RCU-protected heap copy for FIB
-```
-
-`selectBest()` runs after every add/remove. It saves `prevBest = bestEntry`, then
-scans `routes` comparing `adminDistance` then `metric`. The winner is deep-copied
-to a new heap `FibEntry`, atomically swapped into `fibEntry`, and the old copy is
-`RCU::retire()`'d. This ensures FIB readers are never exposed to a pointer into the
-potentially reallocating `routes` vector.
-
-### FIB — LPC Trie
-
-The forwarding table uses a **Longest Prefix Compression (LPC) Trie** — a compact
-binary trie with path compression. Lookups are O(prefix bits) worst-case and
-typically much faster due to compression skipping constant bit ranges.
-
-FIB lookups are protected by **RCU (Read-Copy-Update)**:
-- Readers take an `RCU::Guard` — zero lock acquisition, just a memory barrier
-- Writers copy the new entry to the heap, swap atomically, then `RCU::retire()` the
-  old pointer for deferred free after all readers have exited their guards
-- `RCU::synchronize()` used at teardown to drain all pending retires
-
-The packet forwarding fast path (`fib.lookup(addr)`) is completely lock-free.
-
-### RouteWatcher<Addr>
-
-`RouteWatcher` is the RIB's callback notification system. Protocols and BGP's NHT
-register interest and receive typed callbacks when the best route changes. All
-watches are evaluated on the RIB's `ProcessQueue` scheduler thread, so callbacks
-run in a controlled, single-threaded context.
-
-```
-RouteWatcher<Addr>
-│
-├── unordered_map<PrefixKey, vector<WatchNode>>      prefixWatchTable
-│   └── Exact (prefix, length) → list of watchers
-│
-├── unordered_map<WatchId, PrefixKey>                prefixIdMap
-│   └── Reverse map for O(1) removal
-│
-├── unordered_map<SrcPidKey, vector<WatchNode>>      protocolWatchTable
-│   └── (RouteSource, processId) → list of watchers
-│       Used for redistribution: "tell me whenever BGP pid=42 best changes"
-│
-├── unordered_map<WatchId, AddrWatchState>           addrWatches
-│   └── Per-address watch bookkeeping (re-pins on prefix withdraw)
-│
-├── Fib<Addr>&                                       fib
-├── ProcessQueueRef                                  scheduler
-└── AtomicStack<uint32_t>                            availableIds   ← ID recycling pool
-```
+**Per-source protocol watch** (`watchProtocol`): Fires whenever any best route from
+a specific `(RouteSource, processId)` pair changes. Designed for redistribution where
+the consumer cares about one protocol's entire contribution to the RIB.
 
 **Return value convention**: Callbacks return `bool`. Returning `true` means
 "I'm done — unsubscribe me." Returning `false` keeps the watch alive.
 
-#### Three Watch Modes
+### RibBucket and FIB consistency
 
-**1. `watchRoute(prefix, length, ctx, fn, filter)` — Exact prefix watch**
-
-Fires whenever the best route for the specific (prefix, length) changes according
-to `filter`.
-
-**2. `watchAddress(addr, ctx, fn, filter)` — LPM address watch (auto-repinning)**
-
-Watches the reachability of a specific host address via longest-prefix match. This
-is the watch mode used by BGP NHT. When the covering prefix withdraws, the watch
-automatically re-pins to the next less-specific covering prefix — an NHT caller
-transparently follows route changes through supernet fallbacks.
-
-**3. `watchProtocol(src, pid, ctx, fn)` — Per-source protocol watch**
-
-Fires whenever the best route from a specific `(RouteSource, processId)` pair
-changes on any prefix. Designed for redistribution.
-
-### RoutingTable — Dual-AF Facade
-
-`RoutingTable` wraps `Rib<uint32_t>` and `Rib<__uint128_t>` under a single object
-owned by `VirtualRouter`. All methods dispatch based on `AddrType` via `if constexpr`.
+Each unique (prefix, length) pair owns one `RibBucket` holding all competing source
+routes. `selectBest()` runs after every add/remove: it saves the previous winner,
+scans all sources comparing admin-distance then metric, deep-copies the winner to a
+new heap `FibEntry`, atomically swaps it into the RCU-protected FIB pointer, and
+retires the old copy. This ensures FIB readers are never exposed to a pointer into
+the potentially-reallocating routes vector.
 
 ### BGP Next-Hop Tracking (NHT)
 
-BGP NHT is implemented inside `AddressFamilyInstance<N>` using `watchAddress`.
-It tracks whether each installed route's next-hop is currently reachable in the
-global RIB, and triggers best-path recomputation when reachability changes.
-
-The NHT callback fires on the RIB's scheduler thread. Because BGP state must only
-be mutated from the BGP scheduler thread, the callback immediately posts back to
-the BGP process queue via `NhtCtx::bgpSched` before touching any BGP state. A
-configurable trigger delay (`BGP_NEXT_HOP_TRIGGER_DELAY`) batches multiple NHT
-changes behind a timer, preventing thrashing when a link flap affects many prefixes
-simultaneously.
+BGP NHT is implemented using `watchAddress`. The NHT callback fires on the RIB's
+scheduler thread. Because BGP state must only be mutated from the BGP scheduler
+thread, the callback immediately posts back to the BGP process queue before touching
+any BGP state. A configurable trigger delay (`BGP_NEXT_HOP_TRIGGER_DELAY`) batches
+multiple NHT changes behind a timer, preventing thrashing when a link flap affects
+many prefixes simultaneously.
 
 ---
 
@@ -562,63 +455,29 @@ RFC 4724 (graceful restart framework), and MP-BGP (RFC 4760). The design is
 structured around two ideas: the FSM is the ground truth for session state, and
 per-AFI logic is expressed as compile-time policy rather than runtime branching.
 
-A BGP session carries no awareness of address families — it only drives the FSM
-and delivers parsed messages. Address family instances consume those messages
-independently and install into the global RIB through a shared `RoutingTable`
-reference. This separation means adding a new AFI/SAFI requires no changes to
-the session or FSM code — only a new policy type and a new instantiation.
+### Why the session carries no knowledge of address families
 
-### BgpProcess — The Process Root
+A BGP session only drives the FSM and delivers parsed messages. Address family
+instances consume those messages independently and install routes through a shared
+`RoutingTable` reference. This separation means adding a new AFI/SAFI requires no
+changes to the session or FSM code — only a new policy type and a new instantiation.
+The alternative — a session class with AF-specific branches — would make every FSM
+transition site aware of every AF it might be carrying, and every new AF would
+require auditing those sites.
 
-```
-BgpProcess
-│
-├── uint32_t                                  asNumber         (const)
-├── TCP::Listener                             listener         (passive TCP)
-│
-├── unordered_map<IPAddress, Session>         sessions
-│   └── keyed by peer IP address
-│
-├── unordered_map<AfiSafi, AddressFamilyVariant>  addressFamilies
-│   └── each entry is one of:
-│       AddressFamilyInstance<IPv4UnicastNlri>
-│       AddressFamilyInstance<IPv6UnicastNlri>
-│       AddressFamilyInstance<VpnV4Nlri>
-│       AddressFamilyInstance<VpnV6Nlri>
-│
-├── NeighborTable                             ntable
-├── AttributeManager                          attrMgr
-├── ProcessQueue                              scheduler        (all FSM serialized here)
-└── Config::Reference<BgpRegistry>           configs
-```
+### Address Family Template System
 
-Static TCP callbacks (`onConnectCallback`, `onAcceptCallback`, `onReceiveCallback`)
-are registered with the TCP engine. They receive a `ConnCallbackCtx` with a `void*
-user` field pointing back to the `BgpProcess`, then enqueue FSM events onto the
-scheduler. The TCP thread never directly modifies FSM state — it only enqueues events.
+All per-AFI logic (NLRI encoding, route table types, wire format) is a compile-time
+policy type. `AddressFamilyInstance<N>` is specialized separately for IPv4 unicast,
+IPv6 unicast, VPNv4, VPNv6. Each specialization is a fully separate compiled
+instance with no dead branches for AFIs that aren't active. Adding a new AFI means
+defining a new NLRI policy struct and adding it to the variant — no existing code
+changes.
 
-### Session — Per-Peer State
-
-```
-Session
-│
-├── TCP::Connection         primaryConn    (active/outbound)
-├── TCP::Connection         secondaryConn  (passive/inbound — during collision resolution)
-│
-├── Fsm                     fsm
-├── SessionTimers           timers
-│   ├── holdTimer
-│   ├── keepaliveTimer
-│   ├── connectRetryTimer
-│   └── delayOpenTimer
-│
-├── Capabilities            localCaps
-├── Capabilities            peerCaps
-├── NegotiatedCapabilities  negotiated
-│
-├── Neighbor&               neighbor       (config + RIB state reference)
-└── BgpProcess&             process
-```
+`AddressFamilyVariant` is a `std::variant` of all possible instantiations. `std::visit`
+is used when you need to operate on all enabled AFs uniformly at runtime. The
+compiler enforces that every `std::visit` handles every variant member — a missing
+case for a new AFI is a compile error, not a runtime crash.
 
 ### FSM (Fsm.cpp)
 
@@ -644,47 +503,7 @@ On `OPEN_RECEIVED`, the FSM validates:
 Collision detection is handled by comparing Router IDs; the higher-RID session wins
 and the lower is sent `CEASE` notification.
 
-### Address Family Template System
-
-All per-AFI logic (NLRI encoding, route table types, wire format) is a compile-time
-policy. The alternative — a single class with `if (afi == IPv6)` scattered throughout
-— would mean every code path carries dead branches for every AFI that isn't active,
-and adding a new AFI requires auditing every one of those branches. The template
-approach means each AFI is a fully separate compiled instance. Adding a new AFI
-(e.g., L2VPN EVPN) means defining an `EvpnNlriPolicy` struct with the required type
-aliases and adding it to the variant — no existing code changes.
-
-```
-AddressFamily<AfiSafi::IPv4Unicast>
-    resolves to → AddressFamilyInstance<IPv4UnicastNlriPolicy>
-
-AddressFamily<AfiSafi::IPv6Unicast>
-    resolves to → AddressFamilyInstance<IPv6UnicastNlriPolicy>
-
-AddressFamily<AfiSafi::VpnV4>
-    resolves to → AddressFamilyInstance<VpnV4NlriPolicy>
-```
-
-`AddressFamilyVariant` is a `std::variant` of all possible instantiations, stored
-in the `addressFamilies` map. `std::visit` is used when you need to operate on all
-enabled AFs uniformly at runtime.
-
-### AddressFamilyInstance<N>
-
-```
-AddressFamilyInstance<N>
-│
-├── AdjRibInTable<N>    adjRibIn    ← post-policy, per-neighbor routes
-├── AdjRibOutTable<N>   adjRibOut   ← computed egress routes per neighbor
-├── N::LocRib           locRib      ← best route per prefix; type chosen by NlriPolicy
-│
-├── BgpProcess&         process
-├── VirtualRouter&      policy      (for route installation)
-├── AttributeManager&   attrMgr     (shared with process)
-└── Config::Reference<BgpAddressFamilyRegistry>  configs
-```
-
-**Route processing pipeline** (inbound UPDATE):
+### Inbound Route Processing Pipeline
 
 ```
 onParsedUpdateFromPeer(Neighbor&, ParsedUpdate<Nlri>)
@@ -693,7 +512,7 @@ onParsedUpdateFromPeer(Neighbor&, ParsedUpdate<Nlri>)
     │   ├─ applyIngressPolicy(route) → bool (true = DROP)
     │   │   ├─ AS_PATH loop detection
     │   │   ├─ ALLOWAS_IN / ALLOWAS_IN_OCCURANCES counting
-    │   │   └─ Route policy filter (future: route maps)
+    │   │   └─ Route policy filter
     │   │
     │   ├─ Insert into adjRibIn[neighborId][prefix]
     │   ├─ MAXIMUM_PREFIX check → post MAX_PREFIX_REACHED if exceeded
@@ -705,12 +524,12 @@ onParsedUpdateFromPeer(Neighbor&, ParsedUpdate<Nlri>)
 
 recomputeNlri(prefix)
     │
-    ├─ Collect all candidates: adjRibIn[*][prefix]
+    ├─ Collect all candidates: adjRibIn[*][prefix] + networkLocalRoutes
     ├─ DecisionEngine::selectBest(candidates) → optional<LocalRoute<N>>
     │
     ├─ If winner changed:
     │   ├─ locRib.installOrReplace(prefix, winner)
-    │   ├─ VirtualRouter::installRoute(prefix, winner)  ← into global RIB
+    │   ├─ installToRibDirect(prefix, winner)  ← into global RIB
     │   └─ recomputeAdjRibOut(prefix, winner)
     │
     └─ If no winner: withdraw from locRib + global RIB
@@ -737,15 +556,16 @@ Step 10: Cluster List length (for route reflectors; shorter wins)
 Step 11: Peer IP address (lowest wins; final deterministic tiebreaker)
 ```
 
-### AttributeManager — Flyweight Path Attributes
+### Why AttributeManager uses flyweight refcounting
 
-BGP path attributes are expensive to copy. In a full table with 1M routes, many
-routes share identical AS-PATHs and community sets. Storing a full copy per route
-would be both wasteful and incorrect — a change to a shared attribute would need to
-be applied everywhere. `AttributeManager` deduplicates attributes using refcounted
-flyweights keyed by content hash. Routes store only a `uint32_t pathId`. `RouteBase`
+In a full BGP table, many routes share identical AS-PATHs and community sets.
+Storing a full copy per route would make the table several times larger than
+necessary, and updating a shared attribute (e.g., prepending your own AS on egress)
+would require finding and rewriting every route that referenced it. `AttributeManager`
+deduplicates by content hash. Routes store only a `uint32_t pathId`. `RouteBase`
 RAII wraps retain/release so that reference counts are automatically maintained
-through copy/move/destroy of any route object.
+through copy/move/destroy. No route can outlive its attributes; no attribute set is
+freed while a route still references it.
 
 ---
 
@@ -758,87 +578,32 @@ argument that supplies the wire format differences. This avoids duplicating the
 algorithmic core while keeping the protocol-specific encoding details entirely
 separate.
 
-LSA bodies are stored as `std::variant`, not virtual base classes. The LSDB can
-contain thousands of LSAs, so vtable pointer overhead per LSA is measurable.
-`std::variant` stores all types in a discriminated union with no heap allocation per
-entry and no pointer indirection. More importantly, `std::visit` over a `std::variant`
-is exhaustive — the compiler enforces that every SPF code path handles every LSA type.
-A missing case is a compile error, not a runtime crash.
+### Why LSA bodies are `std::variant` instead of virtual classes
 
-### OspfProcess — Process Root
-
-OSPFv2 runs a single `OspfProcess` per process ID. OSPFv3 wraps two instances (IPv4
-and IPv6 AFs) under an `OspfV3Instance`:
-
-```
-OSPFv2:
-  OspfProcess (procId, af=IPv4)
-
-OSPFv3:
-  OspfV3Instance (procId)
-  ├── OspfProcess* ipv4Instance
-  └── OspfProcess* ipv6Instance
-
-OspfProcess
-│
-├── uint16_t                         procId
-├── AddressFamily                    af            (IPv4 or IPv6)
-├── uint32_t                         rid           (or calculated from interfaces)
-├── bool                             isABR, isASBR
-│
-├── map<uint32_t, Area>              areas         (created lazily by insureArea())
-├── InterfaceManager                 ifaceMgr
-├── OspfRib                          rib
-│
-├── ProcessQueue                     scheduler     (serializes SPF + LSA work)
-└── Config::Reference<OspfRegistry> configs
-```
-
-Area 0 (backbone) is treated specially for ABR logic. `initiateReset()` posts resets
-to all areas, tearing down neighbors and MaxAge-flooding all LSAs.
-
-### LSDB Design
-
-The LSDB uses `std::pmr` (polymorphic memory resource) containers when
-`OSPF_LSDB_USE_PMR=1` is set, allowing arena-style allocation for LSA storage
-during SPF computation. This reduces allocator overhead for large LSDBs.
-
-LSA types are stored in a `std::variant`:
-
-```
-OSPFv2 LsaBody variant:
-  std::variant<RouterLsaV2, NetworkLsaV2, SummaryNetworkLsa, SummaryRouterLsa,
-               ExternalLsaV2, OpaqueLsaV2>
-
-OSPFv3 LsaBody variant:
-  std::variant<RouterLsaV3, NetworkLsaV3, InterAreaPrefixLsa, InterAreaRouterLsa,
-               ExternalLsaV3, LinkLsa, IntraAreaPrefixLsa>
-```
+> **Why `std::variant<RouterLsa, NetworkLsa, ...>`, not `virtual LsaBody`.**
+>
+> The LSDB can contain thousands of LSAs. A vtable pointer per LSA is 8 bytes of
+> overhead per entry plus a heap allocation per LSA body. For a large topology this
+> is measurable. More importantly, `std::visit` over a variant is exhaustive — the
+> compiler enforces that every SPF code path handles every LSA type. A missing case
+> is a compile error.
+>
+> Virtual dispatch would leave a missing LSA handler as a runtime crash or silent
+> wrong behavior. The variant approach eliminates that class of bug entirely.
 
 ### SPF Computation
 
 SPF is Dijkstra's algorithm run on the LSDB. The result feeds into `OspfRib` which
-then installs routes into the VRF's global `RoutingTable`.
+installs routes into the VRF's global `RoutingTable`.
 
-`TopologyTypes.hpp` defines the SPF output types:
-
-```
-OspfNextHop   = { uint32_t interfaceId, IPAddress nextHop }
-OspfRouter    = { uint32_t rid, uint64_t cost, vector<OspfNextHop> nextHops }
-OspfPath      = { type, area, cost, adminDistance, nextHops, ... }
-OspfRoute     = { prefix: IPPrefix, paths: vector<OspfPath> }
-```
-
-### LSA Origination Templates
-
-OSPF uses templated origination methods to handle both v2 and v3 wire formats
-through a common policy interface. `Policy` provides compile-time hooks for how to
-encode/decode LSA bodies and how to compute keys. This pattern avoids a large v2/v3
-runtime switch in every origination path.
+The `OSPF_LSDB_USE_PMR=1` flag enables `std::pmr` arena allocation for LSA storage
+during SPF computation, reducing allocator overhead for large LSDBs. The tradeoff
+is that pmr arenas are bulk-freed — appropriate for SPF's "compute then discard"
+access pattern, not for persistent structures.
 
 ### Neighbor State Machine
 
-The neighbor FSM mirrors RFC 2328 §10 exactly. Each `Neighbor` transitions through:
+The neighbor FSM mirrors RFC 2328 §10 exactly:
 
 ```
 DOWN → ATTEMPT → INIT → 2WAY → EXSTART → EXCHANGE → LOADING → FULL
@@ -858,6 +623,13 @@ MaxAge-flooded via `area.flushNeighborLsas(rid)`.
 DR/BDR election uses the full RFC 2328 §9.4 two-pass algorithm. After election,
 EXSTART is triggered for affected neighbors and the originator updates the Router LSA.
 
+### OSPFv3 dual-stack structure
+
+OSPFv3 wraps two `OspfProcess` instances (one IPv4, one IPv6 AF) under a single
+`OspfV3Instance`. Area 0 (backbone) is treated specially for ABR logic. This mirrors
+the RFC 5340 model where OSPFv3 is address-family-agnostic at the protocol level and
+the same instance can carry both AF prefixes.
+
 ---
 
 ## 7. EIGRP
@@ -870,53 +642,13 @@ condition. Getting DUAL right requires careful implementation of the active/pass
 state machine, the SIA timer escalation, and per-neighbor query tracking. That's
 where the implementation complexity lives.
 
-The RTP layer (Reliable Transport Protocol) is EIGRP's answer to TCP — it provides
-reliable, ordered delivery of Updates, Queries, and Replies over UDP multicast without
-requiring a full TCP stack. It's implemented with per-neighbor sequence tracking,
-exponential backoff, and Jacobson/Karels RTT estimation — the same algorithm TCP uses.
-
 Classic mode and named mode share the same `Eigrp` implementation object. The only
 difference is how configuration is structured at the CLI level, which is resolved
 before it reaches the protocol code.
 
-### Ownership Model
+### DUAL Algorithm — Feasibility Condition
 
-```
-VirtualRouter
-├── unordered_map<uint32_t, EigrpAutonomousSystem>   eigrpList     (classic mode)
-│   └── EigrpAutonomousSystem
-│       ├── Eigrp* ipv4
-│       └── Eigrp* ipv6
-│
-└── unordered_map<string, EigrpNamed>                namedEigrpList
-    └── EigrpNamed
-        ├── Eigrp* ipv4
-        └── Eigrp* ipv6
-```
-
-### Eigrp Class
-
-```
-Eigrp
-│
-├── uint16_t                  asNumber     (const)
-├── AddressFamily             addressFamily (const)
-├── bool                      namedMode
-├── VirtualRouter*            routingInstance
-│
-├── RouterID                  rid          (static or calculated)
-├── EigrpTopology             topology     (wraps DuelEngine + TopologyTable)
-├── InterfaceManager          ifaceMgr     (interface tracking)
-├── EigrpConfig               configMgr    (config validation)
-├── GlobalAggregator          aggregator   (auto + manual summary route generation)
-├── RouteManager              routeManager (installs routes into VRF RIB)
-└── NeighborRegistry          allNeighbors (global neighbor tracking)
-```
-
-### DUAL Algorithm — DuelEngine
-
-`DuelEngine` is the full EIGRP DUAL implementation. The feasibility condition is
-fully implemented:
+The feasibility condition is fully implemented:
 
 ```cpp
 route.isFeasibleSuccessor = (route.routeInfo.reportedDistance < bestFD);
@@ -926,20 +658,7 @@ A neighbor's route is a Feasible Successor if and only if its Reported Distance 
 strictly less than this router's current Feasible Distance. This guarantees the backup
 route is loop-free without requiring a full SPF run — it's the core insight of DUAL.
 
-#### Successor Selection and Variance
-
-```
-recalculateSuccessors():
-  1. Find minimum FD across all valid neighbor routes
-  2. Update stored bestFD for the prefix
-  3. For each candidate:
-     - Mark as Successor if metric == bestFD
-     - Mark as FeasibleSuccessor if RD < bestFD  (feasibility condition)
-     - Mark as in-variance if metric <= bestFD * variance  (unequal-cost ECMP)
-  4. Populate entry->successors[], entry->feasibleSuccessors[]
-```
-
-#### Active/Passive State Machine
+### Active/Passive State Machine
 
 ```
 PASSIVE (normal state, successors exist)
@@ -955,35 +674,38 @@ ACTIVE (diffusing computation underway)
     ▼
 PASSIVE (new successor installed, FD updated)
 
-POISENED (route being withdrawn)
+POISONED (route being withdrawn)
     │  holdtime expires
     ▼
 removed from topology table
 ```
 
-#### SIA (Stuck-In-Active) Handling
+### SIA (Stuck-In-Active) Handling
 
-After `MAX_SIA_RETRIES` retransmissions without a reply, a SIA-QUERY is sent. If
-that also times out, `handleSIATimeout()` tears down the non-responding neighbor,
-preventing the topology from being permanently stuck if a neighbor becomes
-unreachable mid-query.
+After `MAX_SIA_RETRIES` retransmissions without a reply, a SIA-QUERY is sent. If that
+also times out, `handleSIATimeout()` tears down the non-responding neighbor. This
+prevents the topology from being permanently stuck if a neighbor becomes unreachable
+mid-query — the RFC mandates this escalation to protect the remaining topology.
 
-### RTP — Reliable Transport Protocol
+### Why RTP instead of TCP for control messages
 
-RTP gives EIGRP reliable multicast without requiring TCP for every control packet.
-Not all EIGRP packets need reliability (Hellos are best-effort), but Updates, Queries,
-and Replies must be acknowledged. Building a lightweight reliability layer over UDP
-multicast is cheaper than running a full TCP session per neighbor.
+> **Why a custom Reliable Transport Protocol over UDP multicast, not TCP.**
+>
+> TCP is a unicast, connection-oriented protocol. EIGRP control traffic (Hellos,
+> Updates, Queries, Replies) is sent to the EIGRP multicast group. Running TCP to
+> each neighbor would require N separate connections for N neighbors, with N separate
+> retransmit timers, N receive buffers, and N separate TCP stacks — overhead that
+> scales with neighbor count.
+>
+> RTP provides reliable ordered delivery per-neighbor over the existing UDP multicast
+> path. It's lighter than TCP: per-neighbor sequence tracking, exponential backoff,
+> and Jacobson/Karels RTT estimation are sufficient for EIGRP's reliability
+> requirements. Not all packets need reliability (Hellos are best-effort) — RTP
+> delivers reliable delivery only where the protocol requires it.
 
 **Sequence tracking**: Per-neighbor `lastSeqRecv`, `sentInitSeq`, `recvInitSeq`.
 Sequence number 0 is reserved for unreliable packets. Wrap-around at `uint32_t::max`
 wraps to 1, not 0.
-
-**ACK modes**: explicit unicast ACK, piggybacked ACK on the next outgoing packet,
-or implicit ACK from a newer sequence number.
-
-**Retransmission**: exponential backoff with `rto = min(rto * 2.0, 60s)`.
-After `MAX_RETRANSMISSIONS = 16` exhausted → neighbor declared DOWN.
 
 **RTO computation** (TCP-style Jacobson/Karels):
 ```
@@ -991,6 +713,8 @@ srtt   = (1-1/8)*srtt   + (1/8)*sample
 rttvar = (1-1/4)*rttvar + (1/4)*|sample - srtt|
 rto    = clamp(srtt + 4*rttvar, 1s, 60s)
 ```
+
+After `MAX_RETRANSMISSIONS = 16` exhausted → neighbor declared DOWN.
 
 ### Neighbor State Machine
 
@@ -1001,12 +725,9 @@ DOWN ──hello received──► PENDING ──init exchange complete──►
   └──retransmit exhausted─────────────────────────────────────┘
 ```
 
-**K-value validation** happens at PENDING — mismatched K-values reject the neighbor
-before any state is allocated.
-
-**Initialization exchange**: both sides exchange NULL updates with the init bit set,
-acknowledging each other's init updates. Only after `checkInit()` confirms both sides
-have acked does `sendFullTopology()` transmit the complete topology to the new neighbor.
+K-value validation happens at PENDING — mismatched K-values reject the neighbor
+before any state is allocated. Only after both sides have acked the init exchange
+does `sendFullTopology()` transmit the complete topology to the new neighbor.
 
 ### Composite Metric Engine
 
@@ -1023,60 +744,39 @@ if K5 != 0: base = base × K5 / (K4 + reliability)
 
 Default: K1=1, K2=0, K3=1, K4=0, K5=0 → classic bandwidth+delay formula.
 
-### Topology Controller and Split Horizon
-
 Split horizon is the default and prevents routing loops by not advertising a route
 back on the interface it was learned from. It can be disabled per-interface when
 hub-and-spoke topologies require full routing knowledge at spokes.
-
-Route aggregation suppresses more-specific routes on interfaces where a summary is
-configured. `TopologyController::filterAdvertisableRoutes()` checks suppression
-before advertising any route.
 
 ---
 
 ## 8. Async Control Plane — ProcessQueue & ControlScheduler
 
-Protocol state machine work is serialized through per-process lock-free queues. The
-alternative — protecting protocol data structures with fine-grained mutexes — was
-considered and rejected. Fine-grained locking produces lock ordering requirements
-that are easy to violate, creates heisenbugs that only reproduce under thread
-scheduling variations, and requires every protocol function to reason about which
-locks it holds and which it needs to acquire. Serializing through a queue eliminates
-that entire problem class: protocol code never needs a lock because by construction
-it only ever executes on one thread at a time.
+Protocol state machine work is serialized through per-process lock-free queues.
+
+### Why ProcessQueue instead of mutexes on protocol state
+
+Fine-grained locking produces lock ordering requirements that are easy to violate,
+creates heisenbugs that only reproduce under specific thread scheduling variations,
+and requires every protocol function to reason about which locks it holds and which
+it needs to acquire. Serializing through a queue eliminates that entire problem class:
+protocol code never needs a lock because by construction it only ever executes on
+one thread at a time.
 
 The queue is lock-free (MPSC sequence CAS) so that hardware RX threads and the timer
 thread can post events to protocol queues without contending with each other or with
 the consumer.
 
-### ProcessQueue
+### Why sub-queues (lanes)
 
-Every protocol process (BGP, OSPF, EIGRP) owns one `ProcessQueue`. This is the
-single point of serialization for all control-plane mutations.
+A single MPSC queue would serialize all event types behind each other. If a large
+batch of RX events floods the queue, TIMER events would be starved. BGP uses separate
+lanes for TIMERS, RX, and NOTIFICATIONS. Within each lane, events are strictly ordered.
+Events across lanes are interleaved by the scheduler based on availability — a TIMER
+event is never stuck behind a large RX batch.
 
-```
-ProcessQueue
-│
-├── sub[kMaxSubQueues]: SubQueue[]    (up to 8 labeled lanes)
-│   └── SubQueue: lock-free MPSC ring
-│       ├── head, tail: atomic<uint64_t>
-│       └── slots[]: Slot
-│           ├── seq: atomic<uint64_t>
-│           └── task: ThreadPool::Task
-│
-├── labels[]: { name, subIndex }[]   (sorted; binary search to find lane)
-│
-├── atomic<bool> closed, scheduled, draining
-└── atomic<bool> deferDestroy
-```
+### Enqueue path (lock-free CAS loop)
 
-**Sub-queues (lanes)** allow different event types to have independent FIFO ordering
-without head-of-line blocking. BGP uses separate lanes for TIMERS, RX, and
-NOTIFICATIONS. Within each lane, events are strictly ordered. Events across lanes are
-interleaved by the scheduler based on availability.
-
-**Enqueue path** (lock-free CAS loop):
 ```
 producer:
   head = queue.head.fetch_add(1)     ← atomic claim of slot
@@ -1086,38 +786,48 @@ producer:
   slot.seq.store(head + 1)           ← publish to consumer
 ```
 
-**ProcessQueueRef** — a shared reference to a `ProcessQueue` with atomic refcount.
-`release()` marks the queue closed and spins until all in-flight callbacks have
-completed. This is the safe teardown mechanism: after `release()` returns, no more
-callbacks will execute from this ref, and the owning object is safe to destroy.
+No mutex. Multiple producers claim different slots atomically and fill them
+independently. The consumer sees them in sequence-number order regardless of
+which producer finished writing first.
+
+### ProcessQueueRef teardown
+
+`ProcessQueueRef::release()` marks the queue closed and spins until all in-flight
+callbacks have completed. After `release()` returns, no more callbacks will execute
+from this ref, and the owning object is safe to destroy. This is the one safe
+teardown path — it prevents use-after-free when a protocol process is removed
+while timer callbacks are still queued.
 
 ### ThreadPool
 
 Global worker thread pool. Workers continuously drain `ProcessQueue` sub-queues.
-`ThreadPool::Task` uses **Small Object Optimization** — 128 bytes of inline storage
+`ThreadPool::Task` uses Small Object Optimization — 128 bytes of inline storage
 covers any lambda that captures up to ~12 pointers. No heap allocation per task.
 
 ---
 
 ## 9. TimeManager
 
-Protocol timers (hold timer, keepalive, connect retry, SPF delay, SIA timer) must
-fire accurately, but they must not execute protocol logic directly on the timer
-thread. If the timer thread called into protocol state machines, it would create a
-second execution context for those machines alongside the ProcessQueue consumer,
-requiring locks on all protocol state. Instead, the timer thread posts tasks onto
-the target `ProcessQueue` and returns immediately. Protocol code executes only on
-the ThreadPool, regardless of what triggered it.
+Protocol timers must fire accurately, but they must not execute protocol logic
+directly on the timer thread.
+
+### Why timers post to ProcessQueue rather than calling protocol code directly
+
+If the timer thread called into protocol state machines, it would create a second
+execution context for those machines alongside the ProcessQueue consumer, requiring
+locks on all protocol state — the exact problem the ProcessQueue design was built
+to avoid. Instead, the timer thread posts tasks onto the target `ProcessQueue` and
+returns immediately. Protocol code executes only on the ThreadPool, regardless of
+what triggered it.
+
+If a timer fires after cancellation is requested but before the cancel takes effect,
+the callback detects the generation mismatch and exits without executing. No protocol
+state is ever touched from the timer thread.
 
 `TimeManager` provides:
 - **One-shot timers**: fire once at absolute expiration time
 - **Recurring timers**: automatically reschedule after each fire
 - **Cancellation**: O(1) cancel by timer ID
-
-Timer callbacks are delivered on a dedicated timer thread, which posts tasks onto
-the target `ProcessQueue` rather than executing protocol logic directly. If a timer
-fires after cancellation is requested but before the cancel takes effect, the callback
-detects the generation mismatch and exits without executing.
 
 ---
 
@@ -1126,43 +836,33 @@ detects the generation mismatch and exits without executing.
 The configuration system uses C++ type tags as config keys. There are no runtime
 string lookups, no `map<string, variant>`, and no possibility of a typo producing a
 silently wrong default. A config read site that uses the wrong key is a compile error.
-A config read site that accesses a key from the wrong registry scope is a compile
-error.
+A config read site that accesses a key from the wrong registry scope is a compile error.
 
-The downside is ceremony: adding a config field requires adding a type definition
-in the registry header. For a router, this is the right trade — config key typos in
-production protocol code are silent, persistent bugs.
+### Why type-tag keys rather than string keys
 
-### RegistryDatabase<...>
+In a string-keyed system, a typo in a config read site compiles and runs, producing
+either the wrong default (if the key was never set) or the wrong protocol behavior
+(if another key happened to share the typo's spelling). Neither is detectable without
+knowing the expected value.
 
-```cpp
-using Registry = RegistryDatabase<
-    OspfRegistry,
-    OspfAreaRegistry,
-    OspfInterfaceRegistry,
-    BgpRegistry,
-    BgpBaseRegistry,
-    BgpAfBaseRegistry,
-    BgpNeighborSessionRegistry,
-    BgpNeighborRegistry
->;
-```
+With type-tag keys, the compiler rejects any key not defined in the relevant registry.
+The compiler rejects accessing a BGP key from an OSPF registry scope. The downside is
+ceremony: adding a config field requires a type definition. For a router, this is the
+right trade — config key typos in production protocol code are silent, persistent bugs.
 
-Each `*Registry` is a struct defining a set of typed config fields. A field is
-accessed by its type tag:
+### How fields are accessed
 
 ```cpp
-// Read optional field:
+// Optional field:
 auto rid = proc.getConfigs().get<Config::Bgp::BGP_ROUTER_ID>();
 if (rid.hasValue()) return rid.load();
 
-// Read required field:
+// Required field:
 bool gr = procCfg.get<Config::Bgp::BGP_GRACEFUL_RESTART>().load();
 ```
 
-`get<Tag>()` returns a `ConfigField<T>` wrapper with `.hasValue()` and `.load()`.
-The compiler resolves the correct registry and field at compile time — no hash lookup,
-no string comparison.
+`get<Tag>()` returns a `ConfigField<T>` wrapper. The compiler resolves the correct
+registry and field at compile time — no hash lookup, no string comparison.
 
 ### Registry Hierarchy
 
@@ -1192,9 +892,17 @@ Global Registry
 └── ...
 ```
 
-`Config::Reference<RegistryType>` is a lightweight non-owning reference to a
-registry scope. Each protocol process holds one and uses it to read its own
-configuration without needing to know about other registries.
+`Config::Reference<RegistryType>` is a lightweight non-owning reference to a registry
+scope. Each protocol process holds one and uses it to read its own configuration
+without needing to know about other registries.
+
+### OwnedListField and live notification
+
+Fields that own keyed child registries (`OwnedListField<T, K, H>`) can carry an
+optional `ApplyFn` callback. When a child is inserted or removed, the applier fires
+immediately, allowing the owning protocol to react to structural changes (e.g.,
+a new neighbor added in config triggers session setup) without requiring the CLI
+layer to know anything about protocol internals.
 
 ---
 
@@ -1204,119 +912,83 @@ The CLI is a fully compile-time command parser. There are no runtime command
 registration tables, no function pointer maps, and no `strcmp` on command tokens.
 Commands are types.
 
-The reason is consistency between the definition and the dispatch. In a runtime
-registration table, a command can be defined but never registered, or registered
-under the wrong name, or unregistered without updating related code. None of these
-are detectable at compile time. In the template system, the command IS its own
-parser — there is no separate registration step. Adding a command means adding one
-type and including it in the parser list. Removing it means deleting it. The compiler
-enforces completeness.
+### Why commands are types rather than registered callbacks
 
-### Command<Context, Handler, Parts...>
+In a runtime registration table, a command can be defined but never registered, or
+registered under the wrong name, or unregistered without updating related code. None
+of these are detectable at compile time. In the template system, the command IS its
+own parser — there is no separate registration step. Adding a command means adding
+one type and including it in the parser list. Removing it means deleting it. The
+compiler enforces completeness: if a `CliModeParser` is instantiated with a command
+that doesn't define the required static `tryExecute` method, it's a compile error.
 
-A `Command` captures the full pattern of a CLI command at compile time:
+### Command<Handler, Parts...>
 
-```cpp
-using RouteCmd = Command<
-    GlobalContext,
-    &GlobalContext::handleIpRoute,
-    "ip"_tok, "route"_tok, ARG, ARG, ARG
->;
-```
+A `Command` captures the full pattern of one CLI command at compile time. Fixed tokens
+must match exactly by precomputed hash. `ARG` matches any pattern token and captures
+it. The match logic is generated at compile time — no runtime dispatch table, no
+hash map of commands.
 
-- Fixed tokens (`"ip"_tok`, `"route"_tok`) must match exactly
-- `ARG` matches any single token and captures it
-- `ARG_REST` matches the remainder of the line
+`CliModeParser<Mode, Context, Commands...>` groups commands under one CLI mode.
+`execute(ctx, tokens)` folds over the `Commands...` pack, trying each until one
+matches. At runtime this is a linear chain of function calls with no virtual dispatch.
 
-The `match()` and `tryExecute()` static methods are generated at compile time — no
-runtime dispatch table.
+### Executor and mode switching
 
-### CliModeParser<Mode, Context, Commands...>
-
-Groups commands under one CLI mode. `execute(ctx, tokens)` folds over the `Commands...`
-pack, trying each until one matches. At runtime this is a linear chain of function
-calls with no virtual dispatch.
+`Executor` manages mode switching using a two-slot ping-pong buffer. `changeMode<M>`
+builds the new context in the inactive slot, then swaps the active index. Mode
+switching is O(1) with no heap allocation. `revert()` swaps back to the previous
+slot with no cleanup needed — the previous context is still valid in its slot.
 
 `FindParser<M>` is a compile-time lookup that produces a hard compile error if no
-parser is registered for a requested mode — it's impossible to enter a CLI mode that
+parser is registered for a requested mode. It is impossible to enter a CLI mode that
 has no handler.
 
-### Executor<Parsers...>
+### The `negate` and `defaulted` flags
 
-Manages mode switching at the session level using **double-buffering**: `changeMode<M>`
-builds the new context in the inactive slot, then atomically swaps `head`. If a
-command fails after entering a mode, `revert()` swaps back with no cleanup needed.
-
-### Context Hierarchy
-
-```
-ContextBase
-├── terminal: CliSession&
-└── negate: bool               (set when "no" keyword precedes command)
-
-GlobalContext : ContextBase
-OspfContext : ContextBase
-EigrpContext : ContextBase
-InterfaceContext : ContextBase
-```
-
-The `negate` flag on `ContextBase` maps to the `no` keyword: the same command handler
-checks `ctx.negate` to decide whether to apply or remove a configuration.
+Rather than duplicating every command into a `no`-form and a `default`-form variant,
+the tokenizer detects the `no` and `default` keywords and sets flags on `ContextBase`.
+Command handlers check `ctx.negate` and `ctx.defaulted` to decide whether to apply
+or remove a configuration value. This halves the number of command definitions and
+ensures that the positive and negative forms of every command are always in sync.
 
 ---
 
 ## 12. TCP Transport Layer
 
-Each `VirtualRouter` owns an isolated `TCP::Tcp` instance. The alternative — a shared
-TCP stack with per-VRF socket namespaces — would require kernel namespace management,
-leak TCP connection state between VRFs on failure paths, and make VRF teardown complex
-(which VRF connections need to be closed when the VRF is destroyed?). With isolated
-stacks, VRF destruction cleanly tears down all its TCP connections automatically.
-BGP processes in different VRFs cannot accidentally share sockets. Multi-tenant
-scenarios are naturally correct.
+Each `VirtualRouter` owns an isolated `TCP::Tcp` instance.
 
-### Stack Structure
+### Why per-VRF TCP stacks rather than a shared stack
 
-```
-TCP::Tcp
-└── TcpEngine*    (implementation object; full TCP state machine)
-    ├── Listeners: map<ListenId, ListenState>
-    ├── Connections: map<ConnId, ConnectionState>
-    │   └── ConnectionState: TCP FSM per socket
-    │       ├── State (SYN_SENT, ESTABLISHED, FIN_WAIT_1, ...)
-    │       ├── TxBuffer (ring of linked blocks; commit/peek/consume)
-    │       └── RxBuffer
-    └── Timers (retransmit, TIME_WAIT, etc.)
-```
+A shared TCP stack with per-VRF socket namespaces would require kernel namespace
+management, leak connection state between VRFs on failure paths, and make VRF teardown
+complex: the teardown code would need to know which connections belonged to which VRF
+and close them in order. With isolated stacks, VRF destruction automatically closes all
+its TCP connections. BGP processes in different VRFs cannot accidentally share sockets.
+Multi-tenant scenarios are naturally correct.
 
-### Connection API
+### Zero-copy write path
 
-```
-Connection
-├── reserveSpan(minBytes) → span<uint8_t>   ← zero-copy write
-├── write(span<const uint8_t>) → size_t     ← copy bytes into TxBuffer
-├── flush() → size_t                         ← transmit pending bytes
-└── disconnect()
-```
+`reserveSpan()` returns a writable view into the next available region of `TxBuffer`.
+The caller fills the span in-place, then calls `flush()`. No intermediate copy.
+`BgpTx` serializes BGP messages this way — it reserves space, writes the message
+directly, then commits. For a protocol that can generate large UPDATE batches, this
+is the difference between one copy per message and zero copies.
 
-**Zero-copy write path**: `reserveSpan()` returns a writable view into the next
-available region of `TxBuffer`. The caller fills the span in-place, then calls
-`flush()`. No intermediate copy. `BgpTx` serializes BGP messages this way — it
-reserves space, writes the message directly, then commits.
-
-### TxBuffer
+### TxBuffer design
 
 A linked ring of blocks supporting `reserveSpan`, `commit`, `peek`, `consume`, and
 `spliceFrom`. The linked-block design avoids a single large circular buffer — blocks
-can be varied in size, and `spliceFrom` enables O(1) composition of multiple protocol
+can vary in size, and `spliceFrom` enables O(1) composition of multiple protocol
 messages for zero-copy scatter-gather sends.
 
-### Callback Registration
+### Callback integration
 
 BGP registers three `noexcept` static callbacks with the TCP engine. They receive a
-`ConnCallbackCtx` with a `void* user` field pointing to the `BgpProcess`, then
-enqueue FSM events onto the BGP scheduler. The TCP thread never calls protocol logic
-directly — it only enqueues work.
+`ConnCallbackCtx` with a `void* user` field pointing to the `BgpProcess`, then enqueue
+FSM events onto the BGP scheduler. The TCP thread never calls protocol logic directly
+— it only enqueues work. This keeps TCP thread latency bounded regardless of protocol
+computation time.
 
 ---
 
@@ -1326,9 +998,9 @@ The hardware layer's design principle is that the routing code above it must nev
 know which backend is running. Two ingress backends (`IngressXdp` via AF_XDP, and
 `IngressPacket` via TPACKET_V3) and two egress backends (`EgressPacket` via TPACKET_V2,
 and `EgressSend` via plain `sendto`) all present the same interface. The factory tries
-the high-performance backend first and falls back silently. The result is that the
-same routing code runs correctly on a machine with full AF_XDP support or on a basic
-VM with minimal kernel capabilities.
+the high-performance backend first and falls back silently. The result is that the same
+routing code runs correctly on a machine with full AF_XDP support or on a basic VM with
+minimal kernel capabilities.
 
 | Layer   | Fast backend              | Fallback backend              |
 |---------|---------------------------|-------------------------------|
@@ -1337,70 +1009,34 @@ VM with minimal kernel capabilities.
 
 ### Ingress
 
-#### IngressBase
-
-`IngressBase` owns one RX thread per NIC queue. The thread polls frames, delivers
-each to `Interface::processIngress`, and batches frame returns to minimize ring update
+`IngressBase` owns one RX thread per NIC queue. The thread polls frames, delivers each
+to `Interface::processIngress`, and batches frame returns to minimize ring update
 overhead. A batch of return calls is flushed to the kernel in a single store rather
 than one per frame.
 
-```
-IngressBase
-├── Interface&            iface
-├── thread                ingressThread   (pinned to opts.cpuId if ≥ 0)
-├── pollFrame(out FrameView) → bool       [pure virtual]
-├── returnToDevice(index)                 [pure virtual]
-└── onReturnFlush()                       [virtual — batch commit hook]
-```
+`IngressXdp` (AF_XDP, XSK) delivers frames directly into a user-allocated UMEM region
+— no copy between NIC and user space. It binds with `XDP_ZEROCOPY` first and falls
+back to copy mode. The `XDP_RING_NEED_WAKEUP` flag is checked before every kick,
+avoiding unnecessary syscalls when the ring isn't full.
 
-#### IngressXdp
-
-AF_XDP (XSK) zero-copy ingress. The kernel delivers frames directly into a
-user-allocated UMEM region — no copy ever occurs between NIC and user space.
-
-Key design points:
-- **Zero-copy**: binds with `XDP_ZEROCOPY` first; falls back to copy mode.
-- **`XDP_RING_NEED_WAKEUP`**: kicks the kernel only when the flag is set, avoiding
-  unnecessary syscalls.
-- **Deferred fill ring commit**: frame returns are staged locally and committed to
-  the kernel in a single atomic store per batch via `onReturnFlush()`.
-
-#### IngressPacket
-
-TPACKET_V3 block-based RX ring — the standard kernel AF_PACKET fast path.
-`PACKET_FANOUT` is configured when `opts.fanoutGroup > 0`, enabling multiple RX
-queues on the same interface to load-balance across cores.
+`IngressPacket` (TPACKET_V3) uses block-based ring delivery. `PACKET_FANOUT` is
+configured when `opts.fanoutGroup > 0`, enabling multiple RX queues on the same
+interface to load-balance across cores.
 
 ### Egress
 
-#### EgressBase
-
-Owns the per-queue MPMC free ring tracking available frame slots (Vyukov
+`EgressBase` owns the per-queue MPMC free ring tracking available frame slots (Vyukov
 sequence-slot algorithm). All egress subclasses share this free ring management.
 
-Frame layout per slot:
-```
-[ payload area: packetSize + MTU_PADDING(128) ][ alignment pad ][ PacketSlot ]
-```
+`EgressPacket` (TPACKET_V2) writes frames directly into the mmap'd region; a single
+`sendto(MSG_DONTWAIT, nullptr, 0)` kicks the kernel to transmit all queued frames at
+once. `PACKET_QDISC_BYPASS` bypasses the kernel qdisc to reduce latency. Reclaim uses
+a scan-cursor strategy — `onAllocNudge()` scans at most 64 slots to avoid O(N) cost
+on every allocation.
 
-`PacketSlot` (32 bytes) carries frame index, DSCP/ECN/CoS markings, payload length,
-flow hash, and class ID — everything the TX pipeline needs without touching the packet
-payload.
-
-#### EgressPacket
-
-TPACKET_V2 memory-mapped TX ring. Frames are written directly into the mmap'd region;
-a single `sendto(MSG_DONTWAIT, nullptr, 0)` kicks the kernel to transmit all queued
-frames at once. `PACKET_QDISC_BYPASS` bypasses the kernel qdisc to reduce latency.
-
-Reclaim uses a scan-cursor strategy to avoid O(N) cost on every frame allocation —
-`onAllocNudge()` scans at most 64 slots, `waitWritable()` does a full scan.
-
-#### EgressSend
-
-Fallback: allocates a plain `posix_memalign`'d frame area and sends each frame via
-`sendto(AF_PACKET)`. Incurs a syscall per frame and a kernel copy. Used when
-`EgressPacket` construction fails.
+`EgressSend` (fallback) allocates a plain `posix_memalign`'d frame area and sends
+each frame via `sendto(AF_PACKET)`. Incurs a syscall per frame and a kernel copy.
+Used when `EgressPacket` construction fails.
 
 ---
 
@@ -1408,24 +1044,30 @@ Fallback: allocates a plain `posix_memalign`'d frame area and sends each frame v
 
 ARP and NDP serve the same role: given a next-hop IP address, find its MAC address
 for the Ethernet header rewrite. They are kept separate from the FIB because
-reachability (FIB) and L2 resolution (ARP) are logically independent. A route can be
-present in the FIB but the ARP entry can be stale or missing — these are different
+reachability (FIB) and L2 resolution (ARP) are logically independent — a route can
+be present in the FIB but the ARP entry can be stale or missing. These are different
 failure modes requiring different handling.
 
-The ARP/NDP tables use `shared_mutex` rather than RCU. ARP entries are written
-frequently — they age, get evicted, and are refreshed on every reply. RCU's deferred
-free overhead is well-suited to very rare writes; for ARP churn, a shared_mutex is
-simpler and the extra read-path cost is acceptable. ARP lookups happen in the egress
-path after the FIB lookup, not in the innermost forwarding hot path.
+### Why shared_mutex rather than RCU for ARP/NDP
+
+ARP entries are written frequently — they age, get evicted, and are refreshed on
+every reply. RCU's deferred-free overhead is well-suited to very rare writes; for
+ARP churn, the deferred-retire queue would grow constantly and the overhead would
+exceed a simple shared_mutex. ARP lookups happen in the egress path after the FIB
+lookup, not in the innermost forwarding hot path, so the extra read-path cost of a
+shared lock is acceptable.
+
+### Packet queuing on ARP miss
 
 When a next-hop MAC is not found, the packet is queued and an ARP/NS request is sent.
-On reply, the queued packets are flushed. This prevents dropping packets solely due
-to ARP cache miss on first-use.
+On reply, the queued packets are flushed. This prevents dropping packets due to ARP
+cache miss on first-use — important for TCP connections where the SYN would be lost
+and retransmit latency would add hundreds of milliseconds to connection establishment.
 
-### NDP (IPv6 Neighbor Discovery)
+### NDP extensions
 
-NDP mirrors ARP for IPv6, additionally handling Router Solicitation/Advertisement
-for SLAAC and Duplicate Address Detection (DAD) for link-local address assignment.
+NDP mirrors ARP for IPv6, additionally handling Router Solicitation/Advertisement for
+SLAAC and Duplicate Address Detection (DAD) for link-local address assignment.
 
 ---
 
@@ -1433,53 +1075,39 @@ for SLAAC and Duplicate Address Detection (DAD) for link-local address assignmen
 
 The interface layer solves a dependency inversion problem. Protocols need to know
 about interface events (address added, link up/down) to start neighbors and originate
-LSAs. But the `Interface` class should not know that BGP, OSPF, or EIGRP exist — that
-would create a circular dependency between the interface layer and the protocol layer.
+LSAs. But `Interface` should not know that BGP, OSPF, or EIGRP exist — that would
+create a circular dependency between the interface layer and the protocol layer.
 
-The solution is an event bus. `Interface` fires typed events (`IPv4_READY`,
-`IF_DOWN`, etc.) into `InterfaceManager`, and protocols subscribe to the events they
-care about at startup. `Interface` has no knowledge of its subscribers.
+### Why an event bus rather than direct protocol callbacks
 
-Per-protocol config (EIGRP hello interval, OSPF cost, passive mode) lives on
-`Interface` itself rather than in the protocol's interface manager. This keeps the
-config co-located with the thing it describes. Protocols access it via
-`getEigrpConfig(as)` and `getOspfConfig()`, which lazily allocate `config::Reference`
-blocks on first access.
+The alternative — `Interface` calling protocol methods directly on state changes —
+would require `Interface` to hold pointers to every protocol process that might care
+about its state. Adding a new protocol or new event type would require modifying
+`Interface`. The event bus inverts this: `Interface` fires typed events (`IPv4_READY`,
+`IF_DOWN`, etc.) into `InterfaceManager`, and protocols subscribe at startup. `Interface`
+has no knowledge of its subscribers.
 
-### Interface
+`InterfaceManager::notify()` is `private` and called only by `Interface` (declared
+`friend`). It copies the matching callback list before invoking callbacks, so no lock
+is held during protocol code — callbacks can safely call back into `InterfaceManager`.
 
-```
-Interface
-├── InterfaceConfigs            configs          (IPv4/IPv6 address lists, per-protocol state)
-├── infrastructure::Arp         arp
-├── infrastructure::Ndp         ndp
-├── qos::egress::TxDistributor* tx               (egress queue handle)
-├── atomic<bool>                shutdownFlag
-├── atomic<bool>                carrierFlag
-└── atomic<VirtualRouter*>      routingInstance  (lock-free VRF pointer)
-```
+### Why per-protocol config lives on Interface
 
-**VRF reassignment** (`setVRF()`): tears down ARP/NDP/DHCP, removes the interface
-from the old VRF's `InterfaceManager`, then attaches to the new one and restarts.
+Per-protocol config (EIGRP hello interval, OSPF cost, passive mode) lives on `Interface`
+rather than in the protocol's interface manager. The alternative — storing interface
+configuration in the protocol layer — would require two lookups to answer "what is the
+OSPF cost of interface X?": first find the interface, then find its OSPF configuration
+in the OSPF process. Co-locating the config with the thing it describes means one
+lookup. Protocols access it via `getEigrpConfig(as)` and `getOspfConfig()`, which
+lazily allocate `config::Reference` blocks on first access.
 
-### InterfaceManager
+### VRF reassignment
 
-One `InterfaceManager` per `VirtualRouter`. It owns the event bus for all three event
-dimensions (state, IPv4, IPv6) and exposes `subscribe`/`unsubscribe` to protocols.
-
-`notify()` is `private` and called only by `Interface` (declared `friend`). It
-copies the matching callback list before invoking callbacks, so no lock is held
-during protocol code — callbacks can safely call back into `InterfaceManager`.
-
-### utils::EventManager
-
-Generic event bus used by `InterfaceManager`. Enforces at compile time that:
-- The event type is `enum class` with `uint8_t` underlying type
-- The enum defines a `COUNT` sentinel as its last enumerator
-
-`run()` snapshots the callback list under lock, releases the lock, then invokes
-each callback — making it safe for a callback to register or unregister without
-deadlock.
+`setVRF()` on `Interface` is the single point that handles the interface reassignment
+sequence: tears down ARP/NDP/DHCP, removes the interface from the old VRF's
+`InterfaceManager`, then attaches to the new one and restarts. All protocol teardown
+happens through the event bus — `setVRF` fires `IF_DOWN` before detaching, triggering
+neighbor teardown across all protocols without knowing which protocols are active.
 
 ---
 
@@ -1488,143 +1116,181 @@ deadlock.
 The QoS subsystem exists to solve two problems: how to assign NIC queues to CPU cores
 efficiently, and how to enqueue packets from any thread without stalling the sender.
 
-For the first problem, a dedicated consumer thread per TX queue is pinned to a
-specific core. The TX ring buffer (mmap'd DMA region) stays hot in that core's L1/L2
-cache. If producers called `send()` directly, the TX buffer would thrash between
-cores on every enqueue, and `send()` would block when the NIC ring is full, stalling
-the producer. The dedicated consumer absorbs backpressure — producers enqueue up to
-ring capacity and move on.
+### Why dedicated consumer threads per TX queue
 
-For the second problem, the `FIFOQueue` uses the Vyukov sequence-number MPMC ring.
-Multiple producer threads claim slots atomically without contending for a mutex.
+If producers called `send()` directly, the TX ring buffer (mmap'd DMA region) would
+thrash between cores on every enqueue, and `send()` would block when the NIC ring is
+full, stalling the forwarding thread. A dedicated consumer thread per TX queue is
+pinned to a specific core. The TX buffer stays hot in that core's L1/L2 cache.
+Producers enqueue to the MPMC ring and move on — backpressure is absorbed by the ring,
+not by the forwarding thread.
 
-### TxQueueManager
+### Why the Vyukov sequence-number MPMC ring
 
-`TxQueueManager` manages the egress pipeline for each registered interface. It
-queries the NIC's hardware TX queue count, assigns queues to CPU cores based on
-policy, and creates/destroys `FIFOQueue` + `EgressBase` pairs as the CPU pool changes.
+A mutex-based queue serializes all producers behind one lock. For a forwarding
+system with multiple RX threads simultaneously completing L2 rewrites and sending
+to egress, that serialization point is a bottleneck. The Vyukov ring lets N producers
+write into N different claimed slots simultaneously — the only contention is on the
+atomic `head` increment. Producers never block each other as long as the ring isn't
+full.
 
-**CPU policies:**
-- `CpuPolicy::EqualShare` — each interface gets `floor(cores / interfaces)` queues.
-- `CpuPolicy::Weighted` — queue count proportional to `TxIfacePolicy::weight`.
-- `txCoreBias` (0–1) — fraction of cores reserved for TX in a shared pool.
+### The double-drain wake pattern
 
-### RxQueueManager
-
-Mirrors `TxQueueManager` for the ingress side. Uses the same CPU policies and
-`reoptimize()` pattern. When `IngressPacket` (TPACKET_V3) is used, multiple RX
-queues on the same interface share a `PACKET_FANOUT` group so the kernel
-load-balances packets across them.
-
-### BaseQueue
-
-Abstract base for TX queues. Owns one `EgressBase` and one consumer thread.
-
-The consumer uses a **double-drain pattern** to eliminate the missed-wake race:
+The `BaseQueue` consumer uses a double-drain loop to eliminate the missed-wake race:
 1. Drain the queue fully.
 2. Store `wakeSignal = 0` (signal intent to sleep).
 3. Drain again (catch items enqueued between steps 1 and 2).
 4. `futex_wait` only if `wakeSignal` is still 0.
 
 A producer that enqueues between steps 2 and 4 stores `wakeSignal = 1`, causing
-`futex_wait` to return immediately. This ensures no wake signal is ever lost without
-requiring a lock.
+`futex_wait` to return immediately. No wake signal is ever lost without requiring a
+lock. The alternative — a simple condvar — requires a mutex on every enqueue/dequeue,
+which would be acquired on the forwarding critical path.
 
-### FIFOQueue
+### CPU assignment policies
 
-Concrete `BaseQueue` subclass. Implements a bounded MPMC ring using the Vyukov
-sequence-number algorithm. Capacity must be a power of 2. Each slot is cache-line
-aligned to prevent false sharing between producers writing into adjacent slots.
+`TxQueueManager` supports three policies:
+- `EqualShare` — each interface gets `floor(cores / interfaces)` queues.
+- `Weighted` — queue count proportional to `TxIfacePolicy::weight`.
+- `txCoreBias` (0–1) — fraction of cores reserved for TX in a shared pool.
 
-### TxDistributor
-
-Routes frames across a `QueueState*[]` of per-CPU TX queues. Distribution policies:
-
-| Policy | Behaviour |
-|---|---|
-| `BEST_EFFORT` | Always queue 0 |
-| `FLOW_HASH` | `pkt->flowHash % N` — consistent per-flow ordering |
-| `ROUND_ROBIN` | Atomic counter `% N` |
-| `WEIGHTED_RR` | Rejection-sampling over `weights[]` |
+`TxDistributor` routes frames across per-CPU TX queues using flow hash, round-robin,
+or weighted round-robin, ensuring consistent per-flow ordering while distributing
+load.
 
 ---
 
-## 17. Cross-Cutting Design Patterns
+## 17. Cross-Cutting Decisions
 
 ### Policy-Based Compile-Time Dispatch
 
-**Why:** Runtime branching on address family (`if (afi == IPv6)`) would scatter
-conditionals through every route processing path. Any new AFI requires auditing
-every branch. The policy template approach generates a fully separate compiled
-instance per AFI — each is complete, has no dead branches, and adding a new AFI
-touches no existing code.
+**Decision**: Per-AFI logic (BGP, OSPF v2/v3) is expressed as a template policy type
+rather than runtime branching on address family.
 
-Used by: BGP address families, OSPF v2/v3 origination templates.
+**What it solves system-wide**: Any `if (afi == IPv6)` branch in a route processing
+function is a maintenance hazard — every new AFI requires auditing every branch. The
+policy template generates a completely separate compiled instance per AFI. Each is
+complete, has no dead branches, and adding a new AFI touches no existing code.
 
-### std::variant for Discriminated Unions
+**Cost to change**: Adding a runtime AF flag would require auditing every code site
+that currently uses template specialization — BGP's entire route pipeline, OSPF's
+origination templates, and the AF variant map. The migration would be large and
+error-prone.
 
-**Why:** Virtual base classes require vtable pointers (8 bytes per object overhead),
-heap allocation per entry, and pointer indirection on access. For collections with
-thousands of entries (LSDB, AFI variant map), that overhead is measurable.
-`std::variant` stores all types in a discriminated union with zero overhead, trivial
-destructibility (enabling arena allocation), and exhaustive `std::visit` — a missing
-case is a compile error.
+### `std::variant` for Discriminated Unions
 
-Used by: OSPF `LsaBody`, BGP `AddressFamilyVariant`.
+**Decision**: OSPF LSA bodies and BGP's address family map are `std::variant`s rather
+than virtual class hierarchies.
 
-### Flyweight + RAII for BGP Attributes
+**What it solves system-wide**: Virtual dispatch requires a vtable pointer per object
+(8 bytes overhead), a heap allocation per entry, and produces non-exhaustive dispatch
+— a new LSA type added to the enum but missing from a `switch` compiles silently and
+crashes at runtime. `std::variant` stores all types in a discriminated union, `std::visit`
+is exhaustive (missing case = compile error), and there is zero per-entry overhead.
 
-**Why:** In a full BGP table, many routes share identical AS-PATHs and community
-sets. Storing a full copy per route would make the table several times larger than
-necessary. `AttributeManager` deduplicates by content hash; `RouteBase` RAII
-maintains refcounts automatically through copy/move/destroy. No route can outlive
-its attributes; no attribute set is freed while a route still references it.
+**Cost to change**: Reverting to virtual dispatch would require adding vtable overhead
+to thousands of LSDB entries and removing the compiler-enforced exhaustiveness
+guarantee, restoring the possibility of silent missing-case bugs.
+
+### Flyweight Refcounting for BGP Path Attributes
+
+**Decision**: BGP path attributes are stored once in `AttributeManager` and referenced
+by `uint32_t pathId`. `RouteBase` RAII maintains refcounts automatically.
+
+**What it solves system-wide**: In a full table with 1M routes, many routes share
+identical AS-PATHs. Full per-route copies would multiply table size; any attribute
+mutation (egress AS prepend) would require updating every affected route. The flyweight
+ensures each unique attribute set exists once, and mutations produce new entries rather
+than touching existing ones.
+
+**Cost to change**: Removing flyweight storage would multiply memory usage by the
+average number of routes sharing each attribute set — potentially 10-100x for
+well-aggregated tables.
 
 ### Lock-Free Queues with Sequence Counters
 
-**Why:** A mutex-based queue serializes all producers behind one lock. The Vyukov
-sequence-number MPMC ring lets N producers write into N different claimed slots
-simultaneously — the only contention is on the atomic `head` increment. This scales
-to many hardware RX threads posting events to protocol ProcessQueues without
-measurable lock contention.
+**Decision**: `ProcessQueue` sub-queues, `FIFOQueue`, and the egress free ring all
+use the Vyukov sequence-number algorithm rather than mutex-protected queues.
 
-Used by: `SubQueue` (ProcessQueue), `FIFOQueue`, `EgressBase` free ring.
+**What it solves system-wide**: A mutex-based queue serializes all producers behind
+one lock. With multiple hardware RX threads posting to protocol ProcessQueues
+simultaneously, a mutex would create a global serialization point for all control-plane
+event delivery. The sequence-counter ring lets N producers write into N claimed slots
+with only one atomic increment as the contention point.
+
+**Cost to change**: Replacing with mutex-based queues would reintroduce per-queue lock
+contention on the forwarding hot path and under hardware RX load.
 
 ### RCU for Read-Heavy FIB
 
-**Why:** The FIB is read on every forwarded packet but written rarely (only when
-routes change). RCU makes the read completely lock-free at the cost of more complex
-write semantics. For this access pattern — read on every packet, write on route
-convergence — RCU is exactly the right tool.
+**Decision**: The FIB is protected by RCU rather than any form of locking.
+
+**What it solves system-wide**: The FIB is read on every forwarded packet. Any lock
+acquisition on that path, even uncontended, adds hundreds of nanoseconds of latency.
+RCU makes the read completely lock-free. The write is more complex (copy, swap,
+retire), but writes are rare relative to reads.
+
+**Cost to change**: Replacing RCU with any form of per-lookup locking would directly
+increase forwarding latency on every packet and serialize forwarding threads behind
+each other on the FIB lock.
 
 ### RouteWatcher Cross-Thread Safety
 
-**Why:** `RouteWatcher` callbacks fire on the RIB's scheduler thread. Any protocol
-running on a different scheduler must not touch its own state from that callback.
-The pattern is: store a `ProcessQueueRef` in the callback context and immediately
-`post` back to the protocol's own thread. BGP NHT uses this — `NhtCtx::bgpSched.post()`
-— ensuring BGP AF state is only ever mutated from the BGP scheduler thread.
+**Decision**: `RouteWatcher` callbacks fire on the RIB's scheduler thread. Protocols
+on different schedulers must immediately `post` back to their own queue before touching
+their own state.
+
+**What it solves system-wide**: Allowing protocol code to execute directly in the
+RouteWatcher callback would mean two threads could simultaneously mutate BGP state —
+the BGP ProcessQueue consumer and the RIB's scheduler thread. Any shared BGP data
+would need locks. The `post`-back pattern keeps protocol state single-threaded without
+any BGP-level locking.
+
+**Cost to change**: Removing the post-back requirement would require BGP (and any other
+protocol using NHT) to add locks around all state that could be touched from RouteWatcher
+callbacks — defeating the purpose of the ProcessQueue design.
 
 ### Compile-Time CLI Command Matching
 
-**Why:** A runtime dispatch table requires a separate registration step that can
-drift out of sync with the command definitions. In the template system, the command
-type IS its own parser — no registration, no sync problem, no possibility of a
-command existing but never being reachable.
+**Decision**: CLI commands are compile-time template types, not runtime-registered
+callbacks.
+
+**What it solves system-wide**: Runtime registration allows a command to be defined but
+never registered, registered under the wrong name, or registered to the wrong mode
+parser. None of these are detectable without exhaustive runtime testing. In the template
+system, the command IS its own parser — no registration step, no sync problem, no
+possibility of a command existing but being unreachable.
+
+**Cost to change**: Reverting to a registration table would require adding a runtime
+registration mechanism, a runtime table lookup per command, and accepting that
+registration correctness is not statically verified.
 
 ### Per-VRF TCP Isolation
 
-**Why:** Shared TCP with kernel namespace management is complex and leaks state
-across VRFs on failure paths. Isolated stacks mean VRF teardown automatically
-closes all its connections; BGP processes in different VRFs cannot share sockets
-regardless of misconfiguration.
+**Decision**: Each `VirtualRouter` owns an isolated `TCP::Tcp` instance.
+
+**What it solves system-wide**: Shared TCP with kernel namespace management is complex
+and leaks connection state between VRFs on failure paths. With isolated stacks, VRF
+teardown automatically closes all its connections. BGP processes in different VRFs
+cannot share sockets regardless of misconfiguration.
+
+**Cost to change**: A shared TCP stack would require per-connection VRF tagging, VRF-
+aware teardown logic, and careful handling of connections that arrive on one VRF's
+listener but need to be migrated if the VRF configuration changes.
 
 ### X-Macro for Mode Table
 
-**Why:** Without an X-macro, the mode enum and the path/prompt arrays would be
-defined in separate places and could drift out of sync. The X-macro defines the
-mode table once and derives both the enum and the string tables from the same source.
-Adding a mode is one line; the compiler catches any inconsistency.
+**Decision**: The CLI mode enum and path/prompt string tables are generated from a
+single X-macro definition.
+
+**What it solves system-wide**: Without an X-macro, the mode enum and the path/prompt
+arrays would be defined in separate places and could drift out of sync. Adding a mode
+is one line in the X-macro; the compiler catches any inconsistency between the enum
+and the arrays.
+
+**Cost to change**: Splitting mode definitions across enum and array definitions would
+re-introduce the possibility of the two drifting out of sync, with the error manifesting
+as a wrong prompt string rather than a compile error.
 
 ---
 
@@ -1696,5 +1362,3 @@ serialize through ProcessQueue — no mutex needed for FSM state. Hardware threa
 never contend with protocol threads for the same lock.
 
 ---
-
-*End of Architecture Reference*
