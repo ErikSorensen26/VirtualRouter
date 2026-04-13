@@ -3,90 +3,124 @@
 #include <VirtualRouter.h>
 
 #include "InterfaceIPv6Commands.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/CommandUtils.hpp"
+
 #include "cli/runtime/CliSession.h"
-#include "cli/runtime/CliUtils.h"
-#include "eigrp/core/Eigrp.h"
-#include "eigrp/interface/EigrpInterface.h"
-#include "interface/Interface.h"
-#include "configs/registry/router/EigrpInterfaceRegistry.h"
-#include <infrastructure/Ndp.h>
+#include "InterfaceIPv6NDCommands.h"
+#include "cli/modes/parsers/interface/InterfaceIPv6OspfCommands.h"
+
+#define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
+#define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
 
 namespace cli
 {
 bool InterfaceIPv6_AddressSet_Handler(INTERFACE_PARAMS)
 {
-    if (ctx.negate && args.empty())
+    auto& ips = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS>();
+    config::DefType<decltype(ips)>::node tup;
+    for (const auto& seg : segs)
     {
-	ctx.currentInterface.removeAllIPv6();
-	return true;
+        switch (seg[0])
+        {
+            case "address"_tok:
+            {
+                if (!utils::setTupleElement(std::get<0>(tup), seg >> 1))
+                    return false;
+                if (auto& addr = std::get<0>(tup); !addr.isGlobalUnicast() && !addr.isLocalUnicast())
+                {
+		    ctx.terminal.controller.print("\r\n% Invalid local-link address");
+                    return false;
+                }
+                break;
+            }
+            case "anycast"_tok:
+            {
+                std::get<2>(tup) = true;
+                break;
+            }
+            case "eui-64"_tok:
+            {
+                std::get<3>(tup) = true;
+                break;
+            }
+        }
     }
 
-    if (args.empty()) return false;
+    return utils::setListEntry(ips, ctx, tup);
+}
 
-    if (utils::isIPv6Address(args[0]))
+bool InterfaceIPv6_AddressNamed_Handler(INTERFACE_PARAMS)
+{
+    auto& ips = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS>();
+    config::DefType<decltype(ips)>::node tup;
+    for (const auto& seg : segs)
     {
-	types::IPv6Address ipv6Address; utils::extractIPv6Address(args[0], ipv6Address);
-	if (!ctx.negate)
-	{
-	    if (!ipv6Address.isLocalLink())
-	    {
-			ctx.terminal.controller.print(std::string("\r\n%") + std::string(" Invalid local-link address"));
-			return false;
-	    }
+        switch (seg[0])
+        {
+            case "address"_tok:
+            {
+                if (!utils::setTupleElement(std::get<1>(tup), seg >> 1))
+                    return false;
+                if (!utils::setTupleElement(std::get<0>(tup), seg >> 2))
+                    return false;
+                if (auto& addr = std::get<0>(tup); !addr.isGlobalUnicast() && !addr.isLocalUnicast())
+                {
+		    ctx.terminal.controller.print("\r\n% Invalid local-link address");
+                    return false;
+                }
+                break;
+            }
+            case "anycast"_tok:
+            {
+                std::get<2>(tup) = true;
+                break;
+            }
+            case "eui-64"_tok:
+            {
+                std::get<3>(tup) = true;
+                break;
+            }
+        }
+    }
 
-	    ctx.currentInterface.setIPv6(types::IPv6Prefix(ipv6Address.addr, 64), true);
-	}
-	else
-	{
-	    ctx.currentInterface.removeIPv6();
-	}
-    }
-    else if (utils::isIPv6AddressWithMask(args[0]))
+    return utils::setListEntry(ips, ctx, tup);
+}
+
+bool InterfaceIPv6_AddressLinkLocal_Handler(INTERFACE_PARAMS)
+{
+    types::IPv6Address ll;
+    if (!utils::setValue(ll, segs[0] >> 1))
+        return false;
+    if (!ll.isLocalLink())
     {
-	types::IPv6Prefix pfx;
-	if (utils::extractIPv6Prefix(args[0], pfx))
-	{
-	    types::IPv6Address ipv6Address(pfx.addr);
-	    //TODO anycast
-	    if (!ctx.negate)
-	    {
-		ctx.currentInterface.setIPv6(pfx, false);
-	    }
-	    else
-	    {
-		ctx.currentInterface.removeIPv6(&pfx);
-	    }
-	}
+        ctx.terminal.controller.print("\r\n% Invalid link-local address");
+        return false;
     }
-    else if (args[0] == "dhcp")
-    {
-	if (!ctx.currentInterface.dhcp)
-	{
-	    //ctx.currentInterface->dhcp = new services::dhcp::Dhcpv6Client();
-	}
-	else
-	{
-	    //delete ctx.currentInterface->dhcp;
-	}
-    }
+    ctx.configs().reg.get<config::Interface::IPV6_ADDRESS_LL>().set(ll);
+    return true;
+}
+
+bool InterfaceIPv6_AddressAuto_Handler(INTERFACE_PARAMS)
+{
+    auto& autocfg = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS_AUTOCONFIG>();
+    auto& autodf = ctx.configs().reg.get<config::Interface::IPV6_ADDRESS_AUTOCONFIG_DEFAULT>();
+    utils::setToggleValue(autocfg, ctx);
+    utils::setFieldValueWithFallback(autodf, ctx, segs >> 0 >> 0);
     return true;
 }
 
 bool InterfaceIPv6_AuthenticationKeyChain_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::NONE);
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(args[2]);
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::MD5);
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& authKey = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>().emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>();
+            return utils::setFieldValue(authKey, ctx, segs[0] >> 2);
         }
     }
     return true;
@@ -94,188 +128,248 @@ bool InterfaceIPv6_AuthenticationKeyChain_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIPv6_AuthenticationMode_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::NONE);
-            cfg->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::MD5);
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& mode = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_MODE>();
+
+            if (utils::handleValueReset(mode, ctx))
+                return true;
+
+            switch (segs[1][0])
+            {
+                case "md5"_tok:
+                {
+                    mode.set(config::eigrp::AuthType::MD5);
+                    return true;
+                }
+            }
         }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIPv6_BandwidthPercent_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>().set(
-            ctx.negate ? 50u : static_cast<uint32_t>(std::stoul(args[2])));
+        case "eigrp"_tok:
+        {
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& eigrpBw = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>();
+            return utils::setFieldValue(eigrpBw, ctx, segs[0] >> 2);
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIPv6_DampeningChange_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE>().set(false);
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(static_cast<uint8_t>(1));
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE>().set(true);
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(
-                static_cast<uint8_t>(std::stoul(args[2])));
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& eigrp = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>().emplaceBack(as);
+            auto& dampChange = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE>();
+            auto& dampChangePercent = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>();
+            utils::setToggleValue(dampChange, ctx);
+            utils::setFieldValue(dampChangePercent, ctx, segs[0] >> 2);
+            return true;
         }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIPv6_DampeningInterval_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL>().set(false);
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(static_cast<uint16_t>(5));
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL>().set(true);
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(
-                static_cast<uint16_t>(std::stoul(args[2])));
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& eigrp = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>().emplaceBack(as);
+            auto& dampInterval = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL>();
+            auto& dampIntervalTime = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>();
+            utils::setToggleValue(dampInterval, ctx);
+            utils::setFieldValue(dampIntervalTime, ctx, segs[0] >> 2);
+            return true;
         }
     }
-    return true;
+    return false;
 }
 
-bool InterfaceIPv6_EigrpAs_Handler(INTERFACE_PARAMS)
+bool InterfaceIPv6_Eigrp_Handler(INTERFACE_PARAMS)
 {
-    ctx.terminal.isList = true;
-    uint32_t as = static_cast<uint32_t>(std::stoi(args[0]));
-    auto eigrpAs = ctx.currentInterface.getVRF()->getEigrpAutonomousSystem(as);
-    if (!ctx.negate)
-    {
-	if (eigrpAs && eigrpAs->ipv6)
-	{
-	    eigrpAs->ipv6->getIfaceMgr().createInterface(&ctx.currentInterface);
-	}
-	{
-	    std::unique_lock<std::shared_mutex> lock(ctx.currentInterface.configs.ipMutex);
-	    ctx.currentInterface.configs.eigrp.ipv6AutonomousSystems.insert(as);
-	}
-    }
-    else
-    {
-	ctx.currentInterface.configs.eigrp.ipv6AutonomousSystems.erase(static_cast<uint32_t>(std::stoul(args[2])));
-    }
-
-    if (eigrpAs && eigrpAs->ipv6)
-    {
-	    eigrpAs->ipv6->refreshInterfaceList();
-    }
-    return true;
+    auto& eigrpList = ctx.configs().reg.get<config::Interface::IPV6_EIGRP_ENABLED>();
+    uint16_t as;
+    if (!utils::setValue(as, segs[0] >> 1))
+        return false;
+    return utils::setListEntry(eigrpList, ctx, as);
 }
 
 bool InterfaceIPv6_HelloInterval_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::HELLO_INTERVAL>().set(
-            ctx.negate ? static_cast<uint16_t>(5) : static_cast<uint16_t>(std::stoul(args[2])));
+        case "eigrp"_tok:
+        {
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& helloTime = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::HELLO_INTERVAL>();
+            return utils::setFieldValue(helloTime, ctx, segs[0] >> 2);
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIPv6_HoldTime_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::HOLD_TIME>().set(
-            ctx.negate ? static_cast<uint16_t>(15) : static_cast<uint16_t>(std::stoul(args[2])));
+        case "eigrp"_tok:
+        {
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& holdTime = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::HOLD_TIME>();
+            return utils::setFieldValue(holdTime, ctx, segs[0] >> 2);
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIPv6_Mtu_Handler(INTERFACE_PARAMS)
 {
-    ctx.currentInterface.configs.ipv6.mtu.store(ctx.negate ? 1500 : static_cast<uint16_t>(std::stoul(args[0]), std::memory_order_release));
-    return true;
+    auto& mtu = ctx.configs().reg.get<config::Interface::IPV6_MTU>();
+    return utils::setFieldValue(mtu, ctx, segs[0] >> 1);
 }
 
 bool InterfaceIPv6_NextHopSelf_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::NEXT_HOP_SELF>().set(!ctx.negate);
+        case "eigrp"_tok:
+        {
+            uint16_t as; 
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& nhs = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::NEXT_HOP_SELF>();
+            utils::setToggleValue(nhs, ctx);
+            return true;
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIPv6_NdpRedirects_Handler(INTERFACE_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentInterface.ndp.configs.redirects.store(!ctx.negate, std::memory_order_release);
+    UNUSED(segs);
+    auto& redirects = ctx.configs().reg.get<config::Interface::IPV6_REDIRECTS>();
+    utils::setToggleValue(redirects, ctx);
     return true;
 }
 
 bool InterfaceIPv6_SplitHorizon_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::SPLIT_HORIZON>().set(!ctx.negate);
+        case "eigrp"_tok:
+        {
+            uint16_t as; 
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& sh = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::SPLIT_HORIZON>();
+            utils::setToggleValue(sh, ctx);
+            return true;
+        }
     }
     return true;
 }
 
 bool InterfaceIPv6_SummaryAddress_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        types::IPv6Prefix _pfx; utils::extractIPv6Prefix(args[2], _pfx);
-        types::IPPrefix prefix(_pfx.addr, _pfx.prefixLength);
-        auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
-        if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv6)
+        case "eigrp"_tok:
         {
-            if (ctx.negate)
-                ifaceIt->second.IPv6->getAggregator().withdrawSummary(prefix);
-            else
-                ifaceIt->second.IPv6->getAggregator().installSummary(prefix);
-        }
-        else
-        {
-            types::IPAddress netAddr = prefix;
-            uint8_t plen = prefix.prefixLength;
-            ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::SUMMARY_ADDRESS>().withWrite(
-                [&](std::vector<std::tuple<types::IPAddress, uint8_t>>& v) {
-                    auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
-                        return std::get<0>(t) == netAddr && std::get<1>(t) == plen;
-                    });
-                    if (!ctx.negate) { if (it == v.end()) v.emplace_back(netAddr, plen); }
-                    else { if (it != v.end()) v.erase(it); }
-                });
+            uint16_t as; 
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& sum = ctx.configs().reg.get<config::Interface::IPV6_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::SUMMARY_ADDRESS>();
+            config::DefType<decltype(sum)>::node tup;
+            if (!utils::setTupleElement(std::get<0>(tup), segs[0] >> 2))
+                return false;
+            utils::setTupleElement(std::get<1>(tup), segs >> 1 >> 1);
+            return utils::setListEntry(sum, ctx, tup);
         }
     }
-    return true;
+    return false;
 }
+
+bool InterfaceIPv6_ND_SubHandler(INTERFACE_SUB_PARAMS)
+{
+    auto& nd = ctx.configs().reg.get<config::Interface::IPV6_ND>().get();
+    Context<config::NdpRegistry> newCtx(ctx.terminal, nd);
+    newCtx.negate = ctx.negate;
+    newCtx.defaulted = ctx.defaulted;
+    return InterfaceIPv6NDCommands::execute(newCtx, toks, idx);
+}
+
+bool InterfaceIPv6_Ospf_SubHandler(INTERFACE_SUB_PARAMS)
+{
+    auto& ospf = ctx.configs().reg.get<config::Interface::IPV6_OSPF>().get();
+    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    newCtx.negate = ctx.negate;
+    newCtx.defaulted = ctx.defaulted;
+    return InterfaceIPv6OspfCommands::execute(newCtx, toks, idx);
+}
+
+#define INTERFACE_IPV6_LIST(X, Y) \
+    X(Y, (COMMAND, AddressSet, "address"_tok, P_IPV6PFX)) \
+    X(Y, (COMMAND, AddressNamed, "address"_tok, P_WORD)) \
+    X(Y, (COMMAND, AddressLinkLocal, "address"_tok, P_IPV6)) \
+    X(Y, (COMMAND, AddressAuto, "address"_tok, "autoconfig"_tok)) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercent, "bandwidth-percent"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, Eigrp, "eigrp"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, Mtu, "mtu"_tok)) \
+    X(Y, (SUBPRSR, ND, "nd"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (COMMAND, NdpRedirects, "redirects"_tok)) \
+    X(Y, (SUBPRSR, Ospf, "ospf"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
+
+/**
+ * @brief Parser for the `ipv6` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes all
+ * IPv6 address, EIGRP per-interface, NDP, and OSPFv3 interface sub-tree commands.
+ */
+DEFINE_CMD_MODE(InterfaceIPv6, config::InterfaceRegistry, INTERFACE_IPV6_LIST)
 }

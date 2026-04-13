@@ -707,7 +707,6 @@ bool CommandProcessor::handleRoutingConfiguration(const std::vector<std::string>
 				{
 					terminal.configureRoutingMode("eigrp_named", false);
 				}
-				terminal.isExitCommand = true;
 
 				currentVrf = global.getRoutingInstance("default");
 			}

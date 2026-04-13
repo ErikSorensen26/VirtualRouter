@@ -40,7 +40,7 @@ void DuelEngine::refreshSuppression(std::vector<TopologyEntry*>& entries, EigrpI
     // Check for restart (Non active routes need to be withdrawn)
     for (auto& entry : entries)
     {
-        if (setSuppression(entry, iface->interfaceKey))
+        if (setSuppression(entry, iface->interfaceKey.getId()))
             resync = true;
     }
 

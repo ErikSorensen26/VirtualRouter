@@ -12,6 +12,8 @@
 #include <map>
 #include <thread>
 #include <atomic>
+#include <Mac.hpp>
+#include "interface/configs/InterfaceType.hpp"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 namespace cli { class FileSystem; }
@@ -30,7 +32,7 @@ struct HwIfaceInfo
 {
     uint32_t    index;     ///< Kernel interface index (from @c if_nametoindex).
     std::string ifname;    ///< Interface name (e.g. "eth0", "dummy0").
-    uint64_t    mac;       ///< 48-bit MAC address packed into the low 6 bytes.
+    types::Mac  mac;       ///< 48-bit MAC address packed into the low 6 bytes.
     uint64_t    bandwidth; ///< Link speed in bits per second (0 if unknown).
 };
 
@@ -101,15 +103,6 @@ public:
     void addHardware(const std::string& hwConfigFile, cli::FileSystem& fileSystem, bool enableDummies = false);
 
     /**
-     * @brief Returns the kernel interface index for the given type and slot number.
-     *
-     * @param type   Logical interface type (Ethernet, Loopback, …).
-     * @param index  Zero-based slot index within @p type's list.
-     * @return Kernel @c ifindex, or `0` if not found.
-     */
-    uint32_t getInterface(interface::InterfaceType type, int index);
-
-    /**
      * @brief Associates a logical interface with its hardware info record.
      *
      * Called by @ref core::Global when a new @ref interface::Interface is created.
@@ -137,10 +130,10 @@ public:
      * @param index  Kernel @c ifindex.
      * @return Pointer to the record, or @c nullptr if unknown.
      */
-    const HwIfaceInfo* getHwInfo(uint32_t index) const;
+    const HwIfaceInfo* getHwInfo(interface::InterfaceKey key) const;
 
     /** @brief Returns the full map of all physical interfaces grouped by type. */
-    const std::map<interface::InterfaceType, std::vector<uint32_t>>& getPhysicalInterfaces() { return physicalInterfaces; }
+    const std::unordered_map<interface::InterfaceType, std::vector<uint32_t>>& getPhysicalInterfaces() { return physicalInterfaces; }
 
     /**
      * @brief Returns all kernel interface indices for a given interface type.
@@ -208,9 +201,9 @@ private:
      */
     bool createDummy(const char* ifname);
 
-    std::unordered_map<uint32_t, std::vector<interface::Interface*>> registeredInterfaces; ///< ifindex → registered logical interfaces.
-    std::map<interface::InterfaceType, std::vector<uint32_t>> physicalInterfaces;           ///< Type → list of kernel ifindices.
-    std::map<uint32_t, HwIfaceInfo> hwInfo;                                                 ///< ifindex → hardware metadata.
+    std::unordered_map<uint32_t, std::vector<interface::Interface*>> registeredInterfaces;  ///< ifindex → registered logical interfaces.
+    std::unordered_map<interface::InterfaceType, std::vector<uint32_t>> physicalInterfaces; ///< Type → list of kernel ifindices.
+    std::unordered_map<uint32_t, HwIfaceInfo> hwInfo;                                       ///< ifindex → hardware metadata.
 
     nlohmann::ordered_json configJson; ///< Parsed hardware configuration JSON.
     bool allowDummies;                 ///< Whether dummy interface creation is permitted.

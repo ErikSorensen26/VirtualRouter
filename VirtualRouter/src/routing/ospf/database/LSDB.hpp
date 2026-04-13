@@ -62,15 +62,15 @@ template <typename K, typename V, typename H = std::hash<K>, typename E = std::e
 using UMap = std::pmr::unordered_map<K, V, H, E>;
 template <typename K, typename H = std::hash<K>, typename E = std::equal_to<K>>
 using USet = std::pmr::unordered_set<K, H, E>;
-template <typename K, typename V>
-using OMap = std::pmr::map<K, V>;
+template <typename K, typename V, typename C = std::less<K>>
+using OMap = std::pmr::map<K, V, C>;
 #else
 template <typename T> using Vec = std::vector<T>;
 using ByteVec = std::vector<std::byte>;
 template <typename K, typename V, typename H = std::hash<K>, typename E = std::equal_to<K>>
 using UMap = std::unordered_map<K, V, H, E>;
-template <typename K, typename V>
-using OMap = std::map<K, V>;
+template <typename K, typename V, typename C = std::less<K>>
+using OMap = std::map<K, V, C>;
 #endif
 
 /**

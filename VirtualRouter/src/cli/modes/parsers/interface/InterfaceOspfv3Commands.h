@@ -10,49 +10,15 @@
 #ifndef INTERFACE_OSPFV3_COMMANDS_H
 #define INTERFACE_OSPFV3_COMMANDS_H
 
-#include "InterfaceOspfCommands.h"
+#include "configs/registry/interface/InterfaceRegistry.h"
+#include "cli/modes/contexts/Context.hpp"
+#include "cli/modes/Mode.hpp"
 
 namespace cli
 {
-bool InterfaceOspfv3_Area_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Area = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Area_Handler,
-    ARG, "area"_tok, ARG, ARG_REST
->;
-
-bool InterfaceOspfv3_Authentication_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Authentication = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Authentication_Handler,
-    "authentication"_tok, ARG_REST
->;
-
-bool InterfaceOspfv3_Encryption_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Encryption = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Encryption_Handler,
-    "encryption"_tok, ARG_REST
->;
-
-bool InterfaceOspfv3_Neighbor_Handler(INTERFACE_PARAMS);
-using InterfaceOspfv3_Neighbor = commandAdder<InterfaceContext,
-    InterfaceOspfv3_Neighbor_Handler,
-    "neighbor"_tok, ARG_REST
->;
-
-/**
- * @brief Parser for OSPFv3 commands in Interface Configuration mode.
- * @ingroup CLI_MODE_PARSERS
- *
- * Aggregates area, authentication, encryption, and neighbor commands
- * for OSPFv3 interfaces under `CliMode::Interface` with `InterfaceContext`.
- */
-using InterfaceOspfv3Commands = CliModeParser<CliMode::Interface, InterfaceContext,
-    InterfaceOspfCommands,
-    InterfaceOspfv3_Area,
-    InterfaceOspfv3_Authentication,
-    InterfaceOspfv3_Encryption,
-    InterfaceOspfv3_Neighbor
->;
+DEFINE_CMD_EXECUTOR(InterfaceOspfv3, CliMode::Interface, config::OspfInterfaceBaseRegistry);
+DEFINE_CMD_EXECUTOR(InterfaceDefaultOspfv3, CliMode::Interface, config::OspfInterfaceBaseRegistry);
+DEFINE_CMD_EXECUTOR(InterfaceOspfv3Base, CliMode::Interface, config::InterfaceRegistry);
 }
 
 #endif // INTERFACE_IPV6_OSPF_COMMANDS_H
-

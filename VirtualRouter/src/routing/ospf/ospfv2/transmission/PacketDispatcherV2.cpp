@@ -6,14 +6,18 @@
 #include "packet/headers/embedded/ospf/Ospfv2DBDHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
+#include "configs/registry/interface/InterfaceRegistry.h"
 
 namespace routing::ospf
 {
-PacketDispatcherV2::PacketDispatcherV2(OspfInterface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& cfgs)
-    : PacketDispatcher(iface),
-      baseConfigs(cfgs),
-      configs(baseConfigs->get<config::OspfInterfaceBase::BASE>().get())
+PacketDispatcherV2::PacketDispatcherV2(OspfInterface& iface)
+    : PacketDispatcher(iface)
 {}
+
+config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getConfigs()
+{
+    return iface.getIface().configs.getConfigs().reg.get<config::Interface::IP_OSPF>().get();
+}
 
 void PacketDispatcherV2::transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest)
 {
@@ -40,9 +44,7 @@ void PacketDispatcherV2::transmit(processing::PacketBuilder& pkt, const types::I
         .protocolType = IP_OSPF
     };
 
-    af == types::AddressFamily::IPv4
-        ? infrastructure::ippacket::buildIpv4(build)
-        : infrastructure::ippacket::buildIpv6(build);
+    infrastructure::ippacket::buildIpv4(build);
 }
 
 bool PacketDispatcherV2::setupDbd(Neighbor& neighbor, packet::Ospfv2Header& pkt)
@@ -72,9 +74,7 @@ bool PacketDispatcherV2::setupDbd(Neighbor& neighbor, packet::Ospfv2Header& pkt)
 void PacketDispatcherV2::onDbdRetransmissionTimer(Neighbor& nbr)
 {
     processing::PacketBuilder retransmissionPacket(&iface.getIface());
-    af == types::AddressFamily::IPv4
-        ? infrastructure::ippacket::reserveIpv4(retransmissionPacket)
-        : infrastructure::ippacket::reserveIpv6(retransmissionPacket);
+    infrastructure::ippacket::reserveIpv4(retransmissionPacket);
     auto* hdr = retransmissionPacket.addHeader(nbr.getRtr().dbdPacket.packet, packet::HeaderType::OSPFV2);
     if (!hdr) return;
 
@@ -86,8 +86,6 @@ void PacketDispatcherV2::onDbdRetransmissionTimer(Neighbor& nbr)
         .protocolType = IP_OSPF
     };
 
-    af == types::AddressFamily::IPv4
-        ? infrastructure::ippacket::buildIpv4(build)
-        : infrastructure::ippacket::buildIpv6(build);
+    infrastructure::ippacket::buildIpv4(build);
 }
 } // namespace routing

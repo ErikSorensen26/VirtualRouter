@@ -1,111 +1,528 @@
 // CliSession.cpp
 
+#include <algorithm>
 #include <regex>
+#include <sstream>
+
 #include <Global.h>
 
+#include "Token.hpp"
 #include "CliSession.h"
 #include "CliEngine.h"
 #include "CliUtils.h"
 #include "cli/modes/Mode.hpp"
-#include "cli/modes/contexts/GlobalContext.hpp"
-
-// TODO Add new "subcommand_sequence" property, it should allow a recursive chain of commands
-// TODO add new "single_use" property that goes with subcommand_sequence
-// TODO add new "repeatable" property that goes with subcommand_sequence
 
 namespace cli
 {
-static std::string lowerCase(std::string str) 
+static std::string lowerStr(std::string s)
 {
-    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) -> unsigned char {
-        return static_cast<unsigned char>(std::tolower(c));
-    });
-    return str;
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c){ return static_cast<unsigned char>(std::tolower(c)); });
+    return s;
 }
 
-CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool enableDebug) : Console(controller), execution(*this), engine(engine)
+static bool lowerCmp(std::string_view s1, std::string_view s2)
 {
-    // Set debug mode based on the input parameter
+    if (s1.size() != s2.size())
+        return false;
+    return std::equal(s1.begin(), s1.end(), s2.begin(),
+        [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+}
+
+static bool partialLowerCmp(std::string_view partial, std::string_view s2)
+{
+    if (partial.size() > s2.size()) return false;
+    return std::equal(partial.begin(), partial.end(), s2.begin(),
+        [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+}
+
+static std::string trimLeft(const std::string& s)
+{
+    auto it = std::find_if(s.begin(), s.end(),
+        [](unsigned char c){ return !std::isspace(c); });
+    return std::string(it, s.end());
+}
+
+static std::string getLastWord(const std::string& s)
+{
+    std::istringstream ss(s);
+    std::string w, last;
+    while (ss >> w) last = w;
+    return last;
+}
+
+inline static bool isVolatile(std::string_view p)
+{
+    return matchVolatilePattern(p) != P_NONE;
+}
+
+struct NodeView
+{
+    const nlohmann::ordered_json* node;
+    const nlohmann::ordered_json* overrideSubCommands = nullptr;
+
+    const nlohmann::ordered_json* subCommands() const
+    {
+        if (overrideSubCommands)
+            return overrideSubCommands;
+        if (node && node->contains(CLI_JSON_SUBCOMMAND_ARRAY))
+            return &(*node)[CLI_JSON_SUBCOMMAND_ARRAY];
+        return nullptr;
+    }
+};
+
+enum class MatchState
+{
+    NONE,
+    PARTIAL,
+    EXACT,
+    PATTERN
+};
+
+enum class CommandState
+{
+    IN_PROGRESS,
+    COMPLETE,
+    INVALID,
+    AMBIGUOUS
+};
+
+enum class InputMode
+{
+    NORMAL,
+    HELP,
+    TAB,
+    LINE
+};
+
+struct ParseContext
+{
+    CliEngine& engine;
+    const nlohmann::ordered_json* workingDirectory;
+
+    bool negateMode = false;
+    bool defaultMode = false;
+
+    MatchState matchState = MatchState::NONE;
+    CommandState commandState = CommandState::IN_PROGRESS;
+    InputMode inputMode = InputMode::NORMAL;
+
+    const nlohmann::ordered_json* currentDirectory = nullptr;
+    NodeView* currentNodeView = nullptr;
+    
+    std::string_view previousMatch;
+    std::string_view currentPattern;
+    std::string_view endCmdStr;
+
+    bool eoc = false; // End of Command
+    bool err = false; // Error
+    bool nwh = false; // Next Word Help
+
+    std::vector<NodeView> tempDir;
+
+    ParseContext(CliEngine& e, const nlohmann::ordered_json* wd)
+        : engine(e), workingDirectory(wd)
+    {
+        currentDirectory = workingDirectory;
+    }
+
+    bool isRunning()         const { return commandState == CommandState::IN_PROGRESS; }
+    bool isCommandValid()    const { return commandState == CommandState::COMPLETE; }
+    bool isCommandInvalid()  const { return commandState == CommandState::INVALID; }
+    bool isHelpActive()      const { return inputMode == InputMode::HELP || inputMode == InputMode::TAB; }
+    bool isLineActive()      const { return inputMode == InputMode::LINE; }
+    bool isMatchSuccessful() const { return matchState == MatchState::EXACT || matchState == MatchState::PATTERN; }
+    bool isPatternMatching() const { return matchState == MatchState::PATTERN; }
+
+    bool isValidDir(const nlohmann::ordered_json* dir) const
+    {
+        return dir && dir->is_object() && dir->contains(CLI_JSON_SUBCOMMAND_ARRAY);
+    }
+
+    std::vector<std::string_view> tokenize(const std::string& line)
+    {
+        std::vector<std::string_view> tokens;
+        size_t start = 0;
+        bool inToken = false;
+
+        auto pushToken = [&](size_t end)
+        {
+            if (inToken)
+            {
+                tokens.emplace_back(line.data() + start, end - start);
+                inToken = false;
+            }
+        };
+
+        for (size_t i = 0; i < line.size(); ++i)
+        {
+            char ch = line[i];
+
+            if (ch == '?' || ch == '\t')
+            {
+                pushToken(i);
+                tokens.emplace_back(&line[i], 1);
+                return tokens;
+            }
+
+            if (std::isspace(static_cast<unsigned char>(ch)))
+            {
+                pushToken(i);
+            }
+            else
+            {
+                if (!inToken)
+                {
+                    start = i;
+                    inToken = true;
+                }
+            }
+        }
+
+        pushToken(line.size());
+        return tokens;
+    }
+
+    void extendLineToken(const std::string& line, std::string_view& token, bool help)
+    {
+        size_t offset = static_cast<size_t>(token.data() - line.data());
+        if (help) offset++; // Increment to shave help command off the end
+        if (offset > line.size()) return;
+        token = std::string_view(line.data() + offset, line.size() - offset);
+    }
+
+    std::vector<Com> availableAt(std::string_view userInput, std::vector<Com>& prevCommands)
+    {
+        Com* prevCmd = prevCommands.empty() ? nullptr : &prevCommands.front();
+
+        if (err) return {};
+
+        bool addCarriage = false;
+        try
+        {
+            if (negateMode || defaultMode)
+                addCarriage = hasProp(prevCmd, "negate", "negate_all");
+        }
+        catch (...) { return { engine.carriageReturnCommand }; }
+
+        std::vector<NodeView> views;
+        buildViews(views);
+
+        std::vector<Com> available;
+        const nlohmann::ordered_json* matchNode = nullptr;
+        Com exactMatch;
+        bool hasExact = false;
+        int matchCount = 0;
+
+        for (const auto& view : views)
+        {
+            const auto* cmd = view.node;
+            if (!cmd->contains(CLI_JSON_COMMAND_NAME) || !cmd->contains(CLI_JSON_DESCRIPTION)) continue;
+            if (shouldHide(*cmd, negateMode || defaultMode)) continue;
+
+            Com c = buildCom(*cmd, userInput);
+
+            if (!isVolatile(c.name) && c.name.size() >= userInput.size())
+            {
+                if (c.isPartial())
+                    matchNode = cmd, ++matchCount;
+                if (c.isExact())
+                    hasExact = true, exactMatch = c, exactMatch.name = c.name, matchNode = cmd;
+            }
+            available.push_back(c);
+        }
+
+        if (!matchCount && !hasExact)
+        {
+            for (const auto& v : views)
+            {
+                const std::string& name = (*v.node)[CLI_JSON_COMMAND_NAME].get<std::string>();
+                if (matchPattern(userInput, name) && !eoc)
+                {
+                    matchNode = v.node;
+                    matchCount = 1;
+                    if (!isValidDir(matchNode)) eoc = true;
+                    break;
+                }
+            }
+        }
+
+        if (addCarriage) available.push_back(engine.carriageReturnCommand);
+        if (hasExact) matchCount = 1;
+
+        if (matchCount == 1 && isValidDir(matchNode))
+        {
+            currentDirectory = &(*matchNode)[CLI_JSON_SUBCOMMAND_ARRAY];
+            commandState = CommandState::IN_PROGRESS;
+
+            for (const auto& sub : *currentDirectory)
+                if (sub[CLI_JSON_COMMAND_NAME] == engine.carriageReturnCommand.name)
+                    commandState = CommandState::COMPLETE;
+
+            if (hasExact) return { exactMatch };
+        }
+        else if (!isMatchSuccessful() && (matchCount != 1 || isValidDir(matchNode)))
+            err = true;
+        else if (hasExact && !isValidDir(matchNode) && !userInput.empty() &&
+                 !((negateMode && userInput == "no") || (defaultMode && userInput == "default")))
+        {
+            endCmdStr = (*matchNode)[CLI_JSON_COMMAND_NAME].get_ref<const std::string&>();
+            eoc = true;
+            return {};
+        }
+        else eoc = false;
+
+        if (!matchCount && !userInput.empty() && err && userInput != "?" && userInput != "\t")
+            return {};
+        if (!matchCount && !isValidDir(matchNode) && userInput != "?" && userInput != "\t" && !isPatternMatching())
+            return {};
+        return available;
+    }
+
+    bool matchPattern(std::string_view input, const std::string& pattern)
+    {
+        if (previousMatch.empty() || input == "?" || input == "\t")
+            return false;
+
+        auto accept = [&](bool lineMode = false, bool endMode = false)
+        {
+            currentPattern = pattern;
+            matchState = MatchState::PATTERN;
+            if (lineMode) inputMode = InputMode::LINE;
+        };
+
+        // WORD
+        if (pattern == "WORD" && matchWord(input, previousMatch))
+        {
+            accept();
+            return true;
+        }
+
+        // LINE
+        if (pattern == "LINE")
+        {
+            accept(true);
+            return true;
+        }
+
+        // IPv4
+        if (pattern == "A.B.C.D" && cli::utils::isIPv4Address(input))
+        {
+            accept();
+            return true;
+        }
+
+        // IPv6
+        if ((pattern == "X:X:X:X::X" && cli::utils::isIPv6Address(input)) ||
+            (pattern == "X:X:X:X::X/<0-128>" && cli::utils::isIPv6AddressWithMask(input)))
+        {
+            accept();
+            return true;
+        }
+
+        // MAC
+        if (pattern == "H.H.H" && cli::utils::isMACAddress(input))
+        {
+            accept();
+            return true;
+        }
+
+        // Numeric range
+        if (cli::utils::matchNumericRange(input, pattern))
+        {
+            accept(false, true);
+            return true;
+        }
+
+        return false;
+    }
+
+private:
+
+    // AVAILABLE AT HELPERS
+
+    static bool hasProp(const Com* cmd, const std::string& a, const std::string& aAll)
+    {
+        if (!cmd) return false;
+        for (const auto& p : cmd->properties)
+        {
+            if (p == a) return true;
+            if (p == aAll) throw true;
+        }
+        return false;
+    }
+
+    static bool shouldHide(const nlohmann::ordered_json& cmd, bool negate)
+    {
+        if (!cmd.contains(CLI_JSON_COMMAND_PROPERTIES)) return false;
+
+        for (const auto& p : cmd[CLI_JSON_COMMAND_PROPERTIES])
+        {
+            const std::string ps = p.get<std::string>();
+            if ((negate && ps == "negate_hide") ||
+                (!negate && ps == "negate_show"))
+                return true;
+        }
+        return false;
+    }
+
+    static Com buildCom(const nlohmann::ordered_json& cmd, std::string_view raw)
+    {
+        Com c;
+        c.name = cmd[CLI_JSON_COMMAND_NAME].get_ref<const std::string&>();
+        c.description = cmd[CLI_JSON_DESCRIPTION].get_ref<const std::string&>();
+        // c.support TODO: lookup in executor
+        if (cmd.contains(CLI_JSON_COMMAND_PROPERTIES))
+            for (const auto& p : cmd[CLI_JSON_COMMAND_PROPERTIES])
+                c.properties.push_back(p.get_ref<const std::string&>());
+        
+        if (lowerCmp(raw, c.name))
+            c.match = Com::Match::FULL;
+        else if (partialLowerCmp(raw, c.name))
+            c.match = Com::Match::PARTIAL;
+
+        return c;
+    }
+
+    void buildViews(std::vector<NodeView>& views)
+    {
+        for (const auto& cmd : *currentDirectory)
+        {
+            std::string_view name = cmd[CLI_JSON_COMMAND_NAME].get_ref<const std::string&>();
+
+            // recursive
+            if (cmd.contains(CLI_JSON_COMMAND_PROPERTIES))
+            {
+                for (const auto& p : cmd[CLI_JSON_COMMAND_PROPERTIES])
+                    if (p.get<std::string>() == "recursive")
+                    {
+                        tempDir.push_back({ &cmd, currentDirectory });
+                        views.push_back(tempDir.back());
+                        goto next;
+                    }
+            }
+
+            // variable
+            if (name != engine.carriageReturnCommand.name &&
+                !isVolatile(name) && name.size() >= 2 &&
+                name.front() == '<' && name.back() == '>')
+            {
+                auto* sub = cmd.contains(CLI_JSON_SUBCOMMAND_ARRAY)
+                          ? &cmd[CLI_JSON_SUBCOMMAND_ARRAY] : nullptr;
+
+                std::string_view inner = name.substr(1, name.size() - 2);
+
+                if (sub && engine.getCommandTree()[VARIABLE_OBJ].contains(inner))
+                {
+                    for (const auto& var : engine.getCommandTree()[VARIABLE_OBJ][inner])
+                    {
+                        tempDir.push_back({ &var, sub });
+                        views.push_back(tempDir.back());
+                    }
+                }
+                std::cout << engine.getCommandTree()[VARIABLE_OBJ].dump(4) << std::endl;
+                continue;
+            }
+
+            views.push_back({ &cmd, nullptr });
+
+            next:;
+        }
+    }
+
+    // MATCH PATTERN HELPERS
+
+    static bool matchWord(std::string_view input, std::string_view previousMatch)
+    {
+        static const std::regex hostnameRx  { R"(^[A-Za-z0-9]([A-Za-z0-9\-\.]*[A-Za-z0-9])?$)" };
+        static const std::regex nameRx      { R"(^[A-Za-z0-9\-]+$)" };
+        static const std::regex passwordRx  { R"(^[ -~]+$)" };
+        static const std::regex filenameRx  { R"(^[A-Za-z0-9_\-\.\/]+$)" };
+        static const std::regex communityRx { R"(^[0-9]+:[0-9]+$)" };
+        static const std::regex wordRx      { R"(^[A-Za-z0-9_\-\.\/]+$)" };
+
+        static const std::unordered_map<std::string_view, const std::regex*> volatileWordMap {
+            { "hostname", &hostnameRx }, { "name", &nameRx }, { "vrf", &nameRx }, { "route-map", &nameRx },
+            { "policy-map", &nameRx }, { "group", &nameRx }, { "class", &nameRx }, { "pool", &nameRx },
+            { "context", &nameRx }, { "vdpn-group", &nameRx },
+            { "password", &passwordRx }, { "secret", &passwordRx }, { "key-string", &passwordRx },
+            { "encryption type", &passwordRx },
+            { "filename", &filenameRx }, { "flash", &filenameRx }, { "tftp", &filenameRx },
+            { "dir", &filenameRx }, { "view", &filenameRx },
+            { "community", &communityRx }, { "as number", &communityRx }
+        };
+
+        const std::regex* rx = &wordRx; // Default
+        auto it = volatileWordMap.find(previousMatch);
+        if (it != volatileWordMap.end()) rx = it->second;
+
+        return std::regex_match(input.begin(), input.end(), *rx);
+    }
+};
+
+CliSession::CliSession(CliEngine& engine, ConsoleController& controller, bool enableDebug)
+    : Console(controller), engine(engine), execution(*this)
+{
     configNode = &engine.getCommandTree();
     modeHistory.push_back(configNode);
-    isDebugModeEnabled = enableDebug;
-    changeMode<CliMode::UserExec>();
-
-    // Set initial mode
-    initializeProcessingState();
-
-    // Initialize Console
+    changeMode<CliMode::UserExec>(engine.global.configs);
     initConsole();
+
+#ifdef DEBUG
+    isDebugModeEnabled = enableDebug;
+#endif
+
     controller.print("Initializing Terminal...\r\n");
 }
 
 void CliSession::handlePrompt()
 {
-    // Retrieve the hostname from the global settings and reset cursor position
-    std::string hostname = engine.global.getHostname();
-    cursorPos = 0;
-    setPrompt(hostname + currentPrompt);
+    setPrompt(engine.global.getHostname() + currentPrompt);
 
-    // Reset insert mode
     insert = false;
     insertString.clear();
-
-    // Save starting cursor position
     cursorPos = 0;
 
-    // Startup Variables
-    std::string input;
-
-    // Print the nextLine if something is queued
+    std::string preload;
     if (!nextLine.empty())
     {
-        if (nextLine[nextLine.length() - 1] == ' ')
-        {
-            nextLine.pop_back();
-        }
-        input = nextLine;
-        cursorPos = input.size();
-        oldInputLength = input.size();
-        controller.print(nextLine);
+        preload = nextLine;
+        cursorPos      = preload.size();
+        oldInputLength = preload.size();
+        controller.print(preload);
         nextLine.clear();
     }
-
-    inputCacheBuffer = input;
+    inputCacheBuffer = preload;
 }
 
 bool CliSession::handleInput(std::string test)
 {
-    // Read the user's input from the terminal
-    std::string userCommand = input(test, paginationList.size() > 0);
+    std::string userCommand = input(test, !paginationList.empty());
 
-    // Handle the Ctrl-Z shortcut to switch to privilegedExec mode
-    if (userCommand == "CRT-Z" && getMode() != CliMode::UserExec) {
-        if (!changeMode<CliMode::PrivilegedExec>())
+    if (userCommand == "CRT-Z" && getMode() != CliMode::UserExec)
+    {
+        if (!resetAndChangeMode<CliMode::PrivilegedExec>(engine.global.configs))
         {
             controller.print("\r\n");
             return false;
         }
     }
 
-    initializeProcessingState();
-
-    if (paginationList.size() > 0)
+    if (!paginationList.empty())
     {
         handlePagination(userCommand.empty() ? '\x20' : userCommand[0]);
         return true;
     }
 
-    // Execute commands
     if (!executeCommand(userCommand))
     {
-        if (paginationList.size() > 0) return false;
+        if (!paginationList.empty()) return false;
         controller.print("\r\n");
         handlePrompt();
         return false;
     }
 
-    // Move to the next line after command execution
-    if (paginationList.size() > 0)
+    if (!paginationList.empty())
     {
         handlePagination();
         return false;
@@ -116,1208 +533,366 @@ bool CliSession::handleInput(std::string test)
     return true;
 }
 
-void CliSession::initializeProcessingState()
+CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
 {
-    previousMatch.clear();
-    currentPattern.clear();
-    currentDirectory         = workingDirectory;
-    isNextWordHelpRequested  = false;
-    isRunning                = true;
-    isMatchSuccessful        = false;
-    isHelpModeActive         = false;
-    endOfCommand             = false;
-    isLineBasedInput         = false;
-    attemptingGlobalCommand  = false;
-    isGlobalCommandExecution = false;
-    isCommandValid           = false;
-    isCommandInvalid         = false;
-    
-    execution.getContext().negate = false;
-}
+    ParseResult result;
+    ParseContext ctx(engine, workingDirectory);
 
-bool CliSession::detectHelpTriggers(const std::vector<std::string>& parsedWords)
-{
-    return std::any_of(parsedWords.begin(), parsedWords.end(),
-        [](const std::string& word) 
-        { 
-            return word == "?" || word == "vk_tab"; 
-        }
-    );
-}
+    std::vector<std::string_view> words = ctx.tokenize(rawInput);
+    if (words.empty()) return result;
 
-bool CliSession::isNoCommand(const std::vector<std::string>& parsedWords)
-{
-    if (parsedWords.empty()) return false;
-    if (parsedWords[0] != "no" || parsedWords.size() < 2) return false;
+    // Detect help or tab taken
+    const bool hasHelpToken = words.back() == "?" || words.back() == "\t";
 
-    // Avoid "exit and conf"
-    if (parsedWords[1] == "exit" || parsedWords[1].rfind("conf", 0) == 0) return false;
-
-    // Must not be in userExec or privilegedExec
-    CliMode currentMode = execution.getMode();
-    return currentMode != CliMode::UserExec && currentMode != CliMode::PrivilegedExec;
-}
-
-bool CliSession::isDoCommand(const std::vector<std::string>& parsedWords)
-{
-    if (parsedWords.empty()) return false;
-    if (parsedWords[0] != "do" || parsedWords.size() < 2) return false;
-
-    // Avoid "exit and conf"
-    if (parsedWords[1] == "exit" || parsedWords[1].rfind("conf", 0) == 0) return false;
-
-    // Must not already be in userExec or privilegedExec
-    CliMode currentMode = execution.getMode();
-    return currentMode != CliMode::UserExec && currentMode != CliMode::PrivilegedExec;
-}
-
-std::string CliSession::executeDoCommand(std::string remainingCommand)
-{
-    attemptingGlobalCommand = true;
-    // Save current state
-    std::string previousPrompt = currentPrompt;
-    const json* previousCommandTree = &(*workingDirectory);
-    const nlohmann::ordered_json* previousConfigNode = &(*configNode);
-
-    // Switch to privileged mode and execute
-    changeMode<CliMode::PrivilegedExec>();
-    isGlobalCommandExecution = executeCommand(remainingCommand);
-
-    // Restore old mode / working directory
-    execution.revert();
-    currentPrompt         = previousPrompt;
-    configNode            = &(*previousConfigNode);
-    workingDirectory      = &(*previousCommandTree);
-
-    // Return "error" to signify no further processing
-    return "error";
-}
-
-void CliSession::appendLineBasedCommand(const std::vector<std::string>& parsedWords, size_t currentIndex, std::string& fullyFormattedCommand, std::string& volatileCommand)
-{
-    fullyFormattedCommand += " " + parsedWords[currentIndex];
-    volatileCommand       += " " + parsedWords[currentIndex];
-
-    // Handle help question "?"
-    //if (handleHelpQuestion(parsedWords[currentIndex], previousCommandList, inputCommand, formattedOldCommand, fullyFormattedCommand, volatileCommand)) //TODO
+    // Handle "no" and "default"
+    auto handlePrefix = [&](const std::string& prefix, bool& flag)
     {
-        return;
-    }
-
-    // Handle "vk_tab" for tab completion
-    //if (handleTabCompletion(word, previousCommandList, inputCommand, formattedOldCommand, fullyFormattedCommand, volatileCommand)) //TODO
-    {
-        return;
-    }
-}
-
-void CliSession::processNonLineBasedWord(std::string& word, std::vector<Com>& previousCommandList, std::string& formattedOldCommand, std::string& fullyFormattedCommand, std::string& volatileCommand, const std::string& inputCommand, bool& isFirstIteration)
-{
-    // Reset matching states
-    isPatternMatching = false;
-    isPatternMatchEnd = false;
-
-    // if processing has already failed, baile out
-    if (!isRunning) return;
-
-    // Grab the current list of available commands
-    std::vector<Com> availableCommands = getAvailableCommands(word, isFirstIteration, previousCommandList);
-    isFirstIteration = false;
-
-    // Handle help question "?"
-    if (handleHelpQuestion(word, previousCommandList, inputCommand, formattedOldCommand, fullyFormattedCommand, volatileCommand))
-    {
-        return;
-    }
-
-    // Handle "vk_tab" for tab completion
-    if (handleTabCompletion(word, previousCommandList, inputCommand, formattedOldCommand, fullyFormattedCommand, volatileCommand))
-    {
-        return;
-    }
-
-    // If directory is "error", attempt to fix by switching to global config
-    if (!attemptGlobalCommand(inputCommand))
-    {
-        return; // If attemptGlobalCommand returned an error condition, just stop
-    }
-    
-    // Check for incorrect command
-    if (error && !isGlobalCommand(word) && !isHelpModeActive && isRunning)
-    {
-        if (availableCommands.size() > 1)
+        if (!lowerCmp(words[0], prefix) || words.size() < 2) return;
+        const CliMode m = execution.getMode();
+        if (m != CliMode::UserExec && m != CliMode::PrivilegedExec)
         {
-            handleAmbiguousInputMarker(word);
-            return;
-        }
-        else
-        {
-            handleInvalidInputMarker(formattedOldCommand);
-            return;
-        }
-    }
-
-    // Attempt to match user's word with the available commands
-    bool isCommandDone = false;
-    matchCommand(
-        inputCommand, word, availableCommands, previousCommandList, 
-        formattedOldCommand, fullyFormattedCommand, volatileCommand, 
-        isCommandDone
-    );
-}
-
-bool CliSession::handleHelpQuestion(const std::string& word, std::vector<Com>& previousCommandList,
-               const std::string& inputCommand, std::string& formattedOldCommand,
-               std::string& fullyFormattedCommand, std::string& volatileCommand)
-{
-    // Return false if "?" is not actually truggered or doesn't apply
-    if (word != "?" || isMatchSuccessful || previousCommandList.empty() || isNextWordHelpRequested || endOfCommand)
-    {
-        if ((word == "?") && isMatchSuccessful && !previousCommandList.empty() && !isNextWordHelpRequested)
-        {
-            nextLine = inputCommand.substr(0, inputCommand.size());
-        }
-        else if (!isMatchSuccessful && (word == "?") && ((previousCommandList.size() == 1 && previousCommandList[0].name == "<error>")))
-        {
-            nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
-            controller.print(std::string("\r\n%") + " Unrecognized command");
-            return word == "?";
-        }
-
-        return false;
-    }
-
-    fullyFormattedCommand += word;
-    volatileCommand       += word;
-
-    nextLine = " " + inputCommand.substr(0, inputCommand.size() - 1);
-    if (previousCommandList[0].name == "<error>")
-    {
-        nextLine = inputCommand.substr(0, inputCommand.size() - 1);
-        controller.print(std::string("\r\n%") + " Unrecognized command");
-    }
-    else if (previousCommandList[0].name != "<cr>")
-    {
-        displayAvailableCommands(previousCommandList);
-    }
-    else
-    {
-        nextLine = inputCommand.substr(0, inputCommand.size());
-    }
-    return true;
-}
-
-bool CliSession::handleTabCompletion(const std::string& word, std::vector<Com>& previousCommandList,
-               const std::string& inputCommand, std::string& formattedOldCommand,
-               std::string& fullyFormattedCommand, std::string& volatileCommand)
-{
-    if (word != "vk_tab" || isNextWordHelpRequested) return false;
-
-    // Multiple suggestions
-    if (previousCommandList.size() > 1)
-    {
-        fullyFormattedCommand += word;
-        volatileCommand       += word;
-        nextLine = formattedOldCommand + " ";
-    }
-    // no suggestions
-    else if (previousCommandList.empty())
-    {
-        nextLine = trimString(inputCommand);
-    }
-    else if (previousCommandList[0].name == "<error>")
-    {
-        return false;
-    }
-    // Exactly one suggestion => auto complete
-    else
-    {
-        nextLine = " " + inputCommand.substr(0, inputCommand.size() - 1);
-        long lastSpacePosition = static_cast<long>(nextLine.rfind(' '));
-        if (lastSpacePosition == -1)
-        {
-            // No spaces found
-            nextLine += " " + engine.maskInput(inputCommand.substr(0, inputCommand.size() - 1), getLastWord(fullyFormattedCommand)) + "  ";
-        }
-        else
-        {
-            // Insert after last space
-            nextLine = engine.maskInput(" " + inputCommand.substr(0, inputCommand.size() - 1), nextLine.substr(0, static_cast<size_t>(lastSpacePosition)) + " " + getLastWord(fullyFormattedCommand)) + "  ";
-        }
-    }
-
-    return true;
-}
-
-bool CliSession::attemptGlobalCommand(const std::string& inputCommand)
-{
-    CliMode currentMode = getMode();
-    if (error &&
-        currentMode != CliMode::GlobalConfiguration &&
-        currentMode != CliMode::UserExec &&
-        currentMode != CliMode::PrivilegedExec &&
-        !isHelpModeActive && 
-        lowerCase(inputCommand) != "exit")
-    {
-        attemptingGlobalCommand = true;
-        // Backup
-        std::string       prevPrompt      = currentPrompt;
-        auto              prevDirectory   = workingDirectory;
-        auto              preConfig      = configNode;
-
-        // Attempt global execution
-        changeMode<CliMode::GlobalConfiguration>(engine.global, *engine.global.getRoutingInstance("default"));
-        historyToGlobal();
-        std::string inputCommandCopy = inputCommand;
-        if (executeCommand(inputCommandCopy))
-        {
-            isGlobalCommandExecution = true;
-        }
-
-        if (getMode() == CliMode::GlobalConfiguration)
-        {
-            if (isCommandExecutionSuccessful)
-            {
-                return false; // Triggers "error" return
-            }
-            else
-            {
-                // Restore
-                execution.revert();
-                currentPrompt         = prevPrompt;
-                configNode = preConfig;
-                workingDirectory      = prevDirectory;
-                if (isCommandExecutionSuccessful)
-                {
-                    return false;
-                }
-            }
-        }
-        else
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-void CliSession::handleInvalidInputMarker(const std::string& formattedOldCommand)
-{
-    isCommandInvalid = true;
-    isRunning = false;
-    std::string invalidInput = "\r\n";
-
-    std::string hostname = engine.global.getHostname();
-    // Print spaces for hostname, mode, old command
-    invalidInput += std::string(initialLineLength + formattedOldCommand.size(), ' ') + "^\r\n% Invlid input detected at '^' marker.\r\n";
-    controller.print(invalidInput);
-}
-
-void CliSession::handleAmbiguousInputMarker(const std::string& ambiguousCommand)
-{
-    isCommandInvalid = true;
-    isCommandValid = false;
-    isRunning = false;
-    std::string invalidInput = R"(% Ambiguous command: ")" + ambiguousCommand + "\"";
-    controller.print("\r\n" + invalidInput);
-}
-
-void CliSession::matchCommand(const std::string& inputCommand, const std::string& uWord, 
-               const std::vector<Com>& availableCommands, std::vector<Com>& previousCommandList, 
-               std::string& formattedOldCommand, std::string& fullyFormattedCommand,
-               std::string& volatileCommand, bool& isCommandDone)
-{
-    std::string word = lowerCase(uWord);
-    // Build a list of commands that match the user-typed 'word'.
-    std::vector<Com> matchingCommands;
-    for (const auto& command : availableCommands)
-    {
-        // If patteru matching is enabled and the command name matches the current pattern
-        if (isPatternMatching && command.name == currentPattern)
-        {
-            matchingCommands.push_back(command);
-        }
-        // Or if the user-typed word is a prefix of the command name
-        if (command.name.size() >= word.size() && 
-            std::equal(word.begin(), word.end(), lowerCase(command.name).begin()))
-        matchingCommands.push_back(command);
-    }
-
-    // if no specific match was found, fall back to the entire 'availableCommands'.
-    previousCommandList = matchingCommands.empty() ? availableCommands : matchingCommands;
-
-    // Handle "?" or "vk_tab" after partial match:
-    if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested) && !endOfCommand)
-    {
-        // Display possible commands and append "?"
-        displayAvailableCommands(availableCommands);
-        fullyFormattedCommand += word;
-        volatileCommand       += word;
-
-        // Typically set nextline to old command + space
-        nextLine = formattedOldCommand + " ";
-        // If the first command is <error>, revert to raw input
-        if (!availableCommands.empty() && availableCommands[0].name == "<error>")
-        {
-            nextLine = inputCommand.substr(0, inputCommand.size() - 1);
-            handleAmbiguousInputMarker(nextLine);
-        }
-
-        // If in help mode, an extra space is appended for later
-        if (isHelpModeActive)
-        {
-            nextLine += " ";
-        }
-
-        // We displayed help, so reset success
-        isMatchSuccessful = false;
-        return; // This completes processing of this word
-    }
-    else if (word == "vk_tab" && !previousCommandList.empty())
-    {
-        // If there's an <error> or the user requested help, use the raw input
-        if (previousCommandList[0].name == "<error>" || isNextWordHelpRequested)
-        {
-            // Set the nextLine but shave off the "\t"
-            nextLine = inputCommand.substr(0, inputCommand.size() - 1) + " ";
-        }
-        
-        isMatchSuccessful = false;
-        return;
-    }
-
-    // Reset isMatchSuccessful now that "?" / "vk_tab" is handled
-    isMatchSuccessful = false;
-
-    // Check if exactly one match remains
-    if (previousCommandList.size() == 1 && !matchingCommands.empty())
-    {
-        // If pattern-matching is on and the command is exactly currentPattern
-        if (isPatternMatching && currentPattern == matchingCommands[0].name)
-        {
-            isMatchSuccessful = true;
-        }
-        // If typed word matches the command name exactly
-        if (matchingCommands[0].name == word)
-        {
-            isMatchSuccessful = true;
-        }
-    }
-    // If the user typed "?" again after partial match
-    else if (word == "?" && (isMatchSuccessful || isNextWordHelpRequested))
-    {
-        // Set the nextLine to the raw input
-        nextLine = inputCommand;
-    }
-
-    // If this word isn't done yet, decide how to append matched commands
-    if (!isCommandDone && matchingCommands.size() <= 1)
-    {
-        // (A) If we're pattern-matching, use the user's typed pattern
-        if (isPatternMatching && !matchingCommands.empty())
-        {
-            fullyFormattedCommand += " " + uWord;
-            formattedOldCommand   += " " + uWord;
-            volatileCommand       += " " + currentPattern;
-            previousMatch          = matchingCommands[0].name;
-        }
-        // (B) If there is exactly one match
-        else if (matchingCommands.size() == 1)
-        {
-            fullyFormattedCommand += " " + matchingCommands[0].name;
-            formattedOldCommand   += " " + word;
-            volatileCommand       += " " + word;
-            isCommandDone          = true;
-            previousMatch          = matchingCommands[0].name;
-        }
-        // (C) If no matches but the command is flagged as endOfCommand
-        else if (matchingCommands.empty() && endOfCommand)
-        {
-            fullyFormattedCommand += " " + endCommandString;
-            formattedOldCommand   += " " + word;
-            volatileCommand       += " " + word;
-        }
-        // (D) If no matches at all (not endOfCommand)
-        else if (matchingCommands.empty())
-        {
-            fullyFormattedCommand += " " + word;
-            formattedOldCommand   += " " + word;
-            volatileCommand       += " " + word;
-
-            // If its not a help scenario, some code returns the typed word or ends here
-            if (!isHelpModeActive)
-            {
-                fullyFormattedCommand = word;
-            }
-        }
-        // (E) If multiple matches but the first is a valid guess
-        else
-        {
-            fullyFormattedCommand += " " + matchingCommands[0].name;
-            formattedOldCommand   += " " + word;
-            volatileCommand       += " " + word;
-            isCommandDone          = true;
-            previousMatch          = matchingCommands[0].name;
-        }
-    }
-    else
-    {
-        // Command is partially matched or has multiple possibilities
-        formattedOldCommand += " " + word;
-        volatileCommand     += " " + word;
-    }
-}
-
-std::string CliSession::normalizeCommand(const std::string& inputCommand) 
-{
-    // Return an empty string if the input command is empty
-    if (inputCommand.empty()) return "";
-
-    // Parse the command
-    std::vector<std::string> parsedWords = splitIntoWords(inputCommand);
-    if (parsedWords.empty()) return "";
-
-    std::vector<Com> previousCommandList;
-    std::string formattedOldCommand, lastProcessedWord, fullyFormattedCommand, volatileCommand;
-    size_t currentIndex = 0;
-    bool isFirstIteration = true;
-
-    // Check for help triggers ("?" or "vk_tab")
-    isHelpModeActive = detectHelpTriggers(parsedWords);
-
-    // Handle negateCommand
-    if (isNoCommand(parsedWords))
-    {
-        execution.getContext().negate = true;
-    }
-
-    // Handle "do" command
-    if (!isHelpModeActive && isDoCommand(parsedWords))
-    {
-        return executeDoCommand(inputCommand.substr(2));
-    } 
-    
-    // Mark as valid if the first word is "?" or "vk_tab"
-    isMatchSuccessful = (!parsedWords.empty() && (parsedWords[0] == "?" || parsedWords[0] == "vk_tab"));
-
-    if (!isHelpModeActive && isGlobalCommand(parsedWords[0]) && !isMatchSuccessful)
-    {
-        isCommandValid = true;
-        return parsedWords[0];
-    }
-
-    // Process each word in the parsed command
-    for (std::string& word : parsedWords) {
-        if (isGlobalCommandExecution)
-        {
-            // If a global command was succcessfull after falure, return
-            return "";
-        }
-        else if (isLineBasedInput) 
-        {
-            appendLineBasedCommand(parsedWords, currentIndex, fullyFormattedCommand, volatileCommand);
-        }
-        else
-        {
-            processNonLineBasedWord(word, previousCommandList, formattedOldCommand, fullyFormattedCommand, volatileCommand, inputCommand, isFirstIteration);
-        }
-        
-        if (word == "no" && execution.getContext().negate)
-        {
-            currentDirectory = workingDirectory;
-        }
-    }
-
-    // Final trumming/formatting
-    formattedOldCommand   = trimString(formattedOldCommand);
-    volatileCommand       = trimString(volatileCommand);
-    fullyFormattedCommand = trimString(fullyFormattedCommand);
-    nextLine              = trimString(nextLine);
-
-    // Update command history
-    commandHistory = splitIntoWords(volatileCommand);
-
-    // Check if command is incomplete
-    if (!isCommandValid && !isHelpModeActive && !isLineBasedInput && !isCommandInvalid && !isGlobalCommandExecution && isRunning)
-    {
-        if (previousCommandList.size() > 1)
-        {
-            handleAmbiguousInputMarker(getLastWord(inputCommand));
-            return "";
-        }
-        else
-        {
-            isRunning = false;
-            controller.print("\r\n% Incomplete Command");
-            return "";
-        }
-    }
-
-    isCommandInvalid = false;
-
-    // Remove loose pointers of any were made
-    for (json* ptr : loosePtrs)
-    {
-        delete ptr;
-    }
-    loosePtrs.clear();
-
-    // Return the final processed command
-    return fullyFormattedCommand;
-}
-
-std::vector<Com> CliSession::getAvailableCommands(const std::string& userInput, bool inPrivilegedMode, std::vector<Com>& previousCommands)
-{
-    Com* previousCommand = previousCommands.empty() ? nullptr : &previousCommands.front();
-
-    // Get lowercase input
-    std::string lowerUserInput = lowerCase(userInput);
-
-    // Container for storing available commands
-    std::vector<Com> availableCommands;
-
-    // Clone the current command directory
-    const nlohmann::ordered_json* currentCommandDirectory = currentDirectory;
-
-    // Default response for invalid or unavailable commands
-    std::vector<Com> noSubCommands = {engine.errorCommand};
-
-    // Clear and move the tempDir
-    tempDir.clear();
-
-    // Helper lamda to travel to the end of the command
-    std::function<void(nlohmann::ordered_json*, const nlohmann::ordered_json*)> navigateToLastCommand = [&](nlohmann::ordered_json* command, const nlohmann::ordered_json* nextCommand) {
-        if (command->contains(CLI_JSON_SUBCOMMAND_ARRAY) && (*command)[CLI_JSON_SUBCOMMAND_ARRAY].size() > 0)
-        {
-            command = &(*command)[CLI_JSON_SUBCOMMAND_ARRAY][0];
-            navigateToLastCommand(command, nextCommand);
-        }
-        else if ((*command)[CLI_JSON_COMMAND_NAME] != engine.carriageReturnCommand.name)
-        {
-            (*command)[CLI_JSON_SUBCOMMAND_ARRAY] = *nextCommand;
+            flag = true;
         }
     };
 
-    // Variables for handling exact matches
-    Com exactMatchCommand;
-    bool isExactMatch = false;
-    bool isValidCommand = false;
+    handlePrefix("no", result.negate);
+    handlePrefix("default", result.defaulted);
 
-    // If the current directory is invalid, return the default error response
-    if (error) 
+    // Handle "do-exec"
+    if (!hasHelpToken && words.size() >= 2 && lowerStr(std::string(words[0])) == "do-exec")
     {
-        return noSubCommands;
+        const size_t pos = rawInput.find_first_not_of(" \t", 7);
+        result.status = ParseResult::Status::DO_COMMAND;
+        result.doRemainder = (pos != std::string::npos) ? rawInput.substr(pos) : "";
+        return result;
     }
 
-    // Iterate over all commands in the current directory
-    const nlohmann::ordered_json* commandNode = nullptr;
-    int matchCount = 0;
-    bool patternMatched = false;
+    // if (words[0] == "?" || words[0] == "\t") ctx.matchState = MatchState::EXACT;
 
-    bool addCarriage = false;
+    std::vector<Token> tokens;
+    std::vector<Com> prevCommands;
 
-    // Handle negate property
-    if (execution.getContext().negate && previousCommand)
+    for (size_t idx = 0; idx < words.size(); idx++)
     {
-        for (const auto& prop : previousCommand->properties)
-        {
-            if (prop == "negate")
-            {
-                addCarriage = true;
-            }
-            else if (prop == "negate_all")
-            {
-                return {engine.carriageReturnCommand};
-            }
-        }
-    }
-
-    // Creates next commands directory
-    for (const json& command : *currentCommandDirectory)
-    {
-        std::string commandName = command[CLI_JSON_COMMAND_NAME];
-
-        if (command.contains(CLI_JSON_COMMAND_PROPERTIES) && command[CLI_JSON_COMMAND_PROPERTIES].is_array())
-        {
-            // Process properties
-            for (auto prop : command[CLI_JSON_COMMAND_PROPERTIES])
-            {
-                // Handle recursive property
-                if (prop == "recursive") {
-                    json* recursiveCommand = new json(command);
-                    loosePtrs.push_back(recursiveCommand);
-                    json tempRecursiveDir = json::array();
-
-                    for (json commmand : *currentCommandDirectory)
-                    {
-                        if (command[CLI_JSON_COMMAND_NAME] != commandName)
-                        {
-                            tempRecursiveDir.push_back(command);
-                        }
-                    }
-                    navigateToLastCommand(recursiveCommand, &tempRecursiveDir);
-                    tempDir.push_back(recursiveCommand);
-                    continue;
-                }
-            }
-        }
-
-        // Handles move operator ("<>") in command structure
-        if (commandName != engine.carriageReturnCommand.name && !engine.isVolatile(commandName) && commandName[0] == '<' && commandName.back() == '>')
-        {
-            // Next command
-            const nlohmann::ordered_json* nextCommand = nullptr;
-            if (command.contains(CLI_JSON_SUBCOMMAND_ARRAY))
-            {
-                nextCommand = &command[CLI_JSON_SUBCOMMAND_ARRAY];
-            }
-            std::string newName = commandName.substr(1, commandName.size() - 2);
-            if (engine.getCommandTree()[VARIABLE_OBJ].contains(newName))
-            {
-                for (const json& newCommand : engine.getCommandTree()[VARIABLE_OBJ][newName]) 
-                {
-                    // Craft new command
-                    if (nextCommand)
-                    {
-                        nlohmann::ordered_json* commandPtr = new nlohmann::ordered_json(std::move(newCommand));
-                        loosePtrs.push_back(commandPtr);
-                        navigateToLastCommand(commandPtr, nextCommand);
-                        tempDir.push_back(commandPtr);
-                    }
-                }
-            }
-        }
-        else
-        {
-            tempDir.push_back(&command);
-        }
-    }
-
-    for (const json* command : tempDir)
-    {
-        if (command->contains(CLI_JSON_COMMAND_NAME) && command->contains(CLI_JSON_DESCRIPTION))
-        {
-            // Handle Command Support
-            Com::Support support = (command->contains(CLI_JSON_SUPPORT_STATUS) && (*command)[CLI_JSON_SUPPORT_STATUS].is_boolean())
-                ? ((*command)[CLI_JSON_SUPPORT_STATUS] == true
-                    ? Com::Support::SUPPORTED
-                    : Com::Support::PARTIAL)
-                : Com::Support::NO_SUPPORT;
-
-            // Handle command properties
-            if (command->contains(CLI_JSON_COMMAND_PROPERTIES))
-            {
-                bool hide = false;
-                for (const auto& prop : (*command)[CLI_JSON_COMMAND_PROPERTIES])
-                {
-                    if (execution.getContext().negate && prop.get<std::string>() == "negate_hide")
-                        hide = true;
-                    else if (!execution.getContext().negate && prop.get<std::string>() == "negate_show")
-                        hide = true;
-                }
-                if (hide) continue;
-            }
-            Com commandData;
-            commandData.name = (*command)[CLI_JSON_COMMAND_NAME];
-            commandData.description = (*command)[CLI_JSON_DESCRIPTION];
-            commandData.support = support;
-            if (command->contains(CLI_JSON_COMMAND_PROPERTIES))
-            {
-                for (const auto& prop : (*command)[CLI_JSON_COMMAND_PROPERTIES])
-                {
-                    commandData.properties.push_back(prop.get<std::string>());
-                }
-            }
-            availableCommands.push_back(commandData);
-
-            // Check if the user input matches a pattern or specific command
-            std::string commandName = (*command)[CLI_JSON_COMMAND_NAME];
-            if (!patternMatched && matchInputPattern(lowerUserInput, commandName) && !endOfCommand)
-            {
-                commandNode = command;
-                matchCount++;
-                patternMatched = true;
-                if (!isValidCommandDirectory(commandNode)) 
-                {
-                    endOfCommand = true;
-                }
-            } 
-            else if (!engine.isVolatile(commandName) && commandName.size() >= userInput.size())
-            {
-                if (std::equal(lowerUserInput.begin(), lowerUserInput.end(), lowerCase(commandName).begin()) && !isExactMatch) 
-                {
-                    commandNode = command;
-                    matchCount++;
-                }
-                if (commandName == lowerUserInput) 
-                {
-                    isExactMatch = true;
-                    exactMatchCommand.name = lowerCase((*command)[CLI_JSON_COMMAND_NAME]);
-                    exactMatchCommand.description = (*command)[CLI_JSON_DESCRIPTION];
-                    if (command->contains(CLI_JSON_COMMAND_PROPERTIES))
-                    {
-                        for (const auto& prop : (*command)[CLI_JSON_COMMAND_PROPERTIES])
-                        {
-                            exactMatchCommand.properties.push_back(prop.get<std::string>());
-                        }
-                    }
-                    commandNode = command;
-                }
-            }
-        }
-    }
-
-    // Handle negate property
-    if (addCarriage)
-    {
-        availableCommands.push_back(engine.carriageReturnCommand);
-    }
-
-    // Handle exact matches and valid commands
-    if (isExactMatch) 
-    {
-        matchCount = 1;
-    }
-    if (matchCount == 1 && isValidCommandDirectory(commandNode)) 
-    {
-        currentDirectory = &((*commandNode)[CLI_JSON_SUBCOMMAND_ARRAY]);
+        std::string_view word = words[idx];
         
-        for (const auto& subCommand : *currentDirectory) 
+        // Extend line token if active
+        /*if (tokens.back().isLine())
         {
-            if (subCommand[CLI_JSON_COMMAND_NAME] == engine.carriageReturnCommand.name) 
+            ctx.extendLineToken(rawInput, word, hasHelpToken);
+        }*/
+
+        ctx.matchState = MatchState::NONE;
+        std::vector<Com> available = ctx.availableAt(word, prevCommands);
+
+        // Help
+        if (word == "?")
+        {
+            prevCommands.swap(available);
+            result.nextLine = rawInput.substr(0, rawInput.size() - 1);
+            if (prevCommands.empty())
+                controller.print("\r\n% Unrecognized Command");
+            result.helpList = ctx.nwh ? available : prevCommands;
+            result.status = ParseResult::Status::HELP;
+            return result;
+        }
+
+        // Tab
+        if (word == "\t")
+        {
+            if (ctx.nwh || prevCommands.size() != 1)
             {
-                isCommandValid = true;
-                isValidCommand = true;
-            }
-        }
-        if (!isValidCommand) 
-        {
-            isCommandValid = false;
-        }
-        if (isExactMatch) 
-        {
-            availableCommands.clear();
-            availableCommands.push_back(exactMatchCommand);
-        }
-    } 
-    else if ((isValidCommandDirectory(commandNode) || matchCount != 1) && !isMatchSuccessful) 
-    {
-        error = true;
-    } 
-    else if (isExactMatch && !isValidCommandDirectory(commandNode) && !userInput.empty() && !(execution.getContext().negate && userInput == "no"))
-    {
-        endCommandString = lowerCase((*commandNode)[CLI_JSON_COMMAND_NAME]);
-        endOfCommand = true;
-        return noSubCommands;
-    }
-    else
-    {
-        endOfCommand = false;
-    }
-
-    // Handle unmatched or invalid commands
-    if (matchCount == 0 && !userInput.empty() && error &&
-        lowerUserInput != "?" && lowerUserInput != "vk_tab") 
-    {
-        return noSubCommands;
-    }
-    if (matchCount == 0 && !isValidCommandDirectory(commandNode) && lowerUserInput != "?" &&
-        lowerUserInput != "vk_tab" && !isPatternMatching) 
-    {
-        error = true;
-        return noSubCommands;
-    }
-
-    return availableCommands;
-}
-
-bool CliSession::isGlobalCommand(std::string &commandName)
-{
-    // Iterate through the list of global commands
-    for (const std::string &globalCommand : engine.globalCommandList)
-    {
-        if (commandName == globalCommand)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-void CliSession::displayAvailableCommands(std::vector<Com> commandList)
-{
-    // Print each command with aligned descriptions
-    paginationList = commandList;
-    maxNameLength = 0;
-
-    // Find the longest command name for formatting
-    for (const Com &command : paginationList)
-    {
-        if (command.name.size() > maxNameLength)
-        {
-            maxNameLength = command.name.size();
-        }
-    }
-}
-
-std::string CliSession::getLastWord(const std::string &input)
-{
-    std::istringstream stream(input);
-    std::string stringword;
-    std::string stringlastWord;
-    while (stream >> stringword)
-    {
-        stringlastWord = stringword;
-    }
-
-    return stringlastWord;
-}
-
-std::vector<std::string> CliSession::splitIntoWords(const std::string &str)
-{
-    // Initialize function variables
-    std::vector<std::string> words;
-    std::string currentWord;
-    bool isInsideWord = false;
-    bool isPreviousSpace = false;
-
-    // Iterate through each character in the string
-    for (char ch : str)
-    {
-        // Check if the char is a special character
-        if (!std::isspace(ch) && ch != '?' && ch != '\t')
-        {
-            currentWord += ch;
-            isInsideWord = true;
-            isPreviousSpace = false;
-        }
-        else if (ch == '?')
-        {
-            if (!currentWord.empty())
-            {
-                words.push_back(currentWord);
+                result.nextLine = rawInput.substr(0, rawInput.size() - 1);
+                result.status = ParseResult::Status::TAB;
+                return result;
             }
 
-            currentWord = ch;
-
-            if (isPreviousSpace)
-            {
-                isNextWordHelpRequested = true;
-            }
-
-            isPreviousSpace = false;
+            // Single match autocomplete
+            std::string_view stripped = rawInput;
+            if (!stripped.empty()) stripped.remove_suffix(1);
+            long lastSp = static_cast<long>(stripped.rfind(' '));
+            std::string nl;
+            if (lastSp < 0)
+                nl = std::string(prevCommands[0].name) + " ";
+            else
+                nl = std::string(stripped.substr(0, static_cast<size_t>(lastSp + 1))) + std::string(prevCommands[0].name) + " ";
+            result.nextLine = nl;
+            result.status = ParseResult::Status::TAB;
+            return result;
         }
-        else if (ch == '\t')
+
+        // Error handle
+        if (ctx.err && !ctx.isHelpActive())
         {
-            if (!currentWord.empty())
+            if (available.size() > 1)
             {
-                words.push_back(currentWord);
+                result.status = ParseResult::Status::AMBIGUOUS;
+                result.ambiguousToken = word;
+                return result;
             }
+            result.status = ParseResult::Status::INVALID;
+            result.markerCommand = trimLeft(rawInput.substr(0, static_cast<size_t>(word.data() - rawInput.data())));
+            return result;
+        }
 
-            currentWord = "vk_tab";
+        // Match available commands
+        std::vector<Com> matches;
+        for (const auto& cmd : available)
+        {
+            if (ctx.isPatternMatching() && cmd.name == ctx.currentPattern)
+                matches.push_back(cmd);
+            else if (cmd.name.size() >= word.size() && partialLowerCmp(word, cmd.name))
+                matches.push_back(cmd);
+        }
 
-            if (isPreviousSpace)
+        prevCommands = matches.empty() ? available : matches;
+
+        // Match quality
+        if (prevCommands.size() == 1 && !matches.empty())
+        {
+            if (ctx.isPatternMatching() && ctx.currentPattern == matches[0].name)
+                ctx.matchState = MatchState::PATTERN;
+            else if (matches[0].isExact())
+                ctx.matchState = MatchState::EXACT;
+            else
+                ctx.matchState = MatchState::PARTIAL;
+        }
+    
+        // Append token
+        if (matches.size() <= 1)
+        {
+            if (ctx.isPatternMatching() && !matches.empty())
             {
-                isNextWordHelpRequested = true;
+                tokens.emplace_back(word, ctx.currentPattern);
+                ctx.previousMatch = matches[0].name;
             }
-
-            isPreviousSpace = false;
-        }
-        else if (isInsideWord)
-        {
-            words.push_back(currentWord);
-            currentWord.clear();
-            isInsideWord = false;
-            isPreviousSpace = true;
-        }
-    }
-
-    // Push the last word if any
-    if (!currentWord.empty())
-    {
-        words.push_back(currentWord);
-    }
-
-    return words;
-}
-
-std::string CliSession::trimString(std::string str)
-{
-    std::string newstr = str;
-    for (size_t ch = 0; ch <= str.size(); ch++)
-    {
-        if (isspace(str[ch]))
-        {
-            newstr = newstr.substr(1);
+            else if (matches.size() == 1)
+            {
+                tokens.emplace_back(matches[0].name);
+                ctx.previousMatch = matches[0].name;
+            }
+            else if (matches.empty() && ctx.eoc)
+            {
+                tokens.emplace_back(ctx.endCmdStr);
+            }
+            else if (matches.empty())
+            {
+                tokens.clear();
+                tokens.emplace_back(word);
+            }
+            else
+            {
+                tokens.emplace_back(matches[0].name);
+                ctx.previousMatch = matches[0].name;
+            }
         }
         else
         {
-            break;
+            tokens.emplace_back(word);
+        }
+
+        if (idx == 0)
+        {
+            if (lowerCmp(word, "no") && result.negate) ctx.currentDirectory = ctx.workingDirectory;
+            if (lowerCmp(word, "default") && result.defaulted) ctx.currentDirectory = ctx.workingDirectory;
         }
     }
-    return newstr;
+
+    if (ctx.eoc) ctx.commandState = CommandState::COMPLETE;
+
+    // Final validation
+    if (ctx.isHelpActive() && ctx.isRunning())
+    {
+        result.status = ParseResult::Status::HELP;
+        return result;
+    }
+
+    if (!ctx.isCommandValid() && !hasHelpToken)
+    {
+        if (prevCommands.size() > 1)
+        {
+            result.status = ParseResult::Status::AMBIGUOUS;
+            result.ambiguousToken = getLastWord(rawInput);
+            return result;
+        }
+        result.status = ParseResult::Status::INCOMPLETE;
+        return result;
+    }
+
+    result.status = ParseResult::Status::OK_;
+    result.tokens = std::move(tokens);
+    return result;
 }
 
-bool CliSession::matchInputPattern(const std::string &userInput, const std::string &expectedPattern)
+bool CliSession::executeCommand(std::string& command)
 {
-    if (previousMatch.empty())
+    isModeChanged = false;
+    textLine      = false;
+    execution.getContext().negate   = false;
+    execution.getContext().defaulted = false;
+
+    if (command.empty()) return false;
+
+    ParseResult parsed = parseInput(command);
+
+    switch (parsed.status)
     {
-        return false;
-    }
+        case ParseResult::Status::EMPTY:
+            return false;
 
-    if (expectedPattern == "WORD" && userInput != "?" && userInput != "vk_tab")
-    {
-        // Specific validations based on previousMatch
-        if (previousMatch == "hostname") {
-            if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9]([A-Za-z0-9\\-\\.]*[A-Za-z0-9])?$"))) {
-                return false; // Invalid hostname
-            }
-        } 
-        else if (previousMatch == "name" || previousMatch == "vrf" || previousMatch == "route-map" || previousMatch == "policy-map" || 
-                 previousMatch == "group" || previousMatch == "class" || previousMatch == "pool" || previousMatch == "context" || 
-                 previousMatch == "vdpn-group") {
-            if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9\\-]+$"))) {
-                return false; // Invalid name-like userInputs
-            }
-        } 
-        else if (previousMatch == "password" || previousMatch == "secret" || previousMatch == "key-string" || 
-                 previousMatch == "encryption type") {
-            if (!std::regex_match(userInput, std::regex("^[ -~]+$"))) {
-                return false; // Invalid password/secret
-            }
-        } 
-        else if (previousMatch == "input" || previousMatch == "output") {
-            if (!std::regex_match(userInput, std::regex("^[A-Za-z]+[0-9\\/\\:]+$"))) {
-                return false; // Invalid interface
-            }
-        } 
-        else if (previousMatch == "7" || previousMatch == "5") {
-            if (!std::regex_match(userInput, std::regex("^[0-9]+$"))) {
-                return false; // Invalid numeric value
-            }
-        } 
-        else if (previousMatch == "filename" || previousMatch == "flash" || previousMatch == "tftp" || previousMatch == "dir" || previousMatch == "view") {
-            if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9_\\-\\.\\/]+$"))) {
-                return false; // Invalid filename
-            }
-        } 
-        else if (previousMatch == "community" || previousMatch == "as number") {
-            if (!std::regex_match(userInput, std::regex("^[0-9]+:[0-9]+$"))) {
-                return false; // Invalid community or AS number
-            }
-        }
-        else if (!std::regex_match(userInput, std::regex("^[A-Za-z0-9_\\-\\.\\/]+$"))) {
-            return false; // Invalid general WORD
-        }
-
-        // ==========================================
-
-        currentPattern = expectedPattern;
-        isPatternMatching = true;
-        return true;
-    }
-
-    if (expectedPattern == "LINE" && userInput != "?" && userInput != "vk_tab")
-    {
-        currentPattern = expectedPattern;
-        isPatternMatching = true;
-        isLineBasedInput = true;
-        return true;
-    }
-
-    if (expectedPattern == "A.B.C.D" && userInput != "?" && userInput != "vk_tab")
-    {
-        int oct1, oct2, oct3, oct4;
-        int charsRead = 0;
-
-        if (sscanf(userInput.c_str(), "%d.%d.%d.%d%n", &oct1, &oct2, &oct3, &oct4, &charsRead) == 4 && charsRead == static_cast<int>(userInput.length()))
-        {
-            std::vector<int> octets = {oct1, oct2, oct3, oct4};
-            bool isValidIP = true;
-            for (int octet : octets)
-            {
-                if (octet < 0 || octet > 255)
-                {
-                    isValidIP = false;
-                }
-            }
-            if (isValidIP)
-            {
-                currentPattern = expectedPattern;
-                isPatternMatching = true;
-                return true;
-            }
-        }
-    }
-
-    if (expectedPattern == "X:X:X:X::X")
-    {
-        if (cli::utils::isIPv6Address(userInput))
-        {
-            currentPattern = expectedPattern;
-            isPatternMatching = true;
+        case ParseResult::Status::HELP:
+            if (!parsed.helpList.empty())
+                displayCommands(parsed.helpList);
+            nextLine = parsed.nextLine;
             return true;
-        }
-    }
 
-    if (expectedPattern == "X:X:X:X::X/<0-128>")
-    {
-        if (cli::utils::isIPv6AddressWithMask(userInput))
-        {
-            currentPattern = expectedPattern;
-            isPatternMatching = true;
+        case ParseResult::Status::TAB:
+            nextLine = parsed.nextLine;
             return true;
-        }
-    }
 
-    if (expectedPattern == "H.H.H")
-    {
-        if (cli::utils::isMACAddress(userInput))
+        case ParseResult::Status::INVALID:
         {
-            currentPattern = expectedPattern;
-            isPatternMatching = true;
-            return true;
-        }
-    }
-
-    if (expectedPattern[0] == '<' && expectedPattern != engine.carriageReturnCommand.name)
-    {
-        uint32_t min, max;
-        sscanf(expectedPattern.c_str(), "<%d-%d>", &min, &max);
-        if (isNumeric(userInput))
-        {
-            int number = std::stoi(userInput);
-            if (number >= min && number <= max)
-            {
-                currentPattern = expectedPattern;
-                isPatternMatching = true;
-                isPatternMatchEnd = true;
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-bool CliSession::isNumeric(const std::string &input)
-{
-    if (input.empty() || (!std::isdigit(input[0]) && input[0] != '-' && input[0] != '+'))
-    {
-        return false;
-    }
-
-    char *endPtr;
-    std::strtol(input.c_str(), &endPtr, 10);
-
-    return (*endPtr == '\0');
-}
-
-bool CliSession::isValidCommandDirectory(const nlohmann::ordered_json *directory)
-{
-    if (directory && directory->is_object())
-    {
-        return directory->contains(CLI_JSON_SUBCOMMAND_ARRAY);
-    }
-    return false;
-}
-
-bool CliSession::handlePagination(char nextch)
-{
-    if (nextch != '\0')
-    {
-        maxCommandLength = getTerminalWidth() - initialLineLength;
-
-        if (nextch == '\x20')
-        {
-            controller.print("\033[2k\033[1G");
-            controller.print("\033[1A");
-        }
-        else if (nextch == 'q')
-        {
-            controller.print("\033[2k\033[1G");
-            controller.print(std::string(10, ' '));
-            controller.print("\033[2k\033[1G");
-            paginationList.clear();
-            handlePrompt();
+            const std::string marker =
+                "\r\n"
+                + std::string(initialLineLength + parsed.markerCommand.size(), ' ')
+                + "^\r\n% Invalid input detected at '^' marker.\r\n";
+            controller.print(marker);
             return false;
         }
+
+        case ParseResult::Status::AMBIGUOUS:
+            controller.print("\r\n% Ambiguous command: \"" + parsed.ambiguousToken + "\"");
+            return false;
+
+        case ParseResult::Status::INCOMPLETE:
+            if (tryGlobalCommand(command)) return true;
+            controller.print("\r\n% Incomplete Command");
+            return false;
+
+        case ParseResult::Status::GLOBLA_CMD:
+            return true;
+
+        case ParseResult::Status::DO_COMMAND:
+            tryDoCommand(parsed.doRemainder);
+            return false;
+
+        case ParseResult::Status::OK_:
+            break;
     }
 
-    size_t paginationSize = engine.paginationCount == 0 ? paginationList.size() : engine.paginationCount;
+    // Apply negate/default flags to the context
+    if (parsed.negate)
+        execution.getContext().negate = true;
+    if (parsed.defaulted)
+        execution.getContext().defaulted = true;
 
-    for (int i = 0; i < paginationList.size() && i < paginationSize; i++)
-    {
-        const Com &command = paginationList[i];
-        if (command.name != engine.errorCommand.name)
-        {
-            std::string display;
-            display += "\r\n  " + command.name;
-            size_t nameLength = command.name.size();
-            for (size_t i = 0; i <= (maxNameLength - nameLength + 5); i++)
-            {
-                display +=" ";
-            }
-            // Uncomment if you want to display descriptions
-            display += command.description;
-            Color color;
-            switch (command.support)
-            {
-                case Com::Support::SUPPORTED:
-                    color = Color::WHITE;
-                    break;
-                case Com::Support::PARTIAL:
-                    color = Color::YELLOW;
-                    break;
-                case Com::Support::NO_SUPPORT:
-                    color = Color::RED;
-            }
-            controller.print(display, color);
-        }
-    }
+    // Set textLine from token patterns (LINE already collapsed in parseInput)
+    textLine = std::any_of(parsed.tokens.begin(), parsed.tokens.end(),
+        [](const Token& t){ return t.isLine(); });
 
-    if (paginationList.size() > paginationSize)
-    {
-        paginationList.erase(paginationList.begin(), paginationList.begin() + engine.paginationCount);
-        paginationList.shrink_to_fit();
-        controller.print("\r\n  --More--");
-        controller.flush();
-    }
-    else
-    {
-        paginationList.clear();
-        controller.print("\r\n");
-        handlePrompt();
-    }
+    // Build exec token list, skipping the leading "no"/"default" prefix
+    std::span<Token> execTokens = (parsed.negate || parsed.defaulted)
+        ? std::span<Token>(parsed.tokens.begin() + 1, parsed.tokens.size() - 1)
+        : std::span<Token>(parsed.tokens);
+
+    if (execTokens.empty()) return false;
+
+    return executeModeParser(execTokens);
+}
+
+bool CliSession::popMode()
+{
+    if (navTop == 0) return false;
+
+    const NavFrame& frame = navStack[--navTop];
+    execution.restoreFromEntry(frame.executorEntry);
+    currentPrompt    = frame.savedPrompt;
+    workingDirectory = frame.savedWorkingDir;
+    configNode       = frame.savedConfigNode;
+    isModeChanged    = true;
     return true;
+}
+
+bool CliSession::tryDoCommand(const std::string& remainder)
+{
+    const std::string savedPrompt = currentPrompt;
+    const json*       savedDir    = workingDirectory;
+    const json*       savedCfg    = configNode;
+    const size_t      savedNavTop = navTop;   // temp transition: undo nav push on return
+
+    if (!changeMode<CliMode::PrivilegedExec>(engine.global.configs))
+        return false;
+
+    std::string cmd = remainder;
+    const bool ok   = executeCommand(cmd);
+
+    execution.revert();
+    navTop           = savedNavTop;
+    currentPrompt    = savedPrompt;
+    workingDirectory = savedDir;
+    configNode       = savedCfg;
+
+    return ok;
+}
+
+bool CliSession::tryGlobalCommand(const std::string& rawInput)
+{
+    const CliMode curMode = getMode();
+    if (curMode == CliMode::GlobalConfiguration
+        || curMode == CliMode::UserExec
+        || curMode == CliMode::PrivilegedExec)
+        return false;
+    if (lowerStr(rawInput) == "exit")
+        return false;
+
+    const std::string savedPrompt = currentPrompt;
+    const json*       savedDir    = workingDirectory;
+    const json*       savedCfg    = configNode;
+    const size_t      savedNavTop = navTop;   // may revert if command fails
+
+    changeMode<CliMode::GlobalConfiguration>(engine.global.configs);
+    historyToGlobal();
+
+    std::string cmd = rawInput;
+    const bool ok   = executeCommand(cmd);
+
+    if (getMode() == CliMode::GlobalConfiguration && !ok)
+    {
+        execution.revert();
+        navTop           = savedNavTop;
+        currentPrompt    = savedPrompt;
+        workingDirectory = savedDir;
+        configNode       = savedCfg;
+        return false;
+    }
+
+    return ok;
 }
 
 bool CliSession::setCommandDirectory(std::span<const std::string_view>& dir)
 {
-    // Check if the mode exists and has valid commands
     auto& base = engine.getCommandTree();
-    if (dir.size() == 0 || !base.contains(dir[0]) || !base[dir[0]].is_array())
+    if (dir.empty() || !base.contains(dir[0]) || !base[dir[0]].is_array())
         return false;
 
-    bool prompt = false;
+    bool first = true;
     for (auto& step : dir)
     {
-        if (!prompt)
+        if (first)
         {
             workingDirectory = &base[step];
-            currentPrompt = step;
-            prompt = true;
+            currentPrompt    = step;
+            first            = false;
         }
         else
+        {
             workingDirectory = &(*workingDirectory)[0][step];
+        }
     }
-    currentDirectory = workingDirectory;
     isModeChanged = true;
 
     if (!modeHistory.empty() && configNode != modeHistory.back())
-    {
         modeHistory.push_back(configNode);
-    }
     else
     {
         modeHistory.clear();
@@ -1331,11 +906,109 @@ CliMode CliSession::getMode()
     return execution.getMode();
 }
 
-void CliSession::historyToGlobal() 
+void CliSession::historyToGlobal()
 {
-    prevConfig = configNode; 
+    prevConfig = configNode;
     modeHistory.clear();
-    modeHistory.push_back(&engine.getCommandTree()); 
+    modeHistory.push_back(&engine.getCommandTree());
     configNode = &engine.getCommandTree();
 }
+
+void CliSession::displayCommands(std::vector<Com>& list)
+{
+    paginationList = list;
+    maxNameLength  = 0;
+    for (const auto& c : paginationList)
+        if (c.name.size() > maxNameLength) maxNameLength = c.name.size();
 }
+
+bool CliSession::handlePagination(char nextch)
+{
+    if (nextch != '\0')
+    {
+        maxCommandLength = getTerminalWidth() - initialLineLength;
+
+        if (nextch == '\x20')
+        {
+            controller.print("\033[2k\033[1G");
+            controller.print("\033[1A");
+        }
+        else
+        {
+            controller.print("\033[2k\033[1G");
+            controller.print(std::string(10, ' '));
+            controller.print("\033[2k\033[1G");
+            paginationList.clear();
+            handlePrompt();
+            return false;
+        }
+    }
+
+    const size_t pageSize  = engine.paginationCount == 0
+        ? paginationList.size() : engine.paginationCount;
+    const size_t termWidth = getTerminalWidth();
+    const size_t descCol   = 2 + maxNameLength + 6;
+
+    for (size_t i = 0; i < paginationList.size() && i < pageSize; ++i)
+    {
+        const Com& cmd = paginationList[i];
+        std::string display = std::string("\r\n  ") + std::string(cmd.name);
+        for (size_t j = 0; j <= (maxNameLength - cmd.name.size() + 5); ++j)
+            display += ' ';
+
+        const std::string_view desc = cmd.description;
+        if (desc.empty() || termWidth == 0 || descCol + desc.size() <= termWidth)
+        {
+            display += desc;
+        }
+        else
+        {
+            std::string indent(descCol, ' ');
+            size_t col = descCol, di = 0;
+            while (di < desc.size())
+            {
+                size_t wordStart = di;
+                while (di < desc.size() && desc[di] != ' ') ++di;
+                size_t wordEnd = di;
+                while (di < desc.size() && desc[di] == ' ') ++di;
+
+                std::string w(desc.substr(wordStart, wordEnd - wordStart));
+                if (col + w.size() > termWidth && col > descCol)
+                {
+                    display += "\r\n" + indent;
+                    col = descCol;
+                }
+                display += w;
+                col += w.size();
+                if (di < desc.size()) { display += ' '; ++col; }
+            }
+        }
+
+        /*Color color;
+        switch (cmd.support)
+        {
+            case Com::Support::SUPPORTED:  color = Color::WHITE;  break;
+            case Com::Support::PARTIAL:    color = Color::YELLOW; break;
+            default:                       color = Color::RED;    break;
+        }*/
+        controller.print(display);
+    }
+
+    if (paginationList.size() > pageSize)
+    {
+        paginationList.erase(paginationList.begin(),
+            paginationList.begin() + static_cast<ptrdiff_t>(engine.paginationCount));
+        paginationList.shrink_to_fit();
+        controller.print("\r\n  --More--");
+        controller.flush();
+    }
+    else
+    {
+        paginationList.clear();
+        controller.print("\r\n");
+        handlePrompt();
+    }
+    return true;
+}
+
+} // namespace cli

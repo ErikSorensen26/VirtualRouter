@@ -12,6 +12,7 @@
 #include "configs/RegistryReference.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 
+#include "interface/configs/InterfaceType.hpp"
 namespace interface { class Interface; }
 namespace types { struct IPAddress; }
 
@@ -98,7 +99,7 @@ public:
      * @param key System interface identifier.
      * @return Pointer to the matching interface, or nullptr if not found.
      */
-    EigrpInterface* getInterface(uint32_t key);
+    EigrpInterface* getInterface(interface::InterfaceKey key);
 
     /**
      * @brief Returns a registry reference for the per-interface EIGRP
@@ -106,7 +107,7 @@ public:
      *
      * @param iface Physical interface whose registry is needed.
      */
-    config::Reference<config::EigrpInterfaceRegistry> getRegistry(interface::Interface& iface);
+    config::EigrpInterfaceRegistry& getRegistry(interface::Interface& iface);
 
     /**
      * @brief Returns a registry reference for the per-interface EIGRP
@@ -114,10 +115,10 @@ public:
      *
      * @param key System interface identifier.
      */
-    config::Reference<config::EigrpInterfaceRegistry> getRegistryByKey(uint32_t key);
+    config::EigrpInterfaceRegistry& getRegistryByKey(interface::InterfaceKey key);
 
     // INTERFACE LIST
-    std::unordered_map<uint32_t, EigrpInterface> eigrpInterfaceList; ///< Active EIGRP interfaces keyed by interface identifier.
+    std::unordered_map<interface::InterfaceKey, EigrpInterface> eigrpInterfaceList; ///< Active EIGRP interfaces keyed by interface identifier.
 
 private:
 

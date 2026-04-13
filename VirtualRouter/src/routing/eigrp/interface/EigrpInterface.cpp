@@ -3,12 +3,13 @@
 #include <Global.h>
 #include <VirtualRouter.h>
 
+#include "hardware/HardwareManager.h"
 #include "EigrpInterface.h"
 #include "eigrp/core/Eigrp.h"
 
 namespace routing::eigrp
 {
-EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::Reference<config::EigrpInterfaceRegistry>& ifaceReg, interface::Interface& interface)
+EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::EigrpInterfaceRegistry& ifaceReg, interface::Interface& interface)
   : configs(ifaceReg),
     interfaceKey(interface.configs.key),
     base(eigrpSystem),
@@ -17,12 +18,12 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::Reference<config::Eig
     rtp(*this),
     topology(ntable, eigrpSystem.getTopology().duel, *this),
     ntable(*this),
-    auth(ifaceReg.get(), eigrpSystem.routingInstance->getGlobal().keyChainManager),
+    auth(ifaceReg, eigrpSystem.routingInstance->getGlobal().keyChainManager),
     metrics(*this),
     aggregator(*this),
     tmgr(*this, eigrpSystem.getScheduler())
 {
-    configs->context().set(this);
+    configs.reg.context().set(this);
 
     // Set local ip
     if (base.getAF() == types::AddressFamily::IPv4)
@@ -40,10 +41,10 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::Reference<config::Eig
     pendingSummaryRoutes.clear();
 
     // Gather locked values for local metric calculation
-    uint32_t delay      = currentInterfaceInfo->delay.load(std::memory_order_relaxed);
-    uint32_t bandwidth  = currentInterfaceInfo->bandwidth.load(std::memory_order_relaxed);
-    uint8_t reliability = currentInterfaceInfo->reliability.load(std::memory_order_relaxed);
-    uint8_t load        = currentInterfaceInfo->load.load(std::memory_order_relaxed);
+    uint32_t delay      = 0;
+    uint32_t bandwidth  = static_cast<uint32_t>(interface.configs.hwInfo.bandwidth / 1000);
+    uint8_t reliability = 255;
+    uint8_t load        = 1;
 
     // Check if this interface is passive
     if (base.getGlobalConfigMgr().isPassive(interfaceKey))
@@ -67,22 +68,7 @@ EigrpInterface::EigrpInterface(Eigrp& eigrpSystem, config::Reference<config::Eig
 
 EigrpInterface::~EigrpInterface()
 {
-    // Remove interface from other tables
-    uint32_t id = base.getAS();
-    types::AddressFamily af = base.getAF();
-
-    // Remove routes
     base.getTopology().clearConnected(*this);
-
-    if (currentInterface->eigrpInterfaceList.find(id) != currentInterface->eigrpInterfaceList.end())
-    {
-        if (af == types::AddressFamily::IPv4)
-            currentInterface->eigrpInterfaceList[id].IPv4 = nullptr;
-        else if (af == types::AddressFamily::IPv6)
-            currentInterface->eigrpInterfaceList[id].IPv6 = nullptr;
-        if (!currentInterface->eigrpInterfaceList[id].IPv4 && !currentInterface->eigrpInterfaceList[id].IPv6)
-            currentInterface->eigrpInterfaceList.erase(id);
-    }
 }
 
 void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& changedRoutes)
@@ -106,7 +92,7 @@ void EigrpInterface::notifyRoutingChange(const std::vector<const RouteInfo*>& ch
 
 void EigrpInterface::setPassiveMode(bool passive)
 {
-    configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().set(passive);
+    configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().set(passive);
     if (passive)
     {
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)
@@ -162,7 +148,7 @@ bool EigrpInterface::recordDampeningEvent()
     routeChangeTimes.push_back(now);
 
     // Drop old changes outside of interval
-    const auto intervalSec = std::chrono::seconds(configs->get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().load());
+    const auto intervalSec = std::chrono::seconds(configs.reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().load());
     while (!routeChangeTimes.empty() && now - routeChangeTimes.front() > intervalSec)
         routeChangeTimes.pop_front();
 
@@ -178,7 +164,7 @@ void EigrpInterface::triggerDampeningOnRouteChange()
     prefixCount.fetch_add(1, std::memory_order_relaxed);
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefix) * 100.0;
-    double triggerPercent = configs->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
+    double triggerPercent = configs.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
 
     if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
     {
@@ -227,7 +213,7 @@ void EigrpInterface::onDampeningIntervalExpire()
     if (maxPrefixes == 0) return;
 
     double changePercent = (static_cast<double>(routeChangeTimes.size()) / maxPrefixes) * 100.0;
-    double triggerPercent = configs->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
+    double triggerPercent = configs.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().load();
 
     if (changePercent >= triggerPercent && !isSupressed.load(std::memory_order_relaxed))
     {

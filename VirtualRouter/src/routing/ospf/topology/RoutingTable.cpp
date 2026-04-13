@@ -1,5 +1,6 @@
 // OspfRoutingTable.cpp
 
+#include <RCU.hpp>
 #include <VirtualRouter.h>
 #include <algorithm>
 #include <utility>
@@ -582,8 +583,8 @@ bool OspfRib::recomputeLocked(const types::IPPrefix& prefix, types::AddressFamil
         auto merged = mergeEcmpNextHops(next.paths);
         addTrafficShare(
             merged,
-            process.getConfigs().get<config::Ospf::MAXIMUM_PATHS>().load(),
-            process.getConfigs().get<config::Ospf::TRAFFIC_SHARE_MIN>().load()
+            process.getConfigs().reg.get<config::Ospf::MAXIMUM_PATHS>().load(),
+            process.getConfigs().reg.get<config::Ospf::TRAFFIC_SHARE_MIN>().load()
         );
 
         if (af == types::AddressFamily::IPv4)
@@ -665,15 +666,16 @@ void OspfRib::recomputeLocked(const std::unordered_set<types::IPPrefix>& touched
 
 bool OspfRib::globalRibContains(const types::IPPrefix& prefix) const
 {
+    utils::RCU::Guard g;
     if (prefix.isIPv4())
-        return rib.lookup(prefix.v4());
+        return rib.lookup(prefix.v4(), g);
     else
-        return rib.lookup(prefix.v6());
+        return rib.lookup(prefix.v6(), g);
 }
 
 bool OspfRib::validateInterAreaSummaryEligibility(const types::IPPrefix& prefix) const
 {
-    const bool useLocal = process.getConfigs().get<config::Ospf::LRC_INTER_AREA_SUMMARY>().load();
+    const bool useLocal = process.getConfigs().reg.get<config::Ospf::LRC_INTER_AREA_SUMMARY>().load();
 
     if (useLocal)
     {

@@ -24,12 +24,12 @@ std::unordered_map<types::IPPrefix, TopologyEntry>& TopologyController::getTopol
 std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
 {
     std::vector<const RouteInfo*> routes;
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return routes;
 
     auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
     const auto& stubCfg = cfgMgr.getStubConfig();
-    const bool splitHorizon = iface.configs->get<config::EigrpInterface::SPLIT_HORIZON>().load();
+    const bool splitHorizon = iface.configs.reg.get<config::EigrpInterface::SPLIT_HORIZON>().load();
 
     for (const auto& [_, entry] : duel.topologyTable.entries())
     {
@@ -68,11 +68,11 @@ std::vector<const RouteInfo*> TopologyController::getAdvertisableRoutes()
 std::vector<const RouteInfo*> TopologyController::filterAdvertisableRoutes(const std::vector<const RouteInfo*>& routes)
 {
     std::vector<const RouteInfo*> filtered;
-    if (routes.empty() || iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return filtered;
+    if (routes.empty() || iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return filtered;
 
     auto& cfgMgr = iface.getBase().getGlobalConfigMgr();
     const auto& stubCfg = cfgMgr.getStubConfig();
-    const bool splitHorizon = iface.configs->get<config::EigrpInterface::SPLIT_HORIZON>().load();
+    const bool splitHorizon = iface.configs.reg.get<config::EigrpInterface::SPLIT_HORIZON>().load();
 
     for (const auto* route : routes)
     {

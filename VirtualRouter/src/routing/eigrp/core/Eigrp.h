@@ -75,8 +75,10 @@ struct EigrpAutonomousSystem
  */
 struct EigrpNamed
 {
-    Eigrp* ipv4 = nullptr;   ///< IPv4 EIGRP process for this named group, or nullptr.
-    Eigrp* ipv6 = nullptr;   ///< IPv6 EIGRP process for this named group, or nullptr.
+    std::unordered_map<std::string, std::pair<
+        Eigrp*, ///< IPv4 EIGRP process for this named group, or nullptr.
+        Eigrp*  ///< IPv6 EIGRP process for this named group, or nullptr.
+    >> systems;
 };
 
 /**

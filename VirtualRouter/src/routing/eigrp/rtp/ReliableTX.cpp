@@ -1,5 +1,6 @@
 // ReliableTX.cpp
 
+#include "hardware/HardwareManager.h"
 #include "ReliableTransport.h"
 #include "eigrp/interface/EigrpInterface.h"
 #include "EigrpPacketBuilder.h"
@@ -73,7 +74,7 @@ void ReliableTransport::createPacket(processing::PacketBuilder& pkt)
 
 void ReliableTransport::sendHello()
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     processing::PacketBuilder pkt(iface.getIface());
     createPacket(pkt);
@@ -85,7 +86,7 @@ void ReliableTransport::sendHello()
 
 void ReliableTransport::sendConditionalHello(const std::vector<types::IPAddress>& neighbors, uint32_t seq)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     PktInfo info;
     info.mtu = getMtu();
@@ -106,7 +107,7 @@ void ReliableTransport::sendConditionalHello(const std::vector<types::IPAddress>
 
 void ReliableTransport::sendUnicastHello(const types::IPAddress& neighborIp)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     processing::PacketBuilder pkt(iface.getIface());
     createPacket(pkt);
@@ -143,7 +144,7 @@ void ReliableTransport::sendAck(Neighbor& neighbor, uint32_t seq)
 
 void ReliableTransport::sendNullUpdate(Neighbor& neighbor)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     processing::PacketBuilder pkt(iface.getIface());
     createPacket(pkt);
@@ -161,7 +162,7 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
     bool unicast = !iface.multicastEnabledFlag.load(std::memory_order_relaxed)
                || firstFullSend.exchange(true, std::memory_order_release);
 
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load())
         return;
     if (neighbor.fullSent.exchange(true, std::memory_order_acq_rel))
         return; // Full top already sent
@@ -174,8 +175,8 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
         return;
     
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     auto versionedUpdate = [&](const TLVType& version)
@@ -214,15 +215,15 @@ void ReliableTransport::sendFullTopology(Neighbor& neighbor, Resync resync)
 
 void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& inputRoutes)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
     auto routes = iface.getTopController().filterAdvertisableRoutes(inputRoutes);
     if (routes.empty()) return;
 
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     auto versionedUpdate = [&](const TLVType& version)
@@ -256,12 +257,12 @@ void ReliableTransport::sendUpdate(Neighbor* neighbor, const std::vector<const R
 
 void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector<const RouteInfo*>& inputRoutes)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load() || iface.getNTable().size() == 0) return;
 
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
     info.delay = std::numeric_limits<uint64_t>::max();
     info.mtu = getMtu();
 
@@ -296,12 +297,12 @@ void ReliableTransport::sendPoisenedUpdate(Neighbor* neighbor, const std::vector
 
 void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     
     auto versionedQuery = [&](const TLVType& version)
     {
@@ -327,12 +328,12 @@ void ReliableTransport::sendQuery(const std::vector<ActiveRoute*>& routes)
 
 void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     
     auto versionedQuery = [&](const TLVType& version)
     {
@@ -355,12 +356,12 @@ void ReliableTransport::sendUnicastQuery(Neighbor& neighbor, const std::vector<O
 
 void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const RouteInfo*>& replies)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     do
@@ -377,12 +378,12 @@ void ReliableTransport::sendReply(Neighbor& neighbor, const std::vector<const Ro
 
 void ReliableTransport::sendSIAQuery(Neighbor& neighbor, const std::vector<OutgoingQuery*>& queries)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
     auto* interface = iface.getIface();
 
     PktInfo info;
-    info.bandwidthMetric = interface->configs.bandwidth.load(std::memory_order_relaxed);
-    info.delay = interface->configs.delay.load(std::memory_order_relaxed);
+    info.bandwidthMetric = static_cast<uint32_t>(interface->configs.hwInfo.bandwidth / 1000);
+    info.delay = 0;
     info.mtu = getMtu();
 
     do
@@ -399,7 +400,7 @@ void ReliableTransport::sendSIAQuery(Neighbor& neighbor, const std::vector<Outgo
 
 void ReliableTransport::sendSIAReply(Neighbor& neighbor)
 {
-    if (iface.configs->get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
+    if (iface.configs.reg.get<config::EigrpInterface::PASSIVE_INTERFACE>().load()) return;
 
     auto* interface = iface.getIface();
     processing::PacketBuilder eigrpPacket(interface);

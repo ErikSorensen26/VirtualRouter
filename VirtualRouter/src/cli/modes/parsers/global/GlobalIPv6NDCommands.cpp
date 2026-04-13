@@ -1,134 +1,159 @@
 // GlobalIPv6NDCommands.cpp
 
-#include <Global.h>
-
 #include "GlobalIPv6NDCommands.h"
-#include "infrastructure/Ndp.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/CommandUtils.hpp"
+#include "configs/registry/interface/NdpRegistry.h"
+#include "cli/parser/CommandUtils.hpp"
+
+#define NDP_PARAMS DEFINE_PARAMS(config::NdpBaseRegistry)
 
 namespace cli
 {
-bool GlobalIPv6ND_CacheExpire_Handler(GLOBAL_PARAMS)
+bool GlobalIPv6ND_CacheExpire_Handler(NDP_PARAMS)
 {
-    uint16_t value = ctx.negate ? 600 : static_cast<uint16_t>(std::stoi(args[0]));
-    ctx.global.configs.ndp.cacheExpire.store(value, std::memory_order_release);
+    auto& nd = ctx.configs();
 
-    bool setRefresh = (args.size() > 1 && !ctx.negate) || ctx.negate;
-
-    for (const auto& [_, iface] : ctx.global.getInterfaceList())
+    for (const std::span<Token>& seg : segs)
     {
-        if (!iface->ndp.configs.cacheExpireLocal)
+        switch (seg[0])
         {
-            iface->ndp.configs.cacheExpire.store(value, std::memory_order_release); 
-        }
-        if (setRefresh && !iface->ndp.configs.refreshLocal)
-        {
-            iface->ndp.configs.refresh.store(!ctx.negate, std::memory_order_relaxed);
-        }
-    }
-    return true;
-}
-
-bool GlobalIPv6ND_CacheIntLimit_Handler(GLOBAL_PARAMS)
-{
-    uint16_t value = ctx.negate ? 600 : static_cast<uint16_t>(std::stoi(args[0]));
-    ctx.global.configs.ndp.interfaceLimit.store(value, std::memory_order_release);
-
-    bool setLog = false;
-    uint16_t log;
-    if ((args.size() > 1 && !ctx.negate) || ctx.negate)
-    {
-        setLog = true;
-        log = ctx.negate ? 0 : static_cast<uint16_t>(std::stoi(args[1]));
-        ctx.global.configs.ndp.loggingRate.store(log, std::memory_order_release);
-    }
-
-    for (const auto& [_, iface] : ctx.global.getInterfaceList())
-    {
-        if (!iface->ndp.configs.interfaceLimitLocal)
-        {
-            iface->ndp.configs.interfaceLimit.store(value, std::memory_order_release); 
-        }
-        if (setLog && !iface->ndp.configs.loggingRateLocal)
-        {
-            iface->ndp.configs.loggingRate.store(log, std::memory_order_release);
+            case "expire"_tok:
+            {
+                if (!utils::setFieldValue(nd.reg.get<config::NdpBase::CACHE_EXPIRE>(), ctx, seg >> 1))
+                    return false;
+                utils::setToggleValue(nd.reg.get<config::NdpBase::CACHE_REFRESH>(), ctx);
+                break;
+            }
+            case "refresh"_tok:
+            {
+                return utils::setFieldValue(nd.reg.get<config::NdpBase::CACHE_REFRESH>(), ctx, seg >> 1);
+            }
         }
     }
     return true;
 }
 
-bool GlobalIPv6ND_DADTime_Handler(GLOBAL_PARAMS)
+bool GlobalIPv6ND_CacheIntLimit_Handler(NDP_PARAMS)
 {
-    uint16_t time = ctx.negate ? 1000 : static_cast<uint16_t>(std::stoi(args[0]));
-    for (const auto& [_, iface] : ctx.global.getInterfaceList())
+    auto& nd = ctx.configs();
+    
+    for (const auto& seg : segs)
     {
-        if (!iface->ndp.configs.dadTimeLocal)
+        switch (seg[0])
         {
-            iface->ndp.configs.dadTime.store(time, std::memory_order_release);
+            case "interface-limit"_tok:
+            {
+                if (!utils::setFieldValue(nd.reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT>(), ctx, seg >> 1))
+                    return false;
+                utils::setFieldValue(nd.reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>(), ctx, seg >> 1);
+                break;
+            }
+            case "log"_tok:
+            {
+                return utils::setFieldValue(nd.reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT_LOG_RATE>(), ctx, seg >> 1);
+            }
         }
     }
     return true;
 }
 
-bool GlobalIPv6ND_HostMode_Handler(GLOBAL_PARAMS)
+bool GlobalIPv6ND_DADTime_Handler(NDP_PARAMS)
 {
-    UNUSED(args);
-    ctx.global.configs.ndp.strictMode.store(!ctx.negate, std::memory_order_relaxed);
+    auto& nd = ctx.configs();
+    auto seg = segs[0];
+    return utils::setFieldValue(nd.reg.get<config::NdpBase::DAD_TIME>(), ctx, seg >> 1);
+}
+
+bool GlobalIPv6ND_HostMode_Handler(NDP_PARAMS)
+{
+    UNUSED(segs);
+    auto& nd = ctx.configs();
+    utils::setToggleValue(nd.reg.get<config::NdpBase::HOST_MODE_STRICT>(), ctx);
     return true;
 }
 
-bool GlobalIPv6ND_NSFConvergence_Handler(GLOBAL_PARAMS)
+bool GlobalIPv6ND_NSF_Handler(NDP_PARAMS)
 {
-    ctx.global.configs.ndp.nsfConvergenceTime.store(ctx.negate ? 180 : static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
-    return true;
-}
-
-bool GlobalIPv6ND_NSFDADSuppress_Handler(GLOBAL_PARAMS)
-{
-    ctx.global.configs.ndp.nsfDadSupressionTime.store(ctx.negate ? 180 : static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
-    return true;
-}
-
-bool GlobalIPv6ND_NSFThrottle_Handler(GLOBAL_PARAMS)
-{
-    ctx.global.configs.ndp.nsfThrottleResolutions.store(ctx.negate ? 1000 : static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
-    return true;
-}
-
-bool GlobalIPv6ND_NudLimit_Handler(GLOBAL_PARAMS)
-{
-    ctx.global.configs.ndp.nudLimit.store(ctx.negate ? 5 : static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
-    if (args.size() > 1)
+    auto& nd = ctx.configs();
+    for (const auto& seg : segs)
     {
-        ctx.global.configs.ndp.nudRefreshPeriod.store(ctx.negate ? 5 : static_cast<uint16_t>(std::stoi(args[2])), std::memory_order_release);
-    }
-    return true;
-}
-
-bool GlobalIPv6ND_ReachableTime_Handler(GLOBAL_PARAMS)
-{
-    uint16_t value = ctx.negate ? 30000 : static_cast<uint16_t>(std::stoi(args[0]));
-    ctx.global.configs.ndp.reachableTime.store(value, std::memory_order_release);
-    for (const auto& [_, iface] : ctx.global.getInterfaceList())
-    {
-        if (!iface->ndp.configs.reachableTimeLocal)
+        switch (seg[0]) 
         {
-            iface->ndp.configs.reachableTime.store(value, std::memory_order_release);
+            case "convergence"_tok:
+            {
+                return utils::setFieldValue(nd.reg.get<config::NdpBase::NSF_CONVERGENCE_TIME>(), ctx, seg >> 1);
+            }
+            case "supperssion"_tok:
+            {
+                return utils::setFieldValue(nd.reg.get<config::NdpBase::NSF_DAD_SUPPRESS>(), ctx, seg >> 1);
+            }
+            case "throttle"_tok:
+            {
+                return utils::setFieldValue(nd.reg.get<config::NdpBase::NSF_THROTTLE_RESOLUTIONS>(), ctx, seg >> 1);
+            }
         }
     }
     return true;
 }
 
-bool GlobalIPv6ND_ResolutionLimit_Handler(GLOBAL_PARAMS)
+bool GlobalIPv6ND_NudLimit_Handler(NDP_PARAMS)
 {
-    ctx.global.configs.ndp.resolutionLimit.store(ctx.negate ? 512 : static_cast<uint16_t>(std::stoi(args[0])), std::memory_order_release);
+    auto& nd = ctx.configs();
+    for (const auto& seg : segs)
+    {
+        switch (seg[0])
+        {
+            case "limit"_tok:
+            {
+                if (!utils::setFieldValue(nd.reg.get<config::NdpBase::NUD_LIMIT>(), ctx, seg >> 1))
+                    return false;
+                utils::handleValueReset(nd.reg.get<config::NdpBase::NUD_REFRESH_PERIOD>(), ctx);
+                break;
+            }
+            case "refresh"_tok:
+            {
+                return utils::setFieldValue(nd.reg.get<config::NdpBase::NUD_REFRESH_PERIOD>(), ctx, seg >> 1);
+            }
+        }
+    }
     return true;
 }
 
-bool GlobalIPv6ND_RouteOwner_Handler(GLOBAL_PARAMS)
+bool GlobalIPv6ND_ReachableTime_Handler(NDP_PARAMS)
 {
-    UNUSED(args);
-    ctx.global.configs.ndp.ndAsRouteOwner.store(!ctx.negate, std::memory_order_release);
+    auto& nd = ctx.configs();
+    auto& seg = segs[0];
+    return utils::setFieldValue(nd.reg.get<config::NdpBase::REACHABLE_TIME>(), ctx, seg >> 1);
+}
+
+bool GlobalIPv6ND_ResolutionLimit_Handler(NDP_PARAMS)
+{
+    auto& nd = ctx.configs();
+    auto& seg = segs[0];
+    return utils::setFieldValue(nd.reg.get<config::NdpBase::RESOLUTION_DATA_LIMIT>(), ctx, seg >> 1);
+}
+
+bool GlobalIPv6ND_RouteOwner_Handler(NDP_PARAMS)
+{
+    UNUSED(segs);
+    auto& nd = ctx.configs();
+    utils::setToggleValue(nd.reg.get<config::NdpBase::ROUTE_OWNER>(), ctx);
     return true;
 }
 
+#define GLOBAL_IPV6_ND_LIST(X, Y) \
+    X(Y, (COMMAND, CacheExpire, "cache"_tok, "expire"_tok)) \
+    X(Y, (COMMAND, CacheIntLimit, "cache"_tok, "interface-limit"_tok)) \
+    X(Y, (COMMAND, DADTime, "dad"_tok, "time"_tok)) \
+    X(Y, (COMMAND, HostMode, "host"_tok, "mode"_tok, "strict"_tok)) \
+    X(Y, (COMMAND, NSF, "nsf"_tok)) \
+    X(Y, (COMMAND, NudLimit, "nud"_tok, "limit"_tok)) \
+    X(Y, (COMMAND, ReachableTime, "reachable-time"_tok)) \
+    X(Y, (COMMAND, ResolutionLimit, "resolution"_tok, "data"_tok, "limit"_tok)) \
+    X(Y, (COMMAND, RouteOwner, "route-owner"_tok)) \
+
+DEFINE_CMD_MODE(GlobalIPv6ND, config::NdpBaseRegistry, GLOBAL_IPV6_ND_LIST)
 }
+
+#undef NDP_PARAMS

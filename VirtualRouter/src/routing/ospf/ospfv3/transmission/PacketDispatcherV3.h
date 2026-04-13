@@ -50,17 +50,17 @@ public:
      * @param iface The interface this dispatcher operates on.
      * @param configs Reference to the OspfInterfaceBaseRegistry.
      */
-    PacketDispatcherV3(OspfInterface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& configs);
+    PacketDispatcherV3(OspfInterface& iface);
 
     /**
-     * @brief Returns the base interface configuration registry.
+     * @brief Finds and returns the base interface configuration registry.
      *
      * Provides access to static interface base configurations for protocol
      * operations, e.g., timers and retransmission settings.
      *
      * @return Reference to the OspfInterfaceBaseRegistry.
      */
-    config::OspfInterfaceBaseRegistry& getBaseConfigs() override;
+    config::OspfInterfaceBaseRegistry& getConfigs() override;
 
     /**
      * @brief Handles an incoming OSPFv3 packet.
@@ -189,9 +189,6 @@ private:
     void processLLSDataBlock(PacketDispatcher::HeaderInfo& info);
 
     std::optional<LsaBody> buildLsaBody(uint16_t type, const uint8_t* buf, uint16_t len);
-
-    config::Reference<config::OspfInterfaceBaseRegistry> baseConfigs;
-    config::Reference<config::OspfInterfaceRegistry> configs;
 };
 
 } // namespace routing::ospf

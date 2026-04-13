@@ -164,16 +164,9 @@ public:
           family(fam),
           policy(ProcessAccessor::getRoutingInstance(proc)),
           igpMetricResolver([](const types::IPAddress&) { return std::numeric_limits<uint64_t>::max(); }),
-          configs([&proc, &fam]() {
-              auto& bgpConfigs = ProcessAccessor::getConfigs(proc);
-              auto& vrf = ProcessAccessor::getRoutingInstance(proc);
-              auto& registry = vrf.getRegistry();
-              return registry.emplaceBack(
-                  bgpConfigs.get<config::Bgp::ADDRESS_FAMILIES>(), fam.flatten()
-              );
-          })
+          configs(ProcessAccessor::getConfigs(proc).reg.get<config::Bgp::ADDRESS_FAMILIES>().emplaceBack(fam.flatten()))
     {
-        ProcessAccessor::emplaceAfBase(configs->get<config::BgpAddressFamily::AF_BASE>(), process);
+        ProcessAccessor::emplaceAfBase(configs.reg.get<config::BgpAddressFamily::AF_BASE>(), process);
         syncNetworkRoutes();
     }
 
@@ -361,12 +354,12 @@ public:
 
         auto& sti = staleTimers[peerRid];
 
-        uint16_t staleSecs = procCfgs.get<config::Bgp::BGP_REFRESH_STALEPATH_TIME>().load();
+        uint16_t staleSecs = procCfgs.reg.get<config::Bgp::BGP_REFRESH_STALEPATH_TIME>().load();
         sti.stalepath = sched.postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(staleSecs),
             [this, peerRid](uint32_t) { staleTimers[peerRid].stalepath = 0; purgeStalePeer(peerRid); });
 
-        uint16_t maxEorSecs = procCfgs.get<config::Bgp::BGP_REFRESH_MAX_EOR_TIME>().load();
+        uint16_t maxEorSecs = procCfgs.reg.get<config::Bgp::BGP_REFRESH_MAX_EOR_TIME>().load();
         sti.maxEor = sched.postAfter(
             std::chrono::steady_clock::now() + std::chrono::seconds(maxEorSecs),
             [this, peerRid](uint32_t) { staleTimers[peerRid].maxEor = 0; purgeStalePeer(peerRid); });
@@ -564,7 +557,7 @@ private:
         NeighborAf& nbrAf = nbr->getAfNeighbor(family);
         auto& nbrAfCfgs = nbrAf.getConfigs();
         bool softReconfig = nbrAfCfgs.get<config::BgpNeighbor::SOFT_RECONFIGURATION>().load()
-                         || configs->get<config::BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP>().load();
+                         || configs.reg.get<config::BgpAddressFamily::BGP_SOFT_RECONFIG_BACKUP>().load();
 
         std::unordered_set<NlriT> touched;
 
@@ -749,11 +742,11 @@ private:
             }
 
             BestPathConfig bpCfg;
-            bpCfg.compareRouterId   = configs->get<config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
-            bpCfg.medMissingAsWorst = configs->get<config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
-            bpCfg.ignoreIgpMetric   = configs->get<config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
+            bpCfg.compareRouterId   = configs.reg.get<config::BgpAddressFamily::BGP_BEST_PATH_COMPARE_ROUTER_ID>().load();
+            bpCfg.medMissingAsWorst = configs.reg.get<config::BgpAddressFamily::BGP_BEST_PATH_MED_MISSING_AS_WORST>().load();
+            bpCfg.ignoreIgpMetric   = configs.reg.get<config::BgpAddressFamily::BGP_BEST_PATH_IGP_METRIC_IGNORE>().load();
 
-            if (ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_DETERMINISTIC_MED>().load())
+            if (ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_DETERMINISTIC_MED>().load())
             {
                 static const types::IPAddress kDetEmpty{};
                 auto detNbr = [](const InboundRoute<NlriT>* r) -> const types::IPAddress& {
@@ -793,19 +786,19 @@ private:
             DecisionEngine decision(process, bpCfg);
             std::optional<LocalRoute<NlriT>> best = decision.selectBest(
                 candidates,
-                configs->get<config::BgpAddressFamily::MAXIMUM_PATHS_EBGP>().load(),
-                configs->get<config::BgpAddressFamily::MAXIMUM_PATHS_IBGP>().load()
+                configs.reg.get<config::BgpAddressFamily::MAXIMUM_PATHS_EBGP>().load(),
+                configs.reg.get<config::BgpAddressFamily::MAXIMUM_PATHS_IBGP>().load()
             );
 
             // Build ADD-PATH candidate pool for additional-paths advertisement.
             if (best.has_value())
             {
-                config::Reference<config::BgpAfBaseRegistry>& base = configs->get<config::BgpAddressFamily::AF_BASE>().local();
-                bool selectBackup    = configs->get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
-                bool selectBestExt   = configs->get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
-                bool selectAll       = base->get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
-                auto& selectBestFld  = base->get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
-                bool selectGroupBest = base->get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+                config::BgpAfBaseRegistry& base = configs.reg.get<config::BgpAddressFamily::AF_BASE>().get();
+                bool selectBackup    = configs.reg.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
+                bool selectBestExt   = configs.reg.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
+                bool selectAll       = base.reg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
+                auto& selectBestFld  = base.reg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
+                bool selectGroupBest = base.reg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
 
                 if (selectAll || selectBackup || selectBestFld.hasValue() || selectBestExt || selectGroupBest)
                 {
@@ -862,7 +855,7 @@ private:
             const bool had = (lit != locRib.end());
 
             // BGP Route Dampening
-            if (configs->get<config::BgpAddressFamily::BGP_DAMPENING>().load())
+            if (configs.reg.get<config::BgpAddressFamily::BGP_DAMPENING>().load())
             {
                 auto now    = std::chrono::steady_clock::now();
                 auto params = getDampenParams();
@@ -1080,7 +1073,7 @@ private:
 
         // the peer's configured remote AS.  Protects against misconfigured or spoofed updates.
         if (route.ebgp &&
-            ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_ENFORCE_FIRST_AS>().load())
+            ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_ENFORCE_FIRST_AS>().load())
         {
             uint32_t fa = pathAttrs.attrs.firstAs();
             if (fa != 0 && fa != route.peerAs)
@@ -1089,21 +1082,21 @@ private:
 
         // Max AS-PATH length: drop routes with an AS_PATH longer than the configured limit.
         {
-            auto& maxAsField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_MAX_AS_LIMIT>();
+            auto& maxAsField = ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_MAX_AS_LIMIT>();
             if (maxAsField.hasValue() && pathAttrs.attrs.asPathLength() > maxAsField.load())
                 return true;
         }
 
         // Max community count: drop routes that carry too many standard communities.
         {
-            auto& maxComField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_MAX_COMMUNITY_LIMIT>();
+            auto& maxComField = ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_MAX_COMMUNITY_LIMIT>();
             if (maxComField.hasValue() && pathAttrs.attrs.communities.size() > maxComField.load())
                 return true;
         }
 
         // Max extended community count.
         {
-            auto& maxExtField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT>();
+            auto& maxExtField = ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_MAX_EXT_COMMUNITY_LIMIT>();
             if (maxExtField.hasValue() && pathAttrs.attrs.extendedCommunities.size() > maxExtField.load())
                 return true;
         }
@@ -1363,7 +1356,7 @@ private:
             }
 
             // BGP_SUPPRESS_INACTIVE: suppress routes whose next-hop is not reachable via NHT.
-            if (ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_SUPPRESS_INACTIVE>().load())
+            if (ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_SUPPRESS_INACTIVE>().load())
             {
                 if (best->route.pathId.has_value() && best->route.sourceNeighbor != nullptr)
                 {
@@ -1475,7 +1468,7 @@ private:
                     // Client-to-client reflection: honour the global toggle.
                     if (senderIsClient && targetIsClient &&
                         !ProcessAccessor::getConfigs(process)
-                            .get<config::Bgp::BGP_CLIENT_TO_CLIENT_REFLECTION>().load())
+                            .reg.get<config::Bgp::BGP_CLIENT_TO_CLIENT_REFLECTION>().load())
                     {
                         withdrawFromPeer();
                         return;
@@ -1524,12 +1517,12 @@ private:
 
                 if (!best->additionalPaths.empty())
                 {
-                    config::Reference<config::BgpAfBaseRegistry>& baseCfg = configs->get<config::BgpAddressFamily::AF_BASE>().local();
-                    bool advBackup    = configs->get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
-                    bool advBestExt   = configs->get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
-                    bool advAll       = baseCfg->get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
-                    auto& advBestFld  = baseCfg->get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
-                    bool advGroupBest = baseCfg->get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
+                    config::BgpAfBaseRegistry& baseCfg = configs.reg.get<config::BgpAddressFamily::AF_BASE>().get();
+                    bool advBackup    = configs.reg.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BACKUP>().load();
+                    bool advBestExt   = configs.reg.get<config::BgpAddressFamily::BGP_ADDITIONAL_PATHS_SELECT_BEST_EXTERNAL>().load();
+                    bool advAll       = baseCfg.reg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_ALL>().load();
+                    auto& advBestFld  = baseCfg.reg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_PATHS_BEST>();
+                    bool advGroupBest = baseCfg.reg.get<config::BgpAfBase::ADVERTISE_ADDITIONAL_GROUP_BEST>().load();
 
                     if (advAll)
                     {
@@ -1714,7 +1707,7 @@ private:
      */
     uint32_t getClusterId() const
     {
-        auto& cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CLUSTER_ID>();
+        auto& cidField = ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_CLUSTER_ID>();
         return cidField.hasValue() ? cidField.load() : ProcessAccessor::getRid(process);
     }
 
@@ -1729,7 +1722,7 @@ private:
      */
     uint32_t getConfedId() const
     {
-        auto& cidField = ProcessAccessor::getConfigs(process).get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>();
+        auto& cidField = ProcessAccessor::getConfigs(process).reg.get<config::Bgp::BGP_CONFEDERATION_IDENTIFIER>();
         return cidField.hasValue() ? cidField.load() : ProcessAccessor::getAsNum(process);
     }
 
@@ -1963,7 +1956,8 @@ private:
     bool aggregateSuppressed(const NlriT& nlri)
     {
         bool suppressed = false;
-        configs->get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& aggCfgs) {
+        configs.reg.get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& aggCfgsList) {
+            for (const auto& aggCfgs : aggCfgsList)
             for (const auto& aggCfg : aggCfgs)
             {
                 if (!config::BgpAggregateAddress::summaryOnly(aggCfg))
@@ -1994,7 +1988,7 @@ private:
     {
         if (aggregateTimerId != 0)
             return;
-        uint16_t delay = configs->get<config::BgpAddressFamily::BGP_AGGREGATE_TIMER>().load();
+        uint16_t delay = configs.reg.get<config::BgpAddressFamily::BGP_AGGREGATE_TIMER>().load();
         auto expiry = std::chrono::steady_clock::now() + std::chrono::seconds(delay);
         aggregateTimerId = ProcessAccessor::getScheduler(process).postAfter(expiry,
             [this](uint32_t) { aggregateTimerId = 0; recomputeAllAggregates(); });
@@ -2015,8 +2009,9 @@ private:
             return;
 
         std::vector<config::BgpAggregateAddress::Tuple> cfgs;
-        configs->get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& v) {
-            cfgs = v;
+        configs.reg.get<config::BgpAddressFamily::AGGREGATE_ADDRESS>().withRead([&](const auto& vList) {
+            for (const auto& v : vList)
+                cfgs.insert(cfgs.end(), v.begin(), v.end());
         });
 
         for (auto it = aggregateStates.begin(); it != aggregateStates.end(); )
@@ -2278,10 +2273,10 @@ private:
     DampenParams getDampenParams() const
     {
         DampenParams p;
-        p.halfLifeSecs    = configs->get<config::BgpAddressFamily::BGP_DAMPENING_HALF_LIFE>().load() * 60.0;
-        p.reuse           = configs->get<config::BgpAddressFamily::BGP_DAMPENING_REUSE_THRESHOLD>().load();
-        p.suppress        = configs->get<config::BgpAddressFamily::BGP_DAMPENING_SUPPRESS_THRESHOLD>().load();
-        p.maxSuppressSecs = configs->get<config::BgpAddressFamily::BGP_DAMPENING_MAXIMUM_SUPPRESS_TIME>().load() * 60.0;
+        p.halfLifeSecs    = configs.reg.get<config::BgpAddressFamily::BGP_DAMPENING_HALF_LIFE>().load() * 60.0;
+        p.reuse           = configs.reg.get<config::BgpAddressFamily::BGP_DAMPENING_REUSE_THRESHOLD>().load();
+        p.suppress        = configs.reg.get<config::BgpAddressFamily::BGP_DAMPENING_SUPPRESS_THRESHOLD>().load();
+        p.maxSuppressSecs = configs.reg.get<config::BgpAddressFamily::BGP_DAMPENING_MAXIMUM_SUPPRESS_TIME>().load() * 60.0;
         p.ceiling         = p.suppress * std::pow(2.0, p.maxSuppressSecs / p.halfLifeSecs);
         return p;
     }
@@ -2420,7 +2415,7 @@ private:
      */
     void registerNht(const NlriT& nlri, const types::IPAddress& nh)
     {
-        if (!configs->get<config::BgpAddressFamily::BGP_NEXT_HOP_TRACKING>().load())
+        if (!configs.reg.get<config::BgpAddressFamily::BGP_NEXT_HOP_TRACKING>().load())
             return;
 
         auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
@@ -2470,7 +2465,8 @@ private:
             if (entry.watchId)
             {
                 auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
-                rt.unwatchAddress(entry.watchId, entry.isV6);
+                if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
+                else rt.unwatchAddress<uint32_t>(entry.watchId);
             }
             nhtTable.erase(entIt);
         }
@@ -2488,7 +2484,8 @@ private:
         auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
         for (auto& [nh, entry] : nhtTable)
             if (entry.watchId)
-                rt.unwatchAddress(entry.watchId, entry.isV6);
+                if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
+                else rt.unwatchAddress<uint32_t>(entry.watchId);
         nhtTable.clear();
         nlriToNextHop.clear();
     }
@@ -2517,28 +2514,29 @@ private:
         {
             // Locally-originated (network command)
             dist = isMbgp
-                ? configs->get<config::BgpAddressFamily::DISTANCE_MBGP_LOCAL>().load()
-                : configs->get<config::BgpAddressFamily::DISTANCE_BGP_LOCAL>().load();
+                ? configs.reg.get<config::BgpAddressFamily::DISTANCE_MBGP_LOCAL>().load()
+                : configs.reg.get<config::BgpAddressFamily::DISTANCE_BGP_LOCAL>().load();
         }
         else if (route.ebgp)
         {
             dist = isMbgp
-                ? configs->get<config::BgpAddressFamily::DISTANCE_MBGP_EXTERNAL>().load()
-                : configs->get<config::BgpAddressFamily::DISTANCE_BGP_EXTERNAL>().load();
+                ? configs.reg.get<config::BgpAddressFamily::DISTANCE_MBGP_EXTERNAL>().load()
+                : configs.reg.get<config::BgpAddressFamily::DISTANCE_BGP_EXTERNAL>().load();
         }
         else
         {
             dist = isMbgp
-                ? configs->get<config::BgpAddressFamily::DISTANCE_MBGP_INTERNAL>().load()
-                : configs->get<config::BgpAddressFamily::DISTANCE_BGP_INTERNAL>().load();
+                ? configs.reg.get<config::BgpAddressFamily::DISTANCE_MBGP_INTERNAL>().load()
+                : configs.reg.get<config::BgpAddressFamily::DISTANCE_BGP_INTERNAL>().load();
         }
 
         // DISTANCE_RANGE: per-prefix administrative distance override.
         if constexpr (types::isIpPrefix<NlriT>)
         {
-            configs->get<config::BgpAddressFamily::DISTANCE_RANGE>().withRead(
-                [&](const auto& ranges)
+            configs.reg.get<config::BgpAddressFamily::DISTANCE_RANGE>().withRead(
+                [&](const auto& rangesList)
                 {
+                    for (const auto& ranges : rangesList)
                     for (const auto& range : ranges)
                     {
                         uint8_t rangeDist       = std::get<0>(range);
@@ -2592,12 +2590,12 @@ private:
         else if (route.route.sourceNeighbor == nullptr)
         {
             // Locally-originated route: apply DEFAULT_METRIC when no MED is set.
-            auto& defMetricField = configs->get<config::BgpAddressFamily::DEFAULT_METRIC>();
+            auto& defMetricField = configs.reg.get<config::BgpAddressFamily::DEFAULT_METRIC>();
             if (defMetricField.hasValue())
                 install.metric = defMetricField.load();
         }
 
-        install.recursiveHost = configs->get<config::BgpAddressFamily::BGP_RECURSIVE_HOST>().load();
+        install.recursiveHost = configs.reg.get<config::BgpAddressFamily::BGP_RECURSIVE_HOST>().load();
 
         return install;
     }
@@ -2707,7 +2705,7 @@ private:
             pa.path.family   = family;
 
             // Apply DEFAULT_METRIC for locally-originated routes.
-            auto& defMetricField = configs->get<config::BgpAddressFamily::DEFAULT_METRIC>();
+            auto& defMetricField = configs.reg.get<config::BgpAddressFamily::DEFAULT_METRIC>();
             if (defMetricField.hasValue())
                 pa.attrs.med = defMetricField.load();
 
@@ -2744,7 +2742,7 @@ private:
 
         // Snapshot the currently configured prefixes.
         std::vector<NlriT> configured;
-        configs->get<config::BgpAddressFamily::NETWORK>().withRead(
+        configs.reg.get<config::BgpAddressFamily::NETWORK>().withRead(
             [&](const auto& nets)
             {
                 for (const auto& net : nets)
@@ -2817,7 +2815,8 @@ private:
         auto& rt = ProcessAccessor::getRoutingInstance(process).getRib();
         for (auto& [nlri, entry] : networkWatches)
             if (entry.watchId)
-                rt.unwatchAddress(entry.watchId, entry.isV6);
+                if (entry.isV6) rt.unwatchAddress<__uint128_t>(entry.watchId);
+                else rt.unwatchAddress<uint32_t>(entry.watchId);
 
         networkWatches.clear();
         networkLocalRoutes.clear();
@@ -2860,7 +2859,7 @@ private:
     {
         if (nhtTimerId != 0) return;
 
-        auto& delayField = configs->get<config::BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY>();
+        auto& delayField = configs.reg.get<config::BgpAddressFamily::BGP_NEXT_HOP_TRIGGER_DELAY>();
         uint16_t delaySecs = delayField.hasValue() ? delayField.load() : 5;
 
         nhtTimerId = ProcessAccessor::getScheduler(process).postAfter(
@@ -2983,7 +2982,7 @@ private:
     BgpProcess&       process;             ///< Reference to the owning BgpProcess; provides config, scheduler, and neighbor table.
     AfiSafi           family;             ///< AFI/SAFI this instance manages.
 
-    config::Reference<config::BgpAddressFamilyRegistry> configs; ///< Registry reference for address-family configuration.
+    config::BgpAddressFamilyRegistry& configs; ///< Registry reference for address-family configuration.
 };
 } // namespace routing::bgp
 

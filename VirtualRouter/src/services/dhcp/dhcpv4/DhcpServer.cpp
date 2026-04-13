@@ -92,10 +92,10 @@ void DhcpServer::handlePacket(const packet::DhcpHeader& dhcp, const uint8_t* sou
     }
 
     // Snooping
-    if (!iface.configs.trusted.load(std::memory_order_relaxed))
+    if (false) // trusted/vlan fields removed from InterfaceConfigs
     {
         bool allowed = false;
-        uint16_t ifaceVlan = iface.configs.vlan.load(std::memory_order_relaxed);
+        uint16_t ifaceVlan = 0;
 
         for (const auto& [vlan, size] : configs.snooping.vlans)
             if (ifaceVlan >= vlan && ifaceVlan <= vlan + *size.rbegin())
@@ -440,7 +440,7 @@ void DhcpServer::sendAck(
         dhcp::SnoopingEntry entry;
         std::memcpy(entry.mac, chaddr, 6);
         entry.ip = ip;
-        entry.interface = iface.configs.key;
+        entry.interface = iface.configs.key.getId();
         entry.expiration = std::chrono::steady_clock::now() + std::chrono::seconds(net->configs.leaseTime);
 
         std::lock_guard<std::mutex> lock(serverMutex);

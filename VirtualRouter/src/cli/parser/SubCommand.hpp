@@ -6,12 +6,9 @@
 #ifndef SUB_COMMAND_HPP
 #define SUB_COMMAND_HPP
 
-#include <type_traits>
-#include <vector>
-#include <string>
-
-#include "Command.hpp"
-#include "FixedString.hpp"
+#include <cstdint>
+#include "cli/runtime/Token.hpp"
+#include "cli/modes/contexts/Context.hpp"
 
 /**
  * @brief Compile-time CLI command parsing and dispatch.
@@ -20,32 +17,31 @@
  */
 namespace cli
 {
-/**
- * @brief True when `T` is either @ref ArgTag or @ref ArgRestTag.
- * @ingroup CLI_PARSER
- *
- * Used by @ref SubCommand's static_assert to reject wildcard parts in
- * a sub-command prefix, which must consist only of fixed tokens.
- *
- * @tparam T Type to test.
- */
 template <typename T>
-inline constexpr bool is_arg_tag_v =
-    std::is_same_v<std::decay<T>, ArgTag> || std::is_same_v<std::decay<T>, ArgRestTag>;
+struct SubHandlerTraits;
+
+/// @brief Specialization for the canonical handler signature `bool(Context<C>&, ...)`.
+template <typename C>
+struct SubHandlerTraits<bool(*)(Context<C>&, std::span<Token>, size_t)>
+{
+    using ContextType = C; ///< The SubRegistry type the handler's context is parameterized on.
+};
 
 /**
- * @brief Prefix-based delegating command that forwards remaining tokens to a child parser.
+ * @brief Prefix-based delegating command that forwards remaining segments to a child parser.
  * @ingroup CLI_PARSER
  *
- * A `SubCommand` consumes a fixed prefix from the token range and, if the
- * prefix matches, hands the remaining tokens to `SubParser::execute()`.  This
- * allows parsers to be composed in a tree: the top-level @ref CliModeParser
- * holds a `SubCommand<Ctx, IPCommands, "ip"_tok>`, which transparently delegates
- * any token stream beginning with `"ip"` to the `IPCommands` sub-parser.
+ * A `SubCommand` matches a fixed keyword prefix in the flat token span and,
+ * on success, forwards the same span to `SubParser::execute()` with an advanced
+ * `idx` — so the sub-parser starts matching after the prefix while leaf handlers
+ * still receive all segments (including this prefix) via `segmentTokens`.
+ * Example: a top-level @ref CliModeParser holding
+ * `SubCommand<Ctx, IPCommands, "ip"_tok>` transparently routes any command
+ * beginning with `"ip"` into `IPCommands`.
  *
  * ## Architectural Role
  * `SubCommand` is the glue between flat command lists and hierarchical grammar
- * trees.  It provides the same static interface (`match` / `tryExecute`) as
+ * trees.  It provides the same static interface (`tryExecute`) as
  * @ref Command so that both can appear in a @ref CliModeParser's command pack.
  *
  * ## Lifecycle & Ownership
@@ -53,131 +49,70 @@ inline constexpr bool is_arg_tag_v =
  *
  * @tparam Context     The shared context type.  Must derive from @ref ContextBase.
  * @tparam SubParser   A @ref CliModeParser specialization that handles the
- *                     tokens after the prefix has been stripped.  Must expose
+ *                     segments after the prefix has been stripped.  Must expose
  *                     the same `ContextType` as `Context`.
- * @tparam PrefixParts Fixed-string tokens that form the required prefix.
- *                     Only @ref FixedString NTTPs are allowed here — no `ARG`
- *                     or `ARG_REST` (enforced by static_assert).
+ * @tparam PrefixParts Compile-time keyword hashes (`_tok` literals) forming
+ *                     the required prefix.  `ARG` is not valid here — prefix
+ *                     routing is keyword-only.
  *
  * @see Command
  * @see CliModeParser
  * @see subAdder
  */
 template <
-    typename Context,
-    typename SubParser,
-    FixedString... PrefixParts
+    auto Handler,
+    uint64_t... Parts
 >
 struct SubCommand
 {
-    using ContextType = Context; ///< Context type shared with the parent parser.
+    using ContextType = typename SubHandlerTraits<decltype(Handler)>::ContextType; ///< Context type shared with all sibling commands.
+    static constexpr auto handler = Handler; ///< Handler function pointer.
+    static constexpr size_t partCount = sizeof...(Parts); ///< Number of fixed keyword parts.
+    static constexpr std::array<uint64_t, partCount> parts = { Parts... };
 
     static_assert(
-        std::is_same_v<typename SubParser::ContextType, Context>,
-        "SubCommand: SubParser must use the same Context type"
-    );
-
-    // Disallow ARG / ARG_REST in the prefix
-    static_assert(
-        (!is_arg_tag_v<decltype(PrefixParts)> && ...),
-        "SubCommand: prefix cannot include ARG or ARG_REST; use only fixed tokens"
+        std::is_same_v<bool, std::invoke_result_t<decltype(Handler), Context<ContextType>&, std::span<Token>, std::size_t>>,
+        "Handler must return bool"
     );
 
     /**
-     * @brief Tests whether a token range begins with the required prefix.
+     * @brief Matches the prefix at `idx` and, on success, delegates to the sub-parser.
      *
-     * Consumes prefix tokens and, if they all match, delegates to
-     * `SubParser::match()` with the remaining range.  Returns `true` if the
-     * prefix is present and at least one sub-command matches the remainder.
+     * Checks `tokens[idx..idx+prefixSize)` against the compile-time prefix hashes.
+     * On match, calls `SubParser::execute` with the same full token span and an
+     * advanced `idx` so that leaf `Command` handlers still receive all segments
+     * (including this prefix) when they call `segmentTokens`.
      *
-     * @tparam It Forward iterator over string-like elements.
-     * @param first Start of the token range.
-     * @param last  End of the token range.
-     * @return `true` if prefix and sub-parser both match.
-     */
-    template <typename It>
-    static bool match(It first, It last)
-    {
-        auto it = first;
-
-        bool ok = true;
-        auto matchPrefixOne = [&](auto part)
-        {
-            if (!ok) return;
-
-            if (it == last) { ok = false; return; }
-
-            const std::string_view sv = part.view();
-            if (cli::as_sv(*it) != sv) { ok = false; return; }
-
-            ++it;
-        };
-
-        (matchPrefixOne(PrefixParts), ...);
-
-        if (!ok)
-            return false;
-
-        if (it == last)
-            return true;
-
-        return SubParser::match(it, last);
-    }
-
-    /**
-     * @brief Convenience overload accepting a token vector directly.
-     */
-    static bool match(const std::vector<std::string>& tokens)
-    {
-        return match(tokens.begin(), tokens.end());
-    }
-
-    /**
-     * @brief Strips the prefix and, on success, executes via the sub-parser.
-     *
-     * If the prefix matches, calls `SubParser::execute(ctx, it, last)` where
-     * `it` points to the first token after the prefix.
-     *
-     * @tparam It Forward iterator over string-like elements.
-     * @param ctx   Mutable reference to the current execution context.
-     * @param first Start of the token range.
-     * @param last  End of the token range.
+     * @param ctx    Mutable reference to the current execution context.
+     * @param tokens Full flat token span for the current command line.
+     * @param idx    Offset at which prefix matching begins.
      * @return `true` if the prefix matched and the sub-parser executed successfully.
      */
-    template <typename It>
-    static bool tryExecute(Context& ctx, It first, It last)
+    static bool tryExecute(Context<ContextType>& ctx, std::span<Token> tokens, size_t idx)
     {
-        auto it = first;
-
-        bool ok = true;
-        auto matchPrefixOne = [&](auto part)
-        {
-            if (!ok) return;
-
-            if (it == last) { ok = false; return; }
-
-            const std::string_view sv = part.view();
-            if (cli::as_sv(*it) != sv) { ok = false; return; }
-
-            ++it;
-        };
-
-        (matchPrefixOne(PrefixParts), ...);
-
-        if (!ok)
+        if (tokens.size() - idx < partCount)
             return false;
 
-        return SubParser::execute(ctx, it, last);
-    }
+        for (size_t i = 0; i < partCount; ++i)
+        {
+            const Token& t = tokens[idx++];
 
-    /**
-     * @brief Convenience overload accepting a token vector directly.
-     */
-    static bool tryExecute(Context& ctx, const std::vector<std::string>& tokens)
-    {
-        return tryExecute(ctx, tokens.begin(), tokens.end());
+            if (t.isPattern())
+            {
+                if (parts[i] != P_ARG && parts[i] != static_cast<uint64_t>(t.pattern))
+                    return false;
+            }
+            else
+            {
+                if (t.hash != parts[i])
+                    return false;
+            }
+        }
+
+        return Handler(ctx, tokens, idx);
     }
 };
+
 
 /**
  * @brief Convenience alias for @ref SubCommand used at definition sites.
@@ -185,14 +120,13 @@ struct SubCommand
  *
  * @tparam Context   Same as @ref SubCommand::Context.
  * @tparam SubParser Same as @ref SubCommand::SubParser.
- * @tparam Parts     @ref FixedString NTTP values forming the prefix.
+ * @tparam Parts     Keyword hash NTTPs (`_tok` literals) forming the prefix.
  */
 template <
-    typename Context,
-    typename SubParser,
+    auto Handler,
     auto... Parts
 >
-using subAdder = SubCommand<Context, SubParser, Parts...>;
+using subAdder = SubCommand<Handler, Parts...>;
 }
 
 #endif // SUB_COMMAND_HPP

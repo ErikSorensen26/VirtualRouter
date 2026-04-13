@@ -72,7 +72,7 @@ public:
     virtual ~PacketDispatcher();
 
     /// Returns the base (version-independent) interface config registry.
-    virtual config::OspfInterfaceBaseRegistry& getBaseConfigs() = 0;
+    virtual config::OspfInterfaceBaseRegistry& getConfigs() = 0;
 
     /// Sends a multicast Hello on the interface.
     virtual void sendHello() = 0;

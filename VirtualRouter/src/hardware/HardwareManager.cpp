@@ -44,10 +44,10 @@ void HardwareManager::addHardware(const std::string& hwConfigFile, cli::FileSyst
     }
 
     // Load interface configurations from JSON data
-    if (!configJson.is_object() || !configJson.contains("interface::Interface") || !configJson["interface::Interface"].is_object())
+    if (!configJson.is_object() || !configJson.contains("Interface") || !configJson["Interface"].is_object())
         return;
 
-    nlohmann::ordered_json& interfaces = configJson["interface::Interface"];
+    nlohmann::ordered_json& interfaces = configJson["Interface"];
 
     for (auto& [key, value] : interfaces.items())
     {
@@ -109,8 +109,11 @@ void HardwareManager::addHardware(const std::string& hwConfigFile, cli::FileSyst
         return;
     }
 
-    nlThreadRunning.store(true);
-    nlThread = std::thread(&HardwareManager::netlinkMonitorThread, this);
+    if (!nlThread.joinable())
+    {
+        nlThreadRunning.store(true);
+        nlThread = std::thread(&HardwareManager::netlinkMonitorThread, this);
+    }
 }
 
 HardwareManager::~HardwareManager()
@@ -128,18 +131,15 @@ HardwareManager::~HardwareManager()
         nlThread.join();
 }
 
-uint32_t HardwareManager::getInterface(interface::InterfaceType type, int index)
+const HwIfaceInfo* HardwareManager::getHwInfo(interface::InterfaceKey key) const
 {
-    auto it = physicalInterfaces.find(type);
-    if (it == physicalInterfaces.end() || index < 0 || index >= (int)it->second.size())
-        return {};
-    return it->second[static_cast<size_t>(index)];
-}
-
-const HwIfaceInfo* HardwareManager::getHwInfo(uint32_t index) const
-{
-    if (auto it = hwInfo.find(index); it != hwInfo.end())
-        return &it->second;
+    auto [type, id] = key.decode();
+    unsigned int baseId = static_cast<unsigned int>(std::floor(id));
+    auto pit = physicalInterfaces.find(type);
+    if (pit == physicalInterfaces.end() || baseId < 0 || baseId >= static_cast<size_t>(pit->second.size() - 1))
+        return nullptr;
+    if (auto hwit = hwInfo.find(baseId); hwit != hwInfo.end())
+        return &hwit->second;
     return nullptr;
 }
 

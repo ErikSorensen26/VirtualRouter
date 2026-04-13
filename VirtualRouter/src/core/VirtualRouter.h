@@ -16,9 +16,10 @@
 #include <AddressFamily.hpp>
 
 #include "tcp/Tcp.h"
-#include "configs/Registry.hpp"
 #include "routing/RoutingTable.hpp"
 #include "interface/InterfaceManager.h"
+#include "configs/registry/global/GlobalRegistry.h"
+#include "configs/Registry.hpp"
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
@@ -166,6 +167,36 @@ public:
     // EIGRP AUTONOMOUS SYSTEMS
 
     /**
+     * @brief Synchronizes all classic and named EIGRP IPv4 instances with the current interface state.
+     *
+     * Called whenever the interface list or EIGRP configuration changes. Re-evaluates
+     * which interfaces should be participating in EIGRP IPv4 based on configured
+     * network statements and enabled address families, then updates each running
+     * instance accordingly.
+     */
+    void refreshEigrpV4();
+
+    /**
+     * @brief Synchronizes all classic and named EIGRP IPv6 instances with the current interface state.
+     *
+     * Equivalent to @ref refreshEigrpV4 for the IPv6 data plane. Re-evaluates
+     * interface participation for all EIGRP IPv6 processes and updates
+     * neighbor relationships and topology entries as needed.
+     */
+    void refreshEigrpV6();
+
+    /**
+     * @brief Pushes current interface metrics and state into all EIGRP IPv6 interface managers.
+     *
+     * Called after interface configuration changes (MTU, bandwidth, delay) to
+     * ensure EIGRP IPv6 recomputes its composite metric and redistributes
+     * updated routes if anything changed.
+     */
+    void refreshEigrpV6Interfaces();
+
+    // EIGRP CLASSIC SYSTEMS
+
+    /**
      * @brief Create a classic-mode EIGRP Autonomous System instance.
      *
      * @param id Numeric AS number.
@@ -176,7 +207,7 @@ public:
      * - IPv6 EIGRP instance (optional)
      * - Metrics, K-values, timers, bandwidth/delay policies
      */
-    routing::eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint32_t id);
+    routing::eigrp::EigrpAutonomousSystem* addEigrpAutonomousSystem(uint16_t id);
 
     /**
      * @brief Look up an existing EIGRP Autonomous System by number.
@@ -184,7 +215,7 @@ public:
      * @param id AS number.
      * @return Pointer to AS instance or nullptr if not found.
      */
-    routing::eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint32_t id);
+    routing::eigrp::EigrpAutonomousSystem* getEigrpAutonomousSystem(uint16_t id);
 
     /**
      * @brief Remove and delete an EIGRP Autonomous System.
@@ -195,7 +226,7 @@ public:
      * @param id AS number to remove.
      * @return True if removed, false if missing.
      */
-    bool removeEigrpAutonomousSystem(uint32_t id);
+    bool removeEigrpAutonomousSystem(uint16_t id);
 
     // EIGRP NAMED SYSTEMS
 
@@ -235,6 +266,16 @@ public:
     bool removeEigrpNamed(const std::string& name);
 
     // OSPF PROCESS
+    
+    /**
+     * @brief Synchronizes all OSPF (v2 and v3) processes with the current interface state.
+     *
+     * Called when interfaces are added, removed, or reconfigured. Re-evaluates
+     * which interfaces are eligible for OSPF participation based on configured
+     * areas and address families, then updates DR/BDR elections and adjacencies
+     * as needed.
+     */
+    void refreshOspf();
 
     /**
      * @brief Creates a OSPFv2 instance.
@@ -263,6 +304,16 @@ public:
     bool removeOspf(uint16_t id);
 
     // OSPFv3 PROCESS
+
+    /**
+     * @brief Synchronizes all OSPFv3 processes with the current interface state.
+     *
+     * Called when interfaces are added, removed, or reconfigured. Re-evaluates
+     * which interfaces are eligible for OSPFv3 participation based on configured
+     * areas and address families (IPv4 and IPv6 under a single process ID), then
+     * updates DR/BDR elections and adjacencies as needed.
+     */
+    void refreshOspfv3();
 
     /**
      * @brief Creates a OSPFv3 instance.
@@ -321,10 +372,21 @@ public:
     interface::InterfaceManager& getInterfaceManager() { return ifaceMgr; }
 
     /**
-     * @brief Returns the VRF-scoped configuration registry.
+     * @brief Returns the per-vrf configuation registry.
      *
-     * Routing protocols and CLI commands use this registry to read and write
-     * per-VRF configuration knobs without touching the global registry.
+     * The @ref config::VrfRegistry holds all configs belonging to this VRF.
+     */
+    config::VrfRegistry& getConfigs();
+
+    /**
+     * @brief Returns the global configuation registry.
+     *
+     * The @ref config::GlobalRegistry holds all configs belonging to the global scope..
+     */
+    config::GlobalRegistry& getGlobalConfigs();
+
+    /**
+     * @brief Returns the per-VRF config registry for dynamic protocol config allocation.
      */
     config::Registry& getRegistry();
 
@@ -364,6 +426,8 @@ private:
     friend class interface::Interface;
     uint32_t instanceId{0};
     const bool defaulted{false}; ///< True for the single "default" VRF that cannot be deleted.
+
+    config::VrfRegistry& configs; ///< Tracks all VRF related configs.
 
     interface::InterfaceManager ifaceMgr; ///< Tracks interfaces attached to this VRF.
 

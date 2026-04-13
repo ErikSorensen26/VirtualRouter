@@ -1,204 +1,152 @@
 // GlobalCommands.cpp
 
-#include <shared_mutex>
 #include <VirtualRouter.h>
 #include <Global.h>
+#include <vector>
 
 #include "GlobalCommands.h"
-#include "infrastructure/Arp.h"
-#include "interface/configs/InterfaceType.hpp"
-#include "cli/runtime/CliSession.h"
-#include "cli/runtime/CliUtils.h"
-#include "cli/modes/contexts/InterfaceContext.hpp"
-#include "eigrp/core/Eigrp.h"
-#include "hardware/HardwareManager.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/CommandUtils.hpp"
+#include "configs/RegistryDefaultTable.hpp"
+#include "GlobalIPCommands.h"
+#include "GlobalIPv6Commands.h"
+#include "GlobalHelpers.hpp"
+
+#define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
+#define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
 
 namespace cli
 {
 bool Global_Arp_Handler(GLOBAL_PARAMS)
 {
-    size_t offset = 0;
-    std::string vrfName = "default";
-    if (args[0] == "vrf")
-    {
-        vrfName = args[3];
-        offset = 2;
-    }
+    config::VrfRegistry* vrf = nullptr;
+    if (!getVrfConfigs(vrf, ctx))
+        return false;
+    config::DefType<decltype(vrf->reg.get<config::Vrf::ARP_STATIC_ENTRY>())>::node tup;
 
-    std::shared_lock<std::shared_mutex> lock(ctx.global.configs.arp.neighborMutex);
-    types::IPv4Address _arpIp; utils::extractIPv4Address(args[offset + 1], _arpIp);
-    if (ctx.negate && ctx.global.configs.arp.neighbors.count(vrfName) && ctx.global.configs.arp.neighbors[vrfName].count(_arpIp))
+    for (const auto& seg : segs)
     {
-        core::GlobalConfigs::Arp::Neighbor entry = ctx.global.configs.arp.neighbors[vrfName][_arpIp];
-        auto* vrf = ctx.global.getRoutingInstance(vrfName, types::AddressFamily::IPv4);
-        types::IPv4Address addr = _arpIp;
-        if (auto iface = vrf ? ctx.vrf.getInterfaceManager().get(entry.interface) : nullptr)
+        switch (seg[0])
         {
-            iface->arp.removeArpEntry(addr);
-        }
-        ctx.global.configs.arp.neighbors[vrfName].erase(addr);
-    }
-    else
-    {
-        uint32_t ifaceKey = interface::calculateInterfaceKey(interface::getInterfaceType(args[offset + 3]), std::stof(args[offset + 4]));
-        core::GlobalConfigs::Arp::Neighbor entry;
-        { uint64_t _mac = 0; utils::extractMacAddress(args[offset + 2], _mac); (void)_mac; }
-        entry.interface = ifaceKey;
-        entry.proxy = args.size() == 5;
-
-        ctx.global.configs.arp.neighbors[vrfName].emplace(_arpIp, entry);
-        auto* vrf = ctx.global.getRoutingInstance(vrfName, types::AddressFamily::IPv4);
-        if (auto iface = vrf ? vrf->getInterfaceManager().get(ifaceKey) : nullptr)
-        {
-            iface->arp.addArpEntry(_arpIp, entry.mac, entry.proxy, true);
+            case "arp"_tok:
+            {
+                if (!utils::setTupleElement(std::get<1>(tup), seg >> 1))
+                    return false;
+                if (!ctx.negate && ctx.defaulted && !utils::setTupleElement(std::get<2>(tup), seg >> 2))
+                    return false;
+                break;
+            }
+            case "vrf"_tok:
+            {
+                if (!getVrfConfigs(vrf, ctx, seg[0]))
+                    return false;
+                if (!utils::setTupleElement(std::get<1>(tup), seg >> 2))
+                    return false;
+                if (!ctx.negate && ctx.defaulted && !utils::setTupleElement(std::get<2>(tup), seg >> 3))
+                    return false;
+                break;
+            }
+            default: return false;
         }
     }
-    return true;
+
+    auto& entries = vrf->reg.get<config::Vrf::ARP_STATIC_ENTRY>();
+    return utils::setListEntry(entries, ctx, tup);
 }
 
 bool Global_Exit_Handler(GLOBAL_PARAMS)
 {
-    UNUSED(args);
-    ctx.terminal.exitMode<CliMode::PrivilegedExec>();
-    return true;
+    UNUSED(segs);
+    return ctx.terminal.popMode();
 }
 
 bool Global_SetHostname_Handler(GLOBAL_PARAMS)
 {
-    if (!ctx.negate)
-    {
-        ctx.global.setHostname(args[0]);
-    }
-    else
-    {
-        ctx.global.setHostname("Router");
-    }
-    return true;
+    auto& host = ctx.configs().reg.get<config::Global::HOSTNAME>();
+    return utils::setFieldValue(host, ctx, segs[0] >> 1);
 }
 
 bool Global_End_Handler(GLOBAL_PARAMS)
 {
-    UNUSED(args);
-    ctx.terminal.exitMode<CliMode::PrivilegedExec>();
-    return true;
-}
-
-bool Global_IP_Handler(GLOBAL_PARAMS)
-{
-    return GlobalIPCommands::execute(ctx, args);
-}
-
-bool Global_IPv6_Handler(GLOBAL_PARAMS)
-{
-    return GlobalIPv6Commands::execute(ctx, args);
+    UNUSED(segs);
+    return ctx.terminal.resetAndChangeMode<CliMode::PrivilegedExec>(ctx.terminal.engine.global.configs);
 }
 
 bool Global_Interface_Handler(GLOBAL_PARAMS)
 {
-    ctx.terminal.isList = true;
-    std::string type = args[0];
-    ctx.terminal.interfaceID = std::stof(args[1]);
-    interface::InterfaceType interfaceType = interface::getInterfaceType(type);
-    uint32_t hwIface;
-    int id = static_cast<int>(std::floor(ctx.terminal.interfaceID));
-    uint32_t key = interface::calculateInterfaceKey(interfaceType, ctx.terminal.interfaceID);
-    if (!ctx.global.getInterface(key))
-    {
-        if (ctx.negate)
-        {
-            ctx.global.removeInterface(key);
-            ctx.vrf.getInterfaceManager().remove(key);
-        }
-        else
-        {
-            hwIface = ctx.terminal.engine.hwManager.getInterface(interfaceType, id);
-            const hardware::HwIfaceInfo* info = ctx.terminal.engine.hwManager.getHwInfo(hwIface);
-            if (!info) return false;
-            const hardware::HwIfaceInfo& hwInfo = *info;
-            ctx.global.addInterface(interfaceType, hwInfo, ctx.terminal.interfaceID, ctx.terminal.isDebugModeEnabled);
-            ctx.vrf.getInterfaceManager().add(ctx.global.getInterface(key), key);
-        }
-    }
-    ctx.terminal.changeMode<CliMode::Interface>(*ctx.global.getInterface(key));
+    auto& interfaceCfgs = ctx.configs().reg.get<config::Global::INTERFACE>();
+    interface::InterfaceKey ifaceKey;
+    if (!utils::extractInterfaceId(segs[0][0], segs[0][1], ifaceKey)) 
+        return false;
+    utils::setOwnedField(interfaceCfgs, ctx, ifaceKey);
+    ctx.terminal.changeMode<CliMode::Interface>(interfaceCfgs.get().at(ifaceKey));
     return true;
 }
 
-
 bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
 {
-    ctx.terminal.isList = true;
-    std::string id = args[0];
-
-    if (utils::isNumber(id))
+    config::VrfRegistry* vrf;
+    if (!getVrfConfigs(vrf, ctx))
+        return false;
+    std::string_view name = segs[0][1];
+    uint16_t id;
+    if (utils::stouint(id, name))
     {
-        uint16_t asNum = static_cast<uint16_t>(std::stoi(id));
-        routing::eigrp::EigrpAutonomousSystem* as = ctx.vrf.getEigrpAutonomousSystem(asNum);
-        if (!ctx.negate)
+        auto& eigrpList = vrf->reg.get<config::Vrf::ROUTER_EIGRP_V4>();
+        if (ctx.negate || ctx.defaulted)
         {
-            if (as)
-            {
-                if (as->ipv4Named)
-                {
-                    ctx.terminal.controller.print(std::string("\r\n%" + std::string(" ERROR: AS(" + id + ") used by named mode")));
-                    return false; // AS used in named mode. }
-                }
-            }
-            else
-            {
-                as = ctx.vrf.addEigrpAutonomousSystem(asNum);
-            }
-            if (!as->ipv4)
-            {
-                as->ipv4 = new routing::eigrp::Eigrp(asNum, types::AddressFamily::IPv4, ctx.global.getRoutingInstance("default"));
-            }
-            ctx.terminal.changeMode<CliMode::RouterEigrpClassicV4>(as->ipv4, nullptr, nullptr);
+            eigrpList.erase(id);
+            return true;
         }
-        else
-        {
-            if (as)
-            {
-                if (!as->ipv4Named && as->ipv4)
-                {
-                    delete as->ipv4;
-                    as->ipv4 = nullptr;
-                    if (!as->ipv6)
-                    {
-                        ctx.vrf.removeEigrpAutonomousSystem(asNum);
-                    }
-                }
-            }
-        }
+        // TODO handle vrf
+        return ctx.terminal.changeMode<CliMode::RouterEigrpClassicV4>(eigrpList.emplaceBack(id));
     }
     else
     {
-        if (!ctx.negate)
+        auto& namedList = ctx.configs().reg.get<config::Global::ROUTER_EIGRP_NAMED>();
+        std::string nameStr(name);
+        if (ctx.negate || ctx.defaulted)
         {
-            if (!ctx.vrf.getEigrpNamed(id))
-            {
-                ctx.vrf.addEigrpNamed(id);
-            }
-            ctx.terminal.changeMode<CliMode::RouterEigrpNamed>(nullptr, ctx.vrf.getEigrpNamed(id), nullptr);
+            namedList.erase(nameStr);
+            return true;
         }
-        else
-        {
-            ctx.vrf.removeEigrpNamed(id);
-        }
+        return ctx.terminal.changeMode<CliMode::RouterEigrpNamed>(namedList.emplaceBack(nameStr));
     }
-    return true;
 }
 
 bool Global_RouterOSPF_Handler(GLOBAL_PARAMS)
 {
-    return true;
+    // TODO
+    return false;
 }
 
 bool Global_RouterBGP_Handler(GLOBAL_PARAMS)
 {
-    return true;
+    // TODO
+    return false;
 }
 
-#undef ROUTER_CONFIG
+bool Global_IP_SubHandler(GLOBAL_SUB_PARAMS)
+{
+    return GlobalIPCommands::execute(ctx, toks, idx);
+}
 
+bool Global_IPv6_SubHandler(GLOBAL_SUB_PARAMS)
+{
+    return GlobalIPv6Commands::execute(ctx, toks, idx);
+}
 
+#define GLOBAL_LIST(X, Y) \
+    X(Y, (COMMAND, Arp, "arp"_tok)) \
+    X(Y, (COMMAND, Exit, "exit"_tok)) \
+    X(Y, (COMMAND, SetHostname, "hostname"_tok)) \
+    X(Y, (COMMAND, End, "end"_tok)) \
+    X(Y, (SUBPRSR, IP, "ip"_tok)) \
+    X(Y, (SUBPRSR, IPv6, "ipv6"_tok)) \
+    X(Y, (COMMAND, Interface, "interface"_tok)) \
+    X(Y, (COMMAND, RouterEIGRP, "router"_tok, "eigrp"_tok)) \
+    X(Y, (COMMAND, RouterOSPF, "router"_tok, "ospf"_tok)) \
+    X(Y, (COMMAND, RouterBGP, "router"_tok, "bgp"_tok))
 
+DEFINE_CMD_MODE(Global, config::GlobalRegistry, GLOBAL_LIST);
 }

@@ -23,7 +23,7 @@
 #include "bgp/transport/BgpTx.h"
 #include "bgp/attributes/AttributeManager.hpp"
 #include "bgp/af/AddressFamily.hpp"
-#include "bgp/af/AddressFamilyInstance.h" // keep
+#include "bgp/af/AddressFamilyInstance.h" // IWYU pragma: keep
 
 namespace core { class VirtualRouter; }
 
@@ -115,8 +115,8 @@ public:
 
     // GETTERS
 
-    config::BgpRegistry& getConfigs() { return configs.get(); }
-    const config::BgpRegistry& getConfigs() const { return configs.get(); }
+    config::BgpRegistry& getConfigs() { return configs; }
+    const config::BgpRegistry& getConfigs() const { return configs; }
     NeighborTable& getNtable() { return ntable; }
     const NeighborTable& getNtable() const { return ntable; }
     AttributeManager& getAttrMgr() { return attrMgr; }
@@ -132,7 +132,7 @@ public:
      */
     uint32_t getRouterId() const noexcept
     {
-        auto& rid = getConfigs().get<config::Bgp::BGP_ROUTER_ID>();
+        auto& rid = getConfigs().reg.get<config::Bgp::BGP_ROUTER_ID>();
         if (rid.hasValue()) return rid.load();
         return asNumber;
     }
@@ -291,7 +291,7 @@ private:
     AttributeManager attrMgr;     ///< Flyweight store for path attributes shared across all sessions.
     NeighborTable ntable;         ///< Configured and dynamic neighbor registry.
 
-    config::Reference<config::BgpRegistry> configs; ///< Process-level BGP configuration.
+    config::BgpRegistry& configs; ///< Process-level BGP configuration.
 };
 } // namespace routing
 

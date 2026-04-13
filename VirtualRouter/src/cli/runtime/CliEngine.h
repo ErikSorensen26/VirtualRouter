@@ -27,6 +27,8 @@
 
 namespace interface { class Interface; enum class InterfaceType : uint8_t; }
 
+static std::string_view CARRIAGE_RETURN = "<cr>";
+
 namespace cli
 {
 class CliSession;
@@ -112,12 +114,10 @@ class CliEngine : public Configs
 {
 public:
     friend class Internal_CliTest;
-    Com errorCommand;           ///< Represents a sentinel command used when parsing fails or input is malformed.
-    Com carriageReturnCommand;  ///< Represents a carriage return '<cr>>' used by the CLI engine as a structural placeholder.
+    Com carriageReturnCommand{CARRIAGE_RETURN};  ///< Represents a carriage return '<cr>>' used by the CLI engine as a structural placeholder.
 
     static std::string defaultMode; ///< Default operational mode for newly created sessions (typically user EXEC).
 
-    const std::vector<std::string> globalCommandList{"?", "vk_tab"}; ///< List of globally valid commands independent of mode.
     size_t paginationCount = 10; ///< Maximum number of entries displayed before pagination is triggered.
     ::utils::DoTime timeKeeper;          ///< Shared time-management utility used for timestamping or delayed operations.
 
@@ -286,7 +286,7 @@ public:
      * @param original The original input string.
      * @return New string with prefix applied over the first N characters.
      */
-    std::string maskInput(const std::string& prefix, std::string original);
+    std::string& maskInput(std::string_view prefix, std::string& original);
 
 private:
     ConsoleController controller;

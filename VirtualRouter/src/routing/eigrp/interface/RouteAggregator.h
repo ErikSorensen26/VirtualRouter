@@ -6,7 +6,7 @@
 #ifndef EIGRP_ROUTE_AGGREGATOR_H
 #define EIGRP_ROUTE_AGGREGATOR_H
 
-#include <map>
+#include <unordered_map>
 #include <set>
 #include <limits>
 #include <IPAddress.h>
@@ -178,7 +178,7 @@ public:
 
 private:
     EigrpInterface& iface;                                  ///< Interface whose topology this aggregator manages.
-    std::map<types::IPPrefix, SummaryRoute> summaryRoutes;  ///< All active summaries keyed by their aggregate prefix.
+    std::unordered_map<types::IPPrefix, SummaryRoute> summaryRoutes;  ///< All active summaries keyed by their aggregate prefix.
 };
 } // namespace routing::eigrp
 

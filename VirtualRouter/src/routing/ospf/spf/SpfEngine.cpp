@@ -25,7 +25,7 @@ struct QItem
 template <typename Policy>
 SpfResult SpfEngine::run(SpfTopology<Policy>& topo)
 {
-    if (!topo.area.process().getConfigs().template get<config::Ospf::ISPF>().load() ||
+    if (!topo.area.process().getConfigs().reg.template get<config::Ospf::ISPF>().load() ||
         !last.has_value() || lastEdges.empty())
     {
         SpfResult res = runFull<Policy>(topo);
@@ -399,7 +399,7 @@ template <typename Policy>
 void SpfEngine::finalizeParents(SpfTopology<Policy>& topo, SpfResult& res)
 {
     auto& area = topo.area;
-    uint8_t maxPaths = area.process().getConfigs().template get<config::Ospf::MAXIMUM_PATHS>().load();
+    uint8_t maxPaths = area.process().getConfigs().reg.template get<config::Ospf::MAXIMUM_PATHS>().load();
 
     for (auto& kv : res.nodes)
     {

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make)",
+      "Bash(cmake -B build -S .)",
+      "Bash(wait)",
+      "Bash(sed -n '59,65p' /home/erik/VirtualRouter/VirtualRouter/src/services/dhcp/dhcpv6/Dhcpv6Server.cpp)",
+      "Bash(sed -n '1711,1717p' /home/erik/VirtualRouter/VirtualRouter/src/services/dhcp/dhcpv6/Dhcpv6Server.cpp)"
+    ]
+  }
+}

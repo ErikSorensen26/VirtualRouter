@@ -12,22 +12,22 @@
 #define GLOBAL_H
 
 #include <string>
-#include <map>
 #include <mutex>
 #include <shared_mutex>
 #include <atomic>
-#include <map>
 #include <ThreadPool.hpp>
 #include <TimeManager.h>
+#include <Mac.hpp>
 
+#include "interface/configs/InterfaceType.hpp"
 #include "qos/egress/TxQueueManager.h"
 #include "qos/ingress/RxQueueManager.h"
 #include "cli/runtime/CliEngine.h"
 #include "security/keys/KeyChainManager.h"
-#include "configs/Registry.hpp"
 #include "ControlScheduler.h"
 #include "AddressFamily.hpp"
-#include "IPAddress.h"
+#include "configs/registry/global/GlobalRegistry.h"
+#include "configs/Registry.hpp"
 
 namespace interface { class Interface; }
 namespace hardware { struct HwIfaceInfo; }
@@ -50,131 +50,6 @@ namespace core
 #define DEFAULT_HOSTNAME "router"
 
 class VirtualRouter;
-
-/**
- * @struct GlobalConfigs
- * @brief System-wide configuration container for ARP, NDP, and Non-Stop Forwarding (NSF).
- *
- * GlobalConfigs stores configuration and runtime parameters that apply across the entire router,
- * independent of any specific interface or VRF. It is shared by forwarding-plane modules,
- * routing protocols, the CLI engine, and neighbor-discovery subsystems.
- *
- * ## Concurrency Model
- * - High-frequency fields use `std::atomic` for lock-free reads (ARP/NDP fast path).
- * - Neighbor maps use `std::shared_mutex` for concurrent reads and exclusive writes.
- *
- * ## Subcomponents
- * - **Arp**: IPv4 neighbor discovery, rate limits, and static entries.
- * - **Ndp**: IPv6 neighbor discovery, DAD timers, and static neighbors.
- * - **NSF**: Non-stop-forwarding timers and active state.
- *
- * This structure is owned by the Global object and exists for the router’s lifetime.
- */
-struct GlobalConfigs
-{
-    std::atomic<bool> nsfActive = false; ///< Indicates whether NSF is active.
-    std::chrono::steady_clock::time_point nsfStartTime; ///< Time when NSF began.
-
-    /**
-     * @struct Arp
-     * @brief Configuration and neighbor tables for IPv4 ARP.
-     * @ingroup CORE
-     *
-     * Controls global ARP behavior and caches. Provides tunable limits for:
-     * - Incomplete ARP resolution queue lengths
-     * - Retry behavior
-     * - Proxy ARP enablement
-     * - Gratuitous ARP acceptance
-     *
-     * Also includes a static neighbor table and associated locking for safe access
-     * across the control plane and data plane.
-     */
-    struct Arp
-    {
-        std::atomic<bool> acceptGratiutous = true;  ///< Accepts gratious ARPs globally.
-        std::atomic<bool> incompleteEnabled = true; ///< Allows incomplete ARP entries.
-        std::atomic<bool> disableProxy = false;     ///< Disables proxy arp on all interfaces.
-        std::atomic<bool> redirects = false;        ///< Enables ARP redirects (TODO).
-        std::atomic<bool> stickyArp = false;        ///< Prevents learned MAC changes.
-
-        std::atomic<uint32_t> incompleteResolveLimit = 1024; ///< Max concurrent unresolved ARP lookups.
-        std::atomic<uint32_t> incompleteRetries = 3;         ///< Retries before giving up ARP resolution.
-        std::atomic<uint32_t> incompleteInterval = 5;        ///< Retry interval (seconds).
-        std::atomic<uint32_t> queueSize = 512;               ///< Queue size for pending ARP packets.
-
-        std::string arpDumpFileLocation; ///< Debug dump location for ARP data (TODO).
-        std::atomic<uint32_t> stackTraceSize; ///< Size of stack trace dump (TODO).
-        std::atomic<uint8_t> stackTraceDepth; ///< Depth of stack trace dump (TODO).
-
-        /**
-         * @struct Neighbor
-         * @brief Static IPv4 neighbor entry.
-         * @ingroup CORE
-         *
-         * Represents a manually configured ARP entry that overrides dynamic discovery.
-         */
-        struct Neighbor
-        {
-            uint64_t mac; ///< MAC address of neighbor.
-            uint32_t interface; ///< interface::Interface ID this neighbor is bound to.
-            bool proxy = false; ///< Whether this entry is a proxy arp binding
-        };
-
-        std::map<std::string, std::map<types::IPv4Address, Neighbor>> neighbors; ///< Static ARP neighbor table.
-        std::shared_mutex neighborMutex; ///< Syncronizes neighbor table access.
-    } arp;
-
-    /**
-     * @struct Ndp
-     * @brief Global IPv6 Neighbor Discovery (NDP) configuration and static neighbor table.
-     * @ingroup CORE
-     *
-     * Controls IPv6 ND behavior including:
-     * - DAD (Duplicate Address Detection)
-     * - Neighbor Unreachability Detection (NUD)
-     * - Cache expiration settings
-     * - Refresh and convergence timers for NSF events
-     * - Resolution rate limits
-     *
-     * Also maintains a static neighbor table used as a global override for NDP learning.
-     */
-    struct Ndp
-    {
-        std::atomic<bool> refresh = false;        ///< Force NDP refresh cycle.
-        std::atomic<bool> ndAsRouteOwner = false; ///< Install ND entries directly into RIB (optional behavior) (TODO).
-        std::atomic<bool> strictMode = false;     ///< Enforce strict ND validation.
-
-        std::atomic<uint16_t> nudRefreshPeriod = 0; ///< Periodic refresh interval for NUD.
-
-        std::atomic<uint16_t> cacheExpire = 600;      ///< Expiration time for dynamic NDP entries.
-        std::atomic<uint16_t> loggingRate = 0;        ///< Logging throttle for ND events.
-        std::atomic<uint16_t> dadTime = 1000;         ///< Duplicate Address Detectiong timer (ms)
-        std::atomic<uint16_t> nsfConvergenceTime = 180; ///< NSF convergence time (seconds).
-        std::atomic<uint16_t> nsfDadSupressionTime = 180; ///< NSF DAD suppression window.
-        std::atomic<uint16_t> nsfThrottleResolutions = 1000; ///< Max ND resolutions during NSF.
-        std::atomic<uint16_t> nudLimit = 2048;        ///< Maximum concurrent NUD operations.
-        std::atomic<uint16_t> resolutionLimit = 512;  ///< Max outstanding ND resolutions.
-
-        std::atomic<uint32_t> interfaceLimit = 0;     ///< Limit on ND-enabled interfaces.
-        std::atomic<uint32_t> reachableTime = 30000;  ///< Time (ms) that a neighbor is considered reachable.
-
-                /**
-         * @struct Neighbor
-         * @brief Static IPv6 neighbor entry.
-         * @ingroup CORE
-         *
-         * Defines a binding of an IPv6 address to a MAC and interface, bypassing dynamic NDP.
-         */
-        struct Neighbor
-        {
-            uint32_t interface; ///< interface::Interface ID of the static neighbor.
-            uint64_t macAddress; ///< MAC address associated with this IPv6 address.
-        };
-
-        std::map<types::IPv6Address, Neighbor> neighbors; ///< Static NDP neighbor table.
-        std::shared_mutex neighborMutex;         ///< Synchronizes static NDP table access.
-    } ndp;
-};
 
 /**
  * @class Global
@@ -334,6 +209,17 @@ public:
     bool isAAA() {return aaaEnabled.load(std::memory_order_relaxed); }
 
     // INTERFACE MANAGEMENT
+    
+    /**
+     * @brief Reconciles the live interface list with the current configuration registry.
+     *
+     * Called after any change to the interface configuration table. Creates
+     * interfaces that appear in the registry but not in the live list, and
+     * removes interfaces present in the live list but absent from the registry.
+     * Each new interface is initialized with hardware metadata and assigned to
+     * the default VRF.
+     */
+    void interfaceRefresh();
 
     /**
      * @brief Create a new logical or physical interface and assign it to the default VRF.
@@ -341,16 +227,15 @@ public:
      * Interfaces represent IO endpoints (AF_PACKET, dummy, tunnel, VLAN interfaces, etc.)
      * and contain protocol stacks, ARP/NDP tables, hardware state, and configuration.
      *
-     * @param interfaceType  Type of interface (Ethernet, Loopback, Tunnel, etc.)
+     * @param interfaceKey   Type of interface (Ethernet, Loopback, Tunnel, etc.)
      * @param hwInfo         Low-level hardware metadata (ifindex, MAC, driver type)
-     * @param interfaceId    User-visible ID (GigabitEthernet0/1 → 0.1)
      * @param debug          Enables verbose hardware-layer logging for this interface.
      *
      * @return Pointer to created interface::Interface on success, or nullptr if key already exists.
      *
      * @thread_safety Protected internally by interfaceMutex.
      */
-    interface::Interface* addInterface(interface::InterfaceType interfaceType, const hardware::HwIfaceInfo& hwInfo, float interfaceId, bool debug);
+    interface::Interface* addInterface(interface::InterfaceKey interfaceKey, const hardware::HwIfaceInfo& hwInfo, bool debug = false);
 
     /**
      * @brief Retrieve an interface by its computed key.
@@ -360,17 +245,7 @@ public:
      *
      * @note This returns a raw pointer; ownership stays with Global.
      */
-    interface::Interface* getInterface(uint32_t key);
-
-    /**
-     * @brief Retrieve the entire interface table.
-     *
-     * @warning The returned reference exposes internal data structures and is only safe
-     * while the caller holds the implicit lock created by Global’s internal mutex.
-     *
-     * This is exposed because certain routing protocols require full interface iteration.
-     */
-    std::map<uint32_t, interface::Interface*>& getInterfaceList();
+    interface::Interface* getInterface(interface::InterfaceKey key);
 
     /**
      * @brief Remove and destroy an interface.
@@ -380,9 +255,19 @@ public:
      * @param key Lookup key for the interface.
      * @return True if interface was removed, false if not found.
      */
-    bool removeInterface(uint32_t key);
+    bool removeInterface(interface::InterfaceKey key);
 
     // ROUTING INSTANCES (VRFs)
+
+    /**
+     * @brief Reconciles the live VRF list with the current configuration registry.
+     *
+     * Called after any change to the VRF configuration table. Creates VRF
+     * instances that appear in the registry but not in the live routing instance
+     * map, and removes VRFs that are no longer configured. Newly created VRFs
+     * are initialized with their configured address families.
+     */
+    void routingInstanceRefresh();
 
     /**
      * @brief Create a new routing instance (VRF).
@@ -404,7 +289,7 @@ public:
      * @param ad Address family (IPv4/IPv6). If NONE, any AF is accepted.
      * @return Pointer to VirtualRouter or nullptr if not found or AF not enabled.
      */
-    VirtualRouter* getRoutingInstance(const std::string& name, types::AddressFamily = types::AddressFamily::NONE);
+    VirtualRouter* getRoutingInstance(const std::string& name = "default", types::AddressFamily = types::AddressFamily::NONE);
 
     /**
      * @brief Remove a routing instance.
@@ -454,11 +339,11 @@ private:
 
     // interface::Interface table
     std::mutex interfaceMutex; ///< Guards interfaceList for all CRUD operations.
-    std::map<uint32_t, interface::Interface*> interfaceList; ///< All physical/logical interfaces. Owned by Global.
+    std::unordered_map<interface::InterfaceKey, interface::Interface> interfaceList; ///< All physical/logical interfaces. Owned by Global.
 
     // Routing Instances
     std::mutex routingInstanceMutex; ///< Guards routingInstances for all CRUD operations.
-    std::unordered_map<std::string, VirtualRouter*> routingInstances; ///< All VRF instances. Owned by Global.
+    std::unordered_map<std::string, VirtualRouter> routingInstances; ///< All VRF instances. Owned by Global.
     
 public:
     // PUBLIC SYSTEM COMPONENTS
@@ -466,9 +351,8 @@ public:
     bool routingEnabled = false; ///< Initial routing enable flag.
     bool testingMode = false;    ///< Testing mode flag.
 
-    config::Registry registry; ///< Global configuration registry (read by CLI and protocol subsystems).
-
-    GlobalConfigs configs;       ///< Global ARP/NDP/NSF/etc configuration
+    config::GlobalRegistry configs; ///< Global ARP/NDP/NSF/etc configuration
+    config::Registry registry;     ///< Per-VRF and per-protocol config allocator.
 
     core::ThreadPool threadPool;       ///< Global thread pool for off-loading.
     core::TimeManager timeManager;     ///< Global time manager for time keeping.
@@ -478,6 +362,7 @@ public:
 
     qos::egress::TxQueueManager txMgr;        ///< Hardware TX queue controller.
     qos::ingress::RxQueueManager rxMgr;        ///< Hardware RX queue controller.
+
 };
 
 } // namespace core

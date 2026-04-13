@@ -12,7 +12,6 @@
 #ifndef INTERFACE_CONFIGS_H
 #define INTERFACE_CONFIGS_H
 
-#include <shared_mutex>
 #include <atomic>
 #include <vector>
 #include <unordered_set>
@@ -20,46 +19,26 @@
 #include <cstring>
 #include <unordered_set>
 #include <IPAddress.h>
+#include <Mac.hpp>
 #include <optional>
 
 #include "configs/registry/router/OspfInterfaceRegistry.h"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
+#include "configs/registry/interface/InterfaceRegistry.h"
+#include "InterfaceType.hpp"
 
 namespace core { class Global; class TimeManager; }
 namespace hardware { struct HwIfaceInfo; }
 namespace infrastructure { class Ndp; }
 namespace services::dhcp { struct InterfaceConfigs; struct DhcpNetwork; }
-
 class MockInterface;
 class Internal_NdpTest;
 
 namespace interface
 {
 
-// INTERFACE KEY
-
 enum class InterfaceType : uint8_t;
-
-/**
- * @brief Encodes an interface type and fractional interface number into a 32-bit key.
- *
- * The upper 8 bits carry the @ref InterfaceType; the lower 24 bits hold the
- * interface number scaled by 256 (to represent sub-interface fractions like
- * GigabitEthernet0/0.1). The result is suitable for use as an unordered-map
- * key or as a stable interface identifier passed between subsystems.
- *
- * @param type  Interface type to encode.
- * @param id    Interface number, including fractional sub-interface component.
- * @return 32-bit key with type in bits [31:24] and fixed-point id in bits [23:0].
- */
-inline uint32_t calculateInterfaceKey(InterfaceType type, float id)
-{
-    uint8_t typeEncoded = static_cast<uint8_t>(type);
-    float clamped = std::max(0.0f, std::min(id, 65535.256f));
-    uint32_t fixed = static_cast<uint32_t>(clamped * 256.0f);
-    fixed &= 0x00FFFFFF;
-    return (static_cast<uint32_t>(typeEncoded) << 24) | fixed;
-}
+class Interface;
 
 // INTERFACE CONFIGS
 
@@ -116,7 +95,7 @@ public:
      * @param id           Interface number; may include a fractional sub-interface component.
      * @param info         Hardware descriptor; must outlive this object.
      */
-    InterfaceConfigs(core::TimeManager& timeManager, InterfaceType type, float id, const hardware::HwIfaceInfo& info);
+    InterfaceConfigs(interface::Interface& iface, InterfaceType type, float id, const hardware::HwIfaceInfo& info);
 
     /**
      * @brief Destroys the interface configuration, cancelling any pending address timers.
@@ -135,7 +114,6 @@ public:
      * @param len      Prefix length in bits.
      */
     bool hasAddress(const uint8_t* address, uint8_t len);
-
     /**
      * @brief Returns true if the interface currently holds the given IPv6 address and prefix.
      *
@@ -152,32 +130,83 @@ public:
      */
     uint8_t* getMac(uint8_t* mac);
 
-    uint64_t getMac();
+    /**
+     * @brief Gets the interface MAC address.
+     *
+     * @return Mac
+     */
+    types::Mac getMac();
+
+    // Getters
+
+    /// Returns the configured transmit bandwidth for this interface in kbps.
+    uint32_t getBandwidth();
+
+    /// Returns the configured receive bandwidth for this interface in kbps.
+    uint32_t getReceiveBandwidth();
+
+    /// Returns a mutable reference to the interface config registry.
+    config::InterfaceRegistry& getConfigs() { return configs; }
+
+    /// Returns a read-only reference to the interface config registry.
+    const config::InterfaceRegistry& getConfigs() const { return configs; }
 
     /**
-     * @brief Updates the MAC address stored for this interface.
+     * @brief Re-reads the hardware MAC address and updates the cached atomic value.
      *
-     * @param mac  6-byte MAC address in network order.
+     * Called when the MAC changes (e.g. after a `mac-address` config command).
+     * Writes to the `macAddress` atomic so the data plane picks up the new value
+     * without a lock.
      */
-    void setMac(const uint8_t* mac);
+    void syncMac();
+
+    /**
+     * @brief Re-reads the primary IPv4 address from config and updates the atomic.
+     *
+     * Must be called after any change to the primary address field in the
+     * interface registry so that the data-plane fast path and ARP see the
+     * current address immediately.
+     */
+    void syncPrimaryIP();
+
+    /**
+     * @brief Re-reads all secondary IPv4 addresses from config and updates
+     *        the secondary address list.
+     */
+    void syncSecondaryIP();
+
+    /**
+     * @brief Re-reads the IPv6 link-local address from config and updates
+     *        the link-local state.
+     *
+     * Triggers DAD for the new link-local address if one is configured.
+     */
+    void syncLocalLink();
+
+    /**
+     * @brief Re-reads all global IPv6 addresses from config and reconciles
+     *        the global address list.
+     *
+     * Adds newly configured addresses (triggering DAD) and removes any that
+     * have been deleted from config. Called when the IPv6 address config
+     * changes on the interface.
+     */
+    void syncIPv6();
+
+    /**
+     * @brief Re-reads dhcpv6 from config and reconciles
+     *        the global dhcp state.
+     *
+     * Adds dhcp client and removes old primary address.
+     * changes on the interface.
+     */
+    void syncDhcpv6();
 
     float         id;            ///< Interface number, including sub-interface fraction.
     InterfaceType interfaceType; ///< Logical interface type.
-    uint32_t      key;           ///< Composite key encoding type and id; used for global interface lookup.
+    InterfaceKey  key;           ///< Composite key encoding type and id; used for global interface lookup.
 
     const hardware::HwIfaceInfo& hwInfo; ///< Immutable hardware descriptor; owned externally.
-
-    std::atomic<uint8_t>  tid      = 0;       ///< Topology ID; used by multi-topology routing (default 0).
-    std::atomic<uint16_t> vlan     = 1;       ///< 802.1Q VLAN tag (default 1 = untagged).
-    std::atomic<bool>     trusted  = false;   ///< When true, this interface is treated as a trusted security zone.
-    std::atomic<uint32_t> bandwidth{1000000}; ///< Configured bandwidth in kbps; used by EIGRP metric computation.
-    std::atomic<uint32_t> delay{10};          ///< Configured delay in microseconds; used by EIGRP metric computation.
-    std::atomic<uint8_t>  load{1};            ///< Current load value (1–255); used by EIGRP composite metric.
-    std::atomic<uint8_t>  reliability{255};   ///< Reliability (255 = 100%); used by EIGRP composite metric.
-    std::atomic<uint8_t>  ttl{64};            ///< Default IP TTL applied to packets originated on this interface.
-    std::atomic<uint16_t> globalMtu{1500};    ///< Interface-wide MTU in bytes; may be overridden per address family.
-
-    std::shared_mutex ipMutex; ///< Guards combined IPv4 + IPv6 address state for readers needing both AFs atomically.
 
     // IPv4 STATE
 
@@ -220,6 +249,7 @@ public:
          */
         void addSecondaryAddress(types::IPv4Prefix prefix);
 
+        /// Clears the primary IPv4 address, resetting address and mask atomics to zero.
         void removePrimaryAddress();
 
         /**
@@ -245,13 +275,25 @@ public:
          */
         uint8_t* getSecondaryAddress(uint8_t* out) const;
 
+        /// Returns the primary IPv4 address.
         types::IPv4Address getPrimaryAddress() const;
+
+        /// Returns the first secondary IPv4 address, or `std::nullopt` if none is configured.
         std::optional<types::IPv4Address> getSecondaryAddress() const;
 
+        /// Returns true if a primary IPv4 address is configured.
         bool hasPrimaryAddress() const;
+
+        /// Returns true if the primary address matches @p prefix exactly.
         bool hasPrimaryAddress(types::IPv4Prefix prefix) const;
+
+        /// Returns true if the primary address matches the given raw address and mask length.
         bool hasPrimaryAddress(const uint8_t* addr, uint8_t mask) const;
+
+        /// Returns true if any secondary address matches @p prefix exactly.
         bool hasSecondaryAddress(types::IPv4Prefix prefix) const;
+
+        /// Returns true if any secondary address matches the given raw address and mask length.
         bool hasSecondaryAddress(const uint8_t* addr, uint8_t mask) const;
 
         /**
@@ -270,12 +312,19 @@ public:
          */
         std::optional<uint8_t> getSecondaryPrefix(uint8_t* out) const;
 
+        /// Returns the primary address as a prefix (address + length).
         types::IPv4Prefix getPrimaryPrefix() const;
+
+        /// Returns the first secondary prefix, or `std::nullopt` if none is configured.
         std::optional<types::IPv4Prefix> getSecondaryPrefix();
 
+        /// Returns the primary address prefix length in bits.
         uint8_t getPrimaryMask() const;
+
+        /// Returns the first secondary address prefix length, or `std::nullopt` if none is configured.
         std::optional<uint8_t> getSecondaryMask() const;
 
+        /// Returns a list of all secondary IPv4 addresses (without prefix lengths).
         std::vector<types::IPv4Address> getSecondaryList() const;
 
         /**
@@ -287,6 +336,7 @@ public:
          */
         std::vector<types::IPv4Prefix> getSecondaryPrefixList(bool maintainAddress = false) const;
 
+        /// Returns the set of all secondary IPv4 addresses (without prefix lengths).
         std::unordered_set<types::IPv4Address> getSecondarySet() const;
 
         /**
@@ -296,8 +346,14 @@ public:
          */
         std::unordered_set<types::IPv4Prefix> getSecondaryPrefixSet(bool maintainAddress = false) const;
 
+        /// Returns true if the primary address matches the raw 4-byte network-order address @p ip.
         bool comparePrimaryAddress(const uint8_t* ip);
+
+        /// Returns true if the primary address matches @p ip.
         bool comparePrimaryAddress(types::IPv4Address ip);
+
+        /// Returns true if the primary address and prefix length both match @p prefix.
+        bool comparePrimaryPrefix(types::IPv4Prefix prefix);
 
     private:
         mutable std::mutex ipMutex;          ///< Guards secondary address vector and coordinated primary reads.
@@ -337,7 +393,7 @@ public:
          * @param time  Timer service; used to schedule DAD retransmissions and
          *              preferred/valid lifetime expiry events.
          */
-        explicit IPv6State(core::TimeManager& time);
+        explicit IPv6State(core::TimeManager& tmgr);
 
         /**
          * @brief Destroys IPv6 state and cancels all pending address timers.
@@ -410,6 +466,7 @@ public:
          */
         IPv6Address* addGlobalAddress(const types::IPv6Prefix& ip);
 
+        /// Removes the link-local address and cancels any associated DAD timers.
         void removeLocalAddress();
 
         /**
@@ -419,6 +476,7 @@ public:
          */
         void removeAddress(const types::IPv6Prefix& prefix);
 
+        /// Removes all link-local, global unicast, and ULA addresses, cancelling their timers.
         void removeAllAddresses();
 
         /**
@@ -460,19 +518,37 @@ public:
          */
         uint8_t* getLocalUnicast(uint8_t* out) const;
 
+        /// Returns the link-local address (unspecified if none is assigned).
         types::IPv6Address getLocalAddress() const;
+
+        /// Returns the first valid global unicast address (unspecified if none is valid).
         types::IPv6Address getGlobalUnicast() const;
+
+        /// Returns the first valid unique-local address (unspecified if none is valid).
         types::IPv6Address getLocalUnicast() const;
 
+        /// Returns true if the interface holds the given 16-byte network-order IPv6 address (any scope).
         bool hasAddress(const uint8_t* addr);
+
+        /// Returns true if the interface holds @p addr in any address list.
         bool hasAddress(types::IPv6Address addr);
 
+        /// Returns true if the link-local address matches the given raw address and prefix length.
         bool hasLocalAddress(const uint8_t* addr, uint8_t len) const;
+
+        /// Returns true if any global unicast address matches the given raw address and prefix length.
         bool hasGlobalUnicast(const uint8_t* addr, uint8_t len) const;
+
+        /// Returns true if any ULA matches the given raw address and prefix length.
         bool hasLocalUnicast(const uint8_t* addr, uint8_t len) const;
 
+        /// Returns true if the link-local address matches @p prefix.
         bool hasLocalAddress(const types::IPv6Prefix& prefix) const;
+
+        /// Returns true if any global unicast address matches @p prefix.
         bool hasGlobalUnicast(const types::IPv6Prefix& prefix) const;
+
+        /// Returns true if any ULA matches @p prefix.
         bool hasLocalUnicast(const types::IPv6Prefix& prefix) const;
 
         /**
@@ -499,16 +575,31 @@ public:
          */
         uint8_t getLocalUnicastPrefix(uint8_t* out) const;
 
+        /// Returns the link-local address as a prefix (address + length).
         types::IPv6Prefix getLocalPrefix() const;
+
+        /// Returns the first global unicast address as a prefix.
         types::IPv6Prefix getGlobalUnicastPrefix() const;
+
+        /// Returns the first ULA as a prefix.
         types::IPv6Prefix getLocalUnicastPrefix() const;
 
+        /// Returns the link-local address prefix length in bits.
         uint8_t getLocalMask() const;
+
+        /// Returns the first global unicast address prefix length in bits.
         uint8_t getGlobalUnicastMask() const;
+
+        /// Returns the first ULA prefix length in bits.
         uint8_t getLocalUnicastMask() const;
 
+        /// Returns a list of all routable (non-link-local) IPv6 addresses.
         std::vector<types::IPv6Address> getRoutableList() const;
+
+        /// Returns a list of all global unicast addresses.
         std::vector<types::IPv6Address> getGlobalList() const;
+
+        /// Returns a list of all ULA addresses.
         std::vector<types::IPv6Address> getLocalList() const;
 
         /**
@@ -532,12 +623,22 @@ public:
          */
         std::vector<types::IPv6Prefix> getLocalPrefixList(bool maintainAddress = false) const;
 
+        /// Returns the set of all routable (non-link-local) IPv6 addresses.
         std::unordered_set<types::IPv6Address> getRoutableSet() const;
+
+        /// Returns the set of all global unicast addresses.
         std::unordered_set<types::IPv6Address> getGlobalSet() const;
+
+        /// Returns the set of all ULA addresses.
         std::unordered_set<types::IPv6Address> getUniqueSet() const;
 
+        /// Returns the set of routable prefixes; host bits are preserved when @p maintainAddress is true.
         std::unordered_set<types::IPv6Prefix> getRoutablePrefixSet(bool maintainAddress = false) const;
+
+        /// Returns the set of global unicast prefixes; host bits are preserved when @p maintainAddress is true.
         std::unordered_set<types::IPv6Prefix> getGlobalPrefixSet(bool maintainAddress = false) const;
+
+        /// Returns the set of ULA prefixes; host bits are preserved when @p maintainAddress is true.
         std::unordered_set<types::IPv6Prefix> getUniquePrefixSet(bool maintainAddress = false) const;
 
         std::atomic<uint16_t> mtu{1500};       ///< IPv6 MTU; may differ from globalMtu if locally overridden.
@@ -545,7 +646,7 @@ public:
 
     private:
         core::TimeManager& timeManager;
-        mutable std::shared_mutex ipMutex;
+        mutable std::mutex ipMutex;          ///< Guards local/global address vector.
 
         IPv6Address*              linkLocalAddress   = nullptr; ///< The single link-local address, if assigned.
         std::vector<IPv6Address*> globalAddresses;              ///< Heap-allocated global unicast entries.
@@ -564,34 +665,6 @@ public:
         friend class Internal_NdpTest;
     } ipv6;
 
-    // PROTOCOL SUB-CONFIGURATIONS
-
-    /**
-     * @brief Per-interface EIGRP configuration and enabled autonomous-system tracking.
-     *
-     * Stores which IPv6 autonomous systems have this interface enabled, and
-     * holds a reference-counted handle to the per-AS interface registry entry
-     * for each enabled AS.
-     */
-    struct Eigrp
-    {
-        std::unordered_set<uint32_t> ipv6AutonomousSystems; ///< Set of IPv6 AS numbers that have activated this interface.
-        std::unordered_map<uint32_t, config::Reference<config::EigrpInterfaceRegistry>> eigrpIfaceConfigs; ///< Per-AS EIGRP interface config registry references, keyed by AS number.
-    } eigrp;
-
-    /**
-     * @brief Per-interface OSPF process membership and interface registry reference.
-     * @ingroup INTERFACE_CONFIGS
-     *
-     * `enabledProcesses` maps OSPF process ID to the area ID this interface is
-     * assigned to. `ospfInterfaceConfigs` holds the registry reference once the
-     * interface has been placed under an OSPF process.
-     */
-    struct Ospf
-    {
-        std::unordered_map<uint32_t, uint32_t> enabledProcesses;  ///< Maps OSPF process ID → area ID for each enabled process.
-        std::optional<config::Reference<config::OspfInterfaceBaseRegistry>> ospfInterfaceConfigs = std::nullopt; ///< OSPF interface config registry entry; set when the interface joins a process.
-    } ospf;
 
     /**
      * @brief DHCPv6 client/relay configuration attached to this interface.
@@ -608,7 +681,11 @@ public:
     } dhcpv6;
 
 private:
-    std::atomic<uint64_t> macAddress; ///< Interface MAC address packed into 64 bits (6 bytes used, big-endian).
+    friend class Interface;
+
+    config::InterfaceRegistry& configs; ///< Owning reference to the interface config registry; source of truth for all configurable parameters.
+
+    std::atomic<types::Mac> macAddress; ///< Cached MAC address; updated by @ref syncMac when the config changes.
 };
 
 } // namespace interface

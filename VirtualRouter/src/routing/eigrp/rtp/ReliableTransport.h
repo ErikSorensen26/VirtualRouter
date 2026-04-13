@@ -12,7 +12,7 @@
 #ifndef EIGRP_RELIABLE_TRANSPORT_H
 #define EIGRP_RELIABLE_TRANSPORT_H
 
-#include <map>
+#include <unordered_map>
 #include <IPAddress.h>
 #include <atomic>
 
@@ -436,7 +436,7 @@ public:
     // MULTICAST RELIABLE
 
     /// In-flight multicast reliable packets keyed by sequence number.
-    std::map<uint32_t, MulticastReliablePacket> reliablePackets;
+    std::unordered_map<uint32_t, MulticastReliablePacket> reliablePackets;
 
     /**
      * @brief Per-packet metric and format metadata computed once at send time.

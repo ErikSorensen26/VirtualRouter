@@ -11,6 +11,8 @@
 #include "registry/router/OspfInterfaceRegistry.h"
 #include "registry/router/OspfRegistry.h"
 #include "registry/router/BgpRegistry.h"
+#include "registry/global/GlobalRegistry.h"
+#include "registry/interface/InterfaceRegistry.h"
 
 #include "RegistryDatabase.hpp"
 
@@ -35,6 +37,14 @@ namespace config
  * @see RegistryDatabase
  */
 using Registry = RegistryDatabase<
+    GlobalRegistry,
+    VrfRegistry,
+    InterfaceRegistry,
+    ArpRegistry,
+    NdpRegistry,
+    NdpBaseRegistry,
+    NdpEntryRegistry,
+
     EigrpRegistry,
     EigrpInterfaceRegistry,
     OspfRegistry,

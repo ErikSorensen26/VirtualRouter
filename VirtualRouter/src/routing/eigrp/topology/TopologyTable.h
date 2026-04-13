@@ -17,6 +17,7 @@
 #include <chrono>
 #include <map>
 #include <unordered_set>
+#include "interface/configs/InterfaceType.hpp"
 
 namespace routing::eigrp
 {
@@ -60,7 +61,7 @@ struct ReceivedRoute
 {
     types::IPPrefix prefix;
     types::IPAddress nextHop;
-    uint32_t originInterface;     ///< Interface index on which this route was originally connected or learned.
+    interface::InterfaceKey originInterface;    ///< Interface index on which this route was originally connected or learned.
     uint64_t reportedDistance;    ///< Neighbor's own best metric to the destination (RD).
     uint64_t feasibleDistance;    ///< Total path metric as seen from this router (FD).
     uint64_t delay;
@@ -236,7 +237,7 @@ struct TopologyEntry
     };
 
     types::IPPrefix prefix;
-    std::map<types::IPAddress, RouteInfo> routesBySource; ///< Routes learned from each neighbor.
+    std::unordered_map<types::IPAddress, RouteInfo> routesBySource; ///< Routes learned from each neighbor.
 
     std::vector<types::IPAddress> feasibleSuccessors; ///< List of feasible successor neighbors.
     std::vector<types::IPAddress> successors;         ///< List of successor neighbors.
@@ -245,14 +246,14 @@ struct TopologyEntry
     uint8_t bestAD = std::numeric_limits<uint8_t>::max();   ///< Administrative distance of the best path.
     types::IPAddress bestNeighbor = {};                     ///< IP address of the current primary successor neighbor.
 
-    std::map<uint32_t, SuppressionInfo> suppression; ///< Per-interface suppression state, keyed by interface hardware key.
+    std::unordered_map<interface::InterfaceKey, SuppressionInfo> suppression; ///< Per-interface suppression state, keyed by interface hardware key.
 
     /**
      * @brief Returns true if this entry is suppressed on the given interface.
      *
      * @param key Hardware interface key to check.
      */
-    bool isSuppressed(uint32_t key) const
+    bool isSuppressed(interface::InterfaceKey key) const
         { return suppression.count(key) > 0; }
 
     State state = State::PASSIVE;

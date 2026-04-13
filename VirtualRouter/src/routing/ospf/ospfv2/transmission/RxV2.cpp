@@ -31,10 +31,6 @@ static bool verifyOspfFletcher(const uint8_t* lsa, uint16_t len)
     check.addBytes(lsa + 2, len - 2);
     return check.finalize() == 0;
 }
-config::OspfInterfaceBaseRegistry& PacketDispatcherV2::getBaseConfigs()
-{
-    return baseConfigs.get();
-}
 
 void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, const uint8_t* neighborIp, bool multicast)
 {
@@ -42,7 +38,7 @@ void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, 
     uint32_t rid = ospfHeader.getRouterID();
 
     // Check passive
-    if (iface.getConfigs().get<config::OspfInterface::PASSIVE>().load())
+    if (iface.getConfigs().reg.get<config::OspfInterface::PASSIVE>().load())
         return;
 
     // Validate version
@@ -56,9 +52,9 @@ void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, 
     size_t packetSize = packet::Ospfv2Header::fixedSize + ospfHeader.getTrail().size();
     if (ospfHeader.getPacketLen() > packetSize) return;
 
-    auto& interfaceAuth = baseConfigs->get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    auto& interfaceAuth = iface.getBaseConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
     auto authType = interfaceAuth.hasValue() ? interfaceAuth.load()
-        : iface.getArea().getConfigs().get<config::OspfArea::AUTHENTICATION_TYPE>().load();
+        : iface.getArea().getConfigs().reg.get<config::OspfArea::AUTHENTICATION_TYPE>().load();
 
     HeaderInfo info(ospfHeader.getTrail().data(), packetSize, ospfHeader.getPacketLen(), static_cast<uint8_t>(authType), neigIp, rid);
     info.neighbor = iface.getNTable().lookup(rid);
@@ -85,7 +81,13 @@ void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, 
         }
     }
 
-    // TODO header stuff
+    // RFC 2328 §8.2: discard packets sourced by this router itself
+    if (ospfHeader.getRouterID() == iface.getProcess().getRouterId())
+        return;
+
+    // Discard unrecognised packet types (valid range: 1–5)
+    if (ospfHeader.getType() < 1 || ospfHeader.getType() > 5)
+        return;
 
     if (ospfHeader.getType() == OSPFV2_TYPE_HELLO)
     {
@@ -120,10 +122,11 @@ bool PacketDispatcherV2::processOptions(uint32_t options, Neighbor& nbr)
     auto& flags = iface.getFlags();
     auto& areaFlags = iface.getArea().getFlags();
 
-    if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED)
+    bool ignore = iface.getConfigs().reg.get<config::OspfInterface::DEMAND_CIRCUIT_IGNORE>().load();
+    if (iface.demandCircuit == OspfInterface::DcDecision::UNDECIDED && !ignore)
     {
         if (InterfaceFlagManager::getDemandCircuits(options) && flags.getDemandCircuits() &&
-            iface.getConfigs().get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_POINT)
+            iface.getConfigs().reg.get<config::OspfInterface::NETWORK>().load() == config::ospf::NetworkType::POINT_TO_POINT)
             iface.demandCircuit = OspfInterface::DcDecision::ENABLED;
         else
             iface.demandCircuit = OspfInterface::DcDecision::DISABLED;
@@ -152,15 +155,15 @@ void PacketDispatcherV2::processHello(PacketDispatcher::HeaderInfo& info, bool u
         return;
 
     // Validate timers — if mismatch, tear down an existing neighbor; for unknown neighbors just drop
-    if (hdr.getHelloInterval() != ifaceConfigs.get<config::OspfInterface::HELLO_INTERVAL>().load() ||
-        hdr.getDeadInterval() != ifaceConfigs.get<config::OspfInterface::DEAD_INTERVAL>().load())
+    if (hdr.getHelloInterval() != ifaceConfigs.reg.get<config::OspfInterface::HELLO_INTERVAL>().load() ||
+        hdr.getDeadInterval() != ifaceConfigs.reg.get<config::OspfInterface::DEAD_INTERVAL>().load())
     {
         if (info.neighbor)
             info.neighbor->setState(Neighbor::State::DOWN);
         return;
     }
 
-    auto ntype = ifaceConfigs.get<config::OspfInterface::NETWORK>().load();
+    auto ntype = ifaceConfigs.reg.get<config::OspfInterface::NETWORK>().load();
     bool multiAccess = ntype == config::ospf::NetworkType::BROADCAST || ntype == config::ospf::NetworkType::NON_BROADCAST;
 
     if (multiAccess)
@@ -278,7 +281,7 @@ void PacketDispatcherV2::processDBD(PacketDispatcher::HeaderInfo& info)
     }
 
     // Verify MTU
-    if (iface.getConfigs().get<config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
+    if (iface.getConfigs().reg.get<config::OspfInterface::MTU_IGNORE>().load() && info.neighbor->mtu != hdr.getMtu())
     {
         info.neighbor->setState(Neighbor::State::DOWN);
         return;
@@ -595,7 +598,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
 
 bool PacketDispatcherV2::processOspfSimpleAuthentication(const packet::Ospfv2Header& hdr)
 {
-    auto& secretVal = baseConfigs->get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+    auto& secretVal = iface.getBaseConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
     if (!secretVal.hasValue()) return true; // Auth not fully enabled.
     if (hdr.getAuthType() != static_cast<uint16_t>(config::ospf::AuthType::SIMPLE))
         return false;

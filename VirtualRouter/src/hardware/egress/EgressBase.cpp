@@ -12,7 +12,7 @@ EgressBase::EgressBase(interface::Interface& iface, const qos::egress::TxQueueOp
     : iface(iface),
       opts(o),
       qid(static_cast<uint32_t>(opts.cpuId < 0 ? 0 : opts.cpuId)),
-      packetSize(iface.configs.globalMtu.load(std::memory_order_relaxed))
+      packetSize(iface.configs.ipv4.mtu.load(std::memory_order_relaxed) + MTU_PADDING)
 {}
 
 EgressBase::~EgressBase()

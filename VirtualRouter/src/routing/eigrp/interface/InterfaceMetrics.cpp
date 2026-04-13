@@ -31,11 +31,12 @@ void InterfaceMetrics::addRouteMetrics(std::vector<ReceivedRoute>& routes)
 
 uint64_t InterfaceMetrics::getLocalMetric()
 {
+    // TODO questionable
     auto& cfg = iface.getIfaceCfg();
-    uint8_t load = cfg.load.load(std::memory_order_relaxed);
-    uint8_t reliability = cfg.reliability.load(std::memory_order_relaxed);
-    uint64_t bandwidth = cfg.hwInfo.bandwidth;
-    uint64_t delay = cfg.delay.load(std::memory_order_relaxed) * 10'000'000;
+    uint8_t load = 1;
+    uint8_t reliability = 255;
+    uint64_t bandwidth = cfg.hwInfo.bandwidth / 1000;
+    uint64_t delay = 0;
 
     return iface.getMetrics().calculateCompositeMetric(load, reliability, delay, bandwidth);
 }

@@ -7,7 +7,6 @@
 #include "CliSession.h"
 #include "interface/configs/InterfaceType.hpp"
 #include "hardware/HardwareManager.h"
-#include "cli/modes/contexts/GlobalContext.hpp"
 
 namespace cli
 {
@@ -36,8 +35,7 @@ void CliEngine::initEngine(const StartupFiles& stfs)
     initConfigs(stfs);
 
     // Initialize default error and carriage return commands
-    errorCommand.name = "<error>";
-    carriageReturnCommand.name = "<cr>";
+    carriageReturnCommand.name = CARRIAGE_RETURN;
 
     // Clear current command tree
     commandTree.clear();
@@ -171,16 +169,12 @@ bool CliEngine::isValidCommandDirectory(nlohmann::ordered_json *directory)
     return false;
 }
 
-std::string CliEngine::maskInput(const std::string& prefix, std::string original)
+std::string& CliEngine::maskInput(std::string_view prefix, std::string& original)
 {
     if (prefix.length() > original.length())
-    {
         return original;
-    }
-
     // Replace the beginning of the original string with the prefix
     std::copy(prefix.begin(), prefix.end(), original.begin());
-
     return original;
 }
 }

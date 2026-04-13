@@ -1,212 +1,277 @@
 // InterfaceIPCommands.cpp
 
 #include "InterfaceIPCommands.h"
-#include "cli/runtime/CliSession.h"
-#include "cli/runtime/CliUtils.h"
-#include "dhcp/dhcpv4/DhcpClient.h"
-#include "eigrp/core/Eigrp.h"
-#include "eigrp/interface/EigrpInterface.h"
-#include "interface/Interface.h"
-#include "configs/registry/router/EigrpInterfaceRegistry.h"
+#include "cli/parser/CliModeParser.hpp"
+#include "cli/parser/CommandUtils.hpp"
+#include "InterfaceIPOspfCommands.h"
+
+#define INTERFACE_PARAMS DEFINE_PARAMS(config::InterfaceRegistry)
+#define INTERFACE_SUB_PARAMS DEFINE_SUB_PARAMS(config::InterfaceRegistry)
 
 namespace cli
 {
 bool InterfaceIP_AddressSet_Handler(INTERFACE_PARAMS)
 {
-    if (!ctx.negate)
+    if (!ctx.negate && !ctx.defaulted)
     {
-	if (args[0] != "dhcp")
-	{
-	    types::IPv4Address ipAddress; cli::utils::extractIPv4Address(args[0], ipAddress);
-	    types::IPv4Address _mask; cli::utils::extractIPv4Address(args[1], _mask);
-	    uint8_t subnet = static_cast<uint8_t>(__builtin_popcount(_mask.addr));
-	    ctx.currentInterface.setIPv4(types::IPv4Prefix(ipAddress.addr, subnet));
-	}
-	else
-	{
-	    if (!ctx.currentInterface.dhcp)
-	    {
-		ctx.currentInterface.dhcp = new services::dhcp::DhcpClient(&ctx.currentInterface);
-	    }
-	}
+        auto& dhcp = ctx.configs().reg.get<config::Interface::IP_ADDRESS_DHCP>();
+        if (dhcp.load()) dhcp.set(false);
     }
-    else
+
+    if (segs.size() == 1)
     {
-	ctx.currentInterface.removeIPv4();
+        auto& primary = ctx.configs().reg.get<config::Interface::IP_ADDRESS>();
+        return utils::setDoubleFieldValue(primary, ctx, segs[0] >> 1, segs[0] >> 2);
     }
+    auto& secondary = ctx.configs().reg.get<config::Interface::IP_ADDRESS_SECONDARY>();
+    config::DefType<decltype(secondary)>::node tup;
+    if (!utils::setDoubleTupleElement(std::get<0>(tup), segs[0] >> 1, segs[0] >> 2))
+        return false;
+    utils::setTupleElement(std::get<1>(tup), segs >> 1 >> 1);
+    return utils::setListEntry(secondary, ctx, tup);
+}
+
+bool InterfaceIP_AddressDhcp_Handler(INTERFACE_PARAMS)
+{
+    UNUSED(segs);
+    if (!ctx.negate && !ctx.defaulted)
+    {
+        auto& primary = ctx.configs().reg.get<config::Interface::IP_ADDRESS>();
+        if (primary.hasValue()) primary.unset();
+    }
+    auto& ipdhcp = ctx.configs().reg.get<config::Interface::IP_ADDRESS_DHCP>();
+    utils::setToggleValue(ipdhcp, ctx);
     return true;
 }
 
 bool InterfaceIP_AuthenticationKeyChain_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::NONE);
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(args[2]);
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::MD5);
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& authKey = ctx.configs().reg.get<config::Interface::IP_EIGRP>().emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>();
+            return utils::setFieldValue(authKey, ctx, segs[0] >> 2);
         }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_AuthenticationMode_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::NONE);
-            cfg->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::MD5);
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& mode = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_MODE>();
+
+            if (utils::handleValueReset(mode, ctx))
+                return true;
+
+            switch (segs[1][0])
+            {
+                case "md5"_tok:
+                {
+                    mode.set(config::eigrp::AuthType::MD5);
+                    return true;
+                }
+            }
         }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_BandwidthPercentage_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>().set(
-            ctx.negate ? 50u : static_cast<uint32_t>(std::stoul(args[2])));
+        case "eigrp"_tok:
+        {
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& eigrpBw = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>();
+            return utils::setFieldValue(eigrpBw, ctx, segs[0] >> 2);
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_DampeningChange_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE>().set(false);
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(static_cast<uint8_t>(1));
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE>().set(true);
-            cfg->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(
-                static_cast<uint8_t>(std::stoul(args[2])));
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& eigrp = ctx.configs().reg.get<config::Interface::IP_EIGRP>().emplaceBack(as);
+            auto& dampChange = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE>();
+            auto& dampChangePercent = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>();
+            utils::setToggleValue(dampChange, ctx);
+            return utils::setFieldValue(dampChangePercent, ctx, segs[0] >> 2);
         }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_DampeningInterval_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        auto cfg = ctx.currentInterface.getEigrpConfig(as);
-        if (ctx.negate)
+        case "eigrp"_tok:
         {
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL>().set(false);
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(static_cast<uint16_t>(5));
-        }
-        else
-        {
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL>().set(true);
-            cfg->get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(
-                static_cast<uint16_t>(std::stoul(args[2])));
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& eigrp = ctx.configs().reg.get<config::Interface::IP_EIGRP>().emplaceBack(as);
+            auto& dampInterval = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL>();
+            auto& dampIntervalTime = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>();
+            utils::setToggleValue(dampInterval, ctx);
+            return utils::setFieldValue(dampIntervalTime, ctx, segs[0] >> 2);
         }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_HelloInterval_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::HELLO_INTERVAL>().set(
-            ctx.negate ? static_cast<uint16_t>(5) : static_cast<uint16_t>(std::stoul(args[2])));
+        case "eigrp"_tok:
+        {
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& helloTime = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::HELLO_INTERVAL>();
+            return utils::setFieldValue(helloTime, ctx, segs[0] >> 2);
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_HoldTime_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::HOLD_TIME>().set(
-            ctx.negate ? static_cast<uint16_t>(15) : static_cast<uint16_t>(std::stoul(args[2])));
+        case "eigrp"_tok:
+        {
+            uint16_t as;
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& holdTime = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::HOLD_TIME>();
+            return utils::setFieldValue(holdTime, ctx, segs[0] >> 2);
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_Mtu_Handler(INTERFACE_PARAMS)
 {
-    ctx.currentInterface.configs.ipv4.mtu.store(ctx.negate ? 1500 : static_cast<uint16_t>(std::stoul(args[0])), std::memory_order_release);
-    return true;
+    auto& mtu = ctx.configs().reg.get<config::Interface::IP_MTU>();
+    return utils::setFieldValue(mtu, ctx, segs[0] >> 1);
 }
 
 bool InterfaceIP_NextHopSelf_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::NEXT_HOP_SELF>().set(!ctx.negate);
+        case "eigrp"_tok:
+        {
+            uint16_t as; 
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& nhs = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::NEXT_HOP_SELF>();
+            utils::setToggleValue(nhs, ctx);
+            return true;
+        }
     }
-    return true;
+    return false;
 }
 
 bool InterfaceIP_SplitHorizon_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::SPLIT_HORIZON>().set(!ctx.negate);
+        case "eigrp"_tok:
+        {
+            uint16_t as; 
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& sh = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::SPLIT_HORIZON>();
+            utils::setToggleValue(sh, ctx);
+            return true;
+        }
     }
     return true;
 }
 
 bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS)
 {
-    if (args[0] == "eigrp")
+    switch (segs[0][0])
     {
-        uint32_t as = static_cast<uint32_t>(std::stoul(args[1]));
-        types::IPv4Address network; cli::utils::extractIPv4Address(args[2], network);
-        uint8_t mask; cli::utils::extractSubnetMask(network.addr, mask);
-        types::IPPrefix prefix(network.addr, mask);
-        auto ifaceIt = ctx.currentInterface.eigrpInterfaceList.find(as);
-        if (ifaceIt != ctx.currentInterface.eigrpInterfaceList.end() && ifaceIt->second.IPv4)
+        case "eigrp"_tok:
         {
-            if (ctx.negate)
-                ifaceIt->second.IPv4->getAggregator().withdrawSummary(prefix);
-            else
-                ifaceIt->second.IPv4->getAggregator().installSummary(prefix);
-        }
-        else
-        {
-            types::IPAddress netAddr = prefix;
-            uint8_t plen = prefix.prefixLength;
-            ctx.currentInterface.getEigrpConfig(as)->get<config::EigrpInterface::SUMMARY_ADDRESS>().withWrite(
-                [&](std::vector<std::tuple<types::IPAddress, uint8_t>>& v) {
-                    auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
-                        return std::get<0>(t) == netAddr && std::get<1>(t) == plen;
-                    });
-                    if (!ctx.negate) { if (it == v.end()) v.emplace_back(netAddr, plen); }
-                    else { if (it != v.end()) v.erase(it); }
-                });
+            uint16_t as; 
+            if (!utils::setValue(as, segs[0] >> 1))
+                return false;
+            auto& sum = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
+                .emplaceBack(as).reg.get<config::EigrpInterface::SUMMARY_ADDRESS>();
+            config::DefType<decltype(sum)>::node tup;
+            if (!utils::setTupleElement(std::get<0>(tup), segs[0] >> 2) &&
+                !utils::setDoubleTupleElement(std::get<0>(tup), segs[0] >> 2, segs[0] >> 3))
+                return false;
+            utils::setTupleElement(std::get<1>(tup), segs >> 1 >> 1);
+            return utils::setListEntry(sum, ctx, tup);
         }
     }
-    return true;
+    return false;
 }
+
+bool InterfaceIP_Ospf_SubHandler(INTERFACE_SUB_PARAMS)
+{
+    auto& ospf = ctx.configs().reg.get<config::Interface::IP_OSPF>().get();
+    Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
+    newCtx.negate = ctx.negate;
+    newCtx.defaulted = ctx.defaulted;
+    return InterfaceIPOspfCommands::execute(newCtx, toks, idx);
+}
+
+#define INTERFACE_IP_LIST(X, Y) \
+    X(Y, (COMMAND, AddressSet, "address"_tok, P_IPV4)) \
+    X(Y, (COMMAND, AddressDhcp, "address"_tok, "dhcp"_tok)) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercentage, "bandwidth-percentage"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, Mtu, "mtu"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (SUBPRSR, Ospf, "ospf"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
+
+/**
+ * @brief Parser for the `ip` sub-tree in Interface Configuration mode.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Covers `CliMode::Interface` with `InterfaceContext` and composes all
+ * IPv4 address, EIGRP per-interface, and OSPF interface sub-tree commands.
+ */
+DEFINE_CMD_MODE(InterfaceIP, config::InterfaceRegistry, INTERFACE_IP_LIST);
 }

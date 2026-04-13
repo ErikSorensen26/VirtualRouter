@@ -7,6 +7,7 @@
 #include "eigrp/interface/EigrpInterface.h"
 #include "interface/Interface.h"
 #include "configs/registry/router/EigrpRegistry.h"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace routing::eigrp
 {
@@ -14,34 +15,25 @@ InterfaceManager::InterfaceManager(Eigrp& base) : base(base) {}
 
 InterfaceManager::~InterfaceManager() {}
 
-EigrpInterface* InterfaceManager::getInterface(uint32_t key)
+EigrpInterface* InterfaceManager::getInterface(interface::InterfaceKey key)
 {
     if (auto it = eigrpInterfaceList.find(key); it != eigrpInterfaceList.end())
         return &it->second;
     return nullptr;
 }
 
-config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistryByKey(uint32_t key)
+config::EigrpInterfaceRegistry& InterfaceManager::getRegistryByKey(interface::InterfaceKey key)
 {
-    auto& registry = base.routingInstance->getRegistry();
-    auto& configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
-    return registry.emplaceBack(configList, key);
+    auto& configList = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
+    return configList.emplaceBack(key);
 }
 
-config::Reference<config::EigrpInterfaceRegistry> InterfaceManager::getRegistry(interface::Interface& iface)
+config::EigrpInterfaceRegistry& InterfaceManager::getRegistry(interface::Interface& iface)
 {
-    uint32_t key = iface.configs.key;
-    auto& registry = base.routingInstance->getRegistry();
+    interface::InterfaceKey key = iface.configs.key;
 
-    if (base.isNamed())
-    {
-        auto& configList = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
-        return registry.emplaceBack(configList, key);
-    }
-    else
-    {
-        return iface.getEigrpConfig(base.getAS());
-    }
+    auto& configList = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
+    return configList.emplaceBack(key);
 }
 
 EigrpInterface* InterfaceManager::createInterface(interface::Interface* interface)
@@ -56,25 +48,16 @@ EigrpInterface* InterfaceManager::createInterface(interface::Interface* interfac
         // Add the interface to eigrp even if its down
         types::AddressFamily af = base.getAF();
         uint32_t as = base.getAS();
-        uint32_t key = interface->configs.key;
+        interface::InterfaceKey key = interface->configs.key;
 
         // Get or create registry entry for this interface
-        config::Reference<config::EigrpInterfaceRegistry> ifaceReg = getRegistry(*interface);
+        config::EigrpInterfaceRegistry& ifaceReg = getRegistry(*interface);
 
-        if (af == types::AddressFamily::IPv4)
+        if (af == types::AddressFamily::IPv4 || af == types::AddressFamily::IPv6)
         {
             auto ifaceIt = eigrpInterfaceList.try_emplace(key, base, ifaceReg, *interface);
             EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
             base.getTopology().synchronizeConnected(*eigrpIfacePtr);
-            interface->eigrpInterfaceList[as].IPv4 = eigrpIfacePtr;
-            return eigrpIfacePtr;
-        }
-        else if (af == types::AddressFamily::IPv6)
-        {
-            auto ifaceIt = eigrpInterfaceList.try_emplace(key, base, ifaceReg, *interface);
-            EigrpInterface* eigrpIfacePtr = &ifaceIt.first->second;
-            base.getTopology().synchronizeConnected(*eigrpIfacePtr);
-            interface->eigrpInterfaceList[as].IPv6 = eigrpIfacePtr;
             return eigrpIfacePtr;
         }
     }
@@ -89,7 +72,7 @@ void InterfaceManager::refreshInterfaceList()
         if (!base.calculateRID()) return; // No valid RID
 
     {
-        std::vector<std::unordered_map<uint32_t, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
+        std::vector<std::unordered_map<interface::InterfaceKey, EigrpInterface>::node_type> interfacesToRemove; // Will clear when out of scope
 
         // Remove shutdown interfaces
         for (auto it = eigrpInterfaceList.begin(); it != eigrpInterfaceList.end();)
@@ -123,6 +106,15 @@ void InterfaceManager::refreshInterfaceList()
             if (base.getAF() == types::AddressFamily::IPv4)
             {
                 inRange = config.isInNetworkRange(ipInfo.ipv4.getPrimaryAddress());
+                // Named mode: an explicitly configured af-interface entry also qualifies
+                // even without a matching network statement.
+                if (!inRange && isNamed)
+                {
+                    auto& afIfaces = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
+                    auto regIt = afIfaces.find(ipInfo.key);
+                    inRange = (regIt != afIfaces.end()) &&
+                              !regIt->second.reg.get<config::EigrpInterface::SHUTDOWN>().load();
+                }
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())
                     remake = inRange && !ipInfo.ipv4.comparePrimaryAddress(types::IPv4Address(it->second.ifaceAddress.v4()));
@@ -132,13 +124,11 @@ void InterfaceManager::refreshInterfaceList()
                 bool ipv6Contained = false;
                 if (isNamed)
                 {
-                    auto& afIfaces = base.getGlobalConfigMgr().getConfigs().get<config::Eigrp::AF_INTERFACE>();
+                    auto& afIfaces = base.getGlobalConfigMgr().getConfigs().reg.get<config::Eigrp::AF_INTERFACE>();
                     auto regIt = afIfaces.find(ipInfo.key);
-                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second.get().get<config::EigrpInterface::SHUTDOWN>().load();
+                    ipv6Contained = (regIt != afIfaces.end()) && !regIt->second.reg.get<config::EigrpInterface::SHUTDOWN>().load();
                 }
-                if (!ipv6Contained)
-                    ipv6Contained = ipInfo.eigrp.ipv6AutonomousSystems.contains(as) &&
-                                    interface->getVRF() == base.routingInstance;
+                (void)as;
                 inRange = ipv6Contained;
                 // Compare known addresses
                 if (it != eigrpInterfaceList.end())

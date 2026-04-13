@@ -31,13 +31,13 @@ auto getIfaceAddr(interface::Interface& iface, types::AddressFamily af) -> types
 
 namespace ospf
 {
-OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& configs, const OspfInterfaceId& id)
+OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, const OspfInterfaceId& id)
     : id(id),
-      interfaceId(iface.configs.key),
+      interfaceId(iface.configs.key.getId()),
       interfaceAddress(getIfaceAddr(iface, proc.getAF())),
       dispatcher(proc.isV3
-          ? static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this, configs))
-          : static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this, configs))),
+          ? static_cast<PacketDispatcher*>(new PacketDispatcherV3(*this))
+          : static_cast<PacketDispatcher*>(new PacketDispatcherV2(*this))),
       process(proc),
       area(process.insureArea(id.area)),
       flags(*this),
@@ -45,11 +45,11 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
       ntable(*this),
       tmgr(*this),
       iface(iface),
-      configs(configs->get<config::OspfInterfaceBase::BASE>().local()),
-      baseConfigs(configs)
+      baseConfigs(dispatcher->getConfigs()),
+      configs(baseConfigs.reg.get<config::OspfInterfaceBase::BASE>().get())
 {
-    configs->context().set(this);
-    baseConfigs->context().set(this);
+    configs.reg.context().set(this);
+    baseConfigs.reg.context().set(this);
 
     syncConfigs();
     calculateCost();
@@ -59,7 +59,6 @@ OspfInterface::OspfInterface(OspfProcess& proc, interface::Interface& iface, con
 OspfInterface::~OspfInterface()
 {
     uint32_t pid = process.getProcId();
-    types::AddressFamily af = process.getAF();
 
     // Tear down all neighbors and expire originated LSAs
     tmgr.stopHello();
@@ -70,16 +69,6 @@ OspfInterface::~OspfInterface()
     // (removes the network LSA if DR, removes router link, rebuilds router LSA)
     area.getOriginator().updateInterface(interfaceId);
 
-    if (iface.ospfInterfaceList.find(pid) != iface.ospfInterfaceList.end())
-    {
-        if (af == types::AddressFamily::IPv4)
-            iface.ospfInterfaceList[pid].IPv4 = nullptr;
-        else if (af == types::AddressFamily::IPv6)
-            iface.ospfInterfaceList[pid].IPv6 = nullptr;
-        if (!iface.ospfInterfaceList[pid].IPv4 && !iface.ospfInterfaceList[pid].IPv6)
-            iface.ospfInterfaceList.erase(pid);
-    }
-
     delete dispatcher;
 }
 
@@ -88,15 +77,15 @@ void OspfInterface::calculateCost()
     uint16_t oldCost = cost;
     uint16_t newCost{0};
 
-    auto& configuredCost = configs->get<config::OspfInterface::COST>();
+    auto& configuredCost = configs.reg.get<config::OspfInterface::COST>();
     if (configuredCost.hasValue())
     {
         newCost = configuredCost.load();
     }
     else
     {
-        uint32_t referenceBw = process.getConfigs().get<config::Ospf::REFERENCE_BANDWIDTH>().load();
-        uint32_t interfaceBw = iface.configs.bandwidth.load(std::memory_order_relaxed);
+        uint32_t referenceBw = process.getConfigs().reg.get<config::Ospf::REFERENCE_BANDWIDTH>().load();
+        uint32_t interfaceBw = iface.configs.getBandwidth();
         newCost = static_cast<uint16_t>(referenceBw / interfaceBw);
     }
     
@@ -134,7 +123,7 @@ void OspfInterface::election()
     struct Candidate { uint32_t rid; uint8_t priority; uint32_t claimedDr; uint32_t claimedBdr; };
 
     uint32_t selfRid  = getArea().process().getRouterId();
-    uint8_t  selfPrio = configs->get<config::OspfInterface::PRIORITY>().load();
+    uint8_t  selfPrio = configs.reg.get<config::OspfInterface::PRIORITY>().load();
 
     // Build candidate list: self + all >= 2-way neighbors with priority > 0
     std::vector<Candidate> eligible;
@@ -268,9 +257,9 @@ void OspfInterface::syncConfigs()
 
 void OspfInterface::syncTimers()
 {
-    auto& helloTimer = configs->get<config::OspfInterface::HELLO_INTERVAL>();
-    auto& helloMultiplier = configs->get<config::OspfInterface::HELLO_MULTIPLIER>();
-    auto& deadTimer = configs->get<config::OspfInterface::DEAD_INTERVAL>();
+    auto& helloTimer = configs.reg.get<config::OspfInterface::HELLO_INTERVAL>();
+    auto& helloMultiplier = configs.reg.get<config::OspfInterface::HELLO_MULTIPLIER>();
+    auto& deadTimer = configs.reg.get<config::OspfInterface::DEAD_INTERVAL>();
 
     if (helloMultiplier.hasValue())
     {
@@ -289,7 +278,7 @@ void OspfInterface::syncTimers()
         }
         else
         {
-            auto net = configs->get<config::OspfInterface::NETWORK>().load();
+            auto net = configs.reg.get<config::OspfInterface::NETWORK>().load();
             if (net == config::ospf::NetworkType::NON_BROADCAST || net == config::ospf::NetworkType::POINT_TO_MULTIPOINT_BROADCAST || net == config::ospf::NetworkType::POINT_TO_MULTIPOINT)
                 ht = OSPF_MU_HELLO_TIME;
             else
@@ -308,7 +297,7 @@ void OspfInterface::syncTimers()
 
 void OspfInterface::syncNetworkType()
 {
-    auto ntype = getConfigs().get<config::OspfInterface::NETWORK>().load();
+    auto ntype = getConfigs().reg.get<config::OspfInterface::NETWORK>().load();
 
     syncTimers();
     isMulticast.store(
@@ -322,16 +311,13 @@ void OspfInterface::syncNetworkType()
 
 void OspfInterface::syncDigestKey()
 {
-    baseConfigs->get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const std::vector<std::tuple<uint8_t, std::array<uint8_t, 16>, uint64_t>>& keys)
+    baseConfigs.reg.get<config::OspfInterfaceBase::MESSAGE_DIGEST_KEYS>().withRead([this](const auto& keys)
     {
-        auto it = std::max_element(keys.begin(), keys.end(), [](const auto& a, const auto& b) {
-            return std::get<2>(a) < std::get<2>(b);
-        });
-
-        if (it != keys.end())
+        if (!keys.empty())
         {
-            authKey = utils::readU128(std::get<1>(*it).data());
-            authKeyId = std::get<0>(*it);
+            const auto& last = keys.back();
+            authKey = utils::readU128(std::get<1>(last).value.data());
+            authKeyId = std::get<0>(last);
         }
         else
         {
@@ -343,7 +329,7 @@ void OspfInterface::syncDigestKey()
 
 void OspfInterface::setPassiveMode(bool passive)
 {
-    configs->get<config::OspfInterface::PASSIVE>().load();
+    configs.reg.get<config::OspfInterface::PASSIVE>().load();
     if (passive)
     {
         for (auto it = ntable.neighbors.begin(); it != ntable.neighbors.end();)

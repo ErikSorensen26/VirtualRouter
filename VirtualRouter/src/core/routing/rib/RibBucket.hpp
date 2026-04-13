@@ -51,6 +51,7 @@ namespace core
 template <typename AddrType>
 class RibBucket
 {
+    static void deleter(void* val) { delete reinterpret_cast<RibEntry<AddrType>*>(val); }
 public:
     std::vector<RibEntry<AddrType>> routes;  ///< All candidate routes for this prefix.
 
@@ -67,7 +68,7 @@ public:
     ~RibBucket()
     {
         RibEntry<AddrType>* val = fibEntry.exchange(nullptr, std::memory_order_acq_rel);
-        if (val) utils::RCU::retire([val]{ delete val; });
+        if (val) utils::RCU::retire(deleter, val);
     }
 
     // ROUTE MANAGEMENT
@@ -239,7 +240,7 @@ public:
         // exposed to a pointer into the (potentially reallocating) routes vector.
         RibEntry<AddrType>* copy = bestEntry ? new RibEntry<AddrType>(*bestEntry) : nullptr;
         RibEntry<AddrType>* old  = fibEntry.exchange(copy, std::memory_order_acq_rel);
-        if (old) utils::RCU::retire([old]{ delete old; });
+        if (old) utils::RCU::retire(deleter, old);
     }
 
     /**
@@ -256,7 +257,7 @@ public:
     void clear() noexcept
     {
         RibEntry<AddrType>* old = fibEntry.exchange(nullptr, std::memory_order_acq_rel);
-        if (old) utils::RCU::retire([old]{ delete old; });
+        if (old) utils::RCU::retire(deleter, old);
         routes.clear();
         bestEntry = nullptr;
         prevBest  = nullptr;

@@ -19,22 +19,22 @@
 #include <ByteUtils.hpp>
 #include "packet/HeaderHelpers.hpp"
 
-#define IP_ESP    0x32U ///< IP protocol number for ESP (50)
-#define IP_AH     0x32U ///< IP protocol number for AH (51)
-#define IP_GRE    0x2FU ///< IP protocol number for GRE (47)
-#define IP_IGMP   0x02U ///< IP protocol number for IGMP (2)
-#define IP_NONE   0x3BU ///< IP protocol number for NONE (59)
-#define IP_TCP    0x06U ///< IP protocol number for TCP (6)
-#define IP_UDP    0x11U ///< IP protocol number for UDP (11)
-#define IP_ICMPV4 0x01U ///< IP protocol number for ICMPv4 (1)
-#define IP_ICMPV6 0x3AU ///< IP protocol number for ICMPv6 (58)
-#define IP_SCTP   0x84U ///< IP protocol number for SCTP (132)
-#define IP_EIGRP  0x58U ///< IP protocol number for EIGRP (88)
-#define IP_OSPF   0x59U ///< IP protocol number for OSPF (89)
-#define IP_PIM    0x67U ///< IP protocol number for PIM (103)
-#define IP_RSVP   0x2EU ///< IP protocol number for RSVP (46)
-#define IP_IPV4   0x04U ///< IP protocol number for IPv4 (4)
-#define IP_IPV6   0x29U ///< IP Protocol number for IPv6 (41)
+constexpr uint8_t IP_ESP    = 0x32U; ///< IP protocol number for ESP (50)
+constexpr uint8_t IP_AH     = 0x32U; ///< IP protocol number for AH (51)
+constexpr uint8_t IP_GRE    = 0x2FU; ///< IP protocol number for GRE (47)
+constexpr uint8_t IP_IGMP   = 0x02U; ///< IP protocol number for IGMP (2)
+constexpr uint8_t IP_NONE   = 0x3BU; ///< IP protocol number for NONE (59)
+constexpr uint8_t IP_TCP    = 0x06U; ///< IP protocol number for TCP (6)
+constexpr uint8_t IP_UDP    = 0x11U; ///< IP protocol number for UDP (11)
+constexpr uint8_t IP_ICMPV4 = 0x01U; ///< IP protocol number for ICMPv4 (1)
+constexpr uint8_t IP_ICMPV6 = 0x3AU; ///< IP protocol number for ICMPv6 (58)
+constexpr uint8_t IP_SCTP   = 0x84U; ///< IP protocol number for SCTP (132)
+constexpr uint8_t IP_EIGRP  = 0x58U; ///< IP protocol number for EIGRP (88)
+constexpr uint8_t IP_OSPF   = 0x59U; ///< IP protocol number for OSPF (89)
+constexpr uint8_t IP_PIM    = 0x67U; ///< IP protocol number for PIM (103)
+constexpr uint8_t IP_RSVP   = 0x2EU; ///< IP protocol number for RSVP (46)
+constexpr uint8_t IP_IPV4   = 0x04U; ///< IP protocol number for IPv4 (4)
+constexpr uint8_t IP_IPV6   = 0x29U; ///< IP Protocol number for IPv6 (41)
 
 inline constexpr uint32_t IPV4_BROADCAST = 0xFFFFFFFF;
 inline constexpr uint32_t IPV4_SOURCE = 0;

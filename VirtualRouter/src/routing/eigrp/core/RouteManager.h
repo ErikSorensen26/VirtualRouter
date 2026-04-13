@@ -133,7 +133,7 @@ private:
 
             ribEntry->addNextHop(
                 af == types::AddressFamily::IPv4 ? neighbor.v4() : neighbor.v6(),
-                it->second.routeInfo.originInterface,
+                it->second.routeInfo.originInterface.getId(),
                 1
             );
         }

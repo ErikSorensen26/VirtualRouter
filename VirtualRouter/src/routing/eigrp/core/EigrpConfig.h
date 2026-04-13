@@ -12,7 +12,7 @@
 
 #include "eigrp/EigrpTypes.hpp"
 #include "configs/registry/router/EigrpRegistry.h"
-#include "configs/RegistryReference.hpp"
+#include "interface/configs/InterfaceType.hpp"
 
 namespace routing::eigrp
 {
@@ -116,7 +116,7 @@ public:
      * @param key Interface key.
      * @param add True to make passive, false to remove the passive flag.
      */
-    void setPassiveInterface(uint32_t key, bool add = true);
+    void setPassiveInterface(interface::InterfaceKey key, bool add = true);
 
     /**
      * @brief Enables a unicast static neighbor relationship on an interface.
@@ -127,7 +127,7 @@ public:
      * @param neighborIp IP address of the peer.
      * @param key        Interface key the peer is reachable through.
      */
-    void enableUnicastPeer(const types::IPAddress& neighborIp, uint32_t key);
+    void enableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key);
 
     /**
      * @brief Removes a unicast static neighbor relationship.
@@ -135,13 +135,13 @@ public:
      * @param neighborIp IP address of the peer to remove.
      * @param key        Interface key the peer was configured on.
      */
-    void disableUnicastPeer(const types::IPAddress& neighborIp, uint32_t key);
+    void disableUnicastPeer(const types::IPAddress& neighborIp, interface::InterfaceKey key);
 
-    config::EigrpRegistry& getConfigs() { return configs.get(); }
+    config::EigrpRegistry& getConfigs() { return configs; }
 
     // PROCESS-LEVEL CONFIG ACCESSORS
 
-    bool stubEnabled() const { return configs->get<config::Eigrp::STUB>().load(); }
+    bool stubEnabled() const { return configs.reg.get<config::Eigrp::STUB>().load(); }
 
     /**
      * @brief Returns the full stub configuration as a @ref StubConfig value.
@@ -156,40 +156,40 @@ public:
     /**
      * @brief Returns true if the given interface key is configured as passive.
      */
-    bool isPassive(uint32_t key) const;
+    bool isPassive(interface::InterfaceKey key) const;
 
     /**
      * @brief Returns the set of unicast peer addresses configured on the
      *        given interface key.
      */
-    std::unordered_set<types::IPAddress> getUnicastNeighbors(uint32_t key) const;
+    std::unordered_set<types::IPAddress> getUnicastNeighbors(interface::InterfaceKey key) const;
 
     // DAMPENING CONFIG ACCESSORS
 
-    bool getDampening() const          { return configs->get<config::Eigrp::DAMPENING>().load(); }
-    bool getDampeningWarning() const   { return configs->get<config::Eigrp::DAMPENING_WARNINGS>().load(); }
-    uint8_t getDampeningInterval() const  { return configs->get<config::Eigrp::DAMPENING_INTERVAL>().load(); }
-    uint16_t getDampeningResetTime() const { return configs->get<config::Eigrp::DAMPENING_RESET_TIME>().load(); }
-    uint16_t getDampeningRestart() const   { return configs->get<config::Eigrp::DAMPENING_RESTART>().load(); }     ///< Seconds before a dampened neighbor is allowed to restart.
-    uint16_t getDampeningRestartCount() const { return configs->get<config::Eigrp::DAMPENING_RESTART_COUNT>().load(); } ///< Maximum restart attempts before the neighbor is suppressed indefinitely.
+    bool getDampening() const          { return configs.reg.get<config::Eigrp::DAMPENING>().load(); }
+    bool getDampeningWarning() const   { return configs.reg.get<config::Eigrp::DAMPENING_WARNINGS>().load(); }
+    uint8_t getDampeningInterval() const  { return configs.reg.get<config::Eigrp::DAMPENING_THRESHOLD>().load(); }
+    uint16_t getDampeningResetTime() const { return configs.reg.get<config::Eigrp::DAMPENING_RESET_TIME>().load(); }
+    uint16_t getDampeningRestart() const   { return configs.reg.get<config::Eigrp::DAMPENING_RESTART>().load(); }     ///< Seconds before a dampened neighbor is allowed to restart.
+    uint16_t getDampeningRestartCount() const { return configs.reg.get<config::Eigrp::DAMPENING_RESTART_COUNT>().load(); } ///< Maximum restart attempts before the neighbor is suppressed indefinitely.
 
     // METRIC AND PATH CONFIG ACCESSORS
 
-    uint32_t getMaximumPrefixes() const { return configs->get<config::Eigrp::MAXIMUM_PREFIX>().load(); }
-    uint8_t getRibScale() const         { return configs->get<config::Eigrp::RIB_SCALE>().load(); }  ///< Divisor applied to the EIGRP feasible distance before writing to the RIB.
-    uint8_t getAD() const               { return configs->get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load(); }
-    uint8_t getExternalAD() const       { return configs->get<config::Eigrp::EXTERNAL_ADMIN_DISTANCE>().load(); }
-    uint8_t getMaxPaths() const         { return configs->get<config::Eigrp::MAX_PATHS>().load(); }
-    uint8_t getMaxHops() const          { return configs->get<config::Eigrp::MAX_HOPS>().load(); }
-    uint8_t getVariance() const         { return configs->get<config::Eigrp::VARIANCE>().load(); }    ///< EIGRP unequal-cost load-balancing multiplier (1 = equal-cost only).
-    config::eigrp::TrafficShareMode getTrafficMode() const { return configs->get<config::Eigrp::TRAFFIC_SHARE>().load(); }
+    uint32_t getMaximumPrefixes() const { return configs.reg.get<config::Eigrp::MAXIMUM_PREFIX>().load(); }
+    uint8_t getRibScale() const         { return configs.reg.get<config::Eigrp::RIB_SCALE>().load(); }  ///< Divisor applied to the EIGRP feasible distance before writing to the RIB.
+    uint8_t getAD() const               { return configs.reg.get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>().load(); }
+    uint8_t getExternalAD() const       { return configs.reg.get<config::Eigrp::EXTERNAL_ADMIN_DISTANCE>().load(); }
+    uint8_t getMaxPaths() const         { return configs.reg.get<config::Eigrp::MAX_PATHS>().load(); }
+    uint8_t getMaxHops() const          { return configs.reg.get<config::Eigrp::MAX_HOPS>().load(); }
+    uint8_t getVariance() const         { return configs.reg.get<config::Eigrp::VARIANCE>().load(); }    ///< EIGRP unequal-cost load-balancing multiplier (1 = equal-cost only).
+    config::eigrp::TrafficShareMode getTrafficMode() const { return configs.reg.get<config::Eigrp::TRAFFIC_SHARE>().load(); }
 
     // NSF / AUTO-SUMMARY / SIA ACCESSORS
 
-    bool isNonStopForwarding() const { return configs->get<config::Eigrp::NON_STOP_FORWARDING>().load(); }
-    uint16_t getPurgeTime() const    { return configs->get<config::Eigrp::GRACEFUL_PURGE_TIME>().load(); } ///< Seconds that NSF-restarting routes are kept in the RIB during graceful restart.
-    bool isAutoSummarized() const    { return configs->get<config::Eigrp::AUTO_SUMMARIZATION>().load(); }
-    void setAutoSummary(bool enable) { configs->get<config::Eigrp::AUTO_SUMMARIZATION>().set(enable); }   ///< Enables or disables classful auto-summarization; writes directly to the registry.
+    bool isNonStopForwarding() const { return configs.reg.get<config::Eigrp::NON_STOP_FORWARDING>().load(); }
+    uint16_t getPurgeTime() const    { return configs.reg.get<config::Eigrp::GRACEFUL_PURGE_TIME>().load(); } ///< Seconds that NSF-restarting routes are kept in the RIB during graceful restart.
+    bool isAutoSummarized() const    { return configs.reg.get<config::Eigrp::AUTO_SUMMARIZATION>().load(); }
+    void setAutoSummary(bool enable) { configs.reg.get<config::Eigrp::AUTO_SUMMARIZATION>().set(enable); }
 
     /**
      * @brief Returns the Stuck-In-Active (SIA) timeout in seconds.
@@ -198,7 +198,7 @@ public:
      */
     uint16_t getSIATime() const
     {
-        auto& field = configs->get<config::Eigrp::ACTIVE_TIME>();
+        auto& field = configs.reg.get<config::Eigrp::ACTIVE_TIME>();
         return field.hasValue() ? field.load() : 90;
     }
 
@@ -207,7 +207,7 @@ public:
 private:
 
     Eigrp& base;                                          ///< Owning EIGRP process.
-    config::Reference<config::EigrpRegistry> configs;    ///< Live reference to the process registry.
+    config::EigrpRegistry& configs;    ///< Live reference to the process registry.
 };
 } // namespace routing::eigrp
 

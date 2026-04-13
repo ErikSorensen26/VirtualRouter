@@ -56,9 +56,9 @@ public:
      * @param iface   The OSPFv2 interface that owns this dispatcher.
      * @param configs Reference to the shared base interface configuration registry.
      */
-    PacketDispatcherV2(OspfInterface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& configs);
+    PacketDispatcherV2(OspfInterface& iface);
 
-    config::OspfInterfaceBaseRegistry& getBaseConfigs() override;
+    config::OspfInterfaceBaseRegistry& getConfigs() override;
 
     /**
      * @brief Dispatches an incoming OSPFv2 packet to the appropriate handler.
@@ -229,9 +229,6 @@ private:
      * @return Populated `LsaBody` variant on success, `std::nullopt` if parsing fails.
      */
     std::optional<LsaBody> buildLsaBody(uint8_t type, const uint8_t* buf, uint16_t len, uint32_t lsId = 0);
-
-    config::Reference<config::OspfInterfaceBaseRegistry> baseConfigs; ///< Version-independent interface config.
-    config::Reference<config::OspfInterfaceRegistry> configs;         ///< OSPFv2-specific interface config.
 };
 } // namespace routing
 

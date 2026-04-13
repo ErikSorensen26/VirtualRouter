@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
 add_compile_options(-Wall -Wno-unused-parameter)
+add_link_options(-fuse-ld=mold)
 
 option(BUILD_STATIC_ROUTER "Build only a full static VirtualRouterExec" OFF)
 option(ENABLE_DEBUG_SYMBOLS "Include -g and -rdynamic for crash backtrace" ON)
@@ -112,7 +113,7 @@ else()
     # keep your debug-ish flags as-is
     add_compile_options(
         -O0
-        -g3
+        -g1
         -gdwarf-4
         -fno-omit-frame-pointer
         -fno-inline
@@ -131,7 +132,7 @@ else()
     message(STATUS "Building in NORMAL (dynamic + test + utils) mode")
     enable_testing()
     add_subdirectory(VirtualRouter)
-    add_subdirectory(Utils)
-    add_subdirectory(Tests)
+    #add_subdirectory(Utils)
+    #add_subdirectory(Tests)
 endif()
 

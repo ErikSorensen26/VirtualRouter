@@ -121,6 +121,16 @@ public:
 
     std::vector<std::string> getHistory() { return history; }
 
+    /**
+     * @brief Updates the terminal display width used for line-wrap calculations.
+     *
+     * Propagates the new width to the underlying @ref ConsoleController.
+     * Should be called whenever the terminal is resized (e.g. on SIGWINCH).
+     *
+     * @param w New terminal width in columns.
+     */
+    void setTerminalWidth(size_t w) { controller.setTerminalWidth(w); }
+
     // Member variables for line wrapping and display.
     ConsoleController& controller;  ///< Terminal deciding whether its using a simulated terminal.
 

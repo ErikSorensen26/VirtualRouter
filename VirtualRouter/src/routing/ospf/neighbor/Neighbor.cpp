@@ -77,7 +77,7 @@ bool Neighbor::setState(Neighbor::State s)
         {
             state = s;
             
-            auto ntype = iface.getConfigs().get<config::OspfInterface::NETWORK>().load();
+            auto ntype = iface.getConfigs().reg.get<config::OspfInterface::NETWORK>().load();
             if (ntype == config::ospf::NetworkType::BROADCAST ||
                 ntype == config::ospf::NetworkType::NON_BROADCAST)
             {

@@ -98,7 +98,7 @@ void Console::moveCursorLeft(size_t steps)
             {
                 // Move to the previous line
                 controller.moveCursorUp(1);
-                controller.moveCursorRight(terminalWidth);
+                controller.moveCursorRight(getTerminalWidth());
             }
             else
             {
@@ -175,7 +175,7 @@ void Console::skipWordLeft(std::string& input)
 
     size_t newPos = cursorPos - 1;
 
-    if (input[newPos - 1] == ' ')
+    if (newPos > 0 && input[newPos - 1] == ' ')
     {
         while (newPos > 0 && input[newPos - 1] == ' ')
         {
@@ -231,7 +231,7 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
     // Rewrite the input from the start position
     for (size_t i = startPosition; i < (insert ? insertString.size() : input.size()); ++i)
     {
-        if (currentColumn >= terminalWidth)
+        if (currentColumn >= width)
         {
             controller.moveCursorDown(1);
             controller.moveCursorToStart();
@@ -241,7 +241,7 @@ void Console::rewriteTail(const std::string& input, size_t startPosition, bool b
     }
 
     // Clear any leftover characters on the current line and subsequent lines
-    size_t leftoverSpace = (width < currentColumn) ? (width - currentColumn) : 0;
+    size_t leftoverSpace = (width > currentColumn) ? (width - currentColumn) : 0;
     if (leftoverSpace && leftoverSpace > 0)
     {
         controller.print(std::string(leftoverSpace, ' '));
@@ -273,8 +273,7 @@ std::string Console::input(std::string testInput, bool pagination)
 
             if (pagination)
             {
-                if (hInput == '\x20' || hInput == 'q') return std::string(1, hInput);
-                else return "";
+                return std::string(1, hInput);
             }
 
             // 1. Handle single-char special keys (Enter, Tab, '?', Backspace, Delete)
@@ -599,19 +598,11 @@ void Console::handlePrintableChar(char hInput, std::string& input)
             break; // Continue checking
     }
 
-    // If insert mode is on and not at the end => insert mid-line
+    // If insert mode is on and not at the end => overwrite mid-line
     if (insert && cursorPos < input.size())
     {
-        if (cursorPos == input.size())
-        {
-            cursorPos++;
-            input.insert(cursorPos, 1, hInput);
-        }
-        else
-        {
-            cursorPos++;
-            input[cursorPos - 1] = hInput;
-        }
+        input[cursorPos] = hInput;
+        cursorPos++;
         controller.print(std::string(1, hInput), Color::TERMINAL);
         rewriteTail(input, cursorPos);
     }

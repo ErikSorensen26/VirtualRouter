@@ -328,9 +328,9 @@ private:
      */
     uint8_t getMaxRetransmission()
     {
-        return iface.getConfigs().get<config::OspfInterface::DEMAND_CIRCUIT>().load()
-            ? process.getConfigs().get<config::Ospf::RETRANSMISSION_DC_LIMIT>().load()
-            : process.getConfigs().get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT>().load();
+        return iface.getConfigs().reg.get<config::OspfInterface::DEMAND_CIRCUIT>().load()
+            ? process.getConfigs().reg.get<config::Ospf::RETRANSMISSION_DC_LIMIT>().load()
+            : process.getConfigs().reg.get<config::Ospf::RETRANSMISSION_NON_DC_LIMIT>().load();
     }
 
     size_t   cursor = 0;          ///< Index of the next entry to deliver in the current burst.

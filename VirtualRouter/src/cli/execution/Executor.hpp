@@ -11,12 +11,32 @@
 #ifndef EXECUTOR_HPP
 #define EXECUTOR_HPP
 
+#include <iostream>
+
+#include "cli/runtime/Token.hpp"
 #include "cli/parser/CliModeParser.hpp"
-#include "cli/modes/contexts/ContextBase.hpp"
+#include "cli/modes/contexts/Context.hpp"
+#include "cli/modes/Mode.hpp"
 
 /// @brief Namespace enclosing all CLI subsystem types.
 namespace cli
 {
+
+/**
+ * @brief Compact descriptor for a previously-active CLI mode.
+ *
+ * Stored by `CliSession` in the navigation stack so that `popMode()` can
+ * reconstruct the correct `Context<T>` without knowing `T` at pop-time.
+ * The `constructFn` is a type-erased thunk captured when the mode was first
+ * entered; it knows the concrete registry type and performs the placement-new.
+ */
+struct NavEntry
+{
+    CliMode  mode        = CliMode::None;                       ///< Which mode this frame represents.
+    bool   (*executeFn)(ContextBase&, std::span<Token>) = nullptr; ///< Type-erased dispatch thunk.
+    void   (*constructFn)(void*, void*, char*)          = nullptr; ///< Reconstructs Context<T> in-place.
+    void*    configPtr   = nullptr;                             ///< Pointer to the registry instance.
+};
 /**
  * @class Executor
  * @brief Variadic, compile-time CLI mode dispatcher.
@@ -80,31 +100,24 @@ class Executor
     static constexpr bool dependent_false_v = false;
 
     template <CliMode M, typename... Ts>
-    struct FindParserImpl;
-
-    template <CliMode M, typename First, typename... Rest>
-        requires(First::mode == M)
-    struct FindParserImpl<M, First, Rest...>
-    {
-        using Type = First;
-    };
-
-    template <CliMode M, typename First, typename... Rest>
-        requires (First::mode != M)
-    struct FindParserImpl<M, First, Rest...> : FindParserImpl<M, Rest...> {};
-
-    template <CliMode M>
-    struct FindParserImpl<M>
+    struct FindParserImpl
     {
         static_assert(dependent_false_v<std::integral_constant<CliMode, M>>,
                       "No CliModeParser found for the requested CliMode");
         using Type = void;
     };
 
+    template <CliMode M, typename First, typename... Rest>
+    struct FindParserImpl<M, First, Rest...>
+        : std::conditional_t<(First::mode == M),
+                             std::type_identity<First>,
+                             FindParserImpl<M, Rest...>>
+    {};
+
     /// @brief Resolves the concrete parser type for a given `CliMode` constant.
     /// @tparam M  The `CliMode` to look up; a static_assert fires if not found.
     template <CliMode M>
-    using FindParser = typename FindParserImpl<M, Parsers...>::Type;
+    using FindParser = typename FindParserImpl<M, Parsers...>::type;
 
 public:
 
@@ -118,29 +131,10 @@ public:
         : session(sess)
     {}
 
-    /**
-     * @brief Type-erased thunk that down-casts the context and calls the parser.
-     *
-     * Stored as a function pointer in `executeFn` so that the active parser
-     * can be called without virtual dispatch.
-     *
-     * @tparam Parser  The concrete `CliModeParser` whose `execute` to call.
-     * @param ctx  Base-class context reference; down-cast to `Parser::ContextType`.
-     * @param b    Begin iterator of the token range.
-     * @param e    End iterator of the token range.
-     * @return True if the command was recognized and executed.
-     */
-    template <typename Parser>
-    static bool executeThunk(
-        cli::ContextBase& ctx,
-        std::vector<std::string>::const_iterator b,
-        std::vector<std::string>::const_iterator e)
-    {
-        using Ctx = typename Parser::ContextType;
-        static_assert(std::is_base_of_v<cli::ContextBase, Ctx>,
-                      "Parser::ContextType must derive from cli::ContextBase");
-        return Parser::execute(static_cast<Ctx&>(ctx), b, e);
-    }
+    Executor(const Executor&) = delete;
+    Executor& operator=(const Executor&) = delete;
+    Executor(Executor&&) = delete;
+    Executor& operator=(Executor&&) = delete;
 
     /**
      * @brief Transitions to a new CLI mode, constructing the appropriate context.
@@ -154,28 +148,68 @@ public:
      *               the `ContextBase` copy source or `CliSession` reference.
      * @param args   Subsystem references required by the target context type.
      */
-    template <CliMode M, typename... Args>
-    void changeMode(Args&&... args)
+    template <CliMode M, typename C>
+    void changeMode(C& config)
     {
         swap();
 
         using Parser = FindParser<M>;
-        using Ctx = typename Parser::ContextType;
+        using Ctx = Context<C>;
 
-        executeFn[head] = executeThunk<Parser>;
+        executeFn[head]   = executeThunk<Parser>;
+        constructFn[head] = constructCtxThunk<C>;
+        configPtr[head]   = static_cast<void*>(&config);
 
-        if (modeConfig[head ^ 1])
-        {
-            modeConfig[head] =
-                std::make_unique<Ctx>(*modeConfig[head ^ 1], std::forward<Args>(args)...);
-        }
-        else
-        {
-            modeConfig[head] =
-                std::make_unique<Ctx>(session, std::forward<Args>(args)...);
-        }
+        void* buf = &storage[head];
+        Ctx* ctx = new (buf) Ctx(session, config);
 
+        ctxBuffer[head] = reinterpret_cast<ContextBase*>(ctx);
         currentMode[head] = M;
+
+        std::cout << ctx << std::endl;
+        std::cout << ctxBuffer[head] << std::endl;
+    }
+
+    /**
+     * @brief Returns whether the executor currently has an active mode.
+     *
+     * False only before the very first `changeMode` call (session init).
+     * Used by `CliSession::changeMode` to decide whether to push a nav frame.
+     */
+    bool hasMode() const { return executeFn[head] != nullptr; }
+
+    /**
+     * @brief Captures the current mode into a `NavEntry` for nav-stack storage.
+     *
+     * The returned entry holds everything needed to later reconstruct the
+     * current `Context<T>` via `restoreFromEntry`, without knowing `T`.
+     */
+    NavEntry captureCurrentMode() const
+    {
+        return { currentMode[head], executeFn[head], constructFn[head], configPtr[head] };
+    }
+
+    /**
+     * @brief Reconstructs a previously-captured mode from a `NavEntry`.
+     *
+     * Swaps to the inactive ping-pong slot and placement-news the saved
+     * `Context<T>` there, exactly mirroring what `changeMode` does on entry.
+     *
+     * @param entry  A frame previously returned by `captureCurrentMode`.
+     */
+    void restoreFromEntry(const NavEntry& entry)
+    {
+        swap();
+
+        executeFn[head]   = entry.executeFn;
+        constructFn[head] = entry.constructFn;
+        configPtr[head]   = entry.configPtr;
+        currentMode[head] = entry.mode;
+
+        void* buf = &storage[head];
+        entry.constructFn(static_cast<void*>(&session), entry.configPtr, static_cast<char*>(buf));
+
+        ctxBuffer[head] = reinterpret_cast<ContextBase*>(buf);
     }
 
     /**
@@ -188,27 +222,28 @@ public:
     }
 
     /**
-     * @brief Returns a reference to the currently active context.
+     * @brief Resets the context by reverting the 'negate' and '
      * @warning The returned reference is invalidated by the next `changeMode` call.
      * @return Reference to the active `ContextBase` (concrete type varies by mode).
      */
     cli::ContextBase& getContext()
     {
-        return *modeConfig[head];
+        return *ctxBuffer[head];
     }
 
     /**
-     * @brief Dispatches a tokenized command to the active mode parser.
-     * @param tokens  Whitespace-split command tokens from the session input.
+     * @brief Dispatches a flat token span to the active mode parser.
+     *
+     * Passes the token span directly to the active mode's `executeThunk`.
+     * Segmentation is handled inside each `Command::tryExecute` so that
+     * `SubCommand` can forward the raw span without re-segmenting.
+     *
+     * @param tokens  Flat token span from `CliSession::executeModeParser`.
      * @return True if the command was recognized and executed successfully.
      */
-    bool execute(const std::vector<std::string>& tokens)
+    bool execute(std::span<Token> tokens)
     {
-        return executeFn[head](
-            *modeConfig[head],
-            tokens.begin(),
-            tokens.end()
-        );
+        return executeFn[head](*ctxBuffer[head], tokens);
     }
 
     /**
@@ -223,28 +258,47 @@ public:
     }
 
 private:
-
-    // PRIVATE TYPES
-
     /// @brief Signature of a type-erased parser dispatch function.
-    using ExecuteFn = bool (*)(
-        cli::ContextBase&,
-        std::vector<std::string>::const_iterator,
-        std::vector<std::string>::const_iterator
-    );
-
-    // PRIVATE HELPERS
+    using ExecuteFn = bool (*)(ContextBase&, std::span<Token>);
+    /// @brief Signature of a type-erased context construction function.
+    using ConstructFnPtr = void (*)(void*, void*, char*);
 
     /// @brief Toggles the active ping-pong slot index (0 ↔ 1).
     void swap() { head = (head == 0) ? 1 : 0; }
 
-    // PRIVATE MEMBERS
+    template <typename Parser>
+    static bool executeThunk(ContextBase& ctx, std::span<Token> tokens)
+    {
+        using Ctx = cli::Context<typename Parser::ContextType>;
+        return Parser::execute(static_cast<Ctx&>(ctx), tokens);
+    }
+
+    /// @brief Type-erased construction thunk: placement-news `Context<C>` into `buf`.
+    template <typename C>
+    static void constructCtxThunk(void* sess, void* cfg, char* buf)
+    {
+        new (buf) Context<C>(
+            *static_cast<CliSession*>(sess),
+            *static_cast<C*>(cfg)
+        );
+    }
 
     size_t head = 0;                                    ///< Index of the currently active ping-pong slot (0 or 1).
     CliSession& session;                                ///< Back-reference to the owning session; non-owning.
-    CliMode currentMode[2];                             ///< Stored mode for each ping-pong slot.
-    std::unique_ptr<cli::ContextBase> modeConfig[2];    ///< Owned context for each ping-pong slot.
-    ExecuteFn executeFn[2] = {};                        ///< Dispatch function pointer for each ping-pong slot.
+
+    CliMode       currentMode[2]  = {};                 ///< Stored mode for each ping-pong slot.
+    ExecuteFn     executeFn[2]    = {};                 ///< Dispatch function pointer for each ping-pong slot.
+    ConstructFnPtr constructFn[2] = {};                 ///< Construction thunk for each ping-pong slot.
+    void*          configPtr[2]   = {};                 ///< Registry pointer for each ping-pong slot.
+
+    /// @brief Sentinel enum used only to compute the minimum `Context<>` size for the ping-pong storage slots.
+    enum class Dummy { COUNT };
+    struct DummyConfig { config::SubRegistry<Dummy> reg; }; ///< Dummy config struct to satisfy `Context`'s registry requirement.
+    /// @brief Raw aligned storage for two `Context<>` instances; avoids heap allocation on mode switch.
+    using Storage = std::aligned_storage_t<sizeof(Context<DummyConfig>), alignof(Context<DummyConfig>)>;
+    Storage storage[2] = {};
+    /// @brief Pointers into `storage`; null until the first `changeMode` call for that slot.
+    ContextBase* ctxBuffer[2] { nullptr, nullptr };
 };
 }
 

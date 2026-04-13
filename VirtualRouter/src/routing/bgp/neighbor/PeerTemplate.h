@@ -61,12 +61,12 @@ public:
 
     config::BgpNeighborSessionRegistry& getSessionConfigs()
     {
-        return sessionConfigs.get();
+        return sessionConfigs;
     }
 
     const config::BgpNeighborSessionRegistry& getSessionConfigs() const
     {
-        return sessionConfigs.get();
+        return sessionConfigs;
     }
 
     /**
@@ -80,8 +80,8 @@ public:
 
 private:
     BgpProcess& process;
-    config::Reference<config::BgpNeighborSessionRegistry> sessionConfigs;
-    mutable std::unordered_map<AfiSafi, config::Reference<config::BgpNeighborRegistry>> afConfigs; ///< Lazily populated per-AF config registries.
+    config::BgpNeighborSessionRegistry& sessionConfigs;
+    mutable std::unordered_map<AfiSafi, std::reference_wrapper<config::BgpNeighborRegistry>> afConfigs; ///< Lazily populated per-AF config registries.
 };
 
 /**
@@ -120,16 +120,16 @@ public:
 
     config::BgpNeighborSessionRegistry& getConfigs()
     {
-        return configs.get();
+        return configs;
     }
 
     const config::BgpNeighborSessionRegistry& getConfigs() const
     {
-        return configs.get();
+        return configs;
     }
 
 private:
-    config::Reference<config::BgpNeighborSessionRegistry> configs;
+    config::BgpNeighborSessionRegistry& configs;
 };
 
 /**
@@ -168,16 +168,16 @@ public:
 
     config::BgpNeighborRegistry& getConfigs()
     {
-        return configs.get();
+        return configs;
     }
 
     const config::BgpNeighborRegistry& getConfigs() const
     {
-        return configs.get();
+        return configs;
     }
 
 private:
-    config::Reference<config::BgpNeighborRegistry> configs;
+    config::BgpNeighborRegistry& configs;
 };
 
 /**

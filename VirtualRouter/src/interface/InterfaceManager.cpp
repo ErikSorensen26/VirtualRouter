@@ -5,22 +5,21 @@
 
 namespace interface
 {
-
-Interface* InterfaceManager::add(Interface* iface, uint32_t key)
+Interface* InterfaceManager::add(Interface* iface, interface::InterfaceKey key)
 {
     std::lock_guard lock(mutex);
     auto [it, inserted] = interfaces.try_emplace(key, iface);
     return inserted ? it->second : nullptr;
 }
 
-Interface* InterfaceManager::get(uint32_t key) const
+Interface* InterfaceManager::get(interface::InterfaceKey key) const
 {
     std::lock_guard lock(mutex);
     auto it = interfaces.find(key);
     return it != interfaces.end() ? it->second : nullptr;
 }
 
-bool InterfaceManager::remove(uint32_t key)
+bool InterfaceManager::remove(interface::InterfaceKey key)
 {
     {
         std::lock_guard lock(mutex);
@@ -38,7 +37,7 @@ bool InterfaceManager::empty() const noexcept
     return interfaces.empty();
 }
 
-std::unordered_map<uint32_t, Interface*> InterfaceManager::snapshot() const
+std::unordered_map<interface::InterfaceKey, Interface*> InterfaceManager::snapshot() const
 {
     std::lock_guard lock(mutex);
     return interfaces;

@@ -156,13 +156,19 @@ void processPacket(const uint8_t* data, size_t len, PacketInfo& packet, core::Vi
                 GET_HEADER_EXTENDED(eigrp, packet::EigrpHeader)
                 uint32_t as = eigrp.getAutonomousSystem();
                 auto* it = vrf->getEigrpAutonomousSystem(as);
-                auto iface = interface->eigrpInterfaceList.find(as);
-                if (it && iface != interface->eigrpInterfaceList.end()) 
+                if (it)
                 {
-                    if (addressFamily == types::AddressFamily::IPv4 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv4)
-                        interface->eigrpInterfaceList[as].IPv4->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
-                    else if (addressFamily == types::AddressFamily::IPv6 && interface->eigrpInterfaceList.count(as) && interface->eigrpInterfaceList[as].IPv6)
-                        interface->eigrpInterfaceList[as].IPv6->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
+                    auto ifaceKey = interface->configs.key;
+                    if (addressFamily == types::AddressFamily::IPv4 && it->ipv4)
+                    {
+                        auto* eigrpIface = it->ipv4->getIfaceMgr().getInterface(ifaceKey);
+                        if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
+                    }
+                    else if (addressFamily == types::AddressFamily::IPv6 && it->ipv6)
+                    {
+                        auto* eigrpIface = it->ipv6->getIfaceMgr().getInterface(ifaceKey);
+                        if (eigrpIface) eigrpIface->getRtp().handleIncoming(ipStart, eigrp, typedAddress, typedAddress.isMulticast());
+                    }
                 }
                 break;
             }

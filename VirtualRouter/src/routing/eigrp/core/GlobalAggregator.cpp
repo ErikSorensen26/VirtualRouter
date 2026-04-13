@@ -17,7 +17,7 @@ void GlobalAggregator::addSummary(TopologyEntry& top)
     {
         if (auto* sum = iface.getAggregator().isSummarized(top.prefix); sum)
         {
-            top.suppression[id].summaries.insert(sum);
+            top.suppression[id.getId()].summaries.insert(sum);
             sum->summarizedRoutes.insert(top.prefix);
         }
     }

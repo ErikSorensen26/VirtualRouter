@@ -17,6 +17,7 @@
 #ifndef EXECUTION_CONTEXT_HPP
 #define EXECUTION_CONTEXT_HPP
 
+#include "configs/RegistryReference.hpp"
 #include "cli/execution/Executor.hpp"
 
 #include "cli/modes/parsers/global/GlobalCommands.h"
@@ -24,8 +25,8 @@
 #include "cli/modes/parsers/PrivilegedExecCommands.h"
 #include "cli/modes/parsers/UserExecCommands.h"
 
+
 #include "cli/modes/parsers/router/RouterEigrpClassicCommands.h"
-#include "cli/modes/parsers/router/RouterEigrpClassicVrfCommands.h"
 #include "cli/modes/parsers/router/RouterEigrpNamedCommands.h"
 #include "cli/modes/parsers/router/RouterEigrpAddressFamilyCommands.h"
 #include "cli/modes/parsers/router/RouterEigrpInterfaceCommands.h"
@@ -52,8 +53,8 @@ using ExecutionManager = cli::Executor<
     PrivilegedExecCommands,
     GlobalCommands,
     InterfaceCommands,
-    RouterEigrpClassicCommandsV4,
-    RouterEigrpClassicCommandsV6,
+    RouterEigrpClassicV4Commands,
+    RouterEigrpClassicV6Commands,
     RouterEigrpClassicVrfCommands,
     /* RouterEigrpClassicV6Commands */
     RouterEigrpNamedCommands,

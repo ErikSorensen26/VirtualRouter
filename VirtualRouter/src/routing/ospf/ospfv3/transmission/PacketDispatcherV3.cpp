@@ -8,26 +8,28 @@
 #include "packet/headers/embedded/ospf/Ospfv3DBDHeader.hpp"
 #include "processing/PacketBuilder.hpp"
 #include "infrastructure/IPPacket.h"
+#include "configs/registry/interface/InterfaceRegistry.h"
+#include "configs/registry/router/OspfInterfaceRegistry.h"
 
 namespace routing::ospf
 {
-PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface, config::Reference<config::OspfInterfaceBaseRegistry>& cfgs)
-    : PacketDispatcher(iface),
-    baseConfigs(cfgs),
-    configs([&cfgs, &iface]() {
-        auto& registry = iface.getProcess().routingInstance->getRegistry();
-        auto& processConfigs = cfgs->get<config::OspfInterfaceBase::PROCESS_CONFIGS>();
-        uint32_t procId = iface.getProcess().getProcId();
-        auto afBase = registry.emplaceBack(processConfigs, procId);
-        auto base = registry.emplace(afBase->get<config::OspfInterfaceAddressFamily::BASE>(), cfgs->get<config::OspfInterfaceBase::BASE>().local());
-        auto af = iface.getProcess().getAF();
-
-        auto buh = registry.emplace(afBase->get<config::OspfInterfaceAddressFamily::IPV4>());
-        return af == types::AddressFamily::IPv4
-            ? registry.emplace(afBase->get<config::OspfInterfaceAddressFamily::IPV4>(), base)
-            : registry.emplace(afBase->get<config::OspfInterfaceAddressFamily::IPV6>(), base);
-    }())
+PacketDispatcherV3::PacketDispatcherV3(OspfInterface& iface)
+    : PacketDispatcher(iface)
 {}
+
+config::OspfInterfaceBaseRegistry& PacketDispatcherV3::getConfigs()
+{
+    auto& ifCfgs = iface.getIface().configs.getConfigs();
+    if (iface.getProcess().isV3)
+    {
+        auto& afReg = ifCfgs.reg.get<config::Interface::OSPFV3>().emplaceBack(iface.getProcess().getProcId());
+        return afReg.reg.get<config::OspfInterfaceAf::IPV6>().get();
+    }
+    else
+    {
+        return ifCfgs.reg.get<config::Interface::IPV6_OSPF>().get();
+    }
+}
 
 void PacketDispatcherV3::transmit(processing::PacketBuilder& pkt, const types::IPAddress* dest)
 {

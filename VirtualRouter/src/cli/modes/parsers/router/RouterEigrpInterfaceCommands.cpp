@@ -1,173 +1,167 @@
 // RouterEigrpInterfaceCommands.cpp
 
 #include "RouterEigrpInterfaceCommands.h"
-#include "eigrp/core/Eigrp.h"
+#include "cli/parser/CliModeParser.hpp"
 #include "configs/registry/router/EigrpInterfaceRegistry.h"
 #include "cli/runtime/CliSession.h"
-#include "cli/runtime/CliUtils.h"
+#include "cli/parser/CommandUtils.hpp"
+
+#define EIGRP_PARAMS DEFINE_PARAMS(config::EigrpInterfaceRegistry)
 
 namespace cli
 {
 bool RouterEigrpInterface_AuthenticationKeyChain_Handler(EIGRP_PARAMS)
 {
-    if (!ctx.negate)
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(args[0]);
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::MD5);
-    }
-    else
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::NONE);
-    }
-    return true;
+    auto& authKey = ctx.configs().reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>();
+    return utils::setFieldValue(authKey, ctx, segs[0] >> 2);
 }
 
 bool RouterEigrpInterface_AuthenticationMode_Handler(EIGRP_PARAMS)
 {
-    if (ctx.negate)
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::NONE);
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().unset();
-        return true;
-    }
+    auto& mode = ctx.configs().reg.get<config::EigrpInterface::AUTHENTICATION_MODE>();
 
-    if (args[0] == "hmac-sha-256")
+    if (utils::handleValueReset(mode, ctx))
+        return true;
+
+    switch (segs[0][0])
     {
-        std::string key = args[1];
-        if (key.size() > 32)
+        case "md5"_tok:
         {
-            ctx.terminal.controller.print("\r\n%EIGRP: HMAC-SHA-256 password truncated to 32 characters");
-            key = key.substr(0, 32);
+            mode.set(config::eigrp::AuthType::MD5);
+            return true;
         }
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::SHA256);
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>().set(key);
+        case "hmac-sha-256"_tok:
+        {
+            // TODO
+        }
     }
-    else if (args[0] == "md5")
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::AUTHENTICATION_MODE>().set(config::eigrp::AuthType::MD5);
-    }
-    return true;
+    return false;
 }
 
 bool RouterEigrpInterface_BandwidthPercentage_Handler(EIGRP_PARAMS)
 {
-    ctx.currentEigrpInterface->get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>().set(
-        ctx.negate ? 50u : static_cast<uint32_t>(std::stoul(args[0])));
-    return true;
+    auto& eigrpBw = ctx.configs().reg.get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>();
+    return utils::setFieldValue(eigrpBw, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpInterface_DampeningChange_Handler(EIGRP_PARAMS)
 {
-    if (ctx.negate)
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_CHANGE>().set(false);
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(1);
-    }
-    else
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_CHANGE>().set(true);
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>().set(
-            static_cast<uint8_t>(std::stoul(args[0])));
-    }
-    return true;
+    auto& dampChange = ctx.configs().reg.get<config::EigrpInterface::DAMPENING_CHANGE>();
+    auto& dampChangePercent = ctx.configs().reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>();
+    utils::setToggleValue(dampChange, ctx);
+    return utils::setFieldValue(dampChangePercent, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpInterface_DampeningInterval_Handler(EIGRP_PARAMS)
 {
-    if (ctx.negate)
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_INTERVAL>().set(false);
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(5);
-    }
-    else
-    {
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_INTERVAL>().set(true);
-        ctx.currentEigrpInterface->get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>().set(
-            static_cast<uint16_t>(std::stoul(args[0])));
-    }
-    return true;
+    auto& dampInterval = ctx.configs().reg.get<config::EigrpInterface::DAMPENING_INTERVAL>();
+    auto& dampIntervalTime = ctx.configs().reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>();
+    utils::setToggleValue(dampInterval, ctx);
+    return utils::setFieldValue(dampIntervalTime, ctx, segs[0] >> 1);
 }
 
-bool RouterEigrpInterface_Exit_Handler(EIGRP_PARAMS)
+bool RouterEigrpInterfaceV4_Exit_Handler(EIGRP_PARAMS)
 {
-    UNUSED(args);
-    if (ctx.currentEigrp->getAF() == types::AddressFamily::IPv4)
-        ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV4>(ctx.currentEigrp, ctx.currentEigrpNamed, nullptr);
-    else
-        ctx.terminal.exitMode<CliMode::RouterEigrpAddressFamilyV6>(ctx.currentEigrp, ctx.currentEigrpNamed, nullptr);
-    return true;
+    UNUSED(segs);
+    return ctx.terminal.popMode();
+}
+
+bool RouterEigrpInterfaceV6_Exit_Handler(EIGRP_PARAMS)
+{
+    UNUSED(segs);
+    return ctx.terminal.popMode();
 }
 
 bool RouterEigrpInterface_HelloInterval_Handler(EIGRP_PARAMS)
 {
-    ctx.currentEigrpInterface->get<config::EigrpInterface::HELLO_INTERVAL>().set(
-        ctx.negate ? 5 : static_cast<uint16_t>(std::stoul(args[0])));
-    return true;
+    auto& hello = ctx.configs().reg.get<config::EigrpInterface::HELLO_INTERVAL>();
+    return utils::setFieldValue(hello, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpInterface_HoldTime_Handler(EIGRP_PARAMS)
 {
-    ctx.currentEigrpInterface->get<config::EigrpInterface::HOLD_TIME>().set(
-        ctx.negate ? 15 : static_cast<uint16_t>(std::stoul(args[0])));
-    return true;
+    auto& holdTime = ctx.configs().reg.get<config::EigrpInterface::HOLD_TIME>();
+    return utils::setFieldValue(holdTime, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpInterface_NextHopSelf_Handler(EIGRP_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentEigrpInterface->get<config::EigrpInterface::NEXT_HOP_SELF>().set(!ctx.negate);
+    UNUSED(segs);
+    auto& nhs = ctx.configs().reg.get<config::EigrpInterface::NEXT_HOP_SELF>();
+    utils::setToggleValue(nhs, ctx);
     return true;
 }
 
 bool RouterEigrpInterface_PassiveInterface_Handler(EIGRP_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentEigrpInterface->get<config::EigrpInterface::PASSIVE_INTERFACE>().set(!ctx.negate);
+    UNUSED(segs);
+    auto& passive = ctx.configs().reg.get<config::EigrpInterface::PASSIVE_INTERFACE>();
+    utils::setToggleValue(passive, ctx);
     return true;
 }
 
 bool RouterEigrpInterface_SplitHorizon_Handler(EIGRP_PARAMS)
 {
-    UNUSED(args);
-    ctx.currentEigrpInterface->get<config::EigrpInterface::SPLIT_HORIZON>().set(!ctx.negate);
+    UNUSED(segs);
+    auto& split = ctx.configs().reg.get<config::EigrpInterface::SPLIT_HORIZON>();
+    utils::setToggleValue(split, ctx);
     return true;
 }
 
 bool RouterEigrpInterface_SummaryAddress_Handler(EIGRP_PARAMS)
 {
-    types::IPPrefix network;
-    types::AddressFamily af = ctx.currentEigrp->getAF();
-
-    bool extracted = utils::extractIPPrefix(args[0], network);
-    if (!extracted && af == types::AddressFamily::IPv4)
-    {
-        if (!utils::extractIPv4Prefix(args[0], args[1], network))
-        {
-            ctx.terminal.controller.print("\r\n%EIGRP: Invalid summary address");
-            return false;
-        }
-    }
-
-    types::IPAddress netAddr = network; // uses operator types::IPAddress() for the network address
-    uint8_t plen = network.prefixLength;
-
-    ctx.currentEigrpInterface->get<config::EigrpInterface::SUMMARY_ADDRESS>().withWrite(
-        [&](std::vector<std::tuple<types::IPAddress, uint8_t>>& v) {
-            auto it = std::find_if(v.begin(), v.end(), [&](const auto& t) {
-                return std::get<0>(t) == netAddr && std::get<1>(t) == plen;
-            });
-            if (!ctx.negate)
-            {
-                if (it == v.end())
-                    v.emplace_back(netAddr, plen);
-            }
-            else
-            {
-                if (it != v.end())
-                    v.erase(it);
-            }
-        });
-    return true;
+    auto& sum = ctx.configs().reg.get<config::EigrpInterface::SUMMARY_ADDRESS>();
+    config::DefType<decltype(sum)>::node tup;
+    if (!utils::setTupleElement(std::get<0>(tup), segs[0] >> 2) &&
+        !utils::setDoubleTupleElement(std::get<0>(tup), segs[0] >> 2, segs[0] >> 3))
+        return false;
+    utils::setTupleElement(std::get<1>(tup), segs >> 1 >> 1);
+    return utils::setListEntry(sum, ctx, tup);
 }
+
+// bool RouterEigrpInterface_Shutdown_Handler(EIGRP_PARAMS); //TODO
+
+#define ROUTER_EIGRP_INTERFACE_LIST(X, Y) \
+    X(Y, (COMMAND, AuthenticationKeyChain, "authentication"_tok, "key-chain"_tok)) \
+    X(Y, (COMMAND, AuthenticationMode, "authentication"_tok, "mode"_tok)) \
+    X(Y, (COMMAND, BandwidthPercentage, "bandwidth-percentage"_tok)) \
+    X(Y, (COMMAND, DampeningChange, "dampening-change"_tok)) \
+    X(Y, (COMMAND, DampeningInterval, "dampening-interval"_tok)) \
+    X(Y, (COMMAND, HelloInterval, "hello-interval"_tok)) \
+    X(Y, (COMMAND, HoldTime, "hold-time"_tok)) \
+    X(Y, (COMMAND, NextHopSelf, "next-hop-self"_tok)) \
+    X(Y, (COMMAND, PassiveInterface, "passive-interface"_tok)) \
+    X(Y, (COMMAND, SplitHorizon, "split-horizon"_tok)) \
+    X(Y, (COMMAND, SummaryAddress, "summary-address"_tok))
+
+/**
+ * @brief Parser for EIGRPv4 interface-level configuration commands.
+ * @ingroup CLI_MODE_PARSERS
+ *
+ * Configures per-interface EIGRP parameters including bandwidth, delay,
+ * reliability, timers, and split horizon settings.
+ */
+DEFINE_CMD_MODE(RouterEigrpInterface, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST)
+
+#define ROUTER_EIGRP_INTERFACE_LIST_V4(X, Y) \
+    X(Y, (COMMAND, Exit, "exit-af-intervace"_tok)) \
+    X(Y, (INHERIT, RouterEigrpInterfaceCommands))
+
+/**
+ * @brief IPv4 address-family interface mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpInterfaceV4, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST_V4)
+
+#define ROUTER_EIGRP_INTERFACE_LIST_V6(X, Y) \
+    X(Y, (COMMAND, Exit, "exit-af-intervace"_tok)) \
+    X(Y, (INHERIT, RouterEigrpInterfaceCommands))
+
+/**
+ * @brief IPv6 address-family interface mode parser.
+ * @ingroup CLI_MODE_PARSERS
+ */
+DEFINE_CMD_MODE(RouterEigrpInterfaceV6, config::EigrpInterfaceRegistry, ROUTER_EIGRP_INTERFACE_LIST_V6)
 }
+
+#undef EIGRP_PARAMS
