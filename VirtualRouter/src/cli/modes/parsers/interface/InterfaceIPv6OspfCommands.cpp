@@ -34,7 +34,7 @@ bool InterfaceIPv6Ospf_Area_Handler(OSPF_PARAMS)
 
 bool InterfaceIPv6Ospf_Authentication_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
 
     if (auto& t = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
 	t.hasValue() || t.load() != config::ospf::IPsecEncryptType::NULL_TYPE)
@@ -89,7 +89,7 @@ bool InterfaceIPv6Ospf_Authentication_Handler(OSPF_PARAMS)
 
 bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
 	
     auto& spi = ospf.reg.get<config::OspfInterfaceIPSec::SPI>();
     auto& encryptType = ospf.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
@@ -167,7 +167,7 @@ bool InterfaceIPv6Ospf_Encryption_Handler(OSPF_PARAMS)
 
 bool InterfaceIPv6Ospf_Neighbor_Handler(OSPF_PARAMS)
 {
-    auto& neighbors = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get().reg.get<config::OspfInterface::NEIGHBOR>();
+    auto& neighbors = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get().reg.get<config::OspfInterface::NEIGHBOR>();
     config::DefType<decltype(neighbors)>::node tup;
 
     for (const auto& seg : segs)

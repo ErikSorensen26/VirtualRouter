@@ -117,10 +117,14 @@ public:
     ContextBase(CliSession& term)
         : terminal(term)
     {}
+    ContextBase(CliSession& term, void* cfg)
+        : terminal(term), ctx(cfg)
+    {}
 
-    CliSession& terminal;   ///< Reference to the owning CLI session.
-    bool negate = false;    ///< True when the command was entered with a `no` prefix.
-    bool defaulted = false; ///< True when the command was entered with a `default` prefix.
+    CliSession& terminal;    ///< Reference to the owning CLI session.
+    void* ctx = nullptr; ///< Opaque pointer to the mode-specific config registry (for use in executeThunks).
+    bool negate = false;     ///< True when the command was entered with a `no` prefix.
+    bool defaulted = false;  ///< True when the command was entered with a `default` prefix.
 };
 
 
@@ -154,14 +158,13 @@ public:
      * @brief Constructs a root context bound directly to a CLI session.
      * @param term  The owning session; must outlive this context.
      */
-    Context(CliSession& term, T& c) : configs(c), ContextBase(term) {}
+    Context(CliSession& term, T& c) : ContextBase(term, &c) {}
 
     /**
-     * @brief Virtual destructor; enables correct destruction through base pointer.
+     * @brief Accessor for the mode-specific config registry.
+     * @return Reference to the mode's configuration registry.
      */
-    virtual ~Context() = default;
-
-    T& configs;
+    T& configs() { return *static_cast<T*>(ctx); }
 };
 }
 

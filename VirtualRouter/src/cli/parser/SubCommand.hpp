@@ -95,7 +95,7 @@ struct SubCommand
 
         for (size_t i = 0; i < partCount; ++i)
         {
-            const Token& t = tokens[++idx];
+            const Token& t = tokens[idx++];
 
             if (t.isPattern())
             {

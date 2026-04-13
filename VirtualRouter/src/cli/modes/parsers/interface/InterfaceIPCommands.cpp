@@ -14,16 +14,16 @@ bool InterfaceIP_AddressSet_Handler(INTERFACE_PARAMS)
 {
     if (!ctx.negate && !ctx.defaulted)
     {
-        auto& dhcp = ctx.configs.reg.get<config::Interface::IP_ADDRESS_DHCP>();
+        auto& dhcp = ctx.configs().reg.get<config::Interface::IP_ADDRESS_DHCP>();
         if (dhcp.load()) dhcp.set(false);
     }
 
     if (segs.size() == 1)
     {
-        auto& primary = ctx.configs.reg.get<config::Interface::IP_ADDRESS>();
+        auto& primary = ctx.configs().reg.get<config::Interface::IP_ADDRESS>();
         return utils::setDoubleFieldValue(primary, ctx, segs[0] >> 1, segs[0] >> 2);
     }
-    auto& secondary = ctx.configs.reg.get<config::Interface::IP_ADDRESS_SECONDARY>();
+    auto& secondary = ctx.configs().reg.get<config::Interface::IP_ADDRESS_SECONDARY>();
     config::DefType<decltype(secondary)>::node tup;
     if (!utils::setDoubleTupleElement(std::get<0>(tup), segs[0] >> 1, segs[0] >> 2))
         return false;
@@ -36,10 +36,10 @@ bool InterfaceIP_AddressDhcp_Handler(INTERFACE_PARAMS)
     UNUSED(segs);
     if (!ctx.negate && !ctx.defaulted)
     {
-        auto& primary = ctx.configs.reg.get<config::Interface::IP_ADDRESS>();
+        auto& primary = ctx.configs().reg.get<config::Interface::IP_ADDRESS>();
         if (primary.hasValue()) primary.unset();
     }
-    auto& ipdhcp = ctx.configs.reg.get<config::Interface::IP_ADDRESS_DHCP>();
+    auto& ipdhcp = ctx.configs().reg.get<config::Interface::IP_ADDRESS_DHCP>();
     utils::setToggleValue(ipdhcp, ctx);
     return true;
 }
@@ -53,7 +53,7 @@ bool InterfaceIP_AuthenticationKeyChain_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& authKey = ctx.configs.reg.get<config::Interface::IP_EIGRP>().emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>();
+            auto& authKey = ctx.configs().reg.get<config::Interface::IP_EIGRP>().emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_KEYCHAIN>();
             return utils::setFieldValue(authKey, ctx, segs[0] >> 2);
         }
     }
@@ -69,7 +69,7 @@ bool InterfaceIP_AuthenticationMode_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& mode = ctx.configs.reg.get<config::Interface::IP_EIGRP>()
+            auto& mode = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::AUTHENTICATION_MODE>();
 
             if (utils::handleValueReset(mode, ctx))
@@ -97,7 +97,7 @@ bool InterfaceIP_BandwidthPercentage_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& eigrpBw = ctx.configs.reg.get<config::Interface::IP_EIGRP>()
+            auto& eigrpBw = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::BANDWIDTH_PERCENTAGE>();
             return utils::setFieldValue(eigrpBw, ctx, segs[0] >> 2);
         }
@@ -114,7 +114,7 @@ bool InterfaceIP_DampeningChange_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& eigrp = ctx.configs.reg.get<config::Interface::IP_EIGRP>().emplaceBack(as);
+            auto& eigrp = ctx.configs().reg.get<config::Interface::IP_EIGRP>().emplaceBack(as);
             auto& dampChange = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE>();
             auto& dampChangePercent = eigrp.reg.get<config::EigrpInterface::DAMPENING_CHANGE_PERCENT>();
             utils::setToggleValue(dampChange, ctx);
@@ -133,7 +133,7 @@ bool InterfaceIP_DampeningInterval_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& eigrp = ctx.configs.reg.get<config::Interface::IP_EIGRP>().emplaceBack(as);
+            auto& eigrp = ctx.configs().reg.get<config::Interface::IP_EIGRP>().emplaceBack(as);
             auto& dampInterval = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL>();
             auto& dampIntervalTime = eigrp.reg.get<config::EigrpInterface::DAMPENING_INTERVAL_TIME>();
             utils::setToggleValue(dampInterval, ctx);
@@ -152,7 +152,7 @@ bool InterfaceIP_HelloInterval_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& helloTime = ctx.configs.reg.get<config::Interface::IP_EIGRP>()
+            auto& helloTime = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::HELLO_INTERVAL>();
             return utils::setFieldValue(helloTime, ctx, segs[0] >> 2);
         }
@@ -169,7 +169,7 @@ bool InterfaceIP_HoldTime_Handler(INTERFACE_PARAMS)
             uint16_t as;
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& holdTime = ctx.configs.reg.get<config::Interface::IP_EIGRP>()
+            auto& holdTime = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::HOLD_TIME>();
             return utils::setFieldValue(holdTime, ctx, segs[0] >> 2);
         }
@@ -179,7 +179,7 @@ bool InterfaceIP_HoldTime_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIP_Mtu_Handler(INTERFACE_PARAMS)
 {
-    auto& mtu = ctx.configs.reg.get<config::Interface::IP_MTU>();
+    auto& mtu = ctx.configs().reg.get<config::Interface::IP_MTU>();
     return utils::setFieldValue(mtu, ctx, segs[0] >> 1);
 }
 
@@ -192,7 +192,7 @@ bool InterfaceIP_NextHopSelf_Handler(INTERFACE_PARAMS)
             uint16_t as; 
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& nhs = ctx.configs.reg.get<config::Interface::IP_EIGRP>()
+            auto& nhs = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::NEXT_HOP_SELF>();
             utils::setToggleValue(nhs, ctx);
             return true;
@@ -210,7 +210,7 @@ bool InterfaceIP_SplitHorizon_Handler(INTERFACE_PARAMS)
             uint16_t as; 
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& sh = ctx.configs.reg.get<config::Interface::IP_EIGRP>()
+            auto& sh = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::SPLIT_HORIZON>();
             utils::setToggleValue(sh, ctx);
             return true;
@@ -228,7 +228,7 @@ bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS)
             uint16_t as; 
             if (!utils::setValue(as, segs[0] >> 1))
                 return false;
-            auto& sum = ctx.configs.reg.get<config::Interface::IP_EIGRP>()
+            auto& sum = ctx.configs().reg.get<config::Interface::IP_EIGRP>()
                 .emplaceBack(as).reg.get<config::EigrpInterface::SUMMARY_ADDRESS>();
             config::DefType<decltype(sum)>::node tup;
             if (!utils::setTupleElement(std::get<0>(tup), segs[0] >> 2) &&
@@ -243,7 +243,7 @@ bool InterfaceIP_SummaryAddress_Handler(INTERFACE_PARAMS)
 
 bool InterfaceIP_Ospf_SubHandler(INTERFACE_SUB_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::Interface::IP_OSPF>().get();
+    auto& ospf = ctx.configs().reg.get<config::Interface::IP_OSPF>().get();
     Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;

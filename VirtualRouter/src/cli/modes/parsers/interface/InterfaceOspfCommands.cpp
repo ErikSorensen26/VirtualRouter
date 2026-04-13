@@ -12,7 +12,7 @@ namespace cli
 {
 bool InterfaceOspf_BFD_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& bfd = ospf.reg.get<config::OspfInterface::BFD>();
     if (!utils::handleValueReset(bfd, ctx))
 	return true;
@@ -23,14 +23,14 @@ bool InterfaceOspf_BFD_Handler(OSPF_PARAMS)
 
 bool InterfaceOspf_Cost_Handler(OSPF_PARAMS)
 {
-    auto& cost = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get().reg.get<config::OspfInterface::COST>();
+    auto& cost = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get().reg.get<config::OspfInterface::COST>();
     return utils::setFieldValue(cost, ctx, segs >> 0 >> 1);
 }
 
 bool InterfaceOspf_DatabaseFilter_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& dbFilter = ospf.reg.get<config::OspfInterface::DATABASE_FILTER>();
     utils::setToggleValue(dbFilter, ctx);
     return true;
@@ -38,7 +38,7 @@ bool InterfaceOspf_DatabaseFilter_Handler(OSPF_PARAMS)
 
 bool InterfaceOspf_DeadInterval_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& deadInterval = ospf.reg.get<config::OspfInterface::DEAD_INTERVAL>();
     auto& helloInterval = ospf.reg.get<config::OspfInterface::HELLO_INTERVAL>();
     auto& helloMultiplier = ospf.reg.get<config::OspfInterface::HELLO_MULTIPLIER>();
@@ -68,7 +68,7 @@ bool InterfaceOspf_DeadInterval_Handler(OSPF_PARAMS)
 bool InterfaceOspf_DemandCircuit_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& dc = ospf.reg.get<config::OspfInterface::DEMAND_CIRCUIT>();
     auto& dcig = ospf.reg.get<config::OspfInterface::DEMAND_CIRCUIT>();
 
@@ -81,7 +81,7 @@ bool InterfaceOspf_DemandCircuit_Handler(OSPF_PARAMS)
 bool InterfaceOspf_FloodReduction_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& floodReduction = ospf.reg.get<config::OspfInterface::FLOOD_REDUCTION>();
     utils::setToggleValue(floodReduction, ctx);
     return true;
@@ -89,7 +89,7 @@ bool InterfaceOspf_FloodReduction_Handler(OSPF_PARAMS)
 
 bool InterfaceOspf_HelloInterval_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& hello = ospf.reg.get<config::OspfInterface::HELLO_INTERVAL>();
     return utils::setFieldValue(hello, ctx, segs >> 0 >> 1);
 }
@@ -97,7 +97,7 @@ bool InterfaceOspf_HelloInterval_Handler(OSPF_PARAMS)
 bool InterfaceOspf_MtuIgnore_Handler(OSPF_PARAMS)
 {
     UNUSED(segs);
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& mtuIgnore = ospf.reg.get<config::OspfInterface::MTU_IGNORE>();
     utils::setToggleValue(mtuIgnore, ctx);
     return true;
@@ -105,7 +105,7 @@ bool InterfaceOspf_MtuIgnore_Handler(OSPF_PARAMS)
 
 bool InterfaceOspf_Network_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& network = ospf.reg.get<config::OspfInterface::NETWORK>();
 
     if (utils::handleValueReset(network, ctx))
@@ -151,21 +151,21 @@ bool InterfaceOspf_Network_Handler(OSPF_PARAMS)
 
 bool InterfaceOspf_Priority_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& priority = ospf.reg.get<config::OspfInterface::PRIORITY>();
     return utils::setFieldValue(priority, ctx, segs >> 0 >> 1);
 }
 
 bool InterfaceOspf_RetransmissionInterval_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& retrans = ospf.reg.get<config::OspfInterface::RETRANSMIT_INTERVAL>();
     return utils::setFieldValue(retrans, ctx, segs >> 0 >> 1);
 }
 
 bool InterfaceOspf_TransmitDelay_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& delay = ospf.reg.get<config::OspfInterface::TRANSMIT_DELAY>();
     return utils::setFieldValue(delay, ctx, segs >> 0 >> 1);
 }

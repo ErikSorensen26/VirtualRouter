@@ -11,6 +11,8 @@
 #ifndef EXECUTOR_HPP
 #define EXECUTOR_HPP
 
+#include <iostream>
+
 #include "cli/runtime/Token.hpp"
 #include "cli/parser/CliModeParser.hpp"
 #include "cli/modes/contexts/Context.hpp"
@@ -163,6 +165,9 @@ public:
 
         ctxBuffer[head] = reinterpret_cast<ContextBase*>(ctx);
         currentMode[head] = M;
+
+        std::cout << ctx << std::endl;
+        std::cout << ctxBuffer[head] << std::endl;
     }
 
     /**

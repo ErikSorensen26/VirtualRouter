@@ -481,7 +481,7 @@ public:
     {
         bool isSet = false;
         auto trySet = [&]<config::SubRegistryType<T>::type E>() {
-            if (E == e) isSet = setFieldValue(ctx.configs.reg.template get<E>(), ctx, token);
+            if (E == e) isSet = setFieldValue(ctx.configs().reg.template get<E>(), ctx, token);
         };
         (trySet.template operator()<Es>(), ...);
         if (auto idx = indexOf(e); isSet)
@@ -505,7 +505,7 @@ public:
     {
         auto tryUnset = [&]<config::SubRegistryType<T>::type E>() {
             if (auto idx = indexOf(E); idx && bits.test(*idx))
-                ctx.configs.reg.template get<E>().unset();
+                ctx.configs().reg.template get<E>().unset();
         };
         (tryUnset.template operator()<Es>(), ...);
     }

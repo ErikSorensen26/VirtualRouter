@@ -16,7 +16,7 @@ namespace cli
 bool PrivilegedExec_ConfigureTerm_Handler(PRIVILEGED_EXEC_PARAMS)
 {
     UNUSED(segs);
-    ctx.terminal.changeMode<CliMode::GlobalConfiguration>(ctx.configs);
+    ctx.terminal.changeMode<CliMode::GlobalConfiguration>(ctx.configs());
     ctx.terminal.controller.print("\r\nEnter configuration commands, one per line. End with CNTL/Z.");
     return true;
 }

@@ -29,7 +29,7 @@ namespace cli
  */
 inline static bool getVrfConfigs(config::VrfRegistry*& vrf, cli::Context<config::GlobalRegistry>& ctx, std::string_view name = "default")
  {
-    auto& vrfs = ctx.configs.reg.get<config::Global::VRF_CONFIGS>();
+    auto& vrfs = ctx.configs().reg.get<config::Global::VRF_CONFIGS>();
     if (auto it = vrfs.find(std::string(name)); it != vrfs.end())
     {
         vrf = const_cast<config::VrfRegistry*>(&it->second);

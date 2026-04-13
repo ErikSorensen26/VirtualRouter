@@ -108,6 +108,7 @@ struct ParseContext
     InputMode inputMode = InputMode::NORMAL;
 
     const nlohmann::ordered_json* currentDirectory = nullptr;
+    NodeView* currentNodeView = nullptr;
     
     std::string_view previousMatch;
     std::string_view currentPattern;
@@ -419,6 +420,7 @@ private:
                         views.push_back(tempDir.back());
                     }
                 }
+                std::cout << engine.getCommandTree()[VARIABLE_OBJ].dump(4) << std::endl;
                 continue;
             }
 
@@ -569,7 +571,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
 
     std::vector<Token> tokens;
     std::vector<Com> prevCommands;
-    bool cmdDone = false;
 
     for (size_t idx = 0; idx < words.size(); idx++)
     {
@@ -658,7 +659,7 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
         }
     
         // Append token
-        if (!cmdDone && matches.size() <= 1)
+        if (matches.size() <= 1)
         {
             if (ctx.isPatternMatching() && !matches.empty())
             {
@@ -668,7 +669,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             else if (matches.size() == 1)
             {
                 tokens.emplace_back(matches[0].name);
-                cmdDone = true;
                 ctx.previousMatch = matches[0].name;
             }
             else if (matches.empty() && ctx.eoc)
@@ -683,7 +683,6 @@ CliSession::ParseResult CliSession::parseInput(std::string& rawInput)
             else
             {
                 tokens.emplace_back(matches[0].name);
-                cmdDone = true;
                 ctx.previousMatch = matches[0].name;
             }
         }
@@ -821,7 +820,8 @@ bool CliSession::tryDoCommand(const std::string& remainder)
     const json*       savedCfg    = configNode;
     const size_t      savedNavTop = navTop;   // temp transition: undo nav push on return
 
-    changeMode<CliMode::PrivilegedExec>(engine.global.configs);
+    if (!changeMode<CliMode::PrivilegedExec>(engine.global.configs))
+        return false;
 
     std::string cmd = remainder;
     const bool ok   = executeCommand(cmd);

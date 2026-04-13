@@ -17,7 +17,7 @@ namespace cli
 bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS)
 {
     auto& global = ctx.terminal.engine.global.configs;
-    auto& namedList = ctx.configs.reg.get<config::EigrpNamed::NAMED_INSTANCES_V4>();
+    auto& namedList = ctx.configs().reg.get<config::EigrpNamed::NAMED_INSTANCES_V4>();
 
     std::string vrfName = "default";
     uint16_t as = 0;
@@ -102,7 +102,7 @@ bool RouterEigrpNamed_AddressFamilyIPv4_Handler(EIGRP_NAMED_PARAMS)
 bool RouterEigrpNamed_AddressFamilyIPv6_Handler(EIGRP_NAMED_PARAMS)
 {
     auto& global = ctx.terminal.engine.global.configs;
-    auto& namedList = ctx.configs.reg.get<config::EigrpNamed::NAMED_INSTANCES_V6>();
+    auto& namedList = ctx.configs().reg.get<config::EigrpNamed::NAMED_INSTANCES_V6>();
 
     std::string vrfName = "default";
     uint16_t as = 0;

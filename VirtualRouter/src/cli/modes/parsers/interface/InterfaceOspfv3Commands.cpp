@@ -19,17 +19,17 @@ bool InterfaceOspfv3_Area_Handler(OSPF_PARAMS)
     auto idTok = segs >> 0 >> 1;
     if (!utils::setValue(areaId, idTok) && !utils::setValue(areaId.addr, idTok))
 	return false;
-    auto& area = ctx.configs.reg.get<config::OspfInterfaceBase::AREA_ID>();
+    auto& area = ctx.configs().reg.get<config::OspfInterfaceBase::AREA_ID>();
     if (!utils::handleValueReset(area, ctx))
 	area.set(areaId.addr);
-    auto& instance = ctx.configs.reg.get<config::OspfInterfaceBase::INSTANCE_ID>();
+    auto& instance = ctx.configs().reg.get<config::OspfInterfaceBase::INSTANCE_ID>();
     utils::setFieldValue(instance, ctx, segs >> 1 >> 1);
     return true;
 }
 
 bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::OspfInterfaceBase::BASE>().get();
+    auto& ospf = ctx.configs().reg.get<config::OspfInterfaceBase::BASE>().get();
     auto& neighbor = ospf.reg.get<config::OspfInterface::NEIGHBOR>();
     config::DefType<decltype(neighbor)>::node tup;
 
@@ -75,7 +75,7 @@ bool InterfaceOspfv3_Neighbor_Handler(OSPF_PARAMS)
 
 bool InterfaceDefaultOspfv3_Authentication_Handler(OSPF_PARAMS)
 {
-    auto& configs = ctx.configs.reg.get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
     auto& authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     auto& authSpi = configs.reg.get<config::OspfInterfaceIPSec::SPI>();
     auto& authKey = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
@@ -132,7 +132,8 @@ bool InterfaceDefaultOspfv3_Authentication_Handler(OSPF_PARAMS)
 
 bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS)
 {
-    auto& configs = ctx.configs.reg.get<config::OspfInterfaceBase::IPSEC>().get();
+    UNUSED(segs);
+    auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
     auto& authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     if (utils::handleValueReset(authType, ctx))
 	return true;
@@ -142,7 +143,7 @@ bool InterfaceDefaultOspfv3_NullAuthentication_Handler(OSPF_PARAMS)
 
 bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS)
 {
-    auto& configs = ctx.configs.reg.get<config::OspfInterfaceBase::IPSEC>().get();
+    auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
     auto& espSpi = configs.reg.get<config::OspfInterfaceIPSec::SPI>();
     auto& authType = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_TYPE>();
     auto& authKey = configs.reg.get<config::OspfInterfaceIPSec::AUTHENTICATION_KEY>();
@@ -271,7 +272,8 @@ bool InterfaceDefaultOspfv3_Encryption_Handler(OSPF_PARAMS)
 
 bool InterfaceDefaultOspfv3_NullEncryption_Handler(OSPF_PARAMS)
 {
-    auto& configs = ctx.configs.reg.get<config::OspfInterfaceBase::IPSEC>().get();
+    UNUSED(segs);
+    auto& configs = ctx.configs().reg.get<config::OspfInterfaceBase::IPSEC>().get();
     auto& type = configs.reg.get<config::OspfInterfaceIPSec::ENCRYPTION_TYPE>();
     if (utils::handleValueReset(type, ctx))
 	return true;
@@ -284,7 +286,7 @@ bool InterfaceOspfv3Base_ProcessIP_SubHandler(INTERFACE_SUB_PARAMS)
     uint16_t id;
     if (!utils::setValue(id, &toks[1]))
 	return false;
-    auto& ospf = ctx.configs.reg.get<config::Interface::OSPFV3>()
+    auto& ospf = ctx.configs().reg.get<config::Interface::OSPFV3>()
 	.emplaceBack(id).reg.get<config::OspfInterfaceAf::IPV4>().get();
     Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
@@ -297,7 +299,7 @@ bool InterfaceOspfv3Base_ProcessIPv6_SubHandler(INTERFACE_SUB_PARAMS)
     uint16_t id;
     if (!utils::setValue(id, &toks[1]))
 	return false;
-    auto& ospf = ctx.configs.reg.get<config::Interface::OSPFV3>()
+    auto& ospf = ctx.configs().reg.get<config::Interface::OSPFV3>()
 	.emplaceBack(id).reg.get<config::OspfInterfaceAf::IPV6>().get();
     Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
@@ -310,7 +312,7 @@ bool InterfaceOspfv3Base_Process_SubHandler(INTERFACE_SUB_PARAMS)
     uint16_t id;
     if (!utils::setValue(id, &toks[1]))
 	return false;
-    auto& ospf = ctx.configs.reg.get<config::Interface::OSPFV3>()
+    auto& ospf = ctx.configs().reg.get<config::Interface::OSPFV3>()
 	.emplaceBack(id).reg.get<config::OspfInterfaceAf::DEFAULT>().get();
     Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
@@ -320,7 +322,7 @@ bool InterfaceOspfv3Base_Process_SubHandler(INTERFACE_SUB_PARAMS)
 
 bool InterfaceOspfv3Base_Default_SubHandler(INTERFACE_SUB_PARAMS)
 {
-    auto& ospf = ctx.configs.reg.get<config::Interface::OSPFV3_DEFAULT>().get();
+    auto& ospf = ctx.configs().reg.get<config::Interface::OSPFV3_DEFAULT>().get();
     Context<config::OspfInterfaceBaseRegistry> newCtx(ctx.terminal, ospf);
     newCtx.negate = ctx.negate;
     newCtx.defaulted = ctx.defaulted;

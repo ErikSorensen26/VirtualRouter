@@ -20,7 +20,7 @@ bool RouterEigrpClassic_Exit_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpClassic_PassiveInterface_Handler(EIGRP_PARAMS)
 {
-    auto& passive = ctx.configs.reg.get<config::Eigrp::PASSIVE_INTERFACES>();
+    auto& passive = ctx.configs().reg.get<config::Eigrp::PASSIVE_INTERFACES>();
     config::DefType<decltype(passive)>::node tup;
     if (!utils::setDoubleValue(tup, segs[0] >> 0, segs[0] >> 1))
         return false;

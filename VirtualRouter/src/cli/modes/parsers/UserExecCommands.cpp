@@ -11,7 +11,7 @@ namespace cli
 bool UserExec_Enable_Handler(USER_EXEC_PARAMS)
 {
     UNUSED(segs);
-    ctx.terminal.changeMode<CliMode::PrivilegedExec>(ctx.configs);
+    ctx.terminal.changeMode<CliMode::PrivilegedExec>(ctx.configs());
     return true;
 }
 

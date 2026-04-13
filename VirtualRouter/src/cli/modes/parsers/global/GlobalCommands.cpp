@@ -62,7 +62,7 @@ bool Global_Exit_Handler(GLOBAL_PARAMS)
 
 bool Global_SetHostname_Handler(GLOBAL_PARAMS)
 {
-    auto& host = ctx.configs.reg.get<config::Global::HOSTNAME>();
+    auto& host = ctx.configs().reg.get<config::Global::HOSTNAME>();
     return utils::setFieldValue(host, ctx, segs[0] >> 1);
 }
 
@@ -74,7 +74,7 @@ bool Global_End_Handler(GLOBAL_PARAMS)
 
 bool Global_Interface_Handler(GLOBAL_PARAMS)
 {
-    auto& interfaceCfgs = ctx.configs.reg.get<config::Global::INTERFACE>();
+    auto& interfaceCfgs = ctx.configs().reg.get<config::Global::INTERFACE>();
     interface::InterfaceKey ifaceKey;
     if (!utils::extractInterfaceId(segs[0][0], segs[0][1], ifaceKey)) 
         return false;
@@ -103,7 +103,7 @@ bool Global_RouterEIGRP_Handler(GLOBAL_PARAMS)
     }
     else
     {
-        auto& namedList = ctx.configs.reg.get<config::Global::ROUTER_EIGRP_NAMED>();
+        auto& namedList = ctx.configs().reg.get<config::Global::ROUTER_EIGRP_NAMED>();
         std::string nameStr(name);
         if (ctx.negate || ctx.defaulted)
         {

@@ -14,14 +14,14 @@ namespace cli
 bool RouterEigrpTopology_AutoSummary_Handler(EIGRP_PARAMS)
 {
     UNUSED(segs);
-    auto& autosum = ctx.configs.reg.get<config::Eigrp::AUTO_SUMMARIZATION>();
+    auto& autosum = ctx.configs().reg.get<config::Eigrp::AUTO_SUMMARIZATION>();
     utils::setToggleValue(autosum, ctx);
     return true;
 }
 
 bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS)
 {
-    auto& metrics = ctx.configs.reg.get<config::Eigrp::DEFAULT_METRICS>();
+    auto& metrics = ctx.configs().reg.get<config::Eigrp::DEFAULT_METRICS>();
     if (utils::handleValueReset(metrics, ctx))
         return true;
 
@@ -38,8 +38,8 @@ bool RouterEigrpTopology_DefaultMetric_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
 {
-    auto& internal = ctx.configs.reg.get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>();
-    auto& external = ctx.configs.reg.get<config::Eigrp::EXTERNAL_ADMIN_DISTANCE>();
+    auto& internal = ctx.configs().reg.get<config::Eigrp::INTERNAL_ADMIN_DISTANCE>();
+    auto& external = ctx.configs().reg.get<config::Eigrp::EXTERNAL_ADMIN_DISTANCE>();
     if (!utils::setFieldValue(internal, ctx, segs >> 0 >> 1))
         return false;
     if (!utils::setFieldValue(external, ctx, segs >> 0 >> 2))
@@ -49,7 +49,7 @@ bool RouterEigrpTopology_Distance_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_EigrpEventLogSize_Handler(EIGRP_PARAMS)
 {
-    auto& logSiz = ctx.configs.reg.get<config::Eigrp::MAX_EVENT_LOG_SIZE>();
+    auto& logSiz = ctx.configs().reg.get<config::Eigrp::MAX_EVENT_LOG_SIZE>();
     return utils::setFieldValue(logSiz, ctx, segs[0] >> 1);
 }
 
@@ -67,20 +67,20 @@ bool RouterEigrpTopologyV6_Exit_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_MaximumPaths_Handler(EIGRP_PARAMS)
 {
-    auto& maxPaths = ctx.configs.reg.get<config::Eigrp::MAX_PATHS>();
+    auto& maxPaths = ctx.configs().reg.get<config::Eigrp::MAX_PATHS>();
     return utils::setFieldValue(maxPaths, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpTopology_MetricMaximumHops_Handler(EIGRP_PARAMS)
 {
-    auto& metricMax = ctx.configs.reg.get<config::Eigrp::MAXIMUM_PREFIX>();
+    auto& metricMax = ctx.configs().reg.get<config::Eigrp::MAXIMUM_PREFIX>();
     return utils::setFieldValue(metricMax, ctx, segs[0] >> 1);
 }
 
 bool RouterEigrpTopology_ActiveTime_Handler(EIGRP_PARAMS)
 {
-    auto& active = ctx.configs.reg.get<config::Eigrp::ACTIVE_TIME>();
-    auto& disabled = ctx.configs.reg.get<config::Eigrp::ACTIVE_DISABLED>();
+    auto& active = ctx.configs().reg.get<config::Eigrp::ACTIVE_TIME>();
+    auto& disabled = ctx.configs().reg.get<config::Eigrp::ACTIVE_DISABLED>();
 
     switch (segs[0][0])
     {
@@ -99,7 +99,7 @@ bool RouterEigrpTopology_ActiveTime_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_TrafficShare_Handler(EIGRP_PARAMS)
 {
-    auto& trafficShare = ctx.configs.reg.get<config::Eigrp::TRAFFIC_SHARE>();
+    auto& trafficShare = ctx.configs().reg.get<config::Eigrp::TRAFFIC_SHARE>();
     if (utils::handleValueReset(trafficShare, ctx))
         return true;
 
@@ -122,7 +122,7 @@ bool RouterEigrpTopology_TrafficShare_Handler(EIGRP_PARAMS)
 
 bool RouterEigrpTopology_Variance_Handler(EIGRP_PARAMS)
 {
-    auto& variance = ctx.configs.reg.get<config::Eigrp::VARIANCE>();
+    auto& variance = ctx.configs().reg.get<config::Eigrp::VARIANCE>();
     return utils::setFieldValue(variance, ctx, segs >> 0 >> 1);
 }
 
