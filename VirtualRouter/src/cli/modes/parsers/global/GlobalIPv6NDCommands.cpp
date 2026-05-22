@@ -5,6 +5,7 @@
 #include "cli/parser/CommandUtils.hpp"
 #include "configs/registry/interface/NdpRegistry.h"
 #include "cli/parser/CommandUtils.hpp"
+#include "configs/FieldAccessor.hpp"
 
 #define NDP_PARAMS DEFINE_PARAMS(config::NdpBaseRegistry)
 

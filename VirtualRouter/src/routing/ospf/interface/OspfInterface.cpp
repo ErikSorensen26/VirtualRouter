@@ -77,7 +77,7 @@ void OspfInterface::calculateCost()
     uint16_t oldCost = cost;
     uint16_t newCost{0};
 
-    auto& configuredCost = configs.reg.get<config::OspfInterface::COST>();
+    auto configuredCost = configs.reg.get<config::OspfInterface::COST>();
     if (configuredCost.hasValue())
     {
         newCost = configuredCost.load();
@@ -257,9 +257,9 @@ void OspfInterface::syncConfigs()
 
 void OspfInterface::syncTimers()
 {
-    auto& helloTimer = configs.reg.get<config::OspfInterface::HELLO_INTERVAL>();
-    auto& helloMultiplier = configs.reg.get<config::OspfInterface::HELLO_MULTIPLIER>();
-    auto& deadTimer = configs.reg.get<config::OspfInterface::DEAD_INTERVAL>();
+    auto helloTimer = configs.reg.get<config::OspfInterface::HELLO_INTERVAL>();
+    auto helloMultiplier = configs.reg.get<config::OspfInterface::HELLO_MULTIPLIER>();
+    auto deadTimer = configs.reg.get<config::OspfInterface::DEAD_INTERVAL>();
 
     if (helloMultiplier.hasValue())
     {

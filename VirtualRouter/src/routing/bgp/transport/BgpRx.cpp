@@ -176,7 +176,7 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
 
     // Minimum hold time (if configured).
     auto& baseCfg = session.getBaseConfig();
-    auto& minHtOpt = baseCfg.reg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
+    auto minHtOpt = baseCfg.reg.get<config::BgpTransportBase::MINIMUM_HOLDTIME>();
     if (minHtOpt.hasValue())
     {
         uint16_t minHt = minHtOpt.load();
@@ -264,7 +264,7 @@ bool BgpRx::processOpen(Session& session, uint64_t cid, std::span<uint8_t> paylo
 
     // Validate remote AS matches configuration.
     auto& sessCfg = curSession->getNeighbor().getConfigs();
-    auto& remAsOpt = sessCfg.get<config::BgpNeighborSession::REMOTE_AS>();
+    auto remAsOpt = sessCfg.get<config::BgpNeighborSession::REMOTE_AS>();
     if (remAsOpt.hasValue())
     {
         uint32_t cfgAs = remAsOpt.load();

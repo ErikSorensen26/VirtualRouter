@@ -13,7 +13,7 @@ namespace core
 VirtualRouter::VirtualRouter(Global& g, const std::string& name)
     : defaulted(name == "default"),
       configs([&g, &name]() -> config::VrfRegistry& {
-          auto& vrfs = g.configs.reg.get<config::Global::VRF_CONFIGS>();
+          auto vrfs = g.configs.reg.get<config::Global::VRF_CONFIGS>();
           return vrfs.emplaceBack(name);
       }()),
       tcpManager(*this),
@@ -200,7 +200,7 @@ routing::ospf::OspfProcess& VirtualRouter::addOspfv3(uint16_t id, types::Address
 {
     if (ospfv3List.find(id) == ospfv3List.end())
     {
-        config::OspfAddressFamilyV3Registry& afConfigs = global.registry.create<config::OspfAddressFamilyV3Registry>();
+        config::Ospfv3AddressFamilyRegistry& afConfigs = configs.reg.get<config::Vrf::ROUTER_OSPFV3>().emplaceBack(id);
         ospfv3List.emplace(id, afConfigs);
     }
     auto ospf = ospfv3List.at(id);
@@ -313,10 +313,6 @@ config::GlobalRegistry& VirtualRouter::getGlobalConfigs()
     return global.configs;
 }
 
-config::Registry& VirtualRouter::getRegistry()
-{
-    return global.registry;
-}
 
 ControlScheduler& VirtualRouter::getControlScheduler()
 {

@@ -13,10 +13,10 @@ BgpProcess::BgpProcess(uint32_t as, core::VirtualRouter* vrf)
     : routingInstance(vrf),
       asNumber(as),
       scheduler(vrf->getControlScheduler().create()),
-      ntable(*this),
-      configs(vrf->getRegistry().create<config::BgpRegistry>(vrf->getInstanceId()))
+      ntable(*this)
 {
-    vrf->getRegistry().emplace(configs.reg.get<config::Bgp::BGP_BASE>());
+    configs.reg.get<config::Bgp::BGP_BASE>().bind(baseConfigs);
+    vrf->getConfigs().reg.get<config::Vrf::ROUTER_BGP>().bind(configs);
     scheduleScan();
 
     transport::tcp::ListenOptions opts;
@@ -74,7 +74,7 @@ void BgpProcess::shutdownNeighbor(Neighbor& nbr)
 void BgpProcess::unshutdownNeighbor(Neighbor& nbr)
 {
     auto& cfgs = nbr.getConfigs();
-    auto& connMode = cfgs.get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+    auto connMode = cfgs.get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
     bool passive = connMode.hasValue() && !connMode.load();
 
     // If a session already exists (likely in IDLE after being shut down), restart it in place.
@@ -111,7 +111,7 @@ void BgpProcess::onSessionEstablished(Session& session)
         }
     };
 
-    auto& delayField = getConfigs().reg.get<config::Bgp::BGP_UPDATE_DELAY>();
+    auto delayField = getConfigs().reg.get<config::Bgp::BGP_UPDATE_DELAY>();
     if (delayField.hasValue())
     {
         const types::IPAddress peerAddr = nbr.neighborAddress;
@@ -176,19 +176,15 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
             [&](const auto& rangesList)
             {
                 uint32_t remoteV4 = nbrIp.v4();
-                for (const auto& ranges : rangesList)
+                for (const auto& [netAddr, prefixLen, pgName] : rangesList)
                 {
-                    for (const auto& [netAddr, prefixLen, pgName] : ranges)
+                    if (prefixLen > 32) continue;
+                    uint32_t mask = types::v4Mask(static_cast<uint8_t>(prefixLen));
+                    if ((remoteV4 & mask) == (netAddr & mask))
                     {
-                        if (prefixLen > 32) continue;
-                        uint32_t mask = types::v4Mask(static_cast<uint8_t>(prefixLen));
-                        if ((remoteV4 & mask) == (netAddr & mask))
-                        {
-                            matchedGroup = pgName;
-                            break;
-                        }
+                        matchedGroup = pgName;
+                        break;
                     }
-                    if (!matchedGroup.empty()) break;
                 }
             });
 
@@ -198,7 +194,7 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
 
     // Check if accepting a connection is allowed
     auto allowPassive = [&]() {
-        auto& connMode = nbr->getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+        auto connMode = nbr->getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
         return !(connMode.hasValue() && connMode.load() /*active = true*/);
     };
 
@@ -229,7 +225,7 @@ void BgpProcess::onAcceptCallback(transport::tcp::AcceptCallbackCtx& ctx) noexce
 
     // BGP_LISTEN_LIMIT caps the total number of concurrently accepted sessions.
     auto overLimit = [&]() {
-        auto& limitField = bgp->configs.reg.get<config::Bgp::BGP_LISTEN_LIMIT>();
+        auto limitField = bgp->configs.reg.get<config::Bgp::BGP_LISTEN_LIMIT>();
         return limitField.hasValue() && bgp->sessions.size() >= limitField.load();
     };
 

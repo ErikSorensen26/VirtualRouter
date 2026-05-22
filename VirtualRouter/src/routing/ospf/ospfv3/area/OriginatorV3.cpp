@@ -729,7 +729,7 @@ void OriginatorV3::addP2PLink(LsaBody& router, const OspfInterface& iface, const
 void OriginatorV3::addStubLink(LsaBody& router, const OspfInterface& iface, bool fullMask)
 {
     if (fullMask) return; // Full mask is only a v2 feature
-    auto& cost = iface.getConfigs().reg.get<config::OspfInterface::COST>();
+    auto cost = iface.getConfigs().reg.get<config::OspfInterface::COST>();
     uint16_t metric = area.process().getConfigs().reg.get<config::Ospf::MAX_METRIC_INCLUDE_STUB>().load()
         ? 0xFFFF : cost.hasValue() ? cost.load() : iface.cost;
     std::get<RouterLsaV3>(router).links.push_back(RouterLinkV3{

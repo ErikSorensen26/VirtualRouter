@@ -23,8 +23,8 @@ InterfaceConfigs::InterfaceConfigs(interface::Interface& iface, InterfaceType ty
     configs([&iface, type, id]() -> config::InterfaceRegistry& {
         interface::InterfaceKey key(type, id);
         auto* vrf = iface.getVRF();
-        auto& interfaceList = vrf->getGlobalConfigs().reg.get<config::Global::INTERFACE>();
-        return vrf->getRegistry().emplaceBack(interfaceList, key);
+        auto interfaceList = vrf->getGlobalConfigs().reg.get<config::Global::INTERFACE>();
+        return interfaceList.emplaceBack(key);
     }()),
     macAddress(hwInfo.mac)
 {
@@ -42,7 +42,7 @@ InterfaceConfigs::~InterfaceConfigs()
 
 void InterfaceConfigs::syncMac()
 {
-    auto& macField = configs.reg.get<config::Interface::MAC_ADDRESS>();
+    auto macField = configs.reg.get<config::Interface::MAC_ADDRESS>();
     if (macField.hasValue())
         macAddress.store(macField.load(), std::memory_order_release);
     else
@@ -89,7 +89,7 @@ uint32_t InterfaceConfigs::getBandwidth()
 {
     if (id != std::floor(id)) // Child interface
     {
-        auto& bw = configs.reg.get<config::Interface::BANDWIDTH_INHERITANCE>();
+        auto bw = configs.reg.get<config::Interface::BANDWIDTH_INHERITANCE>();
         if (bw.hasValue()) return bw.load();
     }
     return configs.reg.get<config::Interface::BANDWIDTH>().load();
@@ -99,7 +99,7 @@ uint32_t InterfaceConfigs::getReceiveBandwidth()
 {
     if (id != std::floor(id)) // Child interface
     {
-        auto& bw = configs.reg.get<config::Interface::BANDWIDTH_RECEIVE_INHERITANCE>();
+        auto bw = configs.reg.get<config::Interface::BANDWIDTH_RECEIVE_INHERITANCE>();
         if (bw.hasValue()) return bw.load();
     }
     return configs.reg.get<config::Interface::BANDWIDTH_RECEIVE>().load();

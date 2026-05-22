@@ -19,23 +19,23 @@ NeighborAf::NeighborAf(const AfiSafi& fam, Neighbor& p)
       mpNegotiated(false),
       parent(p),
       configs(fam, [&p, &fam]() -> config::BgpNeighborRegistry& {
-          auto& neighborConfigs = p.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>();
+          auto neighborConfigs = p.configs.get<config::BgpNeighborSession::AF_NEIGHBOR>();
           uint32_t id = fam.afi | uint32_t(fam.afi) << 16;
-          return p.getProcess().routingInstance->getRegistry().emplaceBack(neighborConfigs, id);
+          return neighborConfigs.emplaceBack(id);
       }())
 {
     configs.getConfigs().reg.context().set(this);
 
     // Resolve peer group
     {
-        auto& pgField = parent.getConfigs().get<config::BgpNeighborSession::PEER_GROUP>();
+        auto pgField = parent.getConfigs().get<config::BgpNeighborSession::PEER_GROUP>();
         if (pgField.hasValue())
             configs.setPeerGroup(parent.getProcess().getNtable().lookupPeerGroup(pgField.load()));
     }
 
     // Resolve session-level peer template from INHERIT_PEER_SESSION.
     {
-        auto& inhPolField = configs.get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
+        auto inhPolField = configs.get<config::BgpNeighbor::INHERIT_PEER_POLICY>();
         if (inhPolField.hasValue())
             configs.setPeerPolicyTemplate(parent.getProcess().getNtable().lookupPeerPolicyTemplate(inhPolField.load()));
     }

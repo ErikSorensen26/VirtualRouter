@@ -1,8 +1,13 @@
 /**
  * @file InterfaceRegistry.h
- * @brief Interface configuration registry
- *
- * Defines the configuration schema for a Interface including...
+ * @brief Per-interface configuration schema: IP addressing, BFD, QoS, OSPF, EIGRP, and NDP.
+ * @ingroup CONFIG_INTERFACE
+ */
+
+/**
+ * @defgroup CONFIG_INTERFACE Interface Configuration
+ * @ingroup CONFIG
+ * @brief Configuration schemas for network interface parameters.
  */
 
 #ifndef INTERFACE_REGISTRY_H
@@ -26,17 +31,30 @@
 
 struct IncompleteIf {};
 enum class EmptyIf { COUNT };
-using EmptyRegistryIf = config::SubRegistry<EmptyIf>;
+using EmptyRegistryIf = config::SubRegistry<EmptyIf, nullptr>;
 
 namespace interface { struct InterfaceKey; }
 
 namespace config
 {
 
+/**
+ * @brief Reserved base enum for shared interface field indices (currently unused).
+ * @ingroup CONFIG_INTERFACE
+ */
 enum class InterfaceBase
 {
 };
 
+/**
+ * @brief Configuration fields for a single network interface.
+ * @ingroup CONFIG_INTERFACE
+ *
+ * Covers all Cisco IOS-style interface sub-commands: IP addressing, BFD, ARP, NDP,
+ * EIGRP/OSPF per-interface parameters, QoS service policies, keepalive, MTU, and
+ * shutdown state. Fields marked `// TODO` are schema placeholders not yet fully
+ * implemented.
+ */
 enum class Interface
 {
     AAA_CONNECTION_INFO, // TODO string
@@ -259,9 +277,17 @@ void interfaceShutdown(void*);
 void interfaceIPv6Eigrp(void*);
 
 
+/**
+ * @brief Registry slot for one network interface instance.
+ * @ingroup CONFIG_INTERFACE
+ *
+ * Owns a `SubRegistry<Interface, ...>` holding every per-interface configuration field.
+ * Multiple `InterfaceRegistry` instances are stored in `GlobalRegistry::INTERFACE` keyed
+ * by `interface::InterfaceKey`.
+ */
 struct InterfaceRegistry
 {
-    SubRegistry<Interface,
+    SubRegistry<Interface, nullptr,
         ValueField<std::string CONFIG_INDEX_ARG(Interface::AAA_CONNECTION_INFO)>,
         RegistryContainer<ArpRegistry CONFIG_INDEX_ARG(Interface::ARP)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Interface::BANDWIDTH)>,
@@ -359,7 +385,7 @@ struct InterfaceRegistry
         AtomicField<bool CONFIG_INDEX_ARG(Interface::IPV6_MFIB_FORWARDING)>,
         AtomicField<uint16_t CONFIG_INDEX_ARG(Interface::IPV6_MTU)>,
         OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IPV6_MULTICAST)>,
-        RegistryContainer<NdpRegistry CONFIG_INDEX_ARG(Interface::Interface::IPV6_ND)>,
+        RegistryContainer<NdpRegistry CONFIG_INDEX_ARG(Interface::IPV6_ND)>,
         RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(Interface::IPV6_OSPF)>,
         OptionalAtomicField<IncompleteIf CONFIG_INDEX_ARG(Interface::IPV6_PIM)>,
         ValueField<std::string CONFIG_INDEX_ARG(Interface::IPV6_POLICY_ROUTE_MAP)>,

@@ -73,7 +73,7 @@ void EigrpIfaceSummary(void* i);
 
 struct EigrpInterfaceRegistry
 {
-    SubRegistry<EigrpInterface,
+    SubRegistry<EigrpInterface, nullptr,
         ValueField<std::string CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_KEYCHAIN)>,
         AtomicField<config::eigrp::AuthType CONFIG_INDEX_ARG(EigrpInterface::AUTHENTICATION_MODE)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(EigrpInterface::BANDWIDTH_PERCENTAGE)>,

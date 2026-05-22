@@ -52,7 +52,7 @@ void PacketDispatcherV2::handleIncoming(const packet::Ospfv2Header& ospfHeader, 
     size_t packetSize = packet::Ospfv2Header::fixedSize + ospfHeader.getTrail().size();
     if (ospfHeader.getPacketLen() > packetSize) return;
 
-    auto& interfaceAuth = iface.getBaseConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
+    auto interfaceAuth = iface.getBaseConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_TYPE>();
     auto authType = interfaceAuth.hasValue() ? interfaceAuth.load()
         : iface.getArea().getConfigs().reg.get<config::OspfArea::AUTHENTICATION_TYPE>().load();
 
@@ -598,7 +598,7 @@ void PacketDispatcherV2::processLLSDataBlock(PacketDispatcher::HeaderInfo& info)
 
 bool PacketDispatcherV2::processOspfSimpleAuthentication(const packet::Ospfv2Header& hdr)
 {
-    auto& secretVal = iface.getBaseConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
+    auto secretVal = iface.getBaseConfigs().reg.get<config::OspfInterfaceBase::AUTHENTICATION_KEY>();
     if (!secretVal.hasValue()) return true; // Auth not fully enabled.
     if (hdr.getAuthType() != static_cast<uint16_t>(config::ospf::AuthType::SIMPLE))
         return false;

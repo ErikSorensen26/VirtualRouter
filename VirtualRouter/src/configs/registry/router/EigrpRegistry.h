@@ -1,6 +1,7 @@
 /**
  * @file EigrpRegistry.h
  * @brief EIGRP configuration registry: process, AF, and interface settings.
+ * @ingroup EIGRP
  *
  * Defines the configuration schema for EIGRP including process parameters,
  * address-family configuration, metric tuning, stub mode, and per-interface
@@ -16,6 +17,7 @@
 
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryDefaultTable.hpp"
+#include "interface/configs/InterfaceType.hpp"
 #include "EigrpInterfaceRegistry.h"
 #include "configs/SubRegistry.hpp"
 #include "interface/configs/InterfaceType.hpp"
@@ -25,12 +27,20 @@ namespace config
 namespace eigrp
 {
 
-enum class TrafficShareMode
+/**
+ * @brief Traffic sharing strategy across equal-cost EIGRP paths.
+ * @ingroup EIGRP
+ */
+enum class TrafficShareMode : uint8_t
 {
     BALENCED, ///< Balanced traffic sharing.
-    MINIMUM,   ///< Minimum traffic sharing.
+    MINIMUM,  ///< Minimum traffic sharing.
 };
 
+/**
+ * @brief Tie-breaking criteria for EIGRP LFA reroute path selection.
+ * @ingroup EIGRP
+ */
 enum class RerouteTieBreak
 {
     INTERFACE_DISJOINT,
@@ -39,6 +49,10 @@ enum class RerouteTieBreak
     SRLG_DISJOINT
 };
 
+/**
+ * @brief EIGRP stub router advertisement flags.
+ * @ingroup EIGRP
+ */
 enum Stub
 {
     CONNECTED,
@@ -51,6 +65,10 @@ enum Stub
 
 } // namespace config::eigrp
 
+/**
+ * @brief EIGRP process-level configuration fields.
+ * @ingroup EIGRP
+ */
 enum class Eigrp
 {
     IS_NAMED,
@@ -194,9 +212,13 @@ void EigrpSyncPassive(void* e);
 void EigrpSyncRouterId(void* e);
 void EigrpSyncAfInterface(void* e);
 
+/**
+ * @brief Registry slot for an EIGRP process instance.
+ * @ingroup EIGRP
+ */
 struct EigrpRegistry
 {
-    SubRegistry<Eigrp,
+    SubRegistry<Eigrp, nullptr,
         AtomicField<bool CONFIG_INDEX_ARG(Eigrp::IS_NAMED)>,
         AtomicField<bool CONFIG_INDEX_ARG(Eigrp::AUTO_SUMMARIZATION)>,
         OwnedListField<config::EigrpInterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Eigrp::AF_INTERFACE)>,
@@ -253,7 +275,8 @@ struct EigrpRegistry
         AtomicField<bool CONFIG_INDEX_ARG(Eigrp::SHUTDOWN), EigrpShutdown>,
         ListField<std::tuple<types::IPAddress, uint8_t, uint32_t, uint32_t, uint8_t, uint8_t, uint16_t, uint8_t> CONFIG_INDEX_ARG(Eigrp::SUMMARY_METRIC)>,
         OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::ACTIVE_TIME)>,
-        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::ACTIVE_DISABLED)>, AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::GRACEFUL_PURGE_TIME)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Eigrp::ACTIVE_DISABLED)>,
+        AtomicField<uint16_t CONFIG_INDEX_ARG(Eigrp::GRACEFUL_PURGE_TIME)>,
         AtomicField<bool CONFIG_INDEX_ARG(Eigrp::NON_STOP_FORWARDING)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Eigrp::WIDE_METRIC)>,
         AtomicField<uint8_t CONFIG_INDEX_ARG(Eigrp::RIB_SCALE)>,
@@ -276,6 +299,10 @@ struct EigrpRegistry
     > reg;
 };
 
+/**
+ * @brief Named-mode EIGRP container fields (IPv4 and IPv6 AF instances, shutdown).
+ * @ingroup EIGRP
+ */
 enum class EigrpNamed
 {
     NAMED_INSTANCES_V4,
@@ -289,11 +316,15 @@ enum class EigrpNamed
 
 CONFIG_DEFAULT_TABLE(EIGRP_NAMED_DEFAULTS);
 
+/**
+ * @brief Registry slot for a named-mode EIGRP container.
+ * @ingroup EIGRP
+ */
 struct EigrpNamedRegistry
 {
-    SubRegistry<EigrpNamed, 
-        ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES)>,
-        ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES)>,
+    SubRegistry<EigrpNamed, nullptr,
+        ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V4)>,
+        ListField<std::tuple<uint16_t, std::string> CONFIG_INDEX_ARG(EigrpNamed::NAMED_INSTANCES_V6)>,
         AtomicField<bool CONFIG_INDEX_ARG(EigrpNamed::SHUTDOWN)>
     > reg;
 };

@@ -10,6 +10,7 @@
 #include "cli/runtime/CliSession.h"
 #include "cli/parser/CommandUtils.hpp"
 #include "GlobalHelpers.hpp"
+#include "configs/FieldAccessor.hpp"
 
 #define GLOBAL_PARAMS DEFINE_PARAMS(config::GlobalRegistry)
 #define GLOBAL_SUB_PARAMS DEFINE_SUB_PARAMS(config::GlobalRegistry)
@@ -28,8 +29,8 @@ bool GlobalIPv6_ND_SubHandler(GLOBAL_SUB_PARAMS)
 bool GlobalIPv6_Neighbor_Handler(GLOBAL_PARAMS)
 {
     //ListField<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
-    auto& neighbors = ctx.configs().reg.get<config::Global::IPV6_NEIGHBOR>();
-    typename config::DefType<decltype(neighbors)>::node tup;
+    auto neighbors = ctx.configs().reg.get<config::Global::IPV6_NEIGHBOR>();
+    typename config::DefType<decltype(neighbors)::Field>::node tup;
     for (const auto& seg : segs)
     {
         switch (seg[0])
@@ -63,7 +64,7 @@ bool GlobalIPv6_RouterEIGRP_Handler(GLOBAL_PARAMS)
     config::VrfRegistry* vrf;
     if (!getVrfConfigs(vrf, ctx))
         return false;
-    auto& eigrpList = vrf->reg.get<config::Vrf::ROUTER_EIGRP_V6>();
+    auto eigrpList = vrf->reg.get<config::Vrf::ROUTER_EIGRP_V6>();
     if (auto it = eigrpList.find(asNum); it != eigrpList.end())
     {
         if (it->second.reg.get<config::Eigrp::IS_NAMED>().load())

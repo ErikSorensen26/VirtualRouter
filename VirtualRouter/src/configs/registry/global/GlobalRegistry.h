@@ -1,14 +1,18 @@
 /**
  * @file GlobalRegistry.h
- * @brief Global configuration registry
- *
- * Defines the configuration schema for the global scope.
+ * @brief Global configuration registry: system-wide settings and per-VRF containers.
+ * @ingroup CONFIG_GLOBAL
+ */
+
+/**
+ * @defgroup CONFIG_GLOBAL Global Configuration
+ * @ingroup CONFIG
+ * @brief Configuration schemas for the global system scope and per-VRF containers.
  */
 
 #ifndef GLOBAL_REGISTRY_HPP
 #define GLOBAL_REGISTRY_HPP
 
-#include <vector>
 #include <IPAddress.h>
 #include "configs/RegistryTypes.hpp"
 #include "configs/RegistryReference.hpp"
@@ -16,6 +20,10 @@
 #include "configs/registry/interface/InterfaceRegistry.h"
 #include "configs/TupleSchema.hpp"
 #include "interface/configs/InterfaceType.hpp"
+
+#include "configs/registry/policy/AccessListRegistry.hpp"
+#include "configs/registry/policy/RouteMapRegistry.h"
+#include "configs/registry/policy/PrefixListRegistry.hpp"
 
 #undef IP_TCP
 #undef IP_RSVP
@@ -25,6 +33,10 @@ namespace config
 namespace global
 {
 
+/**
+ * @brief Naming convention for multilink bundle interfaces.
+ * @ingroup CONFIG_GLOBAL
+ */
 enum class MultilinkBundleName
 {
     AUTHENTICATED,
@@ -33,6 +45,10 @@ enum class MultilinkBundleName
     RFC
 };
 
+/**
+ * @brief IP address pool allocation strategy.
+ * @ingroup CONFIG_GLOBAL
+ */
 enum class AddressPoolMode
 {
     DHCP_POOL,
@@ -40,6 +56,10 @@ enum class AddressPoolMode
     LOCAL
 };
 
+/**
+ * @brief Scope of gratuitous ARP announcements sent on interface events.
+ * @ingroup CONFIG_GLOBAL
+ */
 enum class GratuitousType
 {
     LOCAL,
@@ -47,6 +67,10 @@ enum class GratuitousType
     ALL
 };
 
+/**
+ * @brief IP protocol number aliases used in extended ACL protocol matching.
+ * @ingroup CONFIG_GLOBAL
+ */
 enum class ExtendedAclTypes : uint8_t
 {
     IP = 0,
@@ -65,6 +89,10 @@ enum class ExtendedAclTypes : uint8_t
     PCP = 108
 };
 
+/**
+ * @brief DSCP codepoint values for QoS classification in ACL matching.
+ * @ingroup CONFIG_GLOBAL
+ */
 enum class Dscp : uint8_t
 {
     AF11 = 0b001010,
@@ -90,14 +118,26 @@ enum class Dscp : uint8_t
     EF = 0b101110
 };
 
+/**
+ * @brief IP header option types for extended ACL matching.
+ * @ingroup CONFIG_GLOBAL
+ */
 enum class IPOption : uint8_t
 {
-
 };
 }
 
 void globalInterface(void*);
 
+/**
+ * @brief Configuration fields for the global system scope.
+ * @ingroup CONFIG_GLOBAL
+ *
+ * This enum indexes every configurable parameter at the global level — from banners
+ * and hostname through IP routing, ACLs, prefix-lists, route-maps, and protocol
+ * process containers. Fields marked `// TODO` are schema placeholders whose registry
+ * types are not yet fully implemented.
+ */
 enum class Global
 {
     ARCHIVE, // TODO
@@ -127,14 +167,14 @@ enum class Global
     FLOW_SAMPLER_MAP, // TODO
     HOSTNAME, // TODO
     INTERFACE,
-    IP_ACCESS_LIST_EXTENDED, // TODO
+    IP_ACCESS_LIST_EXTENDED,
     IP_ACCESS_LIST_HELPER_EGRESS_CHECK, // TODO
     IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD, // TODO
     IP_ACCESS_LIST_LOGGING_HASH_GENERATION, // TODO
     IP_ACCESS_LIST_LOGGING_INTERVAL, // TODO
     IP_ACCESS_LIST_MATCH_LOCAL_TRAFFIC, // TODO
     IP_ACCESS_LIST_ROLE_BASED, // TODO
-    IP_ACCESS_LIST_STANDARD, // TODO
+    IP_ACCESS_LIST_STANDARD,
     IP_ACCOUNTING_LIST, // TODO
     IP_ACCOUNTING_THRESHOLD, // TODO
     IP_ACCOUNTING_TRANSITS, // TODO
@@ -211,7 +251,7 @@ enum class Global
     IP_NBAR, // TODO
     IP_OSPF_NAME_LOOKUP, // TODO
     IP_POLICY_LIST, // TODO
-    IP_PREFIX_LIST, // TODO
+    IP_PREFIX_LIST,
     IP_REFLEXIVE_LIST_TIMEOUT, // TODO
     IP_ROUTING, // TODO
     IP_ROUTING_PROTOCOL_PURGE_INTERFACE, // TODO
@@ -233,7 +273,7 @@ enum class Global
     IP_VERIFY_DROP_RATE_COMPUTE_WINDOW, // TODO
     IP_VERIFY_DROP_RATE_NOTIFY_HOLD_DOWN, // TODO
     IP_VRF, // TODO
-    IPV6_ACCESS_LIST, // TODO
+    IPV6_ACCESS_LIST,
     IPV6_ACCESS_LIST_LOG_UPDATE_THRESHOLD, // TODO
     IPV6_ACCESS_LIST_ROLE_BASED, // TODO
     IPV6_CEF, // TODO
@@ -251,7 +291,7 @@ enum class Global
     IPV6_ND, // TODO
     IPV6_NEIGHBOR, // TODO
     IPV6_OSPF_NAME_LOOKUP, // TODO
-    IPV6_PREFIX_LIST, // TODO
+    IPV6_PREFIX_LIST,
     IPV6_PREFIX_POOL, // TODO
     IPV6_RADIUS_SOURCE_INTERFACE, // TODO
     IPV6_SPD_QUEUE_MAX_THRESHOLD, // TODO
@@ -306,10 +346,11 @@ enum class Global
     PRIVILEGED, // TODO
     QOS_POLICE_ORDER_PARENT_FIRST, // TODO
     QOS_SHAME_TIMER, // TODO
-    ROUTE_MAP, // TODO
+    ROUTE_MAP,
     ROUTE_TAG_LIST, // TODO
     ROUTE_TAG_NOTATION_DOTTED_DECIMAL, // TODO
     ROUTER_EIGRP_NAMED,
+    ROUTER_OSPFV3_DEFAULT,
     SAMPLER, // TODO
     SASL_PROFILE, // TODO
     SCRIPTING_TCL_ENCDIR, // TODO
@@ -488,15 +529,6 @@ enum class Global
 
 CONFIG_DEFAULT_TABLE(GLOBAL_DEFAULTS);
 
-#define IP_STANDARD_ACL_FIELDS(X) \
-    X(uint32_t,    sequence) \
-    X(bool,        permit) \
-    X(types::IPv4Prefix, prefix) \
-    X(bool,        log) \
-    X(std::string, remark)
-
-DEFINE_TUPLE_SCHEMA(IPStandardAcl, IP_STANDARD_ACL_FIELDS)
-
 #define IP_EXTENDED_ACL_FIELDS(X) \
     X(uint32_t,    sequence) \
     X(bool,        permit) \
@@ -510,9 +542,17 @@ DEFINE_TUPLE_SCHEMA(IPStandardAcl, IP_STANDARD_ACL_FIELDS)
 
 DEFINE_TUPLE_SCHEMA(IPExtendedAcl, IP_EXTENDED_ACL_FIELDS)
 
+/**
+ * @brief Registry slot for the global configuration scope.
+ * @ingroup CONFIG_GLOBAL
+ *
+ * Owns a `SubRegistry<Global, ...>` that holds every system-wide configuration field.
+ * The global registry is constructed once at startup and shared across all VRFs and
+ * protocol processes via the `RegistryDatabase`.
+ */
 struct GlobalRegistry
 {
-    SubRegistry<Global,
+    SubRegistry<Global, nullptr,
         AtomicField<bool CONFIG_INDEX_ARG(Global::ARCHIVE)>,
         ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER)>,
         ValueField<std::string CONFIG_INDEX_ARG(Global::BANNER_CONFIG_SAVE)>,
@@ -540,20 +580,20 @@ struct GlobalRegistry
         OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::FLOW_SAMPLER_MAP)>,
         ValueField<std::string CONFIG_INDEX_ARG(Global::HOSTNAME)>,
         OwnedListField<InterfaceRegistry, interface::InterfaceKey CONFIG_INDEX_ARG(Global::INTERFACE), globalInterface>,
-        ListField<std::vector<IPStandardAcl> CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_EXTENDED)>,
+        OwnedListField<ExtendedACLRegistry, std::string CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_EXTENDED)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_HELPER_EGRESS_CHECK)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOG_UPDATE_THRESHOLD)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOGGING_HASH_GENERATION)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_LOGGING_INTERVAL)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_MATCH_LOCAL_TRAFFIC)>,
         ValueField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_ROLE_BASED)>,
-        ValueField<std::vector<IPExtendedAcl> CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_STANDARD)>,
+        OwnedListField<StandardACLRegistry, std::string CONFIG_INDEX_ARG(Global::IP_ACCESS_LIST_STANDARD)>,
         ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_LIST)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_THRESHOLD)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ACCOUNTING_TRANSITS)>,
-        AtomicField<bool CONFIG_INDEX_ARG(IP_ADDRESS_POOL_DHCP)>,
-        AtomicField<bool CONFIG_INDEX_ARG(IP_ADDRESS_POOL_DHCP_PROXY)>,
-        AtomicField<bool CONFIG_INDEX_ARG(IP_ADDRESS_POOL_LOCAL)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ADDRESS_POOL_DHCP)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ADDRESS_POOL_DHCP_PROXY)>,
+        AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ADDRESS_POOL_LOCAL)>,
         AtomicField<int CONFIG_INDEX_ARG(Global::IP_ARP_GRATUITOUS)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE)>,
         OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_ARP_INCOMPLETE_ENTRIES)>,
@@ -624,7 +664,7 @@ struct GlobalRegistry
         ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_NBAR)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_OSPF_NAME_LOOKUP)>,
         ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_POLICY_LIST)>,
-        ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_PREFIX_LIST)>,
+        OwnedListField<PrefixListRegistry<types::IPv4Prefix>, std::string CONFIG_INDEX_ARG(Global::IP_PREFIX_LIST)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IP_REFLEXIVE_LIST_TIMEOUT)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IP_ROUTING)>,
         ListField<Incomplete CONFIG_INDEX_ARG(Global::IP_ROUTING_PROTOCOL_PURGE_INTERFACE)>,
@@ -646,7 +686,7 @@ struct GlobalRegistry
         AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_COMPUTE_WINDOW)>,
         AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IP_VERIFY_DROP_RATE_NOTIFY_HOLD_DOWN)>,
         OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IP_VRF)>,
-        OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST)>,
+        OwnedListField<ExtendedACLRegistry, std::string CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST)>,
         AtomicField<uint32_t CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST_LOG_UPDATE_THRESHOLD)>,
         OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::IPV6_ACCESS_LIST_ROLE_BASED)>,
         ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_CEF)>,
@@ -664,7 +704,7 @@ struct GlobalRegistry
         RegistryContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Global::IPV6_ND)>,
         ListField<std::tuple<types::IPv6Address, interface::InterfaceKey, types::Mac> CONFIG_INDEX_ARG(Global::IPV6_NEIGHBOR)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::IPV6_OSPF_NAME_LOOKUP)>,
-        ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_LIST)>,
+        OwnedListField<PrefixListRegistry<types::IPv6Prefix>, std::string CONFIG_INDEX_ARG(Global::IPV6_PREFIX_LIST)>,
         ListField<Incomplete CONFIG_INDEX_ARG(Global::IPV6_PREFIX_POOL)>,
         ValueField<interface::InterfaceKey CONFIG_INDEX_ARG(Global::IPV6_RADIUS_SOURCE_INTERFACE)>,
         AtomicField<uint16_t CONFIG_INDEX_ARG(Global::IPV6_SPD_QUEUE_MAX_THRESHOLD)>,
@@ -719,10 +759,11 @@ struct GlobalRegistry
         ListField<Incomplete CONFIG_INDEX_ARG(Global::PRIVILEGED)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::QOS_POLICE_ORDER_PARENT_FIRST)>,
         AtomicField<int CONFIG_INDEX_ARG(Global::QOS_SHAME_TIMER)>, // 1 or 4
-        OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_MAP)>,
+        OwnedListField<RouteMapRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_MAP)>,
         OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTE_TAG_LIST)>,
         AtomicField<bool CONFIG_INDEX_ARG(Global::ROUTE_TAG_NOTATION_DOTTED_DECIMAL)>,
         OwnedListField<EigrpNamedRegistry, std::string CONFIG_INDEX_ARG(Global::ROUTER_EIGRP_NAMED)>,
+        OwnedListField<OspfRegistry, uint16_t CONFIG_INDEX_ARG(Global::ROUTER_OSPFV3_DEFAULT)>,
         OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SAMPLER)>,
         OwnedListField<EmptyRegistry, std::string CONFIG_INDEX_ARG(Global::SASL_PROFILE)>,
         ListField<Incomplete CONFIG_INDEX_ARG(Global::SCRIPTING_TCL_ENCDIR)>,

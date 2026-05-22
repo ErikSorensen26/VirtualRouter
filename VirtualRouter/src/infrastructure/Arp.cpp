@@ -251,7 +251,7 @@ void Arp::resolveAndSend(types::IPv4Address targetIp, processing::PacketBuilder&
     // Entry limit enforcement, only enforce if a new entry is required
     if (!cached)
     {
-        auto& incompleteEntries = global.configs.reg.get<config::Global::IP_ARP_INCOMPLETE_ENTRIES>();
+        auto incompleteEntries = global.configs.reg.get<config::Global::IP_ARP_INCOMPLETE_ENTRIES>();
         if (incompleteEntries.hasValue() && incompletes >= incompleteEntries.load())
             return; // Too many incomplete entries
         insertionOrder.push_back(targetIp);

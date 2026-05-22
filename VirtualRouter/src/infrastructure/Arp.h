@@ -37,8 +37,9 @@ namespace infrastructure
  * incoming replies, handles proxy-ARP entries, and queues packets that are
  * waiting for a next-hop MAC to be resolved.
  *
- * The cache is protected by a shared_mutex to allow concurrent reads from the
- * forwarding path while serialising writes on resolution events.
+ * The data-plane table (`arpTable`) is an `AtomicHashMap` readable lock-free
+ * from any thread. The control-plane cache (`arpCache`) is only accessed on
+ * the interface control scheduler, so no mutex is required for either path.
  *
  * @ingroup INFRASTRUCTURE
  */

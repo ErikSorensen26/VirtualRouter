@@ -104,7 +104,7 @@ void OspfInterfaceDemandCircuit(void* iface);
 
 struct OspfInterfaceRegistry
 {
-    SubRegistry<OspfInterface,
+    SubRegistry<OspfInterface, nullptr,
         AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::BFD)>, // TODO
         OptionalAtomicField<uint16_t CONFIG_INDEX_ARG(OspfInterface::COST)>,
         AtomicField<bool CONFIG_INDEX_ARG(OspfInterface::DATABASE_FILTER)>,
@@ -150,7 +150,7 @@ enum class OspfInterfaceAddressFamily : uint8_t
 
 struct OspfInterfaceAddressFamilyRegistry
 {
-    SubRegistry<OspfInterfaceAddressFamily,
+    SubRegistry<OspfInterfaceAddressFamily, nullptr,
         RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::BASE)>,
         RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV4)>,
         RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceAddressFamily::IPV6)>
@@ -169,7 +169,7 @@ enum class OspfInterfaceIPSec : uint8_t
 
 struct OspfInterfaceIPSecRegistry
 {
-    SubRegistry<OspfInterfaceIPSec,
+    SubRegistry<OspfInterfaceIPSec, nullptr,
         OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(OspfInterfaceIPSec::SPI)>, // TODO:
         OptionalAtomicField<ospf::IPsecAuthType CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_TYPE)>, // TODO:
         ValueField<std::array<uint8_t, 40> CONFIG_INDEX_ARG(OspfInterfaceIPSec::AUTHENTICATION_KEY)>, // TODO:
@@ -213,7 +213,7 @@ void OspfInterfaceBasePrefixSuppression(void* iface);
 
 struct OspfInterfaceBaseRegistry
 {
-    SubRegistry<OspfInterfaceBase,
+    SubRegistry<OspfInterfaceBase, nullptr,
         RegistryContainer<OspfInterfaceRegistry CONFIG_INDEX_ARG(OspfInterfaceBase::BASE)>,
         OwnedListField<OspfInterfaceAddressFamilyRegistry, uint32_t CONFIG_INDEX_ARG(OspfInterfaceBase::PROCESS_CONFIGS)>,
         AtomicField<uint8_t CONFIG_INDEX_ARG(OspfInterfaceBase::INSTANCE_ID)>,
@@ -244,7 +244,7 @@ enum class OspfInterfaceAf
 
 struct OspfInterfaceAfRegistry 
 {
-    SubRegistry<OspfInterfaceAf,
+    SubRegistry<OspfInterfaceAf, nullptr,
         RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::IPV4)>,
         RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::IPV6)>,
         RegistryContainer<OspfInterfaceBaseRegistry CONFIG_INDEX_ARG(OspfInterfaceAf::DEFAULT)>

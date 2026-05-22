@@ -80,8 +80,9 @@ public:
 
 private:
     BgpProcess& process;
-    config::BgpNeighborSessionRegistry& sessionConfigs;
-    mutable std::unordered_map<AfiSafi, std::reference_wrapper<config::BgpNeighborRegistry>> afConfigs; ///< Lazily populated per-AF config registries.
+    config::BgpBaseRegistry baseConfigs;
+    config::BgpNeighborSessionRegistry sessionConfigs;
+    mutable std::unordered_map<AfiSafi, config::BgpNeighborRegistry> afConfigs; ///< Lazily populated per-AF config registries.
 };
 
 /**
@@ -129,7 +130,8 @@ public:
     }
 
 private:
-    config::BgpNeighborSessionRegistry& configs;
+    config::BgpBaseRegistry baseConfigs;
+    config::BgpNeighborSessionRegistry configs;
 };
 
 /**
@@ -177,7 +179,7 @@ public:
     }
 
 private:
-    config::BgpNeighborRegistry& configs;
+    config::BgpNeighborRegistry configs;
 };
 
 /**

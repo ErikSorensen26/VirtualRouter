@@ -20,6 +20,7 @@
 #include "ospf/topology/RoutingTable.h"
 #include "ospf/topology/TopologyTable.h"
 #include "configs/registry/router/OspfRegistry.h"
+#include "configs/FieldAccessor.hpp"
 
 namespace core { class VirtualRouter; }
 
@@ -61,13 +62,13 @@ struct OspfV3Instance
      *
      * @param cfgs Shared OSPFv3 address-family configuration reference.
      */
-    OspfV3Instance(config::OspfAddressFamilyV3Registry& cfgs)
+    OspfV3Instance(config::Ospfv3AddressFamilyRegistry& cfgs)
         : configs(cfgs) {}
 
     OspfProcess* ipv4 = nullptr; ///< OSPFv3 process handling the IPv4 address family.
     OspfProcess* ipv6 = nullptr; ///< OSPFv3 process handling the IPv6 address family.
 
-    config::OspfAddressFamilyV3Registry& configs; ///< Shared AF-level configuration reference.
+    config::Ospfv3AddressFamilyRegistry& configs; ///< Shared AF-level configuration reference.
 };
 
 /**
@@ -125,8 +126,6 @@ struct OspfInterfaceInstance
 class OspfProcess
 {
 public:
-    using V3AfConfigs = config::OspfAddressFamilyV3Registry; ///< OSPFv3 AF config reference type alias.
-    using V2AfConfigs = config::OspfAddressFamilyV2Registry; ///< OSPFv2 AF config reference type alias.
 
     /**
      * @brief Constructs an OSPF process.
@@ -256,7 +255,7 @@ public:
     uint16_t getProcId() const { return procId; }
     uint32_t getRouterId() const
     {
-        const auto& id = configs.reg.get<config::Ospf::ROUTER_ID>();
+        const auto id = configs.reg.get<config::Ospf::ROUTER_ID>();
         if (id.hasValue()) return id.load();
         return rid;
     }
@@ -419,7 +418,6 @@ private:
     uint32_t ifUpId, ifDownId, ipReadyId, ipDelId; ///< Event subscription handles; used to deregister on destruction.
 
     // CONFIGS
-    std::variant<std::monostate, std::reference_wrapper<V3AfConfigs>, std::reference_wrapper<V2AfConfigs>> afConfigs; ///< Address-family-specific config reference (v2 or v3).
     config::OspfRegistry& configs; ///< Process-level OSPF configuration reference.
 };
 } // namespace routing

@@ -1,8 +1,7 @@
 /**
  * @file NdpRegistry.h
- * @brief Ndp configuration registry
- *
- * Defines the configuration schema for NDP including...
+ * @brief Per-interface and global NDP configuration schema (RA, NUD, DAD, prefixes).
+ * @ingroup CONFIG_INTERFACE
  */
 
 #ifndef NDP_REGISTRY
@@ -19,18 +18,22 @@ namespace config
 namespace ndp
 {
 /**
- * @enum Preference
  * @brief Router preference for default route selection (RFC 4191).
+ * @ingroup CONFIG_INTERFACE
  */
 enum class Preference { HIGH, MEDIUM, LOW };
 
 /**
- * @enum RaGuardMode
  * @brief RA Guard protection level against unauthorized router announcements.
+ * @ingroup CONFIG_INTERFACE
  */
-enum class RaGuardMode : uint8_t { BLOCK_ALL, TRUSTED, MAC_WHITELIST};
+enum class RaGuardMode : uint8_t { BLOCK_ALL, TRUSTED, MAC_WHITELIST };
 }
 
+/**
+ * @brief Global NDP cache and resolution tuning parameters.
+ * @ingroup CONFIG_INTERFACE
+ */
 enum class NdpBase
 {
     CACHE_EXPIRE,
@@ -66,9 +69,13 @@ enum class NdpBase
 
 CONFIG_DEFAULT_TABLE(NDP_BASE_DEFAULTS);
 
+/**
+ * @brief Registry slot for global NDP cache and resolution parameters.
+ * @ingroup CONFIG_INTERFACE
+ */
 struct NdpBaseRegistry
 {
-    SubRegistry<NdpBase,
+    SubRegistry<NdpBase, nullptr,
         AtomicField<uint16_t CONFIG_INDEX_ARG(NdpBase::CACHE_EXPIRE)>,
         AtomicField<bool CONFIG_INDEX_ARG(NdpBase::CACHE_REFRESH)>,
         OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpBase::CACHE_INTERFACE_LIMIT)>,
@@ -86,6 +93,10 @@ struct NdpBaseRegistry
     > reg;
 };
 
+/**
+ * @brief Per-prefix RA advertisement parameters (lifetime, autoconfig flags, on-link).
+ * @ingroup CONFIG_INTERFACE
+ */
 enum class NdpEntry
 {
     VALID_LIFETIME,
@@ -107,16 +118,27 @@ enum class NdpEntry
     X(NdpEntry, OFF_LINK, false) \
     X(NdpEntry, NO_ADVERTISE, false)
 
-using NdpEntryRegistry = SubRegistry<NdpEntry,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpEntry::VALID_LIFETIME)>,
-    OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpEntry::PREFERRED_LIFETIME)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_AUTOCONFIG)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_ONLINK)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_RTR_ADDRESS)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::OFF_LINK)>,
-    AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_ADVERTISE)>
->;
+/**
+ * @brief Registry slot for one RA prefix advertisement entry.
+ * @ingroup CONFIG_INTERFACE
+ */
+struct NdpEntryRegistry
+{
+    SubRegistry<NdpEntry, nullptr,
+        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpEntry::VALID_LIFETIME)>,
+        OptionalAtomicField<uint32_t CONFIG_INDEX_ARG(NdpEntry::PREFERRED_LIFETIME)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_AUTOCONFIG)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_ONLINK)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_RTR_ADDRESS)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::OFF_LINK)>,
+        AtomicField<bool CONFIG_INDEX_ARG(NdpEntry::NO_ADVERTISE)>
+    > reg;
+};
 
+/**
+ * @brief Per-interface NDP configuration fields (RA generation, DAD, NUD, prefix table).
+ * @ingroup CONFIG_INTERFACE
+ */
 enum class Ndp
 {
     BASE,
@@ -175,9 +197,13 @@ enum class Ndp
 
 CONFIG_DEFAULT_TABLE(NDP_DEFAULTS);
 
+/**
+ * @brief Registry slot for per-interface NDP configuration.
+ * @ingroup CONFIG_INTERFACE
+ */
 struct NdpRegistry
 {
-    SubRegistry<Ndp,
+    SubRegistry<Ndp, nullptr,
         RegistryContainer<NdpBaseRegistry CONFIG_INDEX_ARG(Ndp::BASE)>,
         AtomicField<bool CONFIG_INDEX_ARG(Ndp::ADVERTISEMENT_INTERVAL)>,
         AtomicField<bool CONFIG_INDEX_ARG(Ndp::AUTOCONFIG_DEFAULT_ROUTE)>,

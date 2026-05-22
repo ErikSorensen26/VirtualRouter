@@ -34,6 +34,7 @@
 #include <optional>
 #include <typeinfo>
 #include <stdexcept>
+#include <RCU.hpp>
 
 #include "RegistryTypes.hpp"
 #include "RegistryDefaultTable.hpp"
@@ -100,11 +101,13 @@ using SubRegistryType = decltype(std::declval<T>().reg);
  *
  * @see RegistryTypes.hpp, RegistryDefaultTable.hpp
  */
-template <typename ENUM, typename... Fields>
+template <typename ENUM, ApplyFn H, typename... Fields>
 class SubRegistry : public SubRegistryFlag
 {
 public:
+    using sub     = SubRegistry;
     using type    = ENUM;
+    static constexpr ApplyFn applier = H; ///< Callback invoked whenever the effective value changes.
 
     // Meta tuple: used ONLY for compile-time checks / type indexing.
     /// Type alias for the field tuple (for type checking only, not storage).
@@ -142,6 +145,12 @@ public:
         installDefaults(std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
+    template <ENUM F>
+    FieldTypeAt<F>::type getDefault() const noexcept
+    requires IsAtomicField<FieldTypeAt<F>>
+    {
+        return Entry<ENUM, F>::template get<FieldTypeAt<F>::type>();
+    }
 
     /**
      * @brief Gets the context provider for fields that require external data.
@@ -151,13 +160,70 @@ public:
     ContextProvider& context() noexcept { return ctxProvider; }
 
     /**
+     * @brief Returns a typed accessor for the field identified by enum constant `F`.
+     *
+     * The returned accessor type depends on the underlying field kind:
+     * - `AtomicField`         → `AtomicFieldAccessor<F>`
+     * - `OptionalAtomicField` → `OptionalAtomicFieldAccessor<F>`
+     * - `ValueField`          → `ValueFieldAccessor<F>`
+     * - `ListField`           → `ListFieldAccessor<F>`
+     * - `OwnedListField`      → `OwnedListFieldAccessor<F>`
+     * - `RegistryContainer`   → direct reference to the contained value
+     *
+     * Accessors carry the context provider and applier pointer so that `set()`/
+     * `unset()` fire the live-notification callback automatically.
+     *
+     * @tparam F Enum constant identifying the field.
+     * @return An accessor object or reference for the requested field.
+     */
+    template <ENUM F>
+    decltype(auto) get() noexcept;
+
+    /**
+     * @brief Const overload of @ref get(); returns a const accessor.
+     *
+     * @tparam F Enum constant identifying the field.
+     * @return A const accessor object or reference for the requested field.
+     */
+    template <ENUM F>
+    decltype(auto) get() const noexcept;
+
+    /**
+     * @brief Gets a inherited field by enum constant (mutable).
+     *
+     * @tparam F Enum constant identifying the field
+     * @return Const reference to the field value
+     */
+    template <ENUM F>
+    FieldTypeAt<F>* getInherited() noexcept
+    {
+        if (base)
+            return &base->getValue<F>();
+        return nullptr;
+    }
+
+    /**
+     * @brief Gets a inherited field by enum constant (const).
+     *
+     * @tparam F Enum constant identifying the field
+     * @return Const reference to the field value
+     */
+    template <ENUM F>
+    const FieldTypeAt<F>* getInherited() const noexcept
+    {
+        if (base)
+            return &base->getValue<F>();
+        return nullptr;
+    }
+
+    /**
      * @brief Gets a field by enum constant (mutable).
      *
      * @tparam F Enum constant identifying the field
      * @return Reference to the field value
      */
     template <ENUM F>
-    decltype(auto) get() noexcept
+    decltype(auto) getValue() noexcept
     {
         constexpr size_t I = config::toIndex<F>;
         return (*std::get<I>(fields));
@@ -170,7 +236,7 @@ public:
      * @return Const reference to the field value
      */
     template <ENUM F>
-    decltype(auto) get() const noexcept
+    const FieldTypeAt<F>& getValue() const noexcept
     {
         constexpr size_t I = config::toIndex<F>;
         return (*std::get<I>(fields));
@@ -207,7 +273,7 @@ public:
         return *static_cast<P*>(parent);
     }
 
-    std::mutex mu; ///< Synchronization mutex for concurrent field access.
+    mutable std::mutex mu; ///< Synchronization mutex for concurrent field access.
 
     /**
      * @brief Automatically initialises every unbound @ref RegistryContainer field.
@@ -225,8 +291,23 @@ public:
         initContainersImpl(db, std::make_index_sequence<std::tuple_size_v<FieldTuple>>{});
     }
 
+    /**
+     * @brief Returns the context provider for this registry.
+     *
+     * Accessor constructors call this to obtain the provider reference so that
+     * `set()`/`unset()` can fire the applier callback when a live context is
+     * registered. Exposed as public so that the accessor implementation in
+     * FieldAccessor.hpp can reach it without friendship.
+     *
+     * @return Reference to the `ContextProvider` owned by this registry.
+     */
+    ContextProvider& getProvider()
+    {
+        return ctxProvider;
+    }
+
 private:
-    template <typename T, typename K CONFIG_INDEX_PARAM, auto H>
+    template <typename T, typename K CONFIG_INDEX_PARAM, auto A>
     friend class OwnedListField;
 
     /**
@@ -288,17 +369,7 @@ private:
     template <typename F>
     auto createField()
     {
-        if constexpr (IsListField<F> || IsValueField<F>)
-        {
-            if constexpr (RequiresContext<F>)
-                return std::forward_as_tuple(ctxProvider, mu);
-            else
-                return std::forward_as_tuple(mu);
-        }
-        else if constexpr (RequiresContext<F>)
-            return std::forward_as_tuple(ctxProvider);
-        else
-            return std::tuple<>{};
+        return std::tuple<>{};
     }
 
     /// Creates constructor arguments for a masked field (includes parent field).
@@ -355,10 +426,9 @@ private:
         if constexpr (config::IsAtomicField<Field>)
         {
             constexpr ENUM E = static_cast<ENUM>(I);
-            using T = typename Field::type;
-            auto& f = *std::get<I>(fields);
+            auto f = get<static_cast<ENUM>(I)>();
             if constexpr (hasV<ENUM, E>)
-                f.setDefault(getV<T, E>());
+                f.setDefault();
         }
     }
 
@@ -400,5 +470,7 @@ private:
     SubRegistry* base{nullptr};
 };
 }
+
+#include "FieldAccessor.hpp"
 
 #endif // SUB_REGISTRY_HPP

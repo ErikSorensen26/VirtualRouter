@@ -62,7 +62,7 @@ Neighbor* NeighborTable::createNeighbor(const types::IPAddress& ipAddress)
     auto [it, ok] = neighbors.try_emplace(ipAddress, ipAddress, process);
     if (ok)
     {
-        auto& connectionMode = it->second.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
+        auto connectionMode = it->second.getConfigs().get<config::BgpNeighborSession::TRANSPORT_CONNECTION_MODE>();
         if (connectionMode.hasValue() && !connectionMode.load() /*active = true*/)
             process.startPassiveSession(it->second);
         process.startActiveSession(it->second);

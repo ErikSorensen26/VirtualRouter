@@ -5,8 +5,10 @@
             "name": "CMake Debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${command:cmake.launchTargetPath}",
-            "args": [],
+            "program": "/usr/bin/sudo",
+            "args": [
+                "${command:cmake.launchTargetPath}"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [

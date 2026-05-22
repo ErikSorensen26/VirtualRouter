@@ -1,91 +1,118 @@
-# [Project] — Architecture
+# Project Architecture Specification
 
-This document explains *why* the system is built the way it is. It does not
-describe what files exist or list class members — the code does that. Each
-section answers the question: "why was this done this way, and what would
-break if it were done differently?"
+This document defines the required structure and reasoning format for describing system architecture. It is a strict schema: every section must be completed when used for a real system. No section may be omitted or left partially defined in production use.
 
----
-
-## Table of Contents
-
-- [Design Philosophy](#design-philosophy)
-1. [Section Name](#1-section-name)
-2. ...
+This document does not describe a specific system. It defines the required format for describing any system.
 
 ---
 
-## Design Philosophy
+## 1. Required Completeness Rules
 
-State the core convictions that shaped every decision. These should be
-principles strong enough to resolve ambiguous future design questions —
-not a list of features.
+- Every section labeled “required” must be filled when applied to a real system.
+- No placeholder text (e.g. “TBD”, “...”, “Section Name”) is permitted in finalized instances.
+- Every subsystem must define:
+  - Responsibility
+  - Key design decision
+  - Rejected alternatives
+  - System invariants
+- Every cross-cutting decision must define:
+  - Scope of impact
+  - System-wide problem solved
+  - Cost of reversal
 
-Each principle follows this pattern:
-
-> **Title that reads as a conviction, not a category.**
->
-> One paragraph naming the problem or constraint that forced this choice.
-> What breaks, slows down, or becomes incorrect if you ignore this?
->
-> One paragraph explaining the mechanism chosen and why it satisfies the
-> constraint. Be specific — name the data structure, the pattern, the
-> tradeoff accepted.
->
-> An optional closing sentence making clear this is a foundational
-> assumption, not an optimization added later.
-
-### Example principle
-
-**The data plane must never yield to the control plane.**
-
-Packet forwarding happens on nanosecond timescales. Route updates and
-protocol convergence happen on millisecond timescales. If a forwarding
-thread ever blocked waiting for a control-plane lock, jitter would be
-unbounded and latency guarantees impossible.
-
-The FIB is protected by RCU. A forwarding thread takes one memory barrier
-and proceeds without lock acquisition. The control plane publishes a new FIB
-entry atomically and retires the old one after all readers drain. A BGP
-convergence event has zero impact on forwarding throughput.
-
-This is the foundational constraint the entire threading model is built
-around — not a performance optimization added after the fact.
+If any of these are missing, the document is considered incomplete.
 
 ---
 
-## 1. Section Name
+## 2. Table of Contents (Fixed Structure)
 
-Each section answers:
-1. What problem does this subsystem solve, and why does it need to exist as
-   a distinct thing rather than being inlined elsewhere?
-2. What was the key design decision, and what alternatives were rejected?
-3. What invariants does the rest of the system depend on from this subsystem?
+- Design Philosophy
+- Subsystem Architecture
 
-Avoid describing the class hierarchy or file layout — that belongs in code
-comments. Focus on the reasoning.
-
-### Subsection
-
-If a specific design decision within the subsystem needs its own explanation,
-give it a subsection. Lead with the constraint or goal, then the mechanism,
-then the consequence.
-
-> **Why [mechanism], not [obvious alternative].**
->
-> [The constraint that ruled out the alternative.]
->
-> [How the chosen mechanism satisfies it, and what it costs.]
+No additional top-level sections may be introduced without updating this specification.
 
 ---
 
-## Cross-Cutting Decisions
+## 3. Design Philosophy (System-Wide Invariants)
 
-For decisions that affected many subsystems simultaneously — threading model,
-ownership model, type-safety choices, etc. These belong here rather than
-scattered across protocol sections.
+This section defines non-negotiable system constraints.
 
-Each entry:
-- Names the decision
-- Explains what problem it solved system-wide
-- Explains what it would cost to change it now
+### Required Format per Principle
+
+Each principle must follow this structure exactly:
+
+> **Invariant Statement**
+>
+> Constraint context: The system limitation, requirement, or failure condition that forces this rule.
+>
+> Mechanism: The architectural or algorithmic design used to enforce the constraint. Must include explicit trade-offs.
+>
+> Status: This is a foundational invariant and not a tunable optimization.
+
+### Rule
+
+- Each principle must map to a real system constraint.
+- Vague or decorative principles are not allowed.
+
+---
+
+## 4. Subsystem Architecture
+
+Each subsystem must be defined as a logically independent boundary.
+
+### Required Subsystem Format
+
+For every subsystem:
+
+1. **Purpose**
+   - What problem it solves
+   - Why it cannot be merged into another subsystem
+
+2. **Design Decision**
+   - Primary architectural choice
+   - Explicit rejected alternatives and reasoning
+
+3. **Invariants**
+   - What guarantees it provides to the rest of the system
+
+### Subsystem Detail Block (Optional Depth)
+
+Where a decision affects multiple subsystems, name the affected subsystems
+explicitly in the constraint or trade-off line rather than separating them
+into a standalone section.
+
+> **Decision: [Name]**
+>
+> Constraint: What requirement forces this decision. If the decision affects
+> more than one subsystem, name all affected subsystems here.
+>
+> Mechanism: How the design satisfies the constraint.
+>
+> Trade-offs: What is made more complex, slower, or more constrained. Include
+> the cost of reversing this decision — what would need to change and where.
+
+---
+
+## 5. Validation Rules
+
+A completed instance of this document is only valid if:
+
+- All required fields are filled
+- No placeholders exist
+- Each subsystem has at minimum:
+  - one design decision
+  - one invariant
+- Any decision that affects more than one subsystem names all affected
+  subsystems in its constraint or trade-off line
+- All language is deterministic (no ambiguity such as “may”, “could”, unless explicitly justified)
+
+---
+
+## 6. Intent
+
+This specification exists to enforce:
+
+- architectural clarity
+- reproducibility of reasoning
+- elimination of implicit design assumptions
+- consistent documentation across systems

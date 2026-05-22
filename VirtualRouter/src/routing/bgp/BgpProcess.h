@@ -132,7 +132,7 @@ public:
      */
     uint32_t getRouterId() const noexcept
     {
-        auto& rid = getConfigs().reg.get<config::Bgp::BGP_ROUTER_ID>();
+        auto rid = getConfigs().reg.get<config::Bgp::BGP_ROUTER_ID>();
         if (rid.hasValue()) return rid.load();
         return asNumber;
     }
@@ -291,7 +291,8 @@ private:
     AttributeManager attrMgr;     ///< Flyweight store for path attributes shared across all sessions.
     NeighborTable ntable;         ///< Configured and dynamic neighbor registry.
 
-    config::BgpRegistry& configs; ///< Process-level BGP configuration.
+    config::BgpBaseRegistry baseConfigs; ///< Process-level BGP base (transport/timer) configuration.
+    config::BgpRegistry configs;         ///< Process-level BGP configuration.
 };
 } // namespace routing
 

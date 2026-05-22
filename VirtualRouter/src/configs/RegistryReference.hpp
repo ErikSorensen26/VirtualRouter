@@ -6,7 +6,6 @@
 #ifndef REGISTRY_REFERENCE_HPP
 #define REGISTRY_REFERENCE_HPP
 
-#include "RegistryBucket.hpp"
 #include "RegistryTypes.hpp"
 
 /**
@@ -56,40 +55,16 @@ public:
     RegistryContainer() = default;
 
     /**
-     * @brief Constructs a child container that inherits from a parent `Reference`.
-     *
-     * The container starts in `INHERIT` state; `bound()` returns `true` and
-     * `effective()` delegates to `parent` until a local value is set.
-     *
-     * @param parent  The parent scope whose reference this container inherits.
-     */
-    explicit RegistryContainer(const T& parent) noexcept
-        : state(FieldState::INHERIT),
-          base(&parent)
-    {}
-
-    /**
-     * @brief Constructs a child container that inherits from a sibling `RegistryContainer`.
-     *
-     * Convenience constructor used when building hierarchical registry structs
-     * where the parent scope is itself held in a `RegistryContainer`.
-     *
-     * @param parent  Sibling container whose local reference this container inherits.
-     */
-    explicit RegistryContainer(const RegistryContainer& parent) noexcept
-        : state(FieldState::INHERIT),
-          base(&parent.get())
-    {}
-
-    /**
      * @brief Returns the locally-set reference without inheritance fallback.
      *
      * @return Mutable reference to the locally stored `Reference<T>`.
      * @warning Asserts if no local reference has been set (state != SET).
      */
+    void bind(T& obj) noexcept { registry = &obj; state = FieldState::CANNED; }
+
     T& get() noexcept
     {
-        return registry;
+        return *registry;
     }
 
     /**
@@ -100,16 +75,15 @@ public:
      */
     const T& get() const noexcept
     {
-        return registry;
+        return *registry;
     }
 
 private:
     template <typename...>
     friend class RegistryDatabase;
 
-    T registry; ///< Locally-set registry value;
+    T* registry; ///< Locally-set registry value;
     FieldState state; ///< Whether a local override is in effect.
-    T* base{nullptr}; ///< Pointer to the parent scope's reference, if present.
 };
 }
 

@@ -198,7 +198,7 @@ public:
      */
     uint16_t getSIATime() const
     {
-        auto& field = configs.reg.get<config::Eigrp::ACTIVE_TIME>();
+        auto field = configs.reg.get<config::Eigrp::ACTIVE_TIME>();
         return field.hasValue() ? field.load() : 90;
     }
 

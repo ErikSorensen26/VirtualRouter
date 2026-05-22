@@ -181,7 +181,7 @@ void Ndp::addNdpEntry(types::IPv6Address targetIp, types::Mac targetMac, bool pr
     if (!isStatic)
     {
         // Enforce per-interface cache limit
-        auto& limitField = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT>();
+        auto limitField = configs.reg.get<config::Ndp::BASE>().get().reg.get<config::NdpBase::CACHE_INTERFACE_LIMIT>();
         if (limitField.hasValue())
         {
             uint32_t limit = limitField.load();
